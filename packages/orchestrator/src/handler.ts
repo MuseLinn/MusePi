@@ -24,6 +24,7 @@ function toInstanceSummary(instance: InstanceRecord): InstanceSummary {
 		cwd: instance.cwd,
 		label: instance.label,
 		sessionId: instance.sessionId,
+		sessionFile: instance.sessionFile,
 	};
 }
 

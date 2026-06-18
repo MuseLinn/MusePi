@@ -10,6 +10,7 @@ import {
 	type RpcResponse,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { radiusPresence } from "./radius.ts";
 import { handleRpcCommand } from "./rpc-bridge.ts";
 import { getInstance, loadInstances, removeInstance, upsertInstance } from "./storage.ts";
 import type { InstanceRecord } from "./types.ts";
@@ -25,7 +26,7 @@ function cloneInstance(record: InstanceRecord): InstanceRecord {
 
 async function createRuntime(cwd: string): Promise<AgentSessionRuntime> {
 	const agentDir = getAgentDir();
-	const sessionManager = SessionManager.inMemory(cwd);
+	const sessionManager = SessionManager.create(cwd);
 	const runtimeFactory: CreateAgentSessionRuntimeFactory = async ({
 		cwd,
 		agentDir,
@@ -79,11 +80,13 @@ export class OrchestratorSupervisor {
 			lastSeenAt: now,
 			label: options.label,
 			sessionId: runtime.session.sessionId,
+			sessionFile: runtime.session.sessionFile,
 		};
 
-		this.liveInstances.set(record.id, { runtime, record });
-		upsertInstance(record);
-		return cloneInstance(record);
+		const registeredRecord = await radiusPresence.registerPi(record);
+		this.liveInstances.set(registeredRecord.id, { runtime, record: registeredRecord });
+		upsertInstance(registeredRecord);
+		return cloneInstance(registeredRecord);
 	}
 
 	async stopInstance(instanceId: string): Promise<InstanceRecord | undefined> {
@@ -92,6 +95,7 @@ export class OrchestratorSupervisor {
 			return undefined;
 		}
 
+		await radiusPresence.disconnectPi(live.record);
 		await live.runtime.dispose();
 		this.liveInstances.delete(instanceId);
 		removeInstance(instanceId);

@@ -3,10 +3,17 @@ import { dirname } from "node:path";
 import { getSocketPath } from "./config.ts";
 import { handleIpcRequest } from "./handler.ts";
 import { startIpcServer } from "./ipc/server.ts";
+import { getRadiusOrchestratorBaseUrl, isRadiusEnabled, radiusPresence } from "./radius.ts";
 
 export async function serve(): Promise<void> {
 	const socketPath = getSocketPath();
 	mkdirSync(dirname(socketPath), { recursive: true });
+	if (isRadiusEnabled()) {
+		await radiusPresence.start();
+		console.log(`radius integration enabled: ${socketPath} -> ${getRadiusOrchestratorBaseUrl()}`);
+	} else {
+		console.log("radius integration disabled: set PI_RADIUS_API_KEY to enable");
+	}
 	const server = await startIpcServer(handleIpcRequest);
 	console.log(`orchestrator listening on ${socketPath}`);
 
@@ -17,6 +24,7 @@ export async function serve(): Promise<void> {
 		}
 		cleanedUp = true;
 		server.close();
+		void radiusPresence.stop();
 		if (existsSync(socketPath)) {
 			unlinkSync(socketPath);
 		}

@@ -15,4 +15,6 @@ export interface InstanceRecord {
 	lastSeenAt?: string;
 	label?: string;
 	sessionId?: string;
+	sessionFile?: string;
+	radiusPiId?: string;
 }

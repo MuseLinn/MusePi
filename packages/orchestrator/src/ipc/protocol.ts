@@ -45,6 +45,7 @@ export interface InstanceSummary {
 	cwd: string;
 	label?: string;
 	sessionId?: string;
+	sessionFile?: string;
 }
 
 export interface ResponseBase {
