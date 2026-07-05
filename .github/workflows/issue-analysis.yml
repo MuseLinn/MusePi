@@ -1,0 +1,218 @@
+# Runs the repo's /is prompt against an issue when the `pi-analyze` label is added.
+#
+# Setup required before this works:
+#   1. Create a `pi-analyze` GitHub environment on the repo and add a
+#      `PI_AUTH_JSON` secret containing the contents of a pi auth.json
+#      (~/.pi/agent/auth.json).
+#   2. Create the `pi-analyze` label.
+#   3. Add a repository secret `EARENDIL_ORG_READ_TOKEN` with permission to
+#      read `earendil-works` org membership. The authorization job uses it to
+#      verify that the label actor is an active member of `earendil-works/staff`.
+#   4. Optionally set a `PI_ISSUE_ANALYSIS_MODEL` repository variable to pin
+#      the model (e.g. "anthropic/claude-sonnet-4-5").
+#
+# The session runs in a high-entropy checkout directory so the recorded cwd is
+# a unique string. Import the session into a local checkout with the
+# import-repro extension (.pi/extensions/import-repro.ts):
+#   pi "/import-repro <issue number | issue URL | run URL>"
+
+name: Issue Analysis
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-analysis-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.event.label.name == 'pi-analyze'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify sender permission
+        uses: actions/github-script@v7
+        env:
+          ORG_READ_TOKEN: ${{ secrets.EARENDIL_ORG_READ_TOKEN }}
+        with:
+          script: |
+            const username = context.payload.sender.login;
+
+            async function removeTriggerLabel() {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'pi-analyze',
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            if (!process.env.ORG_READ_TOKEN) {
+              await removeTriggerLabel();
+              core.setFailed('EARENDIL_ORG_READ_TOKEN is not configured; refusing to run issue analysis.');
+              return;
+            }
+
+            try {
+              const { getOctokit } = require('@actions/github');
+              const orgGithub = getOctokit(process.env.ORG_READ_TOKEN);
+              const { data: membership } = await orgGithub.rest.teams.getMembershipForUserInOrg({
+                org: 'earendil-works',
+                team_slug: 'staff',
+                username,
+              });
+              if (membership.state !== 'active') {
+                await removeTriggerLabel();
+                core.setFailed(`@${username} is not an active earendil-works/staff member.`);
+                return;
+              }
+              console.log(`earendil-works/staff membership for @${username}: ${membership.state}`);
+            } catch (error) {
+              await removeTriggerLabel();
+              const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : 'unknown';
+              core.setFailed(`Could not verify earendil-works/staff membership for @${username}: ${status}`);
+              return;
+            }
+
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username,
+            });
+            if (!['admin', 'write'].includes(data.permission)) {
+              await removeTriggerLabel();
+              core.setFailed(
+                `@${username} has '${data.permission}' permission; write or admin is required to trigger issue analysis.`,
+              );
+            }
+
+  analyze:
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    environment: pi-analyze
+    timeout-minutes: 45
+    steps:
+      - name: Create high-entropy working directory name
+        id: workdir
+        run: echo "name=pi-ci-$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: ${{ steps.workdir.outputs.name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ steps.workdir.outputs.name }}/package-lock.json
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fd-find ripgrep
+          sudo ln -s "$(which fdfind)" /usr/local/bin/fd
+
+      - name: Install dependencies
+        working-directory: ${{ steps.workdir.outputs.name }}
+        run: npm ci --ignore-scripts
+
+      - name: Write auth.json
+        env:
+          PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
+        run: |
+          if [ -z "$PI_AUTH_JSON" ]; then
+            echo "PI_AUTH_JSON secret is not configured for the pi-analyze environment" >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/pi-agent"
+          printf '%s' "$PI_AUTH_JSON" > "$RUNNER_TEMP/pi-agent/auth.json"
+          chmod 600 "$RUNNER_TEMP/pi-agent/auth.json"
+
+      - name: Run pi /is
+        shell: bash
+        working-directory: ${{ steps.workdir.outputs.name }}
+        env:
+          PI_CODING_AGENT_DIR: ${{ runner.temp }}/pi-agent
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          PI_MODEL: ${{ vars.PI_ISSUE_ANALYSIS_MODEL }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pi-out/session"
+          args=(-p --approve --session-dir "$RUNNER_TEMP/pi-out/session")
+          if [ -n "$PI_MODEL" ]; then
+            args+=(--model "$PI_MODEL")
+          fi
+          ./pi-test.sh "${args[@]}" "/is $ISSUE_URL" | tee "$RUNNER_TEMP/pi-out/output.md"
+
+      - name: Upload session artifact
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-is-issue-${{ github.event.issue.number }}-run-${{ github.run_id }}
+          path: ${{ runner.temp }}/pi-out/
+          if-no-files-found: error
+
+      - name: Comment with session import instructions
+        if: always() && steps.upload.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const artifactUrl = process.env.ARTIFACT_URL;
+            const runUrl = process.env.RUN_URL;
+            const issueNumber = context.issue.number;
+            const body = [
+              'Pi issue analysis finished.',
+              '',
+              `Session artifact: ${artifactUrl}`,
+              '',
+              'Continue locally from a checkout with:',
+              '',
+              '```sh',
+              `pi "/import-repro ${runUrl}"`,
+              '```',
+              '',
+              'Or import the latest analysis artifact for this issue with:',
+              '',
+              '```sh',
+              `pi "/import-repro #${issueNumber}"`,
+              '```',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body,
+            });
+
+      - name: Remove trigger label
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'pi-analyze',
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
