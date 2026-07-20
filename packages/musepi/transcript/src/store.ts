@@ -14,7 +14,7 @@ interface EntryLike {
 	type: string;
 	id: string;
 	timestamp: string;
-	message?: { role: string; content?: Array<Record<string, unknown>> };
+	message?: { role: string; content?: string | Array<unknown> };
 	customType?: string;
 	display?: boolean;
 }

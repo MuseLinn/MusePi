@@ -22,18 +22,20 @@ interface EntryLike {
 	timestamp: string;
 	message?: {
 		role: string;
-		content?: Array<Record<string, unknown>>;
+		content?: string | Array<unknown>;
 		stopReason?: string;
 	};
 	customType?: string;
 	display?: boolean;
 }
 
-function textOf(content: Array<Record<string, unknown>> | undefined, type: string): string {
+function textOf(content: string | Array<unknown> | undefined, type: string): string {
 	if (!content) return "";
+	if (typeof content === "string") return type === "text" ? content.trim() : "";
 	return content
+		.map((c) => c as Record<string, unknown> | null | undefined)
 		.filter((c) => c?.type === type)
-		.map((c) => String(c.text ?? c.thinking ?? ""))
+		.map((c) => String(c?.text ?? c?.thinking ?? ""))
 		.join("\n")
 		.trim();
 }
@@ -54,7 +56,8 @@ function interactionsFor(entry: EntryLike): TranscriptInteraction[] {
 				const thinking = textOf(msg.content, "thinking");
 				if (thinking) out.push({ ...base, kind: "thinking", thinking });
 				if (text) out.push({ ...base, kind: "assistant", text });
-				for (const c of msg.content ?? []) {
+				for (const raw of msg.content ?? []) {
+					const c = raw as Record<string, unknown>;
 					if (c?.type === "toolCall" || c?.type === "tool_call") {
 						out.push({
 							...base,
@@ -67,7 +70,7 @@ function interactionsFor(entry: EntryLike): TranscriptInteraction[] {
 				return out;
 			}
 			if (msg.role === "toolResult") {
-				const c = (msg.content?.[0] ?? {}) as Record<string, unknown>;
+				const c = ((msg.content?.[0] ?? {}) as unknown) as Record<string, unknown>;
 				return [{
 					...base,
 					kind: "tool_result",

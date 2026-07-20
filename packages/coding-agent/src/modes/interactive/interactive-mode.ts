@@ -38,6 +38,7 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { TranscriptStore } from "@musepi/transcript";
 import chalk from "chalk";
 import { spawn, spawnSync } from "child_process";
 import {
@@ -378,6 +379,7 @@ export class InteractiveMode {
 	// Agent subscription unsubscribe function
 	private unsubscribe?: () => void;
 	private musepiGoalUnsubscribe?: () => void;
+	private readonly musepiTranscript = new TranscriptStore();
 	private signalCleanupHandlers: Array<() => void> = [];
 
 	// Track if editor is in bash mode (text starts with !)
@@ -1732,6 +1734,12 @@ export class InteractiveMode {
 			showError: (message) => this.showError(message),
 			badgeEnabled: this.settingsManager.getMusepi().goal.badge,
 		});
+		// MusePi transcript: rebuild the decoupled conversation model.
+		try {
+			this.musepiTranscript.rebuild(this.sessionManager.getEntries());
+		} catch {
+			/* transcript is a read-only view — never break binding */
+		}
 		// MusePi native background task + cron integration.
 		initMusepiTask(this.session, this.sessionManager);
 		// MusePi native todo integration: restore + inline panel.
@@ -2721,6 +2729,11 @@ export class InteractiveMode {
 			if (text === "/tree") {
 				this.showTreeSelector();
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/transcript") {
+				this.editor.setText("");
+				this.showTranscriptSummary();
 				return;
 			}
 			if (text === "/trust") {
@@ -3781,6 +3794,36 @@ export class InteractiveMode {
 					child.setExpanded(expanded);
 				}
 			}
+		}
+		this.ui.requestRender();
+	}
+
+	/**
+	 * /transcript — show the decoupled transcript model's view of the
+	 * current session (MusePi). Proves the transcript layer reads live
+	 * session entries independently of the chat components.
+	 */
+	private showTranscriptSummary(): void {
+		try {
+			this.musepiTranscript.sync(this.sessionManager.getEntries());
+		} catch {
+			/* sync is best-effort */
+		}
+		const stats = this.musepiTranscript.stats();
+		const lines = [
+			`transcript: ${stats.turns} turns · ${stats.entries} entries · ${stats.toolCalls} tool calls · ${stats.errorTurns} error turns`,
+		];
+		const { turns } = this.musepiTranscript.page({ limit: 3 });
+		for (const turn of turns) {
+			const first = turn.interactions[0];
+			const preview = (first?.text ?? "").split("\n")[0].slice(0, 60);
+			const kinds = turn.interactions.map((i) => i.kind).join(",");
+			lines.push(
+				`  [${turn.startedAt.slice(11, 19)}] ${preview || "(no text)"} — ${kinds}${turn.hasError ? " ⚠" : ""}`,
+			);
+		}
+		for (const line of lines) {
+			this.chatContainer.addChild(new Text(theme.fg("dim", line), 1, 0));
 		}
 		this.ui.requestRender();
 	}
