@@ -38,6 +38,7 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { getSpinnerFrames } from "@musepi/core/swarm/helpers.js";
 import { TranscriptStore } from "@musepi/transcript";
 import chalk from "chalk";
 import { spawn, spawnSync } from "child_process";
@@ -88,6 +89,7 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
 import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
@@ -469,10 +471,42 @@ export class InteractiveMode {
 		setKeybindings(this.keybindings);
 		const editorPaddingX = this.settingsManager.getEditorPaddingX();
 		const autocompleteMaxVisible = this.settingsManager.getAutocompleteMaxVisible();
-		this.defaultEditor = new CustomEditor(this.ui, getEditorTheme(), this.keybindings, {
-			paddingX: editorPaddingX,
-			autocompleteMaxVisible,
-		});
+		const musepiTui = this.settingsManager.getMusepi().tui;
+		if (musepiTui.style === "plain") {
+			this.defaultEditor = new CustomEditor(this.ui, getEditorTheme(), this.keybindings, {
+				paddingX: editorPaddingX,
+				autocompleteMaxVisible,
+			});
+		} else {
+			// MusePi native boxed editor: closed box with spinner/working state
+			// left and (opt-in) model name right in the top border.
+			const slots = {
+				left: () => {
+					if (!this.activeStatusIndicator) return "";
+					const frames = getSpinnerFrames();
+					const frame = frames[Math.floor(Date.now() / 120) % frames.length];
+					const msg = this.workingMessage ?? "Working...";
+					return `${theme.fg("accent", frame)} ${theme.fg("dim", msg)}`;
+				},
+				right: () => {
+					if (!musepiTui.modelInBorder) return "";
+					const m = this.session.model;
+					if (!m) return "";
+					const level = this.session.thinkingLevel;
+					return theme.fg("dim", `${m.provider} · ${m.id}${level ? `:${level}` : ""}`);
+				},
+			};
+			this.defaultEditor = new MusepiBoxedEditor(
+				this.ui,
+				getEditorTheme(),
+				this.keybindings,
+				musepiTui.style,
+				slots,
+			);
+			if (editorPaddingX !== 0 || autocompleteMaxVisible !== undefined) {
+				this.defaultEditor.setPaddingX(editorPaddingX);
+			}
+		}
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
