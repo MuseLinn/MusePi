@@ -4,10 +4,12 @@
 // through the host's extension-widget channel (native in the fork),
 // resume bookkeeping, and the final report.
 //
-// Background variant (run_in_background) is intentionally deferred to
-// the native background-task manager port — callers get a clear
-// message instead of a silent no-op.
+// Background variant runs through the native background task manager
+// (task_list / task_output / task_stop), report optionally to output_path.
 // ============================================================
+
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 import { StringEnum } from "@earendil-works/pi-ai";
 import { formatReport } from "@musepi/core/swarm/report.js";
@@ -31,6 +33,7 @@ import {
 	setSwarmCancelled,
 } from "@musepi/core/swarm/types.js";
 import { Type } from "typebox";
+import { backgroundManager } from "../task/manager.ts";
 import { getDefaultModel, getDefaultProvider, linkAbortSignal, runProgressive, runSubAgent } from "./subagent.ts";
 import { SwarmWidgetComponent } from "./widget.ts";
 
@@ -226,6 +229,80 @@ function unmountSwarmWidget(ctx: any): void {
 	}
 }
 
+// ── Background swarm runner (fire-and-forget) ─────────────────
+
+async function runSwarmInBackground(
+	bgId: string,
+	state: SwarmState,
+	tasks: SubAgentTask[],
+	ctx: any,
+	maxC: number,
+	outputPath?: string,
+): Promise<void> {
+	const controller = new AbortController();
+	// task_stop flips the entry status to "aborted"; poll and translate that
+	// into an abort so in-flight subagents and the worker pool wind down.
+	const stopPoll = setInterval(() => {
+		const t = backgroundManager.get(bgId);
+		if (!t || t.status !== "running") {
+			try {
+				controller.abort();
+			} catch {
+				/* ignore */
+			}
+		}
+	}, 500);
+	stopPoll.unref?.();
+	try {
+		await runProgressive(tasks, maxC, async (task) => {
+			if (controller.signal.aborted) {
+				task.status = "aborted";
+				return;
+			}
+			await runSubAgent(task, ctx, controller.signal, () => {
+				const d = tasks.filter((t) => t.status === "done").length;
+				backgroundManager.appendOutput(bgId, [`progress: ${d}/${tasks.length} done`]);
+			});
+		});
+
+		// stop() already flipped the entry to "aborted" — leave it as-is.
+		if (controller.signal.aborted) return;
+
+		state.endTime = Date.now();
+		state.status = tasks.every((t) => t.status === "done")
+			? "completed"
+			: tasks.some((t) => t.status === "done")
+				? "partial"
+				: "failed";
+
+		const report = formatReport(state);
+		if (outputPath) {
+			// Kimi Code-style: full report lands in output_path; the task entry
+			// keeps only a pointer + tail so in-memory outputLines stay small.
+			try {
+				fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+				fs.writeFileSync(outputPath, report, "utf-8");
+				backgroundManager.complete(bgId, [
+					`[report written to ${outputPath} — use Read with offset/limit to page]`,
+					...report.split("\n").slice(-5),
+				]);
+			} catch (e: any) {
+				backgroundManager.complete(bgId, [
+					`[failed to write output_path ${outputPath}: ${e?.message || e}]`,
+					report,
+				]);
+			}
+		} else {
+			backgroundManager.complete(bgId, report.split("\n"));
+		}
+	} catch (e: any) {
+		backgroundManager.fail(bgId, e?.message || String(e));
+	} finally {
+		clearInterval(stopPoll);
+		if (currentSwarm === state) setCurrentSwarm(null);
+	}
+}
+
 // ── agent_swarm ───────────────────────────────────────────────
 
 export const musepiAgentSwarmToolDef = {
@@ -274,18 +351,6 @@ export const musepiAgentSwarmToolDef = {
 	async execute(_toolCallId: string, params: any, signal: AbortSignal, onUpdate: any, ctx: any) {
 		const tier: ModelTier = params.model_tier || "auto";
 		const maxC = Math.min(params.max_concurrency || 5, 128);
-
-		if (params.run_in_background === true) {
-			return {
-				content: [
-					{
-						type: "text",
-						text: "run_in_background is not yet supported by MusePi's native swarm (the native background task manager is still being ported). Run the swarm in the foreground for now.",
-					},
-				],
-				details: null,
-			};
-		}
 
 		const defaultModelId = getDefaultModel();
 		const defaultProvider = getDefaultProvider();
@@ -397,6 +462,41 @@ export const musepiAgentSwarmToolDef = {
 		if (cancelTimer) {
 			clearTimeout(cancelTimer);
 			setCancelTimer(null);
+		}
+
+		// ── Background mode: hand off to the native background task manager ──
+		if (params.run_in_background === true) {
+			const bgId = `bg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+			backgroundManager.register({
+				id: bgId,
+				prompt: `[swarm] ${params.description} (${tasks.length} agents)`,
+				model: modelId,
+				subagentType: params.subagent_type || "coder",
+				status: "running",
+				outputLines: [],
+				startTime: Date.now(),
+				createdAt: Date.now(),
+				turns: 0,
+				usage: { input: 0, output: 0, cost: 0 },
+			});
+			const outputPath = params.output_path as string | undefined;
+			state.status = "running";
+			// Fire-and-forget: progress lands in the task entry, the final
+			// report in the entry (and optionally in output_path).
+			void runSwarmInBackground(bgId, state, tasks, ctx, maxC, outputPath);
+			return {
+				content: [
+					{
+						type: "text",
+						text:
+							`Swarm started in background. Task ID: ${bgId}\n` +
+							`${tasks.length} agents queued (max_concurrency=${maxC}, 30min/agent timeout).\n` +
+							`Use task_list to check status, task_output(task_id="${bgId}", block=true) to wait for completion.` +
+							(outputPath ? `\nFinal report will be written to: ${outputPath}` : ""),
+					},
+				],
+				details: null,
+			};
 		}
 
 		setGlobalAbortController(new AbortController());

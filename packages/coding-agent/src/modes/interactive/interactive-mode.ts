@@ -88,6 +88,7 @@ import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
+import { initMusepiTask } from "../../musepi/task/native.ts";
 import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
@@ -1731,6 +1732,8 @@ export class InteractiveMode {
 			showError: (message) => this.showError(message),
 			badgeEnabled: this.settingsManager.getMusepi().goal.badge,
 		});
+		// MusePi native background task + cron integration.
+		initMusepiTask(this.session, this.sessionManager);
 		// MusePi native todo integration: restore + inline panel.
 		initMusepiTodo({
 			sessionManager: this.sessionManager,
