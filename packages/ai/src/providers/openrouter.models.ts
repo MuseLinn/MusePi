@@ -297,10 +297,6 @@ export const OPENROUTER_MODELS = values as {
 		id: "meta-llama/llama-3.3-70b-instruct";
 		provider: "openrouter";
 	};
-	"meta-llama/llama-3.3-70b-instruct:free": Model<"openai-completions"> & {
-		id: "meta-llama/llama-3.3-70b-instruct:free";
-		provider: "openrouter";
-	};
 	"meta-llama/llama-4-maverick": Model<"openai-completions"> & {
 		id: "meta-llama/llama-4-maverick";
 		provider: "openrouter";
@@ -717,6 +713,10 @@ export const OPENROUTER_MODELS = values as {
 		id: "openrouter/auto";
 		provider: "openrouter";
 	};
+	"openrouter/auto-beta": Model<"openai-completions"> & {
+		id: "openrouter/auto-beta";
+		provider: "openrouter";
+	};
 	"openrouter/free": Model<"openai-completions"> & {
 		id: "openrouter/free";
 		provider: "openrouter";
@@ -817,10 +817,6 @@ export const OPENROUTER_MODELS = values as {
 		id: "qwen/qwen3-coder-plus";
 		provider: "openrouter";
 	};
-	"qwen/qwen3-coder:free": Model<"openai-completions"> & {
-		id: "qwen/qwen3-coder:free";
-		provider: "openrouter";
-	};
 	"qwen/qwen3-max": Model<"openai-completions"> & {
 		id: "qwen/qwen3-max";
 		provider: "openrouter";
@@ -831,10 +827,6 @@ export const OPENROUTER_MODELS = values as {
 	};
 	"qwen/qwen3-next-80b-a3b-instruct": Model<"openai-completions"> & {
 		id: "qwen/qwen3-next-80b-a3b-instruct";
-		provider: "openrouter";
-	};
-	"qwen/qwen3-next-80b-a3b-instruct:free": Model<"openai-completions"> & {
-		id: "qwen/qwen3-next-80b-a3b-instruct:free";
 		provider: "openrouter";
 	};
 	"qwen/qwen3-next-80b-a3b-thinking": Model<"openai-completions"> & {
@@ -967,6 +959,10 @@ export const OPENROUTER_MODELS = values as {
 	};
 	"thedrummer/unslopnemo-12b": Model<"openai-completions"> & {
 		id: "thedrummer/unslopnemo-12b";
+		provider: "openrouter";
+	};
+	"thinkingmachines/inkling": Model<"openai-completions"> & {
+		id: "thinkingmachines/inkling";
 		provider: "openrouter";
 	};
 	"upstage/solar-pro-3": Model<"openai-completions"> & {
