@@ -12,5 +12,9 @@
 	"files": [
 		"dist/**/*"
 	],
-	"license": "MIT"
+	"license": "MIT",
+	"exports": {
+		".": "./dist/index.js",
+		"./*": "./dist/*"
+	}
 }

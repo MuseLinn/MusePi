@@ -88,6 +88,7 @@ import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
+import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
@@ -1729,6 +1730,12 @@ export class InteractiveMode {
 			setStatus: (key, text) => this.setExtensionStatus(key, text),
 			showError: (message) => this.showError(message),
 		});
+		// MusePi native todo integration: restore + inline panel.
+		initMusepiTodo({
+			sessionManager: this.sessionManager,
+			theme,
+			setWidget: (key, content) => this.setExtensionWidget(key, content, { placement: "aboveEditor" }),
+		});
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();
 		this.updateTerminalTitle();
@@ -2578,7 +2585,13 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
-		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
+		this.defaultEditor.onAction("app.thinking.toggle", () => {
+			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
+			// fall back to pi's thinking-block visibility toggle.
+			if (!toggleMusepiTodoPanel()) {
+				this.toggleThinkingBlockVisibility();
+			}
+		});
 		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
