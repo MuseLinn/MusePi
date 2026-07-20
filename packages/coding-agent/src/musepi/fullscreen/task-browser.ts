@@ -448,7 +448,7 @@ export class TasksBrowserComponent extends Container {
 					styledFg(this.theme, "accent", "─".repeat(remainingDashes))
 				: styledFg(this.theme, "accent", "─".repeat(innerWidth));
 		const top = styledFg(this.theme, "accent", "┌") + topMid + styledFg(this.theme, "accent", "┐");
-		const bottom = styledFg(this.theme, "accent", "└" + "─".repeat(innerWidth) + "┘");
+		const bottom = styledFg(this.theme, "accent", `└${"─".repeat(innerWidth)}┘`);
 
 		const lines: string[] = [top];
 		for (let i = 0; i < innerHeight; i++) {
