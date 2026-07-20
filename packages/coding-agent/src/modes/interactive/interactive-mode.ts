@@ -90,7 +90,9 @@ import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
+import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
+import { backgroundManager } from "../../musepi/task/manager.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
 import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
@@ -2632,6 +2634,7 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
+		this.defaultEditor.onAction("app.musepi.tasks", () => this.showMusepiTaskBrowser());
 		this.defaultEditor.onAction("app.thinking.toggle", () => {
 			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
 			// fall back to pi's thinking-block visibility toggle.
@@ -2768,6 +2771,11 @@ export class InteractiveMode {
 			if (text === "/transcript") {
 				this.editor.setText("");
 				this.showTranscriptSummary();
+				return;
+			}
+			if (text === "/tasks") {
+				this.editor.setText("");
+				this.showMusepiTaskBrowser();
 				return;
 			}
 			if (text === "/trust") {
@@ -3860,6 +3868,100 @@ export class InteractiveMode {
 			this.chatContainer.addChild(new Text(theme.fg("dim", line), 1, 0));
 		}
 		this.ui.requestRender();
+	}
+
+	// ── MusePi fullscreen (container swap, no alt screen) ──
+	// kimi tasks-browser parity: save the main TUI children, clear, mount
+	// the fullscreen component as the only child, restore on exit. The
+	// terminal scrollback is never touched.
+	private musepiSavedChildren: Component[] | null = null;
+
+	private musepiEnterFullscreen(component: Component & { dispose?(): void }): void {
+		if (this.musepiSavedChildren) return; // already fullscreen
+		this.musepiSavedChildren = [...this.ui.children];
+		this.ui.clear();
+		this.ui.addChild(component);
+		this.ui.setFocus(component);
+		this.ui.requestRender(true);
+	}
+
+	private musepiExitFullscreen(): void {
+		if (!this.musepiSavedChildren) return;
+		this.ui.clear();
+		for (const child of this.musepiSavedChildren) {
+			this.ui.addChild(child);
+		}
+		this.musepiSavedChildren = null;
+		this.ui.setFocus(this.editor);
+		this.ui.requestRender(true);
+	}
+
+	/** /tasks (ctrl+shift+t) — fullscreen 3-pane task browser. */
+	private showMusepiTaskBrowser(): void {
+		const filter: "all" | "active" = "all";
+		const browser = new TasksBrowserComponent(
+			this.buildMusepiBrowserProps(filter, undefined, () => {
+				this.musepiExitFullscreen();
+			}),
+			theme,
+		);
+		browser.focused = true;
+		this.musepiEnterFullscreen(browser);
+	}
+
+	private buildMusepiBrowserProps(
+		filter: "all" | "active",
+		selectedTaskId: string | undefined,
+		onCancel: () => void,
+	): any {
+		const entries = backgroundManager.list();
+		const tasks = entries.map((e) => ({
+			id: e.id,
+			task: e.prompt,
+			prompt: e.prompt,
+			model: e.model,
+			status: e.status === "completed" ? "done" : e.status,
+			error: e.error,
+			turns: e.turns,
+			usage: e.usage,
+			outputLines: e.outputLines,
+			startTime: e.startTime,
+			endTime: e.endTime,
+			completedAtMs: e.completedAtMs,
+			toolCalls: 0,
+			progressPercent: e.status === "completed" ? 100 : 0,
+		}));
+		const shown = filter === "active" ? tasks.filter((t) => t.status === "running") : tasks;
+		return {
+			tasks: shown,
+			filter,
+			selectedTaskId,
+			outputPreview: undefined,
+			flashMessage: undefined,
+			onSelect: (_id: string) => {},
+			onToggleFilter: () => {
+				this.musepiExitFullscreen();
+				const next = filter === "all" ? "active" : "all";
+				const nf: "all" | "active" = next;
+				const browser = new TasksBrowserComponent(
+					this.buildMusepiBrowserProps(nf, undefined, () => {
+						this.musepiExitFullscreen();
+					}),
+					theme,
+				);
+				browser.focused = true;
+				this.musepiEnterFullscreen(browser);
+			},
+			onRefresh: () => {
+				this.musepiExitFullscreen();
+				this.showMusepiTaskBrowser();
+			},
+			onCancel,
+			onStopConfirmed: (id: string) => {
+				void backgroundManager.stop(id);
+			},
+			onOpenOutput: (_id: string) => {},
+		};
 	}
 
 	private toggleThinkingBlockVisibility(): void {

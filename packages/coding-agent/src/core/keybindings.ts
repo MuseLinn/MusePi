@@ -21,6 +21,7 @@ export interface AppKeybindings {
 	"app.model.select": true;
 	"app.tools.expand": true;
 	"app.thinking.toggle": true;
+	"app.musepi.tasks": true;
 	"app.session.toggleNamedFilter": true;
 	"app.editor.external": true;
 	"app.message.copy": true;
@@ -87,6 +88,10 @@ export const KEYBINDINGS = {
 	"app.thinking.toggle": {
 		defaultKeys: "ctrl+t",
 		description: "Toggle thinking blocks",
+	},
+	"app.musepi.tasks": {
+		defaultKeys: "ctrl+shift+t",
+		description: "Open the MusePi task browser (fullscreen)",
 	},
 	"app.session.toggleNamedFilter": {
 		defaultKeys: "ctrl+n",
