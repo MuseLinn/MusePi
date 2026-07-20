@@ -45,6 +45,7 @@ import {
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { composeMusepiStreamPrompt, musepiRecentText } from "../musepi/stream-rules.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -510,11 +511,17 @@ export class AgentSession {
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.(turn, signal);
 			const previousContext = previousSnapshot?.context ?? turn.context;
 
+			// MusePi stream rules: per-turn prompt injection at the TS seam.
+			const basePrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
 			return {
 				...previousSnapshot,
 				context: {
 					...previousContext,
-					systemPrompt: this._systemPromptOverride ?? this._baseSystemPrompt,
+					systemPrompt: composeMusepiStreamPrompt(
+						this.sessionManager.getCwd(),
+						basePrompt,
+						musepiRecentText(this.agent.state.messages),
+					),
 					tools: this.agent.state.tools.slice(),
 				},
 				model: this.agent.state.model,
