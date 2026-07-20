@@ -91,11 +91,11 @@ class BackgroundTaskManager {
 			const start = Math.max(0, (offset && offset > 0 ? offset : 1) - 1); // 1-based → 0-based
 			const end = limit && limit > 0 ? Math.min(totalLines, start + limit) : totalLines;
 			const shown = lines.slice(start, end);
-			return `[showing lines ${totalLines === 0 ? 0 : start + 1}-${end} of ${totalLines}]\n` + shown.join("\n");
+			return `[showing lines ${totalLines === 0 ? 0 : start + 1}-${end} of ${totalLines}]\n${shown.join("\n")}`;
 		}
 		if (tail && tail > 0) {
 			const shown = lines.slice(-tail);
-			return `[showing last ${shown.length} of ${totalLines} line(s)]\n` + shown.join("\n");
+			return `[showing last ${shown.length} of ${totalLines} line(s)]\n${shown.join("\n")}`;
 		}
 		return lines.join("\n");
 	}
