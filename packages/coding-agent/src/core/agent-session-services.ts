@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../config.ts";
+import { musepiGoalToolDefs } from "../musepi/goal-native.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
@@ -213,7 +214,7 @@ export async function createAgentSessionFromServices(
 		tools: options.tools,
 		excludeTools: options.excludeTools,
 		noTools: options.noTools,
-		customTools: options.customTools,
+		customTools: [...(options.customTools ?? []), ...musepiGoalToolDefs()],
 		sessionStartEvent: options.sessionStartEvent,
 	});
 }

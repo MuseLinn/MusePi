@@ -56,7 +56,8 @@
 		"semver": "7.8.0",
 		"typebox": "1.1.38",
 		"undici": "8.5.0",
-		"yaml": "2.9.0"
+		"yaml": "2.9.0",
+		"@musepi/core": "0.80.10"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",

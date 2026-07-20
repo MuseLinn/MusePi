@@ -87,6 +87,7 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import { initMusepiGoal } from "../../musepi/goal-native.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
@@ -374,6 +375,7 @@ export class InteractiveMode {
 
 	// Agent subscription unsubscribe function
 	private unsubscribe?: () => void;
+	private musepiGoalUnsubscribe?: () => void;
 	private signalCleanupHandlers: Array<() => void> = [];
 
 	// Track if editor is in bash mode (text starts with !)
@@ -1711,6 +1713,8 @@ export class InteractiveMode {
 	private async rebindCurrentSession(options: { renderBeforeBind?: boolean } = {}): Promise<void> {
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
+		this.musepiGoalUnsubscribe?.();
+		this.musepiGoalUnsubscribe = undefined;
 		this.applyRuntimeSettings();
 		if (options.renderBeforeBind) {
 			this.renderCurrentSessionState();
@@ -1720,6 +1724,11 @@ export class InteractiveMode {
 			await this.bindCurrentSessionExtensions();
 			this.subscribeToAgent();
 		}
+		// MusePi native goal integration: persistence + turn recording + badge.
+		this.musepiGoalUnsubscribe = initMusepiGoal(this.session, this.sessionManager, {
+			setStatus: (key, text) => this.setExtensionStatus(key, text),
+			showError: (message) => this.showError(message),
+		});
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();
 		this.updateTerminalTitle();

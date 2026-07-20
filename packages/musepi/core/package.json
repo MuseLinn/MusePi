@@ -1,0 +1,16 @@
+{
+	"name": "@musepi/core",
+	"version": "0.80.10",
+	"description": "MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task/tui/ask/todo/plugin), zero host imports",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"files": [
+		"dist/**/*"
+	],
+	"license": "MIT"
+}
