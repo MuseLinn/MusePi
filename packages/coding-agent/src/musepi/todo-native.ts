@@ -23,6 +23,7 @@ import type { Theme } from "../modes/interactive/theme/theme.ts";
 interface TodoRuntime {
 	todos: TodoItem[];
 	expanded: boolean;
+	maxVisible: number;
 	sessionManager: SessionManager | null;
 	setWidget: ((key: string, content: string[] | undefined) => void) | null;
 	theme: Theme | null;
@@ -31,6 +32,7 @@ interface TodoRuntime {
 const rt: TodoRuntime = {
 	todos: [],
 	expanded: false,
+	maxVisible: 5,
 	sessionManager: null,
 	setWidget: null,
 	theme: null,
@@ -54,7 +56,7 @@ function buildWidgetLines(theme: Theme): string[] | undefined {
 	if (rt.expanded) {
 		return [head, ...rt.todos.map((t) => statusLine(t, theme)), theme.fg("dim", "ctrl+t collapse")];
 	}
-	const { rows, hidden, hiddenCounts } = selectVisibleTodos(rt.todos);
+	const { rows, hidden, hiddenCounts } = selectVisibleTodos(rt.todos, rt.maxVisible);
 	const lines = [head, ...rows.map((t) => statusLine(t, theme))];
 	if (hidden > 0) {
 		lines.push(
@@ -111,12 +113,15 @@ export interface MusepiTodoHost {
 	sessionManager: SessionManager;
 	theme: Theme;
 	setWidget(key: string, content: string[] | undefined): void;
+	/** From settings: max rows in the folded panel (default 5). */
+	maxVisible?: number;
 }
 
 /** Bind the todo runtime to a session: restore state + show the panel. */
 export function initMusepiTodo(host: MusepiTodoHost): void {
 	rt.sessionManager = host.sessionManager;
 	rt.theme = host.theme;
+	rt.maxVisible = host.maxVisible ?? 5;
 	rt.setWidget = (key, content) => host.setWidget(key, content);
 	restore();
 	refreshPanel();

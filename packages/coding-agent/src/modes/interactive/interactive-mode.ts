@@ -1729,12 +1729,14 @@ export class InteractiveMode {
 		this.musepiGoalUnsubscribe = initMusepiGoal(this.session, this.sessionManager, {
 			setStatus: (key, text) => this.setExtensionStatus(key, text),
 			showError: (message) => this.showError(message),
+			badgeEnabled: this.settingsManager.getMusepi().goal.badge,
 		});
 		// MusePi native todo integration: restore + inline panel.
 		initMusepiTodo({
 			sessionManager: this.sessionManager,
 			theme,
 			setWidget: (key, content) => this.setExtensionWidget(key, content, { placement: "aboveEditor" }),
+			maxVisible: this.settingsManager.getMusepi().todo.maxVisible,
 		});
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();

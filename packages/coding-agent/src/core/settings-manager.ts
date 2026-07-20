@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Transport } from "@earendil-works/pi-ai";
+import { type MusepiSettings, mergeMusepiSettings, type ResolvedMusepiSettings } from "@musepi/core";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -117,6 +118,7 @@ export interface Settings {
 	treeFilterMode?: "default" | "no-tools" | "user-only" | "labeled-only" | "all"; // Default filter when opening /tree
 	thinkingBudgets?: ThinkingBudgetsSettings; // Custom token budgets for thinking levels
 	editorPaddingX?: number; // Horizontal padding for input editor (default: 0)
+	musepi?: MusepiSettings; // MusePi feature settings (defaults via mergeMusepiSettings)
 	outputPad?: 0 | 1; // Horizontal padding for chat message output (default: 1)
 	autocompleteMaxVisible?: number; // Max visible items in autocomplete dropdown (default: 5)
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
@@ -1190,6 +1192,11 @@ export class SettingsManager {
 
 	getEditorPaddingX(): number {
 		return this.settings.editorPaddingX ?? 0;
+	}
+
+	/** MusePi feature settings with defaults applied (see @musepi/core config schema). */
+	getMusepi(): ResolvedMusepiSettings {
+		return mergeMusepiSettings(this.settings.musepi);
 	}
 
 	setEditorPaddingX(padding: number): void {

@@ -23,6 +23,8 @@ export function musepiGoalToolDefs(): ToolDefinition[] {
 export interface MusepiGoalUi {
 	setStatus(key: string, text: string | undefined): void;
 	showError?(message: string): void;
+	/** From settings: show the goal badge in the footer (default true). */
+	badgeEnabled?: boolean;
 }
 
 /**
@@ -50,6 +52,10 @@ export function initMusepiGoal(session: AgentSession, sessionManager: SessionMan
 	goalManager.tryRestoreFromEntries(Array.from(port.entries()));
 
 	const updateBadge = () => {
+		if (ui.badgeEnabled === false) {
+			ui.setStatus("goal", undefined);
+			return;
+		}
 		const badge = goalManager.buildFooterBadge();
 		ui.setStatus("goal", badge || undefined);
 	};
