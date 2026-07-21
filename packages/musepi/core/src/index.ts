@@ -112,3 +112,28 @@ export {
 	writeMemoryFile,
 } from "./memory/index.ts";
 export type { MemoryCaps, MemorySearchHit, MemorySection } from "./memory/index.ts";
+export {
+	computeFileLists,
+	DEFAULT_ARCHIVE_MAX_CHARS,
+	estimateTokensFromChars,
+	formatFileList,
+	formatFilesSection,
+	FRAME_CHAR_CAPACITY,
+	planArchive,
+	serializeConversation,
+	SNAP_ARCHIVE_VERSION,
+	snapCompact,
+	truncateForArchive,
+} from "./snapcompact/index.ts";
+export type {
+	ArchiveLayout,
+	SerializeOptions,
+	SnapArchiveState,
+	SnapCompactionInput,
+	SnapContentBlock,
+	SnapCompactionResult,
+	SnapFileOperations,
+	SnapFrame,
+	SnapMessage,
+} from "./snapcompact/index.ts";
+export type { MusepiCompactionSettings } from "./config/schema.ts";

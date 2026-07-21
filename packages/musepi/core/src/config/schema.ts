@@ -146,6 +146,18 @@ export interface MusepiSettings {
 	toolSelect?: MusepiToolSelectSettings;
 	lsp?: MusepiLspSettings;
 	memory?: MusepiMemorySettings;
+	compaction?: MusepiCompactionSettings;
+}
+
+/**
+ * Context compaction behavior. `strategy` selects the engine used when pi
+ * compacts: "default" keeps pi's LLM summarization untouched; "snapcompact"
+ * replaces it with the deterministic local archive pass (no LLM call, OMP
+ * snapcompact mechanism with text frames instead of PNGs).
+ */
+export interface MusepiCompactionSettings {
+	/** Compaction engine. */
+	strategy?: "default" | "snapcompact"; // default: "default"
 }
 
 /**
@@ -176,6 +188,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	toolSelect: Required<MusepiToolSelectSettings>;
 	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
 	memory: { enabled: boolean; scope: "project" | "global"; caps: { project: number; global: number } };
+	compaction: { strategy: "default" | "snapcompact" };
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -187,6 +200,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	toolSelect: { enabled: false, models: [], defer: [] },
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
 	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
+	compaction: { strategy: "default" },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -305,6 +319,18 @@ function pickMemory(override: unknown): ResolvedMusepiSettings["memory"] {
 }
 
 /**
+ * compaction needs only an enum pick: unknown strategies fall back to
+ * "default" (pi's LLM summarization, zero behavior change).
+ */
+function pickCompaction(override: unknown): ResolvedMusepiSettings["compaction"] {
+	const defaults = MUSEPI_DEFAULTS.compaction;
+	if (!override || typeof override !== "object") return { ...defaults };
+	const strategy = (override as Record<string, unknown>).strategy;
+	if (strategy === "default" || strategy === "snapcompact") return { strategy };
+	return { ...defaults };
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -321,6 +347,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		toolSelect: pickToolSelect(r.toolSelect),
 		lsp: pickLsp(r.lsp),
 		memory: pickMemory(r.memory),
+		compaction: pickCompaction(r.compaction),
 	};
 }
 
@@ -412,5 +439,10 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "memory.caps.global",
 		description: "Global memory injection budget (estimated tokens)",
 		defaultValue: 6000,
+	},
+	{
+		key: "compaction.strategy",
+		description: "Compaction engine: default (LLM summary) or snapcompact (deterministic local archive)",
+		defaultValue: "default",
 	},
 ];

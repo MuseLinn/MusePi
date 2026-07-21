@@ -48,6 +48,7 @@ import { planManager } from "@musepi/core/plan/index.js";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { createHashlineContext, type HashlineContext } from "../musepi/hashline.ts";
 import { resolveRoleModel } from "../musepi/model-roles.ts";
+import { initMusepiSnapcompact } from "../musepi/snapcompact/native.ts";
 import { composeMusepiStreamPrompt, musepiRecentText } from "../musepi/stream-rules.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -2612,6 +2613,9 @@ export class AgentSession {
 		}
 		this._bindExtensionCore(this._extensionRunner);
 		this._applyExtensionBindings(this._extensionRunner);
+		// MusePi snapcompact: arm the deterministic compaction strategy on every
+		// runner (re)build; runtime-gated on musepi.compaction.strategy.
+		initMusepiSnapcompact(this.settingsManager, this._extensionRunner);
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
