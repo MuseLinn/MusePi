@@ -16,3 +16,12 @@ export {
 	resolveModelForRole,
 } from "./model-roles/index.ts";
 export type { ModelRole, ModelRolesConfig, RoleModelSpec, RoleThinkingLevel } from "./model-roles/index.ts";
+export { HashlineEngine, SnapshotStore } from "./hashline/index.ts";
+export type {
+	HashlineApplyResult,
+	HashlineFs,
+	SectionApplyResult,
+	Snapshot,
+} from "./hashline/index.ts";
+export { computeFileHash, formatHashlineHeader, formatNumberedLine } from "./hashline/index.ts";
+export { HASHLINE_EDIT_DESCRIPTION, HASHLINE_EDIT_PROMPT_GUIDELINES } from "./hashline/index.ts";

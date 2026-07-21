@@ -2,12 +2,19 @@ import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } 
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, ImageContent, Model, TextContent } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
+import {
+	formatHashlineHeader,
+	formatNumberedLine,
+	normalizeToLF as hlNormalizeToLF,
+	stripBom as hlStripBom,
+} from "@musepi/core/hashline/index.js";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { getReadmePath } from "../../config.ts";
 import { keyHint, keyText } from "../../modes/interactive/components/keybinding-hints.ts";
 import { getLanguageFromPath, highlightCode, type Theme } from "../../modes/interactive/theme/theme.ts";
+import type { HashlineContext } from "../../musepi/hashline.ts";
 import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../utils/paths.ts";
@@ -60,6 +67,8 @@ export interface ReadToolOptions {
 	autoResizeImages?: boolean;
 	/** Custom operations for file reading. Default: local filesystem */
 	operations?: ReadOperations;
+	/** MusePi hashline context: mints [path#TAG] anchors and numbers text output. */
+	hashline?: HashlineContext;
 }
 
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: number; limit?: number };
@@ -206,12 +215,20 @@ export function createReadToolDefinition(
 ): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> {
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	const ops = options?.operations ?? defaultReadOperations;
+	const hashline = options?.hashline;
 	return {
 		name: "read",
 		label: "read",
-		description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+		description: hashline
+			? `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output starts with a [path#TAG] header (the snapshot tag the edit tool anchors patches to) followed by LINE:TEXT numbered rows; output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`
+			: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
 		promptSnippet: "Read file contents",
-		promptGuidelines: ["Use read to examine files instead of cat or sed."],
+		promptGuidelines: hashline
+			? [
+					"Use read to examine files instead of cat or sed.",
+					"Text output carries a [path#TAG] header and LINE:TEXT rows — copy the header verbatim into edit patches; tags die once the file is edited or changed on disk.",
+				]
+			: ["Use read to examine files instead of cat or sed."],
 		parameters: readSchema,
 		async execute(
 			_toolCallId,
@@ -311,6 +328,23 @@ export function createReadToolDefinition(
 								} else {
 									// No truncation and no remaining user-limited content.
 									outputText = truncation.content;
+								}
+								// MusePi hashline: mint the [path#TAG] anchor and number the
+								// displayed lines so the model can address them in an edit patch.
+								// Seen-line provenance covers exactly the displayed range.
+								if (hashline && !truncation.firstLineExceedsLimit) {
+									const { text: withoutBom } = hlStripBom(textContent);
+									const normalizedFull = hlNormalizeToLF(withoutBom);
+									const displayCount = truncation.outputLines;
+									const seen = new Array<number>(displayCount);
+									for (let i = 0; i < displayCount; i++) seen[i] = startLineDisplay + i;
+									const tag = hashline.store.record(absolutePath, normalizedFull, seen);
+									const numbered = truncation.content
+										.split("\n")
+										.map((line, i) => formatNumberedLine(startLineDisplay + i, line))
+										.join("\n");
+									const notices = outputText.slice(truncation.content.length);
+									outputText = `${formatHashlineHeader(path, tag)}\n${numbered}${notices}`;
 								}
 								content = [{ type: "text", text: outputText }];
 							}

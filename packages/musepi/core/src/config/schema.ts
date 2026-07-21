@@ -45,6 +45,17 @@ export interface MusepiTruncationSettings {
 	tailChars?: number; // default: 500
 }
 
+export interface MusepiEditSettings {
+	/**
+	 * Hashline editing: read/grep output carries [path#TAG] headers and
+	 * LINE:TEXT rows, and edit takes a tag-anchored patch. Off = pi-native
+	 * exact-replacement edit with plain read output.
+	 */
+	hashline?: boolean; // default: true
+	/** Reject edits on lines read/grep never displayed (hashline only). */
+	enforceSeenLines?: boolean; // default: false
+}
+
 /**
  * OMP-style per-purpose model routing. Each role value is a model spec
  * string `provider/model[:thinkingLevel]` (also `provider:model` or a
@@ -77,6 +88,7 @@ export interface MusepiSettings {
 	swarm?: MusepiSwarmSettings;
 	tui?: MusepiTuiSettings;
 	truncation?: MusepiTruncationSettings;
+	edit?: MusepiEditSettings;
 	modelRoles?: MusepiModelRolesSettings;
 }
 
@@ -87,6 +99,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	swarm: Required<MusepiSwarmSettings>;
 	tui: Required<MusepiTuiSettings>;
 	truncation: Required<MusepiTruncationSettings>;
+	edit: Required<MusepiEditSettings>;
 	modelRoles: Required<MusepiModelRolesSettings>;
 }> = {
 	goal: { badge: true },
@@ -94,6 +107,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto" },
 	tui: { style: "boxed", modelInBorder: false },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
+	edit: { hashline: true, enforceSeenLines: false },
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 };
 
@@ -153,6 +167,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		swarm: pick(MUSEPI_DEFAULTS.swarm, r.swarm),
 		tui: pick(MUSEPI_DEFAULTS.tui, r.tui),
 		truncation: pick(MUSEPI_DEFAULTS.truncation, r.truncation),
+		edit: pick(MUSEPI_DEFAULTS.edit, r.edit),
 		modelRoles: pickModelRoles(r.modelRoles),
 	};
 }
@@ -169,6 +184,12 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 	{ key: "truncation.thresholdChars", description: "Tool-result spill threshold (chars)", defaultValue: 40_000 },
 	{ key: "truncation.headChars", description: "Preview head size (chars)", defaultValue: 1_500 },
 	{ key: "truncation.tailChars", description: "Preview tail size (chars)", defaultValue: 500 },
+	{ key: "edit.hashline", description: "Hash-anchored (hashline) editing for read/grep/edit", defaultValue: true },
+	{
+		key: "edit.enforceSeenLines",
+		description: "Reject edits on lines read/grep never displayed",
+		defaultValue: false,
+	},
 	{
 		key: "modelRoles.default",
 		description: "Fallback model for all roles: provider/model[:thinkingLevel]",

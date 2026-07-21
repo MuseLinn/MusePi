@@ -46,6 +46,7 @@ import {
 } from "@earendil-works/pi-ai/compat";
 import { planManager } from "@musepi/core/plan/index.js";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { createHashlineContext, type HashlineContext } from "../musepi/hashline.ts";
 import { resolveRoleModel } from "../musepi/model-roles.ts";
 import { composeMusepiStreamPrompt, musepiRecentText } from "../musepi/stream-rules.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
@@ -336,6 +337,7 @@ export class AgentSession {
 	private _allowedToolNames?: Set<string>;
 	private _excludedToolNames?: Set<string>;
 	private _baseToolsOverride?: Record<string, AgentTool>;
+	private _hashlineContext?: HashlineContext | null;
 	private _sessionStartEvent: SessionStartEvent;
 	private _extensionUIContext?: ExtensionUIContext;
 	private _extensionMode: ExtensionMode = "print";
@@ -2566,6 +2568,13 @@ export class AgentSession {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		// MusePi hashline: create once per session — the shared SnapshotStore must
+		// survive runtime rebuilds so tags minted earlier stay resolvable. `null`
+		// means "resolved, disabled" (musepi.edit.hashline off).
+		if (this._hashlineContext === undefined) {
+			this._hashlineContext = createHashlineContext(this.settingsManager.getMusepi()) ?? null;
+		}
+		const hashline = this._hashlineContext ?? undefined;
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2574,8 +2583,10 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
+					read: { autoResizeImages, hashline },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					edit: { hashline },
+					grep: { hashline },
 				});
 
 		this._baseToolDefinitions = new Map(
