@@ -102,11 +102,16 @@ export interface RetryPolicy {
 /** Optional callbacks emitted by {@link retryAssistantCall} around each retry. */
 export interface RetryCallbacks {
 	/** Emitted before the backoff sleep of each retry attempt (1-indexed). */
-	onRetry?: (attempt: number, maxAttempts: number, delayMs: number, errorMessage: string) => void;
+	onRetryScheduled?: (
+		attempt: number,
+		maxAttempts: number,
+		delayMs: number,
+		errorMessage: string,
+	) => void | Promise<void>;
 	/** Emitted after the backoff sleep, immediately before the retried call starts. */
-	onRetryAttemptStart?: () => void;
+	onRetryAttemptStart?: () => void | Promise<void>;
 	/** Emitted once when the loop ends: success if a later call returned a non-error message. */
-	onRetryEnd?: (success: boolean, attempt: number, finalError?: string) => void;
+	onRetryFinished?: (success: boolean, attempt: number, finalError?: string) => void | Promise<void>;
 }
 
 class RetrySleepAbortError extends Error {
@@ -143,9 +148,9 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * - A non-retryable error (per {@link isRetryableAssistantError}, including quota/
  *   billing exhaustion) is returned immediately so deterministic errors fail fast.
  * - Otherwise retries up to `maxRetries` times with exponential backoff, emitting
- *   `onRetry` before each sleep, `onRetryAttemptStart` after each sleep before the
- *   retried call starts, and `onRetryEnd` once at the end (whether the loop ends in
- *   success, exhausted retries, or an aborted backoff).
+ *   `onRetryScheduled` before each sleep, `onRetryAttemptStart` after each sleep before
+ *   the retried call starts, and `onRetryFinished` once at the end (whether the loop
+ *   ends in success, exhausted retries, or an aborted backoff).
  *
  * When `policy` is undefined or disabled, the first response is returned unchanged
  * (equivalent to calling `produce()` directly).
@@ -165,33 +170,33 @@ export async function retryAssistantCall(
 
 		// Success or abort: never retry an aborted message; non-error returns as-is.
 		if (response.stopReason !== "error") {
-			if (lastRetry) callbacks?.onRetryEnd?.(true, lastRetry.attempt);
+			if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);
 			return response;
 		}
 
 		// Non-retryable, or budget exhausted: return the final error message.
 		if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {
-			if (lastRetry) callbacks?.onRetryEnd?.(false, lastRetry.attempt, response.errorMessage);
+			if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);
 			return response;
 		}
 
 		attempt++;
 		lastRetry = { attempt, errorMessage: response.errorMessage || "Unknown error" };
 		const delayMs = policy!.baseDelayMs * 2 ** (attempt - 1);
-		callbacks?.onRetry?.(attempt, maxAttempts, delayMs, lastRetry.errorMessage);
+		await callbacks?.onRetryScheduled?.(attempt, maxAttempts, delayMs, lastRetry.errorMessage);
 
 		// Normalize aborts during retry backoff to the same AssistantMessage shape as
 		// provider stream aborts, so callers do not need to care when cancellation happened.
 		try {
 			await sleep(delayMs, signal);
 		} catch (error) {
-			callbacks?.onRetryEnd?.(false, attempt, lastRetry.errorMessage);
+			await callbacks?.onRetryFinished?.(false, attempt, lastRetry.errorMessage);
 			if (error instanceof RetrySleepAbortError) {
 				return { ...response, stopReason: "aborted", errorMessage: undefined };
 			}
 			throw error;
 		}
-		callbacks?.onRetryAttemptStart?.();
+		await callbacks?.onRetryAttemptStart?.();
 	}
 }
 

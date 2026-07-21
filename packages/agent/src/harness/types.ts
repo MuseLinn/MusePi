@@ -2,6 +2,7 @@ import type {
 	ImageContent,
 	Model,
 	Models,
+	RetryPolicy,
 	SimpleStreamOptions,
 	TextContent,
 	Transport,
@@ -613,6 +614,25 @@ export interface SessionTreeEvent {
 	fromHook?: boolean;
 }
 
+export interface RetryScheduledEvent {
+	type: "retry_scheduled";
+	operation: "compaction" | "branch_summary";
+	attempt: number;
+	maxAttempts: number;
+	delayMs: number;
+	errorMessage: string;
+}
+
+export interface RetryAttemptStartEvent {
+	type: "retry_attempt_start";
+	operation: "compaction" | "branch_summary";
+}
+
+export interface RetryFinishedEvent {
+	type: "retry_finished";
+	operation: "compaction" | "branch_summary";
+}
+
 export interface ModelUpdateEvent {
 	type: "model_update";
 	model: Model<any>;
@@ -663,6 +683,9 @@ export type AgentHarnessOwnEvent<
 	| SessionCompactEvent
 	| SessionBeforeTreeEvent
 	| SessionTreeEvent
+	| RetryScheduledEvent
+	| RetryAttemptStartEvent
+	| RetryFinishedEvent
 	| ModelUpdateEvent
 	| ThinkingLevelUpdateEvent
 	| ResourcesUpdateEvent<TSkill, TPromptTemplate>
@@ -732,6 +755,9 @@ export type AgentHarnessEventResultMap = {
 	session_compact: undefined;
 	session_before_tree: SessionBeforeTreeResult | undefined;
 	session_tree: undefined;
+	retry_scheduled: undefined;
+	retry_attempt_start: undefined;
+	retry_finished: undefined;
 	model_update: undefined;
 	thinking_level_update: undefined;
 	resources_update: undefined;
@@ -848,6 +874,8 @@ export interface AgentHarnessOptions<
 		  }) => string | Promise<string>);
 	/** Curated stream/provider request options. Snapshotted at turn start. */
 	streamOptions?: AgentHarnessStreamOptions;
+	/** Optional retry policy for generated compaction and branch-summary requests. */
+	retry?: RetryPolicy;
 	model: Model<any>;
 	thinkingLevel?: ThinkingLevel;
 	activeToolNames?: string[];

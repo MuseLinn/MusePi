@@ -80,35 +80,35 @@ describe("retryAssistantCall", () => {
 
 	it("does not retry an aborted message", async () => {
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "aborted" }));
-		const onRetry = vi.fn();
-		const res = await retryAssistantCall(produce, enabled, undefined, { onRetry });
+		const onRetryScheduled = vi.fn();
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled });
 		expect(res.stopReason).toBe("aborted");
 		expect(produce).toHaveBeenCalledTimes(1);
-		expect(onRetry).not.toHaveBeenCalled();
+		expect(onRetryScheduled).not.toHaveBeenCalled();
 	});
 
 	it("does not retry a non-retryable error (quota/billing)", async () => {
 		const produce = vi.fn(async () =>
 			fauxAssistantMessage("", { stopReason: "error", errorMessage: "insufficient_quota" }),
 		);
-		const onRetry = vi.fn();
-		const onRetryEnd = vi.fn();
-		const res = await retryAssistantCall(produce, enabled, undefined, { onRetry, onRetryEnd });
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled, onRetryFinished });
 		expect(res.stopReason).toBe("error");
 		expect(produce).toHaveBeenCalledTimes(1);
-		expect(onRetry).not.toHaveBeenCalled();
-		expect(onRetryEnd).not.toHaveBeenCalled();
+		expect(onRetryScheduled).not.toHaveBeenCalled();
+		expect(onRetryFinished).not.toHaveBeenCalled();
 	});
 
 	it("retries a transient error up to maxRetries then returns the final error", async () => {
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }));
-		const onRetry = vi.fn();
-		const onRetryEnd = vi.fn();
-		const res = await retryAssistantCall(produce, enabled, undefined, { onRetry, onRetryEnd });
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled, onRetryFinished });
 		expect(res.stopReason).toBe("error");
 		expect(produce).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
-		expect(onRetry).toHaveBeenCalledTimes(3);
-		expect(onRetryEnd).toHaveBeenCalledWith(false, 3, "terminated");
+		expect(onRetryScheduled).toHaveBeenCalledTimes(3);
+		expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
 	});
 
 	it("stops retrying once a call succeeds", async () => {
@@ -119,22 +119,22 @@ describe("retryAssistantCall", () => {
 				? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
 				: fauxAssistantMessage("recovered");
 		});
-		const onRetryEnd = vi.fn();
-		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryEnd });
+		const onRetryFinished = vi.fn();
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryFinished });
 		expect(res.content).toEqual([{ type: "text", text: "recovered" }]);
 		expect(produce).toHaveBeenCalledTimes(3);
-		expect(onRetryEnd).toHaveBeenCalledWith(true, 2);
+		expect(onRetryFinished).toHaveBeenCalledWith(true, 2);
 	});
 
 	it("does not retry when policy is disabled", async () => {
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }));
-		const onRetry = vi.fn();
-		const onRetryEnd = vi.fn();
-		const res = await retryAssistantCall(produce, disabled, undefined, { onRetry, onRetryEnd });
+		const onRetryScheduled = vi.fn();
+		const onRetryFinished = vi.fn();
+		const res = await retryAssistantCall(produce, disabled, undefined, { onRetryScheduled, onRetryFinished });
 		expect(res.stopReason).toBe("error");
 		expect(produce).toHaveBeenCalledTimes(1);
-		expect(onRetry).not.toHaveBeenCalled();
-		expect(onRetryEnd).not.toHaveBeenCalled();
+		expect(onRetryScheduled).not.toHaveBeenCalled();
+		expect(onRetryFinished).not.toHaveBeenCalled();
 	});
 
 	it("emits onRetryAttemptStart after backoff before each retried call", async () => {
@@ -147,15 +147,15 @@ describe("retryAssistantCall", () => {
 				? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
 				: fauxAssistantMessage("recovered");
 		});
-		const onRetry = vi.fn((attempt: number) => {
+		const onRetryScheduled = vi.fn((attempt: number) => {
 			events.push(`retry:${attempt}`);
 		});
 		const onRetryAttemptStart = vi.fn(() => {
 			events.push("attempt-start");
 		});
-		const res = await retryAssistantCall(produce, enabled, undefined, { onRetry, onRetryAttemptStart });
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled, onRetryAttemptStart });
 		expect(res.content).toEqual([{ type: "text", text: "recovered" }]);
-		expect(onRetry).toHaveBeenCalledTimes(2);
+		expect(onRetryScheduled).toHaveBeenCalledTimes(2);
 		expect(onRetryAttemptStart).toHaveBeenCalledTimes(2);
 		expect(events).toEqual([
 			"produce:0",
@@ -168,12 +168,12 @@ describe("retryAssistantCall", () => {
 		]);
 	});
 
-	it("aborts backoff sleep via signal, returns an aborted message, and emits onRetryEnd(false)", async () => {
+	it("aborts backoff sleep via signal, returns an aborted message, and emits onRetryFinished(false)", async () => {
 		const controller = new AbortController();
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }));
 		const policy: RetryPolicy = { enabled: true, maxRetries: 5, baseDelayMs: 10_000 };
-		const onRetryEnd = vi.fn();
-		const p = retryAssistantCall(produce, policy, controller.signal, { onRetryEnd });
+		const onRetryFinished = vi.fn();
+		const p = retryAssistantCall(produce, policy, controller.signal, { onRetryFinished });
 		// Let one error call resolve and the first backoff sleep start, then abort.
 		await vi.waitFor(() => expect(produce).toHaveBeenCalled());
 		controller.abort();
@@ -181,6 +181,6 @@ describe("retryAssistantCall", () => {
 		expect(res.stopReason).toBe("aborted");
 		expect(res.errorMessage).toBeUndefined();
 		expect(produce).toHaveBeenCalledTimes(1);
-		expect(onRetryEnd).toHaveBeenCalledWith(false, 1, "terminated");
+		expect(onRetryFinished).toHaveBeenCalledWith(false, 1, "terminated");
 	});
 });

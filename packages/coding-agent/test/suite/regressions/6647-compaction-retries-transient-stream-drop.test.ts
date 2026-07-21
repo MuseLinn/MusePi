@@ -100,13 +100,13 @@ describe("#6647 compaction retries transient summarization failures", () => {
 
 		expect(result.summary).toContain("recovered summary");
 		expect(getCallCount()).toBe(3); // 1 initial + 2 retries
-		const starts = harness.eventsOfType("summarization_retry_start");
-		const ends = harness.eventsOfType("summarization_retry_end");
+		const starts = harness.eventsOfType("summarization_retry_scheduled");
+		const ends = harness.eventsOfType("summarization_retry_finished");
 		expect(starts).toHaveLength(2);
 		expect(ends).toHaveLength(1);
 		expect(starts[0]).toMatchObject({ attempt: 1, maxAttempts: 3, errorMessage: "terminated" });
 		expect(starts[1]).toMatchObject({ attempt: 2, maxAttempts: 3 });
-		expect(ends[0]).toMatchObject({ type: "summarization_retry_end" });
+		expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
 		// model.* referenced to keep imports honest
 		expect(model.id).toBeTruthy();
 	});
@@ -125,7 +125,7 @@ describe("#6647 compaction retries transient summarization failures", () => {
 
 		await expect(harness.session.compact()).rejects.toThrow("insufficient_quota");
 		expect(getCallCount()).toBe(1);
-		expect(harness.eventsOfType("summarization_retry_start")).toHaveLength(0);
+		expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
 	});
 
 	it("does not retry when retry is disabled", async () => {
@@ -142,7 +142,7 @@ describe("#6647 compaction retries transient summarization failures", () => {
 
 		await expect(harness.session.compact()).rejects.toThrow("terminated");
 		expect(getCallCount()).toBe(1);
-		expect(harness.eventsOfType("summarization_retry_start")).toHaveLength(0);
+		expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
 	});
 
 	it("stops retrying after maxRetries and reports failure", async () => {
@@ -159,11 +159,11 @@ describe("#6647 compaction retries transient summarization failures", () => {
 
 		await expect(harness.session.compact()).rejects.toThrow("terminated");
 		expect(getCallCount()).toBe(3); // 1 initial + 2 retries
-		const starts = harness.eventsOfType("summarization_retry_start");
-		const ends = harness.eventsOfType("summarization_retry_end");
+		const starts = harness.eventsOfType("summarization_retry_scheduled");
+		const ends = harness.eventsOfType("summarization_retry_finished");
 		expect(starts).toHaveLength(2);
 		expect(ends).toHaveLength(1);
-		expect(ends[0]).toMatchObject({ type: "summarization_retry_end" });
+		expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
 	});
 
 	it("aborts an in-flight retry backoff via abortCompaction", async () => {
@@ -183,8 +183,8 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		harness.session.abortCompaction();
 
-		// The aborted retry backoff rejects with an AbortError (matching the real SDK
-		// abort path), which compaction classifies as aborted.
+		// The aborted retry backoff is normalized to an aborted assistant message,
+		// which compaction classifies as aborted.
 		await expect(compactPromise).rejects.toThrow();
 		const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
 		expect(compactionEnd).toMatchObject({ aborted: true });

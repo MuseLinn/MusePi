@@ -169,7 +169,7 @@ export type AgentSessionEvent =
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
 	| {
-			type: "summarization_retry_start";
+			type: "summarization_retry_scheduled";
 			attempt: number;
 			maxAttempts: number;
 			delayMs: number;
@@ -181,7 +181,7 @@ export type AgentSessionEvent =
 			source: "compaction";
 			reason: "manual" | "threshold" | "overflow";
 	  }
-	| { type: "summarization_retry_end" };
+	| { type: "summarization_retry_finished" };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -2695,9 +2695,9 @@ export class AgentSession {
 		source: { source: "branchSummary" } | { source: "compaction"; reason: "manual" | "threshold" | "overflow" },
 	): RetryCallbacks {
 		return {
-			onRetry: (attempt, maxAttempts, delayMs, errorMessage) => {
+			onRetryScheduled: (attempt, maxAttempts, delayMs, errorMessage) => {
 				this._emit({
-					type: "summarization_retry_start",
+					type: "summarization_retry_scheduled",
 					attempt,
 					maxAttempts,
 					delayMs,
@@ -2710,8 +2710,8 @@ export class AgentSession {
 					...source,
 				});
 			},
-			onRetryEnd: () => {
-				this._emit({ type: "summarization_retry_end" });
+			onRetryFinished: () => {
+				this._emit({ type: "summarization_retry_finished" });
 			},
 		};
 	}
