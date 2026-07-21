@@ -3239,6 +3239,32 @@ export class InteractiveMode {
 				this.ui.requestRender();
 				break;
 			}
+
+			case "summarization_retry_start": {
+				this.showError(event.errorMessage);
+				this.showStatusIndicator(
+					new RetryStatusIndicator(this.ui, event.attempt, event.maxAttempts, event.delayMs),
+				);
+				this.ui.requestRender();
+				break;
+			}
+
+			case "summarization_retry_attempt_start": {
+				this.clearStatusIndicator("retry");
+				if (event.source === "branchSummary") {
+					this.showStatusIndicator(new BranchSummaryStatusIndicator(this.ui));
+				} else {
+					this.showStatusIndicator(new CompactionStatusIndicator(this.ui, event.reason));
+				}
+				this.ui.requestRender();
+				break;
+			}
+
+			case "summarization_retry_end": {
+				this.clearStatusIndicator("retry");
+				this.ui.requestRender();
+				break;
+			}
 		}
 	}
 
