@@ -353,6 +353,15 @@ export class TUI extends Container {
 	private terminalColorSchemeListeners = new Set<(scheme: TerminalColorScheme) => void>();
 	private terminalColorSchemeNotificationsEnabled = false;
 
+	/**
+	 * Terminal window focus state (DECSET 1004 focus in/out events). Enabled
+	 * on start(); terminals that do not support 1004 simply never send the
+	 * events and the state stays at the initial `true`.
+	 */
+	public focused = true;
+	/** Called when the terminal reports a focus in/out event. */
+	public onFocusChange?: (focused: boolean) => void;
+
 	// Overlay stack for modal components rendered on top of base content
 	private focusOrderCounter = 0;
 	private overlayStack: OverlayStackEntry[] = [];
@@ -675,6 +684,8 @@ export class TUI extends Container {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031h");
 		}
+		// Focus in/out events (DECSET 1004) for focus-aware features
+		this.terminal.write("\x1b[?1004h");
 		this.queryCellSize();
 		this.requestRender();
 	}
@@ -726,6 +737,7 @@ export class TUI extends Container {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031l");
 		}
+		this.terminal.write("\x1b[?1004l");
 		// Move cursor to the end of the content to prevent overwriting/artifacts on exit
 		if (this.previousLines.length > 0) {
 			// Overwrite the inverted cursor with a normal space to clear the artifact
@@ -794,6 +806,15 @@ export class TUI extends Container {
 	}
 
 	private handleInput(data: string): void {
+		// Focus in/out events (DECSET 1004): CSI I = focus gained, CSI O = lost
+		if (data === "\x1b[I" || data === "\x1b[O") {
+			const focused = data === "\x1b[I";
+			if (this.focused !== focused) {
+				this.focused = focused;
+				this.onFocusChange?.(focused);
+			}
+			return;
+		}
 		if (this.consumeOsc11BackgroundResponse(data)) {
 			return;
 		}

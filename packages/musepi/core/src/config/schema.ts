@@ -147,6 +147,21 @@ export interface MusepiSettings {
 	lsp?: MusepiLspSettings;
 	memory?: MusepiMemorySettings;
 	compaction?: MusepiCompactionSettings;
+	notifications?: MusepiNotificationsSettings;
+}
+
+/**
+ * OSC 9 terminal notifications, fired when the agent finishes a response
+ * and waits for input (kimi terminal-notification port). OSC 9 goes only
+ * to allow-listed terminals (iTerm2/WezTerm/Kitty/Ghostty/Warp); other
+ * terminals get a bare BEL. `condition: "unfocused"` suppresses the
+ * notification while the terminal window has focus.
+ */
+export interface MusepiNotificationsSettings {
+	/** Master switch. */
+	enabled?: boolean; // default: true
+	/** "always" fires on every turn end; "unfocused" only when unfocused. */
+	condition?: "always" | "unfocused"; // default: "unfocused"
 }
 
 /**
@@ -189,6 +204,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
 	memory: { enabled: boolean; scope: "project" | "global"; caps: { project: number; global: number } };
 	compaction: { strategy: "default" | "snapcompact" };
+	notifications: { enabled: boolean; condition: "always" | "unfocused" };
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -201,6 +217,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
 	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
 	compaction: { strategy: "default" },
+	notifications: { enabled: true, condition: "unfocused" },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -331,6 +348,20 @@ function pickCompaction(override: unknown): ResolvedMusepiSettings["compaction"]
 }
 
 /**
+ * notifications: enum-gated condition plus a boolean switch; unknown values
+ * fall back to defaults.
+ */
+function pickNotifications(override: unknown): ResolvedMusepiSettings["notifications"] {
+	const defaults = MUSEPI_DEFAULTS.notifications;
+	const out = { ...defaults };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (record.condition === "always" || record.condition === "unfocused") out.condition = record.condition;
+	return out;
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -348,6 +379,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		lsp: pickLsp(r.lsp),
 		memory: pickMemory(r.memory),
 		compaction: pickCompaction(r.compaction),
+		notifications: pickNotifications(r.notifications),
 	};
 }
 
@@ -444,5 +476,15 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "compaction.strategy",
 		description: "Compaction engine: default (LLM summary) or snapcompact (deterministic local archive)",
 		defaultValue: "default",
+	},
+	{
+		key: "notifications.enabled",
+		description: "OSC 9 terminal notification when the agent finishes a response (BEL fallback elsewhere)",
+		defaultValue: true,
+	},
+	{
+		key: "notifications.condition",
+		description: 'When to notify: "always" or "unfocused" (only while the terminal lacks focus)',
+		defaultValue: "unfocused",
 	},
 ];

@@ -303,7 +303,7 @@ export class Editor implements Component, Focusable {
 	private isInPaste: boolean = false;
 
 	// Prompt history for up/down navigation
-	private history: string[] = [];
+	protected history: string[] = [];
 	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
 	private historyDraft: EditorState | null = null;
 	private hostHistoryDraft: unknown = undefined;
@@ -347,6 +347,12 @@ export class Editor implements Component, Focusable {
 	public onHistoryDraftSave?: () => unknown;
 	/** Called with the value from `onHistoryDraftSave` when the draft is restored. */
 	public onHistoryDraftRestore?: (state: unknown) => void;
+	/**
+	 * Called on the history-search keybinding (Ctrl+R). The host is expected
+	 * to open a fuzzy-search UI over `getHistory()` and refill the buffer on
+	 * selection. When unset, the key falls through to normal handling.
+	 */
+	public onHistorySearch?: () => void;
 	public disableSubmit: boolean = false;
 
 	constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
@@ -421,6 +427,14 @@ export class Editor implements Component, Focusable {
 		if (this.history.length > 100) {
 			this.history.pop();
 		}
+	}
+
+	/**
+	 * Read-only view of the prompt history (newest first), for host-side
+	 * history search UIs (Ctrl+R).
+	 */
+	getHistory(): readonly string[] {
+		return this.history;
 	}
 
 	private isEditorEmpty(): boolean {
@@ -658,6 +672,12 @@ export class Editor implements Component, Focusable {
 
 	handleInput(data: string): void {
 		const kb = getKeybindings();
+
+		// History fuzzy search (Ctrl+R) — host opens a search UI over getHistory()
+		if (kb.matches(data, "tui.editor.historySearch") && this.onHistorySearch) {
+			this.onHistorySearch();
+			return;
+		}
 
 		// Handle character jump mode (awaiting next character to jump to)
 		if (this.jumpMode !== null) {

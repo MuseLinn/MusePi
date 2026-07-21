@@ -2880,16 +2880,26 @@ export class AgentSession {
 	 * @param options.customInstructions Custom instructions for summarizer
 	 * @param options.replaceInstructions If true, customInstructions replaces the default prompt
 	 * @param options.label Label to attach to the branch summary entry
+	 * @param options.position "before" moves the leaf to the target's parent (undo-style
+	 * rewind that excludes the target itself, regardless of target type); default keeps
+	 * the type-driven behavior (user message → parent + editor text, otherwise the target)
 	 * @returns Result with editorText (if user message) and cancelled status
 	 */
 	async navigateTree(
 		targetId: string,
-		options: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string } = {},
+		options: {
+			summarize?: boolean;
+			customInstructions?: string;
+			replaceInstructions?: boolean;
+			label?: string;
+			position?: "before";
+		} = {},
 	): Promise<{ editorText?: string; cancelled: boolean; aborted?: boolean; summaryEntry?: BranchSummaryEntry }> {
 		const oldLeafId = this.sessionManager.getLeafId();
 
-		// No-op if already at target
-		if (targetId === oldLeafId) {
+		// No-op if already at target (a "before" navigation still moves when the
+		// target is the current leaf: it lands on the target's parent)
+		if (targetId === oldLeafId && options.position !== "before") {
 			return { cancelled: false };
 		}
 
@@ -3003,7 +3013,10 @@ export class AgentSession {
 			let newLeafId: string | null;
 			let editorText: string | undefined;
 
-			if (targetEntry.type === "message" && targetEntry.message.role === "user") {
+			if (options.position === "before") {
+				// Undo-style rewind: exclude the target itself regardless of type.
+				newLeafId = targetEntry.parentId;
+			} else if (targetEntry.type === "message" && targetEntry.message.role === "user") {
 				// User message: leaf = parent (null if root), text goes to editor
 				newLeafId = targetEntry.parentId;
 				editorText = contentText(targetEntry.message.content, "");

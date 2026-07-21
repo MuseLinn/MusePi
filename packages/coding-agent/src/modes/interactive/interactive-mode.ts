@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
+import { contentText } from "@earendil-works/pi-ai";
 import type { AssistantMessage, ImageContent, Message, Model } from "@earendil-works/pi-ai/compat";
 import type {
 	AutocompleteItem,
@@ -38,7 +39,16 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { notifyTerminalOnce } from "@musepi/core/notify.js";
 import { getSpinnerFrames } from "@musepi/core/swarm/helpers.js";
+import {
+	computeUndoPlan,
+	formatNothingToUndoMessage,
+	formatUndoLimitMessage,
+	listUndoAnchors,
+	type UndoAnchor,
+	type UndoEntry,
+} from "@musepi/core/undo.js";
 import { TranscriptStore } from "@musepi/transcript";
 import chalk from "chalk";
 import { spawn, spawnSync } from "child_process";
@@ -89,6 +99,7 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import { runBtwTurn } from "../../musepi/btw.ts";
 import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
@@ -120,6 +131,7 @@ import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
+import { HistorySearchComponent } from "./components/history-search.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
@@ -2679,6 +2691,10 @@ export class InteractiveMode {
 			historyBrowseMode = null;
 		};
 
+		// Ctrl+R history fuzzy search (OMP port): same mode-aware entries as
+		// arrow browsing — bash mode searches only `!` entries.
+		this.defaultEditor.onHistorySearch = () => this.showHistorySearch();
+
 		// Handle clipboard paste (triggered on Ctrl+V). Images are attached by path;
 		// otherwise, paste plain text from the system clipboard.
 		this.defaultEditor.onPasteImage = () => {
@@ -2776,6 +2792,16 @@ export class InteractiveMode {
 			if (text === "/fork") {
 				this.showUserMessageSelector();
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/undo" || text.startsWith("/undo ")) {
+				this.editor.setText("");
+				await this.handleUndoCommand(text);
+				return;
+			}
+			if (text === "/btw" || text.startsWith("/btw ")) {
+				this.editor.setText("");
+				await this.handleBtwCommand(text);
 				return;
 			}
 			if (text === "/clone") {
@@ -3117,6 +3143,7 @@ export class InteractiveMode {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
+				this.emitTurnEndNotification();
 				this.clearStatusIndicator("working");
 				if (this.streamingComponent) {
 					this.chatContainer.removeChild(this.streamingComponent);
@@ -3797,6 +3824,60 @@ export class InteractiveMode {
 			this.showStatus("No queued messages to restore");
 		} else {
 			this.showStatus(`Restored ${restored} queued message${restored > 1 ? "s" : ""} to editor`);
+		}
+	}
+
+	/**
+	 * Ctrl+R history fuzzy search (OMP history-search port). Entries follow
+	 * the W1 mode-aware filter: bash mode searches only `!`-prefixed entries,
+	 * prompt mode searches everything. The recalled entry lands in the editor
+	 * as a draft; onChange re-derives the input mode from the `!` prefix.
+	 */
+	private showHistorySearch(): void {
+		const all = this.defaultEditor.getHistory();
+		const entries = this.isBashMode ? all.filter((entry) => entry.startsWith("!")) : [...all];
+		if (entries.length === 0) {
+			this.showStatus("No history to search");
+			return;
+		}
+		this.showSelector((done) => {
+			const component = new HistorySearchComponent(
+				entries,
+				(selected) => {
+					done();
+					this.editor.setText(selected);
+					this.ui.requestRender();
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component, focus: component };
+		});
+	}
+
+	/** Keys that already fired a terminal notification (each turn notifies at most once). */
+	private readonly notificationSentKeys = new Set<string>();
+	private notificationTurnCounter = 0;
+
+	/**
+	 * OSC 9 terminal notification on turn end (kimi terminal-notification
+	 * port, `musepi.notifications.{enabled,condition}`). OSC 9 goes only to
+	 * allow-listed terminals; other terminals get a bare BEL. With
+	 * `condition: "unfocused"` the notification is suppressed while the
+	 * terminal window has focus (DECSET 1004 tracking in pi-tui).
+	 */
+	private emitTurnEndNotification(): void {
+		const notifications = this.settingsManager.getMusepi().notifications;
+		const sequences = notifyTerminalOnce(
+			{ enabled: notifications.enabled, condition: notifications.condition },
+			{ focused: this.ui.focused, sentKeys: this.notificationSentKeys },
+			`turn-${++this.notificationTurnCounter}`,
+			{ title: APP_NAME, body: "turn complete" },
+		);
+		for (const sequence of sequences) {
+			this.ui.terminal.write(sequence);
 		}
 	}
 
@@ -4785,6 +4866,146 @@ export class InteractiveMode {
 			);
 			return { component: selector, focus: selector.getMessageList() };
 		});
+	}
+
+	/**
+	 * /undo [count] — rewind the session to a previous user-driven anchor
+	 * (kimi-code port, pi session-tree variant). Anchors are user prompts and
+	 * `!`/`!!` bash executions on the current branch, capped at the most
+	 * recent compaction. No args: open the anchor selector. Count N: rewind
+	 * N anchors. Navigation uses `navigateTree(anchorId, { position:
+	 * "before" })`, so the undone tail survives as a side branch (nothing is
+	 * deleted, no files are touched) and the anchor's text lands back in the
+	 * editor for re-submission. Anchor planning lives in @musepi/core undo.ts.
+	 */
+	private async handleUndoCommand(text: string): Promise<void> {
+		if (this.session.isStreaming) {
+			this.showWarning("Cannot undo while the agent is working — press Esc first.");
+			return;
+		}
+		const entries = this.branchToUndoEntries();
+
+		const arg = text.startsWith("/undo ") ? text.slice(6).trim() : "";
+		if (arg.length === 0) {
+			this.showUndoSelector(entries);
+			return;
+		}
+		if (!/^[1-9]\d*$/.test(arg)) {
+			this.showError("Usage: /undo [count], where count is a positive integer.");
+			return;
+		}
+		const count = Number(arg);
+		const plan = computeUndoPlan(entries, count);
+		if (!plan.ok) {
+			this.showStatus(
+				plan.reason === "nothing"
+					? formatNothingToUndoMessage(plan.availability)
+					: formatUndoLimitMessage(count, plan.availability),
+			);
+			return;
+		}
+		await this.undoToAnchor(plan.anchor, `Undid ${count} ${count === 1 ? "prompt" : "prompts"}`);
+	}
+
+	/** Project the current session branch into host-neutral undo entries. */
+	private branchToUndoEntries(): UndoEntry[] {
+		return this.sessionManager.getBranch().map((entry) => {
+			if (entry.type === "compaction") {
+				return { id: entry.id, kind: "compaction" as const };
+			}
+			if (entry.type === "message") {
+				const message = entry.message;
+				if (message.role === "user") {
+					return { id: entry.id, kind: "user" as const, text: contentText(message.content, "") };
+				}
+				if (message.role === "bashExecution") {
+					return {
+						id: entry.id,
+						kind: "bash" as const,
+						command: message.command,
+						excludeFromContext: message.excludeFromContext,
+					};
+				}
+			}
+			return { id: entry.id, kind: "other" as const };
+		});
+	}
+
+	private showUndoSelector(entries: UndoEntry[]): void {
+		const { anchors, availability } = listUndoAnchors(entries);
+		if (anchors.length === 0) {
+			this.showStatus(formatNothingToUndoMessage(availability));
+			return;
+		}
+		const initialSelectedId = anchors[anchors.length - 1]?.entryId;
+		this.showSelector((done) => {
+			const selector = new UserMessageSelectorComponent(
+				anchors.map((anchor) => ({ id: anchor.entryId, text: anchor.label })),
+				async (entryId) => {
+					done();
+					const anchor = anchors.find((candidate) => candidate.entryId === entryId);
+					if (anchor) {
+						await this.undoToAnchor(anchor, "Undone to selected message");
+					}
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+				initialSelectedId,
+			);
+			return { component: selector, focus: selector.getMessageList() };
+		});
+	}
+
+	private async undoToAnchor(anchor: UndoAnchor, statusText: string): Promise<void> {
+		try {
+			// Rewind to *before* the anchor: the leaf lands on the anchor's
+			// parent, the transcript view is rebuilt, and the anchor's text
+			// goes back into the editor for re-submission.
+			const result = await this.session.navigateTree(anchor.entryId, { position: "before" });
+			if (result.cancelled) {
+				this.ui.requestRender();
+				return;
+			}
+			this.chatContainer.clear();
+			this.renderInitialMessages();
+			this.editor.setText(anchor.refillText);
+			this.showStatus(statusText);
+			void this.flushCompactionQueue({ willRetry: false });
+		} catch (error: unknown) {
+			this.showError(error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	/**
+	 * /btw <question> — side-channel conversation (see musepi/btw.ts).
+	 * Renders the Q inline and the A as it completes; the child session
+	 * keeps side-channel history across follow-up /btw turns.
+	 */
+	private async handleBtwCommand(text: string): Promise<void> {
+		const question = text.startsWith("/btw ") ? text.slice(5).trim() : "";
+		if (!question) {
+			this.showError("Usage: /btw <question>");
+			return;
+		}
+		if (!this.session.model) {
+			this.showError("No model selected — pick a model before using /btw.");
+			return;
+		}
+
+		this.chatContainer.addChild(new Text(theme.fg("accent", `btw ❯ ${question}`), 1, 0));
+		const answerText = new Text(theme.fg("dim", "…"), 1, 0);
+		this.chatContainer.addChild(answerText);
+		this.ui.requestRender();
+
+		try {
+			const answer = await runBtwTurn(this.session, question);
+			answerText.setText(answer.trim().length > 0 ? answer : "(no answer)");
+		} catch (error: unknown) {
+			answerText.setText(theme.fg("error", error instanceof Error ? error.message : String(error)));
+		}
+		this.ui.requestRender();
 	}
 
 	private async handleCloneCommand(): Promise<void> {

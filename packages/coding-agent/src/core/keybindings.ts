@@ -106,7 +106,10 @@ export const KEYBINDINGS = {
 		description: "Copy message to clipboard",
 	},
 	"app.message.followUp": {
-		defaultKeys: "alt+enter",
+		// Ctrl+Enter reaches us only on terminals that deliver it (Kitty/iTerm2/WezTerm/
+		// Ghostty); Windows Terminal swallows it, so Ctrl+Q is listed first (OMP #1903).
+		// Alt+Enter stays as the legacy pi chord.
+		defaultKeys: ["ctrl+q", "ctrl+enter", "alt+enter"],
 		description: "Queue follow-up message",
 	},
 	"app.message.dequeue": {

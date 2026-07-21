@@ -137,3 +137,31 @@ export type {
 	SnapMessage,
 } from "./snapcompact/index.ts";
 export type { MusepiCompactionSettings } from "./config/schema.ts";
+export {
+	computeUndoPlan,
+	formatNothingToUndoMessage,
+	formatUndoLimitMessage,
+	listUndoAnchors,
+	resolveUndoAvailability,
+	undoAnchorLabel,
+	undoRefillText,
+} from "./undo.ts";
+export type { UndoAnchor, UndoAvailability, UndoEntry, UndoEntryKind, UndoPlan } from "./undo.ts";
+export {
+	BEL,
+	buildTerminalNotificationSequences,
+	ESC,
+	formatNotification,
+	isInsideTmux,
+	MAX_TERMINAL_NOTIFICATION_MESSAGE_LENGTH,
+	notifyTerminalOnce,
+	ST,
+	supportsOsc9Notification,
+} from "./notify.ts";
+export type {
+	NotificationBuildOptions,
+	NotificationCondition,
+	NotificationGateOptions,
+	NotificationGateState,
+	TerminalNotification,
+} from "./notify.ts";

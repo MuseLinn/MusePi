@@ -4272,3 +4272,31 @@ describe("Editor component", () => {
 		});
 	});
 });
+
+describe("history search hook (Ctrl+R)", () => {
+	it("fires onHistorySearch on ctrl+r when the hook is set", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		let fired = 0;
+		editor.onHistorySearch = () => {
+			fired++;
+		};
+		editor.handleInput("\x12"); // ctrl+r
+		assert.strictEqual(fired, 1);
+		// Buffer is untouched — the host owns the search UI
+		assert.strictEqual(editor.getText(), "");
+	});
+
+	it("does not throw on ctrl+r when no hook is set", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		editor.handleInput("\x12"); // falls through harmlessly
+		assert.strictEqual(editor.getText(), "");
+	});
+
+	it("getHistory exposes entries newest-first as a readonly view", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		editor.addToHistory("first");
+		editor.addToHistory("second");
+		editor.addToHistory("!bang");
+		assert.deepStrictEqual([...editor.getHistory()], ["!bang", "second", "first"]);
+	});
+});
