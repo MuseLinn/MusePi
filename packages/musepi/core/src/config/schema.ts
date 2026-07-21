@@ -9,6 +9,8 @@
 // deep-merged with whatever the user configured.
 // ============================================================
 
+import { isModelRole, MODEL_ROLES } from "../model-roles/types.ts";
+
 export interface MusepiGoalSettings {
 	/** Show the goal badge in the footer. */
 	badge?: boolean; // default: true
@@ -43,12 +45,39 @@ export interface MusepiTruncationSettings {
 	tailChars?: number; // default: 500
 }
 
+/**
+ * OMP-style per-purpose model routing. Each role value is a model spec
+ * string `provider/model[:thinkingLevel]` (also `provider:model` or a
+ * bare model id). Empty string = unset → the role falls back to
+ * `default`, and an unset `default` keeps the session's current model,
+ * so a fully empty table never interferes with model selection.
+ */
+export interface MusepiModelRolesSettings {
+	/** Fallback for every other role; also the "main conversation" role. */
+	default?: string;
+	/** Cheap/fast model for lightweight foreground work. */
+	smol?: string;
+	/** Model used while plan mode is active. */
+	plan?: string;
+	/** Sideline reviewer model (advisory calls). */
+	advisor?: string;
+	/** Model for swarm subagents (overrides auto-routing when set). */
+	task?: string;
+	/** Tiny model for background chores (titles, memory distillation). */
+	tiny?: string;
+	/** Roles to cycle through when rotating models (ordered). */
+	cycleOrder?: string[];
+	/** Per-role ordered fallback candidates for 429/quota degradation. */
+	fallbackChains?: Record<string, string[]>;
+}
+
 export interface MusepiSettings {
 	goal?: MusepiGoalSettings;
 	todo?: MusepiTodoSettings;
 	swarm?: MusepiSwarmSettings;
 	tui?: MusepiTuiSettings;
 	truncation?: MusepiTruncationSettings;
+	modelRoles?: MusepiModelRolesSettings;
 }
 
 /** Default values, applied per-field when unset. */
@@ -58,12 +87,14 @@ export const MUSEPI_DEFAULTS: Required<{
 	swarm: Required<MusepiSwarmSettings>;
 	tui: Required<MusepiTuiSettings>;
 	truncation: Required<MusepiTruncationSettings>;
+	modelRoles: Required<MusepiModelRolesSettings>;
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
 	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto" },
 	tui: { style: "boxed", modelInBorder: false },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
+	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -82,6 +113,35 @@ function pick<T extends object>(defaults: T, override: unknown): T {
 }
 
 /**
+ * modelRoles needs a custom merge: role values are plain strings, but
+ * cycleOrder is a filtered list of known role names and fallbackChains
+ * is a nested record of per-role string lists (unknown keys dropped).
+ */
+function pickModelRoles(override: unknown): ResolvedMusepiSettings["modelRoles"] {
+	const defaults = MUSEPI_DEFAULTS.modelRoles;
+	const out = { ...defaults, cycleOrder: [] as string[], fallbackChains: {} as Record<string, string[]> };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	for (const role of MODEL_ROLES) {
+		const v = record[role];
+		if (typeof v === "string") out[role] = v;
+	}
+	if (Array.isArray(record.cycleOrder)) {
+		out.cycleOrder = record.cycleOrder.filter(
+			(v): v is string => typeof v === "string" && isModelRole(v),
+		);
+	}
+	if (record.fallbackChains && typeof record.fallbackChains === "object" && !Array.isArray(record.fallbackChains)) {
+		for (const [role, chain] of Object.entries(record.fallbackChains as Record<string, unknown>)) {
+			if (!isModelRole(role) || !Array.isArray(chain)) continue;
+			const entries = chain.filter((v): v is string => typeof v === "string");
+			if (entries.length > 0) out.fallbackChains[role] = entries;
+		}
+	}
+	return out;
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -93,6 +153,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		swarm: pick(MUSEPI_DEFAULTS.swarm, r.swarm),
 		tui: pick(MUSEPI_DEFAULTS.tui, r.tui),
 		truncation: pick(MUSEPI_DEFAULTS.truncation, r.truncation),
+		modelRoles: pickModelRoles(r.modelRoles),
 	};
 }
 
@@ -108,4 +169,20 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 	{ key: "truncation.thresholdChars", description: "Tool-result spill threshold (chars)", defaultValue: 40_000 },
 	{ key: "truncation.headChars", description: "Preview head size (chars)", defaultValue: 1_500 },
 	{ key: "truncation.tailChars", description: "Preview tail size (chars)", defaultValue: 500 },
+	{
+		key: "modelRoles.default",
+		description: "Fallback model for all roles: provider/model[:thinkingLevel]",
+		defaultValue: "",
+	},
+	{ key: "modelRoles.smol", description: "Cheap/fast model for lightweight work", defaultValue: "" },
+	{ key: "modelRoles.plan", description: "Model used while plan mode is active", defaultValue: "" },
+	{ key: "modelRoles.advisor", description: "Sideline reviewer model", defaultValue: "" },
+	{ key: "modelRoles.task", description: "Model for swarm subagents (overrides auto-routing)", defaultValue: "" },
+	{ key: "modelRoles.tiny", description: "Tiny model for background chores (titles, memory)", defaultValue: "" },
+	{ key: "modelRoles.cycleOrder", description: "Roles to cycle through when rotating models", defaultValue: [] },
+	{
+		key: "modelRoles.fallbackChains",
+		description: "Per-role ordered fallback models for 429/quota degradation",
+		defaultValue: {},
+	},
 ];

@@ -44,7 +44,9 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
+import { planManager } from "@musepi/core/plan/index.js";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { resolveRoleModel } from "../musepi/model-roles.ts";
 import { composeMusepiStreamPrompt, musepiRecentText } from "../musepi/stream-rules.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -511,6 +513,10 @@ export class AgentSession {
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.(turn, signal);
 			const previousContext = previousSnapshot?.context ?? turn.context;
 
+			// MusePi model roles: while plan mode is active, pin the loop to
+			// the plan-role model (unset → live session model = "default").
+			const planOverride = this._resolvePlanRoleModel();
+
 			// MusePi stream rules: per-turn prompt injection at the TS seam.
 			const basePrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
 			return {
@@ -524,10 +530,28 @@ export class AgentSession {
 					),
 					tools: this.agent.state.tools.slice(),
 				},
-				model: this.agent.state.model,
-				thinkingLevel: this.agent.state.thinkingLevel,
+				model: planOverride?.model ?? this.agent.state.model,
+				thinkingLevel: planOverride?.thinkingLevel ?? this.agent.state.thinkingLevel,
 			};
 		};
+	}
+
+	/**
+	 * Resolve the `plan` role to a registry model while plan mode is
+	 * active. Returns undefined when plan mode is off, the role (and
+	 * "default") is unconfigured, or the configured model is unknown —
+	 * the turn then keeps the live session model. Fail-open by design.
+	 */
+	private _resolvePlanRoleModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel } | undefined {
+		try {
+			if (!planManager.isPlanModeActive()) return undefined;
+			const roles = this.settingsManager.getMusepi().modelRoles;
+			if (!roles.plan?.trim()) return undefined;
+			const available = this._modelRuntime.getAvailableSnapshot();
+			return resolveRoleModel("plan", roles, available as Model<any>[]);
+		} catch {
+			return undefined;
+		}
 	}
 
 	// =========================================================================

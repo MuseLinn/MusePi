@@ -4,8 +4,10 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { goalManager } from "@musepi/core";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { goalManager, mergeMusepiSettings } from "@musepi/core";
 import { hookEngine } from "@musepi/core/hooks/index.js";
+import { parseRoleModelSpec } from "@musepi/core/model-roles/index.js";
 import { permissionManager } from "@musepi/core/permission/index.js";
 import { loadSkillsForCwd } from "@musepi/core/skills/index.js";
 import type { SubAgentTask } from "@musepi/core/swarm/types.js";
@@ -25,6 +27,7 @@ import type { ResourceLoader } from "../../core/resource-loader.ts";
 import { createAgentSession } from "../../core/sdk.ts";
 import { SessionManager } from "../../core/session-manager.ts";
 import { createCodingTools, createReadOnlyTools } from "../../core/tools/index.ts";
+import { findModelForSpec, resolveRoleFallbackModels, resolveRoleModel } from "../model-roles.ts";
 
 // Append one output line with a hard array-length cap (oldest dropped first).
 function pushOutputLine(task: SubAgentTask, line: string): void {
@@ -196,6 +199,43 @@ export function getDefaultProvider(): string {
 }
 
 // ============================================================
+// Model Roles (musepi.modelRoles in the same settings.json)
+// ============================================================
+
+/** Merged musepi.modelRoles table (defaults applied; empty = unset). */
+export function getMusepiModelRoles() {
+	const settings = readSettingsCached();
+	return mergeMusepiSettings(settings?.musepi).modelRoles;
+}
+
+/**
+ * Resolve the `task` role against the registry. Returns the canonical
+ * "provider:modelId[:thinkingLevel]" string for SubAgentTask.model, or
+ * null when the role is unconfigured / names an unknown model — the
+ * caller then keeps the existing auto-routing.
+ */
+export function getTaskRoleModel(available: Array<{ id: string; provider?: string }>): string | null {
+	const roles = getMusepiModelRoles();
+	if (!roles.task?.trim() && !roles.default?.trim()) return null;
+	const match = resolveRoleModel("task", roles, available as any);
+	if (!match) return null;
+	const suffix = match.thinkingLevel ? `:${match.thinkingLevel}` : "";
+	return `${match.model.provider}:${match.model.id}${suffix}`;
+}
+
+/**
+ * Ordered fallback candidates for the `task` role (role value first,
+ * then musepi.modelRoles.fallbackChains.task), resolved against the
+ * registry. Used to degrade on 429/quota errors.
+ */
+function getTaskRoleFallbackCandidates(
+	available: Array<{ id: string; provider?: string }>,
+): Array<{ model: any; thinkingLevel?: ThinkingLevel }> {
+	const roles = getMusepiModelRoles();
+	return resolveRoleFallbackModels("task", roles, available as any);
+}
+
+// ============================================================
 // Rate Limit Handling
 // ============================================================
 
@@ -268,21 +308,15 @@ export async function runSubAgent(
 			),
 		);
 
-		// Parse provider:modelId or just modelId
-		let targetProvider = "";
-		let targetModelId = task.model;
-		if (task.model.includes(":")) {
-			const [p, m] = task.model.split(":");
-			targetProvider = p;
-			targetModelId = m;
-		}
-
-		const model = models.find((m: any) => {
-			const idMatch = m.id === targetModelId;
-			if (targetProvider) return idMatch && m.provider === targetProvider;
-			return idMatch;
-		});
-		if (!model) {
+		// Parse task.model as a role spec: provider/model, provider:model,
+		// or a bare id — each with an optional :thinkingLevel suffix. When
+		// the value doesn't parse (e.g. an id that itself contains ":" or
+		// "/", like "tencent/hy3:free"), fall back to a bare raw-id match.
+		const parsed = parseRoleModelSpec(task.model);
+		const primary = parsed.ok
+			? findModelForSpec(parsed.spec, models as any, task.model)
+			: findModelForSpec({ modelId: task.model }, models as any, task.model);
+		if (!primary) {
 			task.status = "failed";
 			task.error = `Model "${task.model}" not found. Available: ${models.map((m: any) => `${m.provider}:${m.id}`).join(", ")}`;
 			task.endTime = Date.now();
@@ -292,7 +326,49 @@ export async function runSubAgent(
 			return;
 		}
 
-		await runWithModel(model, task, ctx, resourceLoader, gatedTools, signal, onProgress);
+		// Ordered candidates: the requested model first, then the
+		// task-role fallback chain (musepi.modelRoles.fallbackChains.task)
+		// for 429/quota degradation.
+		const candidates: Array<{ model: any; thinkingLevel?: ThinkingLevel }> = [
+			{
+				model: primary,
+				thinkingLevel: parsed.ok ? (parsed.spec.thinkingLevel as ThinkingLevel | undefined) : undefined,
+			},
+		];
+		for (const c of getTaskRoleFallbackCandidates(models)) {
+			if (c.model.provider === primary.provider && c.model.id === primary.id) continue;
+			candidates.push(c);
+		}
+
+		for (let i = 0; i < candidates.length; i++) {
+			if (i > 0) {
+				// Previous candidate died on a rate-limit/quota error: reset
+				// the failure state and degrade to the next fallback model.
+				pushOutputLine(
+					task,
+					`[fallback] rate-limited; retrying with ${candidates[i].model.provider}:${candidates[i].model.id}`,
+				);
+				task.status = "pending";
+				task.error = undefined;
+				task.endTime = undefined;
+				task.completedAtMs = undefined;
+				task.progressPercent = 0;
+				onProgress();
+			}
+			await runWithModel(
+				candidates[i].model,
+				task,
+				ctx,
+				resourceLoader,
+				gatedTools,
+				signal,
+				onProgress,
+				candidates[i].thinkingLevel,
+			);
+			if (task.status !== "failed") return;
+			if (!isRateLimitError({ message: task.error ?? "" })) return;
+			// Rate-limit failure — fall through to the next candidate.
+		}
 	} finally {
 		try {
 			void hookEngine.fire(
@@ -314,6 +390,7 @@ async function runWithModel(
 	tools: any[],
 	signal: AbortSignal,
 	onProgress: () => void,
+	thinkingLevel?: ThinkingLevel,
 ): Promise<void> {
 	let session: any = null;
 	let outputBytes = 0;
@@ -365,6 +442,8 @@ async function runWithModel(
 		const result = await createAgentSession({
 			sessionManager: SessionManager.inMemory(),
 			model,
+			// Role-spec thinking suffix (e.g. task: "openai/gpt-5:low"), when present.
+			...(thinkingLevel ? { thinkingLevel } : {}),
 			modelRuntime: (ctx.modelRegistry as any)?.runtime ?? ctx.modelRegistry,
 			// Only the gated tools are enabled: default built-ins are disabled
 			// and our wrapped replacements keep their names, so the permission

@@ -34,7 +34,14 @@ import {
 } from "@musepi/core/swarm/types.js";
 import { Type } from "typebox";
 import { backgroundManager } from "../task/manager.ts";
-import { getDefaultModel, getDefaultProvider, linkAbortSignal, runProgressive, runSubAgent } from "./subagent.ts";
+import {
+	getDefaultModel,
+	getDefaultProvider,
+	getTaskRoleModel,
+	linkAbortSignal,
+	runProgressive,
+	runSubAgent,
+} from "./subagent.ts";
 import { SwarmWidgetComponent } from "./widget.ts";
 
 // ── Shared helpers (ported from the harness entry) ───────────
@@ -376,14 +383,21 @@ export const musepiAgentSwarmToolDef = {
 			}
 			modelId = resolved;
 		} else {
-			modelId = await resolveModelForTask(
-				(params.prompt_template || "").toLowerCase(),
-				params.items || [],
-				available,
-				defaultModelId,
-				defaultProvider,
-				ctx,
-			);
+			// MusePi model roles: an explicit `task` role config wins over
+			// auto-routing; unconfigured → existing auto-routing behavior.
+			const taskRole = getTaskRoleModel(available);
+			if (taskRole) {
+				modelId = taskRole;
+			} else {
+				modelId = await resolveModelForTask(
+					(params.prompt_template || "").toLowerCase(),
+					params.items || [],
+					available,
+					defaultModelId,
+					defaultProvider,
+					ctx,
+				);
+			}
 		}
 		if (!modelId) {
 			return { content: [{ type: "text", text: "No models available in registry." }] };
@@ -632,14 +646,21 @@ export const musepiAgentToolDef = {
 			}
 			modelId = resolved;
 		} else {
-			modelId = await resolveModelForTask(
-				(params.prompt || "").toLowerCase(),
-				[],
-				available,
-				defaultModelId,
-				defaultProvider,
-				ctx,
-			);
+			// MusePi model roles: an explicit `task` role config wins over
+			// auto-routing; unconfigured → existing auto-routing behavior.
+			const taskRole = getTaskRoleModel(available);
+			if (taskRole) {
+				modelId = taskRole;
+			} else {
+				modelId = await resolveModelForTask(
+					(params.prompt || "").toLowerCase(),
+					[],
+					available,
+					defaultModelId,
+					defaultProvider,
+					ctx,
+				);
+			}
 		}
 		if (!modelId) {
 			return { content: [{ type: "text", text: "No models available." }] };
