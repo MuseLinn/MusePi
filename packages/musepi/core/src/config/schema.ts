@@ -28,6 +28,13 @@ export interface MusepiSwarmSettings {
 	timeoutMs?: number; // default: 1800000 (30 min)
 	/** Default model tier when unspecified. */
 	modelTier?: "cheap" | "balanced" | "premium" | "auto"; // default: "auto"
+	/**
+	 * Subagent filesystem isolation: "worktree" runs each subagent in a
+	 * detached git worktree at HEAD and merges changes back on completion
+	 * (auto-apply only while the main tree is untouched, otherwise the patch
+	 * lands in the session patches dir); "none" runs in the main worktree.
+	 */
+	isolation?: "worktree" | "none"; // default: "worktree"
 }
 
 export interface MusepiTuiSettings {
@@ -172,7 +179,7 @@ export const MUSEPI_DEFAULTS: Required<{
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
-	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto" },
+	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto", isolation: "worktree" },
 	tui: { style: "boxed", modelInBorder: false },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
 	edit: { hashline: true, enforceSeenLines: false },
@@ -324,6 +331,11 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 	{ key: "swarm.maxConcurrency", description: "Default parallel workers for agent_swarm", defaultValue: 5 },
 	{ key: "swarm.timeoutMs", description: "Subagent timeout in milliseconds", defaultValue: 1_800_000 },
 	{ key: "swarm.modelTier", description: "Default model tier for subagents", defaultValue: "auto" },
+	{
+		key: "swarm.isolation",
+		description: "Subagent filesystem isolation: git worktree per subagent + merge-back, or none",
+		defaultValue: "worktree",
+	},
 	{ key: "tui.style", description: "Editor chrome style (plain/boxed/compact)", defaultValue: "boxed" },
 	{ key: "tui.modelInBorder", description: "Show model name in the editor top border", defaultValue: false },
 	{ key: "truncation.thresholdChars", description: "Tool-result spill threshold (chars)", defaultValue: 40_000 },

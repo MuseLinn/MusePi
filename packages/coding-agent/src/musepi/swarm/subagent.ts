@@ -10,6 +10,12 @@ import { hookEngine } from "@musepi/core/hooks/index.js";
 import { parseRoleModelSpec } from "@musepi/core/model-roles/index.js";
 import { permissionManager } from "@musepi/core/permission/index.js";
 import { loadSkillsForCwd } from "@musepi/core/skills/index.js";
+import {
+	cleanupIsolation,
+	mergeIsolation,
+	type PreparedIsolation,
+	prepareIsolation,
+} from "@musepi/core/swarm/isolation.js";
 import type { SubAgentTask } from "@musepi/core/swarm/types.js";
 import {
 	activeSessions,
@@ -25,7 +31,7 @@ import { getAgentDir } from "../../config.ts";
 import { createExtensionRuntime } from "../../core/extensions/loader.ts";
 import type { ResourceLoader } from "../../core/resource-loader.ts";
 import { createAgentSession } from "../../core/sdk.ts";
-import { SessionManager } from "../../core/session-manager.ts";
+import { getDefaultSessionDir, SessionManager } from "../../core/session-manager.ts";
 import { createCodingTools, createReadOnlyTools } from "../../core/tools/index.ts";
 import { findModelForSpec, resolveRoleFallbackModels, resolveRoleModel } from "../model-roles.ts";
 
@@ -40,6 +46,23 @@ function pushOutputLine(task: SubAgentTask, line: string): void {
 // Timeout & output limit constants (Kimi Code-aligned)
 const SUBAGENT_TIMEOUT_MS = parseInt(process.env.KIMI_SUBAGENT_TIMEOUT_MS || "1800000", 10); // 30 min default (Kimi Code-aligned)
 const MAX_OUTPUT_BYTES = 1 * 1024 * 1024; // 1 MiB (Kimi Code)
+
+// ============================================================
+// Merge serialization — concurrent subagents merge back one at a time
+// (git index operations and the porcelain baseline check are not
+// race-safe across workers).
+// ============================================================
+
+let isolationMergeQueue: Promise<void> = Promise.resolve();
+
+function enqueueIsolationMerge<T>(fn: () => Promise<T>): Promise<T> {
+	const next = isolationMergeQueue.then(fn, fn);
+	isolationMergeQueue = next.then(
+		() => undefined,
+		() => undefined,
+	);
+	return next;
+}
 
 // ============================================================
 // UserCancellationError — distinguishes user cancel from system errors
@@ -208,6 +231,12 @@ export function getMusepiModelRoles() {
 	return mergeMusepiSettings(settings?.musepi).modelRoles;
 }
 
+/** Merged musepi.swarm.isolation ("worktree" default; anything else = off). */
+export function getMusepiSwarmIsolation(): "worktree" | "none" {
+	const settings = readSettingsCached();
+	return mergeMusepiSettings(settings?.musepi).swarm.isolation === "none" ? "none" : "worktree";
+}
+
 /**
  * Resolve the `task` role against the registry. Returns the canonical
  * "provider:modelId[:thinkingLevel]" string for SubAgentTask.model, or
@@ -288,8 +317,22 @@ export async function runSubAgent(
 	} catch {
 		/* hooks fail open */
 	}
+	// W8 worktree isolation: each subagent works in a detached git worktree
+	// at HEAD (uncommitted main-tree changes are NOT carried over); changes
+	// merge back on completion. Degrades loudly to the main cwd when the
+	// repo is not isolatable. Declared before try so the finally block can
+	// merge/clean up on every exit path (the candidate loop returns early).
+	let isolation: PreparedIsolation | null = null;
 	try {
-		const resourceLoader = createSubagentResourceLoader(ctx);
+		if (getMusepiSwarmIsolation() !== "none") {
+			isolation = await prepareIsolation(ctx.cwd, task.id);
+			if (isolation.kind === "none") {
+				pushOutputLine(task, `[isolation] running without isolation: ${isolation.reason}`);
+			}
+		}
+		const effectiveCwd = isolation?.kind === "worktree" ? isolation.worktreeDir : ctx.cwd;
+
+		const resourceLoader = createSubagentResourceLoader({ ...ctx, cwd: effectiveCwd });
 		const models = ctx.modelRegistry.getAvailable();
 		// Kimi Code-aligned built-in subagent tool sets:
 		//  - coder:  full read/write + shell (default general-purpose agent)
@@ -301,7 +344,9 @@ export async function runSubAgent(
 		// workers share the session's PermissionManager, so /mode switches
 		// propagate to in-flight subagents by construction, and 'ask' verdicts
 		// degrade to blocks (unattended workers cannot answer dialogs).
-		const baseTools = task.type === "coder" ? createCodingTools(ctx.cwd) : createReadOnlyTools(ctx.cwd);
+		// Permission evaluation keeps the REAL cwd so user path rules match
+		// the repository they were written for; file tools run in effectiveCwd.
+		const baseTools = task.type === "coder" ? createCodingTools(effectiveCwd) : createReadOnlyTools(effectiveCwd);
 		const gatedTools = baseTools.map((t: any) =>
 			wrapWithPermissionGate(t, (name, params) =>
 				permissionManager.evaluateForSubagent(name, params as Record<string, unknown>, ctx.cwd),
@@ -364,12 +409,46 @@ export async function runSubAgent(
 				signal,
 				onProgress,
 				candidates[i].thinkingLevel,
+				effectiveCwd,
 			);
 			if (task.status !== "failed") return;
 			if (!isRateLimitError({ message: task.error ?? "" })) return;
 			// Rate-limit failure — fall through to the next candidate.
 		}
 	} finally {
+		// W8 merge-back + cleanup. Only a successfully completed subagent
+		// merges (OMP semantics: failed/aborted runs discard the worktree).
+		// git apply --check is the conflict guard: clean patches auto-apply
+		// (sibling merges in completion order included); conflicts drop the
+		// patch to <session-dir>/patches/ and preserve the worktree instead
+		// of force-merging. Merges serialize across concurrent subagents.
+		if (isolation?.kind === "worktree") {
+			const isolated = isolation;
+			let preserve = false;
+			if (task.status === "done") {
+				try {
+					const patchesDir = path.join(getDefaultSessionDir(ctx.cwd), "patches");
+					const outcome = await enqueueIsolationMerge(() => mergeIsolation(isolated, patchesDir, task.id));
+					preserve = outcome.status === "patch-saved" || outcome.status === "failed";
+					const kept = preserve ? ` Worktree kept at: ${isolated.worktreeDir}` : "";
+					pushOutputLine(task, `[isolation] ${outcome.note}${kept}`);
+				} catch (mergeErr) {
+					preserve = true;
+					pushOutputLine(
+						task,
+						`[isolation] merge error: ${(mergeErr as any)?.message ?? mergeErr}; worktree kept at: ${isolated.worktreeDir}`,
+					);
+				}
+			}
+			if (!preserve) {
+				try {
+					const warn = await cleanupIsolation(isolated);
+					if (warn) pushOutputLine(task, `[isolation] ${warn}`);
+				} catch {
+					/* best-effort cleanup */
+				}
+			}
+		}
 		try {
 			void hookEngine.fire(
 				"SubagentStop",
@@ -391,6 +470,8 @@ async function runWithModel(
 	signal: AbortSignal,
 	onProgress: () => void,
 	thinkingLevel?: ThinkingLevel,
+	/** W8: the directory the session actually runs in (worktree when isolated). */
+	runCwd?: string,
 ): Promise<void> {
 	let session: any = null;
 	let outputBytes = 0;
@@ -442,6 +523,9 @@ async function runWithModel(
 		const result = await createAgentSession({
 			sessionManager: SessionManager.inMemory(),
 			model,
+			// W8: run inside the worktree when isolated — LSP/memory/session
+			// project resolution keys off this cwd, not the main tree's.
+			...(runCwd ? { cwd: runCwd } : {}),
 			// Role-spec thinking suffix (e.g. task: "openai/gpt-5:low"), when present.
 			...(thinkingLevel ? { thinkingLevel } : {}),
 			modelRuntime: (ctx.modelRegistry as any)?.runtime ?? ctx.modelRegistry,

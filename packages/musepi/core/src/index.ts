@@ -45,6 +45,14 @@ export type {
 	ToolSelectGateConfig,
 	ToolSelectModelRef,
 } from "./tool-select/index.ts";
+export { cleanupIsolation, mergeIsolation, prepareIsolation } from "./swarm/isolation.ts";
+export type {
+	MergeOutcome,
+	NoIsolation,
+	PreparedIsolation,
+	WorktreeBaseline,
+	WorktreeIsolation,
+} from "./swarm/isolation.ts";
 export {
 	BUILTIN_LSP_SERVERS,
 	DeferredDiagnosticsCoordinator,
