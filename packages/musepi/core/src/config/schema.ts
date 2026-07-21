@@ -75,6 +75,34 @@ export interface MusepiToolSelectSettings {
 }
 
 /**
+ * One language server override (musepi.lsp.servers.<name>). Fields merge
+ * onto the built-in table entry of the same name; `disabled` removes it.
+ */
+export interface MusepiLspServerSettings {
+	command?: string;
+	args?: string[];
+	fileTypes?: string[];
+	rootMarkers?: string[];
+	isLinter?: boolean;
+	disabled?: boolean;
+	initOptions?: Record<string, unknown>;
+	settings?: Record<string, unknown>;
+}
+
+/**
+ * LSP integration: lazy language-server clients behind the `lsp` tool,
+ * plus deferred post-edit diagnostics re-injected into the session.
+ */
+export interface MusepiLspSettings {
+	/** Master switch. Off = tool errors politely, deferred diagnostics disarmed. */
+	enabled?: boolean; // default: true
+	/** Per-server overrides / custom servers, merged onto the built-in table. */
+	servers?: Record<string, MusepiLspServerSettings>; // default: {}
+	/** Idle clients are shut down after this many ms. */
+	idleTimeoutMs?: number; // default: 600000 (10 min)
+}
+
+/**
  * OMP-style per-purpose model routing. Each role value is a model spec
  * string `provider/model[:thinkingLevel]` (also `provider:model` or a
  * bare model id). Empty string = unset → the role falls back to
@@ -109,6 +137,7 @@ export interface MusepiSettings {
 	edit?: MusepiEditSettings;
 	modelRoles?: MusepiModelRolesSettings;
 	toolSelect?: MusepiToolSelectSettings;
+	lsp?: MusepiLspSettings;
 }
 
 /** Default values, applied per-field when unset. */
@@ -121,6 +150,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	edit: Required<MusepiEditSettings>;
 	modelRoles: Required<MusepiModelRolesSettings>;
 	toolSelect: Required<MusepiToolSelectSettings>;
+	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -130,6 +160,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	edit: { hashline: true, enforceSeenLines: false },
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	toolSelect: { enabled: false, models: [], defer: [] },
+	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -192,6 +223,43 @@ function pickToolSelect(override: unknown): ResolvedMusepiSettings["toolSelect"]
 }
 
 /**
+ * lsp needs a custom merge: `enabled` boolean, `idleTimeoutMs` number, and
+ * `servers` is a record of per-server override objects (non-object entries
+ * dropped; only known override fields are kept).
+ */
+function pickLsp(override: unknown): ResolvedMusepiSettings["lsp"] {
+	const defaults = MUSEPI_DEFAULTS.lsp;
+	const out = { ...defaults, servers: {} as Record<string, MusepiLspServerSettings> };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (typeof record.idleTimeoutMs === "number" && record.idleTimeoutMs > 0) {
+		out.idleTimeoutMs = record.idleTimeoutMs;
+	}
+	if (record.servers && typeof record.servers === "object" && !Array.isArray(record.servers)) {
+		for (const [name, value] of Object.entries(record.servers as Record<string, unknown>)) {
+			if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+			const v = value as Record<string, unknown>;
+			const server: MusepiLspServerSettings = {};
+			if (typeof v.command === "string") server.command = v.command;
+			if (Array.isArray(v.args)) server.args = v.args.filter((a): a is string => typeof a === "string");
+			if (Array.isArray(v.fileTypes)) server.fileTypes = v.fileTypes.filter((a): a is string => typeof a === "string");
+			if (Array.isArray(v.rootMarkers)) {
+				server.rootMarkers = v.rootMarkers.filter((a): a is string => typeof a === "string");
+			}
+			if (typeof v.isLinter === "boolean") server.isLinter = v.isLinter;
+			if (typeof v.disabled === "boolean") server.disabled = v.disabled;
+			if (v.initOptions && typeof v.initOptions === "object") {
+				server.initOptions = v.initOptions as Record<string, unknown>;
+			}
+			if (v.settings && typeof v.settings === "object") server.settings = v.settings as Record<string, unknown>;
+			out.servers[name] = server;
+		}
+	}
+	return out;
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -206,6 +274,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		edit: pick(MUSEPI_DEFAULTS.edit, r.edit),
 		modelRoles: pickModelRoles(r.modelRoles),
 		toolSelect: pickToolSelect(r.toolSelect),
+		lsp: pickLsp(r.lsp),
 	};
 }
 
@@ -241,6 +310,21 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "edit.enforceSeenLines",
 		description: "Reject edits on lines read/grep never displayed",
 		defaultValue: false,
+	},
+	{
+		key: "lsp.enabled",
+		description: "LSP integration: lsp tool + post-edit diagnostics (graceful when no server installed)",
+		defaultValue: true,
+	},
+	{
+		key: "lsp.servers",
+		description: "Language server overrides merged onto the built-in table",
+		defaultValue: {},
+	},
+	{
+		key: "lsp.idleTimeoutMs",
+		description: "Idle language servers are shut down after this many ms",
+		defaultValue: 600000,
 	},
 	{
 		key: "modelRoles.default",

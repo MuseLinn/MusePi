@@ -3,6 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "../config.ts";
 import { musepiGoalToolDefs } from "../musepi/goal-native.ts";
+import { musepiLspToolDef } from "../musepi/lsp/native.ts";
 import { musepiAgentSwarmToolDef, musepiAgentToolDef } from "../musepi/swarm/orchestrate.ts";
 import { musepiBackgroundToolDefs, musepiCronToolDefs } from "../musepi/task/native.ts";
 import { musepiTodoToolDef } from "../musepi/todo-native.ts";
@@ -227,6 +228,7 @@ export async function createAgentSessionFromServices(
 			...musepiBackgroundToolDefs(),
 			...musepiCronToolDefs(),
 			musepiSelectToolsToolDef,
+			musepiLspToolDef,
 		] as ToolDefinition[],
 		sessionStartEvent: options.sessionStartEvent,
 	});

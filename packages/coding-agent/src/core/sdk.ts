@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { clampThinkingLevel, type Message, type Model } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
+import { initMusepiLsp, transformMusepiLspContext } from "../musepi/lsp/native.ts";
 import { initMusepiToolSelect, transformMusepiToolSelectContext } from "../musepi/tool-select-native.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -346,8 +347,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		transformContext: async (messages) => {
 			const runner = extensionRunnerRef.current;
 			const base = runner ? await runner.emitContext(messages) : messages;
-			// MusePi tool-select announcement (no-op unless the gate is on).
-			return transformMusepiToolSelectContext(base);
+			// MusePi tool-select announcement + deferred post-edit LSP diagnostics
+			// (both no-ops unless their gates fired).
+			return transformMusepiLspContext(transformMusepiToolSelectContext(base));
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),
@@ -388,6 +390,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// MusePi progressive tool disclosure: gate-check, shape the active tool
 	// set (deferrable tools out, select_tools in), arm the announcement.
 	initMusepiToolSelect(session, settingsManager);
+	// MusePi LSP: resolve detected servers, arm post-mutation diagnostics.
+	initMusepiLsp(session, settingsManager);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

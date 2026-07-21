@@ -62,6 +62,7 @@ const NEVER_DEFER: readonly string[] = [
 	"cron_list",
 	"cron_create",
 	"cron_delete",
+	"lsp",
 ];
 
 function toolEntriesOf(session: AgentSession): ToolEntry[] {
