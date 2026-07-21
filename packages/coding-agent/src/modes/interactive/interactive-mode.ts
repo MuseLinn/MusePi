@@ -2659,6 +2659,26 @@ export class InteractiveMode {
 			}
 		};
 
+		// Mode-aware history navigation (kimi 4-hook port): bash mode recalls
+		// only `!`-prefixed history entries; prompt mode recalls everything. The
+		// filter is locked to the mode captured when the user first enters
+		// history browsing, so landing on a `!` entry mid-browse doesn't flip
+		// the filter to bash-only. Recalled entries go through onChange, which
+		// re-derives isBashMode from the `!` prefix and updates the border
+		// color — no onRecall hook is needed for mode switching here.
+		let historyBrowseMode: "prompt" | "bash" | null = null;
+		this.defaultEditor.setHistoryFilter((entry: string) => {
+			const mode = historyBrowseMode ?? (this.isBashMode ? "bash" : "prompt");
+			return mode === "bash" ? entry.startsWith("!") : true;
+		});
+		this.defaultEditor.onHistoryDraftSave = () => {
+			historyBrowseMode = this.isBashMode ? "bash" : "prompt";
+			return historyBrowseMode;
+		};
+		this.defaultEditor.onHistoryDraftRestore = () => {
+			historyBrowseMode = null;
+		};
+
 		// Handle clipboard paste (triggered on Ctrl+V). Images are attached by path;
 		// otherwise, paste plain text from the system clipboard.
 		this.defaultEditor.onPasteImage = () => {
