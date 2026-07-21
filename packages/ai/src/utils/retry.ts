@@ -110,7 +110,7 @@ export interface RetryCallbacks {
 	) => void | Promise<void>;
 	/** Emitted after the backoff sleep, immediately before the retried call starts. */
 	onRetryAttemptStart?: () => void | Promise<void>;
-	/** Emitted once when the loop ends: success if a later call returned a non-error message. */
+	/** Emitted once when the loop ends: success if a later call completed normally. */
 	onRetryFinished?: (success: boolean, attempt: number, finalError?: string) => void | Promise<void>;
 }
 
@@ -142,9 +142,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * Run a single assistant-producing call with bounded retry on transient errors.
  *
  * Behavior:
- * - A non-error response (success or aborted) is returned immediately; aborts are
- *   never retried. Aborts during the backoff sleep are normalized to an aborted
- *   `AssistantMessage` too, so callers do not need to care when cancellation happened.
+ * - A successful response is returned immediately. Aborts are terminal and never
+ *   retried, but reported as unsuccessful if they happen after a retry was scheduled.
+ *   Aborts during the backoff sleep are normalized to an aborted `AssistantMessage`
+ *   too, so callers do not need to care when cancellation happened.
  * - A non-retryable error (per {@link isRetryableAssistantError}, including quota/
  *   billing exhaustion) is returned immediately so deterministic errors fail fast.
  * - Otherwise retries up to `maxRetries` times with exponential backoff, emitting
@@ -168,7 +169,13 @@ export async function retryAssistantCall(
 	for (;;) {
 		const response = await produce();
 
-		// Success or abort: never retry an aborted message; non-error returns as-is.
+		// Abort: terminal but not successful. Never retry an aborted message.
+		if (response.stopReason === "aborted") {
+			if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);
+			return response;
+		}
+
+		// Success: non-error, non-abort responses return as-is.
 		if (response.stopReason !== "error") {
 			if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);
 			return response;

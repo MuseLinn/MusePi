@@ -126,6 +126,21 @@ describe("retryAssistantCall", () => {
 		expect(onRetryFinished).toHaveBeenCalledWith(true, 2);
 	});
 
+	it("reports an aborted retried call as unsuccessful", async () => {
+		let n = 0;
+		const produce = vi.fn(async () => {
+			n++;
+			return n === 1
+				? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+				: fauxAssistantMessage("", { stopReason: "aborted" });
+		});
+		const onRetryFinished = vi.fn();
+		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryFinished });
+		expect(res.stopReason).toBe("aborted");
+		expect(produce).toHaveBeenCalledTimes(2);
+		expect(onRetryFinished).toHaveBeenCalledWith(false, 1);
+	});
+
 	it("does not retry when policy is disabled", async () => {
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }));
 		const onRetryScheduled = vi.fn();
