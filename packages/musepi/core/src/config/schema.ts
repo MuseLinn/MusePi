@@ -138,6 +138,23 @@ export interface MusepiSettings {
 	modelRoles?: MusepiModelRolesSettings;
 	toolSelect?: MusepiToolSelectSettings;
 	lsp?: MusepiLspSettings;
+	memory?: MusepiMemorySettings;
+}
+
+/**
+ * Long-term memory (markdown file tree + BM25 recall + budgeted startup
+ * injection). Disabled by default.
+ */
+export interface MusepiMemorySettings {
+	/** Master switch. Off = no injection, memory tool hidden. */
+	enabled?: boolean; // default: false
+	/** project = project memory only; global = project + global memory. */
+	scope?: "project" | "global"; // default: "project"
+	/** Per-section injection budgets (estimated tokens). */
+	caps?: {
+		project?: number; // default: 10000
+		global?: number; // default: 6000
+	};
 }
 
 /** Default values, applied per-field when unset. */
@@ -151,6 +168,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	modelRoles: Required<MusepiModelRolesSettings>;
 	toolSelect: Required<MusepiToolSelectSettings>;
 	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
+	memory: { enabled: boolean; scope: "project" | "global"; caps: { project: number; global: number } };
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -161,6 +179,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	toolSelect: { enabled: false, models: [], defer: [] },
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
+	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -260,6 +279,25 @@ function pickLsp(override: unknown): ResolvedMusepiSettings["lsp"] {
 }
 
 /**
+ * memory needs a custom merge: `enabled` boolean, `scope` enum, and a
+ * nested `caps` record of positive numbers.
+ */
+function pickMemory(override: unknown): ResolvedMusepiSettings["memory"] {
+	const defaults = MUSEPI_DEFAULTS.memory;
+	const out = { ...defaults, caps: { ...defaults.caps } };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (record.scope === "project" || record.scope === "global") out.scope = record.scope;
+	if (record.caps && typeof record.caps === "object" && !Array.isArray(record.caps)) {
+		const caps = record.caps as Record<string, unknown>;
+		if (typeof caps.project === "number" && caps.project > 0) out.caps.project = caps.project;
+		if (typeof caps.global === "number" && caps.global > 0) out.caps.global = caps.global;
+	}
+	return out;
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -275,6 +313,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		modelRoles: pickModelRoles(r.modelRoles),
 		toolSelect: pickToolSelect(r.toolSelect),
 		lsp: pickLsp(r.lsp),
+		memory: pickMemory(r.memory),
 	};
 }
 
@@ -341,5 +380,25 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "modelRoles.fallbackChains",
 		description: "Per-role ordered fallback models for 429/quota degradation",
 		defaultValue: {},
+	},
+	{
+		key: "memory.enabled",
+		description: "Long-term memory: BM25 recall + budgeted startup injection (default off)",
+		defaultValue: false,
+	},
+	{
+		key: "memory.scope",
+		description: "Memory injection scope: project only, or project + global",
+		defaultValue: "project",
+	},
+	{
+		key: "memory.caps.project",
+		description: "Project memory injection budget (estimated tokens)",
+		defaultValue: 10000,
+	},
+	{
+		key: "memory.caps.global",
+		description: "Global memory injection budget (estimated tokens)",
+		defaultValue: 6000,
 	},
 ];

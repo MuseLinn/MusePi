@@ -3,6 +3,7 @@ import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/pi
 import { clampThinkingLevel, type Message, type Model } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
 import { initMusepiLsp, transformMusepiLspContext } from "../musepi/lsp/native.ts";
+import { initMusepiMemory, transformMusepiMemoryContext } from "../musepi/memory-native.ts";
 import { initMusepiToolSelect, transformMusepiToolSelectContext } from "../musepi/tool-select-native.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -349,7 +350,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			const base = runner ? await runner.emitContext(messages) : messages;
 			// MusePi tool-select announcement + deferred post-edit LSP diagnostics
 			// (both no-ops unless their gates fired).
-			return transformMusepiLspContext(transformMusepiToolSelectContext(base));
+			return transformMusepiMemoryContext(transformMusepiLspContext(transformMusepiToolSelectContext(base)));
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),
@@ -392,6 +393,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	initMusepiToolSelect(session, settingsManager);
 	// MusePi LSP: resolve detected servers, arm post-mutation diagnostics.
 	initMusepiLsp(session, settingsManager);
+	// MusePi memory: arm the one-shot startup injection + recall tool.
+	initMusepiMemory(session, settingsManager);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

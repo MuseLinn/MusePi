@@ -87,3 +87,20 @@ export type {
 	ResolvedLspServer,
 } from "./lsp/index.ts";
 export type { MusepiLspServerSettings, MusepiLspSettings } from "./config/schema.ts";
+export {
+	buildMemoryInjection,
+	computeProjectId,
+	editEntry,
+	isEmptyMemory,
+	MEMORY_SECTIONS,
+	memoryPaths,
+	memorySkeleton,
+	readMemoryFile,
+	retainEntry,
+	searchIndex,
+	searchMemory,
+	tokenize,
+	truncateToBudget,
+	writeMemoryFile,
+} from "./memory/index.ts";
+export type { MemoryCaps, MemorySearchHit, MemorySection } from "./memory/index.ts";
