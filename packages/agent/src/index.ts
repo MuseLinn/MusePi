@@ -42,5 +42,7 @@ export * from "./harness/utils/shell-output.ts";
 export * from "./harness/utils/truncate.ts";
 // Proxy utilities
 export * from "./proxy.ts";
+// Stream defaults
+export { setDefaultStreamFn } from "./stream-fn.ts";
 // Types
 export * from "./types.ts";

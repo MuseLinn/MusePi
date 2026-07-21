@@ -25,7 +25,7 @@ const agent = new Agent({
     systemPrompt: "You are a helpful assistant.",
     model,
   },
-  streamFunction: models.streamSimple.bind(models),
+  streamFn: models.streamSimple.bind(models),
 });
 
 agent.subscribe((event) => {
@@ -195,7 +195,7 @@ const agent = new Agent({
   followUpMode: "one-at-a-time",
 
   // Required stream function
-  streamFunction: models.streamSimple.bind(models),
+  streamFn: models.streamSimple.bind(models),
 
   // Session ID for provider caching
   sessionId: "session-123",
@@ -382,7 +382,7 @@ Handle custom types in `convertToLlm`:
 
 ```typescript
 const agent = new Agent({
-  streamFunction: models.streamSimple.bind(models),
+  streamFn: models.streamSimple.bind(models),
   convertToLlm: (messages) => messages.flatMap(m => {
     if (m.role === "notification") return []; // Filter out
     return [m];
@@ -453,7 +453,7 @@ For browser apps that proxy through a backend:
 import { Agent, streamProxy } from "@earendil-works/pi-agent-core";
 
 const agent = new Agent({
-  streamFunction: (model, context, options) =>
+  streamFn: (model, context, options) =>
     streamProxy(model, context, {
       ...options,
       authToken: "...",
@@ -485,13 +485,13 @@ const config: AgentLoopConfig = {
 
 const userMessage = { role: "user", content: "Hello", timestamp: Date.now() };
 
-const streamFunction = models.streamSimple.bind(models);
-for await (const event of agentLoop([userMessage], context, config, undefined, streamFunction)) {
+const streamFn = models.streamSimple.bind(models);
+for await (const event of agentLoop([userMessage], context, config, undefined, streamFn)) {
   console.log(event.type);
 }
 
 // Continue from existing context
-for await (const event of agentLoopContinue(context, config, undefined, streamFunction)) {
+for await (const event of agentLoopContinue(context, config, undefined, streamFn)) {
   console.log(event.type);
 }
 ```
