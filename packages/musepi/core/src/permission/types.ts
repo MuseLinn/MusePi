@@ -33,6 +33,9 @@ export interface Policy {
 // Read-only tools (auto-approved in all modes)
 export const READ_ONLY_TOOLS = new Set([
   'read', 'grep', 'find', 'ls', 'get_goal', 'web_search', 'fetch_content',
+  // select_tools only mutates the session's active tool set — no external
+  // side effect, same spirit as get_goal.
+  'select_tools',
 ]);
 
 // Sensitive file patterns

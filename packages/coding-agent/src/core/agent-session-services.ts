@@ -6,6 +6,7 @@ import { musepiGoalToolDefs } from "../musepi/goal-native.ts";
 import { musepiAgentSwarmToolDef, musepiAgentToolDef } from "../musepi/swarm/orchestrate.ts";
 import { musepiBackgroundToolDefs, musepiCronToolDefs } from "../musepi/task/native.ts";
 import { musepiTodoToolDef } from "../musepi/todo-native.ts";
+import { musepiSelectToolsToolDef } from "../musepi/tool-select-native.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
@@ -225,6 +226,7 @@ export async function createAgentSessionFromServices(
 			musepiAgentToolDef,
 			...musepiBackgroundToolDefs(),
 			...musepiCronToolDefs(),
+			musepiSelectToolsToolDef,
 		] as ToolDefinition[],
 		sessionStartEvent: options.sessionStartEvent,
 	});

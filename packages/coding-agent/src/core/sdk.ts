@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { Agent, type AgentMessage, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { clampThinkingLevel, type Message, type Model } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
+import { initMusepiToolSelect, transformMusepiToolSelectContext } from "../musepi/tool-select-native.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
 import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
@@ -344,8 +345,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		sessionId: sessionManager.getSessionId(),
 		transformContext: async (messages) => {
 			const runner = extensionRunnerRef.current;
-			if (!runner) return messages;
-			return runner.emitContext(messages);
+			const base = runner ? await runner.emitContext(messages) : messages;
+			// MusePi tool-select announcement (no-op unless the gate is on).
+			return transformMusepiToolSelectContext(base);
 		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),
@@ -383,6 +385,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		extensionRunnerRef,
 		sessionStartEvent: options.sessionStartEvent,
 	});
+	// MusePi progressive tool disclosure: gate-check, shape the active tool
+	// set (deferrable tools out, select_tools in), arm the announcement.
+	initMusepiToolSelect(session, settingsManager);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

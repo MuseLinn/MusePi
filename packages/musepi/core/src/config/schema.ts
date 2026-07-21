@@ -57,6 +57,24 @@ export interface MusepiEditSettings {
 }
 
 /**
+ * Progressive tool disclosure (experimental). When enabled for a capable
+ * model, extension-registered tools stay out of the top-level tools[] and
+ * the model loads them on demand via the select_tools tool, keeping the
+ * prompt-cache prefix stable (Kimi K3 wire: deferredToolsMode "kimi").
+ */
+export interface MusepiToolSelectSettings {
+	/** Master switch (experimental). */
+	enabled?: boolean; // default: false
+	/**
+	 * Model allowlist fallback when the catalog does not declare a
+	 * deferred-tools capability. Entries: `provider/model` or bare model id.
+	 */
+	models?: string[]; // default: []
+	/** Extra tool names to force-defer regardless of source. */
+	defer?: string[]; // default: []
+}
+
+/**
  * OMP-style per-purpose model routing. Each role value is a model spec
  * string `provider/model[:thinkingLevel]` (also `provider:model` or a
  * bare model id). Empty string = unset → the role falls back to
@@ -90,6 +108,7 @@ export interface MusepiSettings {
 	truncation?: MusepiTruncationSettings;
 	edit?: MusepiEditSettings;
 	modelRoles?: MusepiModelRolesSettings;
+	toolSelect?: MusepiToolSelectSettings;
 }
 
 /** Default values, applied per-field when unset. */
@@ -101,6 +120,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	truncation: Required<MusepiTruncationSettings>;
 	edit: Required<MusepiEditSettings>;
 	modelRoles: Required<MusepiModelRolesSettings>;
+	toolSelect: Required<MusepiToolSelectSettings>;
 }> = {
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -109,6 +129,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
 	edit: { hashline: true, enforceSeenLines: false },
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
+	toolSelect: { enabled: false, models: [], defer: [] },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -156,6 +177,21 @@ function pickModelRoles(override: unknown): ResolvedMusepiSettings["modelRoles"]
 }
 
 /**
+ * toolSelect needs a custom merge: `enabled` is a boolean, `models`/`defer`
+ * are filtered string lists (non-string entries dropped).
+ */
+function pickToolSelect(override: unknown): ResolvedMusepiSettings["toolSelect"] {
+	const defaults = MUSEPI_DEFAULTS.toolSelect;
+	const out = { ...defaults, models: [] as string[], defer: [] as string[] };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (Array.isArray(record.models)) out.models = record.models.filter((v): v is string => typeof v === "string");
+	if (Array.isArray(record.defer)) out.defer = record.defer.filter((v): v is string => typeof v === "string");
+	return out;
+}
+
+/**
  * Resolve user settings against defaults: each known field falls back
  * to its default when unset or mistyped; unknown fields are dropped.
  */
@@ -169,6 +205,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		truncation: pick(MUSEPI_DEFAULTS.truncation, r.truncation),
 		edit: pick(MUSEPI_DEFAULTS.edit, r.edit),
 		modelRoles: pickModelRoles(r.modelRoles),
+		toolSelect: pickToolSelect(r.toolSelect),
 	};
 }
 
@@ -185,6 +222,21 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 	{ key: "truncation.headChars", description: "Preview head size (chars)", defaultValue: 1_500 },
 	{ key: "truncation.tailChars", description: "Preview tail size (chars)", defaultValue: 500 },
 	{ key: "edit.hashline", description: "Hash-anchored (hashline) editing for read/grep/edit", defaultValue: true },
+	{
+		key: "toolSelect.enabled",
+		description: "Progressive tool disclosure: extension tools load on demand via select_tools (experimental)",
+		defaultValue: false,
+	},
+	{
+		key: "toolSelect.models",
+		description: "Extra models to treat as deferred-tools capable: provider/model or bare model id",
+		defaultValue: [],
+	},
+	{
+		key: "toolSelect.defer",
+		description: "Extra tool names to defer regardless of source",
+		defaultValue: [],
+	},
 	{
 		key: "edit.enforceSeenLines",
 		description: "Reject edits on lines read/grep never displayed",

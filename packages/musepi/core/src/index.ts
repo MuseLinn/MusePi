@@ -25,3 +25,23 @@ export type {
 } from "./hashline/index.ts";
 export { computeFileHash, formatHashlineHeader, formatNumberedLine } from "./hashline/index.ts";
 export { HASHLINE_EDIT_DESCRIPTION, HASHLINE_EDIT_PROMPT_GUIDELINES } from "./hashline/index.ts";
+export {
+	activeNamesOnDisable,
+	activeNamesOnEnable,
+	foldLoadedToolNames,
+	isToolSelectEnabled,
+	partitionTools,
+	planLoad,
+	reconcileResumedActiveNames,
+	renderLoadableToolsAnnouncement,
+	renderLoadResult,
+	SELECT_TOOLS_DESCRIPTION,
+	SELECT_TOOLS_TOOL_NAME,
+} from "./tool-select/index.ts";
+export type {
+	AddedToolsCarrier,
+	LoadPlan,
+	ToolEntry,
+	ToolSelectGateConfig,
+	ToolSelectModelRef,
+} from "./tool-select/index.ts";
