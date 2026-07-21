@@ -1761,6 +1761,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				if (isKimiK3) {
 					compat.requiresReasoningContentOnAssistantMessages = true;
 					compat.deferredToolsMode = "kimi";
+					compat.thinkingFormat = "openai";
+					compat.supportsReasoningEffort = true;
 				}
 				models.push({
 					id: modelId,
