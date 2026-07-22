@@ -5,7 +5,26 @@ export { goalState, GOAL_ENTRY_TYPE } from "./goal/types.ts";
 export type { GoalSnapshot } from "./goal/types.ts";
 export type { PersistencePort, ScopeDirs, SessionEntryLike } from "./ports.ts";
 export { mergeMusepiSettings, MUSEPI_DEFAULTS, MUSEPI_SETTINGS_DOCS } from "./config/schema.ts";
-export type { MusepiSettings, ResolvedMusepiSettings } from "./config/schema.ts";
+export type { MusepiAdvisorSettings, MusepiSettings, ResolvedMusepiSettings } from "./config/schema.ts";
+export {
+	ADVISOR_DEFAULT_MAX_CONTEXT_CHARS,
+	ADVISOR_DEFAULT_TOOL_RESULT_MAX_CHARS,
+	ADVISOR_GUIDANCE,
+	ADVISOR_HEAD_ANCHOR_CHARS,
+	ADVISOR_SYSTEM_PROMPT,
+	buildAdvisorTranscript,
+	buildAdvisorUserPrompt,
+	formatAdvisorResult,
+	isAdvisorEnabled,
+	resolveAdvisorModelSpec,
+} from "./advisor/index.ts";
+export type {
+	AdvisorGateConfig,
+	AdvisorModelConfig,
+	AdvisorPromptInput,
+	AdvisorRoleChain,
+	AdvisorTranscriptOptions,
+} from "./advisor/index.ts";
 export {
 	isModelRole,
 	MODEL_ROLES,

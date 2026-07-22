@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
+import { initMusepiAdvisor } from "../musepi/advisor-native.ts";
 import { initMusepiLsp, transformMusepiLspContext } from "../musepi/lsp/native.ts";
 import { initMusepiMemory, transformMusepiMemoryContext } from "../musepi/memory-native.ts";
 import { initMusepiToolSelect, transformMusepiToolSelectContext } from "../musepi/tool-select-native.ts";
@@ -400,6 +401,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	initMusepiLsp(session, settingsManager);
 	// MusePi memory: arm the one-shot startup injection + recall tool.
 	initMusepiMemory(session, settingsManager);
+	// MusePi advisor: gate-check, bind transcript access + review-model
+	// resolution for the advisor tool.
+	initMusepiAdvisor(session, settingsManager);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {
