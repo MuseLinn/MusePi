@@ -135,7 +135,37 @@ export interface MusepiModelRolesSettings {
 	fallbackChains?: Record<string, string[]>;
 }
 
+/**
+ * Native advisor: an `advisor` tool that sends the serialized session
+ * transcript to a review model and injects its guidance back as the tool
+ * result (OMP advisor closed loop: pick model → send context → get
+ * guidance → inject). Model chain: musepi.advisor.model →
+ * modelRoles.advisor → modelRoles.default → the session's current model.
+ */
+export interface MusepiAdvisorSettings {
+	/** Master switch. Off = advisor tool hidden (zero surface). */
+	enabled?: boolean; // default: true
+	/** Review model spec provider/model[:thinkingLevel]. Empty = role chain / session model. */
+	model?: string; // default: ""
+	/** Transcript char budget sent for review (tail-biased, first ask anchored). */
+	maxContextChars?: number; // default: 60000
+}
+
+/**
+ * Compatibility bridges back to a legacy pi installation. Everything here
+ * is opt-in (default off): the fork ships native features that can collide
+ * with pi extensions, so nothing from `~/.pi` is loaded unless asked.
+ */
+export interface MusepiCompatSettings {
+	/** Also auto-load extensions from `~/.pi/agent/extensions` (the legacy pi home). */
+	loadPiExtensions?: boolean; // default: false
+}
+
 export interface MusepiSettings {
+	/** Check MusePi's GitHub Releases for new versions on startup and show the update prompt. */
+	updateCheck?: boolean; // default: true
+	compat?: MusepiCompatSettings;
+	advisor?: MusepiAdvisorSettings;
 	goal?: MusepiGoalSettings;
 	todo?: MusepiTodoSettings;
 	swarm?: MusepiSwarmSettings;
@@ -193,6 +223,9 @@ export interface MusepiMemorySettings {
 
 /** Default values, applied per-field when unset. */
 export const MUSEPI_DEFAULTS: Required<{
+	updateCheck: boolean;
+	compat: Required<MusepiCompatSettings>;
+	advisor: Required<MusepiAdvisorSettings>;
 	goal: Required<MusepiGoalSettings>;
 	todo: Required<MusepiTodoSettings>;
 	swarm: Required<MusepiSwarmSettings>;
@@ -206,6 +239,9 @@ export const MUSEPI_DEFAULTS: Required<{
 	compaction: { strategy: "default" | "snapcompact" };
 	notifications: { enabled: boolean; condition: "always" | "unfocused" };
 }> = {
+	updateCheck: true,
+	compat: { loadPiExtensions: false },
+	advisor: { enabled: true, model: "", maxContextChars: 60_000 },
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
 	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto", isolation: "worktree" },
@@ -368,6 +404,9 @@ function pickNotifications(override: unknown): ResolvedMusepiSettings["notificat
 export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMusepiSettings {
 	const r = raw ?? {};
 	return {
+		updateCheck: typeof r.updateCheck === "boolean" ? r.updateCheck : MUSEPI_DEFAULTS.updateCheck,
+		compat: pick(MUSEPI_DEFAULTS.compat, r.compat),
+		advisor: pick(MUSEPI_DEFAULTS.advisor, r.advisor),
 		goal: pick(MUSEPI_DEFAULTS.goal, r.goal),
 		todo: pick(MUSEPI_DEFAULTS.todo, r.todo),
 		swarm: pick(MUSEPI_DEFAULTS.swarm, r.swarm),
@@ -385,7 +424,32 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 
 /** Per-key documentation for the future settings menu. */
 export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; defaultValue: unknown }> = [
+	{
+		key: "updateCheck",
+		description: "Check MusePi GitHub Releases for new versions on startup and show the update prompt",
+		defaultValue: true,
+	},
+	{
+		key: "compat.loadPiExtensions",
+		description: "Also auto-load extensions from the legacy pi home (~/.pi/agent/extensions)",
+		defaultValue: false,
+	},
 	{ key: "goal.badge", description: "Show the goal badge in the footer", defaultValue: true },
+	{
+		key: "advisor.enabled",
+		description: "Native advisor: advisor tool sends the session transcript to a review model for guidance",
+		defaultValue: true,
+	},
+	{
+		key: "advisor.model",
+		description: "Review model: provider/model[:thinkingLevel] (empty = modelRoles.advisor → default → session model)",
+		defaultValue: "",
+	},
+	{
+		key: "advisor.maxContextChars",
+		description: "Transcript char budget sent to the review model",
+		defaultValue: 60000,
+	},
 	{ key: "todo.maxVisible", description: "Max rows in the folded todo panel", defaultValue: 5 },
 	{ key: "swarm.maxConcurrency", description: "Default parallel workers for agent_swarm", defaultValue: 5 },
 	{ key: "swarm.timeoutMs", description: "Subagent timeout in milliseconds", defaultValue: 1_800_000 },

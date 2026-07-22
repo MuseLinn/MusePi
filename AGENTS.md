@@ -88,17 +88,17 @@ When closing issues via commit:
 
 - Include `fixes #<number>` or `closes #<number>` in the message so merging auto-closes the issue. For multiple issues, repeat the keyword per issue (`closes #1, closes #2`); a shared keyword (`closes #1, #2`) only closes the first.
 
-## Testing pi Interactive Mode with tmux
+## Testing MusePi Interactive Mode with tmux
 
 Run the TUI in a controlled terminal (from the repo root):
 
 ```bash
-tmux new-session -d -s pi-test -x 80 -y 24
-tmux send-keys -t pi-test "./pi-test.sh" Enter
-sleep 3 && tmux capture-pane -t pi-test -p     # capture after startup
-tmux send-keys -t pi-test "your prompt here" Enter
-tmux send-keys -t pi-test Escape               # special keys (also C-o for ctrl+o, etc.)
-tmux kill-session -t pi-test
+tmux new-session -d -s musepi-test -x 80 -y 24
+tmux send-keys -t musepi-test "./musepi-test.sh" Enter
+sleep 3 && tmux capture-pane -t musepi-test -p     # capture after startup
+tmux send-keys -t musepi-test "your prompt here" Enter
+tmux send-keys -t musepi-test Escape               # special keys (also C-o for ctrl+o, etc.)
+tmux kill-session -t musepi-test
 ```
 
 ## Changelog
@@ -129,20 +129,20 @@ Attribution:
    cd /tmp
 
    # Node package install smoke tests
-   /tmp/pi-local-release/node/pi --help
-   /tmp/pi-local-release/node/pi --version
-   /tmp/pi-local-release/node/pi --list-models
-   /tmp/pi-local-release/node/pi -p "Say exactly: ok"
-   /tmp/pi-local-release/node/pi
+   /tmp/pi-local-release/node/musepi --help
+   /tmp/pi-local-release/node/musepi --version
+   /tmp/pi-local-release/node/musepi --list-models
+   /tmp/pi-local-release/node/musepi -p "Say exactly: ok"
+   /tmp/pi-local-release/node/musepi
 
    # Bun binary smoke tests
-   /tmp/pi-local-release/bun/pi --help
-   /tmp/pi-local-release/bun/pi --version
-   /tmp/pi-local-release/bun/pi --list-models
-   /tmp/pi-local-release/bun/pi -p "Say exactly: ok"
-   /tmp/pi-local-release/bun/pi
+   /tmp/pi-local-release/bun/musepi --help
+   /tmp/pi-local-release/bun/musepi --version
+   /tmp/pi-local-release/bun/musepi --list-models
+   /tmp/pi-local-release/bun/musepi -p "Say exactly: ok"
+   /tmp/pi-local-release/bun/musepi
    ```
-   Verify both Node and Bun startup, model/account listing, interactive startup, and at least one real prompt with the intended default provider. The bare commands `/tmp/pi-local-release/node/pi` and `/tmp/pi-local-release/bun/pi` start interactive mode; run each in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk.
+   Verify both Node and Bun startup, model/account listing, interactive startup, and at least one real prompt with the intended default provider. The bare commands `/tmp/pi-local-release/node/musepi` and `/tmp/pi-local-release/bun/musepi` start interactive mode; run each in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk.
 
 3. **Run the release script**:
    ```bash

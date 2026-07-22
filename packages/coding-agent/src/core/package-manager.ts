@@ -2427,6 +2427,23 @@ export class DefaultPackageManager implements PackageManager {
 			globalBaseDir,
 		);
 
+		// MusePi fork, opt-in compat bridge (`musepi.compat.loadPiExtensions`,
+		// default off): also auto-load extensions from the legacy pi home
+		// (~/.pi/agent/extensions). Off by default because pi extensions can
+		// collide with MusePi native features.
+		if (CONFIG_DIR_NAME !== ".pi" && this.settingsManager.getMusepi().compat.loadPiExtensions) {
+			const legacyAgentDir = join(homedir(), ".pi", "agent");
+			if (legacyAgentDir !== globalBaseDir) {
+				addResources(
+					"extensions",
+					collectAutoExtensionEntries(join(legacyAgentDir, "extensions")),
+					{ ...userMetadata, baseDir: legacyAgentDir },
+					userOverrides.extensions,
+					legacyAgentDir,
+				);
+			}
+		}
+
 		// User skills from ~/.pi/agent/
 		addResources(
 			"skills",

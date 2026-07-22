@@ -1,17 +1,17 @@
 {
 	"name": "@earendil-works/pi-coding-agent",
-	"version": "0.80.10",
+	"version": "0.1.0",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@earendil-works/pi-coding-agent",
-			"version": "0.80.10",
+			"version": "0.1.0",
 			"license": "MIT",
 			"dependencies": {
-				"@earendil-works/pi-agent-core": "^0.80.10",
-				"@earendil-works/pi-ai": "^0.80.10",
-				"@earendil-works/pi-tui": "^0.80.10",
+				"@earendil-works/pi-agent-core": "^0.1.0",
+				"@earendil-works/pi-ai": "^0.1.0",
+				"@earendil-works/pi-tui": "^0.1.0",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -27,13 +27,13 @@
 				"typebox": "1.1.38",
 				"undici": "8.5.0",
 				"yaml": "2.9.0",
-				"@musepi/core": "0.80.10"
+				"@musepi/core": "0.1.0"
 			},
 			"optionalDependencies": {
 				"@mariozechner/clipboard": "0.3.9"
 			},
 			"bin": {
-				"pi": "dist/cli.js"
+				"musepi": "dist/cli.js"
 			},
 			"engines": {
 				"node": ">=22.19.0"
@@ -475,11 +475,11 @@
 			}
 		},
 		"node_modules/@earendil-works/pi-agent-core": {
-			"version": "0.80.10",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-0.80.10.tgz",
+			"version": "0.1.0",
+			"resolved": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-0.1.0.tgz",
 			"license": "MIT",
 			"dependencies": {
-				"@earendil-works/pi-ai": "^0.80.10",
+				"@earendil-works/pi-ai": "^0.1.0",
 				"ignore": "7.0.5",
 				"typebox": "1.1.38",
 				"yaml": "2.9.0"
@@ -489,8 +489,8 @@
 			}
 		},
 		"node_modules/@earendil-works/pi-ai": {
-			"version": "0.80.10",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.80.10.tgz",
+			"version": "0.1.0",
+			"resolved": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.1.0.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",
@@ -513,8 +513,8 @@
 			}
 		},
 		"node_modules/@earendil-works/pi-tui": {
-			"version": "0.80.10",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.80.10.tgz",
+			"version": "0.1.0",
+			"resolved": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.1.0.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",
@@ -763,8 +763,8 @@
 			}
 		},
 		"node_modules/@musepi/core": {
-			"version": "0.80.10",
-			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.80.10.tgz",
+			"version": "0.1.0",
+			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.1.0.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@nodable/entities": {
