@@ -43,11 +43,14 @@ jobs:
       - name: Hydrate model data
         run: npm run hydrate:model-data
 
-      - name: Lint, format, type check & lockfile checks
-        run: npm run check
-
+      # Build BEFORE check: tsgo --noEmit (in npm run check) resolves
+      # @musepi/* imports via their dist outputs, which don't exist on a
+      # fresh runner until something builds them.
       - name: Build all packages
         run: npm run build:offline
+
+      - name: Lint, format, type check & lockfile checks
+        run: npm run check
 
       - name: Test musepi suite (core + transcript)
         run: |

@@ -24,6 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  contents: read # required for actions/checkout (implicit none otherwise)
   pages: write
   id-token: write
 
