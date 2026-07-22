@@ -7,6 +7,7 @@ import type {
 	TextContent,
 	Transport,
 	Usage,
+	VideoContent,
 } from "@earendil-works/pi-ai";
 import type { AgentEvent, AgentMessage, AgentTool, QueueMode, ThinkingLevel } from "../index.ts";
 import type { Session } from "./session/session.ts";
@@ -580,7 +581,7 @@ export interface ToolResultEvent {
 	toolCallId: string;
 	toolName: string;
 	input: Record<string, unknown>;
-	content: Array<TextContent | ImageContent>;
+	content: Array<TextContent | ImageContent | VideoContent>;
 	details: unknown;
 	isError: boolean;
 	usage?: Usage;
@@ -718,7 +719,7 @@ export interface ToolCallResult {
 }
 
 export interface ToolResultPatch {
-	content?: Array<TextContent | ImageContent>;
+	content?: Array<TextContent | ImageContent | VideoContent>;
 	details?: unknown;
 	isError?: boolean;
 	usage?: Usage;

@@ -28,6 +28,7 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
+	VideoContent,
 } from "../types.ts";
 import { splitDeferredTools } from "../utils/deferred-tools.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
@@ -111,8 +112,12 @@ const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
 
 /**
  * Convert content blocks to Anthropic API format
+ *
+ * Video blocks have no Anthropic wire representation; they are degraded to a
+ * text placeholder. In practice transformMessages already replaces videos for
+ * models without `video` input, so this is a defensive floor only.
  */
-function convertContentBlocks(content: (TextContent | ImageContent)[]):
+function convertContentBlocks(content: (TextContent | ImageContent | VideoContent)[]):
 	| string
 	| Array<
 			| { type: "text"; text: string }
@@ -128,7 +133,13 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 	// If only text blocks, return as concatenated string for simplicity
 	const hasImages = content.some((c) => c.type === "image");
 	if (!hasImages) {
-		return sanitizeSurrogates(content.map((c) => (c as TextContent).text).join("\n"));
+		return sanitizeSurrogates(
+			content
+				.map((c) =>
+					c.type === "video" ? "(video omitted: model does not support videos)" : (c as TextContent).text,
+				)
+				.join("\n"),
+		);
 	}
 
 	// If we have images, convert to content block array
@@ -137,6 +148,12 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 			return {
 				type: "text" as const,
 				text: sanitizeSurrogates(block.text),
+			};
+		}
+		if (block.type === "video") {
+			return {
+				type: "text" as const,
+				text: "(video omitted: model does not support videos)",
 			};
 		}
 		return {

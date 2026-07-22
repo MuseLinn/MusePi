@@ -1,6 +1,6 @@
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, ImageContent, Model, TextContent } from "@earendil-works/pi-ai";
+import type { Api, ImageContent, Model, TextContent, VideoContent } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import {
 	formatHashlineHeader,
@@ -16,7 +16,7 @@ import { keyHint, keyText } from "../../modes/interactive/components/keybinding-
 import { getLanguageFromPath, highlightCode, type Theme } from "../../modes/interactive/theme/theme.ts";
 import type { HashlineContext } from "../../musepi/hashline.ts";
 import { processImage } from "../../utils/image-process.ts";
-import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
+import { detectSupportedImageMimeTypeFromFile, detectSupportedVideoMimeTypeFromFile } from "../../utils/mime.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../utils/paths.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
 import { resolveReadPathAsync, resolveToCwd } from "./path-utils.ts";
@@ -54,13 +54,19 @@ export interface ReadOperations {
 	access: (absolutePath: string) => Promise<void>;
 	/** Detect image MIME type, return null or undefined for non-images */
 	detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
+	/** Detect video MIME type, return null or undefined for non-videos */
+	detectVideoMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
 }
 
 const defaultReadOperations: ReadOperations = {
 	readFile: (path) => fsReadFile(path),
 	access: (path) => fsAccess(path, constants.R_OK),
 	detectImageMimeType: detectSupportedImageMimeTypeFromFile,
+	detectVideoMimeType: detectSupportedVideoMimeTypeFromFile,
 };
+
+/** Maximum video file size the read tool will inline as base64 (mirrors kimi-code's MAX_MEDIA_BYTES). */
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 export interface ReadToolOptions {
 	/** Whether to auto-resize images to 2000x2000 max. Default: true */
@@ -98,6 +104,13 @@ function getNonVisionImageNote(model: Model<Api> | undefined): string | undefine
 		return undefined;
 	}
 	return "[Current model does not support images. The image will be omitted from this request.]";
+}
+
+function getNonVideoNote(model: Model<Api> | undefined): string | undefined {
+	if (!model || model.input.includes("video")) {
+		return undefined;
+	}
+	return "[Current model does not support videos. The video will be omitted from this request.]";
 }
 
 function toPosixPath(filePath: string): string {
@@ -172,7 +185,7 @@ function formatCompactReadCall(
 
 function formatReadResult(
 	args: ReadRenderArgs | undefined,
-	result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails },
+	result: { content: (TextContent | ImageContent | VideoContent)[]; details?: ReadToolDetails },
 	options: ToolRenderResultOptions,
 	theme: Theme,
 	showImages: boolean,
@@ -220,8 +233,8 @@ export function createReadToolDefinition(
 		name: "read",
 		label: "read",
 		description: hashline
-			? `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output starts with a [path#TAG] header (the snapshot tag the edit tool anchors patches to) followed by LINE:TEXT numbered rows; output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`
-			: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+			? `Read the contents of a file. Supports text files, images (jpg, png, gif, webp, bmp), and videos (mp4, mov, webm, mkv, avi, flv, mpeg, 3gp). Images and videos are sent as attachments. For text files, output starts with a [path#TAG] header (the snapshot tag the edit tool anchors patches to) followed by LINE:TEXT numbered rows; output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`
+			: `Read the contents of a file. Supports text files, images (jpg, png, gif, webp, bmp), and videos (mp4, mov, webm, mkv, avi, flv, mpeg, 3gp). Images and videos are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
 		promptSnippet: "Read file contents",
 		promptGuidelines: hashline
 			? [
@@ -237,128 +250,154 @@ export function createReadToolDefinition(
 			_onUpdate?,
 			ctx?,
 		) {
-			return new Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }>(
-				(resolve, reject) => {
-					if (signal?.aborted) {
-						reject(new Error("Operation aborted"));
-						return;
-					}
-					let aborted = false;
-					const onAbort = () => {
-						aborted = true;
-						reject(new Error("Operation aborted"));
-					};
-					signal?.addEventListener("abort", onAbort, { once: true });
+			return new Promise<{
+				content: (TextContent | ImageContent | VideoContent)[];
+				details: ReadToolDetails | undefined;
+			}>((resolve, reject) => {
+				if (signal?.aborted) {
+					reject(new Error("Operation aborted"));
+					return;
+				}
+				let aborted = false;
+				const onAbort = () => {
+					aborted = true;
+					reject(new Error("Operation aborted"));
+				};
+				signal?.addEventListener("abort", onAbort, { once: true });
 
-					(async () => {
-						try {
-							const absolutePath = await resolveReadPathAsync(path, cwd);
-							if (aborted) return;
-							// Check if file exists and is readable.
-							await ops.access(absolutePath);
-							if (aborted) return;
-							const mimeType = ops.detectImageMimeType ? await ops.detectImageMimeType(absolutePath) : undefined;
-							let content: (TextContent | ImageContent)[];
-							let details: ReadToolDetails | undefined;
-							const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
-							if (mimeType) {
-								// Read image as binary.
-								const buffer = await ops.readFile(absolutePath);
-								const processed = await processImage(buffer, mimeType, { autoResizeImages });
-								if (!processed.ok) {
-									let textNote = `Read image file [${mimeType}]\n${processed.message}`;
-									if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-									content = [{ type: "text", text: textNote }];
-								} else {
-									let textNote = `Read image file [${processed.mimeType}]`;
-									if (processed.hints.length > 0) textNote += `\n${processed.hints.join("\n")}`;
-									if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-									content = [
-										{ type: "text", text: textNote },
-										{ type: "image", data: processed.data, mimeType: processed.mimeType },
-									];
-								}
+				(async () => {
+					try {
+						const absolutePath = await resolveReadPathAsync(path, cwd);
+						if (aborted) return;
+						// Check if file exists and is readable.
+						await ops.access(absolutePath);
+						if (aborted) return;
+						const mimeType = ops.detectImageMimeType ? await ops.detectImageMimeType(absolutePath) : undefined;
+						const videoMimeType =
+							!mimeType && ops.detectVideoMimeType ? await ops.detectVideoMimeType(absolutePath) : undefined;
+						let content: (TextContent | ImageContent | VideoContent)[];
+						let details: ReadToolDetails | undefined;
+						const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
+						if (mimeType) {
+							// Read image as binary.
+							const buffer = await ops.readFile(absolutePath);
+							const processed = await processImage(buffer, mimeType, { autoResizeImages });
+							if (!processed.ok) {
+								let textNote = `Read image file [${mimeType}]\n${processed.message}`;
+								if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
+								content = [{ type: "text", text: textNote }];
 							} else {
-								// Read text content.
-								const buffer = await ops.readFile(absolutePath);
-								const textContent = buffer.toString("utf-8");
-								const allLines = textContent.split("\n");
-								const totalFileLines = allLines.length;
-								// Apply offset if specified. Convert from 1-indexed input to 0-indexed array access.
-								const startLine = offset ? Math.max(0, offset - 1) : 0;
-								const startLineDisplay = startLine + 1;
-								// Check if offset is out of bounds.
-								if (startLine >= allLines.length) {
-									throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
-								}
-								let selectedContent: string;
-								let userLimitedLines: number | undefined;
-								// If limit is specified by the user, honor it first. Otherwise truncateHead decides.
-								if (limit !== undefined) {
-									const endLine = Math.min(startLine + limit, allLines.length);
-									selectedContent = allLines.slice(startLine, endLine).join("\n");
-									userLimitedLines = endLine - startLine;
-								} else {
-									selectedContent = allLines.slice(startLine).join("\n");
-								}
-								// Apply truncation, respecting both line and byte limits.
-								const truncation = truncateHead(selectedContent);
-								let outputText: string;
-								if (truncation.firstLineExceedsLimit) {
-									// First line alone exceeds the byte limit. Point the model at a bash fallback.
-									const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
-									outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
-									details = { truncation };
-								} else if (truncation.truncated) {
-									// Truncation occurred. Build an actionable continuation notice.
-									const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
-									const nextOffset = endLineDisplay + 1;
-									outputText = truncation.content;
-									if (truncation.truncatedBy === "lines") {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
-									} else {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
-									}
-									details = { truncation };
-								} else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
-									// User-specified limit stopped early, but the file still has more content.
-									const remaining = allLines.length - (startLine + userLimitedLines);
-									const nextOffset = startLine + userLimitedLines + 1;
-									outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
-								} else {
-									// No truncation and no remaining user-limited content.
-									outputText = truncation.content;
-								}
-								// MusePi hashline: mint the [path#TAG] anchor and number the
-								// displayed lines so the model can address them in an edit patch.
-								// Seen-line provenance covers exactly the displayed range.
-								if (hashline && !truncation.firstLineExceedsLimit) {
-									const { text: withoutBom } = hlStripBom(textContent);
-									const normalizedFull = hlNormalizeToLF(withoutBom);
-									const displayCount = truncation.outputLines;
-									const seen = new Array<number>(displayCount);
-									for (let i = 0; i < displayCount; i++) seen[i] = startLineDisplay + i;
-									const tag = hashline.store.record(absolutePath, normalizedFull, seen);
-									const numbered = truncation.content
-										.split("\n")
-										.map((line, i) => formatNumberedLine(startLineDisplay + i, line))
-										.join("\n");
-									const notices = outputText.slice(truncation.content.length);
-									outputText = `${formatHashlineHeader(path, tag)}\n${numbered}${notices}`;
-								}
-								content = [{ type: "text", text: outputText }];
+								let textNote = `Read image file [${processed.mimeType}]`;
+								if (processed.hints.length > 0) textNote += `\n${processed.hints.join("\n")}`;
+								if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
+								content = [
+									{ type: "text", text: textNote },
+									{ type: "image", data: processed.data, mimeType: processed.mimeType },
+								];
 							}
-
-							if (aborted) return;
-							signal?.removeEventListener("abort", onAbort);
-							resolve({ content, details });
-						} catch (error: any) {
-							signal?.removeEventListener("abort", onAbort);
-							if (!aborted) reject(error);
+						} else if (videoMimeType) {
+							// Read video as binary and attach it as a video content part.
+							// Models without video input get the note below and the part is
+							// replaced by a placeholder in transformMessages.
+							const nonVideoNote = getNonVideoNote(ctx?.model);
+							const buffer = await ops.readFile(absolutePath);
+							if (buffer.length === 0) {
+								content = [{ type: "text", text: `Read video file [${videoMimeType}]\nFile is empty.` }];
+							} else if (buffer.length > MAX_VIDEO_BYTES) {
+								content = [
+									{
+										type: "text",
+										text: `Read video file [${videoMimeType}]\nFile is ${formatSize(buffer.length)}, exceeds the ${formatSize(MAX_VIDEO_BYTES)} video limit. Trim or compress it first (e.g. with ffmpeg).`,
+									},
+								];
+							} else {
+								let textNote = `Read video file [${videoMimeType}]`;
+								if (nonVideoNote) textNote += `\n${nonVideoNote}`;
+								content = [
+									{ type: "text", text: textNote },
+									{ type: "video", data: buffer.toString("base64"), mimeType: videoMimeType },
+								];
+							}
+						} else {
+							// Read text content.
+							const buffer = await ops.readFile(absolutePath);
+							const textContent = buffer.toString("utf-8");
+							const allLines = textContent.split("\n");
+							const totalFileLines = allLines.length;
+							// Apply offset if specified. Convert from 1-indexed input to 0-indexed array access.
+							const startLine = offset ? Math.max(0, offset - 1) : 0;
+							const startLineDisplay = startLine + 1;
+							// Check if offset is out of bounds.
+							if (startLine >= allLines.length) {
+								throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
+							}
+							let selectedContent: string;
+							let userLimitedLines: number | undefined;
+							// If limit is specified by the user, honor it first. Otherwise truncateHead decides.
+							if (limit !== undefined) {
+								const endLine = Math.min(startLine + limit, allLines.length);
+								selectedContent = allLines.slice(startLine, endLine).join("\n");
+								userLimitedLines = endLine - startLine;
+							} else {
+								selectedContent = allLines.slice(startLine).join("\n");
+							}
+							// Apply truncation, respecting both line and byte limits.
+							const truncation = truncateHead(selectedContent);
+							let outputText: string;
+							if (truncation.firstLineExceedsLimit) {
+								// First line alone exceeds the byte limit. Point the model at a bash fallback.
+								const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
+								outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
+								details = { truncation };
+							} else if (truncation.truncated) {
+								// Truncation occurred. Build an actionable continuation notice.
+								const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
+								const nextOffset = endLineDisplay + 1;
+								outputText = truncation.content;
+								if (truncation.truncatedBy === "lines") {
+									outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
+								} else {
+									outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
+								}
+								details = { truncation };
+							} else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
+								// User-specified limit stopped early, but the file still has more content.
+								const remaining = allLines.length - (startLine + userLimitedLines);
+								const nextOffset = startLine + userLimitedLines + 1;
+								outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
+							} else {
+								// No truncation and no remaining user-limited content.
+								outputText = truncation.content;
+							}
+							// MusePi hashline: mint the [path#TAG] anchor and number the
+							// displayed lines so the model can address them in an edit patch.
+							// Seen-line provenance covers exactly the displayed range.
+							if (hashline && !truncation.firstLineExceedsLimit) {
+								const { text: withoutBom } = hlStripBom(textContent);
+								const normalizedFull = hlNormalizeToLF(withoutBom);
+								const displayCount = truncation.outputLines;
+								const seen = new Array<number>(displayCount);
+								for (let i = 0; i < displayCount; i++) seen[i] = startLineDisplay + i;
+								const tag = hashline.store.record(absolutePath, normalizedFull, seen);
+								const numbered = truncation.content
+									.split("\n")
+									.map((line, i) => formatNumberedLine(startLineDisplay + i, line))
+									.join("\n");
+								const notices = outputText.slice(truncation.content.length);
+								outputText = `${formatHashlineHeader(path, tag)}\n${numbered}${notices}`;
+							}
+							content = [{ type: "text", text: outputText }];
 						}
-					})();
-				},
-			);
+
+						if (aborted) return;
+						signal?.removeEventListener("abort", onAbort);
+						resolve({ content, details });
+					} catch (error: any) {
+						signal?.removeEventListener("abort", onAbort);
+						if (!aborted) reject(error);
+					}
+				})();
+			});
 		},
 		renderCall(args, theme, context) {
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);

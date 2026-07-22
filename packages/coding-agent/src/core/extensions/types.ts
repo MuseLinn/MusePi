@@ -31,6 +31,7 @@ import type {
 	TextContent,
 	ToolResultMessage,
 	Usage,
+	VideoContent,
 } from "@earendil-works/pi-ai";
 import type {
 	AutocompleteItem,
@@ -904,7 +905,7 @@ interface ToolResultEventBase {
 	type: "tool_result";
 	toolCallId: string;
 	input: Record<string, unknown>;
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | ImageContent | VideoContent)[];
 	isError: boolean;
 	/** Usage from the tool execution itself, if available. */
 	usage?: Usage;
@@ -1072,7 +1073,7 @@ export interface UserBashEventResult {
 }
 
 export interface ToolResultEventResult {
-	content?: (TextContent | ImageContent)[];
+	content?: (TextContent | ImageContent | VideoContent)[];
 	details?: unknown;
 	isError?: boolean;
 	usage?: Usage;
@@ -1465,7 +1466,7 @@ export interface ProviderModelConfig {
 	/** Maps pi thinking levels to provider/model-specific values; null marks a level unsupported. */
 	thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
 	/** Supported input types. */
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	/** Per-million-token cost rates and optional request-wide input pricing tiers. */
 	cost: Model<Api>["cost"];
 	/** Maximum context window size in tokens. */
