@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MusePi — a pi fork with the muselinn feature set</title>
+<meta name="description" content="MusePi is a fork of the earendil-works/pi agent harness: hashline editing, an independent ~/.musepi config home, native kimi-k3 video understanding, and the muselinn agent core." />
+<style>
+  /*
+    MusePi project page — deliberately plain.
+    Paper background, ink text, one accent, hairline rules, serif display +
+    monospace data. No gradients, no cards-in-a-row hero, no glassmorphism.
+  */
+  :root {
+    --paper:   #f6f3ec;
+    --ink:     #1c1a16;
+    --ink-2:   #5b564c;
+    --rule:    #d8d2c4;
+    --accent:  #0e5f4e;   /* deep green */
+    --accent-ink: #0a463a;
+    --term-bg: #191713;
+    --term-fg: #d8d2c4;
+    --term-dim:#8a8477;
+    --term-acc:#7fc8a9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.65 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-ink); text-decoration-color: rgba(14,95,78,.35); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--accent-ink); }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- top bar ---- */
+  header.top {
+    border-bottom: 1px solid var(--rule);
+    padding: 18px 0;
+  }
+  header.top .wrap {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  }
+  .wordmark {
+    font: 700 20px/1 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    letter-spacing: -.5px; color: var(--ink); text-decoration: none;
+  }
+  .wordmark em { color: var(--accent); font-style: normal; }
+  nav.top a {
+    font: 13px/1 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--ink-2); text-decoration: none; margin-left: 20px;
+  }
+  nav.top a:hover { color: var(--accent-ink); text-decoration: underline; }
+
+  /* ---- masthead ---- */
+  .masthead { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
+  .kicker {
+    font: 12px/1 ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+    margin-bottom: 22px;
+  }
+  h1 {
+    font-size: clamp(34px, 5.4vw, 52px);
+    line-height: 1.12; font-weight: 600; letter-spacing: -.01em;
+    max-width: 18ch;
+  }
+  .lede {
+    margin-top: 24px; max-width: 58ch; color: var(--ink-2); font-size: 17px;
+  }
+  .lede code { font-size: .88em; background: #ece7db; padding: 1px 5px; border-radius: 3px; }
+
+  /* ---- terminal block ---- */
+  .term {
+    margin-top: 36px; max-width: 620px;
+    background: var(--term-bg); color: var(--term-fg);
+    border-radius: 6px; overflow: hidden;
+    box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 12px 32px -18px rgba(28,26,22,.35);
+  }
+  .term-bar {
+    display: flex; gap: 6px; align-items: center;
+    padding: 9px 12px; border-bottom: 1px solid #2a2721;
+    font: 11px/1 ui-monospace, Menlo, monospace; color: var(--term-dim);
+  }
+  .term-bar i { width: 9px; height: 9px; border-radius: 50%; background: #3a362e; display: inline-block; }
+  .term-bar i:first-child { background: var(--accent); }
+  .term-bar span { margin-left: 8px; }
+  .term pre {
+    padding: 16px 18px 18px; font-size: 13.5px; line-height: 1.7; overflow-x: auto;
+  }
+  .term .p { color: var(--term-acc); }        /* prompt */
+  .term .c { color: var(--term-dim); }        /* comment/output-dim */
+
+  /* ---- sections ---- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--rule); }
+  section:last-of-type { border-bottom: 0; }
+  h2 {
+    font-size: 24px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 8px;
+  }
+  h2 .no {
+    font: 12px/1 ui-monospace, Menlo, monospace; color: var(--accent);
+    vertical-align: 5px; margin-right: 10px; letter-spacing: .08em;
+  }
+  .sub { color: var(--ink-2); max-width: 62ch; margin-bottom: 32px; }
+
+  /* feature ledger — rows, not cards */
+  dl.features { border-top: 1px solid var(--rule); }
+  dl.features > div {
+    display: grid; grid-template-columns: 220px 1fr; gap: 24px;
+    padding: 20px 0; border-bottom: 1px solid var(--rule);
+  }
+  dl.features dt {
+    font: 600 14.5px/1.5 ui-monospace, "Cascadia Code", Menlo, monospace;
+    color: var(--ink);
+  }
+  dl.features dt .tag {
+    display: block; font-weight: 400; font-size: 11.5px; color: var(--accent); margin-top: 4px;
+  }
+  dl.features dd { color: var(--ink-2); font-size: 15.5px; }
+  dl.features dd code { font-size: .88em; background: #ece7db; padding: 1px 5px; border-radius: 3px; }
+
+  /* install / build code blocks */
+  pre.block {
+    background: #ece7db; border: 1px solid var(--rule); border-radius: 4px;
+    padding: 14px 16px; font-size: 13.5px; line-height: 1.75; overflow-x: auto;
+    color: var(--ink);
+  }
+  pre.block .c { color: #8a8477; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .cols h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+  .cols p.note { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; }
+
+  /* screenshot placeholder */
+  figure.shot {
+    border: 1px dashed var(--rule); border-radius: 6px;
+    padding: 56px 32px; text-align: center; color: var(--ink-2);
+    background:
+      repeating-linear-gradient(0deg, transparent 0 27px, rgba(28,26,22,.035) 27px 28px),
+      var(--paper);
+  }
+  figure.shot .mono { font-size: 12.5px; letter-spacing: .06em; }
+  figure.shot figcaption { margin-top: 8px; font-size: 13px; font-style: italic; }
+
+  /* links footer */
+  footer { padding: 40px 0 64px; }
+  footer ul { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 28px; }
+  footer li { font-size: 14.5px; }
+  footer .fine {
+    margin-top: 28px; font-size: 12.5px; color: var(--ink-2);
+    font-family: ui-monospace, Menlo, monospace;
+  }
+
+  @media (max-width: 640px) {
+    dl.features > div { grid-template-columns: 1fr; gap: 6px; }
+    .cols { grid-template-columns: 1fr; }
+    .masthead { padding: 48px 0 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="wordmark" href="#">Muse<em>Pi</em></a>
+    <nav class="top">
+      <a href="https://github.com/MuseLinn/MusePi">GitHub</a>
+      <a href="https://github.com/MuseLinn/MusePi/releases">Releases</a>
+      <a href="https://github.com/earendil-works/pi">Upstream pi</a>
+    </nav>
+  </div>
+</header>
+
+<section class="masthead">
+  <div class="wrap">
+    <p class="kicker">A fork of earendil-works/pi · v0.1.0</p>
+    <h1>The pi agent harness, with the muselinn feature set.</h1>
+    <p class="lede">
+      MusePi layers hashline editing, an independent <code>~/.musepi</code> config
+      home, native kimi-k3 video understanding, and the muselinn agent core on
+      top of the upstream pi agent loop — while keeping pi&rsquo;s extension API
+      compatible, so existing extensions load unchanged.
+    </p>
+
+    <div class="term" aria-label="Install and run MusePi">
+      <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
+      <pre><span class="c"># grab a prebuilt binary from GitHub Releases, or build from source:</span>
+<span class="p">$</span> git clone https://github.com/MuseLinn/MusePi.git
+<span class="p">$</span> cd MusePi &amp;&amp; npm install --ignore-scripts
+<span class="p">$</span> npm run build
+<span class="p">$</span> ./pi-test.sh
+<span class="c">MusePi 0.1.0 — config home: ~/.musepi</span></pre>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2><span class="no">01</span>What MusePi adds over upstream pi</h2>
+    <p class="sub">
+      Differences live in <code>packages/musepi/</code> and the TUI seam of the
+      coding agent; upstream tracks the agent/tool layer, so the fork stays
+      cheap to maintain.
+    </p>
+
+    <dl class="features">
+      <div>
+        <dt>hashline editing<span class="tag">@musepi/core/hashline</span></dt>
+        <dd>Hash-anchored edit format for robust, retryable file edits —
+        weaker models stop corrupting files with fuzzy diffs.</dd>
+      </div>
+      <div>
+        <dt>independent config home<span class="tag">~/.musepi</span></dt>
+        <dd>Reads and writes its own config directory and coexists with a stock
+        pi install. First run migrates auth, settings, models and keybindings
+        from <code>~/.pi/agent</code>; pi.dev update checks are gated behind
+        <code>musepi.updateCheck</code> (default off).</dd>
+      </div>
+      <div>
+        <dt>native k3 video<span class="tag">@earendil-works/pi-ai</span></dt>
+        <dd>kimi-k3 <code>video_url</code> wire support, video input through the
+        read tool, and provider capability declarations — video understanding
+        without an extension shim.</dd>
+      </div>
+      <div>
+        <dt>muselinn agent core<span class="tag">@musepi/core · /transcript</span></dt>
+        <dd>Goal/plan orchestration, permission, hooks, skills, swarm and task
+        logic as a host-independent package with zero host imports, plus a
+        dedicated transcript layer.</dd>
+      </div>
+      <div>
+        <dt>muselinn renderer<span class="tag">packages/musepi/renderer</span></dt>
+        <dd>Replaces the upstream TUI rendering surface with damage-tracked
+        containers — ~1&nbsp;ms frame cost even at 2000 messages, verified in the
+        render profile. Upstream pi-tui editor hooks remain patched at the seam.</dd>
+      </div>
+      <div>
+        <dt>upstream discipline<span class="tag">pin + monthly cherry-pick</span></dt>
+        <dd>Tracks <code>earendil-works/pi</code> with a pinned base and monthly
+        cherry-picks of agent-loop fixes — no continuous rebase. The pinned
+        commit, every cherry-pick and the conflict rules live in
+        <code>UPSTREAM.md</code>.</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2><span class="no">02</span>Install &amp; build</h2>
+    <p class="sub">
+      Prebuilt binaries for macOS (arm64/x64), Linux (x64/arm64) and Windows
+      (x64/arm64) are attached to each release. The CLI identifies itself as
+      <code>MusePi</code>; the binary filename is still <code>pi</code> for now.
+    </p>
+
+    <div class="cols">
+      <div>
+        <h3>From a release</h3>
+        <pre class="block"><span class="c"># download the archive for your platform from:</span>
+https://github.com/MuseLinn/MusePi/releases
+
+<span class="c"># then:</span>
+pi --version   <span class="c"># =&gt; MusePi 0.1.0</span></pre>
+        <p class="note">Config, sessions and auth live under
+        <code>~/.musepi</code> — a stock pi install is left untouched.</p>
+      </div>
+      <div>
+        <h3>From source (Node 24)</h3>
+        <pre class="block">npm install --ignore-scripts
+npm run build          <span class="c"># refresh models + build all</span>
+npm run check          <span class="c"># lint, format, types, lockfile</span>
+./test.sh              <span class="c"># tests (LLM tests self-skip)</span>
+./pi-test.sh           <span class="c"># run MusePi from sources</span></pre>
+        <p class="note">Supply-chain policy: lifecycle scripts stay disabled;
+        <code>package-lock.json</code> is the dependency ground truth.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screenshot">
+  <div class="wrap">
+    <h2><span class="no">03</span>In the terminal</h2>
+    <p class="sub">The muselinn renderer in a real session.</p>
+
+    <!-- TODO: replace this placeholder with a real capture, e.g.
+         <img src="screenshot.png" alt="MusePi interactive session" />
+         once a screenshot is added under docs/site/. Keep it terminal-sized
+         (~880px wide) and dark-on-dark to match the .term block above. -->
+    <figure class="shot">
+      <p class="mono">[ screenshot placeholder ]</p>
+      <figcaption>A MusePi session capture will live here.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <ul>
+      <li><a href="https://github.com/MuseLinn/MusePi">Repository</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/releases">Releases</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">Upstream policy</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CONTRIBUTING.md">Contributing</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/blob/main/LICENSE">MIT License</a></li>
+      <li><a href="https://github.com/earendil-works/pi">earendil-works/pi</a></li>
+    </ul>
+    <p class="fine">MusePi · a fork of pi · deployed via GitHub Pages</p>
+  </div>
+</footer>
+
+</body>
+</html>

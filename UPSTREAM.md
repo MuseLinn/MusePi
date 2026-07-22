@@ -30,7 +30,61 @@
 
 **明确跳过**（记录在案，后续需要再评）：`9e7582aa` SQLite 会话存储（#6594，
 大特性）、`8495f9d0` orchestrator→server 改名（大 rename，会扩大冲突面）、
-`b1425041` 目录刷新移出启动（行为变化）、llama.cpp/Qwen provider/发布归档。
+llama.cpp/Qwen provider/发布归档。
+
+### 2026-07-22 → 品牌分离 + 补 pick `b1425041`
+
+- 品牌分离：`piConfig = { name: musepi, configDir: .musepi, title: MusePi }`，
+  全 workspace 版本线 0.80.10 → 0.1.0（install-lock 校验要求 lockstep）；
+  首次运行从 `~/.pi/agent` 迁移 auth/settings/models/keybindings 四个文件；
+  `musepi.updateCheck`（默认 false）门控 pi.dev 更新提示。
+- 补 pick `b1425041`（目录刷新移出启动，此前标记跳过）：冲突仅在
+  interactive-mode 的版本检查块，已与新 updateCheck 门控合并；
+  CHANGELOG 条目 HEAD 侧已存在，去重。
+- 验证：`npm run check` 绿（biome/pinned-deps/ts-imports/shrinkwrap/install-lock/
+  tsgo/browser-smoke）；全量 build 绿；musepi core 测试绿（248）；
+  coding-agent vitest 与基点持平（残余失败均为该 Windows 机器既有环境失败，
+  基线对比 33↔33）；HOME 隔离冒烟：`--version` → `MusePi 0.1.0`，
+  迁移四文件且排除 extensions/sessions/npm，updateCheck 默认 false。
+
+### 2026-07-22 → 初版（0.1.0）发布准备（草稿，待 push 后确认）
+
+- main 累积 5 个未 push 提交：`710d368c` 身份三连（MusePi 品牌/config home/
+  首迁/update-check 门控）、`00017d47` 目录刷新延后、`6a1f3372` 测试对齐、
+  `2b8de88f` 镜像 harness plan+goal 修复（dbc917c、95bc30c）、`7adeea8a`
+  kimi-k3 原生视频理解（video_url wire + read 工具视频路径 + 能力声明）。
+- 新增 `.github/workflows/ci.yml`（push/PR：npm ci --ignore-scripts →
+  npm run check → build:offline → musepi 套件 + pi-ai 测试；Windows job
+  continue-on-error，33 个已知环境基线失败未修）与
+  `.github/workflows/release.yml`（tag v* → build-binaries.sh 六平台 bun
+  交叉编译 → GitHub Release）。
+- README 改写为 MusePi 品牌（定位、上游关系、构建说明、CI badge）；
+  GitHub Pages 未配置，记为 TODO。
+- 待办：push main、打 tag `v0.1.0` 触发首个 release、确认仓库 secrets
+  无额外需求（GITHUB_TOKEN 默认权限即可）、Pages source 后续再定。
+
+### 2026-07-22 → 品牌化最后一公里：CLI 改名 + 自有 update 通道
+
+- 二进制/CLI 改名 `pi` → `musepi`：package.json `bin`、`scripts/build-binaries.sh`
+  产物名（`musepi-<platform>.tar.gz/.zip`，内部可执行文件名同步）、
+  `scripts/local-release.mjs` shim/归档名、`pi-test.*` → `musepi-test.*`、
+  release workflow 冒烟路径、AGENTS.md/README 引用同步。内部包名
+  `@earendil-works/*` 与 npm-shrinkwrap/install-lock 由生成器刷新，不动。
+- update 通道切换到 MuseLinn/MusePi GitHub Releases
+  （`api.github.com/repos/MuseLinn/MusePi/releases/latest`，tag `vX.Y.Z`
+  与 VERSION 比较）；`musepi.updateCheck` 默认改为开启。TUI 提示
+  `MusePi update available: x.y.z, run musepi update`，release notes 链接
+  指向对应 release 页。
+- `musepi update`（self）不再走上游 npm self-update（会装回原版 pi），
+  改为"提示 + 打开 release 页"最小闭环；extensions/models 更新路径不变。
+  `pi`/`musepi` 仍可作为 `self` 的位置参数别名。
+- 删除死代码 `packages/musepi/core/src/ask/types.ts`（全仓无引用）。
+- 新增 opt-in `musepi.compat.loadPiExtensions`（默认 off）：开启后额外
+  自动加载 `~/.pi/agent/extensions`。默认关是因为 pi 扩展可能与 MusePi
+  原生特性冲突（首迁本就有意排除 extensions）。
+- 测试：version-check 改写为 GitHub API 形态（tag 解析、UA、错误/离线
+  门控）；新增 `@musepi/core` settings-schema 测试（updateCheck/compat
+  门控）与 coding-agent compat 扩展加载测试。
 
 ## 同步策略（pin + 月度 cherry-pick，不做持续 rebase）
 
