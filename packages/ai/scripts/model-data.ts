@@ -165,10 +165,11 @@ function validateModelValue(
 	if (typeof value.name !== "string" || value.name.length === 0) errors.push(`${label} has no model name`);
 	if (typeof value.baseUrl !== "string") errors.push(`${label} has no baseUrl string`);
 	if (typeof value.reasoning !== "boolean") errors.push(`${label} has no reasoning boolean`);
+	// Keep in sync with Model["input"] in src/types.ts ("text" | "image" | "video").
 	if (
 		!Array.isArray(value.input) ||
 		value.input.length === 0 ||
-		value.input.some((entry) => entry !== "text" && entry !== "image")
+		value.input.some((entry) => entry !== "text" && entry !== "image" && entry !== "video")
 	) {
 		errors.push(`${label} has invalid input modalities`);
 	}
