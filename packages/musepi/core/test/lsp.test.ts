@@ -192,8 +192,10 @@ describe("format helpers", () => {
 
 	it("normalizeLspUriKey canonicalizes server-published URIs", () => {
 		// typescript-language-server lowercases the drive letter and encodes the
-		// colon; lookups with our as-sent URI must still hit.
-		const ours = fileToUri("C:\\Users\\x\\project\\a.ts");
+		// colon; lookups with our as-sent URI must still hit. Build the as-sent
+		// URI literally: routing a Windows path through fileToUri() would apply
+		// host filesystem semantics (path.resolve garbles it on POSIX).
+		const ours = "file:///C:/Users/x/project/a.ts";
 		const published = "file:///c%3A/Users/x/project/a.ts";
 		assert.equal(normalizeLspUriKey(ours), normalizeLspUriKey(published));
 		assert.equal(normalizeLspUriKey("file:///home/x/a.ts"), "file:///home/x/a.ts");
