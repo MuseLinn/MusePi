@@ -4,6 +4,7 @@ import { clampThinkingLevel, type Message, type Model, streamSimple } from "@ear
 import { getAgentDir } from "../config.ts";
 import { initMusepiAdvisor } from "../musepi/advisor-native.ts";
 import { initMusepiLsp, transformMusepiLspContext } from "../musepi/lsp/native.ts";
+import { initMusepiMcp } from "../musepi/mcp-native.ts";
 import { initMusepiMemory, transformMusepiMemoryContext } from "../musepi/memory-native.ts";
 import { initMusepiToolSelect, transformMusepiToolSelectContext } from "../musepi/tool-select-native.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -404,6 +405,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// MusePi advisor: gate-check, bind transcript access + review-model
 	// resolution for the advisor tool.
 	initMusepiAdvisor(session, settingsManager);
+	// MusePi MCP: resolve configured servers, register cached tool lists
+	// (lazy — no connection), arm idle reaping + tool-change sync.
+	initMusepiMcp(session, settingsManager);
 	const extensionsResult = resourceLoader.getExtensions();
 
 	return {

@@ -104,6 +104,7 @@ import { runBtwTurn } from "../../musepi/btw.ts";
 import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
+import { handleMusepiMcpCommand } from "../../musepi/mcp-native.ts";
 import { backgroundManager } from "../../musepi/task/manager.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
 import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
@@ -2798,6 +2799,11 @@ export class InteractiveMode {
 			if (text === "/changelog") {
 				this.handleChangelogCommand();
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/mcp" || text.startsWith("/mcp ")) {
+				this.editor.setText("");
+				await this.handleMcpCommand(text.slice(4));
 				return;
 			}
 			if (text === "/hotkeys") {
@@ -6128,6 +6134,18 @@ export class InteractiveMode {
 		}
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(theme.fg("dim", `Session name set: ${sessionName ?? name}`), 1, 0));
+		this.ui.requestRender();
+	}
+
+	/** MusePi MCP: `/mcp [list|status|reconnect [name]]` — render as chat text. */
+	private async handleMcpCommand(args: string): Promise<void> {
+		try {
+			const output = await handleMusepiMcpCommand(args);
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", output), 1, 0));
+		} catch (error) {
+			this.showError(`MCP command failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 		this.ui.requestRender();
 	}
 

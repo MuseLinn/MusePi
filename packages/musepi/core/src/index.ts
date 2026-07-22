@@ -115,6 +115,33 @@ export type {
 } from "./lsp/index.ts";
 export type { MusepiLspServerSettings, MusepiLspSettings } from "./config/schema.ts";
 export {
+	bridgeMcpServerTools,
+	JsonRpcPeer,
+	McpClient,
+	mcpNodeSpawn,
+	McpRegistry,
+	mcpToolName,
+	mcpToolResultToText,
+	resolveMcpServers,
+	sanitizeMcpNamePart,
+	StdioMcpTransport,
+} from "./mcp/index.ts";
+export type {
+	BridgedMcpTool,
+	JsonRpcPeerOptions,
+	McpCallToolResult,
+	McpClientOptions,
+	McpRegistryOptions,
+	McpServerSettingsEntry,
+	McpServerStatusInfo,
+	McpSpawnFn,
+	McpTool,
+	McpTransport,
+	ResolvedMcpServer,
+	ResolvedMcpServers,
+} from "./mcp/index.ts";
+export type { MusepiMcpServerSettings, MusepiMcpSettings } from "./config/schema.ts";
+export {
 	buildMemoryInjection,
 	computeProjectId,
 	editEntry,
@@ -185,3 +212,11 @@ export type {
 	NotificationGateState,
 	TerminalNotification,
 } from "./notify.ts";
+export {
+	buildTruncatedPreview,
+	shouldTruncate,
+	TRUNCATION_HEAD_CHARS,
+	TRUNCATION_TAIL_CHARS,
+	TRUNCATION_THRESHOLD_CHARS,
+	truncationPathFor,
+} from "./truncation/index.ts";

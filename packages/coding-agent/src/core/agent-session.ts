@@ -346,6 +346,8 @@ export class AgentSession {
 
 	private _resourceLoader: ResourceLoader;
 	private _customTools: ToolDefinition[];
+	/** Runtime-registered custom tools (e.g. MCP-bridged tools discovered after session start). */
+	private _dynamicCustomTools: Map<string, ToolDefinition> = new Map();
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
 	private _cwd: string;
 	private _extensionRunnerRef?: { current?: ExtensionRunner };
@@ -930,6 +932,36 @@ export class AgentSession {
 	 */
 	getActiveToolNames(): string[] {
 		return this.agent.state.tools.map((t) => t.name);
+	}
+
+	/**
+	 * Register or replace dynamic custom tools discovered after session start
+	 * (MusePi MCP: server tool lists are only known once the server has been
+	 * enumerated). Refreshes the tool registry; brand-new tools join the
+	 * active set by default.
+	 */
+	registerDynamicTools(definitions: ToolDefinition[]): void {
+		for (const definition of definitions) {
+			this._dynamicCustomTools.set(definition.name, definition);
+		}
+		this._refreshToolRegistry();
+	}
+
+	/**
+	 * Remove dynamic custom tools by name (stale MCP tools after a
+	 * re-enumeration or server shutdown). No-op for names never registered.
+	 */
+	unregisterDynamicTools(names: string[]): void {
+		let changed = false;
+		for (const name of names) {
+			changed = this._dynamicCustomTools.delete(name) || changed;
+		}
+		if (changed) this._refreshToolRegistry();
+	}
+
+	/** Names of currently registered dynamic custom tools. */
+	getDynamicToolNames(): string[] {
+		return [...this._dynamicCustomTools.keys()];
 	}
 
 	/**
@@ -2501,6 +2533,10 @@ export class AgentSession {
 			...this._customTools.map((definition) => ({
 				definition,
 				sourceInfo: createSyntheticSourceInfo(`<sdk:${definition.name}>`, { source: "sdk" }),
+			})),
+			...Array.from(this._dynamicCustomTools.values()).map((definition) => ({
+				definition,
+				sourceInfo: createSyntheticSourceInfo(`<mcp:${definition.name}>`, { source: "mcp" }),
 			})),
 		].filter((tool) => isAllowedTool(tool.definition.name));
 		const definitionRegistry = new Map<string, ToolDefinitionEntry>(

@@ -115,6 +115,27 @@ async function executeSelectTools(
 	return { content: [{ type: "text", text }], details: {} };
 }
 
+/**
+ * Defer newly-registered tools when the gate is on. MusePi MCP registers
+ * server tools dynamically (after enumeration); with the gate on they must
+ * join the deferrable set and leave the active set so they appear in the
+ * loadable announcement instead of the top-level tools[].
+ */
+export function deferToolsViaToolSelect(names: string[]): void {
+	if (!binding?.enabled || names.length === 0) return;
+	for (const name of names) binding.deferrableNames.add(name);
+	const active = binding.getActiveNames();
+	const drop = new Set(names);
+	const next = active.filter((name) => !drop.has(name));
+	if (next.length !== active.length) binding.setActiveNames(next);
+}
+
+/** Remove tools from the deferrable set (MCP tool unregistered). */
+export function undeferToolsViaToolSelect(names: string[]): void {
+	if (!binding || names.length === 0) return;
+	for (const name of names) binding.deferrableNames.delete(name);
+}
+
 export const musepiSelectToolsToolDef: ToolDefinition = {
 	name: SELECT_TOOLS_TOOL_NAME,
 	label: "Select Tools",
