@@ -1,0 +1,49 @@
+name: Pages
+
+# Deploys docs/site/ to GitHub Pages via actions/deploy-pages.
+#
+# Why Actions deployment instead of a gh-pages branch: the artifact is built
+# and published by CI, so main's history stays free of generated-site commits
+# and no one has to maintain a gh-pages branch by hand. This is the currently
+# recommended GitHub Pages setup for static content.
+#
+# One-time repo setup (web UI): Settings → Pages → Build and deployment →
+# Source = "GitHub Actions". Without that, the deploy job below has nothing
+# to publish to. The site then serves at https://muselinn.github.io/MusePi/.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    name: deploy docs/site to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # docs/site is plain static HTML — no build step needed, upload as-is.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
