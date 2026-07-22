@@ -745,6 +745,14 @@ export const OPENROUTER_MODELS = values as {
 		id: "poolside/laguna-m.1:free";
 		provider: "openrouter";
 	};
+	"poolside/laguna-s-2.1": Model<"openai-completions"> & {
+		id: "poolside/laguna-s-2.1";
+		provider: "openrouter";
+	};
+	"poolside/laguna-s-2.1:free": Model<"openai-completions"> & {
+		id: "poolside/laguna-s-2.1:free";
+		provider: "openrouter";
+	};
 	"poolside/laguna-xs-2.1": Model<"openai-completions"> & {
 		id: "poolside/laguna-xs-2.1";
 		provider: "openrouter";
