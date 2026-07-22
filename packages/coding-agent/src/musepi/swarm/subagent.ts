@@ -18,13 +18,12 @@ import {
 } from "@musepi/core/swarm/isolation.js";
 import type { SubAgentTask } from "@musepi/core/swarm/types.js";
 import {
-	activeSessions,
 	clearResumeResults,
 	MAX_OUTPUT_LINES,
 	OUTPUT_TRUNCATED_MARKER,
 	progressEstimator,
 	setResumeResult,
-	swarmCancelled,
+	swarmState,
 } from "@musepi/core/swarm/types.js";
 import { wrapWithPermissionGate } from "@musepi/core/swarm/wrap-tools.js";
 import { getAgentDir } from "../../config.ts";
@@ -545,7 +544,7 @@ async function runWithModel(
 		}
 
 		const entry = { session, taskId: task.id };
-		activeSessions?.set(task.id, entry);
+		swarmState.activeSessions?.set(task.id, entry);
 
 		const unsub = session.subscribe((event: any) => {
 			if (event.type === "message_end" && event.message?.role === "assistant") {
@@ -607,7 +606,7 @@ async function runWithModel(
 		try {
 			await retryOnRateLimit(() => session.prompt(task.task, { source: "extension" }));
 		} catch (promptErr: any) {
-			const wasAborted = signal.aborted || (childController?.signal.aborted ?? false) || swarmCancelled;
+			const wasAborted = signal.aborted || (childController?.signal.aborted ?? false) || swarmState.swarmCancelled;
 			const wasTimeout = timeoutAborted;
 
 			if (wasTimeout) {
@@ -625,7 +624,7 @@ async function runWithModel(
 				setResumeResult(task.id, { status: "failed", output: task.error });
 				cleanupAbortListeners();
 				unsub();
-				activeSessions?.delete(task.id);
+				swarmState.activeSessions?.delete(task.id);
 				return;
 			}
 
@@ -638,7 +637,7 @@ async function runWithModel(
 				setResumeResult(task.id, { status: "aborted" });
 				cleanupAbortListeners();
 				unsub();
-				activeSessions?.delete(task.id);
+				swarmState.activeSessions?.delete(task.id);
 				return;
 			}
 			log_swarm_warn("prompt failed", promptErr);
@@ -656,7 +655,7 @@ async function runWithModel(
 			setResumeResult(task.id, { status: "failed", output: promptErr.message });
 			cleanupAbortListeners();
 			unsub();
-			activeSessions?.delete(task.id);
+			swarmState.activeSessions?.delete(task.id);
 			return;
 		}
 
@@ -725,7 +724,7 @@ async function runWithModel(
 		}
 
 		unsub();
-		activeSessions?.delete(task.id);
+		swarmState.activeSessions?.delete(task.id);
 		onProgress();
 	} catch (initErr: any) {
 		log_swarm_warn("runWithModel init failed", initErr);
@@ -741,7 +740,7 @@ async function runWithModel(
 		}
 		setResumeResult(task.id, { status: "failed", output: initErr.message || String(initErr) });
 		cleanupAbortListeners();
-		activeSessions?.delete(task.id);
+		swarmState.activeSessions?.delete(task.id);
 		onProgress();
 	} finally {
 		// Defensive: ensure abort listeners are unlinked even if an unexpected

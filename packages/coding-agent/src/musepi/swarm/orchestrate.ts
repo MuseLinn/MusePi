@@ -14,11 +14,7 @@ import * as path from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { formatReport } from "@musepi/core/swarm/report.js";
 import {
-	cancelPending,
-	cancelTimer,
-	currentSwarm,
 	FRAME_INTERVAL_MS,
-	globalAbortController,
 	type ModelTier,
 	progressEstimator,
 	type SubAgentTask,
@@ -31,6 +27,7 @@ import {
 	setGlobalAbortController,
 	setSavedSwarmState,
 	setSwarmCancelled,
+	swarmState,
 } from "@musepi/core/swarm/types.js";
 import { Type } from "typebox";
 import { backgroundManager } from "../task/manager.ts";
@@ -306,7 +303,7 @@ async function runSwarmInBackground(
 		backgroundManager.fail(bgId, e?.message || String(e));
 	} finally {
 		clearInterval(stopPoll);
-		if (currentSwarm === state) setCurrentSwarm(null);
+		if (swarmState.currentSwarm === state) setCurrentSwarm(null);
 	}
 }
 
@@ -473,8 +470,8 @@ export const musepiAgentSwarmToolDef = {
 		setActiveSessions(new Map());
 		setCancelPending(false);
 		setSwarmCancelled(false);
-		if (cancelTimer) {
-			clearTimeout(cancelTimer);
+		if (swarmState.cancelTimer) {
+			clearTimeout(swarmState.cancelTimer);
 			setCancelTimer(null);
 		}
 
@@ -514,15 +511,15 @@ export const musepiAgentSwarmToolDef = {
 		}
 
 		setGlobalAbortController(new AbortController());
-		const unlinkGlobal = linkAbortSignal(signal, globalAbortController!);
+		const unlinkGlobal = linkAbortSignal(signal, swarmState.globalAbortController!);
 
 		const theme = ctx.ui.theme;
 		state.status = "running";
 
 		const widget = new SwarmWidgetComponent(
-			() => currentSwarm,
+			() => swarmState.currentSwarm,
 			theme,
-			() => cancelPending,
+			() => swarmState.cancelPending,
 		);
 		const host = mountSwarmWidget(ctx, widget);
 		const updateWidget = () => {
@@ -558,12 +555,14 @@ export const musepiAgentSwarmToolDef = {
 				tasks,
 				maxC,
 				async (task) => {
-					if (signal.aborted || currentSwarm === null) {
+					if (signal.aborted || swarmState.currentSwarm === null) {
 						task.status = "aborted";
 						return;
 					}
 					const combinedSignal =
-						AbortSignal.any?.([signal, globalAbortController?.signal].filter(Boolean) as AbortSignal[]) ?? signal;
+						AbortSignal.any?.(
+							[signal, swarmState.globalAbortController?.signal].filter(Boolean) as AbortSignal[],
+						) ?? signal;
 					await runSubAgent(task, ctx, combinedSignal, updateProgress);
 				},
 				{ initialBatch: Math.min(5, maxC), spacingMs: 700 },
@@ -600,7 +599,7 @@ export const musepiAgentSwarmToolDef = {
 
 			setTimeout(() => {
 				unmountSwarmWidget(ctx);
-				if (currentSwarm === state) setCurrentSwarm(null);
+				if (swarmState.currentSwarm === state) setCurrentSwarm(null);
 			}, 30000);
 		}
 
@@ -746,7 +745,7 @@ export const musepiAgentToolDef = {
 			setActiveSessions(null);
 			setTimeout(() => {
 				unmountSwarmWidget(ctx);
-				if (currentSwarm === state) setCurrentSwarm(null);
+				if (swarmState.currentSwarm === state) setCurrentSwarm(null);
 			}, 30000);
 		}
 
