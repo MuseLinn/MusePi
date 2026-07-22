@@ -156,6 +156,7 @@ export type {
 	SnapMessage,
 } from "./snapcompact/index.ts";
 export type { MusepiCompactionSettings } from "./config/schema.ts";
+export { expandMoveHome, resolveMoveTarget, sameMovePath, unquoteMoveInput } from "./move.ts";
 export {
 	computeUndoPlan,
 	formatNothingToUndoMessage,

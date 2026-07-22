@@ -39,6 +39,7 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { resolveMoveTarget, sameMovePath } from "@musepi/core/move.js";
 import { notifyTerminalOnce } from "@musepi/core/notify.js";
 import { getSpinnerFrames } from "@musepi/core/swarm/helpers.js";
 import {
@@ -2767,6 +2768,11 @@ export class InteractiveMode {
 			if (text === "/import" || text.startsWith("/import ")) {
 				await this.handleImportCommand(text);
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/move" || text.startsWith("/move ")) {
+				this.editor.setText("");
+				await this.handleMoveCommand(text);
 				return;
 			}
 			if (text === "/share") {
@@ -5861,7 +5867,7 @@ export class InteractiveMode {
 		}
 	}
 
-	private getPathCommandArgument(text: string, command: "/export" | "/import"): string | undefined {
+	private getPathCommandArgument(text: string, command: "/export" | "/import" | "/move"): string | undefined {
 		if (text === command) {
 			return undefined;
 		}
@@ -5888,6 +5894,64 @@ export class InteractiveMode {
 			return argsString;
 		}
 		return argsString.slice(0, firstWhitespaceIndex);
+	}
+
+	private async handleMoveCommand(text: string): Promise<void> {
+		if (this.session.isStreaming) {
+			this.showWarning("Wait for the current response to finish or abort it before moving.");
+			return;
+		}
+		if (this.session.isCompacting) {
+			this.showWarning("Wait for compaction to finish before moving.");
+			return;
+		}
+
+		const input = this.getPathCommandArgument(text, "/move");
+		if (!input) {
+			this.showError("Usage: /move <directory>");
+			return;
+		}
+
+		const currentCwd = this.sessionManager.getCwd();
+		const resolvedPath = resolveMoveTarget(input, currentCwd);
+		if (sameMovePath(resolvedPath, currentCwd)) {
+			this.showStatus(`Already in ${currentCwd}`);
+			return;
+		}
+
+		if (!fs.existsSync(resolvedPath)) {
+			const confirmed = await this.showExtensionConfirm(
+				"Move session",
+				`${resolvedPath} does not exist. Create it and move there?`,
+			);
+			if (!confirmed) {
+				this.showStatus("Move cancelled");
+				return;
+			}
+			try {
+				fs.mkdirSync(resolvedPath, { recursive: true });
+			} catch (error: unknown) {
+				this.showError(`Failed to create directory: ${error instanceof Error ? error.message : String(error)}`);
+				return;
+			}
+		} else if (!fs.statSync(resolvedPath).isDirectory()) {
+			this.showError(`Cannot move: not a directory: ${resolvedPath}`);
+			return;
+		}
+
+		this.clearStatusIndicator();
+		try {
+			const result = await this.runtimeHost.moveCwd(resolvedPath, {
+				projectTrustContextFactory: (cwd) => this.createProjectTrustContext(cwd),
+			});
+			if (result.cancelled) {
+				this.showStatus("Move cancelled");
+				return;
+			}
+			this.showStatus(`Moved to ${this.sessionManager.getCwd()}`);
+		} catch (error: unknown) {
+			this.showError(`Move failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	private async handleImportCommand(text: string): Promise<void> {
