@@ -73,12 +73,25 @@ describe("DefaultPackageManager", () => {
 	let settingsManager: SettingsManager;
 	let packageManager: DefaultPackageManager;
 	let previousOfflineEnv: string | undefined;
+	let previousHomeEnv: string | undefined;
+	let previousKimiHomeEnv: string | undefined;
 
 	beforeEach(() => {
 		previousOfflineEnv = process.env.PI_OFFLINE;
 		delete process.env.PI_OFFLINE;
+		// Isolate the user-home scopes (~/.agents, host top-level skills dir,
+		// $KIMI_CODE_HOME default) from the developer machine's real home.
+		previousHomeEnv = process.env.HOME;
+		previousKimiHomeEnv = process.env.KIMI_CODE_HOME;
 		tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
+		process.env.HOME = join(tempDir, "home-isolated");
+		mkdirSync(process.env.HOME, { recursive: true });
+		delete process.env.KIMI_CODE_HOME;
+		// Stop the .agents/skills ancestor walk at tempDir: without a .git
+		// marker it climbs to the filesystem root and picks up the developer
+		// machine's real ~/.agents/skills (tmpdir lives under the real home).
+		mkdirSync(join(tempDir, ".git"), { recursive: true });
 		agentDir = join(tempDir, "agent");
 		mkdirSync(agentDir, { recursive: true });
 
@@ -95,6 +108,16 @@ describe("DefaultPackageManager", () => {
 			delete process.env.PI_OFFLINE;
 		} else {
 			process.env.PI_OFFLINE = previousOfflineEnv;
+		}
+		if (previousHomeEnv === undefined) {
+			delete process.env.HOME;
+		} else {
+			process.env.HOME = previousHomeEnv;
+		}
+		if (previousKimiHomeEnv === undefined) {
+			delete process.env.KIMI_CODE_HOME;
+		} else {
+			process.env.KIMI_CODE_HOME = previousKimiHomeEnv;
 		}
 		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
@@ -383,6 +406,109 @@ Content`,
 			expect(resolvedPackageSkill?.metadata.source).toBe("auto");
 			expect(resolvedPackageSkill?.metadata.scope).toBe("project");
 			expect(resolvedPackageSkill?.metadata.baseDir).toBe(packageAgentsBaseDir);
+		});
+	});
+
+	describe("seven-scope skills unification (MusePi fork)", () => {
+		// Outer beforeEach isolates HOME to <tempDir>/home-isolated and clears
+		// KIMI_CODE_HOME; cwd stays tempDir, so project and user scopes never
+		// collide on the same directory.
+		const homeDir = () => process.env.HOME as string;
+
+		it("should discover project .kimi-code skills with project metadata when trusted", async () => {
+			const kimiBaseDir = join(tempDir, ".kimi-code");
+			const skillPath = join(kimiBaseDir, "skills", "kimi-proj", "SKILL.md");
+			mkdirSync(join(kimiBaseDir, "skills", "kimi-proj"), { recursive: true });
+			writeFileSync(skillPath, "---\nname: kimi-proj\ndescription: kimi project\n---\n");
+
+			const result = await packageManager.resolve();
+			const skill = result.skills.find((r) => r.path === skillPath);
+
+			expect(skill?.enabled).toBe(true);
+			expect(skill?.metadata.source).toBe("auto");
+			expect(skill?.metadata.scope).toBe("project");
+			expect(skill?.metadata.baseDir).toBe(kimiBaseDir);
+		});
+
+		it("should not discover project .kimi-code skills when the project is untrusted", async () => {
+			const skillPath = join(tempDir, ".kimi-code", "skills", "kimi-proj", "SKILL.md");
+			mkdirSync(join(tempDir, ".kimi-code", "skills", "kimi-proj"), { recursive: true });
+			writeFileSync(skillPath, "---\nname: kimi-proj\ndescription: kimi project\n---\n");
+
+			settingsManager.setProjectTrusted(false);
+			const result = await packageManager.resolve();
+
+			expect(result.skills.some((r) => r.path === skillPath)).toBe(false);
+		});
+
+		it("should discover user skills from the host top-level dir (~/.musepi/skills)", async () => {
+			const hostBaseDir = join(homeDir(), CONFIG_DIR_NAME);
+			const skillPath = join(hostBaseDir, "skills", "host-top", "SKILL.md");
+			mkdirSync(join(hostBaseDir, "skills", "host-top"), { recursive: true });
+			writeFileSync(skillPath, "---\nname: host-top\ndescription: host top-level\n---\n");
+
+			const result = await packageManager.resolve();
+			const skill = result.skills.find((r) => r.path === skillPath);
+
+			expect(skill?.enabled).toBe(true);
+			expect(skill?.metadata.source).toBe("auto");
+			expect(skill?.metadata.scope).toBe("user");
+			expect(skill?.metadata.baseDir).toBe(hostBaseDir);
+		});
+
+		it("should discover user skills from $KIMI_CODE_HOME/skills", async () => {
+			const kimiHome = join(tempDir, "kimi-home");
+			process.env.KIMI_CODE_HOME = kimiHome;
+			const skillPath = join(kimiHome, "skills", "kimi-user", "SKILL.md");
+			mkdirSync(join(kimiHome, "skills", "kimi-user"), { recursive: true });
+			writeFileSync(skillPath, "---\nname: kimi-user\ndescription: kimi user\n---\n");
+
+			const result = await packageManager.resolve();
+			const skill = result.skills.find((r) => r.path === skillPath);
+
+			expect(skill?.enabled).toBe(true);
+			expect(skill?.metadata.scope).toBe("user");
+			expect(skill?.metadata.baseDir).toBe(kimiHome);
+		});
+
+		it("musepi.skills.kimiCodeCompat=false excludes kimi dirs but keeps the host top-level dir", async () => {
+			const kimiHome = join(tempDir, "kimi-home");
+			process.env.KIMI_CODE_HOME = kimiHome;
+			const projectKimiSkill = join(tempDir, ".kimi-code", "skills", "kimi-proj", "SKILL.md");
+			mkdirSync(join(tempDir, ".kimi-code", "skills", "kimi-proj"), { recursive: true });
+			writeFileSync(projectKimiSkill, "---\nname: kimi-proj\ndescription: kimi project\n---\n");
+			const userKimiSkill = join(kimiHome, "skills", "kimi-user", "SKILL.md");
+			mkdirSync(join(kimiHome, "skills", "kimi-user"), { recursive: true });
+			writeFileSync(userKimiSkill, "---\nname: kimi-user\ndescription: kimi user\n---\n");
+			const hostTopSkill = join(homeDir(), CONFIG_DIR_NAME, "skills", "host-top", "SKILL.md");
+			mkdirSync(join(homeDir(), CONFIG_DIR_NAME, "skills", "host-top"), { recursive: true });
+			writeFileSync(hostTopSkill, "---\nname: host-top\ndescription: host top-level\n---\n");
+
+			const offSettings = SettingsManager.inMemory({ musepi: { skills: { kimiCodeCompat: false } } });
+			const pm = new DefaultPackageManager({ cwd: tempDir, agentDir, settingsManager: offSettings });
+			const result = await pm.resolve();
+
+			expect(result.skills.some((r) => r.path === projectKimiSkill)).toBe(false);
+			expect(result.skills.some((r) => r.path === userKimiSkill)).toBe(false);
+			expect(result.skills.some((r) => r.path === hostTopSkill && r.enabled)).toBe(true);
+		});
+
+		it("should register pi-native dirs before compat dirs (pi-native first-wins)", async () => {
+			// Same skill name in <cwd>/.musepi/skills (pi-native) and
+			// .kimi-code/skills (compat): the pi-native entry must appear
+			// first so loadSkills' first-wins dedupe keeps it.
+			const nativeSkill = join(tempDir, CONFIG_DIR_NAME, "skills", "shared", "SKILL.md");
+			mkdirSync(join(tempDir, CONFIG_DIR_NAME, "skills", "shared"), { recursive: true });
+			writeFileSync(nativeSkill, "---\nname: shared\ndescription: native\n---\n");
+			const compatSkill = join(tempDir, ".kimi-code", "skills", "shared", "SKILL.md");
+			mkdirSync(join(tempDir, ".kimi-code", "skills", "shared"), { recursive: true });
+			writeFileSync(compatSkill, "---\nname: shared\ndescription: compat\n---\n");
+
+			const result = await packageManager.resolve();
+			const paths = result.skills.map((r) => r.path);
+
+			expect(paths.indexOf(nativeSkill)).toBeGreaterThanOrEqual(0);
+			expect(paths.indexOf(compatSkill)).toBeGreaterThan(paths.indexOf(nativeSkill));
 		});
 	});
 

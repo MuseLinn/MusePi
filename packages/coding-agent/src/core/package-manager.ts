@@ -24,6 +24,7 @@ function getEnv(): NodeJS.ProcessEnv {
 
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { Readable } from "node:stream";
+import { listCompatSkillDirs } from "@musepi/core/skills/index.js";
 import { globSync } from "glob";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
@@ -2351,6 +2352,29 @@ export class DefaultPackageManager implements PackageManager {
 			? collectAncestorAgentsSkillDirs(this.cwd).filter((dir) => resolve(dir) !== resolve(userAgentsSkillsDir))
 			: [];
 
+		// MusePi fork: seven-scope skills unification (@musepi/core/skills
+		// scanner). pi natively scans <cwd>/<hostDir>/skills, .agents/skills
+		// ancestors, <agentDir>/skills and ~/.agents/skills; the remaining
+		// scopes — project .kimi-code/skills, user <hostDir>/skills (top-level,
+		// e.g. ~/.musepi/skills) and $KIMI_CODE_HOME/skills — are registered
+		// here in the scanner's priority order. pi-native dirs stay first, so
+		// their priority, trust gate and first-wins dedupe are unchanged.
+		// Project scope follows pi's cwd-based convention (sibling of the
+		// .musepi dir), not the scanner's git-root walk.
+		const musepiSkillsSettings = this.settingsManager.getMusepi().skills;
+		const compatSkillDirs = listCompatSkillDirs(
+			this.cwd,
+			{
+				projectRoot: this.cwd,
+				homeDir: getHomeDir(),
+				agentDir: this.agentDir,
+				hostDirName: CONFIG_DIR_NAME,
+			},
+			{ kimiCodeCompat: musepiSkillsSettings.kimiCodeCompat },
+		);
+		const compatProjectSkillDirs = compatSkillDirs.filter((d) => d.source === "project");
+		const compatUserSkillDirs = compatSkillDirs.filter((d) => d.source === "user");
+
 		const addResources = (
 			resourceType: ResourceType,
 			paths: string[],
@@ -2383,6 +2407,19 @@ export class DefaultPackageManager implements PackageManager {
 				projectOverrides.skills,
 				projectBaseDir,
 			);
+
+			// Project skills from .kimi-code/ (Kimi Code compat scope — same
+			// trust gate as .pi/ skills)
+			for (const compatDir of compatProjectSkillDirs) {
+				const compatBaseDir = dirname(compatDir.dir);
+				addResources(
+					"skills",
+					collectAutoSkillEntries(compatDir.dir, "pi"),
+					{ ...projectMetadata, baseDir: compatBaseDir },
+					projectOverrides.skills,
+					compatBaseDir,
+				);
+			}
 		}
 
 		// Project skills from .agents/ (each with its own baseDir)
@@ -2452,6 +2489,19 @@ export class DefaultPackageManager implements PackageManager {
 			userOverrides.skills,
 			globalBaseDir,
 		);
+
+		// User skills from ~/.musepi/skills (host top-level) and
+		// $KIMI_CODE_HOME/skills (Kimi Code compat scope)
+		for (const compatDir of compatUserSkillDirs) {
+			const compatBaseDir = dirname(compatDir.dir);
+			addResources(
+				"skills",
+				collectAutoSkillEntries(compatDir.dir, "pi"),
+				{ ...userMetadata, baseDir: compatBaseDir },
+				userOverrides.skills,
+				compatBaseDir,
+			);
+		}
 
 		// User skills from ~/.agents/ (with its own baseDir)
 		const userAgentsBaseDir = dirname(userAgentsSkillsDir);

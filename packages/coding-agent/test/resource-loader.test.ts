@@ -18,16 +18,38 @@ describe("DefaultResourceLoader", () => {
 	let tempDir: string;
 	let agentDir: string;
 	let cwd: string;
+	let previousHomeEnv: string | undefined;
+	let previousKimiHomeEnv: string | undefined;
 
 	beforeEach(() => {
+		// Isolate user-home scopes from the developer machine's real home
+		// (~/.agents/skills via the ancestor walk, host top-level skills dir,
+		// $KIMI_CODE_HOME default): tmpdir lives under the real home.
+		previousHomeEnv = process.env.HOME;
+		previousKimiHomeEnv = process.env.KIMI_CODE_HOME;
 		tempDir = join(tmpdir(), `rl-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		process.env.HOME = join(tempDir, "home-isolated");
+		delete process.env.KIMI_CODE_HOME;
 		agentDir = join(tempDir, "agent");
 		cwd = join(tempDir, "project");
+		mkdirSync(process.env.HOME, { recursive: true });
 		mkdirSync(agentDir, { recursive: true });
 		mkdirSync(cwd, { recursive: true });
+		// Stop the .agents/skills ancestor walk at tempDir.
+		mkdirSync(join(tempDir, ".git"), { recursive: true });
 	});
 
 	afterEach(() => {
+		if (previousHomeEnv === undefined) {
+			delete process.env.HOME;
+		} else {
+			process.env.HOME = previousHomeEnv;
+		}
+		if (previousKimiHomeEnv === undefined) {
+			delete process.env.KIMI_CODE_HOME;
+		} else {
+			process.env.KIMI_CODE_HOME = previousKimiHomeEnv;
+		}
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 

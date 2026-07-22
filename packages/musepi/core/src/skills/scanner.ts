@@ -145,12 +145,46 @@ export function listSkillRootDirs(cwd: string, scope?: SkillScope): SkillRootDir
 }
 
 /** Existing dirs only — used by the resources_discover main-session hook. */
-export function listExistingSkillDirs(cwd: string): string[] {
-  return listSkillRootDirs(cwd)
+export function listExistingSkillDirs(cwd: string, scope?: SkillScope): string[] {
+  return listSkillRootDirs(cwd, scope)
     .map((r) => r.dir)
     .filter((d) => {
       try { return fs.statSync(d).isDirectory(); } catch { return false; }
     });
+}
+
+/**
+ * The two Kimi Code compat dirs (project `.kimi-code/skills`, user
+ * `<kimiHome>/skills`). Everything else in the seven-scope layout is either
+ * host-native or a cross-tool standard (.agents), so this is the only
+ * category a host may reasonably want to switch off.
+ */
+function kimiCompatDirs(s: ResolvedScope): string[] {
+  return [path.join(s.projectRoot, ".kimi-code", "skills"), path.join(s.kimiHome, "skills")];
+}
+
+/**
+ * Skill root dirs that pi's native package-manager does NOT scan itself:
+ * project `.kimi-code/skills`, user `<hostDir>/skills` (top-level, e.g.
+ * ~/.musepi/skills), user `<kimiHome>/skills`. Hosts that keep pi's own
+ * loader as the primary path feed these in as extra dirs — pi-native dirs
+ * keep priority because the host registers them first (first-wins dedupe).
+ * `kimiCodeCompat: false` drops the two Kimi Code compat dirs, leaving only
+ * the host top-level user dir.
+ */
+export function listCompatSkillDirs(
+  cwd: string,
+  scope?: SkillScope,
+  options?: { kimiCodeCompat?: boolean },
+): SkillRootDir[] {
+  const s = resolveScope(cwd, scope);
+  const kimiCompat = options?.kimiCodeCompat ?? true;
+  const [projectKimiDir, userKimiDir] = kimiCompatDirs(s);
+  const dirs: SkillRootDir[] = [];
+  if (kimiCompat) dirs.push({ dir: projectKimiDir, source: "project" });
+  dirs.push({ dir: path.join(s.home, s.hostDirName, "skills"), source: "user" });
+  if (kimiCompat) dirs.push({ dir: userKimiDir, source: "user" });
+  return dirs;
 }
 
 // ------------------------------------------------------------
@@ -408,14 +442,29 @@ function scanRootCached(root: SkillRootDir): ScanOut {
 // Public entry point
 // ------------------------------------------------------------
 
+export interface LoadSkillsForCwdOptions {
+  /** Host layout override (defaults: pi conventions). */
+  scope?: SkillScope;
+  /**
+   * Include the Kimi Code compat dirs (project `.kimi-code/skills`, user
+   * `<kimiHome>/skills`). Default true; hosts expose this as a setting so
+   * users can keep a pi-pure skill set.
+   */
+  kimiCodeCompat?: boolean;
+}
+
 /**
  * Load Kimi Code Agent Skills for a cwd: project scopes first, then user
  * scopes; dedupe by name (first loader wins; losers → collision diagnostic).
  */
-export function loadSkillsForCwd(cwd: string): LoadSkillsResult {
+export function loadSkillsForCwd(cwd: string, options?: LoadSkillsForCwdOptions): LoadSkillsResult {
+  const resolved = resolveScope(cwd, options?.scope);
+  const kimiCompat = options?.kimiCodeCompat ?? true;
+  const skipped = kimiCompat ? new Set<string>() : new Set(kimiCompatDirs(resolved));
   const out: ScanOut = { skills: [], diagnostics: [] };
   const seenNames = new Set<string>();
-  for (const root of listSkillRootDirs(cwd)) {
+  for (const root of listSkillRootDirs(cwd, options?.scope)) {
+    if (skipped.has(root.dir)) continue;
     const partial = scanRootCached(root);
     for (const d of partial.diagnostics) out.diagnostics.push(d);
     for (const skill of partial.skills) pushSkill(skill, out, seenNames);

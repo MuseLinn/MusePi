@@ -97,6 +97,45 @@ export interface MusepiLspServerSettings {
 }
 
 /**
+ * One MCP server entry (musepi.mcp.servers.<name>). `command` (+ args/env)
+ * selects a stdio server spawned on demand; `url` (+ headers) selects a
+ * streamable-HTTP server. Exactly one transport must be set.
+ */
+export interface MusepiMcpServerSettings {
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+	url?: string;
+	headers?: Record<string, string>;
+	/** Per-server switch. Off = never connected, tools never registered. */
+	enabled?: boolean; // default: true
+}
+
+/**
+ * MCP (Model Context Protocol) integration: external tool servers bridged
+ * into the session under the `mcp_<server>_<tool>` namespace. Servers
+ * connect lazily on first use (or via /mcp reconnect), degrade gracefully
+ * per-server, and are reaped after an idle timeout. With
+ * musepi.toolSelect enabled, MCP tools join the deferred loadable set
+ * instead of the top-level tools[].
+ */
+export interface MusepiMcpSettings {
+	/** Master switch. Off = no connections, no tool surface. */
+	enabled?: boolean; // default: true
+	/** Server registry: name → { command, args, env } or { url, headers }. */
+	servers?: Record<string, MusepiMcpServerSettings>; // default: {}
+	/** Idle connections are closed after this many ms. */
+	idleTimeoutMs?: number; // default: 600000 (10 min)
+	/**
+	 * Also enumerate every server in the background at session start so its
+	 * tools appear without a first manual call. Off (default) = pure lazy:
+	 * tools register from the on-disk cache and the server connects on the
+	 * first actual tool call.
+	 */
+	startupDiscovery?: boolean; // default: false
+}
+
+/**
  * LSP integration: lazy language-server clients behind the `lsp` tool,
  * plus deferred post-edit diagnostics re-injected into the session.
  */
@@ -152,6 +191,21 @@ export interface MusepiAdvisorSettings {
 }
 
 /**
+ * Skills discovery (seven-scope layout, see @musepi/core/skills scanner).
+ * The host-native dirs (project `<cwd>/.musepi/skills`, `.agents/skills`
+ * ancestors, `~/.musepi/agent/skills`, `~/.musepi/skills`, `~/.agents/skills`)
+ * are always scanned; only the Kimi Code compat dirs are switchable.
+ */
+export interface MusepiSkillsSettings {
+	/**
+	 * Also scan the Kimi Code compat dirs (project `.kimi-code/skills` and
+	 * `$KIMI_CODE_HOME/skills`, default `~/.kimi-code/skills`) in both the
+	 * main session and swarm subagents. Off = pi-pure skill set.
+	 */
+	kimiCodeCompat?: boolean; // default: true
+}
+
+/**
  * Compatibility bridges back to a legacy pi installation. Everything here
  * is opt-in (default off): the fork ships native features that can collide
  * with pi extensions, so nothing from `~/.pi` is loaded unless asked.
@@ -165,6 +219,7 @@ export interface MusepiSettings {
 	/** Check MusePi's GitHub Releases for new versions on startup and show the update prompt. */
 	updateCheck?: boolean; // default: true
 	compat?: MusepiCompatSettings;
+	skills?: MusepiSkillsSettings;
 	advisor?: MusepiAdvisorSettings;
 	goal?: MusepiGoalSettings;
 	todo?: MusepiTodoSettings;
@@ -175,6 +230,7 @@ export interface MusepiSettings {
 	modelRoles?: MusepiModelRolesSettings;
 	toolSelect?: MusepiToolSelectSettings;
 	lsp?: MusepiLspSettings;
+	mcp?: MusepiMcpSettings;
 	memory?: MusepiMemorySettings;
 	compaction?: MusepiCompactionSettings;
 	notifications?: MusepiNotificationsSettings;
@@ -225,6 +281,7 @@ export interface MusepiMemorySettings {
 export const MUSEPI_DEFAULTS: Required<{
 	updateCheck: boolean;
 	compat: Required<MusepiCompatSettings>;
+	skills: Required<MusepiSkillsSettings>;
 	advisor: Required<MusepiAdvisorSettings>;
 	goal: Required<MusepiGoalSettings>;
 	todo: Required<MusepiTodoSettings>;
@@ -235,12 +292,19 @@ export const MUSEPI_DEFAULTS: Required<{
 	modelRoles: Required<MusepiModelRolesSettings>;
 	toolSelect: Required<MusepiToolSelectSettings>;
 	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
+	mcp: {
+		enabled: boolean;
+		servers: Record<string, MusepiMcpServerSettings>;
+		idleTimeoutMs: number;
+		startupDiscovery: boolean;
+	};
 	memory: { enabled: boolean; scope: "project" | "global"; caps: { project: number; global: number } };
 	compaction: { strategy: "default" | "snapcompact" };
 	notifications: { enabled: boolean; condition: "always" | "unfocused" };
 }> = {
 	updateCheck: true,
 	compat: { loadPiExtensions: false },
+	skills: { kimiCodeCompat: true },
 	advisor: { enabled: true, model: "", maxContextChars: 60_000 },
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
@@ -251,6 +315,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	toolSelect: { enabled: false, models: [], defer: [] },
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
+	mcp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, startupDiscovery: false },
 	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
 	compaction: { strategy: "default" },
 	notifications: { enabled: true, condition: "unfocused" },
@@ -353,6 +418,46 @@ function pickLsp(override: unknown): ResolvedMusepiSettings["lsp"] {
 }
 
 /**
+ * mcp needs a custom merge: `enabled`/`startupDiscovery` booleans,
+ * `idleTimeoutMs` number, and `servers` is a record of per-server entries
+ * (non-object entries dropped; only known fields kept).
+ */
+function pickMcp(override: unknown): ResolvedMusepiSettings["mcp"] {
+	const defaults = MUSEPI_DEFAULTS.mcp;
+	const out = { ...defaults, servers: {} as Record<string, MusepiMcpServerSettings> };
+	if (!override || typeof override !== "object") return out;
+	const record = override as Record<string, unknown>;
+	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (typeof record.startupDiscovery === "boolean") out.startupDiscovery = record.startupDiscovery;
+	if (typeof record.idleTimeoutMs === "number" && record.idleTimeoutMs > 0) {
+		out.idleTimeoutMs = record.idleTimeoutMs;
+	}
+	if (record.servers && typeof record.servers === "object" && !Array.isArray(record.servers)) {
+		for (const [name, value] of Object.entries(record.servers as Record<string, unknown>)) {
+			if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+			const v = value as Record<string, unknown>;
+			const server: MusepiMcpServerSettings = {};
+			if (typeof v.command === "string") server.command = v.command;
+			if (Array.isArray(v.args)) server.args = v.args.filter((a): a is string => typeof a === "string");
+			if (v.env && typeof v.env === "object" && !Array.isArray(v.env)) {
+				server.env = Object.fromEntries(
+					Object.entries(v.env as Record<string, unknown>).filter(([, val]) => typeof val === "string"),
+				) as Record<string, string>;
+			}
+			if (typeof v.url === "string") server.url = v.url;
+			if (v.headers && typeof v.headers === "object" && !Array.isArray(v.headers)) {
+				server.headers = Object.fromEntries(
+					Object.entries(v.headers as Record<string, unknown>).filter(([, val]) => typeof val === "string"),
+				) as Record<string, string>;
+			}
+			if (typeof v.enabled === "boolean") server.enabled = v.enabled;
+			out.servers[name] = server;
+		}
+	}
+	return out;
+}
+
+/**
  * memory needs a custom merge: `enabled` boolean, `scope` enum, and a
  * nested `caps` record of positive numbers.
  */
@@ -406,6 +511,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 	return {
 		updateCheck: typeof r.updateCheck === "boolean" ? r.updateCheck : MUSEPI_DEFAULTS.updateCheck,
 		compat: pick(MUSEPI_DEFAULTS.compat, r.compat),
+		skills: pick(MUSEPI_DEFAULTS.skills, r.skills),
 		advisor: pick(MUSEPI_DEFAULTS.advisor, r.advisor),
 		goal: pick(MUSEPI_DEFAULTS.goal, r.goal),
 		todo: pick(MUSEPI_DEFAULTS.todo, r.todo),
@@ -416,6 +522,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		modelRoles: pickModelRoles(r.modelRoles),
 		toolSelect: pickToolSelect(r.toolSelect),
 		lsp: pickLsp(r.lsp),
+		mcp: pickMcp(r.mcp),
 		memory: pickMemory(r.memory),
 		compaction: pickCompaction(r.compaction),
 		notifications: pickNotifications(r.notifications),
@@ -433,6 +540,12 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "compat.loadPiExtensions",
 		description: "Also auto-load extensions from the legacy pi home (~/.pi/agent/extensions)",
 		defaultValue: false,
+	},
+	{
+		key: "skills.kimiCodeCompat",
+		description:
+			"Also scan Kimi Code compat skill dirs (.kimi-code/skills, $KIMI_CODE_HOME/skills) in main session and swarm",
+		defaultValue: true,
 	},
 	{ key: "goal.badge", description: "Show the goal badge in the footer", defaultValue: true },
 	{
@@ -499,6 +612,26 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "lsp.idleTimeoutMs",
 		description: "Idle language servers are shut down after this many ms",
 		defaultValue: 600000,
+	},
+	{
+		key: "mcp.enabled",
+		description: "MCP integration: external tool servers bridged as mcp_<server>_<tool> (lazy connect)",
+		defaultValue: true,
+	},
+	{
+		key: "mcp.servers",
+		description: "MCP servers: name → { command, args, env } (stdio) or { url, headers } (http)",
+		defaultValue: {},
+	},
+	{
+		key: "mcp.idleTimeoutMs",
+		description: "Idle MCP connections are closed after this many ms",
+		defaultValue: 600000,
+	},
+	{
+		key: "mcp.startupDiscovery",
+		description: "Enumerate MCP servers in the background at session start (off = pure lazy)",
+		defaultValue: false,
 	},
 	{
 		key: "modelRoles.default",

@@ -26,7 +26,7 @@ import {
 	swarmState,
 } from "@musepi/core/swarm/types.js";
 import { wrapWithPermissionGate } from "@musepi/core/swarm/wrap-tools.js";
-import { getAgentDir } from "../../config.ts";
+import { CONFIG_DIR_NAME, getAgentDir } from "../../config.ts";
 import { createExtensionRuntime } from "../../core/extensions/loader.ts";
 import type { ResourceLoader } from "../../core/resource-loader.ts";
 import { createAgentSession } from "../../core/sdk.ts";
@@ -165,8 +165,14 @@ export function createSubagentResourceLoader(ctx: {
 
 	return {
 		getExtensions: () => extensionsResult,
-		// Kimi Code-style Agent Skills (project + user scopes) for subagent sessions.
-		getSkills: () => loadSkillsForCwd(ctx.cwd || process.cwd()) as { skills: any[]; diagnostics: any[] },
+		// Seven-scope Agent Skills (project + user, pi-native first) for
+		// subagent sessions — same scanner/layout as the main session, with
+		// the fork's host dirs (.musepi) and the shared kimiCodeCompat gate.
+		getSkills: () =>
+			loadSkillsForCwd(ctx.cwd || process.cwd(), {
+				scope: { hostDirName: CONFIG_DIR_NAME, agentDir: getAgentDir() },
+				kimiCodeCompat: getMusepiSkillsKimiCodeCompat(),
+			}) as { skills: any[]; diagnostics: any[] },
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
@@ -234,6 +240,12 @@ export function getMusepiModelRoles() {
 export function getMusepiSwarmIsolation(): "worktree" | "none" {
 	const settings = readSettingsCached();
 	return mergeMusepiSettings(settings?.musepi).swarm.isolation === "none" ? "none" : "worktree";
+}
+
+/** Merged musepi.skills.kimiCodeCompat (default on; shared with the main session). */
+export function getMusepiSkillsKimiCodeCompat(): boolean {
+	const settings = readSettingsCached();
+	return mergeMusepiSettings(settings?.musepi).skills.kimiCodeCompat;
 }
 
 /**
