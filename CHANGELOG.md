@@ -10,6 +10,23 @@ and in the
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-23
+
+Settings and memory surfaces, the fork's own changelog pipeline, and CI
+reliability fixes.
+
+### New Features
+
+- **Grouped settings panel** — the settings list gains section headings (skipped by navigation, matched by search), and the main panel is reorganized from a flat list into Session / Images / Interface / Advanced / MusePi sections.
+- **MusePi settings submenu** — all 42 `musepi.*` feature settings are editable from the TUI, grouped Memory / MCP / LSP / Advisor / Model Roles / Tools / Swarm / Interface / Updates & Compat: booleans and enums cycle in place, numbers cycle curated presets, model specs open a text input, and nested registries point at `settings.json`.
+- **`/memory` command** — `view` shows the exact startup memory injection, `stats` reports paths/entry counts/BM25 policy, `clear` resets project/global/all behind an interactive confirm, and `enable`/`disable` persist `musepi.memory.enabled` and hot-switch by re-binding the memory tool without a restart.
+
+### Fixed
+
+- **Own CHANGELOG drives What's New** — `packages/coding-agent/CHANGELOG.md` now tracks MusePi releases (pre-fork upstream history preserved as `UPSTREAM-CHANGELOG.md`, mirrored by the repo-root `CHANGELOG.md`), What's New links rewrite to MuseLinn/MusePi, and a last-seen version newer than the running one (e.g. migrating from upstream pi 0.81.x) shows this distribution's entries instead of nothing.
+- **goalId same-millisecond collision** — goal ids gain a random suffix, fixing the same-ms collision that flaked the CI goal test.
+- **CI reliability** — build runs before check so fresh runners have `@musepi/*` dist output, the Pages checkout gets `contents: read`, and the LSP URI normalization test is platform-independent.
+
 ## [0.1.0] - 2026-07-22
 
 First MusePi release: the pi agent harness (`earendil-works/pi` 0.81.x base)
