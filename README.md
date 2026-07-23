@@ -9,7 +9,8 @@
 
 MusePi is a fork of the [pi agent harness](https://github.com/earendil-works/pi)
 (`earendil-works/pi`) with the muselinn feature set layered on top of the
-upstream agent loop.
+upstream agent loop. See [CHANGELOG.md](CHANGELOG.md) for MusePi's own release
+history.
 
 * **[@earendil-works/pi-coding-agent](packages/coding-agent)**: Interactive coding agent CLI (MusePi branded)
 * **[@musepi/core](packages/musepi/core)**: MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task), zero host imports
@@ -21,6 +22,11 @@ upstream agent loop.
 
 - **Hashline editing** — hash-anchored edit format (`@musepi/core/hashline`) for
   robust, retryable file edits by weaker models.
+- **Long-term memory** — MiMo-style markdown memory (`@musepi/core/memory`):
+  project + global `MEMORY.md` files, BM25 recall, a `memory` tool
+  (search/retain/edit), and a budgeted one-shot startup injection. Opt-in via
+  `musepi.memory.enabled` (default off); inspect and manage it with `/memory`
+  (view/stats/clear/enable/disable).
 - **Independent config home** — MusePi reads/writes `~/.musepi` instead of
   `~/.pi`, so it coexists with a stock pi install. First run migrates
   auth/settings/models/keybindings from `~/.pi/agent`; update checks run

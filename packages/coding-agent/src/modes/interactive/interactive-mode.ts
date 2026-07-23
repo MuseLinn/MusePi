@@ -105,10 +105,16 @@ import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
 import { handleMusepiMcpCommand } from "../../musepi/mcp-native.ts";
+import { handleMusepiMemoryCommand, initMusepiMemory } from "../../musepi/memory-native.ts";
 import { backgroundManager } from "../../musepi/task/manager.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
 import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
-import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
+import {
+	getChangelogPath,
+	getStartupChangelogEntries,
+	normalizeChangelogLinks,
+	parseChangelog,
+} from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
@@ -1058,8 +1064,8 @@ export class InteractiveMode {
 			return undefined;
 		}
 
-		const newEntries = getNewEntries(entries, lastVersion);
-		if (newEntries.length > 0) {
+		const newEntries = getStartupChangelogEntries(entries, lastVersion, VERSION);
+		if (newEntries) {
 			this.settingsManager.setLastChangelogVersion(VERSION);
 			this.reportInstallTelemetry(VERSION);
 			return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
@@ -2806,6 +2812,11 @@ export class InteractiveMode {
 				await this.handleMcpCommand(text.slice(4));
 				return;
 			}
+			if (text === "/memory" || text.startsWith("/memory ")) {
+				this.editor.setText("");
+				await this.handleMemoryCommand(text.slice(7));
+				return;
+			}
 			if (text === "/hotkeys") {
 				this.handleHotkeysCommand();
 				this.editor.setText("");
@@ -4481,6 +4492,8 @@ export class InteractiveMode {
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
 					warnings: this.settingsManager.getWarnings(),
+					musepi: this.settingsManager.getMusepi(),
+					musepiSettingsPath: this.settingsManager.getGlobalSettingsPath(),
 				},
 				{
 					onAutoCompactChange: (enabled) => {
@@ -4618,6 +4631,9 @@ export class InteractiveMode {
 					},
 					onWarningsChange: (warnings) => {
 						this.settingsManager.setWarnings(warnings);
+					},
+					onMusepiChange: (path, value) => {
+						this.settingsManager.setMusepiValue(path, value);
 					},
 					onCancel: () => {
 						done();
@@ -6145,6 +6161,38 @@ export class InteractiveMode {
 			this.chatContainer.addChild(new Text(theme.fg("dim", output), 1, 0));
 		} catch (error) {
 			this.showError(`MCP command failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+		this.ui.requestRender();
+	}
+
+	/** MusePi memory: `/memory [view|stats|clear <target>|enable|disable]` — render as chat text. */
+	private async handleMemoryCommand(args: string): Promise<void> {
+		try {
+			const [action = "", target = ""] = args.trim().split(/\s+/, 2);
+			let confirmed = false;
+			if (action === "clear" && ["project", "global", "all"].includes(target)) {
+				confirmed = await this.showExtensionConfirm(
+					"Clear memory",
+					`Reset ${target} memory to the empty skeleton? This cannot be undone.`,
+				);
+				if (!confirmed) {
+					this.showStatus("Memory clear cancelled.");
+					return;
+				}
+			}
+			const output = handleMusepiMemoryCommand(args, {
+				confirmed,
+				setEnabled: (enabled) => {
+					this.settingsManager.setMusepiMemoryEnabled(enabled);
+					// Hot switch: re-bind so the tool set and the one-shot
+					// injection reflect the new toggle without a restart.
+					initMusepiMemory(this.session, this.settingsManager);
+				},
+			});
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", output), 1, 0));
+		} catch (error) {
+			this.showError(`Memory command failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 		this.ui.requestRender();
 	}

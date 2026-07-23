@@ -3,9 +3,10 @@
 All notable changes to MusePi are documented in this file.
 
 MusePi is a fork of [pi](https://github.com/earendil-works/pi). The pre-fork
-upstream history (pi 0.5.x–0.81.x) lives in the
-[upstream changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md)
-and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
+upstream history (pi 0.5.x–0.81.x) is preserved at
+[packages/coding-agent/UPSTREAM-CHANGELOG.md](packages/coding-agent/UPSTREAM-CHANGELOG.md)
+and in the
+[upstream changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md).
 
 ## [Unreleased]
 
@@ -13,8 +14,7 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 First MusePi release: the pi agent harness (`earendil-works/pi` 0.81.x base)
 with the muselinn feature set layered on top of the upstream agent loop. See
-[UPSTREAM.md](../../UPSTREAM.md) for the pin + cherry-pick policy towards
-upstream.
+[UPSTREAM.md](UPSTREAM.md) for the pin + cherry-pick policy towards upstream.
 
 ### New Features
 

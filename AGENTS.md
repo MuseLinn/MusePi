@@ -103,7 +103,7 @@ tmux kill-session -t musepi-test
 
 ## Changelog
 
-Location: `packages/*/CHANGELOG.md` (one per package).
+Location: `packages/*/CHANGELOG.md` (one per package). The user-facing `packages/coding-agent/CHANGELOG.md` tracks MusePi releases only; pre-fork upstream history is preserved in `packages/coding-agent/UPSTREAM-CHANGELOG.md`.
 
 Sections under `## [Unreleased]`: `### Breaking Changes` (API changes requiring migration), `### Added`, `### Changed`, `### Fixed`, `### Removed`.
 
@@ -114,8 +114,8 @@ Rules:
 
 Attribution:
 
-- Internal (from issues): `Fixed foo bar ([#123](https://github.com/earendil-works/pi-mono/issues/123))`
-- External contributions: `Added feature X ([#456](https://github.com/earendil-works/pi-mono/pull/456) by [@username](https://github.com/username))`
+- Internal (from issues): `Fixed foo bar ([#123](https://github.com/MuseLinn/MusePi/issues/123))`
+- External contributions: `Added feature X ([#456](https://github.com/MuseLinn/MusePi/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 
