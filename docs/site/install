@@ -1,0 +1,128 @@
+#!/bin/sh
+# MusePi installer for Linux and macOS.
+#
+#   curl -fsSL https://muselinn.github.io/MusePi/install | sh
+#
+# Environment overrides:
+#   MUSEPI_INSTALL_DIR   install root (default: ~/.local/bin)
+#   MUSEPI_VERSION       release tag to install, e.g. v0.1.0 (default: latest)
+#   MUSEPI_DOWNLOAD_URL  full asset URL override (mirror/proxy/testing)
+#
+# Layout note: the release archive keeps MusePi as a directory — the `musepi`
+# executable needs its sibling package.json (version display) plus theme/,
+# export-html/ and friends — so the archive is extracted as-is:
+#
+#   $MUSEPI_INSTALL_DIR/musepi/musepi        <- the executable
+#   $MUSEPI_INSTALL_DIR/musepi/package.json
+#   $MUSEPI_INSTALL_DIR/musepi/theme/ ...
+#
+# and $MUSEPI_INSTALL_DIR/musepi is added to PATH via your shell rc file.
+
+set -e
+
+REPO="MuseLinn/MusePi"
+INSTALL_DIR="${MUSEPI_INSTALL_DIR:-$HOME/.local/bin}"
+
+info() { printf '%s\n' "$*"; }
+fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+# --- platform detection ----------------------------------------------------
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+    Linux)  PLATFORM="linux" ;;
+    Darwin) PLATFORM="darwin" ;;
+    MINGW*|MSYS*|CYGWIN*)
+        fail "Windows detected. Use PowerShell instead:
+  irm https://muselinn.github.io/MusePi/install.ps1 | iex" ;;
+    *) fail "Unsupported OS: $OS (supported: Linux, macOS)" ;;
+esac
+
+case "$ARCH" in
+    x86_64|amd64)  ARCH="x64" ;;
+    arm64|aarch64) ARCH="arm64" ;;
+    *) fail "Unsupported architecture: $ARCH (supported: x64, arm64)" ;;
+esac
+
+ASSET="musepi-${PLATFORM}-${ARCH}.tar.gz"
+
+# --- downloader (curl preferred, wget fallback) -----------------------------
+if command -v curl >/dev/null 2>&1; then
+    fetch() { curl -fsSL --connect-timeout 10 --retry 3 "$1" -o "$2"; }
+elif command -v wget >/dev/null 2>&1; then
+    fetch() { wget -q "$1" -O "$2"; }
+else
+    fail "Neither curl nor wget found. Install one of them and retry."
+fi
+
+# --- resolve download URL ----------------------------------------------------
+if [ -n "${MUSEPI_DOWNLOAD_URL:-}" ]; then
+    URL="$MUSEPI_DOWNLOAD_URL"
+elif [ -n "${MUSEPI_VERSION:-}" ]; then
+    URL="https://github.com/${REPO}/releases/download/${MUSEPI_VERSION}/${ASSET}"
+else
+    URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+fi
+
+# --- download & extract ------------------------------------------------------
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+info "Downloading ${ASSET}..."
+if ! fetch "$URL" "$TMP_DIR/$ASSET"; then
+    fail "Download failed: ${URL}
+Check https://github.com/${REPO}/releases for available assets."
+fi
+
+APP_DIR="$INSTALL_DIR/musepi"
+info "Installing to ${APP_DIR} ..."
+mkdir -p "$INSTALL_DIR"
+rm -rf "$APP_DIR"
+# The archive wraps everything in a top-level musepi/ directory, so plain
+# extraction yields INSTALL_DIR/musepi/ with the full layout preserved.
+tar -xzf "$TMP_DIR/$ASSET" -C "$INSTALL_DIR" || fail "Failed to extract the archive."
+chmod +x "$APP_DIR/musepi" 2>/dev/null || true
+
+[ -f "$APP_DIR/musepi" ] || fail "Executable missing after extract: $APP_DIR/musepi"
+[ -f "$APP_DIR/package.json" ] || fail "Unexpected archive layout: package.json is not next to the executable."
+
+# --- PATH ---------------------------------------------------------------------
+case ":$PATH:" in
+    *":$APP_DIR:"*) IN_PATH=1 ;;
+    *)              IN_PATH=0 ;;
+esac
+
+if [ "$IN_PATH" -eq 0 ]; then
+    SHELL_NAME="$(basename "${SHELL:-sh}")"
+    case "$SHELL_NAME" in
+        zsh)  RC="$HOME/.zshrc" ;;
+        bash)
+            if [ "$PLATFORM" = "darwin" ]; then
+                RC="$HOME/.bash_profile"
+            else
+                RC="$HOME/.bashrc"
+            fi ;;
+        *)    RC="$HOME/.profile" ;;
+    esac
+
+    if [ -f "$RC" ] && grep -qF "$APP_DIR" "$RC"; then
+        info "PATH entry for ${APP_DIR} already exists in ${RC}."
+    else
+        printf '\n# MusePi\nexport PATH="%s:$PATH"\n' "$APP_DIR" >> "$RC"
+        info "Added ${APP_DIR} to PATH in ${RC}."
+    fi
+    export PATH="$APP_DIR:$PATH"
+fi
+
+# --- verify --------------------------------------------------------------------
+info ""
+VERSION_OUT="$("$APP_DIR/musepi" --version 2>&1)" || fail "musepi --version failed: $VERSION_OUT"
+info "Installed: ${VERSION_OUT}"
+info "Location:  ${APP_DIR}/musepi"
+if [ "$IN_PATH" -eq 0 ]; then
+    info ""
+    info "Open a new terminal (or 'source ${RC}'), then run: musepi"
+else
+    info "Run 'musepi' to get started!"
+fi

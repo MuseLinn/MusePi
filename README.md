@@ -62,10 +62,34 @@ conflict-surface rules are recorded in [UPSTREAM.md](UPSTREAM.md). In short:
 
 ## Install
 
-Prebuilt binaries for macOS (arm64/x64), Linux (x64/arm64) and Windows
-(x64/arm64) are attached to [GitHub Releases](https://github.com/MuseLinn/MusePi/releases).
-Download the `musepi-<platform>` archive for your system; the CLI identifies
-itself as `MusePi` (`musepi --version`).
+**One-line install (recommended):**
+
+macOS / Linux:
+
+```sh
+curl -fsSL https://muselinn.github.io/MusePi/install | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://muselinn.github.io/MusePi/install.ps1 | iex
+```
+
+The installer downloads the latest release archive for your platform
+(macOS arm64/x64, Linux x64/arm64, Windows x64/arm64), keeps it as a
+directory — `musepi` needs its sibling `package.json` for `--version` —
+puts it on your `PATH`, and verifies the result:
+
+- macOS / Linux: `~/.local/bin/musepi/` (override with `MUSEPI_INSTALL_DIR`)
+- Windows: `%LOCALAPPDATA%\Programs\musepi` (override with `$env:MUSEPI_INSTALL_DIR`; open a new terminal for the `PATH` change)
+
+You can also grab an archive manually from
+[GitHub Releases](https://github.com/MuseLinn/MusePi/releases) — keep the
+extracted directory intact rather than moving the bare executable. The CLI
+identifies itself as `MusePi` (`musepi --version`).
+
+To build from source instead, see [Development](#development) below.
 
 ## Development
 
@@ -96,9 +120,10 @@ Provider live/E2E tests skip automatically via
 
 ### GitHub Pages
 
-Not set up yet. The repo has a `docs/` directory but no Pages source is
-configured — TODO: pick a Pages source (or a docs generator) once the
-documentation set grows beyond [docs/RENDER-PROFILE.md](docs/RENDER-PROFILE.md).
+The project site lives at <https://muselinn.github.io/MusePi/> — plain static
+HTML in `docs/site/` (including the `install` / `install.ps1` one-liner
+scripts), deployed by `.github/workflows/pages.yml` whenever `docs/site/`
+changes on `main`.
 
 ## Permissions & Containerization
 

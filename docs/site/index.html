@@ -188,11 +188,10 @@
 
     <div class="term" aria-label="Install and run MusePi">
       <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
-      <pre><span class="c"># grab a prebuilt binary from GitHub Releases, or build from source:</span>
-<span class="p">$</span> git clone https://github.com/MuseLinn/MusePi.git
-<span class="p">$</span> cd MusePi &amp;&amp; npm install --ignore-scripts
-<span class="p">$</span> npm run build
-<span class="p">$</span> ./pi-test.sh
+      <pre><span class="c"># one-line install (macOS / Linux):</span>
+<span class="p">$</span> curl -fsSL https://muselinn.github.io/MusePi/install | sh
+<span class="c"># Windows (PowerShell): irm https://muselinn.github.io/MusePi/install.ps1 | iex</span>
+<span class="p">$</span> musepi --version
 <span class="c">MusePi 0.1.0 — config home: ~/.musepi</span></pre>
     </div>
   </div>
@@ -253,20 +252,24 @@
   <div class="wrap">
     <h2><span class="no">02</span>Install &amp; build</h2>
     <p class="sub">
-      Prebuilt binaries for macOS (arm64/x64), Linux (x64/arm64) and Windows
-      (x64/arm64) are attached to each release. The CLI identifies itself as
-      <code>MusePi</code>; the binary filename is still <code>pi</code> for now.
+      One command installs the latest prebuilt binary for macOS (arm64/x64),
+      Linux (x64/arm64) or Windows (x64/arm64). The CLI identifies itself as
+      <code>MusePi</code>; the executable is <code>musepi</code>.
     </p>
 
     <div class="cols">
       <div>
-        <h3>From a release</h3>
-        <pre class="block"><span class="c"># download the archive for your platform from:</span>
-https://github.com/MuseLinn/MusePi/releases
+        <h3>One-line install</h3>
+        <pre class="block"><span class="c"># macOS / Linux</span>
+curl -fsSL https://muselinn.github.io/MusePi/install | sh
 
-<span class="c"># then:</span>
-pi --version   <span class="c"># =&gt; MusePi 0.1.0</span></pre>
-        <p class="note">Config, sessions and auth live under
+<span class="c"># Windows (PowerShell)</span>
+irm https://muselinn.github.io/MusePi/install.ps1 | iex
+
+musepi --version   <span class="c"># =&gt; MusePi 0.1.0</span></pre>
+        <p class="note">Installs to <code>~/.local/bin/musepi/</code>
+        (<code>%LOCALAPPDATA%\Programs\musepi</code> on Windows) and adds it to
+        your <code>PATH</code>. Config, sessions and auth live under
         <code>~/.musepi</code> — a stock pi install is left untouched.</p>
       </div>
       <div>
@@ -275,7 +278,7 @@ pi --version   <span class="c"># =&gt; MusePi 0.1.0</span></pre>
 npm run build          <span class="c"># refresh models + build all</span>
 npm run check          <span class="c"># lint, format, types, lockfile</span>
 ./test.sh              <span class="c"># tests (LLM tests self-skip)</span>
-./pi-test.sh           <span class="c"># run MusePi from sources</span></pre>
+./musepi-test.sh       <span class="c"># run MusePi from sources</span></pre>
         <p class="note">Supply-chain policy: lifecycle scripts stay disabled;
         <code>package-lock.json</code> is the dependency ground truth.</p>
       </div>
