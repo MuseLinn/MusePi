@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>MusePi — a pi fork with the muselinn feature set</title>
-<meta name="description" content="MusePi is a fork of the earendil-works/pi agent harness: hashline editing, an independent ~/.musepi config home, native kimi-k3 video understanding, and the muselinn agent core." />
+<meta name="description" content="MusePi is a fork of the earendil-works/pi agent harness: hashline editing, native kimi-k3 video understanding, advisor and MCP, long-term memory with /memory, a grouped settings panel for all musepi.* options, an independent ~/.musepi config home, and its own update channel." />
 <style>
   /*
     MusePi project page — deliberately plain.
@@ -25,24 +25,29 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
   body {
     background: var(--paper);
     color: var(--ink);
     font: 16px/1.65 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     -webkit-font-smoothing: antialiased;
   }
+  ::selection { background: rgba(14,95,78,.16); }
   code, pre, .mono {
     font-family: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
   }
   a { color: var(--accent-ink); text-decoration-color: rgba(14,95,78,.35); text-underline-offset: 3px; }
   a:hover { text-decoration-color: var(--accent-ink); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 
   .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
 
   /* ---- top bar ---- */
   header.top {
     border-bottom: 1px solid var(--rule);
-    padding: 18px 0;
+    padding: 16px 0;
   }
   header.top .wrap {
     display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
@@ -52,32 +57,48 @@
     letter-spacing: -.5px; color: var(--ink); text-decoration: none;
   }
   .wordmark em { color: var(--accent); font-style: normal; }
+  nav.top { display: flex; flex-wrap: wrap; gap: 6px 0; justify-content: flex-end; }
   nav.top a {
-    font: 13px/1 ui-monospace, Menlo, Consolas, monospace;
+    font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace;
     color: var(--ink-2); text-decoration: none; margin-left: 20px;
   }
+  nav.top a[href^="#"] { color: var(--accent-ink); }
   nav.top a:hover { color: var(--accent-ink); text-decoration: underline; }
+  nav.top .sep { margin-left: 20px; color: var(--rule); font: 13px/1.6 ui-monospace, Menlo, monospace; }
 
   /* ---- masthead ---- */
-  .masthead { padding: 72px 0 56px; border-bottom: 1px solid var(--rule); }
+  .masthead { padding: 76px 0 60px; border-bottom: 1px solid var(--rule); }
   .kicker {
     font: 12px/1 ui-monospace, Menlo, Consolas, monospace;
     letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
-    margin-bottom: 22px;
+    margin-bottom: 24px;
   }
+  .kicker a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted rgba(14,95,78,.5); }
+  .kicker a:hover { border-bottom-style: solid; }
   h1 {
     font-size: clamp(34px, 5.4vw, 52px);
     line-height: 1.12; font-weight: 600; letter-spacing: -.01em;
     max-width: 18ch;
   }
   .lede {
-    margin-top: 24px; max-width: 58ch; color: var(--ink-2); font-size: 17px;
+    margin-top: 26px; max-width: 58ch; color: var(--ink-2); font-size: 17px;
   }
   .lede code { font-size: .88em; background: #ece7db; padding: 1px 5px; border-radius: 3px; }
 
+  .meta {
+    margin-top: 30px; padding: 10px 0;
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    font: 12.5px/1.8 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--ink-2); letter-spacing: .02em;
+    display: flex; flex-wrap: wrap; gap: 4px 0;
+  }
+  .meta span + span::before { content: "·"; margin: 0 12px; color: var(--rule); }
+  .meta a { color: var(--accent-ink); text-decoration: none; border-bottom: 1px dotted rgba(14,95,78,.5); }
+  .meta a:hover { border-bottom-style: solid; }
+
   /* ---- terminal block ---- */
   .term {
-    margin-top: 36px; max-width: 620px;
+    margin-top: 38px; max-width: 620px;
     background: var(--term-bg); color: var(--term-fg);
     border-radius: 6px; overflow: hidden;
     box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 12px 32px -18px rgba(28,26,22,.35);
@@ -97,22 +118,23 @@
   .term .c { color: var(--term-dim); }        /* comment/output-dim */
 
   /* ---- sections ---- */
-  section { padding: 56px 0; border-bottom: 1px solid var(--rule); }
+  section { padding: 64px 0; border-bottom: 1px solid var(--rule); scroll-margin-top: 20px; }
   section:last-of-type { border-bottom: 0; }
   h2 {
-    font-size: 24px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 8px;
+    font-size: 24px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 10px;
   }
   h2 .no {
     font: 12px/1 ui-monospace, Menlo, monospace; color: var(--accent);
     vertical-align: 5px; margin-right: 10px; letter-spacing: .08em;
   }
-  .sub { color: var(--ink-2); max-width: 62ch; margin-bottom: 32px; }
+  .sub { color: var(--ink-2); max-width: 62ch; margin-bottom: 36px; }
+  .sub code { font-size: .88em; background: #ece7db; padding: 1px 5px; border-radius: 3px; }
 
   /* feature ledger — rows, not cards */
   dl.features { border-top: 1px solid var(--rule); }
   dl.features > div {
-    display: grid; grid-template-columns: 220px 1fr; gap: 24px;
-    padding: 20px 0; border-bottom: 1px solid var(--rule);
+    display: grid; grid-template-columns: 220px 1fr; gap: 8px 28px;
+    padding: 22px 0; border-bottom: 1px solid var(--rule);
   }
   dl.features dt {
     font: 600 14.5px/1.5 ui-monospace, "Cascadia Code", Menlo, monospace;
@@ -131,34 +153,41 @@
     color: var(--ink);
   }
   pre.block .c { color: #8a8477; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-  .cols h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
-  .cols p.note { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .cols h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .cols p.note { font-size: 13.5px; color: var(--ink-2); margin-top: 12px; }
+  .cols p.note code { font-size: .92em; }
 
   /* screenshot placeholder */
   figure.shot {
     border: 1px dashed var(--rule); border-radius: 6px;
-    padding: 56px 32px; text-align: center; color: var(--ink-2);
+    padding: 60px 32px; text-align: center; color: var(--ink-2);
     background:
       repeating-linear-gradient(0deg, transparent 0 27px, rgba(28,26,22,.035) 27px 28px),
       var(--paper);
   }
   figure.shot .mono { font-size: 12.5px; letter-spacing: .06em; }
-  figure.shot figcaption { margin-top: 8px; font-size: 13px; font-style: italic; }
+  figure.shot figcaption { margin-top: 10px; font-size: 13px; font-style: italic; }
 
   /* links footer */
-  footer { padding: 40px 0 64px; }
-  footer ul { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 28px; }
+  footer { padding: 44px 0 68px; }
+  footer ul { list-style: none; display: flex; flex-wrap: wrap; gap: 10px 28px; }
   footer li { font-size: 14.5px; }
   footer .fine {
-    margin-top: 28px; font-size: 12.5px; color: var(--ink-2);
+    margin-top: 30px; font-size: 12.5px; color: var(--ink-2);
     font-family: ui-monospace, Menlo, monospace;
   }
 
   @media (max-width: 640px) {
+    header.top .wrap { flex-direction: column; gap: 8px; }
+    nav.top { justify-content: flex-start; }
+    nav.top a, nav.top .sep { margin-left: 0; margin-right: 16px; }
     dl.features > div { grid-template-columns: 1fr; gap: 6px; }
     .cols { grid-template-columns: 1fr; }
-    .masthead { padding: 48px 0 40px; }
+    .masthead { padding: 52px 0 44px; }
+    section { padding: 48px 0; }
+    .term pre { font-size: 12.5px; }
+    .meta span + span::before { margin: 0 8px; }
   }
 </style>
 </head>
@@ -168,6 +197,10 @@
   <div class="wrap">
     <a class="wordmark" href="#">Muse<em>Pi</em></a>
     <nav class="top">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#screenshot">Session</a>
+      <span class="sep" aria-hidden="true">|</span>
       <a href="https://github.com/MuseLinn/MusePi">GitHub</a>
       <a href="https://github.com/MuseLinn/MusePi/releases">Releases</a>
       <a href="https://github.com/earendil-works/pi">Upstream pi</a>
@@ -177,13 +210,21 @@
 
 <section class="masthead">
   <div class="wrap">
-    <p class="kicker">A fork of earendil-works/pi · v0.1.0</p>
+    <p class="kicker">A fork of earendil-works/pi · <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.0">v0.1.0</a></p>
     <h1>The pi agent harness, with the muselinn feature set.</h1>
     <p class="lede">
-      MusePi layers hashline editing, an independent <code>~/.musepi</code> config
-      home, native kimi-k3 video understanding, and the muselinn agent core on
-      top of the upstream pi agent loop — while keeping pi&rsquo;s extension API
-      compatible, so existing extensions load unchanged.
+      MusePi layers hashline editing, native kimi-k3 video understanding,
+      advisor and MCP, long-term memory, and a grouped settings panel on top of
+      the upstream pi agent loop — with its own <code>~/.musepi</code> config
+      home and update channel, while keeping pi&rsquo;s extension API
+      compatible so existing extensions load unchanged.
+    </p>
+
+    <p class="meta">
+      <span><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.0">v0.1.0</a> · 2026-07-22</span>
+      <span>macOS · Linux · Windows binaries</span>
+      <span>MIT</span>
+      <span>config home <code>~/.musepi</code></span>
     </p>
 
     <div class="term" aria-label="Install and run MusePi">
@@ -217,20 +258,51 @@
         <dd>MiMo-style markdown memory: project + global <code>MEMORY.md</code>
         files, BM25 recall, a <code>memory</code> tool (search/retain/edit) and a
         budgeted startup injection. Opt-in via <code>musepi.memory.enabled</code>;
-        inspect and manage with <code>/memory</code> (view/stats/clear/enable/disable).</dd>
+        inspect and manage with <code>/memory</code> — view/stats/clear and
+        enable/disable hot-switch the live session.</dd>
       </div>
       <div>
-        <dt>independent config home<span class="tag">~/.musepi</span></dt>
-        <dd>Reads and writes its own config directory and coexists with a stock
-        pi install. First run migrates auth, settings, models and keybindings
-        from <code>~/.pi/agent</code>; pi.dev update checks are gated behind
-        <code>musepi.updateCheck</code> (default off).</dd>
+        <dt>grouped settings panel<span class="tag">settings · MusePi submenu</span></dt>
+        <dd>The settings UI is organized into section headings with
+        type-to-search, and a dedicated MusePi submenu exposes all 42
+        <code>musepi.*</code> settings across nine groups (Memory, MCP, LSP,
+        Advisor, Model Roles, Tools, Swarm, Interface, Updates &amp; Compat) —
+        booleans and enums cycle in place, numbers cycle curated presets, and
+        nested registries point at <code>settings.json</code>.</dd>
+      </div>
+      <div>
+        <dt>native advisor &amp; MCP<span class="tag">advisor · /mcp</span></dt>
+        <dd>A second-opinion advisor wired natively into the agent loop, and
+        first-class MCP server support with lazy stdio/http connections,
+        managed from the <code>/mcp</code> command.</dd>
       </div>
       <div>
         <dt>native k3 video<span class="tag">@earendil-works/pi-ai</span></dt>
         <dd>kimi-k3 <code>video_url</code> wire support, video input through the
         read tool, and provider capability declarations — video understanding
         without an extension shim.</dd>
+      </div>
+      <div>
+        <dt>independent config home<span class="tag">~/.musepi</span></dt>
+        <dd>Reads and writes its own config directory and coexists with a stock
+        pi install. First run migrates auth, settings, models and keybindings
+        from <code>~/.pi/agent</code>; update checks run against MusePi&rsquo;s
+        own GitHub Releases (<code>musepi.updateCheck</code>, default on).</dd>
+      </div>
+      <div>
+        <dt>own update channel &amp; What&rsquo;s New<span class="tag">GitHub Releases · CHANGELOG.md</span></dt>
+        <dd>Updates come from MusePi&rsquo;s own releases, and the startup
+        What&rsquo;s New screen is driven by MusePi&rsquo;s own
+        <code>CHANGELOG.md</code> — pre-fork upstream history is preserved as
+        <code>UPSTREAM-CHANGELOG.md</code>.</dd>
+      </div>
+      <div>
+        <dt>session &amp; workflow extras<span class="tag">/move · skills · snapcompact</span></dt>
+        <dd><code>/move</code> relocates the session to another working
+        directory; seven-scope skills discovery, <code>snapcompact</code>
+        snapshot compaction, <code>toolSelect</code> dynamic tool gating,
+        <code>modelRoles</code> per-role model routing, LSP integration and
+        desktop notifications round out the daily loop.</dd>
       </div>
       <div>
         <dt>muselinn agent core<span class="tag">@musepi/core · /transcript</span></dt>
@@ -260,8 +332,10 @@
     <h2><span class="no">02</span>Install &amp; build</h2>
     <p class="sub">
       One command installs the latest prebuilt binary for macOS (arm64/x64),
-      Linux (x64/arm64) or Windows (x64/arm64). The CLI identifies itself as
-      <code>MusePi</code>; the executable is <code>musepi</code>.
+      Linux (x64/arm64) or Windows (x64/arm64) — six archives on the
+      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.0">v0.1.0 release</a>.
+      The CLI identifies itself as <code>MusePi</code>; the executable is
+      <code>musepi</code>.
     </p>
 
     <div class="cols">
@@ -277,7 +351,10 @@ musepi --version   <span class="c"># =&gt; MusePi 0.1.0</span></pre>
         <p class="note">Installs to <code>~/.local/bin/musepi/</code>
         (<code>%LOCALAPPDATA%\Programs\musepi</code> on Windows) and adds it to
         your <code>PATH</code>. Config, sessions and auth live under
-        <code>~/.musepi</code> — a stock pi install is left untouched.</p>
+        <code>~/.musepi</code> — a stock pi install is left untouched. Prefer a
+        manual download? Grab an archive from
+        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.0">GitHub Releases</a>
+        and keep the extracted directory intact.</p>
       </div>
       <div>
         <h3>From source (Node 24)</h3>
@@ -313,7 +390,8 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
   <div class="wrap">
     <ul>
       <li><a href="https://github.com/MuseLinn/MusePi">Repository</a></li>
-      <li><a href="https://github.com/MuseLinn/MusePi/releases">Releases</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.0">v0.1.0 release</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">Changelog</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">Upstream policy</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CONTRIBUTING.md">Contributing</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/LICENSE">MIT License</a></li>

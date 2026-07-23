@@ -10,7 +10,9 @@
 MusePi is a fork of the [pi agent harness](https://github.com/earendil-works/pi)
 (`earendil-works/pi`) with the muselinn feature set layered on top of the
 upstream agent loop. See [CHANGELOG.md](CHANGELOG.md) for MusePi's own release
-history.
+history — the same changelog drives the startup What's New screen (pre-fork
+upstream history is preserved at
+[packages/coding-agent/UPSTREAM-CHANGELOG.md](packages/coding-agent/UPSTREAM-CHANGELOG.md)).
 
 * **[@earendil-works/pi-coding-agent](packages/coding-agent)**: Interactive coding agent CLI (MusePi branded)
 * **[@musepi/core](packages/musepi/core)**: MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task), zero host imports
@@ -26,7 +28,21 @@ history.
   project + global `MEMORY.md` files, BM25 recall, a `memory` tool
   (search/retain/edit), and a budgeted one-shot startup injection. Opt-in via
   `musepi.memory.enabled` (default off); inspect and manage it with `/memory`
-  (view/stats/clear/enable/disable).
+  (view/stats/clear/enable/disable — toggles hot-switch the live session).
+- **Grouped settings panel** — the interactive settings UI is organized into
+  sections with type-to-search, and a dedicated MusePi submenu exposes all 42
+  `musepi.*` settings across nine groups (Memory / MCP / LSP / Advisor /
+  Model Roles / Tools / Swarm / Interface / Updates & Compat): booleans and
+  enums cycle in place, numbers cycle curated presets, and nested registries
+  open an info panel pointing at `settings.json`.
+- **Native advisor & MCP** — a second-opinion advisor wired natively into the
+  agent loop, and first-class MCP server support (lazy stdio/http connections)
+  managed with `/mcp`.
+- **Session & workflow extras** — `/move` (move the current session to another
+  working directory), seven-scope skills discovery, `snapcompact`
+  snapshot-based context compaction, `toolSelect` dynamic tool gating,
+  `modelRoles` per-role model routing, LSP integration, and desktop
+  notifications.
 - **Independent config home** — MusePi reads/writes `~/.musepi` instead of
   `~/.pi`, so it coexists with a stock pi install. First run migrates
   auth/settings/models/keybindings from `~/.pi/agent`; update checks run
