@@ -9,9 +9,14 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-23
+
+Binary self-update, and a redesigned project site.
+
 ### New Features
 
 - **Binary self-update** — `musepi update` now downloads the platform archive from the fork's GitHub Releases and swaps the install directory in place (interactive confirmation, `--yes` to skip, `--check` to only report, `--force` to reinstall). POSIX installs swap in-process; Windows hands the swap to a detached PowerShell script that runs after the process exits. The previous install is kept as a `musepi.old-*` backup until the next successful update, verification failures roll back automatically, and non-archive or non-writable installs fall back to the manual download link. `musepi update --all` honors `musepi.updateCheck=false`; an explicit `musepi update` always checks.
+- **Site redesign** — the Pages site adopts the pi.dev graph-paper look with a pixel mark, a tabbed install box, and a bilingual (EN/中文) toggle.
 
 ## [0.1.1] - 2026-07-23
 
