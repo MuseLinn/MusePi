@@ -4,6 +4,7 @@ import {
 	type Component,
 	Container,
 	getCapabilities,
+	Input,
 	type SelectItem,
 	SelectList,
 	type SelectListLayoutOptions,
@@ -12,6 +13,7 @@ import {
 	Spacer,
 	Text,
 } from "@earendil-works/pi-tui";
+import type { ResolvedMusepiSettings } from "@musepi/core";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import type { DefaultProjectTrust, WarningSettings } from "../../../core/settings-manager.ts";
 import {
@@ -23,6 +25,12 @@ import {
 } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
+import {
+	formatMusepiValue,
+	MUSEPI_SETTING_DEFS,
+	musepiSettingDescription,
+	parseMusepiValue,
+} from "./musepi-settings-defs.ts";
 
 const SETTINGS_SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 	minPrimaryColumnWidth: 12,
@@ -80,6 +88,10 @@ export interface SettingsConfig {
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
 	warnings: WarningSettings;
+	/** Resolved MusePi feature settings (musepi.*), edited in the MusePi submenu. */
+	musepi: ResolvedMusepiSettings;
+	/** Global settings.json path, shown in "edit in file" info panels. */
+	musepiSettingsPath: string;
 }
 
 export interface SettingsCallbacks {
@@ -111,6 +123,7 @@ export interface SettingsCallbacks {
 	onClearOnShrinkChange: (enabled: boolean) => void;
 	onShowTerminalProgressChange: (enabled: boolean) => void;
 	onWarningsChange: (warnings: WarningSettings) => void;
+	onMusepiChange: (path: string, value: unknown) => void;
 	onCancel: () => void;
 }
 
@@ -149,6 +162,159 @@ class WarningSettingsSubmenu extends Container {
 				}
 			},
 			onCancel,
+		);
+
+		this.addChild(this.settingsList);
+	}
+
+	handleInput(data: string): void {
+		this.settingsList.handleInput(data);
+	}
+}
+
+/**
+ * A submenu for editing a free-text setting value (e.g. a model spec).
+ * Enter saves the trimmed value; Esc cancels without changes.
+ */
+class TextInputSubmenu extends Container {
+	private input: Input;
+
+	constructor(
+		title: string,
+		description: string,
+		currentValue: string,
+		onSubmit: (value: string) => void,
+		onCancel: () => void,
+	) {
+		super();
+
+		this.addChild(new Text(theme.bold(theme.fg("accent", title)), 0, 0));
+		if (description) {
+			this.addChild(new Spacer(1));
+			this.addChild(new Text(theme.fg("muted", description), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+
+		this.input = new Input();
+		if (currentValue && currentValue !== "(unset)") {
+			this.input.setValue(currentValue);
+		}
+		this.input.onSubmit = (value) => onSubmit(value.trim());
+		this.input.onEscape = onCancel;
+		this.addChild(this.input);
+
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("dim", "  Enter to save · Esc to cancel"), 0, 0));
+	}
+
+	handleInput(data: string): void {
+		this.input.handleInput(data);
+	}
+}
+
+/**
+ * A read-only submenu explaining how to edit a nested setting
+ * (server registries, string lists) directly in settings.json.
+ */
+class InfoSubmenu extends Container {
+	private onDone: () => void;
+
+	constructor(title: string, lines: string[], onDone: () => void) {
+		super();
+		this.onDone = onDone;
+
+		this.addChild(new Text(theme.bold(theme.fg("accent", title)), 0, 0));
+		this.addChild(new Spacer(1));
+		for (const line of lines) {
+			this.addChild(new Text(theme.fg("muted", line), 0, 0));
+		}
+		this.addChild(new Spacer(1));
+		this.addChild(new Text(theme.fg("dim", "  Esc to go back"), 0, 0));
+	}
+
+	handleInput(data: string): void {
+		if (data === "\x1b" || data === "\r" || data === "\n") {
+			this.onDone();
+		}
+	}
+}
+
+/**
+ * The MusePi submenu: every musepi.* feature setting, grouped by feature
+ * area (Memory, MCP, LSP, Advisor, Model Roles, Tools, Swarm, Interface,
+ * Updates & Compat) with type-to-search. Booleans/enums/numbers cycle in
+ * place, model specs open a text input, and nested registries open an
+ * info panel pointing at settings.json.
+ */
+class MusepiSettingsSubmenu extends Container {
+	private settingsList: SettingsList;
+
+	constructor(
+		values: ResolvedMusepiSettings,
+		settingsPath: string,
+		onChange: (path: string, value: unknown) => void,
+		onCancel: () => void,
+	) {
+		super();
+
+		const defsById = new Map(MUSEPI_SETTING_DEFS.map((def) => [def.path, def]));
+
+		const items: SettingItem[] = MUSEPI_SETTING_DEFS.map((def) => {
+			const description = musepiSettingDescription(def.path);
+			const item: SettingItem = {
+				id: def.path,
+				label: def.label,
+				section: def.section,
+				description,
+				currentValue: formatMusepiValue(def, values),
+			};
+
+			switch (def.kind) {
+				case "bool":
+					item.values = ["true", "false"];
+					break;
+				case "enum":
+					item.values = [...(def.options ?? [])];
+					break;
+				case "number":
+					item.values = (def.presets ?? []).map(String);
+					break;
+				case "text":
+					item.submenu = (currentValue, done) =>
+						new TextInputSubmenu(
+							`${def.section} · ${def.label}`,
+							description,
+							currentValue,
+							(value) => done(value.length > 0 ? value : "(unset)"),
+							() => done(),
+						);
+					break;
+				case "info":
+					item.submenu = (_currentValue, done) =>
+						new InfoSubmenu(
+							`${def.section} · ${def.label}`,
+							[...(def.info ?? []), "", `Settings file: ${settingsPath}`],
+							() => done(),
+						);
+					break;
+			}
+			return item;
+		});
+
+		this.settingsList = new SettingsList(
+			items,
+			12,
+			getSettingsListTheme(),
+			(id, newValue) => {
+				const def = defsById.get(id);
+				if (!def) return;
+				const parsed = parseMusepiValue(def, newValue);
+				if (parsed !== undefined) {
+					onChange(def.path, parsed);
+				}
+			},
+			onCancel,
+			{ enableSearch: true },
 		);
 
 		this.addChild(this.settingsList);
@@ -480,9 +646,11 @@ export class SettingsSelectorComponent extends Container {
 		let currentWarnings = { ...config.warnings };
 
 		const items: SettingItem[] = [
+			// ── Session ────────────────────────────────────────────────
 			{
 				id: "autocompact",
 				label: "Auto-compact",
+				section: "Session",
 				description: "Automatically compact context when it gets too large",
 				currentValue: config.autoCompact ? "true" : "false",
 				values: ["true", "false"],
@@ -490,6 +658,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "steering-mode",
 				label: "Steering mode",
+				section: "Session",
 				description:
 					"Enter while streaming queues steering messages. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",
 				currentValue: config.steeringMode,
@@ -498,6 +667,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "follow-up-mode",
 				label: "Follow-up mode",
+				section: "Session",
 				description: `${followUpKey} queues follow-up messages until agent stops. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.`,
 				currentValue: config.followUpMode,
 				values: ["one-at-a-time", "all"],
@@ -505,6 +675,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "transport",
 				label: "Transport",
+				section: "Session",
 				description: "Preferred transport for providers that support multiple transports",
 				currentValue: config.transport,
 				values: ["sse", "websocket", "websocket-cached", "auto"],
@@ -512,85 +683,16 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "http-idle-timeout",
 				label: "HTTP idle timeout",
+				section: "Session",
 				description:
 					"Maximum idle gap while waiting for HTTP headers or body chunks. Disable for local models that pause longer than five minutes.",
 				currentValue: formatHttpIdleTimeoutMs(config.httpIdleTimeoutMs),
 				values: HTTP_IDLE_TIMEOUT_CHOICES.map((choice) => choice.label),
 			},
 			{
-				id: "hide-thinking",
-				label: "Hide thinking",
-				description: "Hide thinking blocks in assistant responses",
-				currentValue: config.hideThinkingBlock ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "cache-miss-notices",
-				label: "Cache miss notices",
-				description: "Show transcript notices for significant prompt-cache misses",
-				currentValue: config.showCacheMissNotices ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "collapse-changelog",
-				label: "Collapse changelog",
-				description: "Show condensed changelog after updates",
-				currentValue: config.collapseChangelog ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "quiet-startup",
-				label: "Quiet startup",
-				description: "Disable verbose printing at startup",
-				currentValue: config.quietStartup ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "install-telemetry",
-				label: "Install telemetry",
-				description: "Send an anonymous version/update ping after changelog-detected updates",
-				currentValue: config.enableInstallTelemetry ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "default-project-trust",
-				label: "Default project trust",
-				description: "Fallback behavior when no extension or saved trust decision decides project trust",
-				currentValue: DEFAULT_PROJECT_TRUST_LABELS[config.defaultProjectTrust],
-				values: Object.values(DEFAULT_PROJECT_TRUST_LABELS),
-			},
-			{
-				id: "double-escape-action",
-				label: "Double-escape action",
-				description: "Action when pressing Escape twice with empty editor",
-				currentValue: config.doubleEscapeAction,
-				values: ["tree", "fork", "none"],
-			},
-			{
-				id: "tree-filter-mode",
-				label: "Tree filter mode",
-				description: "Default filter when opening /tree",
-				currentValue: config.treeFilterMode,
-				values: ["default", "no-tools", "user-only", "labeled-only", "all"],
-			},
-			{
-				id: "warnings",
-				label: "Warnings",
-				description: "Enable or disable individual warnings",
-				currentValue: "configure",
-				submenu: (_currentValue, done) =>
-					new WarningSettingsSubmenu(
-						currentWarnings,
-						(warnings) => {
-							currentWarnings = warnings;
-							callbacks.onWarningsChange(warnings);
-						},
-						() => done(),
-					),
-			},
-			{
 				id: "thinking",
 				label: "Thinking level",
+				section: "Session",
 				description: "Reasoning depth for thinking-capable models",
 				currentValue: config.thinkingLevel,
 				submenu: (currentValue, done) =>
@@ -611,121 +713,217 @@ export class SettingsSelectorComponent extends Container {
 					),
 			},
 			{
+				id: "default-project-trust",
+				label: "Default project trust",
+				section: "Session",
+				description: "Fallback behavior when no extension or saved trust decision decides project trust",
+				currentValue: DEFAULT_PROJECT_TRUST_LABELS[config.defaultProjectTrust],
+				values: Object.values(DEFAULT_PROJECT_TRUST_LABELS),
+			},
+			{
+				id: "warnings",
+				label: "Warnings",
+				section: "Session",
+				description: "Enable or disable individual warnings",
+				currentValue: "configure",
+				submenu: (_currentValue, done) =>
+					new WarningSettingsSubmenu(
+						currentWarnings,
+						(warnings) => {
+							currentWarnings = warnings;
+							callbacks.onWarningsChange(warnings);
+						},
+						() => done(),
+					),
+			},
+		];
+
+		// ── Images ───────────────────────────────────────────────────
+		// Inline image toggles only when the terminal supports images;
+		// auto-resize / block apply to attached and read images either way.
+		if (supportsImages) {
+			items.push(
+				{
+					id: "show-images",
+					label: "Show images",
+					section: "Images",
+					description: "Render images inline in terminal",
+					currentValue: config.showImages ? "true" : "false",
+					values: ["true", "false"],
+				},
+				{
+					id: "image-width-cells",
+					label: "Image width",
+					section: "Images",
+					description: "Preferred inline image width in terminal cells",
+					currentValue: String(config.imageWidthCells),
+					values: ["60", "80", "120"],
+				},
+			);
+		}
+		items.push(
+			{
+				id: "auto-resize-images",
+				label: "Auto-resize images",
+				section: "Images",
+				description: "Resize large images to 2000x2000 max for better model compatibility",
+				currentValue: config.autoResizeImages ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "block-images",
+				label: "Block images",
+				section: "Images",
+				description: "Prevent images from being sent to LLM providers",
+				currentValue: config.blockImages ? "true" : "false",
+				values: ["true", "false"],
+			},
+		);
+
+		// ── Interface ────────────────────────────────────────────────
+		items.push(
+			{
 				id: "theme",
 				label: "Theme",
+				section: "Interface",
 				description: "Color theme for the interface",
 				currentValue: config.currentTheme,
 				submenu: (currentValue, done) =>
 					new ThemeSubmenu(currentValue, config.terminalTheme, config.availableThemes, callbacks, done),
 			},
-		];
-
-		// Only show image toggle if terminal supports it
-		if (supportsImages) {
-			// Insert after autocompact
-			items.splice(1, 0, {
-				id: "show-images",
-				label: "Show images",
-				description: "Render images inline in terminal",
-				currentValue: config.showImages ? "true" : "false",
+			{
+				id: "hide-thinking",
+				label: "Hide thinking",
+				section: "Interface",
+				description: "Hide thinking blocks in assistant responses",
+				currentValue: config.hideThinkingBlock ? "true" : "false",
 				values: ["true", "false"],
-			});
-			items.splice(2, 0, {
-				id: "image-width-cells",
-				label: "Image width",
-				description: "Preferred inline image width in terminal cells",
-				currentValue: String(config.imageWidthCells),
-				values: ["60", "80", "120"],
-			});
-		}
+			},
+			{
+				id: "cache-miss-notices",
+				label: "Cache miss notices",
+				section: "Interface",
+				description: "Show transcript notices for significant prompt-cache misses",
+				currentValue: config.showCacheMissNotices ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "collapse-changelog",
+				label: "Collapse changelog",
+				section: "Interface",
+				description: "Show condensed changelog after updates",
+				currentValue: config.collapseChangelog ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "quiet-startup",
+				label: "Quiet startup",
+				section: "Interface",
+				description: "Disable verbose printing at startup",
+				currentValue: config.quietStartup ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "show-hardware-cursor",
+				label: "Show hardware cursor",
+				section: "Interface",
+				description: "Show the terminal cursor while still positioning it for IME support",
+				currentValue: config.showHardwareCursor ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "editor-padding",
+				label: "Editor padding",
+				section: "Interface",
+				description: "Horizontal padding for input editor (0-3)",
+				currentValue: String(config.editorPaddingX),
+				values: ["0", "1", "2", "3"],
+			},
+			{
+				id: "output-padding",
+				label: "Output padding",
+				section: "Interface",
+				description: "Horizontal padding for user messages, assistant messages, and thinking",
+				currentValue: String(config.outputPad),
+				values: ["0", "1"],
+			},
+			{
+				id: "autocomplete-max-visible",
+				label: "Autocomplete max items",
+				section: "Interface",
+				description: "Max visible items in autocomplete dropdown (3-20)",
+				currentValue: String(config.autocompleteMaxVisible),
+				values: ["3", "5", "7", "10", "15", "20"],
+			},
+			{
+				id: "clear-on-shrink",
+				label: "Clear on shrink",
+				section: "Interface",
+				description: "Clear empty rows when content shrinks (may cause flicker)",
+				currentValue: config.clearOnShrink ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "terminal-progress",
+				label: "Terminal progress",
+				section: "Interface",
+				description: "Show OSC 9;4 progress indicators in the terminal tab bar",
+				currentValue: config.showTerminalProgress ? "true" : "false",
+				values: ["true", "false"],
+			},
+		);
 
-		// Image auto-resize toggle (always available, affects both attached and read images)
-		items.splice(supportsImages ? 3 : 1, 0, {
-			id: "auto-resize-images",
-			label: "Auto-resize images",
-			description: "Resize large images to 2000x2000 max for better model compatibility",
-			currentValue: config.autoResizeImages ? "true" : "false",
-			values: ["true", "false"],
-		});
+		// ── Advanced ─────────────────────────────────────────────────
+		items.push(
+			{
+				id: "skill-commands",
+				label: "Skill commands",
+				section: "Advanced",
+				description: "Register skills as /skill:name commands",
+				currentValue: config.enableSkillCommands ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "double-escape-action",
+				label: "Double-escape action",
+				section: "Advanced",
+				description: "Action when pressing Escape twice with empty editor",
+				currentValue: config.doubleEscapeAction,
+				values: ["tree", "fork", "none"],
+			},
+			{
+				id: "tree-filter-mode",
+				label: "Tree filter mode",
+				section: "Advanced",
+				description: "Default filter when opening /tree",
+				currentValue: config.treeFilterMode,
+				values: ["default", "no-tools", "user-only", "labeled-only", "all"],
+			},
+			{
+				id: "install-telemetry",
+				label: "Install telemetry",
+				section: "Advanced",
+				description: "Send an anonymous version/update ping after changelog-detected updates",
+				currentValue: config.enableInstallTelemetry ? "true" : "false",
+				values: ["true", "false"],
+			},
+		);
 
-		// Block images toggle (always available, insert after auto-resize-images)
-		const autoResizeIndex = items.findIndex((item) => item.id === "auto-resize-images");
-		items.splice(autoResizeIndex + 1, 0, {
-			id: "block-images",
-			label: "Block images",
-			description: "Prevent images from being sent to LLM providers",
-			currentValue: config.blockImages ? "true" : "false",
-			values: ["true", "false"],
-		});
-
-		// Skill commands toggle (insert after block-images)
-		const blockImagesIndex = items.findIndex((item) => item.id === "block-images");
-		items.splice(blockImagesIndex + 1, 0, {
-			id: "skill-commands",
-			label: "Skill commands",
-			description: "Register skills as /skill:name commands",
-			currentValue: config.enableSkillCommands ? "true" : "false",
-			values: ["true", "false"],
-		});
-
-		// Hardware cursor toggle (insert after skill-commands)
-		const skillCommandsIndex = items.findIndex((item) => item.id === "skill-commands");
-		items.splice(skillCommandsIndex + 1, 0, {
-			id: "show-hardware-cursor",
-			label: "Show hardware cursor",
-			description: "Show the terminal cursor while still positioning it for IME support",
-			currentValue: config.showHardwareCursor ? "true" : "false",
-			values: ["true", "false"],
-		});
-
-		// Editor padding toggle (insert after show-hardware-cursor)
-		const hardwareCursorIndex = items.findIndex((item) => item.id === "show-hardware-cursor");
-		items.splice(hardwareCursorIndex + 1, 0, {
-			id: "editor-padding",
-			label: "Editor padding",
-			description: "Horizontal padding for input editor (0-3)",
-			currentValue: String(config.editorPaddingX),
-			values: ["0", "1", "2", "3"],
-		});
-
-		// Output padding toggle (insert after editor-padding)
-		const editorPaddingIndex = items.findIndex((item) => item.id === "editor-padding");
-		items.splice(editorPaddingIndex + 1, 0, {
-			id: "output-padding",
-			label: "Output padding",
-			description: "Horizontal padding for user messages, assistant messages, and thinking",
-			currentValue: String(config.outputPad),
-			values: ["0", "1"],
-		});
-
-		// Autocomplete max visible toggle (insert after output-padding)
-		const outputPaddingIndex = items.findIndex((item) => item.id === "output-padding");
-		items.splice(outputPaddingIndex + 1, 0, {
-			id: "autocomplete-max-visible",
-			label: "Autocomplete max items",
-			description: "Max visible items in autocomplete dropdown (3-20)",
-			currentValue: String(config.autocompleteMaxVisible),
-			values: ["3", "5", "7", "10", "15", "20"],
-		});
-
-		// Clear on shrink toggle (insert after autocomplete-max-visible)
-		const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
-		items.splice(autocompleteIndex + 1, 0, {
-			id: "clear-on-shrink",
-			label: "Clear on shrink",
-			description: "Clear empty rows when content shrinks (may cause flicker)",
-			currentValue: config.clearOnShrink ? "true" : "false",
-			values: ["true", "false"],
-		});
-
-		// Terminal progress toggle (insert after clear-on-shrink)
-		const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
-		items.splice(clearOnShrinkIndex + 1, 0, {
-			id: "terminal-progress",
-			label: "Terminal progress",
-			description: "Show OSC 9;4 progress indicators in the terminal tab bar",
-			currentValue: config.showTerminalProgress ? "true" : "false",
-			values: ["true", "false"],
+		// ── MusePi ───────────────────────────────────────────────────
+		items.push({
+			id: "musepi",
+			label: "MusePi settings",
+			section: "MusePi",
+			description:
+				"MusePi feature settings: memory, MCP, LSP, advisor, model roles, tool select, swarm, and more. Most changes apply to new sessions.",
+			currentValue: "configure",
+			submenu: (_currentValue, done) =>
+				new MusepiSettingsSubmenu(
+					config.musepi,
+					config.musepiSettingsPath,
+					(path, value) => callbacks.onMusepiChange(path, value),
+					() => done(),
+				),
 		});
 
 		// Add borders
