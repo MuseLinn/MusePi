@@ -213,6 +213,13 @@
         weaker models stop corrupting files with fuzzy diffs.</dd>
       </div>
       <div>
+        <dt>long-term memory<span class="tag">@musepi/core/memory · /memory</span></dt>
+        <dd>MiMo-style markdown memory: project + global <code>MEMORY.md</code>
+        files, BM25 recall, a <code>memory</code> tool (search/retain/edit) and a
+        budgeted startup injection. Opt-in via <code>musepi.memory.enabled</code>;
+        inspect and manage with <code>/memory</code> (view/stats/clear/enable/disable).</dd>
+      </div>
+      <div>
         <dt>independent config home<span class="tag">~/.musepi</span></dt>
         <dd>Reads and writes its own config directory and coexists with a stock
         pi install. First run migrates auth, settings, models and keybindings

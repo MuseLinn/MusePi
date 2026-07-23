@@ -10,21 +10,29 @@
 //      synthetic user message (non-persistent — resume re-injects at
 //      process start, nothing is written into the transcript);
 //   3. the enable gate: disabled = no injection and the tool is
-//      stripped from the active set (zero surface).
+//      stripped from the active set (zero model surface);
+//   4. the /memory command surface (view/stats/clear/enable/disable) —
+//      see handleMusepiMemoryCommand; view reuses buildMemoryInjection
+//      so the payload on screen is exactly what startup injects.
 //
 // Data root: <agentDir>/memory/ (global/MEMORY.md + projects/<pid>/
 // MEMORY.md, pid = sha256(abs cwd)[:12]). Files are authoritative and
 // human-editable; recall re-reads them on every query.
 // ============================================================
 
+import { existsSync, readFileSync, statSync } from "node:fs";
 import {
 	buildMemoryInjection,
 	editEntry,
+	estimateTokens,
 	MEMORY_SECTIONS,
 	type MemorySection,
 	memoryPaths,
+	memorySkeleton,
 	retainEntry,
 	searchMemory,
+	tokenize,
+	writeMemoryFile,
 } from "@musepi/core";
 import { Type } from "typebox";
 import { getAgentDir } from "../config.ts";
@@ -185,15 +193,26 @@ export function transformMusepiMemoryContext<TMessage>(messages: TMessage[]): TM
 }
 
 /**
- * Bind memory for one session. Disabled = no injection and the memory
- * tool removed from the active set. Mode-independent: call once per
- * session right after AgentSession construction (initMusepiLsp pattern).
+ * Bind memory for one session. The binding always exists after this call —
+ * `enabled: false` only means the tool is stripped from the active set and
+ * the startup injection is skipped; the /memory command surface (view/stats/
+ * clear) stays usable so the feature is discoverable. Mode-independent:
+ * call once per session right after AgentSession construction, and again
+ * after toggling musepi.memory.enabled (hot switch — a fresh bind re-arms
+ * the one-shot injection for the next turn).
  */
 export function initMusepiMemory(session: AgentSession, settingsManager: SettingsManager): void {
 	const config = settingsManager.getMusepi().memory;
+	const active = session.getActiveToolNames();
 	if (!config.enabled) {
-		binding = null;
-		const active = session.getActiveToolNames();
+		binding = {
+			enabled: false,
+			cwd: session.sessionManager.getCwd(),
+			dataDir: getAgentDir(),
+			scope: config.scope,
+			caps: config.caps,
+			injected: false,
+		};
 		if (active.includes(MEMORY_TOOL_NAME)) {
 			session.setActiveToolsByName(active.filter((name) => name !== MEMORY_TOOL_NAME));
 		}
@@ -207,4 +226,158 @@ export function initMusepiMemory(session: AgentSession, settingsManager: Setting
 		caps: config.caps,
 		injected: false,
 	};
+	if (!active.includes(MEMORY_TOOL_NAME)) {
+		session.setActiveToolsByName([...active, MEMORY_TOOL_NAME]);
+	}
+}
+
+// =============================================================================
+// /memory command surface
+// =============================================================================
+
+/** Host-provided context for the /memory command (interactive layer). */
+export interface MusepiMemoryCommandContext {
+	/** clear confirmation — the interactive layer prompts before calling. */
+	confirmed?: boolean;
+	/**
+	 * enable/disable: write musepi.memory.enabled to settings and re-bind
+	 * (hot switch). Absent outside an interactive session.
+	 */
+	setEnabled?: (enabled: boolean) => void;
+}
+
+const MEMORY_USAGE = "Usage: /memory [view|stats|clear <project|global|all>|enable|disable]";
+
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/** Entry lines = non-empty, non-heading (same granularity as BM25 documents). */
+function countEntries(content: string): number {
+	return content.split("\n").filter((line) => line.trim().length > 0 && !line.trimStart().startsWith("#")).length;
+}
+
+function renderFileStats(label: string, file: string, inScope: boolean): string[] {
+	const lines: string[] = [];
+	const scopeNote = inScope ? "" : " (not injected: scope = project)";
+	if (!existsSync(file)) {
+		lines.push(`${label}: ${file}${scopeNote}`);
+		lines.push("  not created yet — no entries retained");
+		return lines;
+	}
+	const content = readFileSync(file, "utf-8");
+	const entries = countEntries(content);
+	const terms = new Set(content.split("\n").flatMap((line) => tokenize(line)));
+	lines.push(`${label}: ${file}${scopeNote}`);
+	lines.push(
+		`  ${entries} entries · ${formatBytes(statSync(file).size)} · ~${estimateTokens(content)} tokens · ${terms.size} distinct terms`,
+	);
+	return lines;
+}
+
+/** `/memory view` — the exact block the startup injection would send now. */
+function renderView(b: MemoryBinding): string {
+	if (!b.enabled) {
+		return [
+			"Memory is disabled (musepi.memory.enabled = false) — nothing is injected.",
+			"Run /memory enable to turn it on for this session and future ones.",
+		].join("\n");
+	}
+	// Same constructor as the startup injection (transformMusepiMemoryContext) —
+	// a fresh read of the files, so edits since session start are reflected.
+	const block = buildMemoryInjection({ dataDir: b.dataDir, cwd: b.cwd, scope: b.scope, caps: b.caps });
+	if (block === null) {
+		return [
+			"Memory payload is empty — no entries beyond the skeleton, so nothing was injected at session start.",
+			"Use the memory tool (retain) or edit MEMORY.md directly to add durable facts.",
+		].join("\n");
+	}
+	return `Memory Injection Payload (as constructed for session start):\n\n${block}`;
+}
+
+function renderStats(b: MemoryBinding): string {
+	const paths = memoryPaths(b.dataDir, b.cwd);
+	const lines: string[] = [];
+	lines.push(
+		`Memory: ${b.enabled ? "enabled" : "disabled"} · scope = ${b.scope} · budgets: project ${b.caps.project} / global ${b.caps.global} tokens`,
+	);
+	lines.push("");
+	lines.push(...renderFileStats("Project", paths.projectFile, true));
+	lines.push(...renderFileStats("Global", paths.globalFile, b.scope === "global"));
+	lines.push("");
+	lines.push("BM25 index: rebuilt in memory per query (no persistent cache) — files are the source of truth.");
+	return lines.join("\n");
+}
+
+function clearMemory(b: MemoryBinding, target: string): string {
+	const paths = memoryPaths(b.dataDir, b.cwd);
+	const reset = (file: string, kind: "project" | "global", label: string): string => {
+		const existed = existsSync(file) && countEntries(readFileSync(file, "utf-8")) > 0;
+		writeMemoryFile(file, memorySkeleton(kind));
+		return existed
+			? `${label} memory reset to the empty skeleton (${file}).`
+			: `${label} memory was already empty (${file}).`;
+	};
+	switch (target) {
+		case "project":
+			return reset(paths.projectFile, "project", "Project");
+		case "global":
+			return reset(paths.globalFile, "global", "Global");
+		case "all":
+			return [reset(paths.projectFile, "project", "Project"), reset(paths.globalFile, "global", "Global")].join(
+				"\n",
+			);
+		default:
+			return `Unknown clear target "${target}". Usage: /memory clear <project|global|all>`;
+	}
+}
+
+/**
+ * Handle `/memory [view|stats|clear <target>|enable|disable]`. Returns the
+ * text to display. `clear` is destructive — the interactive layer confirms
+ * first and passes { confirmed: true }; without it this only reports what
+ * would happen.
+ */
+export function handleMusepiMemoryCommand(args: string, ctx: MusepiMemoryCommandContext = {}): string {
+	const [action = "", target = ""] = args.trim().split(/\s+/, 2);
+
+	if (action === "enable" || action === "disable") {
+		if (!ctx.setEnabled) return `Memory ${action} is only available in an interactive session.`;
+		const enable = action === "enable";
+		ctx.setEnabled(enable);
+		return enable
+			? [
+					"Memory enabled — musepi.memory.enabled = true written to settings.",
+					"Hot-switched: the memory tool is active now and the payload injects on the next agent turn.",
+				].join("\n")
+			: [
+					"Memory disabled — musepi.memory.enabled = false written to settings.",
+					"Hot-switched: the memory tool is removed and no further injection happens this session",
+					"(the non-persistent block already sent earlier cannot be unsent).",
+				].join("\n");
+	}
+
+	if (!binding) return "Memory is not initialized for this session.";
+	const b = binding;
+
+	switch (action) {
+		case "":
+		case "view":
+			return renderView(b);
+		case "stats":
+			return renderStats(b);
+		case "clear": {
+			if (!target) return "Usage: /memory clear <project|global|all>";
+			if (!["project", "global", "all"].includes(target)) {
+				return `Unknown clear target "${target}". Usage: /memory clear <project|global|all>`;
+			}
+			if (!ctx.confirmed) {
+				return `Clearing ${target} memory resets it to the empty skeleton — confirmation required.`;
+			}
+			return clearMemory(b, target);
+		}
+		default:
+			return `Unknown /memory action "${action}". ${MEMORY_USAGE}`;
+	}
 }

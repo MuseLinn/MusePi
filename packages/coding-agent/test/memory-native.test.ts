@@ -1,9 +1,11 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { computeProjectId } from "@musepi/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+	handleMusepiMemoryCommand,
 	initMusepiMemoryForTest,
 	musepiMemoryToolDef,
 	transformMusepiMemoryContext,
@@ -135,5 +137,163 @@ describe("musepi memory tool — retain / search / edit", () => {
 		const foundText = textOf(found as never);
 		expect(foundText).toContain("editorconfig");
 		expect(foundText).toContain("global");
+	});
+});
+
+describe("/memory command — view", () => {
+	it("shows the injection payload built by the same constructor as startup injection", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		await execute({ operation: "retain", text: "deploys run through terraform" });
+
+		const output = handleMusepiMemoryCommand("view");
+		expect(output).toContain("Memory Injection Payload");
+		expect(output).toContain("heuristics, not facts");
+		expect(output).toContain("deploys run through terraform");
+		expect(output).toContain(computeProjectId(cwd));
+	});
+
+	it("empty action defaults to view; skeleton-only memory reports an empty payload", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		const output = handleMusepiMemoryCommand("");
+		expect(output).toContain("Memory payload is empty");
+	});
+
+	it("disabled binding reports disabled instead of a payload", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd, { enabled: false }));
+		const output = handleMusepiMemoryCommand("view");
+		expect(output).toContain("Memory is disabled");
+		expect(output).toContain("/memory enable");
+	});
+
+	it("no binding reports uninitialized", () => {
+		initMusepiMemoryForTest(null);
+		expect(handleMusepiMemoryCommand("view")).toContain("not initialized");
+	});
+});
+
+describe("/memory command — stats", () => {
+	it("reports paths, entry counts, sizes and the BM25 index policy", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd, { scope: "global" }));
+		await execute({ operation: "retain", text: "the api gateway listens on 8443" });
+		await execute({ operation: "retain", text: "editorconfig is mandatory", scope: "global" });
+
+		const output = handleMusepiMemoryCommand("stats");
+		expect(output).toContain("enabled");
+		expect(output).toContain("scope = global");
+		expect(output).toContain("Project:");
+		expect(output).toContain("Global:");
+		expect(output).toContain("1 entries");
+		expect(output).toContain("BM25 index: rebuilt in memory per query");
+		const projectFile = join(dataDir, "memory", "projects", computeProjectId(cwd), "MEMORY.md");
+		expect(output).toContain(projectFile);
+	});
+
+	it("reports not-created-yet without creating the file", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		const output = handleMusepiMemoryCommand("stats");
+		expect(output).toContain("not created yet");
+		const globalFile = join(dataDir, "memory", "global", "MEMORY.md");
+		expect(existsSync(globalFile)).toBe(false);
+	});
+
+	it("marks the global file out of scope when scope = project", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		const output = handleMusepiMemoryCommand("stats");
+		expect(output).toContain("not injected: scope = project");
+	});
+});
+
+describe("/memory command — clear", () => {
+	it("requires confirmation and leaves the file untouched without it", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		await execute({ operation: "retain", text: "deploys run through terraform" });
+
+		const output = handleMusepiMemoryCommand("clear project");
+		expect(output).toContain("confirmation required");
+
+		const projectFile = join(dataDir, "memory", "projects", computeProjectId(cwd), "MEMORY.md");
+		expect(await readFile(projectFile, "utf-8")).toContain("terraform");
+	});
+
+	it("confirmed clear resets the project file to the skeleton and empties the payload", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		await execute({ operation: "retain", text: "deploys run through terraform" });
+
+		const output = handleMusepiMemoryCommand("clear project", { confirmed: true });
+		expect(output).toContain("reset to the empty skeleton");
+
+		const projectFile = join(dataDir, "memory", "projects", computeProjectId(cwd), "MEMORY.md");
+		const content = await readFile(projectFile, "utf-8");
+		expect(content).not.toContain("terraform");
+		expect(content).toContain("# Project Memory");
+		expect(handleMusepiMemoryCommand("view")).toContain("Memory payload is empty");
+	});
+
+	it("clear all resets both files; clearing an empty file says so", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd, { scope: "global" }));
+		await execute({ operation: "retain", text: "project fact" });
+		await execute({ operation: "retain", text: "global fact", scope: "global" });
+
+		const output = handleMusepiMemoryCommand("clear all", { confirmed: true });
+		expect(output).toContain("Project memory reset");
+		expect(output).toContain("Global memory reset");
+
+		const second = handleMusepiMemoryCommand("clear global", { confirmed: true });
+		expect(second).toContain("already empty");
+	});
+
+	it("rejects unknown targets and missing target", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		expect(handleMusepiMemoryCommand("clear")).toContain("Usage: /memory clear");
+		expect(handleMusepiMemoryCommand("clear everything", { confirmed: true })).toContain("Unknown clear target");
+	});
+});
+
+describe("/memory command — enable/disable", () => {
+	it("invokes the host setEnabled hook with the right value", () => {
+		initMusepiMemoryForTest(null);
+		const calls: boolean[] = [];
+		const ctx = { setEnabled: (enabled: boolean) => calls.push(enabled) };
+
+		const enableOut = handleMusepiMemoryCommand("enable", ctx);
+		expect(calls).toEqual([true]);
+		expect(enableOut).toContain("Memory enabled");
+		expect(enableOut).toContain("Hot-switched");
+
+		const disableOut = handleMusepiMemoryCommand("disable", ctx);
+		expect(calls).toEqual([true, false]);
+		expect(disableOut).toContain("Memory disabled");
+	});
+
+	it("reports when the host cannot toggle settings", () => {
+		initMusepiMemoryForTest(null);
+		expect(handleMusepiMemoryCommand("enable")).toContain("only available in an interactive session");
+	});
+
+	it("unknown action prints usage", async () => {
+		const dataDir = await createTempDir();
+		const cwd = await createTempDir();
+		initMusepiMemoryForTest(makeBinding(dataDir, cwd));
+		expect(handleMusepiMemoryCommand("nope")).toContain("Unknown /memory action");
 	});
 });

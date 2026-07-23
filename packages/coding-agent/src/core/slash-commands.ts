@@ -48,6 +48,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		description: "MCP servers: list/status or reconnect",
 		argumentHint: "[list|status|reconnect [name]]",
 	},
+	{
+		name: "memory",
+		description: "Long-term memory: view payload, stats, clear, enable/disable",
+		argumentHint: "[view|stats|clear <project|global|all>|enable|disable]",
+	},
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, themes, and context files" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },

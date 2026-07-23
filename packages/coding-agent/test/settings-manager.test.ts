@@ -217,6 +217,29 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("musepi memory toggle", () => {
+		it("persists musepi.memory.enabled and preserves sibling musepi settings", async () => {
+			const settingsPath = join(agentDir, "settings.json");
+			writeFileSync(
+				settingsPath,
+				JSON.stringify({ musepi: { memory: { scope: "global" }, advisor: { enabled: false } } }),
+			);
+
+			const manager = SettingsManager.create(projectDir, agentDir);
+			expect(manager.getMusepi().memory.enabled).toBe(false);
+			expect(manager.getMusepi().memory.scope).toBe("global");
+
+			manager.setMusepiMemoryEnabled(true);
+			await manager.flush();
+
+			expect(manager.getMusepi().memory.enabled).toBe(true);
+			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+			expect(savedSettings.musepi.memory.enabled).toBe(true);
+			expect(savedSettings.musepi.memory.scope).toBe("global");
+			expect(savedSettings.musepi.advisor.enabled).toBe(false);
+		});
+	});
+
 	describe("error tracking", () => {
 		it("should collect and clear load errors via drainErrors", () => {
 			const globalSettingsPath = join(agentDir, "settings.json");

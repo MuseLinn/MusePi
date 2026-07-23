@@ -145,6 +145,7 @@ export {
 	buildMemoryInjection,
 	computeProjectId,
 	editEntry,
+	estimateTokens,
 	isEmptyMemory,
 	MEMORY_SECTIONS,
 	memoryPaths,

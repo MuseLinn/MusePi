@@ -198,6 +198,11 @@ export class FileSettingsStorage implements SettingsStorage {
 		this.projectSettingsPath = join(resolvedCwd, CONFIG_DIR_NAME, "settings.json");
 	}
 
+	/** Absolute path of the global settings file this storage writes to. */
+	getGlobalSettingsPath(): string {
+		return this.globalSettingsPath;
+	}
+
 	private acquireLockSyncWithRetry(path: string): () => void {
 		const maxAttempts = 10;
 		const delayMs = 20;
@@ -1197,6 +1202,53 @@ export class SettingsManager {
 	/** MusePi feature settings with defaults applied (see @musepi/core config schema). */
 	getMusepi(): ResolvedMusepiSettings {
 		return mergeMusepiSettings(this.settings.musepi);
+	}
+
+	/** Persist the musepi.memory.enabled toggle (written by /memory enable|disable). */
+	setMusepiMemoryEnabled(enabled: boolean): void {
+		if (!this.globalSettings.musepi) {
+			this.globalSettings.musepi = {};
+		}
+		this.globalSettings.musepi.memory = { ...this.globalSettings.musepi.memory, enabled };
+		this.markModified("musepi", "memory");
+		this.save();
+	}
+
+	/**
+	 * Set a MusePi feature setting by dot path (e.g. "memory.enabled") in the
+	 * global settings and persist. Intermediate objects are shallow-cloned so
+	 * sibling keys are preserved; unknown/mistyped values are dropped by
+	 * mergeMusepiSettings on the next read.
+	 */
+	setMusepiValue(path: string, value: unknown): void {
+		const segments = path.split(".");
+		const musepi: Record<string, unknown> = { ...(this.globalSettings.musepi ?? {}) };
+		let target = musepi;
+		for (let i = 0; i < segments.length - 1; i++) {
+			const key = segments[i];
+			if (!key) return;
+			const child = target[key];
+			const next: Record<string, unknown> =
+				typeof child === "object" && child !== null && !Array.isArray(child)
+					? { ...(child as Record<string, unknown>) }
+					: {};
+			target[key] = next;
+			target = next;
+		}
+		const leaf = segments[segments.length - 1];
+		if (!leaf) return;
+		target[leaf] = value;
+		this.globalSettings.musepi = musepi as MusepiSettings;
+		this.markModified("musepi");
+		this.save();
+	}
+
+	/** Absolute path of the global settings file (for "edit in file" hints). */
+	getGlobalSettingsPath(): string {
+		if (this.storage instanceof FileSettingsStorage) {
+			return this.storage.getGlobalSettingsPath();
+		}
+		return join(getAgentDir(), "settings.json");
 	}
 
 	setEditorPaddingX(padding: number): void {
