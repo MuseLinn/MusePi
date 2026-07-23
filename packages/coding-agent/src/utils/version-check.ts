@@ -9,10 +9,18 @@ const GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/MuseLinn/MusePi/
 export const MUSEPI_RELEASES_URL = "https://github.com/MuseLinn/MusePi/releases";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
+export interface LatestPiReleaseAsset {
+	name: string;
+	/** Direct download URL (browser_download_url). */
+	url: string;
+}
+
 export interface LatestPiRelease {
 	version: string;
 	/** Browser URL of the GitHub release (falls back to the releases page). */
 	url?: string;
+	/** Downloadable assets attached to the release (used by the binary self-update). */
+	assets?: LatestPiReleaseAsset[];
 }
 
 export function comparePackageVersions(leftVersion: string, rightVersion: string): number | undefined {
@@ -61,6 +69,7 @@ export async function getLatestPiRelease(
 	const data = (await response.json()) as {
 		tag_name?: unknown;
 		html_url?: unknown;
+		assets?: unknown;
 	};
 	if (typeof data.tag_name !== "string") {
 		return undefined;
@@ -70,7 +79,22 @@ export async function getLatestPiRelease(
 		return undefined;
 	}
 	const url = typeof data.html_url === "string" && data.html_url.trim() ? data.html_url.trim() : undefined;
-	return { version, ...(url ? { url } : {}) };
+	const assets: LatestPiReleaseAsset[] = [];
+	if (Array.isArray(data.assets)) {
+		for (const asset of data.assets) {
+			if (typeof asset !== "object" || asset === null) continue;
+			const { name, browser_download_url } = asset as { name?: unknown; browser_download_url?: unknown };
+			if (
+				typeof name === "string" &&
+				name.trim() &&
+				typeof browser_download_url === "string" &&
+				browser_download_url.trim()
+			) {
+				assets.push({ name: name.trim(), url: browser_download_url.trim() });
+			}
+		}
+	}
+	return { version, ...(url ? { url } : {}), ...(assets.length > 0 ? { assets } : {}) };
 }
 
 export async function getLatestPiVersion(

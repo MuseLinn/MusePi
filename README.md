@@ -111,6 +111,23 @@ You can also grab an archive manually from
 extracted directory intact rather than moving the bare executable. The CLI
 identifies itself as `MusePi` (`musepi --version`).
 
+## Update
+
+```sh
+musepi update
+```
+
+checks the latest GitHub Release and, after a confirmation prompt (`--yes`
+skips it), downloads the archive for your platform and swaps the install
+directory in place — the previous install is kept as a `musepi.old-*`
+backup next to it until the next successful update. `musepi update --check`
+only reports whether a newer release exists without downloading anything.
+Self-updating works for archive installs (the layout the one-line installer
+creates); other installs print the manual download link instead, and you
+can always update manually by re-running the one-line installer or grabbing
+an archive from
+[GitHub Releases](https://github.com/MuseLinn/MusePi/releases).
+
 To build from source instead, see [Development](#development) below.
 
 ## Development

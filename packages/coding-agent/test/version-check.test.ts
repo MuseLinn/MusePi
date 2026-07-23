@@ -88,6 +88,32 @@ describe("version checks", () => {
 		});
 	});
 
+	it("returns downloadable assets from the releases api", async () => {
+		const fetchMock = vi.fn(async () =>
+			githubReleaseResponse({
+				tag_name: "v1.2.4",
+				assets: [
+					{
+						name: "musepi-windows-x64.zip",
+						browser_download_url:
+							"https://github.com/MuseLinn/MusePi/releases/download/v1.2.4/musepi-windows-x64.zip",
+					},
+					{ name: "musepi-linux-x64.tar.gz", browser_download_url: "" },
+					{ unexpected: true },
+				],
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const release = await getLatestPiRelease("1.2.3");
+		expect(release?.assets).toEqual([
+			{
+				name: "musepi-windows-x64.zip",
+				url: "https://github.com/MuseLinn/MusePi/releases/download/v1.2.4/musepi-windows-x64.zip",
+			},
+		]);
+	});
+
 	it("ignores releases with non-semver or missing tags", async () => {
 		const fetchMock = vi
 			.fn()
