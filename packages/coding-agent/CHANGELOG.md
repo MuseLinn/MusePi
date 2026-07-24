@@ -7,7 +7,7 @@ upstream history (pi 0.5.x–0.81.x) lives in the
 [upstream changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md)
 and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
-## [Unreleased]
+## [0.1.6] - 2026-07-24
 
 ### Fixed
 

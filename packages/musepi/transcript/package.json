@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/transcript",
-	"version": "0.1.4",
+	"version": "0.1.6",
 	"description": "MusePi transcript layer — normalized conversation model decoupled from rendering",
 	"type": "module",
 	"main": "dist/index.js",
