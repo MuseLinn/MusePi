@@ -13,10 +13,20 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 ## [Unreleased]
 
+### Added
+
+- **Permission mode badge** — `/mode auto|yolo|manual` now sets a footer badge.
+- **Plan mode badge** — `/plan on` sets a `plan` footer badge; `/plan off` clears it.
+
+### Changed
+
+- **Footer layout redesign** — Oh My Pi-inspired hybrid layout: PWD + git branch and model + context percentage now live in the editor top border. Footer shows token/cache/cost stats on line 1 and extension status badges on line 2.
+
 ### Fixed
 
 - **macOS tar extraction** — only pass `--force-local` to tar on Windows; macOS tar rejects this flag.
 - **Update fallback hint** — when auto-update is unavailable, print the install-script one-liner alongside the manual download link.
+- **Windows auto-update** — wait 3 seconds before process exit so the detached PowerShell swap script has time to start watching.
 
 ## [0.1.3] - 2026-07-24
 
