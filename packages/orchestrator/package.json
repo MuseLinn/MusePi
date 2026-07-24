@@ -1,6 +1,6 @@
 {
 	"name": "@earendil-works/pi-orchestrator",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"description": "experimental orchestrator package for pi",
 	"type": "module",
 	"main": "./dist/index.js",
