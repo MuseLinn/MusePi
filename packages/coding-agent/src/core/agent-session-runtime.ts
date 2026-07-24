@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { resolvePath } from "../utils/paths.ts";
 import type { AgentSession } from "./agent-session.ts";
@@ -131,7 +131,7 @@ export class AgentSessionRuntime {
 	}
 
 	private async emitBeforeSwitch(
-		reason: "new" | "resume",
+		reason: "new" | "resume" | "move",
 		targetSessionFile?: string,
 	): Promise<{ cancelled: boolean }> {
 		const runner = this.session.extensionRunner;
@@ -390,6 +390,57 @@ export class AgentSessionRuntime {
 		);
 		await this.finishSessionReplacement();
 		return { cancelled: false };
+	}
+
+	/**
+	 * Move the current session to a different working directory (`/move`).
+	 *
+	 * The SessionManager relocates its file/header first, then the whole
+	 * runtime is rebuilt against the new cwd — cwd-bound services (settings,
+	 * resource loader with AGENTS.md/skills/prompts, tools) and every native
+	 * binding created in createAgentSession (memory project slot, tool-select,
+	 * lsp, advisor) are re-scoped by construction, same as /resume into
+	 * another project. Conversation history is preserved.
+	 *
+	 * @returns `{ cancelled: true }` when a `session_before_switch` handler
+	 * cancels; `{ moved: false }` when already in `newCwd` (no-op).
+	 * @throws When `newCwd` does not exist or is not a directory.
+	 */
+	async moveCwd(
+		newCwd: string,
+		options?: {
+			withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
+			projectTrustContextFactory?: (cwd: string) => ProjectTrustContext;
+		},
+	): Promise<{ cancelled: boolean; moved: boolean }> {
+		const sessionManager = this.session.sessionManager;
+		const resolvedCwd = resolvePath(newCwd, sessionManager.getCwd());
+		if (resolvedCwd === sessionManager.getCwd()) {
+			return { cancelled: false, moved: false };
+		}
+		if (!existsSync(resolvedCwd) || !statSync(resolvedCwd).isDirectory()) {
+			throw new Error(`Cannot move: directory does not exist: ${resolvedCwd}`);
+		}
+
+		const beforeResult = await this.emitBeforeSwitch("move");
+		if (beforeResult.cancelled) {
+			return { cancelled: true, moved: false };
+		}
+
+		const previousSessionFile = this.session.sessionFile;
+		sessionManager.moveCwd(resolvedCwd);
+		await this.teardownCurrent("move", sessionManager.getSessionFile());
+		this.apply(
+			await this.createRuntime({
+				cwd: sessionManager.getCwd(),
+				agentDir: this.services.agentDir,
+				sessionManager,
+				sessionStartEvent: { type: "session_start", reason: "move", previousSessionFile },
+				projectTrustContext: options?.projectTrustContextFactory?.(sessionManager.getCwd()),
+			}),
+		);
+		await this.finishSessionReplacement(options?.withSession);
+		return { cancelled: false, moved: true };
 	}
 
 	async dispose(): Promise<void> {

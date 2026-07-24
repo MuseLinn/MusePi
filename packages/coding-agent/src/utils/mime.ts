@@ -33,6 +33,66 @@ export async function detectSupportedImageMimeTypeFromFile(filePath: string): Pr
 	}
 }
 
+const VIDEO_TYPE_SNIFF_BYTES = 4100;
+
+/**
+ * Detect a supported video MIME type from magic bytes.
+ * Recognises MP4/MOV/3GP (ISO BMFF `ftyp`), WebM/Matroska (EBML), AVI (RIFF),
+ * FLV, and MPEG program/elementary streams. Returns null for anything else.
+ */
+export function detectSupportedVideoMimeType(buffer: Uint8Array): string | null {
+	// ISO Base Media File Format: bytes 4..8 are "ftyp", followed by the major brand.
+	if (startsWithAscii(buffer, 4, "ftyp")) {
+		const brand = asciiAt(buffer, 8, 4);
+		if (brand === "M4A " || brand === "M4B ") return null; // audio-only variants
+		if (brand === "qt  ") return "video/quicktime";
+		if (brand.startsWith("3gp") || brand.startsWith("3g2")) return "video/3gpp";
+		if (brand === "avif" || brand === "heic" || brand === "heix") return null; // still images
+		return "video/mp4";
+	}
+	// EBML header (WebM / Matroska). Distinguish via the DocType string when it
+	// appears inside the sniffed header.
+	if (startsWith(buffer, [0x1a, 0x45, 0xdf, 0xa3])) {
+		return containsAscii(buffer, "matroska") && !containsAscii(buffer, "webm") ? "video/x-matroska" : "video/webm";
+	}
+	if (startsWithAscii(buffer, 0, "RIFF") && startsWithAscii(buffer, 8, "AVI ")) {
+		return "video/x-msvideo";
+	}
+	if (startsWithAscii(buffer, 0, "FLV")) {
+		return "video/x-flv";
+	}
+	if (startsWith(buffer, [0x00, 0x00, 0x01, 0xba]) || startsWith(buffer, [0x00, 0x00, 0x01, 0xb3])) {
+		return "video/mpeg";
+	}
+	return null;
+}
+
+export async function detectSupportedVideoMimeTypeFromFile(filePath: string): Promise<string | null> {
+	const fileHandle = await open(filePath, "r");
+	try {
+		const buffer = Buffer.alloc(VIDEO_TYPE_SNIFF_BYTES);
+		const { bytesRead } = await fileHandle.read(buffer, 0, VIDEO_TYPE_SNIFF_BYTES, 0);
+		return detectSupportedVideoMimeType(buffer.subarray(0, bytesRead));
+	} finally {
+		await fileHandle.close();
+	}
+}
+
+function asciiAt(buffer: Uint8Array, offset: number, length: number): string {
+	let text = "";
+	for (let index = 0; index < length; index++) {
+		text += String.fromCharCode(buffer[offset + index] ?? 0);
+	}
+	return text;
+}
+
+function containsAscii(buffer: Uint8Array, text: string): boolean {
+	for (let offset = 0; offset + text.length <= buffer.length; offset++) {
+		if (startsWithAscii(buffer, offset, text)) return true;
+	}
+	return false;
+}
+
 function isPng(buffer: Uint8Array): boolean {
 	return (
 		buffer.length >= 16 && readUint32BE(buffer, PNG_SIGNATURE.length) === 13 && startsWithAscii(buffer, 12, "IHDR")

@@ -1,0 +1,17 @@
+{
+	"name": "@musepi/transcript",
+	"version": "0.1.4",
+	"description": "MusePi transcript layer — normalized conversation model decoupled from rendering",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsgo -p tsconfig.build.json",
+		"test": "node --test --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"files": [
+		"dist/**/*"
+	],
+	"license": "MIT"
+}

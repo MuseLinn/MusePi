@@ -31,6 +31,7 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
+	VideoContent,
 } from "../types.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
@@ -112,6 +113,23 @@ function isToolCallBlock(block: { type: string }): block is ToolCall {
 
 function isImageContentBlock(block: { type: string }): block is ImageContent {
 	return block.type === "image";
+}
+
+function isVideoContentBlock(block: { type: string }): block is VideoContent {
+	return block.type === "video";
+}
+
+/**
+ * Moonshot/Kimi extension to the OpenAI chat completions content parts:
+ * `video_url` carries either an inline `data:` base64 payload or an uploaded
+ * file reference (e.g. `ms://<file-id>`). Not part of the openai SDK types.
+ */
+interface ChatCompletionContentPartVideo {
+	type: "video_url";
+	video_url: {
+		url: string;
+		id?: string;
+	};
 }
 
 function isEncryptedReasoningDetail(detail: unknown): detail is OpenAIEncryptedReasoningDetail {
@@ -951,6 +969,17 @@ export function convertMessages(
 							type: "text",
 							text: sanitizeSurrogates(item.text),
 						} satisfies ChatCompletionContentPartText;
+					} else if (item.type === "video") {
+						// Moonshot/Kimi `video_url` extension (inline base64 data URI).
+						// Only reachable when the model declares `video` input —
+						// transformMessages has already replaced video blocks with a
+						// text placeholder otherwise.
+						return {
+							type: "video_url",
+							video_url: {
+								url: `data:${item.mimeType};base64,${item.data}`,
+							},
+						} satisfies ChatCompletionContentPartVideo as unknown as ChatCompletionContentPart;
 					} else {
 						return {
 							type: "image_url",
@@ -1069,22 +1098,29 @@ export function convertMessages(
 			params.push(assistantMsg);
 		} else if (msg.role === "toolResult") {
 			const imageBlocks: Array<{ type: "image_url"; image_url: { url: string } }> = [];
+			const videoBlocks: ChatCompletionContentPartVideo[] = [];
 			const deferredToolNames = new Set<string>();
 			let j = i;
 
 			for (; j < transformedMessages.length && transformedMessages[j].role === "toolResult"; j++) {
 				const toolMsg = transformedMessages[j] as ToolResultMessage;
 
-				// Extract text and image content
+				// Extract text and media content
 				const textResult = toolMsg.content
 					.filter(isTextContentBlock)
 					.map((block) => block.text)
 					.join("\n");
 				const hasImages = toolMsg.content.some((c) => c.type === "image");
+				const hasVideos = toolMsg.content.some((c) => c.type === "video");
 
-				// Always send tool result with text (or placeholder if only images)
+				// Always send tool result with text (or placeholder if only media)
 				const hasText = textResult.length > 0;
-				const toolResultText = hasText ? textResult : hasImages ? "(see attached image)" : "(no tool output)";
+				const mediaPlaceholder = hasImages
+					? "(see attached image)"
+					: hasVideos
+						? "(see attached video)"
+						: "(no tool output)";
+				const toolResultText = hasText ? textResult : mediaPlaceholder;
 				// Some providers require the 'name' field in tool results
 				const toolResultMsg: ChatCompletionToolMessageParam = {
 					role: "tool",
@@ -1114,11 +1150,24 @@ export function convertMessages(
 						}
 					}
 				}
+
+				if (hasVideos && model.input.includes("video")) {
+					for (const block of toolMsg.content) {
+						if (isVideoContentBlock(block)) {
+							videoBlocks.push({
+								type: "video_url",
+								video_url: {
+									url: `data:${block.mimeType};base64,${block.data}`,
+								},
+							});
+						}
+					}
+				}
 			}
 
 			i = j - 1;
 
-			if (imageBlocks.length > 0) {
+			if (imageBlocks.length > 0 || videoBlocks.length > 0) {
 				if (compat.requiresAssistantAfterToolResult) {
 					params.push({
 						role: "assistant",
@@ -1126,14 +1175,21 @@ export function convertMessages(
 					});
 				}
 
+				const mediaLabel =
+					imageBlocks.length > 0 && videoBlocks.length > 0
+						? "Attached image(s)/video(s) from tool result:"
+						: imageBlocks.length > 0
+							? "Attached image(s) from tool result:"
+							: "Attached video(s) from tool result:";
 				params.push({
 					role: "user",
 					content: [
 						{
 							type: "text",
-							text: "Attached image(s) from tool result:",
+							text: mediaLabel,
 						},
 						...imageBlocks,
+						...(videoBlocks as unknown as ChatCompletionContentPart[]),
 					],
 				});
 				lastRole = "user";

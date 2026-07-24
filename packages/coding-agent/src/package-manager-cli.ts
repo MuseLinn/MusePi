@@ -1,21 +1,10 @@
-import { join } from "node:path";
-import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
-import {
-	APP_NAME,
-	CONFIG_DIR_NAME,
-	detectInstallMethod,
-	getAgentDir,
-	getPackageDir,
-	getSelfUpdateCommand,
-	getSelfUpdateUnavailableInstruction,
-	PACKAGE_NAME,
-	type SelfUpdateCommand,
-	type SelfUpdatePackageTarget,
-	VERSION,
-} from "./config.ts";
+import { APP_NAME, CONFIG_DIR_NAME, getAgentDir, isBunBinary, VERSION } from "./config.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
@@ -23,33 +12,28 @@ import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import { DefaultResourceLoader } from "./core/resource-loader.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
-import { spawnProcess } from "./utils/child-process.ts";
-import { getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.ts";
+import { openBrowser } from "./utils/open-browser.ts";
 import {
-	cleanupWindowsSelfUpdateQuarantine,
-	quarantineWindowsNativeDependencies,
-} from "./utils/windows-self-update.ts";
+	applyStagedUpdatePosix,
+	backupDirName,
+	buildWindowsUpdateScript,
+	cleanupStaleUpdateDirs,
+	createUpdateWorkDir,
+	detectInstallDir,
+	downloadReleaseAsset,
+	extractReleaseArchive,
+	findInstallRoot,
+	isDirectoryWritable,
+	launchWindowsUpdateScript,
+	resolveAssetDownload,
+	stageInstallRoot,
+	timestampSuffix,
+} from "./utils/self-update.ts";
+import { getLatestPiRelease, isNewerPackageVersion, MUSEPI_RELEASES_URL } from "./utils/version-check.ts";
 
 export type PackageCommand = "install" | "remove" | "update" | "list";
 
 type UpdateTarget = { type: "all" } | { type: "self" } | { type: "extensions"; source?: string } | { type: "models" };
-
-const SELF_UPDATE_NOTE_MARKDOWN_THEME: MarkdownTheme = {
-	heading: (text) => chalk.bold(chalk.yellow(text)),
-	link: (text) => chalk.cyan(text),
-	linkUrl: (text) => chalk.dim(text),
-	code: (text) => chalk.yellow(text),
-	codeBlock: (text) => chalk.dim(text),
-	codeBlockBorder: (text) => chalk.dim(text),
-	quote: (text) => chalk.dim(text),
-	quoteBorder: (text) => chalk.dim(text),
-	hr: (text) => chalk.dim(text),
-	listBullet: (text) => chalk.yellow(text),
-	bold: (text) => chalk.bold(text),
-	italic: (text) => chalk.italic(text),
-	strikethrough: (text) => chalk.strikethrough(text),
-	underline: (text) => chalk.underline(text),
-};
 
 interface PackageCommandOptions {
 	command: PackageCommand;
@@ -58,6 +42,8 @@ interface PackageCommandOptions {
 	showExtensionsSkippedNote: boolean;
 	local: boolean;
 	force: boolean;
+	yes: boolean;
+	checkOnly: boolean;
 	projectTrustOverride?: boolean;
 	help: boolean;
 	invalidOption?: string;
@@ -83,7 +69,7 @@ function getPackageCommandUsage(command: PackageCommand): string {
 		case "remove":
 			return `${APP_NAME} remove <source> [-l] [--approve|--no-approve]`;
 		case "update":
-			return `${APP_NAME} update [source|self|pi] [--self|--extensions|--models|--all] [--extension <source>] [--approve|--no-approve] [--force]`;
+			return `${APP_NAME} update [source|self] [--self|--extensions|--models|--all] [--extension <source>] [--approve|--no-approve] [--force] [--check] [--yes]`;
 		case "list":
 			return `${APP_NAME} list [--approve|--no-approve]`;
 	}
@@ -151,24 +137,27 @@ Examples:
 			console.log(`${chalk.bold("Usage:")}
   ${getPackageCommandUsage("update")}
 
-Update pi, installed packages, or model catalogs.
+Update MusePi, installed packages, or model catalogs.
 
 Options:
-  --self                  Update pi only (default when no target is given)
+  --self                  Update MusePi itself from GitHub Releases (default when no target is given)
   --extensions            Update installed packages only
   --models                Refresh model catalogs only
-  --all                   Update pi and installed packages
+  --all                   Check MusePi and update installed packages
   --extension <source>    Update one package only
   -a, --approve           Trust project-local files for this command
   -na, --no-approve       Ignore project-local files for this command
-  --force                 Reinstall pi even if the current version is latest
+  --force                 Reinstall the latest release even if the current version is latest
+  --check                 Only check for a new MusePi release; do not download or install
+  -y, --yes               Skip the interactive confirmation when self-updating
 
 Short forms:
-  ${APP_NAME} update                Update pi only
-  ${APP_NAME} update --all          Update pi and all extensions
+  ${APP_NAME} update                Update MusePi from GitHub Releases (asks before installing)
+  ${APP_NAME} update --check        Only report whether a new MusePi release exists
+  ${APP_NAME} update --all          Check MusePi and update all extensions
   ${APP_NAME} update --models       Refresh model catalogs only
   ${APP_NAME} update <source>       Update one package
-  ${APP_NAME} update pi             Update pi only (self works as alias to pi)
+  ${APP_NAME} update self           Update MusePi from GitHub Releases
 `);
 			return;
 
@@ -200,6 +189,8 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 
 	let local = false;
 	let force = false;
+	let yes = false;
+	let checkOnly = false;
 	let projectTrustOverride: boolean | undefined;
 	let help = false;
 	let invalidOption: string | undefined;
@@ -284,6 +275,24 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 			continue;
 		}
 
+		if (arg === "--yes" || arg === "-y") {
+			if (command === "update") {
+				yes = true;
+			} else {
+				invalidOption = invalidOption ?? arg;
+			}
+			continue;
+		}
+
+		if (arg === "--check") {
+			if (command === "update") {
+				checkOnly = true;
+			} else {
+				invalidOption = invalidOption ?? arg;
+			}
+			continue;
+		}
+
 		if (arg === "--extension") {
 			if (command !== "update") {
 				invalidOption = invalidOption ?? arg;
@@ -345,7 +354,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 			}
 			updateTarget = { type: "extensions", source: extensionFlagSource };
 		} else if (source) {
-			const sourceIsSelf = source === "self" || source === "pi";
+			const sourceIsSelf = source === "self" || source === "pi" || source === "musepi";
 			if (sourceIsSelf) {
 				updateTarget = extensionsFlag ? { type: "all" } : { type: "self" };
 			} else {
@@ -368,6 +377,14 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 			updateTarget = { type: "self" };
 			showExtensionsSkippedNote = true;
 		}
+		if (
+			(checkOnly || yes) &&
+			updateTarget &&
+			(updateTarget.type === "extensions" || updateTarget.type === "models")
+		) {
+			conflictingOptions =
+				conflictingOptions ?? "--check and --yes only apply to MusePi self-updates (--self, self, or --all)";
+		}
 	}
 
 	return {
@@ -377,6 +394,8 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 		showExtensionsSkippedNote,
 		local,
 		force,
+		yes,
+		checkOnly,
 		projectTrustOverride,
 		help,
 		invalidOption,
@@ -421,58 +440,46 @@ async function refreshModelCatalogs(agentDir: string): Promise<void> {
 	console.log(chalk.green("Model catalogs refreshed"));
 }
 
-function printSelfUpdateUnavailable(
-	npmCommand?: string[],
-	updatePackageTarget: SelfUpdatePackageTarget = PACKAGE_NAME,
-): void {
-	console.error(`error: ${APP_NAME} cannot self-update this installation.`);
-	console.error(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
-
-	const entrypoint = process.argv[1];
-	if (entrypoint) {
-		console.error("");
-		console.error(`Location of pi executable: ${entrypoint}`);
+/**
+ * MusePi fork: there is no npm package to self-update from (and running the
+ * upstream npm self-update would replace MusePi with stock pi). Self-update
+ * downloads the platform archive from the fork's GitHub Releases and swaps
+ * the install directory (see utils/self-update.ts for the swap strategy).
+ * Any step that cannot run automatically falls back to pointing the user at
+ * the release page, which is the pre-self-update behavior.
+ */
+function printManualUpdateFallback(releaseUrl: string): void {
+	console.log(`Automatic update is not available for this install.`);
+	console.log(`Download the musepi-<platform> archive for your system from:\n  ${releaseUrl}`);
+	console.log(`Or reinstall with the one-liner (replaces your existing install):`);
+	console.log(`  powershell -c "irm https://muselinn.github.io/MusePi/install.ps1 | iex"`);
+	console.log(`  sh -c "$(curl -fsSL https://muselinn.github.io/MusePi/install.sh)"`);
+	// Only pop a browser from an interactive terminal — never in CI/scripts.
+	if (process.stdout.isTTY) {
+		openBrowser(releaseUrl);
 	}
 }
 
-function printSelfUpdateFallback(command: SelfUpdateCommand): void {
-	console.error(chalk.dim(`If this keeps failing, run this command yourself: ${command.display}`));
-}
-
-function printPnpmSelfUpdateMetadataHint(): void {
-	console.error(chalk.yellow("If pnpm reports missing package versions, its cached registry metadata may be stale."));
-	console.error(chalk.yellow(`Run \`pnpm store prune\` and retry \`${APP_NAME} update --self\`.`));
-}
-
-function printSelfUpdateNote(note: string): void {
-	const trimmedNote = note.trim();
-	if (!trimmedNote) {
-		return;
-	}
-
-	console.log();
-	console.log(chalk.bold(chalk.yellow("Update note")));
+async function confirmSelfUpdate(question: string): Promise<boolean> {
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
 	try {
-		const width = Math.max(20, process.stdout.columns ?? 80);
-		const renderedLines = new Markdown(trimmedNote, 0, 0, SELF_UPDATE_NOTE_MARKDOWN_THEME)
-			.render(width)
-			.map((line) => line.trimEnd());
-		console.log(renderedLines.join("\n"));
-	} catch {
-		console.log(trimmedNote);
+		const answer = await new Promise<string>((resolve) => rl.question(question, resolve));
+		return /^(y|yes)$/i.test(answer.trim());
+	} finally {
+		rl.close();
 	}
-	console.log();
 }
 
-interface SelfUpdatePlan {
-	packageName: string;
-	installSpec: string;
-	version: string;
-	shouldRun: boolean;
-	note?: string;
+function reportDownloadProgress(assetName: string, receivedBytes: number, totalBytes: number | undefined): void {
+	const receivedMb = (receivedBytes / 1024 / 1024).toFixed(1);
+	if (process.stdout.isTTY) {
+		const totalPart = totalBytes ? ` / ${(totalBytes / 1024 / 1024).toFixed(1)} MB` : " MB";
+		const percent = totalBytes ? ` ${Math.min(100, Math.floor((receivedBytes / totalBytes) * 100))}%` : "";
+		process.stdout.write(`\rDownloading ${assetName} ... ${receivedMb}${totalPart}${percent}   `);
+	}
 }
 
-async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
+async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes: boolean }): Promise<void> {
 	let latestRelease: Awaited<ReturnType<typeof getLatestPiRelease>>;
 	try {
 		latestRelease = await getLatestPiRelease(VERSION);
@@ -481,56 +488,124 @@ async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
 		throw new Error(`Could not determine latest ${APP_NAME} version: ${message}`);
 	}
 	if (!latestRelease) {
-		throw new Error(`Could not determine latest ${APP_NAME} version.`);
+		throw new Error(
+			`Could not determine latest ${APP_NAME} version (no GitHub release yet, or the channel is unreachable). See ${MUSEPI_RELEASES_URL}`,
+		);
 	}
 
-	const packageName = latestRelease.packageName ?? PACKAGE_NAME;
-	const installSpec = `${packageName}@${latestRelease.version}`;
-	if (force || packageName !== PACKAGE_NAME || isNewerPackageVersion(latestRelease.version, VERSION)) {
-		return {
-			packageName,
-			installSpec,
-			version: latestRelease.version,
-			...(latestRelease.note ? { note: latestRelease.note } : {}),
-			shouldRun: true,
-		};
-	}
-
-	console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
-	return { packageName, installSpec, version: latestRelease.version, shouldRun: false };
-}
-
-async function runSelfUpdate(command: SelfUpdateCommand): Promise<void> {
-	console.log(chalk.dim(`Updating ${APP_NAME} with ${command.display}...`));
-	for (const step of command.steps ?? [command]) {
-		await new Promise<void>((resolve, reject) => {
-			const child = spawnProcess(step.command, step.args, {
-				stdio: "inherit",
-			});
-			child.on("error", (error) => {
-				reject(error);
-			});
-			child.on("close", (code, signal) => {
-				if (code === 0) {
-					resolve();
-				} else if (signal) {
-					reject(new Error(`${step.display} terminated by signal ${signal}`));
-				} else {
-					reject(new Error(`${step.display} exited with code ${code ?? "unknown"}`));
-				}
-			});
-		});
-	}
-}
-
-function prepareWindowsNpmSelfUpdate(): void {
-	if (process.platform !== "win32") {
+	const isNewer = isNewerPackageVersion(latestRelease.version, VERSION);
+	if (!options.force && !isNewer) {
+		console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
 		return;
 	}
 
-	const packageDir = getPackageDir();
-	cleanupWindowsSelfUpdateQuarantine(packageDir);
-	quarantineWindowsNativeDependencies(packageDir);
+	const releaseUrl = latestRelease.url ?? MUSEPI_RELEASES_URL;
+	if (isNewer) {
+		console.log(chalk.yellow(`MusePi update available: ${latestRelease.version} (current: ${VERSION})`));
+	} else {
+		console.log(`${APP_NAME} v${VERSION} (latest release: ${latestRelease.version})`);
+	}
+
+	if (options.checkOnly) {
+		console.log(`Release notes and downloads:\n  ${releaseUrl}`);
+		return;
+	}
+
+	// Self-replacement is only safe for release-archive installs: the binary
+	// must live in its own directory next to its package.json. Dev checkouts,
+	// npm/bun global installs, etc. fall back to the manual download path.
+	if (!isBunBinary) {
+		printManualUpdateFallback(releaseUrl);
+		return;
+	}
+	const installDir = detectInstallDir(process.execPath, process.platform);
+	if (!installDir) {
+		printManualUpdateFallback(releaseUrl);
+		return;
+	}
+	const parentDir = dirname(installDir);
+	if (!isDirectoryWritable(parentDir)) {
+		console.error(
+			chalk.yellow(
+				`Install directory ${parentDir} is not writable by this user (a privileged/system-wide install?).`,
+			),
+		);
+		printManualUpdateFallback(releaseUrl);
+		return;
+	}
+
+	const action = isNewer ? `Update MusePi v${VERSION} -> v${latestRelease.version}` : `Reinstall MusePi v${VERSION}`;
+	if (!options.yes) {
+		if (!process.stdin.isTTY) {
+			console.log(`Non-interactive shell: re-run with --yes to ${isNewer ? "update" : "reinstall"}.`);
+			return;
+		}
+		const confirmed = await confirmSelfUpdate(`${action} in ${installDir}? [y/N] `);
+		if (!confirmed) {
+			console.log(chalk.dim("Update cancelled."));
+			return;
+		}
+	}
+
+	// Previous backups only matter until the new install proves it works;
+	// reaching this point means the current install runs fine.
+	cleanupStaleUpdateDirs(installDir);
+
+	const download = resolveAssetDownload(latestRelease, process.platform, process.arch);
+	if (!download) {
+		console.error(chalk.yellow(`No prebuilt MusePi archive for ${process.platform}/${process.arch}.`));
+		printManualUpdateFallback(releaseUrl);
+		return;
+	}
+
+	const suffix = timestampSuffix();
+	const workDir = createUpdateWorkDir();
+	try {
+		const archivePath = join(workDir, download.assetName);
+		await downloadReleaseAsset(download.url, archivePath, (received, total) =>
+			reportDownloadProgress(download.assetName, received, total),
+		);
+		if (process.stdout.isTTY) {
+			process.stdout.write("\n");
+		}
+
+		const extractDir = join(workDir, "extracted");
+		extractReleaseArchive(archivePath, extractDir, download.assetName);
+		const installRoot = findInstallRoot(extractDir, process.platform);
+		if (!installRoot) {
+			throw new Error("Downloaded archive does not contain a valid MusePi install; refusing to update.");
+		}
+
+		const stagedDir = stageInstallRoot(installRoot, installDir, suffix);
+		if (process.platform === "win32") {
+			// Windows cannot move the directory of a running executable, so a
+			// detached PowerShell script finishes the swap after this process
+			// exits. The script and its log live next to the install dir; the
+			// script deletes itself when done.
+			const backupDir = backupDirName(installDir, suffix);
+			const logFile = join(parentDir, `${basename(installDir)}.update-${suffix}.log`);
+			const scriptPath = join(parentDir, `${basename(installDir)}.update-${suffix}.ps1`);
+			writeFileSync(
+				scriptPath,
+				buildWindowsUpdateScript({ installDir, stagedDir, backupDir, logFile, parentPid: process.pid }),
+			);
+			launchWindowsUpdateScript(scriptPath);
+			console.log(
+				chalk.green(
+					`MusePi v${latestRelease.version} is staged and will be installed as soon as this process exits.`,
+				),
+			);
+			console.log(chalk.dim(`Previous install will be kept at ${backupDir}; update log: ${logFile}`));
+			setTimeout(() => process.exit(0), 3000);
+			return;
+		}
+
+		const { backupDir } = await applyStagedUpdatePosix({ installDir, stagedDir, platform: process.platform, suffix });
+		console.log(chalk.green(`Updated MusePi to v${latestRelease.version}.`));
+		console.log(chalk.dim(`Previous install kept at ${backupDir} until the next update.`));
+	} finally {
+		rmSync(workDir, { recursive: true, force: true });
+	}
 }
 
 export interface PackageCommandRuntimeOptions {
@@ -751,7 +826,6 @@ export async function handlePackageCommand(
 		return true;
 	}
 	reportSettingsErrors(settingsManager, "package command");
-	const selfUpdateNpmCommand = settingsManager.getGlobalSettings().npmCommand;
 
 	const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
 
@@ -832,48 +906,17 @@ export async function handlePackageCommand(
 					}
 				}
 				if (updateTargetIncludesSelf(target)) {
-					const selfUpdatePlan = await getSelfUpdatePlan(options.force);
-					if (!selfUpdatePlan.shouldRun) {
-						return true;
-					}
-					const installMethod = detectInstallMethod();
-					if (process.platform === "win32" && installMethod !== "npm" && installMethod !== "pnpm") {
-						console.error(
-							chalk.red(`${APP_NAME} self-update on Windows is only supported for npm and pnpm installs.`),
+					// `--all` is a passive sweep, so it honors musepi.updateCheck=false;
+					// an explicit `musepi update` / `update self` always checks.
+					if (target.type === "all" && !settingsManager.getMusepi().updateCheck) {
+						console.log(
+							chalk.dim(
+								`MusePi self-update check skipped (musepi.updateCheck=false). Run ${APP_NAME} update to check manually.`,
+							),
 						);
-						console.error(chalk.dim(`Detected install method: ${installMethod}. Update ${APP_NAME} manually.`));
-						process.exitCode = 1;
-						return true;
+					} else {
+						await runSelfUpdate({ force: options.force, checkOnly: options.checkOnly, yes: options.yes });
 					}
-					const selfUpdateTarget = {
-						packageName: selfUpdatePlan.packageName,
-						installSpec: selfUpdatePlan.installSpec,
-					};
-					const selfUpdateCommand = getSelfUpdateCommand(PACKAGE_NAME, selfUpdateNpmCommand, selfUpdateTarget);
-					if (!selfUpdateCommand) {
-						printSelfUpdateUnavailable(selfUpdateNpmCommand, selfUpdateTarget);
-						process.exitCode = 1;
-						return true;
-					}
-					if (selfUpdatePlan.note) {
-						printSelfUpdateNote(selfUpdatePlan.note);
-					}
-					try {
-						if (installMethod === "npm") {
-							prepareWindowsNpmSelfUpdate();
-						}
-						await runSelfUpdate(selfUpdateCommand);
-					} catch (error: unknown) {
-						const message = error instanceof Error ? error.message : "Unknown package command error";
-						console.error(chalk.red(`Error: ${message}`));
-						if (installMethod === "pnpm") {
-							printPnpmSelfUpdateMetadataHint();
-						}
-						printSelfUpdateFallback(selfUpdateCommand);
-						process.exitCode = 1;
-						return true;
-					}
-					console.log(chalk.green(`Updated ${APP_NAME} from ${VERSION} to ${selfUpdatePlan.version}`));
 				}
 				return true;
 			}

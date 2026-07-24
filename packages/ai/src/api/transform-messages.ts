@@ -7,17 +7,26 @@ import type {
 	TextContent,
 	ToolCall,
 	ToolResultMessage,
+	VideoContent,
 } from "../types.ts";
 
 const NON_VISION_USER_IMAGE_PLACEHOLDER = "(image omitted: model does not support images)";
 const NON_VISION_TOOL_IMAGE_PLACEHOLDER = "(tool image omitted: model does not support images)";
+const NON_VIDEO_USER_PLACEHOLDER = "(video omitted: model does not support videos)";
+const NON_VIDEO_TOOL_PLACEHOLDER = "(tool video omitted: model does not support videos)";
 
-function replaceImagesWithPlaceholder(content: (TextContent | ImageContent)[], placeholder: string): TextContent[] {
-	const result: TextContent[] = [];
+type MediaType = "image" | "video";
+
+function replaceMediaWithPlaceholder(
+	content: (TextContent | ImageContent | VideoContent)[],
+	mediaType: MediaType,
+	placeholder: string,
+): (TextContent | ImageContent | VideoContent)[] {
+	const result: (TextContent | ImageContent | VideoContent)[] = [];
 	let previousWasPlaceholder = false;
 
 	for (const block of content) {
-		if (block.type === "image") {
+		if (block.type === mediaType) {
 			if (!previousWasPlaceholder) {
 				result.push({ type: "text", text: placeholder });
 			}
@@ -26,30 +35,40 @@ function replaceImagesWithPlaceholder(content: (TextContent | ImageContent)[], p
 		}
 
 		result.push(block);
-		previousWasPlaceholder = block.text === placeholder;
+		previousWasPlaceholder = block.type === "text" && block.text === placeholder;
 	}
 
 	return result;
 }
 
-function downgradeUnsupportedImages<TApi extends Api>(messages: Message[], model: Model<TApi>): Message[] {
-	if (model.input.includes("image")) {
+function downgradeUnsupportedMedia<TApi extends Api>(messages: Message[], model: Model<TApi>): Message[] {
+	const supportsImages = model.input.includes("image");
+	const supportsVideos = model.input.includes("video");
+	if (supportsImages && supportsVideos) {
 		return messages;
 	}
 
 	return messages.map((msg) => {
 		if (msg.role === "user" && Array.isArray(msg.content)) {
-			return {
-				...msg,
-				content: replaceImagesWithPlaceholder(msg.content, NON_VISION_USER_IMAGE_PLACEHOLDER),
-			};
+			let content = msg.content;
+			if (!supportsImages) {
+				content = replaceMediaWithPlaceholder(content, "image", NON_VISION_USER_IMAGE_PLACEHOLDER);
+			}
+			if (!supportsVideos) {
+				content = replaceMediaWithPlaceholder(content, "video", NON_VIDEO_USER_PLACEHOLDER);
+			}
+			return content === msg.content ? msg : { ...msg, content };
 		}
 
 		if (msg.role === "toolResult") {
-			return {
-				...msg,
-				content: replaceImagesWithPlaceholder(msg.content, NON_VISION_TOOL_IMAGE_PLACEHOLDER),
-			};
+			let content = msg.content;
+			if (!supportsImages) {
+				content = replaceMediaWithPlaceholder(content, "image", NON_VISION_TOOL_IMAGE_PLACEHOLDER);
+			}
+			if (!supportsVideos) {
+				content = replaceMediaWithPlaceholder(content, "video", NON_VIDEO_TOOL_PLACEHOLDER);
+			}
+			return content === msg.content ? msg : { ...msg, content };
 		}
 
 		return msg;
@@ -71,7 +90,7 @@ export function transformMessages<TApi extends Api>(
 	// Normalize null/undefined content from untyped callers (custom tools, hand-built
 	// histories, old session files) so downstream code can rely on the type contract.
 	const normalizedMessages = messages.map((msg) => (msg.content == null ? { ...msg, content: [] } : msg));
-	const imageAwareMessages = downgradeUnsupportedImages(normalizedMessages, model);
+	const imageAwareMessages = downgradeUnsupportedMedia(normalizedMessages, model);
 
 	// First pass: transform messages (unsupported image downgrade, thinking blocks, tool call ID normalization)
 	const transformed = imageAwareMessages.map((msg) => {

@@ -4,17 +4,17 @@
 	"type": "module",
 	"workspaces": [
 		"packages/*",
-		"packages/storage/*",
 		"packages/coding-agent/examples/extensions/with-deps",
 		"packages/coding-agent/examples/extensions/custom-provider-anthropic",
 		"packages/coding-agent/examples/extensions/custom-provider-gitlab-duo",
 		"packages/coding-agent/examples/extensions/sandbox",
-		"packages/coding-agent/examples/extensions/gondolin"
+		"packages/coding-agent/examples/extensions/gondolin",
+		"packages/musepi/*"
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",
-		"build": "cd packages/tui && npm run build && cd ../ai && npm run build && cd ../agent && npm run build && cd ../storage/sqlite-node && npm run build && cd ../../coding-agent && npm run build && cd ../server && npm run build",
-		"build:offline": "cd packages/tui && npm run build && cd ../ai && npm run build:offline && cd ../agent && npm run build && cd ../storage/sqlite-node && npm run build && cd ../../coding-agent && npm run build && cd ../server && npm run build",
+		"build": "cd packages/tui && npm run build && cd ../ai && npm run build && cd ../agent && npm run build && cd ../musepi/core && npm run build && cd ../transcript && npm run build && cd ../../coding-agent && npm run build && cd ../orchestrator && npm run build",
+		"build:offline": "cd packages/tui && npm run build && cd ../ai && npm run build:offline && cd ../agent && npm run build && cd ../musepi/core && npm run build && cd ../transcript && npm run build && cd ../../coding-agent && npm run build && cd ../orchestrator && npm run build",
 		"check": "biome check --write --error-on-warnings . && npm run check:pinned-deps && npm run check:ts-imports && npm run check:shrinkwrap && npm run check:install-lock:coding-agent && tsgo --noEmit && npm run check:browser-smoke",
 		"check:browser-smoke": "node scripts/check-browser-smoke.mjs",
 		"check:pinned-deps": "node scripts/check-pinned-deps.mjs",

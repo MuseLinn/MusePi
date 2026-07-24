@@ -173,9 +173,9 @@ function extractText(messages: AgentMessage[]): string {
 				case "toolResult":
 					return typeof message.content === "string"
 						? message.content
-						: message.content
-								.filter((block): block is { type: "text"; text: string } => block.type === "text")
-								.map((block) => block.text)
+						: (message.content as ({ type: string } & { text?: string })[])
+								.filter((block) => block.type === "text")
+								.map((block) => block.text ?? "")
 								.join(" ");
 				case "bashExecution":
 					return `${message.command}\n${message.output}`;

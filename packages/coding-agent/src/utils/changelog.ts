@@ -8,9 +8,8 @@ export interface ChangelogEntry {
 	content: string;
 }
 
-const GITHUB_REPO = "earendil-works/pi";
+const GITHUB_REPO = "MuseLinn/MusePi";
 const CHANGELOG_LINK_BASE_PATH = "packages/coding-agent";
-const LEGACY_REPO_RE = /^https:\/\/github\.com\/(?:badlogic|earendil-works)\/pi-mono(?=\/|$)/;
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/g;
 
@@ -67,7 +66,7 @@ function isDirectoryTarget(originalPath: string, repositoryPath: string): boolea
 }
 
 function normalizeChangelogLinkTarget(target: string, tag: string): string {
-	let canonicalTarget = target.replace(LEGACY_REPO_RE, `https://github.com/${GITHUB_REPO}`);
+	let canonicalTarget = target;
 	const repoUrl = `https://github.com/${GITHUB_REPO}`;
 
 	for (const route of ["blob", "tree"]) {
@@ -176,20 +175,48 @@ export function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number 
 	return v1.patch - v2.patch;
 }
 
+/** Parse an "x.y.z" version string into a version triple (missing parts default to 0). */
+function parseVersion(version: string): { major: number; minor: number; patch: number } {
+	const parts = version.split(".").map(Number);
+	return {
+		major: parts[0] || 0,
+		minor: parts[1] || 0,
+		patch: parts[2] || 0,
+	};
+}
+
 /**
  * Get entries newer than lastVersion
  */
 export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
-	// Parse lastVersion
-	const parts = lastVersion.split(".").map(Number);
-	const last: ChangelogEntry = {
-		major: parts[0] || 0,
-		minor: parts[1] || 0,
-		patch: parts[2] || 0,
-		content: "",
-	};
+	const last: ChangelogEntry = { ...parseVersion(lastVersion), content: "" };
 
 	return entries.filter((entry) => compareVersions(entry, last) > 0);
+}
+
+/**
+ * Decide which changelog entries to show on startup.
+ * Returns undefined when there is nothing new to show.
+ *
+ * A lastVersion newer than currentVersion means the setting was migrated from
+ * a different distribution (e.g. upstream pi's 0.81.x into MusePi's 0.1.x), so
+ * version comparison is meaningless — show all entries of this distribution.
+ */
+export function getStartupChangelogEntries(
+	entries: ChangelogEntry[],
+	lastVersion: string | undefined,
+	currentVersion: string,
+): ChangelogEntry[] | undefined {
+	if (!lastVersion) return undefined;
+
+	const last: ChangelogEntry = { ...parseVersion(lastVersion), content: "" };
+	const current: ChangelogEntry = { ...parseVersion(currentVersion), content: "" };
+	if (compareVersions(last, current) > 0) {
+		return entries.length > 0 ? entries : undefined;
+	}
+
+	const newEntries = getNewEntries(entries, lastVersion);
+	return newEntries.length > 0 ? newEntries : undefined;
 }
 
 // Re-export getChangelogPath from paths.ts for convenience

@@ -29,10 +29,6 @@ export const NVIDIA_MODELS = values as {
 		id: "minimaxai/minimax-m3";
 		provider: "nvidia";
 	};
-	"mistralai/mistral-large-3-675b-instruct-2512": Model<"openai-completions"> & {
-		id: "mistralai/mistral-large-3-675b-instruct-2512";
-		provider: "nvidia";
-	};
 	"mistralai/mistral-small-4-119b-2603": Model<"openai-completions"> & {
 		id: "mistralai/mistral-small-4-119b-2603";
 		provider: "nvidia";

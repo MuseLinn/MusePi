@@ -1,5 +1,5 @@
 /**
- * TUI config selector for `pi config` command
+ * TUI config selector for `musepi config` command
  */
 
 import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";

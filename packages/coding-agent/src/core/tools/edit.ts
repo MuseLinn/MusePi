@@ -1,10 +1,19 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
+import {
+	formatHashlineHeader,
+	HASHLINE_EDIT_DESCRIPTION,
+	HASHLINE_EDIT_PROMPT_GUIDELINES,
+	type HashlineFs,
+	parseHashlineHeader,
+	parsePatch,
+} from "@musepi/core/hashline/index.js";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { renderDiff } from "../../modes/interactive/components/diff.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
+import type { HashlineContext } from "../../musepi/hashline.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import {
 	applyEditsToNormalizedContent,
@@ -89,6 +98,8 @@ const defaultEditOperations: EditOperations = {
 export interface EditToolOptions {
 	/** Custom operations for file editing. Default: local filesystem */
 	operations?: EditOperations;
+	/** MusePi hashline context: switches the tool to tag-anchored patch editing. */
+	hashline?: HashlineContext;
 }
 
 function prepareEditArguments(input: unknown): EditToolInput {
@@ -288,6 +299,15 @@ export function createEditToolDefinition(
 	cwd: string,
 	options?: EditToolOptions,
 ): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> {
+	// MusePi hashline: same tool name, tag-anchored patch contract instead of
+	// exact-replacement edits. The schema swap is config-determined, so the
+	// cast below never pairs a native schema with hashline runtime behavior.
+	if (options?.hashline) {
+		return createHashlineEditToolDefinition(cwd, {
+			...options,
+			hashline: options.hashline,
+		}) as unknown as ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState>;
+	}
 	const ops = options?.operations ?? defaultEditOperations;
 	return {
 		name: "edit",
@@ -434,4 +454,258 @@ export function createEditToolDefinition(
 
 export function createEditTool(cwd: string, options?: EditToolOptions): AgentTool<typeof editSchema> {
 	return wrapToolDefinition(createEditToolDefinition(cwd, options));
+}
+
+// ============================================================
+// MusePi hashline edit definition
+//
+// Same tool name ("edit"), tag-anchored patch contract. The engine
+// (parse/apply/recovery/atomic write) lives in @musepi/core/hashline;
+// everything below is host glue: schema, result formatting, the
+// streaming diff preview, and per-file mutation-queue locking.
+// ============================================================
+
+const hashlineEditSchema = Type.Object(
+	{
+		patch: Type.String({
+			description:
+				"Hashline patch: one or more [path#TAG] sections with SWAP/DEL/INS hunks addressing original file lines. See the tool description for the exact format.",
+		}),
+	},
+	{},
+);
+
+export type HashlineEditToolInput = Static<typeof hashlineEditSchema>;
+
+type HashlineRenderableArgs = { patch?: string };
+
+/** Acquire per-file mutation queues in sorted order (deadlock-free), then run fn. */
+async function withMutationQueues<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
+	const sorted = [...new Set(paths)].sort();
+	const run = (index: number): Promise<T> =>
+		index >= sorted.length ? fn() : withFileMutationQueue(sorted[index]!, () => run(index + 1));
+	return run(0);
+}
+
+function getHashlinePreviewInput(args: HashlineRenderableArgs | undefined): { patch: string } | null {
+	if (!args || typeof args.patch !== "string" || args.patch.trim().length === 0) return null;
+	return { patch: args.patch };
+}
+
+/** Extract section paths from a (possibly partially streamed) patch for display. */
+function hashlineSectionPaths(patchText: string): string[] {
+	const paths: string[] = [];
+	for (const line of patchText.split("\n")) {
+		const header = parseHashlineHeader(line);
+		if (header) paths.push(header.path);
+	}
+	return paths;
+}
+
+function formatHashlineEditCall(args: HashlineRenderableArgs | undefined, theme: Theme, cwd: string): string {
+	const paths = args?.patch ? hashlineSectionPaths(args.patch) : [];
+	if (paths.length === 0) {
+		return `${theme.fg("toolTitle", theme.bold("edit"))} ${theme.fg("dim", "(hashline patch)")}`;
+	}
+	const rendered = paths.map((p) => renderToolPath(p, theme, cwd)).join(", ");
+	return `${theme.fg("toolTitle", theme.bold("edit"))} ${rendered}`;
+}
+
+/** In-memory preview: preflight the patch and produce a display diff, or an error card. */
+async function computeHashlinePreview(
+	patchText: string,
+	ctx: HashlineContext,
+	cwd: string,
+	ops: EditOperations,
+): Promise<EditPreview> {
+	try {
+		const engine = ctx.createEngine(hashlineFsSeam(ops), (p) => resolveToCwd(p, cwd));
+		const result = await engine.applyPatch(patchText, { dryRun: true });
+		return { diff: combinedDiff(result.sections), firstChangedLine: result.sections[0]?.firstChangedLine };
+	} catch (error) {
+		return { error: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+function combinedDiff(sections: ReadonlyArray<{ absolutePath: string; oldText: string; newText: string }>): string {
+	const parts: string[] = [];
+	for (const section of sections) {
+		if (sections.length > 1) parts.push(`--- ${section.absolutePath}`);
+		parts.push(generateDiffString(section.oldText, section.newText).diff);
+	}
+	return parts.join("\n");
+}
+
+function hashlineFsSeam(ops: EditOperations): HashlineFs {
+	return {
+		readFile: async (absolutePath) => (await ops.readFile(absolutePath)).toString("utf-8"),
+		writeFile: (absolutePath, content) => ops.writeFile(absolutePath, content),
+	};
+}
+
+function createHashlineEditToolDefinition(
+	cwd: string,
+	options: EditToolOptions & { hashline: HashlineContext },
+): ToolDefinition<typeof hashlineEditSchema, EditToolDetails | undefined, EditRenderState> {
+	const hashline = options.hashline;
+	const ops = options.operations ?? defaultEditOperations;
+	return {
+		name: "edit",
+		label: "edit",
+		description: HASHLINE_EDIT_DESCRIPTION,
+		promptSnippet: "Edit files with tag-anchored hashline patches (SWAP/DEL/INS hunks on [path#TAG] sections)",
+		promptGuidelines: [...HASHLINE_EDIT_PROMPT_GUIDELINES],
+		parameters: hashlineEditSchema,
+		renderShell: "self",
+		async execute(_toolCallId, input: HashlineEditToolInput, signal?: AbortSignal, _onUpdate?, _ctx?) {
+			if (typeof input.patch !== "string" || input.patch.trim().length === 0) {
+				throw new Error("Edit tool input is invalid. patch must be a non-empty hashline patch string.");
+			}
+			// Parse once up front to enumerate target paths for the mutation queues;
+			// parse errors are actionable and surface to the model as-is.
+			const parsed = parsePatch(input.patch);
+			const paths = parsed.sections.map((section) => resolveToCwd(section.path, cwd));
+
+			return withMutationQueues(paths, async () => {
+				if (signal?.aborted) throw new Error("Operation aborted");
+				const engine = hashline.createEngine(hashlineFsSeam(ops), (p) => resolveToCwd(p, cwd));
+				const result = await engine.applyPatch(input.patch);
+				if (signal?.aborted) throw new Error("Operation aborted");
+
+				const applied = result.sections.map((section) => {
+					const displayPath = renderPlainPath(section.absolutePath, cwd);
+					const header = formatHashlineHeader(displayPath, section.newTag);
+					const notes: string[] = [];
+					if (section.recovered) notes.push("recovered from a stale tag");
+					if (section.firstChangedLine !== undefined)
+						notes.push(`first change at line ${section.firstChangedLine}`);
+					return `${header} — applied${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
+				});
+				const lines = [
+					...applied,
+					...(result.warnings.length > 0 ? ["", "Warnings:", ...result.warnings] : []),
+					"",
+					"These are fresh tags minted from the new file contents. Anchor any follow-up edit on them (or re-read) — pre-edit tags and line numbers are dead.",
+				];
+
+				const patch = result.sections
+					.map((section) => generateUnifiedPatch(section.absolutePath, section.oldText, section.newText))
+					.join("\n");
+				return {
+					content: [{ type: "text", text: lines.join("\n") }],
+					details: {
+						diff: combinedDiff(result.sections),
+						patch,
+						firstChangedLine: result.sections[0]?.firstChangedLine,
+					},
+				};
+			});
+		},
+		renderCall(args, theme, context) {
+			const component = getEditCallRenderComponent(context.state, context.lastComponent);
+			const typedArgs = args as HashlineRenderableArgs | undefined;
+			const previewInput = getHashlinePreviewInput(typedArgs);
+			const argsKey = previewInput?.patch;
+
+			if (component.previewArgsKey !== argsKey) {
+				component.preview = undefined;
+				component.previewArgsKey = argsKey;
+				component.previewPending = false;
+				component.settledError = false;
+			}
+
+			if (context.argsComplete && previewInput && !component.preview && !component.previewPending) {
+				component.previewPending = true;
+				const requestKey = argsKey;
+				void computeHashlinePreview(previewInput.patch, hashline, context.cwd, ops).then((preview) => {
+					if (component.previewArgsKey === requestKey) {
+						setEditPreview(component, preview, requestKey);
+						context.invalidate();
+					}
+				});
+			}
+
+			component.setBgFn(getEditHeaderBg(component.preview, component.settledError, theme));
+			component.clear();
+			component.addChild(new Text(formatHashlineEditCall(typedArgs, theme, context.cwd), 0, 0));
+			if (component.preview) {
+				const body =
+					"error" in component.preview
+						? theme.fg("error", component.preview.error)
+						: renderDiff(component.preview.diff);
+				component.addChild(new Spacer(1));
+				component.addChild(new Text(body, 0, 0));
+			}
+			return component;
+		},
+		renderResult(result, _options, theme, context) {
+			const callComponent = context.state.callComponent;
+			const typedResult = result as EditToolResultLike;
+			let changed = false;
+			if (callComponent) {
+				const resultDiff = !context.isError ? typedResult.details?.diff : undefined;
+				if (typeof resultDiff === "string") {
+					changed =
+						setEditPreview(
+							callComponent,
+							{ diff: resultDiff, firstChangedLine: typedResult.details?.firstChangedLine },
+							callComponent.previewArgsKey,
+						) || changed;
+				}
+				if (callComponent.settledError !== context.isError) {
+					callComponent.settledError = context.isError;
+					changed = true;
+				}
+				if (changed) {
+					callComponent.setBgFn(getEditHeaderBg(callComponent.preview, callComponent.settledError, theme));
+					callComponent.clear();
+					callComponent.addChild(
+						new Text(
+							formatHashlineEditCall(context.args as HashlineRenderableArgs | undefined, theme, context.cwd),
+							0,
+							0,
+						),
+					);
+					if (callComponent.preview) {
+						const body =
+							"error" in callComponent.preview
+								? theme.fg("error", callComponent.preview.error)
+								: renderDiff(callComponent.preview.diff);
+						callComponent.addChild(new Spacer(1));
+						callComponent.addChild(new Text(body, 0, 0));
+					}
+				}
+			}
+
+			let output: string | undefined;
+			if (context.isError) {
+				const errorText = typedResult.content
+					.filter((c) => c.type === "text")
+					.map((c) => c.text || "")
+					.join("\n");
+				output = errorText ? theme.fg("error", errorText) : undefined;
+			} else {
+				const resultDiff = typedResult.details?.diff;
+				const previewDiff =
+					callComponent?.preview && !("error" in callComponent.preview) ? callComponent.preview.diff : undefined;
+				if (resultDiff && resultDiff !== previewDiff) output = renderDiff(resultDiff);
+			}
+
+			const component = (context.lastComponent as Container | undefined) ?? new Container();
+			component.clear();
+			if (!output) return component;
+			component.addChild(new Spacer(1));
+			component.addChild(new Text(output, 1, 0));
+			return component;
+		},
+	};
+}
+
+/** Path relative to cwd when possible (matches how anchors are displayed by read/grep). */
+function renderPlainPath(absolutePath: string, cwd: string): string {
+	if (absolutePath.startsWith(cwd)) {
+		const rel = absolutePath.slice(cwd.length).replace(/^[/\\]+/, "");
+		if (rel && !rel.startsWith("..")) return rel.replace(/\\/g, "/");
+	}
+	return absolutePath;
 }

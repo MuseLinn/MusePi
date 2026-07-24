@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Manual run: pick the v* tag in the ref dropdown so the release attaches
+  # to the tag instead of the branch.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    # bun cross-compiles every target (including windows-*) from one Linux
+    # runner; scripts/build-binaries.sh handles install, build, compile and
+    # packaging.
+    name: Build binaries & publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Build all platform binaries
+        run: ./scripts/build-binaries.sh
+
+      - name: Upload binary archives as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: musepi-binaries-${{ github.ref_name }}
+          path: |
+            packages/coding-agent/binaries/*.tar.gz
+            packages/coding-agent/binaries/*.zip
+          retention-days: 30
+
+      - name: Smoke linux-x64 binary
+        run: |
+          runtime_dir="$(mktemp -d)"
+          HOME="$runtime_dir" packages/coding-agent/binaries/linux-x64/musepi --version
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            packages/coding-agent/binaries/*.tar.gz
+            packages/coding-agent/binaries/*.zip
+          generate_release_notes: true

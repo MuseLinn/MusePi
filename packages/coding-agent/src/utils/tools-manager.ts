@@ -181,8 +181,15 @@ function runExtractionCommand(command: string, args: string[]): string | null {
 	return `${command}: ${formatSpawnFailure(result)}`;
 }
 
-function extractTarGzArchive(archivePath: string, extractDir: string, assetName: string): void {
-	const failure = runExtractionCommand("tar", ["xzf", archivePath, "-C", extractDir]);
+export function extractTarGzArchive(archivePath: string, extractDir: string, assetName: string): void {
+	// --force-local: GNU tar (e.g. Git Bash on Windows) would treat a drive
+	// letter ("C:\...") as a remote host. Unnecessary and unsupported on
+	// macOS/Linux (BSD tar, GNU tar without libarchive compat).
+	const args =
+		platform() === "win32"
+			? ["--force-local", "-xzf", archivePath, "-C", extractDir]
+			: ["-xzf", archivePath, "-C", extractDir];
+	const failure = runExtractionCommand("tar", args);
 	if (failure) {
 		throw new Error(`Failed to extract ${assetName}: ${failure}`);
 	}
@@ -199,7 +206,7 @@ function getWindowsTarCommand(): string {
 	return "tar.exe";
 }
 
-function extractZipArchive(archivePath: string, extractDir: string, assetName: string): void {
+export function extractZipArchive(archivePath: string, extractDir: string, assetName: string): void {
 	const failures: string[] = [];
 
 	if (platform() === "win32") {

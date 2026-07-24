@@ -3,15 +3,71 @@
  */
 
 import chalk from "chalk";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import { dirname, join } from "path";
-import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
+import { CONFIG_DIR_NAME, ENV_AGENT_DIR, getAgentDir, getBinDir } from "./config.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
 
 const MIGRATION_GUIDE_URL =
 	"https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration";
 const EXTENSIONS_DOC_URL =
 	"https://github.com/earendil-works/pi-mono/blob/main/packages/coding-agent/docs/extensions.md";
+
+/**
+ * Core config files carried over from a legacy pi installation on first run.
+ * Extensions, sessions, and the npm package cache are deliberately excluded:
+ * the fork ships native features that collide with many pi extensions, and
+ * sessions/caches are cheap to rebuild.
+ */
+const LEGACY_AGENT_FILES = ["auth.json", "settings.json", "models.json", "keybindings.json"];
+
+/**
+ * First-run migration for the MusePi fork: when the new agent dir
+ * (e.g. ~/.musepi/agent) does not exist yet but a legacy pi agent dir
+ * (~/.pi/agent) does, copy the user's core config files over and print a
+ * one-line notice on stderr.
+ *
+ * Skipped when this is the official pi distribution (config dir ".pi"),
+ * when a custom agent dir override is set, or when the target already exists.
+ *
+ * Fail-open: any error is reported as a warning and never blocks startup.
+ *
+ * @returns Names of the files that were copied (empty when nothing happened).
+ */
+export function migrateLegacyPiAgentDir(options: { legacyAgentDir?: string; targetAgentDir?: string } = {}): string[] {
+	try {
+		// Only forked distributions (config dir renamed away from ".pi") migrate.
+		if (CONFIG_DIR_NAME === ".pi") return [];
+		// A custom agent dir override means the user chose their home explicitly.
+		if (process.env[ENV_AGENT_DIR]) return [];
+		const targetAgentDir = options.targetAgentDir ?? getAgentDir();
+		const legacyAgentDir = options.legacyAgentDir ?? join(homedir(), ".pi", "agent");
+		if (legacyAgentDir === targetAgentDir) return [];
+		if (existsSync(targetAgentDir)) return [];
+		if (!existsSync(legacyAgentDir)) return [];
+
+		const copied: string[] = [];
+		for (const file of LEGACY_AGENT_FILES) {
+			const source = join(legacyAgentDir, file);
+			if (!existsSync(source)) continue;
+			if (copied.length === 0) {
+				mkdirSync(targetAgentDir, { recursive: true });
+			}
+			copyFileSync(source, join(targetAgentDir, file));
+			copied.push(file);
+		}
+		if (copied.length > 0) {
+			console.error(chalk.yellow(`Migrated ${copied.join(", ")} from ${legacyAgentDir} to ${targetAgentDir}`));
+		}
+		return copied;
+	} catch (error) {
+		console.error(
+			chalk.yellow(`Warning: legacy pi config migration failed: ${error instanceof Error ? error.message : error}`),
+		);
+		return [];
+	}
+}
 
 /**
  * Migrate legacy oauth.json and settings.json apiKeys to auth.json.

@@ -88,7 +88,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 				model: target.id,
 				initialMessage: "Starting…",
 				cancelTitle: "Stop loading?",
-				cancelMessage: target.id,
+				cancelMessage: `Stop loading ${target.id}?`,
 				run: (signal, update) => client.loadAndWait(target.id, update, signal),
 				cancel: () => client.unload(target.id),
 			});
@@ -119,7 +119,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 		client: LlamaClient,
 		model: LlamaModelInfo,
 	): Promise<void> => {
-		if (!(await ui.confirm("Unload model?", model.id))) return;
+		if (!(await ui.confirm("Unload model?", `Unload ${model.id}?`))) return;
 		await client.unloadAndWait(model.id);
 		await syncCatalog(ctx, client);
 		ctx.ui.notify(`Unloaded ${model.id}`);
@@ -162,7 +162,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 			model,
 			initialMessage: "Starting…",
 			cancelTitle: "Stop download?",
-			cancelMessage: model,
+			cancelMessage: `Stop downloading ${model}?`,
 			run: (signal, update) => client.downloadAndWait(model, update, signal),
 			cancel: () => client.unload(model),
 		});

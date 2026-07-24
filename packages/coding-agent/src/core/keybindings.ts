@@ -21,6 +21,7 @@ export interface AppKeybindings {
 	"app.model.select": true;
 	"app.tools.expand": true;
 	"app.thinking.toggle": true;
+	"app.musepi.tasks": true;
 	"app.session.toggleNamedFilter": true;
 	"app.editor.external": true;
 	"app.message.copy": true;
@@ -88,6 +89,10 @@ export const KEYBINDINGS = {
 		defaultKeys: "ctrl+t",
 		description: "Toggle thinking blocks",
 	},
+	"app.musepi.tasks": {
+		defaultKeys: "ctrl+shift+t",
+		description: "Open the MusePi task browser (fullscreen)",
+	},
 	"app.session.toggleNamedFilter": {
 		defaultKeys: "ctrl+n",
 		description: "Toggle named session filter",
@@ -101,7 +106,10 @@ export const KEYBINDINGS = {
 		description: "Copy message to clipboard",
 	},
 	"app.message.followUp": {
-		defaultKeys: "alt+enter",
+		// Ctrl+Enter reaches us only on terminals that deliver it (Kitty/iTerm2/WezTerm/
+		// Ghostty); Windows Terminal swallows it, so Ctrl+Q is listed first (OMP #1903).
+		// Alt+Enter stays as the legacy pi chord.
+		defaultKeys: ["ctrl+q", "ctrl+enter", "alt+enter"],
 		description: "Queue follow-up message",
 	},
 	"app.message.dequeue": {

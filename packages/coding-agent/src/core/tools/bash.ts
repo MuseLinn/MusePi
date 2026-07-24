@@ -194,6 +194,25 @@ class BashResultRenderComponent extends Container {
 	};
 }
 
+/** Status line thrown by the executor on timeout (kept stable — renderer matches it). */
+const TIMEOUT_STATUS_RE = /(?:^|\n\n)(Command timed out after (\d+) seconds)$/;
+
+/** Yellow warning box for a bash timeout (distinct from plain red tool errors). */
+function renderTimeoutWarningBox(seconds: string): Text {
+	const label = ` ⏱ timed out after ${seconds}s `;
+	const width = label.length;
+	const border = (s: string) => theme.fg("warning", s);
+	return new Text(
+		[
+			border(`╭${"─".repeat(width)}╮`),
+			`${border("│")}${theme.fg("warning", label)}${border("│")}`,
+			border(`╰${"─".repeat(width)}╯`),
+		].join("\n"),
+		0,
+		0,
+	);
+}
+
 function formatDuration(ms: number): string {
 	return `${(ms / 1000).toFixed(1)}s`;
 }
@@ -216,11 +235,22 @@ function rebuildBashResultRenderComponent(
 	showImages: boolean,
 	startedAt: number | undefined,
 	endedAt: number | undefined,
+	isError?: boolean,
 ): void {
 	const state = component.state;
 	component.clear();
 
 	let output = getTextOutput(result as any, showImages).trim();
+	// Timeout errors get a dedicated yellow warning box instead of blending
+	// into plain tool-error red; the status line is lifted out of the output.
+	let timeoutSeconds: string | undefined;
+	if (isError) {
+		const timeoutMatch = TIMEOUT_STATUS_RE.exec(output);
+		if (timeoutMatch) {
+			timeoutSeconds = timeoutMatch[2];
+			output = output.slice(0, timeoutMatch.index).trimEnd();
+		}
+	}
 	const truncation = result.details?.truncation;
 	const fullOutputPath = result.details?.fullOutputPath;
 	if (!options.isPartial && truncation?.truncated && fullOutputPath && output.endsWith("]")) {
@@ -262,6 +292,11 @@ function rebuildBashResultRenderComponent(
 				},
 			});
 		}
+	}
+
+	if (timeoutSeconds !== undefined) {
+		component.addChild(new Text("\n", 0, 0));
+		component.addChild(renderTimeoutWarningBox(timeoutSeconds));
 	}
 
 	if (truncation?.truncated || fullOutputPath) {
@@ -458,6 +493,7 @@ export function createBashToolDefinition(
 				context.showImages,
 				state.startedAt,
 				state.endedAt,
+				context.isError,
 			);
 			component.invalidate();
 			return component;
