@@ -9,10 +9,10 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages/coding-agent");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
-const internalPackagePrefixes = ["@earendil-works/pi-", "@musepi/"];
+const internalPackagePrefixes = ["@earendil-works/", "@musepi/", "@muselinn/"];
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
-	["protobufjs@7.6.4", "postinstall only warns about protobufjs version scheme mismatches"],
+	["protobufjs@7.6.5", "postinstall only warns about protobufjs version scheme mismatches"],
 ]);
 
 const args = new Set(process.argv.slice(2));
@@ -34,6 +34,11 @@ function packageDependencies(entry) {
 		...(entry.dependencies ?? {}),
 		...(entry.optionalDependencies ?? {}),
 	};
+}
+
+/** Same as packageDependencies but excludes optional — used for validation */
+function packageRequiredDependencies(entry) {
+	return { ...(entry.dependencies ?? {}) };
 }
 
 function sortedObject(object) {
@@ -207,7 +212,18 @@ function addInternalWorkspace(shrinkwrapPackages, addedPaths, queue, name, works
 }
 
 function addExternalPackage(lockPackages, shrinkwrapPackages, addedPaths, queue, name, from) {
-	const lockPath = resolveExternalDependency(lockPackages, name, from);
+	let lockPath;
+	try {
+		lockPath = resolveExternalDependency(lockPackages, name, from);
+	} catch (e) {
+		// Optional platform packages may not be resolvable on the current OS.
+		// Check if the parent entry lists this as optional.
+		const parentEntry = lockPackages[from];
+		if (parentEntry?.optionalDependencies?.[name]) {
+			return; // skip silently — not available on this platform
+		}
+		throw e;
+	}
 	if (addedPaths.has(lockPath)) {
 		return;
 	}
@@ -267,7 +283,7 @@ function validateShrinkwrap(shrinkwrap, internalNames) {
 	}
 
 	for (const [lockPath, entry] of Object.entries(shrinkwrap.packages)) {
-		for (const dependencyName of Object.keys(packageDependencies(entry))) {
+		for (const dependencyName of Object.keys(packageRequiredDependencies(entry))) {
 			const dependencyIncluded = [...includedPaths].some(
 				(candidate) => candidate === `node_modules/${dependencyName}` || candidate.endsWith(`/node_modules/${dependencyName}`),
 			);

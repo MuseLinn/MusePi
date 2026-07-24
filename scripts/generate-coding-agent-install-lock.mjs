@@ -11,11 +11,11 @@ const outputDir = join(codingAgentDir, "install-lock");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
-const internalPackagePrefixes = ["@earendil-works/pi-", "@musepi/"];
+const internalPackagePrefixes = ["@earendil-works/", "@musepi/", "@muselinn/"];
 const installPackageName = "@muselinn/musepi-install";
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
-	["protobufjs@7.6.4", "postinstall only warns about protobufjs version scheme mismatches"],
+	["protobufjs@7.6.5", "postinstall only warns about protobufjs version scheme mismatches"],
 ]);
 
 const args = new Set(process.argv.slice(2));
@@ -37,6 +37,10 @@ function packageDependencies(entry) {
 		...(entry.dependencies ?? {}),
 		...(entry.optionalDependencies ?? {}),
 	};
+}
+
+function packageRequiredDependencies(entry) {
+	return { ...(entry.dependencies ?? {}) };
 }
 
 function sortedObject(object) {
@@ -214,7 +218,17 @@ function addInternalWorkspace(installLockPackages, addedPaths, queue, name, work
 }
 
 function addExternalPackage(lockPackages, installLockPackages, addedPaths, queue, name, from) {
-	const lockPath = resolveExternalDependency(lockPackages, name, from);
+	let lockPath;
+	try {
+		lockPath = resolveExternalDependency(lockPackages, name, from);
+	} catch (e) {
+		// Optional platform packages may not be resolvable on the current OS.
+		const parentEntry = lockPackages[from];
+		if (parentEntry?.optionalDependencies?.[name]) {
+			return;
+		}
+		throw e;
+	}
 	if (addedPaths.has(lockPath)) {
 		return;
 	}
@@ -294,7 +308,7 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		if (packageName && internalPackagePrefixes.some((prefix) => packageName.startsWith(prefix)) && entry.version !== installerPackageJson.version) {
+		if (packageName && (packageName.startsWith("@musepi/") || packageName.startsWith("@muselinn/")) && entry.version !== installerPackageJson.version) {
 			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
 		}
 		if (entry.hasInstallScript) {
@@ -326,7 +340,7 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 	}
 
 	for (const [lockPath, entry] of Object.entries(installLock.packages)) {
-		for (const [dependencyName, dependencySpec] of Object.entries(packageDependencies(entry))) {
+		for (const [dependencyName, dependencySpec] of Object.entries(packageRequiredDependencies(entry))) {
 			let dependencyLockPath;
 			try {
 				dependencyLockPath = resolveExternalDependency(installLock.packages, dependencyName, lockPath);
