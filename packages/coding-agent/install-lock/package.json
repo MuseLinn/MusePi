@@ -1,10 +1,10 @@
 {
 	"name": "@muselinn/musepi-install",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
-		"@muselinn/musepi": "0.1.7"
+		"@muselinn/musepi": "0.1.8"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",

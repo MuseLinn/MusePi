@@ -1,6 +1,6 @@
 {
 	"name": "@muselinn/musepi",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
@@ -59,8 +59,8 @@
 		"typebox": "1.1.38",
 		"undici": "8.5.0",
 		"yaml": "2.9.0",
-		"@musepi/core": "0.1.7",
-		"@musepi/transcript": "0.1.7"
+		"@musepi/core": "0.1.8",
+		"@musepi/transcript": "0.1.8"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",
