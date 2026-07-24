@@ -9,6 +9,11 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows update** — replace detached PowerShell script with in-process file rename (rename running exe, copy new exe, verify, rollback). No more 3-second delay or script failures.
+- **Changelog** — v0.1.5 section was empty due to merge corruption; content restored.
+
 ### Changed
 
 - **Upstream v0.82.0** — merged 40 upstream commits including constrained sampling API, OpenRouter OAuth, Kimi Code subscription OAuth, bash session metadata, model picker hot-reload, bash_execution_update events, and various fixes.
