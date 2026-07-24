@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-07-24
+### New Features
+
+- **Foreign Session Import** — Claude Code and Codex session scanners with `[claude]`/`[codex]` badges, a Claude-to-MusePi session converter with native content block passthrough, the `/import-claude` command with a checkbox selector (MCP servers, skills), and a `/setup` 5-step setup wizard (Welcome, Provider, Scanning, Claude Import, Apply). Configure via `musepi.settings.json`: `scanClaudeSessions`, `scanCodexSessions`, `claudeImportHintSeen`. Startup hint detection with persisted `claudeImportHintSeen`.
+
+### Fixed
+
+- **Task browser crash** — `task.usage` being undefined no longer crashes `/tasks`; shows `—` instead.
+- **`/swarm` bare text** — non-`on|off|status` arguments are now forwarded to the model as a prompt.
 
 ### Changed
 
