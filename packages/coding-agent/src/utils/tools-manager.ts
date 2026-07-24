@@ -183,8 +183,12 @@ function runExtractionCommand(command: string, args: string[]): string | null {
 
 export function extractTarGzArchive(archivePath: string, extractDir: string, assetName: string): void {
 	// --force-local: GNU tar (e.g. Git Bash on Windows) would treat a drive
-	// letter ("C:\...") as a remote host. Supported by GNU tar and bsdtar.
-	const failure = runExtractionCommand("tar", ["--force-local", "-xzf", archivePath, "-C", extractDir]);
+	// letter ("C:\...") as a remote host. Unnecessary and unsupported on
+	// macOS/Linux (BSD tar, GNU tar without libarchive compat).
+	const args = platform() === "win32"
+		? ["--force-local", "-xzf", archivePath, "-C", extractDir]
+		: ["-xzf", archivePath, "-C", extractDir];
+	const failure = runExtractionCommand("tar", args);
 	if (failure) {
 		throw new Error(`Failed to extract ${assetName}: ${failure}`);
 	}
