@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [0.1.4] - 2026-07-24
 
 All notable changes to MusePi are documented in this file.
