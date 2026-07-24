@@ -451,6 +451,9 @@ async function refreshModelCatalogs(agentDir: string): Promise<void> {
 function printManualUpdateFallback(releaseUrl: string): void {
 	console.log(`Automatic update is not available for this install.`);
 	console.log(`Download the musepi-<platform> archive for your system from:\n  ${releaseUrl}`);
+	console.log(`Or reinstall with the one-liner (replaces your existing install):`);
+	console.log(`  powershell -c "irm https://muselinn.github.io/MusePi/install.ps1 | iex"`);
+	console.log(`  sh -c "\$(curl -fsSL https://muselinn.github.io/MusePi/install.sh)"`);
 	// Only pop a browser from an interactive terminal — never in CI/scripts.
 	if (process.stdout.isTTY) {
 		openBrowser(releaseUrl);
