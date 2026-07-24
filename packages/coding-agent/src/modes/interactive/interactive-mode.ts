@@ -515,18 +515,33 @@ export class InteractiveMode {
 			// left and (opt-in) model name right in the top border.
 			const slots = {
 				left: () => {
-					if (!this.activeStatusIndicator) return "";
-					const frames = getSpinnerFrames();
-					const frame = frames[Math.floor(Date.now() / 120) % frames.length];
-					const msg = this.workingMessage ?? "Working...";
-					return `${theme.fg("accent", frame)} ${theme.fg("dim", msg)}`;
+					if (this.activeStatusIndicator) {
+						const frames = getSpinnerFrames();
+						const frame = frames[Math.floor(Date.now() / 120) % frames.length];
+						const msg = this.workingMessage ?? "Working...";
+						return `${theme.fg("accent", frame)} ${theme.fg("dim", msg)}`;
+					}
+					// Idle: show PWD + git branch
+					const cwd = this.session.sessionManager.getCwd();
+					const home = process.env.HOME || process.env.USERPROFILE;
+					let pwd = home ? cwd.replace(home, "~") : cwd;
+					const branch = this.footerDataProvider.getGitBranch();
+					if (branch) pwd += ` (${branch})`;
+					return theme.fg("dim", pwd);
 				},
 				right: () => {
 					if (!musepiTui.modelInBorder) return "";
 					const m = this.session.model;
 					if (!m) return "";
 					const level = this.session.thinkingLevel;
-					return theme.fg("dim", `${m.provider} · ${m.id}${level ? `:${level}` : ""}`);
+					const modelStr = `${m.provider} · ${m.id}${level ? ` • ${level}` : ""}`;
+					// Add context %
+					const ctx = this.session.getContextUsage();
+					let ctxStr = "";
+					if (ctx?.percent !== undefined && ctx.percent !== null && ctx.contextWindow) {
+						ctxStr = ` ${ctx.percent.toFixed(1)}%/${Math.round(ctx.contextWindow / 1000)}k`;
+					}
+					return theme.fg("dim", modelStr + ctxStr);
 				},
 			};
 			this.defaultEditor = new MusepiBoxedEditor(
