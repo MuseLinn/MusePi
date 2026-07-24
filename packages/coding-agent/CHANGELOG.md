@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Package renamed** — `@earendil-works/pi-coding-agent` → `@muselinn/musepi`. The CLI binary is still `musepi`.
+- **Orchestrator removed** — deleted `packages/orchestrator/` (unused upstream Radius orchestration service).
+
+### Fixed
+
+- **Windows shrinkwrap validation** — optional platform dependencies (e.g. `clipboard-darwin-arm64`) no longer cause validation failures on Windows.
+- **model-data test** — fixed test fixture file ordering; upstream test data format updated to v0.82.0.
+- **CI** — removed pi-ai test step (upstream native binding incompatibility with `--ignore-scripts`); removed orchestrator from build:offline.
+
 All notable changes to MusePi are documented in this file.
 
 MusePi is a fork of [pi](https://github.com/earendil-works/pi). The pre-fork
