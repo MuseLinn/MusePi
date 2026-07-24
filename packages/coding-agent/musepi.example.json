@@ -1,0 +1,14 @@
+{
+	"$schema": "./settings-schema.json",
+	"musepi": {
+		"compat": {
+			"loadPiExtensions": false,
+			"scanClaudeSessions": false,
+			"scanCodexSessions": false
+		},
+		"skills": {
+			"kimiCodeCompat": true
+		},
+		"updateCheck": true
+	}
+}
