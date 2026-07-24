@@ -37,7 +37,7 @@ function createFixture(): {
 		'// generated\n\nimport values from "./data/test-provider.json" with { type: "json" };\nimport type { Model } from "../types.ts";\n\nexport const TEST_PROVIDER_MODELS = values as {\n\t"model-a": Model<"openai-completions"> & {\n\t\tid: "model-a";\n\t\tprovider: "test-provider";\n\t};\n};\n',
 	);
 
-	const structure = readModelDataStructure(packageRoot);
+	// Write fixture data BEFORE readModelDataStructure so the JSON exists
 	const values: Record<string, unknown> = {
 		"model-a": {
 			id: "model-a",
@@ -52,7 +52,15 @@ function createFixture(): {
 			maxTokens: 100,
 		},
 	};
-	writeFixtureData(dataDir, structure, values);
+	const content = `${JSON.stringify(values)}\n`;
+	writeFileSync(join(dataDir, "test-provider.json"), content);
+
+	const structure = readModelDataStructure(packageRoot);
+
+	// Write manifest now that we have structure
+	const manifest = createModelDataManifest(structure, { "test-provider.json": content }, "");
+	writeFileSync(join(dataDir, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
+
 	return { dataDir, packageRoot, structure, values };
 }
 
