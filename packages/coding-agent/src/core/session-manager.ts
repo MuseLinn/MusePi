@@ -172,6 +172,8 @@ export interface SessionContext {
 	model: { provider: string; modelId: string } | null;
 }
 
+export type SessionSource = "native" | "claude" | "codex" | "cursor";
+
 export interface SessionInfo {
 	path: string;
 	id: string;
@@ -181,6 +183,8 @@ export interface SessionInfo {
 	name?: string;
 	/** Path to the parent session (if this session was forked). */
 	parentSessionPath?: string;
+	/** Source of this session. "native" for MusePi sessions, tool name for imported sessions. */
+	source?: SessionSource;
 	created: Date;
 	modified: Date;
 	messageCount: number;

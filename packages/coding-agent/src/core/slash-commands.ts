@@ -17,6 +17,7 @@ export interface BuiltinSlashCommand {
 }
 
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+	{ name: "setup", description: "Run the MusePi setup wizard (first-run configuration)" },
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "model", description: "Select model (opens selector UI)", argumentHint: "<provider/model>" },
 	{ name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
@@ -51,7 +52,8 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "logout", description: "Remove provider authentication" },
 	{ name: "new", description: "Start a new session" },
 	{ name: "move", description: "Move session to a different working directory", argumentHint: "<path>" },
-	{ name: "compact", description: "Manually compact the session context" },
+	{ name: "tui", description: "TUI settings: style or timing", argumentHint: "[style <plain|boxed|compact>|timing]" },
+	{ name: "compact", description: "Manually compact the session context", argumentHint: "[instructions]" },
 	{
 		name: "mcp",
 		description: "MCP servers: list/status or reconnect",
@@ -62,7 +64,10 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		description: "Long-term memory: view payload, stats, clear, enable/disable",
 		argumentHint: "[view|stats|clear <project|global|all>|enable|disable]",
 	},
+	{ name: "import-claude", description: "Import MCP servers and skills from Claude Code" },
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, themes, and context files" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },
+	{ name: "transcript", description: "Show transcript summary for the current session" },
+	{ name: "debug", description: "Show internal debug info (render dimensions, all lines)" },
 ];

@@ -178,9 +178,15 @@ Type `/` in the editor to trigger commands. [Extensions](#extensions) can regist
 | `/login`, `/logout` | Manage provider credentials |
 | [`/llama`](docs/llama-cpp.md) | Download, load, and unload llama.cpp router models |
 | `/model` | Switch models |
+| `/mode` | Switch permission mode (auto/yolo/manual/status) |
+| `/plan` | Toggle plan mode on/off |
+| `/goal` | Manage goal: set, status, pause, resume, cancel, etc. |
+| `/swarm` | Toggle swarm mode or show status |
 | `/scoped-models` | Enable/disable models for Ctrl+P cycling |
 | `/settings` | Thinking level, theme, message delivery, transport |
+| `/setup` | Run the MusePi setup wizard (first-run configuration) |
 | `/resume` | Pick from previous sessions |
+| [`/import-claude`](docs/foreign-sessions.md) | Import MCP servers and skills from Claude Code |
 | `/new` | Start a new session |
 | `/name <name>` | Set session display name |
 | `/session` | Show session info (file, ID, messages, tokens, cost) |
@@ -196,7 +202,12 @@ Type `/` in the editor to trigger commands. [Extensions](#extensions) can regist
 | `/reload` | Reload keybindings, extensions, skills, prompts, themes, and context files |
 | `/hotkeys` | Show all keyboard shortcuts |
 | `/changelog` | Display version history |
-| `/quit` | Quit pi |
+| `/tui` | TUI settings: style or timing |
+| `/memory` | Long-term memory: view, stats, clear, enable/disable |
+| `/mcp` | MCP servers: list, status, reconnect |
+| `/transcript` | Show transcript summary for the current session |
+| `/debug` | Show internal debug info |
+| `/quit` | Quit MusePi |
 
 ### Keyboard Shortcuts
 
@@ -250,6 +261,26 @@ pi --fork <path|id>    # Fork specific session file or ID into a new session
 ```
 
 Use `/session` in interactive mode to see the current session ID before reusing it with `--session <id>` or `--fork <id>`.
+
+### Foreign Sessions
+
+MusePi can scan sessions from other AI coding agents and show them in the
+session picker alongside native sessions. Foreign sessions are marked with
+a `[claude]` or `[codex]` badge.
+
+| Source | Scanner | Session picker | Resume |
+|--------|---------|----------------|--------|
+| Claude Code | `~/.claude/projects/` | ✅ `[claude]` badge | ✅ Auto-converted |
+| Codex (OpenAI) | `~/.codex/state/` | ✅ `[codex]` badge | ❌ List only |
+
+Enable scanning by setting `musepi.compat.scanClaudeSessions` or
+`musepi.compat.scanCodexSessions` to `true` in `settings.json`, or run
+[`/setup`](#commands) to configure them interactively.
+
+Claude Code sessions are automatically converted to MusePi format on resume.
+[`/import-claude`](docs/foreign-sessions.md) imports MCP servers and skills
+from Claude Code configuration. See
+[docs/foreign-sessions.md](docs/foreign-sessions.md) for details.
 
 ### Branching
 

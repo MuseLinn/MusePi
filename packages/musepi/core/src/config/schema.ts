@@ -213,6 +213,12 @@ export interface MusepiSkillsSettings {
 export interface MusepiCompatSettings {
 	/** Also auto-load extensions from `~/.pi/agent/extensions` (the legacy pi home). */
 	loadPiExtensions?: boolean; // default: false
+	/** Scan Claude Code session directories and show them in the session picker. */
+	scanClaudeSessions?: boolean; // default: false
+	/** Scan Codex session databases and show them in the session picker. */
+	scanCodexSessions?: boolean; // default: false
+	/** Whether the one-time Claude Code startup hint has been shown. */
+	claudeImportHintSeen?: boolean; // default: false
 }
 
 export interface MusepiSettings {
@@ -303,9 +309,9 @@ export const MUSEPI_DEFAULTS: Required<{
 	notifications: { enabled: boolean; condition: "always" | "unfocused" };
 }> = {
 	updateCheck: true,
-	compat: { loadPiExtensions: false },
 	skills: { kimiCodeCompat: true },
 	advisor: { enabled: true, model: "", maxContextChars: 60_000 },
+	compat: { loadPiExtensions: false, scanClaudeSessions: false, scanCodexSessions: false, claudeImportHintSeen: false },
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
 	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto", isolation: "worktree" },

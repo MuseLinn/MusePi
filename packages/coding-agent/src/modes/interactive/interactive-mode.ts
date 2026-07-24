@@ -39,6 +39,14 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import type { CompletionItem } from "@musepi/core/completions.js";
+import {
+	goalArgumentCompletions,
+	modeArgumentCompletions,
+	planArgumentCompletions,
+	swarmArgumentCompletions,
+	tuiArgumentCompletions,
+} from "@musepi/core/completions.js";
 import { goalManager } from "@musepi/core/goal/index.js";
 import {
 	addToQueue,
@@ -111,6 +119,10 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import { convertClaudeSession } from "../../foreign-sessions/claude-converter.ts";
+import { listAllClaudeSessions, listClaudeSessions } from "../../foreign-sessions/claude-scanner.ts";
+import { listAllCodexSessions, listCodexSessions } from "../../foreign-sessions/codex-scanner.ts";
+import { scanClaudeConfig } from "../../foreign-sessions/import-claude.ts";
 import { runBtwTurn } from "../../musepi/btw.ts";
 import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
@@ -139,6 +151,7 @@ import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
 import { BorderedLoader } from "./components/bordered-loader.ts";
 import { BranchSummaryMessageComponent } from "./components/branch-summary-message.ts";
+import { type CheckboxItem, CheckboxSelectorComponent } from "./components/checkbox-selector.ts";
 import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.ts";
 import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
@@ -162,6 +175,7 @@ import {
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
+import { type SetupResult, SetupWizardComponent } from "./components/setup-wizard.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
 	BranchSummaryStatusIndicator,
@@ -440,7 +454,7 @@ export class InteractiveMode {
 	private shutdownRequested = false;
 
 	// Extension UI state
-	private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
+	private extensionSelector: Container | undefined = undefined;
 	private extensionInput: ExtensionInputComponent | undefined = undefined;
 	private extensionEditor: ExtensionEditorComponent | undefined = undefined;
 	private extensionTerminalInputUnsubscribers = new Set<() => void>();
@@ -672,6 +686,18 @@ export class InteractiveMode {
 			};
 		}
 
+		// Wire argument completions for commands with known subcommand completions
+		const wireCompletion = (name: string, fn: (prefix: string) => CompletionItem[] | null) => {
+			const cmd = slashCommands.find((c) => c.name === name);
+			if (cmd) {
+				cmd.getArgumentCompletions = (prefix: string) => fn(prefix) as unknown as AutocompleteItem[] | null;
+			}
+		};
+		wireCompletion("mode", modeArgumentCompletions);
+		wireCompletion("swarm", swarmArgumentCompletions);
+		wireCompletion("plan", planArgumentCompletions);
+		wireCompletion("goal", goalArgumentCompletions);
+		wireCompletion("tui", tuiArgumentCompletions);
 		// Convert prompt templates to SlashCommand format for autocomplete
 		const templateCommands: SlashCommand[] = this.session.promptTemplates.map((cmd) => ({
 			name: cmd.name,
@@ -730,33 +756,55 @@ export class InteractiveMode {
 	}
 
 	private showStartupNoticesIfNeeded(): void {
-		if (this.startupNoticesShown) {
-			return;
-		}
+		if (this.startupNoticesShown) return;
 		this.startupNoticesShown = true;
 
-		if (!this.changelogMarkdown) {
-			return;
+		// Changelog banner (only when new version)
+		if (this.changelogMarkdown) {
+			if (this.chatContainer.children.length > 0) {
+				this.chatContainer.addChild(new Spacer(1));
+			}
+			this.chatContainer.addChild(new DynamicBorder());
+			if (this.settingsManager.getCollapseChangelog()) {
+				const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
+				const latestVersion = versionMatch ? versionMatch[1] : this.version;
+				const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
+				this.chatContainer.addChild(new Text(condensedText, 1, 0));
+			} else {
+				this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "What's New")), 1, 0));
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(
+					new Markdown(this.changelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings()),
+				);
+				this.chatContainer.addChild(new Spacer(1));
+			}
+			this.chatContainer.addChild(new DynamicBorder());
 		}
 
-		if (this.chatContainer.children.length > 0) {
-			this.chatContainer.addChild(new Spacer(1));
+		// Claude Code detection — one-time hint for /import-claude
+		try {
+			const claudeSettingsPath = path.join(os.homedir(), ".claude", "settings.json");
+			if (fs.existsSync(claudeSettingsPath) && this.settingsManager.getMusepi().compat) {
+				const compat = this.settingsManager.getMusepi().compat;
+				// Only show once per user, and skip if user already enabled session scanning
+				if (!compat.claudeImportHintSeen && !compat.scanClaudeSessions) {
+					this.chatContainer.addChild(new Spacer(1));
+					this.chatContainer.addChild(
+						new Text(
+							theme.fg(
+								"dim",
+								`Claude Code config detected. Use ${theme.bold("/import-claude")} to import settings and skills.`,
+							),
+							1,
+							0,
+						),
+					);
+					this.settingsManager.setMusepiValue("compat.claudeImportHintSeen", true);
+				}
+			}
+		} catch {
+			// ignore detection errors
 		}
-		this.chatContainer.addChild(new DynamicBorder());
-		if (this.settingsManager.getCollapseChangelog()) {
-			const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
-			const latestVersion = versionMatch ? versionMatch[1] : this.version;
-			const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
-			this.chatContainer.addChild(new Text(condensedText, 1, 0));
-		} else {
-			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "What's New")), 1, 0));
-			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(
-				new Markdown(this.changelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings()),
-			);
-			this.chatContainer.addChild(new Spacer(1));
-		}
-		this.chatContainer.addChild(new DynamicBorder());
 	}
 
 	async init(): Promise<void> {
@@ -2347,7 +2395,7 @@ export class InteractiveMode {
 	 * Hide the extension selector.
 	 */
 	private hideExtensionSelector(): void {
-		this.extensionSelector?.dispose();
+		(this.extensionSelector as { dispose(): void } | undefined)?.dispose();
 		this.editorContainer.clear();
 		this.editorContainer.addChild(this.editor);
 		this.extensionSelector = undefined;
@@ -2365,6 +2413,30 @@ export class InteractiveMode {
 	): Promise<boolean> {
 		const result = await this.showExtensionSelector(`${title}\n${message}`, ["Yes", "No"], opts);
 		return result === "Yes";
+	}
+
+	private showCheckboxSelector(title: string, items: CheckboxItem[]): Promise<CheckboxItem[] | undefined> {
+		return new Promise((resolve) => {
+			const onCancel = () => {
+				this.hideExtensionSelector();
+				resolve(undefined);
+			};
+
+			this.extensionSelector = new CheckboxSelectorComponent(
+				items,
+				(selected) => {
+					this.hideExtensionSelector();
+					resolve(selected);
+				},
+				onCancel,
+				{ title, tui: this.ui },
+			);
+
+			this.editorContainer.clear();
+			this.editorContainer.addChild(this.extensionSelector);
+			this.ui.setFocus(this.extensionSelector);
+			this.ui.requestRender();
+		});
 	}
 
 	private async promptForMissingSessionCwd(error: MissingSessionCwdError): Promise<string | undefined> {
@@ -2813,6 +2885,16 @@ export class InteractiveMode {
 			if (text === "/import" || text.startsWith("/import ")) {
 				await this.handleImportCommand(text);
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/setup") {
+				this.editor.setText("");
+				await this.handleSetupCommand();
+				return;
+			}
+			if (text === "/import-claude") {
+				this.editor.setText("");
+				await this.handleImportClaudeCommand();
 				return;
 			}
 			if (text === "/move" || text.startsWith("/move ")) {
@@ -4443,21 +4525,32 @@ export class InteractiveMode {
 			return;
 		}
 
-		if (arg === "on" || arg === "off") {
-			this.showExtensionNotify(`Swarm mode: ${arg.toUpperCase()}`, "info");
+		if (arg === "on") {
+			// Swarm mode: enable the background task runner (agent_swarm tool).
+			// The session already has agent_swarm registered; this just surfaces status.
+			this.setExtensionStatus("swarm-mode", "active");
+			this.showExtensionNotify("Swarm mode: ON. Use /tasks to list background tasks.");
 			return;
 		}
 
-		// Treat bare text as a task prompt — send to the model
-		this.session.sendUserMessage(raw);
-	}
+		if (arg === "off") {
+			const running = backgroundManager.listRunning();
+			if (running.length > 0) {
+				this.showExtensionNotify(
+					`${running.length} background task(s) still running. Use /tasks to manage them first.`,
+				);
+				return;
+			}
+			this.setExtensionStatus("swarm-mode", undefined);
+			this.showExtensionNotify("Swarm mode: OFF");
+			return;
+		}
 
+		this.showExtensionNotify("Usage: /swarm [on|off|status]", "error");
+	}
 	private toggleThinkingBlockVisibility(): void {
 		this.hideThinkingBlock = !this.hideThinkingBlock;
 		this.settingsManager.setHideThinkingBlock(this.hideThinkingBlock);
-
-		// Rebuild chat from session messages
-		this.chatContainer.clear();
 		this.rebuildChatFromMessages();
 
 		// If streaming, re-add the streaming component with updated visibility and re-render
@@ -5515,12 +5608,26 @@ export class InteractiveMode {
 	private showSessionSelector(): void {
 		this.showSelector((done) => {
 			const selector = new SessionSelectorComponent(
-				(onProgress) =>
-					SessionManager.list(this.sessionManager.getCwd(), this.sessionManager.getSessionDir(), onProgress),
-				(onProgress) =>
-					this.sessionManager.usesDefaultSessionDir()
-						? SessionManager.listAll(onProgress)
-						: SessionManager.listAll(this.sessionManager.getSessionDir(), onProgress),
+				async (onProgress) => {
+					const native = await SessionManager.list(
+						this.sessionManager.getCwd(),
+						this.sessionManager.getSessionDir(),
+						onProgress,
+					);
+					const compat = this.settingsManager.getMusepi().compat;
+					const claude = compat.scanClaudeSessions ? listClaudeSessions(this.sessionManager.getCwd()) : [];
+					const codex = compat.scanCodexSessions ? listCodexSessions(this.sessionManager.getCwd()) : [];
+					return [...native, ...claude, ...codex];
+				},
+				async (onProgress) => {
+					const native = this.sessionManager.usesDefaultSessionDir()
+						? await SessionManager.listAll(onProgress)
+						: await SessionManager.listAll(this.sessionManager.getSessionDir(), onProgress);
+					const compat = this.settingsManager.getMusepi().compat;
+					const claude = compat.scanClaudeSessions ? listAllClaudeSessions() : [];
+					const codex = compat.scanCodexSessions ? listAllCodexSessions() : [];
+					return [...native, ...claude, ...codex];
+				},
 				async (sessionPath) => {
 					done();
 					await this.handleResumeSession(sessionPath);
@@ -5543,7 +5650,6 @@ export class InteractiveMode {
 					showRenameHint: true,
 					keybindings: this.keybindings,
 				},
-
 				this.sessionManager.getSessionFile(),
 			);
 			return { component: selector, focus: selector };
@@ -5554,6 +5660,19 @@ export class InteractiveMode {
 		sessionPath: string,
 		options?: Parameters<ExtensionCommandContext["switchSession"]>[1],
 	): Promise<{ cancelled: boolean }> {
+		// Detect foreign session paths and convert on-the-fly
+		const isClaudeSession = sessionPath.includes(".claude/projects/") && sessionPath.endsWith(".jsonl");
+		const isCodexSession = sessionPath.includes(".codex/state/") && sessionPath.endsWith(".db");
+		if (isClaudeSession) {
+			const sessionDir = this.sessionManager.getSessionDir();
+			this.showStatus("Importing Claude session...");
+			sessionPath = convertClaudeSession(sessionPath, sessionDir);
+		}
+		if (isCodexSession) {
+			this.showError("Codex session resume is not yet supported. Only session listing is available.");
+			return { cancelled: true };
+		}
+
 		this.clearStatusIndicator();
 		try {
 			const result = await this.runtimeHost.switchSession(sessionPath, {
@@ -6311,6 +6430,107 @@ export class InteractiveMode {
 		}
 	}
 
+	private async handleSetupCommand(): Promise<void> {
+		const compat = this.settingsManager.getMusepi().compat;
+		const claudeConfigDetected = fs.existsSync(path.join(os.homedir(), ".claude", "settings.json"));
+
+		this.showSelector((done) => {
+			const wizard = new SetupWizardComponent(
+				{
+					claudeConfigDetected,
+					claudeScanEnabled: compat.scanClaudeSessions,
+					codexScanEnabled: compat.scanCodexSessions,
+				},
+				(result: SetupResult) => {
+					done();
+					if (result.completed) {
+						this.applySetupChanges(result);
+						if (result.runClaudeImport) {
+							this.handleImportClaudeCommand().catch(() => {});
+						}
+					}
+					this.ui.requestRender();
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component: wizard, focus: wizard };
+		});
+	}
+
+	private applySetupChanges(result: SetupResult): void {
+		this.settingsManager.setMusepiValue("compat.scanClaudeSessions", result.scanClaudeSessions);
+		this.settingsManager.setMusepiValue("compat.scanCodexSessions", result.scanCodexSessions);
+	}
+
+	private async handleImportClaudeCommand(): Promise<void> {
+		const preview = scanClaudeConfig();
+
+		// Build checkbox items
+		const checkboxItems: CheckboxItem[] = [];
+		for (const s of preview.settings?.mcpServers ?? []) {
+			checkboxItems.push({
+				label: `MCP: ${s.name} (${s.transport})`,
+				checked: true,
+				data: { kind: "mcp", server: s } satisfies { kind: "mcp"; server: typeof s },
+			});
+		}
+		for (const sk of preview.skills) {
+			checkboxItems.push({
+				label: `Skill: ${sk.name}`,
+				checked: true,
+				data: { kind: "skill", filePath: sk.path, name: sk.name } satisfies {
+					kind: "skill";
+					filePath: string;
+					name: string;
+				},
+			});
+		}
+
+		if (checkboxItems.length === 0) {
+			this.showError("No importable items found in Claude Code configuration.");
+			return;
+		}
+
+		const selected = await this.showCheckboxSelector(
+			`Import from Claude Code (${checkboxItems.length} items found)`,
+			checkboxItems,
+		);
+		if (!selected || selected.length === 0) {
+			this.showStatus("Import cancelled");
+			return;
+		}
+
+		let mcpCount = 0;
+		let skillCount = 0;
+
+		for (const item of selected) {
+			const data = item.data as { kind: string };
+			if (data.kind === "mcp") {
+				const server = item.data as {
+					kind: "mcp";
+					server: { transport: "stdio" | "http"; command?: string; args?: string[]; url?: string; name: string };
+				};
+				const m = server.server;
+				const value =
+					m.transport === "stdio"
+						? { command: m.command, args: m.args, transport: "stdio" as const }
+						: { url: m.url, transport: "http" as const };
+				this.settingsManager.setMusepiValue(`mcp.servers.${m.name}`, value as Record<string, unknown>);
+				mcpCount++;
+			} else if (data.kind === "skill") {
+				const sk = item.data as { kind: "skill"; filePath: string; name: string };
+				const targetDir = path.join(os.homedir(), ".musepi", "skills");
+				fs.mkdirSync(targetDir, { recursive: true });
+				fs.copyFileSync(sk.filePath, path.join(targetDir, `${sk.name}.md`));
+				skillCount++;
+			}
+		}
+
+		this.showStatus(`Imported ${mcpCount} MCP server(s), ${skillCount} skill(s)`);
+	}
 	private async handleShareCommand(): Promise<void> {
 		// Check if gh is available and logged in
 		try {

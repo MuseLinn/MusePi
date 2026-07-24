@@ -461,6 +461,9 @@ class SessionList implements Component, Focusable {
 			const displayText = session.name ?? session.firstMessage;
 			const normalizedMessage = displayText.replace(/[\x00-\x1f\x7f]/g, " ").trim();
 
+			// Foreign session badge
+			const badge = session.source && session.source !== "native" ? theme.fg("accent", `[${session.source}] `) : "";
+
 			// Right side: message count and age
 			const age = formatSessionDate(session.modified);
 			const msgCount = String(session.messageCount);
@@ -497,7 +500,7 @@ class SessionList implements Component, Focusable {
 			}
 
 			// Build line
-			const leftPart = cursor + theme.fg("dim", prefix) + styledMsg;
+			const leftPart = cursor + theme.fg("dim", prefix) + badge + styledMsg;
 			const leftWidth = visibleWidth(leftPart);
 			const spacing = Math.max(1, width - leftWidth - visibleWidth(rightPart));
 			const styledRight = theme.fg(isConfirmingDelete ? "error" : "dim", rightPart);
