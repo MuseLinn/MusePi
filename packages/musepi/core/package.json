@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/core",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"description": "MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task/tui/ask/todo/plugin), zero host imports",
 	"type": "module",
 	"main": "dist/index.js",
