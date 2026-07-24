@@ -74,6 +74,22 @@ try {
 		}
 	}
 
+	const contributingInputs = new Set(
+		Object.values(agentTreeshakeBuild.metafile.outputs).flatMap((output) =>
+			Object.entries(output.inputs)
+				.filter(([, contribution]) => contribution.bytesInOutput > 0)
+				.map(([input]) => input),
+		),
+	);
+	const catalogInputs = Array.from(contributingInputs).filter((input) =>
+		normalizePath(input).includes("packages/ai/src/providers/data/"),
+	);
+	if (catalogInputs.length !== 1 || !normalizePath(catalogInputs[0]).endsWith("/anthropic.json")) {
+		throw new Error(
+			`Agent selective-provider bundle catalogs: expected only anthropic.json, found ${catalogInputs.join(", ") || "none"}`,
+		);
+	}
+
 	const aiSdkPackages = [
 		"@anthropic-ai/sdk",
 		"@aws-sdk/client-bedrock-runtime",

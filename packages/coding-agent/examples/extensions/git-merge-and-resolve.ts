@@ -40,7 +40,7 @@ async function findConflicts(pi: ExtensionAPI, cwd: string): Promise<ConflictBlo
 				if (line.startsWith("<<<<<<<")) {
 					blockStart = lineNo;
 					separatorLine = undefined;
-				} else if (line.startsWith("=======") && blockStart !== undefined) {
+				} else if (line.startsWith("") && blockStart !== undefined) {
 					separatorLine = lineNo;
 				} else if (line.startsWith(">>>>>>>") && blockStart !== undefined && separatorLine !== undefined) {
 					blocks.push({ file, startLine: blockStart, separatorLine, endLine: lineNo });

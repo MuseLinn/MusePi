@@ -176,6 +176,7 @@ import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
+import { editInExternalEditor } from "./external-editor.ts";
 import { getModelSearchText } from "./model-search.ts";
 import {
 	getAvailableThemes,
@@ -491,7 +492,7 @@ export class InteractiveMode {
 			await this.rebindCurrentSession({ renderBeforeBind: true });
 		});
 		this.version = VERSION;
-		this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
+		this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor(), getAgentDir());
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
 		this.headerContainer = new Container();
 		this.loadedResourcesContainer = new Container();
@@ -1126,9 +1127,9 @@ export class InteractiveMode {
 		};
 	}
 
-	// =========================================================================
+	// ===
 	// Extension System
-	// =========================================================================
+	// ===
 
 	private formatDisplayPath(p: string): string {
 		const home = os.homedir();
@@ -1167,8 +1168,16 @@ export class InteractiveMode {
 	 * Get a short path relative to the package root for display.
 	 */
 	private getShortPath(fullPath: string, sourceInfo?: SourceInfo): string {
+		const normalizedFullPath = fullPath.replace(/\\/g, "/");
 		const baseDir = sourceInfo?.baseDir;
 		if (baseDir && this.isPackageSource(sourceInfo)) {
+			const normalizedBaseDir = baseDir.replace(/\\/g, "/");
+			const npmRootMatch = normalizedBaseDir.match(/^(.*\/node_modules)\/(@?[^/]+(?:\/[^/]+)?)$/);
+			// If fullPath is under the same node_modules root as baseDir, preserve that relative topology.
+			if (npmRootMatch?.[1] && normalizedFullPath.startsWith(`${npmRootMatch[1]}/`)) {
+				return path.posix.relative(normalizedBaseDir, normalizedFullPath);
+			}
+
 			const relativePath = path.relative(path.resolve(baseDir), path.resolve(fullPath));
 			if (
 				relativePath &&
@@ -1182,12 +1191,12 @@ export class InteractiveMode {
 		}
 
 		const source = sourceInfo?.source ?? "";
-		const npmMatch = fullPath.match(/node_modules\/(@?[^/]+(?:\/[^/]+)?)\/(.*)/);
+		const npmMatch = normalizedFullPath.match(/node_modules\/(@?[^/]+(?:\/[^/]+)?)\/(.*)/);
 		if (npmMatch && source.startsWith("npm:")) {
 			return npmMatch[2];
 		}
 
-		const gitMatch = fullPath.match(/git\/[^/]+\/[^/]+\/(.*)/);
+		const gitMatch = normalizedFullPath.match(/git\/[^/]+\/[^/]+\/(.*)/);
 		if (gitMatch && source.startsWith("git:")) {
 			return gitMatch[1];
 		}
@@ -1888,6 +1897,7 @@ export class InteractiveMode {
 			sessionManager: this.sessionManager,
 			modelRegistry: extensionRunner.getModelRegistry(),
 			model: this.session.model,
+			thinkingLevel: this.session.thinkingLevel,
 			isIdle: () => this.session.isIdle,
 			isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
 			signal: this.session.agent.signal,
@@ -2643,9 +2653,9 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	// =========================================================================
+	// ===
 	// Key Handlers
-	// =========================================================================
+	// ===
 
 	private setupKeyHandlers(): void {
 		// Set up handlers on defaultEditor - they use this.editor for text access
@@ -2690,6 +2700,11 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
+<<<<<<< HEAD
+=======
+		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
+		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
+>>>>>>> merge-v0820
 		this.defaultEditor.onAction("app.musepi.tasks", () => this.showMusepiTaskBrowser());
 		this.defaultEditor.onAction("app.thinking.toggle", () => {
 			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
@@ -2698,7 +2713,11 @@ export class InteractiveMode {
 				this.toggleThinkingBlockVisibility();
 			}
 		});
+<<<<<<< HEAD
 		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
+=======
+		this.defaultEditor.onAction("app.editor.external", () => this.handleOpenExternalEditor());
+>>>>>>> merge-v0820
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
@@ -3173,6 +3192,10 @@ export class InteractiveMode {
 					this.footer.invalidate();
 				}
 				this.ui.requestRender();
+				break;
+
+			case "bash_execution_update":
+				// The bash execution callback handles TUI output rendering.
 				break;
 
 			case "tool_execution_start": {
@@ -3693,9 +3716,9 @@ export class InteractiveMode {
 		this.renderSessionEntries(this.sessionManager.buildContextEntries());
 	}
 
-	// =========================================================================
+	// ===
 	// Key handlers
-	// =========================================================================
+	// ===
 
 	private handleCtrlC(): void {
 		const now = Date.now();
@@ -4447,64 +4470,27 @@ export class InteractiveMode {
 		this.showStatus(`Thinking blocks: ${this.hideThinkingBlock ? "hidden" : "visible"}`);
 	}
 
-	private async openExternalEditor(): Promise<void> {
+	private async handleOpenExternalEditor(): Promise<void> {
 		const editorCmd = this.settingsManager.getExternalEditorCommand();
-		if (!editorCmd) {
-			this.showWarning("No editor configured. Set externalEditor in settings.json or $VISUAL/$EDITOR.");
-			return;
-		}
-
-		const currentText = this.editor.getExpandedText?.() ?? this.editor.getText();
-		const tmpFile = path.join(os.tmpdir(), `pi-editor-${Date.now()}.pi.md`);
-
+		const content = this.editor.getExpandedText?.() ?? this.editor.getText();
+		this.ui.stop();
 		try {
-			// Write current content to temp file
-			fs.writeFileSync(tmpFile, currentText, "utf-8");
-
-			// Stop TUI to release terminal
-			this.ui.stop();
-
-			// Split by space to support editor arguments (e.g., "code --wait")
-			const [editor, ...editorArgs] = editorCmd.split(" ");
-
-			process.stdout.write(`Launching external editor: ${editorCmd}\nPi will resume when the editor exits.\n`);
-
-			// Do not use spawnSync here. On Windows, synchronous child_process calls can keep
-			// Node/libuv's console input read active after ui.stop() pauses stdin, racing
-			// vim/nvim for the console input buffer until Ctrl+C cancels the pending read.
-			const status = await new Promise<number | null>((resolve) => {
-				const child = spawn(editor, [...editorArgs, tmpFile], {
-					stdio: "inherit",
-					shell: process.platform === "win32",
-				});
-				child.on("error", () => resolve(null));
-				child.on("close", (code) => resolve(code));
+			const result = await editInExternalEditor({
+				command: editorCmd,
+				content,
 			});
-
-			// On successful exit (status 0), replace editor content
-			if (status === 0) {
-				const newContent = fs.readFileSync(tmpFile, "utf-8").replace(/\n$/, "");
-				this.editor.setText(newContent);
+			if (result.status === "complete") {
+				this.editor.setText(result.content);
 			}
-			// On non-zero exit, keep original text (no action needed)
 		} finally {
-			// Clean up temp file
-			try {
-				fs.unlinkSync(tmpFile);
-			} catch {
-				// Ignore cleanup errors
-			}
-
-			// Restart TUI
 			this.ui.start();
-			// Force full re-render since external editor uses alternate screen
 			this.ui.requestRender(true);
 		}
 	}
 
-	// =========================================================================
+	// ===
 	// UI helpers
-	// =========================================================================
+	// ===
 
 	clearEditor(): void {
 		this.editor.setText("");
@@ -4742,9 +4728,9 @@ export class InteractiveMode {
 		this.pendingBashComponents = [];
 	}
 
-	// =========================================================================
+	// ===
 	// Selectors
-	// =========================================================================
+	// ===
 
 	/**
 	 * Shows a selector component in place of the editor.
@@ -6070,9 +6056,9 @@ export class InteractiveMode {
 		}
 	}
 
-	// =========================================================================
+	// ===
 	// Command handlers
-	// =========================================================================
+	// ===
 
 	private async handleReloadCommand(): Promise<void> {
 		if (this.session.isStreaming) {

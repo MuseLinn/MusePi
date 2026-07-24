@@ -21,7 +21,11 @@
 			"@earendil-works/pi-tui": ["./packages/tui/src/index.ts"],
 			"@earendil-works/pi-tui/*": ["./packages/tui/src/*"],
 			"@earendil-works/pi-agent-old": ["./packages/agent-old/src/index.ts"],
-			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"]
+			"@earendil-works/pi-agent-old/*": ["./packages/agent-old/src/*"],
+			"@musepi/core": ["./packages/musepi/core/src/index.ts"],
+			"@musepi/core/*": ["./packages/musepi/core/src/*"],
+			"@musepi/transcript": ["./packages/musepi/transcript/src/index.ts"],
+			"@musepi/transcript/*": ["./packages/musepi/transcript/src/*"]
 		}
 	},
 	"include": ["packages/*/src/**/*", "packages/*/test/**/*", "packages/coding-agent/examples/**/*"],

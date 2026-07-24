@@ -30,6 +30,7 @@ import type { LatestPiRelease } from "./version-check.ts";
  *   happens in-process: rename the install dir to `<name>.old-<ts>`, move the
  *   staged dir into place, run `<exe> --version` to verify, and roll back on
  *   any failure. The `.old` backup is kept until the next successful run.
+<<<<<<< HEAD
  * - Windows: a running exe can be renamed but its *directory* cannot be moved
  *   while it is alive, and in-process per-file replacement risks half-written
  *   installs with no clean rollback. Instead the updater stages the new
@@ -42,6 +43,18 @@ import type { LatestPiRelease } from "./version-check.ts";
  * In both cases the previous install is preserved as `<name>.old-<ts>` next
  * to the install dir and is cleaned up by the next successful self-update
  * run (which proves the new install works).
+=======
+ * - Windows: the directory of a running exe cannot be renamed, but the exe
+ *   file itself *can* be renamed (NTFS remaps the file handle to the new
+ *   name). The swap happens in-process without needing a helper process:
+ *   copy non-exe files from the staged dir (best-effort, skip locked files),
+ *   rename the running exe to `<name>.<ts>.bak`, copy the new exe in place,
+ *   and verify with `--version`. The `.bak` is cleaned up on the next
+ *   successful update.
+ *
+ * On both platforms the previous install artifact is preserved until the
+ * next successful self-update (which proves the new install works).
+>>>>>>> merge-v0820
  */
 
 const GITHUB_RELEASE_DOWNLOAD_BASE = "https://github.com/MuseLinn/MusePi/releases/download";
@@ -285,6 +298,169 @@ export async function applyStagedUpdatePosix(options: PosixApplyOptions): Promis
 	);
 }
 
+<<<<<<< HEAD
+=======
+export interface WindowsApplyOptions {
+	installDir: string;
+	stagedDir: string;
+	platform: NodeJS.Platform;
+	suffix?: string;
+	verify?: VerifyInstall;
+}
+
+/**
+ * Walk the staged dir recursively and copy non-exe files to the install dir.
+ * Files that are locked by the running process (EBUSY/EACCES) are skipped;
+ * they will be replaced on the next update.
+ */
+function syncCopyStagedDir(src: string, dst: string, exeName: string): void {
+	mkdirSync(dst, { recursive: true });
+	for (const entry of readdirSync(src, { withFileTypes: true })) {
+		const srcPath = join(src, entry.name);
+		const dstPath = join(dst, entry.name);
+		if (entry.isDirectory()) {
+			syncCopyStagedDir(srcPath, dstPath, exeName);
+		} else if (entry.isFile() && entry.name !== exeName) {
+			try {
+				cpSync(srcPath, dstPath, { force: true });
+			} catch {
+				// File may be locked by the running process; skip and try
+				// again on the next update.
+			}
+		}
+	}
+}
+
+/**
+ * Remove leftover `.ps1` scripts and `.log` files from the old PS-based
+ * Windows update approach that required process.exit().
+ */
+export function cleanupStaleWindowsUpdateScripts(installDir: string): void {
+	const parent = dirname(installDir);
+	const prefix = basename(installDir);
+	let entries: string[];
+	try {
+		entries = readdirSync(parent);
+	} catch {
+		return;
+	}
+	for (const entry of entries) {
+		if (!entry.startsWith(`${prefix}.update-`)) continue;
+		try {
+			rmSync(join(parent, entry), { force: true });
+		} catch {
+			// Best-effort cleanup.
+		}
+	}
+}
+
+/**
+ * Best-effort removal of `<exe>.*.bak` backup files from earlier Windows
+ * updates. On Windows a backup cannot be deleted while the updating process
+ * is alive (it IS the running process image after the rename), so it is
+ * left for a later run to reclaim.
+ */
+export function sweepStaleWindowsBackups(installDir: string, exeName: string): void {
+	let entries: string[];
+	try {
+		entries = readdirSync(installDir);
+	} catch {
+		return;
+	}
+	const bakPattern = `${exeName}.`;
+	for (const entry of entries) {
+		if (!entry.startsWith(bakPattern) || !entry.endsWith(".bak")) continue;
+		const middle = entry.slice(bakPattern.length, entry.length - ".bak".length);
+		if (middle.length > 0 && !/^\d+(\.\d+)*$/.test(middle)) continue;
+		try {
+			rmSync(join(installDir, entry), { force: true });
+		} catch {
+			// Will try again next update.
+		}
+	}
+}
+
+/**
+ * Windows in-place update.
+ *
+ * On Windows, renaming the directory of a running exe is not allowed, but
+ * renaming the exe file itself *is* allowed (NTFS remaps the file handle).
+ * This function performs the swap entirely in-process, without needing a
+ * helper PowerShell script or process.exit():
+ *
+ *  1. Copy non-exe files from the staged dir to the install dir, skipping
+ *     any files locked by the running process.
+ *  2. Rename the running exe to `<exe>.<ts>.bak`.
+ *  3. Copy the new exe from the staged dir in place.
+ *  4. Verify with `--version`; roll back on failure.
+ *  5. Best-effort delete the backup (will fail if still mapped; reclaimed
+ *     on the next update via sweepStaleWindowsBackups).
+ *  6. Clean up stale `.ps1` scripts from the old PS-based approach.
+ */
+export async function applyStagedUpdateWindows(options: WindowsApplyOptions): Promise<{ backupExe: string }> {
+	const suffix = options.suffix ?? timestampSuffix();
+	const verify = options.verify ?? defaultVerifyInstall;
+	const exeName = executableNameForPlatform(options.platform);
+
+	// 1. Copy non-exe files (best-effort, skip locked files).
+	syncCopyStagedDir(options.stagedDir, options.installDir, exeName);
+
+	const oldExe = join(options.installDir, exeName);
+	const backupExe = join(options.installDir, `${exeName}.${suffix}.bak`);
+	const newExe = join(options.stagedDir, exeName);
+
+	// 2. Rename the running exe (allowed on Windows).
+	try {
+		renameSync(oldExe, backupExe);
+	} catch (error) {
+		throw new Error(`Could not rename running ${exeName} for update: ${error}`);
+	}
+
+	// 3. Copy the new exe in place.
+	try {
+		cpSync(newExe, oldExe);
+	} catch (error) {
+		// Rollback: put the backup back.
+		try {
+			renameSync(backupExe, oldExe);
+		} catch {
+			// Worst case: backup is at backupExe and the install dir has no
+			// valid exe. User can recover by re-running the installer.
+		}
+		throw new Error(`Could not install updated ${exeName}: ${error}`);
+	}
+
+	// 4. Verify the new executable.
+	if (!(await verify(oldExe))) {
+		// Rollback: keep the broken exe for diagnosis, restore the backup.
+		try {
+			const failedExe = join(options.installDir, `${exeName}.failed-${suffix}`);
+			renameSync(oldExe, failedExe);
+		} catch {
+			// Best-effort.
+		}
+		try {
+			renameSync(backupExe, oldExe);
+		} catch {
+			// Best-effort.
+		}
+		throw new Error(`Updated ${exeName} failed its --version check; rolled back to the previous binary.`);
+	}
+
+	// 5. Best-effort cleanup of the backup (will fail if still mapped).
+	try {
+		rmSync(backupExe, { force: true });
+	} catch {
+		// Cleaned up on the next update via sweepStaleWindowsBackups.
+	}
+
+	// 6. Clean up stale .ps1 scripts from the old PS-based approach.
+	cleanupStaleWindowsUpdateScripts(options.installDir);
+
+	return { backupExe };
+}
+
+>>>>>>> merge-v0820
 export interface WindowsUpdateScriptOptions {
 	installDir: string;
 	stagedDir: string;
@@ -298,9 +474,17 @@ function psLiteral(value: string): string {
 }
 
 /**
+<<<<<<< HEAD
  * Render the detached PowerShell swap script used on Windows. The script is
  * generated (not executed) by the running process, which makes it unit
  * testable; it is launched only after the user confirms the update.
+=======
+ * Render the detached PowerShell swap script used on Windows.
+ *
+ * @deprecated Replaced by {@link applyStagedUpdateWindows} which performs
+ *   the swap in-process via file rename, without needing a helper PS script
+ *   or process.exit(). Kept for unit test coverage of the old approach.
+>>>>>>> merge-v0820
  */
 export function buildWindowsUpdateScript(options: WindowsUpdateScriptOptions): string {
 	const installDir = psLiteral(options.installDir);
@@ -353,8 +537,16 @@ Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction Silent
 }
 
 /**
+<<<<<<< HEAD
  * Launch the Windows swap script detached and hidden. The caller must exit
  * the current process immediately afterwards so the script can do the swap.
+=======
+ * Launch the Windows swap script detached and hidden.
+ *
+ * @deprecated Replaced by {@link applyStagedUpdateWindows} which performs
+ *   the swap in-process via file rename. Kept for backward compatibility
+ *   if external code references it.
+>>>>>>> merge-v0820
  */
 export function launchWindowsUpdateScript(scriptPath: string): void {
 	// Resolve the full path: powershell.exe is not guaranteed on PATH for

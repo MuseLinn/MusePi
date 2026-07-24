@@ -40,6 +40,10 @@ const compat: Omit<Required<OpenAICompletionsCompat>, "deferredToolsMode"> & {
 	supportsStrictMode: true,
 	cacheControlFormat: "anthropic",
 	sendSessionAffinityHeaders: false,
+<<<<<<< HEAD
+=======
+	supportsOpenAIGrammarTools: true,
+>>>>>>> merge-v0820
 	sessionAffinityFormat: "openai",
 	supportsLongCacheRetention: true,
 };

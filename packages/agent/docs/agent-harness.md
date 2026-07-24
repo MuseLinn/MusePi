@@ -43,6 +43,7 @@ Harness config is the latest runtime configuration set by the application or ext
 - thinking level
 - tools
 - active tool names
+- tool context source
 - resources
 - stream options
 - system prompt or system prompt provider
@@ -66,6 +67,7 @@ A turn snapshot is the concrete state used for one LLM turn. It is created by `c
 - thinking level
 - all tools
 - active tools
+- resolved tool context
 - stream options
 - derived session id
 
@@ -73,7 +75,13 @@ Static option values are used directly. System-prompt provider callbacks are inv
 
 Resource arrays are shallow-copied when a snapshot is created. Individual skill and prompt-template objects are not deep-copied.
 
+`toolContext` is application-defined and required when the configured tools require a non-`undefined` context. A static value is reused, while a zero-argument sync or async provider is resolved once for each turn snapshot. Harness tools receive that resolved value when they execute. Individual tools can structurally require only the context fields they use.
+
 Stream options are shallow-copied when a snapshot is created. `headers` and `metadata` maps are shallow-copied; their values are not deep-copied. Credentials from `getApiKeyAndHeaders()` are resolved per provider request so expiring tokens can refresh, but the configured stream options and derived session id come from the current turn snapshot.
+
+### Built-in tools
+
+The package exports `createReadTool()`, `createWriteTool()`, `createEditTool()`, and `createBashTool()`. They perform filesystem and shell operations exclusively through the `ExecutionEnv` supplied in their tool context. Each tool structurally requires the shared `ExecutionToolContext`, containing `env: ExecutionEnv`; applications may provide additional fields. `createReadTool()` accepts an optional image processor for host-provided conversion and resizing without imposing an image-processing dependency on the agent package. `createBashTool()` accepts an async `prepare` hook that can mutate the command, working directory, environment, and environment-inheritance policy using the current tool context.
 
 ### Session
 
@@ -266,7 +274,7 @@ Done:
 - Added `setTools(tools, activeToolNames?)`.
 - Added `setActiveTools(toolNames)`.
 - Invalid active tool names reject with `AgentHarnessError`.
-- Added generic app tool shape via `AgentHarness<TSkill, TPromptTemplate, TTool>`.
+- Added generic app tool and context shapes via `AgentHarness<TContext, TSkill, TPromptTemplate, TTool>`.
 - Exported `QueueMode` from core types.
 - Added `AgentHarnessOptions.steeringMode` and `followUpMode`.
 - Added live `getSteeringMode()` / `setSteeringMode()` and `getFollowUpMode()` / `setFollowUpMode()`.

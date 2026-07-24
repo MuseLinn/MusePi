@@ -13,7 +13,7 @@ import { AgentHarness } from "../../src/harness/agent-harness.ts";
 import { NodeExecutionEnv } from "../../src/harness/env/nodejs.ts";
 import { InMemorySessionStorage } from "../../src/harness/session/memory-storage.ts";
 import { Session } from "../../src/harness/session/session.ts";
-import type { PromptTemplate, Skill } from "../../src/harness/types.ts";
+import type { AgentHarnessTool, PromptTemplate, Skill } from "../../src/harness/types.ts";
 import type { AgentMessage, AgentTool } from "../../src/types.ts";
 import { calculateTool, createCalculateToolWithUsage } from "../utils/calculate.ts";
 import { getCurrentTimeTool } from "../utils/get-current-time.ts";
@@ -92,11 +92,9 @@ function createAssistantMessage(text: string): AgentMessage {
 describe("AgentHarness", () => {
 	it("constructs directly and exposes queue modes", () => {
 		const session = new Session(new InMemorySessionStorage());
-		const env = new NodeExecutionEnv({ cwd: process.cwd() });
 		const initialModel = getModel("anthropic", "claude-sonnet-4-5");
 		const harness = new AgentHarness({
 			models,
-			env,
 			session,
 			model: initialModel,
 			thinkingLevel: "high",
@@ -104,7 +102,6 @@ describe("AgentHarness", () => {
 			steeringMode: "all",
 			followUpMode: "all",
 		});
-		expect(harness.env).toBe(env);
 		expect(harness.getModel()).toBe(initialModel);
 		expect(harness.getThinkingLevel()).toBe("high");
 		expect(harness.getSteeringMode()).toBe("all");
@@ -134,7 +131,6 @@ describe("AgentHarness", () => {
 		]);
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session: new Session(new InMemorySessionStorage()),
 			model: registration.getModel(),
 			steeringMode: "one-at-a-time",
@@ -170,7 +166,6 @@ describe("AgentHarness", () => {
 		const session = new Session(new InMemorySessionStorage());
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -211,7 +206,6 @@ describe("AgentHarness", () => {
 		]);
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session: new Session(new InMemorySessionStorage()),
 			model: registration.getModel(),
 		});
@@ -264,7 +258,6 @@ describe("AgentHarness", () => {
 		]);
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session: new Session(new InMemorySessionStorage()),
 			model: registration.getModel(),
 			followUpMode: "one-at-a-time",
@@ -294,7 +287,6 @@ describe("AgentHarness", () => {
 		const session = new Session(new InMemorySessionStorage());
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -351,9 +343,8 @@ describe("AgentHarness", () => {
 				return fauxAssistantMessage("done");
 			},
 		]);
-		const harness = new AgentHarness<Skill, PromptTemplate, AgentTool>({
+		const harness = new AgentHarness<undefined, Skill, PromptTemplate, AgentTool>({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session: new Session(new InMemorySessionStorage()),
 			model: registration.getModel(),
 			thinkingLevel: "off",
@@ -390,7 +381,6 @@ describe("AgentHarness", () => {
 		const session = new Session(new InMemorySessionStorage());
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -421,7 +411,6 @@ describe("AgentHarness", () => {
 		const barrier = deferred();
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session: new Session(new InMemorySessionStorage()),
 			model: registration.getModel(),
 		});
@@ -461,7 +450,6 @@ describe("AgentHarness", () => {
 		const calculateToolWithUsage = createCalculateToolWithUsage(toolUsage);
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 			tools: [calculateToolWithUsage],
@@ -502,6 +490,75 @@ describe("AgentHarness", () => {
 		});
 	});
 
+	it("passes a static application context to harness tools", async () => {
+		const registration = newFaux();
+		registration.setResponses([
+			() =>
+				fauxAssistantMessage(fauxToolCall("context", { expression: "2 + 2" }, { id: "call-1" }), {
+					stopReason: "toolUse",
+				}),
+		]);
+		const env = new NodeExecutionEnv({ cwd: process.cwd() });
+		const toolContext = { env };
+		let receivedContext: typeof toolContext | undefined;
+		const contextTool: AgentHarnessTool<typeof toolContext, typeof calculateTool.parameters, undefined> = {
+			...calculateTool,
+			name: "context",
+			execute: async (toolCallId, params, signal, onUpdate, context) => {
+				receivedContext = context;
+				return { ...(await calculateTool.execute(toolCallId, params, signal, onUpdate)), terminate: true };
+			},
+		};
+		const harness = new AgentHarness({
+			models,
+			session: new Session(new InMemorySessionStorage()),
+			model: registration.getModel(),
+			tools: [contextTool],
+			toolContext,
+		});
+
+		await harness.prompt("hello");
+
+		expect(receivedContext).toBe(toolContext);
+	});
+
+	it("resolves async tool context providers for each turn snapshot", async () => {
+		const registration = newFaux();
+		registration.setResponses([
+			() =>
+				fauxAssistantMessage(fauxToolCall("context", { expression: "1 + 1" }, { id: "call-1" }), {
+					stopReason: "toolUse",
+				}),
+			() =>
+				fauxAssistantMessage(fauxToolCall("context", { expression: "2 + 2" }, { id: "call-2" }), {
+					stopReason: "toolUse",
+				}),
+			() => fauxAssistantMessage("done"),
+		]);
+		type ToolContext = { generation: number };
+		const generations: number[] = [];
+		const contextTool: AgentHarnessTool<ToolContext, typeof calculateTool.parameters, undefined> = {
+			...calculateTool,
+			name: "context",
+			execute: async (toolCallId, params, signal, onUpdate, context) => {
+				generations.push(context.generation);
+				return await calculateTool.execute(toolCallId, params, signal, onUpdate);
+			},
+		};
+		let generation = 0;
+		const harness = new AgentHarness({
+			models,
+			session: new Session(new InMemorySessionStorage()),
+			model: registration.getModel(),
+			tools: [contextTool],
+			toolContext: async (): Promise<ToolContext> => ({ generation: ++generation }),
+		});
+
+		await harness.prompt("hello");
+
+		expect(generations).toEqual([1, 2]);
+	});
+
 	it("persists generated compaction usage", async () => {
 		const registration = newFaux();
 		registration.setResponses([fauxAssistantMessage("## Goal\nTest summary")]);
@@ -510,7 +567,6 @@ describe("AgentHarness", () => {
 		await session.appendMessage(createAssistantMessage("two"));
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -530,7 +586,6 @@ describe("AgentHarness", () => {
 		await session.appendMessage(createAssistantMessage("two"));
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -569,7 +624,6 @@ describe("AgentHarness", () => {
 			await session.appendMessage(createAssistantMessage("two"));
 			const harness = new AgentHarness({
 				models,
-				env: new NodeExecutionEnv({ cwd: process.cwd() }),
 				session,
 				model: registration.getModel(),
 				retry: { enabled: true, maxRetries: 1, baseDelayMs: 0 },
@@ -610,7 +664,6 @@ describe("AgentHarness", () => {
 			await session.appendMessage(createAssistantMessage("two"));
 			const harness = new AgentHarness({
 				models,
-				env: new NodeExecutionEnv({ cwd: process.cwd() }),
 				session,
 				model: registration.getModel(),
 				retry: { enabled: true, maxRetries: 1, baseDelayMs: 0 },
@@ -646,7 +699,6 @@ describe("AgentHarness", () => {
 			await session.appendMessage(createAssistantMessage("two"));
 			const harness = new AgentHarness({
 				models,
-				env: new NodeExecutionEnv({ cwd: process.cwd() }),
 				session,
 				model: registration.getModel(),
 				retry: { enabled: true, maxRetries: 3, baseDelayMs: 0 },
@@ -696,7 +748,6 @@ describe("AgentHarness", () => {
 			await session.appendMessage(createAssistantMessage("abandoned reply"));
 			const harness = new AgentHarness({
 				models,
-				env: new NodeExecutionEnv({ cwd: process.cwd() }),
 				session,
 				model: registration.getModel(),
 				retry: { enabled: true, maxRetries: 1, baseDelayMs: 0 },
@@ -734,7 +785,6 @@ describe("AgentHarness", () => {
 		await session.appendMessage(createAssistantMessage("abandoned reply"));
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -754,7 +804,6 @@ describe("AgentHarness", () => {
 		await session.appendMessage(createAssistantMessage("abandoned reply"));
 		const harness = new AgentHarness({
 			models,
-			env: new NodeExecutionEnv({ cwd: process.cwd() }),
 			session,
 			model: registration.getModel(),
 		});
@@ -769,14 +818,12 @@ describe("AgentHarness", () => {
 
 	it("preserves app tool types for getters and update events", async () => {
 		const session = new Session(new InMemorySessionStorage());
-		const env = new NodeExecutionEnv({ cwd: process.cwd() });
 		const model = getModel("anthropic", "claude-sonnet-4-5");
 		type AppTool = AgentTool<typeof calculateTool.parameters, undefined> & { source: "builtin" | "extension" };
 		const inspectTool: AppTool = { ...calculateTool, name: "inspect", source: "builtin" };
 		const searchTool: AppTool = { ...calculateTool, name: "search", source: "extension" };
-		const harness = new AgentHarness<AppSkill, AppPromptTemplate, AppTool>({
+		const harness = new AgentHarness<undefined, AppSkill, AppPromptTemplate, AppTool>({
 			models,
-			env,
 			session,
 			model,
 			tools: [inspectTool, searchTool],
@@ -841,16 +888,14 @@ describe("AgentHarness", () => {
 
 	it("validates constructor tool names", () => {
 		const session = new Session(new InMemorySessionStorage());
-		const env = new NodeExecutionEnv({ cwd: process.cwd() });
 		const model = getModel("anthropic", "claude-sonnet-4-5");
 		expect(
-			() => new AgentHarness({ env, session, models, model, tools: [calculateTool], activeToolNames: ["missing"] }),
+			() => new AgentHarness({ session, models, model, tools: [calculateTool], activeToolNames: ["missing"] }),
 		).toThrow(/Unknown tool/);
 		expect(
 			() =>
 				new AgentHarness({
 					models,
-					env,
 					session,
 					model,
 					tools: [calculateTool, calculateTool],
@@ -861,7 +906,6 @@ describe("AgentHarness", () => {
 			() =>
 				new AgentHarness({
 					models,
-					env,
 					session,
 					model,
 					tools: [calculateTool],
@@ -872,9 +916,12 @@ describe("AgentHarness", () => {
 
 	it("preserves app resource types for getters and update events", async () => {
 		const session = new Session(new InMemorySessionStorage());
-		const env = new NodeExecutionEnv({ cwd: process.cwd() });
 		const model = getModel("anthropic", "claude-sonnet-4-5");
-		const harness = new AgentHarness<AppSkill, AppPromptTemplate, AgentTool>({ env, session, models, model });
+		const harness = new AgentHarness<undefined, AppSkill, AppPromptTemplate, AgentTool>({
+			session,
+			models,
+			model,
+		});
 		const skill: AppSkill = {
 			name: "inspect",
 			description: "Inspect things",
