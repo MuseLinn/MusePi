@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-25
+
 ### Added
 
 - **Theme presets** — Nord, Gruvbox, Tokyo Night, Catppuccin preset themes with
