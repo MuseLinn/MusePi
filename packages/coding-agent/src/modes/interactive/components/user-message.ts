@@ -26,6 +26,15 @@ export class UserMessageComponent extends Container {
 		this.rebuild();
 	}
 
+	/**
+	 * Damage-tracking fingerprint (MusePi): user messages are static after
+	 * construction, so the chat container can cache their rendered lines
+	 * until the text or padding changes.
+	 */
+	fingerprint(): unknown {
+		return `${this.text.length}|${this.outputPad}`;
+	}
+
 	private rebuild(): void {
 		this.clear();
 		const contentBox = new Box(this.outputPad, 1, (content: string) => theme.bg("userMessageBg", content));

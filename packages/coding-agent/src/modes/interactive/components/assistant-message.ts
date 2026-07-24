@@ -69,6 +69,24 @@ export class AssistantMessageComponent extends Container {
 		}
 	}
 
+	/**
+	 * Damage-tracking fingerprint (MusePi): settled assistant messages never
+	 * change, so the chat container caches their rendered lines and skips
+	 * them on every frame; the streaming message keeps changing its content
+	 * signature and re-renders as before. Theme/label changes invalidate the
+	 * cache via invalidate(), so they are not part of the fingerprint.
+	 */
+	fingerprint(): unknown {
+		const m = this.lastMessage;
+		if (!m) return "empty";
+		let sig = 0;
+		for (const c of m.content) {
+			const t = (c as any).text ?? (c as any).thinking ?? "";
+			sig += typeof t === "string" ? t.length : 0;
+		}
+		return `${m.stopReason ?? "streaming"}|${m.content.length}|${sig}|${this.hideThinkingBlock}|${this.hiddenThinkingLabel}|${this.outputPad}`;
+	}
+
 	override render(width: number): string[] {
 		const lines = super.render(width);
 		if (this.hasToolCalls || lines.length === 0) {

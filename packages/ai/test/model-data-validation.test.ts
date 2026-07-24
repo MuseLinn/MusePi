@@ -94,6 +94,22 @@ describe("generated model data validation", () => {
 		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(expectedMessage);
 	});
 
+	it("accepts video input modalities", () => {
+		const fixture = createFixture();
+		const model = fixture.values["model-a"] as Record<string, unknown>;
+		model.input = ["text", "image", "video"];
+		writeFixtureData(fixture.dataDir, fixture.structure, fixture.values);
+		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).not.toThrow();
+	});
+
+	it("rejects unknown input modalities", () => {
+		const fixture = createFixture();
+		const model = fixture.values["model-a"] as Record<string, unknown>;
+		model.input = ["text", "audio"];
+		writeFixtureData(fixture.dataDir, fixture.structure, fixture.values);
+		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow("invalid input modalities");
+	});
+
 	it("rejects missing model IDs and stale file hashes", () => {
 		const fixture = createFixture();
 		writeFileSync(join(fixture.dataDir, "test-provider.json"), "{}\n");

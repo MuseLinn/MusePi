@@ -7,6 +7,7 @@ import type {
 	TextContent,
 	Transport,
 	Usage,
+	VideoContent,
 } from "@earendil-works/pi-ai";
 import type { AgentEvent, AgentMessage, AgentTool, QueueMode, ThinkingLevel } from "../index.ts";
 import type { Session } from "./session/session.ts";
@@ -371,9 +372,8 @@ export interface ActiveToolsChangeEntry extends SessionTreeEntryBase {
 export interface CompactionEntry<T = unknown> extends SessionTreeEntryBase {
 	type: "compaction";
 	summary: string;
-	firstKeptEntryId?: string;
+	firstKeptEntryId: string;
 	tokensBefore: number;
-	retainedTail?: AgentMessage[];
 	details?: T;
 	usage?: Usage;
 	fromHook?: boolean;
@@ -438,14 +438,6 @@ export interface SessionContext {
 	activeToolNames: string[] | null;
 }
 
-export interface SessionStats {
-	messageCount: number;
-	cachedTokens: number;
-	uncachedTokens: number;
-	totalTokens: number;
-	costTotal: number;
-}
-
 export interface SessionMetadata {
 	id: string;
 	createdAt: string;
@@ -456,11 +448,6 @@ export interface JsonlSessionMetadata extends SessionMetadata {
 	path: string;
 	parentSessionPath?: string;
 	metadata?: Record<string, unknown>;
-}
-
-export interface SessionEntryCursorOptions {
-	afterEntrySeq?: number;
-	limit?: number;
 }
 
 export interface SessionStorage<TMetadata extends SessionMetadata = SessionMetadata> {
@@ -475,10 +462,8 @@ export interface SessionStorage<TMetadata extends SessionMetadata = SessionMetad
 		type: TType,
 	): Promise<Array<Extract<SessionTreeEntry, { type: TType }>>>;
 	getLabel(id: string): Promise<string | undefined>;
-	getSessionName(): Promise<string | undefined>;
-	getSessionStats(): Promise<SessionStats>;
-	getPathToRootOrCompaction(leafId: string | null): Promise<SessionTreeEntry[]>;
-	getEntries(options?: SessionEntryCursorOptions): Promise<SessionTreeEntry[]>;
+	getPathToRoot(leafId: string | null): Promise<SessionTreeEntry[]>;
+	getEntries(): Promise<SessionTreeEntry[]>;
 }
 
 export type { Session } from "./session/session.ts";
@@ -596,7 +581,7 @@ export interface ToolResultEvent {
 	toolCallId: string;
 	toolName: string;
 	input: Record<string, unknown>;
-	content: Array<TextContent | ImageContent>;
+	content: Array<TextContent | ImageContent | VideoContent>;
 	details: unknown;
 	isError: boolean;
 	usage?: Usage;
@@ -734,7 +719,7 @@ export interface ToolCallResult {
 }
 
 export interface ToolResultPatch {
-	content?: Array<TextContent | ImageContent>;
+	content?: Array<TextContent | ImageContent | VideoContent>;
 	details?: unknown;
 	isError?: boolean;
 	usage?: Usage;
@@ -795,11 +780,10 @@ export interface AbortResult {
 
 export interface CompactResult {
 	summary: string;
-	firstKeptEntryId?: string;
+	firstKeptEntryId: string;
 	tokensBefore: number;
 	/** Usage from the LLM call(s) that generated this summary, if available. */
 	usage?: Usage;
-	retainedTail?: AgentMessage[];
 	details?: unknown;
 }
 
@@ -819,7 +803,6 @@ export interface CompactionPreparation {
 	firstKeptEntryId: string;
 	messagesToSummarize: AgentMessage[];
 	turnPrefixMessages: AgentMessage[];
-	retainedTail: AgentMessage[];
 	isSplitTurn: boolean;
 	tokensBefore: number;
 	previousSummary?: string;

@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
+import { contentText } from "@earendil-works/pi-ai";
 import type { AssistantMessage, ImageContent, Message, Model } from "@earendil-works/pi-ai/compat";
 import type {
 	AutocompleteItem,
@@ -38,6 +39,29 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { goalManager } from "@musepi/core/goal/index.js";
+import {
+	addToQueue,
+	formatQueue,
+	prioritizeQueueItem,
+	removeFromQueue,
+	skipCurrentQueueItem,
+} from "@musepi/core/goal/queue.js";
+import { parseBudgetToLimits } from "@musepi/core/goal/types.js";
+import { resolveMoveTarget, sameMovePath } from "@musepi/core/move.js";
+import { notifyTerminalOnce } from "@musepi/core/notify.js";
+import { permissionManager } from "@musepi/core/permission/index.js";
+import { planManager } from "@musepi/core/plan/index.js";
+import { getSpinnerFrames } from "@musepi/core/swarm/helpers.js";
+import {
+	computeUndoPlan,
+	formatNothingToUndoMessage,
+	formatUndoLimitMessage,
+	listUndoAnchors,
+	type UndoAnchor,
+	type UndoEntry,
+} from "@musepi/core/undo.js";
+import { TranscriptStore } from "@musepi/transcript";
 import chalk from "chalk";
 import { spawn, spawnSync } from "child_process";
 import {
@@ -87,7 +111,21 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
-import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
+import { runBtwTurn } from "../../musepi/btw.ts";
+import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
+import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
+import { initMusepiGoal } from "../../musepi/goal-native.ts";
+import { handleMusepiMcpCommand } from "../../musepi/mcp-native.ts";
+import { handleMusepiMemoryCommand, initMusepiMemory } from "../../musepi/memory-native.ts";
+import { backgroundManager } from "../../musepi/task/manager.ts";
+import { initMusepiTask } from "../../musepi/task/native.ts";
+import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
+import {
+	getChangelogPath,
+	getStartupChangelogEntries,
+	normalizeChangelogLinks,
+	parseChangelog,
+} from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
@@ -95,7 +133,7 @@ import { getCwdRelativePath } from "../../utils/paths.ts";
 import { getPiUserAgent } from "../../utils/pi-user-agent.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
-import { checkForNewPiVersion, type LatestPiRelease } from "../../utils/version-check.ts";
+import { checkForNewPiVersion, type LatestPiRelease, MUSEPI_RELEASES_URL } from "../../utils/version-check.ts";
 import { ArminComponent } from "./components/armin.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
@@ -112,6 +150,7 @@ import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
+import { HistorySearchComponent } from "./components/history-search.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
@@ -374,6 +413,8 @@ export class InteractiveMode {
 
 	// Agent subscription unsubscribe function
 	private unsubscribe?: () => void;
+	private musepiGoalUnsubscribe?: () => void;
+	private readonly musepiTranscript = new TranscriptStore();
 	private signalCleanupHandlers: Array<() => void> = [];
 
 	// Track if editor is in bash mode (text starts with !)
@@ -463,10 +504,42 @@ export class InteractiveMode {
 		setKeybindings(this.keybindings);
 		const editorPaddingX = this.settingsManager.getEditorPaddingX();
 		const autocompleteMaxVisible = this.settingsManager.getAutocompleteMaxVisible();
-		this.defaultEditor = new CustomEditor(this.ui, getEditorTheme(), this.keybindings, {
-			paddingX: editorPaddingX,
-			autocompleteMaxVisible,
-		});
+		const musepiTui = this.settingsManager.getMusepi().tui;
+		if (musepiTui.style === "plain") {
+			this.defaultEditor = new CustomEditor(this.ui, getEditorTheme(), this.keybindings, {
+				paddingX: editorPaddingX,
+				autocompleteMaxVisible,
+			});
+		} else {
+			// MusePi native boxed editor: closed box with spinner/working state
+			// left and (opt-in) model name right in the top border.
+			const slots = {
+				left: () => {
+					if (!this.activeStatusIndicator) return "";
+					const frames = getSpinnerFrames();
+					const frame = frames[Math.floor(Date.now() / 120) % frames.length];
+					const msg = this.workingMessage ?? "Working...";
+					return `${theme.fg("accent", frame)} ${theme.fg("dim", msg)}`;
+				},
+				right: () => {
+					if (!musepiTui.modelInBorder) return "";
+					const m = this.session.model;
+					if (!m) return "";
+					const level = this.session.thinkingLevel;
+					return theme.fg("dim", `${m.provider} · ${m.id}${level ? `:${level}` : ""}`);
+				},
+			};
+			this.defaultEditor = new MusepiBoxedEditor(
+				this.ui,
+				getEditorTheme(),
+				this.keybindings,
+				musepiTui.style,
+				slots,
+			);
+			if (editorPaddingX !== 0 || autocompleteMaxVisible !== undefined) {
+				this.defaultEditor.setPaddingX(editorPaddingX);
+			}
+		}
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
@@ -833,12 +906,15 @@ export class InteractiveMode {
 				.catch(() => {});
 		}
 
-		// Start version check asynchronously
-		checkForNewPiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
-			}
-		});
+		// Start version check asynchronously (MusePi fork: checks the fork's own
+		// GitHub Releases; on by default, opt out via settings `musepi.updateCheck`).
+		if (this.settingsManager.getMusepi().updateCheck) {
+			checkForNewPiVersion(this.version).then((newRelease) => {
+				if (newRelease) {
+					this.showNewVersionNotification(newRelease);
+				}
+			});
+		}
 
 		// Start package update check asynchronously
 		this.checkForPackageUpdates()
@@ -999,8 +1075,8 @@ export class InteractiveMode {
 			return undefined;
 		}
 
-		const newEntries = getNewEntries(entries, lastVersion);
-		if (newEntries.length > 0) {
+		const newEntries = getStartupChangelogEntries(entries, lastVersion, VERSION);
+		if (newEntries) {
 			this.settingsManager.setLastChangelogVersion(VERSION);
 			this.reportInstallTelemetry(VERSION);
 			return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
@@ -1718,6 +1794,8 @@ export class InteractiveMode {
 	private async rebindCurrentSession(options: { renderBeforeBind?: boolean } = {}): Promise<void> {
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
+		this.musepiGoalUnsubscribe?.();
+		this.musepiGoalUnsubscribe = undefined;
 		this.applyRuntimeSettings();
 		if (options.renderBeforeBind) {
 			this.renderCurrentSessionState();
@@ -1727,6 +1805,27 @@ export class InteractiveMode {
 			await this.bindCurrentSessionExtensions();
 			this.subscribeToAgent();
 		}
+		// MusePi native goal integration: persistence + turn recording + badge.
+		this.musepiGoalUnsubscribe = initMusepiGoal(this.session, this.sessionManager, {
+			setStatus: (key, text) => this.setExtensionStatus(key, text),
+			showError: (message) => this.showError(message),
+			badgeEnabled: this.settingsManager.getMusepi().goal.badge,
+		});
+		// MusePi transcript: rebuild the decoupled conversation model.
+		try {
+			this.musepiTranscript.rebuild(this.sessionManager.getEntries());
+		} catch {
+			/* transcript is a read-only view — never break binding */
+		}
+		// MusePi native background task + cron integration.
+		initMusepiTask(this.session, this.sessionManager);
+		// MusePi native todo integration: restore + inline panel.
+		initMusepiTodo({
+			sessionManager: this.sessionManager,
+			theme,
+			setWidget: (key, content) => this.setExtensionWidget(key, content, { placement: "aboveEditor" }),
+			maxVisible: this.settingsManager.getMusepi().todo.maxVisible,
+		});
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();
 		this.updateTerminalTitle();
@@ -2576,7 +2675,14 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
-		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
+		this.defaultEditor.onAction("app.musepi.tasks", () => this.showMusepiTaskBrowser());
+		this.defaultEditor.onAction("app.thinking.toggle", () => {
+			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
+			// fall back to pi's thinking-block visibility toggle.
+			if (!toggleMusepiTodoPanel()) {
+				this.toggleThinkingBlockVisibility();
+			}
+		});
 		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
@@ -2593,6 +2699,30 @@ export class InteractiveMode {
 				this.updateEditorBorderColor();
 			}
 		};
+
+		// Mode-aware history navigation (kimi 4-hook port): bash mode recalls
+		// only `!`-prefixed history entries; prompt mode recalls everything. The
+		// filter is locked to the mode captured when the user first enters
+		// history browsing, so landing on a `!` entry mid-browse doesn't flip
+		// the filter to bash-only. Recalled entries go through onChange, which
+		// re-derives isBashMode from the `!` prefix and updates the border
+		// color — no onRecall hook is needed for mode switching here.
+		let historyBrowseMode: "prompt" | "bash" | null = null;
+		this.defaultEditor.setHistoryFilter((entry: string) => {
+			const mode = historyBrowseMode ?? (this.isBashMode ? "bash" : "prompt");
+			return mode === "bash" ? entry.startsWith("!") : true;
+		});
+		this.defaultEditor.onHistoryDraftSave = () => {
+			historyBrowseMode = this.isBashMode ? "bash" : "prompt";
+			return historyBrowseMode;
+		};
+		this.defaultEditor.onHistoryDraftRestore = () => {
+			historyBrowseMode = null;
+		};
+
+		// Ctrl+R history fuzzy search (OMP port): same mode-aware entries as
+		// arrow browsing — bash mode searches only `!` entries.
+		this.defaultEditor.onHistorySearch = () => this.showHistorySearch();
 
 		// Handle clipboard paste (triggered on Ctrl+V). Images are attached by path;
 		// otherwise, paste plain text from the system clipboard.
@@ -2658,6 +2788,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/move" || text.startsWith("/move ")) {
+				this.editor.setText("");
+				await this.handleMoveCommand(text);
+				return;
+			}
 			if (text === "/share") {
 				await this.handleShareCommand();
 				this.editor.setText("");
@@ -2683,6 +2818,16 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/mcp" || text.startsWith("/mcp ")) {
+				this.editor.setText("");
+				await this.handleMcpCommand(text.slice(4));
+				return;
+			}
+			if (text === "/memory" || text.startsWith("/memory ")) {
+				this.editor.setText("");
+				await this.handleMemoryCommand(text.slice(7));
+				return;
+			}
 			if (text === "/hotkeys") {
 				this.handleHotkeysCommand();
 				this.editor.setText("");
@@ -2693,6 +2838,16 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/undo" || text.startsWith("/undo ")) {
+				this.editor.setText("");
+				await this.handleUndoCommand(text);
+				return;
+			}
+			if (text === "/btw" || text.startsWith("/btw ")) {
+				this.editor.setText("");
+				await this.handleBtwCommand(text);
+				return;
+			}
 			if (text === "/clone") {
 				this.editor.setText("");
 				await this.handleCloneCommand();
@@ -2701,6 +2856,36 @@ export class InteractiveMode {
 			if (text === "/tree") {
 				this.showTreeSelector();
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/transcript") {
+				this.editor.setText("");
+				this.showTranscriptSummary();
+				return;
+			}
+			if (text === "/goal" || text.startsWith("/goal ")) {
+				this.editor.setText("");
+				await this.handleGoalCommand(text);
+				return;
+			}
+			if (text === "/mode" || text.startsWith("/mode ")) {
+				this.editor.setText("");
+				await this.handleModeCommand(text);
+				return;
+			}
+			if (text === "/plan" || text.startsWith("/plan ")) {
+				this.editor.setText("");
+				await this.handlePlanCommand(text);
+				return;
+			}
+			if (text === "/swarm" || text.startsWith("/swarm ")) {
+				this.editor.setText("");
+				this.handleSwarmCommand(text);
+				return;
+			}
+			if (text === "/tasks") {
+				this.editor.setText("");
+				this.showMusepiTaskBrowser();
 				return;
 			}
 			if (text === "/trust") {
@@ -3022,6 +3207,7 @@ export class InteractiveMode {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
+				this.emitTurnEndNotification();
 				this.clearStatusIndicator("working");
 				if (this.streamingComponent) {
 					this.chatContainer.removeChild(this.streamingComponent);
@@ -3731,6 +3917,60 @@ export class InteractiveMode {
 		}
 	}
 
+	/**
+	 * Ctrl+R history fuzzy search (OMP history-search port). Entries follow
+	 * the W1 mode-aware filter: bash mode searches only `!`-prefixed entries,
+	 * prompt mode searches everything. The recalled entry lands in the editor
+	 * as a draft; onChange re-derives the input mode from the `!` prefix.
+	 */
+	private showHistorySearch(): void {
+		const all = this.defaultEditor.getHistory();
+		const entries = this.isBashMode ? all.filter((entry) => entry.startsWith("!")) : [...all];
+		if (entries.length === 0) {
+			this.showStatus("No history to search");
+			return;
+		}
+		this.showSelector((done) => {
+			const component = new HistorySearchComponent(
+				entries,
+				(selected) => {
+					done();
+					this.editor.setText(selected);
+					this.ui.requestRender();
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component, focus: component };
+		});
+	}
+
+	/** Keys that already fired a terminal notification (each turn notifies at most once). */
+	private readonly notificationSentKeys = new Set<string>();
+	private notificationTurnCounter = 0;
+
+	/**
+	 * OSC 9 terminal notification on turn end (kimi terminal-notification
+	 * port, `musepi.notifications.{enabled,condition}`). OSC 9 goes only to
+	 * allow-listed terminals; other terminals get a bare BEL. With
+	 * `condition: "unfocused"` the notification is suppressed while the
+	 * terminal window has focus (DECSET 1004 tracking in pi-tui).
+	 */
+	private emitTurnEndNotification(): void {
+		const notifications = this.settingsManager.getMusepi().notifications;
+		const sequences = notifyTerminalOnce(
+			{ enabled: notifications.enabled, condition: notifications.condition },
+			{ focused: this.ui.focused, sentKeys: this.notificationSentKeys },
+			`turn-${++this.notificationTurnCounter}`,
+			{ title: APP_NAME, body: "turn complete" },
+		);
+		for (const sequence of sequences) {
+			this.ui.terminal.write(sequence);
+		}
+	}
+
 	private updateEditorBorderColor(): void {
 		if (this.isBashMode) {
 			this.editor.borderColor = theme.getBashModeBorderColor();
@@ -3789,6 +4029,386 @@ export class InteractiveMode {
 			}
 		}
 		this.ui.requestRender();
+	}
+
+	/**
+	 * /transcript — show the decoupled transcript model's view of the
+	 * current session (MusePi). Proves the transcript layer reads live
+	 * session entries independently of the chat components.
+	 */
+	private showTranscriptSummary(): void {
+		try {
+			this.musepiTranscript.sync(this.sessionManager.getEntries());
+		} catch {
+			/* sync is best-effort */
+		}
+		const stats = this.musepiTranscript.stats();
+		const lines = [
+			`transcript: ${stats.turns} turns · ${stats.entries} entries · ${stats.toolCalls} tool calls · ${stats.errorTurns} error turns`,
+		];
+		const { turns } = this.musepiTranscript.page({ limit: 3 });
+		for (const turn of turns) {
+			const first = turn.interactions[0];
+			const preview = (first?.text ?? "").split("\n")[0].slice(0, 60);
+			const kinds = turn.interactions.map((i) => i.kind).join(",");
+			lines.push(
+				`  [${turn.startedAt.slice(11, 19)}] ${preview || "(no text)"} — ${kinds}${turn.hasError ? " ⚠" : ""}`,
+			);
+		}
+		for (const line of lines) {
+			this.chatContainer.addChild(new Text(theme.fg("dim", line), 1, 0));
+		}
+		this.ui.requestRender();
+	}
+
+	// ── MusePi fullscreen (container swap, no alt screen) ──
+	// kimi tasks-browser parity: save the main TUI children, clear, mount
+	// the fullscreen component as the only child, restore on exit. The
+	// terminal scrollback is never touched.
+	private musepiSavedChildren: Component[] | null = null;
+
+	private musepiEnterFullscreen(component: Component & { dispose?(): void }): void {
+		if (this.musepiSavedChildren) return; // already fullscreen
+		this.musepiSavedChildren = [...this.ui.children];
+		this.ui.clear();
+		this.ui.addChild(component);
+		this.ui.setFocus(component);
+		this.ui.requestRender(true);
+	}
+
+	private musepiExitFullscreen(): void {
+		if (!this.musepiSavedChildren) return;
+		this.ui.clear();
+		for (const child of this.musepiSavedChildren) {
+			this.ui.addChild(child);
+		}
+		this.musepiSavedChildren = null;
+		this.ui.setFocus(this.editor);
+		this.ui.requestRender(true);
+	}
+
+	/** /tasks (ctrl+shift+t) — fullscreen 3-pane task browser. */
+	private showMusepiTaskBrowser(): void {
+		const filter: "all" | "active" = "all";
+		const browser = new TasksBrowserComponent(
+			this.buildMusepiBrowserProps(filter, undefined, () => {
+				this.musepiExitFullscreen();
+			}),
+			theme,
+		);
+		browser.focused = true;
+		this.musepiEnterFullscreen(browser);
+	}
+
+	private buildMusepiBrowserProps(
+		filter: "all" | "active",
+		selectedTaskId: string | undefined,
+		onCancel: () => void,
+	): any {
+		const entries = backgroundManager.list();
+		const tasks = entries.map((e) => ({
+			id: e.id,
+			task: e.prompt,
+			prompt: e.prompt,
+			model: e.model,
+			status: e.status === "completed" ? "done" : e.status,
+			error: e.error,
+			turns: e.turns,
+			usage: e.usage,
+			outputLines: e.outputLines,
+			startTime: e.startTime,
+			endTime: e.endTime,
+			completedAtMs: e.completedAtMs,
+			toolCalls: 0,
+			progressPercent: e.status === "completed" ? 100 : 0,
+		}));
+		const shown = filter === "active" ? tasks.filter((t) => t.status === "running") : tasks;
+		return {
+			tasks: shown,
+			filter,
+			selectedTaskId,
+			outputPreview: undefined,
+			flashMessage: undefined,
+			onSelect: (_id: string) => {},
+			onToggleFilter: () => {
+				this.musepiExitFullscreen();
+				const next = filter === "all" ? "active" : "all";
+				const nf: "all" | "active" = next;
+				const browser = new TasksBrowserComponent(
+					this.buildMusepiBrowserProps(nf, undefined, () => {
+						this.musepiExitFullscreen();
+					}),
+					theme,
+				);
+				browser.focused = true;
+				this.musepiEnterFullscreen(browser);
+			},
+			onRefresh: () => {
+				this.musepiExitFullscreen();
+				this.showMusepiTaskBrowser();
+			},
+			onCancel,
+			onStopConfirmed: (id: string) => {
+				void backgroundManager.stop(id);
+			},
+			onOpenOutput: (_id: string) => {},
+		};
+	}
+
+	// ── /goal handler ──
+	private async handleGoalCommand(text: string): Promise<void> {
+		const args = text.slice(6).trim();
+		const sub = args.split(/\s+/)[0]?.toLowerCase() || "";
+		const rest = args
+			.replace(/^(pause|resume|cancel|clear|replace|next|status|queue|budget|add|prioritize|drop|skip)\s*/i, "")
+			.trim();
+
+		switch (sub) {
+			case "status":
+			case "": {
+				const g = goalManager.getGoal();
+				if (!g) {
+					this.showExtensionNotify("No active goal. Use /goal <objective> to set one.");
+				} else {
+					this.showExtensionNotify(goalManager.formatGoalPanel?.() ?? `Goal: ${g.objective} [${g.status}]`);
+				}
+				break;
+			}
+			case "pause": {
+				const p = goalManager.pause("user");
+				this.showExtensionNotify(
+					p ? `Goal paused: ${p.objective}` : "No active goal to pause.",
+					p ? "info" : "error",
+				);
+				break;
+			}
+			case "resume": {
+				const r = goalManager.resume("user");
+				this.showExtensionNotify(
+					r ? `Goal resumed: ${r.objective}` : "No paused/blocked goal to resume.",
+					r ? "info" : "error",
+				);
+				break;
+			}
+			case "cancel":
+			case "clear":
+				goalManager.clear("user");
+				this.showExtensionNotify("Goal cleared.");
+				break;
+			case "replace":
+				if (!rest) {
+					this.showExtensionNotify("Usage: /goal replace <new objective>", "error");
+					break;
+				}
+				{
+					const replaced = goalManager.editGoal(rest, undefined, "user");
+					this.showExtensionNotify(
+						replaced ? `Goal replaced: ${replaced.objective}` : "No goal to replace.",
+						replaced ? "info" : "error",
+					);
+				}
+				break;
+			case "next": {
+				const cur = goalManager.getGoal();
+				if (cur) {
+					goalManager.complete("user");
+					this.showExtensionNotify(`Goal completed: ${cur.objective}`);
+				} else {
+					this.showExtensionNotify("No active goal to complete.", "error");
+				}
+				break;
+			}
+			case "queue": {
+				this.showExtensionNotify(formatQueue() || "Queue is empty.");
+				break;
+			}
+			case "add": {
+				if (!rest) {
+					this.showExtensionNotify("Usage: /goal add <objective>", "error");
+					break;
+				}
+				addToQueue(rest);
+				this.showExtensionNotify(`Added to queue: ${rest.slice(0, 60)}`);
+				break;
+			}
+			case "prioritize": {
+				const idx = parseInt(rest, 10);
+				if (Number.isNaN(idx)) {
+					this.showExtensionNotify("Usage: /goal prioritize <index>", "error");
+					break;
+				}
+				if (prioritizeQueueItem(idx)) {
+					this.showExtensionNotify(`Item ${idx} prioritized.`);
+				} else {
+					this.showExtensionNotify(`Cannot prioritize item ${idx}.`, "error");
+				}
+				break;
+			}
+			case "drop": {
+				const idx = parseInt(rest, 10);
+				if (Number.isNaN(idx)) {
+					this.showExtensionNotify("Usage: /goal drop <index>", "error");
+					break;
+				}
+				if (removeFromQueue(idx)) {
+					this.showExtensionNotify(`Item ${idx} dropped.`);
+				} else {
+					this.showExtensionNotify(`Cannot drop item ${idx}.`, "error");
+				}
+				break;
+			}
+			case "skip": {
+				const next = skipCurrentQueueItem();
+				if (next) {
+					goalManager.createGoal(next.objective, next.completionCriterion, next.budgetLimits, "user", true);
+					this.showExtensionNotify(`Skipped to: ${next.objective.slice(0, 60)}`);
+				} else {
+					this.showExtensionNotify("No more items in queue.");
+				}
+				break;
+			}
+			case "budget": {
+				const parts = rest.trim().split(/\s+/);
+				const budget = parseFloat(parts[0]);
+				const unit = parts[1]?.toLowerCase();
+				const validUnits = ["turns", "tokens", "ms", "s", "minutes", "hours"];
+				if (Number.isNaN(budget) || !unit || !validUnits.includes(unit)) {
+					this.showExtensionNotify(
+						"Usage: /goal budget <number> <unit> (turns, tokens, ms, s, minutes, hours)",
+						"error",
+					);
+					break;
+				}
+				const limits = parseBudgetToLimits(budget, unit);
+				const updated = goalManager.setBudgetLimits(limits, "user");
+				if (updated) {
+					this.showExtensionNotify(`Goal budget updated: ${budget} ${unit}`);
+				} else {
+					this.showExtensionNotify("No active goal to set budget on.", "error");
+				}
+				break;
+			}
+			default: {
+				if (args.trim()) {
+					const existing = goalManager.getGoal();
+					if (existing?.status === "active") {
+						this.showExtensionNotify("Goal already active. Use /goal replace <new> to replace.", "error");
+					} else {
+						try {
+							goalManager.createGoal(args.trim(), undefined, undefined, "user");
+							this.showExtensionNotify(`Goal set: ${args.trim()}`);
+						} catch (e: unknown) {
+							this.showExtensionNotify(
+								`Cannot set goal: ${e instanceof Error ? e.message : String(e)}`,
+								"error",
+							);
+						}
+					}
+				} else {
+					this.showExtensionNotify(
+						"Usage: /goal <objective> | status|pause|resume|cancel|replace|next|budget|queue...",
+						"error",
+					);
+				}
+				break;
+			}
+		}
+	}
+
+	// ── /mode handler (permission: auto/yolo/manual) ──
+	private async handleModeCommand(text: string): Promise<void> {
+		const arg = text.slice(6).trim().toLowerCase();
+
+		if (arg === "status" || arg === "") {
+			this.showExtensionNotify(`Permission mode: ${permissionManager.getMode()}`);
+			return;
+		}
+
+		if (arg === "auto" || arg === "yolo" || arg === "manual") {
+			const prevMode = permissionManager.getMode();
+			if (arg === prevMode) {
+				this.showExtensionNotify(`Permission mode is already ${arg}.`, "info");
+				return;
+			}
+			permissionManager.setMode(arg);
+			this.showExtensionNotify(`Permission mode: ${arg.toUpperCase()}`);
+			return;
+		}
+
+		this.showExtensionNotify(`Unknown mode: ${arg}. Use auto, yolo, or manual.`, "error");
+	}
+
+	// ── /plan handler ──
+	private async handlePlanCommand(text: string): Promise<void> {
+		const arg = text.slice(6).trim().toLowerCase();
+
+		if (arg === "clear") {
+			const wasActive = planManager.isPlanModeActive();
+			planManager.clearPlanContent();
+			if (wasActive) {
+				planManager.enterPlanMode("Plan cleared");
+				this.showExtensionNotify("Plan content cleared. Plan mode still active.");
+			} else {
+				this.showExtensionNotify("Plan cleared. No active plan mode.");
+			}
+			return;
+		}
+
+		let turnOn: boolean;
+		if (arg === "on") {
+			turnOn = true;
+		} else if (arg === "off") {
+			turnOn = false;
+		} else if (arg === "" || arg === "toggle") {
+			turnOn = !planManager.isPlanModeActive();
+		} else {
+			this.showExtensionNotify(`Unknown plan subcommand: ${arg}`, "error");
+			return;
+		}
+
+		if (turnOn) {
+			if (planManager.isPlanModeActive()) {
+				this.showExtensionNotify("Plan mode is already ON.", "info");
+				return;
+			}
+			planManager.enterPlanMode("User activated plan mode");
+			this.showExtensionNotify("Plan mode: ON");
+		} else {
+			if (!planManager.isPlanModeActive()) {
+				this.showExtensionNotify("Plan mode is already OFF.", "info");
+				return;
+			}
+			planManager.exitPlanMode();
+			this.showExtensionNotify("Plan mode: OFF");
+		}
+	}
+
+	// ── /swarm handler ──
+	private handleSwarmCommand(text: string): void {
+		const arg = text.slice(7).trim().toLowerCase();
+
+		if (arg === "status" || arg === "") {
+			const bgTasks = backgroundManager.list();
+			const running = bgTasks.filter((t) => t.status === "running");
+			const completed = bgTasks.filter((t) => t.status === "completed");
+			const lines: string[] = ["Swarm Status:"];
+			if (running.length > 0) {
+				lines.push(`  Running: ${running.length}`);
+				for (const t of running.slice(0, 5)) {
+					lines.push(`    \u2022 ${t.prompt.slice(0, 60)} (turns: ${t.turns ?? 0})`);
+				}
+			}
+			if (completed.length > 0) {
+				lines.push(`  Completed: ${completed.length}`);
+			}
+			if (bgTasks.length === 0) {
+				lines.push("  No background tasks.");
+			}
+			this.showExtensionNotify(lines.join("\n"));
+			return;
+		}
+
+		this.showExtensionNotify("Usage: /swarm [on|off|status]", "error");
 	}
 
 	private toggleThinkingBlockVisibility(): void {
@@ -3887,28 +4507,18 @@ export class InteractiveMode {
 
 	showNewVersionNotification(release: LatestPiRelease): void {
 		const action = theme.fg("accent", `${APP_NAME} update`);
-		const updateInstruction = theme.fg("muted", `New version ${release.version} is available. Run `) + action;
-		const changelogUrl = "https://pi.dev/changelog";
+		const updateInstruction = theme.fg("muted", `MusePi update available: ${release.version}, run `) + action;
+		const changelogUrl = release.url ?? MUSEPI_RELEASES_URL;
 		const changelogLink = getCapabilities().hyperlinks
 			? hyperlink(theme.fg("accent", changelogUrl), changelogUrl)
 			: theme.fg("accent", changelogUrl);
-		const changelogLine = theme.fg("muted", "Changelog: ") + changelogLink;
-		const note = release.note?.trim();
+		const changelogLine = theme.fg("muted", "Release notes: ") + changelogLink;
 
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
 		this.chatContainer.addChild(
 			new Text(`${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction}`, 1, 0),
 		);
-		if (note) {
-			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(
-				new Markdown(note, 1, 0, this.getMarkdownThemeWithSettings(), {
-					color: (text) => theme.fg("muted", text),
-				}),
-			);
-			this.chatContainer.addChild(new Spacer(1));
-		}
 		this.chatContainer.addChild(new Text(changelogLine, 1, 0));
 		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
 		this.ui.requestRender();
@@ -4169,6 +4779,8 @@ export class InteractiveMode {
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
 					warnings: this.settingsManager.getWarnings(),
+					musepi: this.settingsManager.getMusepi(),
+					musepiSettingsPath: this.settingsManager.getGlobalSettingsPath(),
 				},
 				{
 					onAutoCompactChange: (enabled) => {
@@ -4306,6 +4918,9 @@ export class InteractiveMode {
 					},
 					onWarningsChange: (warnings) => {
 						this.settingsManager.setWarnings(warnings);
+					},
+					onMusepiChange: (path, value) => {
+						this.settingsManager.setMusepiValue(path, value);
 					},
 					onCancel: () => {
 						done();
@@ -4595,6 +5210,146 @@ export class InteractiveMode {
 			);
 			return { component: selector, focus: selector.getMessageList() };
 		});
+	}
+
+	/**
+	 * /undo [count] — rewind the session to a previous user-driven anchor
+	 * (kimi-code port, pi session-tree variant). Anchors are user prompts and
+	 * `!`/`!!` bash executions on the current branch, capped at the most
+	 * recent compaction. No args: open the anchor selector. Count N: rewind
+	 * N anchors. Navigation uses `navigateTree(anchorId, { position:
+	 * "before" })`, so the undone tail survives as a side branch (nothing is
+	 * deleted, no files are touched) and the anchor's text lands back in the
+	 * editor for re-submission. Anchor planning lives in @musepi/core undo.ts.
+	 */
+	private async handleUndoCommand(text: string): Promise<void> {
+		if (this.session.isStreaming) {
+			this.showWarning("Cannot undo while the agent is working — press Esc first.");
+			return;
+		}
+		const entries = this.branchToUndoEntries();
+
+		const arg = text.startsWith("/undo ") ? text.slice(6).trim() : "";
+		if (arg.length === 0) {
+			this.showUndoSelector(entries);
+			return;
+		}
+		if (!/^[1-9]\d*$/.test(arg)) {
+			this.showError("Usage: /undo [count], where count is a positive integer.");
+			return;
+		}
+		const count = Number(arg);
+		const plan = computeUndoPlan(entries, count);
+		if (!plan.ok) {
+			this.showStatus(
+				plan.reason === "nothing"
+					? formatNothingToUndoMessage(plan.availability)
+					: formatUndoLimitMessage(count, plan.availability),
+			);
+			return;
+		}
+		await this.undoToAnchor(plan.anchor, `Undid ${count} ${count === 1 ? "prompt" : "prompts"}`);
+	}
+
+	/** Project the current session branch into host-neutral undo entries. */
+	private branchToUndoEntries(): UndoEntry[] {
+		return this.sessionManager.getBranch().map((entry) => {
+			if (entry.type === "compaction") {
+				return { id: entry.id, kind: "compaction" as const };
+			}
+			if (entry.type === "message") {
+				const message = entry.message;
+				if (message.role === "user") {
+					return { id: entry.id, kind: "user" as const, text: contentText(message.content, "") };
+				}
+				if (message.role === "bashExecution") {
+					return {
+						id: entry.id,
+						kind: "bash" as const,
+						command: message.command,
+						excludeFromContext: message.excludeFromContext,
+					};
+				}
+			}
+			return { id: entry.id, kind: "other" as const };
+		});
+	}
+
+	private showUndoSelector(entries: UndoEntry[]): void {
+		const { anchors, availability } = listUndoAnchors(entries);
+		if (anchors.length === 0) {
+			this.showStatus(formatNothingToUndoMessage(availability));
+			return;
+		}
+		const initialSelectedId = anchors[anchors.length - 1]?.entryId;
+		this.showSelector((done) => {
+			const selector = new UserMessageSelectorComponent(
+				anchors.map((anchor) => ({ id: anchor.entryId, text: anchor.label })),
+				async (entryId) => {
+					done();
+					const anchor = anchors.find((candidate) => candidate.entryId === entryId);
+					if (anchor) {
+						await this.undoToAnchor(anchor, "Undone to selected message");
+					}
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+				initialSelectedId,
+			);
+			return { component: selector, focus: selector.getMessageList() };
+		});
+	}
+
+	private async undoToAnchor(anchor: UndoAnchor, statusText: string): Promise<void> {
+		try {
+			// Rewind to *before* the anchor: the leaf lands on the anchor's
+			// parent, the transcript view is rebuilt, and the anchor's text
+			// goes back into the editor for re-submission.
+			const result = await this.session.navigateTree(anchor.entryId, { position: "before" });
+			if (result.cancelled) {
+				this.ui.requestRender();
+				return;
+			}
+			this.chatContainer.clear();
+			this.renderInitialMessages();
+			this.editor.setText(anchor.refillText);
+			this.showStatus(statusText);
+			void this.flushCompactionQueue({ willRetry: false });
+		} catch (error: unknown) {
+			this.showError(error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	/**
+	 * /btw <question> — side-channel conversation (see musepi/btw.ts).
+	 * Renders the Q inline and the A as it completes; the child session
+	 * keeps side-channel history across follow-up /btw turns.
+	 */
+	private async handleBtwCommand(text: string): Promise<void> {
+		const question = text.startsWith("/btw ") ? text.slice(5).trim() : "";
+		if (!question) {
+			this.showError("Usage: /btw <question>");
+			return;
+		}
+		if (!this.session.model) {
+			this.showError("No model selected — pick a model before using /btw.");
+			return;
+		}
+
+		this.chatContainer.addChild(new Text(theme.fg("accent", `btw ❯ ${question}`), 1, 0));
+		const answerText = new Text(theme.fg("dim", "…"), 1, 0);
+		this.chatContainer.addChild(answerText);
+		this.ui.requestRender();
+
+		try {
+			const answer = await runBtwTurn(this.session, question);
+			answerText.setText(answer.trim().length > 0 ? answer : "(no answer)");
+		} catch (error: unknown) {
+			answerText.setText(theme.fg("error", error instanceof Error ? error.message : String(error)));
+		}
+		this.ui.requestRender();
 	}
 
 	private async handleCloneCommand(): Promise<void> {
@@ -5421,7 +6176,7 @@ export class InteractiveMode {
 		}
 	}
 
-	private getPathCommandArgument(text: string, command: "/export" | "/import"): string | undefined {
+	private getPathCommandArgument(text: string, command: "/export" | "/import" | "/move"): string | undefined {
 		if (text === command) {
 			return undefined;
 		}
@@ -5448,6 +6203,64 @@ export class InteractiveMode {
 			return argsString;
 		}
 		return argsString.slice(0, firstWhitespaceIndex);
+	}
+
+	private async handleMoveCommand(text: string): Promise<void> {
+		if (this.session.isStreaming) {
+			this.showWarning("Wait for the current response to finish or abort it before moving.");
+			return;
+		}
+		if (this.session.isCompacting) {
+			this.showWarning("Wait for compaction to finish before moving.");
+			return;
+		}
+
+		const input = this.getPathCommandArgument(text, "/move");
+		if (!input) {
+			this.showError("Usage: /move <directory>");
+			return;
+		}
+
+		const currentCwd = this.sessionManager.getCwd();
+		const resolvedPath = resolveMoveTarget(input, currentCwd);
+		if (sameMovePath(resolvedPath, currentCwd)) {
+			this.showStatus(`Already in ${currentCwd}`);
+			return;
+		}
+
+		if (!fs.existsSync(resolvedPath)) {
+			const confirmed = await this.showExtensionConfirm(
+				"Move session",
+				`${resolvedPath} does not exist. Create it and move there?`,
+			);
+			if (!confirmed) {
+				this.showStatus("Move cancelled");
+				return;
+			}
+			try {
+				fs.mkdirSync(resolvedPath, { recursive: true });
+			} catch (error: unknown) {
+				this.showError(`Failed to create directory: ${error instanceof Error ? error.message : String(error)}`);
+				return;
+			}
+		} else if (!fs.statSync(resolvedPath).isDirectory()) {
+			this.showError(`Cannot move: not a directory: ${resolvedPath}`);
+			return;
+		}
+
+		this.clearStatusIndicator();
+		try {
+			const result = await this.runtimeHost.moveCwd(resolvedPath, {
+				projectTrustContextFactory: (cwd) => this.createProjectTrustContext(cwd),
+			});
+			if (result.cancelled) {
+				this.showStatus("Move cancelled");
+				return;
+			}
+			this.showStatus(`Moved to ${this.sessionManager.getCwd()}`);
+		} catch (error: unknown) {
+			this.showError(`Move failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	private async handleImportCommand(text: string): Promise<void> {
@@ -5624,6 +6437,50 @@ export class InteractiveMode {
 		}
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(theme.fg("dim", `Session name set: ${sessionName ?? name}`), 1, 0));
+		this.ui.requestRender();
+	}
+
+	/** MusePi MCP: `/mcp [list|status|reconnect [name]]` — render as chat text. */
+	private async handleMcpCommand(args: string): Promise<void> {
+		try {
+			const output = await handleMusepiMcpCommand(args);
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", output), 1, 0));
+		} catch (error) {
+			this.showError(`MCP command failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+		this.ui.requestRender();
+	}
+
+	/** MusePi memory: `/memory [view|stats|clear <target>|enable|disable]` — render as chat text. */
+	private async handleMemoryCommand(args: string): Promise<void> {
+		try {
+			const [action = "", target = ""] = args.trim().split(/\s+/, 2);
+			let confirmed = false;
+			if (action === "clear" && ["project", "global", "all"].includes(target)) {
+				confirmed = await this.showExtensionConfirm(
+					"Clear memory",
+					`Reset ${target} memory to the empty skeleton? This cannot be undone.`,
+				);
+				if (!confirmed) {
+					this.showStatus("Memory clear cancelled.");
+					return;
+				}
+			}
+			const output = handleMusepiMemoryCommand(args, {
+				confirmed,
+				setEnabled: (enabled) => {
+					this.settingsManager.setMusepiMemoryEnabled(enabled);
+					// Hot switch: re-bind so the tool set and the one-shot
+					// injection reflect the new toggle without a restart.
+					initMusepiMemory(this.session, this.settingsManager);
+				},
+			});
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", output), 1, 0));
+		} catch (error) {
+			this.showError(`Memory command failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 		this.ui.requestRender();
 	}
 

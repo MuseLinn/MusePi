@@ -10,11 +10,12 @@ import {
 	openSync,
 	readdirSync,
 	readSync,
+	renameSync,
 	statSync,
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
-import { join, resolve } from "path";
+import { basename, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
@@ -841,6 +842,20 @@ async function listSessionsFromDir(
 	return sessions;
 }
 
+/** Outcome of {@link SessionManager.moveCwd}. */
+export interface SessionMoveResult {
+	/** false when the target cwd equals the current cwd (no-op). */
+	moved: boolean;
+	/** true when the session file was relocated into the new cwd's bucket. */
+	relocatedSessionFile: boolean;
+	previousCwd: string;
+	cwd: string;
+	previousSessionDir: string;
+	sessionDir: string;
+	previousSessionFile?: string;
+	sessionFile?: string;
+}
+
 /**
  * Manages conversation sessions as append-only trees stored in JSONL files.
  *
@@ -1010,6 +1025,95 @@ export class SessionManager {
 
 	getSessionFile(): string | undefined {
 		return this.sessionFile;
+	}
+
+	/**
+	 * Relocate this session to a different working directory (`/move`).
+	 *
+	 * - The in-memory header cwd is updated and persisted (full rewrite) when
+	 *   the session file already exists on disk.
+	 * - When the session lives in the default per-cwd bucket
+	 *   (`~/.pi/agent/sessions/<encoded-cwd>/`), the session file and its
+	 *   per-session sidecars (`.plan-state-<id>.json`) are moved into the new
+	 *   cwd's bucket so `/resume` from the destination directory finds them.
+	 * - A custom session dir (env/CLI override) is left untouched: only the
+	 *   header cwd changes.
+	 *
+	 * Callers must ensure `newCwd` exists. No-op when already there.
+	 */
+	moveCwd(newCwd: string): SessionMoveResult {
+		const resolvedNewCwd = resolvePath(newCwd);
+		const result: SessionMoveResult = {
+			moved: false,
+			relocatedSessionFile: false,
+			previousCwd: this.cwd,
+			cwd: this.cwd,
+			previousSessionDir: this.sessionDir,
+			sessionDir: this.sessionDir,
+			previousSessionFile: this.sessionFile,
+			sessionFile: this.sessionFile,
+		};
+		if (resolvedNewCwd === this.cwd) {
+			return result;
+		}
+
+		// Evaluate against the OLD cwd before any mutation.
+		const relocateBucket = this.persist && this.usesDefaultSessionDir();
+		const nextSessionDir = relocateBucket ? getDefaultSessionDir(resolvedNewCwd) : this.sessionDir;
+		const nextSessionFile =
+			relocateBucket && this.sessionFile ? join(nextSessionDir, basename(this.sessionFile)) : this.sessionFile;
+
+		if (
+			relocateBucket &&
+			this.sessionFile &&
+			nextSessionFile &&
+			existsSync(this.sessionFile) &&
+			existsSync(nextSessionFile)
+		) {
+			throw new Error(`Cannot move: a session file already exists at ${nextSessionFile}`);
+		}
+
+		// Filesystem first: only mutate in-memory state after the moves succeed.
+		if (relocateBucket) {
+			if (!existsSync(nextSessionDir)) {
+				mkdirSync(nextSessionDir, { recursive: true });
+			}
+			if (this.sessionFile && nextSessionFile && existsSync(this.sessionFile)) {
+				renameSync(this.sessionFile, nextSessionFile);
+			}
+			// Best-effort: per-session plan-state mirror follows the session.
+			const planSidecar = join(this.sessionDir, `.plan-state-${this.sessionId}.json`);
+			if (existsSync(planSidecar)) {
+				try {
+					renameSync(planSidecar, join(nextSessionDir, basename(planSidecar)));
+				} catch {
+					/* sidecar is a debugging aid — never break the move */
+				}
+			}
+		}
+
+		const header = this.fileEntries.find((e) => e.type === "session") as SessionHeader | undefined;
+		if (header) {
+			header.cwd = resolvedNewCwd;
+		}
+		this.cwd = resolvedNewCwd;
+		this.sessionDir = nextSessionDir;
+		if (relocateBucket && nextSessionFile) {
+			this.sessionFile = resolvePath(nextSessionFile);
+			result.relocatedSessionFile = this.sessionFile !== result.previousSessionFile;
+		}
+
+		// Persist the header rewrite only when the file is already on disk;
+		// an unflushed session keeps its lazy first-write semantics.
+		if (this.persist && this.sessionFile && existsSync(this.sessionFile)) {
+			this._rewriteFile();
+		}
+
+		result.moved = true;
+		result.cwd = this.cwd;
+		result.sessionDir = this.sessionDir;
+		result.sessionFile = this.sessionFile;
+		return result;
 	}
 
 	_persist(entry: SessionEntry): void {

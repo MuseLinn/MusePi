@@ -25,16 +25,25 @@ Pi loads skills from:
 
 - Global:
   - `~/.pi/agent/skills/`
+  - `~/.pi/skills/` (host top-level)
   - `~/.agents/skills/`
+  - `$KIMI_CODE_HOME/skills/` (default `~/.kimi-code/skills/`; Kimi Code compat, disable with `musepi.skills.kimiCodeCompat: false`)
 - Project (only after the project is trusted):
   - `.pi/skills/`
+  - `.kimi-code/skills/` (Kimi Code compat, same `musepi.skills.kimiCodeCompat` gate)
   - `.agents/skills/` in `cwd` and ancestor directories (up to git repo root, or filesystem root when not in a repo)
 - Packages: `skills/` directories or `pi.skills` entries in `package.json`
 - Settings: `skills` array with files or directories
 - CLI: `--skill <path>` (repeatable, additive even with `--no-skills`)
 
+Note: MusePi's config dir is `.musepi` (from `piConfig.configDir`), so the
+host-native dirs above resolve to `~/.musepi/agent/skills/`,
+`~/.musepi/skills/` and `.musepi/skills/`; the legacy `~/.pi` tree is not
+scanned. The same seven-scope layout is used for swarm subagent sessions
+(`@musepi/core/skills` scanner).
+
 Discovery rules:
-- In `~/.pi/agent/skills/` and `.pi/skills/`, direct root `.md` files are discovered as individual skills
+- In `~/.pi/agent/skills/`, `~/.pi/skills/`, `.pi/skills/` and the Kimi Code compat dirs, direct root `.md` files are discovered as individual skills
 - In all skill locations, directories containing `SKILL.md` are discovered recursively
 - In `~/.agents/skills/` and project `.agents/skills/`, root `.md` files are ignored
 

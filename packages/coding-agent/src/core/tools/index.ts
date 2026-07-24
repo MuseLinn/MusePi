@@ -91,6 +91,17 @@ export interface ToolsOptions {
 	grep?: GrepToolOptions;
 	find?: FindToolOptions;
 	ls?: LsToolOptions;
+	/** MusePi hashline shared context; forwarded into read/edit/grep options. */
+	hashline?: import("../../musepi/hashline.ts").HashlineContext;
+}
+
+function withHashline<T extends { hashline?: import("../../musepi/hashline.ts").HashlineContext }>(
+	options: T | undefined,
+	hashline: import("../../musepi/hashline.ts").HashlineContext | undefined,
+): T | undefined {
+	if (!hashline) return options;
+	if (options?.hashline) return options;
+	return { ...options, hashline } as T;
 }
 
 export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
@@ -155,11 +166,11 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
 
 export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef> {
 	return {
-		read: createReadToolDefinition(cwd, options?.read),
+		read: createReadToolDefinition(cwd, withHashline(options?.read, options?.hashline)),
 		bash: createBashToolDefinition(cwd, options?.bash),
-		edit: createEditToolDefinition(cwd, options?.edit),
+		edit: createEditToolDefinition(cwd, withHashline(options?.edit, options?.hashline)),
 		write: createWriteToolDefinition(cwd, options?.write),
-		grep: createGrepToolDefinition(cwd, options?.grep),
+		grep: createGrepToolDefinition(cwd, withHashline(options?.grep, options?.hashline)),
 		find: createFindToolDefinition(cwd, options?.find),
 		ls: createLsToolDefinition(cwd, options?.ls),
 	};
@@ -185,11 +196,11 @@ export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[]
 
 export function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool> {
 	return {
-		read: createReadTool(cwd, options?.read),
+		read: createReadTool(cwd, withHashline(options?.read, options?.hashline)),
 		bash: createBashTool(cwd, options?.bash),
-		edit: createEditTool(cwd, options?.edit),
+		edit: createEditTool(cwd, withHashline(options?.edit, options?.hashline)),
 		write: createWriteTool(cwd, options?.write),
-		grep: createGrepTool(cwd, options?.grep),
+		grep: createGrepTool(cwd, withHashline(options?.grep, options?.hashline)),
 		find: createFindTool(cwd, options?.find),
 		ls: createLsTool(cwd, options?.ls),
 	};
