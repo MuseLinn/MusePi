@@ -39,8 +39,19 @@ import {
 	TUI,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import { goalManager } from "@musepi/core/goal/index.js";
+import {
+	addToQueue,
+	formatQueue,
+	prioritizeQueueItem,
+	removeFromQueue,
+	skipCurrentQueueItem,
+} from "@musepi/core/goal/queue.js";
+import { parseBudgetToLimits } from "@musepi/core/goal/types.js";
 import { resolveMoveTarget, sameMovePath } from "@musepi/core/move.js";
 import { notifyTerminalOnce } from "@musepi/core/notify.js";
+import { permissionManager } from "@musepi/core/permission/index.js";
+import { planManager } from "@musepi/core/plan/index.js";
 import { getSpinnerFrames } from "@musepi/core/swarm/helpers.js";
 import {
 	computeUndoPlan,
@@ -2852,6 +2863,26 @@ export class InteractiveMode {
 				this.showTranscriptSummary();
 				return;
 			}
+			if (text === "/goal" || text.startsWith("/goal ")) {
+				this.editor.setText("");
+				await this.handleGoalCommand(text);
+				return;
+			}
+			if (text === "/mode" || text.startsWith("/mode ")) {
+				this.editor.setText("");
+				await this.handleModeCommand(text);
+				return;
+			}
+			if (text === "/plan" || text.startsWith("/plan ")) {
+				this.editor.setText("");
+				await this.handlePlanCommand(text);
+				return;
+			}
+			if (text === "/swarm" || text.startsWith("/swarm ")) {
+				this.editor.setText("");
+				this.handleSwarmCommand(text);
+				return;
+			}
 			if (text === "/tasks") {
 				this.editor.setText("");
 				this.showMusepiTaskBrowser();
@@ -4122,6 +4153,262 @@ export class InteractiveMode {
 			},
 			onOpenOutput: (_id: string) => {},
 		};
+	}
+
+	// ── /goal handler ──
+	private async handleGoalCommand(text: string): Promise<void> {
+		const args = text.slice(6).trim();
+		const sub = args.split(/\s+/)[0]?.toLowerCase() || "";
+		const rest = args
+			.replace(/^(pause|resume|cancel|clear|replace|next|status|queue|budget|add|prioritize|drop|skip)\s*/i, "")
+			.trim();
+
+		switch (sub) {
+			case "status":
+			case "": {
+				const g = goalManager.getGoal();
+				if (!g) {
+					this.showExtensionNotify("No active goal. Use /goal <objective> to set one.");
+				} else {
+					this.showExtensionNotify(goalManager.formatGoalPanel?.() ?? `Goal: ${g.objective} [${g.status}]`);
+				}
+				break;
+			}
+			case "pause": {
+				const p = goalManager.pause("user");
+				this.showExtensionNotify(
+					p ? `Goal paused: ${p.objective}` : "No active goal to pause.",
+					p ? "info" : "error",
+				);
+				break;
+			}
+			case "resume": {
+				const r = goalManager.resume("user");
+				this.showExtensionNotify(
+					r ? `Goal resumed: ${r.objective}` : "No paused/blocked goal to resume.",
+					r ? "info" : "error",
+				);
+				break;
+			}
+			case "cancel":
+			case "clear":
+				goalManager.clear("user");
+				this.showExtensionNotify("Goal cleared.");
+				break;
+			case "replace":
+				if (!rest) {
+					this.showExtensionNotify("Usage: /goal replace <new objective>", "error");
+					break;
+				}
+				{
+					const replaced = goalManager.editGoal(rest, undefined, "user");
+					this.showExtensionNotify(
+						replaced ? `Goal replaced: ${replaced.objective}` : "No goal to replace.",
+						replaced ? "info" : "error",
+					);
+				}
+				break;
+			case "next": {
+				const cur = goalManager.getGoal();
+				if (cur) {
+					goalManager.complete("user");
+					this.showExtensionNotify(`Goal completed: ${cur.objective}`);
+				} else {
+					this.showExtensionNotify("No active goal to complete.", "error");
+				}
+				break;
+			}
+			case "queue": {
+				this.showExtensionNotify(formatQueue() || "Queue is empty.");
+				break;
+			}
+			case "add": {
+				if (!rest) {
+					this.showExtensionNotify("Usage: /goal add <objective>", "error");
+					break;
+				}
+				addToQueue(rest);
+				this.showExtensionNotify(`Added to queue: ${rest.slice(0, 60)}`);
+				break;
+			}
+			case "prioritize": {
+				const idx = parseInt(rest, 10);
+				if (Number.isNaN(idx)) {
+					this.showExtensionNotify("Usage: /goal prioritize <index>", "error");
+					break;
+				}
+				if (prioritizeQueueItem(idx)) {
+					this.showExtensionNotify(`Item ${idx} prioritized.`);
+				} else {
+					this.showExtensionNotify(`Cannot prioritize item ${idx}.`, "error");
+				}
+				break;
+			}
+			case "drop": {
+				const idx = parseInt(rest, 10);
+				if (Number.isNaN(idx)) {
+					this.showExtensionNotify("Usage: /goal drop <index>", "error");
+					break;
+				}
+				if (removeFromQueue(idx)) {
+					this.showExtensionNotify(`Item ${idx} dropped.`);
+				} else {
+					this.showExtensionNotify(`Cannot drop item ${idx}.`, "error");
+				}
+				break;
+			}
+			case "skip": {
+				const next = skipCurrentQueueItem();
+				if (next) {
+					goalManager.createGoal(next.objective, next.completionCriterion, next.budgetLimits, "user", true);
+					this.showExtensionNotify(`Skipped to: ${next.objective.slice(0, 60)}`);
+				} else {
+					this.showExtensionNotify("No more items in queue.");
+				}
+				break;
+			}
+			case "budget": {
+				const parts = rest.trim().split(/\s+/);
+				const budget = parseFloat(parts[0]);
+				const unit = parts[1]?.toLowerCase();
+				const validUnits = ["turns", "tokens", "ms", "s", "minutes", "hours"];
+				if (Number.isNaN(budget) || !unit || !validUnits.includes(unit)) {
+					this.showExtensionNotify(
+						"Usage: /goal budget <number> <unit> (turns, tokens, ms, s, minutes, hours)",
+						"error",
+					);
+					break;
+				}
+				const limits = parseBudgetToLimits(budget, unit);
+				const updated = goalManager.setBudgetLimits(limits, "user");
+				if (updated) {
+					this.showExtensionNotify(`Goal budget updated: ${budget} ${unit}`);
+				} else {
+					this.showExtensionNotify("No active goal to set budget on.", "error");
+				}
+				break;
+			}
+			default: {
+				if (args.trim()) {
+					const existing = goalManager.getGoal();
+					if (existing?.status === "active") {
+						this.showExtensionNotify("Goal already active. Use /goal replace <new> to replace.", "error");
+					} else {
+						try {
+							goalManager.createGoal(args.trim(), undefined, undefined, "user");
+							this.showExtensionNotify(`Goal set: ${args.trim()}`);
+						} catch (e: unknown) {
+							this.showExtensionNotify(
+								`Cannot set goal: ${e instanceof Error ? e.message : String(e)}`,
+								"error",
+							);
+						}
+					}
+				} else {
+					this.showExtensionNotify(
+						"Usage: /goal <objective> | status|pause|resume|cancel|replace|next|budget|queue...",
+						"error",
+					);
+				}
+				break;
+			}
+		}
+	}
+
+	// ── /mode handler (permission: auto/yolo/manual) ──
+	private async handleModeCommand(text: string): Promise<void> {
+		const arg = text.slice(6).trim().toLowerCase();
+
+		if (arg === "status" || arg === "") {
+			this.showExtensionNotify(`Permission mode: ${permissionManager.getMode()}`);
+			return;
+		}
+
+		if (arg === "auto" || arg === "yolo" || arg === "manual") {
+			const prevMode = permissionManager.getMode();
+			if (arg === prevMode) {
+				this.showExtensionNotify(`Permission mode is already ${arg}.`, "info");
+				return;
+			}
+			permissionManager.setMode(arg);
+			this.showExtensionNotify(`Permission mode: ${arg.toUpperCase()}`);
+			return;
+		}
+
+		this.showExtensionNotify(`Unknown mode: ${arg}. Use auto, yolo, or manual.`, "error");
+	}
+
+	// ── /plan handler ──
+	private async handlePlanCommand(text: string): Promise<void> {
+		const arg = text.slice(6).trim().toLowerCase();
+
+		if (arg === "clear") {
+			const wasActive = planManager.isPlanModeActive();
+			planManager.clearPlanContent();
+			if (wasActive) {
+				planManager.enterPlanMode("Plan cleared");
+				this.showExtensionNotify("Plan content cleared. Plan mode still active.");
+			} else {
+				this.showExtensionNotify("Plan cleared. No active plan mode.");
+			}
+			return;
+		}
+
+		let turnOn: boolean;
+		if (arg === "on") {
+			turnOn = true;
+		} else if (arg === "off") {
+			turnOn = false;
+		} else if (arg === "" || arg === "toggle") {
+			turnOn = !planManager.isPlanModeActive();
+		} else {
+			this.showExtensionNotify(`Unknown plan subcommand: ${arg}`, "error");
+			return;
+		}
+
+		if (turnOn) {
+			if (planManager.isPlanModeActive()) {
+				this.showExtensionNotify("Plan mode is already ON.", "info");
+				return;
+			}
+			planManager.enterPlanMode("User activated plan mode");
+			this.showExtensionNotify("Plan mode: ON");
+		} else {
+			if (!planManager.isPlanModeActive()) {
+				this.showExtensionNotify("Plan mode is already OFF.", "info");
+				return;
+			}
+			planManager.exitPlanMode();
+			this.showExtensionNotify("Plan mode: OFF");
+		}
+	}
+
+	// ── /swarm handler ──
+	private handleSwarmCommand(text: string): void {
+		const arg = text.slice(7).trim().toLowerCase();
+
+		if (arg === "status" || arg === "") {
+			const bgTasks = backgroundManager.list();
+			const running = bgTasks.filter((t) => t.status === "running");
+			const completed = bgTasks.filter((t) => t.status === "completed");
+			const lines: string[] = ["Swarm Status:"];
+			if (running.length > 0) {
+				lines.push(`  Running: ${running.length}`);
+				for (const t of running.slice(0, 5)) {
+					lines.push(`    \u2022 ${t.prompt.slice(0, 60)} (turns: ${t.turns ?? 0})`);
+				}
+			}
+			if (completed.length > 0) {
+				lines.push(`  Completed: ${completed.length}`);
+			}
+			if (bgTasks.length === 0) {
+				lines.push("  No background tasks.");
+			}
+			this.showExtensionNotify(lines.join("\n"));
+			return;
+		}
+
+		this.showExtensionNotify("Usage: /swarm [on|off|status]", "error");
 	}
 
 	private toggleThinkingBlockVisibility(): void {

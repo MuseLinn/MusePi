@@ -31,6 +31,15 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "fork", description: "Create a new fork from a previous user message" },
 	{ name: "undo", description: "Rewind to a previous user message (/undo [count])", argumentHint: "[count]" },
 	{
+		name: "goal",
+		description: "Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue",
+		argumentHint: "<objective|status|pause|resume|cancel|replace|next|budget|queue|add|prioritize|drop|skip>",
+	},
+	{ name: "mode", description: "Switch permission mode", argumentHint: "<auto|yolo|manual|status>" },
+	{ name: "plan", description: "Toggle plan mode on/off", argumentHint: "[on|off|clear]" },
+	{ name: "swarm", description: "Toggle swarm mode on/off or show status", argumentHint: "[on|off|status]" },
+	{ name: "tasks", description: "Show background task browser" },
+	{
 		name: "btw",
 		description: "Ask a side question without touching the main session (tools off)",
 		argumentHint: "<question>",
