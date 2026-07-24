@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Transport } from "@earendil-works/pi-ai";
+import { type MusepiSettings, mergeMusepiSettings, type ResolvedMusepiSettings } from "@musepi/core";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -117,6 +118,7 @@ export interface Settings {
 	treeFilterMode?: "default" | "no-tools" | "user-only" | "labeled-only" | "all"; // Default filter when opening /tree
 	thinkingBudgets?: ThinkingBudgetsSettings; // Custom token budgets for thinking levels
 	editorPaddingX?: number; // Horizontal padding for input editor (default: 0)
+	musepi?: MusepiSettings; // MusePi feature settings (defaults via mergeMusepiSettings)
 	outputPad?: 0 | 1; // Horizontal padding for chat message output (default: 1)
 	autocompleteMaxVisible?: number; // Max visible items in autocomplete dropdown (default: 5)
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
@@ -194,6 +196,11 @@ export class FileSettingsStorage implements SettingsStorage {
 		const resolvedAgentDir = resolvePath(agentDir);
 		this.globalSettingsPath = join(resolvedAgentDir, "settings.json");
 		this.projectSettingsPath = join(resolvedCwd, CONFIG_DIR_NAME, "settings.json");
+	}
+
+	/** Absolute path of the global settings file this storage writes to. */
+	getGlobalSettingsPath(): string {
+		return this.globalSettingsPath;
 	}
 
 	private acquireLockSyncWithRetry(path: string): () => void {
@@ -1190,6 +1197,58 @@ export class SettingsManager {
 
 	getEditorPaddingX(): number {
 		return this.settings.editorPaddingX ?? 0;
+	}
+
+	/** MusePi feature settings with defaults applied (see @musepi/core config schema). */
+	getMusepi(): ResolvedMusepiSettings {
+		return mergeMusepiSettings(this.settings.musepi);
+	}
+
+	/** Persist the musepi.memory.enabled toggle (written by /memory enable|disable). */
+	setMusepiMemoryEnabled(enabled: boolean): void {
+		if (!this.globalSettings.musepi) {
+			this.globalSettings.musepi = {};
+		}
+		this.globalSettings.musepi.memory = { ...this.globalSettings.musepi.memory, enabled };
+		this.markModified("musepi", "memory");
+		this.save();
+	}
+
+	/**
+	 * Set a MusePi feature setting by dot path (e.g. "memory.enabled") in the
+	 * global settings and persist. Intermediate objects are shallow-cloned so
+	 * sibling keys are preserved; unknown/mistyped values are dropped by
+	 * mergeMusepiSettings on the next read.
+	 */
+	setMusepiValue(path: string, value: unknown): void {
+		const segments = path.split(".");
+		const musepi: Record<string, unknown> = { ...(this.globalSettings.musepi ?? {}) };
+		let target = musepi;
+		for (let i = 0; i < segments.length - 1; i++) {
+			const key = segments[i];
+			if (!key) return;
+			const child = target[key];
+			const next: Record<string, unknown> =
+				typeof child === "object" && child !== null && !Array.isArray(child)
+					? { ...(child as Record<string, unknown>) }
+					: {};
+			target[key] = next;
+			target = next;
+		}
+		const leaf = segments[segments.length - 1];
+		if (!leaf) return;
+		target[leaf] = value;
+		this.globalSettings.musepi = musepi as MusepiSettings;
+		this.markModified("musepi");
+		this.save();
+	}
+
+	/** Absolute path of the global settings file (for "edit in file" hints). */
+	getGlobalSettingsPath(): string {
+		if (this.storage instanceof FileSettingsStorage) {
+			return this.storage.getGlobalSettingsPath();
+		}
+		return join(getAgentDir(), "settings.json");
 	}
 
 	setEditorPaddingX(padding: number): void {

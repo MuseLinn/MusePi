@@ -2,11 +2,13 @@ import { readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Text } from "@earendil-works/pi-tui";
+import { formatHashlineHeader, stripBom as hlStripBom } from "@musepi/core/hashline/index.js";
 import { spawn } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
+import type { HashlineContext } from "../../musepi/hashline.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
 import { resolveToCwd } from "./path-utils.ts";
@@ -63,6 +65,8 @@ const defaultGrepOperations: GrepOperations = {
 export interface GrepToolOptions {
 	/** Custom operations for grep. Default: local filesystem plus ripgrep */
 	operations?: GrepOperations;
+	/** MusePi hashline context: records snapshots for matched files and appends anchor tags. */
+	hashline?: HashlineContext;
 }
 
 function formatGrepCall(
@@ -125,10 +129,13 @@ export function createGrepToolDefinition(
 	options?: GrepToolOptions,
 ): ToolDefinition<typeof grepSchema, GrepToolDetails | undefined> {
 	const customOps = options?.operations;
+	const hashline = options?.hashline;
 	return {
 		name: "grep",
 		label: "grep",
-		description: `Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
+		description: hashline
+			? `Search file contents for a pattern. Returns matching lines with file paths and line numbers, plus a [path#TAG] anchor per matched file for edit patches. Respects .gitignore. Output is truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`
+			: `Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
 		promptSnippet: "Search file contents for patterns (respects .gitignore)",
 		parameters: grepSchema,
 		async execute(
@@ -212,6 +219,18 @@ export function createGrepToolDefinition(
 							return lines;
 						};
 
+						// MusePi hashline: displayed lines per matched file (seen-line provenance).
+						const seenByFile = new Map<string, Set<number>>();
+						const markSeen = (filePath: string, from: number, to: number): void => {
+							if (!hashline) return;
+							let set = seenByFile.get(filePath);
+							if (!set) {
+								set = new Set<number>();
+								seenByFile.set(filePath, set);
+							}
+							for (let l = from; l <= to; l++) set.add(l);
+						};
+
 						const args: string[] = ["--json", "--line-number", "--color=never", "--hidden"];
 						if (ignoreCase) args.push("--ignore-case");
 						if (literal) args.push("--fixed-strings");
@@ -254,6 +273,7 @@ export function createGrepToolDefinition(
 							const block: string[] = [];
 							const start = contextValue > 0 ? Math.max(1, lineNumber - contextValue) : lineNumber;
 							const end = contextValue > 0 ? Math.min(lines.length, lineNumber + contextValue) : lineNumber;
+							markSeen(filePath, start, end);
 							for (let current = start; current <= end; current++) {
 								const lineText = lines[current - 1] ?? "";
 								const sanitized = lineText.replace(/\r/g, "");
@@ -317,6 +337,7 @@ export function createGrepToolDefinition(
 							for (const match of matches) {
 								if (contextValue === 0 && match.lineText !== undefined) {
 									const relativePath = formatPath(match.filePath);
+									markSeen(match.filePath, match.lineNumber, match.lineNumber);
 									const sanitized = match.lineText
 										.replace(/\r\n/g, "\n")
 										.replace(/\r/g, "")
@@ -327,6 +348,34 @@ export function createGrepToolDefinition(
 								} else {
 									const block = await formatBlock(match.filePath, match.lineNumber);
 									outputLines.push(...block);
+								}
+							}
+
+							// MusePi hashline: record a snapshot per matched file (capped) and
+							// append the [path#TAG] anchors the edit tool patches against.
+							if (hashline && seenByFile.size > 0) {
+								const MAX_ANCHORED_FILES = 20;
+								const anchors: string[] = [];
+								let recorded = 0;
+								for (const [filePath, seen] of seenByFile) {
+									if (recorded >= MAX_ANCHORED_FILES) break;
+									const lines = await getFileLines(filePath);
+									if (!lines.length) continue;
+									const { text: snapshotText } = hlStripBom(lines.join("\n"));
+									const tag = hashline.store.record(filePath, snapshotText, seen);
+									const displayPath = path.relative(cwd, filePath);
+									anchors.push(
+										formatHashlineHeader(
+											displayPath && !displayPath.startsWith("..")
+												? displayPath.replace(/\\/g, "/")
+												: filePath,
+											tag,
+										),
+									);
+									recorded++;
+								}
+								if (anchors.length > 0) {
+									outputLines.push("", `[hashline anchors: ${anchors.join(", ")}]`);
 								}
 							}
 

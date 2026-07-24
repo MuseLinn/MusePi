@@ -33,8 +33,10 @@ describe("shouldRunFirstTimeSetup", () => {
 		}
 	});
 
-	it("returns true when experimental, default agent dir, and no settings.json", () => {
-		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(true);
+	it("returns false on the MusePi fork (first-time setup is official-distribution only)", () => {
+		// The fork rebrands APP_NAME/CONFIG_DIR_NAME via piConfig, so the
+		// official-distribution gate in shouldRunFirstTimeSetup never passes.
+		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
 	});
 
 	it("returns false when experimental features are disabled", () => {

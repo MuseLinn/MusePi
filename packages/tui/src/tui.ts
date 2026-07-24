@@ -85,6 +85,16 @@ export interface Component {
 	 * Called when theme changes or when component needs to re-render from scratch.
 	 */
 	invalidate(): void;
+
+	/**
+	 * Optional cheap state fingerprint for frame-level damage tracking
+	 * (MusePi). When present, Container caches this component's rendered
+	 * lines per width and skips render() entirely while the fingerprint
+	 * and width are unchanged — a spinner tick in one widget no longer
+	 * re-renders settled siblings (e.g. the whole chat history).
+	 * Components without a fingerprint always re-render (unchanged behavior).
+	 */
+	fingerprint?(): unknown;
 }
 
 type InputListenerResult = { consume?: boolean; data?: string } | undefined;
@@ -256,22 +266,33 @@ type OverlayFocusRestorePolicy = "clear" | "preserve";
 export class Container implements Component {
 	children: Component[] = [];
 
+	/**
+	 * Per-child damage cache (MusePi): fingerprint + width → rendered lines.
+	 * Entries are only consulted for children that implement fingerprint();
+	 * all other children re-render every frame (unchanged behavior).
+	 */
+	private damageCache = new Map<Component, { fingerprint: unknown; width: number; lines: string[] }>();
+
 	addChild(component: Component): void {
 		this.children.push(component);
+		this.damageCache.delete(component);
 	}
 
 	removeChild(component: Component): void {
 		const index = this.children.indexOf(component);
 		if (index !== -1) {
 			this.children.splice(index, 1);
+			this.damageCache.delete(component);
 		}
 	}
 
 	clear(): void {
 		this.children = [];
+		this.damageCache.clear();
 	}
 
 	invalidate(): void {
+		this.damageCache.clear();
 		for (const child of this.children) {
 			child.invalidate?.();
 		}
@@ -280,7 +301,19 @@ export class Container implements Component {
 	render(width: number): string[] {
 		const lines: string[] = [];
 		for (const child of this.children) {
-			const childLines = child.render(width);
+			let childLines: string[];
+			if (child.fingerprint !== undefined) {
+				const fp = child.fingerprint();
+				const entry = this.damageCache.get(child);
+				if (entry && entry.width === width && entry.fingerprint === fp) {
+					childLines = entry.lines;
+				} else {
+					childLines = child.render(width);
+					this.damageCache.set(child, { fingerprint: fp, width, lines: childLines });
+				}
+			} else {
+				childLines = child.render(width);
+			}
 			for (const line of childLines) {
 				lines.push(line);
 			}
@@ -320,6 +353,15 @@ export class TUI extends Container {
 	private terminalColorSchemeListeners = new Set<(scheme: TerminalColorScheme) => void>();
 	private terminalColorSchemeNotificationsEnabled = false;
 	private readonly logDirectory: string;
+
+	/**
+	 * Terminal window focus state (DECSET 1004 focus in/out events). Enabled
+	 * on start(); terminals that do not support 1004 simply never send the
+	 * events and the state stays at the initial `true`.
+	 */
+	public focused = true;
+	/** Called when the terminal reports a focus in/out event. */
+	public onFocusChange?: (focused: boolean) => void;
 
 	// Overlay stack for modal components rendered on top of base content
 	private focusOrderCounter = 0;
@@ -644,6 +686,8 @@ export class TUI extends Container {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031h");
 		}
+		// Focus in/out events (DECSET 1004) for focus-aware features
+		this.terminal.write("\x1b[?1004h");
 		this.queryCellSize();
 		this.requestRender();
 	}
@@ -695,6 +739,7 @@ export class TUI extends Container {
 		if (this.terminalColorSchemeNotificationsEnabled) {
 			this.terminal.write("\x1b[?2031l");
 		}
+		this.terminal.write("\x1b[?1004l");
 		// Move cursor to the end of the content to prevent overwriting/artifacts on exit
 		if (this.previousLines.length > 0) {
 			// Overwrite the inverted cursor with a normal space to clear the artifact
@@ -763,6 +808,15 @@ export class TUI extends Container {
 	}
 
 	private handleInput(data: string): void {
+		// Focus in/out events (DECSET 1004): CSI I = focus gained, CSI O = lost
+		if (data === "\x1b[I" || data === "\x1b[O") {
+			const focused = data === "\x1b[I";
+			if (this.focused !== focused) {
+				this.focused = focused;
+				this.onFocusChange?.(focused);
+			}
+			return;
+		}
 		if (this.consumeOsc11BackgroundResponse(data)) {
 			return;
 		}

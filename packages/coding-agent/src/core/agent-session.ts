@@ -45,7 +45,12 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
+import { planManager } from "@musepi/core/plan/index.js";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { createHashlineContext, type HashlineContext } from "../musepi/hashline.ts";
+import { resolveRoleModel } from "../musepi/model-roles.ts";
+import { initMusepiSnapcompact } from "../musepi/snapcompact/native.ts";
+import { composeMusepiStreamPrompt, musepiRecentText } from "../musepi/stream-rules.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -343,6 +348,8 @@ export class AgentSession {
 
 	private _resourceLoader: ResourceLoader;
 	private _customTools: ToolDefinition[];
+	/** Runtime-registered custom tools (e.g. MCP-bridged tools discovered after session start). */
+	private _dynamicCustomTools: Map<string, ToolDefinition> = new Map();
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
 	private _cwd: string;
 	private _extensionRunnerRef?: { current?: ExtensionRunner };
@@ -350,6 +357,7 @@ export class AgentSession {
 	private _allowedToolNames?: Set<string>;
 	private _excludedToolNames?: Set<string>;
 	private _baseToolsOverride?: Record<string, AgentTool>;
+	private _hashlineContext?: HashlineContext | null;
 	private _sessionStartEvent: SessionStartEvent;
 	private _extensionUIContext?: ExtensionUIContext;
 	private _extensionMode: ExtensionMode = "print";
@@ -527,17 +535,45 @@ export class AgentSession {
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.(turn, signal);
 			const previousContext = previousSnapshot?.context ?? turn.context;
 
+			// MusePi model roles: while plan mode is active, pin the loop to
+			// the plan-role model (unset → live session model = "default").
+			const planOverride = this._resolvePlanRoleModel();
+
+			// MusePi stream rules: per-turn prompt injection at the TS seam.
+			const basePrompt = this._systemPromptOverride ?? this._baseSystemPrompt;
 			return {
 				...previousSnapshot,
 				context: {
 					...previousContext,
-					systemPrompt: this._systemPromptOverride ?? this._baseSystemPrompt,
+					systemPrompt: composeMusepiStreamPrompt(
+						this.sessionManager.getCwd(),
+						basePrompt,
+						musepiRecentText(this.agent.state.messages),
+					),
 					tools: this.agent.state.tools.slice(),
 				},
-				model: this.agent.state.model,
-				thinkingLevel: this.agent.state.thinkingLevel,
+				model: planOverride?.model ?? this.agent.state.model,
+				thinkingLevel: planOverride?.thinkingLevel ?? this.agent.state.thinkingLevel,
 			};
 		};
+	}
+
+	/**
+	 * Resolve the `plan` role to a registry model while plan mode is
+	 * active. Returns undefined when plan mode is off, the role (and
+	 * "default") is unconfigured, or the configured model is unknown —
+	 * the turn then keeps the live session model. Fail-open by design.
+	 */
+	private _resolvePlanRoleModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel } | undefined {
+		try {
+			if (!planManager.isPlanModeActive()) return undefined;
+			const roles = this.settingsManager.getMusepi().modelRoles;
+			if (!roles.plan?.trim()) return undefined;
+			const available = this._modelRuntime.getAvailableSnapshot();
+			return resolveRoleModel("plan", roles, available as Model<any>[]);
+		} catch {
+			return undefined;
+		}
 	}
 
 	// =========================================================================
@@ -898,6 +934,36 @@ export class AgentSession {
 	 */
 	getActiveToolNames(): string[] {
 		return this.agent.state.tools.map((t) => t.name);
+	}
+
+	/**
+	 * Register or replace dynamic custom tools discovered after session start
+	 * (MusePi MCP: server tool lists are only known once the server has been
+	 * enumerated). Refreshes the tool registry; brand-new tools join the
+	 * active set by default.
+	 */
+	registerDynamicTools(definitions: ToolDefinition[]): void {
+		for (const definition of definitions) {
+			this._dynamicCustomTools.set(definition.name, definition);
+		}
+		this._refreshToolRegistry();
+	}
+
+	/**
+	 * Remove dynamic custom tools by name (stale MCP tools after a
+	 * re-enumeration or server shutdown). No-op for names never registered.
+	 */
+	unregisterDynamicTools(names: string[]): void {
+		let changed = false;
+		for (const name of names) {
+			changed = this._dynamicCustomTools.delete(name) || changed;
+		}
+		if (changed) this._refreshToolRegistry();
+	}
+
+	/** Names of currently registered dynamic custom tools. */
+	getDynamicToolNames(): string[] {
+		return [...this._dynamicCustomTools.keys()];
 	}
 
 	/**
@@ -2470,6 +2536,10 @@ export class AgentSession {
 				definition,
 				sourceInfo: createSyntheticSourceInfo(`<sdk:${definition.name}>`, { source: "sdk" }),
 			})),
+			...Array.from(this._dynamicCustomTools.values()).map((definition) => ({
+				definition,
+				sourceInfo: createSyntheticSourceInfo(`<mcp:${definition.name}>`, { source: "mcp" }),
+			})),
 		].filter((tool) => isAllowedTool(tool.definition.name));
 		const definitionRegistry = new Map<string, ToolDefinitionEntry>(
 			Array.from(this._baseToolDefinitions.entries())
@@ -2556,6 +2626,13 @@ export class AgentSession {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		// MusePi hashline: create once per session — the shared SnapshotStore must
+		// survive runtime rebuilds so tags minted earlier stay resolvable. `null`
+		// means "resolved, disabled" (musepi.edit.hashline off).
+		if (this._hashlineContext === undefined) {
+			this._hashlineContext = createHashlineContext(this.settingsManager.getMusepi()) ?? null;
+		}
+		const hashline = this._hashlineContext ?? undefined;
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2564,8 +2641,10 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
+					read: { autoResizeImages, hashline },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					edit: { hashline },
+					grep: { hashline },
 				});
 
 		this._baseToolDefinitions = new Map(
@@ -2591,6 +2670,9 @@ export class AgentSession {
 		}
 		this._bindExtensionCore(this._extensionRunner);
 		this._applyExtensionBindings(this._extensionRunner);
+		// MusePi snapcompact: arm the deterministic compaction strategy on every
+		// runner (re)build; runtime-gated on musepi.compaction.strategy.
+		initMusepiSnapcompact(this.settingsManager, this._extensionRunner);
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
@@ -2890,16 +2972,26 @@ export class AgentSession {
 	 * @param options.customInstructions Custom instructions for summarizer
 	 * @param options.replaceInstructions If true, customInstructions replaces the default prompt
 	 * @param options.label Label to attach to the branch summary entry
+	 * @param options.position "before" moves the leaf to the target's parent (undo-style
+	 * rewind that excludes the target itself, regardless of target type); default keeps
+	 * the type-driven behavior (user message → parent + editor text, otherwise the target)
 	 * @returns Result with editorText (if user message) and cancelled status
 	 */
 	async navigateTree(
 		targetId: string,
-		options: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string } = {},
+		options: {
+			summarize?: boolean;
+			customInstructions?: string;
+			replaceInstructions?: boolean;
+			label?: string;
+			position?: "before";
+		} = {},
 	): Promise<{ editorText?: string; cancelled: boolean; aborted?: boolean; summaryEntry?: BranchSummaryEntry }> {
 		const oldLeafId = this.sessionManager.getLeafId();
 
-		// No-op if already at target
-		if (targetId === oldLeafId) {
+		// No-op if already at target (a "before" navigation still moves when the
+		// target is the current leaf: it lands on the target's parent)
+		if (targetId === oldLeafId && options.position !== "before") {
 			return { cancelled: false };
 		}
 
@@ -3015,7 +3107,10 @@ export class AgentSession {
 			let newLeafId: string | null;
 			let editorText: string | undefined;
 
-			if (targetEntry.type === "message" && targetEntry.message.role === "user") {
+			if (options.position === "before") {
+				// Undo-style rewind: exclude the target itself regardless of type.
+				newLeafId = targetEntry.parentId;
+			} else if (targetEntry.type === "message" && targetEntry.message.role === "user") {
 				// User message: leaf = parent (null if root), text goes to editor
 				newLeafId = targetEntry.parentId;
 				editorText = contentText(targetEntry.message.content, "");

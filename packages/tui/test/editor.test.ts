@@ -4148,4 +4148,180 @@ describe("Editor component", () => {
 			assert.strictEqual(submitted, pastedText);
 		});
 	});
+
+	describe("Mode-aware history (historyFilter/onRecall/draft hooks)", () => {
+		/**
+		 * Replicates the interactive-mode wiring: bash mode derives from the
+		 * buffer's `!` prefix, the history filter is locked to the mode
+		 * captured at browse entry, and the lock is released on draft restore.
+		 */
+		function wireModes(editor: Editor) {
+			const state = {
+				isBashMode: false,
+				browseMode: null as "prompt" | "bash" | null,
+				draftSaves: [] as unknown[],
+				draftRestores: [] as unknown[],
+			};
+			editor.onChange = (text) => {
+				state.isBashMode = text.trimStart().startsWith("!");
+			};
+			editor.setHistoryFilter((entry: string) => {
+				const mode = state.browseMode ?? (state.isBashMode ? "bash" : "prompt");
+				return mode === "bash" ? entry.startsWith("!") : true;
+			});
+			editor.onHistoryDraftSave = () => {
+				state.browseMode = state.isBashMode ? "bash" : "prompt";
+				state.draftSaves.push(state.browseMode);
+				return state.browseMode;
+			};
+			editor.onHistoryDraftRestore = (saved: unknown) => {
+				state.draftRestores.push(saved);
+				state.browseMode = null;
+			};
+			return state;
+		}
+
+		it("bash mode recalls only !-prefixed entries; prompt mode recalls everything", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const state = wireModes(editor);
+			editor.addToHistory("plain prompt");
+			editor.addToHistory("!ls -la");
+			editor.addToHistory("another prompt");
+			editor.addToHistory("!git status");
+
+			// Bash mode: only ! entries are visited.
+			editor.setText("!"); // puts the buffer into bash mode via onChange
+			assert.strictEqual(state.isBashMode, true);
+			editor.handleInput("\x1b[A"); // jump to line start (non-empty buffer)
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "!git status");
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "!ls -la");
+			editor.handleInput("\x1b[A"); // no older bash entries — stays put
+			assert.strictEqual(editor.getText(), "!ls -la");
+
+			// Prompt mode: every entry is visited.
+			editor.setText("");
+			assert.strictEqual(state.isBashMode, false);
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "!git status");
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "another prompt");
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "!ls -la");
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "plain prompt");
+		});
+
+		it("recalling a ! entry re-derives bash mode through onChange; plain entry restores prompt mode", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const state = wireModes(editor);
+			editor.addToHistory("!make build");
+			editor.addToHistory("fix the tests");
+
+			editor.setText("");
+			editor.handleInput("\x1b[A"); // "fix the tests"
+			assert.strictEqual(state.isBashMode, false);
+			editor.handleInput("\x1b[A"); // "!make build"
+			assert.strictEqual(state.isBashMode, true);
+			editor.handleInput("\x1b[B"); // back to "fix the tests"
+			assert.strictEqual(state.isBashMode, false);
+		});
+
+		it("draft restore returns the saved host state and releases the browse lock", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const state = wireModes(editor);
+			editor.addToHistory("!pwd");
+
+			editor.setText("!partial");
+			editor.handleInput("\x1b[A"); // jump to line start (non-empty buffer)
+			editor.handleInput("\x1b[A"); // enter browse in bash mode
+			assert.strictEqual(editor.getText(), "!pwd");
+			assert.deepStrictEqual(state.draftSaves, ["bash"]);
+
+			editor.handleInput("\x1b[B"); // back to draft
+			assert.strictEqual(editor.getText(), "!partial");
+			assert.deepStrictEqual(state.draftRestores, ["bash"]);
+			assert.strictEqual(state.browseMode, null);
+		});
+
+		it("filter stays locked to the browse-entry mode after landing on a cross-mode entry", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const state = wireModes(editor);
+			editor.addToHistory("older prompt");
+			editor.addToHistory("!bang");
+			editor.addToHistory("recent prompt");
+
+			// Enter browse in prompt mode; landing on "!bang" flips isBashMode
+			// via onChange, but the locked filter must keep visiting prompt
+			// entries too.
+			editor.setText("");
+			editor.handleInput("\x1b[A"); // "recent prompt"
+			editor.handleInput("\x1b[A"); // "!bang" — isBashMode now true
+			assert.strictEqual(state.isBashMode, true);
+			editor.handleInput("\x1b[A"); // still reaches "older prompt"
+			assert.strictEqual(editor.getText(), "older prompt");
+
+			// After returning to the draft the lock is released, so a fresh
+			// browse from the (now bash) buffer only sees ! entries.
+			editor.handleInput("\x1b[B"); // "!bang"
+			editor.handleInput("\x1b[B"); // "recent prompt"
+			editor.handleInput("\x1b[B"); // draft ""
+			assert.strictEqual(state.browseMode, null);
+			editor.setText("!");
+			editor.handleInput("\x1b[A"); // jump to line start (non-empty buffer)
+			editor.handleInput("\x1b[A");
+			assert.strictEqual(editor.getText(), "!bang");
+			editor.handleInput("\x1b[A"); // no older bash entries
+			assert.strictEqual(editor.getText(), "!bang");
+		});
+
+		it("onRecall can rewrite the recalled entry before it lands in the buffer", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			editor.addToHistory("!ls -la");
+			editor.addToHistory("plain");
+			const seen: Array<[string, number]> = [];
+			editor.onRecall = (entry, direction) => {
+				seen.push([entry, direction]);
+				return entry.startsWith("!") ? entry.slice(1) : undefined;
+			};
+
+			editor.handleInput("\x1b[A"); // "plain" — returned as-is
+			assert.strictEqual(editor.getText(), "plain");
+			editor.handleInput("\x1b[A"); // "!ls -la" — prefix stripped by onRecall
+			assert.strictEqual(editor.getText(), "ls -la");
+			assert.deepStrictEqual(seen, [
+				["plain", -1],
+				["!ls -la", -1],
+			]);
+		});
+	});
+});
+
+describe("history search hook (Ctrl+R)", () => {
+	it("fires onHistorySearch on ctrl+r when the hook is set", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		let fired = 0;
+		editor.onHistorySearch = () => {
+			fired++;
+		};
+		editor.handleInput("\x12"); // ctrl+r
+		assert.strictEqual(fired, 1);
+		// Buffer is untouched — the host owns the search UI
+		assert.strictEqual(editor.getText(), "");
+	});
+
+	it("does not throw on ctrl+r when no hook is set", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		editor.handleInput("\x12"); // falls through harmlessly
+		assert.strictEqual(editor.getText(), "");
+	});
+
+	it("getHistory exposes entries newest-first as a readonly view", () => {
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		editor.addToHistory("first");
+		editor.addToHistory("second");
+		editor.addToHistory("!bang");
+		assert.deepStrictEqual([...editor.getHistory()], ["!bang", "second", "first"]);
+	});
 });

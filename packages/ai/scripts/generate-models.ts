@@ -2075,6 +2075,16 @@ async function generateModels() {
 		) {
 			candidate.maxTokens = KIMI_K3_MAX_TOKENS;
 		}
+		// Kimi K3 natively understands video (Moonshot `video_url` content parts and
+		// uploaded `ms://` file references); upstream model metadata does not declare
+		// the modality yet, so keep it until models.dev catches up.
+		if (
+			(candidate.provider === "moonshotai" || candidate.provider === "moonshotai-cn") &&
+			candidate.id === "kimi-k3" &&
+			!candidate.input.includes("video")
+		) {
+			candidate.input.push("video");
+		}
 		// Keep selected OpenRouter model metadata stable until upstream settles.
 		if (candidate.provider === "openrouter" && candidate.id === "moonshotai/kimi-k2.5") {
 			candidate.cost.input = 0.41;

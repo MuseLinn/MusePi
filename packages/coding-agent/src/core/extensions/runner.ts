@@ -30,6 +30,7 @@ import type {
 	ExtensionError,
 	ExtensionEvent,
 	ExtensionFlag,
+	ExtensionHandler,
 	ExtensionMode,
 	ExtensionRuntime,
 	ExtensionShortcut,
@@ -292,6 +293,22 @@ export class ExtensionRunner {
 	private shortcutDiagnostics: ResourceDiagnostic[] = [];
 	private commandDiagnostics: ResourceDiagnostic[] = [];
 	private staleMessage: string | undefined;
+	/** Native (built-in) event handlers, keyed by event type. Registered by
+	 *  host features that are not extension modules (e.g. MusePi compaction
+	 *  strategy); they run BEFORE extension handlers so user extensions can
+	 *  still override their results (last non-empty result wins). */
+	private nativeHandlers = new Map<string, Array<ExtensionHandler<never, unknown>>>();
+
+	/**
+	 * Register a native event handler without an extension module. Native
+	 * handlers participate in hasHandlers/emit like extension handlers but
+	 * always run first, letting extensions override them.
+	 */
+	registerNativeHandler(eventType: string, handler: ExtensionHandler<never, unknown>): void {
+		const list = this.nativeHandlers.get(eventType) ?? [];
+		list.push(handler);
+		this.nativeHandlers.set(eventType, list);
+	}
 
 	constructor(
 		extensions: Extension[],
@@ -563,6 +580,7 @@ export class ExtensionRunner {
 	}
 
 	hasHandlers(eventType: string): boolean {
+		if ((this.nativeHandlers.get(eventType)?.length ?? 0) > 0) return true;
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(eventType);
 			if (handlers && handlers.length > 0) {
@@ -788,6 +806,28 @@ export class ExtensionRunner {
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {
 		const ctx = this.createContext();
 		let result: SessionBeforeEventResult | undefined;
+
+		// Native handlers first — extensions may still override their results.
+		for (const handler of this.nativeHandlers.get(event.type) ?? []) {
+			try {
+				const handlerResult = await handler(event as never, ctx);
+				if (this.isSessionBeforeEvent(event) && handlerResult) {
+					result = handlerResult as SessionBeforeEventResult;
+					if (result.cancel) {
+						return result as RunnerEmitResult<TEvent>;
+					}
+				}
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				const stack = err instanceof Error ? err.stack : undefined;
+				this.emitError({
+					extensionPath: "(native)",
+					event: event.type,
+					error: message,
+					stack,
+				});
+			}
+		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(event.type);
