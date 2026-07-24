@@ -13,6 +13,17 @@ const packageDirs = readdirSync(packagesDir, { withFileTypes: true })
 	.filter(dirent => dirent.isDirectory())
 	.map(dirent => dirent.name);
 
+// Also scan nested workspace packages (e.g. packages/musepi/*)
+const musepiDir = join(packagesDir, 'musepi');
+let musepiDirs = [];
+try {
+	musepiDirs = readdirSync(musepiDir, { withFileTypes: true })
+		.filter(dirent => dirent.isDirectory())
+		.map(dirent => join('musepi', dirent.name));
+} catch {}
+
+packageDirs.push(...musepiDirs);
+
 // Read all package.json files and build version map
 const packages = {};
 const versionMap = {};
