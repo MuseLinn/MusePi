@@ -552,8 +552,8 @@ export class TasksBrowserComponent extends Container {
 			`${label("Agent type:")}${value(task.type)}`,
 			`${label("Model:")}${value(task.model)}`,
 			`${label("Turns:")}${value(String(task.turns))}`,
-			`${label("Tokens:")}${value(`↑${task.usage.input} ↓${task.usage.output}`)}`,
-			`${label("Cost:")}${value(task.usage.cost === 0 ? "$0" : `$${task.usage.cost.toFixed(4)}`)}`,
+			`${label("Tokens:")}${value(task.usage ? `↑${task.usage.input} ↓${task.usage.output}` : "—")}`,
+			`${label("Cost:")}${value(task.usage?.cost === 0 ? "$0" : task.usage?.cost ? `$${task.usage.cost.toFixed(4)}` : "—")}`,
 		];
 
 		const dur = task.startTime

@@ -4419,7 +4419,8 @@ export class InteractiveMode {
 
 	// ── /swarm handler ──
 	private handleSwarmCommand(text: string): void {
-		const arg = text.slice(7).trim().toLowerCase();
+		const raw = text.slice(7).trim();
+		const arg = raw.toLowerCase();
 
 		if (arg === "status" || arg === "") {
 			const bgTasks = backgroundManager.list();
@@ -4442,7 +4443,13 @@ export class InteractiveMode {
 			return;
 		}
 
-		this.showExtensionNotify("Usage: /swarm [on|off|status]", "error");
+		if (arg === "on" || arg === "off") {
+			this.showExtensionNotify(`Swarm mode: ${arg.toUpperCase()}`, "info");
+			return;
+		}
+
+		// Treat bare text as a task prompt — send to the model
+		this.session.sendUserMessage(raw);
 	}
 
 	private toggleThinkingBlockVisibility(): void {
