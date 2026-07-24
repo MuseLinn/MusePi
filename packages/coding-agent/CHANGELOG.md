@@ -11,7 +11,13 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 ### New Features
 
-- **Missing slash commands** — 7 slash commands from the harness extension are now built into the coding-agent TUI. `/goal` manages the active goal lifecycle (set, status, pause, resume, cancel, replace, next, budget) and the goal queue (add, prioritize, drop, skip); `/mode` switches the permission policy (auto, yolo, manual); `/plan` toggles plan mode on and off; `/swarm` reports background task status; `/tasks` is registered in the command palette (already available via the existing handler and Ctrl+Shift+T keybinding); `/todo` adds list items, marks them done, or shows the todo panel.
+- **Missing slash commands** — 7 slash commands from the harness extension are now built into the coding-agent TUI.
+
+### Changed
+
+- **Upstream v0.81.1** — merged 50 upstream commits including streamFn compatibility, deferred catalog refresh, llama download progress, sqlite session storage, compaction retries, usage accounting, RPC thinking levels, Qwen Token Plan provider, tui paste registry fix, and video content API.
+
+- **Corrected slash command mappings** — `/mode` now controls permission policy (auto/yolo/manual), `/plan` toggles plan mode on/off/clear, `/goal` gains the `budget` subcommand, `/swarm` reports background task status, `/permission` removed (merged into `/mode`). `/goal` manages the active goal lifecycle (set, status, pause, resume, cancel, replace, next, budget) and the goal queue (add, prioritize, drop, skip); `/mode` switches the permission policy (auto, yolo, manual); `/plan` toggles plan mode on and off; `/swarm` reports background task status; `/tasks` is registered in the command palette (already available via the existing handler and Ctrl+Shift+T keybinding); `/todo` adds list items, marks them done, or shows the todo panel.
 
 ## [0.1.2] - 2026-07-23
 
