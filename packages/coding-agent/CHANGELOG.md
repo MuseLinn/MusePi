@@ -9,6 +9,13 @@ upstream history (pi 0.5.x–0.81.x) lives in the
 [upstream changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md)
 and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
+## [Unreleased]
+
+### Fixed
+
+- **macOS tar extraction** — only pass `--force-local` to tar on Windows; macOS tar rejects this flag.
+- **Update fallback hint** — when auto-update is unavailable, print the install-script one-liner alongside the manual download link.
+
 ## [0.1.3] - 2026-07-24
 
 ### New Features
