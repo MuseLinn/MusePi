@@ -4331,6 +4331,7 @@ export class InteractiveMode {
 				return;
 			}
 			permissionManager.setMode(arg);
+			this.setExtensionStatus("permission-mode", arg);
 			this.showExtensionNotify(`Permission mode: ${arg.toUpperCase()}`);
 			return;
 		}
@@ -4372,6 +4373,7 @@ export class InteractiveMode {
 				return;
 			}
 			planManager.enterPlanMode("User activated plan mode");
+			this.setExtensionStatus("plan-mode", "plan");
 			this.showExtensionNotify("Plan mode: ON");
 		} else {
 			if (!planManager.isPlanModeActive()) {
@@ -4379,6 +4381,7 @@ export class InteractiveMode {
 				return;
 			}
 			planManager.exitPlanMode();
+			this.setExtensionStatus("plan-mode", undefined);
 			this.showExtensionNotify("Plan mode: OFF");
 		}
 	}
