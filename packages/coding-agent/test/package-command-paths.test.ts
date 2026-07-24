@@ -493,72 +493,18 @@ describe("package commands", () => {
 		}
 	});
 
-<<<<<<< HEAD
-	it("allows explicit self-update checks when automatic version checks are disabled", async () => {
-		const previousSkipVersionCheck = process.env.PI_SKIP_VERSION_CHECK;
-		process.env.PI_SKIP_VERSION_CHECK = "1";
-		const fetchMock = vi.fn(async () => Response.json({ version: VERSION }));
-		vi.stubGlobal("fetch", fetchMock);
-=======
 	it("reports an available self update from the GitHub release channel", async () => {
 		const targetVersion = getNewerPatchVersion();
 		const releaseUrl = `https://github.com/MuseLinn/MusePi/releases/tag/v${targetVersion}`;
 		const fetchMock = vi.fn(async () => Response.json({ tag_name: `v${targetVersion}`, html_url: releaseUrl }));
 		vi.stubGlobal("fetch", fetchMock);
 
->>>>>>> merge-base-0811
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		try {
 			await expect(runPackageCommandDirectly(["update", "--self"])).resolves.toBeUndefined();
 
-<<<<<<< HEAD
-			expect(fetchMock).toHaveBeenCalledOnce();
-			expect(logSpy.mock.calls.map(([message]) => String(message)).join("\n")).toContain(
-				`pi is already up to date (v${VERSION})`,
-			);
-			expect(errorSpy).not.toHaveBeenCalled();
-			expect(process.exitCode).toBeUndefined();
-		} finally {
-			if (previousSkipVersionCheck === undefined) {
-				delete process.env.PI_SKIP_VERSION_CHECK;
-			} else {
-				process.env.PI_SKIP_VERSION_CHECK = previousSkipVersionCheck;
-			}
-		}
-	});
-
-	it("uses the update check version for forced self updates even when current", async () => {
-		const globalPrefix = join(tempDir, "global-prefix");
-		const projectPrefix = join(tempDir, "project-prefix");
-		const selfPackageDir = join(globalPrefix, "lib", "node_modules", "@earendil-works", "pi-coding-agent");
-		const fakeNpmPath = join(tempDir, "fake-npm.cjs");
-		const recordPath = join(tempDir, "self-update.json");
-		mkdirSync(selfPackageDir, { recursive: true });
-		mkdirSync(join(projectDir, ".pi"), { recursive: true });
-		writeFileSync(
-			fakeNpmPath,
-			`const fs=require("node:fs"),path=require("node:path"),args=process.argv.slice(2),prefix=args[args.indexOf("--prefix")+1];
-if(args.includes("root")) console.log(path.join(prefix,"lib","node_modules"));
-else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
-`,
-		);
-		writeFileSync(
-			join(agentDir, "settings.json"),
-			JSON.stringify({ npmCommand: [originalExecPath, fakeNpmPath, "--prefix", globalPrefix] }, null, 2),
-		);
-		writeFileSync(
-			join(projectDir, ".pi", "settings.json"),
-			JSON.stringify({ npmCommand: [originalExecPath, fakeNpmPath, "--prefix", projectPrefix] }, null, 2),
-		);
-		process.env.PI_PACKAGE_DIR = selfPackageDir;
-		Object.defineProperty(process, "execPath", {
-			value: join(selfPackageDir, "dist", "cli.js"),
-			configurable: true,
-		});
-		const fetchMock = vi.fn(async () => Response.json({ version: VERSION }));
-=======
 			expect(process.exitCode).toBeUndefined();
 			expect(errorSpy).not.toHaveBeenCalled();
 			expect(fetchMock).toHaveBeenCalledOnce();
@@ -599,7 +545,6 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
 	it("shows the latest release on forced self update even when current", async () => {
 		const releaseUrl = `https://github.com/MuseLinn/MusePi/releases/tag/v${VERSION}`;
 		const fetchMock = vi.fn(async () => Response.json({ tag_name: `v${VERSION}`, html_url: releaseUrl }));
->>>>>>> merge-base-0811
 		vi.stubGlobal("fetch", fetchMock);
 
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

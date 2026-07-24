@@ -27,6 +27,7 @@ import type {
 	Tool,
 	ToolCall,
 	Usage,
+	VideoContent,
 } from "../types.ts";
 import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
@@ -75,7 +76,7 @@ type ToolResultOutputContent = Array<ResponseInputText | ResponseInputImage>;
 
 function convertToolResultOutput<TApi extends Api>(
 	model: Model<TApi>,
-	content: readonly (TextContent | ImageContent)[],
+	content: readonly (TextContent | ImageContent | VideoContent)[],
 ): string | ToolResultOutputContent {
 	const textResult = content
 		.filter((c): c is TextContent => c.type === "text")

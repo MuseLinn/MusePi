@@ -1,5 +1,5 @@
-import { rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { rmSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { selectConfig } from "./cli/config-selector.ts";
@@ -15,18 +15,18 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { openBrowser } from "./utils/open-browser.ts";
 import {
 	applyStagedUpdatePosix,
-	backupDirName,
-	buildWindowsUpdateScript,
+	applyStagedUpdateWindows,
 	cleanupStaleUpdateDirs,
 	createUpdateWorkDir,
 	detectInstallDir,
 	downloadReleaseAsset,
+	executableNameForPlatform,
 	extractReleaseArchive,
 	findInstallRoot,
 	isDirectoryWritable,
-	launchWindowsUpdateScript,
 	resolveAssetDownload,
 	stageInstallRoot,
+	sweepStaleWindowsBackups,
 	timestampSuffix,
 } from "./utils/self-update.ts";
 import { getLatestPiRelease, isNewerPackageVersion, MUSEPI_RELEASES_URL } from "./utils/version-check.ts";
@@ -578,25 +578,18 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 
 		const stagedDir = stageInstallRoot(installRoot, installDir, suffix);
 		if (process.platform === "win32") {
-			// Windows cannot move the directory of a running executable, so a
-			// detached PowerShell script finishes the swap after this process
-			// exits. The script and its log live next to the install dir; the
-			// script deletes itself when done.
-			const backupDir = backupDirName(installDir, suffix);
-			const logFile = join(parentDir, `${basename(installDir)}.update-${suffix}.log`);
-			const scriptPath = join(parentDir, `${basename(installDir)}.update-${suffix}.ps1`);
-			writeFileSync(
-				scriptPath,
-				buildWindowsUpdateScript({ installDir, stagedDir, backupDir, logFile, parentPid: process.pid }),
-			);
-			launchWindowsUpdateScript(scriptPath);
-			console.log(
-				chalk.green(
-					`MusePi v${latestRelease.version} is staged and will be installed as soon as this process exits.`,
-				),
-			);
-			console.log(chalk.dim(`Previous install will be kept at ${backupDir}; update log: ${logFile}`));
-			setTimeout(() => process.exit(0), 3000);
+			// Windows: cannot rename the directory of a running exe, but CAN
+			// rename the exe file itself. Perform the swap in-process via file
+			// rename + copy, without needing a helper process or process.exit().
+			const { backupExe } = await applyStagedUpdateWindows({
+				installDir,
+				stagedDir,
+				platform: process.platform,
+				suffix,
+			});
+			sweepStaleWindowsBackups(installDir, executableNameForPlatform(process.platform));
+			console.log(chalk.green(`Updated MusePi to v${latestRelease.version}.`));
+			console.log(chalk.dim(`Restart MusePi to use the new version. Previous binary kept at ${backupExe}.`));
 			return;
 		}
 

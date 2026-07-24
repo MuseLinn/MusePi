@@ -1,11 +1,7 @@
 {
 	"name": "pi-extension-sandbox",
 	"private": true,
-<<<<<<< HEAD
-	"version": "1.12.0",
-=======
-	"version": "1.10.13",
->>>>>>> merge-base-0811
+	"version": "1.11.1",
 	"type": "module",
 	"scripts": {
 		"clean": "echo 'nothing to clean'",

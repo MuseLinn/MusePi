@@ -576,7 +576,11 @@ describe("AgentHarness tools", () => {
 		it("coalesces updates and persists truncated full output", async () => {
 			const context = createContext();
 			const updates: Array<{
-				content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
+				content: Array<
+					| { type: "text"; text: string }
+					| { type: "image"; data: string; mimeType: string }
+					| { type: "video"; data: string; mimeType: string }
+				>;
 				details?: BashToolDetails;
 			}> = [];
 			const result = await createBashTool().execute(

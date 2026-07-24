@@ -1127,9 +1127,9 @@ export class InteractiveMode {
 		};
 	}
 
-	// =========================================================================
+	// ===
 	// Extension System
-	// =========================================================================
+	// ===
 
 	private formatDisplayPath(p: string): string {
 		const home = os.homedir();
@@ -2653,9 +2653,9 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	// =========================================================================
+	// ===
 	// Key Handlers
-	// =========================================================================
+	// ===
 
 	private setupKeyHandlers(): void {
 		// Set up handlers on defaultEditor - they use this.editor for text access
@@ -2700,10 +2700,8 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
-<<<<<<< HEAD
 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
 		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
-=======
 		this.defaultEditor.onAction("app.musepi.tasks", () => this.showMusepiTaskBrowser());
 		this.defaultEditor.onAction("app.thinking.toggle", () => {
 			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
@@ -2712,8 +2710,7 @@ export class InteractiveMode {
 				this.toggleThinkingBlockVisibility();
 			}
 		});
-		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
->>>>>>> merge-base-0811
+		this.defaultEditor.onAction("app.editor.external", () => this.handleOpenExternalEditor());
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
@@ -3712,9 +3709,9 @@ export class InteractiveMode {
 		this.renderSessionEntries(this.sessionManager.buildContextEntries());
 	}
 
-	// =========================================================================
+	// ===
 	// Key handlers
-	// =========================================================================
+	// ===
 
 	private handleCtrlC(): void {
 		const now = Date.now();
@@ -4484,9 +4481,9 @@ export class InteractiveMode {
 		}
 	}
 
-	// =========================================================================
+	// ===
 	// UI helpers
-	// =========================================================================
+	// ===
 
 	clearEditor(): void {
 		this.editor.setText("");
@@ -4724,9 +4721,9 @@ export class InteractiveMode {
 		this.pendingBashComponents = [];
 	}
 
-	// =========================================================================
+	// ===
 	// Selectors
-	// =========================================================================
+	// ===
 
 	/**
 	 * Shows a selector component in place of the editor.
@@ -6052,9 +6049,9 @@ export class InteractiveMode {
 		}
 	}
 
-	// =========================================================================
+	// ===
 	// Command handlers
-	// =========================================================================
+	// ===
 
 	private async handleReloadCommand(): Promise<void> {
 		if (this.session.isStreaming) {
