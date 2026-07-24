@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 All notable changes to MusePi are documented in this file.
 
 MusePi is a fork of [pi](https://github.com/earendil-works/pi). The pre-fork
