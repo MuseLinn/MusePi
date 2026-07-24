@@ -277,6 +277,10 @@ export const OPENROUTER_MODELS = values as {
 		id: "inclusionai/ling-2.6-flash";
 		provider: "openrouter";
 	};
+	"inclusionai/ling-3.0-flash:free": Model<"openai-completions"> & {
+		id: "inclusionai/ling-3.0-flash:free";
+		provider: "openrouter";
+	};
 	"inclusionai/ring-2.6-1t": Model<"openai-completions"> & {
 		id: "inclusionai/ring-2.6-1t";
 		provider: "openrouter";

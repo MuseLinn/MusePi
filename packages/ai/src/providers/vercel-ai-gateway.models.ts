@@ -289,6 +289,10 @@ export const VERCEL_AI_GATEWAY_MODELS = values as {
 		id: "inception/mercury-coder-small";
 		provider: "vercel-ai-gateway";
 	};
+	"inclusionai/ling-3.0-flash-free": Model<"anthropic-messages"> & {
+		id: "inclusionai/ling-3.0-flash-free";
+		provider: "vercel-ai-gateway";
+	};
 	"interfaze/interfaze-beta": Model<"anthropic-messages"> & {
 		id: "interfaze/interfaze-beta";
 		provider: "vercel-ai-gateway";
@@ -655,6 +659,10 @@ export const VERCEL_AI_GATEWAY_MODELS = values as {
 	};
 	"stepfun/step-3.7-flash": Model<"anthropic-messages"> & {
 		id: "stepfun/step-3.7-flash";
+		provider: "vercel-ai-gateway";
+	};
+	"tencent/hy3": Model<"anthropic-messages"> & {
+		id: "tencent/hy3";
 		provider: "vercel-ai-gateway";
 	};
 	"thinkingmachines/inkling": Model<"anthropic-messages"> & {
