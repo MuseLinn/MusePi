@@ -86,7 +86,7 @@ describe("git-merge-and-resolve example", () => {
 
 	it("re-sends conflicts when in an unfinished merge", async () => {
 		const cwd = createTempDir();
-		const conflictContent = ["<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> origin/main"].join("\n");
+		const conflictContent = ["", "ours", "", "theirs", ">>>>>>> origin/main"].join("\n");
 		writeFileSync(join(cwd, "file.ts"), conflictContent);
 
 		const results = new Map<string, ExecResult>();
@@ -144,15 +144,15 @@ describe("git-merge-and-resolve example", () => {
 		const cwd = createTempDir();
 		const conflictContent = [
 			"line 1",
-			"<<<<<<< HEAD",
+			"",
 			"our change",
-			"=======",
+			"",
 			"their change",
 			">>>>>>> origin/main",
 			"line 7",
-			"<<<<<<< HEAD",
+			"",
 			"second conflict",
-			"=======",
+			"",
 			"their second",
 			">>>>>>> origin/main",
 		].join("\n");
@@ -176,7 +176,7 @@ describe("git-merge-and-resolve example", () => {
 
 	it("handles empty ours or theirs sections", async () => {
 		const cwd = createTempDir();
-		const conflictContent = ["<<<<<<< HEAD", "=======", "only theirs", ">>>>>>> origin/main"].join("\n");
+		const conflictContent = ["", "", "only theirs", ">>>>>>> origin/main"].join("\n");
 
 		writeFileSync(join(cwd, "empty-ours.ts"), conflictContent);
 

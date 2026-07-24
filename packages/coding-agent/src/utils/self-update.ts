@@ -30,7 +30,6 @@ import type { LatestPiRelease } from "./version-check.ts";
  *   happens in-process: rename the install dir to `<name>.old-<ts>`, move the
  *   staged dir into place, run `<exe> --version` to verify, and roll back on
  *   any failure. The `.old` backup is kept until the next successful run.
-<<<<<<< HEAD
  * - Windows: a running exe can be renamed but its *directory* cannot be moved
  *   while it is alive, and in-process per-file replacement risks half-written
  *   installs with no clean rollback. Instead the updater stages the new
@@ -43,7 +42,6 @@ import type { LatestPiRelease } from "./version-check.ts";
  * In both cases the previous install is preserved as `<name>.old-<ts>` next
  * to the install dir and is cleaned up by the next successful self-update
  * run (which proves the new install works).
-=======
  * - Windows: the directory of a running exe cannot be renamed, but the exe
  *   file itself *can* be renamed (NTFS remaps the file handle to the new
  *   name). The swap happens in-process without needing a helper process:
@@ -54,7 +52,6 @@ import type { LatestPiRelease } from "./version-check.ts";
  *
  * On both platforms the previous install artifact is preserved until the
  * next successful self-update (which proves the new install works).
->>>>>>> merge-v0820
  */
 
 const GITHUB_RELEASE_DOWNLOAD_BASE = "https://github.com/MuseLinn/MusePi/releases/download";
@@ -298,8 +295,6 @@ export async function applyStagedUpdatePosix(options: PosixApplyOptions): Promis
 	);
 }
 
-<<<<<<< HEAD
-=======
 export interface WindowsApplyOptions {
 	installDir: string;
 	stagedDir: string;
@@ -460,7 +455,6 @@ export async function applyStagedUpdateWindows(options: WindowsApplyOptions): Pr
 	return { backupExe };
 }
 
->>>>>>> merge-v0820
 export interface WindowsUpdateScriptOptions {
 	installDir: string;
 	stagedDir: string;
@@ -474,17 +468,14 @@ function psLiteral(value: string): string {
 }
 
 /**
-<<<<<<< HEAD
  * Render the detached PowerShell swap script used on Windows. The script is
  * generated (not executed) by the running process, which makes it unit
  * testable; it is launched only after the user confirms the update.
-=======
  * Render the detached PowerShell swap script used on Windows.
  *
  * @deprecated Replaced by {@link applyStagedUpdateWindows} which performs
  *   the swap in-process via file rename, without needing a helper PS script
  *   or process.exit(). Kept for unit test coverage of the old approach.
->>>>>>> merge-v0820
  */
 export function buildWindowsUpdateScript(options: WindowsUpdateScriptOptions): string {
 	const installDir = psLiteral(options.installDir);
@@ -537,16 +528,13 @@ Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction Silent
 }
 
 /**
-<<<<<<< HEAD
  * Launch the Windows swap script detached and hidden. The caller must exit
  * the current process immediately afterwards so the script can do the swap.
-=======
  * Launch the Windows swap script detached and hidden.
  *
  * @deprecated Replaced by {@link applyStagedUpdateWindows} which performs
  *   the swap in-process via file rename. Kept for backward compatibility
  *   if external code references it.
->>>>>>> merge-v0820
  */
 export function launchWindowsUpdateScript(scriptPath: string): void {
 	// Resolve the full path: powershell.exe is not guaranteed on PATH for

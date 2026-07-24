@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-## [0.1.5] - 2026-07-24
-
-## [0.1.4] - 2026-07-24
-
 All notable changes to MusePi are documented in this file.
 
 MusePi is a fork of [pi](https://github.com/earendil-works/pi). The pre-fork
@@ -14,6 +8,12 @@ upstream history (pi 0.5.x–0.81.x) lives in the
 and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
 ## [Unreleased]
+
+### Changed
+
+- **Upstream v0.82.0** — merged 40 upstream commits including constrained sampling API, OpenRouter OAuth, Kimi Code subscription OAuth, bash session metadata, model picker hot-reload, bash_execution_update events, and various fixes.
+
+## [0.1.5] - 2026-07-24
 
 ### Added
 

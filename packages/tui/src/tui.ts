@@ -363,15 +363,6 @@ export class TUI extends Container {
 	/** Called when the terminal reports a focus in/out event. */
 	public onFocusChange?: (focused: boolean) => void;
 
-	/**
-	 * Terminal window focus state (DECSET 1004 focus in/out events). Enabled
-	 * on start(); terminals that do not support 1004 simply never send the
-	 * events and the state stays at the initial `true`.
-	 */
-	public focused = true;
-	/** Called when the terminal reports a focus in/out event. */
-	public onFocusChange?: (focused: boolean) => void;
-
 	// Overlay stack for modal components rendered on top of base content
 	private focusOrderCounter = 0;
 	private overlayStack: OverlayStackEntry[] = [];

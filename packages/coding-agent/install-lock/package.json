@@ -1,21 +1,12 @@
 {
 	"name": "@earendil-works/pi-coding-agent-install",
-<<<<<<< HEAD
 	"version": "0.1.5",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
 		"@earendil-works/pi-coding-agent": "0.1.5"
-=======
-	"version": "0.82.0",
-	"private": true,
-	"description": "Lockfile root used by the Pi installer and updater.",
-	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.82.0"
->>>>>>> merge-v0820
 	},
 	"overrides": {
-		"protobufjs": "7.6.5",
 		"rimraf": "6.1.2",
 		"gaxios": {
 			"rimraf": "6.1.2"

@@ -2700,11 +2700,8 @@ export class InteractiveMode {
 		this.ui.onDebug = () => this.handleDebugCommand();
 		this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
-<<<<<<< HEAD
-=======
 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
 		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
->>>>>>> merge-v0820
 		this.defaultEditor.onAction("app.musepi.tasks", () => this.showMusepiTaskBrowser());
 		this.defaultEditor.onAction("app.thinking.toggle", () => {
 			// ctrl+t toggles the MusePi todo panel when todos exist; otherwise
@@ -2713,11 +2710,7 @@ export class InteractiveMode {
 				this.toggleThinkingBlockVisibility();
 			}
 		});
-<<<<<<< HEAD
-		this.defaultEditor.onAction("app.editor.external", () => this.openExternalEditor());
-=======
 		this.defaultEditor.onAction("app.editor.external", () => this.handleOpenExternalEditor());
->>>>>>> merge-v0820
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
