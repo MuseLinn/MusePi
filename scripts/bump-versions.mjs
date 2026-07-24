@@ -5,10 +5,9 @@
  * Upstream packages (@earendil-works/pi-*) keep their original versions.
  *
  * Our packages (lockstep):
- *   - @earendil-works/pi-coding-agent (our CLI)
+ *   - packages/coding-agent (our CLI)
  *   - @musepi/core
  *   - @musepi/transcript
- *   - @earendil-works/pi-orchestrator (if we keep it)
  */
 
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
@@ -20,7 +19,6 @@ const root = join(__dirname, '..');
 
 const OURS = [
   'packages/coding-agent',
-  'packages/orchestrator',
   'packages/musepi/core',
   'packages/musepi/transcript',
 ];

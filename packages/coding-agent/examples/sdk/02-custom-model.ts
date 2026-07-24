@@ -5,7 +5,7 @@
  */
 
 import { getModel } from "@earendil-works/pi-ai/compat";
-import { createAgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, ModelRuntime } from "@muselinn/musepi";
 
 const modelRuntime = await ModelRuntime.create();
 

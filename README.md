@@ -14,7 +14,7 @@ history — the same changelog drives the startup What's New screen (pre-fork
 upstream history is preserved at
 [packages/coding-agent/UPSTREAM-CHANGELOG.md](packages/coding-agent/UPSTREAM-CHANGELOG.md)).
 
-* **[@earendil-works/pi-coding-agent](packages/coding-agent)**: Interactive coding agent CLI (MusePi branded)
+* **[@muselinn/musepi](packages/coding-agent)**: Interactive coding agent CLI (MusePi branded)
 * **[@musepi/core](packages/musepi/core)**: MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task), zero host imports
 * **[@musepi/transcript](packages/musepi/transcript)**: MusePi transcript layer
 * **[@earendil-works/pi-agent-core](packages/agent)**: Agent runtime with tool calling and state management
@@ -64,7 +64,7 @@ conflict-surface rules are recorded in [UPSTREAM.md](UPSTREAM.md). In short:
 - MusePi changes live in `packages/musepi/` and the TUI seam of
   `packages/coding-agent`; upstream changes concentrate in the agent/tool
   layer, so file overlap stays small.
-- The extension API surface of `@earendil-works/pi-coding-agent` is kept
+- The extension API surface of `@muselinn/musepi` is kept
   compatible — installed extensions such as
   [pi-muselinn-harness](https://www.npmjs.com/package/pi-muselinn-harness) and
   termdraw load unchanged.
@@ -77,7 +77,7 @@ conflict-surface rules are recorded in [UPSTREAM.md](UPSTREAM.md). In short:
 |---------|-------------|
 | **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, Kimi, etc.) |
 | **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
+| **[@muselinn/musepi](packages/coding-agent)** | Interactive coding agent CLI |
 | **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
 | **[@musepi/core](packages/musepi/core)** | MusePi agent orchestration core (goal/plan/permission/hooks/skills/swarm/task) |
 | **[@musepi/transcript](packages/musepi/transcript)** | MusePi transcript layer |

@@ -44,7 +44,7 @@ import {
 	type ToolResultMessage,
 	type VideoContent,
 } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@muselinn/musepi";
 
 // =============================================================================
 // OAuth implementation adapted for the legacy extension compatibility interface.

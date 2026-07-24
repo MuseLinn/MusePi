@@ -23,7 +23,7 @@ import * as _bundledTypeboxCompile from "typebox/compile";
 import * as _bundledTypeboxValue from "typebox/value";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../../config.ts";
 // NOTE: This import works because loader.ts exports are NOT re-exported from index.ts,
-// avoiding a circular dependency. Extensions can import from @earendil-works/pi-coding-agent.
+// avoiding a circular dependency. Extensions can import from @muselinn/musepi.
 import * as _bundledPiCodingAgent from "../../index.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
@@ -61,7 +61,7 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@earendil-works/pi-ai/compat": _bundledPiAiCompat,
 	"@earendil-works/pi-ai/oauth": _bundledPiAiOauth,
 	"@earendil-works/pi-ai/providers/all": _bundledPiAiProviders,
-	"@earendil-works/pi-coding-agent": _bundledPiCodingAgent,
+	"@muselinn/musepi": _bundledPiCodingAgent,
 	"@mariozechner/pi-agent-core": _bundledPiAgentCore,
 	"@mariozechner/pi-tui": _bundledPiTui,
 	"@mariozechner/pi-ai": _bundledPiAiCompat,
@@ -112,7 +112,7 @@ function getAliases(): Record<string, string> {
 	);
 
 	_aliases = {
-		"@earendil-works/pi-coding-agent": piCodingAgentEntry,
+		"@muselinn/musepi": piCodingAgentEntry,
 		"@earendil-works/pi-agent-core": piAgentCoreEntry,
 		"@earendil-works/pi-tui": piTuiEntry,
 		"@earendil-works/pi-ai/providers/all": piAiProvidersEntry,

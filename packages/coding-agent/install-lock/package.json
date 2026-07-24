@@ -1,10 +1,10 @@
 {
-	"name": "@earendil-works/pi-coding-agent-install",
+	"name": "@muselinn/musepi-install",
 	"version": "0.1.6",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.1.6"
+		"@muselinn/musepi": "0.1.6"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",

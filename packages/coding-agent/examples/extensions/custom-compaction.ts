@@ -15,8 +15,8 @@
 
 import { uuidv7 } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai/compat";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@muselinn/musepi";
+import { convertToLlm, serializeConversation } from "@muselinn/musepi";
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_before_compact", async (event, ctx) => {

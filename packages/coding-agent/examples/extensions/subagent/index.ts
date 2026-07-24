@@ -19,14 +19,14 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { StringEnum } from "@earendil-works/pi-ai";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import {
 	CONFIG_DIR_NAME,
 	type ExtensionAPI,
 	getAgentDir,
 	getMarkdownTheme,
 	withFileMutationQueue,
-} from "@earendil-works/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
+} from "@muselinn/musepi";
 import { Type } from "typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.ts";
 

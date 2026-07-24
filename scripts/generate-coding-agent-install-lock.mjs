@@ -12,7 +12,7 @@ const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
 const internalPackagePrefixes = ["@earendil-works/pi-", "@musepi/"];
-const installPackageName = "@earendil-works/pi-coding-agent-install";
+const installPackageName = "@muselinn/musepi-install";
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
 	["protobufjs@7.6.4", "postinstall only warns about protobufjs version scheme mismatches"],

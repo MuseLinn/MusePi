@@ -1,11 +1,11 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
+	"name": "@muselinn/musepi",
 	"version": "0.1.6",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
-			"name": "@earendil-works/pi-coding-agent",
+			"name": "@muselinn/musepi",
 			"version": "0.1.6",
 			"license": "MIT",
 			"dependencies": {

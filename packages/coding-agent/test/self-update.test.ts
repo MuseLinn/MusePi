@@ -37,7 +37,7 @@ function makeInstallDir(dir: string, options: { version?: string; platform?: Nod
 	writeFileSync(
 		join(dir, "package.json"),
 		JSON.stringify({
-			name: "@earendil-works/pi-coding-agent",
+			name: "@muselinn/musepi",
 			version: options.version ?? "0.1.1",
 			piConfig: { name: "musepi" },
 		}),

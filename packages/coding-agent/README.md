@@ -5,7 +5,7 @@
 </p>
 <p align="center">
   <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
-  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@earendil-works/pi-coding-agent?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/@muselinn/musepi"><img alt="npm" src="https://img.shields.io/npm/v/@muselinn/musepi?style=flat-square" /></a>
 </p>
 
 > New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
@@ -63,7 +63,7 @@ I regularly publish my own `pi-mono` work sessions here:
 ## Quick Start
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+npm install -g --ignore-scripts @muselinn/musepi
 ```
 
 `--ignore-scripts` disables dependency lifecycle scripts during install. Pi does not require install scripts for normal npm installs.
@@ -459,7 +459,7 @@ See [docs/packages.md](docs/packages.md).
 ### SDK
 
 ```typescript
-import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, ModelRuntime, SessionManager } from "@muselinn/musepi";
 
 const modelRuntime = await ModelRuntime.create();
 const { session } = await createAgentSession({

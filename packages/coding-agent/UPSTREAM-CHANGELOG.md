@@ -942,7 +942,7 @@
 
 ### New Features
 
-- **Self-update support for the npm scope migration**: `pi update --self` now supports the upcoming package rename from `@mariozechner/pi-coding-agent` to `@earendil-works/pi-coding-agent`. After the new package is published, existing global installs can update through the normal self-update flow; pi will uninstall the old global package and install the package name returned by the version check endpoint.
+- **Self-update support for the npm scope migration**: `pi update --self` now supports the upcoming package rename from `@mariozechner/pi-coding-agent` to `@muselinn/musepi`. After the new package is published, existing global installs can update through the normal self-update flow; pi will uninstall the old global package and install the package name returned by the version check endpoint.
 - **Interactive OAuth login selection**: OAuth providers can now present multiple login choices in `/login`, enabling provider-specific interactive authentication flows. See [Providers](docs/providers.md).
 - **JSONC-style `models.json` parsing**: `models.json` now allows comments and trailing commas, making custom provider and model configuration easier to maintain. See [Providers](docs/providers.md) and [Custom Providers](docs/custom-provider.md).
 

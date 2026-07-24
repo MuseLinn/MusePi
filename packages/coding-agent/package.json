@@ -1,5 +1,5 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
+	"name": "@muselinn/musepi",
 	"version": "0.1.6",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
@@ -59,7 +59,8 @@
 		"typebox": "1.1.38",
 		"undici": "8.5.0",
 		"yaml": "2.9.0",
-		"@musepi/core": "^0.1.6"
+		"@musepi/core": "0.1.6",
+		"@musepi/transcript": "0.1.6"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",
@@ -92,11 +93,6 @@
 	],
 	"author": "Mario Zechner",
 	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/coding-agent"
-	},
 	"engines": {
 		"node": ">=22.19.0"
 	}

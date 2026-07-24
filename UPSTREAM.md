@@ -7,7 +7,7 @@
 | 上游仓库 | https://github.com/earendil-works/pi |
 | 基点 commit | `ff992261e2ec349e4257a59d052076355ca0b18b` + 2026-07-21 cherry-pick 9 个（见下"同步日志"） |
 | 基点时间 | 2026-07-20T20:00:14Z（首次 pin）；2026-07-21 同步至 v0.81.1 选定项 |
-| 对应 npm 版本 | `@earendil-works/pi-coding-agent@0.80.10` + 0.81.1 选定修复（extension peer dep `>=0.80.0` 线） |
+| 对应 npm 版本 | `@muselinn/musepi@0.80.10` + 0.81.1 选定修复（extension peer dep `>=0.80.0` 线） |
 | License | MIT（fork 保留原 LICENSE） |
 
 ## 同步日志
