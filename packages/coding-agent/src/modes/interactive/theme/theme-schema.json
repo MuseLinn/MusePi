@@ -3,7 +3,10 @@
 	"title": "Pi Coding Agent Theme",
 	"description": "Theme schema for Pi coding agent",
 	"type": "object",
-	"required": ["name", "colors"],
+	"required": [
+		"name",
+		"colors"
+	],
 	"properties": {
 		"$schema": {
 			"type": "string",
@@ -42,6 +45,7 @@
 				"borderMuted",
 				"success",
 				"error",
+				"info",
 				"warning",
 				"muted",
 				"dim",
@@ -86,7 +90,22 @@
 				"thinkingMedium",
 				"thinkingHigh",
 				"thinkingXhigh",
-				"bashMode"
+				"bashMode",
+				"pythonMode",
+				"statusLineSep",
+				"statusLineModel",
+				"statusLinePath",
+				"statusLineGitClean",
+				"statusLineGitDirty",
+				"statusLineContext",
+				"statusLineSpend",
+				"statusLineStaged",
+				"statusLineDirty",
+				"statusLineUntracked",
+				"statusLineOutput",
+				"statusLineCost",
+				"statusLineSubagents",
+				"statusLineBg"
 			],
 			"properties": {
 				"accent": {
@@ -112,6 +131,11 @@
 				"error": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Error states"
+				},
+				"info": {
+					"$ref": "#/$defs/colorValue",
+					"title": "Info",
+					"description": "Informational status color"
 				},
 				"warning": {
 					"$ref": "#/$defs/colorValue",
@@ -296,6 +320,66 @@
 				"bashMode": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Editor border color in bash mode"
+				},
+				"pythonMode": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Editor border color in python mode"
+				},
+				"statusLineSep": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Status line separator character"
+				},
+				"statusLineModel": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Status line model name"
+				},
+				"statusLinePath": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Status line path"
+				},
+				"statusLineGitClean": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Git clean indicator in status line"
+				},
+				"statusLineGitDirty": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Git dirty indicator in status line"
+				},
+				"statusLineContext": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Context usage in status line"
+				},
+				"statusLineSpend": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Spend display in status line"
+				},
+				"statusLineStaged": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Git staged count in status line"
+				},
+				"statusLineDirty": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Git dirty count in status line"
+				},
+				"statusLineUntracked": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Untracked files in status line"
+				},
+				"statusLineOutput": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Output indicator in status line"
+				},
+				"statusLineCost": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Cost display in status line"
+				},
+				"statusLineSubagents": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Subagent count in status line"
+				},
+				"statusLineBg": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Status line background color"
 				}
 			},
 			"additionalProperties": false

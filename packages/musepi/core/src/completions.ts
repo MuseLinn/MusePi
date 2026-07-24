@@ -186,3 +186,36 @@ export function modeArgumentCompletions(prefix: string): CompletionItem[] | null
   if (/\s/.test(text.trim())) return null;
   return filterCompletions(MODE_SUBCOMMANDS, text);
 }
+
+// ── /theme ───────────────────────────────────────────────────
+
+const THEME_SUBCOMMANDS: CompletionItem[] = [
+	{ value: "list", label: "list", description: "List available themes" },
+	{ value: "preview", label: "preview", description: "Show a theme's color preview" },
+	{ value: "current", label: "current", description: "Show current theme info" },
+];
+/**
+ * Argument completions for /theme.
+ * First token: subcommand. Second token (preview): theme name.
+ */
+export function themeArgumentCompletions(prefix: string): CompletionItem[] | null {
+	if (!prefix) {
+		return THEME_SUBCOMMANDS;
+	}
+	const parts = prefix.split(/\s+/);
+	const subcommand = parts[0];
+
+	// Completing the first token: match against subcommands
+	if (parts.length === 1 && !prefix.endsWith(" ")) {
+		return filterCompletions(THEME_SUBCOMMANDS, prefix);
+	}
+
+	// /theme preview <name>: dynamically list available themes
+	if (subcommand === "preview") {
+		// Return null so the caller knows there's no static list — we handle it
+		// in interactive-mode with a dynamic getArgumentCompletions
+		return null;
+	}
+
+	return null;
+}

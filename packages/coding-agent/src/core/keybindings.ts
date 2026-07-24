@@ -22,6 +22,7 @@ export interface AppKeybindings {
 	"app.tools.expand": true;
 	"app.thinking.toggle": true;
 	"app.musepi.tasks": true;
+	"app.musepi.todo-expand": true;
 	"app.session.toggleNamedFilter": true;
 	"app.editor.external": true;
 	"app.message.copy": true;
@@ -92,6 +93,10 @@ export const KEYBINDINGS = {
 	"app.musepi.tasks": {
 		defaultKeys: "ctrl+shift+t",
 		description: "Open the MusePi task browser (fullscreen)",
+	},
+	"app.musepi.todo-expand": {
+		defaultKeys: "alt+t",
+		description: "Expand/collapse todo panel",
 	},
 	"app.session.toggleNamedFilter": {
 		defaultKeys: "ctrl+n",

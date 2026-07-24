@@ -199,6 +199,8 @@ Type `/` in the editor to trigger commands. [Extensions](#extensions) can regist
 | `/export [file]` | Export session to HTML or JSONL file |
 | `/import <file>` | Import and resume a session from a JSONL file |
 | `/share` | Upload as private GitHub gist with shareable HTML link |
+| `/queue <message>` | Queue a message for after the agent yields |
+| `/theme` | List, preview, or switch themes |
 | `/reload` | Reload keybindings, extensions, skills, prompts, themes, and context files |
 | `/hotkeys` | Show all keyboard shortcuts |
 | `/changelog` | Display version history |
@@ -424,13 +426,39 @@ The default export can also be `async`. pi waits for async extension factories b
 - Games while waiting (yes, Doom runs)
 - ...anything you can dream up
 
-Place in `~/.pi/agent/extensions/`, `.pi/extensions/`, or a [pi package](#pi-packages) to share with others. See [docs/extensions.md](docs/extensions.md) and [examples/extensions/](examples/extensions/).
-
 ### Themes
 
-Built-in: `dark`, `light`. Themes hot-reload: modify the active theme file and pi immediately applies changes.
+Built-in: `dark`, `light`, `nord`, `gruvbox`, `tokyo-night`, `catppuccin`.
+Switch via `/theme <name>`, preview with `/theme preview <name>`, or list all
+with `/theme list`.
 
-Place in `~/.pi/agent/themes/`, `.pi/themes/`, or a [pi package](#pi-packages) to share with others. See [docs/themes.md](docs/themes.md).
+Themes hot-reload: modify the active theme file and pi immediately applies changes.
+
+**`/theme` command:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | Show all themes with color chip previews |
+| `current` | Show active theme name and source path |
+| `preview <name>` | Show full color chip preview for a theme |
+| `<name>` | Switch to the named theme |
+
+**Colorblind mode:** Enable via `/mode` menu or `setColorBlindMode(true)`.
+Shifts hues +60° and desaturates to 71% for deuteranopia-friendly colors.
+Applied globally — all hex colors are adjusted before ANSI resolution.
+
+**Shimmer animation:** Agent status indicators, loaders, and bash execution
+components use character-level time-varying animation. Two modes — `classic`
+(cosine sweep left-to-right) and `kitt` (K.I.T.T. scanner + trail). Toggle
+at runtime with `setShimmerMode("classic"|"kitt"|"disabled")`.
+
+**Symbol presets:** 200+ unicode symbols across categories — status, icons,
+tree-drawing, box-drawing, model/plan/goal/git states, language icons (38),
+tool icons (20), markdown, and tab icons. Switch between `"unicode"` and
+`"ascii"` presets with `setSymbolPreset()`.
+
+Place custom themes in `~/.pi/agent/themes/`, `.pi/themes/`, or a
+[pi package](#pi-packages) to share with others. See [docs/themes.md](docs/themes.md).
 
 ### Pi Packages
 

@@ -45,6 +45,7 @@ import {
 	modeArgumentCompletions,
 	planArgumentCompletions,
 	swarmArgumentCompletions,
+	themeArgumentCompletions,
 	tuiArgumentCompletions,
 } from "@musepi/core/completions.js";
 import { goalManager } from "@musepi/core/goal/index.js";
@@ -131,7 +132,14 @@ import { handleMusepiMcpCommand } from "../../musepi/mcp-native.ts";
 import { handleMusepiMemoryCommand, initMusepiMemory } from "../../musepi/memory-native.ts";
 import { backgroundManager } from "../../musepi/task/manager.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
-import { initMusepiTodo, toggleMusepiTodoPanel } from "../../musepi/todo-native.ts";
+import {
+	checkTodoReminder,
+	handleTodoCommand,
+	incrementTodoTurnCounter,
+	initMusepiTodo,
+	toggleMusepiTodoExpand,
+	toggleMusepiTodoPanel,
+} from "../../musepi/todo-native.ts";
 import {
 	getChangelogPath,
 	getStartupChangelogEntries,
@@ -199,6 +207,7 @@ import {
 	getMarkdownTheme,
 	getThemeByName,
 	onThemeChange,
+	renderThemePreview,
 	setRegisteredThemes,
 	stopThemeWatcher,
 	Theme,
@@ -450,9 +459,6 @@ export class InteractiveMode {
 	// Messages queued while compaction is running
 	private compactionQueuedMessages: CompactionQueuedMessage[] = [];
 
-	// Shutdown state
-	private shutdownRequested = false;
-
 	// Extension UI state
 	private extensionSelector: Container | undefined = undefined;
 	private extensionInput: ExtensionInputComponent | undefined = undefined;
@@ -536,12 +542,19 @@ export class InteractiveMode {
 						const msg = this.workingMessage ?? "Working...";
 						return `${theme.fg("accent", frame)} ${theme.fg("dim", msg)}`;
 					}
-					// Idle: show PWD + git branch
+					// Idle: show extension status badges + PWD + git branch
+					const parts: string[] = [];
+					for (const [, text] of this.footerDataProvider.getExtensionStatuses()) {
+						parts.push(text);
+					}
 					const cwd = this.session.sessionManager.getCwd();
 					const home = process.env.HOME || process.env.USERPROFILE;
 					let pwd = home ? cwd.replace(home, "~") : cwd;
 					const branch = this.footerDataProvider.getGitBranch();
 					if (branch) pwd += ` (${branch})`;
+					if (parts.length > 0) {
+						return `${parts.join(" ")}  ${theme.fg("dim", pwd)}`;
+					}
 					return theme.fg("dim", pwd);
 				},
 				right: () => {
@@ -697,6 +710,23 @@ export class InteractiveMode {
 		wireCompletion("swarm", swarmArgumentCompletions);
 		wireCompletion("plan", planArgumentCompletions);
 		wireCompletion("goal", goalArgumentCompletions);
+		// Theme completions: static subcommands + dynamic theme names for "preview"
+		{
+			const themeCmd = slashCommands.find((c) => c.name === "theme");
+			if (themeCmd) {
+				themeCmd.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+					const result = themeArgumentCompletions(prefix);
+					if (result) return result as unknown as AutocompleteItem[];
+					// Dynamic theme name completion for "preview <name>"
+					const parts = prefix.split(/\s+/);
+					if (parts[0] === "preview" && prefix.endsWith(" ")) {
+						const available = getAvailableThemes();
+						return available.map((name) => ({ value: name, label: name }));
+					}
+					return null;
+				};
+			}
+		}
 		wireCompletion("tui", tuiArgumentCompletions);
 		// Convert prompt templates to SlashCommand format for autocomplete
 		const templateCommands: SlashCommand[] = this.session.promptTemplates.map((cmd) => ({
@@ -1821,10 +1851,7 @@ export class InteractiveMode {
 				},
 			},
 			shutdownHandler: () => {
-				this.shutdownRequested = true;
-				if (this.session.isIdle) {
-					void this.shutdown();
-				}
+				void this.shutdown();
 			},
 			onError: (error) => {
 				this.showExtensionError(error.extensionPath, error.error, error.stack);
@@ -1954,7 +1981,7 @@ export class InteractiveMode {
 			},
 			hasPendingMessages: () => this.session.pendingMessageCount > 0,
 			shutdown: () => {
-				this.shutdownRequested = true;
+				void this.shutdown();
 			},
 			getContextUsage: () => this.session.getContextUsage(),
 			compact: (options) => {
@@ -2783,6 +2810,9 @@ export class InteractiveMode {
 			}
 		});
 		this.defaultEditor.onAction("app.editor.external", () => this.handleOpenExternalEditor());
+		this.defaultEditor.onAction("app.musepi.todo-expand", () => {
+			toggleMusepiTodoExpand();
+		});
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
@@ -2892,6 +2922,17 @@ export class InteractiveMode {
 				await this.handleSetupCommand();
 				return;
 			}
+			if (text === "/queue" || text.startsWith("/queue ")) {
+				this.editor.setText("");
+				const msg = text === "/queue" ? "" : text.slice(7).trim();
+				await this.handleQueueCommand(msg);
+				return;
+			}
+			if (text === "/theme" || text.startsWith("/theme ")) {
+				this.editor.setText("");
+				await this.handleThemeCommand(text);
+				return;
+			}
 			if (text === "/import-claude") {
 				this.editor.setText("");
 				await this.handleImportClaudeCommand();
@@ -2900,6 +2941,11 @@ export class InteractiveMode {
 			if (text === "/move" || text.startsWith("/move ")) {
 				this.editor.setText("");
 				await this.handleMoveCommand(text);
+				return;
+			}
+			if (text === "/todo" || text.startsWith("/todo ")) {
+				this.editor.setText("");
+				this.handleTodoSlashCommand(text);
 				return;
 			}
 			if (text === "/share") {
@@ -3316,7 +3362,7 @@ export class InteractiveMode {
 				break;
 			}
 
-			case "agent_end":
+			case "agent_end": {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
@@ -3329,12 +3375,16 @@ export class InteractiveMode {
 				}
 				this.pendingTools.clear();
 
+				// Todo reminder: increment turn counter and check if nudge needed
+				incrementTodoTurnCounter();
+				const reminder = checkTodoReminder();
+				if (reminder) {
+					this.showExtensionNotify(reminder, "warning");
+				}
+
 				this.ui.requestRender();
 				break;
-
-			case "agent_settled":
-				await this.checkShutdownRequested();
-				break;
+			}
 
 			case "compaction_start": {
 				if (this.settingsManager.getShowTerminalProgress()) {
@@ -3897,14 +3947,6 @@ export class InteractiveMode {
 		process.exit(1);
 	}
 
-	/**
-	 * Check if shutdown was requested and perform shutdown if so.
-	 */
-	private async checkShutdownRequested(): Promise<void> {
-		if (!this.shutdownRequested) return;
-		await this.shutdown();
-	}
-
 	private registerSignalHandlers(): void {
 		this.unregisterSignalHandlers();
 
@@ -4018,6 +4060,20 @@ export class InteractiveMode {
 		else if (this.editor.onSubmit) {
 			this.editor.setText("");
 			this.editor.onSubmit(text);
+		}
+	}
+
+	private async handleQueueCommand(message: string): Promise<void> {
+		if (!message) {
+			this.showStatus("Usage: /queue <message> — queues a message for after the agent yields");
+			return;
+		}
+		try {
+			await this.session.followUp(message);
+			this.showStatus(`Queued: "${message.slice(0, 60)}${message.length > 60 ? "…" : ""}"`);
+		} catch (error) {
+			const errMsg = error instanceof Error ? error.message : String(error);
+			this.showStatus(`Failed to queue: ${errMsg}`);
 		}
 	}
 
@@ -4444,7 +4500,7 @@ export class InteractiveMode {
 				return;
 			}
 			permissionManager.setMode(arg);
-			this.setExtensionStatus("permission-mode", arg);
+			this.setExtensionStatus("permission-mode", theme.fg("muted", arg));
 			this.showExtensionNotify(`Permission mode: ${arg.toUpperCase()}`);
 			return;
 		}
@@ -4460,8 +4516,9 @@ export class InteractiveMode {
 			const wasActive = planManager.isPlanModeActive();
 			planManager.clearPlanContent();
 			if (wasActive) {
-				planManager.enterPlanMode("Plan cleared");
-				this.showExtensionNotify("Plan content cleared. Plan mode still active.");
+				const plan = planManager.enterPlanMode("Plan cleared");
+				this.setExtensionStatus("plan-mode", theme.fg("warning", "plan"));
+				this.showExtensionNotify(`Plan content cleared. Plan mode still active — ${plan.path}`);
 			} else {
 				this.showExtensionNotify("Plan cleared. No active plan mode.");
 			}
@@ -4485,9 +4542,9 @@ export class InteractiveMode {
 				this.showExtensionNotify("Plan mode is already ON.", "info");
 				return;
 			}
-			planManager.enterPlanMode("User activated plan mode");
-			this.setExtensionStatus("plan-mode", "plan");
-			this.showExtensionNotify("Plan mode: ON");
+			const plan = planManager.enterPlanMode("User activated plan mode");
+			this.setExtensionStatus("plan-mode", theme.fg("warning", "plan"));
+			this.showExtensionNotify(`Plan mode: ON — ${plan.path}`);
 		} else {
 			if (!planManager.isPlanModeActive()) {
 				this.showExtensionNotify("Plan mode is already OFF.", "info");
@@ -4528,7 +4585,7 @@ export class InteractiveMode {
 		if (arg === "on") {
 			// Swarm mode: enable the background task runner (agent_swarm tool).
 			// The session already has agent_swarm registered; this just surfaces status.
-			this.setExtensionStatus("swarm-mode", "active");
+			this.setExtensionStatus("swarm-mode", theme.fg("accent", "swarm"));
 			this.showExtensionNotify("Swarm mode: ON. Use /tasks to list background tasks.");
 			return;
 		}
@@ -4547,6 +4604,78 @@ export class InteractiveMode {
 		}
 
 		this.showExtensionNotify("Usage: /swarm [on|off|status]", "error");
+	}
+	private handleTodoSlashCommand(text: string): void {
+		const args = text === "/todo" ? "" : text.slice(6).trim();
+		const result = handleTodoCommand(args);
+		this.showExtensionNotify(result);
+	}
+	private async handleThemeCommand(text: string): Promise<void> {
+		const args = text === "/theme" ? "" : text.slice(7).trim();
+		if (!args || args === "list") {
+			// List available themes with preview
+			const themes = getAvailableThemes();
+			const current = this.settingsManager.getThemeSetting() || "dark";
+			const lines: string[] = [];
+			for (const name of themes) {
+				const themeObj = getThemeByName(name);
+				const preview = themeObj ? renderThemePreview(themeObj) : "";
+				const marker = name === current ? theme.fg("accent", "▸ ") : "  ";
+				const nameDisplay = name === current ? theme.bold(name) : name;
+				lines.push(`${marker}${nameDisplay}  ${preview}`);
+			}
+			lines.push(theme.fg("dim", `\n${themes.length} themes available. Use /theme <name> to switch.`));
+			this.showExtensionNotify(lines.join("\n"));
+			return;
+		}
+
+		if (args === "current") {
+			const current = this.settingsManager.getThemeSetting() || "dark";
+			const themeObj = getThemeByName(current);
+			const lines: string[] = [theme.fg("accent", `Current theme: ${theme.bold(current)}`)];
+			if (themeObj) {
+				lines.push(renderThemePreview(themeObj));
+				lines.push(theme.fg("dim", `Source: ${themeObj.sourcePath ?? "built-in"}`));
+			}
+			this.showExtensionNotify(lines.join("\n"));
+			return;
+		}
+
+		if (args.startsWith("preview ")) {
+			const themeName = args.slice(8).trim();
+			const themeObj = getThemeByName(themeName);
+			if (!themeObj) {
+				this.showExtensionNotify(`Unknown theme: ${themeName}`, "error");
+				return;
+			}
+			const lines: string[] = [
+				theme.fg("accent", `Theme: ${theme.bold(themeName)}`),
+				renderThemePreview(themeObj),
+				theme.fg("dim", `Source: ${themeObj.sourcePath ?? "built-in"}`),
+			];
+			this.showExtensionNotify(lines.join("\n"));
+			return;
+		}
+
+		// Try switching to a theme by name
+		if (getAvailableThemes().includes(args)) {
+			const result = this.themeController.setThemeName(args, true);
+			if (result.success) {
+				this.settingsManager.setTheme(args);
+				const themeObj = getThemeByName(args);
+				const preview = themeObj ? ` ${renderThemePreview(themeObj)}` : "";
+				this.setExtensionStatus("theme", theme.fg("accent", args));
+				this.showExtensionNotify(`Theme switched to ${theme.bold(args)}${preview}`);
+			} else {
+				this.showExtensionNotify(result.error ?? `Failed to switch to theme: ${args}`, "error");
+			}
+			return;
+		}
+
+		this.showExtensionNotify(
+			`Unknown subcommand: ${args}. Usage: /theme [list|current|preview <name>|<theme-name>]`,
+			"error",
+		);
 	}
 	private toggleThinkingBlockVisibility(): void {
 		this.hideThinkingBlock = !this.hideThinkingBlock;

@@ -168,12 +168,12 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 	return new Promise((resolve) => {
 		let settled = false;
 		const finish = async (result: FirstTimeSetupResult | undefined) => {
-			if (settled) {
-				return;
-			}
+			if (settled) return;
 			settled = true;
 			if (result) {
-				settingsManager.setTheme(result.theme);
+				// "auto" stores the auto-detection theme setting
+				const themeSetting = result.theme === "auto" ? "auto" : result.theme;
+				settingsManager.setTheme(themeSetting);
 				settingsManager.setEnableAnalytics(result.shareAnalytics);
 				await settingsManager.flush();
 			}
@@ -188,8 +188,8 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 			setTheme(detectedTheme);
 			const component = new FirstTimeSetupComponent({
 				detectedTheme,
-				onThemePreview: (themeName) => {
-					setTheme(themeName);
+				onThemePreview: (_themeName) => {
+					// Component already called setTheme/setColorBlindMode internally
 					ui.requestRender();
 				},
 				onSubmit: (result) => void finish(result),

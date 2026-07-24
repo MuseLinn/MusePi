@@ -1,24 +1,23 @@
 > pi can create themes. Ask it to build one for your setup.
 
 # Themes
-
 Themes are JSON files that define colors for the TUI.
 
-## Table of Contents
+**Built-in presets:** `dark`, `light`, `nord`, `gruvbox`, `tokyo-night`,
+`catppuccin`. Switch via `/theme <name>`, preview with `/theme preview <name>`.
 
-- [Locations](#locations)
-- [Selecting a Theme](#selecting-a-theme)
-- [Creating a Custom Theme](#creating-a-custom-theme)
-- [Theme Format](#theme-format)
-- [Color Tokens](#color-tokens)
-- [Color Values](#color-values)
-- [Tips](#tips)
+**Colorblind mode:** Shifts hues +60° and desaturates to 71% for
+deuteranopia-friendly colors. Enable via `setColorBlindMode(true)` at runtime
+— all hex colors are adjusted before ANSI resolution.
 
-## Locations
+**Shimmer animation:** Character-level time-varying sweep across status and
+loader text. Two modes: `classic` (cosine LTR) and `kitt` (K.I.T.T. scanner).
+Toggle at runtime via `setShimmerMode()`.
+
 
 Pi loads themes from:
 
-- Built-in: `dark`, `light`
+- Built-in: `dark`, `light`, `nord`, `gruvbox`, `tokyo-night`, `catppuccin`
 - Global: `~/.pi/agent/themes/*.json`
 - Project: `.pi/themes/*.json` (only after the project is trusted)
 - Packages: `themes/` directories or `pi.themes` entries in `package.json`
@@ -139,16 +138,15 @@ vim ~/.pi/agent/themes/my-theme.json
 ```
 
 - `name` is required, must be unique, and must not contain `/`.
-- `vars` is optional. Define reusable colors here, then reference them in `colors`.
-- `colors` must define all 51 required tokens. `thinkingMax` is optional and falls back to `thinkingXhigh`.
+- `colors` must define all 68 required tokens. `thinkingMax` is optional and falls back to `thinkingXhigh`.
 
 The `$schema` field enables editor auto-completion and validation.
 
 ## Color Tokens
 
-Every theme must define all 51 required color tokens. `thinkingMax` is optional for compatibility with existing themes; when omitted, it uses `thinkingXhigh`.
+Every theme must define all 68 required color tokens. `thinkingMax` is optional for compatibility with existing themes; when omitted, it uses `thinkingXhigh`.
 
-### Core UI (11 colors)
+### Core UI (12 colors)
 
 | Token | Purpose |
 |-------|---------|
@@ -159,6 +157,7 @@ Every theme must define all 51 required color tokens. `thinkingMax` is optional 
 | `success` | Success states |
 | `error` | Error states |
 | `warning` | Warning states |
+| `info` | Info/lifecycle states |
 | `muted` | Secondary text |
 | `dim` | Tertiary text |
 | `text` | Default text (usually `""`) |
@@ -231,25 +230,30 @@ Editor border colors indicating thinking level (visual hierarchy from subtle to 
 | `thinkingXhigh` | Extra high thinking |
 | `thinkingMax` | Maximum thinking; optional, falls back to `thinkingXhigh` |
 
-### Bash Mode (1 color)
+### Bash & Python Mode (2 colors)
 
 | Token | Purpose |
 |-------|---------|
 | `bashMode` | Editor border in bash mode (`!` prefix) |
+| `pythonMode` | Editor border in python mode (`> ` prefix) |
+### Status Line (12 colors, 1 background)
 
-### HTML Export (optional)
-
-The `export` section controls colors for `/export` HTML output. If omitted, colors are derived from `userMessageBg`.
-
-```json
-{
-  "export": {
-    "pageBg": "#18181e",
-    "cardBg": "#1e1e24",
-    "infoBg": "#3c3728"
-  }
-}
-```
+| Token | Purpose |
+|-------|---------|
+| `statusLineSep` | Status line separator |
+| `statusLineModel` | Model name segment |
+| `statusLinePath` | Path segment |
+| `statusLineGitClean` | Git clean state |
+| `statusLineGitDirty` | Git dirty state |
+| `statusLineContext` | Context usage segment |
+| `statusLineSpend` | Cost/spend segment |
+| `statusLineStaged` | Staged files count |
+| `statusLineDirty` | Dirty files count |
+| `statusLineUntracked` | Untracked files count |
+| `statusLineOutput` | Output indicator |
+| `statusLineCost` | Cumulative cost |
+| `statusLineSubagents` | Subagent count |
+Background: `statusLineBg` (ThemeBg) for the status line background fill.
 
 ## Color Values
 
@@ -284,14 +288,28 @@ echo $COLORTERM  # Should output "truecolor" or "24bit"
 
 **Light terminals:** Use darker, muted colors with lower contrast.
 
-**Color harmony:** Start with a base palette (Nord, Gruvbox, Tokyo Night), define it in `vars`, and reference consistently.
+### Presets
 
-**Testing:** Check your theme with different message types, tool states, markdown content, and long wrapped text.
+MusePi ships with six built-in themes. Switch between them at runtime:
 
-**VS Code:** Set `terminal.integrated.minimumContrastRatio` to `1` for accurate colors.
+| Theme | Vibe | Status line |
+|-------|------|-------------|
+| `dark` | Deep blue-gray | `` bright cyan |
+| `light` | Warm parchment | `` muted teal |
+| `nord` | Cool Arctic | `` snow peak |
+| `gruvbox` | Retro earth | `` burnt orange |
+| `tokyo-night` | Stormy neon | `` electric violet |
+| `catppuccin` | Soft pastel | `` mauve accent |
+
+Select via `/theme <name>` or in `settings.json`.
 
 ## Examples
 
 See the built-in themes:
 - [dark.json](../src/modes/interactive/theme/dark.json)
 - [light.json](../src/modes/interactive/theme/light.json)
+- [nord.json](../src/modes/interactive/theme/nord.json)
+- [gruvbox.json](../src/modes/interactive/theme/gruvbox.json)
+- [tokyo-night.json](../src/modes/interactive/theme/tokyo-night.json)
+- [catppuccin.json](../src/modes/interactive/theme/catppuccin.json)
+

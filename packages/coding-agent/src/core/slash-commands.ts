@@ -18,6 +18,11 @@ export interface BuiltinSlashCommand {
 
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "setup", description: "Run the MusePi setup wizard (first-run configuration)" },
+	{
+		name: "theme",
+		description: "List, preview, or switch themes",
+		argumentHint: "[list|preview <name>|current|<theme-name>]",
+	},
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "model", description: "Select model (opens selector UI)", argumentHint: "<provider/model>" },
 	{ name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
@@ -30,7 +35,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "changelog", description: "Show changelog entries" },
 	{ name: "hotkeys", description: "Show all keyboard shortcuts" },
 	{ name: "fork", description: "Create a new fork from a previous user message" },
-	{ name: "undo", description: "Rewind to a previous user message (/undo [count])", argumentHint: "[count]" },
+	{ name: "queue", description: "Queue a message for after the agent yields", argumentHint: "<message>" },
 	{
 		name: "goal",
 		description: "Manage goal: set, status, pause, resume, cancel, replace, next, budget, queue",
@@ -40,6 +45,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "plan", description: "Toggle plan mode on/off", argumentHint: "[on|off|clear]" },
 	{ name: "swarm", description: "Toggle swarm mode on/off or show status", argumentHint: "[on|off|status]" },
 	{ name: "tasks", description: "Show background task browser" },
+	{
+		name: "todo",
+		description: "Manage todo list: view, init, start, done, drop, rm, append",
+		argumentHint: "[view|init|start|done|drop|rm|append]",
+	},
 	{
 		name: "btw",
 		description: "Ask a side question without touching the main session (tools off)",

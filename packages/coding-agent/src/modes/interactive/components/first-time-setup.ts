@@ -1,24 +1,44 @@
 import { Container, getKeybindings, Spacer, Text } from "@earendil-works/pi-tui";
 import { APP_NAME } from "../../../config.ts";
-import { type TerminalTheme, theme } from "../theme/theme.ts";
+import { renderThemePreview, setColorBlindMode, setTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
 export interface FirstTimeSetupResult {
-	theme: TerminalTheme;
+	theme: string;
 	shareAnalytics: boolean;
 }
 
 export interface FirstTimeSetupOptions {
-	detectedTheme: TerminalTheme;
-	onThemePreview: (themeName: TerminalTheme) => void;
+	detectedTheme: string;
+	onThemePreview: (themeName: string) => void;
 	onSubmit: (result: FirstTimeSetupResult) => void;
 	onCancel: () => void;
 }
 
-const THEME_OPTIONS: Array<{ value: TerminalTheme; label: string }> = [
-	{ value: "dark", label: "Dark" },
-	{ value: "light", label: "Light" },
+interface CuratedTheme {
+	value: string;
+	label: string;
+	description: string;
+}
+
+const CURATED_THEMES: CuratedTheme[] = [
+	{
+		value: "auto",
+		label: "Match terminal",
+		description: "Auto-switches between dark and light based on terminal appearance",
+	},
+	{ value: "dark", label: "Dark", description: "Default dark theme with blue accents" },
+	{ value: "light", label: "Light", description: "Clean light theme for bright terminals" },
+	{ value: "nord", label: "Nord", description: "Arctic-inspired cold blue palette" },
+	{ value: "gruvbox", label: "Gruvbox", description: "Warm retro sepia palette" },
+	{ value: "tokyo-night", label: "Tokyo Night", description: "Deep blue-violet urban night" },
+	{ value: "catppuccin", label: "Catppuccin", description: "Soft pastel with warm undertones" },
+	{
+		value: "colorblind",
+		label: "Colorblind-friendly",
+		description: "Adjust greens toward blue for red-green colorblindness",
+	},
 ];
 
 const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
@@ -28,20 +48,22 @@ const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
 
 const SETUP_LOGO_LINES = ["██████", "██  ██", "████  ██", "██    ██"];
 
-/** First-time setup dialog: theme choice and analytics opt-in. */
+/** First-time setup dialog: curated theme choice with live preview + analytics opt-in. */
 export class FirstTimeSetupComponent extends Container {
 	private step: "theme" | "analytics" = "theme";
 	private themeIndex: number;
 	private analyticsIndex = 0;
 	private readonly options: FirstTimeSetupOptions;
+	private themePreviewLines: string[] = [];
 
 	constructor(options: FirstTimeSetupOptions) {
 		super();
 		this.options = options;
 		this.themeIndex = Math.max(
 			0,
-			THEME_OPTIONS.findIndex((option) => option.value === options.detectedTheme),
+			CURATED_THEMES.findIndex((t) => t.value === options.detectedTheme || t.value === "dark"),
 		);
+		this.refreshThemePreview();
 		this.update();
 	}
 
@@ -58,30 +80,31 @@ export class FirstTimeSetupComponent extends Container {
 		this.addChild(new Spacer(1));
 
 		if (this.step === "theme") {
-			this.addChild(new Text(theme.fg("text", "Pick a theme."), 1, 0));
-			this.addChild(new Text(theme.fg("muted", `Detected system appearance: ${this.options.detectedTheme}`), 1, 0));
+			this.addChild(new Text(theme.fg("text", "Pick a theme. Move through the list to preview."), 1, 0));
+			this.addChild(new Text(theme.fg("muted", `Detected appearance: ${this.options.detectedTheme}`), 1, 0));
 			this.addChild(new Spacer(1));
-			this.addOptionList(
-				THEME_OPTIONS.map((option) => option.label),
-				this.themeIndex,
-			);
+			this.renderThemeList();
+			// Live preview strip
+			if (this.themePreviewLines.length > 0) {
+				this.addChild(new Spacer(1));
+				for (const line of this.themePreviewLines) {
+					this.addChild(new Text(line, 1, 0));
+				}
+			}
 		} else {
 			this.addChild(new Text(theme.fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0));
 			this.addChild(
 				new Text(
 					theme.fg(
 						"muted",
-						"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within Pi. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
+						"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within MusePi. You can change this anytime in settings.json.",
 					),
 					1,
 					0,
 				),
 			);
 			this.addChild(new Spacer(1));
-			this.addOptionList(
-				ANALYTICS_OPTIONS.map((option) => option.label),
-				this.analyticsIndex,
-			);
+			this.renderAnalyticsList();
 		}
 
 		this.addChild(new Spacer(1));
@@ -100,21 +123,59 @@ export class FirstTimeSetupComponent extends Container {
 		this.addChild(new DynamicBorder());
 	}
 
-	private addOptionList(labels: string[], selectedIndex: number): void {
-		for (let i = 0; i < labels.length; i++) {
-			const isSelected = i === selectedIndex;
+	private renderThemeList(): void {
+		for (let i = 0; i < CURATED_THEMES.length; i++) {
+			const item = CURATED_THEMES[i];
+			const isSelected = i === this.themeIndex;
 			const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
-			const label = isSelected ? theme.fg("accent", labels[i]) : theme.fg("text", labels[i]);
+			const label = isSelected ? theme.fg("accent", theme.bold(item.label)) : theme.fg("text", item.label);
+			const desc = isSelected ? theme.fg("dim", `  ${item.description}`) : "";
+			this.addChild(new Text(`${prefix}${label}${desc}`, 1, 0));
+		}
+	}
+
+	private renderAnalyticsList(): void {
+		for (let i = 0; i < ANALYTICS_OPTIONS.length; i++) {
+			const isSelected = i === this.analyticsIndex;
+			const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
+			const label = isSelected
+				? theme.fg("accent", ANALYTICS_OPTIONS[i].label)
+				: theme.fg("text", ANALYTICS_OPTIONS[i].label);
 			this.addChild(new Text(`${prefix}${label}`, 1, 0));
+		}
+	}
+
+	private refreshThemePreview(): void {
+		try {
+			const preview = renderThemePreview(theme);
+			// Split into lines of max width 60
+			const lineLength = 60;
+			const chips = preview;
+			const lines: string[] = [];
+			for (let i = 0; i < chips.length; i += lineLength) {
+				lines.push(chips.slice(i, i + lineLength));
+			}
+			this.themePreviewLines = lines.length > 0 ? lines : [];
+		} catch {
+			this.themePreviewLines = [];
 		}
 	}
 
 	private moveSelection(delta: number): void {
 		if (this.step === "theme") {
-			const next = Math.max(0, Math.min(THEME_OPTIONS.length - 1, this.themeIndex + delta));
+			const next = Math.max(0, Math.min(CURATED_THEMES.length - 1, this.themeIndex + delta));
 			if (next !== this.themeIndex) {
 				this.themeIndex = next;
-				this.options.onThemePreview(THEME_OPTIONS[this.themeIndex].value);
+				const selected = CURATED_THEMES[this.themeIndex];
+				if (selected.value === "colorblind") {
+					setColorBlindMode(true);
+					setTheme("dark");
+				} else {
+					setColorBlindMode(false);
+					setTheme(selected.value);
+				}
+				this.refreshThemePreview();
+				this.options.onThemePreview(selected.value);
 			}
 		} else {
 			this.analyticsIndex = Math.max(0, Math.min(ANALYTICS_OPTIONS.length - 1, this.analyticsIndex + delta));
@@ -133,8 +194,9 @@ export class FirstTimeSetupComponent extends Container {
 				this.step = "analytics";
 				this.update();
 			} else {
+				const selected = CURATED_THEMES[this.themeIndex];
 				this.options.onSubmit({
-					theme: THEME_OPTIONS[this.themeIndex].value,
+					theme: selected.value,
 					shareAnalytics: ANALYTICS_OPTIONS[this.analyticsIndex].value,
 				});
 			}

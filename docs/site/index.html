@@ -442,6 +442,23 @@
         <code>/import-claude</code> 命令用勾选选择器导入 MCP 服务器和技能，
         <code>/setup</code> 提供逐步向导来配置这些集成。</span></dd>
       </div>
+      <div>
+        <dt>theme system &amp; presets<span class="tag">/theme · shimmer · symbols</span></dt>
+        <dd><span data-l="en">Six built-in themes (dark, light, nord, gruvbox, tokyo-night,
+        catppuccin) with <code>/theme list|preview|current|&lt;name&gt;</code>,
+        colorblind mode (hue-shifted ANSI), shimmer animation engine
+        (classic/kitt sweep on loaders and status indicators), and 200+
+        unicode symbol presets for status, icons, and tree drawing.</span><span data-l="zh">六套内置主题（dark、light、nord、gruvbox、tokyo-night、
+        catppuccin），<code>/theme list|preview|current|&lt;name&gt;</code> 命令、
+        色盲模式（色调偏移 ANSI）、shimmer 动画引擎（loader 与状态指示器上的
+        classic/kitt 扫描效果），以及 200+ unicode 符号预设（状态、图标、树形图）。</span></dd>
+      </div>
+      <div>
+        <dt><code>/queue</code> command<span class="tag">queued follow-up</span></dt>
+        <dd><span data-l="en">Queue a message for after the agent yields — useful for providing
+        context or instructions without interrupting the current turn.</span><span data-l="zh">在 agent 结束后再发送消息——可在不打断当前轮次的情况下提供
+        上下文或指示。</span></dd>
+      </div>
     </dl>
   </div>
 </section>
@@ -452,12 +469,12 @@
     <p class="sub">
       <span data-l="en">One command installs the latest prebuilt binary for macOS (arm64/x64),
       Linux (x64/arm64) or Windows (x64/arm64) — six archives on the
-      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">v0.1.1 release</a>.
+      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a>.
       The CLI identifies itself as <code>MusePi</code>; the executable is
       <code>musepi</code>.</span>
       <span data-l="zh">一条命令安装最新预编译二进制，覆盖 macOS（arm64/x64）、
       Linux（x64/arm64）、Windows（x64/arm64）——六个归档见
-      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">v0.1.1 release</a>。
+      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a>。
       CLI 自报 <code>MusePi</code>，可执行文件名为 <code>musepi</code>。</span>
     </p>
 
@@ -470,18 +487,18 @@ curl -fsSL https://muselinn.github.io/MusePi/install | sh
 <span class="c"># Windows (PowerShell)</span>
 irm https://muselinn.github.io/MusePi/install.ps1 | iex
 
-musepi --version   <span class="c"># =&gt; MusePi 0.1.1</span></pre>
+musepi --version   <span class="c"># =&gt; MusePi 0.1.9</span></pre>
         <p class="note"><span data-l="en">Installs to <code>~/.local/bin/musepi/</code>
         (<code>%LOCALAPPDATA%\Programs\musepi</code> on Windows) and adds it to
         your <code>PATH</code>. Config, sessions and auth live under
         <code>~/.musepi</code> — a stock pi install is left untouched. Prefer a
         manual download? Grab an archive from
-        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">GitHub Releases</a>
+        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">GitHub Releases</a>
         and keep the extracted directory intact.</span><span data-l="zh">安装到 <code>~/.local/bin/musepi/</code>
         （Windows 为 <code>%LOCALAPPDATA%\Programs\musepi</code>）并写入
         <code>PATH</code>。配置、会话与凭据都在 <code>~/.musepi</code> 下——
         原版 pi 不受影响。想手动下载？从
-        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">GitHub Releases</a>
+        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">GitHub Releases</a>
         取归档，保持解压目录结构完整即可。</span></p>
       </div>
       <div>
@@ -501,39 +518,51 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
 
 <section id="whatsnew">
   <div class="wrap">
-    <h2><span class="no">03</span><span data-l="en">New in 0.1.1</span><span data-l="zh">0.1.1 新功能</span></h2>
+    <h2><span class="no">03</span><span data-l="en">New in 0.1.9</span><span data-l="zh">0.1.9 新功能</span></h2>
     <p class="sub">
-      <span data-l="en">Released 2026-07-23. Full details in the
+      <span data-l="en">Full details in the
       <a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">changelog</a>.</span>
-      <span data-l="zh">发布于 2026-07-23。完整内容见
+      <span data-l="zh">完整内容见
       <a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">更新日志</a>。</span>
     </p>
 
     <dl class="news">
       <div>
-        <dt>grouped settings panel<span class="v">settings</span></dt>
-        <dd><span data-l="en">The settings UI grows section headings and type-to-search, and a
-        MusePi submenu exposes all 42 <code>musepi.*</code> options across nine
-        groups — every knob the fork adds is finally visible in one place.</span><span data-l="zh">设置界面引入分组标题与模糊搜索，MusePi 子菜单集中暴露全部
-        42 项 <code>musepi.*</code> 配置——fork 加过的每个开关终于一览无遗。</span></dd>
+        <dt>theme presets &amp; <code>/theme</code> command<span class="v">theme</span></dt>
+        <dd><span data-l="en">Four new preset themes (nord, gruvbox, tokyo-night, catppuccin),
+        a <code>/theme</code> command for listing/previewing/switching themes,
+        and a curated theme picker in the setup wizard with live color strip previews.</span><span data-l="zh">四套新预设主题（nord、gruvbox、tokyo-night、catppuccin），
+        <code>/theme</code> 命令用于列表/预览/切换主题，
+        安装向导中新增精选主题选择器，带实时色带预览。</span></dd>
       </div>
       <div>
-        <dt>/memory command<span class="v">memory</span></dt>
-        <dd><span data-l="en"><code>view</code> shows the exact injection payload the model sees,
-        <code>stats</code> reports files and budgets, <code>clear</code> resets with
-        confirmation, and <code>enable</code>/<code>disable</code> hot-switch the
-        live session — the W5 memory system becomes fully discoverable.</span><span data-l="zh"><code>view</code> 展示模型实际看到的注入内容，<code>stats</code>
-        报告文件与预算，<code>clear</code> 带确认重置，<code>enable</code>/<code>disable</code>
-        热切换当前会话——W5 记忆系统完全可见可控。</span></dd>
+        <dt>colorblind mode<span class="v">accessibility</span></dt>
+        <dd><span data-l="en">Global hue rotation (+60°) and desaturation (71%) for
+        deuteranopia-friendly terminal colors. Toggle at runtime; all hex
+        colors are adjusted before ANSI resolution.</span><span data-l="zh">全局色调偏移（+60°）+ 去饱和度（71%），
+        对红色盲友好的终端颜色。运行时切换，所有十六进制颜色在 ANSI 解析前自动调整。</span></dd>
       </div>
       <div>
-        <dt>own What&rsquo;s New<span class="v">changelog</span></dt>
-        <dd><span data-l="en">The startup changelog is driven by MusePi&rsquo;s own
-        <code>CHANGELOG.md</code> — including the cross-distro fix so settings
-        migrated from pi no longer hide it. Upstream history lives on as
-        <code>UPSTREAM-CHANGELOG.md</code>.</span><span data-l="zh">启动更新日志由 MusePi 自己的 <code>CHANGELOG.md</code> 驱动——
-        含跨发行版修复：从 pi 迁移来的设置不再让它永久空白。上游历史保留为
-        <code>UPSTREAM-CHANGELOG.md</code>。</span></dd>
+        <dt>shimmer animation engine<span class="v">ui</span></dt>
+        <dd><span data-l="en">Character-level time-varying sweep on agent status indicators,
+        loaders, and bash execution components. Two modes — <code>classic</code>
+        (cosine LTR) and <code>kitt</code> (K.I.T.T. scanner).</span><span data-l="zh">Agent 状态指示器、加载器、bash 执行组件上的字符级动态扫描效果。
+        两种模式——<code>classic</code>（余弦左到右）和 <code>kitt</code>（扫描灯效果）。</span></dd>
+      </div>
+      <div>
+        <dt>symbol preset system<span class="v">ui</span></dt>
+        <dd><span data-l="en">200+ unicode symbols across status, navigation, tree-drawing,
+        language icons (38), tool icons (20), and tab icons. Switch between
+        <code>unicode</code> and <code>ascii</code> presets.</span><span data-l="zh">200+ unicode 符号，覆盖状态、导航、树形图、
+        语言图标（38）、工具图标（20）和标签页图标。可在 <code>unicode</code>
+        和 <code>ascii</code> 预设间切换。</span></dd>
+      </div>
+      <div>
+        <dt><code>/queue</code> command<span class="v">workflow</span></dt>
+        <dd><span data-l="en">Type <code>/queue &lt;message&gt;</code> to queue a follow-up message
+        that is delivered after the agent finishes its work — no need to
+        wait or interrupt.</span><span data-l="zh">使用 <code>/queue &lt;message&gt;</code>
+        来排队一条消息，等 agent 完成当前工作后再投递——无需等待或打断。</span></dd>
       </div>
     </dl>
   </div>
@@ -559,7 +588,7 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
   <div class="wrap">
     <ul>
       <li><a href="https://github.com/MuseLinn/MusePi">Repository</a></li>
-      <li><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">v0.1.1 release</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">Changelog</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">Upstream policy</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CONTRIBUTING.md">Contributing</a></li>

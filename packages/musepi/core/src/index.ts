@@ -1,3 +1,49 @@
+export {
+	applyOp,
+	applyOpsToPhases,
+	clonePhases,
+	findPhaseByName,
+	findTaskByContent,
+	formatPhaseDisplayName,
+	formatPhaseLine,
+	formatPhaseSummaryLine,
+	formatSummary,
+	formatSummaryMarkdown,
+	formatTodoLine,
+	getActiveTodoDescriptions,
+	getCompletionTransitions,
+	markdownToPhases,
+	MAX_VISIBLE_TODOS,
+	nextActionableTask,
+	normalizeInProgressTask,
+	normalizeTodos,
+	phasesToMarkdown,
+	phaseRomanNumeral,
+	selectVisibleTodos,
+	setActiveTodoDescriptionsProvider,
+	STATUS_SYMBOL,
+	summarizePhases,
+	summarizeTodos,
+	TODO_ENTRY_TYPE,
+	todoMatchesAnyDescription,
+	todoSymbol,
+	todosToPhases,
+} from "./todo/types.ts";
+export type {
+	InitListEntry,
+	PhaseCounts,
+	TodoActiveDescriptionsProvider,
+	TodoCompletionTransition,
+	TodoItem,
+	TodoOpParams,
+	TodoOperation,
+	TodoPhase,
+	TodoStatus,
+	TodoTheme,
+	VisibleTodos,
+} from "./todo/types.ts";
+
+
 // @musepi/core — barrel for the native integrations in coding-agent.
 export { goalManager, GoalManager } from "./goal/index.ts";
 export { registerGoalTools } from "./goal/tools.ts";

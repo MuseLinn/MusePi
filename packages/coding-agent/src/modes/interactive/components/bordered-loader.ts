@@ -1,5 +1,14 @@
-import { CancellableLoader, Container, Loader, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
+import {
+	CancellableLoader,
+	Container,
+	Loader,
+	type LoaderMessageColorFn,
+	Spacer,
+	Text,
+	type TUI,
+} from "@earendil-works/pi-tui";
 import type { Theme } from "../theme/theme.ts";
+import { shimmerText } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
@@ -15,20 +24,14 @@ export class BorderedLoader extends Container {
 		const borderColor = (s: string) => theme.fg("border", s);
 		this.addChild(new DynamicBorder(borderColor));
 		if (this.cancellable) {
-			this.loader = new CancellableLoader(
-				tui,
-				(s) => theme.fg("accent", s),
-				(s) => theme.fg("muted", s),
-				message,
-			);
+			const msgColor: LoaderMessageColorFn = (s) => shimmerText(s, theme);
+			msgColor.animated = true;
+			this.loader = new CancellableLoader(tui, (s) => theme.fg("accent", s), msgColor, message);
 		} else {
 			this.signalController = new AbortController();
-			this.loader = new Loader(
-				tui,
-				(s) => theme.fg("accent", s),
-				(s) => theme.fg("muted", s),
-				message,
-			);
+			const msgColor: LoaderMessageColorFn = (s) => shimmerText(s, theme);
+			msgColor.animated = true;
+			this.loader = new Loader(tui, (s) => theme.fg("accent", s), msgColor, message);
 		}
 		this.addChild(this.loader);
 		if (this.cancellable) {

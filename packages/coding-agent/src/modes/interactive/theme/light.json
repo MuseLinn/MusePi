@@ -26,11 +26,11 @@
 		"success": "green",
 		"error": "red",
 		"warning": "yellow",
+		"info": "#547da7",
 		"muted": "mediumGray",
 		"dim": "dimGray",
 		"text": "text",
 		"thinkingText": "mediumGray",
-
 		"selectedBg": "selectedBg",
 		"userMessageBg": "userMsgBg",
 		"userMessageText": "text",
@@ -42,7 +42,6 @@
 		"toolErrorBg": "toolErrorBg",
 		"toolTitle": "text",
 		"toolOutput": "mediumGray",
-
 		"mdHeading": "yellow",
 		"mdLink": "blue",
 		"mdLinkUrl": "dimGray",
@@ -53,11 +52,9 @@
 		"mdQuoteBorder": "mediumGray",
 		"mdHr": "mediumGray",
 		"mdListBullet": "green",
-
 		"toolDiffAdded": "green",
 		"toolDiffRemoved": "red",
 		"toolDiffContext": "mediumGray",
-
 		"syntaxComment": "#008000",
 		"syntaxKeyword": "#0000FF",
 		"syntaxFunction": "#795E26",
@@ -67,7 +64,6 @@
 		"syntaxType": "#267F99",
 		"syntaxOperator": "#000000",
 		"syntaxPunctuation": "#000000",
-
 		"thinkingOff": "lightGray",
 		"thinkingMinimal": "#767676",
 		"thinkingLow": "blue",
@@ -75,8 +71,22 @@
 		"thinkingHigh": "#875f87",
 		"thinkingXhigh": "#8b008b",
 		"thinkingMax": "#af005f",
-
-		"bashMode": "green"
+		"bashMode": "green",
+		"pythonMode": "green",
+		"statusLineSep": "blue",
+		"statusLineModel": "teal",
+		"statusLinePath": "text",
+		"statusLineGitClean": "green",
+		"statusLineGitDirty": "yellow",
+		"statusLineContext": "mediumGray",
+		"statusLineSpend": "mediumGray",
+		"statusLineStaged": "teal",
+		"statusLineDirty": "yellow",
+		"statusLineUntracked": "mediumGray",
+		"statusLineOutput": "text",
+		"statusLineCost": "mediumGray",
+		"statusLineSubagents": "mediumGray",
+		"statusLineBg": "userMsgBg"
 	},
 	"export": {
 		"pageBg": "#f8f8f8",

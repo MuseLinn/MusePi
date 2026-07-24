@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Theme presets** — Nord, Gruvbox, Tokyo Night, Catppuccin preset themes with
+  `/theme list|preview|current|<name>` command, argument completions, and
+  `renderThemePreview()` color chip preview.
+- **Colorblind mode** — global hue rotation (+60°) and desaturation (71%) for
+  deuteranopia-friendly terminal colors via `setColorBlindMode()`.
+- **Shimmer animation engine** — character-level time-varying cosine/kitt sweep
+  across status indicators, loaders, and bash execution components with 30fps
+  animation loop.
+- **Symbol preset system** — 200+ unicode symbols: status, navigation, tree,
+  box-drawing, model/plan/goal/git states, 38 language icons, 20 tool icons,
+  9 tab icons. Unicode and ASCII presets with `getSymbol()` and `symbolFg()`.
+- **`/queue` command** — queue a follow-up message delivered after the agent
+  yields. Calls `session.followUp()` under the hood.
+- **Setup wizard theme scene** — 8 curated theme options with ↑↓ live preview,
+  color chip strip, and colorblind mode toggle.
+- **Extra theme tokens** — `info`, `pythonMode`, `statusLine` (13 tokens),
+  `statusLineBg` (background). 68 total required tokens. `isValidThemeColor()`
+  runtime validation.
+- **TodoTheme rendering** — nullable `TodoTheme` interface with
+  `formatTodoLine()` (strikethrough for completed/abandoned), `formatPhaseLine()`
+  (bold active phase, done/total count), and `formatSummary()` AI-readable
+  format with collapsed phase tree.
+- **`gradientText()` method** — per-character 24-bit ANSI gradient on `Theme`
+  class with 256-color fallback.
+
+### Removed
+
+- **Dead `checkShutdownRequested()`** — unused method and `shutdownRequested`
+  field; call sites now call `void this.shutdown()` directly.
+
+### Changed
+
+- **Theme schema** — updated to 68 tokens, added `info` to `ThemeColor` union,
+  added Typebox definition and JSON schema validation.
+- **Loader animation API** — `LoaderMessageColorFn` gains `animated?: boolean`
+  flag for 30fps shimmer loop; `startAnimatedLoop()` / `stopAnimatedLoop()`
+  exported from `@musepi/tui`.
+- **Theme JSONs** — all 6 built-in themes updated with info token and 14
+  status-line tokens.
+
 ## [0.1.8] - 2026-07-24
 
 ### New Features

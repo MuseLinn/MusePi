@@ -2,7 +2,7 @@
  * Component for displaying bash command execution with streaming output.
  */
 
-import { Container, Loader, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
+import { Container, Loader, type LoaderMessageColorFn, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -10,7 +10,7 @@ import {
 	truncateTail,
 } from "../../../core/tools/truncate.ts";
 import { stripAnsi } from "../../../utils/ansi.ts";
-import { theme } from "../theme/theme.ts";
+import { shimmerText, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, keyText } from "./keybinding-hints.ts";
 import { truncateToVisualLines } from "./visual-truncate.ts";
@@ -52,11 +52,13 @@ export class BashExecutionComponent extends Container {
 		this.contentContainer.addChild(header);
 
 		// Loader
+		const msgColor: LoaderMessageColorFn = (text) => shimmerText(text, theme);
+		msgColor.animated = true;
 		this.loader = new Loader(
 			ui,
 			(spinner) => theme.fg(colorKey, spinner),
-			(text) => theme.fg("muted", text),
-			`Running... (${keyText("tui.select.cancel")} to cancel)`, // Plain text for loader
+			msgColor,
+			`Running... (${keyText("tui.select.cancel")} to cancel)`,
 		);
 		this.contentContainer.addChild(this.loader);
 

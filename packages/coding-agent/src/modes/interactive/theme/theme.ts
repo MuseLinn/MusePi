@@ -40,6 +40,7 @@ const ThemeJsonSchema = Type.Object({
 		borderMuted: ColorValueSchema,
 		success: ColorValueSchema,
 		error: ColorValueSchema,
+		info: ColorValueSchema,
 		warning: ColorValueSchema,
 		muted: ColorValueSchema,
 		dim: ColorValueSchema,
@@ -90,8 +91,25 @@ const ThemeJsonSchema = Type.Object({
 		thinkingHigh: ColorValueSchema,
 		thinkingXhigh: ColorValueSchema,
 		thinkingMax: Type.Optional(ColorValueSchema),
-		// Bash Mode (1 color)
+		// Mode colors (2 colors)
 		bashMode: ColorValueSchema,
+		pythonMode: ColorValueSchema,
+		// Status line colors (13 colors)
+		statusLineSep: ColorValueSchema,
+		statusLineModel: ColorValueSchema,
+		statusLinePath: ColorValueSchema,
+		statusLineGitClean: ColorValueSchema,
+		statusLineGitDirty: ColorValueSchema,
+		statusLineContext: ColorValueSchema,
+		statusLineSpend: ColorValueSchema,
+		statusLineStaged: ColorValueSchema,
+		statusLineDirty: ColorValueSchema,
+		statusLineUntracked: ColorValueSchema,
+		statusLineOutput: ColorValueSchema,
+		statusLineCost: ColorValueSchema,
+		statusLineSubagents: ColorValueSchema,
+		// Status line background (1 bg)
+		statusLineBg: Type.Optional(ColorValueSchema),
 	}),
 	export: Type.Optional(
 		Type.Object({
@@ -106,6 +124,78 @@ type ThemeJson = Static<typeof ThemeJsonSchema>;
 
 const validateThemeJson = Compile(ThemeJsonSchema);
 
+/** Set of all valid ThemeColor string values for runtime validation. */
+const THEME_COLOR_RECORD = {
+	accent: true,
+	border: true,
+	borderAccent: true,
+	borderMuted: true,
+	success: true,
+	error: true,
+	info: true,
+	warning: true,
+	muted: true,
+	dim: true,
+	text: true,
+	thinkingText: true,
+	userMessageText: true,
+	customMessageText: true,
+	customMessageLabel: true,
+	toolTitle: true,
+	toolOutput: true,
+	mdHeading: true,
+	mdLink: true,
+	mdLinkUrl: true,
+	mdCode: true,
+	mdCodeBlock: true,
+	mdCodeBlockBorder: true,
+	mdQuote: true,
+	mdQuoteBorder: true,
+	mdHr: true,
+	mdListBullet: true,
+	toolDiffAdded: true,
+	toolDiffRemoved: true,
+	toolDiffContext: true,
+	syntaxComment: true,
+	syntaxKeyword: true,
+	syntaxFunction: true,
+	syntaxVariable: true,
+	syntaxString: true,
+	syntaxNumber: true,
+	syntaxType: true,
+	syntaxOperator: true,
+	syntaxPunctuation: true,
+	thinkingOff: true,
+	thinkingMinimal: true,
+	thinkingLow: true,
+	thinkingMedium: true,
+	thinkingHigh: true,
+	thinkingXhigh: true,
+	thinkingMax: true,
+	bashMode: true,
+	pythonMode: true,
+	statusLineSep: true,
+	statusLineModel: true,
+	statusLinePath: true,
+	statusLineGitClean: true,
+	statusLineGitDirty: true,
+	statusLineContext: true,
+	statusLineSpend: true,
+	statusLineStaged: true,
+	statusLineDirty: true,
+	statusLineUntracked: true,
+	statusLineOutput: true,
+	statusLineCost: true,
+	statusLineSubagents: true,
+} satisfies Record<ThemeColor, true>;
+
+const VALID_THEME_COLORS: ReadonlySet<string> = new Set(Object.keys(THEME_COLOR_RECORD));
+
+/** Check if a string is a valid ThemeColor value. */
+export function isValidThemeColor(color: string): color is ThemeColor {
+	return VALID_THEME_COLORS.has(color);
+}
+
 export type ThemeColor =
 	| "accent"
 	| "border"
@@ -113,6 +203,7 @@ export type ThemeColor =
 	| "borderMuted"
 	| "success"
 	| "error"
+	| "info"
 	| "warning"
 	| "muted"
 	| "dim"
@@ -152,15 +243,29 @@ export type ThemeColor =
 	| "thinkingHigh"
 	| "thinkingXhigh"
 	| "thinkingMax"
-	| "bashMode";
-
+	| "bashMode"
+	| "pythonMode"
+	| "statusLineSep"
+	| "statusLineModel"
+	| "statusLinePath"
+	| "statusLineGitClean"
+	| "statusLineGitDirty"
+	| "statusLineContext"
+	| "statusLineSpend"
+	| "statusLineStaged"
+	| "statusLineDirty"
+	| "statusLineUntracked"
+	| "statusLineOutput"
+	| "statusLineCost"
+	| "statusLineSubagents";
 export type ThemeBg =
 	| "selectedBg"
 	| "userMessageBg"
 	| "customMessageBg"
 	| "toolPendingBg"
 	| "toolSuccessBg"
-	| "toolErrorBg";
+	| "toolErrorBg"
+	| "statusLineBg";
 
 type ColorMode = "truecolor" | "256color";
 
@@ -173,13 +278,73 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
 	if (cleaned.length !== 6) {
 		throw new Error(`Invalid hex color: ${hex}`);
 	}
-	const r = parseInt(cleaned.substring(0, 2), 16);
-	const g = parseInt(cleaned.substring(2, 4), 16);
-	const b = parseInt(cleaned.substring(4, 6), 16);
-	if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
-		throw new Error(`Invalid hex color: ${hex}`);
+	return {
+		r: Number.parseInt(cleaned.slice(0, 2), 16),
+		g: Number.parseInt(cleaned.slice(2, 4), 16),
+		b: Number.parseInt(cleaned.slice(4, 6), 16),
+	};
+}
+function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
+	r /= 255;
+	g /= 255;
+	b /= 255;
+	const mx = Math.max(r, g, b);
+	const mn = Math.min(r, g, b);
+	const d = mx - mn;
+	let h = 0;
+	const s = mx === 0 ? 0 : d / mx;
+	const v = mx;
+	if (d !== 0) {
+		switch (mx) {
+			case r:
+				h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+				break;
+			case g:
+				h = ((b - r) / d + 2) * 60;
+				break;
+			case b:
+				h = ((r - g) / d + 4) * 60;
+				break;
+		}
 	}
-	return { r, g, b };
+	return { h, s, v };
+}
+
+function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: number } {
+	const hi = Math.floor(h / 60) % 6;
+	const f = h / 60 - Math.floor(h / 60);
+	const p = v * (1 - s);
+	const q = v * (1 - f * s);
+	const t = v * (1 - (1 - f) * s);
+	switch (hi) {
+		case 0:
+			return { r: v * 255, g: t * 255, b: p * 255 };
+		case 1:
+			return { r: q * 255, g: v * 255, b: p * 255 };
+		case 2:
+			return { r: p * 255, g: v * 255, b: t * 255 };
+		case 3:
+			return { r: p * 255, g: q * 255, b: v * 255 };
+		case 4:
+			return { r: t * 255, g: p * 255, b: v * 255 };
+		case 5:
+			return { r: v * 255, g: p * 255, b: q * 255 };
+		default:
+			return { r: v * 255, g: p * 255, b: q * 255 };
+	}
+}
+
+/** Adjust a hex color toward blue (for colorblind mode: red-green deficiency). */
+function adjustForColorBlind(hex: string): string {
+	const { r, g, b } = hexToRgb(hex);
+	const hsv = rgbToHsv(r, g, b);
+	// Rotate hue 60° (green→blue) and desaturate
+	const adjusted = hsvToRgb((hsv.h + 60) % 360, hsv.s * 0.71, hsv.v);
+	const toHex = (n: number) =>
+		Math.round(Math.min(255, Math.max(0, n)))
+			.toString(16)
+			.padStart(2, "0");
+	return `#${toHex(adjusted.r)}${toHex(adjusted.g)}${toHex(adjusted.b)}`;
 }
 
 // The 6x6x6 color cube channel values (indices 0-5)
@@ -386,6 +551,50 @@ export class Theme {
 
 	strikethrough(text: string): string {
 		return chalk.strikethrough(text);
+	}
+
+	/**
+	 * Per-character hex gradient between two colors.
+	 * Each character gets an interpolated 24-bit ANSI color.
+	 * Breaks gracefully in 256-color mode (falls back to fromColor).
+	 */
+	/**
+	 * Per-character hex gradient between two colors for truecolor terminals.
+	 * Falls back to a solid 256-color approximation in 256-color mode.
+	 */
+	gradientText(text: string, fromColor: string, toColor: string): string {
+		if (!text) return text;
+		if (this.mode !== "truecolor" || text.length <= 1) {
+			// 256-color or single-char: solid interpolated color
+			const avgR = Math.round(
+				(Number.parseInt(fromColor.slice(1, 3), 16) + Number.parseInt(toColor.slice(1, 3), 16)) / 2,
+			);
+			const avgG = Math.round(
+				(Number.parseInt(fromColor.slice(3, 5), 16) + Number.parseInt(toColor.slice(3, 5), 16)) / 2,
+			);
+			const avgB = Math.round(
+				(Number.parseInt(fromColor.slice(5, 7), 16) + Number.parseInt(toColor.slice(5, 7), 16)) / 2,
+			);
+			return `\x1b[38;5;${rgbTo256(avgR, avgG, avgB)}m${text}\x1b[39m`;
+		}
+		const fromR = Number.parseInt(fromColor.slice(1, 3), 16);
+		const fromG = Number.parseInt(fromColor.slice(3, 5), 16);
+		const fromB = Number.parseInt(fromColor.slice(5, 7), 16);
+		const toR = Number.parseInt(toColor.slice(1, 3), 16);
+		const toG = Number.parseInt(toColor.slice(3, 5), 16);
+		const toB = Number.parseInt(toColor.slice(5, 7), 16);
+		const len = text.length;
+		const step = len > 1 ? 1 / (len - 1) : 0;
+		const reset = "\x1b[39m";
+		let result = "";
+		for (let i = 0; i < len; i++) {
+			const t = i * step;
+			const r = Math.round(fromR + (toR - fromR) * t);
+			const g = Math.round(fromG + (toG - fromG) * t);
+			const b = Math.round(fromB + (toB - fromB) * t);
+			result += `\x1b[38;2;${r};${g};${b}m${text[i]}${reset}`;
+		}
+		return result;
 	}
 
 	getFgAnsi(color: ThemeColor): string {
@@ -596,7 +805,17 @@ function loadThemeJson(name: string): ThemeJson {
 
 function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string): Theme {
 	const colorMode = mode ?? (getCapabilities().trueColor ? "truecolor" : "256color");
-	const resolvedColors = resolveThemeColors(withThemeColorFallbacks(themeJson.colors), themeJson.vars);
+	const rawColors = withThemeColorFallbacks(themeJson.colors);
+	// Apply colorblind adjustment to all hex values
+	const adjustedColors = globalColorBlindMode
+		? (Object.fromEntries(
+				Object.entries(rawColors).map(([key, value]) => [
+					key,
+					typeof value === "string" && value.startsWith("#") ? adjustForColorBlind(value) : value,
+				]),
+			) as typeof rawColors)
+		: rawColors;
+	const resolvedColors = resolveThemeColors(adjustedColors, themeJson.vars);
 	const fgColors: Record<ThemeColor, string | number> = {} as Record<ThemeColor, string | number>;
 	const bgColors: Record<ThemeBg, string | number> = {} as Record<ThemeBg, string | number>;
 	const bgColorKeys: Set<string> = new Set([
@@ -606,6 +825,7 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 		"toolPendingBg",
 		"toolSuccessBg",
 		"toolErrorBg",
+		"statusLineBg",
 	]);
 	for (const [key, value] of Object.entries(resolvedColors)) {
 		if (bgColorKeys.has(key)) {
@@ -816,10 +1036,35 @@ function setGlobalTheme(t: Theme): void {
 }
 
 let currentThemeName: string | undefined;
+let themeEpoch = 0;
 let themeWatcher: fs.FSWatcher | undefined;
 let themeReloadTimer: NodeJS.Timeout | undefined;
 let onThemeChangeCallback: (() => void) | undefined;
 const registeredThemes = new Map<string, Theme>();
+
+/** Monotonic counter bumped on any theme-affecting change. */
+export function getThemeEpoch(): number {
+	return themeEpoch;
+}
+
+function bumpThemeEpoch(): void {
+	themeEpoch++;
+}
+
+let globalColorBlindMode = false;
+
+/** Enable or disable colorblind-friendly mode (shifts green hues toward blue). */
+export function setColorBlindMode(enabled: boolean): void {
+	if (globalColorBlindMode !== enabled) {
+		globalColorBlindMode = enabled;
+		bumpThemeEpoch();
+	}
+}
+
+/** Check whether colorblind mode is active. */
+export function isColorBlindMode(): boolean {
+	return globalColorBlindMode;
+}
 
 export function setRegisteredThemes(themes: Theme[]): void {
 	registeredThemes.clear();
@@ -1293,3 +1538,65 @@ export function getSettingsListTheme(): SettingsListTheme {
 		section: (text: string) => theme.bold(theme.fg("muted", text)),
 	};
 }
+
+// ============================================================================
+// Theme Preview Helpers
+// ============================================================================
+
+/** Color chips for the semantic token groups shown in /theme preview. */
+const PREVIEW_TOKENS: { label: string; fg: ThemeColor[]; bg?: ThemeBg[] }[] = [
+	{ label: "status", fg: ["success", "info", "warning", "error"] },
+	{ label: "core", fg: ["accent", "text", "muted", "dim"] },
+	{ label: "border", fg: ["borderAccent", "border", "borderMuted"] },
+	{ label: "md", fg: ["mdHeading", "mdLink", "mdCode", "mdQuote"] },
+	{ label: "thinking", fg: ["thinkingOff", "thinkingLow", "thinkingMedium", "thinkingHigh", "thinkingXhigh"] },
+];
+
+/**
+ * Render a compact one-line color preview for a set of semantic tokens.
+ * Each chip shows a colored block (▌▐) for the given token.
+ */
+export function renderThemePreview(t: Theme): string {
+	const chips: string[] = [];
+	for (const group of PREVIEW_TOKENS) {
+		const line = group.fg.map((token) => {
+			const block = "██";
+			return t.fg(token, block);
+		});
+		chips.push(line.join(""));
+	}
+	return chips.join(" ");
+}
+
+// ── Shimmer re-exports ───────────────────────
+export {
+	getShimmerMode,
+	getSpinnerFrames,
+	getSpinnerPreset,
+	getSpinnerSymbols,
+	type ShimmerMode,
+	type ShimmerPalette,
+	type ShimmerSegment,
+	type SpinnerPreset,
+	type SpinnerSymbols,
+	setShimmerMode,
+	setSpinnerPreset,
+	shimmerEnabled,
+	shimmerSegments,
+	shimmerText,
+} from "./shimmer.ts";
+
+// ── Symbol preset re-exports ─────────────────
+export {
+	getLangIconKey,
+	getSymbol,
+	getSymbolPreset,
+	getSymbolTheme,
+	LANG_BRAND_COLORS,
+	LANG_MAP,
+	type SymbolKey,
+	type SymbolPreset,
+	type SymbolTheme,
+	setSymbolPreset,
+} from "./symbols.ts";
+// ── Semantic token re-exports ───────────────────────────────
