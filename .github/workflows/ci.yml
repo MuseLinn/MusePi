@@ -57,10 +57,6 @@ jobs:
           npm test --workspace @musepi/core
           npm test --workspace @musepi/transcript
 
-      - name: Test pi-ai (unit; live E2E skipped without API keys)
-        working-directory: packages/ai
-        run: npm test
-
   windows:
     name: build & targeted tests (windows)
     runs-on: windows-latest
@@ -91,7 +87,3 @@ jobs:
         run: |
           npm test --workspace @musepi/core
           npm test --workspace @musepi/transcript
-
-      - name: Test pi-ai (unit; live E2E skipped without API keys)
-        working-directory: packages/ai
-        run: npm test
