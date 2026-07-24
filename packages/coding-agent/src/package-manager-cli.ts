@@ -596,7 +596,7 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 				),
 			);
 			console.log(chalk.dim(`Previous install will be kept at ${backupDir}; update log: ${logFile}`));
-			setImmediate(() => process.exit(0));
+			setTimeout(() => process.exit(0), 3000);
 			return;
 		}
 
