@@ -1,6 +1,6 @@
 {
 	"name": "@earendil-works/pi-coding-agent",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
@@ -59,7 +59,7 @@
 		"typebox": "1.1.38",
 		"undici": "8.5.0",
 		"yaml": "2.9.0",
-		"@musepi/core": "0.1.2"
+		"@musepi/core": "0.1.3"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",
