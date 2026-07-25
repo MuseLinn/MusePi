@@ -61,6 +61,9 @@ export const usageResponseSchema = z.object({
 	generatedAt: z.number(),
 	reports: z.array(usageReportSchema),
 });
+export const usageStaleResponseSchema = z.object({
+	ok: z.boolean(),
+});
 
 export const credentialRefreshResponseSchema = z.object({
 	entry: snapshotEntrySchema,
@@ -91,8 +94,9 @@ export const credentialRemarkRequestSchema = z.object({
 export const credentialRemarkResponseSchema = z.object({
 	ok: z.literal(true),
 });
-
-export const credentialBlocksDeleteResponseSchema = z.object({});
+export const credentialBlocksDeleteResponseSchema = z.object({
+	ok: z.boolean(),
+});
 
 export const credentialUploadRequestSchema = z.object({
 	provider: z.string(),
