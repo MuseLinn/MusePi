@@ -177,6 +177,7 @@ import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-
 import { getNativeEntryRenderer } from "./components/late-diagnostics-message.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { LogoutAccountSelectorComponent } from "./components/logout-account-selector.ts";
+import { ModelSelectorComponent } from "./components/model-selector.ts";
 import {
 	type AuthSelectorProvider,
 	formatAuthSelectorProviderType,
@@ -207,6 +208,7 @@ import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
 	getEditorTheme,
+	getMarkdownTheme,
 	getSelectListTheme,
 	getThemeByName,
 	onThemeChange,
@@ -6318,7 +6320,7 @@ export class InteractiveMode {
 	}
 
 	private showAgentsDashboard(): void {
-		this.editor.clear();
+		this.editor.setText("");
 		const dashboard = new AgentDashboard({
 			onClose: () => {
 				this.editorContainer.removeChild(dashboard);
@@ -7372,7 +7374,6 @@ export class InteractiveMode {
 			width: "100%",
 			maxHeight: "100%",
 			margin: 0,
-			fullscreen: true,
 		});
 		this.ui.setFocus(selector);
 		this.ui.requestRender();
@@ -7491,5 +7492,15 @@ export class InteractiveMode {
 			this.isInitialized = false;
 		}
 		this.unregisterSignalHandlers();
+	}
+	// ─── Easter egg stubs (from upstream) ──────────────────────────
+	private handleArminSaysHi(): void {
+		// Upstream easter egg — no-op in MusePi
+	}
+	private handleDementedDelves(): void {
+		// Upstream easter egg — no-op in MusePi
+	}
+	private checkDaxnutsEasterEgg(_model: Model<any>): void {
+		// Upstream easter egg — no-op in MusePi
 	}
 }

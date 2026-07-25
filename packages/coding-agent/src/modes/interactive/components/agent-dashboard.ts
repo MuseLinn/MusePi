@@ -13,7 +13,7 @@
 
 import { matchesKey, type Tab, TabBar } from "@musepi/pi-tui";
 import { type AgentRegistryEntry, agentRegistry } from "../../../agents/registry.ts";
-import { theme } from "../theme/theme.ts";
+import { getTabBarTheme, type ThemeColor, theme } from "../theme/theme.ts";
 import { bottomBorder, topBorder } from "./overlay-box.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -37,9 +37,7 @@ export class AgentDashboard {
 		this.refresh();
 	}
 
-	invalidate(): void {
-		this._invalidated = true;
-	}
+	invalidate(): void {}
 
 	/** Re-query the registry for the current filter. */
 	private refresh(): void {
@@ -131,7 +129,9 @@ export class AgentDashboard {
 		lines.push(bottomBorder(width));
 
 		// Quick help
-		lines.push(theme.fg("muted", `  ${theme.dim("Esc to close")}    ${theme.dim("Tab/Shift+Tab: navigate")}`));
+		lines.push(
+			theme.fg("muted", `  ${theme.fg("dim", "Esc to close")}    ${theme.fg("dim", "Tab/Shift+Tab: navigate")}`),
+		);
 
 		return lines;
 	}
@@ -146,15 +146,12 @@ export class AgentDashboard {
 			{ label: "User", id: "user" },
 			{ label: "Project", id: "project" },
 		];
-		const tabBar = new TabBar(tabs, {
-			onSelect: (tab) => this.setFilter(tab.id as AgentFilter),
-		});
-		tabBar.selectTab(tabs.findIndex((t) => t.id === this.filter));
-		lines.push(...tabBar.render(width));
+		const tabBar = new TabBar("", tabs, getTabBarTheme());
+		tabBar.onTabChange = (tab) => this.setFilter(tab.id as AgentFilter);
 
 		// Header
 		lines.push(theme.fg("border", ` ${theme.bold("Agent")}`.padEnd(width)));
-		lines.push(theme.fg("border", ` ${theme.alpha.char.repeat(width - 2)}`));
+		lines.push(theme.fg("border", ` ${"\u2500".repeat(width - 2)}`));
 
 		// Agent list
 		for (const entry of this.agents) {
@@ -163,13 +160,13 @@ export class AgentDashboard {
 			const prefix = isSelected ? theme.bold(theme.fg("accent", "\u25b8 ")) : "  ";
 			const nameText = isSelected ? theme.bold(name) : name;
 			const modelInfo = entry.runtimeModelOverride
-				? theme.dim(theme.fg("muted", ` [${entry.runtimeModelOverride}]`))
+				? theme.fg("dim", theme.fg("muted", ` [${entry.runtimeModelOverride}]`))
 				: "";
 			const enabledIcon = entry.enabled ? theme.fg("success", "\u25cf") : theme.fg("muted", "\u25cb");
 
 			const padded = `${prefix}${enabledIcon} ${nameText}${modelInfo}`.padEnd(width).slice(0, width);
-			lines.push(theme.fg(isSelected ? "selectionBg" : "fg", padded));
-			lines.push(theme.dim(theme.fg("muted", `   ${entry.definition.description}`)));
+			const styled = isSelected ? theme.bg("selectedBg", theme.fg("text", padded)) : theme.fg("text", padded);
+			lines.push(styled);
 		}
 
 		return lines;
@@ -181,7 +178,7 @@ export class AgentDashboard {
 
 		if (!entry) {
 			lines.push(" ".repeat(width));
-			lines.push(theme.dim(theme.fg("muted", "  No agent selected")));
+			lines.push(theme.fg("dim", theme.fg("muted", "  No agent selected")));
 			return lines;
 		}
 
@@ -189,7 +186,7 @@ export class AgentDashboard {
 
 		// Agent name header
 		lines.push(` ${theme.bold(def.name)}`);
-		lines.push(theme.fg("border", ` ${theme.alpha.char.repeat(Math.min(width - 2, 40))}`));
+		lines.push(theme.fg("border", ` ${"\u2500".repeat(Math.min(width - 2, 40))}`));
 
 		// Source badge
 		const sourceColors: Record<string, string> = {
@@ -199,7 +196,7 @@ export class AgentDashboard {
 			extension: "success",
 		};
 		lines.push(
-			`  ${theme.fg(sourceColors[def.source] ?? ("muted" as any), def.source)}  ${theme.dim(theme.fg("muted", "source"))}`,
+			`  ${theme.fg((sourceColors[def.source] ?? "muted") as ThemeColor, def.source)}  ${theme.fg("dim", theme.fg("muted", "source"))}`,
 		);
 
 		// Description
@@ -215,14 +212,14 @@ export class AgentDashboard {
 		const defModels = def.model ?? [];
 		if (modelOverride) {
 			lines.push(
-				`  Model: ${theme.fg("accent", modelOverride)} ${theme.dim(theme.fg("muted", "(runtime override)"))}`,
+				`  Model: ${theme.fg("accent", modelOverride)} ${theme.fg("dim", theme.fg("muted", "(runtime override)"))}`,
 			);
 		} else if (defModels.length > 0) {
 			const modelsStr = defModels.slice(0, 3).join(", ");
 			const suffix = defModels.length > 3 ? ` +${defModels.length - 3} more` : "";
-			lines.push(`  Model: ${theme.fg("info", modelsStr)}${theme.dim(theme.fg("muted", suffix))}`);
+			lines.push(`  Model: ${theme.fg("info", modelsStr)}${theme.fg("dim", theme.fg("muted", suffix))}`);
 		} else {
-			lines.push(`  Model: ${theme.dim(theme.fg("muted", "(session default)"))}`);
+			lines.push(`  Model: ${theme.fg("dim", theme.fg("muted", "(session default)"))}`);
 		}
 
 		// Prewalk
@@ -234,27 +231,27 @@ export class AgentDashboard {
 						? " (override: on)"
 						: " (override: off)"
 					: "";
-			lines.push(`  ${theme.fg("info", pwLabel)}${theme.dim(theme.fg("muted", overrideLabel))}`);
+			lines.push(`  ${theme.fg("info", pwLabel)}${theme.fg("dim", theme.fg("muted", overrideLabel))}`);
 		}
 
 		// File path
 		if (def.filePath) {
-			lines.push(`  ${theme.dim(theme.fg("muted", def.filePath))}`);
+			lines.push(`  ${theme.fg("dim", theme.fg("muted", def.filePath))}`);
 		}
 
 		// System prompt preview
 		lines.push("");
 		lines.push(theme.fg("border", ` ${theme.bold("System Prompt")}`));
-		lines.push(theme.fg("border", ` ${theme.alpha.char.repeat(Math.min(width - 2, 40))}`));
+		lines.push(theme.fg("border", ` ${"\u2500".repeat(Math.min(width - 2, 40))}`));
 
 		const promptLines = def.systemPrompt.split("\n").slice(0, 6);
 		for (const pl of promptLines) {
 			lines.push(
-				`  ${theme.dim(theme.fg("muted", pl.length > width - 4 ? `${pl.slice(0, width - 7)}\u2026` : pl))}`,
+				`  ${theme.fg("dim", theme.fg("muted", pl.length > width - 4 ? `${pl.slice(0, width - 7)}\u2026` : pl))}`,
 			);
 		}
 		if (def.systemPrompt.split("\n").length > 6) {
-			lines.push(`  ${theme.dim(theme.fg("muted", "\u2026 (truncated)"))}`);
+			lines.push(`  ${theme.fg("dim", theme.fg("muted", "\u2026 (truncated)"))}`);
 		}
 
 		return lines;

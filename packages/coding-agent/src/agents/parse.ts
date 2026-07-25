@@ -9,7 +9,7 @@
  * is used as `name` when the frontmatter has no `name` field.
  */
 
-import type { AgentDefinition, AgentSource } from "@musepi/core";
+import type { AgentDefinition, AgentSource, AgentTools } from "@musepi/core";
 
 /** Regex matching the frontmatter block. */
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)?$/;
@@ -54,7 +54,7 @@ export function parseAgentMarkdown(content: string, fileName: string): ParseAgen
 		name,
 		description: (fields.description as string) ?? "",
 		systemPrompt: body,
-		tools: parseTools(fields.tools),
+		tools: parseTools(fields.tools) ?? "*",
 		spawns: parseSpawns(fields.spawns),
 		model: parseModel(fields.model),
 		thinkingLevel: parseThinkingLevel(fields["thinking-level"]),
@@ -89,32 +89,32 @@ function parseYamlBlock(raw: string): Record<string, unknown> {
 		const key = trimmed.slice(0, colonIndex).trim();
 		let value: unknown = trimmed.slice(colonIndex + 1).trim();
 
-		if (value === "" || value === "~" || value === "null") {
+		// Narrow string checks: after the non-string falsy comparisons above,
+		// we know value is a non-empty string for the remaining branches.
+		const strVal = typeof value === "string" ? value : String(value);
+		if (strVal === "" || strVal === "~" || strVal === "null") {
 			value = undefined;
-		} else if (value === "true") {
+		} else if (strVal === "true") {
 			value = true;
-		} else if (value === "false") {
+		} else if (strVal === "false") {
 			value = false;
-		} else if (value.startsWith("[") && value.endsWith("]")) {
-			value = value
+		} else if (strVal.startsWith("[") && strVal.endsWith("]")) {
+			value = strVal
 				.slice(1, -1)
 				.split(",")
 				.map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
 				.filter(Boolean);
-		} else if (/^\d+$/.test(value as string)) {
-			value = Number(value);
+		} else if (/^\d+$/.test(strVal)) {
+			value = Number(strVal);
 		} else {
-			// Remove surrounding quotes
-			value = (value as string).replace(/^['"]|['"]$/g, "");
+			value = strVal.replace(/^['"]|['"]$/g, "");
 		}
-
 		result[key] = value;
 	}
-
 	return result;
 }
 
-function parseTools(value: unknown): string[] | "*" | undefined {
+function parseTools(value: unknown): AgentTools | undefined {
 	if (value === "*") return "*";
 	if (Array.isArray(value)) return value.filter((t): t is string => typeof t === "string");
 	if (typeof value === "string") {

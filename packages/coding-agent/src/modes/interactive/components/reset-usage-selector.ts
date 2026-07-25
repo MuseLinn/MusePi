@@ -26,7 +26,7 @@ export class ResetUsageSelectorComponent extends Container {
 		this.#onSelectCallback = onSelect;
 		this.#onCancelCallback = onCancel;
 
-		const items = accounts.map((account) => ({
+		const items: import("@musepi/pi-tui").SelectItem[] = accounts.map((account) => ({
 			value: account.label,
 			label: account.label,
 			description: account.availableCount > 0 ? `${account.availableCount} saved resets` : "no resets available",

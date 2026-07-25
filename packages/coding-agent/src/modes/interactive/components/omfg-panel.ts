@@ -1,5 +1,6 @@
 import { type Component, Container, Markdown, Spacer, Text, type TUI } from "@musepi/pi-tui";
 import { getMarkdownTheme, getSymbol, theme } from "../theme/theme.ts";
+import { DynamicBorder } from "./dynamic-border.ts";
 
 export type OmfgPanelState =
 	| "generating"

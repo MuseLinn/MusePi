@@ -302,6 +302,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	skills: Required<MusepiSkillsSettings>;
 	advisor: Required<MusepiAdvisorSettings>;
 	goal: Required<MusepiGoalSettings>;
+	todo: Required<MusepiTodoSettings>;
 	swarm: Required<MusepiSwarmSettings>;
 	agents: Required<MusepiAgentSettings>;
 	tui: Required<MusepiTuiSettings>;

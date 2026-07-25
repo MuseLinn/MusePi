@@ -34,6 +34,7 @@ export function discoverAgents(projectDir?: string): DiscoverAgentsResult {
 		if (!byName.has(spec.name)) {
 			byName.set(spec.name, {
 				...spec,
+				tools: spec.tools ?? "*",
 				source: "bundled",
 				filePath: undefined,
 			});
