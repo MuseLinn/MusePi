@@ -1,4 +1,5 @@
-import type { Credential, CredentialInfo, CredentialStore } from "./types.ts";
+import { ModelsError } from "./resolve.ts";
+import type { Credential, CredentialInfo, CredentialStore, StoredCredentialInfo } from "./types.ts";
 
 /**
  * Default in-memory credential store. Apps inject persistent stores.
@@ -47,5 +48,63 @@ export class InMemoryCredentialStore implements CredentialStore {
 		return this.enqueue(providerId, async () => {
 			this.credentials.delete(providerId);
 		});
+	}
+
+	async listCredentials(providerId?: string): Promise<StoredCredentialInfo[]> {
+		const entries = [...this.credentials.entries()]
+			.filter(([pid]) => !providerId || pid === providerId)
+			.map(([pid, credential]) => this.#credentialToInfo(pid, credential));
+		if (entries.length === 0) return [];
+		return entries;
+	}
+
+	async removeCredential(id: number): Promise<number[]> {
+		// In-memory store has no persistent IDs; treat as "remove all for the
+		// single credential" — callers should use delete(providerId) instead.
+		if (id === 0) {
+			this.credentials.clear();
+			return [];
+		}
+		// Try to match by iterating all entries (id is meaningless in memory,
+		// but try to find a match by index).
+		const entries = [...this.credentials.entries()];
+		const match = entries[id - 1];
+		if (match) {
+			this.credentials.delete(match[0]);
+			return [];
+		}
+		return [];
+	}
+
+	async updateRemark(_id: number, _remark: string): Promise<void> {
+		throw new ModelsError("auth", "InMemoryCredentialStore does not support remarks");
+	}
+
+	async setActiveCredential(providerId: string, _credentialId: number): Promise<void> {
+		// Single-credential store: the only credential is always active.
+		if (!this.credentials.has(providerId)) {
+			throw new ModelsError("auth", `No credential for provider ${providerId}`);
+		}
+	}
+
+	async listCredentialBlocks(_credentialIds: readonly number[]): Promise<
+		Array<{
+			credentialId: number;
+			providerKey: string;
+			blockScope: string;
+			blockedUntilMs: number;
+			updatedAt: number;
+		}>
+	> {
+		return [];
+	}
+
+	#credentialToInfo(providerId: string, credential: Credential): StoredCredentialInfo {
+		const info: StoredCredentialInfo = { id: 0, providerId, type: credential.type };
+		if (credential.type === "oauth") {
+			info.email = credential.email as string | undefined;
+			info.accountId = credential.accountId as string | undefined;
+		}
+		return info;
 	}
 }

@@ -18,7 +18,7 @@
  *   /thinking-label          Reset to the default label
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@muselinn/musepi";
+import type { ExtensionAPI, ExtensionContext } from "@musepi/coding-agent";
 
 const DEFAULT_LABEL = "Pondering...";
 

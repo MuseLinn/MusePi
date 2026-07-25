@@ -1,4 +1,4 @@
-import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
+import type { Credential, CredentialInfo, CredentialStore, StoredCredentialInfo } from "@musepi/pi-ai";
 
 /** Async credential store overlay for non-persistent runtime API keys. */
 export class RuntimeCredentials implements CredentialStore {
@@ -44,5 +44,33 @@ export class RuntimeCredentials implements CredentialStore {
 	async delete(providerId: string): Promise<void> {
 		this.overrides.delete(providerId);
 		await this.store.delete(providerId);
+	}
+
+	listCredentials(providerId?: string): Promise<StoredCredentialInfo[]> {
+		return this.store.listCredentials(providerId);
+	}
+
+	removeCredential(id: number): Promise<number[]> {
+		return this.store.removeCredential(id);
+	}
+
+	updateRemark(id: number, remark: string): Promise<void> {
+		return this.store.updateRemark(id, remark);
+	}
+
+	setActiveCredential(providerId: string, credentialId: number): Promise<void> {
+		return this.store.setActiveCredential(providerId, credentialId);
+	}
+
+	listCredentialBlocks(credentialIds: readonly number[]): Promise<
+		Array<{
+			credentialId: number;
+			providerKey: string;
+			blockScope: string;
+			blockedUntilMs: number;
+			updatedAt: number;
+		}>
+	> {
+		return this.store.listCredentialBlocks?.(credentialIds) ?? Promise.resolve([]);
 	}
 }

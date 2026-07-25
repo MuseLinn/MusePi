@@ -8,7 +8,7 @@
 // Usage: node packages/coding-agent/scripts/bench-render.mjs
 import { performance } from "node:perf_hooks";
 
-const { Container, Markdown } = await import("@earendil-works/pi-tui");
+const { Container, Markdown } = await import("@musepi/pi-tui");
 
 // Minimal MarkdownTheme stub (style fns return plain text).
 const mdTheme = {

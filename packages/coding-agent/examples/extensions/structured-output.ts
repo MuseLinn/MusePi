@@ -5,8 +5,8 @@
  * without paying for an extra follow-up LLM turn.
  */
 
-import { Text } from "@earendil-works/pi-tui";
-import { defineTool, type ExtensionAPI } from "@muselinn/musepi";
+import { defineTool, type ExtensionAPI } from "@musepi/coding-agent";
+import { Text } from "@musepi/pi-tui";
 import { Type } from "typebox";
 
 interface StructuredOutputDetails {

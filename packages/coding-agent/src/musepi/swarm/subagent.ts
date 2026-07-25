@@ -4,7 +4,6 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { goalManager, mergeMusepiSettings } from "@musepi/core";
 import { hookEngine } from "@musepi/core/hooks/index.js";
 import { parseRoleModelSpec } from "@musepi/core/model-roles/index.js";
@@ -26,6 +25,7 @@ import {
 	swarmState,
 } from "@musepi/core/swarm/types.js";
 import { wrapWithPermissionGate } from "@musepi/core/swarm/wrap-tools.js";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import { CONFIG_DIR_NAME, getAgentDir } from "../../config.ts";
 import { createExtensionRuntime } from "../../core/extensions/loader.ts";
 import type { ResourceLoader } from "../../core/resource-loader.ts";

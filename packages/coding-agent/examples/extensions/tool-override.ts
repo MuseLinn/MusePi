@@ -20,8 +20,8 @@
  *   pi -e ./tool-override.ts
  */
 
-import type { TextContent } from "@earendil-works/pi-ai";
-import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "@muselinn/musepi";
+import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "@musepi/coding-agent";
+import type { TextContent } from "@musepi/pi-ai";
 import { constants, readFileSync } from "fs";
 import { access, appendFile, readFile } from "fs/promises";
 import { join, resolve } from "path";

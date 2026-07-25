@@ -4,7 +4,7 @@
  * Override settings using SettingsManager.
  */
 
-import { createAgentSession, SessionManager, SettingsManager } from "@muselinn/musepi";
+import { createAgentSession, SessionManager, SettingsManager } from "@musepi/coding-agent";
 
 const cwd = process.cwd();
 

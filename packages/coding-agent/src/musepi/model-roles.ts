@@ -8,13 +8,13 @@
 // host features (swarm subagents, plan mode, future memory calls).
 // ============================================================
 
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai/compat";
 import type { ModelRole, ModelRolesConfig, RoleModelSpec } from "@musepi/core/model-roles/index.js";
 import {
 	resolveModelForRole as coreResolveModelForRole,
 	resolveCandidatesForRole,
 } from "@musepi/core/model-roles/index.js";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Model } from "@musepi/pi-ai/compat";
 
 export interface RoleModelMatch {
 	model: Model<any>;

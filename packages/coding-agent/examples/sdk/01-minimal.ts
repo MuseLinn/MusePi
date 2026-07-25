@@ -5,7 +5,7 @@
  * from cwd and ~/.pi/agent. Model chosen from settings or first available.
  */
 
-import { createAgentSession } from "@muselinn/musepi";
+import { createAgentSession } from "@musepi/coding-agent";
 
 const { session } = await createAgentSession();
 

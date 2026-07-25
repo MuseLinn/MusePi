@@ -14,7 +14,7 @@
 import { createReadStream } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
 
 interface ConflictBlock {
 	file: string;

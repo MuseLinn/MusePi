@@ -1,13 +1,13 @@
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, ImageContent, Model, TextContent, VideoContent } from "@earendil-works/pi-ai";
-import { Text } from "@earendil-works/pi-tui";
 import {
 	formatHashlineHeader,
 	formatNumberedLine,
 	normalizeToLF as hlNormalizeToLF,
 	stripBom as hlStripBom,
 } from "@musepi/core/hashline/index.js";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import type { Api, ImageContent, Model, TextContent, VideoContent } from "@musepi/pi-ai";
+import { Text } from "@musepi/pi-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";

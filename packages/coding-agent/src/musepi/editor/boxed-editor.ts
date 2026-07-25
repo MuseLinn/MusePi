@@ -14,8 +14,8 @@
 // the border spinner advances with them.
 // ============================================================
 
-import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { composeTopBorder, type EditorStyle, wrapWithSideBorders } from "@musepi/core/tui/box.js";
+import type { EditorTheme, TUI } from "@musepi/pi-tui";
 
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { CustomEditor } from "../../modes/interactive/components/custom-editor.ts";

@@ -5,7 +5,7 @@
  * Demonstrates how extensions can use ctx.shutdown() to exit pi cleanly.
  */
 
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
 import { Type } from "typebox";
 
 export default function (pi: ExtensionAPI) {

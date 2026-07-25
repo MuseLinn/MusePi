@@ -40,16 +40,53 @@ export type Credential = ApiKeyCredential | OAuthCredential;
 export interface CredentialInfo {
 	providerId: string;
 	type: Credential["type"];
+	/**
+	 * Database row id. Undefined for legacy single-credential stores or
+	 * ambient-only providers.
+	 */
+	id?: number;
+	/** User-editable label for distinguishing API keys. */
+	remark?: string;
+	/** OAuth email, when known from the identity provider. */
+	email?: string;
+	/** Organization/workspace id, when scoped (Anthropic, ChatGPT multi-sub). */
+	orgId?: string;
+	/** Human-readable organization label. */
+	orgName?: string;
+	/** OAuth account id from the identity provider. */
+	accountId?: string;
 }
 
 /**
- * App-owned credential storage, keyed by `Provider.id`, one credential per
- * provider. `modify` is the only write path, so every mutation is a
- * serialized read-modify-write; `Models.getAuth()` runs OAuth refresh inside
- * `modify` so concurrent requests cannot double-refresh a rotated token. The
- * app persists a credential after login via
- * `modify(provider.id, async () => credential)`. Login/logout orchestration
- * is app-owned.
+ * Full metadata about one stored credential row, as returned by
+ * {@link CredentialStore.listCredentials}. Includes the credential's
+ * internal storage id, identity metadata, and user-editable remark.
+ */
+export interface StoredCredentialInfo {
+	id: number;
+	providerId: string;
+	type: Credential["type"];
+	remark?: string;
+	email?: string;
+	orgId?: string;
+	orgName?: string;
+	accountId?: string;
+}
+
+/**
+ * App-owned credential storage, keyed by `Provider.id`. Supports multiple
+ * credentials per provider for round-robin, usage-based ranking, and
+ * session-sticky credential selection.
+ *
+ * The four contract methods (`read`, `list`, `modify`, `delete`) operate on
+ * the **active** credential for a provider — the one selected by
+ * session-sticky or round-robin logic. Store implementations that need
+ * multi-credential management implement the additional methods below.
+ *
+ * `Models.getAuth()` calls `read(providerId)` to obtain the credential to
+ * use for an outbound API request. Implementations that return different
+ * credentials per session or per call are responsible for their own selection
+ * strategy (round-robin, usage ranking, etc.).
  *
  * Error semantics: `read` resolves `undefined` for missing entries. Methods
  * reject only on storage failure; `Models` wraps such rejections in
@@ -61,12 +98,19 @@ export interface CredentialStore {
 	/**
 	 * Read the stored credential, possibly expired. Display/status use;
 	 * resolved request auth comes from `Models.getAuth()`.
+	 *
+	 * For multi-credential stores, returns the **active** credential for the
+	 * provider — the one selected by the store's credential-selection
+	 * strategy (session stickiness, round-robin, usage ranking).
 	 */
 	read(providerId: string): Promise<Credential | undefined>;
 
 	/**
 	 * List stored credential metadata without resolving or exposing secrets.
 	 * Implementations must not execute configured API-key commands while listing.
+	 *
+	 * For multi-credential stores, returns one entry per stored credential,
+	 * including the augmented `CredentialInfo` fields (`id`, `remark`, etc.).
 	 */
 	list(): Promise<readonly CredentialInfo[]>;
 
@@ -77,6 +121,9 @@ export interface CredentialStore {
 	 * Mutual exclusion per provider id, cross-process too where the backing
 	 * store supports it (e.g. a file lock). Resolves with the post-write
 	 * credential. Rejections from `fn` propagate.
+	 *
+	 * For multi-credential stores, operates on the **active** credential for
+	 * the provider (the one `read()` would return).
 	 */
 	modify(
 		providerId: string,
@@ -85,6 +132,66 @@ export interface CredentialStore {
 
 	/** Remove a credential (logout). Implementations serialize this against `modify`. */
 	delete(providerId: string): Promise<void>;
+
+	// ─────────────────────────────────────────────────────────────────────
+	// Multi-credential management methods
+	// (optional — throw "not supported" on single-credential stores)
+	// ─────────────────────────────────────────────────────────────────────
+
+	/**
+	 * List full metadata for one or all providers' stored credentials.
+	 * Unlike `list()`, returns the full `StoredCredentialInfo` for each row,
+	 * suitable for rendering an account picker.
+	 *
+	 * Resolves with an empty array when no credentials are stored. Rejects on
+	 * storage failure. Implementations that don't support multi-credential
+	 * storage may throw `ModelsError` with code "auth".
+	 */
+	listCredentials(providerId?: string): Promise<StoredCredentialInfo[]>;
+
+	/**
+	 * Remove one stored credential by its storage id. Used for per-account
+	 * logout from multi-credential stores. Single-credential stores should
+	 * delegate to `delete(providerId)`.
+	 * Resolves with the remaining credential ids for the provider, or an
+	 * empty array when none remain.
+	 */
+	removeCredential(id: number): Promise<number[]>;
+
+	/**
+	 * Set a user-editable label on a stored credential. The remark is
+	 * displayed in account selectors and debug panels.
+	 */
+	updateRemark(id: number, remark: string): Promise<void>;
+
+	/**
+	 * Set a user-editable label on a stored credential. The remark is
+	 * displayed in account selectors and debug panels.
+	 */
+	updateRemark(id: number, remark: string): Promise<void>;
+
+	/**
+	 * Set which stored credential is the **active** one for a provider.
+	 * Subsequent `read(providerId)` calls return this credential.
+	 * The credential must exist in the store.
+	 */
+	setActiveCredential(providerId: string, credentialId: number): Promise<void>;
+
+	/**
+	 * List non-expired credential blocks for the given credential ids.
+	 * Results are used by credential routers to skip rate-limited credentials
+	 * across process restarts. Optional — stores that don't support
+	 * persistent blocks may return an empty array.
+	 */
+	listCredentialBlocks?(credentialIds: readonly number[]): Promise<
+		Array<{
+			credentialId: number;
+			providerKey: string;
+			blockScope: string;
+			blockedUntilMs: number;
+			updatedAt: number;
+		}>
+	>;
 }
 
 /** Environment access for auth resolution. Injectable for tests and browsers. */

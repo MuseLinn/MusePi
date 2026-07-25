@@ -1,4 +1,4 @@
-import type { Api, Model, ModelsStoreEntry, Provider } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelsStoreEntry, Provider } from "@musepi/pi-ai";
 import { VERSION } from "../config.ts";
 import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 

@@ -3,8 +3,8 @@
  * Uses Kitty keyboard protocol for smooth movement (press/release detection)
  */
 
-import { isKeyRelease, Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
+import { isKeyRelease, Key, matchesKey, visibleWidth } from "@musepi/pi-tui";
 
 const GAME_WIDTH = 60;
 const GAME_HEIGHT = 24;

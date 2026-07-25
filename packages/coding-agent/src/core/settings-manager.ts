@@ -1,6 +1,6 @@
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Transport } from "@earendil-works/pi-ai";
 import { type MusepiSettings, mergeMusepiSettings, type ResolvedMusepiSettings } from "@musepi/core";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Transport } from "@musepi/pi-ai";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";

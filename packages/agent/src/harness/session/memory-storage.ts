@@ -1,4 +1,4 @@
-import { uuidv7 } from "@earendil-works/pi-ai";
+import { uuidv7 } from "@musepi/pi-ai";
 import {
 	type LeafEntry,
 	SessionError,

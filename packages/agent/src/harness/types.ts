@@ -8,7 +8,7 @@ import type {
 	Transport,
 	Usage,
 	VideoContent,
-} from "@earendil-works/pi-ai";
+} from "@musepi/pi-ai";
 import type { Static, TSchema } from "typebox";
 import type {
 	AgentEvent,

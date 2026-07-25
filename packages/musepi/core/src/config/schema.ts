@@ -37,6 +37,15 @@ export interface MusepiSwarmSettings {
 	isolation?: "worktree" | "none"; // default: "worktree"
 }
 
+export interface MusepiAgentSettings {
+	/** Agents disabled by the user. Array of agent names. */
+	disabledAgents?: string[]; // default: []
+	/** Per-agent model overrides. Keyed by agent name. */
+	agentModelOverrides?: Record<string, string>; // default: {}
+	/** Per-agent prewalk override. Keyed by agent name. */
+	agentPrewalk?: Record<string, boolean>; // default: {}
+}
+
 export interface MusepiTuiSettings {
 	/** Editor chrome style. */
 	style?: "plain" | "boxed" | "compact"; // default: "boxed"
@@ -146,6 +155,8 @@ export interface MusepiLspSettings {
 	servers?: Record<string, MusepiLspServerSettings>; // default: {}
 	/** Idle clients are shut down after this many ms. */
 	idleTimeoutMs?: number; // default: 600000 (10 min)
+	/** Run LSP diagnostics after every file write/edit. */
+	diagnosticsOnWrite?: boolean; // default: true
 }
 
 /**
@@ -230,6 +241,7 @@ export interface MusepiSettings {
 	goal?: MusepiGoalSettings;
 	todo?: MusepiTodoSettings;
 	swarm?: MusepiSwarmSettings;
+	agents?: MusepiAgentSettings;
 	tui?: MusepiTuiSettings;
 	truncation?: MusepiTruncationSettings;
 	edit?: MusepiEditSettings;
@@ -290,14 +302,14 @@ export const MUSEPI_DEFAULTS: Required<{
 	skills: Required<MusepiSkillsSettings>;
 	advisor: Required<MusepiAdvisorSettings>;
 	goal: Required<MusepiGoalSettings>;
-	todo: Required<MusepiTodoSettings>;
 	swarm: Required<MusepiSwarmSettings>;
+	agents: Required<MusepiAgentSettings>;
 	tui: Required<MusepiTuiSettings>;
 	truncation: Required<MusepiTruncationSettings>;
 	edit: Required<MusepiEditSettings>;
 	modelRoles: Required<MusepiModelRolesSettings>;
 	toolSelect: Required<MusepiToolSelectSettings>;
-	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number };
+	lsp: { enabled: boolean; servers: Record<string, MusepiLspServerSettings>; idleTimeoutMs: number; diagnosticsOnWrite: boolean };
 	mcp: {
 		enabled: boolean;
 		servers: Record<string, MusepiMcpServerSettings>;
@@ -315,12 +327,13 @@ export const MUSEPI_DEFAULTS: Required<{
 	goal: { badge: true },
 	todo: { maxVisible: 5 },
 	swarm: { maxConcurrency: 5, timeoutMs: 1_800_000, modelTier: "auto", isolation: "worktree" },
+	agents: { disabledAgents: [], agentModelOverrides: {}, agentPrewalk: {} },
 	tui: { style: "boxed", modelInBorder: false },
+	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
 	edit: { hashline: true, enforceSeenLines: false },
-	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
+	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, diagnosticsOnWrite: true },
 	toolSelect: { enabled: false, models: [], defer: [] },
-	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000 },
 	mcp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, startupDiscovery: false },
 	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
 	compaction: { strategy: "default" },
@@ -394,9 +407,9 @@ function pickToolSelect(override: unknown): ResolvedMusepiSettings["toolSelect"]
 function pickLsp(override: unknown): ResolvedMusepiSettings["lsp"] {
 	const defaults = MUSEPI_DEFAULTS.lsp;
 	const out = { ...defaults, servers: {} as Record<string, MusepiLspServerSettings> };
-	if (!override || typeof override !== "object") return out;
 	const record = override as Record<string, unknown>;
 	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+	if (typeof record.diagnosticsOnWrite === "boolean") out.diagnosticsOnWrite = record.diagnosticsOnWrite;
 	if (typeof record.idleTimeoutMs === "number" && record.idleTimeoutMs > 0) {
 		out.idleTimeoutMs = record.idleTimeoutMs;
 	}
@@ -494,6 +507,31 @@ function pickCompaction(override: unknown): ResolvedMusepiSettings["compaction"]
 	return { ...defaults };
 }
 
+function pickAgents(override: unknown): ResolvedMusepiSettings["agents"] {
+	const defaults = MUSEPI_DEFAULTS.agents;
+	if (!override || typeof override !== "object") return { ...defaults };
+	const r = override as Record<string, unknown>;
+	const out: Record<string, unknown> = { ...defaults };
+	if (Array.isArray(r.disabledAgents)) {
+		out.disabledAgents = r.disabledAgents.filter((a): a is string => typeof a === "string");
+	}
+	if (r.agentModelOverrides && typeof r.agentModelOverrides === "object") {
+		const overrides: Record<string, string> = {};
+		for (const [key, val] of Object.entries(r.agentModelOverrides)) {
+			if (typeof val === "string") overrides[key] = val;
+		}
+		out.agentModelOverrides = overrides;
+	}
+	if (r.agentPrewalk && typeof r.agentPrewalk === "object") {
+		const prewalk: Record<string, boolean> = {};
+		for (const [key, val] of Object.entries(r.agentPrewalk)) {
+			if (typeof val === "boolean") prewalk[key] = val;
+		}
+		out.agentPrewalk = prewalk;
+	}
+	return out as ResolvedMusepiSettings["agents"];
+}
+
 /**
  * notifications: enum-gated condition plus a boolean switch; unknown values
  * fall back to defaults.
@@ -531,6 +569,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		mcp: pickMcp(r.mcp),
 		memory: pickMemory(r.memory),
 		compaction: pickCompaction(r.compaction),
+		agents: pickAgents(r.agents),
 		notifications: pickNotifications(r.notifications),
 	};
 }
@@ -613,6 +652,11 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "lsp.servers",
 		description: "Language server overrides merged onto the built-in table",
 		defaultValue: {},
+	},
+	{
+		key: "lsp.diagnosticsOnWrite",
+		description: "Run LSP diagnostics after every file write/edit and show in transcript",
+		defaultValue: true,
 	},
 	{
 		key: "lsp.idleTimeoutMs",

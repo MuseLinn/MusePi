@@ -10,8 +10,6 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { StringEnum } from "@earendil-works/pi-ai";
 import { formatReport } from "@musepi/core/swarm/report.js";
 import {
 	FRAME_INTERVAL_MS,
@@ -29,6 +27,7 @@ import {
 	setSwarmCancelled,
 	swarmState,
 } from "@musepi/core/swarm/types.js";
+import { StringEnum } from "@musepi/pi-ai";
 import { Type } from "typebox";
 import { backgroundManager } from "../task/manager.ts";
 import {

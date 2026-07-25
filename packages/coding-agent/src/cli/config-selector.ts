@@ -2,7 +2,7 @@
  * TUI config selector for `musepi config` command
  */
 
-import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";
+import { ProcessTerminal, TUI } from "@musepi/pi-tui";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { ConfigSelectorComponent, type ScopedResolvedPaths } from "../modes/interactive/components/config-selector.ts";
 import { initTheme, stopThemeWatcher } from "../modes/interactive/theme/theme.ts";

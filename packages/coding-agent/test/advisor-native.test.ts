@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { mergeMusepiSettings } from "@musepi/core";
+import type { AgentMessage } from "@musepi/pi-agent-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	type AdvisorBinding,

@@ -14,7 +14,6 @@
 // existing details persistence — no session-format change).
 // ============================================================
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	type SnapArchiveState,
 	type SnapCompactionInput,
@@ -22,6 +21,7 @@ import {
 	type SnapMessage,
 	snapCompact,
 } from "@musepi/core";
+import type { AgentMessage } from "@musepi/pi-agent-core";
 import type {
 	ExtensionRunner,
 	SessionBeforeCompactEvent,

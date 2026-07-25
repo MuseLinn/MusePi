@@ -1,18 +1,18 @@
 {
-	"name": "@muselinn/musepi",
+	"name": "@musepi/coding-agent",
 	"version": "0.1.9",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
-			"name": "@muselinn/musepi",
+			"name": "@musepi/coding-agent",
 			"version": "0.1.9",
 			"license": "MIT",
 			"dependencies": {
 				"@musepi/core": "0.1.9",
 				"@musepi/transcript": "0.1.9",
-				"@earendil-works/pi-ai": "^0.82.0",
-				"@earendil-works/pi-tui": "^0.82.0",
+				"@musepi/pi-ai": "^0.82.0",
+				"@musepi/pi-tui": "^0.82.0",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -420,42 +420,6 @@
 				"node": ">=6.9.0"
 			}
 		},
-		"node_modules/@earendil-works/pi-ai": {
-			"version": "0.82.0",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.82.0.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@anthropic-ai/sdk": "0.91.1",
-				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
-				"@google/genai": "1.52.0",
-				"@mistralai/mistralai": "2.2.6",
-				"@opentelemetry/api": "1.9.0",
-				"@smithy/node-http-handler": "4.7.3",
-				"http-proxy-agent": "7.0.2",
-				"https-proxy-agent": "7.0.6",
-				"openai": "6.26.0",
-				"partial-json": "0.1.7",
-				"typebox": "1.1.38"
-			},
-			"bin": {
-				"pi-ai": "dist/cli.js"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/pi-tui": {
-			"version": "0.82.0",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.82.0.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"get-east-asian-width": "1.6.0",
-				"marked": "18.0.5"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
 		"node_modules/@google/genai": {
 			"version": "1.52.0",
 			"license": "Apache-2.0",
@@ -534,6 +498,42 @@
 			"version": "0.1.9",
 			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.1.9.tgz",
 			"license": "MIT"
+		},
+		"node_modules/@musepi/pi-ai": {
+			"version": "0.82.0",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.82.0.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@anthropic-ai/sdk": "0.91.1",
+				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
+				"@google/genai": "1.52.0",
+				"@mistralai/mistralai": "2.2.6",
+				"@opentelemetry/api": "1.9.0",
+				"@smithy/node-http-handler": "4.7.3",
+				"http-proxy-agent": "7.0.2",
+				"https-proxy-agent": "7.0.6",
+				"openai": "6.26.0",
+				"partial-json": "0.1.7",
+				"typebox": "1.1.38"
+			},
+			"bin": {
+				"pi-ai": "dist/cli.js"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/@musepi/pi-tui": {
+			"version": "0.82.0",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-tui/-/pi-tui-0.82.0.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"get-east-asian-width": "1.6.0",
+				"marked": "18.0.5"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
 		},
 		"node_modules/@musepi/transcript": {
 			"version": "0.1.9",

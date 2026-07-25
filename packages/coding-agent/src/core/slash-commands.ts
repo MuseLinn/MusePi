@@ -78,6 +78,15 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, themes, and context files" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },
-	{ name: "transcript", description: "Show transcript summary for the current session" },
+	{
+		name: "agents",
+		description: "Open the Agents dashboard (browse, inspect, configure agents)",
+	},
+	{ name: "credentials", description: "List stored credentials and edit remarks" },
+	{
+		name: "auth-broker",
+		description: "Manage the shared credential broker (remote credential sharing)",
+		argumentHint: "[status|token]",
+	},
 	{ name: "debug", description: "Show internal debug info (render dimensions, all lines)" },
 ];

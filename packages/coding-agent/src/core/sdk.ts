@@ -1,7 +1,11 @@
 import { join } from "node:path";
-import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/pi-ai/compat";
+import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@musepi/pi-agent-core";
+import { clampThinkingLevel, type Message, type Model, streamSimple } from "@musepi/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
+import {
+	lateDiagnosticsEntryRenderer,
+	registerNativeEntryRenderer,
+} from "../modes/interactive/components/late-diagnostics-message.ts";
 import { initMusepiAdvisor } from "../musepi/advisor-native.ts";
 import { initMusepiLsp, transformMusepiLspContext } from "../musepi/lsp/native.ts";
 import { initMusepiMcp } from "../musepi/mcp-native.ts";
@@ -145,7 +149,7 @@ function getDefaultAgentDir(): string {
  * const { session } = await createAgentSession();
  *
  * // With explicit model
- * import { getModel } from '@earendil-works/pi-ai';
+ * import { getModel } from '@musepi/pi-ai';
  * const { session } = await createAgentSession({
  *   model: getModel('anthropic', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',
@@ -399,7 +403,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// set (deferrable tools out, select_tools in), arm the announcement.
 	initMusepiToolSelect(session, settingsManager);
 	// MusePi LSP: resolve detected servers, arm post-mutation diagnostics.
-	initMusepiLsp(session, settingsManager);
+	// Wire deferred entries to session for TUI transcript display.
+	initMusepiLsp(session, settingsManager, (customType, data) => {
+		session.sessionManager.appendCustomEntry(customType, data);
+	});
+	// Register native entry renderers for TUI custom entries.
+	registerNativeEntryRenderer("lsp-late-diagnostic", lateDiagnosticsEntryRenderer);
 	// MusePi memory: arm the one-shot startup injection + recall tool.
 	initMusepiMemory(session, settingsManager);
 	// MusePi advisor: gate-check, bind transcript access + review-model

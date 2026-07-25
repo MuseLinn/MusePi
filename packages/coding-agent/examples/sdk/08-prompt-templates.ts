@@ -11,7 +11,7 @@ import {
 	getAgentDir,
 	type PromptTemplate,
 	SessionManager,
-} from "@muselinn/musepi";
+} from "@musepi/coding-agent";
 
 // Define custom templates
 const deployTemplate: PromptTemplate = {

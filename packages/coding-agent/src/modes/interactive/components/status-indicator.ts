@@ -1,4 +1,4 @@
-import { type Component, Loader, type LoaderMessageColorFn, type TUI } from "@earendil-works/pi-tui";
+import { type Component, Loader, type LoaderMessageColorFn, type TUI } from "@musepi/pi-tui";
 import type { WorkingIndicatorOptions } from "../../../core/extensions/index.ts";
 import { shimmerText, theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";

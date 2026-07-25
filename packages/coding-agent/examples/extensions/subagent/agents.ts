@@ -4,7 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@muselinn/musepi";
+import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@musepi/coding-agent";
 
 export type AgentScope = "user" | "project" | "both";
 

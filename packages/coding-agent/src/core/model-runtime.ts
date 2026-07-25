@@ -11,6 +11,7 @@ import {
 	type Context,
 	type Credential,
 	type CredentialInfo,
+	CredentialRouter,
 	type CredentialStore,
 	createModels,
 	lazyStream,
@@ -27,9 +28,11 @@ import {
 	type Provider,
 	type ProviderHeaders,
 	type SimpleStreamOptions,
+	type StoredCredentialInfo,
 	type StreamOptions,
-} from "@earendil-works/pi-ai";
-import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
+} from "@musepi/pi-ai";
+import { AuthBrokerClient, RemoteAuthCredentialStore, resolveAuthBrokerConfig } from "@musepi/pi-ai/auth-broker";
+import * as builtinProviderCatalog from "@musepi/pi-ai/providers/all";
 import { getAgentDir } from "../config.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
@@ -67,6 +70,13 @@ export interface CreateModelRuntimeOptions {
 	/** Timeout for the create-time network model refresh. */
 	modelRefreshTimeoutMs?: number;
 	catalogBaseUrl?: string;
+	/**
+	 * Stable session identifier for credential pinning.
+	 * When set, CredentialRouter uses deterministic PHRED hashing
+	 * so the same session always starts with the same credential
+	 * (sticky multi-credential routing). Default: round-robin only.
+	 */
+	sessionId?: string;
 }
 
 export interface ModelRuntimeAuthOverrides {
@@ -131,7 +141,24 @@ export class ModelRuntime implements Models {
 	}
 
 	static async create(options: CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
-		const credentials = new RuntimeCredentials(options.credentials ?? DefaultAuthStorage.create(options.authPath));
+		const brokerConfig = resolveAuthBrokerConfig();
+		let innerStore: CredentialStore;
+		if (brokerConfig) {
+			const client = new AuthBrokerClient({
+				baseUrl: brokerConfig.url,
+				token: brokerConfig.token,
+			});
+			const remoteStore = new RemoteAuthCredentialStore({ client });
+			await remoteStore.refreshSnapshot();
+			innerStore = remoteStore;
+		} else {
+			const localStore = options.credentials ?? DefaultAuthStorage.create(options.authPath);
+			// Wrap with CredentialRouter for multi-credential selection strategy
+			// (session-sticky PHRED hashing when sessionId is set, round-robin otherwise)
+			innerStore = new CredentialRouter(localStore, { sessionId: options.sessionId });
+		}
+
+		const credentials = new RuntimeCredentials(innerStore);
 		const modelsPath =
 			options.modelsPath === null ? undefined : (options.modelsPath ?? join(getAgentDir(), "models.json"));
 		const config = await ModelConfig.load(modelsPath);
@@ -423,6 +450,14 @@ export class ModelRuntime implements Models {
 		return this.credentials.list();
 	}
 
+	/**
+	 * List stored credentials with full metadata for one or all providers.
+	 * Unlike `listCredentials()`, returns per-credential info including storage ids.
+	 */
+	listCredentialAccounts(providerId?: string): Promise<StoredCredentialInfo[]> {
+		return this.credentials.listCredentials(providerId);
+	}
+
 	getProviderAuthStatus(providerId: string): AuthStatus {
 		if (this.credentials.hasRuntimeApiKey(providerId)) return { configured: true, source: "runtime" };
 		if (this.snapshot.storedProviders.has(providerId)) return { configured: true, source: "stored" };
@@ -511,6 +546,20 @@ export class ModelRuntime implements Models {
 		// Reset credential-dependent compatibility projections before the unconfigured provider is skipped by refresh.
 		this.recomposeProvider(providerId);
 		await this.refresh({ allowNetwork: this.modelNetworkEnabled });
+	}
+
+	async logoutCredential(credentialId: number): Promise<void> {
+		await this.models.logoutCredential(credentialId);
+		// Refresh to recompose providers that may have lost their only credential.
+		await this.refresh({ allowNetwork: this.modelNetworkEnabled });
+	}
+
+	async setActiveCredential(providerId: string, credentialId: number): Promise<void> {
+		await this.credentials.setActiveCredential(providerId, credentialId);
+	}
+
+	async updateRemark(credentialId: number, remark: string): Promise<void> {
+		await this.credentials.updateRemark(credentialId, remark);
 	}
 
 	async refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {

@@ -3,7 +3,7 @@
  * Provider auth orchestration belongs to ModelRuntime and pi-ai Models.
  */
 
-import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
+import type { Credential, CredentialInfo, CredentialStore, StoredCredentialInfo } from "@musepi/pi-ai";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
@@ -251,6 +251,49 @@ export class AuthStorage implements CredentialStore {
 	/** List credential metadata without resolving configured key values. */
 	async list(): Promise<readonly CredentialInfo[]> {
 		return Object.entries(this.data).map(([providerId, credential]) => ({ providerId, type: credential.type }));
+	}
+
+	/** List all stored credentials with metadata (single-credential store returns one per provider). */
+	async listCredentials(providerId?: string): Promise<StoredCredentialInfo[]> {
+		const entries = Object.entries(this.data)
+			.filter(([pid]) => !providerId || pid === providerId)
+			.map(([pid, credential]) => {
+				const info: StoredCredentialInfo = { id: 0, providerId: pid, type: credential.type };
+				if (credential.type === "oauth") {
+					info.email = credential.email as string | undefined;
+					info.accountId = credential.accountId as string | undefined;
+				}
+				return info;
+			});
+		return entries;
+	}
+
+	async removeCredential(_id: number): Promise<number[]> {
+		// Single-credential store: callers should use delete(providerId) instead.
+		throw new Error("removeCredential requires a multi-credential store; use delete(providerId)");
+	}
+
+	async updateRemark(_id: number, _remark: string): Promise<void> {
+		throw new Error("updateRemark requires a multi-credential store");
+	}
+
+	async setActiveCredential(providerId: string, _credentialId: number): Promise<void> {
+		// Single-credential store: the only credential is always active.
+		if (!this.data[providerId]) {
+			throw new Error(`No credential for provider ${providerId}`);
+		}
+	}
+
+	async listCredentialBlocks(_credentialIds: readonly number[]): Promise<
+		Array<{
+			credentialId: number;
+			providerKey: string;
+			blockScope: string;
+			blockedUntilMs: number;
+			updatedAt: number;
+		}>
+	> {
+		return [];
 	}
 }
 

@@ -54,6 +54,17 @@ upstream history is preserved at
   swarm and task logic as a host-independent package.
 - **Muselinn renderer** — `packages/musepi/renderer` replaces the upstream TUI
   rendering surface (upstream pi-tui editor hooks remain patched at the seam).
+- **Multi-credential auth** — SQLite-backed credential store with identity key
+  dedup, session-sticky PHRED routing, and persistent rate-limit blocks. Store
+  multiple API keys or OAuth tokens per provider; manage them with
+  `/credentials` (list/edit/delete) and route through the `/logout` flow.
+  Remote machines share the credential pool via the **auth broker**
+  (`musepi auth-broker serve` with AES-256-GCM encrypted snapshot cache).
+- **Agent dashboard** — `/agents` full-screen browser with source tabs (All /
+  Bundled / User / Project), per-agent detail inspector (model override,
+  prewalk, system prompt preview), and enable/disable via settings.
+  Bundled agents include `coder`, `explore`, `plan`, `scout`, `designer`,
+  `reviewer`, `librarian`, and `task`, auto-discovered from swarm types.
 
 ## Relationship with upstream
 

@@ -51,6 +51,7 @@ function setup(): TestContext {
 		registry,
 		coordinator,
 		detachMutationListener: null,
+		diagnosticsOnWrite: true,
 	});
 	return { dir, file, registry, coordinator };
 }
@@ -106,6 +107,7 @@ describe("lsp tool", () => {
 				registry: c.registry,
 				coordinator: c.coordinator,
 				detachMutationListener: null,
+				diagnosticsOnWrite: true,
 			});
 			const text = await execute({ action: "diagnostics", path: c.file });
 			expect(text).toContain("disabled");

@@ -1,4 +1,4 @@
-import type { Api, Model, Models } from "@earendil-works/pi-ai";
+import type { Api, Model, Models } from "@musepi/pi-ai";
 import { AgentHarness } from "../../src/harness/agent-harness.ts";
 import { createReadTool } from "../../src/harness/tools/read.ts";
 import type { ExecutionToolContext } from "../../src/harness/tools/tool-context.ts";

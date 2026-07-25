@@ -4,7 +4,7 @@
  * Usage: pi --extension ./examples/extensions/rainbow-editor.ts
  */
 
-import { CustomEditor, type ExtensionAPI } from "@muselinn/musepi";
+import { CustomEditor, type ExtensionAPI } from "@musepi/coding-agent";
 
 // Base colors (coral → yellow → green → teal → blue → purple → pink)
 const COLORS: [number, number, number][] = [

@@ -66,6 +66,8 @@ export class SettingsList implements Component {
 	private onCancel: () => void;
 	private searchInput?: Input;
 	private searchEnabled: boolean;
+	/** Items filtered by section (subset of this.items). */
+	private sectionItems: SettingItem[];
 
 	// Submenu state
 	private submenuComponent: Component | null = null;
@@ -84,8 +86,9 @@ export class SettingsList implements Component {
 		options: SettingsListOptions = {},
 	) {
 		this.items = items;
+		this.sectionItems = items;
 		this.filteredItems = items;
-		this.entries = buildEntries(items);
+		this.entries = buildEntries(this.sectionItems);
 		this.filteredEntries = this.entries;
 		this.maxVisible = maxVisible;
 		this.theme = theme;
@@ -130,6 +133,19 @@ export class SettingsList implements Component {
 		}
 	}
 
+	/** Filter to items in the given section, or null to show all. */
+	setSectionFilter(section: string | null): void {
+		this.sectionItems = section ? this.items.filter((item) => item.section === section) : this.items;
+		this.entries = buildEntries(this.sectionItems);
+		// Reset search when changing sections
+		if (this.searchInput) {
+			this.searchInput.setValue("");
+		}
+		this.filteredItems = this.sectionItems;
+		this.filteredEntries = this.entries;
+		this.selectedIndex = this.firstItemIndex(this.entries);
+	}
+
 	invalidate(): void {
 		this.submenuComponent?.invalidate?.();
 	}
@@ -151,7 +167,7 @@ export class SettingsList implements Component {
 			lines.push("");
 		}
 
-		if (this.items.length === 0) {
+		if (this.sectionItems.length === 0) {
 			lines.push(this.theme.hint("  No settings available"));
 			if (this.searchEnabled) {
 				this.addHintLine(lines, width);
@@ -175,7 +191,7 @@ export class SettingsList implements Component {
 		const endIndex = Math.min(startIndex + this.maxVisible, displayEntries.length);
 
 		// Calculate max label width for alignment
-		const maxLabelWidth = Math.min(30, Math.max(...this.items.map((item) => visibleWidth(item.label))));
+		const maxLabelWidth = Math.min(30, Math.max(...this.sectionItems.map((item) => visibleWidth(item.label))));
 
 		const sectionStyle = this.theme.section ?? this.theme.hint;
 
@@ -302,7 +318,7 @@ export class SettingsList implements Component {
 	private applyFilter(query: string): void {
 		// Match against section + label so typing a section name (e.g. "musepi")
 		// surfaces every setting in that section.
-		this.filteredItems = fuzzyFilter(this.items, query, (item) =>
+		this.filteredItems = fuzzyFilter(this.sectionItems, query, (item) =>
 			item.section ? `${item.section} ${item.label}` : item.label,
 		);
 		this.filteredEntries = buildEntries(this.filteredItems);

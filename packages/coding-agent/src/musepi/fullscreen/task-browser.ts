@@ -3,7 +3,6 @@
 // Architecture: Component class with setProps(), handleInput(), render()
 // ============================================================
 
-import { Container, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
 	collapseTaskList,
 	compareTasks,
@@ -17,6 +16,7 @@ import {
 	statusLabel,
 } from "@musepi/core/swarm/task-list-utils.js";
 import type { SubAgentTask } from "@musepi/core/swarm/types.js";
+import { Container, matchesKey, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 
 const ELLIPSIS = "…";

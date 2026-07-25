@@ -1,4 +1,4 @@
-import { Container, getKeybindings, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container, getKeybindings, Spacer, Text } from "@musepi/pi-tui";
 import {
 	getProjectTrustOptions,
 	type ProjectTrustOption,

@@ -459,6 +459,34 @@
         context or instructions without interrupting the current turn.</span><span data-l="zh">在 agent 结束后再发送消息——可在不打断当前轮次的情况下提供
         上下文或指示。</span></dd>
       </div>
+      <div>
+        <dt>multi-credential auth<span class="tag">/credentials · /login · auth broker</span></dt>
+        <dd><span data-l="en">SQLite-backed credential store with identity key dedup,
+        session-sticky PHRED routing, and persistent rate-limit blocks.
+        Manage multiple API keys or OAuth tokens per provider with
+        <code>/credentials</code> — list, edit remarks, delete. Remote instances
+        share the pool via the <strong>auth broker</strong>:
+        <code>musepi auth-broker serve</code>, with AES-256-GCM encrypted
+        snapshot cache.</span><span data-l="zh">SQLite 支持的凭证存储，具有身份键去重、
+        会话粘性 PHRED 路由和持久化限流屏蔽。使用 <code>/credentials</code>
+        管理每个提供商的多个 API 密钥或 OAuth 令牌——列表、编辑备注、删除。
+        远程实例通过 <strong>auth broker</strong> 共享凭证池：
+        <code>musepi auth-broker serve</code>，含 AES-256-GCM 加密快照缓存。</span></dd>
+      </div>
+      <div>
+        <dt>/agents dashboard<span class="tag">/agents · bundled agents</span></dt>
+        <dd><span data-l="en">Full-screen agent browser with source tabs (All, Bundled, User,
+        Project), per-agent detail inspector (model, prewalk, system prompt),
+        and enable/disable via <code>musepi.agents.*</code> settings.
+        Bundled agents: <code>coder</code>, <code>explore</code>, <code>plan</code>,
+        <code>scout</code>, <code>designer</code>, <code>reviewer</code>,
+        <code>librarian</code>, and <code>task</code>, auto-discovered from
+        swarm definitions.</span><span data-l="zh">全屏 agent 浏览器，带源标签（全部、内置、用户、项目）、
+        逐个 agent 详细检查器（模型、prewalk、system prompt），
+        以及通过 <code>musepi.agents.*</code> 设置启用/禁用。
+        内置 agent：<code>coder</code>、<code>explore</code>、<code>plan</code>、
+        <code>scout</code>、<code>designer</code>、<code>reviewer</code>、
+        <code>librarian</code> 和 <code>task</code>，从 swarm 定义自动发现。</span></dd>
     </dl>
   </div>
 </section>

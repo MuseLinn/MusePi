@@ -1,4 +1,5 @@
 // UI Components for extensions
+export { AgentDashboard } from "./agent-dashboard.ts";
 export { ArminComponent } from "./armin.ts";
 export { AssistantMessageComponent } from "./assistant-message.ts";
 export { BashExecutionComponent } from "./bash-execution.ts";

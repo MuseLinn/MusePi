@@ -14,7 +14,7 @@ import type {
 	AgentToolUpdateCallback,
 	ThinkingLevel,
 	ToolExecutionMode,
-} from "@earendil-works/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import type {
 	Api,
 	AssistantMessageEvent,
@@ -33,7 +33,7 @@ import type {
 	ToolResultMessage,
 	Usage,
 	VideoContent,
-} from "@earendil-works/pi-ai";
+} from "@musepi/pi-ai";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -44,7 +44,7 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	TUI,
-} from "@earendil-works/pi-tui";
+} from "@musepi/pi-tui";
 import type { Static, TSchema } from "typebox";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { BashResult } from "../bash-executor.ts";
@@ -233,12 +233,12 @@ export interface ExtensionUIContext {
 	 * - `keybindings`: KeybindingsManager for app-level keybindings
 	 *
 	 * For full app keybinding support (escape, ctrl+d, model switching, etc.),
-	 * extend `CustomEditor` from `@muselinn/musepi` and call
+	 * extend `CustomEditor` from `@musepi/coding-agent` and call
 	 * `super.handleInput(data)` for keys you don't handle.
 	 *
 	 * @example
 	 * ```ts
-	 * import { CustomEditor } from "@muselinn/musepi";
+	 * import { CustomEditor } from "@musepi/coding-agent";
 	 *
 	 * class VimEditor extends CustomEditor {
 	 *   private mode: "normal" | "insert" = "insert";

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { FileEntry, SessionHeader, SessionMessageEntry } from "../core/session-manager.ts";
 
 /**

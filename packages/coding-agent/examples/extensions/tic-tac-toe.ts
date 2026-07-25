@@ -17,9 +17,9 @@
  * separate variables. Only the agent cursor is ever exposed to the agent.
  */
 
-import { StringEnum } from "@earendil-works/pi-ai";
-import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@muselinn/musepi";
+import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@musepi/coding-agent";
+import { StringEnum } from "@musepi/pi-ai";
+import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { Type } from "typebox";
 
 // Thrown from the tool on illegal actions. The agent runtime surfaces thrown

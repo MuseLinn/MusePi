@@ -5,7 +5,7 @@
  *    example prompt: Use the available tools to calculate 100 + 500. Do not calculate it yourself.
  */
 
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
 import { Type } from "typebox";
 
 function calculate(_expr: string): string {

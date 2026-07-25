@@ -12,7 +12,7 @@ import {
 	getAgentDir,
 	SessionManager,
 	type Skill,
-} from "@muselinn/musepi";
+} from "@musepi/coding-agent";
 
 // Or define custom skills inline
 const customSkill: Skill = {

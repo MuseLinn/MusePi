@@ -1,20 +1,15 @@
 // ============================================================
 // MusePi /btw — side-channel ("by the way") conversation.
 //
-// A lightweight child session forked from the main session's context
-// snapshot with all tools disabled and a side-channel system reminder
-// (kimi-code btw domain, pi-native seams). The first /btw seeds the
-// child with the parent's current messages; follow-up /btw turns reuse
-// the same child, so the side channel keeps its own conversation.
-// Nothing is persisted — the child is in-memory and dies with the
-// process (or when the parent session is replaced).
+// A lightweight side channel forked from the main session's model.
+// Uses streamSimple/completeSimple directly instead of spawning
+// a full AgentSession. The side channel keeps its own message
+// buffer in memory for follow-up turns.
 // ============================================================
 
+import type { AssistantMessage, Context, Message } from "@musepi/pi-ai";
+import { completeSimple, streamSimple } from "@musepi/pi-ai/compat";
 import type { AgentSession } from "../core/agent-session.ts";
-import { createExtensionRuntime } from "../core/extensions/loader.ts";
-import type { ResourceLoader } from "../core/resource-loader.ts";
-import { createAgentSession } from "../core/sdk.ts";
-import { SessionManager } from "../core/session-manager.ts";
 
 export const SIDE_QUESTION_SYSTEM_REMINDER = `
 This is a side-channel conversation with the user. You should answer user questions directly based on what you already know.
@@ -29,85 +24,75 @@ IMPORTANT:
 - If you do not know the answer, say so directly.
 `.trim();
 
-function createBtwResourceLoader(basePrompt: string): ResourceLoader {
-	const systemPrompt = `${basePrompt}\n\n---\n${SIDE_QUESTION_SYSTEM_REMINDER}`;
-	const extensionsResult = { extensions: [], errors: [], runtime: createExtensionRuntime() };
-	return {
-		getExtensions: () => extensionsResult,
-		getSkills: () => ({ skills: [], diagnostics: [] }),
-		getPrompts: () => ({ prompts: [], diagnostics: [] }),
-		getThemes: () => ({ themes: [], diagnostics: [] }),
-		getAgentsFiles: () => ({ agentsFiles: [] }),
-		getSystemPrompt: () => systemPrompt,
-		getAppendSystemPrompt: () => [],
-		extendResources: () => {},
-		reload: async () => {},
-	};
-}
+const BTW_USER_TEMPLATE = (question: string): string =>
+	`The user asks: ${question}\n\nPlease answer concisely and directly based on what you know.`;
 
 export interface BtwTurn {
 	question: string;
 	answer: string;
 }
 
-let btwSession: AgentSession | null = null;
-let btwParentRef: AgentSession | null = null;
+/** In-memory side-channel user + assistant messages. */
+const sideMessages: Message[] = [];
+let sideParentRef: AgentSession | null = null;
 
-/** Drop the side channel (parent session replaced or process teardown). */
+/** Reset the side channel. */
 export function resetBtwSession(parent?: AgentSession): void {
-	if (parent !== undefined && parent === btwParentRef) return;
-	try {
-		btwSession?.dispose();
-	} catch {
-		/* best effort */
-	}
-	btwSession = null;
-	btwParentRef = null;
+	if (parent && sideParentRef !== parent) return;
+	sideMessages.length = 0;
+	sideParentRef = null;
 }
 
 /**
- * Run one side-channel turn. Creates the child on first use (context
- * snapshot from the parent), then keeps reusing it for follow-ups.
+ * Run one side-channel turn. Creates the context on first use, then
+ * appends follow-ups for subsequent turns.
+ * Pass an AbortSignal to cancel.
+ * onDelta receives streaming text tokens as they arrive.
  */
-export async function runBtwTurn(parent: AgentSession, question: string): Promise<string> {
-	if (btwParentRef !== parent) resetBtwSession();
-
-	if (!btwSession) {
-		if (!parent.model) throw new Error("No model selected — pick a model before using /btw.");
-		const result = await createAgentSession({
-			sessionManager: SessionManager.inMemory(),
-			model: parent.model,
-			modelRuntime: parent.modelRuntime,
-			// DenyAll: no built-in tools and no extension/custom tools (kimi btw
-			// registers a deny-all permission policy; here we simply enable none).
-			noTools: "all",
-			customTools: [],
-			resourceLoader: createBtwResourceLoader(""),
-		});
-		btwSession = result.session;
-		// Context inheritance: seed the child with the parent's current view.
-		// The child owns this array copy from here on — later parent turns do
-		// not leak in (it is a snapshot, not a live view).
-		btwSession.agent.state.messages = [...parent.agent.state.messages];
-		btwParentRef = parent;
+export async function runBtwTurn(
+	parent: AgentSession,
+	question: string,
+	signal?: AbortSignal,
+	onDelta?: (delta: string) => void,
+): Promise<string> {
+	const model = parent.model;
+	if (!model) {
+		throw new Error("No model available for /btw");
 	}
 
-	let answer = "";
-	const unsubscribe = btwSession.subscribe((event) => {
-		if (event.type !== "message_end") return;
-		const message = (event as { message?: { role?: string; content?: unknown } }).message;
-		if (message?.role !== "assistant") return;
-		const content = Array.isArray(message.content) ? message.content : [];
-		const texts = content.filter(
-			(block): block is { type: "text"; text: string } =>
-				typeof block === "object" && block !== null && (block as { type?: string }).type === "text",
-		);
-		if (texts.length > 0) answer = texts.map((block) => block.text).join("\n");
-	});
-	try {
-		await btwSession.prompt(question);
-	} finally {
-		unsubscribe();
+	// Reset side channel if parent changed
+	if (sideParentRef && sideParentRef !== parent) {
+		resetBtwSession();
 	}
+	sideParentRef = parent;
+
+	// Append user question
+	sideMessages.push({ role: "user", content: BTW_USER_TEMPLATE(question) } as unknown as Message);
+
+	// Build context from accumulated messages + system reminder
+	const context: Context = {
+		systemPrompt: SIDE_QUESTION_SYSTEM_REMINDER,
+		messages: sideMessages,
+	};
+
+	let answer: string;
+	if (onDelta) {
+		const stream = streamSimple(model, context, { signal, maxTokens: 2048 });
+		const assistantMsg = await stream.result();
+		answer = extractTextContent(assistantMsg);
+		onDelta(answer);
+	} else {
+		const assistantMsg = await completeSimple(model, context, { signal, maxTokens: 2048 });
+		answer = extractTextContent(assistantMsg);
+	}
+
+	// Store assistant response for follow-up context
+	sideMessages.push({ role: "assistant", content: answer } as unknown as Message);
+
 	return answer;
+}
+
+function extractTextContent(msg: AssistantMessage): string {
+	const parts = msg.content.filter((p: { type: string }): p is { type: "text"; text: string } => p.type === "text");
+	return parts.map((p) => p.text).join("");
 }

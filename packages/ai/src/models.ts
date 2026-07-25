@@ -170,6 +170,12 @@ export interface Models {
 	/** Remove the stored credential for a provider. */
 	logout(providerId: string): Promise<void>;
 
+	/**
+	 * Remove a specific stored credential by its storage id.
+	 * Used for per-account logout from multi-credential stores.
+	 */
+	logoutCredential(credentialId: number): Promise<void>;
+
 	stream<TApi extends Api>(
 		model: Model<TApi>,
 		context: Context,
@@ -449,6 +455,18 @@ class ModelsImpl implements MutableModels {
 			await this.credentials.delete(providerId);
 		} catch (error) {
 			throw new ModelsError("auth", `Credential store delete failed for ${providerId}`, { cause: error });
+		}
+	}
+
+	/**
+	 * Remove one stored credential by its storage id.
+	 * Used for per-account logout in multi-credential stores.
+	 */
+	async logoutCredential(credentialId: number): Promise<void> {
+		try {
+			await this.credentials.removeCredential(credentialId);
+		} catch (error) {
+			throw new ModelsError("auth", `Credential store remove failed for id ${credentialId}`, { cause: error });
 		}
 	}
 

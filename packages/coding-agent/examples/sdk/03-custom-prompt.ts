@@ -4,7 +4,7 @@
  * Shows how to replace or modify the default system prompt.
  */
 
-import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from "@muselinn/musepi";
+import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from "@musepi/coding-agent";
 
 const cwd = process.cwd();
 const agentDir = getAgentDir();

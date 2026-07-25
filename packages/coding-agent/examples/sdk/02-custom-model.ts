@@ -4,8 +4,8 @@
  * Shows how to select a specific model and thinking level.
  */
 
-import { getModel } from "@earendil-works/pi-ai/compat";
-import { createAgentSession, ModelRuntime } from "@muselinn/musepi";
+import { createAgentSession, ModelRuntime } from "@musepi/coding-agent";
+import { getModel } from "@musepi/pi-ai/compat";
 
 const modelRuntime = await ModelRuntime.create();
 

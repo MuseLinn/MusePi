@@ -49,7 +49,10 @@ export type SymbolKey =
 	| "boxRound.bottomRight"
 	| "boxRound.horizontal"
 	| "boxRound.vertical"
-	// Box drawing - sharp
+	| "boxRound.teeRight"
+	| "boxRound.teeLeft"
+	| "boxRound.teeDown"
+	| "boxRound.teeUp"
 	| "boxSharp.topLeft"
 	| "boxSharp.topRight"
 	| "boxSharp.bottomLeft"
@@ -261,7 +264,10 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"boxRound.bottomRight": "╯",
 	"boxRound.horizontal": "─",
 	"boxRound.vertical": "│",
-	// Box sharp
+	"boxRound.teeRight": "├",
+	"boxRound.teeLeft": "┤",
+	"boxRound.teeDown": "┬",
+	"boxRound.teeUp": "┴",
 	"boxSharp.topLeft": "┌",
 	"boxSharp.topRight": "┐",
 	"boxSharp.bottomLeft": "└",
@@ -468,6 +474,10 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"boxRound.bottomRight": "'",
 	"boxRound.horizontal": "-",
 	"boxRound.vertical": "|",
+	"boxRound.teeRight": "<",
+	"boxRound.teeLeft": ">",
+	"boxRound.teeDown": "v",
+	"boxRound.teeUp": "^",
 	"boxSharp.topLeft": ".",
 	"boxSharp.topRight": ".",
 	"boxSharp.bottomLeft": "'",

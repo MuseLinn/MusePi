@@ -6,7 +6,7 @@ import {
 	Spacer,
 	Text,
 	type TUI,
-} from "@earendil-works/pi-tui";
+} from "@musepi/pi-tui";
 import type { Theme } from "../theme/theme.ts";
 import { shimmerText } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";

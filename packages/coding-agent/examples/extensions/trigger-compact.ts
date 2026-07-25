@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@muselinn/musepi";
+import type { ExtensionAPI, ExtensionContext } from "@musepi/coding-agent";
 
 const COMPACT_THRESHOLD_TOKENS = 100_000;
 

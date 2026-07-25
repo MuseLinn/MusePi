@@ -81,12 +81,30 @@ async function main(): Promise<void> {
 	if (!command || command === "help" || command === "--help" || command === "-h") {
 		const providerList = PROVIDERS.map((provider) => `  ${provider.id.padEnd(20)} ${provider.name}`).join("\n");
 		console.log(
-			`Usage: npx @earendil-works/pi-ai <command> [provider]\n\nCommands:\n  login [provider]  Login to an OAuth provider\n  list              List available providers\n\nProviders:\n${providerList}`,
+			`Usage: npx @musepi/pi-ai <command> [provider]\n\nCommands:\n  login [provider]  Login to an OAuth provider\n  list              List available providers\n\nProviders:\n${providerList}`,
 		);
 		return;
 	}
 	if (command === "list") {
 		for (const provider of PROVIDERS) console.log(`${provider.id.padEnd(20)} ${provider.name}`);
+		return;
+	}
+	if (command === "auth-broker") {
+		const { runAuthBrokerCommand } = await import("./auth-broker/cli.ts");
+		const subcmd = args[1] as string | undefined;
+		if (!subcmd) {
+			console.error("Usage: npx @musepi/pi-ai auth-broker <serve|token|status|list> [flags]");
+			return;
+		}
+		const rawFlags: Record<string, string | boolean> = {};
+		for (const arg of args.slice(2)) {
+			if (arg.startsWith("--")) {
+				const eq = arg.indexOf("=");
+				if (eq !== -1) rawFlags[arg.slice(2, eq)] = arg.slice(eq + 1);
+				else rawFlags[arg.slice(2)] = true;
+			}
+		}
+		await runAuthBrokerCommand(subcmd as any, rawFlags);
 		return;
 	}
 	if (command === "login") {

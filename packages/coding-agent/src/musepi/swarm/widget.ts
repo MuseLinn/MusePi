@@ -8,9 +8,9 @@
 // and are re-exported here for back-compat.
 // ============================================================
 
-import { Container, truncateToWidth } from "@earendil-works/pi-tui";
 import type { SwarmState } from "@musepi/core/swarm/types.js";
 import { buildWidgetLines, computeWidgetFingerprint } from "@musepi/core/swarm/widget-lines.js";
+import { Container, truncateToWidth } from "@musepi/pi-tui";
 
 export {
 	buildGoalStatus,

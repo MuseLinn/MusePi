@@ -4,16 +4,8 @@
  * Escape in editor returns to options, Escape in options cancels
  */
 
-import {
-	Editor,
-	type EditorTheme,
-	Key,
-	matchesKey,
-	Text,
-	visibleWidth,
-	wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
+import { Editor, type EditorTheme, Key, matchesKey, Text, visibleWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
 import { Type } from "typebox";
 
 interface OptionWithDesc {

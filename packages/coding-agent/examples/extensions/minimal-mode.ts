@@ -16,8 +16,7 @@
  * Then use ctrl+o to toggle between minimal (collapsed) and full (expanded) views.
  */
 
-import { Text } from "@earendil-works/pi-tui";
-import type { ExtensionAPI } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
 import {
 	createBashTool,
 	createEditTool,
@@ -26,7 +25,8 @@ import {
 	createLsTool,
 	createReadTool,
 	createWriteTool,
-} from "@muselinn/musepi";
+} from "@musepi/coding-agent";
+import { Text } from "@musepi/pi-tui";
 import { homedir } from "os";
 
 /**

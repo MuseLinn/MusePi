@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ModelsStore, ModelsStoreEntry } from "@earendil-works/pi-ai";
+import type { ModelsStore, ModelsStoreEntry } from "@musepi/pi-ai";
 import { getAgentDir } from "../config.ts";
 import { type AuthStorageBackend, FileAuthStorageBackend } from "./auth-storage.ts";
 

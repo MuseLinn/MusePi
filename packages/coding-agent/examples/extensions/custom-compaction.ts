@@ -13,10 +13,10 @@
  *   pi --extension examples/extensions/custom-compaction.ts
  */
 
-import { uuidv7 } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai/compat";
-import type { ExtensionAPI } from "@muselinn/musepi";
-import { convertToLlm, serializeConversation } from "@muselinn/musepi";
+import type { ExtensionAPI } from "@musepi/coding-agent";
+import { convertToLlm, serializeConversation } from "@musepi/coding-agent";
+import { uuidv7 } from "@musepi/pi-ai";
+import { complete } from "@musepi/pi-ai/compat";
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_before_compact", async (event, ctx) => {

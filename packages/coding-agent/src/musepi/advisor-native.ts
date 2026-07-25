@@ -21,10 +21,6 @@
 // <advisory> block stamped "weigh, don't blindly obey" (OMP's frame).
 // ============================================================
 
-import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { contentText } from "@earendil-works/pi-ai";
-import type { Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai/compat";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
 import {
 	ADVISOR_SYSTEM_PROMPT,
 	buildAdvisorTranscript,
@@ -35,6 +31,10 @@ import {
 	resolveAdvisorModelSpec,
 	type SnapMessage,
 } from "@musepi/core";
+import type { AgentMessage, ThinkingLevel } from "@musepi/pi-agent-core";
+import { contentText } from "@musepi/pi-ai";
+import type { Context, Model, SimpleStreamOptions } from "@musepi/pi-ai/compat";
+import { completeSimple } from "@musepi/pi-ai/compat";
 import { Type } from "typebox";
 import type { AgentSession } from "../core/agent-session.ts";
 import type { ToolDefinition } from "../core/extensions/index.ts";

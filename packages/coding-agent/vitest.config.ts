@@ -23,12 +23,12 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: [
-			{ find: /^@earendil-works\/pi-ai$/, replacement: aiSrcIndex },
-			{ find: /^@earendil-works\/pi-ai\/compat$/, replacement: aiSrcCompat },
-			{ find: /^@earendil-works\/pi-ai\/oauth$/, replacement: aiSrcOAuth },
-			{ find: /^@earendil-works\/pi-ai\/providers\/(.+)$/, replacement: `${aiSrcProviders}/$1.ts` },
-			{ find: /^@earendil-works\/pi-agent-core$/, replacement: agentSrcIndex },
-			{ find: /^@earendil-works\/pi-tui$/, replacement: tuiSrcIndex },
+			{ find: /^@musepi\/pi-ai$/, replacement: aiSrcIndex },
+			{ find: /^@musepi\/pi-ai\/compat$/, replacement: aiSrcCompat },
+			{ find: /^@musepi\/pi-ai\/oauth$/, replacement: aiSrcOAuth },
+			{ find: /^@musepi\/pi-ai\/providers\/(.+)$/, replacement: `${aiSrcProviders}/$1.ts` },
+			{ find: /^@musepi\/pi-agent-core$/, replacement: agentSrcIndex },
+			{ find: /^@musepi\/pi-tui$/, replacement: tuiSrcIndex },
 			{ find: /^@mariozechner\/pi-ai$/, replacement: aiSrcIndex },
 			{ find: /^@mariozechner\/pi-ai\/oauth$/, replacement: aiSrcOAuth },
 			{ find: /^@mariozechner\/pi-agent-core$/, replacement: agentSrcIndex },

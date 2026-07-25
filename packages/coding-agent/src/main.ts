@@ -6,8 +6,10 @@
  */
 
 import { createInterface } from "node:readline";
-import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
+import { type ImageContent, modelsAreEqual } from "@musepi/pi-ai";
+import { runAuthBrokerCommand } from "@musepi/pi-ai/auth-broker/cli";
 import chalk from "chalk";
+import { agentRegistry } from "./agents/registry.ts";
 import { type Args, type Mode, parseArgs, printHelp } from "./cli/args.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
@@ -510,6 +512,20 @@ export async function main(args: string[], options?: MainOptions) {
 		return;
 	}
 
+	if (args[0] === "auth-broker") {
+		const subcmd = args[1] ?? "help";
+		const rawFlags: Record<string, string | boolean> = {};
+		for (const arg of args.slice(2)) {
+			if (arg.startsWith("--")) {
+				const eq = arg.indexOf("=");
+				if (eq !== -1) rawFlags[arg.slice(2, eq)] = arg.slice(eq + 1);
+				else rawFlags[arg.slice(2)] = true;
+			}
+		}
+		await runAuthBrokerCommand(subcmd as any, rawFlags);
+		process.exit(0);
+	}
+
 	const parsed = parseArgs(args);
 	if (parsed.diagnostics.length > 0) {
 		for (const d of parsed.diagnostics) {
@@ -561,6 +577,10 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const startupSettingsManager = SettingsManager.create(cwd, agentDir);
 	reportDiagnostics(collectSettingsDiagnostics(startupSettingsManager, "startup session lookup"));
+
+	// Initialize agent registry (discovery + settings)
+	agentRegistry.initialize(cwd);
+	agentRegistry.applySettings(startupSettingsManager.getMusepi().agents);
 
 	// Experimental first-time setup: theme choice and analytics opt-in.
 	// Runs before any runtime services are created so the chosen settings apply everywhere.

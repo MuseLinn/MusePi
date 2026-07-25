@@ -1,5 +1,5 @@
 {
-	"name": "@muselinn/musepi",
+	"name": "@musepi/coding-agent",
 	"version": "0.1.9",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
@@ -43,8 +43,8 @@
 	"dependencies": {
 		"@musepi/core": "0.1.9",
 		"@musepi/transcript": "0.1.9",
-		"@earendil-works/pi-ai": "^0.82.0",
-		"@earendil-works/pi-tui": "^0.82.0",
+		"@musepi/pi-ai": "^0.82.0",
+		"@musepi/pi-tui": "^0.82.0",
 		"@silvia-odwyer/photon-node": "0.3.4",
 		"chalk": "5.6.2",
 		"cross-spawn": "7.0.6",

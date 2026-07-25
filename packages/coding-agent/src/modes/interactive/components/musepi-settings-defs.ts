@@ -59,6 +59,7 @@ export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [
 	// LSP
 	{ path: "lsp.enabled", label: "Enabled", section: "LSP", kind: "bool" },
 	{ path: "lsp.idleTimeoutMs", label: "Idle timeout (ms)", section: "LSP", kind: "number", presets: TIMEOUT_PRESETS },
+	{ path: "lsp.diagnosticsOnWrite", label: "Diagnostics on write", section: "LSP", kind: "bool" },
 	{
 		path: "lsp.servers",
 		label: "Servers",
@@ -190,7 +191,37 @@ export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [
 	},
 	// Updates & compat
 	{ path: "updateCheck", label: "Update check", section: "Updates & Compat", kind: "bool" },
-	{ path: "compat.loadPiExtensions", label: "Load legacy pi extensions", section: "Updates & Compat", kind: "bool" },
+	// Agents
+	{
+		path: "agents.disabledAgents",
+		label: "Disabled agents",
+		section: "Agents",
+		kind: "info",
+		info: [
+			"Array of agent names to disable. Edit in settings.json:",
+			'"musepi.agents.disabledAgents": ["agent-name"]',
+		],
+	},
+	{
+		path: "agents.agentModelOverrides",
+		label: "Model overrides",
+		section: "Agents",
+		kind: "info",
+		info: [
+			"Per-agent model overrides. Edit in settings.json:",
+			'"musepi.agents.agentModelOverrides": { "agent-name": "provider/model" }',
+		],
+	},
+	{
+		path: "agents.agentPrewalk",
+		label: "Prewalk overrides",
+		section: "Agents",
+		kind: "info",
+		info: [
+			"Per-agent prewalk overrides. Edit in settings.json:",
+			'"musepi.agents.agentPrewalk": { "agent-name": true }',
+		],
+	},
 ];
 
 const DOCS_BY_KEY = new Map(MUSEPI_SETTINGS_DOCS.map((doc) => [doc.key, doc.description]));

@@ -15,6 +15,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
+import { planManager } from "@musepi/core/plan/index.js";
 import type {
 	Agent,
 	AgentEvent,
@@ -23,8 +24,8 @@ import type {
 	AgentTool,
 	PrepareNextTurnContext,
 	ThinkingLevel,
-} from "@earendil-works/pi-agent-core";
-import { contentText } from "@earendil-works/pi-ai";
+} from "@musepi/pi-agent-core";
+import { contentText } from "@musepi/pi-ai";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -33,7 +34,7 @@ import type {
 	ProviderHeaders,
 	TextContent,
 	Usage,
-} from "@earendil-works/pi-ai/compat";
+} from "@musepi/pi-ai/compat";
 import {
 	clampThinkingLevel,
 	cleanupSessionResources,
@@ -44,8 +45,7 @@ import {
 	type RetryCallbacks,
 	resetApiProviders,
 	streamSimple,
-} from "@earendil-works/pi-ai/compat";
-import { planManager } from "@musepi/core/plan/index.js";
+} from "@musepi/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { createHashlineContext, type HashlineContext } from "../musepi/hashline.ts";
 import { resolveRoleModel } from "../musepi/model-roles.ts";

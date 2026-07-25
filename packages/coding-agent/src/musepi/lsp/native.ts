@@ -60,8 +60,11 @@ interface LspBinding {
 	registry: LspRegistry;
 	coordinator: DeferredDiagnosticsCoordinator;
 	detachMutationListener: (() => void) | null;
+	/** Callback to emit a custom session entry for TUI display. */
+	onEntry?: (customType: string, data: unknown) => void;
+	/** Whether post-edit LSP diagnostics are enabled for TUI display. */
+	diagnosticsOnWrite: boolean;
 }
-
 let binding: LspBinding | null = null;
 
 /** Test hook: run the deferred pipeline against an in-process registry. */
@@ -324,6 +327,17 @@ async function fetchAndOffer(absPath: string, mutationVersion: number, signal: A
 			absPath,
 			mutationVersion,
 		);
+		// Emit a custom session entry for TUI transcript display.
+		// Push immediately without draining the coordinator — the coordinator's
+		if (binding.onEntry && shown.length > 0 && binding.diagnosticsOnWrite !== false) {
+			const entry = {
+				path: rel,
+				messages: shown,
+				summary: summarizeDiagnosticMessages(shown).summary,
+				errored: fresh.errored,
+			};
+			binding.onEntry("lsp-late-diagnostic", { files: [entry] });
+		}
 	} catch {
 		// Graceful: a broken/slow/aborted server must never surface as an edit failure.
 	}
@@ -448,7 +462,11 @@ export const musepiLspToolDef: ToolDefinition = {
  * apply the idle timeout, and arm the post-mutation diagnostics listener.
  * Called once per session right after AgentSession construction.
  */
-export function initMusepiLsp(session: AgentSession, settingsManager: SettingsManager): void {
+export function initMusepiLsp(
+	session: AgentSession,
+	settingsManager: SettingsManager,
+	onEntry?: (customType: string, data: unknown) => void,
+): void {
 	const config = settingsManager.getMusepi().lsp;
 	const cwd = session.sessionManager.getCwd();
 	binding?.detachMutationListener?.();
@@ -459,6 +477,8 @@ export function initMusepiLsp(session: AgentSession, settingsManager: SettingsMa
 		registry: binding?.registry ?? new LspRegistryCtor(),
 		coordinator: binding?.coordinator ?? new DeferredDiagnosticsCoordinator(),
 		detachMutationListener: null,
+		onEntry,
+		diagnosticsOnWrite: config.diagnosticsOnWrite,
 	};
 	binding.registry.setIdleTimeout(config.idleTimeoutMs);
 	if (config.enabled) {

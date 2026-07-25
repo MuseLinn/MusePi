@@ -1,3 +1,4 @@
+export type { AgentDefinition, AgentSource, AgentThinkingLevel, AgentSpec, AgentTools } from "./agents/types.ts";
 export {
 	applyOp,
 	applyOpsToPhases,
@@ -51,7 +52,7 @@ export { goalState, GOAL_ENTRY_TYPE } from "./goal/types.ts";
 export type { GoalSnapshot } from "./goal/types.ts";
 export type { PersistencePort, ScopeDirs, SessionEntryLike } from "./ports.ts";
 export { mergeMusepiSettings, MUSEPI_DEFAULTS, MUSEPI_SETTINGS_DOCS } from "./config/schema.ts";
-export type { MusepiAdvisorSettings, MusepiSettings, ResolvedMusepiSettings } from "./config/schema.ts";
+export type { MusepiAdvisorSettings, MusepiAgentSettings, MusepiSettings, ResolvedMusepiSettings } from "./config/schema.ts";
 export {
 	ADVISOR_DEFAULT_MAX_CONTEXT_CHARS,
 	ADVISOR_DEFAULT_TOOL_RESULT_MAX_CHARS,

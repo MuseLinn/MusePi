@@ -19,9 +19,9 @@
  *   /overlay-streaming  - Multiple input panels with simulated streaming (Tab to cycle focus)
  */
 
-import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@earendil-works/pi-tui";
-import { Input, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@muselinn/musepi";
+import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@musepi/coding-agent";
+import type { Component, OverlayAnchor, OverlayHandle, OverlayOptions, TUI } from "@musepi/pi-tui";
+import { Input, matchesKey, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { spawn } from "child_process";
 
 // Global handle for toggle demo (in real code, use a more elegant pattern)

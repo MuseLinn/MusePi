@@ -21,8 +21,8 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: [
-			{ find: /^@earendil-works\/pi-ai$/, replacement: aiSrcIndex },
-			{ find: /^@earendil-works\/pi-ai\/compat$/, replacement: aiSrcCompat },
+			{ find: /^@musepi\/pi-ai$/, replacement: aiSrcIndex },
+			{ find: /^@musepi\/pi-ai\/compat$/, replacement: aiSrcCompat },
 		],
 	},
 });

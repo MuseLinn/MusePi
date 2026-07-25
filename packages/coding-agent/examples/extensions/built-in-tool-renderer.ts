@@ -25,9 +25,9 @@
  *   pi -e ./built-in-tool-renderer.ts
  */
 
-import { Text } from "@earendil-works/pi-tui";
-import type { BashToolDetails, EditToolDetails, ExtensionAPI, ReadToolDetails } from "@muselinn/musepi";
-import { createBashTool, createEditTool, createReadTool, createWriteTool } from "@muselinn/musepi";
+import type { BashToolDetails, EditToolDetails, ExtensionAPI, ReadToolDetails } from "@musepi/coding-agent";
+import { createBashTool, createEditTool, createReadTool, createWriteTool } from "@musepi/coding-agent";
+import { Text } from "@musepi/pi-tui";
 
 export default function (pi: ExtensionAPI) {
 	const cwd = process.cwd();

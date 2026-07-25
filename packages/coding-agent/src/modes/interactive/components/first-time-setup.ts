@@ -1,4 +1,4 @@
-import { Container, getKeybindings, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container, getKeybindings, Spacer, Text } from "@musepi/pi-tui";
 import { APP_NAME } from "../../../config.ts";
 import { renderThemePreview, setColorBlindMode, setTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";

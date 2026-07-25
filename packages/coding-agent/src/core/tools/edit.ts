@@ -1,5 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
 import {
 	formatHashlineHeader,
 	HASHLINE_EDIT_DESCRIPTION,
@@ -8,6 +6,8 @@ import {
 	parseHashlineHeader,
 	parsePatch,
 } from "@musepi/core/hashline/index.js";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { Box, Container, Spacer, Text } from "@musepi/pi-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";

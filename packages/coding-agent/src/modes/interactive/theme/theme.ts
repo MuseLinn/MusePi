@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import {
 	type EditorTheme,
 	getCapabilities,
@@ -8,7 +8,8 @@ import {
 	type RgbColor,
 	type SelectListTheme,
 	type SettingsListTheme,
-} from "@earendil-works/pi-tui";
+	type TabBarTheme,
+} from "@musepi/pi-tui";
 import chalk from "chalk";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
@@ -16,6 +17,7 @@ import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
 import type { SourceInfo } from "../../../core/source-info.ts";
 import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.ts";
 import { highlight, supportsLanguage } from "../../../utils/syntax-highlight.ts";
+import { getSymbol } from "./symbols.ts";
 
 // ============================================================================
 // Types & Schema
@@ -521,12 +523,41 @@ export class Theme {
 		}
 	}
 
+	/**
+	 * Box-drawing symbols (rounded variant). Resolved from the current symbol
+	 * preset so Nerd Font / Unicode / ASCII all get the right glyphs.
+	 */
+	get boxRound(): {
+		topLeft: string;
+		topRight: string;
+		bottomLeft: string;
+		bottomRight: string;
+		horizontal: string;
+		vertical: string;
+		teeRight: string;
+		teeLeft: string;
+		teeDown: string;
+		teeUp: string;
+	} {
+		return {
+			topLeft: getSymbol("boxRound.topLeft"),
+			topRight: getSymbol("boxRound.topRight"),
+			bottomLeft: getSymbol("boxRound.bottomLeft"),
+			bottomRight: getSymbol("boxRound.bottomRight"),
+			horizontal: getSymbol("boxRound.horizontal"),
+			vertical: getSymbol("boxRound.vertical"),
+			teeRight: getSymbol("boxRound.teeRight"),
+			teeLeft: getSymbol("boxRound.teeLeft"),
+			teeDown: getSymbol("boxRound.teeDown"),
+			teeUp: getSymbol("boxRound.teeUp"),
+		};
+	}
+
 	fg(color: ThemeColor, text: string): string {
 		const ansi = this.fgColors.get(color);
 		if (!ansi) throw new Error(`Unknown theme color: ${color}`);
 		return `${ansi}${text}\x1b[39m`; // Reset only foreground color
 	}
-
 	bg(color: ThemeBg, text: string): string {
 		const ansi = this.bgColors.get(color);
 		if (!ansi) throw new Error(`Unknown theme background color: ${color}`);
@@ -1017,7 +1048,7 @@ export function getDefaultTheme(): string {
 // ============================================================================
 
 // Use globalThis to share theme across module loaders (tsx + jiti in dev mode)
-const THEME_KEY = Symbol.for("@muselinn/musepi:theme");
+const THEME_KEY = Symbol.for("@musepi/coding-agent:theme");
 const THEME_KEY_OLD = Symbol.for("@mariozechner/pi-coding-agent:theme");
 
 // Export theme as a getter that reads from globalThis
@@ -1528,6 +1559,17 @@ export function getEditorTheme(): EditorTheme {
 	};
 }
 
+export function getTabBarTheme(): TabBarTheme {
+	return {
+		label: (text: string) => theme.bold(theme.fg("accent", text)),
+		activeTab: (text: string) => theme.bg("selectedBg", theme.bold(theme.fg("accent", text))),
+		inactiveTab: (text: string) => theme.fg("muted", text),
+		mutedTab: (text: string) => theme.fg("dim", text),
+		hoverTab: (text: string) => theme.bg("selectedBg", theme.fg("text", text)),
+		hint: (text: string) => theme.fg("dim", text),
+	};
+}
+
 export function getSettingsListTheme(): SettingsListTheme {
 	return {
 		label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : text),
@@ -1552,10 +1594,6 @@ const PREVIEW_TOKENS: { label: string; fg: ThemeColor[]; bg?: ThemeBg[] }[] = [
 	{ label: "thinking", fg: ["thinkingOff", "thinkingLow", "thinkingMedium", "thinkingHigh", "thinkingXhigh"] },
 ];
 
-/**
- * Render a compact one-line color preview for a set of semantic tokens.
- * Each chip shows a colored block (▌▐) for the given token.
- */
 export function renderThemePreview(t: Theme): string {
 	const chips: string[] = [];
 	for (const group of PREVIEW_TOKENS) {
@@ -1568,7 +1606,6 @@ export function renderThemePreview(t: Theme): string {
 	return chips.join(" ");
 }
 
-// ── Shimmer re-exports ───────────────────────
 export {
 	getShimmerMode,
 	getSpinnerFrames,

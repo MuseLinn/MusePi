@@ -7,38 +7,6 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
-import { contentText } from "@earendil-works/pi-ai";
-import type { AssistantMessage, ImageContent, Message, Model } from "@earendil-works/pi-ai/compat";
-import type {
-	AutocompleteItem,
-	AutocompleteProvider,
-	EditorComponent,
-	Keybinding,
-	KeyId,
-	MarkdownTheme,
-	OverlayHandle,
-	OverlayOptions,
-	SlashCommand,
-} from "@earendil-works/pi-tui";
-import {
-	CombinedAutocompleteProvider,
-	type Component,
-	Container,
-	fuzzyFilter,
-	getCapabilities,
-	hyperlink,
-	Markdown,
-	matchesKey,
-	ProcessTerminal,
-	Spacer,
-	setKeybindings,
-	Text,
-	TruncatedText,
-	TUI,
-	visibleWidth,
-} from "@earendil-works/pi-tui";
 import type { CompletionItem } from "@musepi/core/completions.js";
 import {
 	goalArgumentCompletions,
@@ -70,6 +38,40 @@ import {
 	type UndoAnchor,
 	type UndoEntry,
 } from "@musepi/core/undo.js";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { AuthEvent, AuthPrompt } from "@musepi/pi-ai";
+import { contentText } from "@musepi/pi-ai";
+import { resolveAuthBrokerConfig } from "@musepi/pi-ai/auth-broker";
+import type { AssistantMessage, ImageContent, Message, Model } from "@musepi/pi-ai/compat";
+import type {
+	AutocompleteItem,
+	AutocompleteProvider,
+	EditorComponent,
+	Keybinding,
+	KeyId,
+	MarkdownTheme,
+	OverlayHandle,
+	OverlayOptions,
+	SlashCommand,
+} from "@musepi/pi-tui";
+import {
+	CombinedAutocompleteProvider,
+	type Component,
+	Container,
+	fuzzyFilter,
+	getCapabilities,
+	hyperlink,
+	Input,
+	Markdown,
+	matchesKey,
+	ProcessTerminal,
+	SelectList,
+	Spacer,
+	setKeybindings,
+	Text,
+	TruncatedText,
+	TUI,
+} from "@musepi/pi-tui";
 import { TranscriptStore } from "@musepi/transcript";
 import chalk from "chalk";
 import { spawn, spawnSync } from "child_process";
@@ -79,7 +81,6 @@ import {
 	CONFIG_DIR_NAME,
 	getAgentDir,
 	getAuthPath,
-	getDebugLogPath,
 	getDocsPath,
 	getShareViewerUrl,
 	VERSION,
@@ -120,16 +121,17 @@ import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
+import { DebugSelectorComponent, type DebugSelectorDelegate } from "../../debug/index.ts";
 import { convertClaudeSession } from "../../foreign-sessions/claude-converter.ts";
 import { listAllClaudeSessions, listClaudeSessions } from "../../foreign-sessions/claude-scanner.ts";
 import { listAllCodexSessions, listCodexSessions } from "../../foreign-sessions/codex-scanner.ts";
 import { scanClaudeConfig } from "../../foreign-sessions/import-claude.ts";
-import { runBtwTurn } from "../../musepi/btw.ts";
 import { MusepiBoxedEditor } from "../../musepi/editor/boxed-editor.ts";
 import { TasksBrowserComponent } from "../../musepi/fullscreen/task-browser.ts";
 import { initMusepiGoal } from "../../musepi/goal-native.ts";
 import { handleMusepiMcpCommand } from "../../musepi/mcp-native.ts";
 import { handleMusepiMemoryCommand, initMusepiMemory } from "../../musepi/memory-native.ts";
+import { initMusepiRecap } from "../../musepi/recap.ts";
 import { backgroundManager } from "../../musepi/task/manager.ts";
 import { initMusepiTask } from "../../musepi/task/native.ts";
 import {
@@ -154,7 +156,7 @@ import { getPiUserAgent } from "../../utils/pi-user-agent.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import { checkForNewPiVersion, type LatestPiRelease, MUSEPI_RELEASES_URL } from "../../utils/version-check.ts";
-import { ArminComponent } from "./components/armin.ts";
+import { AgentDashboard } from "./components/agent-dashboard.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
 import { BorderedLoader } from "./components/bordered-loader.ts";
@@ -164,17 +166,17 @@ import { CompactionSummaryMessageComponent } from "./components/compaction-summa
 import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
-import { DaxnutsComponent } from "./components/daxnuts.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
-import { EarendilAnnouncementComponent } from "./components/earendil-announcement.ts";
+import { ErrorBannerComponent } from "./components/error-banner.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { HistorySearchComponent } from "./components/history-search.ts";
-import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
+import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
+import { getNativeEntryRenderer } from "./components/late-diagnostics-message.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
-import { ModelSelectorComponent } from "./components/model-selector.ts";
+import { LogoutAccountSelectorComponent } from "./components/logout-account-selector.ts";
 import {
 	type AuthSelectorProvider,
 	formatAuthSelectorProviderType,
@@ -182,8 +184,9 @@ import {
 } from "./components/oauth-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
+import { WelcomeComponent } from "./components/session-welcome.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
-import { type SetupResult, SetupWizardComponent } from "./components/setup-wizard.ts";
+import { SetupWizardComponent } from "./components/setup-wizard.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
 	BranchSummaryStatusIndicator,
@@ -204,7 +207,7 @@ import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
 	getEditorTheme,
-	getMarkdownTheme,
+	getSelectListTheme,
 	getThemeByName,
 	onThemeChange,
 	renderThemePreview,
@@ -384,6 +387,7 @@ export class InteractiveMode {
 	private chatContainer: Container;
 	private pendingMessagesContainer: Container;
 	private statusContainer: Container;
+	private errorBannerContainer: Container;
 	private defaultEditor: CustomEditor;
 	private editor: EditorComponent;
 	private editorComponentFactory: EditorFactory | undefined;
@@ -439,6 +443,7 @@ export class InteractiveMode {
 	private unsubscribe?: () => void;
 	private musepiGoalUnsubscribe?: () => void;
 	private readonly musepiTranscript = new TranscriptStore();
+	private musepiRecap?: ReturnType<typeof initMusepiRecap>;
 	private signalCleanupHandlers: Array<() => void> = [];
 
 	// Track if editor is in bash mode (text starts with !)
@@ -517,6 +522,7 @@ export class InteractiveMode {
 		this.headerContainer = new Container();
 		this.loadedResourcesContainer = new Container();
 		this.chatContainer = new Container();
+		this.errorBannerContainer = new Container();
 		this.pendingMessagesContainer = new Container();
 		this.statusContainer = new Container();
 		this.widgetContainerAbove = new Container();
@@ -873,6 +879,7 @@ export class InteractiveMode {
 		this.ui.addChild(this.chatContainer);
 		this.ui.addChild(this.pendingMessagesContainer);
 		this.ui.addChild(this.statusContainer);
+		this.ui.addChild(this.errorBannerContainer);
 		this.renderWidgets(); // Initialize with default spacer
 		this.ui.addChild(this.widgetContainerAbove);
 		this.ui.addChild(this.editorContainer);
@@ -889,58 +896,14 @@ export class InteractiveMode {
 
 		await this.themeController.applyFromSettings();
 
-		// Add header with keybindings from config (unless silenced)
+		// Add welcome header (MusePi branding with tips)
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
-			const logo = theme.bold(theme.fg("accent", APP_NAME)) + theme.fg("dim", ` v${this.version}`);
+			const m = this.session.model;
+			this.builtInHeader = new WelcomeComponent({
+				currentModel: m ? `${m.provider}/${m.id}` : "loading...",
+				currentProvider: m?.provider ?? "connnecting to model runtime",
+			});
 
-			// Build startup instructions using keybinding hint helpers
-			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
-
-			const expandedInstructions = [
-				hint("app.interrupt", "to interrupt"),
-				hint("app.clear", "to clear"),
-				rawKeyHint(`${keyText("app.clear")} twice`, "to exit"),
-				hint("app.exit", "to exit (empty)"),
-				hint("app.suspend", "to suspend"),
-				keyHint("tui.editor.deleteToLineEnd", "to delete to end"),
-				hint("app.thinking.cycle", "to cycle thinking level"),
-				rawKeyHint(`${keyText("app.model.cycleForward")}/${keyText("app.model.cycleBackward")}`, "to cycle models"),
-				hint("app.model.select", "to select model"),
-				hint("app.tools.expand", "to expand tools"),
-				hint("app.thinking.toggle", "to expand thinking"),
-				hint("app.editor.external", "for external editor"),
-				rawKeyHint("/", "for commands"),
-				rawKeyHint("!", "to run bash"),
-				rawKeyHint("!!", "to run bash (no context)"),
-				hint("app.message.followUp", "to queue follow-up"),
-				hint("app.message.dequeue", "to edit all queued messages"),
-				hint("app.clipboard.pasteImage", "to paste image (with text fallback)"),
-				rawKeyHint("drop files", "to attach"),
-			].join("\n");
-			const compactInstructions = [
-				hint("app.interrupt", "interrupt"),
-				rawKeyHint(`${keyText("app.clear")}/${keyText("app.exit")}`, "clear/exit"),
-				rawKeyHint("/", "commands"),
-				rawKeyHint("!", "bash"),
-				hint("app.tools.expand", "more"),
-			].join(theme.fg("muted", " · "));
-			const compactOnboarding = theme.fg(
-				"dim",
-				`Press ${keyText("app.tools.expand")} to show full startup help and loaded resources.`,
-			);
-			const onboarding = theme.fg(
-				"dim",
-				`Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.`,
-			);
-			this.builtInHeader = new ExpandableText(
-				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
-				() => `${logo}\n${expandedInstructions}\n\n${onboarding}`,
-				this.getStartupExpansionState(),
-				1,
-				0,
-			);
-
-			// Setup UI layout
 			this.headerContainer.addChild(new Spacer(1));
 			this.headerContainer.addChild(this.builtInHeader);
 			this.headerContainer.addChild(new Spacer(1));
@@ -1895,6 +1858,8 @@ export class InteractiveMode {
 		this.unsubscribe = undefined;
 		this.musepiGoalUnsubscribe?.();
 		this.musepiGoalUnsubscribe = undefined;
+		this.musepiRecap?.dispose();
+		this.musepiRecap = undefined;
 		this.applyRuntimeSettings();
 		if (options.renderBeforeBind) {
 			this.renderCurrentSessionState();
@@ -1903,6 +1868,23 @@ export class InteractiveMode {
 		} else {
 			await this.bindCurrentSessionExtensions();
 			this.subscribeToAgent();
+		}
+
+		// Detect pi-muselinn-harness extension: native MusePi replaces
+		// ask dialog, boxed editor, and todo natively.
+		try {
+			const extPaths = this.session.extensionRunner.getExtensionPaths();
+			if (extPaths.some((p: string) => p.includes("pi-muselinn-harness"))) {
+				this.showStatus(
+					theme.fg(
+						"warning",
+						"pi-muselinn-harness detected: native MusePi replaces ask dialog, boxed editor, and todo. " +
+							"Uninstall or set musepi.harnessCompat=false to silence.",
+					),
+				);
+			}
+		} catch {
+			/* extensionRunner not initialized yet */
 		}
 		// MusePi native goal integration: persistence + turn recording + badge.
 		this.musepiGoalUnsubscribe = initMusepiGoal(this.session, this.sessionManager, {
@@ -1925,6 +1907,12 @@ export class InteractiveMode {
 			setWidget: (key, content) => this.setExtensionWidget(key, content, { placement: "aboveEditor" }),
 			maxVisible: this.settingsManager.getMusepi().todo.maxVisible,
 		});
+		// MusePi native idle recap: summarize after inactivity.
+		this.musepiRecap = initMusepiRecap(
+			this.session,
+			(text) => this.showStatus(theme.fg("dim", theme.italic(`\u203B recap: ${text}`))),
+			{ enabled: true, idleSeconds: 240 },
+		);
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();
 		this.updateTerminalTitle();
@@ -3059,6 +3047,21 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/credentials") {
+				this.editor.setText("");
+				await this.showCredentialsManager();
+				return;
+			}
+			if (text === "/agents") {
+				this.editor.setText("");
+				this.showAgentsDashboard();
+				return;
+			}
+			if (text === "/auth-broker") {
+				this.editor.setText("");
+				this.showAuthBrokerStatus();
+				return;
+			}
 			if (text === "/new") {
 				this.editor.setText("");
 				await this.handleClearCommand();
@@ -3170,6 +3173,9 @@ export class InteractiveMode {
 
 		switch (event.type) {
 			case "agent_start":
+				// Cancel any pending recap timer when a new turn starts
+				this.musepiRecap?.poke();
+				this.clearPinnedError();
 				this.pendingTools.clear();
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(true);
@@ -3301,6 +3307,7 @@ export class InteractiveMode {
 							});
 						}
 						this.pendingTools.clear();
+						this.showPinnedError(errorMessage);
 					} else {
 						// Args are now complete - trigger diff computation for edit tools
 						for (const [, component] of this.pendingTools.entries()) {
@@ -3381,6 +3388,9 @@ export class InteractiveMode {
 				if (reminder) {
 					this.showExtensionNotify(reminder, "warning");
 				}
+
+				// Idle recap: schedule a timer to summarize after inactivity.
+				this.musepiRecap?.onTurnEnd();
 
 				this.ui.requestRender();
 				break;
@@ -3532,7 +3542,9 @@ export class InteractiveMode {
 	}
 
 	private addCustomEntryToChat(entry: Extract<SessionEntry, { type: "custom" }>): void {
-		const renderer = this.session.extensionRunner.getEntryRenderer(entry.customType);
+		// Check native renderers first, then extension renderers.
+		const renderer =
+			getNativeEntryRenderer(entry.customType) ?? this.session.extensionRunner.getEntryRenderer(entry.customType);
 		if (!renderer) {
 			return;
 		}
@@ -4730,6 +4742,17 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Text(theme.fg("warning", `Warning: ${warningMessage}`), 1, 0));
 		this.ui.requestRender();
 	}
+	showPinnedError(message: string): void {
+		this.errorBannerContainer.clear();
+		this.errorBannerContainer.addChild(new ErrorBannerComponent(message));
+		this.ui.requestRender();
+	}
+
+	clearPinnedError(): void {
+		if (this.errorBannerContainer.children.length === 0) return;
+		this.errorBannerContainer.clear();
+		this.ui.requestRender();
+	}
 
 	showNewVersionNotification(release: LatestPiRelease): void {
 		const action = theme.fg("accent", `${APP_NAME} update`);
@@ -5154,7 +5177,7 @@ export class InteractiveMode {
 					},
 				},
 			);
-			return { component: selector, focus: selector.getSettingsList() };
+			return { component: selector, focus: selector };
 		});
 	}
 
@@ -5550,9 +5573,12 @@ export class InteractiveMode {
 
 	/**
 	 * /btw <question> — side-channel conversation (see musepi/btw.ts).
-	 * Renders the Q inline and the A as it completes; the child session
-	 * keeps side-channel history across follow-up /btw turns.
+	 * Renders a dedicated panel with DynamicBorder, streaming answer,
+	 * and keyboard shortcuts (Esc dismiss, c copy, b branch).
 	 */
+	private btwPanel: import("../../musepi/btw-panel.ts").BtwPanelComponent | null = null;
+	private btwAbortController: AbortController | null = null;
+
 	private async handleBtwCommand(text: string): Promise<void> {
 		const question = text.startsWith("/btw ") ? text.slice(5).trim() : "";
 		if (!question) {
@@ -5564,18 +5590,48 @@ export class InteractiveMode {
 			return;
 		}
 
-		this.chatContainer.addChild(new Text(theme.fg("accent", `btw ❯ ${question}`), 1, 0));
-		const answerText = new Text(theme.fg("dim", "…"), 1, 0);
-		this.chatContainer.addChild(answerText);
+		// Close any existing btw panel
+		this.closeBtwPanel();
+
+		// Create and mount the panel
+		const panel = new (await import("../../musepi/btw-panel.ts")).BtwPanelComponent(question, (s) =>
+			theme.fg("accent", s),
+		);
+		this.btwPanel = panel;
+		this.chatContainer.addChild(panel);
 		this.ui.requestRender();
 
+		this.btwAbortController = new AbortController();
+
 		try {
-			const answer = await runBtwTurn(this.session, question);
-			answerText.setText(answer.trim().length > 0 ? answer : "(no answer)");
+			const { runBtwTurn } = await import("../../musepi/btw.ts");
+			const answer = await runBtwTurn(this.session, question, this.btwAbortController.signal, (delta) => {
+				panel.appendText(delta);
+				this.ui.requestRender();
+			});
+			panel.setAnswer(answer);
+			panel.markComplete();
 		} catch (error: unknown) {
-			answerText.setText(theme.fg("error", error instanceof Error ? error.message : String(error)));
+			if (error instanceof Error && error.name === "AbortError") {
+				panel.markAborted();
+			} else {
+				panel.markError(error instanceof Error ? error.message : String(error));
+			}
 		}
 		this.ui.requestRender();
+	}
+
+	/** Close the active btw panel and clean up. */
+	private closeBtwPanel(): void {
+		if (this.btwAbortController) {
+			this.btwAbortController.abort();
+			this.btwAbortController = null;
+		}
+		if (this.btwPanel) {
+			this.btwPanel.close();
+			this.chatContainer.removeChild(this.btwPanel);
+			this.btwPanel = null;
+		}
 	}
 
 	private async handleCloneCommand(): Promise<void> {
@@ -6052,6 +6108,20 @@ export class InteractiveMode {
 						return;
 					}
 
+					// Check for multiple credentials — show account picker if needed.
+					const accounts = await this.session.modelRuntime.listCredentialAccounts(providerId);
+					if (accounts.length > 1) {
+						this.showLogoutAccountSelector(
+							providerOption.name,
+							accounts.map((a) => ({
+								id: a.id,
+								label: a.email ?? a.remark ?? `Account #${a.id}`,
+								active: a.id === accounts[0]?.id,
+							})),
+						);
+						return;
+					}
+
 					try {
 						await this.session.modelRuntime.logout(providerOption.id);
 						await this.updateAvailableProviderCount();
@@ -6071,6 +6141,208 @@ export class InteractiveMode {
 			);
 			return { component: selector, focus: selector };
 		});
+	}
+
+	private showLogoutAccountSelector(
+		providerName: string,
+		accounts: Array<{ id: number; label: string; active: boolean }>,
+	): void {
+		this.showSelector((done) => {
+			const component = new LogoutAccountSelectorComponent(
+				providerName,
+				accounts.map((a) => ({
+					label: a.label,
+					active: a.active,
+				})),
+				async (selected) => {
+					done();
+
+					const account = accounts.find((a) => a.label === selected.label);
+					if (!account) return;
+
+					try {
+						await this.session.modelRuntime.logoutCredential(account.id);
+						await this.updateAvailableProviderCount();
+						this.showStatus(`Logged out of ${providerName}: ${account.label}`);
+					} catch (error: unknown) {
+						this.showError(`Logout failed: ${error instanceof Error ? error.message : String(error)}`);
+					}
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component, focus: component.getSelectList() };
+		});
+	}
+
+	private async showCredentialsManager(): Promise<void> {
+		const accounts = await this.session.modelRuntime.listCredentialAccounts();
+		if (accounts.length === 0) {
+			this.showStatus("No stored credentials found. Use /login to add one.");
+			return;
+		}
+
+		this.showSelector((done) => {
+			const items: { value: string; label: string; description: string }[] = accounts.map((a) => ({
+				value: String(a.id),
+				label: `${a.email ?? a.remark ?? `Account #${a.id}`}`,
+				description: `${a.providerId} · ${a.type}${a.remark ? ` · remark: ${a.remark}` : ""}`,
+			}));
+
+			const select = new SelectList(items, 15, getSelectListTheme());
+
+			const container = new Container();
+			container.addChild(new DynamicBorder());
+			container.addChild(new Spacer(1));
+			container.addChild(new TruncatedText(theme.bold("Stored credentials:")));
+			container.addChild(new Spacer(1));
+			container.addChild(select);
+			container.addChild(new Spacer(1));
+			container.addChild(new DynamicBorder());
+
+			select.onSelect = async (item) => {
+				const accountId = Number(item.value);
+				const account = accounts.find((a) => a.id === accountId);
+				if (!account) return;
+				done();
+				await this.showCredentialActions(account);
+			};
+
+			select.onCancel = () => {
+				done();
+				this.ui.requestRender();
+			};
+
+			return { component: container, focus: select };
+		});
+	}
+
+	private async showCredentialActions(account: {
+		id: number;
+		providerId: string;
+		type: string;
+		email?: string;
+		remark?: string;
+	}): Promise<void> {
+		const actions = [
+			{ value: "edit-remark", label: "Edit remark", description: `Current: ${account.remark ?? "(none)"}` },
+			{ value: "set-active", label: "Set as active", description: `Provider: ${account.providerId}` },
+			{ value: "delete", label: "Delete credential", description: "Remove this stored credential" },
+		];
+
+		this.showSelector((done) => {
+			const select = new SelectList(actions, 8, getSelectListTheme());
+
+			const container = new Container();
+			container.addChild(new DynamicBorder());
+			container.addChild(new Spacer(1));
+			container.addChild(new TruncatedText(theme.bold(`${account.email ?? account.providerId} — actions`)));
+			container.addChild(new Spacer(1));
+			container.addChild(select);
+			container.addChild(new Spacer(1));
+			container.addChild(new DynamicBorder());
+
+			select.onSelect = async (item) => {
+				done();
+				if (item.value === "edit-remark") {
+					await this.showRemarkEditor(account.id, account.remark ?? "");
+				} else if (item.value === "set-active") {
+					try {
+						await this.session.modelRuntime.setActiveCredential(account.providerId, account.id);
+						this.showStatus(
+							`Active credential set to ${account.email ?? `#${account.id}`} for ${account.providerId}`,
+						);
+					} catch (error: unknown) {
+						this.showError(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+					}
+				} else if (item.value === "delete") {
+					try {
+						await this.session.modelRuntime.logoutCredential(account.id);
+						await this.updateAvailableProviderCount();
+						this.showStatus(`Removed credential #${account.id} (${account.email ?? account.providerId})`);
+					} catch (error: unknown) {
+						this.showError(`Failed: ${error instanceof Error ? error.message : String(error)}`);
+					}
+				}
+			};
+
+			select.onCancel = () => {
+				done();
+				this.ui.requestRender();
+			};
+
+			return { component: container, focus: select };
+		});
+	}
+
+	private async showRemarkEditor(credentialId: number, currentRemark: string): Promise<void> {
+		this.showSelector((done) => {
+			const input = new Input();
+			if (currentRemark) input.setValue(currentRemark);
+
+			input.onSubmit = async (value) => {
+				const remark = value.trim();
+				done();
+				try {
+					await this.session.modelRuntime.updateRemark(credentialId, remark);
+					this.showStatus(`Remark updated${remark ? `: ${remark}` : " (cleared)"}`);
+				} catch (error: unknown) {
+					this.showError(`Failed to update remark: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			};
+
+			input.onEscape = () => {
+				done();
+				this.ui.requestRender();
+			};
+
+			const container = new Container();
+			container.addChild(new DynamicBorder());
+			container.addChild(new Spacer(1));
+			container.addChild(new TruncatedText(theme.bold("Edit credential remark:")));
+			container.addChild(new Spacer(1));
+			container.addChild(
+				new Text(theme.fg("muted", "Enter a label for this credential (shown in account pickers)"), 0, 0),
+			);
+			container.addChild(new Spacer(1));
+			container.addChild(input);
+			container.addChild(new Spacer(1));
+			container.addChild(new Text(theme.fg("dim", "  Enter to save · Esc to cancel"), 0, 0));
+			container.addChild(new Spacer(1));
+			container.addChild(new DynamicBorder());
+
+			return { component: container, focus: input };
+		});
+	}
+
+	private showAgentsDashboard(): void {
+		this.editor.clear();
+		const dashboard = new AgentDashboard({
+			onClose: () => {
+				this.editorContainer.removeChild(dashboard);
+				this.editorContainer.clear();
+				this.editorContainer.addChild(this.editor);
+				this.ui.setFocus(this.editor);
+				this.ui.requestRender();
+			},
+		});
+		this.editorContainer.clear();
+		this.editorContainer.addChild(dashboard);
+		this.ui.setFocus(dashboard);
+		this.ui.requestRender();
+	}
+
+	private async showAuthBrokerStatus(): Promise<void> {
+		const config = resolveAuthBrokerConfig();
+		if (!config) {
+			this.showStatus(
+				"No auth-broker configured. Set MUSEPI_AUTH_BROKER_URL and MUSEPI_AUTH_BROKER_TOKEN to use a remote credential vault.",
+			);
+			return;
+		}
+		this.showStatus(`Auth-broker: ${config.url} ${config.token ? "(authenticated)" : "(no token)"}`);
 	}
 
 	private async completeProviderAuthentication(
@@ -6560,25 +6832,19 @@ export class InteractiveMode {
 	}
 
 	private async handleSetupCommand(): Promise<void> {
-		const compat = this.settingsManager.getMusepi().compat;
-		const claudeConfigDetected = fs.existsSync(path.join(os.homedir(), ".claude", "settings.json"));
+		const providerOptions = this.getLoginProviderOptions();
+		if (providerOptions.length === 0) {
+			this.showStatus("No providers found. Configure a provider in .pi/models.json.");
+			return;
+		}
 
 		this.showSelector((done) => {
 			const wizard = new SetupWizardComponent(
-				{
-					claudeConfigDetected,
-					claudeScanEnabled: compat.scanClaudeSessions,
-					codexScanEnabled: compat.scanCodexSessions,
-				},
-				(result: SetupResult) => {
+				providerOptions,
+				(provider) => {
+					// Sign-in starts asynchronously; close the wizard first
 					done();
-					if (result.completed) {
-						this.applySetupChanges(result);
-						if (result.runClaudeImport) {
-							this.handleImportClaudeCommand().catch(() => {});
-						}
-					}
-					this.ui.requestRender();
+					void this.startProviderLogin(provider);
 				},
 				() => {
 					done();
@@ -6587,11 +6853,6 @@ export class InteractiveMode {
 			);
 			return { component: wizard, focus: wizard };
 		});
-	}
-
-	private applySetupChanges(result: SetupResult): void {
-		this.settingsManager.setMusepiValue("compat.scanClaudeSessions", result.scanClaudeSessions);
-		this.settingsManager.setMusepiValue("compat.scanCodexSessions", result.scanCodexSessions);
 	}
 
 	private async handleImportClaudeCommand(): Promise<void> {
@@ -7068,62 +7329,54 @@ export class InteractiveMode {
 	}
 
 	private handleDebugCommand(): void {
-		const width = this.ui.terminal.columns;
-		const height = this.ui.terminal.rows;
-		const allLines = this.ui.render(width);
+		const delegate: DebugSelectorDelegate = {
+			showError: (message) => {
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(new Text(theme.fg("error", message), 1, 0));
+				this.ui.requestRender();
+			},
+			showWarning: (message) => {
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(new Text(theme.fg("warning", message), 1, 0));
+				this.ui.requestRender();
+			},
+			showStatus: (message) => {
+				this.showStatus(message);
+			},
+			presentBlock: (text) => {
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(new DynamicBorder());
+				this.chatContainer.addChild(new Text(text, 1, 0));
+				this.chatContainer.addChild(new DynamicBorder());
+				this.ui.requestRender();
+			},
+			presentComponent: (component) => {
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(component);
+				this.ui.requestRender();
+			},
+			ui: {
+				terminal: this.ui.terminal,
+				requestRender: () => this.ui.requestRender(),
+			},
+		};
 
-		const debugLogPath = getDebugLogPath();
-		const debugData = [
-			`Debug output at ${new Date().toISOString()}`,
-			`Terminal: ${width}x${height}`,
-			`Total lines: ${allLines.length}`,
-			"",
-			"=== All rendered lines with visible widths ===",
-			...allLines.map((line, idx) => {
-				const vw = visibleWidth(line);
-				const escaped = JSON.stringify(line);
-				return `[${idx}] (w=${vw}) ${escaped}`;
-			}),
-			"",
-			"=== Agent messages (JSONL) ===",
-			...this.session.messages.map((msg) => JSON.stringify(msg)),
-			"",
-		].join("\n");
-
-		fs.mkdirSync(path.dirname(debugLogPath), { recursive: true });
-		fs.writeFileSync(debugLogPath, debugData);
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(
-			new Text(`${theme.fg("accent", "✓ Debug log written")}\n${theme.fg("muted", debugLogPath)}`, 1, 1),
-		);
+		let overlayHandle: import("@musepi/pi-tui").OverlayHandle | undefined;
+		const selector = new DebugSelectorComponent(delegate, () => {
+			overlayHandle?.hide();
+			overlayHandle = undefined;
+			this.ui.requestRender();
+		});
+		overlayHandle = this.ui.showOverlay(selector, {
+			anchor: "top-left",
+			width: "100%",
+			maxHeight: "100%",
+			margin: 0,
+			fullscreen: true,
+		});
+		this.ui.setFocus(selector);
 		this.ui.requestRender();
 	}
-
-	private handleArminSaysHi(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new ArminComponent(this.ui));
-		this.ui.requestRender();
-	}
-
-	private handleDementedDelves(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new EarendilAnnouncementComponent());
-		this.ui.requestRender();
-	}
-
-	private handleDaxnuts(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DaxnutsComponent(this.ui));
-		this.ui.requestRender();
-	}
-
-	private checkDaxnutsEasterEgg(model: { provider: string; id: string }): void {
-		if (model.provider === "opencode" && model.id.toLowerCase().includes("kimi-k2.5")) {
-			this.handleDaxnuts();
-		}
-	}
-
 	private async handleBashCommand(command: string, excludeFromContext = false): Promise<void> {
 		const extensionRunner = this.session.extensionRunner;
 
