@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+### New Features
+
+- **Auth broker** — shared credential pool server with AES-256-GCM encrypted snapshot
+  cache, SSE streaming and long-poll snapshot sync, OAuth refresh loop, credential
+  block management. CLI: `musepi auth-broker serve|token|status|list`.
+  Remote instances share credentials via `RemoteAuthCredentialStore`.
+- **Multi-credential auth** — manage multiple API keys or OAuth tokens per provider
+  with the `/credentials` command (list, edit remarks, set active,
+  soft-delete). `CredentialRouter` provides session-sticky PHRED
+  routing and round-robin for rate-limit resilience.
+- **Agent system** — full agent lifecycle: `AgentDefinition` types,
+  3-tier discovery (bundled / user / project), `AgentRegistry` singleton,
+  `/agents` dashboard with source tab filtering (All/Bundled/User/Project)
+  and per-agent detail inspector (model, prewalk, system prompt). 8 bundled agents:
+  `coder`, `explore`, `plan`, `scout`, `designer`, `reviewer`, `librarian`, `task`.
+
+### Added
+
+- **AgentDashboard keyboard navigation** — Tab/Shift+Tab cycles through agents, Esc
+  closes the dashboard. Focus is properly restored to the editor on close.
+- **Agent settings** — `musepi.agents.disabledAgents`,
+  `musepi.agents.agentModelOverrides`,
+  `musepi.agents.agentPrewalk` settings with defaults and
+  `pickAgents()` merge function.
+- **`/auth-broker` slash command** — shows broker status (URL, auth state).
+- **TabBar component** — reusable tab bar for source filtering and navigation in
+  fullscreen overlays (`@musepi/pi-tui`).
+
+### Changed
+
+- **ModelRuntime.create()** now wraps local credential stores with
+  `CredentialRouter` for multi-credential selection; `sessionId`
+  option enables deterministic credential pinning.
+- **Settings panel** — MusePi submenu includes 3 agent group entries.
+- **Workspace rename** — all internal `@earendil-works/*` references
+  migrated to `@musepi/*`.
+
+### Fixed
+
+- **Auth broker `disableCredentialById`** — restored missing function body
+  and corrected async return type.
+- **RemoteAuthCredentialStore.updateRemark** — added `PATCH /v1/credential/:id/remark`
+  broker endpoint, client, and remote store implementation (no longer throws).
+
 ## [0.1.9] - 2026-07-25
 
 ### Added
@@ -19,7 +63,7 @@
   9 tab icons. Unicode and ASCII presets with `getSymbol()` and `symbolFg()`.
 - **`/queue` command** — queue a follow-up message delivered after the agent
   yields. Calls `session.followUp()` under the hood.
-- **Setup wizard theme scene** — 8 curated theme options with ↑↓ live preview,
+- **Setup wizard theme scene** — 8 curated theme options with up/down live preview,
   color chip strip, and colorblind mode toggle.
 - **Extra theme tokens** — `info`, `pythonMode`, `statusLine` (13 tokens),
   `statusLineBg` (background). 68 total required tokens. `isValidThemeColor()`
@@ -54,12 +98,12 @@
 
 ### Fixed
 
-- **Task browser crash** — `task.usage` being undefined no longer crashes `/tasks`; shows `—` instead.
+- **Task browser crash** — `task.usage` being undefined no longer crashes `/tasks`; shows `--` instead.
 - **`/swarm` bare text** — non-`on|off|status` arguments are now forwarded to the model as a prompt.
 
 ### Changed
 
-- **Package renamed** — `@earendil-works/pi-coding-agent` → `@muselinn/musepi`. The CLI binary is still `musepi`.
+- **Package renamed** — `@earendil-works/pi-coding-agent` to `@muselinn/musepi`. The CLI binary is still `musepi`.
 - **Orchestrator removed** — deleted `packages/orchestrator/` (unused upstream Radius orchestration service).
 
 ### Fixed
@@ -71,7 +115,7 @@
 All notable changes to MusePi are documented in this file.
 
 MusePi is a fork of [pi](https://github.com/earendil-works/pi). The pre-fork
-upstream history (pi 0.5.x–0.81.x) lives in the
+upstream history (pi 0.5.x-0.81.x) lives in the
 [upstream changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md)
 and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 
@@ -112,7 +156,6 @@ and is mirrored next to this file as `UPSTREAM-CHANGELOG.md`.
 ### Changed
 
 - **Upstream v0.81.1** — merged 50 upstream commits including streamFn compatibility, deferred catalog refresh, llama download progress, sqlite session storage, compaction retries, usage accounting, RPC thinking levels, Qwen Token Plan provider, tui paste registry fix, and video content API.
-
 - **Corrected slash command mappings** — `/mode` now controls permission policy (auto/yolo/manual), `/plan` toggles plan mode on/off/clear, `/goal` gains the `budget` subcommand, `/swarm` reports background task status, `/permission` removed (merged into `/mode`). `/goal` manages the active goal lifecycle (set, status, pause, resume, cancel, replace, next, budget) and the goal queue (add, prioritize, drop, skip); `/mode` switches the permission policy (auto, yolo, manual); `/plan` toggles plan mode on and off; `/swarm` reports background task status; `/tasks` is registered in the command palette (already available via the existing handler and Ctrl+Shift+T keybinding); `/todo` adds list items, marks them done, or shows the todo panel.
 
 ## [0.1.2] - 2026-07-23
@@ -122,7 +165,7 @@ Binary self-update, and a redesigned project site.
 ### New Features
 
 - **Binary self-update** — `musepi update` now downloads the platform archive from the fork's GitHub Releases and swaps the install directory in place (interactive confirmation, `--yes` to skip, `--check` to only report, `--force` to reinstall). POSIX installs swap in-process; Windows hands the swap to a detached PowerShell script that runs after the process exits. The previous install is kept as a `musepi.old-*` backup until the next successful update, verification failures roll back automatically, and non-archive or non-writable installs fall back to the manual download link. `musepi update --all` honors `musepi.updateCheck=false`; an explicit `musepi update` always checks.
-- **Site redesign** — the Pages site adopts the pi.dev graph-paper look with a pixel mark, a tabbed install box, and a bilingual (EN/中文) toggle.
+- **Site redesign** — the Pages site adopts the pi.dev graph-paper look with a pixel mark, a tabbed install box, and a bilingual (EN/Chinese) toggle.
 
 ## [0.1.1] - 2026-07-23
 
@@ -132,7 +175,7 @@ reliability fixes.
 ### New Features
 
 - **Grouped settings panel** — the settings list gains section headings (skipped by navigation, matched by search), and the main panel is reorganized from a flat list into Session / Images / Interface / Advanced / MusePi sections.
-- **MusePi settings submenu** — all 42 `musepi.*` feature settings are editable from the TUI, grouped Memory / MCP / LSP / Advisor / Model Roles / Tools / Swarm / Interface / Updates & Compat: booleans and enums cycle in place, numbers cycle curated presets, model specs open a text input, and nested registries point at `settings.json`.
+- **MusePi settings submenu** — all 42 `musepi.*` feature settings are editable from the TUI, grouped Memory / MCP / LSP / Advisor / Model Roles / Tools / Swarm / Interface / Updates and Compat: booleans and enums cycle in place, numbers cycle curated presets, model specs open a text input, and nested registries point at `settings.json`.
 - **`/memory` command** — `view` shows the exact startup memory injection, `stats` reports paths/entry counts/BM25 policy, `clear` resets project/global/all behind an interactive confirm, and `enable`/`disable` persist `musepi.memory.enabled` and hot-switch by re-binding the memory tool without a restart.
 
 ### Fixed
@@ -145,12 +188,11 @@ reliability fixes.
 
 First MusePi release: the pi agent harness (`earendil-works/pi` 0.81.x base)
 with the muselinn feature set layered on top of the upstream agent loop. See
-[UPSTREAM.md](../../UPSTREAM.md) for the pin + cherry-pick policy towards
-upstream.
+[UPSTREAM.md](UPSTREAM.md) for the pin + cherry-pick policy towards upstream.
 
 ### New Features
 
-- **MusePi branding & independent config home** — the CLI identifies as `musepi` and reads/writes `~/.musepi` instead of `~/.pi`, coexisting with a stock pi install. First run migrates auth/settings/models/keybindings from `~/.pi/agent`.
+- **MusePi branding and independent config home** — the CLI identifies as `musepi` and reads/writes `~/.musepi` instead of `~/.pi`, coexisting with a stock pi install. First run migrates auth/settings/models/keybindings from `~/.pi/agent`.
 - **Own update channel** — update checks run against [MusePi GitHub Releases](https://github.com/MuseLinn/MusePi/releases) (`musepi.updateCheck`, default on), with one-line installers for macOS/Linux/Windows and prebuilt binaries for six platform targets.
 - **Hashline editing** — hash-anchored edit format (`@musepi/core/hashline`) for robust, retryable file edits by weaker models.
 - **Native video understanding** — kimi-k3 `video_url` wire support and video input through the read tool, with provider capability declarations.
@@ -160,8 +202,8 @@ upstream.
 - **Seven-scope skills** — skill discovery across project and user scopes spanning host-native, Kimi Code compat, and `.agents` cross-tool directories.
 - **Snap compaction** — `snapcompact` snapshot-based context compaction.
 - **`/move` command** — move the current session to another working directory.
-- **Tool selection & model roles** — `toolSelect` tool gating and `modelRoles` per-role model assignment.
-- **LSP, notifications & compat** — language-server integration, desktop notifications, and the extension compat layer that keeps upstream pi extensions loading unchanged.
+- **Tool selection and model roles** — `toolSelect` tool gating and `modelRoles` per-role model assignment.
+- **LSP, notifications and compat** — language-server integration, desktop notifications, and the extension compat layer that keeps upstream pi extensions loading unchanged.
 
 ### Added
 

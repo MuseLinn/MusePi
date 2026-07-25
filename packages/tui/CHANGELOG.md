@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **TabBar component** — reusable tab bar for source filtering, keyboard
+  navigation, and selection callbacks.
+
 ## [0.82.0] - 2026-07-24
 
 ## [0.1.8] - 2026-07-24

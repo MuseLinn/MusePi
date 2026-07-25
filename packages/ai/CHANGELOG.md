@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Auth broker** — HTTP credential pool server with 10 endpoints
+  (`/v1/snapshot`, `/v1/snapshot/stream` SSE, `/v1/credential` CRUD,
+  `/v1/usage`). AES-256-GCM encrypted snapshot cache, OAuth refresh
+  lease fencing, credential block management.
+- **CredentialRouter** — session-sticky PHRED routing and round-robin
+  multi-credential selection with in-memory + persistent rate-limit blocking.
+- **SqliteCredentialStore** — identity key dedup, persistent blocks,
+  OAuth refresh lease CAS-style acquire/release/renew.
+- **RemoteAuthCredentialStore** — broker-backed credential store with
+  snapshot sync via SSE or long-poll.
+- **`/credentials` slash command** — list, edit remarks, set active,
+  soft-delete credentials per provider.
+- **`/logout` flow** — `LogoutAccountSelectorComponent` with credential
+  selection and `logoutCredential()` runtime method.
+
+### Fixed
+
+- **RemoteAuthCredentialStore.updateRemark** — added
+  `PATCH /v1/credential/:id/remark` broker endpoint + client + remote
+  store implementation.
+
 ## [0.82.0] - 2026-07-24
 
 ## [0.1.8] - 2026-07-24
