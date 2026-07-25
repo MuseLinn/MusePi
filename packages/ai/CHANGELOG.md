@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
 ### Added
 
 - **Auth broker** — HTTP credential pool server with 10 endpoints

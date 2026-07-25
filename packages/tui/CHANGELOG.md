@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
 ### Added
 
 - **TabBar component** — reusable tab bar for source filtering, keyboard

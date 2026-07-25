@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
 ### New Features
 
 - **Auth broker** — shared credential pool server with AES-256-GCM encrypted snapshot
