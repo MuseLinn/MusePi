@@ -207,6 +207,7 @@ for platform in "${PLATFORMS[@]}"; do
         cp "../../node_modules/@mariozechner/$clipboard_native_package/$clipboard_native_file" \
             "$OUTPUT_DIR/$platform/node_modules/@mariozechner/clipboard/"
     fi
+done
 
 # Create archives
 cd "$OUTPUT_DIR"
