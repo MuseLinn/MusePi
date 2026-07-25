@@ -139,14 +139,6 @@ else
     PLATFORMS=(darwin-arm64 darwin-x64 linux-x64 linux-arm64 ohos-arm64 windows-x64 windows-arm64)
 fi
 
-# Patch compiled JS for Bun compatibility: bun's compiled runtime doesn't
-# include node:sqlite, but bun:sqlite is always available. The API is
-# nearly identical (Database vs DatabaseSync).
-echo "==> Patching dist for Bun compatibility (node:sqlite → bun:sqlite)..."
-find ../../packages/ai/dist -name '*.js' -exec sed -i \
-  -e 's/from "node:sqlite"/from "bun:sqlite"/g' \
-  -e 's/require("node:sqlite")/require("bun:sqlite")/g' \
-  -e 's/\bDatabaseSync\b/Database/g' {} +
 
 
 for platform in "${PLATFORMS[@]}"; do
