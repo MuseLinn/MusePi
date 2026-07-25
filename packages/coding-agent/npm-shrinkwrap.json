@@ -9,10 +9,10 @@
 			"version": "0.2.0",
 			"license": "MIT",
 			"dependencies": {
-				"@musepi/core": "0.1.9",
-				"@musepi/transcript": "0.1.9",
-				"@musepi/pi-ai": "^0.82.0",
-				"@musepi/pi-tui": "^0.82.0",
+				"@musepi/core": "^0.2.0",
+				"@musepi/transcript": "^0.2.0",
+				"@musepi/pi-ai": "^0.2.0",
+				"@musepi/pi-tui": "^0.2.0",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -495,13 +495,13 @@
 			}
 		},
 		"node_modules/@musepi/core": {
-			"version": "0.1.9",
-			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.1.9.tgz",
+			"version": "0.2.0",
+			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.0.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@musepi/pi-ai": {
-			"version": "0.82.0",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.82.0.tgz",
+			"version": "0.2.0",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.2.0.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",
@@ -514,7 +514,8 @@
 				"https-proxy-agent": "7.0.6",
 				"openai": "6.26.0",
 				"partial-json": "0.1.7",
-				"typebox": "1.1.38"
+				"typebox": "1.1.38",
+				"zod": "^3.24.1"
 			},
 			"bin": {
 				"pi-ai": "dist/cli.js"
@@ -524,8 +525,8 @@
 			}
 		},
 		"node_modules/@musepi/pi-tui": {
-			"version": "0.82.0",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-tui/-/pi-tui-0.82.0.tgz",
+			"version": "0.2.0",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-tui/-/pi-tui-0.2.0.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",
@@ -536,8 +537,8 @@
 			}
 		},
 		"node_modules/@musepi/transcript": {
-			"version": "0.1.9",
-			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.1.9.tgz",
+			"version": "0.2.0",
+			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.2.0.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@nodable/entities": {
