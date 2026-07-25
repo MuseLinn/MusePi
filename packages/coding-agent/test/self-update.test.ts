@@ -55,6 +55,8 @@ describe("platform -> asset name mapping", () => {
 		expect(getReleaseAssetName("linux", "arm64")).toBe("musepi-linux-arm64.tar.gz");
 		expect(getReleaseAssetName("darwin", "x64")).toBe("musepi-darwin-x64.tar.gz");
 		expect(getReleaseAssetName("darwin", "arm64")).toBe("musepi-darwin-arm64.tar.gz");
+		expect(getReleaseAssetName("ohos", "arm64")).toBe("musepi-ohos-arm64.tar.gz");
+		expect(getReleaseAssetName("ohos", "x64")).toBe("musepi-ohos-x64.tar.gz");
 	});
 
 	it("returns undefined for unsupported platforms", () => {

@@ -63,9 +63,17 @@ export interface PlatformKey {
 }
 
 /** Map a Node platform/arch pair to the release archive name, e.g. musepi-windows-x64.zip. */
-export function getReleaseAssetName(platform: NodeJS.Platform, arch: string): string | undefined {
+export function getReleaseAssetName(platform: string, arch: string): string | undefined {
 	const platformName =
-		platform === "win32" ? "windows" : platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : undefined;
+		platform === "win32"
+			? "windows"
+			: platform === "darwin"
+				? "darwin"
+				: platform === "linux"
+					? "linux"
+					: platform === "ohos"
+						? "ohos"
+						: undefined;
 	const archName = arch === "x64" ? "x64" : arch === "arm64" ? "arm64" : undefined;
 	if (!platformName || !archName) return undefined;
 	const extension = platformName === "windows" ? "zip" : "tar.gz";
@@ -91,7 +99,7 @@ export interface InstallRootValidation {
 	version?: string;
 }
 
-export function executableNameForPlatform(platform: NodeJS.Platform): string {
+export function executableNameForPlatform(platform: string): string {
 	return platform === "win32" ? "musepi.exe" : "musepi";
 }
 

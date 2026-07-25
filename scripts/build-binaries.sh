@@ -70,11 +70,11 @@ done
 # Validate platform if specified
 if [[ -n "$PLATFORM" ]]; then
     case "$PLATFORM" in
-        darwin-arm64|darwin-x64|linux-x64|linux-arm64|windows-x64|windows-arm64)
+        darwin-arm64|darwin-x64|linux-x64|linux-arm64|ohos-arm64|windows-x64|windows-arm64)
             ;;
         *)
             echo "Invalid platform: $PLATFORM"
-            echo "Valid platforms: darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64, windows-arm64"
+            echo "Valid platforms: darwin-arm64, darwin-x64, linux-x64, linux-arm64, ohos-arm64, windows-x64, windows-arm64"
             exit 1
             ;;
     esac
@@ -130,13 +130,13 @@ cd packages/coding-agent
 
 # Clean previous builds
 rm -rf "$OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"/{darwin-arm64,darwin-x64,linux-x64,linux-arm64,windows-x64,windows-arm64}
+mkdir -p "$OUTPUT_DIR"/{darwin-arm64,darwin-x64,linux-x64,linux-arm64,ohos-arm64,windows-x64,windows-arm64}
 
 # Determine which platforms to build
 if [[ -n "$PLATFORM" ]]; then
     PLATFORMS=("$PLATFORM")
 else
-    PLATFORMS=(darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64 windows-arm64)
+    PLATFORMS=(darwin-arm64 darwin-x64 linux-x64 linux-arm64 ohos-arm64 windows-x64 windows-arm64)
 fi
 
 for platform in "${PLATFORMS[@]}"; do
@@ -146,6 +146,8 @@ for platform in "${PLATFORMS[@]}"; do
     # worker must be present in the compiled executable.
     if [[ "$platform" == windows-* ]]; then
         bun build --compile --target=bun-$platform ./dist/bun/cli.js ./src/utils/image-resize-worker.ts --outfile "$OUTPUT_DIR/$platform/musepi.exe"
+    elif [[ "$platform" == ohos-* ]]; then
+        bun build --compile --target=bun-linux-arm64 ./dist/bun/cli.js ./src/utils/image-resize-worker.ts --outfile "$OUTPUT_DIR/$platform/musepi"
     else
         bun build --compile --target=bun-$platform ./dist/bun/cli.js ./src/utils/image-resize-worker.ts --outfile "$OUTPUT_DIR/$platform/musepi"
     fi
@@ -192,28 +194,19 @@ for platform in "${PLATFORMS[@]}"; do
             clipboard_native_package="clipboard-win32-arm64-msvc"
             clipboard_native_file="clipboard.win32-arm64-msvc.node"
             ;;
+        ohos-arm64)
+            clipboard_native_package=""
+            clipboard_native_file=""
+            ;;
     esac
-    mkdir -p "$OUTPUT_DIR/$platform/node_modules/@mariozechner"
-    cp -r ../../node_modules/@mariozechner/clipboard "$OUTPUT_DIR/$platform/node_modules/@mariozechner/"
-    cp -r ../../node_modules/@mariozechner/$clipboard_native_package "$OUTPUT_DIR/$platform/node_modules/@mariozechner/"
-    cp "../../node_modules/@mariozechner/$clipboard_native_package/$clipboard_native_file" \
-        "$OUTPUT_DIR/$platform/node_modules/@mariozechner/clipboard/"
-
-    # Copy terminal input native helpers next to compiled binaries.
-    if [[ "$platform" == darwin-* ]]; then
-        mkdir -p "$OUTPUT_DIR/$platform/native/darwin/prebuilds/$platform"
-        cp ../tui/native/darwin/prebuilds/$platform/darwin-modifiers.node "$OUTPUT_DIR/$platform/native/darwin/prebuilds/$platform/"
+    # Skip native clipboard for platforms without a prebuilt binding
+    if [[ -n "$clipboard_native_package" ]]; then
+        mkdir -p "$OUTPUT_DIR/$platform/node_modules/@mariozechner"
+        cp -r ../../node_modules/@mariozechner/clipboard "$OUTPUT_DIR/$platform/node_modules/@mariozechner/"
+        cp -r ../../node_modules/@mariozechner/$clipboard_native_package "$OUTPUT_DIR/$platform/node_modules/@mariozechner/"
+        cp "../../node_modules/@mariozechner/$clipboard_native_package/$clipboard_native_file" \
+            "$OUTPUT_DIR/$platform/node_modules/@mariozechner/clipboard/"
     fi
-    if [[ "$platform" == windows-* ]]; then
-        if [[ "$platform" == "windows-arm64" ]]; then
-            win32_arch_dir="win32-arm64"
-        else
-            win32_arch_dir="win32-x64"
-        fi
-        mkdir -p "$OUTPUT_DIR/$platform/native/win32/prebuilds/$win32_arch_dir"
-        cp ../tui/native/win32/prebuilds/$win32_arch_dir/win32-console-mode.node "$OUTPUT_DIR/$platform/native/win32/prebuilds/$win32_arch_dir/"
-    fi
-done
 
 # Create archives
 cd "$OUTPUT_DIR"
