@@ -29,6 +29,7 @@ import {
 } from "@musepi/core/swarm/types.js";
 import { StringEnum } from "@musepi/pi-ai";
 import { Type } from "typebox";
+import { agentRegistry } from "../../agents/registry.ts";
 import { backgroundManager } from "../task/manager.ts";
 import {
 	getDefaultModel,
@@ -360,8 +361,13 @@ export const musepiAgentSwarmToolDef = {
 		const available: Array<{ id: string; provider?: string; cost: { input: number } }> =
 			ctx.modelRegistry?.getAvailable() || [];
 
-		// ── Model selection ──
-		let modelId = params.model || "";
+		// Agent registry model override: when the subagent type has a
+		// runtimeModelOverride in the registry, prefer it over auto-routing
+		// but still let an explicit params.model parameter win.
+		const agentOverride = params.subagent_type
+			? agentRegistry.get(params.subagent_type)?.runtimeModelOverride
+			: undefined;
+		let modelId = params.model || agentOverride || "";
 		if (modelId) {
 			const resolved = resolveExplicitModel(modelId, available, defaultProvider);
 			if (!resolved) {
@@ -636,7 +642,13 @@ export const musepiAgentToolDef = {
 		const available: Array<{ id: string; provider?: string; cost: { input: number } }> =
 			ctx.modelRegistry?.getAvailable() || [];
 
-		let modelId = params.model || "";
+		// Agent registry model override: when the subagent type has a
+		// runtimeModelOverride in the registry, prefer it over auto-routing
+		// but still let an explicit params.model parameter win.
+		const agentOverride = params.subagent_type
+			? agentRegistry.get(params.subagent_type)?.runtimeModelOverride
+			: undefined;
+		let modelId = params.model || agentOverride || "";
 		if (modelId) {
 			const resolved = resolveExplicitModel(modelId, available, defaultProvider);
 			if (!resolved) {

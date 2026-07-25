@@ -85,6 +85,22 @@ export class AgentDashboard {
 			this.selectedName = this.agents[prevIndex].definition.name;
 			return;
 		}
+		if (matchesKey(data, "left")) {
+			// Previous filter tab
+			const filters: AgentFilter[] = ["all", "bundled", "user", "project"];
+			const curIdx = filters.indexOf(this.filter);
+			const prevIdx = (curIdx - 1 + filters.length) % filters.length;
+			this.setFilter(filters[prevIdx]);
+			return;
+		}
+		if (matchesKey(data, "right")) {
+			// Next filter tab
+			const filters: AgentFilter[] = ["all", "bundled", "user", "project"];
+			const curIdx = filters.indexOf(this.filter);
+			const nextIdx = (curIdx + 1) % filters.length;
+			this.setFilter(filters[nextIdx]);
+			return;
+		}
 	}
 
 	// ─── Component interface ────────────────────────────────────────
