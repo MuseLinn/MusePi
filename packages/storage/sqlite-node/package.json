@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/pi-storage-sqlite-node",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Node sqlite storage backend for @musepi/pi-agent-core sessions",
 	"type": "module",
 	"main": "./dist/index.js",
