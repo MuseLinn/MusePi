@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Updated tsconfig `paths` to @musepi/*, fixing TS type identity mismatches
+- Updated build scripts, smoke tests and internal prefixes
+- Removed sqlite-credential-store from root barrel
+- pickLsp null guard in settings schema
+
+
 ## [0.2.0] - 2026-07-25
 
 ### New Features
