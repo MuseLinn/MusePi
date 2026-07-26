@@ -150,10 +150,10 @@ rm -rf ~/.local/bin/musepi
 
 ```powershell
 # Windows (PowerShell)
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Programs\musepi"
-$path = [Environment]::GetEnvironmentVariable("Path", "User")
-$newPath = ($path -split ";" | Where-Object { $_ -ne "$env:LOCALAPPDATA\Programs\musepi" }) -join ";"
-[Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Programs\musepi" -ErrorAction SilentlyContinue
+$p = [Environment]::GetEnvironmentVariable("Path", "User")
+$p = ($p -split ";" | Where-Object { $_ -ne "$env:LOCALAPPDATA\Programs\musepi" }) -join ";"
+[Environment]::SetEnvironmentVariable("Path", $p, "User")
 ```
 
 Then install via npm:
