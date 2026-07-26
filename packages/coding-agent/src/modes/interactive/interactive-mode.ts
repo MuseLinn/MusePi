@@ -4996,8 +4996,21 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	/**
+	 * Shows a selector component in fullscreen mode (replaces the entire UI,
+	 * not just the editor). Uses the same container-swap mechanism as /tasks.
+	 */
+	private showFullscreenSelector(create: (done: () => void) => { component: Component; focus: Component }): void {
+		if (this.musepiSavedChildren) return; // already fullscreen
+		const done = () => {
+			this.musepiExitFullscreen();
+		};
+		const { component, focus } = create(done);
+		this.musepiEnterFullscreen(component);
+	}
+
 	private showSettingsSelector(): void {
-		this.showSelector((done) => {
+		this.showFullscreenSelector((done) => {
 			const selector = new SettingsSelectorComponent(
 				{
 					autoCompact: this.session.autoCompactionEnabled,
@@ -5317,7 +5330,7 @@ export class InteractiveMode {
 	}
 
 	private showModelSelector(initialSearchInput?: string): void {
-		this.showSelector((done) => {
+		this.showFullscreenSelector((done) => {
 			const selector = new ModelSelectorComponent(
 				this.ui,
 				this.session.model,
@@ -6323,17 +6336,11 @@ export class InteractiveMode {
 		this.editor.setText("");
 		const dashboard = new AgentDashboard({
 			onClose: () => {
-				this.editorContainer.removeChild(dashboard);
-				this.editorContainer.clear();
-				this.editorContainer.addChild(this.editor);
-				this.ui.setFocus(this.editor);
+				this.musepiExitFullscreen();
 				this.ui.requestRender();
 			},
 		});
-		this.editorContainer.clear();
-		this.editorContainer.addChild(dashboard);
-		this.ui.setFocus(dashboard);
-		this.ui.requestRender();
+		this.musepiEnterFullscreen(dashboard);
 	}
 
 	private async showAuthBrokerStatus(): Promise<void> {
@@ -6840,7 +6847,7 @@ export class InteractiveMode {
 			return;
 		}
 
-		this.showSelector((done) => {
+		this.showFullscreenSelector((done) => {
 			const wizard = new SetupWizardComponent(
 				providerOptions,
 				(provider) => {

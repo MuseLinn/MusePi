@@ -84,12 +84,10 @@ export class SetupWizardComponent extends Container {
 	}
 
 	private renderLogo(): void {
-		const logoX = 30;
-		let y = 1;
 		for (const line of MUSEPI_LOGO) {
-			this.addChild(new Text(theme.fg("accent", line), logoX, y++));
+			this.addChild(new Text(theme.fg("accent", line), 30, 0));
 		}
-		this.addChild(new Text(theme.bold(theme.fg("accent", `  musepi v${VERSION}`)), logoX + 1, y));
+		this.addChild(new Text(theme.bold(theme.fg("accent", `  musepi v${VERSION}`)), 31, 0));
 	}
 
 	private renderTabs(): void {
