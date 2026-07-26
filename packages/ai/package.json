@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/pi-ai",
-	"version": "0.2.1",
+	"version": "0.2.8",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -40,12 +40,12 @@
 			"import": "./dist/bun-oauth.js"
 		},
 		"./auth-broker": {
-			"types": "./src/auth-broker/index.ts",
-			"import": "./src/auth-broker/index.ts"
+			"types": "./dist/auth-broker/index.d.ts",
+			"import": "./dist/auth-broker/index.js"
 		},
 		"./auth-broker/*": {
-			"types": "./src/auth-broker/*.ts",
-			"import": "./src/auth-broker/*.ts"
+			"types": "./dist/auth-broker/*.d.ts",
+			"import": "./dist/auth-broker/*.js"
 		}
 	},
 	"bin": {
