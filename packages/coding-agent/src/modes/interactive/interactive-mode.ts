@@ -5005,8 +5005,7 @@ export class InteractiveMode {
 		const done = () => {
 			this.musepiExitFullscreen();
 		};
-		const { component, focus } = create(done);
-		this.musepiEnterFullscreen(component);
+		const { component } = create(done);
 	}
 
 	private showSettingsSelector(): void {

@@ -39,5 +39,8 @@ export function bottomBorder(width: number): string {
 /** Wrap pre-styled content in vertical borders with single-column insets. */
 export function row(content: string, width: number): string {
 	const box = theme.boxRound;
-	return `${paint(box.vertical)} ${content.length > 0 ? content : " ".repeat(Math.max(0, width - 4))} ${paint(box.vertical)}`;
+	const inner = Math.max(0, width - 4);
+	const filled = content.length > 0 ? content : "";
+	const pad = Math.max(0, inner - visibleWidth(filled));
+	return `${paint(box.vertical)} ${filled}${" ".repeat(pad)} ${paint(box.vertical)}`;
 }
