@@ -1,8 +1,8 @@
 /**
  * MusePi welcome page — initial session welcome screen.
  *
- * Flat line-array rendering to avoid excessive whitespace from
- * Text component paddingY accumulation.
+ * Two-column layout with vertical divider, line-based rendering
+ * (no Container/Text padding to avoid whitespace issues).
  */
 
 import { truncateToWidth, visibleWidth } from "@musepi/pi-tui";
@@ -30,6 +30,11 @@ const LOGO_LINES = [
 	"   \u2584\u2588\u2588\u2584  \u2584\u2588\u2588\u2584    ",
 ];
 
+const MAX_BOX_WIDTH = 100;
+const MIN_LEFT = 12;
+const MIN_RIGHT = 20;
+const PREFERRED_LEFT = 26;
+
 export class WelcomeComponent {
 	private currentModel: string;
 	private currentProvider: string;
@@ -46,71 +51,79 @@ export class WelcomeComponent {
 	}
 
 	invalidate(): void {
-		// Welcome is rendered once per session — nothing to invalidate
+		// Welcome is rendered once per session
 	}
 
 	render(width: number): string[] {
-		const innerW = width - 4;
-		const leftW = innerW < 60 ? innerW : Math.min(38, Math.floor(innerW * 0.45));
-		const rightW = innerW - leftW - 1;
+		const innerW = Math.min(MAX_BOX_WIDTH, Math.max(0, width - 4));
+		if (innerW < 4) return [];
 
-		// Left column
-		const left: string[] = [];
-		left.push(theme.fg("dim", `\u2514\u2500\u2500 ${APP_NAME} v${VERSION}`));
-		left.push("");
-		for (const l of LOGO_LINES) left.push(theme.fg("accent", l));
-		left.push("");
-		left.push(theme.bold(theme.fg("accent", `Welcome to ${APP_NAME}!`)));
-		left.push("");
-		left.push(`  ${theme.fg("accent", "\u25CF")} ${theme.bold(this.currentModel)}`);
-		left.push(`    ${theme.fg("dim", this.currentProvider)}`);
+		const dualW = innerW - 2; // room for two │ dividers
+		const desiredLeft = Math.min(PREFERRED_LEFT, Math.max(MIN_LEFT, Math.floor(dualW * 0.35)));
+		const leftCol = dualW >= MIN_RIGHT + 1 ? Math.min(desiredLeft, dualW - MIN_RIGHT) : Math.max(1, dualW - 1);
+		const rightCol = Math.max(1, dualW - leftCol);
+		const showRight = leftCol >= MIN_LEFT && rightCol >= MIN_RIGHT;
 
-		// Right column (tips computed lazily — theme must be initialized first)
-		const right: string[] = [];
-		right.push(theme.bold(theme.fg("accent", "Tips")));
-		const tips = [
-			rawKeyHint("#", "for prompt actions"),
-			rawKeyHint("/", "for commands"),
-			rawKeyHint("!", "to run bash"),
-			rawKeyHint("$", "to run python"),
-			keyHint("app.message.followUp", "to queue follow-up"),
-		];
-		for (const t of tips) right.push(`  ${t}`);
-		right.push("");
+		const v = theme.fg("border", theme.boxRound.vertical);
+
+		// Title
+		const title = theme.fg("dim", `\u2514\u2500\u2500 ${APP_NAME} v${VERSION}`);
+
+		// Left column: logo + welcome + model
+		const leftLines: string[] = [];
+		for (const l of LOGO_LINES) leftLines.push(theme.fg("accent", l));
+		leftLines.push("");
+		leftLines.push(theme.bold(theme.fg("accent", `Welcome to ${APP_NAME}!`)));
+		leftLines.push("");
+		leftLines.push(`  \u25CF ${theme.bold(this.currentModel)}`);
+		leftLines.push(`    ${theme.fg("dim", this.currentProvider)}`);
+
+		// Right column: tips + recent sessions
+		const rightLines: string[] = [];
+		rightLines.push(theme.bold(theme.fg("accent", "Tips")));
+		rightLines.push(`  ${rawKeyHint("#", "for prompt actions")}`);
+		rightLines.push(`  ${rawKeyHint("/", "for commands")}`);
+		rightLines.push(`  ${rawKeyHint("!", "to run bash")}`);
+		rightLines.push(`  ${rawKeyHint("$", "to run python")}`);
+		rightLines.push(`  ${keyHint("app.message.followUp", "to queue follow-up")}`);
+		rightLines.push("");
 		if (this.recentSessions.length > 0) {
-			right.push(theme.bold(theme.fg("accent", "Recent sessions")));
+			rightLines.push(theme.bold(theme.fg("accent", "Recent sessions")));
 			for (const rs of this.recentSessions.slice(0, 5)) {
-				right.push(`  ${theme.fg("accent", "\u25CF")} ${rs.label} (${rs.timeAgo})`);
+				rightLines.push(`  \u25CF ${rs.label} (${rs.timeAgo})`);
 			}
 		}
 
-		// Merge side by side
-		const maxRows = Math.max(left.length, right.length);
-		const inner: string[] = [];
+		// Merge: │ left │ right │
+		const maxRows = Math.max(leftLines.length, rightLines.length);
+		const borderBox: string[] = [title, ""];
 		for (let i = 0; i < maxRows; i++) {
-			const l = i < left.length ? fit(left[i], leftW) : " ".repeat(leftW);
-			const r = i < right.length ? fit(right[i], rightW) : "";
-			inner.push(innerW >= 60 ? `${l} ${r}` : l);
+			const l = i < leftLines.length ? fit(leftLines[i], leftCol) : " ".repeat(leftCol);
+			if (showRight) {
+				const r = i < rightLines.length ? fit(rightLines[i], rightCol) : " ".repeat(rightCol);
+				borderBox.push(`${v} ${l} ${v} ${r} ${v}`);
+			} else {
+				borderBox.push(`${v} ${l} ${v}`);
+			}
 		}
+		borderBox.push("");
 
-		// Footer
-		if (innerW > 10) inner.push(theme.fg("dim", "\u2500".repeat(innerW)));
-		inner.push(
+		// Footer hint
+		borderBox.push(
 			theme.fg(
 				"dim",
 				`${rawKeyHint("#", "command palette")}  ${rawKeyHint("!", "shell")}  ${rawKeyHint("$", "tools")}  ${keyHint("tui.select.cancel", "dismiss")}`,
 			),
 		);
 
-		// Overlay-box frame
+		// Frame
 		const out = [topBorder(width, `${APP_NAME} v${VERSION}`)];
-		for (const line of inner) out.push(row(line, width));
+		for (const line of borderBox) out.push(row(line, width));
 		out.push(bottomBorder(width));
 		return out;
 	}
 }
 
-/** Pad or truncate text to a target visible width, preserving ANSI codes. */
 function fit(text: string, w: number): string {
 	const vw = visibleWidth(text);
 	if (vw === w) return text;
