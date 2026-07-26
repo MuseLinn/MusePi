@@ -408,8 +408,9 @@ function pickToolSelect(override: unknown): ResolvedMusepiSettings["toolSelect"]
 function pickLsp(override: unknown): ResolvedMusepiSettings["lsp"] {
 	const defaults = MUSEPI_DEFAULTS.lsp;
 	const out = { ...defaults, servers: {} as Record<string, MusepiLspServerSettings> };
+	if (!override || typeof override !== "object") return out;
 	const record = override as Record<string, unknown>;
-	if (typeof record.enabled === "boolean") out.enabled = record.enabled;
+
 	if (typeof record.diagnosticsOnWrite === "boolean") out.diagnosticsOnWrite = record.diagnosticsOnWrite;
 	if (typeof record.idleTimeoutMs === "number" && record.idleTimeoutMs > 0) {
 		out.idleTimeoutMs = record.idleTimeoutMs;

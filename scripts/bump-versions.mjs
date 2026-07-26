@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * Bump versions for MusePi-owned packages only.
- * Upstream packages (@earendil-works/pi-*) keep their original versions.
+ * Bump versions for MusePi-owned packages only (lockstep).
  *
- * Our packages (lockstep):
- *   - packages/coding-agent (our CLI)
- *   - @musepi/core
- *   - @musepi/transcript
+ * All @musepi/* packages are lockstepped to one version. The "upstream"
+ * packages (originally @earendil-works/pi-*) have been renamed to
+ * @musepi/pi-* and now follow the lockstep version.
+ *
+ * Lockstep packages:
+ *   - packages/ai          (@musepi/pi-ai)
+ *   - packages/agent       (@musepi/pi-agent-core)
+ *   - packages/tui         (@musepi/pi-tui)
+ *   - packages/coding-agent (@musepi/coding-agent)
+ *   - packages/musepi/core  (@musepi/core)
+ *   - packages/musepi/transcript (@musepi/transcript)
  */
 
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
@@ -18,6 +24,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
 const OURS = [
+  'packages/ai',
+  'packages/agent',
+  'packages/tui',
   'packages/coding-agent',
   'packages/musepi/core',
   'packages/musepi/transcript',

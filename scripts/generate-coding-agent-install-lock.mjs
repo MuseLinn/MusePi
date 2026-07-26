@@ -11,8 +11,8 @@ const outputDir = join(codingAgentDir, "install-lock");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
-const internalPackagePrefixes = ["@earendil-works/", "@musepi/", "@muselinn/"];
-const installPackageName = "@muselinn/musepi-install";
+const internalPackagePrefixes = ["@musepi/"];
+const installPackageName = "@musepi/coding-agent-install";
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
 	["protobufjs@7.6.5", "postinstall only warns about protobufjs version scheme mismatches"],
@@ -308,7 +308,7 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		if (packageName && (packageName.startsWith("@musepi/") || packageName.startsWith("@muselinn/")) && entry.version !== installerPackageJson.version) {
+		if (packageName && packageName.startsWith("@musepi/") && entry.version !== installerPackageJson.version) {
 			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
 		}
 		if (entry.hasInstallScript) {
