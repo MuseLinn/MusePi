@@ -2,12 +2,17 @@
  * MusePi /setup — provider sign-in + web search setup.
  *
  * Flat line-array rendering (no Container/Text yoga positioning) to avoid
- * whitespace and alignment issues. Each rebuild produces a `lines` array
- * from centering/logic alone; render() wraps them in overlay-box chrome.
+ * whitespace and alignment issues. Uses SEARCH_PROVIDER_OPTIONS from the
+ * web/search module for the interactive provider picker.
  */
 
-import { type Component, getKeybindings, type SelectItem, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { type Component, getKeybindings, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { VERSION } from "../../../config.ts";
+import {
+	SEARCH_PROVIDER_OPTIONS,
+	type SearchProviderId,
+	setPreferredSearchProvider,
+} from "../../../web/search/index.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 import type { AuthSelectorProvider } from "./oauth-selector.ts";
@@ -26,20 +31,8 @@ const MUSEPI_LOGO = [
 
 const MAX_VISIBLE = 10;
 
-/** Web search provider options (hardcoded until a proper tool infra lands). */
-const SEARCH_PROVIDER_ITEMS: SelectItem[] = [
-	{ value: "brave", label: "Brave Search", description: "Free tier available — API key from api.search.brave.com" },
-	{ value: "google", label: "Google Custom Search", description: "Requires CX + API key from Google Cloud Console" },
-	{ value: "bing", label: "Bing Search", description: "Azure Bing Search API key" },
-	{ value: "duckduckgo", label: "DuckDuckGo", description: "No API key needed — rate-limited" },
-];
-
 /**
  * Renders a provider list selection box using box-drawing characters.
- * @param items — filtered provider items to display
- * @param selectedIndex — current selection
- * @param searchQuery — current search input (empty = no search bar)
- * @param showScrollPos — whether to show the "(N/M)" scroll indicator
  */
 function renderProviderBox(
 	items: AuthSelectorProvider[],
@@ -53,10 +46,8 @@ function renderProviderBox(
 	const boxWidth = 72;
 	const lines: string[] = [];
 
-	// Top border
 	lines.push(theme.fg("border", `${box.topLeft}${box.horizontal.repeat(boxWidth - 2)}${box.topRight}`));
 
-	// Scroll window
 	const startIdx = Math.max(0, Math.min(selectedIndex - Math.floor(MAX_VISIBLE / 2), items.length - MAX_VISIBLE));
 	const endIdx = Math.min(startIdx + MAX_VISIBLE, items.length);
 
@@ -73,21 +64,18 @@ function renderProviderBox(
 		lines.push(truncateToWidth(content, boxWidth));
 	}
 
-	// Scroll position
 	if (showScrollPos) {
 		lines.push(
 			theme.fg("border", `${box.vertical} ${theme.fg("dim", `\u2502 (${selectedIndex + 1}/${items.length})`)}`),
 		);
 	}
 
-	// Search bar
 	if (searchQuery) {
 		lines.push(theme.fg("border", `${box.vertical} ${theme.fg("accent", ">")} ${searchQuery}_`));
 	} else {
 		lines.push(theme.fg("border", `${box.vertical} ${theme.fg("dim", "Type to search")}`));
 	}
 
-	// Bottom border
 	lines.push(theme.fg("border", `${box.bottomLeft}${box.horizontal.repeat(boxWidth - 2)}${box.bottomRight}`));
 
 	return lines;
@@ -103,6 +91,7 @@ export class SetupWizardComponent implements Component {
 	private selectedProvider: string | null = null;
 	private readonly onSignIn: (provider: AuthSelectorProvider) => void;
 	private readonly onCancel: () => void;
+
 	constructor(
 		providers: AuthSelectorProvider[],
 		onSignIn: (provider: AuthSelectorProvider) => void,
@@ -123,6 +112,7 @@ export class SetupWizardComponent implements Component {
 
 		if (kb.matches(keyData, "tui.input.tab")) {
 			this.tab = this.tab === "signin" ? "websearch" : "signin";
+			this.webSearchIndex = 0;
 			this.selectedIndex = 0;
 			return;
 		}
@@ -131,6 +121,7 @@ export class SetupWizardComponent implements Component {
 			this.onCancel();
 			return;
 		}
+
 		if (this.tab === "signin") {
 			this.handleSignInInput(keyData);
 		} else {
@@ -190,22 +181,27 @@ export class SetupWizardComponent implements Component {
 	}
 
 	private handleWebSearchInput(keyData: string): void {
+		const items = SEARCH_PROVIDER_OPTIONS;
 		const kb = getKeybindings();
 
 		if (kb.matches(keyData, "tui.select.up")) {
-			this.webSearchIndex = this.webSearchIndex <= 0 ? SEARCH_PROVIDER_ITEMS.length - 1 : this.webSearchIndex - 1;
+			this.webSearchIndex = this.webSearchIndex <= 0 ? items.length - 1 : this.webSearchIndex - 1;
 			return;
 		}
 
 		if (kb.matches(keyData, "tui.select.down")) {
-			this.webSearchIndex = this.webSearchIndex >= SEARCH_PROVIDER_ITEMS.length - 1 ? 0 : this.webSearchIndex + 1;
+			this.webSearchIndex = this.webSearchIndex >= items.length - 1 ? 0 : this.webSearchIndex + 1;
 			return;
 		}
 
 		if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
-			const item = SEARCH_PROVIDER_ITEMS[this.webSearchIndex];
+			const item = items[this.webSearchIndex];
 			if (item) {
-				this.selectedProvider = this.selectedProvider === item.value ? null : item.value;
+				const togglingOn = this.selectedProvider !== item.value;
+				this.selectedProvider = togglingOn ? item.value : null;
+				if (togglingOn) {
+					setPreferredSearchProvider(item.value as SearchProviderId);
+				}
 			}
 			return;
 		}
@@ -213,11 +209,11 @@ export class SetupWizardComponent implements Component {
 
 	render(width: number): string[] {
 		const inner: string[] = [];
-		const boxInner = Math.max(0, width - 4); // inner width for row-wrapped content
+		const boxInner = Math.max(0, width - 4);
 
-		// ── Logo (centered) ──
+		// Logo (centered)
 		const logoWidth = Math.max(...MUSEPI_LOGO.map((l) => visibleWidth(l)));
-		const logoPad = Math.floor((boxInner - 2 - logoWidth) / 2); // indent inside row()
+		const logoPad = Math.floor((boxInner - 2 - logoWidth) / 2);
 		if (logoPad > 0) {
 			for (const line of MUSEPI_LOGO) {
 				inner.push(`${" ".repeat(logoPad)}${theme.fg("accent", line)}`);
@@ -231,13 +227,13 @@ export class SetupWizardComponent implements Component {
 		}
 		inner.push("");
 
-		// ── Header ──
+		// Header
 		inner.push(theme.fg("muted", theme.bold("Setup step 1 of 1")));
 		inner.push(theme.fg("accent", theme.bold("Set up your providers")));
 		inner.push(theme.fg("dim", "Sign in and pick a web search provider. Press Esc when you're done."));
 		inner.push("");
 
-		// ── Tab bar ──
+		// Tab bar
 		const tabDefs: Array<{ id: TabId; label: string }> = [
 			{ id: "signin", label: "Sign in" },
 			{ id: "websearch", label: "Web search" },
@@ -253,14 +249,14 @@ export class SetupWizardComponent implements Component {
 		inner.push(tabLine);
 		inner.push("");
 
-		// ── Content ──
+		// Content
 		if (this.tab === "signin") {
 			inner.push(...this.renderSignInTab(boxInner));
 		} else {
 			inner.push(...this.renderWebSearchTab(boxInner));
 		}
 
-		// ── Footer separator ──
+		// Footer
 		const separator = "\u2501".repeat(Math.min(boxInner - 2, 76));
 		inner.push("");
 		inner.push(theme.fg("muted", separator));
@@ -296,8 +292,8 @@ export class SetupWizardComponent implements Component {
 		const boxWidth = 72;
 		lines.push(theme.fg("border", `${box.topLeft}${box.horizontal.repeat(boxWidth - 2)}${box.topRight}`));
 
-		for (let i = 0; i < SEARCH_PROVIDER_ITEMS.length; i++) {
-			const sp = SEARCH_PROVIDER_ITEMS[i];
+		for (let i = 0; i < SEARCH_PROVIDER_OPTIONS.length; i++) {
+			const sp = SEARCH_PROVIDER_OPTIONS[i];
 			const sel = i === this.webSearchIndex;
 			const picked = this.selectedProvider === sp.value;
 			const prefix = sel ? theme.fg("accent", ">") : " ";
