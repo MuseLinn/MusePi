@@ -14,11 +14,11 @@ history — the same changelog drives the startup What's New screen (pre-fork
 upstream history is preserved at
 [packages/coding-agent/UPSTREAM-CHANGELOG.md](packages/coding-agent/UPSTREAM-CHANGELOG.md)).
 
-* **[@muselinn/musepi](packages/coding-agent)**: Interactive coding agent CLI (MusePi branded)
+* **[@musepi/coding-agent](packages/coding-agent)**: Interactive coding agent CLI (musepi command)
 * **[@musepi/core](packages/musepi/core)**: MusePi core — pure agent orchestration logic (goal/plan/permission/hooks/skills/swarm/task), zero host imports
 * **[@musepi/transcript](packages/musepi/transcript)**: MusePi transcript layer
-* **[@earendil-works/pi-agent-core](packages/agent)**: Agent runtime with tool calling and state management
-* **[@earendil-works/pi-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, Kimi, …)
+* **[@musepi/pi-agent-core](packages/agent)**: Agent runtime with tool calling and state management
+* **[@musepi/pi-ai](packages/ai)**: Unified multi-provider LLM API (OpenAI, Anthropic, Google, Kimi, …)
 
 ## What MusePi adds over upstream pi
 
@@ -49,7 +49,7 @@ upstream history is preserved at
   against MusePi's own GitHub Releases (`musepi.updateCheck`, default on).
 - **Native video understanding** — kimi-k3 `video_url` wire support, video
   input through the read tool, and provider capability declarations in
-  `@earendil-works/pi-ai`.
+  `@musepi/pi-ai`.
 - **MusePi agent core** — goal/plan orchestration, permission, hooks, skills,
   swarm and task logic as a host-independent package.
 - **Muselinn renderer** — `packages/musepi/renderer` replaces the upstream TUI
@@ -85,61 +85,55 @@ conflict-surface rules are recorded in [UPSTREAM.md](UPSTREAM.md). In short:
 ## All Packages
 
 | Package | Description |
-|---------|-------------|
-| **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, Kimi, etc.) |
-| **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@muselinn/musepi](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
+|---|:---|
+| **[@musepi/coding-agent](packages/coding-agent)** | Interactive coding agent CLI (`musepi` command) |
+| **[@musepi/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, Kimi, etc.) |
+| **[@musepi/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
+| **[@musepi/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
 | **[@musepi/core](packages/musepi/core)** | MusePi agent orchestration core (goal/plan/permission/hooks/skills/swarm/task) |
 | **[@musepi/transcript](packages/musepi/transcript)** | MusePi transcript layer |
 
 ## Install
 
-**One-line install (recommended):**
+### npm (recommended)
 
-macOS / Linux:
+Requires **Node.js 22+**:
 
 ```sh
-curl -fsSL https://muselinn.github.io/MusePi/install | sh
+npm install -g @musepi/coding-agent
+musepi --version    # => MusePi 0.2.0
 ```
 
-Windows (PowerShell):
+Or run directly without installing:
 
-```powershell
-irm https://muselinn.github.io/MusePi/install.ps1 | iex
+```sh
+npx @musepi/coding-agent
 ```
 
-The installer downloads the latest release archive for your platform
-(macOS arm64/x64, Linux x64/arm64, Windows x64/arm64), keeps it as a
-directory — `musepi` needs its sibling `package.json` for `--version` —
-puts it on your `PATH`, and verifies the result:
+Config, sessions, and auth live under `~/.musepi` — a stock pi install is left
+untouched.
 
-- macOS / Linux: `~/.local/bin/musepi/` (override with `MUSEPI_INSTALL_DIR`)
-- Windows: `%LOCALAPPDATA%\Programs\musepi` (override with `$env:MUSEPI_INSTALL_DIR`; open a new terminal for the `PATH` change)
+### From source (Node 24)
 
-You can also grab an archive manually from
-[GitHub Releases](https://github.com/MuseLinn/MusePi/releases) — keep the
-extracted directory intact rather than moving the bare executable. The CLI
-identifies itself as `MusePi` (`musepi --version`).
+```bash
+npm install --ignore-scripts  # Install all dependencies without running lifecycle scripts
+npm run build         # Refresh model data, then build all packages
+npm run check         # Lint, format, type check, and lockfile checks
+./test.sh            # Run tests (skips LLM-dependent tests without API keys)
+./musepi-test.sh     # Run MusePi from sources (can be run from any directory)
+```
 
 ## Update
 
 ```sh
-musepi update
+npm update -g @musepi/coding-agent
+# or
+musepi --version          # check current
+npm outdated -g           # see what's new
 ```
 
-checks the latest GitHub Release and, after a confirmation prompt (`--yes`
-skips it), downloads the archive for your platform and swaps the install
-directory in place — the previous install is kept as a `musepi.old-*`
-backup next to it until the next successful update. `musepi update --check`
-only reports whether a newer release exists without downloading anything.
-Self-updating works for archive installs (the layout the one-line installer
-creates); other installs print the manual download link instead, and you
-can always update manually by re-running the one-line installer or grabbing
-an archive from
-[GitHub Releases](https://github.com/MuseLinn/MusePi/releases).
-
-To build from source instead, see [Development](#development) below.
+Versions are lockstepped — every package shares one version. See
+[releases](https://github.com/MuseLinn/MusePi/releases) for changelogs.
 
 ## Development
 
@@ -160,13 +154,14 @@ Provider live/E2E tests skip automatically via
 
 - **CI** (`.github/workflows/ci.yml`) — on every push to `main` and PR:
   `npm ci --ignore-scripts`, `npm run check`, `npm run build:offline`, the
-  musepi suite (`@musepi/core` + `@musepi/transcript`) and the `@earendil-works/pi-ai`
+  musepi suite (`@musepi/core` + `@musepi/transcript`) and the `@musepi/pi-ai`
   unit tests on `ubuntu-latest`. A `windows-latest` job runs the same targeted
   subset with `continue-on-error` (33 known pre-existing Windows environment
   failures in the full coding-agent suite keep it informational for now).
 - **Release** (`.github/workflows/release.yml`) — pushing a `v*` tag runs
-  `scripts/build-binaries.sh` (bun cross-compile for six platform targets),
-  smokes the linux-x64 binary, and uploads the archives to a GitHub Release.
+  `npm run build` and creates a GitHub Release with auto-generated release
+  notes. Publish to npm is manual (`npm publish --workspaces --access public`).
+  Standalone binaries are not yet distributed (follow [#1](https://github.com/MuseLinn/MusePi/issues/1)).
 
 ### GitHub Pages
 

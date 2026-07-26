@@ -493,54 +493,38 @@
 
 <section id="install">
   <div class="wrap">
-    <h2><span class="no">02</span><span data-l="en">Install &amp; build</span><span data-l="zh">安装与构建</span></h2>
+    <h2><span class="no">02</span><span data-l="en">Install</span><span data-l="zh">安装</span></h2>
     <p class="sub">
-      <span data-l="en">One command installs the latest prebuilt binary for macOS (arm64/x64),
-      Linux (x64/arm64) or Windows (x64/arm64) — six archives on the
-      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a>.
-      The CLI identifies itself as <code>MusePi</code>; the executable is
-      <code>musepi</code>.</span>
-      <span data-l="zh">一条命令安装最新预编译二进制，覆盖 macOS（arm64/x64）、
-      Linux（x64/arm64）、Windows（x64/arm64）——六个归档见
-      <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a>。
-      CLI 自报 <code>MusePi</code>，可执行文件名为 <code>musepi</code>。</span>
+      <span data-l="en">MusePi is distributed as an npm package. Requires <strong>Node.js 22+</strong>.
+      Config, sessions and auth live under <code>~/.musepi</code> — a stock pi
+      install is left untouched.</span>
+      <span data-l="zh">MusePi 通过 npm 发布。需要 <strong>Node.js 22+</strong>。
+      配置、会话与凭据都在 <code>~/.musepi</code> 下——原版 pi 不受影响。</span>
     </p>
 
     <div class="cols">
       <div>
-        <h3><span data-l="en">One-line install</span><span data-l="zh">一键安装</span></h3>
-        <pre class="block"><span class="c"># macOS / Linux</span>
-curl -fsSL https://muselinn.github.io/MusePi/install | sh
-
-<span class="c"># Windows (PowerShell)</span>
-irm https://muselinn.github.io/MusePi/install.ps1 | iex
-
-musepi --version   <span class="c"># =&gt; MusePi 0.1.9</span></pre>
-        <p class="note"><span data-l="en">Installs to <code>~/.local/bin/musepi/</code>
-        (<code>%LOCALAPPDATA%\Programs\musepi</code> on Windows) and adds it to
-        your <code>PATH</code>. Config, sessions and auth live under
-        <code>~/.musepi</code> — a stock pi install is left untouched. Prefer a
-        manual download? Grab an archive from
-        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">GitHub Releases</a>
-        and keep the extracted directory intact.</span><span data-l="zh">安装到 <code>~/.local/bin/musepi/</code>
-        （Windows 为 <code>%LOCALAPPDATA%\Programs\musepi</code>）并写入
-        <code>PATH</code>。配置、会话与凭据都在 <code>~/.musepi</code> 下——
-        原版 pi 不受影响。想手动下载？从
-        <a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">GitHub Releases</a>
-        取归档，保持解压目录结构完整即可。</span></p>
+        <h3><span data-l="en">Install globally</span><span data-l="zh">全局安装</span></h3>
+        <pre class="block">npm install -g @musepi/coding-agent
+musepi --version   <span class="c"># => MusePi 0.2.0</span></pre>
       </div>
       <div>
-        <h3><span data-l="en">From source (Node 24)</span><span data-l="zh">源码构建（Node 24）</span></h3>
-        <pre class="block">npm install --ignore-scripts
+        <h3><span data-l="en">Run without installing</span><span data-l="zh">临时使用</span></h3>
+        <pre class="block">npx @musepi/coding-agent</pre>
+      </div>
+    </div>
+
+    <svg class="separator" viewBox="0 0 40 12" width="40" height="12"><path d="M0 6h40" stroke="currentColor"/></svg>
+
+    <h3><span data-l="en">From source (Node 24)</span><span data-l="zh">源码构建（Node 24）</span></h3>
+    <pre class="block">npm install --ignore-scripts
 npm run build          <span class="c"># refresh models + build all</span>
 npm run check          <span class="c"># lint, format, types, lockfile</span>
 ./test.sh              <span class="c"># tests (LLM tests self-skip)</span>
 ./musepi-test.sh       <span class="c"># run MusePi from sources</span></pre>
-        <p class="note"><span data-l="en">Supply-chain policy: lifecycle scripts stay disabled;
-        <code>package-lock.json</code> is the dependency ground truth.</span><span data-l="zh">供应链策略：生命周期脚本一律禁用；
-        <code>package-lock.json</code> 是依赖的唯一事实来源。</span></p>
-      </div>
-    </div>
+    <p class="note"><span data-l="en">Supply-chain policy: lifecycle scripts stay disabled;
+    <code>package-lock.json</code> is the dependency ground truth.</span><span data-l="zh">供应链策略：生命周期脚本一律禁用；
+    <code>package-lock.json</code> 是依赖的唯一事实来源。</span></p>
   </div>
 </section>
 
