@@ -56,13 +56,22 @@ export class WelcomeComponent {
 
 	render(width: number): string[] {
 		const innerW = Math.min(MAX_BOX_WIDTH, Math.max(0, width - 4));
-		if (innerW < 4) return [];
+		if (innerW < 8) return [];
 
-		const dualW = innerW - 2; // room for two │ dividers
-		const desiredLeft = Math.min(PREFERRED_LEFT, Math.max(MIN_LEFT, Math.floor(dualW * 0.35)));
-		const leftCol = dualW >= MIN_RIGHT + 1 ? Math.min(desiredLeft, dualW - MIN_RIGHT) : Math.max(1, dualW - 1);
-		const rightCol = Math.max(1, dualW - leftCol);
-		const showRight = leftCol >= MIN_LEFT && rightCol >= MIN_RIGHT;
+		// Can we fit two columns with "LEFT │ RIGHT" separator?
+		const hasRight = innerW >= MIN_LEFT + MIN_RIGHT + 3;
+
+		let leftCol: number;
+		let rightCol: number;
+		if (hasRight) {
+			const dualW = innerW - 3; // room for " │ "
+			const desiredLeft = Math.min(PREFERRED_LEFT, Math.max(MIN_LEFT, Math.floor(dualW * 0.35)));
+			leftCol = Math.min(desiredLeft, dualW - MIN_RIGHT);
+			rightCol = Math.max(1, dualW - leftCol);
+		} else {
+			leftCol = innerW;
+			rightCol = 0;
+		}
 
 		const v = theme.fg("border", theme.boxRound.vertical);
 
@@ -94,16 +103,16 @@ export class WelcomeComponent {
 			}
 		}
 
-		// Merge: │ left │ right │
+		// Merge columns — row() wraps the final lines with outer │ │
 		const maxRows = Math.max(leftLines.length, rightLines.length);
 		const borderBox: string[] = [title, ""];
 		for (let i = 0; i < maxRows; i++) {
 			const l = i < leftLines.length ? padFit(leftLines[i], leftCol) : " ".repeat(leftCol);
-			if (showRight) {
+			if (hasRight) {
 				const r = i < rightLines.length ? padFit(rightLines[i], rightCol) : " ".repeat(rightCol);
-				borderBox.push(`${v} ${l} ${v} ${r} ${v}`);
+				borderBox.push(`${l} ${v} ${r}`);
 			} else {
-				borderBox.push(`${v} ${l} ${v}`);
+				borderBox.push(l);
 			}
 		}
 		borderBox.push("");
@@ -116,7 +125,7 @@ export class WelcomeComponent {
 			),
 		);
 
-		// Frame
+		// Frame — row() adds │ │ borders around each line
 		const out = [topBorder(width, `${APP_NAME} v${VERSION}`)];
 		for (const line of borderBox) out.push(row(line, width));
 		out.push(bottomBorder(width));

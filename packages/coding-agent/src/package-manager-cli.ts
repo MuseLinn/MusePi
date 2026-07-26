@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -440,16 +441,22 @@ async function refreshModelCatalogs(agentDir: string): Promise<void> {
 	console.log(chalk.green("Model catalogs refreshed"));
 }
 /**
- * Print instructions for npm-based or manual update.
- * v0.2.0+: MusePi is distributed via npm, not binary archives.
+ * Run `npm update -g @musepi/coding-agent` for npm-installed MusePi.
+ * Binary/distro installs still get the manual fallback message.
  */
-function printNpmUpdateInstructions(version: string | undefined, releaseUrl: string): void {
+async function runNpmSelfUpdate(version: string | undefined, _releaseUrl: string): Promise<void> {
 	if (version) {
-		console.log(`MusePi ${version} is available (current: ${VERSION}).`);
+		console.log(chalk.yellow(`MusePi ${version} is available (current: ${VERSION}).`));
 	}
-	console.log(`Update via npm:`);
-	console.log(`  npm update -g @musepi/coding-agent`);
-	console.log(`Changelog: ${releaseUrl}`);
+	try {
+		execSync("npm update -g @musepi/coding-agent", { stdio: "inherit" });
+		console.log(chalk.green(`MusePi updated to ${version ?? "latest"} successfully.`));
+		console.log("Restart MusePi to use the new version.");
+	} catch {
+		console.error(chalk.red("npm update failed."));
+		console.log("Retry manually:");
+		console.log("  npm update -g @musepi/coding-agent");
+	}
 }
 
 function printManualUpdateFallback(releaseUrl: string): void {
@@ -495,10 +502,23 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 	const isNewer = isNewerPackageVersion(latestRelease.version, VERSION);
 	if (!options.force && !isNewer) {
 		console.log(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
+		if (detectInstallMethod() !== "unknown") {
+			console.log("Run with --force to reinstall.");
+		}
 		return;
 	}
 
 	const releaseUrl = latestRelease.url ?? MUSEPI_RELEASES_URL;
+
+	// npm/distro install: auto-execute npm update instead of downloading binary.
+	const method = detectInstallMethod();
+	if (method === "npm" || method === "bun" || method === "pnpm" || method === "yarn") {
+		if (isNewer) {
+			console.log(chalk.yellow(`MusePi ${latestRelease.version} is available (current: ${VERSION}).`));
+		}
+		await runNpmSelfUpdate(isNewer ? latestRelease.version : undefined, releaseUrl);
+		return;
+	}
 	if (isNewer) {
 		console.log(chalk.yellow(`MusePi update available: ${latestRelease.version} (current: ${VERSION})`));
 	} else {
@@ -510,14 +530,7 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 		return;
 	}
 
-	// npm install: print the npm update command.
-	const method = detectInstallMethod();
-	if (method === "npm" || method === "bun" || method === "pnpm" || method === "yarn") {
-		printNpmUpdateInstructions(isNewer ? latestRelease.version : undefined, releaseUrl);
-		return;
-	}
-
-	// Legacy bun binary: archive-based self-update (no longer published).
+	// Legacy bun binary or unknown install — fallback.
 	if (!isBunBinary) {
 		printManualUpdateFallback(releaseUrl);
 		return;
