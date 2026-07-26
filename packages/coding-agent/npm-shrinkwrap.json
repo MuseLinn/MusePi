@@ -1,12 +1,12 @@
 {
 	"name": "@musepi/coding-agent",
-	"version": "0.2.1",
+	"version": "0.2.5",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@musepi/coding-agent",
-			"version": "0.2.1",
+			"version": "0.2.5",
 			"license": "MIT",
 			"dependencies": {
 				"@musepi/core": "^0.2.1",
@@ -27,7 +27,8 @@
 				"semver": "7.8.0",
 				"typebox": "1.1.38",
 				"undici": "8.5.0",
-				"yaml": "2.9.0"
+				"yaml": "2.9.0",
+				"@musepi/pi-agent-core": "^0.2.1"
 			},
 			"optionalDependencies": {
 				"@mariozechner/clipboard": "0.3.9"
@@ -499,9 +500,23 @@
 			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.1.tgz",
 			"license": "MIT"
 		},
-		"node_modules/@musepi/pi-ai": {
+		"node_modules/@musepi/pi-agent-core": {
 			"version": "0.2.1",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.2.1.tgz",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-agent-core/-/pi-agent-core-0.2.1.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@musepi/pi-ai": "^0.2.1",
+				"ignore": "7.0.5",
+				"typebox": "1.1.38",
+				"yaml": "2.9.0"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/@musepi/pi-ai": {
+			"version": "0.2.2",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.2.2.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",

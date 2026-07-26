@@ -116,6 +116,16 @@ function getAliases(): Record<string, string> {
 		"@musepi/pi-ai/compat": piAiCompatEntry,
 		"@musepi/pi-ai/oauth": piAiOauthEntry,
 		"@musepi/pi-ai": piAiCompatEntry,
+		// Old package name aliases — extensions written against
+		// @earendil-works/pi-* or @muselinn/musepi still work.
+		"@earendil-works/pi-coding-agent": piCodingAgentEntry,
+		"@earendil-works/pi-agent-core": piAgentCoreEntry,
+		"@earendil-works/pi-tui": piTuiEntry,
+		"@earendil-works/pi-ai/providers/all": piAiProvidersEntry,
+		"@earendil-works/pi-ai/compat": piAiCompatEntry,
+		"@earendil-works/pi-ai/oauth": piAiOauthEntry,
+		"@earendil-works/pi-ai": piAiCompatEntry,
+		"@muselinn/musepi": piCodingAgentEntry,
 		"@mariozechner/pi-coding-agent": piCodingAgentEntry,
 		"@mariozechner/pi-agent-core": piAgentCoreEntry,
 		"@mariozechner/pi-tui": piTuiEntry,

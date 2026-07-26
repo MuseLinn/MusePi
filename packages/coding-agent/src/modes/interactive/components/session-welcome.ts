@@ -1,13 +1,11 @@
 /**
  * MusePi welcome page — initial session welcome screen.
  *
- * Branded page shown at session start:
- *   - overlay-box with musepi vX.Y.Z
- *   - Two columns: logo + model (left), tips + recents (right)
- *   - Footer keyboard hints
+ * Flat line-array rendering to avoid excessive whitespace from
+ * Text component paddingY accumulation.
  */
 
-import { Container, Spacer, Text } from "@musepi/pi-tui";
+import { truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { APP_NAME, VERSION } from "../../../config.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
@@ -24,8 +22,6 @@ export interface WelcomeOptions {
 	recentSessions?: WelcomeSessionInfo[];
 }
 
-// ── Logo (OMP-style small) ──
-
 const LOGO_LINES = [
 	"  \u2580\u2588\u2580\u2580\u2580\u2580\u2580\u2580\u2588\u2580\u2580\u2580\u2588\u2580  ",
 	"   \u2558\u2588\u2588    \u2588\u2588     ",
@@ -34,99 +30,91 @@ const LOGO_LINES = [
 	"   \u2584\u2588\u2588\u2584  \u2584\u2588\u2588\u2584    ",
 ];
 
-// ── Component ──
+const TIPS = [
+	rawKeyHint("#", "for prompt actions"),
+	rawKeyHint("/", "for commands"),
+	rawKeyHint("!", "to run bash"),
+	rawKeyHint("$", "to run python"),
+	keyHint("app.message.followUp", "to queue follow-up"),
+];
 
-export class WelcomeComponent extends Container {
+export class WelcomeComponent {
 	private currentModel: string;
 	private currentProvider: string;
 	private recentSessions: WelcomeSessionInfo[];
 
 	constructor(opts: WelcomeOptions) {
-		super();
 		this.currentModel = opts.currentModel;
 		this.currentProvider = opts.currentProvider;
 		this.recentSessions = opts.recentSessions ?? [];
-		this.rebuild();
 	}
 
 	setExpanded(_expanded: boolean): void {
-		// No expand/collapse — always shows the full welcome
+		// no-op
 	}
 
-	private rebuild(): void {
-		this.clear();
-
-		// Title bar
-		this.addChild(new Text(theme.fg("dim", `\u2514\u2500\u2500 ${APP_NAME} v${VERSION}`), 2, 0));
-		this.addChild(new Spacer(1));
-
-		// Two-column layout
-		this.renderLeftColumn();
-		this.renderRightColumn();
-
-		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "\u2500".repeat(76)), 2, 0));
-		this.addChild(new Text(this.getFooterHint(), 2, 0));
+	invalidate(): void {
+		// Welcome is rendered once per session — nothing to invalidate
 	}
 
-	private renderLeftColumn(): void {
-		let y = 3;
-		for (const line of LOGO_LINES) {
-			this.addChild(new Text(theme.fg("accent", line), 4, y++));
-		}
+	render(width: number): string[] {
+		const innerW = width - 4;
+		const leftW = innerW < 60 ? innerW : Math.min(38, Math.floor(innerW * 0.45));
+		const rightW = innerW - leftW - 1;
 
-		y += 1;
-		this.addChild(new Text(theme.bold(theme.fg("accent", `Welcome to ${APP_NAME}!`)), 4, y++));
-		y += 1;
+		// Left column
+		const left: string[] = [];
+		left.push(theme.fg("dim", `\u2514\u2500\u2500 ${APP_NAME} v${VERSION}`));
+		left.push("");
+		for (const l of LOGO_LINES) left.push(theme.fg("accent", l));
+		left.push("");
+		left.push(theme.bold(theme.fg("accent", `Welcome to ${APP_NAME}!`)));
+		left.push("");
+		left.push(`  ${theme.fg("accent", "\u25CF")} ${theme.bold(this.currentModel)}`);
+		left.push(`    ${theme.fg("dim", this.currentProvider)}`);
 
-		this.addChild(new Text(`  ${theme.fg("accent", "\u25CF")} ${theme.bold(this.currentModel)}`, 4, y++));
-		this.addChild(new Text(`    ${theme.fg("dim", this.currentProvider)}`, 4, y++));
-	}
-
-	private renderRightColumn(): void {
-		let y = 3;
-
-		// Tips
-		this.addChild(new Text(theme.bold(theme.fg("accent", "Tips")), 38, y++));
-		const tips = [
-			`${rawKeyHint("#", "for prompt actions")}`,
-			`${rawKeyHint("/", "for commands")}`,
-			`${rawKeyHint("!", "to run bash")}`,
-			`${rawKeyHint("$", "to run python")}`,
-			`${keyHint("app.message.followUp", "to queue follow-up")}`,
-		];
-		for (const t of tips) {
-			this.addChild(new Text(`  ${t}`, 38, y++));
-		}
-
-		y += 1;
-
-		// Recent sessions
+		// Right column
+		const right: string[] = [];
+		right.push(theme.bold(theme.fg("accent", "Tips")));
+		for (const t of TIPS) right.push(`  ${t}`);
+		right.push("");
 		if (this.recentSessions.length > 0) {
-			this.addChild(new Text(theme.bold(theme.fg("accent", "Recent sessions")), 38, y++));
+			right.push(theme.bold(theme.fg("accent", "Recent sessions")));
 			for (const rs of this.recentSessions.slice(0, 5)) {
-				this.addChild(new Text(`  ${theme.fg("accent", "\u25CF")} ${rs.label} (${rs.timeAgo})`, 38, y++));
+				right.push(`  ${theme.fg("accent", "\u25CF")} ${rs.label} (${rs.timeAgo})`);
 			}
 		}
-	}
 
-	private getFooterHint(): string {
-		return theme.fg(
-			"dim",
-			`${rawKeyHint("#", "command palette")}  ${rawKeyHint("!", "shell")}  ${rawKeyHint("$", "tools")}  ${keyHint("tui.select.cancel", "dismiss")}`,
+		// Merge side by side
+		const maxRows = Math.max(left.length, right.length);
+		const inner: string[] = [];
+		for (let i = 0; i < maxRows; i++) {
+			const l = i < left.length ? fit(left[i], leftW) : " ".repeat(leftW);
+			const r = i < right.length ? fit(right[i], rightW) : "";
+			inner.push(innerW >= 60 ? `${l} ${r}` : l);
+		}
+
+		// Footer
+		if (innerW > 10) inner.push(theme.fg("dim", "\u2500".repeat(innerW)));
+		inner.push(
+			theme.fg(
+				"dim",
+				`${rawKeyHint("#", "command palette")}  ${rawKeyHint("!", "shell")}  ${rawKeyHint("$", "tools")}  ${keyHint("tui.select.cancel", "dismiss")}`,
+			),
 		);
-	}
 
-	// ── Render (overlay-box framing) ────────────────────────────────
-
-	override render(width: number): string[] {
-		const out: string[] = [];
-		out.push(topBorder(width, `${APP_NAME} v${VERSION}`));
-
-		const inner = super.render(width - 4);
+		// Overlay-box frame
+		const out = [topBorder(width, `${APP_NAME} v${VERSION}`)];
 		for (const line of inner) out.push(row(line, width));
-
 		out.push(bottomBorder(width));
 		return out;
 	}
+}
+
+/** Pad or truncate text to a target visible width, preserving ANSI codes. */
+function fit(text: string, w: number): string {
+	const vw = visibleWidth(text);
+	if (vw === w) return text;
+	if (vw < w) return text + " ".repeat(w - vw);
+	return truncateToWidth(text, w);
 }

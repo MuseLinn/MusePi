@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/coding-agent",
-	"version": "0.2.1",
+	"version": "0.2.5",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
@@ -59,7 +59,8 @@
 		"semver": "7.8.0",
 		"typebox": "1.1.38",
 		"undici": "8.5.0",
-		"yaml": "2.9.0"
+		"yaml": "2.9.0",
+		"@musepi/pi-agent-core": "^0.2.1"
 	},
 	"overrides": {
 		"rimraf": "6.1.2",

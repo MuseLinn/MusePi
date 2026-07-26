@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- Extension compatibility: added @earendil-works/pi-* and @muselinn/musepi aliases for old extensions
+- Welcome screen: replaced Container layout with flat line-array rendering, eliminating excessive whitespace
+- npm runtime: fixed @musepi/pi-ai exports pointing to src/ instead of dist/
+- npm runtime: added missing @musepi/pi-agent-core dependency
+
+
+### Fixed
+
 - Updated tsconfig `paths` to @musepi/*, fixing TS type identity mismatches
 - Updated build scripts, smoke tests and internal prefixes
 - Removed sqlite-credential-store from root barrel
