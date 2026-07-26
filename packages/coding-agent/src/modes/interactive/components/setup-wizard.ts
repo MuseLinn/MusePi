@@ -99,10 +99,10 @@ export class SetupWizardComponent implements Component {
 	private filteredProviders: AuthSelectorProvider[];
 	private selectedIndex = 0;
 	private searchQuery = "";
+	private webSearchIndex = 0;
+	private selectedProvider: string | null = null;
 	private readonly onSignIn: (provider: AuthSelectorProvider) => void;
 	private readonly onCancel: () => void;
-	/** Last rendered widget height, for mouse routing. */
-
 	constructor(
 		providers: AuthSelectorProvider[],
 		onSignIn: (provider: AuthSelectorProvider) => void,
@@ -131,9 +131,10 @@ export class SetupWizardComponent implements Component {
 			this.onCancel();
 			return;
 		}
-
 		if (this.tab === "signin") {
 			this.handleSignInInput(keyData);
+		} else {
+			this.handleWebSearchInput(keyData);
 		}
 	}
 
@@ -186,6 +187,28 @@ export class SetupWizardComponent implements Component {
 			(p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q),
 		);
 		this.selectedIndex = 0;
+	}
+
+	private handleWebSearchInput(keyData: string): void {
+		const kb = getKeybindings();
+
+		if (kb.matches(keyData, "tui.select.up")) {
+			this.webSearchIndex = this.webSearchIndex <= 0 ? SEARCH_PROVIDER_ITEMS.length - 1 : this.webSearchIndex - 1;
+			return;
+		}
+
+		if (kb.matches(keyData, "tui.select.down")) {
+			this.webSearchIndex = this.webSearchIndex >= SEARCH_PROVIDER_ITEMS.length - 1 ? 0 : this.webSearchIndex + 1;
+			return;
+		}
+
+		if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
+			const item = SEARCH_PROVIDER_ITEMS[this.webSearchIndex];
+			if (item) {
+				this.selectedProvider = this.selectedProvider === item.value ? null : item.value;
+			}
+			return;
+		}
 	}
 
 	render(width: number): string[] {
@@ -266,17 +289,22 @@ export class SetupWizardComponent implements Component {
 
 	private renderWebSearchTab(_innerWidth: number): string[] {
 		const lines: string[] = [];
-		lines.push(theme.fg("dim", "  Pick a default web search provider."));
+		lines.push(theme.fg("dim", "  Pick a default web search provider (Enter to toggle)."));
 		lines.push("");
 
 		const box = theme.boxRound;
 		const boxWidth = 72;
 		lines.push(theme.fg("border", `${box.topLeft}${box.horizontal.repeat(boxWidth - 2)}${box.topRight}`));
 
-		for (const sp of SEARCH_PROVIDER_ITEMS) {
-			const label = theme.fg("text", `  ${sp.label}`);
+		for (let i = 0; i < SEARCH_PROVIDER_ITEMS.length; i++) {
+			const sp = SEARCH_PROVIDER_ITEMS[i];
+			const sel = i === this.webSearchIndex;
+			const picked = this.selectedProvider === sp.value;
+			const prefix = sel ? theme.fg("accent", ">") : " ";
+			const label = sel ? theme.fg("accent", ` ${sp.label}`) : theme.fg("text", ` ${sp.label}`);
+			const checkmark = picked ? theme.fg("success", " \u2713") : theme.fg("dim", "   ");
 			const desc = sp.description ? theme.fg("dim", `\u2502 ${sp.description}`) : "";
-			lines.push(`${theme.fg("border", box.vertical)} ${label}${desc ? ` ${desc}` : ""}`);
+			lines.push(`${theme.fg("border", box.vertical)}${prefix}${label}${checkmark}${desc ? ` ${desc}` : ""}`);
 		}
 
 		lines.push(
