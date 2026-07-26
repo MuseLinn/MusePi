@@ -98,9 +98,9 @@ export class WelcomeComponent {
 		const maxRows = Math.max(leftLines.length, rightLines.length);
 		const borderBox: string[] = [title, ""];
 		for (let i = 0; i < maxRows; i++) {
-			const l = i < leftLines.length ? fit(leftLines[i], leftCol) : " ".repeat(leftCol);
+			const l = i < leftLines.length ? padFit(leftLines[i], leftCol) : " ".repeat(leftCol);
 			if (showRight) {
-				const r = i < rightLines.length ? fit(rightLines[i], rightCol) : " ".repeat(rightCol);
+				const r = i < rightLines.length ? padFit(rightLines[i], rightCol) : " ".repeat(rightCol);
 				borderBox.push(`${v} ${l} ${v} ${r} ${v}`);
 			} else {
 				borderBox.push(`${v} ${l} ${v}`);
@@ -124,7 +124,7 @@ export class WelcomeComponent {
 	}
 }
 
-function fit(text: string, w: number): string {
+function padFit(text: string, w: number): string {
 	const vw = visibleWidth(text);
 	if (vw === w) return text;
 	if (vw < w) return text + " ".repeat(w - vw);

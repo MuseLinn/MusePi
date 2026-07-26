@@ -48,7 +48,6 @@ export class SelectList implements Component, MouseRoutable, SelectListMouseTarg
 	private layout: SelectListLayoutOptions;
 	private startIndex = 0;
 	private renderLineOffset = 0;
-	private hoverIndex: number | null = null;
 
 	public onSelect?: (item: SelectItem) => void;
 	public onCancel?: () => void;
