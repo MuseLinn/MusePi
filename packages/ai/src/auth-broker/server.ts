@@ -20,7 +20,6 @@ import type {
 	SnapshotStreamEntryEvent,
 	SnapshotStreamRemovedEvent,
 	UsageResponse,
-	UsageStaleResponse,
 } from "./types.ts";
 
 // ─── Options & handle ─────────────────────────────────────────────────────────
@@ -254,7 +253,7 @@ class GenerationGate {
 		}
 	}
 
-	async wait(ifGenerationGt: number, timeoutMs: number): Promise<boolean> {
+	async wait(_ifGenerationGt: number, timeoutMs: number): Promise<boolean> {
 		return new Promise((resolve) => {
 			const timer = setTimeout(() => {
 				this.#listeners.delete(handler);

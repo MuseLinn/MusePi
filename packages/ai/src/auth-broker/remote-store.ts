@@ -93,14 +93,14 @@ export class RemoteAuthCredentialStore implements CredentialStore {
 
 	/** Modify is not supported on the remote store. */
 	async modify(
-		providerId: string,
-		fn: (current: Credential | undefined) => Promise<Credential | undefined>,
+		_providerId: string,
+		_fn: (current: Credential | undefined) => Promise<Credential | undefined>,
 	): Promise<Credential | undefined> {
 		throw new ModelsError("auth", "RemoteAuthCredentialStore is read-only for mutations. Use the broker directly.");
 	}
 
 	/** Delete is not supported on the remote store. */
-	async delete(providerId: string): Promise<void> {
+	async delete(_providerId: string): Promise<void> {
 		throw new ModelsError("auth", "RemoteAuthCredentialStore is read-only for mutations. Use the broker directly.");
 	}
 

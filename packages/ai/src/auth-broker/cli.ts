@@ -45,7 +45,7 @@ async function writeToken(token: string): Promise<void> {
 	if (!existsSync(dir)) {
 		mkdirSync(dir, { recursive: true, mode: 0o700 });
 	}
-	writeFileSync(p, token + "\n", { mode: 0o600 });
+	writeFileSync(p, `${token}\n`, { mode: 0o600 });
 }
 
 function generateToken(): string {
