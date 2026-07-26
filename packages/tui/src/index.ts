@@ -62,6 +62,13 @@ export {
 	parseKey,
 	setKittyProtocolActive,
 } from "./keys.ts";
+// Utilities
+export {
+	type MouseRoutable,
+	parseSgrMouse,
+	type SelectListMouseTarget,
+	type SgrMouseEvent,
+} from "./mouse.ts";
 // Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
 // Terminal interface and implementations
@@ -115,5 +122,5 @@ export {
 	type SizeValue,
 	TUI,
 } from "./tui.ts";
-// Utilities
+
 export { sliceByColumn, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils.ts";

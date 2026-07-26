@@ -58,6 +58,12 @@ function extractKittyImageRows(line: string): number {
 	return parseKittyImageHeader(line)?.rows ?? 1;
 }
 
+// Alt screen and mouse tracking constants
+const MOUSE_TRACKING_ON = "[?1000h[?1003h[?1006h";
+const MOUSE_TRACKING_OFF = "[?1006l[?1003l[?1000l";
+const ALT_SCREEN_ENTER = "[?1049h";
+const ALT_SCREEN_EXIT = "[?1049l";
+
 /**
  * Component interface - all components must implement this
  */
@@ -360,6 +366,8 @@ export class TUI extends Container {
 	 * events and the state stays at the initial `true`.
 	 */
 	public focused = true;
+	/** Alternate screen buffer active. */
+	#altActive = false;
 	/** Called when the terminal reports a focus in/out event. */
 	public onFocusChange?: (focused: boolean) => void;
 
@@ -718,6 +726,20 @@ export class TUI extends Container {
 		if (!this.stopped) {
 			this.terminal.write(enabled ? "\x1b[?2031h" : "\x1b[?2031l");
 		}
+	}
+
+	setAltActive(active: boolean): void {
+		if (this.#altActive === active) return;
+		this.#altActive = active;
+		if (active) {
+			this.terminal.write(ALT_SCREEN_ENTER + MOUSE_TRACKING_ON);
+			// Force full re-render on next frame (alt screen starts blank)
+			this.previousLines = [];
+			this.previousWidth = -1;
+		} else {
+			this.terminal.write(MOUSE_TRACKING_OFF + ALT_SCREEN_EXIT);
+		}
+		this.requestRender();
 	}
 
 	private queryCellSize(): void {

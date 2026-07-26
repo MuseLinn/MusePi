@@ -4253,6 +4253,7 @@ export class InteractiveMode {
 	private musepiEnterFullscreen(component: Component & { dispose?(): void }): void {
 		if (this.musepiSavedChildren) return; // already fullscreen
 		this.musepiSavedChildren = [...this.ui.children];
+		(this.ui as any).setAltActive?.(true);
 		this.ui.clear();
 		this.ui.addChild(component);
 		this.ui.setFocus(component);
@@ -4261,6 +4262,7 @@ export class InteractiveMode {
 
 	private musepiExitFullscreen(): void {
 		if (!this.musepiSavedChildren) return;
+		(this.ui as any).setAltActive?.(false);
 		this.ui.clear();
 		for (const child of this.musepiSavedChildren) {
 			this.ui.addChild(child);
