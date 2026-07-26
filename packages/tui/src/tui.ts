@@ -220,6 +220,8 @@ export interface OverlayOptions {
 	visible?: (termWidth: number, termHeight: number) => boolean;
 	/** If true, don't capture keyboard focus when shown */
 	nonCapturing?: boolean;
+	/** If true, overlay fills the terminal and triggers alt screen + mouse tracking. */
+	fullscreen?: boolean;
 }
 
 /** Options for {@link OverlayHandle.unfocus}. */
@@ -367,7 +369,7 @@ export class TUI extends Container {
 	 */
 	public focused = true;
 	/** Alternate screen buffer active. */
-	#altActive = false;
+	_altActive = false;
 	/** Called when the terminal reports a focus in/out event. */
 	public onFocusChange?: (focused: boolean) => void;
 
@@ -729,8 +731,8 @@ export class TUI extends Container {
 	}
 
 	setAltActive(active: boolean): void {
-		if (this.#altActive === active) return;
-		this.#altActive = active;
+		if (this._altActive === active) return;
+		this._altActive = active;
 		if (active) {
 			this.terminal.write(ALT_SCREEN_ENTER + MOUSE_TRACKING_ON);
 			// Force full re-render on next frame (alt screen starts blank)

@@ -6,7 +6,14 @@
  * web/search module for the interactive provider picker.
  */
 
-import { type Component, getKeybindings, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import {
+	type Component,
+	getKeybindings,
+	type MouseRoutable,
+	type SgrMouseEvent,
+	truncateToWidth,
+	visibleWidth,
+} from "@musepi/pi-tui";
 import { VERSION } from "../../../config.ts";
 import {
 	SEARCH_PROVIDER_OPTIONS,
@@ -81,7 +88,7 @@ function renderProviderBox(
 	return lines;
 }
 
-export class SetupWizardComponent implements Component {
+export class SetupWizardComponent implements Component, MouseRoutable {
 	private tab: TabId = "signin";
 	private providers: AuthSelectorProvider[];
 	private filteredProviders: AuthSelectorProvider[];
@@ -91,6 +98,8 @@ export class SetupWizardComponent implements Component {
 	private selectedProvider: string | null = null;
 	private readonly onSignIn: (provider: AuthSelectorProvider) => void;
 	private readonly onCancel: () => void;
+	/** Screen row where the content area starts (for mouse hit-test). */
+	private contentRowStart = 0;
 
 	constructor(
 		providers: AuthSelectorProvider[],
@@ -207,6 +216,62 @@ export class SetupWizardComponent implements Component {
 		}
 	}
 
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		// Wheel: scroll provider list (sign-in tab) or websearch list
+		if (event.wheel !== null) {
+			if (this.tab === "signin") {
+				const list = this.filteredProviders.length > 0 ? this.filteredProviders : this.providers;
+				if (list.length === 0) return;
+				const dir = event.wheel === -1 ? -1 : 1; // wheel up = previous
+				this.selectedIndex = (this.selectedIndex + dir + list.length) % list.length;
+			} else {
+				const items = SEARCH_PROVIDER_OPTIONS;
+				const dir = event.wheel === -1 ? -1 : 1;
+				this.webSearchIndex = (this.webSearchIndex + dir + items.length) % items.length;
+			}
+			return;
+		}
+
+		// Left click on an item: forward to confirm or navigate
+		if (event.leftClick) {
+			const relLine = line - this.contentRowStart;
+			if (relLine < 0) return; // above content area
+
+			if (this.tab === "signin") {
+				const list = this.filteredProviders.length > 0 ? this.filteredProviders : this.providers;
+				// Content: "Pick a provider..." (1) + blank (1) + box top (1) + items (N) + scroll/search/bottom
+				const itemLine = relLine - 3; // skip info, blank, box top
+				if (itemLine >= 0 && itemLine < Math.min(MAX_VISIBLE, list.length)) {
+					const startIdx = Math.max(
+						0,
+						Math.min(this.selectedIndex - Math.floor(MAX_VISIBLE / 2), list.length - MAX_VISIBLE),
+					);
+					const idx = startIdx + itemLine;
+					if (idx < list.length) {
+						this.selectedIndex = idx;
+						const p = list[idx];
+						if (p) {
+							this.onSignIn(p);
+						}
+					}
+				}
+			} else {
+				const itemLine = relLine - 3; // skip info, blank, box top
+				if (itemLine >= 0 && itemLine < SEARCH_PROVIDER_OPTIONS.length) {
+					this.webSearchIndex = itemLine;
+					const item = SEARCH_PROVIDER_OPTIONS[itemLine];
+					if (item) {
+						const togglingOn = this.selectedProvider !== item.value;
+						this.selectedProvider = togglingOn ? item.value : null;
+						if (togglingOn) {
+							setPreferredSearchProvider(item.value as SearchProviderId);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	render(width: number): string[] {
 		const inner: string[] = [];
 		const boxInner = Math.max(0, width - 4);
@@ -250,6 +315,7 @@ export class SetupWizardComponent implements Component {
 		inner.push("");
 
 		// Content
+		this.contentRowStart = inner.length;
 		if (this.tab === "signin") {
 			inner.push(...this.renderSignInTab(boxInner));
 		} else {

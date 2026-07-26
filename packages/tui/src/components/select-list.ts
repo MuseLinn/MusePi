@@ -1,4 +1,6 @@
 import { getKeybindings } from "../keybindings.ts";
+import type { MouseRoutable, SelectListMouseTarget } from "../mouse.ts";
+import { routeSelectListMouse, type SgrMouseEvent } from "../mouse.ts";
 import type { Component } from "../tui.ts";
 import { truncateToWidth, visibleWidth } from "../utils.ts";
 
@@ -37,13 +39,16 @@ export interface SelectListLayoutOptions {
 	truncatePrimary?: (context: SelectListTruncatePrimaryContext) => string;
 }
 
-export class SelectList implements Component {
+export class SelectList implements Component, MouseRoutable, SelectListMouseTarget {
 	private items: SelectItem[] = [];
 	private filteredItems: SelectItem[] = [];
 	private selectedIndex: number = 0;
 	private maxVisible: number = 5;
 	private theme: SelectListTheme;
 	private layout: SelectListLayoutOptions;
+	private startIndex = 0;
+	private renderLineOffset = 0;
+	private hoverIndex: number | null = null;
 
 	public onSelect?: (item: SelectItem) => void;
 	public onCancel?: () => void;
@@ -83,14 +88,15 @@ export class SelectList implements Component {
 		const primaryColumnWidth = this.getPrimaryColumnWidth();
 
 		// Calculate visible range with scrolling
-		const startIndex = Math.max(
+		this.startIndex = Math.max(
 			0,
 			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredItems.length - this.maxVisible),
 		);
-		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
+		const endIndex = Math.min(this.startIndex + this.maxVisible, this.filteredItems.length);
+		this.renderLineOffset = lines.length;
 
 		// Render visible items
-		for (let i = startIndex; i < endIndex; i++) {
+		for (let i = this.startIndex; i < endIndex; i++) {
 			const item = this.filteredItems[i];
 			if (!item) continue;
 
@@ -100,7 +106,7 @@ export class SelectList implements Component {
 		}
 
 		// Add scroll indicators if needed
-		if (startIndex > 0 || endIndex < this.filteredItems.length) {
+		if (this.startIndex > 0 || endIndex < this.filteredItems.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;
 			// Truncate if too long for terminal
 			lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, "")));
@@ -225,5 +231,38 @@ export class SelectList implements Component {
 	getSelectedItem(): SelectItem | null {
 		const item = this.filteredItems[this.selectedIndex];
 		return item || null;
+	}
+
+	// ── Mouse routing ──────────────────────────────────────────────
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		routeSelectListMouse(this, event, line - this.renderLineOffset);
+	}
+
+	handleWheel(delta: -1 | 1): void {
+		const newIdx = this.selectedIndex + delta;
+		if (newIdx >= 0 && newIdx < this.filteredItems.length) {
+			this.selectedIndex = newIdx;
+			this.notifySelectionChange();
+		}
+	}
+
+	hitTest(line: number): number | undefined {
+		const maxVisible = Math.min(this.maxVisible, this.filteredItems.length - this.startIndex);
+		if (line < 0 || line >= maxVisible) return undefined;
+		return this.startIndex + line;
+	}
+
+	setHoverIndex(index: number | null): void {
+		this.hoverIndex = index;
+	}
+
+	clickItem(index: number): void {
+		this.selectedIndex = index;
+		this.notifySelectionChange();
+		const item = this.filteredItems[index];
+		if (item) {
+			this.onSelect?.(item);
+		}
 	}
 }
