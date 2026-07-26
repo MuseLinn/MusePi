@@ -33,6 +33,7 @@
 			"!**/models.generated.ts",
 			"!**/*.models.ts",
 			"!packages/mom/data/**/*",
+			"!packages/coding-agent/src/_test_lint.ts",
 			"!!**/node_modules"
 		]
 	}

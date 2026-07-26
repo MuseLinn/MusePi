@@ -515,7 +515,7 @@
 				"openai": "6.26.0",
 				"partial-json": "0.1.7",
 				"typebox": "1.1.38",
-				"zod": "^3.24.1"
+				"zod": "3.25.76"
 			},
 			"bin": {
 				"pi-ai": "dist/cli.js"

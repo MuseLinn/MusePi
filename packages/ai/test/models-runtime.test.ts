@@ -525,6 +525,10 @@ describe("Models runtime", () => {
 				return base.modify(pid, fn);
 			},
 			delete: (pid) => base.delete(pid),
+			listCredentials: (pid) => base.listCredentials(pid),
+			removeCredential: (id) => base.removeCredential(id),
+			updateRemark: (id, remark) => base.updateRemark(id, remark),
+			setActiveCredential: (pid, id) => base.setActiveCredential(pid, id),
 		};
 		await base.modify("p1", async () => ({
 			type: "oauth",
@@ -540,7 +544,6 @@ describe("Models runtime", () => {
 	});
 
 	it("wraps credential store failures in ModelsError", async () => {
-		// read failure
 		const readFailing: CredentialStore = {
 			read: async () => {
 				throw new Error("disk on fire");
@@ -548,6 +551,10 @@ describe("Models runtime", () => {
 			list: async () => [],
 			modify: async () => undefined,
 			delete: async () => {},
+			listCredentials: async () => [],
+			removeCredential: async () => [],
+			updateRemark: async () => {},
+			setActiveCredential: async () => {},
 		};
 		const models = createModels({ credentials: readFailing });
 		models.setProvider(testProvider({ id: "p1", auth: { apiKey: envKeyAuth("env-key") } }));
@@ -561,6 +568,10 @@ describe("Models runtime", () => {
 				throw new Error("disk on fire");
 			},
 			delete: async () => {},
+			listCredentials: async () => [],
+			removeCredential: async () => [],
+			updateRemark: async () => {},
+			setActiveCredential: async () => {},
 		};
 		const oauthModels = createModels({ credentials: modifyFailing });
 		oauthModels.setProvider(testProvider({ id: "p1", auth: { oauth: testOAuth() } }));

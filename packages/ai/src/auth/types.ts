@@ -165,12 +165,6 @@ export interface CredentialStore {
 	updateRemark(id: number, remark: string): Promise<void>;
 
 	/**
-	 * Set a user-editable label on a stored credential. The remark is
-	 * displayed in account selectors and debug panels.
-	 */
-	updateRemark(id: number, remark: string): Promise<void>;
-
-	/**
 	 * Set which stored credential is the **active** one for a provider.
 	 * Subsequent `read(providerId)` calls return this credential.
 	 * The credential must exist in the store.
