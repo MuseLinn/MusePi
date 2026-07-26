@@ -30,14 +30,6 @@ const LOGO_LINES = [
 	"   \u2584\u2588\u2588\u2584  \u2584\u2588\u2588\u2584    ",
 ];
 
-const TIPS = [
-	rawKeyHint("#", "for prompt actions"),
-	rawKeyHint("/", "for commands"),
-	rawKeyHint("!", "to run bash"),
-	rawKeyHint("$", "to run python"),
-	keyHint("app.message.followUp", "to queue follow-up"),
-];
-
 export class WelcomeComponent {
 	private currentModel: string;
 	private currentProvider: string;
@@ -73,10 +65,17 @@ export class WelcomeComponent {
 		left.push(`  ${theme.fg("accent", "\u25CF")} ${theme.bold(this.currentModel)}`);
 		left.push(`    ${theme.fg("dim", this.currentProvider)}`);
 
-		// Right column
+		// Right column (tips computed lazily — theme must be initialized first)
 		const right: string[] = [];
 		right.push(theme.bold(theme.fg("accent", "Tips")));
-		for (const t of TIPS) right.push(`  ${t}`);
+		const tips = [
+			rawKeyHint("#", "for prompt actions"),
+			rawKeyHint("/", "for commands"),
+			rawKeyHint("!", "to run bash"),
+			rawKeyHint("$", "to run python"),
+			keyHint("app.message.followUp", "to queue follow-up"),
+		];
+		for (const t of tips) right.push(`  ${t}`);
 		right.push("");
 		if (this.recentSessions.length > 0) {
 			right.push(theme.bold(theme.fg("accent", "Recent sessions")));
