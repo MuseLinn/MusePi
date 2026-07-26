@@ -143,9 +143,8 @@ installed v0.1.x via the one-line installer, uninstall the old version first:
 ```sh
 # macOS / Linux
 rm -rf ~/.local/bin/musepi
-# Then remove these lines from your shell rc file (~/.zshrc, ~/.bashrc, etc.):
-#   # MusePi
-#   export PATH="$HOME/.local/bin/musepi:$PATH"
+# Remove from your shell rc (~/.zshrc, ~/.bashrc, etc.):
+sed -i '' '/# MusePi/d; /export PATH.*musepi/d' ~/.zshrc
 ```
 
 ```powershell
