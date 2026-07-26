@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ExecResult, ExtensionAPI, ExtensionContext } from "@musepi/coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mergeAndResolve from "../examples/extensions/git-merge-and-resolve.ts";
-import type { ExecResult, ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
 
 type AgentEndHandler = (event: { type: "agent_end" }, ctx: ExtensionContext) => Promise<undefined>;
 

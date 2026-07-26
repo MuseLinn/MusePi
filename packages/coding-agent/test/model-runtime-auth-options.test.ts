@@ -54,6 +54,10 @@ describe("ModelRuntime auth options", () => {
 			list: () => base.list(),
 			modify: (providerId, fn) => base.modify(providerId, fn),
 			delete: (providerId) => base.delete(providerId),
+			listCredentials: (pid) => base.listCredentials(pid),
+			removeCredential: (id) => base.removeCredential(id),
+			updateRemark: (id, remark) => base.updateRemark(id, remark),
+			setActiveCredential: (pid, id) => base.setActiveCredential(pid, id),
 		};
 		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
 

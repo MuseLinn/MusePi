@@ -1,8 +1,8 @@
+import type { ExtensionAPI, ExtensionContext } from "@musepi/coding-agent";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import planModeExtension from "../examples/extensions/plan-mode/index.ts";
-import type { ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
 type AgentEndHandler = (

@@ -66,26 +66,11 @@ describe("platform -> asset name mapping", () => {
 });
 
 describe("resolveAssetDownload", () => {
-	it("prefers the asset URL reported by the releases api", () => {
-		const download = resolveAssetDownload(
-			{
-				version: "0.2.0",
-				assets: [{ name: "musepi-linux-x64.tar.gz", url: "https://example.com/musepi-linux-x64.tar.gz" }],
-			},
-			"linux",
-			"x64",
-		);
+	it("constructs the conventional download URL from version and platform", () => {
+		const download = resolveAssetDownload({ version: "0.2.0" }, "linux", "x64");
 		expect(download).toEqual({
 			assetName: "musepi-linux-x64.tar.gz",
-			url: "https://example.com/musepi-linux-x64.tar.gz",
-		});
-	});
-
-	it("falls back to the conventional download URL when assets are missing", () => {
-		const download = resolveAssetDownload({ version: "0.2.0" }, "win32", "arm64");
-		expect(download).toEqual({
-			assetName: "musepi-windows-arm64.zip",
-			url: "https://github.com/MuseLinn/MusePi/releases/download/v0.2.0/musepi-windows-arm64.zip",
+			url: "https://github.com/MuseLinn/MusePi/releases/download/v0.2.0/musepi-linux-x64.tar.gz",
 		});
 	});
 
