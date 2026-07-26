@@ -252,8 +252,8 @@ export class SelectList implements Component, MouseRoutable, SelectListMouseTarg
 		return this.startIndex + line;
 	}
 
-	setHoverIndex(index: number | null): void {
-		this.hoverIndex = index;
+	setHoverIndex(_index: number | null): void {
+		// Hover tracking not implemented yet
 	}
 
 	clickItem(index: number): void {

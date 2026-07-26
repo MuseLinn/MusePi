@@ -496,8 +496,8 @@
 			}
 		},
 		"node_modules/@musepi/core": {
-			"version": "0.2.2",
-			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.2.tgz",
+			"version": "0.2.8",
+			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.8.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@musepi/pi-agent-core": {
@@ -552,8 +552,8 @@
 			}
 		},
 		"node_modules/@musepi/transcript": {
-			"version": "0.2.2",
-			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.2.2.tgz",
+			"version": "0.2.8",
+			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.2.8.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@nodable/entities": {

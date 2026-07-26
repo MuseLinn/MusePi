@@ -8,8 +8,7 @@
 		"packages/coding-agent/examples/extensions/custom-provider-anthropic",
 		"packages/coding-agent/examples/extensions/custom-provider-gitlab-duo",
 		"packages/coding-agent/examples/extensions/sandbox",
-		"packages/coding-agent/examples/extensions/gondolin",
-		"packages/musepi/*"
+		"packages/coding-agent/examples/extensions/gondolin"
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",

@@ -28,8 +28,6 @@ const OURS = [
   'packages/agent',
   'packages/tui',
   'packages/coding-agent',
-  'packages/musepi/core',
-  'packages/musepi/transcript',
 ];
 
 const bump = process.argv[2] ?? 'patch'; // patch | minor | major
