@@ -43,3 +43,4 @@ plans/
 .pi/hf-sessions-backup/
 collect.sh
 nul
+recover-path.ps1
