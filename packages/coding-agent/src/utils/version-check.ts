@@ -1,54 +1,33 @@
 import { compare, valid } from "semver";
 
 /**
- * MusePi fork: update checks run against the fork's own GitHub Releases
- * (MuseLinn/MusePi), not the dormant upstream pi.dev endpoint. The latest
- * release tag (`vX.Y.Z`) is compared against the running VERSION.
+ * MusePi v0.2.0+: version checks query the npm registry for the latest
+ * published version of @musepi/coding-agent. The GitHub Releases page is
+ * still linked for changelogs.
  */
-const GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/MuseLinn/MusePi/releases/latest";
+const NPM_LATEST_URL = "https://registry.npmjs.org/@musepi/coding-agent/latest";
 export const MUSEPI_RELEASES_URL = "https://github.com/MuseLinn/MusePi/releases";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
-export interface LatestPiReleaseAsset {
-	name: string;
-	/** Direct download URL (browser_download_url). */
-	url: string;
-}
-
 export interface LatestPiRelease {
 	version: string;
-	/** Browser URL of the GitHub release (falls back to the releases page). */
+	/** Browser URL of the GitHub release (for changelogs). */
 	url?: string;
-	/** Downloadable assets attached to the release (used by the binary self-update). */
-	assets?: LatestPiReleaseAsset[];
 }
 
 export function comparePackageVersions(leftVersion: string, rightVersion: string): number | undefined {
-	const left = valid(leftVersion.trim());
-	const right = valid(rightVersion.trim());
-	if (!left || !right) {
-		return undefined;
-	}
-	return compare(left, right);
+	const left = valid(leftVersion);
+	const right = valid(rightVersion);
+	return left !== null && right !== null ? compare(left, right) : undefined;
 }
 
 export function isNewerPackageVersion(candidateVersion: string, currentVersion: string): boolean {
-	const comparison = comparePackageVersions(candidateVersion, currentVersion);
-	if (comparison !== undefined) {
-		return comparison > 0;
-	}
-	return candidateVersion.trim() !== currentVersion.trim();
-}
-
-/** Strip an optional leading "v"/"V" from a git release tag. */
-export function versionFromReleaseTag(tag: string): string | undefined {
-	const version = tag.trim().replace(/^[vV]/, "");
-	return valid(version) ? version : undefined;
+	const cmp = comparePackageVersions(candidateVersion, currentVersion);
+	return cmp !== undefined && cmp > 0;
 }
 
 function getMusepiUserAgent(version: string): string {
-	const runtime = process.versions.bun ? `bun/${process.versions.bun}` : `node/${process.version}`;
-	return `musepi/${version} (${process.platform}; ${runtime}; ${process.arch})`;
+	return `musepi/${version}`;
 }
 
 export async function getLatestPiRelease(
@@ -57,44 +36,20 @@ export async function getLatestPiRelease(
 ): Promise<LatestPiRelease | undefined> {
 	if (process.env.PI_OFFLINE) return undefined;
 
-	const response = await fetch(GITHUB_LATEST_RELEASE_URL, {
+	const response = await fetch(NPM_LATEST_URL, {
 		headers: {
 			"User-Agent": getMusepiUserAgent(currentVersion),
-			accept: "application/vnd.github+json",
+			accept: "application/vnd.npm.install-v1+json",
 		},
 		signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS),
 	});
 	if (!response.ok) return undefined;
 
-	const data = (await response.json()) as {
-		tag_name?: unknown;
-		html_url?: unknown;
-		assets?: unknown;
-	};
-	if (typeof data.tag_name !== "string") {
+	const data = (await response.json()) as { version?: unknown };
+	if (typeof data.version !== "string" || !data.version) {
 		return undefined;
 	}
-	const version = versionFromReleaseTag(data.tag_name);
-	if (!version) {
-		return undefined;
-	}
-	const url = typeof data.html_url === "string" && data.html_url.trim() ? data.html_url.trim() : undefined;
-	const assets: LatestPiReleaseAsset[] = [];
-	if (Array.isArray(data.assets)) {
-		for (const asset of data.assets) {
-			if (typeof asset !== "object" || asset === null) continue;
-			const { name, browser_download_url } = asset as { name?: unknown; browser_download_url?: unknown };
-			if (
-				typeof name === "string" &&
-				name.trim() &&
-				typeof browser_download_url === "string" &&
-				browser_download_url.trim()
-			) {
-				assets.push({ name: name.trim(), url: browser_download_url.trim() });
-			}
-		}
-	}
-	return { version, ...(url ? { url } : {}), ...(assets.length > 0 ? { assets } : {}) };
+	return { version: data.version, url: MUSEPI_RELEASES_URL };
 }
 
 export async function getLatestPiVersion(

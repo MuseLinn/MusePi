@@ -4757,7 +4757,7 @@ export class InteractiveMode {
 	}
 
 	showNewVersionNotification(release: LatestPiRelease): void {
-		const action = theme.fg("accent", `${APP_NAME} update`);
+		const action = theme.fg("accent", `npm update -g @musepi/coding-agent`);
 		const updateInstruction = theme.fg("muted", `MusePi update available: ${release.version}, run `) + action;
 		const changelogUrl = release.url ?? MUSEPI_RELEASES_URL;
 		const changelogLink = getCapabilities().hyperlinks

@@ -4,7 +4,7 @@ import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
-import { APP_NAME, CONFIG_DIR_NAME, getAgentDir, isBunBinary, VERSION } from "./config.ts";
+import { APP_NAME, CONFIG_DIR_NAME, detectInstallMethod, getAgentDir, isBunBinary, VERSION } from "./config.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
@@ -439,22 +439,23 @@ async function refreshModelCatalogs(agentDir: string): Promise<void> {
 	}
 	console.log(chalk.green("Model catalogs refreshed"));
 }
-
 /**
- * MusePi fork: there is no npm package to self-update from (and running the
- * upstream npm self-update would replace MusePi with stock pi). Self-update
- * downloads the platform archive from the fork's GitHub Releases and swaps
- * the install directory (see utils/self-update.ts for the swap strategy).
- * Any step that cannot run automatically falls back to pointing the user at
- * the release page, which is the pre-self-update behavior.
+ * Print instructions for npm-based or manual update.
+ * v0.2.0+: MusePi is distributed via npm, not binary archives.
  */
+function printNpmUpdateInstructions(version: string | undefined, releaseUrl: string): void {
+	if (version) {
+		console.log(`MusePi ${version} is available (current: ${VERSION}).`);
+	}
+	console.log(`Update via npm:`);
+	console.log(`  npm update -g @musepi/coding-agent`);
+	console.log(`Changelog: ${releaseUrl}`);
+}
+
 function printManualUpdateFallback(releaseUrl: string): void {
-	console.log(`Automatic update is not available for this install.`);
-	console.log(`Download the musepi-<platform> archive for your system from:\n  ${releaseUrl}`);
-	console.log(`Or reinstall with the one-liner (replaces your existing install):`);
-	console.log(`  powershell -c "irm https://muselinn.github.io/MusePi/install.ps1 | iex"`);
-	console.log(`  sh -c "$(curl -fsSL https://muselinn.github.io/MusePi/install.sh)"`);
-	// Only pop a browser from an interactive terminal — never in CI/scripts.
+	console.log(chalk.dim(`Automatic self-update is not available for this install type.`));
+	console.log(`Update via npm:`);
+	console.log(`  npm update -g @musepi/coding-agent`);
 	if (process.stdout.isTTY) {
 		openBrowser(releaseUrl);
 	}
@@ -488,9 +489,7 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 		throw new Error(`Could not determine latest ${APP_NAME} version: ${message}`);
 	}
 	if (!latestRelease) {
-		throw new Error(
-			`Could not determine latest ${APP_NAME} version (no GitHub release yet, or the channel is unreachable). See ${MUSEPI_RELEASES_URL}`,
-		);
+		throw new Error(`Could not determine latest ${APP_NAME} version. See ${MUSEPI_RELEASES_URL}`);
 	}
 
 	const isNewer = isNewerPackageVersion(latestRelease.version, VERSION);
@@ -507,17 +506,23 @@ async function runSelfUpdate(options: { force: boolean; checkOnly: boolean; yes:
 	}
 
 	if (options.checkOnly) {
-		console.log(`Release notes and downloads:\n  ${releaseUrl}`);
+		console.log(`Release notes:\n  ${releaseUrl}`);
 		return;
 	}
 
-	// Self-replacement is only safe for release-archive installs: the binary
-	// must live in its own directory next to its package.json. Dev checkouts,
-	// npm/bun global installs, etc. fall back to the manual download path.
+	// npm install: print the npm update command.
+	const method = detectInstallMethod();
+	if (method === "npm" || method === "bun" || method === "pnpm" || method === "yarn") {
+		printNpmUpdateInstructions(isNewer ? latestRelease.version : undefined, releaseUrl);
+		return;
+	}
+
+	// Legacy bun binary: archive-based self-update (no longer published).
 	if (!isBunBinary) {
 		printManualUpdateFallback(releaseUrl);
 		return;
 	}
+
 	const installDir = detectInstallDir(process.execPath, process.platform);
 	if (!installDir) {
 		printManualUpdateFallback(releaseUrl);

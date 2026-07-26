@@ -135,6 +135,26 @@ npm outdated -g           # see what's new
 Versions are lockstepped — every package shares one version. See
 [releases](https://github.com/MuseLinn/MusePi/releases) for changelogs.
 
+## Migration from 0.1.x (binary archives)
+
+v0.2.0 switches distribution from GitHub Release binary archives to npm. If you
+installed v0.1.x via the one-line installer, uninstall the old version first:
+
+```sh
+# macOS / Linux
+rm -rf ~/.local/bin/musepi
+sed -i '' '/# MusePi/d; /export PATH.*musepi/d' ~/.zshrc  # or your shell rc
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Programs\musepi"
+```
+
+Then install via npm:
+
+```sh
+npm install -g @musepi/coding-agent
+musepi --version    # => MusePi 0.2.0
+
 ## Development
 
 ```bash

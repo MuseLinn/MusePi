@@ -5,7 +5,6 @@ import {
 	getLatestPiRelease,
 	getLatestPiVersion,
 	isNewerPackageVersion,
-	versionFromReleaseTag,
 } from "../src/utils/version-check.ts";
 
 const originalSkipVersionCheck = process.env.PI_SKIP_VERSION_CHECK;
@@ -25,108 +24,74 @@ afterEach(() => {
 	}
 });
 
-function githubReleaseResponse(body: unknown): Response {
+function npmRegistryResponse(body: unknown): Response {
 	return Response.json(body);
 }
 
 describe("version checks", () => {
 	it("compares package versions", () => {
-		expect(comparePackageVersions("0.70.6", "0.70.5")).toBeGreaterThan(0);
-		expect(comparePackageVersions("0.70.5", "0.70.5")).toBe(0);
-		expect(comparePackageVersions("0.70.4", "0.70.5")).toBeLessThan(0);
-		expect(comparePackageVersions("5.0.0-beta.20", "5.0.0-beta.9")).toBeGreaterThan(0);
-		expect(isNewerPackageVersion("0.70.5", "0.70.5")).toBe(false);
-		expect(isNewerPackageVersion("0.70.6", "0.70.5")).toBe(true);
+		expect(comparePackageVersions("1.2.3", "1.2.3")).toBe(0);
+		expect(comparePackageVersions("1.2.3", "1.2.4")).toBe(-1);
+		expect(comparePackageVersions("1.2.4", "1.2.3")).toBe(1);
+		expect(comparePackageVersions("not-semver", "1.2.3")).toBeUndefined();
+		expect(comparePackageVersions("1.2.3", "not-semver")).toBeUndefined();
 	});
 
-	it("parses versions from release tags", () => {
-		expect(versionFromReleaseTag("v1.2.3")).toBe("1.2.3");
-		expect(versionFromReleaseTag("V1.2.3")).toBe("1.2.3");
-		expect(versionFromReleaseTag("1.2.3")).toBe("1.2.3");
-		expect(versionFromReleaseTag(" v1.2.3 ")).toBe("1.2.3");
-		expect(versionFromReleaseTag("nightly")).toBeUndefined();
-		expect(versionFromReleaseTag("v")).toBeUndefined();
-		expect(versionFromReleaseTag("")).toBeUndefined();
+	it("detects newer versions", () => {
+		expect(isNewerPackageVersion("1.2.4", "1.2.3")).toBe(true);
+		expect(isNewerPackageVersion("1.2.3", "1.2.3")).toBe(false);
+		expect(isNewerPackageVersion("1.2.2", "1.2.3")).toBe(false);
 	});
 
 	it("returns only newer versions", async () => {
-		const fetchMock = vi.fn(async () => githubReleaseResponse({ tag_name: "v1.2.3" }));
+		const fetchMock = vi.fn(async () => npmRegistryResponse({ version: "1.2.4" }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(checkForNewPiVersion("1.2.3")).resolves.toEqual({
+			version: "1.2.4",
+			url: "https://github.com/MuseLinn/MusePi/releases",
+		});
+	});
+
+	it("returns undefined when no newer version exists", async () => {
+		const fetchMock = vi.fn(async () => npmRegistryResponse({ version: "1.2.3" }));
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
-		await expect(checkForNewPiVersion("1.2.2")).resolves.toEqual({ version: "1.2.3" });
 	});
 
-	it("queries the MusePi GitHub releases api with a musepi user agent", async () => {
-		const fetchMock = vi.fn(async () => githubReleaseResponse({ tag_name: "v1.2.4" }));
+	it("queries the npm registry with a musepi user agent", async () => {
+		const fetchMock = vi.fn(async () => npmRegistryResponse({ version: "1.2.4" }));
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(getLatestPiVersion("1.2.3")).resolves.toBe("1.2.4");
 		expect(fetchMock).toHaveBeenCalledWith(
-			"https://api.github.com/repos/MuseLinn/MusePi/releases/latest",
+			"https://registry.npmjs.org/@musepi/coding-agent/latest",
 			expect.objectContaining({
 				headers: expect.objectContaining({
 					"User-Agent": expect.stringMatching(/^musepi\/1\.2\.3 /),
-					accept: "application/vnd.github+json",
+					accept: "application/vnd.npm.install-v1+json",
 				}),
 			}),
 		);
 	});
 
-	it("returns the release url from the releases api", async () => {
+	it("returns the release url from a npm registry response", async () => {
 		const fetchMock = vi.fn(async () =>
-			githubReleaseResponse({
-				tag_name: "v1.2.4",
-				html_url: "https://github.com/MuseLinn/MusePi/releases/tag/v1.2.4",
+			npmRegistryResponse({
+				version: "1.2.4",
 			}),
 		);
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(getLatestPiRelease("1.2.3")).resolves.toEqual({
 			version: "1.2.4",
-			url: "https://github.com/MuseLinn/MusePi/releases/tag/v1.2.4",
+			url: "https://github.com/MuseLinn/MusePi/releases",
 		});
 	});
 
-	it("returns downloadable assets from the releases api", async () => {
-		const fetchMock = vi.fn(async () =>
-			githubReleaseResponse({
-				tag_name: "v1.2.4",
-				assets: [
-					{
-						name: "musepi-windows-x64.zip",
-						browser_download_url:
-							"https://github.com/MuseLinn/MusePi/releases/download/v1.2.4/musepi-windows-x64.zip",
-					},
-					{ name: "musepi-linux-x64.tar.gz", browser_download_url: "" },
-					{ unexpected: true },
-				],
-			}),
-		);
-		vi.stubGlobal("fetch", fetchMock);
-
-		const release = await getLatestPiRelease("1.2.3");
-		expect(release?.assets).toEqual([
-			{
-				name: "musepi-windows-x64.zip",
-				url: "https://github.com/MuseLinn/MusePi/releases/download/v1.2.4/musepi-windows-x64.zip",
-			},
-		]);
-	});
-
-	it("ignores releases with non-semver or missing tags", async () => {
-		const fetchMock = vi
-			.fn()
-			.mockImplementationOnce(async () => githubReleaseResponse({ tag_name: "nightly" }))
-			.mockImplementationOnce(async () => githubReleaseResponse({ name: "no tag here" }));
-		vi.stubGlobal("fetch", fetchMock);
-
-		await expect(getLatestPiRelease("1.2.3")).resolves.toBeUndefined();
-		await expect(getLatestPiRelease("1.2.3")).resolves.toBeUndefined();
-	});
-
-	it("returns undefined when the api responds with an error", async () => {
-		const fetchMock = vi.fn(async () => new Response("nope", { status: 403 }));
+	it("returns undefined when npm responds with an error", async () => {
+		const fetchMock = vi.fn(async () => new Response("nope", { status: 503 }));
 		vi.stubGlobal("fetch", fetchMock);
 
 		await expect(getLatestPiRelease("1.2.3")).resolves.toBeUndefined();
