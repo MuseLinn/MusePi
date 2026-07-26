@@ -143,10 +143,17 @@ installed v0.1.x via the one-line installer, uninstall the old version first:
 ```sh
 # macOS / Linux
 rm -rf ~/.local/bin/musepi
-sed -i '' '/# MusePi/d; /export PATH.*musepi/d' ~/.zshrc  # or your shell rc
+# Then remove these lines from your shell rc file (~/.zshrc, ~/.bashrc, etc.):
+#   # MusePi
+#   export PATH="$HOME/.local/bin/musepi:$PATH"
+```
 
+```powershell
 # Windows (PowerShell)
 Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Programs\musepi"
+$path = [Environment]::GetEnvironmentVariable("Path", "User")
+$newPath = ($path -split ";" | Where-Object { $_ -ne "$env:LOCALAPPDATA\Programs\musepi" }) -join ";"
+[Environment]::SetEnvironmentVariable("Path", $newPath, "User")
 ```
 
 Then install via npm:
@@ -154,17 +161,9 @@ Then install via npm:
 ```sh
 npm install -g @musepi/coding-agent
 musepi --version    # => MusePi 0.2.0
+```
 
 ## Development
-
-```bash
-npm install --ignore-scripts  # Install all dependencies without running lifecycle scripts
-npm run build         # Refresh model data, then build all packages
-npm run build:offline # Rebuild using existing model data without network access
-npm run check         # Lint, format, type check, and lockfile checks
-./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./musepi-test.sh     # Run MusePi from sources (can be run from any directory)
-```
 
 Provider live/E2E tests skip automatically via
 `describe.skipIf(!process.env.*_API_KEY)` when no API keys are present;
