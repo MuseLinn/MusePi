@@ -80,7 +80,7 @@ export function getReleaseAssetName(platform: string, arch: string): string | un
 	return `musepi-${platformName}-${archName}.${extension}`;
 }
 
-/** Pick the release asset matching this platform, falling back to the conventional download URL. */
+/** Pick the release asset URL for this platform using the conventional download URL pattern. */
 export function resolveAssetDownload(
 	release: LatestPiRelease,
 	platform: NodeJS.Platform,
@@ -88,8 +88,7 @@ export function resolveAssetDownload(
 ): { assetName: string; url: string } | undefined {
 	const assetName = getReleaseAssetName(platform, arch);
 	if (!assetName) return undefined;
-	const asset = release.assets?.find((candidate) => candidate.name === assetName);
-	const url = asset?.url ?? `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${release.version}/${assetName}`;
+	const url = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${release.version}/${assetName}`;
 	return { assetName, url };
 }
 
