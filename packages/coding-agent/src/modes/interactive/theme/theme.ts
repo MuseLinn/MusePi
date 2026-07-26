@@ -1549,6 +1549,7 @@ export function getSelectListTheme(): SelectListTheme {
 		description: (text: string) => theme.fg("muted", text),
 		scrollInfo: (text: string) => theme.fg("muted", text),
 		noMatch: (text: string) => theme.fg("muted", text),
+		hovered: (text: string) => theme.bg("selectedBg", text),
 	};
 }
 

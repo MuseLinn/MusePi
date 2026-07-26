@@ -23,6 +23,8 @@ export interface SelectListTheme {
 	description: (text: string) => string;
 	scrollInfo: (text: string) => string;
 	noMatch: (text: string) => string;
+	/** Optional — applied to items under the mouse pointer (but not the selected item). */
+	hovered?: (text: string) => string;
 }
 
 export interface SelectListTruncatePrimaryContext {
@@ -48,7 +50,8 @@ export class SelectList implements Component, MouseRoutable, SelectListMouseTarg
 	private layout: SelectListLayoutOptions;
 	private startIndex = 0;
 	private renderLineOffset = 0;
-
+	/** Index of hovered item (mouse pointer), or null when not hovering. Used by routeMouse. */
+	private hoverIndex: number | null = null;
 	public onSelect?: (item: SelectItem) => void;
 	public onCancel?: () => void;
 	public onSelectionChange?: (item: SelectItem) => void;
@@ -100,8 +103,13 @@ export class SelectList implements Component, MouseRoutable, SelectListMouseTarg
 			if (!item) continue;
 
 			const isSelected = i === this.selectedIndex;
+			const isHovered = this.theme.hovered !== undefined && i === this.hoverIndex && !isSelected;
 			const descriptionSingleLine = item.description ? normalizeToSingleLine(item.description) : undefined;
-			lines.push(this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth));
+			let line = this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth);
+			if (isHovered) {
+				line = this.theme.hovered!(line);
+			}
+			lines.push(line);
 		}
 
 		// Add scroll indicators if needed
@@ -252,10 +260,9 @@ export class SelectList implements Component, MouseRoutable, SelectListMouseTarg
 		return this.startIndex + line;
 	}
 
-	setHoverIndex(_index: number | null): void {
-		// Hover tracking not implemented yet
+	setHoverIndex(index: number | null): void {
+		this.hoverIndex = index;
 	}
-
 	clickItem(index: number): void {
 		this.selectedIndex = index;
 		this.notifySelectionChange();
