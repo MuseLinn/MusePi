@@ -6,7 +6,6 @@ import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
 export interface FirstTimeSetupResult {
 	theme: string;
-	shareAnalytics: boolean;
 }
 
 export interface FirstTimeSetupOptions {
@@ -41,18 +40,11 @@ const CURATED_THEMES: CuratedTheme[] = [
 	},
 ];
 
-const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
-	{ value: true, label: "Share anonymous usage data" },
-	{ value: false, label: "Don't share" },
-];
-
 const SETUP_LOGO_LINES = ["██████", "██  ██", "████  ██", "██    ██"];
 
-/** First-time setup dialog: curated theme choice with live preview + analytics opt-in. */
+/** First-time setup dialog: curated theme choice with live preview. */
 export class FirstTimeSetupComponent extends Container {
-	private step: "theme" | "analytics" = "theme";
 	private themeIndex: number;
-	private analyticsIndex = 0;
 	private readonly options: FirstTimeSetupOptions;
 	private themePreviewLines: string[] = [];
 
@@ -77,32 +69,16 @@ export class FirstTimeSetupComponent extends Container {
 		this.addChild(new Text(theme.fg("accent", theme.bold(t("Welcome to MusePi, the AI coding agent."))), 1, 0));
 		this.addChild(new Spacer(1));
 
-		if (this.step === "theme") {
-			this.addChild(new Text(theme.fg("text", t("Pick a theme. Navigate with arrow keys to preview.")), 1, 0));
-			this.addChild(new Text(theme.fg("muted", `${t("Detected appearance")}: ${this.options.detectedTheme}`), 1, 0));
+		this.addChild(new Text(theme.fg("text", t("Pick a theme. Navigate with arrow keys to preview.")), 1, 0));
+		this.addChild(new Text(theme.fg("muted", `${t("Detected appearance")}: ${this.options.detectedTheme}`), 1, 0));
+		this.addChild(new Spacer(1));
+		this.renderThemeList();
+		// Live preview strip
+		if (this.themePreviewLines.length > 0) {
 			this.addChild(new Spacer(1));
-			this.renderThemeList();
-			// Live preview strip
-			if (this.themePreviewLines.length > 0) {
-				this.addChild(new Spacer(1));
-				for (const line of this.themePreviewLines) {
-					this.addChild(new Text(line, 1, 0));
-				}
+			for (const line of this.themePreviewLines) {
+				this.addChild(new Text(line, 1, 0));
 			}
-		} else {
-			this.addChild(new Text(theme.fg("text", t("Share anonymous usage data?")), 1, 0));
-			this.addChild(
-				new Text(
-					theme.fg(
-						"muted",
-						t("Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics."),
-					),
-					1,
-					0,
-				),
-			);
-			this.addChild(new Spacer(1));
-			this.renderAnalyticsList();
 		}
 
 		this.addChild(new Spacer(1));
@@ -110,7 +86,7 @@ export class FirstTimeSetupComponent extends Container {
 			new Text(
 				rawKeyHint("↑↓", "navigate") +
 					"  " +
-					keyHint("tui.select.confirm", this.step === "theme" ? "continue" : "finish") +
+					keyHint("tui.select.confirm", "finish") +
 					"  " +
 					keyHint("tui.select.cancel", "skip setup"),
 				1,
@@ -132,17 +108,6 @@ export class FirstTimeSetupComponent extends Container {
 		}
 	}
 
-	private renderAnalyticsList(): void {
-		for (let i = 0; i < ANALYTICS_OPTIONS.length; i++) {
-			const isSelected = i === this.analyticsIndex;
-			const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
-			const label = isSelected
-				? theme.fg("accent", ANALYTICS_OPTIONS[i].label)
-				: theme.fg("text", ANALYTICS_OPTIONS[i].label);
-			this.addChild(new Text(`${prefix}${label}`, 1, 0));
-		}
-	}
-
 	private refreshThemePreview(): void {
 		try {
 			const preview = renderThemePreview(theme);
@@ -160,23 +125,19 @@ export class FirstTimeSetupComponent extends Container {
 	}
 
 	private moveSelection(delta: number): void {
-		if (this.step === "theme") {
-			const next = Math.max(0, Math.min(CURATED_THEMES.length - 1, this.themeIndex + delta));
-			if (next !== this.themeIndex) {
-				this.themeIndex = next;
-				const selected = CURATED_THEMES[this.themeIndex];
-				if (selected.value === "colorblind") {
-					setColorBlindMode(true);
-					setTheme("dark");
-				} else {
-					setColorBlindMode(false);
-					setTheme(selected.value);
-				}
-				this.refreshThemePreview();
-				this.options.onThemePreview(selected.value);
+		const next = Math.max(0, Math.min(CURATED_THEMES.length - 1, this.themeIndex + delta));
+		if (next !== this.themeIndex) {
+			this.themeIndex = next;
+			const selected = CURATED_THEMES[this.themeIndex];
+			if (selected.value === "colorblind") {
+				setColorBlindMode(true);
+				setTheme("dark");
+			} else {
+				setColorBlindMode(false);
+				setTheme(selected.value);
 			}
-		} else {
-			this.analyticsIndex = Math.max(0, Math.min(ANALYTICS_OPTIONS.length - 1, this.analyticsIndex + delta));
+			this.refreshThemePreview();
+			this.options.onThemePreview(selected.value);
 		}
 		this.update();
 	}
@@ -188,16 +149,8 @@ export class FirstTimeSetupComponent extends Container {
 		} else if (kb.matches(keyData, "tui.select.down") || keyData === "j") {
 			this.moveSelection(1);
 		} else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
-			if (this.step === "theme") {
-				this.step = "analytics";
-				this.update();
-			} else {
-				const selected = CURATED_THEMES[this.themeIndex];
-				this.options.onSubmit({
-					theme: selected.value,
-					shareAnalytics: ANALYTICS_OPTIONS[this.analyticsIndex].value,
-				});
-			}
+			const selected = CURATED_THEMES[this.themeIndex];
+			this.options.onSubmit({ theme: selected.value });
 		} else if (kb.matches(keyData, "tui.select.cancel")) {
 			this.options.onCancel();
 		}

@@ -582,7 +582,7 @@ export async function main(args: string[], options?: MainOptions) {
 	agentRegistry.initialize(cwd);
 	agentRegistry.applySettings(startupSettingsManager.getMusepi().agents);
 
-	// Experimental first-time setup: theme choice and analytics opt-in.
+	// First-time setup: theme choice.
 	// Runs before any runtime services are created so the chosen settings apply everywhere.
 	if (appMode === "interactive" && !parsed.help && parsed.listModels === undefined && shouldRunFirstTimeSetup()) {
 		await showFirstTimeSetup(startupSettingsManager);

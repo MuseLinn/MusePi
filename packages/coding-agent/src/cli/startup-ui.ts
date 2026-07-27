@@ -174,7 +174,6 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 				// "auto" stores the auto-detection theme setting
 				const themeSetting = result.theme === "auto" ? "auto" : result.theme;
 				settingsManager.setTheme(themeSetting);
-				settingsManager.setEnableAnalytics(result.shareAnalytics);
 				await settingsManager.flush();
 			}
 			await clearStartupTui(ui);
