@@ -222,6 +222,8 @@ export interface OverlayOptions {
 	nonCapturing?: boolean;
 	/** If true, overlay fills the terminal and triggers alt screen + mouse tracking. */
 	fullscreen?: boolean;
+	/** Enable terminal mouse reporting while fullscreen. Defaults on. */
+	mouseTracking?: boolean;
 }
 
 /** Options for {@link OverlayHandle.unfocus}. */
@@ -553,6 +555,10 @@ export class TUI extends Container {
 			focusOrder: ++this.focusOrderCounter,
 		};
 		this.overlayStack.push(entry);
+		// Enter alt screen for fullscreen overlays
+		if (options?.fullscreen) {
+			this.setAltActive(true);
+		}
 		// Only focus if overlay is actually visible
 		if (!options?.nonCapturing && this.isOverlayVisible(entry)) {
 			this.setFocus(component);
@@ -568,6 +574,10 @@ export class TUI extends Container {
 					this.clearOverlayFocusRestoreFor(entry);
 					this.retargetOverlayPreFocus(entry);
 					this.overlayStack.splice(index, 1);
+					// Exit alt screen when last fullscreen overlay is removed
+					if (options?.fullscreen && !this.overlayStack.some((o) => o.options?.fullscreen)) {
+						this.setAltActive(false);
+					}
 					// Restore focus if this overlay had focus
 					if (this.focusedComponent === component) {
 						const topVisible = this.getTopmostVisibleOverlay();
@@ -645,7 +655,12 @@ export class TUI extends Container {
 		if (!overlay) return;
 		this.clearOverlayFocusRestoreFor(overlay);
 		this.retargetOverlayPreFocus(overlay);
+		const wasFullscreen = overlay.options?.fullscreen;
 		this.overlayStack.pop();
+		// Exit alt screen when last fullscreen overlay is removed
+		if (wasFullscreen && !this.overlayStack.some((o) => o.options?.fullscreen)) {
+			this.setAltActive(false);
+		}
 		if (this.focusedComponent === overlay.component) {
 			// Find topmost visible overlay, or fall back to preFocus
 			const topVisible = this.getTopmostVisibleOverlay();

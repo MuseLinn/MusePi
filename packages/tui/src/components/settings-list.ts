@@ -1,5 +1,6 @@
 import { fuzzyFilter } from "../fuzzy.ts";
 import { getKeybindings } from "../keybindings.ts";
+import type { SgrMouseEvent } from "../mouse.ts";
 import type { Component } from "../tui.ts";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 import { Input } from "./input.ts";
@@ -77,6 +78,10 @@ export class SettingsList implements Component {
 	private entries: ListEntry[];
 	private filteredEntries: ListEntry[];
 
+	// Mouse support state
+	private renderDisplayEntries: ListEntry[] = [];
+	private renderEntryStart = 0;
+
 	constructor(
 		items: SettingItem[],
 		maxVisible: number,
@@ -133,9 +138,13 @@ export class SettingsList implements Component {
 		}
 	}
 
-	/** Filter to items in the given section, or null to show all. */
-	setSectionFilter(section: string | null): void {
-		this.sectionItems = section ? this.items.filter((item) => item.section === section) : this.items;
+	/** Filter to items in the given section(s), or null to show all. */
+	setSectionFilter(section: string | string[] | null): void {
+		if (Array.isArray(section)) {
+			this.sectionItems = this.items.filter((item) => item.section !== undefined && section.includes(item.section));
+		} else {
+			this.sectionItems = section ? this.items.filter((item) => item.section === section) : this.items;
+		}
 		this.entries = buildEntries(this.sectionItems);
 		// Reset search when changing sections
 		if (this.searchInput) {
@@ -163,11 +172,14 @@ export class SettingsList implements Component {
 		const lines: string[] = [];
 
 		if (this.searchEnabled && this.searchInput) {
-			lines.push(...this.searchInput.render(width));
+			const searchLines = this.searchInput.render(width);
+			lines.push(...searchLines);
 			lines.push("");
 		}
 
 		if (this.sectionItems.length === 0) {
+			this.renderDisplayEntries = [];
+			this.renderEntryStart = lines.length;
 			lines.push(this.theme.hint("  No settings available"));
 			if (this.searchEnabled) {
 				this.addHintLine(lines, width);
@@ -178,6 +190,8 @@ export class SettingsList implements Component {
 		const displayEntries = this.searchEnabled ? this.filteredEntries : this.entries;
 		const displayItemCount = displayEntries.reduce((count, entry) => (entry.kind === "item" ? count + 1 : count), 0);
 		if (displayItemCount === 0) {
+			this.renderDisplayEntries = displayEntries;
+			this.renderEntryStart = lines.length;
 			lines.push(truncateToWidth(this.theme.hint("  No matching settings"), width));
 			this.addHintLine(lines, width);
 			return lines;
@@ -194,6 +208,9 @@ export class SettingsList implements Component {
 		const maxLabelWidth = Math.min(30, Math.max(...this.sectionItems.map((item) => visibleWidth(item.label))));
 
 		const sectionStyle = this.theme.section ?? this.theme.hint;
+
+		this.renderDisplayEntries = displayEntries;
+		this.renderEntryStart = lines.length;
 
 		// Render visible entries
 		for (let i = startIndex; i < endIndex; i++) {
@@ -268,7 +285,7 @@ export class SettingsList implements Component {
 		} else if (kb.matches(data, "tui.select.down")) {
 			this.moveSelection(displayEntries, 1);
 		} else if (kb.matches(data, "tui.select.confirm") || data === " ") {
-			this.activateItem();
+			this.activateSelection();
 		} else if (kb.matches(data, "tui.select.cancel")) {
 			this.onCancel();
 		} else if (this.searchEnabled && this.searchInput) {
@@ -281,7 +298,8 @@ export class SettingsList implements Component {
 		}
 	}
 
-	private activateItem(): void {
+	/** Activate the currently selected entry (toggle values or open submenus). */
+	activateSelection(): void {
 		const displayEntries = this.searchEnabled ? this.filteredEntries : this.entries;
 		const item = this.selectedItem(displayEntries);
 		if (!item) return;
@@ -337,5 +355,88 @@ export class SettingsList implements Component {
 				width,
 			),
 		);
+	}
+
+	// ── Mouse support ──────────────────────────────────────────────
+
+	/** Returns true while a submenu is open (owns the pointer). */
+	hasOpenSubmenu(): boolean {
+		return this.submenuComponent !== null;
+	}
+
+	/**
+	 * Route a mouse event into the active submenu, if any.
+	 * `line`/`col` are relative to this SettingsList's rendered frame.
+	 */
+	routeSubmenuMouse(event: SgrMouseEvent, line: number, col: number): void {
+		if (
+			this.submenuComponent &&
+			typeof (
+				this.submenuComponent as unknown as {
+					routeMouse?: (event: SgrMouseEvent, line: number, col: number) => void;
+				}
+			).routeMouse === "function"
+		) {
+			(
+				this.submenuComponent as unknown as {
+					routeMouse: (event: SgrMouseEvent, line: number, col: number) => void;
+				}
+			).routeMouse(event, line, col);
+		}
+	}
+
+	/**
+	 * Map a rendered row to the selectable entry index, or -1 when the line
+	 * does not hit an item row (heading / scroll hint / description).
+	 */
+	hitTest(line: number): number {
+		const rel = line - this.renderEntryStart;
+		if (rel < 0 || rel >= this.renderDisplayEntries.length) return -1;
+		const entry = this.renderDisplayEntries[rel];
+		if (entry?.kind !== "item") return -1;
+		return rel;
+	}
+
+	handleWheel(_delta: 1 | -1): void {
+		const entries = this.searchEnabled ? this.filteredEntries : this.entries;
+		const selectable = entries.reduce<number[]>((acc, entry, index) => {
+			if (entry.kind === "item") acc.push(index);
+			return acc;
+		}, []);
+		if (selectable.length === 0) return;
+		const position = selectable.indexOf(this.selectedIndex);
+		const nextPosition = (position + (_delta > 0 ? 1 : -1) + selectable.length) % selectable.length;
+		this.selectedIndex = selectable[nextPosition] ?? this.selectedIndex;
+	}
+
+	/**
+	 * Set the hovered item index for mouse highlighting.
+	 * Pass null to clear hover state.
+	 */
+	setHoverItem(_index: number | null): void {
+		// SettingsList renders heading rows interleaved with items, so we
+		// cannot rely on a simple 1:1 hoverIndex mapping. Defer to the host
+		// to drive hover via the SettingsList's own hitTest + selection state
+		// if desired; this no-op keeps the contract safe.
+	}
+
+	/** Select the item at the given rendered row, if it is a selectable entry. */
+	selectItemAt(line: number): void {
+		const idx = this.hitTest(line);
+		if (idx < 0) return;
+		const entries = this.searchEnabled ? this.filteredEntries : this.entries;
+		if (idx >= entries.length || entries[idx]?.kind !== "item") return;
+		this.selectedIndex = idx;
+		this.activateSelection();
+	}
+
+	/** Expose the active list (main or search) for mouse hit-testing. */
+	getDisplayEntries(): ListEntry[] {
+		return this.searchEnabled ? this.filteredEntries : this.entries;
+	}
+
+	/** Current selected index within `getDisplayEntries()`. */
+	getSelectedIndex(): number {
+		return this.selectedIndex;
 	}
 }

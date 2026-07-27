@@ -1588,14 +1588,36 @@ export class Editor implements Component, Focusable {
 		return result;
 	}
 
-	private moveToLineStart(): void {
+	public moveToLineStart(): void {
 		this.lastAction = null;
 		this.setCursorCol(0);
 	}
 
-	private moveToLineEnd(): void {
+	public moveToLineEnd(): void {
 		this.lastAction = null;
 		const currentLine = this.state.lines[this.state.cursorLine] || "";
+		this.setCursorCol(currentLine.length);
+	}
+
+	/** Set cursor to a specific line and column, clamped to valid bounds. */
+	public setCursorPosition(line: number, col: number): void {
+		const maxLine = Math.max(0, this.state.lines.length - 1);
+		this.state.cursorLine = Math.max(0, Math.min(line, maxLine));
+		const maxCol = this.state.lines[this.state.cursorLine]?.length ?? 0;
+		this.state.cursorCol = Math.max(0, Math.min(col, maxCol));
+	}
+
+	/** Move cursor to the start of the first line (message beginning). */
+	public moveToMessageStart(): void {
+		this.state.cursorLine = 0;
+		this.setCursorCol(0);
+	}
+
+	/** Move cursor to the end of the last line (message end). */
+	public moveToMessageEnd(): void {
+		const lastLine = this.state.lines.length - 1;
+		this.state.cursorLine = lastLine;
+		const currentLine = this.state.lines[lastLine] || "";
 		this.setCursorCol(currentLine.length);
 	}
 
@@ -2094,7 +2116,7 @@ export class Editor implements Component, Focusable {
 		this.undoStack.push({ state: this.state, pastes: this.pastes, pasteCounter: this.pasteCounter });
 	}
 
-	private undo(): void {
+	public undo(): void {
 		this.exitHistoryBrowsing();
 		const snapshot = this.undoStack.pop();
 		if (!snapshot) return;
