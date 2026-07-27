@@ -232,9 +232,39 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 /**
  * Check if compaction should trigger based on context usage.
  */
+/**
+ * Compute the effective reserve (budget buffer) with proportional fallback.
+ * When the default reserve exceeds a small window's 15% room, fall back to
+ * proportional so compaction doesn't trigger too early.
+ */
+export function resolveBudgetReserveTokens(contextWindow: number, settings: CompactionSettings): number {
+	const reserveTokens = settings.reserveTokens;
+	const proportionalReserveTokens = Math.max(1, Math.floor(contextWindow * 0.15));
+	const reserveWasDefaulted = reserveTokens === 16384; // factory default
+	const defaultReserveIsEffectivelyImpossible =
+		reserveWasDefaulted && reserveTokens >= contextWindow - proportionalReserveTokens;
+	const reserveExceedsWindow = reserveTokens >= contextWindow;
+	return defaultReserveIsEffectivelyImpossible || reserveExceedsWindow ? proportionalReserveTokens : reserveTokens;
+}
+
+/**
+ * Floor provider-reported context tokens by the local stored estimate to
+ * prevent on-wire compression (obfuscator, Headroom, inline snapcompact) from
+ * suppressing compaction triggers.
+ */
+export function compactionContextTokens(providerContextTokens: number, storedConversationEstimate: number): number {
+	return Math.max(Math.max(0, providerContextTokens), Math.max(0, storedConversationEstimate));
+}
+
 export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
-	if (!settings.enabled) return false;
-	return contextTokens > contextWindow - settings.reserveTokens;
+	if (!settings.enabled || contextWindow <= 0) return false;
+	const thresholdTokens = resolveThresholdTokens(contextWindow, settings);
+	return contextTokens > thresholdTokens;
+}
+
+/** Compute the effective threshold: window minus proportional reserve. */
+export function resolveThresholdTokens(contextWindow: number, settings: CompactionSettings): number {
+	return Math.max(0, Math.min(contextWindow - 1, contextWindow - resolveBudgetReserveTokens(contextWindow, settings)));
 }
 
 // ============================================================================

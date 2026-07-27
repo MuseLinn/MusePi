@@ -61,6 +61,7 @@ import {
 	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	compact,
+	compactionContextTokens,
 	estimateContextTokens,
 	estimateTokens,
 	generateBranchSummary,
@@ -330,6 +331,7 @@ export class AgentSession {
 	private _compactionAbortController: AbortController | undefined = undefined;
 	private _autoCompactionAbortController: AbortController | undefined = undefined;
 	private _overflowRecoveryAttempted = false;
+	private _midRunToolCounter = 0;
 
 	// Branch summarization state
 	private _branchSummaryAbortController: AbortController | undefined = undefined;
@@ -653,6 +655,28 @@ export class AgentSession {
 
 		// Emit to extensions first
 		await this._emitExtensionEvent(event);
+
+		// Mid-run compaction: check every 5 tool executions during a turn
+		if (event.type === "tool_execution_end") {
+			this._midRunToolCounter++;
+			if (this._midRunToolCounter >= 5 && this.model) {
+				this._midRunToolCounter = 0;
+				const contextWindow = this.model.contextWindow ?? 0;
+				if (contextWindow > 0) {
+					const estimate = this._estimateCurrentContextTokens();
+					const settings = this.settingsManager.getCompactionSettings();
+					if (estimate > 0 && shouldCompact(estimate, contextWindow, settings)) {
+						// Try context promotion first
+						if (!(await this._tryPromoteContextModel())) {
+							await this._runAutoCompaction("threshold", false);
+						}
+					}
+				}
+			}
+		}
+		if (event.type === "agent_end" || event.type === "agent_start") {
+			this._midRunToolCounter = 0;
+		}
 
 		// Notify all listeners
 		this._emit(event.type === "agent_end" ? { ...event, willRetry: this._willRetryAfterAgentEnd(event) } : event);
@@ -2100,11 +2124,65 @@ export class AgentSession {
 			contextTokens = estimate.tokens;
 		} else {
 			contextTokens = directContextTokens;
+			// Floor provider-reported tokens by local stored estimate to prevent
+			// on-wire compression (obfuscator, Headroom) from suppressing compaction triggers.
+			const storedEstimate = estimateContextTokens(this.agent.state.messages).tokens;
+			contextTokens = compactionContextTokens(contextTokens, storedEstimate);
 		}
 		if (shouldCompact(contextTokens, contextWindow, settings)) {
+			// Try context promotion before compacting: switch to larger-context model if available
+			if (await this._tryPromoteContextModel()) {
+				return false; // promotion handled it, no compaction needed
+			}
 			return await this._runAutoCompaction("threshold", false);
 		}
 		return false;
+	}
+
+	/** Estimate current context tokens from agent state + usage. */
+	private _estimateCurrentContextTokens(): number {
+		const lastAssistant = this._findLastAssistantMessage();
+		if (lastAssistant?.usage) {
+			const fromUsage = calculateContextTokens(lastAssistant.usage);
+			if (fromUsage > 0) {
+				const storedEstimate = estimateContextTokens(this.agent.state.messages).tokens;
+				return compactionContextTokens(fromUsage, storedEstimate);
+			}
+		}
+		return estimateContextTokens(this.agent.state.messages).tokens;
+	}
+
+	/**
+	 * Try to promote to a larger-context model before compacting.
+	 * Returns true if promotion succeeded and compaction is no longer needed.
+	 */
+	private async _tryPromoteContextModel(): Promise<boolean> {
+		const currentModel = this.model;
+		if (!currentModel || !currentModel.contextWindow) return false;
+
+		try {
+			const available = await this._modelRuntime.getAvailable();
+			// Find a model with larger context window that has auth
+			const target = available.find((m: Model<any>) => {
+				if (m.id === currentModel.id && m.provider === currentModel.provider) return false;
+				const cw = m.contextWindow ?? 0;
+				return cw > currentModel.contextWindow! && cw >= currentModel.contextWindow! * 1.5;
+			});
+			if (!target) return false;
+
+			const auth = await this._modelRuntime.getAuth(target);
+			if (!auth?.auth.apiKey && !auth?.auth.headers) return false;
+
+			// Switch model via the runtime host
+			await this.setModel(target);
+			this._emit({
+				type: "session_info_changed",
+				name: this.sessionManager.getSessionName(),
+			});
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	/**
