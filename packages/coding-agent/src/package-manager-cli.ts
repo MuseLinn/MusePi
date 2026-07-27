@@ -452,10 +452,26 @@ async function runNpmSelfUpdate(version: string | undefined, _releaseUrl: string
 		execSync("npm update -g @musepi/coding-agent", { stdio: "inherit" });
 		console.log(chalk.green(`MusePi updated to ${version ?? "latest"} successfully.`));
 		console.log("Restart MusePi to use the new version.");
-	} catch {
+	} catch (err) {
+		const msg = String(err);
 		console.error(chalk.red("npm update failed."));
-		console.log("Retry manually:");
-		console.log("  npm update -g @musepi/coding-agent");
+		// Root-cause hints
+		if (msg.includes("EACCES") || msg.includes("EPERM")) {
+			console.log(chalk.yellow("  Cause: Permission denied. Try:"));
+			console.log(chalk.yellow("    sudo npm update -g @musepi/coding-agent"));
+		} else if (msg.includes("E404") || msg.includes("404")) {
+			console.log(
+				chalk.yellow("  Cause: Package not found on registry. Verify you have access to @musepi/coding-agent."),
+			);
+		} else if (msg.includes("ETIMEDOUT") || msg.includes("ECONNREFUSED") || msg.includes("ECONNRESET")) {
+			console.log(chalk.yellow("  Cause: Network error. Check your internet connection and npm registry status."));
+		} else if (msg.includes("ENOENT") || msg.includes("not found")) {
+			console.log(chalk.yellow("  Cause: npm not found or package not installed. Install or update manually:"));
+		} else {
+			console.log(chalk.yellow(`  Cause: ${msg.slice(0, 200)}`));
+		}
+		console.log("  Retry manually:");
+		console.log("    npm update -g @musepi/coding-agent");
 	}
 }
 

@@ -158,7 +158,9 @@ class BackgroundTaskManager {
 		task.status = "completed";
 		task.endTime = Date.now();
 		task.completedAtMs = task.endTime;
-		task.outputLines = outputLines.map(sanitizeShellOutput);
+		if (outputLines.length > 0) {
+			task.outputLines = outputLines.map(sanitizeShellOutput);
+		}
 
 		// Cleanup session handle
 		const handle = this.sessions.get(taskId);
@@ -328,7 +330,21 @@ export function registerBackgroundTools(pi: any): void {
 		async execute(_toolCallId: string, params: any, signal: any, _onUpdate: any, ctx: any) {
 			const taskId = `bg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 			const models = ctx.modelRegistry?.getAvailable() || [];
-			const model = models.find((m: any) => m.id === (params.model || models[0]?.id));
+
+			// Three-tier model selection:
+			// Tier 1: Exact match by params.model
+			// Tier 2: First model with configured auth
+			// Tier 3: First available model
+			let model: any;
+			if (params.model) {
+				model = models.find((m: any) => m.id === params.model);
+			}
+			if (!model) {
+				model = models.find((m: any) => ctx.modelRegistry?.hasConfiguredAuth(m));
+			}
+			if (!model) {
+				model = models[0];
+			}
 			if (!model) {
 				return { content: [{ type: "text", text: "No model available." }] };
 			}
@@ -563,24 +579,26 @@ async function runBackgroundSession(
 			.flatMap((m: any) => (m.content || []).filter((p: any) => p.type === "text").map((p: any) => p.text))
 			.filter(Boolean);
 
+		const resolvedOutput = allText.length > 0 ? allText : backgroundManager.get(taskId)?.outputLines || [];
+
 		if (outputPath) {
 			// Kimi Code-style: full output lands in output_path; the task entry keeps
 			// only a pointer so in-memory outputLines stay small and Read can page.
 			try {
 				fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
-				fs.writeFileSync(outputPath, allText.join("\n\n"), "utf-8");
+				fs.writeFileSync(outputPath, resolvedOutput.join("\n\n"), "utf-8");
 				backgroundManager.complete(taskId, [
-					`[output written to ${outputPath} — ${allText.length} message(s); use Read with offset/limit to page]`,
-					...allText.slice(-3),
+					`[output written to ${outputPath} — ${resolvedOutput.length} message(s); use Read with offset/limit to page]`,
+					...resolvedOutput.slice(-3),
 				]);
 			} catch (writeErr: any) {
 				backgroundManager.complete(taskId, [
 					`[failed to write output_path ${outputPath}: ${writeErr?.message || writeErr}]`,
-					...allText,
+					...resolvedOutput,
 				]);
 			}
 		} else {
-			backgroundManager.complete(taskId, allText);
+			backgroundManager.complete(taskId, resolvedOutput);
 		}
 	} catch (err: any) {
 		if (timedOut) {

@@ -6,6 +6,7 @@
  */
 
 export const SEARCH_PROVIDER_OPTIONS = [
+	{ value: "auto", label: "Auto", description: "Automatically uses the first configured web-search provider" },
 	{ value: "brave", label: "Brave Search", description: "Free tier — api.search.brave.com" },
 	{ value: "google", label: "Google Custom Search", description: "Requires CX + API key" },
 	{ value: "bing", label: "Bing Search", description: "Azure Bing Search API key" },
@@ -22,6 +23,7 @@ export const SEARCH_PROVIDER_OPTIONS = [
 	{ value: "startpage", label: "Startpage", description: "startpage.com API key" },
 	{ value: "ecosia", label: "Ecosia", description: "ecosia.org" },
 	{ value: "tinyfish", label: "Tinyfish", description: "tinyfish.io" },
+	{ value: "synthetic", label: "Synthetic (test)", description: "Mock provider for testing the provider chain" },
 ] as const;
 
 export type SearchProviderId = (typeof SEARCH_PROVIDER_OPTIONS)[number]["value"];
@@ -65,4 +67,24 @@ export interface SearchSource {
 export interface SearchUsage {
 	requestCount: number;
 	totalTokens?: number;
+}
+
+/** Parameters passed to every provider's search() method. */
+export interface SearchParams {
+	/** The search query string. */
+	query: string;
+	/** Max results to return. */
+	limit?: number;
+	/** Recency filter: "day", "week", "month", "year", or undefined. */
+	recency?: string;
+	/** Optional system prompt for LLM-mediated providers. */
+	systemPrompt?: string;
+	/** AbortSignal from the caller (user Esc cancels in-flight search). */
+	signal?: AbortSignal;
+	/** Polyfill-friendly fetch implementation. */
+	fetch?: typeof globalThis.fetch;
+	/** Model registry for LLM-mediated providers to pick a model. */
+	modelRegistry?: { provider: string; model: string }[];
+	/** Current session id for LLM-mediated providers that need it. */
+	sessionId?: string;
 }
