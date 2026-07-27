@@ -17,6 +17,7 @@ import {
 	TabBar,
 	Text,
 } from "@musepi/pi-tui";
+import { t } from "../../../../../musepi/core/src/i18n/index.ts";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import type { DefaultProjectTrust, WarningSettings } from "../../../core/settings-manager.ts";
 import { SEARCH_PROVIDER_LABELS, SEARCH_PROVIDER_OPTIONS } from "../../../web/search/types.ts";
@@ -269,8 +270,8 @@ class MusepiSettingsSubmenu extends Container {
 			const description = musepiSettingDescription(def.path);
 			const item: SettingItem = {
 				id: def.path,
-				label: def.label,
-				section: def.section,
+				label: t(def.label),
+				section: t(def.section),
 				description,
 				currentValue: formatMusepiValue(def, values),
 			};
@@ -288,7 +289,7 @@ class MusepiSettingsSubmenu extends Container {
 				case "text":
 					item.submenu = (currentValue, done) =>
 						new TextInputSubmenu(
-							`${def.section} · ${def.label}`,
+							`${t(def.section)} · ${t(def.label)}`,
 							description,
 							currentValue,
 							(value) => done(value.length > 0 ? value : "(unset)"),
@@ -298,7 +299,7 @@ class MusepiSettingsSubmenu extends Container {
 				case "info":
 					item.submenu = (_currentValue, done) =>
 						new InfoSubmenu(
-							`${def.section} · ${def.label}`,
+							`${t(def.section)} · ${t(def.label)}`,
 							[...(def.info ?? []), "", `Settings file: ${settingsPath}`],
 							() => done(),
 						);
