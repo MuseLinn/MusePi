@@ -33,6 +33,16 @@ export class EventController {
 	readonly #advisor: AdvisorController;
 	readonly #ttsr: TtsrManager;
 
+	/** Resolve tool display style from settings. */
+	get #toolDisplayStyle(): "bordered" | "filled" {
+		try {
+			const musepi = this.#ctx.settingsManager.getMusepi();
+			const style = (musepi as any).edit?.toolDisplayStyle;
+			if (style === "filled" || style === "bordered") return style;
+		} catch {}
+		return "bordered";
+	}
+
 	constructor(ctx: InteractiveModeContext) {
 		this.#ctx = ctx;
 		this.#ttsr = new TtsrManager({
@@ -164,6 +174,7 @@ export class EventController {
 							{
 								showImages: this.#ctx.settingsManager.getShowImages(),
 								imageWidthCells: this.#ctx.settingsManager.getImageWidthCells(),
+								displayStyle: this.#toolDisplayStyle,
 							},
 							this.#ctx.getRegisteredToolDefinition(content.name),
 							this.#ctx.ui,
@@ -243,6 +254,7 @@ export class EventController {
 				{
 					showImages: this.#ctx.settingsManager.getShowImages(),
 					imageWidthCells: this.#ctx.settingsManager.getImageWidthCells(),
+					displayStyle: this.#toolDisplayStyle,
 				},
 				this.#ctx.getRegisteredToolDefinition(event.toolName),
 				this.#ctx.ui,

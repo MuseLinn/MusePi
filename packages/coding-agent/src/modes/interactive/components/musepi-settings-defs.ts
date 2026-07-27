@@ -118,6 +118,13 @@ export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [
 	},
 	{ path: "edit.hashline", label: "Hashline editing", section: "Tools", kind: "bool" },
 	{ path: "edit.enforceSeenLines", label: "Enforce seen lines", section: "Tools", kind: "bool" },
+	{
+		path: "edit.toolDisplayStyle",
+		label: "Tool card style",
+		section: "Tools",
+		kind: "enum",
+		options: ["bordered", "filled"],
+	},
 	{ path: "skills.kimiCodeCompat", label: "Kimi Code skill dirs", section: "Tools", kind: "bool" },
 	{
 		path: "compaction.strategy",

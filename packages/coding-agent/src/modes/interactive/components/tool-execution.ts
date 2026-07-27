@@ -8,6 +8,8 @@ import { theme } from "../theme/theme.ts";
 export interface ToolExecutionOptions {
 	showImages?: boolean;
 	imageWidthCells?: number;
+	/** Tool card display style: "bordered" (default) or "filled" (OpenCode). */
+	displayStyle?: "bordered" | "filled";
 }
 
 export class ToolExecutionComponent extends Container {
@@ -25,6 +27,7 @@ export class ToolExecutionComponent extends Container {
 	private expanded = false;
 	private showImages: boolean;
 	private imageWidthCells: number;
+	private displayStyle: "bordered" | "filled";
 	private isPartial = true;
 	private toolDefinition?: ToolDefinition<any, any>;
 	private builtInToolDefinition?: ToolDefinition<any, any>;
@@ -57,6 +60,7 @@ export class ToolExecutionComponent extends Container {
 		this.builtInToolDefinition = createAllToolDefinitions(cwd)[toolName as ToolName];
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
+		this.displayStyle = options.displayStyle ?? "bordered";
 		this.ui = ui;
 		this.cwd = cwd;
 
@@ -291,12 +295,23 @@ export class ToolExecutionComponent extends Container {
 		if (this.hasRendererDefinition()) {
 			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
 			if (renderContainer instanceof Box) {
-				renderContainer.setBgFn(undefined);
+				if (this.displayStyle === "filled") {
+					const bgFn = this.isPartial
+						? (text: string) => theme.bg("toolPendingBg", text)
+						: this.result?.isError
+							? (text: string) => theme.bg("toolErrorBg", text)
+							: (text: string) => theme.bg("toolSuccessBg", text);
+					renderContainer.setBgFn(bgFn);
+				} else {
+					renderContainer.setBgFn(undefined);
+				}
 			}
 			renderContainer.clear();
 
-			// Add header border line
-			renderContainer.addChild(new Text(this.buildHeader(), 0, 0));
+			// Add header border line (bordered style only)
+			if (this.displayStyle === "bordered") {
+				renderContainer.addChild(new Text(this.buildHeader(), 0, 0));
+			}
 
 			const callRenderer = this.getCallRenderer();
 			if (!callRenderer) {

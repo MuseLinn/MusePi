@@ -70,6 +70,12 @@ export interface MusepiEditSettings {
 	hashline?: boolean; // default: true
 	/** Reject edits on lines read/grep never displayed (hashline only). */
 	enforceSeenLines?: boolean; // default: false
+	/**
+	 * Tool execution card display style:
+	 * - "filled" (OpenCode): solid background fill color
+	 * - "bordered" (clean): state-colored header with border lines
+	 */
+	toolDisplayStyle?: "filled" | "bordered"; // default: "bordered"
 }
 
 /**
@@ -252,6 +258,12 @@ export interface MusepiSettings {
 	memory?: MusepiMemorySettings;
 	compaction?: MusepiCompactionSettings;
 	notifications?: MusepiNotificationsSettings;
+	providers?: MusepiProvidersSettings;
+}
+
+export interface MusepiProvidersSettings {
+	/** Preferred backend for web_search tool ("auto", "none", or provider id). */
+	webSearch?: string;
 }
 
 /**
@@ -320,6 +332,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	memory: { enabled: boolean; scope: "project" | "global"; caps: { project: number; global: number } };
 	compaction: { strategy: "default" | "snapcompact" };
 	notifications: { enabled: boolean; condition: "always" | "unfocused" };
+	providers: { webSearch: string };
 }> = {
 	updateCheck: true,
 	skills: { kimiCodeCompat: true },
@@ -332,13 +345,14 @@ export const MUSEPI_DEFAULTS: Required<{
 	tui: { style: "boxed", modelInBorder: false },
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
-	edit: { hashline: true, enforceSeenLines: false },
+	edit: { hashline: true, enforceSeenLines: false, toolDisplayStyle: "bordered" },
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, diagnosticsOnWrite: true },
 	toolSelect: { enabled: false, models: [], defer: [] },
 	mcp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, startupDiscovery: false },
 	memory: { enabled: false, scope: "project", caps: { project: 10_000, global: 6_000 } },
 	compaction: { strategy: "default" },
 	notifications: { enabled: true, condition: "unfocused" },
+	providers: { webSearch: "auto" },
 };
 
 export type ResolvedMusepiSettings = typeof MUSEPI_DEFAULTS;
@@ -573,6 +587,7 @@ export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMu
 		compaction: pickCompaction(r.compaction),
 		agents: pickAgents(r.agents),
 		notifications: pickNotifications(r.notifications),
+		providers: pick(MUSEPI_DEFAULTS.providers, r.providers),
 	};
 }
 
@@ -735,5 +750,10 @@ export const MUSEPI_SETTINGS_DOCS: Array<{ key: string; description: string; def
 		key: "notifications.condition",
 		description: 'When to notify: "always" or "unfocused" (only while the terminal lacks focus)',
 		defaultValue: "unfocused",
+	},
+	{
+		key: "providers.webSearch",
+		description: "Preferred backend for the web_search tool (auto, none, brave, google, ...)",
+		defaultValue: "auto",
 	},
 ];
