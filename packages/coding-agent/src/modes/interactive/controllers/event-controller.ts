@@ -146,9 +146,11 @@ export class EventController {
 			for (const block of textBlocks) {
 				const ttsrCtx: TtsrMatchContext = { source: "text" };
 				const matched = this.#ttsr.checkDelta("text" in block ? ((block as any).text ?? "") : "", ttsrCtx);
-				for (const rule of matched) {
-					this.#ctx.showStatus(`[TTSR] Rule matched: ${rule.name} — ${rule.description ?? ""}`);
-					this.#ttsr.markInjected([rule]);
+				if (matched.length > 0) {
+					// Mark injected and abort for retry
+					this.#ttsr.markInjected(matched);
+					this.#ctx.abortForTTSR(matched.map((r) => ({ name: r.name, description: r.description })));
+					return;
 				}
 			}
 

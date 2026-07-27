@@ -119,4 +119,10 @@ export interface InteractiveModeContext {
 	maybeShowCacheMissNotice(message: AssistantMessage): void;
 	/** Get the registered tool definition for a tool name (for rendering). */
 	getRegisteredToolDefinition(toolName: string): import("../../core/extensions/types.ts").ToolDefinition | undefined;
+
+	/**
+	 * Abort the current stream for TTSR: abort the session turn, inject matched
+	 * rules as context, and let the auto-retry mechanism regenerate.
+	 */
+	abortForTTSR(rules: ReadonlyArray<{ name: string; description?: string }>): void;
 }

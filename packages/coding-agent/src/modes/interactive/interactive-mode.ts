@@ -200,6 +200,7 @@ import {
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
+import { TtsrNotificationComponent } from "./components/ttsr-notification.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { BtwController } from "./controllers/btw-controller.ts";
@@ -4608,6 +4609,18 @@ export class InteractiveMode {
 	clearPinnedError(): void {
 		if (this.errorBannerContainer.children.length === 0) return;
 		this.errorBannerContainer.clear();
+		this.ui.requestRender();
+	}
+
+	abortForTTSR(rules: ReadonlyArray<{ name: string; description?: string }>): void {
+		// Show TTSR notification in the chat
+		const notification = new TtsrNotificationComponent(rules as any);
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(notification);
+
+		// Abort the current turn — session auto-retry handles regeneration
+		this.session.abort().catch(() => {});
+
 		this.ui.requestRender();
 	}
 
