@@ -62,7 +62,7 @@ export class BtwController {
 		return this.#panel?.isCopyable() === true && !this.#branchInFlight;
 	}
 
-	/** Handle branch (b) key — fork BTW answer into main session. Returns true if consumed. */
+	/** Handle branch (b) key — insert BTW answer into main session as assistant message. */
 	async handleBranch(): Promise<boolean> {
 		if (!this.canBranch()) return false;
 		const text = this.#panel!.getBranchText();
@@ -70,11 +70,19 @@ export class BtwController {
 
 		this.#branchInFlight = true;
 		try {
-			// TODO: wire proper branch → fork session with BTW answer
-			// this.#ctx.session.sendCustomMessage(...)
-			this.#ctx.showStatus("Branch not yet wired — coming soon");
-		} catch {
-			this.#ctx.showStatus("Branch failed");
+			// Insert BTW Q&A as a user+assistant pair in the session transcript
+			this.#ctx.sessionManager.appendMessage({
+				role: "user",
+				content: this.#lastQuestion,
+			} as any);
+			this.#ctx.sessionManager.appendMessage({
+				role: "assistant",
+				content: [{ type: "text", text }],
+			} as any);
+			this.#ctx.showStatus("Branched Q&A into session");
+			this.close();
+		} catch (e) {
+			this.#ctx.showStatus(`Branch failed: ${e}`);
 		}
 		this.#branchInFlight = false;
 		return true;
