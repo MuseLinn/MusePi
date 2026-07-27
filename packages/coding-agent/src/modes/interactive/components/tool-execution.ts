@@ -250,21 +250,53 @@ export class ToolExecutionComponent extends Container {
 		return super.render(width);
 	}
 
-	private updateDisplay(): void {
-		const bgFn = this.isPartial
-			? (text: string) => theme.bg("toolPendingBg", text)
-			: this.result?.isError
-				? (text: string) => theme.bg("toolErrorBg", text)
-				: (text: string) => theme.bg("toolSuccessBg", text);
+	private stateColor(): "toolTitle" | "success" | "error" {
+		if (this.isPartial) return "toolTitle";
+		if (this.result?.isError) return "error";
+		return "success";
+	}
 
+	/** Build header line: "╭── tool_name args_summary ──╮" in state color. */
+	private buildHeader(): string {
+		const color = this.stateColor();
+		const label = this.isPartial
+			? theme.fg("muted", `${this.toolName} \u2026`)
+			: this.result?.isError
+				? theme.fg(color, `${this.toolName} ${this.getErrorSummary()}`)
+				: theme.fg(color, `${this.toolName} ${this.getResultSummary()}`);
+		const leftCap = theme.fg(color, "\u256D");
+		const rightCap = theme.fg(color, "\u256E");
+		return `${leftCap} ${label} ${rightCap}`;
+	}
+
+	private getErrorSummary(): string {
+		if (!this.result) return "";
+		for (const c of this.result.content) {
+			if (c.type === "text" && c.text) return `\u2716 ${c.text.slice(0, 60)}`;
+		}
+		return "\u2716";
+	}
+
+	private getResultSummary(): string {
+		if (!this.result) return "";
+		for (const c of this.result.content) {
+			if (c.type === "text" && c.text) return `\u2714 ${c.text.slice(0, 60)}`;
+		}
+		return "\u2714";
+	}
+
+	private updateDisplay(): void {
 		let hasContent = false;
 		this.hideComponent = false;
 		if (this.hasRendererDefinition()) {
 			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
 			if (renderContainer instanceof Box) {
-				renderContainer.setBgFn(bgFn);
+				renderContainer.setBgFn(undefined);
 			}
 			renderContainer.clear();
+
+			// Add header border line
+			renderContainer.addChild(new Text(this.buildHeader(), 0, 0));
 
 			const callRenderer = this.getCallRenderer();
 			if (!callRenderer) {
@@ -313,7 +345,7 @@ export class ToolExecutionComponent extends Container {
 				}
 			}
 		} else {
-			this.contentText.setCustomBgFn(bgFn);
+			this.contentText.setCustomBgFn(undefined);
 			this.contentText.setText(this.formatToolExecution());
 			hasContent = true;
 		}
