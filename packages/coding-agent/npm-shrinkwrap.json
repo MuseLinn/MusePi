@@ -1,12 +1,12 @@
 {
 	"name": "@musepi/coding-agent",
-	"version": "0.2.12",
+	"version": "0.2.13",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@musepi/coding-agent",
-			"version": "0.2.12",
+			"version": "0.2.13",
 			"license": "MIT",
 			"dependencies": {
 				"@ast-grep/napi": "0.45.0",
@@ -673,13 +673,13 @@
 			}
 		},
 		"node_modules/@musepi/core": {
-			"version": "0.2.12",
-			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.12.tgz",
+			"version": "0.2.13",
+			"resolved": "https://registry.npmjs.org/@musepi/core/-/core-0.2.13.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@musepi/pi-agent-core": {
-			"version": "0.2.12",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-agent-core/-/pi-agent-core-0.2.12.tgz",
+			"version": "0.2.13",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-agent-core/-/pi-agent-core-0.2.13.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@musepi/pi-ai": "^0.2.3",
@@ -692,8 +692,8 @@
 			}
 		},
 		"node_modules/@musepi/pi-ai": {
-			"version": "0.2.12",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.2.12.tgz",
+			"version": "0.2.13",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-ai/-/pi-ai-0.2.13.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",
@@ -717,8 +717,8 @@
 			}
 		},
 		"node_modules/@musepi/pi-tui": {
-			"version": "0.2.12",
-			"resolved": "https://registry.npmjs.org/@musepi/pi-tui/-/pi-tui-0.2.12.tgz",
+			"version": "0.2.13",
+			"resolved": "https://registry.npmjs.org/@musepi/pi-tui/-/pi-tui-0.2.13.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",
@@ -729,8 +729,8 @@
 			}
 		},
 		"node_modules/@musepi/transcript": {
-			"version": "0.2.12",
-			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.2.12.tgz",
+			"version": "0.2.13",
+			"resolved": "https://registry.npmjs.org/@musepi/transcript/-/transcript-0.2.13.tgz",
 			"license": "MIT"
 		},
 		"node_modules/@nodable/entities": {
