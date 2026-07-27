@@ -27,7 +27,8 @@ function commandForPlatform(command) {
 
 function run(command, args, options = {}) {
 	const cmd = commandForPlatform(command);
-	console.log(`$ ${cmd} ${args.join(" ")}`);
+	const fullCmd = `${cmd} ${args.join(" ")}`;
+	console.log(`$ ${fullCmd}`);
 	const isWin = process.platform === "win32";
 	const spawnOptions = {
 		cwd: options.cwd,
@@ -36,14 +37,21 @@ function run(command, args, options = {}) {
 	};
 	// Windows: npm.cmd is a batch file; spawnSync needs shell:true to propagate
 	// exit codes and stdio correctly, especially for interactive commands (OTP).
-	if (isWin) spawnOptions.shell = true;
+	// Passing a single string avoids DEP0190 (separate args with shell).
+	if (isWin) {
+		spawnOptions.shell = true;
+		const result = spawnSync(fullCmd, [], spawnOptions);
+		if (result.status !== 0) {
+			const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+			throw new Error(output ? `Command failed: ${fullCmd}\n${output}` : `Command failed: ${fullCmd}`);
+		}
+		return result;
+	}
 	const result = spawnSync(cmd, args, spawnOptions);
-
 	if (result.status !== 0) {
 		const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-		throw new Error(output ? `Command failed: ${cmd} ${args.join(" ")}\n${output}` : `Command failed: ${cmd} ${args.join(" ")}`);
+		throw new Error(output ? `Command failed: ${fullCmd}\n${output}` : `Command failed: ${fullCmd}`);
 	}
-
 	return result;
 }
 
