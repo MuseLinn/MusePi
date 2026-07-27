@@ -1,5 +1,5 @@
 import { Container, getKeybindings, Spacer, Text } from "@musepi/pi-tui";
-import { APP_NAME } from "../../../config.ts";
+import { t } from "../../../../../musepi/core/src/i18n/index.ts";
 import { renderThemePreview, setColorBlindMode, setTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
@@ -74,14 +74,12 @@ export class FirstTimeSetupComponent extends Container {
 		this.addChild(new Spacer(1));
 		this.addChild(new Text(theme.fg("accent", SETUP_LOGO_LINES.join("\n")), 1, 0));
 		this.addChild(new Spacer(1));
-		this.addChild(
-			new Text(theme.fg("accent", theme.bold(`Welcome to ${APP_NAME}, the minimal coding agent.`)), 1, 0),
-		);
+		this.addChild(new Text(theme.fg("accent", theme.bold(t("Welcome to MusePi, the AI coding agent."))), 1, 0));
 		this.addChild(new Spacer(1));
 
 		if (this.step === "theme") {
-			this.addChild(new Text(theme.fg("text", "Pick a theme. Move through the list to preview."), 1, 0));
-			this.addChild(new Text(theme.fg("muted", `Detected appearance: ${this.options.detectedTheme}`), 1, 0));
+			this.addChild(new Text(theme.fg("text", t("Pick a theme. Navigate with arrow keys to preview.")), 1, 0));
+			this.addChild(new Text(theme.fg("muted", `${t("Detected appearance")}: ${this.options.detectedTheme}`), 1, 0));
 			this.addChild(new Spacer(1));
 			this.renderThemeList();
 			// Live preview strip
@@ -92,12 +90,12 @@ export class FirstTimeSetupComponent extends Container {
 				}
 			}
 		} else {
-			this.addChild(new Text(theme.fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0));
+			this.addChild(new Text(theme.fg("text", t("Share anonymous usage data?")), 1, 0));
 			this.addChild(
 				new Text(
 					theme.fg(
 						"muted",
-						"Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within MusePi. You can change this anytime in settings.json.",
+						t("Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics."),
 					),
 					1,
 					0,

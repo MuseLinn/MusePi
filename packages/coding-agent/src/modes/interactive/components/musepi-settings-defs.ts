@@ -11,6 +11,7 @@
 // ============================================================
 
 import { MUSEPI_SETTINGS_DOCS, type ResolvedMusepiSettings } from "@musepi/core";
+import { t } from "../../../../../musepi/core/src/i18n/index.ts";
 
 export type MusepiSettingKind = "bool" | "enum" | "number" | "text" | "info";
 
@@ -135,6 +136,13 @@ export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [
 		kind: "enum",
 		options: ["default", "snapcompact"],
 	},
+	{
+		path: "compaction.thresholdPercent",
+		label: "Threshold %",
+		section: "Tools",
+		kind: "number",
+		presets: [10, 20, 30, 50, 75, 85, 95],
+	},
 	// Swarm
 	{
 		path: "swarm.maxConcurrency",
@@ -237,7 +245,8 @@ const DOCS_BY_KEY = new Map(MUSEPI_SETTINGS_DOCS.map((doc) => [doc.key, doc.desc
 
 /** Per-key description reused from the @musepi/core schema docs. */
 export function musepiSettingDescription(path: string): string {
-	return DOCS_BY_KEY.get(path) ?? "";
+	const en = DOCS_BY_KEY.get(path) ?? "";
+	return en ? t(en) : "";
 }
 
 /** Read a dot path (e.g. "memory.caps.project") from resolved MusePi settings. */

@@ -657,7 +657,8 @@ export class AgentSession {
 		await this._emitExtensionEvent(event);
 
 		// Mid-run compaction: check every 5 tool executions during a turn
-		if (event.type === "tool_execution_end") {
+		const compSettings = this.settingsManager.getCompactionSettings();
+		if (event.type === "tool_execution_end" && compSettings.midTurnEnabled) {
 			this._midRunToolCounter++;
 			if (this._midRunToolCounter >= 5 && this.model) {
 				this._midRunToolCounter = 0;
@@ -2157,6 +2158,7 @@ export class AgentSession {
 	 * Returns true if promotion succeeded and compaction is no longer needed.
 	 */
 	private async _tryPromoteContextModel(): Promise<boolean> {
+		if (!this.settingsManager.getContextPromotionEnabled()) return false;
 		const currentModel = this.model;
 		if (!currentModel || !currentModel.contextWindow) return false;
 

@@ -125,7 +125,7 @@ function combineUsage(first: Usage, second: Usage): Usage {
 
 export interface CompactionSettings {
 	enabled: boolean;
-	reserveTokens: number;
+	reserveTokens: number | undefined;
 	keepRecentTokens: number;
 }
 
@@ -232,19 +232,27 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 /**
  * Check if compaction should trigger based on context usage.
  */
+/** Default reserve when user has not configured one (proportional fallback floor). */
+export const DEFAULT_RESERVE_TOKENS = 16384;
+
 /**
  * Compute the effective reserve (budget buffer) with proportional fallback.
  * When the default reserve exceeds a small window's 15% room, fall back to
  * proportional so compaction doesn't trigger too early.
  */
 export function resolveBudgetReserveTokens(contextWindow: number, settings: CompactionSettings): number {
-	const reserveTokens = settings.reserveTokens;
+	const reserveTokens = effectiveReserveTokens(contextWindow, settings);
 	const proportionalReserveTokens = Math.max(1, Math.floor(contextWindow * 0.15));
-	const reserveWasDefaulted = reserveTokens === 16384; // factory default
+	const reserveWasDefaulted = settings.reserveTokens === undefined;
 	const defaultReserveIsEffectivelyImpossible =
 		reserveWasDefaulted && reserveTokens >= contextWindow - proportionalReserveTokens;
 	const reserveExceedsWindow = reserveTokens >= contextWindow;
 	return defaultReserveIsEffectivelyImpossible || reserveExceedsWindow ? proportionalReserveTokens : reserveTokens;
+}
+
+/** Raw reserve: max(15% window, configured floor) when no user override. */
+export function effectiveReserveTokens(contextWindow: number, settings: CompactionSettings): number {
+	return Math.max(Math.floor(contextWindow * 0.15), settings.reserveTokens ?? DEFAULT_RESERVE_TOKENS);
 }
 
 /**
@@ -879,7 +887,7 @@ export async function compact(
 			const historyResult = await generateSummaryWithUsage(
 				messagesToSummarize,
 				model,
-				settings.reserveTokens,
+				settings.reserveTokens ?? 16384,
 				apiKey,
 				headers,
 				signal,
@@ -897,7 +905,7 @@ export async function compact(
 		const turnPrefixResult = await generateTurnPrefixSummary(
 			turnPrefixMessages,
 			model,
-			settings.reserveTokens,
+			settings.reserveTokens ?? 16384,
 			apiKey,
 			headers,
 			env,
@@ -915,7 +923,7 @@ export async function compact(
 		const result = await generateSummaryWithUsage(
 			messagesToSummarize,
 			model,
-			settings.reserveTokens,
+			settings.reserveTokens ?? 16384,
 			apiKey,
 			headers,
 			signal,

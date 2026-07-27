@@ -259,6 +259,7 @@ export interface MusepiSettings {
 	mcp?: MusepiMcpSettings;
 	memory?: MusepiMemorySettings;
 	compaction?: MusepiCompactionSettings;
+	contextPromotion?: MusepiContextPromotionSettings;
 	notifications?: MusepiNotificationsSettings;
 	providers?: MusepiProvidersSettings;
 }
@@ -289,8 +290,23 @@ export interface MusepiNotificationsSettings {
  * snapcompact mechanism with text frames instead of PNGs).
  */
 export interface MusepiCompactionSettings {
+	/** Enable automatic context compaction. */
+	enabled?: boolean; // default: true
+	/** Check thresholds at tool-loop boundaries before the next provider request. */
+	midTurnEnabled?: boolean; // default: true
 	/** Compaction engine. */
 	strategy?: "default" | "snapcompact"; // default: "default"
+	/** Reserve tokens (budget buffer). Unset = proportional fallback (max 15%, floor 16384). */
+	reserveTokens?: number; // default: undefined
+	/** Fixed token threshold override. Overrides percentage. -1 = use percentage/reserve. */
+	thresholdTokens?: number; // default: -1
+	/** Percent threshold for context maintenance. -1 = use reserve-based. */
+	thresholdPercent?: number; // default: -1
+}
+
+/** Context promotion: switch to larger-context model before compacting. */
+export interface MusepiContextPromotionSettings {
+	enabled?: boolean; // default: false
 }
 
 /**

@@ -127,7 +127,10 @@ export function handleMusepiSnapcompact(
 		previousSummary: preparation.previousSummary,
 		previousArchive: findPreviousArchive(event.branchEntries),
 		fileOps: preparation.fileOps,
-		archiveMaxChars: Math.max(8_000, Math.round(preparation.settings.reserveTokens * 4 * ARCHIVE_BUDGET_RATIO)),
+		archiveMaxChars: Math.max(
+			8_000,
+			Math.round((preparation.settings.reserveTokens ?? 16384) * 4 * ARCHIVE_BUDGET_RATIO),
+		),
 	};
 	const result = snapCompact(input);
 

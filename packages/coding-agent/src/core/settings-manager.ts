@@ -11,8 +11,13 @@ import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dis
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
+	midTurnEnabled?: boolean; // default: true
 	reserveTokens?: number; // default: 16384
 	keepRecentTokens?: number; // default: 20000
+}
+
+export interface ContextPromotionSettings {
+	enabled?: boolean; // default: false
 }
 
 export interface BranchSummarySettings {
@@ -91,6 +96,7 @@ export interface Settings {
 	followUpMode?: "all" | "one-at-a-time";
 	theme?: string;
 	compaction?: CompactionSettings;
+	contextPromotion?: ContextPromotionSettings;
 	branchSummary?: BranchSummarySettings;
 	retry?: RetrySettings;
 	hideThinkingBlock?: boolean;
@@ -777,20 +783,30 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getCompactionReserveTokens(): number {
-		return this.settings.compaction?.reserveTokens ?? 16384;
+	getCompactionReserveTokens(): number | undefined {
+		return this.settings.compaction?.reserveTokens;
 	}
 
 	getCompactionKeepRecentTokens(): number {
 		return this.settings.compaction?.keepRecentTokens ?? 20000;
 	}
 
-	getCompactionSettings(): { enabled: boolean; reserveTokens: number; keepRecentTokens: number } {
+	getCompactionSettings(): {
+		enabled: boolean;
+		reserveTokens: number | undefined;
+		keepRecentTokens: number;
+		midTurnEnabled: boolean;
+	} {
 		return {
 			enabled: this.getCompactionEnabled(),
 			reserveTokens: this.getCompactionReserveTokens(),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(),
+			midTurnEnabled: this.settings.compaction?.midTurnEnabled ?? true,
 		};
+	}
+
+	getContextPromotionEnabled(): boolean {
+		return this.settings.contextPromotion?.enabled ?? false;
 	}
 
 	getBranchSummarySettings(): { reserveTokens: number; skipPrompt: boolean } {

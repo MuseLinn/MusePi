@@ -153,4 +153,11 @@ export const zhCN: TranslationMap = {
 	"common.clear": "清除",
 	"common.copy": "复制",
 	"common.paste": "粘贴",
+
+	// Setup wizard
+	"Welcome to MusePi, the AI coding agent.": "欢迎使用 MusePi，AI 编程助手。",
+	"Pick a theme. Navigate with arrow keys to preview.": "选择主题。用方向键浏览预览。",
+	"Detected appearance": "检测到的外观",
+	"Share anonymous usage data?": "分享匿名使用数据？",
+	"Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.": "选择加入会在 settings.json 中存储跟踪标识符，并启用匿名使用分析。",
 };
