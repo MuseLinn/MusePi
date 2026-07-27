@@ -8,6 +8,7 @@ import {
 	type Focusable,
 	getKeybindings,
 	Input,
+	type SgrMouseEvent,
 	Spacer,
 	Text,
 	truncateToWidth,
@@ -309,6 +310,12 @@ class SessionList implements Component, Focusable {
 	public onError?: (message: string) => void;
 	private maxVisible: number = 10; // Max sessions visible (one line each)
 
+	// Mouse support state
+	private renderRowStart = 0;
+	private renderRowCount = 0;
+	private startIndex = 0;
+	private requestRender: (() => void) | undefined;
+
 	// Focusable implementation - propagate to searchInput for IME cursor positioning
 	private _focused = false;
 	get focused(): boolean {
@@ -439,14 +446,17 @@ class SessionList implements Component, Focusable {
 		}
 
 		// Calculate visible range with scrolling
-		const startIndex = Math.max(
+		this.startIndex = Math.max(
 			0,
 			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredSessions.length - this.maxVisible),
 		);
-		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredSessions.length);
+		const endIndex = Math.min(this.startIndex + this.maxVisible, this.filteredSessions.length);
+
+		this.renderRowStart = lines.length;
+		this.renderRowCount = endIndex - this.startIndex;
 
 		// Render visible sessions (one line each with tree structure)
-		for (let i = startIndex; i < endIndex; i++) {
+		for (let i = this.startIndex; i < endIndex; i++) {
 			const node = this.filteredSessions[i]!;
 			const session = node.session;
 			const isSelected = i === this.selectedIndex;
@@ -513,13 +523,39 @@ class SessionList implements Component, Focusable {
 		}
 
 		// Add scroll indicator if needed
-		if (startIndex > 0 || endIndex < this.filteredSessions.length) {
+		if (this.startIndex > 0 || endIndex < this.filteredSessions.length) {
 			const scrollText = `  (${this.selectedIndex + 1}/${this.filteredSessions.length})`;
 			const scrollInfo = theme.fg("muted", truncateToWidth(scrollText, width, ""));
 			lines.push(scrollInfo);
 		}
 
 		return lines;
+	}
+
+	// ── Mouse support ──────────────────────────────────────────────
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		const rel = line - this.renderRowStart;
+		if (rel < 0 || rel >= this.renderRowCount) return;
+
+		const idx = this.startIndex + rel;
+		if (idx < 0 || idx >= this.filteredSessions.length) return;
+
+		if (event.wheel !== null) {
+			const delta = event.wheel > 0 ? 1 : -1;
+			const newIndex = Math.max(0, Math.min(this.filteredSessions.length - 1, this.selectedIndex + delta));
+			this.selectedIndex = newIndex;
+			this.requestRender?.();
+			return;
+		}
+
+		if (event.leftClick) {
+			this.selectedIndex = idx;
+			const selected = this.filteredSessions[idx];
+			if (selected && this.onSelect) {
+				this.onSelect(selected.session.path);
+			}
+		}
 	}
 
 	private buildTreePrefix(node: FlatSessionNode): string {
@@ -698,6 +734,10 @@ export class SessionSelectorComponent extends Container implements Focusable {
 		}
 
 		this.sessionList.handleInput(data);
+	}
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		this.sessionList.routeMouse(event, line, _col);
 	}
 
 	private canRename = true;

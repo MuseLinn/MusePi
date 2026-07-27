@@ -21,7 +21,17 @@
  */
 
 import { type Model, modelsAreEqual } from "@musepi/pi-ai";
-import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text, type TUI } from "@musepi/pi-tui";
+import {
+	Container,
+	type Focusable,
+	fuzzyFilter,
+	getKeybindings,
+	Input,
+	type SgrMouseEvent,
+	Spacer,
+	Text,
+	type TUI,
+} from "@musepi/pi-tui";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
 import type { SettingsManager } from "../../../core/settings-manager.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
@@ -125,6 +135,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private readonly SIDEBAR_WIDTH = 20;
 	private ctxWidth = 8;
 	private costWidth = 10;
+
+	// Mouse geometry (updated on every render)
+	private paneRowStart = 0;
+	private paneRowCount = 0;
 
 	constructor(
 		tui: TUI,
@@ -541,9 +555,59 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		out.push(topBorder(width, "Models"));
 
 		const inner = super.render(width - 4);
+		// Geometry: header is Spacer(1) + scope + Spacer(1) + search + Spacer(1) = 5 rows,
+		// then rebuildPane adds another Spacer(1) before the dual-pane rows.
+		this.paneRowStart = out.length + 5;
 		for (const line of inner) out.push(row(line, width));
+		this.paneRowCount = Math.max(0, inner.length - 6 - 4); // subtract header(5)+leading spacer(1)+detail+error/status+footer+trailing spacer
 
 		out.push(bottomBorder(width));
 		return out;
+	}
+
+	// ── Mouse support ──────────────────────────────────────────────
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		const rel = line - this.paneRowStart;
+		if (rel < 0 || rel >= this.paneRowCount) return;
+
+		const providers = this.providers;
+		const models = this.filteredModels;
+		const providerRow = rel;
+		const modelRow = rel;
+
+		if (event.wheel !== null) {
+			if (event.wheel > 0) {
+				// scroll down
+				if (this.selectedProviderIndex < providers.length - 1) this.selectedProviderIndex++;
+				else if (this.selectedModelIndex < models.length - 1) this.selectedModelIndex++;
+			} else {
+				// scroll up
+				if (this.selectedProviderIndex > 0) this.selectedProviderIndex--;
+				else if (this.selectedModelIndex > 0) this.selectedModelIndex--;
+			}
+			this.rebuildPane();
+			return;
+		}
+
+		if (event.leftClick) {
+			// Determine which pane was clicked based on column
+			// Layout: " " + left(SIDEBAR_WIDTH) + " | " + right...
+			const providerEndCol = 1 + this.SIDEBAR_WIDTH; // cols 1..20 (inclusive)
+			const separatorEndCol = providerEndCol + 3; // " | "
+			const clickedProvider = _col >= 1 && _col <= providerEndCol;
+			const clickedModel = _col >= separatorEndCol;
+
+			if (clickedProvider && providerRow < providers.length) {
+				this.selectedProviderIndex = providerRow;
+				this.applyProviderFilter();
+				this.focusPane = "models";
+				this.selectedModelIndex = 0;
+				this.rebuildPane();
+			} else if (clickedModel && modelRow < models.length) {
+				this.selectedModelIndex = modelRow;
+				this.rebuildPane();
+			}
+		}
 	}
 }

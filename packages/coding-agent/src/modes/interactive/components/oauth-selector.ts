@@ -1,4 +1,5 @@
 import type { ApiKeyAuth, AuthCheck, OAuthAuth } from "@musepi/pi-ai";
+import type { SgrMouseEvent } from "@musepi/pi-tui";
 import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, TruncatedText } from "@musepi/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -39,6 +40,10 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 	private onSelectCallback: (providerId: string, authType: AuthSelectorProvider["authType"]) => void;
 	private onCancelCallback: () => void;
 	private showAuthTypeLabels: boolean;
+
+	// Mouse routing geometry
+	private listStartRow = 0;
+	private listRowCount = 0;
 
 	constructor(
 		mode: "login" | "logout",
@@ -91,6 +96,44 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 		this.filterProviders(initialSearchInput ?? "");
 	}
 
+	private getVisibleRange(): { startIndex: number; endIndex: number } {
+		const maxVisible = 8;
+		const startIndex = Math.max(
+			0,
+			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredProviders.length - maxVisible),
+		);
+		const endIndex = Math.min(startIndex + maxVisible, this.filteredProviders.length);
+		return { startIndex, endIndex };
+	}
+
+	render(width: number): string[] {
+		const lines = super.render(width);
+		this.listStartRow = 6;
+		this.listRowCount = Math.max(0, lines.length - this.listStartRow - 1);
+		return lines;
+	}
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		if (event.wheel !== null) {
+			if (line < this.listStartRow || line >= this.listStartRow + this.listRowCount) return;
+			this.selectedIndex = Math.max(
+				0,
+				Math.min(this.filteredProviders.length - 1, this.selectedIndex + event.wheel),
+			);
+			this.updateList();
+			return;
+		}
+
+		if (!event.leftClick) return;
+		if (line < this.listStartRow || line >= this.listStartRow + this.listRowCount) return;
+		if (this.filteredProviders.length === 0) return;
+		const index = line - this.listStartRow + this.getVisibleRange().startIndex;
+		if (index >= 0 && index < this.filteredProviders.length) {
+			this.selectedIndex = index;
+			this.updateList();
+		}
+	}
+
 	private filterProviders(query: string): void {
 		this.filteredProviders = query
 			? fuzzyFilter(
@@ -106,12 +149,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 	private updateList(): void {
 		this.listContainer.clear();
 
-		const maxVisible = 8;
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredProviders.length - maxVisible),
-		);
-		const endIndex = Math.min(startIndex + maxVisible, this.filteredProviders.length);
+		const { startIndex, endIndex } = this.getVisibleRange();
 
 		for (let i = startIndex; i < endIndex; i++) {
 			const provider = this.filteredProviders[i];

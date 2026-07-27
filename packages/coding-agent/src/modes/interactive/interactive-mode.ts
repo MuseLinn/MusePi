@@ -202,6 +202,12 @@ import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
+import { BtwController } from "./controllers/btw-controller.ts";
+import { CommandController } from "./controllers/command-controller.ts";
+import { EventController } from "./controllers/event-controller.ts";
+import { InputController } from "./controllers/input-controller.ts";
+import { SelectorController } from "./controllers/selector-controller.ts";
+import { TodoCommandController } from "./controllers/todo-command-controller.ts";
 import { editInExternalEditor } from "./external-editor.ts";
 import { getModelSearchText } from "./model-search.ts";
 import {
@@ -412,7 +418,7 @@ export class InteractiveMode {
 	private workingIndicatorOptions: WorkingIndicatorOptions | undefined = undefined;
 	private readonly defaultWorkingMessage = "Working...";
 	private readonly defaultHiddenThinkingLabel = "Thinking...";
-	private hiddenThinkingLabel = this.defaultHiddenThinkingLabel;
+	hiddenThinkingLabel = this.defaultHiddenThinkingLabel;
 
 	private lastSigintTime = 0;
 	private lastEscapeTime = 0;
@@ -425,18 +431,18 @@ export class InteractiveMode {
 	private lastStatusText: Text | undefined = undefined;
 
 	// Streaming message tracking
-	private streamingComponent: AssistantMessageComponent | undefined = undefined;
-	private streamingMessage: AssistantMessage | undefined = undefined;
+	streamingComponent: AssistantMessageComponent | undefined = undefined;
+	streamingMessage: AssistantMessage | undefined = undefined;
 
 	// Tool execution tracking: toolCallId -> component
-	private pendingTools = new Map<string, ToolExecutionComponent>();
+	pendingTools = new Map<string, ToolExecutionComponent>();
 
 	// Tool output expansion state
-	private toolOutputExpanded = false;
+	toolOutputExpanded = false;
 
 	// Thinking block visibility state
-	private hideThinkingBlock = false;
-	private outputPad = 1;
+	hideThinkingBlock = false;
+	outputPad = 1;
 
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
@@ -459,6 +465,14 @@ export class InteractiveMode {
 
 	// Auto-compaction state
 	private autoCompactionEscapeHandler?: () => void;
+
+	// Controller instances
+	private btwController!: BtwController;
+	private commandController!: CommandController;
+	private todoController!: TodoCommandController;
+	private selectorController!: SelectorController;
+	private eventController!: EventController;
+	private inputController!: InputController;
 
 	// Auto-retry state
 	private retryEscapeHandler?: () => void;
@@ -610,6 +624,14 @@ export class InteractiveMode {
 			(message) => this.showError(message),
 			() => this.updateEditorBorderColor(),
 		);
+
+		// Initialize controllers
+		this.btwController = new BtwController(this as any);
+		this.commandController = new CommandController(this as any);
+		this.todoController = new TodoCommandController(this as any);
+		this.selectorController = new SelectorController(this as any);
+		this.eventController = new EventController(this as any);
+		this.inputController = new InputController(this as any);
 	}
 
 	private getAutocompleteSourceTag(sourceInfo?: SourceInfo): string | undefined {
@@ -941,7 +963,7 @@ export class InteractiveMode {
 	/**
 	 * Update terminal title with session name and cwd.
 	 */
-	private updateTerminalTitle(): void {
+	updateTerminalTitle(): void {
 		const cwdBasename = path.basename(this.sessionManager.getCwd());
 		const sessionName = this.sessionManager.getSessionName();
 		if (sessionName) {
@@ -1942,7 +1964,7 @@ export class InteractiveMode {
 	/**
 	 * Get a registered tool definition by name (for custom rendering).
 	 */
-	private getRegisteredToolDefinition(toolName: string) {
+	getRegisteredToolDefinition(toolName: string) {
 		return this.session.getToolDefinition(toolName);
 	}
 
@@ -3162,11 +3184,11 @@ export class InteractiveMode {
 
 	private subscribeToAgent(): void {
 		this.unsubscribe = this.session.subscribe(async (event) => {
-			await this.handleEvent(event);
+			await this.eventController.handleEvent(event);
 		});
 	}
 
-	private async handleEvent(event: AgentSessionEvent): Promise<void> {
+	async handleEvent(event: AgentSessionEvent): Promise<void> {
 		if (!this.isInitialized) {
 			await this.init();
 		}
@@ -3201,175 +3223,6 @@ export class InteractiveMode {
 				}
 				this.ui.requestRender();
 				break;
-
-			case "queue_update":
-				this.updatePendingMessagesDisplay();
-				this.ui.requestRender();
-				break;
-
-			case "entry_appended":
-				if (event.entry.type === "custom") {
-					this.addCustomEntryToChat(event.entry);
-					this.ui.requestRender();
-				}
-				break;
-
-			case "session_info_changed":
-				this.updateTerminalTitle();
-				this.footer.invalidate();
-				this.ui.requestRender();
-				break;
-
-			case "thinking_level_changed":
-				this.footer.invalidate();
-				this.updateEditorBorderColor();
-				break;
-
-			case "message_start":
-				if (event.message.role === "custom") {
-					this.addMessageToChat(event.message);
-					this.ui.requestRender();
-				} else if (event.message.role === "user") {
-					this.addMessageToChat(event.message);
-					this.updatePendingMessagesDisplay();
-					this.ui.requestRender();
-				} else if (event.message.role === "assistant") {
-					this.streamingComponent = new AssistantMessageComponent(
-						undefined,
-						this.hideThinkingBlock,
-						this.getMarkdownThemeWithSettings(),
-						this.hiddenThinkingLabel,
-						this.outputPad,
-					);
-					this.streamingMessage = event.message;
-					this.chatContainer.addChild(this.streamingComponent);
-					this.streamingComponent.updateContent(this.streamingMessage);
-					this.ui.requestRender();
-				}
-				break;
-
-			case "message_update":
-				if (this.streamingComponent && event.message.role === "assistant") {
-					this.streamingMessage = event.message;
-					this.streamingComponent.updateContent(this.streamingMessage);
-
-					for (const content of this.streamingMessage.content) {
-						if (content.type === "toolCall") {
-							if (!this.pendingTools.has(content.id)) {
-								const component = new ToolExecutionComponent(
-									content.name,
-									content.id,
-									content.arguments,
-									{
-										showImages: this.settingsManager.getShowImages(),
-										imageWidthCells: this.settingsManager.getImageWidthCells(),
-									},
-									this.getRegisteredToolDefinition(content.name),
-									this.ui,
-									this.sessionManager.getCwd(),
-								);
-								component.setExpanded(this.toolOutputExpanded);
-								this.chatContainer.addChild(component);
-								this.pendingTools.set(content.id, component);
-							} else {
-								const component = this.pendingTools.get(content.id);
-								if (component) {
-									component.updateArgs(content.arguments);
-								}
-							}
-						}
-					}
-					this.ui.requestRender();
-				}
-				break;
-
-			case "message_end":
-				if (event.message.role === "user") break;
-				if (this.streamingComponent && event.message.role === "assistant") {
-					this.streamingMessage = event.message;
-					let errorMessage: string | undefined;
-					if (this.streamingMessage.stopReason === "aborted") {
-						const retryAttempt = this.session.retryAttempt;
-						errorMessage =
-							retryAttempt > 0
-								? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
-								: "Operation aborted";
-						this.streamingMessage.errorMessage = errorMessage;
-					}
-					this.streamingComponent.updateContent(this.streamingMessage);
-
-					if (this.streamingMessage.stopReason === "aborted" || this.streamingMessage.stopReason === "error") {
-						if (!errorMessage) {
-							errorMessage = this.streamingMessage.errorMessage || "Error";
-						}
-						for (const [, component] of this.pendingTools.entries()) {
-							component.updateResult({
-								content: [{ type: "text", text: errorMessage }],
-								isError: true,
-							});
-						}
-						this.pendingTools.clear();
-						this.showPinnedError(errorMessage);
-					} else {
-						// Args are now complete - trigger diff computation for edit tools
-						for (const [, component] of this.pendingTools.entries()) {
-							component.setArgsComplete();
-						}
-						this.maybeShowCacheMissNotice(this.streamingMessage);
-					}
-					this.streamingComponent = undefined;
-					this.streamingMessage = undefined;
-					this.footer.invalidate();
-				}
-				this.ui.requestRender();
-				break;
-
-			case "bash_execution_update":
-				// The bash execution callback handles TUI output rendering.
-				break;
-
-			case "tool_execution_start": {
-				let component = this.pendingTools.get(event.toolCallId);
-				if (!component) {
-					component = new ToolExecutionComponent(
-						event.toolName,
-						event.toolCallId,
-						event.args,
-						{
-							showImages: this.settingsManager.getShowImages(),
-							imageWidthCells: this.settingsManager.getImageWidthCells(),
-						},
-						this.getRegisteredToolDefinition(event.toolName),
-						this.ui,
-						this.sessionManager.getCwd(),
-					);
-					component.setExpanded(this.toolOutputExpanded);
-					this.chatContainer.addChild(component);
-					this.pendingTools.set(event.toolCallId, component);
-				}
-				component.markExecutionStarted();
-				this.ui.requestRender();
-				break;
-			}
-
-			case "tool_execution_update": {
-				const component = this.pendingTools.get(event.toolCallId);
-				if (component) {
-					component.updateResult({ ...event.partialResult, isError: false }, true);
-					this.ui.requestRender();
-				}
-				break;
-			}
-
-			case "tool_execution_end": {
-				const component = this.pendingTools.get(event.toolCallId);
-				if (component) {
-					component.updateResult({ ...event.result, isError: event.isError });
-					this.pendingTools.delete(event.toolCallId);
-					this.ui.requestRender();
-				}
-				break;
-			}
 
 			case "agent_end": {
 				if (this.settingsManager.getShowTerminalProgress()) {
@@ -3543,7 +3396,7 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private addCustomEntryToChat(entry: Extract<SessionEntry, { type: "custom" }>): void {
+	addCustomEntryToChat(entry: Extract<SessionEntry, { type: "custom" }>): void {
 		// Check native renderers first, then extension renderers.
 		const renderer =
 			getNativeEntryRenderer(entry.customType) ?? this.session.extensionRunner.getEntryRenderer(entry.customType);
@@ -3567,7 +3420,7 @@ export class InteractiveMode {
 		this.chatContainer.addChild(component);
 	}
 
-	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
+	addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
 		switch (message.role) {
 			case "bashExecution": {
 				const component = new BashExecutionComponent(message.command, this.ui, message.excludeFromContext);
@@ -3775,7 +3628,7 @@ export class InteractiveMode {
 	 * significant cache miss. Only states observable facts: the miss itself,
 	 * a model switch, or an idle gap past the cache TTL.
 	 */
-	private maybeShowCacheMissNotice(message: AssistantMessage): void {
+	maybeShowCacheMissNotice(message: AssistantMessage): void {
 		if (!this.settingsManager.getShowCacheMissNotices()) return;
 
 		// Entries don't contain `message` yet: message_end fires before persistence.
@@ -4831,7 +4684,7 @@ export class InteractiveMode {
 		};
 	}
 
-	private updatePendingMessagesDisplay(): void {
+	updatePendingMessagesDisplay(): void {
 		this.pendingMessagesContainer.clear();
 		const { steering: steeringMessages, followUp: followUpMessages } = this.getAllQueuedMessages();
 		if (steeringMessages.length > 0 || followUpMessages.length > 0) {
@@ -7493,6 +7346,12 @@ export class InteractiveMode {
 		this.clearExtensionTerminalInputListeners();
 		this.footer.dispose();
 		this.footerDataProvider.dispose();
+		this.btwController.dispose();
+		this.commandController.dispose();
+		this.todoController.dispose();
+		this.selectorController.dispose();
+		this.eventController.dispose();
+		this.inputController.dispose();
 		if (this.unsubscribe) {
 			this.unsubscribe();
 		}

@@ -30,7 +30,7 @@ export interface MusepiSettingDef {
 	info?: string[];
 }
 
-const TIMEOUT_PRESETS = [60_000, 300_000, 600_000, 1_800_000];
+export const TIMEOUT_PRESETS = [60_000, 300_000, 600_000, 1_800_000];
 const TOKEN_CAP_PRESETS = [2_000, 6_000, 10_000, 20_000];
 
 export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [

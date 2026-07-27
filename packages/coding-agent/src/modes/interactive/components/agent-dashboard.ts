@@ -104,9 +104,9 @@ export class AgentDashboard {
 	// ─── Component interface ────────────────────────────────────────
 
 	render(width: number): string[] {
-		const paneWidth = Math.floor(width / 2) - 2;
-		const leftWidth = paneWidth - 1;
-		const rightWidth = width - paneWidth - 4;
+		const paneWidth = Math.floor(width / 2);
+		const leftWidth = paneWidth;
+		const rightWidth = width - paneWidth - 1;
 
 		const lines: string[] = [];
 
@@ -148,6 +148,9 @@ export class AgentDashboard {
 		];
 		const tabBar = new TabBar("", tabs, getTabBarTheme());
 		tabBar.onTabChange = (tab) => this.setFilter(tab.id as AgentFilter);
+
+		// Tab bar
+		lines.push(...tabBar.render(width));
 
 		// Header
 		lines.push(theme.fg("border", ` ${theme.bold("Agent")}`.padEnd(width)));

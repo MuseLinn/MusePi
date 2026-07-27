@@ -1,4 +1,5 @@
-import type { Model } from "@musepi/pi-ai";
+import type { Model } from "@musepi/pi-ai/compat";
+import type { SgrMouseEvent } from "@musepi/pi-tui";
 import {
 	Container,
 	type Focusable,
@@ -111,6 +112,10 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 	private maxVisible = 8;
 	private isDirty = false;
 
+	// Mouse routing geometry
+	private listStartRow = 0;
+	private listRowCount = 0;
+
 	constructor(config: ModelsConfig, callbacks: ModelsCallbacks) {
 		super();
 		this.callbacks = callbacks;
@@ -205,11 +210,7 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			return;
 		}
 
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredItems.length - this.maxVisible),
-		);
-		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
+		const { startIndex, endIndex } = this.getVisibleRange();
 		const allEnabled = this.enabledIds === null;
 
 		for (let i = startIndex; i < endIndex; i++) {
@@ -234,6 +235,40 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			this.listContainer.addChild(new Spacer(1));
 			this.listContainer.addChild(new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0));
 		}
+	}
+
+	render(width: number): string[] {
+		const lines = super.render(width);
+		this.listStartRow = 7;
+		this.listRowCount = Math.max(0, lines.length - this.listStartRow - 3);
+		return lines;
+	}
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		if (event.wheel !== null) {
+			if (line < this.listStartRow || line >= this.listStartRow + this.listRowCount) return;
+			this.selectedIndex = Math.max(0, Math.min(this.filteredItems.length - 1, this.selectedIndex + event.wheel));
+			this.updateList();
+			return;
+		}
+
+		if (!event.leftClick) return;
+		if (line < this.listStartRow || line >= this.listStartRow + this.listRowCount) return;
+		if (this.filteredItems.length === 0) return;
+		const index = line - this.listStartRow + this.getVisibleRange().startIndex;
+		if (index >= 0 && index < this.filteredItems.length) {
+			this.selectedIndex = index;
+			this.updateList();
+		}
+	}
+
+	private getVisibleRange(): { startIndex: number; endIndex: number } {
+		const startIndex = Math.max(
+			0,
+			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredItems.length - this.maxVisible),
+		);
+		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
+		return { startIndex, endIndex };
 	}
 
 	handleInput(data: string): void {

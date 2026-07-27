@@ -28,6 +28,8 @@ export interface AppKeybindings {
 	"app.message.copy": true;
 	"app.message.followUp": true;
 	"app.message.dequeue": true;
+	"app.clipboard.copyLine": true;
+	"app.clipboard.copyPrompt": true;
 	"app.clipboard.pasteImage": true;
 	"app.session.new": true;
 	"app.session.tree": true;
@@ -120,6 +122,14 @@ export const KEYBINDINGS = {
 	"app.message.dequeue": {
 		defaultKeys: "alt+up",
 		description: "Restore queued messages",
+	},
+	"app.clipboard.copyLine": {
+		defaultKeys: [],
+		description: "Copy current line to clipboard",
+	},
+	"app.clipboard.copyPrompt": {
+		defaultKeys: [],
+		description: "Copy entire prompt to clipboard",
 	},
 	"app.clipboard.pasteImage": {
 		defaultKeys: process.platform === "win32" ? "alt+v" : "ctrl+v",

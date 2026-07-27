@@ -23,17 +23,17 @@ export interface WelcomeOptions {
 }
 
 const LOGO_LINES = [
-	"  \u2580\u2588\u2580\u2580\u2580\u2580\u2580\u2580\u2588\u2580\u2580\u2580\u2588\u2580  ",
-	"   \u2558\u2588\u2588    \u2588\u2588     ",
-	"    \u2588\u2588    \u2588\u2588     ",
-	"    \u2588\u2588    \u2588\u2588     ",
-	"   \u2584\u2588\u2588\u2584  \u2584\u2588\u2588\u2584    ",
+	"  __  __           _    ____  _  ",
+	" |  \\/  |  _   _  | |  |  _ \\(_)",
+	" | |\\/| | | | | | | |  | |_) | |",
+	" | |  | | | |_| | | |  |  __/| |",
+	" |_|  |_|  \\__,_| |_|  |_|   |_|",
 ];
 
 const MAX_BOX_WIDTH = 100;
 const MIN_LEFT = 12;
 const MIN_RIGHT = 20;
-const PREFERRED_LEFT = 26;
+const PREFERRED_LEFT = 35;
 
 export class WelcomeComponent {
 	private currentModel: string;
@@ -65,7 +65,7 @@ export class WelcomeComponent {
 		let rightCol: number;
 		if (hasRight) {
 			const dualW = innerW - 3; // room for " │ "
-			const desiredLeft = Math.min(PREFERRED_LEFT, Math.max(MIN_LEFT, Math.floor(dualW * 0.35)));
+			const desiredLeft = Math.min(PREFERRED_LEFT, Math.max(MIN_LEFT, Math.floor(dualW * 0.45)));
 			leftCol = Math.min(desiredLeft, dualW - MIN_RIGHT);
 			rightCol = Math.max(1, dualW - leftCol);
 		} else {
@@ -121,7 +121,7 @@ export class WelcomeComponent {
 		borderBox.push(
 			theme.fg(
 				"dim",
-				`${rawKeyHint("#", "command palette")}  ${rawKeyHint("!", "shell")}  ${rawKeyHint("$", "tools")}  ${keyHint("tui.select.cancel", "dismiss")}`,
+				`${rawKeyHint("#", "prompt actions")}  ${rawKeyHint("!", "shell")}  ${rawKeyHint("$", "tools")}  ${keyHint("tui.select.cancel", "dismiss")}`,
 			),
 		);
 

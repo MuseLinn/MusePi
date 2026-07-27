@@ -1,3 +1,4 @@
+import type { SgrMouseEvent } from "@musepi/pi-tui";
 import {
 	type Component,
 	Container,
@@ -105,8 +106,10 @@ interface ToolCallInfo {
 
 class TreeList implements Component {
 	private flatNodes: FlatNode[] = [];
-	private filteredNodes: FlatNode[] = [];
-	private selectedIndex = 0;
+	/** @internal accessed by routeMouse */
+	filteredNodes: FlatNode[] = [];
+	/** @internal accessed by routeMouse */
+	selectedIndex = 0;
 	private currentLeafId: string | null;
 	private maxVisibleLines: number;
 	private filterMode: FilterMode = "default";
@@ -1346,6 +1349,10 @@ export class TreeSelectorComponent extends Container implements Focusable {
 		}
 	}
 
+	// Mouse routing geometry
+	private treeStartRow = 0;
+	private treeRowCount = 0;
+
 	constructor(
 		tree: SessionTreeNode[],
 		currentLeafId: string | null,
@@ -1386,6 +1393,37 @@ export class TreeSelectorComponent extends Container implements Focusable {
 
 		if (tree.length === 0) {
 			setTimeout(() => onCancel(), 100);
+		}
+	}
+
+	render(width: number): string[] {
+		const lines = super.render(width);
+		this.treeStartRow = 7;
+		this.treeRowCount = Math.max(0, lines.length - this.treeStartRow - 3);
+		return lines;
+	}
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		if (event.wheel !== null) {
+			if (line < this.treeStartRow || line >= this.treeStartRow + this.treeRowCount) return;
+			const treeList = this.labelInput ? this.getTreeList() : this.treeList;
+			treeList.selectedIndex = Math.max(
+				0,
+				Math.min((treeList.filteredNodes?.length ?? 0) - 1, treeList.selectedIndex + event.wheel),
+			);
+			(treeList as unknown as { updateList?: () => void }).updateList?.();
+			return;
+		}
+
+		if (!event.leftClick) return;
+		if (line < this.treeStartRow || line >= this.treeStartRow + this.treeRowCount) return;
+		const treeList = this.labelInput ? this.getTreeList() : this.treeList;
+		const nodes = treeList.filteredNodes ?? [];
+		if (nodes.length === 0) return;
+		const index = line - this.treeStartRow;
+		if (index >= 0 && index < nodes.length) {
+			treeList.selectedIndex = index;
+			(treeList as unknown as { updateList?: () => void }).updateList?.();
 		}
 	}
 

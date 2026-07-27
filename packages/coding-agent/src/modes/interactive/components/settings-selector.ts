@@ -11,6 +11,7 @@ import {
 	type SelectListLayoutOptions,
 	type SettingItem,
 	SettingsList,
+	type SgrMouseEvent,
 	Spacer,
 	type Tab,
 	TabBar,
@@ -18,6 +19,7 @@ import {
 } from "@musepi/pi-tui";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import type { DefaultProjectTrust, WarningSettings } from "../../../core/settings-manager.ts";
+import { SEARCH_PROVIDER_LABELS, SEARCH_PROVIDER_OPTIONS } from "../../../web/search/types.ts";
 import {
 	getSelectListTheme,
 	getSettingsListTheme,
@@ -32,6 +34,7 @@ import {
 	MUSEPI_SETTING_DEFS,
 	musepiSettingDescription,
 	parseMusepiValue,
+	TIMEOUT_PRESETS,
 } from "./musepi-settings-defs.ts";
 import { bottomBorder, divider, row, topBorder } from "./overlay-box.ts";
 
@@ -635,12 +638,23 @@ class ThemeSubmenu extends Container {
 	}
 }
 
+/** Map tab IDs to the section/group names shown within that tab.
+ * Items whose section matches appear under the tab; consecutive items
+ * with different sections render group headings automatically.
+ * Omitting a tab here falls back to filtering by tab label (current behavior). */
+const TAB_SECTIONS: Record<string, string[]> = {
+	model: ["Thinking", "Advisor"],
+	appearance: ["Theme", "Display", "Images"],
+	providers: ["Services", "MCP", "LSP", "Advanced"],
+};
+
 /**
  * Main settings selector component.
  */
 export class SettingsSelectorComponent extends Container {
 	private settingsList: SettingsList;
 	private tabBar: TabBar;
+	private tabDefs: Tab[];
 	constructor(config: SettingsConfig, callbacks: SettingsCallbacks) {
 		super();
 
@@ -704,7 +718,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "theme",
 				label: "Theme",
-				section: "Appearance",
+				section: "Theme",
 				description: "Color theme for the interface",
 				currentValue: config.currentTheme,
 				submenu: (currentValue, done) =>
@@ -713,7 +727,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "hide-thinking",
 				label: "Hide thinking",
-				section: "Appearance",
+				section: "Display",
 				description: "Hide thinking blocks in assistant responses",
 				currentValue: config.hideThinkingBlock ? "true" : "false",
 				values: ["true", "false"],
@@ -721,7 +735,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "cache-miss-notices",
 				label: "Cache miss notices",
-				section: "Appearance",
+				section: "Display",
 				description: "Show transcript notices for significant prompt-cache misses",
 				currentValue: config.showCacheMissNotices ? "true" : "false",
 				values: ["true", "false"],
@@ -729,7 +743,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "collapse-changelog",
 				label: "Collapse changelog",
-				section: "Appearance",
+				section: "Display",
 				description: "Show condensed changelog after updates",
 				currentValue: config.collapseChangelog ? "true" : "false",
 				values: ["true", "false"],
@@ -737,7 +751,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "quiet-startup",
 				label: "Quiet startup",
-				section: "Appearance",
+				section: "Display",
 				description: "Disable verbose printing at startup",
 				currentValue: config.quietStartup ? "true" : "false",
 				values: ["true", "false"],
@@ -745,7 +759,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "show-hardware-cursor",
 				label: "Show hardware cursor",
-				section: "Appearance",
+				section: "Display",
 				description: "Show the terminal cursor while still positioning it for IME support",
 				currentValue: config.showHardwareCursor ? "true" : "false",
 				values: ["true", "false"],
@@ -753,7 +767,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "editor-padding",
 				label: "Editor padding",
-				section: "Appearance",
+				section: "Display",
 				description: "Horizontal padding for input editor (0-3)",
 				currentValue: String(config.editorPaddingX),
 				values: ["0", "1", "2", "3"],
@@ -761,7 +775,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "output-padding",
 				label: "Output padding",
-				section: "Appearance",
+				section: "Display",
 				description: "Horizontal padding for user messages, assistant messages, and thinking",
 				currentValue: String(config.outputPad),
 				values: ["0", "1"],
@@ -769,7 +783,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "autocomplete-max-visible",
 				label: "Autocomplete max items",
-				section: "Appearance",
+				section: "Display",
 				description: "Max visible items in autocomplete dropdown (3-20)",
 				currentValue: String(config.autocompleteMaxVisible),
 				values: ["3", "5", "7", "10", "15", "20"],
@@ -777,7 +791,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "clear-on-shrink",
 				label: "Clear on shrink",
-				section: "Appearance",
+				section: "Display",
 				description: "Clear empty rows when content shrinks (may cause flicker)",
 				currentValue: config.clearOnShrink ? "true" : "false",
 				values: ["true", "false"],
@@ -785,7 +799,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "terminal-progress",
 				label: "Terminal progress",
-				section: "Appearance",
+				section: "Display",
 				description: "Show OSC 9;4 progress indicators in the terminal tab bar",
 				currentValue: config.showTerminalProgress ? "true" : "false",
 				values: ["true", "false"],
@@ -793,7 +807,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "editor-style",
 				label: "Editor style",
-				section: "Appearance",
+				section: "Display",
 				description: "Editor chrome: boxed (╭╮╰╯), compact (embedded top bar), or plain",
 				currentValue: config.musepi.tui?.style ?? "boxed",
 				values: ["boxed", "compact", "plain"],
@@ -801,7 +815,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "notifications-enabled",
 				label: "Notifications",
-				section: "Appearance",
+				section: "Display",
 				description: "Show desktop notifications for agent events",
 				currentValue: config.musepi.notifications.enabled ? "true" : "false",
 				values: ["true", "false"],
@@ -809,7 +823,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "model-in-border",
 				label: "Model in border",
-				section: "Appearance",
+				section: "Display",
 				description: "Show model name in the editor top border",
 				currentValue: config.musepi.tui?.modelInBorder ? "true" : "false",
 				values: ["true", "false"],
@@ -817,7 +831,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "goal-badge",
 				label: "Goal badge",
-				section: "Appearance",
+				section: "Display",
 				description: "Show goal mode badge in the status line",
 				currentValue: config.musepi.goal?.badge ? "true" : "false",
 				values: ["true", "false"],
@@ -829,7 +843,7 @@ export class SettingsSelectorComponent extends Container {
 						{
 							id: "show-images",
 							label: "Show images",
-							section: "Appearance",
+							section: "Display",
 							description: "Render images inline in terminal",
 							currentValue: config.showImages ? "true" : "false",
 							values: ["true", "false"],
@@ -837,7 +851,7 @@ export class SettingsSelectorComponent extends Container {
 						{
 							id: "image-width-cells",
 							label: "Image width",
-							section: "Appearance",
+							section: "Display",
 							description: "Preferred inline image width in terminal cells",
 							currentValue: String(config.imageWidthCells),
 							values: ["60", "80", "120"],
@@ -847,7 +861,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "auto-resize-images",
 				label: "Auto-resize images",
-				section: "Appearance",
+				section: "Display",
 				description: "Resize large images to 2000x2000 max for better model compatibility",
 				currentValue: config.autoResizeImages ? "true" : "false",
 				values: ["true", "false"],
@@ -855,7 +869,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "block-images",
 				label: "Block images",
-				section: "Appearance",
+				section: "Display",
 				description: "Prevent images from being sent to LLM providers",
 				currentValue: config.blockImages ? "true" : "false",
 				values: ["true", "false"],
@@ -865,7 +879,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "thinking",
 				label: "Thinking level",
-				section: "Model",
+				section: "Thinking",
 				description: "Reasoning depth for thinking-capable models",
 				currentValue: config.thinkingLevel,
 				submenu: (currentValue, done) =>
@@ -888,7 +902,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "advisor-enabled",
 				label: "Advisor",
-				section: "Model",
+				section: "Advisor",
 				description: "Enable the advisor tool for review-model guidance",
 				currentValue: config.musepi.advisor?.enabled ? "true" : "false",
 				values: ["true", "false"],
@@ -896,7 +910,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "advisor-model",
 				label: "Advisor model",
-				section: "Model",
+				section: "Advisor",
 				description: "Model spec for advisor reviews (e.g. openai/gpt-4o). Leave empty to use the session model.",
 				currentValue: config.musepi.advisor?.model ?? "(session default)",
 				submenu: (currentValue, done) =>
@@ -985,15 +999,6 @@ export class SettingsSelectorComponent extends Container {
 				currentValue: config.musepi.edit.enforceSeenLines ? "true" : "false",
 				values: ["true", "false"],
 			},
-			{
-				id: "lsp-enabled",
-				label: "LSP servers",
-				section: "Files",
-				description: "Enable Language Server Protocol integration for code intelligence",
-				currentValue: config.musepi.lsp.enabled ? "true" : "false",
-				values: ["true", "false"],
-			},
-
 			// ── Shell ──────────────────────────────────────────────────
 			{
 				id: "skill-commands",
@@ -1037,23 +1042,6 @@ export class SettingsSelectorComponent extends Container {
 				currentValue: config.enableInstallTelemetry ? "true" : "false",
 				values: ["true", "false"],
 			},
-			{
-				id: "mcp-enabled",
-				label: "MCP servers",
-				section: "Tools",
-				description: "Enable MCP (Model Context Protocol) server integration",
-				currentValue: config.musepi.mcp.enabled ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "mcp-startup-discovery",
-				label: "MCP startup discovery",
-				section: "Tools",
-				description: "Auto-discover MCP servers from settings on startup",
-				currentValue: config.musepi.mcp.startupDiscovery ? "true" : "false",
-				values: ["true", "false"],
-			},
-
 			// ── Tasks ──────────────────────────────────────────────────
 			{
 				id: "swarm-max-concurrency",
@@ -1100,18 +1088,118 @@ export class SettingsSelectorComponent extends Container {
 
 			// ── Providers ──────────────────────────────────────────────
 			{
+				id: "web-search-provider",
+				label: "Web search provider",
+				section: "Services",
+				description: "Preferred backend for the web_search tool",
+				currentValue:
+					(SEARCH_PROVIDER_LABELS as Record<string, string>)[config.musepi.providers.webSearch] ??
+					config.musepi.providers.webSearch,
+				values: SEARCH_PROVIDER_OPTIONS.map((o) => o.label),
+			},
+			{
 				id: "load-legacy-extensions",
 				label: "Load legacy pi extensions",
-				section: "Providers",
+				section: "Services",
 				description: "Load extensions registered via pi_extensions in settings.json",
 				currentValue: config.musepi.compat.loadPiExtensions ? "true" : "false",
 				values: ["true", "false"],
 			},
 			{
-				id: "musepi-remaining",
-				label: "More settings...",
-				section: "Providers",
-				description: "Additional MusePi settings: MCP, LSP, model roles, notifications, updates, and more.",
+				id: "mcp-enabled",
+				label: "MCP servers",
+				section: "MCP",
+				description: "Enable MCP (Model Context Protocol) server integration",
+				currentValue: config.musepi.mcp.enabled ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "mcp-startup-discovery",
+				label: "MCP startup discovery",
+				section: "MCP",
+				description: "Auto-discover MCP servers from settings on startup",
+				currentValue: config.musepi.mcp.startupDiscovery ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "mcp-idle-timeout",
+				label: "MCP idle timeout",
+				section: "MCP",
+				description: "Idle MCP connections are closed after this many ms",
+				currentValue: String(config.musepi.mcp.idleTimeoutMs),
+				values: TIMEOUT_PRESETS.map(String),
+			},
+			{
+				id: "mcp-servers-info",
+				label: "MCP servers (edit file)",
+				section: "MCP",
+				description: "MCP servers are a nested registry — edit in settings.json",
+				currentValue: "open",
+				submenu: (_currentValue, done) =>
+					new InfoSubmenu(
+						"MCP Servers",
+						[
+							"MCP servers are a nested registry and are edited in settings.json.",
+							'Under "musepi.mcp.servers", map a name to a stdio server',
+							'{ "command": "...", "args": [...], "env": {...} } or an HTTP server',
+							'{ "url": "...", "headers": {...} }. Per-server "enabled": false',
+							"disables without deleting. Manage interactively via /mcp.",
+							"",
+							`Settings file: ${config.musepiSettingsPath}`,
+						],
+						() => done(),
+					),
+			},
+			{
+				id: "lsp-enabled",
+				label: "LSP servers",
+				section: "LSP",
+				description: "Enable Language Server Protocol integration for code intelligence",
+				currentValue: config.musepi.lsp.enabled ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "lsp-diagnostics",
+				label: "LSP diagnostics on write",
+				section: "LSP",
+				description: "Run LSP diagnostics after every file write/edit",
+				currentValue: config.musepi.lsp.diagnosticsOnWrite ? "true" : "false",
+				values: ["true", "false"],
+			},
+			{
+				id: "lsp-idle-timeout",
+				label: "LSP idle timeout",
+				section: "LSP",
+				description: "Idle language servers are shut down after this many ms",
+				currentValue: String(config.musepi.lsp.idleTimeoutMs),
+				values: TIMEOUT_PRESETS.map(String),
+			},
+			{
+				id: "lsp-servers-info",
+				label: "LSP servers (edit file)",
+				section: "LSP",
+				description: "Language-server overrides — edit in settings.json",
+				currentValue: "open",
+				submenu: (_currentValue, done) =>
+					new InfoSubmenu(
+						"LSP Server Overrides",
+						[
+							"Language-server overrides are a nested registry edited in settings.json.",
+							'Under "musepi.lsp.servers", map a server name to override fields',
+							"(command, args, fileTypes, rootMarkers, isLinter, disabled,",
+							"initOptions, settings); fields merge onto the built-in table entry",
+							'of the same name, and "disabled": true removes it.',
+							"",
+							`Settings file: ${config.musepiSettingsPath}`,
+						],
+						() => done(),
+					),
+			},
+			{
+				id: "advanced-settings",
+				label: "Advanced MusePi settings",
+				section: "Advanced",
+				description: "Model roles, memory, notifications, updates, agents, and more",
 				currentValue: "configure",
 				submenu: (_currentValue, done) =>
 					new MusepiSettingsSubmenu(
@@ -1124,7 +1212,7 @@ export class SettingsSelectorComponent extends Container {
 		];
 
 		// TabBar for tab navigation — 11 tabs matching OMP layout
-		const tabDefs: Tab[] = [
+		this.tabDefs = [
 			{ id: "session", label: "Session" },
 			{ id: "appearance", label: "Appearance" },
 			{ id: "model", label: "Model" },
@@ -1137,8 +1225,8 @@ export class SettingsSelectorComponent extends Container {
 			{ id: "tasks", label: "Tasks" },
 			{ id: "providers", label: "Providers" },
 		];
-		this.tabBar = new TabBar("Settings", tabDefs, getTabBarTheme());
-		this.tabBar.onTabChange = (tab) => this.settingsList.setSectionFilter(tab.label);
+		this.tabBar = new TabBar("Settings", this.tabDefs, getTabBarTheme());
+		this.tabBar.onTabChange = (tab) => this.applyTabFilter(tab.id);
 		this.addChild(this.tabBar);
 
 		this.settingsList = new SettingsList(
@@ -1277,8 +1365,23 @@ export class SettingsSelectorComponent extends Container {
 					case "mcp-startup-discovery":
 						callbacks.onMusepiChange("mcp.startupDiscovery", newValue === "true");
 						break;
+					case "web-search-provider": {
+						// Map label back to provider id
+						const matched = SEARCH_PROVIDER_OPTIONS.find((o) => o.label === newValue);
+						if (matched) callbacks.onMusepiChange("providers.webSearch", matched.value);
+						break;
+					}
 					case "lsp-enabled":
 						callbacks.onMusepiChange("lsp.enabled", newValue === "true");
+						break;
+					case "lsp-diagnostics":
+						callbacks.onMusepiChange("lsp.diagnosticsOnWrite", newValue === "true");
+						break;
+					case "mcp-idle-timeout":
+						callbacks.onMusepiChange("mcp.idleTimeoutMs", Number(newValue));
+						break;
+					case "lsp-idle-timeout":
+						callbacks.onMusepiChange("lsp.idleTimeoutMs", Number(newValue));
 						break;
 					case "notifications-enabled":
 						callbacks.onMusepiChange("notifications.enabled", newValue === "true");
@@ -1299,12 +1402,31 @@ export class SettingsSelectorComponent extends Container {
 
 		// Bootstrap: show first tab
 		this.tabBar.selectTab("session");
-		this.settingsList.setSectionFilter("Session");
+		this.applyTabFilter("session");
+	}
+
+	/** Apply tab filter: show all groups under this tab. */
+	private applyTabFilter(tabId: string): void {
+		const groups = TAB_SECTIONS[tabId];
+		if (groups) {
+			this.settingsList.setSectionFilter(groups);
+		} else {
+			// Fallback: filter by tab label (matching section name)
+			const tabDef = this.tabDefs.find((t: Tab) => t.id === tabId);
+			this.settingsList.setSectionFilter(tabDef?.label ?? null);
+		}
 	}
 
 	getSettingsList(): SettingsList {
 		return this.settingsList;
 	}
+
+	// Frame geometry from the last render, for mouse hit-testing (the
+	// fullscreen overlay paints from screen row 0, so mouse rows map 1:1).
+	private tabRowStart = 0;
+	private tabRowCount = 0;
+	private contentRowStart = 0;
+	private contentRowCount = 0;
 
 	// ── Render (overlay-box framing) ────────────────────────────────
 
@@ -1313,10 +1435,14 @@ export class SettingsSelectorComponent extends Container {
 		out.push(topBorder(width, "Settings"));
 
 		const tabLines = this.tabBar.render(width - 4);
+		this.tabRowStart = out.length;
+		this.tabRowCount = tabLines.length;
 		for (const line of tabLines) out.push(row(line, width));
 		out.push(divider(width));
 
 		const listLines = this.settingsList.render(width - 4);
+		this.contentRowStart = out.length;
+		this.contentRowCount = listLines.length;
 		for (const line of listLines) out.push(row(line, width));
 		out.push(divider(width));
 
@@ -1332,5 +1458,38 @@ export class SettingsSelectorComponent extends Container {
 	handleInput(data: string): void {
 		if (this.tabBar.handleInput(data)) return;
 		this.settingsList.handleInput(data);
+	}
+
+	routeMouse(event: SgrMouseEvent, line: number, _col: number): void {
+		const contentColInset = 2;
+		const innerCol = event.col - contentColInset;
+		const contentLine = line - this.contentRowStart;
+
+		if (event.wheel !== null) {
+			if (contentLine >= 0 && contentLine < this.contentRowCount) {
+				this.settingsList.handleWheel(event.wheel);
+			}
+			return;
+		}
+
+		if (event.motion) {
+			// hover handling could be added here later
+			return;
+		}
+
+		if (event.leftClick) {
+			const tabLine = line - this.tabRowStart;
+			if (tabLine >= 0 && tabLine < this.tabRowCount) {
+				const tab = this.tabBar.tabAt(tabLine, innerCol);
+				if (tab) this.tabBar.selectTab(tab.id);
+				return;
+			}
+			if (contentLine >= 0 && contentLine < this.contentRowCount) {
+				const idx = this.settingsList.hitTest(contentLine);
+				if (idx >= 0) {
+					this.settingsList.selectItemAt(idx);
+				}
+			}
+		}
 	}
 }
