@@ -8,6 +8,8 @@ const packages = [
 	{ directory: "packages/ai", name: "@musepi/pi-ai" },
 	{ directory: "packages/agent", name: "@musepi/pi-agent-core" },
 	{ directory: "packages/tui", name: "@musepi/pi-tui" },
+	{ directory: "packages/musepi/core", name: "@musepi/core" },
+	{ directory: "packages/musepi/transcript", name: "@musepi/transcript" },
 	{ directory: "packages/coding-agent", name: "@musepi/coding-agent" },
 ];
 
@@ -120,6 +122,6 @@ for (const pkg of packageStates) {
 		continue;
 	}
 
-	run("npm", ["publish", "--access", "public", "--provenance", "--ignore-scripts"], { cwd: pkg.directory });
+	run("npm", ["publish", "--access", "public", "--ignore-scripts"], { cwd: pkg.directory });
 	console.log();
 }
