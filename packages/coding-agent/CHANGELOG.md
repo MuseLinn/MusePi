@@ -2,10 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- OMP controller alignment: EventController extracted from InteractiveMode with full message/tool handler takeover; StreamingReveal (30fps grapheme); ToolArgsReveal
+- TTSR: full stream rules engine (regex + ast-grep via @ast-grep/napi), scoped buffering, injection tracking, auto-abort/retry cycle, AstEngine interface
+- Background Advisor: passive watcher loop, emission guard, WATCHDOG.yml config, secret obfuscation, transcript recording
+- BTW side channel: /btw panel with streaming answer, copy, branch, spinner animation
+- i18n framework: t() lookup, en-US/zh-CN locales, language selector in Settings
+- Configurable tool card style: bordered (clean borders) / filled (OpenCode)
+- Compaction alignment: proportional reserve fallback, token flooring, mid-run compaction, context promotion, threshold percent
+- AgentRegistry: process-global agent registration
+
 ### Fixed
 
 - Extension compatibility: added @earendil-works/pi-* and @muselinn/musepi aliases for old extensions
 - Welcome screen: replaced Container layout with flat line-array rendering, eliminating excessive whitespace
+- Task output: model selection fallback for unauthenticated models, output content preservation on empty streaming
 - npm runtime: fixed @musepi/pi-ai exports pointing to src/ instead of dist/
 - npm runtime: added missing @musepi/pi-agent-core dependency
 

@@ -284,7 +284,7 @@
       <rect x="3" y="10" width="3" height="2" fill="#1c1a16"/>
       <rect x="9" y="10" width="3" height="2" fill="#0e5f4e"/>
     </svg>
-    <p class="kicker"><span data-l="en">A fork of earendil-works/pi · </span><span data-l="zh">fork 自 earendil-works/pi · </span><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">v0.1.1</a></p>
+    <p class="kicker"><span data-l="en">A fork of earendil-works/pi · </span><span data-l="zh">fork 自 earendil-works/pi · </span><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.2.10">v0.2.10-beta</a></p>
     <h1 class="tagline">
       <span data-l="en">A fork of pi that grew into <em>its own agent</em>.</span>
       <span data-l="zh">始于 pi 的 fork，长成<em style="white-space:nowrap">自己的 agent</em>。</span>
@@ -300,7 +300,7 @@
     </p>
 
     <p class="meta">
-      <span><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.1">v0.1.1</a> · 2026-07-23</span>
+      <span><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.2.10">v0.2.10-beta</a> · 2026-07-28</span>
       <span>macOS · Linux · Windows</span>
       <span>MIT</span>
       <span>config home <code>~/.musepi</code></span>
@@ -324,7 +324,7 @@
     <div class="term" aria-label="Verify the install">
       <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
       <pre><span class="p">$</span> musepi --version
-<span class="c">MusePi 0.1.1 — config home: ~/.musepi</span></pre>
+<span class="c">MusePi 0.2.10 — config home: ~/.musepi</span></pre>
     </div>
   </div>
 </section>
@@ -530,7 +530,7 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
 
 <section id="whatsnew">
   <div class="wrap">
-    <h2><span class="no">03</span><span data-l="en">New in 0.1.9</span><span data-l="zh">0.1.9 新功能</span></h2>
+    <h2><span class="no">03</span><span data-l="en">New in 0.2.10</span><span data-l="zh">0.2.10 新功能</span></h2>
     <p class="sub">
       <span data-l="en">Full details in the
       <a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">changelog</a>.</span>
@@ -540,41 +540,63 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
 
     <dl class="news">
       <div>
-        <dt>theme presets &amp; <code>/theme</code> command<span class="v">theme</span></dt>
-        <dd><span data-l="en">Four new preset themes (nord, gruvbox, tokyo-night, catppuccin),
-        a <code>/theme</code> command for listing/previewing/switching themes,
-        and a curated theme picker in the setup wizard with live color strip previews.</span><span data-l="zh">四套新预设主题（nord、gruvbox、tokyo-night、catppuccin），
-        <code>/theme</code> 命令用于列表/预览/切换主题，
-        安装向导中新增精选主题选择器，带实时色带预览。</span></dd>
+        <dt>OMP controller alignment<span class="v">core</span></dt>
+        <dd><span data-l="en">EventController extracted from InteractiveMode with full
+        message_start/update/end and tool_execution handlers. StreamingReveal
+        (30fps grapheme typewriter) and ToolArgsReveal inline, zero-delay.
+        Configurable tool card style: <code>bordered</code> (clean borders) or
+        <code>filled</code> (OpenCode background).</span><span data-l="zh">EventController 从 InteractiveMode 中提取，接管了
+        message_start/update/end 与 tool_execution 等所有事件处理。StreamingReveal
+        （30fps 逐字渐显）和 ToolArgsReveal 零延迟内联接入。可配置工具卡片样式：
+        <code>bordered</code>（边框线条）或 <code>filled</code>（实心背景）。</span></dd>
       </div>
       <div>
-        <dt>colorblind mode<span class="v">accessibility</span></dt>
-        <dd><span data-l="en">Global hue rotation (+60°) and desaturation (71%) for
-        deuteranopia-friendly terminal colors. Toggle at runtime; all hex
-        colors are adjusted before ANSI resolution.</span><span data-l="zh">全局色调偏移（+60°）+ 去饱和度（71%），
-        对红色盲友好的终端颜色。运行时切换，所有十六进制颜色在 ANSI 解析前自动调整。</span></dd>
+        <dt>TTSR (stream rules)<span class="v">safety</span></dt>
+        <dd><span data-l="en">Full pattern-matching stream rules with text (regex) and AST
+        (ast-grep via @ast-grep/napi) conditions, scoped buffering, injection
+        tracking, and auto-abort/retry cycle. AstEngine interface for future
+        native bindings.</span><span data-l="zh">完整流式规则引擎：文本（regex）+ AST（ast-grep，通过
+        @ast-grep/napi）条件匹配、作用域缓冲、注入频率控制与自动中断/重试周期。
+        AstEngine 接口预留 native 绑定接入点。</span></dd>
       </div>
       <div>
-        <dt>shimmer animation engine<span class="v">ui</span></dt>
-        <dd><span data-l="en">Character-level time-varying sweep on agent status indicators,
-        loaders, and bash execution components. Two modes — <code>classic</code>
-        (cosine LTR) and <code>kitt</code> (K.I.T.T. scanner).</span><span data-l="zh">Agent 状态指示器、加载器、bash 执行组件上的字符级动态扫描效果。
-        两种模式——<code>classic</code>（余弦左到右）和 <code>kitt</code>（扫描灯效果）。</span></dd>
+        <dt>Background Advisor<span class="v">ai</span></dt>
+        <dd><span data-l="en">Passive watcher loop: subscribes to primary transcript,
+        builds context via buildAdvisorTranscript(), calls a review model,
+        and surfaces findings. Emission guard for dedup/suppression. Full
+        WATCHDOG.yml config, secret obfuscation, and transcript recording.</span><span data-l="zh">被动看门狗循环：订阅主会话记录，通过 buildAdvisorTranscript()
+        构建上下文，调用审查模型，输出建议。Emission guard 处理去重和频率控制。
+        完整 WATCHDOG.yml 配置、密钥脱敏、会话录音。</span></dd>
       </div>
       <div>
-        <dt>symbol preset system<span class="v">ui</span></dt>
-        <dd><span data-l="en">200+ unicode symbols across status, navigation, tree-drawing,
-        language icons (38), tool icons (20), and tab icons. Switch between
-        <code>unicode</code> and <code>ascii</code> presets.</span><span data-l="zh">200+ unicode 符号，覆盖状态、导航、树形图、
-        语言图标（38）、工具图标（20）和标签页图标。可在 <code>unicode</code>
-        和 <code>ascii</code> 预设间切换。</span></dd>
+        <dt>BTW side channel<span class="v">chat</span></dt>
+        <dd><span data-l="en"><code>/btw &lt;question&gt;</code> opens a dedicated panel with streaming
+        answer, copy to clipboard, branch to session, braille spinner animation,
+        and Escape dismiss. Controller extracted, zero inline code.</span><span data-l="zh"><code>/btw &lt;question&gt;</code> 打开专用侧边面板，
+        流式回答、复制到剪贴板、分支到会话、盲文 spinner 动画、Escape 关闭。
+        控制器完整提取，零内联代码。</span></dd>
       </div>
       <div>
-        <dt><code>/queue</code> command<span class="v">workflow</span></dt>
-        <dd><span data-l="en">Type <code>/queue &lt;message&gt;</code> to queue a follow-up message
-        that is delivered after the agent finishes its work — no need to
-        wait or interrupt.</span><span data-l="zh">使用 <code>/queue &lt;message&gt;</code>
-        来排队一条消息，等 agent 完成当前工作后再投递——无需等待或打断。</span></dd>
+        <dt>i18n framework<span class="v">ui</span></dt>
+        <dd><span data-l="en"><code>t()</code> lookup with <code>en-US</code> / <code>zh-CN</code>
+        locale files. Language selector in Settings &rarr; General. Setup wizard
+        and settings descriptions wrapped with translations. Ready for GUI.
+        </span><span data-l="zh"><code>t()</code> 翻译查找，内置 <code>en-US</code> / <code>zh-CN</code>
+        语言包。设置 → 通用 中可选语言。安装向导与设置描述都已包装翻译就绪。
+        为未来 GUI 版打下基础。</span></dd>
+      </div>
+      <div>
+        <dt>Compaction alignment<span class="v">reliability</span></dt>
+        <dd><span data-l="en">Reserve token proportional fallback, token flooring (MAX of
+        provider report and local estimate), mid-run compaction during tool
+        loops, context promotion to larger models before compacting, and
+        threshold percent configuration.</span><span data-l="zh">保留 token 比例兜底、token 取整（provider 报告与本地估算取最大值）、
+        工具循环内运行中压缩、压缩前尝试升级到大窗口模型、阈值百分比可配置。</span></dd>
+      </div>
+      <div>
+        <dt>AgentRegistry<span class="v">infra</span></dt>
+        <dd><span data-l="en">Process-global agent registry for hub/IRC integration. Pure data
+        structure, zero external dependencies.</span><span data-l="zh">进程级 agent 注册表，为 hub/IRC 集成准备。纯数据结构，零外部依赖。</span></dd>
       </div>
     </dl>
   </div>
@@ -600,7 +622,7 @@ npm run check          <span class="c"># lint, format, types, lockfile</span>
   <div class="wrap">
     <ul>
       <li><a href="https://github.com/MuseLinn/MusePi">Repository</a></li>
-      <li><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.1.9">v0.1.9 release</a></li>
+      <li><a href="https://github.com/MuseLinn/MusePi/releases/tag/v0.2.10">v0.2.10 release</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CHANGELOG.md">Changelog</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">Upstream policy</a></li>
       <li><a href="https://github.com/MuseLinn/MusePi/blob/main/CONTRIBUTING.md">Contributing</a></li>

@@ -60,11 +60,14 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"version": "0.2.8",
+	"version": "0.2.10",
 	"overrides": {
 		"rimraf": "6.1.2",
 		"gaxios": {
 			"rimraf": "6.1.2"
 		}
+	},
+	"dependencies": {
+		"@ast-grep/napi": "0.45.0"
 	}
 }
