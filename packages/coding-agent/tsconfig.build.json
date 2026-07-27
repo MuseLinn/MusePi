@@ -3,12 +3,16 @@
 	"compilerOptions": {
 		"outDir": "./dist",
 		"paths": {
+			"@musepi/core": ["../musepi/core/dist/index.d.ts"],
+			"@musepi/core/*": ["../musepi/core/dist/*.d.ts"],
 			"@musepi/pi-agent-core": ["../agent/dist/index.d.ts"],
 			"@musepi/pi-agent-core/*": ["../agent/dist/*.d.ts"],
 			"@musepi/pi-ai": ["../ai/dist/index.d.ts"],
 			"@musepi/pi-ai/*": ["../ai/dist/*.d.ts", "../ai/dist/providers/*.d.ts"],
 			"@musepi/pi-tui": ["../tui/dist/index.d.ts"],
-			"@musepi/pi-tui/*": ["../tui/dist/*.d.ts", "../tui/dist/components/*.d.ts"]
+			"@musepi/pi-tui/*": ["../tui/dist/*.d.ts", "../tui/dist/components/*.d.ts"],
+			"@musepi/transcript": ["../musepi/transcript/dist/index.d.ts"],
+			"@musepi/transcript/*": ["../musepi/transcript/dist/*.d.ts"]
 		},
 		"rootDir": "./src"
 	},
