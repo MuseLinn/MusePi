@@ -28,15 +28,15 @@ function commandForPlatform(command) {
 function run(command, args, options = {}) {
 	const cmd = commandForPlatform(command);
 	console.log(`$ ${cmd} ${args.join(" ")}`);
+	const isWin = process.platform === "win32";
 	const spawnOptions = {
 		cwd: options.cwd,
 		encoding: "utf8",
 		stdio: options.capture ? ["inherit", "pipe", "pipe"] : "inherit",
 	};
-	// Windows: npm.cmd is a batch file; spawnSync with pipe stdio needs shell:true
-	if (process.platform === "win32" && options.capture) {
-		spawnOptions.shell = true;
-	}
+	// Windows: npm.cmd is a batch file; spawnSync needs shell:true to propagate
+	// exit codes and stdio correctly, especially for interactive commands (OTP).
+	if (isWin) spawnOptions.shell = true;
 	const result = spawnSync(cmd, args, spawnOptions);
 
 	if (result.status !== 0) {

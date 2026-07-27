@@ -60,7 +60,7 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"version": "0.2.11",
+	"version": "0.2.12",
 	"overrides": {
 		"rimraf": "6.1.2",
 		"gaxios": {
