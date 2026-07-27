@@ -208,12 +208,10 @@ export class TtsrManager {
 			.filter(Boolean);
 		if (astConditions.length > 0 && !this.#astEngine) {
 			logger.warn(
-				"TTSR: astCondition patterns require @musepi/pi-natives (native ast-grep binding). " +
-					`Rule "${rule.name}" has ${astConditions.length} astCondition(s) that will not be evaluated.`,
-				{
-					ruleName: rule.name,
-					astConditions,
-				},
+				"TTSR: astCondition patterns require an AstEngine. " +
+					`Rule "${rule.name}" has ${astConditions.length} astCondition(s) that will not be evaluated. ` +
+					"Install @ast-grep/napi and pass new AstGrepEngine() to the TtsrManager constructor.",
+				{ ruleName: rule.name, astConditions },
 			);
 		}
 		if (conditions.length === 0 && astConditions.length === 0) return false;
@@ -249,9 +247,24 @@ export class TtsrManager {
 		return this.#matchBuffer(snapshot, context);
 	}
 
-	async checkAstSnapshot(_snapshot: string, _context: TtsrMatchContext): Promise<Rule[]> {
-		// AstCondition requires @musepi/pi-natives (ast-grep). Not available.
-		return [];
+	async checkAstSnapshot(snapshot: string, context: TtsrMatchContext): Promise<Rule[]> {
+		if (!this.#settings.enabled || !this.#astEngine || context.source !== "tool") return [];
+
+		const matched: Rule[] = [];
+		for (const entry of this.#rules.values()) {
+			if (entry.astConditions.length === 0) continue;
+			if (!this.#canTrigger(entry.rule.name)) continue;
+			if (!this.#matchesGlobalPaths(entry, context)) continue;
+			if (!this.#matchesScope(entry, context)) continue;
+
+			const lang = deriveLang(context.filePaths);
+			if (!lang) continue;
+
+			if (await this.#astEngine.matchAll(entry.astConditions, snapshot, lang)) {
+				matched.push(entry.rule);
+			}
+		}
+		return matched;
 	}
 
 	hasAstRules(): boolean {
@@ -318,4 +331,16 @@ export class TtsrManager {
 	getSettings(): Required<TtsrSettings> {
 		return { ...this.#settings };
 	}
+}
+
+/** Derive ast-grep language from file paths (extension, e.g. "ts"). */
+function deriveLang(filePaths: string[] | undefined): string | undefined {
+	for (const filePath of filePaths ?? []) {
+		const dot = filePath.lastIndexOf(".");
+		if (dot !== -1 && dot < filePath.length - 1) {
+			const ext = filePath.slice(dot + 1).toLowerCase();
+			if (/^[a-z]+$/.test(ext) && ext.length <= 6) return ext;
+		}
+	}
+	return undefined;
 }
