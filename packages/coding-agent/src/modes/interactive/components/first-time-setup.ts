@@ -1,5 +1,5 @@
+import { t } from "@musepi/core/i18n";
 import { Container, getKeybindings, Spacer, Text } from "@musepi/pi-tui";
-import { t } from "../../../../../musepi/core/src/i18n/index.ts";
 import { renderThemePreview, setColorBlindMode, setTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";

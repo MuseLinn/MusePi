@@ -11,7 +11,7 @@
 // ============================================================
 
 import { MUSEPI_SETTINGS_DOCS, type ResolvedMusepiSettings } from "@musepi/core";
-import { t } from "../../../../../musepi/core/src/i18n/index.ts";
+import { t } from "@musepi/core/i18n";
 
 export type MusepiSettingKind = "bool" | "enum" | "number" | "text" | "info";
 

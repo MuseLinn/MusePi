@@ -6,8 +6,8 @@
  * ~250 lines — not a port of OMP's 1118-line runtime.ts.
  */
 
+import { buildAdvisorTranscript } from "@musepi/core/advisor";
 import type { AgentMessage } from "@musepi/pi-agent-core";
-import { buildAdvisorTranscript } from "../../../musepi/core/src/advisor/serialize.ts";
 import type { SecretObfuscator } from "../secrets/obfuscator.ts";
 import * as logger from "../utils/pi-logger.ts";
 import { AdvisorEmissionGuard } from "./emission-guard.ts";

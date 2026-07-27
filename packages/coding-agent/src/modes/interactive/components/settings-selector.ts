@@ -1,4 +1,5 @@
 import type { ResolvedMusepiSettings } from "@musepi/core";
+import { t } from "@musepi/core/i18n";
 import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import type { Transport } from "@musepi/pi-ai";
 import {
@@ -17,7 +18,6 @@ import {
 	TabBar,
 	Text,
 } from "@musepi/pi-tui";
-import { t } from "../../../../../musepi/core/src/i18n/index.ts";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import type { DefaultProjectTrust, WarningSettings } from "../../../core/settings-manager.ts";
 import { SEARCH_PROVIDER_LABELS, SEARCH_PROVIDER_OPTIONS } from "../../../web/search/types.ts";

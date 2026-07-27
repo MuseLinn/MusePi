@@ -4,7 +4,9 @@
 		"outDir": "./dist",
 		"paths": {
 			"@musepi/core": ["../musepi/core/dist/index.d.ts"],
-			"@musepi/core/*": ["../musepi/core/dist/*.d.ts"],
+			"@musepi/core/*": ["../musepi/core/dist/*/index.d.ts"],
+			"@musepi/core/i18n": ["../musepi/core/dist/i18n/index.d.ts"],
+			"@musepi/core/advisor": ["../musepi/core/dist/advisor/index.d.ts"],
 			"@musepi/pi-agent-core": ["../agent/dist/index.d.ts"],
 			"@musepi/pi-agent-core/*": ["../agent/dist/*.d.ts"],
 			"@musepi/pi-ai": ["../ai/dist/index.d.ts"],

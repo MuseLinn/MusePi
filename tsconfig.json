@@ -18,6 +18,8 @@
 			"@musepi/coding-agent/hooks": ["./packages/coding-agent/src/core/hooks/index.ts"],
 			"@musepi/coding-agent/*": ["./packages/coding-agent/src/*"],
 			"@musepi/core": ["./packages/musepi/core/src/index.ts"],
+			"@musepi/core/i18n": ["./packages/musepi/core/src/i18n/index.ts"],
+			"@musepi/core/advisor": ["./packages/musepi/core/src/advisor/index.ts"],
 			"@musepi/core/*": ["./packages/musepi/core/src/*"],
 			"@musepi/transcript": ["./packages/musepi/transcript/src/index.ts"],
 			"@musepi/transcript/*": ["./packages/musepi/transcript/src/*"],
