@@ -8,6 +8,8 @@ const packages = [
 	{ directory: "packages/ai", name: "@musepi/pi-ai" },
 	{ directory: "packages/agent", name: "@musepi/pi-agent-core" },
 	{ directory: "packages/tui", name: "@musepi/pi-tui" },
+	{ directory: "packages/musepi/core", name: "@musepi/core" },
+	{ directory: "packages/musepi/transcript", name: "@musepi/transcript" },
 	{ directory: "packages/coding-agent", name: "@musepi/coding-agent" },
 ];
 
@@ -24,16 +26,22 @@ function commandForPlatform(command) {
 }
 
 function run(command, args, options = {}) {
-	console.log(`$ ${[command, ...args].join(" ")}`);
-	const result = spawnSync(commandForPlatform(command), args, {
+	const cmd = commandForPlatform(command);
+	console.log(`$ ${cmd} ${args.join(" ")}`);
+	const spawnOptions = {
 		cwd: options.cwd,
 		encoding: "utf8",
 		stdio: options.capture ? ["inherit", "pipe", "pipe"] : "inherit",
-	});
+	};
+	// Windows: npm.cmd is a batch file; spawnSync with pipe stdio needs shell:true
+	if (process.platform === "win32" && options.capture) {
+		spawnOptions.shell = true;
+	}
+	const result = spawnSync(cmd, args, spawnOptions);
 
 	if (result.status !== 0) {
 		const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-		throw new Error(output ? `Command failed: ${command} ${args.join(" ")}\n${output}` : `Command failed: ${command} ${args.join(" ")}`);
+		throw new Error(output ? `Command failed: ${cmd} ${args.join(" ")}\n${output}` : `Command failed: ${cmd} ${args.join(" ")}`);
 	}
 
 	return result;
@@ -56,17 +64,54 @@ function validatePack(directory) {
 }
 
 function isPublished(name, version) {
-	const result = spawnSync(commandForPlatform("npm"), ["view", `${name}@${version}`, "version", "--json"], {
+	const cmd = commandForPlatform("npm");
+	const args = [`view`, `${name}@${version}`, `version`, `--json`];
+	const spawnOpts = {
 		encoding: "utf8",
 		stdio: ["inherit", "pipe", "pipe"],
-	});
+	};
+	if (process.platform === "win32") spawnOpts.shell = true;
+	const result = spawnSync(cmd, args, spawnOpts);
 
-	if (result.status === 0 && result.stdout.trim()) {
-		return true;
+	const stdout = result.stdout?.trim() ?? "";
+	const stderr = result.stderr?.trim() ?? "";
+	const output = [stdout, stderr].filter(Boolean).join("\n");
+
+	// Status 0 + non-empty JSON → published
+	if (result.status === 0 && stdout) {
+		try {
+			const parsed = JSON.parse(stdout);
+			if (typeof parsed === "string") return true;
+			if (parsed && parsed.error) {
+				// npm returns JSON error on 404
+				return false;
+			}
+			return true;
+		} catch {}
 	}
 
-	const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
-	if (result.status !== 0 && (output.includes("E404") || output.includes("404 Not Found"))) {
+	// Non-zero status + E404 in output → not published
+	if (result.status !== 0 && (output.includes("E404") || output.includes("404"))) {
+		return false;
+	}
+
+	// On Windows, npm.cmd may exit with null status but still produce output
+	if (output.includes("E404") || output.includes("404")) {
+		return false;
+	}
+
+	// If we got here and have JSON with error, handle gracefully
+	if (stdout) {
+		try {
+			const parsed = JSON.parse(stdout);
+			if (parsed?.error?.code === "E404" || parsed?.error?.code === "404") {
+				return false;
+			}
+		} catch {}
+	}
+
+	// Treat any other failure as "not published" to avoid blocking publish
+	if (result.status !== 0 || result.status === null) {
 		return false;
 	}
 
@@ -120,6 +165,6 @@ for (const pkg of packageStates) {
 		continue;
 	}
 
-	run("npm", ["publish", "--access", "public", "--provenance", "--ignore-scripts"], { cwd: pkg.directory });
+	run("npm", ["publish", "--access", "public", "--ignore-scripts"], { cwd: pkg.directory });
 	console.log();
 }
