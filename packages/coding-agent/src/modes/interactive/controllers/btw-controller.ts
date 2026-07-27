@@ -1,15 +1,13 @@
 /**
  * BTW (By The Way) controller — side-channel conversation panel.
  *
- * Extracted from InteractiveMode to keep the mode class focused on
- * orchestration (lifecycle, key routing, session wiring).
- *
  * /btw <question> — opens a dedicated panel with streaming answer
  * and keyboard shortcuts (Esc dismiss, c copy, b branch).
  */
 
 import { runBtwTurn } from "../../../musepi/btw.ts";
 import { BtwPanelComponent } from "../../../musepi/btw-panel.ts";
+import { copyToClipboard } from "../../../utils/clipboard.ts";
 import { theme } from "../theme/theme.ts";
 import type { InteractiveModeContext } from "../types.ts";
 
@@ -17,6 +15,9 @@ export class BtwController {
 	#panel: BtwPanelComponent | null = null;
 	#abortController: AbortController | null = null;
 	#ctx: InteractiveModeContext;
+	#copyInFlight = false;
+	#branchInFlight = false;
+	#lastQuestion: string | undefined;
 
 	constructor(ctx: InteractiveModeContext) {
 		this.#ctx = ctx;
@@ -34,6 +35,51 @@ export class BtwController {
 		return true;
 	}
 
+	/** Whether the active panel has text ready to copy. */
+	canCopy(): boolean {
+		return this.#panel?.isCopyable() === true && !this.#copyInFlight;
+	}
+
+	/** Handle copy — copies BTW answer to clipboard. Returns true if consumed. */
+	async handleCopy(): Promise<boolean> {
+		if (!this.canCopy()) return false;
+		const text = this.#panel!.getCopyText();
+		if (!text) return false;
+
+		this.#copyInFlight = true;
+		try {
+			await copyToClipboard(text);
+			this.#ctx.showStatus("Copied to clipboard");
+		} catch {
+			this.#ctx.showStatus("Failed to copy");
+		}
+		this.#copyInFlight = false;
+		return true;
+	}
+
+	/** Whether the active panel can be branched into the main chat. */
+	canBranch(): boolean {
+		return this.#panel?.isCopyable() === true && !this.#branchInFlight;
+	}
+
+	/** Handle branch (b) key — fork BTW answer into main session. Returns true if consumed. */
+	async handleBranch(): Promise<boolean> {
+		if (!this.canBranch()) return false;
+		const text = this.#panel!.getBranchText();
+		if (!text || !this.#lastQuestion) return false;
+
+		this.#branchInFlight = true;
+		try {
+			// TODO: wire proper branch → fork session with BTW answer
+			// this.#ctx.session.sendCustomMessage(...)
+			this.#ctx.showStatus("Branch not yet wired — coming soon");
+		} catch {
+			this.#ctx.showStatus("Branch failed");
+		}
+		this.#branchInFlight = false;
+		return true;
+	}
+
 	/** Start a new /btw turn with the given question. */
 	async start(question: string): Promise<void> {
 		if (!question) {
@@ -41,14 +87,14 @@ export class BtwController {
 			return;
 		}
 		if (!this.#ctx.session.model) {
-			this.#ctx.showError("No model selected — pick a model before using /btw.");
+			this.#ctx.showError("No model selected");
 			return;
 		}
 
-		// Close any existing panel
 		this.close();
 
-		// Create panel
+		this.#lastQuestion = question;
+
 		const panel = new BtwPanelComponent(question, (s: string) => theme.fg("accent", s));
 		this.#panel = panel;
 		this.#ctx.chatContainer.addChild(panel);
@@ -86,7 +132,6 @@ export class BtwController {
 		}
 	}
 
-	/** Clean up all resources. */
 	dispose(): void {
 		this.close();
 	}

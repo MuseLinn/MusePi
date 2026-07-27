@@ -2773,6 +2773,10 @@ export class InteractiveMode {
 		// Set up handlers on defaultEditor - they use this.editor for text access
 		// so they work correctly regardless of which editor is active
 		this.defaultEditor.onEscape = () => {
+			// BTW panel open? Dismiss it
+			if (this.btwController.handleEscape()) {
+				return;
+			}
 			if (this.session.isStreaming) {
 				this.restoreQueuedMessagesToEditor({ abort: true });
 			} else if (this.session.isBashRunning) {
@@ -3013,7 +3017,8 @@ export class InteractiveMode {
 			}
 			if (text === "/btw" || text.startsWith("/btw ")) {
 				this.editor.setText("");
-				await this.handleBtwCommand(text);
+				const question = text.startsWith("/btw ") ? text.slice(5).trim() : "";
+				await this.btwController.start(question);
 				return;
 			}
 			if (text === "/clone") {
@@ -5454,69 +5459,6 @@ export class InteractiveMode {
 		}
 	}
 
-	/**
-	 * /btw <question> — side-channel conversation (see musepi/btw.ts).
-	 * Renders a dedicated panel with DynamicBorder, streaming answer,
-	 * and keyboard shortcuts (Esc dismiss, c copy, b branch).
-	 */
-	private btwPanel: import("../../musepi/btw-panel.ts").BtwPanelComponent | null = null;
-	private btwAbortController: AbortController | null = null;
-
-	private async handleBtwCommand(text: string): Promise<void> {
-		const question = text.startsWith("/btw ") ? text.slice(5).trim() : "";
-		if (!question) {
-			this.showError("Usage: /btw <question>");
-			return;
-		}
-		if (!this.session.model) {
-			this.showError("No model selected — pick a model before using /btw.");
-			return;
-		}
-
-		// Close any existing btw panel
-		this.closeBtwPanel();
-
-		// Create and mount the panel
-		const panel = new (await import("../../musepi/btw-panel.ts")).BtwPanelComponent(question, (s) =>
-			theme.fg("accent", s),
-		);
-		this.btwPanel = panel;
-		this.chatContainer.addChild(panel);
-		this.ui.requestRender();
-
-		this.btwAbortController = new AbortController();
-
-		try {
-			const { runBtwTurn } = await import("../../musepi/btw.ts");
-			const answer = await runBtwTurn(this.session, question, this.btwAbortController.signal, (delta) => {
-				panel.appendText(delta);
-				this.ui.requestRender();
-			});
-			panel.setAnswer(answer);
-			panel.markComplete();
-		} catch (error: unknown) {
-			if (error instanceof Error && error.name === "AbortError") {
-				panel.markAborted();
-			} else {
-				panel.markError(error instanceof Error ? error.message : String(error));
-			}
-		}
-		this.ui.requestRender();
-	}
-
-	/** Close the active btw panel and clean up. */
-	private closeBtwPanel(): void {
-		if (this.btwAbortController) {
-			this.btwAbortController.abort();
-			this.btwAbortController = null;
-		}
-		if (this.btwPanel) {
-			this.btwPanel.close();
-			this.chatContainer.removeChild(this.btwPanel);
-			this.btwPanel = null;
-		}
-	}
-
 	private async handleCloneCommand(): Promise<void> {
 		const leafId = this.sessionManager.getLeafId();
 		if (!leafId) {
@@ -6893,6 +6835,11 @@ export class InteractiveMode {
 	}
 
 	private async handleCopyCommand(): Promise<void> {
+		// If BTW panel is active, copy from there instead
+		if (await this.btwController.handleCopy()) {
+			return;
+		}
+
 		const text = this.session.getLastAssistantText();
 		if (!text) {
 			this.showError("No agent messages to copy yet.");
