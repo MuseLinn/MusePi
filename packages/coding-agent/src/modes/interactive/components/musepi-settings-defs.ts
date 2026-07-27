@@ -34,6 +34,8 @@ export const TIMEOUT_PRESETS = [60_000, 300_000, 600_000, 1_800_000];
 const TOKEN_CAP_PRESETS = [2_000, 6_000, 10_000, 20_000];
 
 export const MUSEPI_SETTING_DEFS: MusepiSettingDef[] = [
+	// General
+	{ path: "locale", label: "Language", section: "General", kind: "enum", options: ["en-US", "zh-CN"] },
 	// Memory
 	{ path: "memory.enabled", label: "Enabled", section: "Memory", kind: "bool" },
 	{ path: "memory.scope", label: "Scope", section: "Memory", kind: "enum", options: ["project", "global"] },

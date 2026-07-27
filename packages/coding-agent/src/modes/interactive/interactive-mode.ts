@@ -5058,6 +5058,7 @@ export class InteractiveMode {
 					},
 					onMusepiChange: (path, value) => {
 						this.settingsManager.setMusepiValue(path, value);
+						// Locale change takes effect on next restart
 					},
 					onCancel: () => {
 						done();

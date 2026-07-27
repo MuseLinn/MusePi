@@ -241,6 +241,8 @@ export interface MusepiCompatSettings {
 export interface MusepiSettings {
 	/** Check MusePi's GitHub Releases for new versions on startup and show the update prompt. */
 	updateCheck?: boolean; // default: true
+	/** UI locale — affects setup wizard and settings display language. */
+	locale?: "en-US" | "zh-CN"; // default: "en-US"
 	compat?: MusepiCompatSettings;
 	skills?: MusepiSkillsSettings;
 	advisor?: MusepiAdvisorSettings;
@@ -309,6 +311,7 @@ export interface MusepiMemorySettings {
 
 /** Default values, applied per-field when unset. */
 export const MUSEPI_DEFAULTS: Required<{
+	locale: "en-US" | "zh-CN";
 	updateCheck: boolean;
 	compat: Required<MusepiCompatSettings>;
 	skills: Required<MusepiSkillsSettings>;
@@ -346,6 +349,7 @@ export const MUSEPI_DEFAULTS: Required<{
 	modelRoles: { default: "", smol: "", plan: "", advisor: "", task: "", tiny: "", cycleOrder: [], fallbackChains: {} },
 	truncation: { thresholdChars: 40_000, headChars: 1_500, tailChars: 500 },
 	edit: { hashline: true, enforceSeenLines: false, toolDisplayStyle: "bordered" },
+	locale: "en-US",
 	lsp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, diagnosticsOnWrite: true },
 	toolSelect: { enabled: false, models: [], defer: [] },
 	mcp: { enabled: true, servers: {}, idleTimeoutMs: 600_000, startupDiscovery: false },
@@ -569,6 +573,7 @@ function pickNotifications(override: unknown): ResolvedMusepiSettings["notificat
 export function mergeMusepiSettings(raw: MusepiSettings | undefined): ResolvedMusepiSettings {
 	const r = raw ?? {};
 	return {
+		locale: typeof r.locale === "string" ? r.locale : MUSEPI_DEFAULTS.locale,
 		updateCheck: typeof r.updateCheck === "boolean" ? r.updateCheck : MUSEPI_DEFAULTS.updateCheck,
 		compat: pick(MUSEPI_DEFAULTS.compat, r.compat),
 		skills: pick(MUSEPI_DEFAULTS.skills, r.skills),
