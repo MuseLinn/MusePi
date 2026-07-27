@@ -16,6 +16,8 @@
 	"license": "MIT",
 	"exports": {
 		".": "./dist/index.js",
+		"./advisor": "./dist/advisor/index.js",
+		"./i18n": "./dist/i18n/index.js",
 		"./*": "./dist/*"
 	}
 }
