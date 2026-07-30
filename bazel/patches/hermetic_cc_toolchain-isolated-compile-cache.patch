@@ -1,0 +1,49 @@
+Isolate zig's cache for compile-only invocations (ziglang/zig#18763).
+
+Concurrent `zig cc` processes sharing one cache dir corrupt it under load
+(cache manifests referencing evicted objects: "failed to open .../scanner.o:
+FileNotFound"). This repo drives ~60 cc-compiling cargo build scripts in
+parallel through the wrapper, which reproduces the corruption reliably on CI.
+
+Compile/preprocess steps gain nothing from the cache (~25ms cold vs warm,
+measured) — give each process a private throwaway cache under the system tmp
+dir. Link steps keep the shared cache: they are the ones that benefit
+(compiler-rt/crt, ~6s cold vs 25ms warm), zig's per-artifact locking is the
+battle-tested path for concurrent artifact builds, and after first warm they
+are pure readers.
+
+--- a/toolchain/zig-wrapper.zig
++++ b/toolchain/zig-wrapper.zig
+@@ -252,6 +252,32 @@ fn parseArgs(
+     if (run_mode == RunMode.cc)
+         try resolveColonLibraries(arena, cwd, &args);
+ 
++    // Compile-only steps (-c/-E/-S) get a private throwaway cache: concurrent
++    // zig processes sharing one cache corrupt it (ziglang/zig#18763), and the
++    // cache is worthless for plain compiles. Links keep the shared cache for
++    // compiler-rt/crt reuse; zig's per-artifact locking covers those.
++    if (run_mode == RunMode.cc) {
++        var compile_only = false;
++        for (args.items) |a| {
++            if (mem.eql(u8, a, "-c") or mem.eql(u8, a, "-E") or mem.eql(u8, a, "-S")) {
++                compile_only = true;
++                break;
++            }
++        }
++        if (compile_only and builtin.os.tag != .windows) {
++            const tmp_root = env.get("TMPDIR") orelse "/tmp";
++            var rnd: [8]u8 = undefined;
++            std.crypto.random.bytes(&rnd);
++            const iso = try std.fmt.allocPrint(
++                arena,
++                "{s}{s}zig-pp-{}",
++                .{ tmp_root, sep, std.fmt.fmtSliceHexLower(&rnd) },
++            );
++            try env.put("ZIG_LOCAL_CACHE_DIR", iso);
++            try env.put("ZIG_GLOBAL_CACHE_DIR", iso);
++        }
++    }
++
+     // Add -target as the last parameter. The wrapper should overwrite
+     // the target specified by other tools calling the wrapper.
+     // Some tools might pass LLVM target triple, which are rejected by zig.

@@ -1,0 +1,78 @@
+name: "Native inputs: change detection + artifact cache key"
+description: >
+   Single source of truth for what counts as a native-affecting change.
+
+   `rust` gates Rust validation (tests, clippy, rustfmt); `cache-key`
+   addresses the prebuilt Linux x64 addon pair published by trusted main
+   builds. The detector pathspec and the hashed file set MUST cover the same
+   inputs — drift means a native change could ship without validation or be
+   tested against stale addons. The key embeds a schema version, OS, arch,
+   target pair, and build profile so a future target/profile change can
+   never resolve valid-but-wrong .node files under the same source hash.
+
+outputs:
+   rust:
+      description: Whether the event touches native inputs (always true off pull_request)
+      value: ${{ steps.changes.outputs.rust }}
+   source-hash:
+      description: 16-hex fingerprint over every native build input
+      value: ${{ steps.hash.outputs.source-hash }}
+   cache-key:
+      description: Exact actions/cache key for the prebuilt Linux x64 addon pair
+      value: ${{ steps.hash.outputs.cache-key }}
+
+runs:
+   using: composite
+   steps:
+      - name: Detect native-affecting changes
+        id: changes
+        shell: bash
+        env:
+           GH_TOKEN: ${{ github.token }}
+        run: |
+           set -euo pipefail
+           if [ "${{ github.event_name }}" != "pull_request" ]; then
+             echo "rust=true" >> "$GITHUB_OUTPUT"
+             exit 0
+           fi
+           # Write the diff to a file before matching: in a pipeline, an API
+           # failure is indistinguishable from "no native changes" (skips
+           # validation — fail-open), and grep -q can close the pipe early so
+           # gh dies on SIGPIPE and pipefail flips a MATCH to rust=false.
+           changed_files="$RUNNER_TEMP/native-changed-files"
+           gh pr diff ${{ github.event.pull_request.number }} --name-only > "$changed_files"
+           if grep -qE '^(crates/|bazel/|Cargo\.(toml|lock)|MODULE\.bazel(\.lock)?|BUILD\.bazel|\.bazelrc|\.bazelignore|\.bazelversion|rust-toolchain\.toml|rustfmt\.toml|scripts/bazel-natives\.ts|\.github/actions/(bazel-cache|bazel-natives|native-artifacts|native-inputs)/|\.github/workflows/ci\.yml)' "$changed_files"; then
+             echo "rust=true" >> "$GITHUB_OUTPUT"
+           else
+             echo "No native-affecting changes; skipping Rust validation."
+             echo "rust=false" >> "$GITHUB_OUTPUT"
+           fi
+
+      # Content-addresses the addon bytes from git index entries (mode,
+      # blob identity, path) — `git ls-files -s` covers the executable bit
+      # and never follows symlinks into worktree bytes. `--error-unmatch`
+      # fails the step loudly when a listed path disappears instead of
+      # silently narrowing the key.
+      - name: Compute native source hash
+        id: hash
+        shell: bash
+        run: |
+           set -euo pipefail
+           source_hash=$(git ls-files -s -z --error-unmatch -- \
+                 crates bazel \
+                 Cargo.toml Cargo.lock \
+                 MODULE.bazel MODULE.bazel.lock BUILD.bazel \
+                 .bazelrc .bazelignore .bazelversion \
+                 rust-toolchain.toml rustfmt.toml \
+                 scripts/bazel-natives.ts \
+                 .github/actions/bazel-cache .github/actions/bazel-natives \
+                 .github/actions/native-artifacts .github/actions/native-inputs \
+                 .github/workflows/ci.yml \
+              | sort -z \
+              | sha256sum \
+              | cut -c1-16)
+           {
+             echo "source-hash=$source_hash"
+             echo "cache-key=native-addons-v1-linux-x64-baseline+modern-opt-$source_hash"
+           } >> "$GITHUB_OUTPUT"
+           echo "Native source hash: $source_hash"

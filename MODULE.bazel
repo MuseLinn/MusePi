@@ -1,0 +1,206 @@
+"""oh-my-pi — Bazel build for the native (Rust) side of the workspace.
+
+Builds the pi_natives NAPI cdylib for every shipped target with hermetic
+toolchains, replacing cargo-zigbuild/cargo-xwin/sccache plus the hand-rolled
+CI caches with Bazel's content-addressed action cache (see infra/bazel-remote.yaml).
+
+Layout:
+  //:natives-<target>      release-grade renamed .node artifacts (root BUILD.bazel)
+  //crates/...             first-party crate targets
+  //bazel/...              platforms, ISA-variant constraints, toolchains, rules
+  @crates//...             third-party crates from Cargo.lock via crate_universe
+
+The cargo workspace stays authoritative for local iteration (rust-analyzer,
+`cargo nextest`, napi typedef regeneration); Bazel is the artifact and CI
+pipeline. `crate_universe` derives the Bazel dependency graph directly from
+Cargo.toml/Cargo.lock and the module annotations; no separate repin step is required.
+"""
+
+module(name = "oh-my-pi")
+
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "rules_rust", version = "0.71.3")
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.2.0")
+
+# zig 0.14's cache corrupts under concurrent `zig cc` (ziglang/zig#18763);
+# the patch gives compile-only steps private throwaway caches while links
+# keep the shared cache. See the patch header for measurements.
+single_version_override(
+    module_name = "hermetic_cc_toolchain",
+    patch_strip = 1,
+    patches = ["//bazel/patches:hermetic_cc_toolchain-isolated-compile-cache.patch"],
+)
+
+# --- Rust toolchains ----------------------------------------------------------
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["nightly/2026-04-29"],
+    extra_target_triples = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+    ],
+)
+use_repo(
+    rust,
+    "rust_toolchains",
+    # musl rustc toolchains, re-registered in //bazel/toolchains with an
+    # explicit @zig_sdk//libc:musl constraint: rules_rust's generated gnu and
+    # musl toolchains share (os, cpu) constraints, so without the extra
+    # constraint whichever registers first would win for both libcs.
+    "rust_linux_x86_64__x86_64-unknown-linux-musl__nightly_tools",
+    "rust_linux_x86_64__aarch64-unknown-linux-musl__nightly_tools",
+    "rust_macos_aarch64__x86_64-unknown-linux-musl__nightly_tools",
+    "rust_macos_aarch64__aarch64-unknown-linux-musl__nightly_tools",
+    "rust_linux_aarch64__aarch64-unknown-linux-musl__nightly_tools",
+    "rust_linux_aarch64__x86_64-unknown-linux-musl__nightly_tools",
+)
+
+# Order matters: repo-local toolchains (musl disambiguation wrappers, msvc
+# cross cc toolchain) MUST resolve before the generated @rust_toolchains set.
+register_toolchains("//bazel/toolchains:all")
+register_toolchains("@rust_toolchains//:all")
+
+# --- C/C++ toolchains ---------------------------------------------------------
+# zig cc provides hermetic linux-gnu (pinned glibc 2.17 portability floor, same
+# floor cargo-zigbuild used) and linux-musl cross toolchains, executable from
+# both linux-x64 CI pods and darwin dev hosts. darwin targets use the host
+# Xcode toolchain (Apple frameworks are not redistributable); win32-msvc uses
+# the hermetic clang-cl+xwin toolchain in //bazel/toolchains/msvc.
+zig = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
+use_repo(zig, "zig_sdk")
+register_toolchains(
+    "@zig_sdk//libc_aware/toolchain:linux_amd64_gnu.2.17",
+    "@zig_sdk//libc_aware/toolchain:linux_arm64_gnu.2.17",
+    "@zig_sdk//libc_aware/toolchain:linux_amd64_musl",
+    "@zig_sdk//libc_aware/toolchain:linux_arm64_musl",
+)
+
+# --- Third-party crates (crate_universe over the cargo workspace) --------------
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.render_config(
+    # rules_rust's builtin platform settings have no musl triples; ours in
+    # //bazel/triples add the @zig_sdk//libc axis.
+    platforms_template = "@@//bazel/triples:{triple}",
+)
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    # Exactly the shipped addon triples: crate BUILD files get
+    # target_compatible_with selects over this set (defaults omit darwin-x64
+    # and musl), and features/deps resolve per-triple from Cargo.lock.
+    supported_platform_triples = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+    ],
+    # The root manifest covers all workspace members, including the vendored
+    # brush fork (members so their sources render hermetically; the
+    # [patch.crates-io] entries redirect brush-builtins' registry dep to them).
+    manifests = ["//:Cargo.toml"],
+)
+
+# audiopus_sys builds its vendored opus via the `cmake` crate: give the build
+# script a PATH that resolves cmake/make (runner image, GH runners, dev hosts)
+# and the policy override its old CMakeLists needs under CMake 4.x. The cmake
+# crate picks up CC/CFLAGS from the Bazel cc toolchain on its own.
+crate.annotation(
+    crate = "audiopus_sys",
+    build_script_env = {
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        # msvc cross only (cmake-rs reads VAR_<triple> before VAR; the key is
+        # inert for every other target): without a generator override cmake-rs
+        # insists on a Visual Studio generator for msvc targets, which cannot
+        # exist on linux/mac hosts. Ninja must be on the PATH below.
+        "CMAKE_GENERATOR_x86_64_pc_windows_msvc": "Ninja",
+        # msvc cross only: cmake's vs_link_exe insists on rc/mt tools for
+        # MSVC-ABI exe links (try_compile), which find_program can't locate on
+        # linux/mac PATH. @msvc_cc's toolchain.cmake pins compiler/linker/
+        # rc/mt to the wrapper dir (self-locating via CMAKE_CURRENT_LIST_DIR).
+        # $${pwd} → exec root in the rules_rust runner; the canonical repo
+        # path must track the repo rule/name in the msvc section below.
+        "CMAKE_TOOLCHAIN_FILE_x86_64_pc_windows_msvc": "$${pwd}/external/+msvc_cc_repository+msvc_cc/toolchain.cmake",
+        # zig cc enables UBSan by default; cmake's try-compile links a test
+        # exe with the raw wrapper (no toolchain features), which would demand
+        # the UBSan runtime. Opus shipped without sanitizers under
+        # cargo-zigbuild too.
+        "CFLAGS": "-fno-sanitize=undefined",
+        "PATH": "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin",
+    },
+)
+
+# Release addons must never pick up a host libpcre2 (Homebrew paths leaked into
+# shipped dylibs before); always build the vendored static copy.
+crate.annotation(
+    crate = "pcre2-sys",
+    build_script_env = {"PCRE2_SYS_STATIC": "1"},
+)
+
+# tree-sitter-just's scanner.c hard-errors when NDEBUG is set (opt-mode cc
+# default). cc-rs appends env CFLAGS after its computed flags, so -UNDEBUG wins.
+crate.annotation(
+    crate = "tree-sitter-just",
+    build_script_env = {"CFLAGS": "-UNDEBUG"},
+)
+
+# `generate-bindings` is enabled for darwin so miniaudio's Rust bindings match
+# its CoreAudio C layout. Build scripts execute for the host, however, so a
+# macOS-hosted Linux cross-build also sees that feature. Use Cargo's TARGET to
+# keep bindgen darwin-only and select pregenerated bindings for other targets.
+crate.annotation(
+    crate = "maudio-sys",
+    patches = ["//bazel/patches:maudio-sys-target-bindings.patch"],
+    patch_args = ["-p1"],
+)
+
+use_repo(crate, "crates")
+
+
+# --- msvc cross toolchain (owned by bazel/toolchains/msvc) ---------------------
+# Hermetic clang-cl + lld-link + xwin CRT/SDK toolchain for x86_64-pc-windows-msvc
+# (replaces cargo-xwin). Three repos so flag iteration in cc.bzl never
+# invalidates the ~2 GiB LLVM download or the ~1 GiB xwin splat:
+#   @llvm_msvc_tools  pruned LLVM 20.1.7 release binaries for the exec host
+#   @xwin_sysroot     MSVC CRT + Windows SDK splatted by pinned xwin 0.6.5
+#   @msvc_cc          wrappers + MSVC-flavored cc_toolchain (rules_cc config)
+# toolchain() registrations live in //bazel/toolchains (one per exec host).
+# rules_cc pin matches Bazel 9.2's own builtin dependency.
+bazel_dep(name = "rules_cc", version = "0.2.17")
+
+llvm_msvc_tools = use_repo_rule("//bazel/toolchains/msvc:llvm.bzl", "llvm_msvc_tools_repository")
+
+llvm_msvc_tools(name = "llvm_msvc_tools")
+
+xwin_sysroot = use_repo_rule("//bazel/toolchains/msvc:sysroot.bzl", "xwin_sysroot_repository")
+
+xwin_sysroot(name = "xwin_sysroot")
+
+msvc_cc = use_repo_rule("//bazel/toolchains/msvc:cc.bzl", "msvc_cc_repository")
+
+msvc_cc(name = "msvc_cc")
+
+# blake3 assembles MASM .asm for x64 msvc targets; cc-rs resolves `ml64.exe`
+# from the build-script PATH on non-windows hosts. Prepend @msvc_cc's wrapper
+# dir (bin/ml64.exe → llvm-ml -m64; the dir rides into the sandbox with the
+# resolved cc toolchain's all_files). ${pwd} expands to the exec root in the
+# rules_rust build-script runner. The leading entry is the canonical repo path
+# of @msvc_cc (`+<repo rule>+<name>`) — keep in sync if the rule or repo in
+# this section is ever renamed. On non-msvc targets the dir simply does not
+# exist and the rest of the PATH matches the audiopus_sys annotation above.
+crate.annotation(
+    crate = "blake3",
+    build_script_env = {
+        "PATH": "$${pwd}/external/+msvc_cc_repository+msvc_cc/bin:/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin",
+    },
+)
+# --- end msvc cross toolchain ---------------------------------------------------

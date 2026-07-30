@@ -1,0 +1,79 @@
+name: Warm bazel disk cache
+
+# GitHub-hosted PR runners cannot use the cluster remote cache and only see
+# actions/cache entries created on the default branch. Bazel action keys do
+# not transfer across runner environments (a kata-produced disk cache misses
+# every action on ubuntu-22.04), so seed the disk cache from the same image
+# PR jobs run on. Runs the full hosted action set — Rust validation (test,
+# clippy, rustfmt) plus the native addons — so one exact-key archive covers
+# both rust_validate and native_addons for this source generation. The v3
+# key embeds a crates/** source fingerprint, so a native change on main
+# means an exact miss: the build seeds from the previous generation via the
+# config-scoped prefix and the refreshed archive is saved. An exact hit
+# makes every invocation a cache replay and saves nothing.
+
+on:
+   push:
+      branches: [main]
+      paths:
+         - "packages/**"
+         - "crates/**"
+         - "scripts/**"
+         - "bazel/**"
+         - "MODULE.bazel"
+         - "MODULE.bazel.lock"
+         - "BUILD.bazel"
+         - ".bazelrc"
+         - ".bazelignore"
+         - ".bazelversion"
+         - "Cargo.toml"
+         - "Cargo.lock"
+         - "rust-toolchain.toml"
+         - "rustfmt.toml"
+         - ".github/**"
+   workflow_dispatch:
+
+permissions:
+   contents: read
+
+concurrency:
+   group: bazel-cache-warm
+   cancel-in-progress: true
+
+jobs:
+   warm:
+      name: Seed hosted bazel disk cache
+      runs-on: ubuntu-22.04
+      steps:
+         - uses: actions/checkout@v4
+         - id: cache
+           uses: ./.github/actions/bazel-cache
+           with:
+              scope: linux
+         # Invocation set mirrors the hosted CI jobs (rust_validate +
+         # native_addons) so the saved archive serves both.
+         - name: Rust tests
+           run: |
+              set -euo pipefail
+              if [ "$(ulimit -Sn)" != unlimited ] && [ "$(ulimit -Sn)" -lt 65536 ]; then ulimit -Sn 65536 || true; fi
+              bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" test //crates/...
+         - name: Clippy (workspace lint policy on opted-in crates)
+           run: |
+              bazelisk query "kind('rust_library|rust_shared_library', //crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-walker/...)" \
+                | xargs bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=clippy-strict --
+         - name: Clippy (default lints elsewhere)
+           run: |
+              bazelisk query "kind('rust_library|rust_shared_library', //crates/... - (//crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-walker/...) - //crates/vendor/brush-core/... - //crates/vendor/brush-builtins/...)" \
+                | xargs bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=clippy --
+         - name: Rustfmt
+           run: bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=rustfmt //crates/...
+         - name: Build native addons
+           run: |
+              set -euo pipefail
+              bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build //:natives-linux-x64-baseline //:natives-linux-x64-modern
+         - name: Save bazel disk cache
+           if: steps.cache.outputs.save-needed == 'true'
+           uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+           with:
+              path: ~/.cache/omp-bazel-disk
+              key: ${{ steps.cache.outputs.cache-key }}

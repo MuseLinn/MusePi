@@ -1,0 +1,38 @@
+--- a/build.rs
++++ b/build.rs
+@@ -5,6 +5,12 @@ use cc::Build;
+ 
+ #[cfg(feature = "generate-bindings")]
+ fn write_bindings(out_bindings: &std::path::Path) {
++    let target = env::var("TARGET").expect("TARGET must be set by Cargo");
++    if !target.contains("apple-darwin") {
++        copy_bindings(&target, out_bindings);
++        return;
++    }
++
+     let mut builder = bindgen::Builder::default()
+         .header("native/miniaudio/miniaudio.h")
+         .clang_arg("-Inative")
+@@ -25,11 +31,17 @@ fn write_bindings(out_bindings: &std::path::Path) {
+ 
+ #[cfg(not(feature = "generate-bindings"))]
+ fn write_bindings(out_bindings: &std::path::Path) {
++    let target = env::var("TARGET").expect("TARGET must be set by Cargo");
++    copy_bindings(&target, out_bindings);
++}
++
++fn copy_bindings(target: &str, out_bindings: &std::path::Path) {
+     eprintln!("Copying bindings");
+-    #[cfg(unix)]
+-    std::fs::copy("src/pregen_bindings/unix.rs", out_bindings)
+-        .expect("Failed to copy pre-generated bindings to OUT_DIR");
+-    #[cfg(windows)]
+-    std::fs::copy("src/pregen_bindings/windows.rs", out_bindings)
++    let source = if target.contains("windows") {
++        "src/pregen_bindings/windows.rs"
++    } else {
++        "src/pregen_bindings/unix.rs"
++    };
++    std::fs::copy(source, out_bindings)
+         .expect("Failed to copy pre-generated bindings to OUT_DIR");
+ }
