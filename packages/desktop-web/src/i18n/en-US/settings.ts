@@ -2855,6 +2855,9 @@ export const settings = {
 	"modes view title": "Preset details",
 	"modes duplicate hint": "Duplicate becomes an editable custom preset.",
 	"modes default hint": "Click a card to set it as the default preset for new sessions.",
+	"extensions running": "{count} extensions running",
+	"extensions state running": "Running",
+	"extensions state disabled": "Disabled",
 	"{count} settings": "{count} settings",
 	// Welcome-composer starter chips — distinct from named presets (modes), see docs/modes-plan.md
 	"starter prompts": "Starter prompts",

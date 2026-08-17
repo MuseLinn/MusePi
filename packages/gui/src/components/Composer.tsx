@@ -51,6 +51,7 @@ import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useModes } from "./composer/use-modes";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
+import { ExtensionStatusCard } from "./ExtensionStatusCard";
 import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
@@ -1492,6 +1493,9 @@ export function Composer({
 								autosize(ta);
 							}}
 						/>
+						{/* 会话扩展状态卡(DSH Cordis Plugin 卡片参考吸收):运行中扩展数 +
+						 * 浮窗状态列表。 */}
+						{!welcome && <ExtensionStatusCard rpc={rpc} />}
 						{/* Pending-message queue chip (TUI /queue parity): visible
 						 * while the agent works and messages are queued behind
 						 * the current turn; hover shows the queued texts. */}

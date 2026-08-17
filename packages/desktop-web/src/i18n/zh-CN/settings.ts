@@ -2740,6 +2740,9 @@ export const settings = {
 	"modes view title": "预设详情",
 	"modes duplicate hint": "复制为自定义预设后可编辑。",
 	"modes default hint": "点击卡片设为新会话默认预设。",
+	"extensions running": "{count} 个扩展运行中",
+	"extensions state running": "运行中",
+	"extensions state disabled": "已禁用",
 	"{count} settings": "{count} 项设置",
 	// 空态快捷提示词(与「预设/modes」无关 —— 避免与命名预设混淆,见 docs/modes-plan.md)
 	"starter prompts": "快捷提示词",
