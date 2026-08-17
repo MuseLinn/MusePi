@@ -69,7 +69,6 @@ import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-de
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
-import { createExtensionManagerTools } from "./extension-manager-tools";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
@@ -113,6 +112,8 @@ import {
 	saveCronTasks,
 	validateCronTask,
 } from "./crons";
+import { createDynamicExtensionTools, DynamicToolRegistry } from "./dynamic-extension-tools";
+import { createExtensionManagerTools } from "./extension-manager-tools";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 import {
@@ -1112,6 +1113,30 @@ export class DaemonSessionHost {
 		});
 	}
 
+	/** P2 动态自举:会话级动态插件工具链(ext_define/ext_run/ext_stop/
+	 *  ext_undefine/ext_inspect)——实现见 dynamic-extension-tools.ts。
+	 *  每会话独立 registry,沙箱(vm)承载 host 半体。 */
+	#dynamicRegistries = new Map<string, DynamicToolRegistry>();
+
+	#dynamicExtensionTools(): CustomTool[] {
+		return createDynamicExtensionTools(
+			ctx => {
+				const id = ctx.sessionManager.getSessionId();
+				if (!id) return null;
+				return this.get(id)?.agentSession ?? null;
+			},
+			ctx => {
+				const id = ctx.sessionManager.getSessionId();
+				let registry = this.#dynamicRegistries.get(id);
+				if (!registry) {
+					registry = new DynamicToolRegistry();
+					this.#dynamicRegistries.set(id, registry);
+				}
+				return registry;
+			},
+		);
+	}
+
 	async createSession(params: {
 		cwd?: string;
 		title?: string;
@@ -1151,7 +1176,7 @@ export class DaemonSessionHost {
 			preloadedExtensionPaths: discovery.extensionPaths,
 			mcpManager,
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-			customTools: this.#extensionManagerTools(),
+			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
@@ -1225,7 +1250,7 @@ export class DaemonSessionHost {
 			preloadedExtensionPaths: discovery.extensionPaths,
 			mcpManager,
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-			customTools: this.#extensionManagerTools(),
+			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -1823,6 +1848,7 @@ export class DaemonSessionHost {
 			live.idleTimer = null;
 		}
 		this.#sessions.delete(sessionId);
+		this.#dynamicRegistries.delete(sessionId);
 		live.dispose();
 	}
 
@@ -2868,10 +2894,7 @@ export class DaemonServer {
 	 * "真实挂载"层面的检查——standingKeyFor 同款语义:不建 agent 跑完整
 	 * 挂载,失败四类精确报错。
 	 */
-	async #validateModeMounting(
-		def: { extensions?: string[] },
-		errors: string[],
-	): Promise<void> {
+	async #validateModeMounting(def: { extensions?: string[] }, errors: string[]): Promise<void> {
 		const extensions = def.extensions ?? [];
 		if (extensions.length === 0) return;
 		const cwd = this.#host.cwd();
@@ -7151,12 +7174,13 @@ export class DaemonServer {
 				// host-level cache — merged so the panel shows them without
 				// requiring a live session.
 				const extSettings = this.#host.extensionSettings();
-				// Whitelist the requested tabs (B-class audit: the schema walk
-				// only knows the TUI's SETTING_TABS). Unknown tab names are
-				// dropped — a client cannot ask for an invented tab, and a
-				// typo'd tab renders nothing instead of a partial page.
+				// P1 设置 tab 开放:白名单 = SETTING_TABS ∪ 扩展声明 tab
+				// (registerSetting 的 ui.tab)。扩展 tab 名仍受"客户端不能
+				// 发明任意 tab"约束——只有真实注册过的 tab 才返回,typo 丢弃。
+				const extTabs = new Set<string>();
+				for (const setting of extSettings.values()) extTabs.add(setting.ui.tab);
 				const requested = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
-				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab));
+				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab));
 				const out: Record<string, unknown[]> = {};
 				for (const tab of tabs) {
 					const items: unknown[] = [];

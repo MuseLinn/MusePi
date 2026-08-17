@@ -5,7 +5,13 @@ import { isElectron, openExternalUrl } from "../lib/electron";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
-import { RIGHT_PANEL_SLOT, SlotComponentHost } from "../lib/slot-components";
+import {
+	PANEL_TAB_SLOT_PREFIX,
+	RIGHT_PANEL_SLOT,
+	SlotComponentHost,
+	SlotComponentMount,
+	useSlotComponentsByPrefix,
+} from "../lib/slot-components";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FilePane } from "./FilePane";
@@ -91,7 +97,10 @@ export function ContextPanel({
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
-	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory">("files");
+	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory" | string>("files");
+	// 内核级 slot(P1):`panel.tab.<id>` 槽位组件自动挂载为右面板 tab ——
+	// 宿主不再硬编码 tab 结构,扩展声明即出现(DSH conversation.view 语义)。
+	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
 	// ring): tokens / capacity / percent, polled while the panel lives.
@@ -228,6 +237,18 @@ export function ContextPanel({
 					>
 						<Icon name="list-unordered" className="h-4 w-4" />
 					</button>
+					{extTabs.map(item => (
+						<button
+							key={item.extensionId}
+							type="button"
+							title={item.label ?? item.slot}
+							aria-label={item.label ?? item.slot}
+							className={`gui-pane-tab${tab === `ext:${item.slot}` ? " gui-pane-tab--active" : ""}`}
+							onClick={() => setTab(`ext:${item.slot}`)}
+						>
+							<Icon name="plug" className="h-4 w-4" />
+						</button>
+					))}
 					<div className="ml-auto flex items-center gap-0.5">
 						{TOOLS.map(toolDef => (
 							<button
@@ -269,6 +290,15 @@ export function ContextPanel({
 						<WidgetSidebarTab entries={snap?.entries ?? []} />
 					) : tab === "trajectory" ? (
 						<TrajectoryView entries={snap?.entries ?? []} modelId={snap?.state?.model?.id} />
+					) : typeof tab === "string" && tab.startsWith("ext:") ? (
+						(() => {
+							const item = extTabs.find(x => `ext:${x.slot}` === tab);
+							return item ? (
+								<div className="h-full overflow-y-auto">
+									<SlotComponentMount item={item} />
+								</div>
+							) : null;
+						})()
 					) : tab === "context" ? (
 						<div className="px-1 py-2">
 							<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>

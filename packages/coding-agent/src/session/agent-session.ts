@@ -4491,6 +4491,11 @@ export class AgentSession {
 		return this.#tools.getEnabledToolNames();
 	}
 
+	/** P2 动态工具链:全量替换 extdyn__ 命名空间工具并刷新激活集。 */
+	setDynamicTools(tools: CustomTool[]): Promise<void> {
+		return this.#tools.setDynamicTools(tools);
+	}
+
 	/** Names of dynamic tools mounted under `xd://`. */
 	getMountedXdevToolNames(): string[] {
 		return this.#tools.getMountedXdevToolNames();

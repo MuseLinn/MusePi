@@ -2,6 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
+import { SETTINGS_TAB_SLOT_PREFIX, SlotComponentMount, useSlotComponentsByPrefix } from "../lib/slot-components";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
@@ -252,8 +253,8 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
  * (session.search) and 使用统计 (packages/stats) complete the capability
  * groups. Evaluated at render so the labels follow locale switches (a
  * module-level const would freeze the first locale's strings). */
-function navGroups(): { title: string; items: SectionDef[] }[] {
-	return [
+function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { title: string; items: SectionDef[] }[] {
+	const groups: { title: string; items: SectionDef[] }[] = [
 		{
 			title: t("basic settings"),
 			items: [
@@ -296,6 +297,16 @@ function navGroups(): { title: string; items: SectionDef[] }[] {
 			],
 		},
 	];
+	// 内核级 slot(P1):settings.tab.<id> 槽位组件挂为导航项(智能体组末尾)。
+	for (const c of extTabs) {
+		groups[1]!.items.push({
+			id: `ext:${c.slot}`,
+			icon: "plug",
+			label: c.label ?? c.slot,
+			enabled: true,
+		});
+	}
+	return groups;
 }
 
 interface ProviderInfo {
@@ -350,7 +361,10 @@ export function SettingsView({
 	/** Active session's workspace dir — the 代码库 index scans this. */
 	cwd?: string | null;
 }): ReactNode {
-	const [section, setSection] = useState<SectionId>(initialSection ?? "appearance");
+	const [section, setSection] = useState<SectionId | string>(initialSection ?? "appearance");
+	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
+	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献,DSH 同款语义)。
+	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
 	// Settings search highlight: with an active query, imperatively mark the
@@ -360,7 +374,10 @@ export function SettingsView({
 	// section switch, so further typing never re-scrolls and the pane can't
 	// jitter. The class is applied outside React, keeping every section
 	// component unaware of the search state.
-	const prevSearchRef = useRef<{ q: string; section: SectionId }>({ q: "", section: section ?? "appearance" });
+	const prevSearchRef = useRef<{ q: string; section: SectionId | string }>({
+		q: "",
+		section: section ?? "appearance",
+	});
 	useEffect(() => {
 		const content = settingsContentRef.current;
 		if (!content) return;
@@ -564,7 +581,7 @@ export function SettingsView({
 						data-top-scroll="false"
 						data-bottom-scroll="false"
 					>
-						{navGroups()
+						{navGroups(extSettingsTabs)
 							.map(group => ({
 								...group,
 								items: settingsQuery.trim()
@@ -587,7 +604,7 @@ export function SettingsView({
 											title={item.enabled ? item.label : `${item.label} · ${t("coming soon")}`}
 											className={`gui-settings-nav${section === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
 											onClick={() => {
-												if (item.enabled) setSection(item.id as SectionId);
+												if (item.enabled) setSection(item.id as SectionId | string);
 											}}
 										>
 											<Icon name={item.icon} className="h-4 w-4" />
@@ -630,6 +647,16 @@ export function SettingsView({
 							innerRef={settingsContentRef}
 							className={`gui-settings-content${section === "history" ? " gui-settings-content--fill" : ""}`}
 						>
+							{typeof section === "string" && section.startsWith("ext:")
+								? (() => {
+										const item = extSettingsTabs.find(x => `ext:${x.slot}` === section);
+										return item ? (
+											<div className="px-3 py-2">
+												<SlotComponentMount item={item} />
+											</div>
+										) : null;
+									})()
+								: null}
 							{section === "general" && <GeneralSection rpc={rpc} />}
 							{section === "appearance" && (
 								<AppearanceSection

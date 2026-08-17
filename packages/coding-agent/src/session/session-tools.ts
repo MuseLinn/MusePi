@@ -194,6 +194,8 @@ export class SessionTools {
 	#rpcHostToolNames = new Set<string>();
 	#mcpManagerToolNames = new Set<string>();
 	#extensionMcpTools = new Map<string, AgentTool>();
+	/** P2 动态工具链(ext_define/ext_run):注册名 extdyn__ 命名空间。 */
+	#dynamicToolNames = new Set<string>();
 	#xdev: XdevState | undefined;
 	#pendingXdevMountDelta: { added: Set<string>; removed: Set<string> } | undefined;
 	/**
@@ -1570,6 +1572,70 @@ export class SessionTools {
 			if (this.#host.isDisposed()) restorePreviousMcpTools();
 		} catch (error) {
 			restorePreviousMcpTools();
+			throw error;
+		}
+	}
+
+	/**
+	 * P2 动态工具链:全量替换 `extdyn__` 命名空间工具并刷新激活集
+	 * (ext_run/ext_stop/ext_undefine 每次传当前全部活动动态工具)。
+	 * 其他命名空间工具不受影响。
+	 */
+	setDynamicTools(customTools: CustomTool[]): Promise<void> {
+		const snapshot = [...customTools];
+		return this.runToolRegistryMutation(() => this.#applyDynamicToolRefresh(snapshot));
+	}
+
+	async #applyDynamicToolRefresh(customTools: CustomTool[]): Promise<void> {
+		const previousDynamicTools = new Map<string, AgentTool>();
+		for (const name of this.#dynamicToolNames) {
+			const tool = this.#toolRegistry.get(name);
+			if (tool) previousDynamicTools.set(name, tool);
+		}
+		const previousActiveDynamicToolNames = this.getEnabledToolNames().filter(name =>
+			this.#dynamicToolNames.has(name),
+		);
+		const restorePreviousDynamicTools = () => {
+			for (const name of this.#dynamicToolNames) this.#toolRegistry.delete(name);
+			this.#dynamicToolNames.clear();
+			for (const [name, tool] of previousDynamicTools) this.#toolRegistry.set(name, tool);
+			this.#dynamicToolNames = new Set(previousDynamicTools.keys());
+		};
+
+		const getCustomToolContext = (): CustomToolContext => ({
+			sessionManager: this.#host.sessionManager,
+			modelRegistry: this.#host.modelRegistry,
+			model: this.#host.model(),
+			isIdle: () => !this.#host.isStreaming(),
+			hasQueuedMessages: () => this.#host.queuedMessageCount() > 0,
+			abort: () => {
+				this.#host.agent.abort();
+			},
+			settings: this.#host.settings,
+			localProtocolOptions: this.#host.localProtocolOptions(),
+		});
+
+		const extensionRunner = this.#host.extensionRunner();
+		const wrappedTools = customTools.map(customTool => {
+			const wrapped = wrapToolWithMetaNotice(CustomToolAdapter.wrap(customTool, getCustomToolContext) as AgentTool);
+			return (extensionRunner ? new ExtensionToolWrapper(wrapped, extensionRunner) : wrapped) as AgentTool;
+		});
+		const nextDynamicNames = new Set(wrappedTools.map(tool => tool.name));
+		// 同名覆盖:同一 ext_run 的旧版本工具被新版本替换。
+		for (const name of this.#dynamicToolNames) this.#toolRegistry.delete(name);
+		this.#dynamicToolNames.clear();
+		for (const tool of wrappedTools) {
+			this.#toolRegistry.set(tool.name, tool);
+			this.#dynamicToolNames.add(tool.name);
+		}
+		const nextActive = [
+			...new Set([...this.#getActiveNonMCPToolNames(), ...previousActiveDynamicToolNames, ...nextDynamicNames]),
+		];
+		try {
+			await this.#applyActiveToolsByName(nextActive);
+			if (this.#host.isDisposed()) restorePreviousDynamicTools();
+		} catch (error) {
+			restorePreviousDynamicTools();
 			throw error;
 		}
 	}

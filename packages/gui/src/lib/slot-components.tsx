@@ -20,6 +20,14 @@ export const RIGHT_PANEL_SLOT = "panel.right";
 /** Right-edge 44px icon rail slot (openchamber ContextPanelRail parity):
  *  extension icons mount at the rail's bottom section. */
 export const RIGHT_RAIL_SLOT = "rail.right";
+/** 内核级 slot 命名空间(P1 架构开放,DSH cordis slot 语义):slot 名是开放
+ *  命名空间,前缀决定挂载位置,GUI 按前缀自动挂载 —— 扩展声明任意
+ *  `panel.tab.<id>` / `settings.tab.<id>` / `rail.<id>` 即自动出现为
+ *  tab/设置页/rail 图标,宿主不再逐槽位硬编码。保留的旧槽位
+ *  (panel.right/rail.right/settings.extensions)语义不变。 */
+export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
+export const SETTINGS_TAB_SLOT_PREFIX = "settings.tab.";
+export const RAIL_SLOT_PREFIX = "rail.";
 
 export interface SlotComponent {
 	slot: string;
@@ -63,19 +71,52 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 	return items;
 }
 
+/** Poll extensions.list and pick compiled components for one slot prefix
+ *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
+export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
+	const [items, setItems] = useState<SlotComponent[]>([]);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		const load = (): void => {
+			if (document.visibilityState === "hidden") return;
+			void rpc
+				.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
+				.then(res => {
+					if (!alive) return;
+					setItems((res?.components ?? []).filter(c => c.slot.startsWith(prefix) && c.code.length > 0));
+				})
+				.catch(() => alive && setItems([]));
+		};
+		load();
+		const id = setInterval(load, 10_000);
+		const off = rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "extensions.changed") load();
+		});
+		return () => {
+			alive = false;
+			clearInterval(id);
+			off();
+		};
+	}, [rpc, prefix]);
+	return items;
+}
+
 /** Mount every extension-contributed component registered for a slot. */
 export function SlotComponentHost({ rpc, slot }: { rpc: RpcClient | null; slot: string }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	return (
 		<>
 			{items.map(item => (
-				<DynamicComponent key={item.extensionId} item={item} />
+				<SlotComponentMount key={item.extensionId} item={item} />
 			))}
 		</>
 	);
 }
 
-function DynamicComponent({ item }: { item: SlotComponent }): ReactNode {
+/** 单个槽位组件挂载(动态 tab/rail 注入用——内核级 slot 的宿主侧接收端)。 */
+export function SlotComponentMount({ item }: { item: SlotComponent }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
 	const [Comp, setComp] = useState<ComponentType | null>(null);
 	useEffect(() => {
