@@ -1,15 +1,7 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	ExtensionsCenter,
-} from "../ExtensionsCenter";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import type { RpcClient } from "../../lib/rpc";
+import { ExtensionsCenter } from "../ExtensionsCenter";
 
 /** Settings → 智能体 → 技能: discovered skills (daemon skills.list). */
 /** Settings → 智能体 → 技能: 扩展控制中心 (CCEC 形态) — provider tabs +

@@ -28,7 +28,6 @@ export { ModelSection } from "./settings-sections/model";
 export { ModesSection } from "./settings-sections/modes";
 export { NotificationsSection, SoundEventRow } from "./settings-sections/notifications";
 export { PetCard, PetMarket, PetMarketCard, PetSection } from "./settings-sections/pet";
-export { PluginsSection } from "./settings-sections/plugins";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionsSection } from "./settings-sections/sessions";
 export { hitText, NumberStepper } from "./settings-sections/shared";

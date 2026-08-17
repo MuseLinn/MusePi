@@ -276,7 +276,6 @@ function navGroups(): { title: string; items: SectionDef[] }[] {
 		{
 			title: t("agent capabilities"),
 			items: [
-				{ id: "plugins", icon: "plug", label: t("plugins"), enabled: true },
 				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
@@ -670,7 +669,6 @@ export function SettingsView({
 							{section === "tools" && <ToolsSection rpc={rpc} />}
 							{section === "files" && <FilesLspSection rpc={rpc} />}
 							{section === "memory" && <MemorySection rpc={rpc} />}
-							{section === "plugins" && <PluginsSection rpc={rpc} />}
 							{section === "skills" && <SkillsSection rpc={rpc} />}
 							{section === "suggestions" && <PromptsSection />}
 							{section === "modes" && <ModesSection rpc={rpc} />}
@@ -711,7 +709,6 @@ import {
 	ModesSection,
 	NotificationsSection,
 	PetSection,
-	PluginsSection,
 	PromptsSection,
 	SessionsSection,
 	ShellSection,

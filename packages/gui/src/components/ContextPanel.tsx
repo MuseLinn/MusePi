@@ -10,6 +10,7 @@ import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FilePane } from "./FilePane";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
+import { TrajectoryView } from "./TrajectoryView";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
  *  loadURL/executeJavaScript/etc. at runtime; only the JSX shape is typed. */
@@ -90,7 +91,7 @@ export function ContextPanel({
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
-	const [tab, setTab] = useState<"context" | "files" | "widget">("files");
+	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory">("files");
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
 	// ring): tokens / capacity / percent, polled while the panel lives.
@@ -218,6 +219,15 @@ export function ContextPanel({
 					>
 						<Icon name="sparkling" className="h-4 w-4" />
 					</button>
+					<button
+						type="button"
+						title={t("trajectory")}
+						aria-label={t("trajectory")}
+						className={`gui-pane-tab${tab === "trajectory" ? " gui-pane-tab--active" : ""}`}
+						onClick={() => setTab("trajectory")}
+					>
+						<Icon name="list-unordered" className="h-4 w-4" />
+					</button>
 					<div className="ml-auto flex items-center gap-0.5">
 						{TOOLS.map(toolDef => (
 							<button
@@ -257,6 +267,8 @@ export function ContextPanel({
 						<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
 					) : tab === "widget" ? (
 						<WidgetSidebarTab entries={snap?.entries ?? []} />
+					) : tab === "trajectory" ? (
+						<TrajectoryView entries={snap?.entries ?? []} modelId={snap?.state?.model?.id} />
 					) : tab === "context" ? (
 						<div className="px-1 py-2">
 							<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
