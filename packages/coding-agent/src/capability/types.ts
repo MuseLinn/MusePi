@@ -73,6 +73,12 @@ export interface LoadOptions<T = unknown> {
 	/** Explicit disabled extension IDs to apply instead of settings. */
 	disabledExtensions?: string[];
 	/**
+	 * 显式启用集(omp 生态智能兼容):同名去重冲突时,forceEnabled 项
+	 * 反转默认的"高优先级胜出"——它存活并反向 shadow 胜者。agent 感知层
+	 * 分析 shadowedBy 详情后可主动启用低优先级的 omp 兼容项。
+	 */
+	forceEnabledIds?: string[];
+	/**
 	 * Drop items before deduplication as if they never existed (e.g. scope
 	 * exclusions). A dropped item neither survives nor claims its dedupe key,
 	 * so it cannot shadow anything. Receives the item with its attached

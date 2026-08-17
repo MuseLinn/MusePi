@@ -113,7 +113,9 @@ const capabilityCache = new Map<string, CapabilityCacheEntry>();
 function capabilityCacheKey(capabilityId: string, ctx: LoadContext, options: LoadOptions<unknown>): string {
 	const disabled = disabledProviders.size > 0 ? Array.from(disabledProviders).sort().join(",") : "";
 	const ext = Array.isArray(options.disabledExtensions) ? options.disabledExtensions.sort().join(",") : "";
-	return `${capabilityId}|${ctx.cwd}|${ctx.repoRoot ?? ""}|${disabled}|${ext}`;
+	// omp 兼容 force 集参与缓存键 —— 否则 setForceEnabled 后命中旧结果。
+	const force = Array.isArray(options.forceEnabledIds) ? options.forceEnabledIds.sort().join(",") : "";
+	return `${capabilityId}|${ctx.cwd}|${ctx.repoRoot ?? ""}|${disabled}|${ext}|${force}`;
 }
 
 /**
@@ -125,13 +127,15 @@ async function loadImpl<T>(
 	ctx: LoadContext,
 	options: LoadOptions<T>,
 ): Promise<CapabilityResult<T>> {
-	const allItems: Array<T & { _source: SourceMeta; _shadowed?: boolean }> = [];
-	const suppressedItems = new Set<T & { _source: SourceMeta; _shadowed?: boolean }>();
+	const allItems: Array<T & { _source: SourceMeta; _shadowed?: boolean; _shadowedBy?: string }> = [];
+	const suppressedItems = new Set<T & { _source: SourceMeta; _shadowed?: boolean; _shadowedBy?: string }>();
 	const allWarnings: string[] = [];
 	const contributingProviders: string[] = [];
 	const disabledExtensionIds = options.includeDisabled
 		? new Set<string>()
 		: new Set<string>(options.disabledExtensions ?? settings?.get("disabledExtensions") ?? []);
+	// omp 生态智能兼容:显式启用集优先于优先级去重(见 LoadOptions)。
+	const forceEnabledIds = new Set<string>(options.forceEnabledIds ?? []);
 
 	const results = await Promise.all(
 		providers.map(async provider => {
@@ -201,10 +205,13 @@ async function loadImpl<T>(
 		}
 	}
 
-	// Deduplicate by key or semantic equivalence (first wins = highest priority)
+	// Deduplicate by key or semantic equivalence (first wins = highest priority,
+	// unless the later item is force-enabled — omp 兼容项显式启用时反转)。
 	const seen = new Set<string>();
-	const deduped: Array<T & { _source: SourceMeta }> = [];
+	const deduped: Array<T & { _source: SourceMeta; _shadowed?: boolean; _shadowedBy?: string }> = [];
 	const equivalent = capability.equivalent;
+
+	const extensionIdOf = (item: T & { _source: SourceMeta }): string | undefined => capability.toExtensionId?.(item);
 
 	for (const item of allItems) {
 		const key = capability.key(item);
@@ -223,9 +230,28 @@ async function loadImpl<T>(
 
 		const keySeen = seen.has(key);
 		seen.add(key);
+		const itemExtId = extensionIdOf(item);
+		const forced = itemExtId !== undefined && forceEnabledIds.has(itemExtId);
 		const aliasSeen = !keySeen && equivalent !== undefined && deduped.some(existing => equivalent(existing, item));
-		if (keySeen || aliasSeen) {
+		if (forced && keySeen) {
+			// 显式启用:低优先级项存活,原胜者反向 shadow(感知层决策覆盖默认)。
+			const index = deduped.findIndex(existing => capability.key(existing) === key || equivalent?.(existing, item));
+			if (index >= 0) {
+				const winner = deduped[index];
+				winner._shadowed = true;
+				winner._shadowedBy = `${item._source.providerName} (${item._source.provider})`;
+				deduped[index] = winner;
+			}
+			deduped.push(item);
+			seen.add(key);
+		} else if (keySeen || aliasSeen) {
 			item._shadowed = true;
+			const winner = deduped.find(
+				existing => capability.key(existing) === key || (equivalent?.(existing, item) ?? false),
+			);
+			item._shadowedBy = winner
+				? `${winner._source.providerName} (${winner._source.provider})`
+				: "同 key 高优先级项";
 		} else {
 			deduped.push(item);
 		}

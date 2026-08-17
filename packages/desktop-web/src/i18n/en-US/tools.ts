@@ -329,6 +329,7 @@ export const tools = {
 	trigger: "Trigger",
 	"raw data": "Raw data",
 	"shadowed by {name}": "Shadowed by {name}",
+	"force enable": "Force enable",
 	plugin: "Plugin",
 	isolated: "Isolated",
 	"patch: {path}": "Patch: {path}",

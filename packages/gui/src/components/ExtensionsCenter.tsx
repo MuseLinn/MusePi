@@ -200,6 +200,35 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			});
 	};
 
+	/** omp 生态智能兼容:shadowed 项显式启用/取消(写 forceEnabledExtensions)。
+	 *  默认同名冲突低优先级自动让位(shadow);agent/用户分析 shadowedBy 详情后
+	 *  可强制启用 —— 下次扫描该项存活、原胜者反向 shadow。 */
+	const forceToggle = (e: ExtensionItem, next: boolean): void => {
+		if (!rpc) return;
+		const prevState = e.state;
+		void rpc
+			.request("extensions.setForceEnabled", { id: e.id, enabled: next })
+			.then(() => {
+				setExtensions(
+					prevList =>
+						prevList?.map(x =>
+							x.id === e.id
+								? {
+										...x,
+										state: next ? ("active" as const) : ("shadowed" as const),
+										disabledReason: next ? undefined : ("shadowed" as const),
+									}
+								: x,
+						) ?? null,
+				);
+				setError(null);
+			})
+			.catch((err: unknown) => {
+				setExtensions(prevList => prevList?.map(x => (x.id === e.id ? { ...x, state: prevState } : x)) ?? null);
+				setError(err instanceof Error ? err.message : String(err));
+			});
+	};
+
 	const toggleProvider = (p: ProviderInfo): void => {
 		if (!rpc) return;
 		const prev = p.enabled;
@@ -527,6 +556,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 									)}
 								</div>
 							</div>
+							{selected.state === "shadowed" && (
+								<div className="gui-ext-detail-actions">
+									<button type="button" className="gui-btn" onClick={() => forceToggle(selected, true)}>
+										<Icon name="plug" className="h-3.5 w-3.5" />
+										{t("force enable")}
+									</button>
+								</div>
+							)}
 							{(selected.kind === "skill" || selected.kind === "context-file") && (
 								<div className="gui-ext-detail-section">
 									<div className="gui-ext-detail-label">{t("instructions")}</div>

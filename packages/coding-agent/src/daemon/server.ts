@@ -2880,9 +2880,12 @@ export class DaemonServer {
 				settings = this.#host.settings();
 			}
 			const disabledIds = (settings?.get("disabledExtensions") ?? []) as string[];
+			// omp 生态智能兼容:显式启用集(默认空的隐藏设置键)优先于优先级去重。
+			// getRaw:forceEnabledExtensions 不在 schema(隐藏设置键),走原始读取。
+			const forceIds = (settings?.getRaw("forceEnabledExtensions") ?? []) as string[];
 			this.#extensionsCache = {
 				at: Date.now(),
-				extensions: await loadAllExtensions(this.#host.cwd(), disabledIds),
+				extensions: await loadAllExtensions(this.#host.cwd(), disabledIds, forceIds),
 			};
 		}
 		return this.#extensionsCache.extensions;
@@ -3885,6 +3888,27 @@ export class DaemonServer {
 					await settings.flush();
 				}
 				this.#extensionsCache = null;
+				return { ok: true };
+			}
+			case "extensions.setForceEnabled": {
+				// omp 生态智能兼容:显式启用同名冲突项(默认被高优先级 shadow)。
+				// 与 disabledExtensions 正交 —— 写入 forceEnabledExtensions;
+				// 感知层(agent/用户)分析 shadowedBy 详情后决定启用。
+				const p = (params ?? {}) as { id: string; enabled: boolean };
+				let settings = this.#host.settings();
+				if (!settings) {
+					await this.#host.ensureRegistry();
+					settings = this.#host.settings();
+				}
+				if (!settings) throw new Error("settings unavailable");
+				const force = [...((settings.getRaw("forceEnabledExtensions") ?? []) as string[])];
+				const i = force.indexOf(p.id);
+				if (p.enabled && i < 0) force.push(p.id);
+				if (!p.enabled && i >= 0) force.splice(i, 1);
+				settings.set("forceEnabledExtensions" as Parameters<Settings["set"]>[0], force as never);
+				await settings.flush();
+				this.#extensionsCache = null;
+				this.#pluginsCache = null;
 				return { ok: true };
 			}
 			case "events.subscribe": {

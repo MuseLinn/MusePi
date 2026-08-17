@@ -46,7 +46,11 @@ export interface ExtensionSettingsManager {
 /**
  * Load all extensions from all capabilities.
  */
-export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): Promise<Extension[]> {
+export async function loadAllExtensions(
+	cwd?: string,
+	disabledIds?: string[],
+	forceEnabledIds?: string[],
+): Promise<Extension[]> {
 	const extensions: Extension[] = [];
 	const disabledExtensions = new Set<string>(disabledIds ?? []);
 
@@ -100,7 +104,11 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		}
 	}
 
-	const loadOpts = cwd ? { cwd, includeDisabled: true } : { includeDisabled: true };
+	const loadOpts = {
+		...(cwd ? { cwd } : {}),
+		includeDisabled: true,
+		...(forceEnabledIds ? { forceEnabledIds } : {}),
+	};
 
 	// Load skills
 	try {
@@ -108,6 +116,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		addItems(skills.all, "skill", {
 			getDescription: s => s.frontmatter?.description,
 			getTrigger: s => s.frontmatter?.globs?.join(", "),
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load skills capability", { error: String(error) });
@@ -119,6 +128,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		addItems(rules.all, "rule", {
 			getDescription: r => r.description,
 			getTrigger: r => r.globs?.join(", ") || (r.alwaysApply ? "always" : undefined),
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load rules capability", { error: String(error) });
@@ -129,6 +139,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		const tools = await loadCapability<CustomTool>("tools", loadOpts);
 		addItems(tools.all, "tool", {
 			getDescription: t => t.description,
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load tools capability", { error: String(error) });
@@ -144,7 +155,9 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		const nativeModules = modules.all.filter(
 			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
 		);
-		addItems(nativeModules, "extension-module");
+		addItems(nativeModules, "extension-module", {
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
+		});
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });
 	}
@@ -218,6 +231,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		addItems(prompts.all, "prompt", {
 			getDescription: () => undefined,
 			getTrigger: p => `/prompts:${p.name}`,
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load prompts capability", { error: String(error) });
@@ -229,6 +243,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		addItems(commands.all, "slash-command", {
 			getDescription: () => undefined,
 			getTrigger: c => `/${c.name}`,
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load slash-commands capability", { error: String(error) });
@@ -328,6 +343,7 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 		const motions = await loadCapability<GuiMotion>("gui-motion", loadOpts);
 		addItems(motions.all, "gui-motion", {
 			getDescription: () => "CSS motion pack (motion tokens + keyframes overrides)",
+			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 		});
 	} catch (error) {
 		logger.warn("Failed to load gui-motion capability", { error: String(error) });

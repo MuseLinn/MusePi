@@ -319,6 +319,7 @@ export const tools = {
 	trigger: "触发",
 	"raw data": "原始数据",
 	"shadowed by {name}": "被 {name} 遮蔽",
+	"force enable": "强制启用",
 	plugin: "插件",
 	isolated: "隔离",
 	"patch: {path}": "补丁：{path}",
