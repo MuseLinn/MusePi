@@ -3977,8 +3977,15 @@ export class DaemonServer {
 			}
 			case "modes.save": {
 				// 保存 = 校验(结构 + 环/悬空 + 扩展存在性)→ 写文件 → 广播。
-				const { loadModeFile, resolveMode, validateMode, MODE_ID_PATTERN, modeFilePath, ensureModeTemplates } =
-					await import("../presets/resolve");
+				const {
+					loadModeFile,
+					resolveMode,
+					validateMode,
+					MODE_ID_PATTERN,
+					modeFilePath,
+					ensureModeTemplates,
+					BUILTIN_MODE_TEMPLATES,
+				} = await import("../presets/resolve");
 				const p = (params ?? {}) as {
 					id: string;
 					label?: string;
@@ -3991,6 +3998,12 @@ export class DaemonServer {
 					settings?: Record<string, unknown>;
 				};
 				if (!MODE_ID_PATTERN.test(p.id)) throw new Error(`invalid mode id: ${p.id}`);
+				// 内置预设(work/chat/design/creator)不可被保存覆盖(DSH
+				// system preset 对齐:shipped 预设属于部署,authoring 拒绝写)。
+				// 与 modes.delete 同一 guard;手改磁盘文件仍允许(文件级自由)。
+				if (p.id in BUILTIN_MODE_TEMPLATES) {
+					throw new Error(`built-in preset "${p.id}" cannot be overwritten — copy it to a new id instead`);
+				}
 				const dir = this.#modesDir();
 				ensureModeTemplates(dir);
 				const knownExtensions = (await this.#getExtensions()).map(e => e.id);
