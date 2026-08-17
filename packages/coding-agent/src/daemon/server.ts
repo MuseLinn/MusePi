@@ -2861,6 +2861,41 @@ export class DaemonServer {
 		return this.#extensionsCache.extensions;
 	}
 
+	/**
+	 * P0-② 挂载校验(DSH standingKeyFor 参考吸收):mode 引用的每个扩展
+	 * 独立加载(不注册到任何会话)验证加载错误 + 槽位组件可编译。
+	 * schema/环/悬空/扩展存在性由 validateMode/resolveMode 负责,这里只做
+	 * "真实挂载"层面的检查——standingKeyFor 同款语义:不建 agent 跑完整
+	 * 挂载,失败四类精确报错。
+	 */
+	async #validateModeMounting(
+		def: { extensions?: string[] },
+		errors: string[],
+	): Promise<void> {
+		const extensions = def.extensions ?? [];
+		if (extensions.length === 0) return;
+		const cwd = this.#host.cwd();
+		const { loadExtensions } = await import("../extensibility/extensions/loader");
+		const { validateExtensionComponents } = await import("./extension-components");
+		const known = await this.#getExtensions();
+		for (const id of extensions) {
+			const entry = known.find(e => e.id === id);
+			if (!entry) continue; // 未找到已由 validateMode 报
+			const result = await loadExtensions([entry.path], cwd);
+			if (result.errors.length > 0) {
+				for (const err of result.errors) errors.push(`扩展 "${id}" 加载失败: ${err.error}`);
+				continue;
+			}
+			const ext = result.extensions[0];
+			if (!ext) {
+				errors.push(`扩展 "${id}" 加载后为空`);
+				continue;
+			}
+			const bad = await validateExtensionComponents(ext);
+			for (const c of bad) errors.push(`扩展 "${id}" 组件 "${c.moduleUrl}" 编译失败: ${c.error}`);
+		}
+	}
+
 	/** TTL-refreshed skills scan shared by skills.list and commands.list. */
 	async #getSkills(): Promise<SkillListItem[]> {
 		if (!this.#skillsCache || Date.now() - this.#skillsCache.at > 10_000) {
@@ -3996,6 +4031,10 @@ export class DaemonServer {
 					else {
 						errors.push(...validateMode(def as never, { knownExtensions }));
 						resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
+						// P0-② 挂载校验(DSH standingKeyFor 参考吸收):白名单扩展
+						// 实际加载 + 槽位组件编译。不建会话(standingKeyFor 即
+						// "真实挂载但不建 agent")。
+						await this.#validateModeMounting(def as never, errors);
 					}
 				} catch (error) {
 					errors.push(String((error as Error).message));
