@@ -2476,6 +2476,18 @@ ipcMain.handle("open-external", async (_event, url) => {
 	}
 });
 
+// ── IPC: reveal a directory in the OS file manager (预设设置"打开目录"等)。
+// 路径来自 daemon 报告(modeDir/project 等),非任意输入。
+ipcMain.handle("shell-open-path", async (_event, dirPath) => {
+	if (typeof dirPath !== "string" || dirPath === "") return { ok: false, error: "empty path" };
+	try {
+		const error = await shell.openPath(dirPath);
+		return error ? { ok: false, error } : { ok: true };
+	} catch (err) {
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
 // ── IPC: clipboard (openchamber copy-path) ─────────────────────────────
 
 ipcMain.handle("clipboard-write", (_event, text) => {

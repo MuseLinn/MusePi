@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	dataRootApply: (picked) => ipcRenderer.invoke("data-root-apply", picked),
 	/** Native folder picker (ZCode "打开文件夹"); resolves the path or null. */
 	openDirectory: () => ipcRenderer.invoke("dialog-open-directory"),
+	/** Reveal a directory in the OS file manager (路径来自 daemon 报告)。 */
+	openPath: (dirPath) => ipcRenderer.invoke("shell-open-path", dirPath),
 	/** Clipboard write (openchamber copy-path action). */
 	copyText: (text) => ipcRenderer.invoke("clipboard-write", text),
 	/** Open a picture-in-picture mini chat window. */

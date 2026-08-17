@@ -595,7 +595,9 @@ function AppInner(): ReactNode {
 	/** 预设(mode)选择(欢迎页 chip):welcome 创建会话时随 create RPC 传入。
 	 *  默认 Work(全量,= 未启用预设时的行为);与 presetModelId 同语义:
 	 *  一次选择应用到下一次新建,不随会话回写。 */
-	const [welcomeModeId, setWelcomeModeId] = useState<string | null>("work");
+	const [welcomeModeId, setWelcomeModeId] = useState<string | null>(
+		() => localStorage.getItem("omp-gui-default-mode") ?? "work",
+	);
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
@@ -1922,6 +1924,11 @@ function AppInner(): ReactNode {
 			if (ref) setDefaultModelId(ref);
 		};
 		window.addEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
+		const onDefaultModeChanged = (e: Event): void => {
+			const ref = (e as CustomEvent<string | null>).detail;
+			if (ref !== undefined) setWelcomeModeId(ref);
+		};
+		window.addEventListener("omp-gui-default-mode-changed", onDefaultModeChanged);
 		const unsubReq = electronAPI.onPetStateRequest?.(() => {
 			lastMood = null; // force a resend
 			lastStatePush = 0;
@@ -2013,6 +2020,7 @@ function AppInner(): ReactNode {
 			window.removeEventListener("omp-pet-activity", onBubble);
 			window.removeEventListener("omp-pet-changed", onPetChanged);
 			window.removeEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
+			window.removeEventListener("omp-gui-default-mode-changed", onDefaultModeChanged);
 			window.removeEventListener("omp-glow-setting", onGlowSetting);
 		};
 	}, [store, sendPrompt, decideApproval, createSession, markAllRead, persistReadCount]);

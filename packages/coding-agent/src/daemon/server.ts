@@ -3886,7 +3886,7 @@ export class DaemonServer {
 					fileIds.add(em.id);
 					modes.push(em);
 				}
-				return { modes };
+				return { modes, modesDir: dir };
 			}
 			case "modes.get": {
 				// 单预设完整定义(设置页编辑器用):modes.list 是摘要,编辑页
@@ -3931,8 +3931,12 @@ export class DaemonServer {
 				};
 				const errors = validateMode(def as never, { knownExtensions });
 				if (errors.length > 0) throw new Error(`mode validation failed:\n${errors.join("\n")}`);
-				// 环/悬空引用经 resolveMode 验证(knownExtensions 同样参与)
-				resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
+				// 环/悬空引用经 resolveMode 验证(knownExtensions 同样参与)。
+				// 新建时文件尚不存在 —— 顶层 id 用内存 def(否则 load 命中
+				// undefined 报"未定义的预设"),继承链其余 id 仍走文件。
+				resolveMode(p.id, mid => (mid === p.id ? (def as never) : loadModeFile(dir, mid)), {
+					knownExtensions,
+				});
 				const file = modeFilePath(dir, p.id);
 				fs.writeFileSync(file, `${JSON.stringify(def, null, 2)}\n`, "utf8");
 				this.#broadcastModesChanged();
