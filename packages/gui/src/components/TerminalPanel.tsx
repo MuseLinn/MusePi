@@ -63,7 +63,7 @@ function TerminalTab({
 			fontFamily: "var(--font-mono), Menlo, monospace",
 			// openchamber parity: terminal font size is user-configurable
 			// (settings → 外观), default 13px.
-			fontSize: Number(localStorage.getItem("omp-gui-terminal-font") ?? 13),
+			fontSize: Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13),
 			scrollback: 2000,
 			cursorBlink: true,
 		});
@@ -148,9 +148,9 @@ function TerminalTab({
 	}, [scheme]);
 
 	// External command channel (e.g. the header dev-server button): the
-	// ACTIVE tab executes whatever is broadcast on omp-gui-terminal-cmd.
+	// ACTIVE tab executes whatever is broadcast on musepi-gui-terminal-cmd.
 	// The header's project-actions stop button broadcasts
-	// omp-gui-terminal-stop, which sends Ctrl+C to the active tab
+	// musepi-gui-terminal-stop, which sends Ctrl+C to the active tab
 	// (openchamber projectActions.stopAction parity). paste() routes
 	// through term.onData, so the bytes reach the daemon pty — write()
 	// would only paint them on the display.
@@ -165,11 +165,11 @@ function TerminalTab({
 			if (!active) return;
 			termRef.current?.paste("\x03");
 		};
-		window.addEventListener("omp-gui-terminal-cmd", onCmd);
-		window.addEventListener("omp-gui-terminal-stop", onStop);
+		window.addEventListener("musepi-gui-terminal-cmd", onCmd);
+		window.addEventListener("musepi-gui-terminal-stop", onStop);
 		return () => {
-			window.removeEventListener("omp-gui-terminal-cmd", onCmd);
-			window.removeEventListener("omp-gui-terminal-stop", onStop);
+			window.removeEventListener("musepi-gui-terminal-cmd", onCmd);
+			window.removeEventListener("musepi-gui-terminal-stop", onStop);
 		};
 	}, [active]);
 

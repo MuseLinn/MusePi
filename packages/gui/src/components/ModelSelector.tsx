@@ -18,7 +18,7 @@ export interface WireModel {
 // the same set via useSyncExternalStore, so pinning in the composer is
 // immediately reflected in the settings role tab (and vice versa). Pinned
 // models sort to the top of the listing, in pin order.
-const FAV_MODELS_KEY = "omp-gui-fav-models";
+const FAV_MODELS_KEY = "musepi-gui-fav-models";
 
 // Module-level cache: useSyncExternalStore's getSnapshot must return a
 // STABLE reference between renders (Object.is), so the parsed array is
@@ -206,7 +206,7 @@ export function ModelSelector({
 				// snapshot) in sync: without this, changing the DEFAULT role
 				// while running still shows the OLD default on the next new
 				// task (app.tsx listens and refreshes).
-				window.dispatchEvent(new CustomEvent("omp-gui-default-model-changed", { detail: ref }));
+				window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
 			})
 			.catch(() => {});
 	};

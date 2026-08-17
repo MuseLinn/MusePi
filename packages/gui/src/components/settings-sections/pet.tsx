@@ -363,20 +363,20 @@ export function PetSection(): ReactNode {
 	const [selectedPetId, setSelectedPetId] = useState<string>(() => petId());
 	const [petdex, setPetdex] = useState<PetdexPackage[]>(() => loadPetdex());
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
-	const [dock, setDock] = useState<boolean>(() => localStorage.getItem("omp-gui-pet-dock") === "1");
+	const [dock, setDock] = useState<boolean>(() => localStorage.getItem("musepi-gui-pet-dock") === "1");
 	const [importing, setImporting] = useState(false);
 	const [importError, setImportError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(true);
 	const commit = (): void => {
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
-	const setPref = (key: "omp-gui-pet" | "omp-gui-pet-mode" | "omp-gui-pet-id", value: string): void => {
+	const setPref = (key: "musepi-gui-pet" | "musepi-gui-pet-mode" | "musepi-gui-pet-id", value: string): void => {
 		localStorage.setItem(key, value);
 		commit();
 	};
 	const pickPet = (id: string): void => {
 		setSelectedPetId(id);
-		setPref("omp-gui-pet-id", id);
+		setPref("musepi-gui-pet-id", id);
 	};
 	const importPetdex = async (): Promise<void> => {
 		const electronAPI = (
@@ -494,7 +494,7 @@ export function PetSection(): ReactNode {
 						onClick={() => {
 							const next = !enabled;
 							setEnabled(next);
-							setPref("omp-gui-pet", next ? "1" : "0");
+							setPref("musepi-gui-pet", next ? "1" : "0");
 						}}
 						aria-label={t("show agent companion")}
 					>
@@ -540,7 +540,7 @@ export function PetSection(): ReactNode {
 					onChange={v => {
 									const next = v as PetDisplayMode;
 									setMode(next);
-									setPref("omp-gui-pet-mode", next);
+									setPref("musepi-gui-pet-mode", next);
 								}}
 					ariaLabel={t("display position")}
 					options={[{ value: "input", label: t("pet display input") }, { value: "desktop", label: t("pet display desktop") }]}
@@ -559,7 +559,7 @@ export function PetSection(): ReactNode {
 								onClick={() => {
 									const next = !dock;
 									setDock(next);
-									localStorage.setItem("omp-gui-pet-dock", next ? "1" : "0");
+									localStorage.setItem("musepi-gui-pet-dock", next ? "1" : "0");
 									commit();
 									const api = (
 										window as unknown as { electronAPI?: { setPetDock?(v: boolean): Promise<unknown> } }

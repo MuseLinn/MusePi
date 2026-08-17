@@ -3,10 +3,10 @@
  *
  * Three settings (all renderer-local, localStorage — same pattern as the
  * sound/motion prefs):
- *   - omp-gui-pet        "0" | "1"            master switch (default on)
- *   - omp-gui-pet-mode   "input" | "desktop"  where the pet lives
- *   - omp-gui-pet-id     pet id (builtin or imported petdex id)
- *   - omp-gui-petdex     JSON list of imported petdex packages
+ *   - musepi-gui-pet        "0" | "1"            master switch (default on)
+ *   - musepi-gui-pet-mode   "input" | "desktop"  where the pet lives
+ *   - musepi-gui-pet-id     pet id (builtin or imported petdex id)
+ *   - musepi-gui-petdex     JSON list of imported petdex packages
  *
  * A pet is either a builtin SVG companion (drawn in PetSprite.tsx) or an
  * imported Petdex package (pet.json + spritesheet, 8×9 frame grid).
@@ -241,7 +241,7 @@ export interface PetdexPackage {
 
 export function petEnabled(): boolean {
 	try {
-		return localStorage.getItem("omp-gui-pet") !== "0";
+		return localStorage.getItem("musepi-gui-pet") !== "0";
 	} catch {
 		return true;
 	}
@@ -249,7 +249,7 @@ export function petEnabled(): boolean {
 
 export function petMode(): PetDisplayMode {
 	try {
-		return localStorage.getItem("omp-gui-pet-mode") === "desktop" ? "desktop" : "input";
+		return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 	} catch {
 		return "input";
 	}
@@ -260,7 +260,7 @@ export const DEFAULT_PET_ID = "usagi";
 
 export function petId(): string {
 	try {
-		return localStorage.getItem("omp-gui-pet-id") ?? DEFAULT_PET_ID;
+		return localStorage.getItem("musepi-gui-pet-id") ?? DEFAULT_PET_ID;
 	} catch {
 		return DEFAULT_PET_ID;
 	}
@@ -268,7 +268,7 @@ export function petId(): string {
 
 export function setPetId(id: string): void {
 	try {
-		localStorage.setItem("omp-gui-pet-id", id);
+		localStorage.setItem("musepi-gui-pet-id", id);
 	} catch {
 		// storage unavailable
 	}
@@ -276,7 +276,7 @@ export function setPetId(id: string): void {
 
 export function loadPetdex(): PetdexPackage[] {
 	try {
-		const raw = localStorage.getItem("omp-gui-petdex");
+		const raw = localStorage.getItem("musepi-gui-petdex");
 		if (!raw) return [];
 		const parsed = JSON.parse(raw) as unknown;
 		return Array.isArray(parsed)
@@ -295,7 +295,7 @@ export function loadPetdex(): PetdexPackage[] {
 
 export function savePetdex(pets: PetdexPackage[]): void {
 	try {
-		localStorage.setItem("omp-gui-petdex", JSON.stringify(pets));
+		localStorage.setItem("musepi-gui-petdex", JSON.stringify(pets));
 	} catch {
 		// storage quota exceeded — the import UI surfaces this
 	}
@@ -344,7 +344,7 @@ export function moodFromState(opts: { working: boolean; streaming: boolean; hasA
 export const PET_CONTENT_TARGET_H = 100;
 
 /** User-facing pet size slider range (percent) + storage key. */
-export const PET_SCALE_KEY = "omp-gui-pet-scale";
+export const PET_SCALE_KEY = "musepi-gui-pet-scale";
 export const PET_SCALE_MIN = 60;
 export const PET_SCALE_MAX = 150;
 

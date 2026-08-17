@@ -40,7 +40,7 @@ function formatPauseElapsed(pausedAt: number): string {
 
 /**
  * User gutter avatar — GitHub avatar (synced by the settings Git tab via
- * `omp-gui-user-avatar`, `https://github.com/<login>.png`) with the git
+ * `musepi-gui-user-avatar`, `https://github.com/<login>.png`) with the git
  * identity's initial as fallback; the title carries the git name/email
  * (falls back to the generic user chip).
  */
@@ -51,7 +51,7 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	// instance RPC would fan out; localStorage is set by the Git tab.
 	const avatarUrl = (() => {
 		try {
-			return localStorage.getItem("omp-gui-user-avatar") || null;
+			return localStorage.getItem("musepi-gui-user-avatar") || null;
 		} catch {
 			return null;
 		}
@@ -74,7 +74,7 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	// omp-avatar-changed so a settings change applies immediately.
 	const readMode = (): string => {
 		try {
-			return localStorage.getItem("omp-gui-user-avatar-mode") ?? "auto";
+			return localStorage.getItem("musepi-gui-user-avatar-mode") ?? "auto";
 		} catch {
 			return "auto";
 		}
@@ -367,7 +367,7 @@ export function ChatView({
 	}, [rpc]);
 	// display.smoothStreaming controls the reveal via the html class —
 	// sole source since the chat-settings toggle merged into 外观 (the old
-	// omp-gui-chat-smooth localStorage key no longer writes it, so stale
+	// musepi-gui-chat-smooth localStorage key no longer writes it, so stale
 	// values must not stick).
 	useEffect(() => {
 		const cls = document.documentElement.classList;
@@ -510,8 +510,8 @@ export function ChatView({
 	// streaming = the assistant message has started streaming (view folds it
 	// into entries at message_start — no separate ghost is kept).
 	const orb: OrbState = snap?.working ? (snap.streaming ? "composing" : "working") : "listening";
-	// Avatar display toggle lives in Settings → appearance (omp-gui-avatars).
-	const showAvatars = localStorage.getItem("omp-gui-avatars") !== "0";
+	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
+	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
 	// Terminal dock resize — unified usePointerDrag primitive (pointer
@@ -572,8 +572,8 @@ export function ChatView({
 			const detail = (e as CustomEvent<{ text?: string }>).detail;
 			if (detail?.text) appendQuote(detail.text);
 		};
-		window.addEventListener("omp-gui-quote-append", onQuoteAppend);
-		return () => window.removeEventListener("omp-gui-quote-append", onQuoteAppend);
+		window.addEventListener("musepi-gui-quote-append", onQuoteAppend);
+		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
 	}, [appendQuote]);
 	// File-reveal requests from transcript paths / artifact cards: relayed
 	// into the ContextPanel → FilePane preview. nonce re-triggers the same
@@ -1076,14 +1076,14 @@ export function ChatView({
 														 * markdown/plain + long-message collapse. */
 														userPlain={(() => {
 															try {
-																return localStorage.getItem("omp-gui-chat-usermsg") === "plain";
+																return localStorage.getItem("musepi-gui-chat-usermsg") === "plain";
 															} catch {
 																return false;
 															}
 														})()}
 														collapseLongUserMessages={(() => {
 															try {
-																return localStorage.getItem("omp-gui-chat-collapseuser") !== "0";
+																return localStorage.getItem("musepi-gui-chat-collapseuser") !== "0";
 															} catch {
 																return true;
 															}
@@ -1169,7 +1169,7 @@ export function ChatView({
 												containerRef={transcriptRef}
 												onQuote={text => appendQuote(text)}
 												onAsk={(text, x, y) =>
-													window.dispatchEvent(new CustomEvent("omp-gui-ask", { detail: { text, x, y } }))
+													window.dispatchEvent(new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }))
 												}
 												onCopy={text => void navigator.clipboard.writeText(text)}
 												onNewSession={text => onSubmitNewSession(text)}

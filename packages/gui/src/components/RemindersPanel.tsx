@@ -17,7 +17,7 @@ export interface ReminderRow {
 }
 
 /** Persisted collapse preference: 1 = collapsed, 0 = expanded. */
-const COLLAPSED_KEY = "omp-gui-reminders-collapsed";
+const COLLAPSED_KEY = "musepi-gui-reminders-collapsed";
 
 /** Row height budget (px): row padding 7+7 + 13px line ≈ 33 — keep a
  *  small headroom so the computed list height never clips a row. */

@@ -8,9 +8,9 @@ import type { RpcClient } from "./rpc";
  * cleanup should keep running).
  */
 
-export const CLEANUP_KEY = "omp-gui-autoclean";
-export const CLEANUP_DAYS_KEY = "omp-gui-autoclean-days";
-export const CLEANUP_ACTION_KEY = "omp-gui-autoclean-action";
+export const CLEANUP_KEY = "musepi-gui-autoclean";
+export const CLEANUP_DAYS_KEY = "musepi-gui-autoclean-days";
+export const CLEANUP_ACTION_KEY = "musepi-gui-autoclean-action";
 
 export function cleanupEnabled(): boolean {
 	try {

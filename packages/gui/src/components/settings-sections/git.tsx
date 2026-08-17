@@ -52,7 +52,7 @@ interface GitIdentity {
 /** Git settings (openchamber GitPage parity): GitHub OAuth via the gh CLI
  *  (device flow → gh auth login --with-token, so all gh RPCs pick it up)
  *  plus named commit identities. Identities are stored client-side
- *  (omp-gui-git-identities) — no commit UI consumes them yet, but the
+ *  (musepi-gui-git-identities) — no commit UI consumes them yet, but the
  *  default identity is what a future git commit flow should use. */
 export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const { prompt } = usePrompt();
@@ -61,7 +61,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [avatarFailed, setAvatarFailed] = useState(false);
 	const [userAvatarMode, setUserAvatarMode] = useState<string>(() => {
 		try {
-			return localStorage.getItem("omp-gui-user-avatar-mode") ?? "auto";
+			return localStorage.getItem("musepi-gui-user-avatar-mode") ?? "auto";
 		} catch {
 			return "auto";
 		}
@@ -69,7 +69,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const pickUserAvatarMode = (mode: "auto" | "punk" | "initial"): void => {
 		setUserAvatarMode(mode);
 		try {
-			localStorage.setItem("omp-gui-user-avatar-mode", mode);
+			localStorage.setItem("musepi-gui-user-avatar-mode", mode);
 		} catch {
 			// storage unavailable — session-only choice
 		}
@@ -89,8 +89,8 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			setAuth(next);
 			// Sync the GitHub avatar to the chat user bubble (UserAvatar
 			// reads this key synchronously — zero RPC per message).
-			if (next?.avatarUrl) localStorage.setItem("omp-gui-user-avatar", next.avatarUrl);
-			else localStorage.removeItem("omp-gui-user-avatar");
+			if (next?.avatarUrl) localStorage.setItem("musepi-gui-user-avatar", next.avatarUrl);
+			else localStorage.removeItem("musepi-gui-user-avatar");
 		} catch (err) {
 			// RPC failure (e.g. daemon predates github.authStatus) is NOT the
 			// same as gh missing — keep the detail so the UI can say so.
@@ -198,7 +198,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// ── Identities ───────────────────────────────────────────────────────
 	const [identities, setIdentities] = useState<GitIdentity[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-git-identities");
+			const raw = localStorage.getItem("musepi-gui-git-identities");
 			return raw ? (JSON.parse(raw) as GitIdentity[]) : [];
 		} catch {
 			return [];
@@ -206,7 +206,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	});
 	const [defaultIdentity, setDefaultIdentity] = useState<string | null>(() => {
 		try {
-			return localStorage.getItem("omp-gui-git-default-identity");
+			return localStorage.getItem("musepi-gui-git-default-identity");
 		} catch {
 			return null;
 		}
@@ -214,7 +214,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const saveIdentities = (next: GitIdentity[]): void => {
 		setIdentities(next);
 		try {
-			localStorage.setItem("omp-gui-git-identities", JSON.stringify(next));
+			localStorage.setItem("musepi-gui-git-identities", JSON.stringify(next));
 		} catch {
 			// storage unavailable
 		}
@@ -229,7 +229,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		if (!defaultIdentity) {
 			setDefaultIdentity(id);
 			try {
-				localStorage.setItem("omp-gui-git-default-identity", id);
+				localStorage.setItem("musepi-gui-git-default-identity", id);
 			} catch {
 				// storage unavailable
 			}
@@ -242,7 +242,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		if (defaultIdentity === id) {
 			setDefaultIdentity(null);
 			try {
-				localStorage.removeItem("omp-gui-git-default-identity");
+				localStorage.removeItem("musepi-gui-git-default-identity");
 			} catch {
 				// storage unavailable
 			}
@@ -407,7 +407,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								onClick={() => {
 									setDefaultIdentity(idt.id);
 									try {
-										localStorage.setItem("omp-gui-git-default-identity", idt.id);
+										localStorage.setItem("musepi-gui-git-default-identity", idt.id);
 									} catch {
 										// storage unavailable
 									}
@@ -436,11 +436,11 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
  *  show-gitignored — consumed by the right-pane DiffPane (same keys). */
 export function GitPrefsRow(): ReactNode {
 	const [view, setViewState] = useState<"flat" | "tree">(() =>
-		localStorage.getItem("omp-gui-git-view") === "tree" ? "tree" : "flat",
+		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
 	);
-	const [gitmoji, setGitmoji] = useState<boolean>(() => localStorage.getItem("omp-gui-gitmoji") !== "0");
+	const [gitmoji, setGitmoji] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
 	const [showIgnored, setShowIgnored] = useState<boolean>(
-		() => localStorage.getItem("omp-gui-git-show-ignored") === "1",
+		() => localStorage.getItem("musepi-gui-git-show-ignored") === "1",
 	);
 	return (
 		<>
@@ -455,7 +455,7 @@ export function GitPrefsRow(): ReactNode {
 						className={`gui-seg-btn${view === "flat" ? " gui-seg-btn--active" : ""}`}
 						onClick={() => {
 							setViewState("flat");
-							localStorage.setItem("omp-gui-git-view", "flat");
+							localStorage.setItem("musepi-gui-git-view", "flat");
 						}}
 					>
 						{t("flat list")}
@@ -465,7 +465,7 @@ export function GitPrefsRow(): ReactNode {
 						className={`gui-seg-btn${view === "tree" ? " gui-seg-btn--active" : ""}`}
 						onClick={() => {
 							setViewState("tree");
-							localStorage.setItem("omp-gui-git-view", "tree");
+							localStorage.setItem("musepi-gui-git-view", "tree");
 						}}
 					>
 						{t("tree view")}
@@ -485,7 +485,7 @@ export function GitPrefsRow(): ReactNode {
 					onClick={() => {
 						const next = !gitmoji;
 						setGitmoji(next);
-						localStorage.setItem("omp-gui-gitmoji", next ? "1" : "0");
+						localStorage.setItem("musepi-gui-gitmoji", next ? "1" : "0");
 						// Live consumers (ContextPanel gitmojiOn badge) re-read
 						// on this event — same-window storage events don't fire.
 						window.dispatchEvent(new CustomEvent("omp-gitmoji-changed"));
@@ -508,7 +508,7 @@ export function GitPrefsRow(): ReactNode {
 					onClick={() => {
 						const next = !showIgnored;
 						setShowIgnored(next);
-						localStorage.setItem("omp-gui-git-show-ignored", next ? "1" : "0");
+						localStorage.setItem("musepi-gui-git-show-ignored", next ? "1" : "0");
 					}}
 					aria-label={t("show gitignored")}
 				>

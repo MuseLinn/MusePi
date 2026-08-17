@@ -31,7 +31,7 @@ export function useDraftPersistence({
 	// restore scoped to sessionId changes.
 	const draftEnabled = useCallback((): boolean => {
 		try {
-			return localStorage.getItem("omp-gui-chat-draft") !== "0";
+			return localStorage.getItem("musepi-gui-chat-draft") !== "0";
 		} catch {
 			return true;
 		}
@@ -44,7 +44,7 @@ export function useDraftPersistence({
 		let next = "";
 		if (draftEnabled()) {
 			try {
-				next = localStorage.getItem(`omp-gui-draft:${sessionId}`) ?? "";
+				next = localStorage.getItem(`musepi-gui-draft:${sessionId}`) ?? "";
 			} catch {
 				// localStorage unavailable — start empty
 			}
@@ -103,8 +103,8 @@ export function useDraftPersistence({
 		}
 		if (!draftEnabled()) return;
 		try {
-			if (text.length > 0) localStorage.setItem(`omp-gui-draft:${sessionId}`, text);
-			else localStorage.removeItem(`omp-gui-draft:${sessionId}`);
+			if (text.length > 0) localStorage.setItem(`musepi-gui-draft:${sessionId}`, text);
+			else localStorage.removeItem(`musepi-gui-draft:${sessionId}`);
 		} catch {
 			// ignore
 		}

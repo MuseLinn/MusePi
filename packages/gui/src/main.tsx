@@ -19,7 +19,7 @@ import "./styles/tailwind.out.css";
 // in localStorage so the broken state (blank sidebar, streaming 错位) can
 // be traced after the fact. main.cjs auto-reloads the window on
 // render-process-gone; this log survives the reload.
-const ERROR_LOG_KEY = "omp-gui-error-log";
+const ERROR_LOG_KEY = "musepi-gui-error-log";
 function captureRenderError(kind: "error" | "rejection", detail: string): void {
 	console.error(`[gui] uncaught ${kind}:`, detail);
 	try {

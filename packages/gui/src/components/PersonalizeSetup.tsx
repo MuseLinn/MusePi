@@ -27,7 +27,7 @@ export function PersonalizeSetup({
 	const [smooth, setSmooth] = useState(true);
 	const [selectedPet, setSelectedPet] = useState<string>(() => {
 		try {
-			return localStorage.getItem("omp-gui-pet-id") ?? "musepi";
+			return localStorage.getItem("musepi-gui-pet-id") ?? "musepi";
 		} catch {
 			return "musepi";
 		}
@@ -49,7 +49,7 @@ export function PersonalizeSetup({
 		tapFeedback();
 		setAvatarId(id);
 		try {
-			localStorage.setItem("omp-gui-avatar", id);
+			localStorage.setItem("musepi-gui-avatar", id);
 		} catch {
 			// storage unavailable
 		}
@@ -72,7 +72,7 @@ export function PersonalizeSetup({
 		tapFeedback();
 		setSelectedPet(id);
 		try {
-			localStorage.setItem("omp-gui-pet-id", id);
+			localStorage.setItem("musepi-gui-pet-id", id);
 		} catch {
 			// storage unavailable
 		}
@@ -81,13 +81,13 @@ export function PersonalizeSetup({
 
 	const petOptions = [...BUILTIN_PETDEX, ...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" }))];
 	// Where the pet lives: docked inside the composer ("input") or its own
-	// desktop window ("desktop") — omp-gui-pet-mode, same key the pet host
+	// desktop window ("desktop") — musepi-gui-pet-mode, same key the pet host
 	// reads. State is lifted (OnboardingOverlay) so the chat preview on the
 	// right reflects the choice live.
 	const pickPetMode = (mode: "input" | "desktop"): void => {
 		onPetModeChange(mode);
 		try {
-			localStorage.setItem("omp-gui-pet-mode", mode);
+			localStorage.setItem("musepi-gui-pet-mode", mode);
 		} catch {
 			// ignore
 		}

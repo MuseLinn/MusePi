@@ -38,14 +38,14 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 	const [idxStatus, setIdxStatus] = useState<IndexStatus | null>(null);
 	const [idxEnabled, setIdxEnabled] = useState(() => {
 		try {
-			return localStorage.getItem("omp-gui-index-enabled") !== "0";
+			return localStorage.getItem("musepi-gui-index-enabled") !== "0";
 		} catch {
 			return true;
 		}
 	});
 	const [autoFolders, setAutoFolders] = useState(() => {
 		try {
-			return localStorage.getItem("omp-gui-index-newfolders") !== "0";
+			return localStorage.getItem("musepi-gui-index-newfolders") !== "0";
 		} catch {
 			return true;
 		}
@@ -107,7 +107,7 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 	const toggleIndex = (next: boolean): void => {
 		setIdxEnabled(next);
 		try {
-			localStorage.setItem("omp-gui-index-enabled", next ? "1" : "0");
+			localStorage.setItem("musepi-gui-index-enabled", next ? "1" : "0");
 		} catch {
 			// ignore
 		}
@@ -150,7 +150,7 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 						setAutoFolders(v => {
 							const next = !v;
 							try {
-								localStorage.setItem("omp-gui-index-newfolders", next ? "1" : "0");
+								localStorage.setItem("musepi-gui-index-newfolders", next ? "1" : "0");
 							} catch {
 								// ignore
 							}

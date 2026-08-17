@@ -37,9 +37,9 @@ export function SessionsSection({
 	rpc: RpcClient | null;
 	currentSessionId: string | null;
 }): ReactNode {
-	const [autoTitle, setAutoTitle] = useState<boolean>(() => localStorage.getItem("omp-gui-autotitle") !== "0");
+	const [autoTitle, setAutoTitle] = useState<boolean>(() => localStorage.getItem("musepi-gui-autotitle") !== "0");
 	const [confirmDelete, setConfirmDelete] = useState<boolean>(
-		() => localStorage.getItem("omp-gui-confirm-delete") !== "0",
+		() => localStorage.getItem("musepi-gui-confirm-delete") !== "0",
 	);
 	// ── retention (openchamber SessionRetentionSettings parity) ──────────
 	const MIN_DAYS = 1;
@@ -99,7 +99,7 @@ export function SessionsSection({
 	const setDays = (next: number): void => {
 		const clamped = Math.min(MAX_DAYS, Math.max(MIN_DAYS, next));
 		setCleanupDays(clamped);
-		localStorage.setItem("omp-gui-autoclean-days", String(clamped));
+		localStorage.setItem("musepi-gui-autoclean-days", String(clamped));
 	};
 	return (
 		<>
@@ -121,7 +121,7 @@ export function SessionsSection({
 						onClick={() => {
 							const next = !autoTitle;
 							setAutoTitle(next);
-							localStorage.setItem("omp-gui-autotitle", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-autotitle", next ? "1" : "0");
 						}}
 						aria-label={t("auto title")}
 					>
@@ -141,7 +141,7 @@ export function SessionsSection({
 						onClick={() => {
 							const next = !confirmDelete;
 							setConfirmDelete(next);
-							localStorage.setItem("omp-gui-confirm-delete", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-confirm-delete", next ? "1" : "0");
 						}}
 						aria-label={t("show delete dialog")}
 					>
@@ -166,7 +166,7 @@ export function SessionsSection({
 						onClick={() => {
 							const next = !cleanupOn;
 							setCleanupOn(next);
-							localStorage.setItem("omp-gui-autoclean", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-autoclean", next ? "1" : "0");
 						}}
 						aria-label={t("enable auto cleanup")}
 					>
@@ -214,7 +214,7 @@ export function SessionsSection({
 							className={`gui-seg-btn${cleanupAction === "archive" ? " gui-seg-btn--active" : ""}`}
 							onClick={() => {
 								setCleanupAction("archive");
-								localStorage.setItem("omp-gui-autoclean-action", "archive");
+								localStorage.setItem("musepi-gui-autoclean-action", "archive");
 							}}
 						>
 							{t("archive")}
@@ -224,7 +224,7 @@ export function SessionsSection({
 							className={`gui-seg-btn${cleanupAction === "delete" ? " gui-seg-btn--active" : ""}`}
 							onClick={() => {
 								setCleanupAction("delete");
-								localStorage.setItem("omp-gui-autoclean-action", "delete");
+								localStorage.setItem("musepi-gui-autoclean-action", "delete");
 							}}
 						>
 							{t("delete")}

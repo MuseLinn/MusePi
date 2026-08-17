@@ -57,7 +57,7 @@ function stateLabel(e: ExtensionItem): string {
 function levelLabel(s: ExtensionItem): string {
 	if (
 		s.source.provider === "native" ||
-		s.source.provider === "omp-managed" ||
+		s.source.provider === "musepi-managed" ||
 		s.source.provider === "builtin-defaults"
 	) {
 		return t("skill filter builtin");
@@ -72,7 +72,7 @@ function isDeletable(e: ExtensionItem): boolean {
 		e.kind === "skill" &&
 		e.source.level === "user" &&
 		e.source.provider !== "native" &&
-		e.source.provider !== "omp-managed"
+		e.source.provider !== "musepi-managed"
 	);
 }
 
@@ -407,7 +407,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																		className={`gui-ext-dot${e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 																	/>
 																	<span className="min-w-0 flex-1 truncate">{e.name}</span>
-																	{isGuiKind(e) && <span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>}
+																	{isGuiKind(e) && (
+																		<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+																			GUI
+																		</span>
+																	)}
 																	<span className="gui-ext-item-tag">{levelLabel(e)}</span>
 																	<span className="gui-ext-item-ops">
 																		{isDeletable(e) && (

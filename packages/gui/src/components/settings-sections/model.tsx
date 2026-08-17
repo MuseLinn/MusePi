@@ -598,11 +598,11 @@ export function ModelSection({
 								// (no :level suffix) mirrors the daemon's
 								// modelRoles.default value.
 								try {
-									localStorage.setItem("omp-gui-default-model", ref);
+									localStorage.setItem("musepi-gui-default-model", ref);
 								} catch {
 									// storage unavailable
 								}
-								window.dispatchEvent(new CustomEvent("omp-gui-default-model-changed", { detail: ref }));
+								window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
 							}
 							// Keep the role's thinking suffix when the model
 							// changes (TUI assign preserves the level).

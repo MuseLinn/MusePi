@@ -64,12 +64,12 @@ export const DEFAULT_UI_FONT: FontOption = UI_FONT_OPTIONS[0]!;
 export const DEFAULT_CODE_FONT: FontOption = CODE_FONT_OPTIONS[0]!;
 
 /** localStorage keys for the appearance prefs. */
-export const UI_FONT_KEY = "omp-gui-ui-font";
-export const MONO_FONT_KEY = "omp-gui-mono-font";
-export const DENSITY_KEY = "omp-gui-density";
-export const TIME_FMT_KEY = "omp-gui-timefmt";
-export const WEEK_START_KEY = "omp-gui-weekstart";
-export const EDITOR_FONT_KEY = "omp-gui-editor-font";
+export const UI_FONT_KEY = "musepi-gui-ui-font";
+export const MONO_FONT_KEY = "musepi-gui-mono-font";
+export const DENSITY_KEY = "musepi-gui-density";
+export const TIME_FMT_KEY = "musepi-gui-timefmt";
+export const WEEK_START_KEY = "musepi-gui-weekstart";
+export const EDITOR_FONT_KEY = "musepi-gui-editor-font";
 
 /**
  * Code block themes (ZCode-parity 代码设置): one pick per scheme, applied as
@@ -101,11 +101,11 @@ export const DARK_CODE_THEMES: CodeTheme[] = [
 export const DEFAULT_LIGHT_CODE_THEME: CodeTheme = LIGHT_CODE_THEMES[0]!;
 export const DEFAULT_DARK_CODE_THEME: CodeTheme = DARK_CODE_THEMES[0]!;
 
-export const CODE_THEME_LIGHT_KEY = "omp-gui-code-theme-light";
-export const CODE_THEME_DARK_KEY = "omp-gui-code-theme-dark";
+export const CODE_THEME_LIGHT_KEY = "musepi-gui-code-theme-light";
+export const CODE_THEME_DARK_KEY = "musepi-gui-code-theme-dark";
 /** Line numbers + long-line wrap (ZCode 代码设置 toggles). */
-export const CODE_LINES_KEY = "omp-gui-code-lines";
-export const CODE_WRAP_KEY = "omp-gui-code-wrap";
+export const CODE_LINES_KEY = "musepi-gui-code-lines";
+export const CODE_WRAP_KEY = "musepi-gui-code-wrap";
 
 const findCodeTheme = (options: CodeTheme[], id: string | null): CodeTheme =>
 	options.find(o => o.id === id) ?? options[0]!;

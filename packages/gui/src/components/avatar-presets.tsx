@@ -6,10 +6,10 @@ import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
  * Agent-avatar presets (pet-style switcher): the chat avatar is a
  * thinking-orb by default, but users can swap in alternative SVG
  * definitions — each preset renders its own state-aware animation.
- * Selection persists as omp-gui-avatar (localStorage) and broadcasts
+ * Selection persists as musepi-gui-avatar (localStorage) and broadcasts
  * omp-avatar-changed so every mounted avatar re-renders live.
  */
-export const AVATAR_STORAGE_KEY = "omp-gui-avatar";
+export const AVATAR_STORAGE_KEY = "musepi-gui-avatar";
 
 export function avatarPresetId(): string {
 	try {
@@ -90,7 +90,7 @@ function SparkAvatar({ state, size }: { state: OrbState; size: number }): ReactN
  *  user picked, while identity-bound faces stay stable regardless. State
  *  is ignored (static face; the surrounding state chrome stays on the
  *  host). */
-export const PUNK_SEED_KEY = "omp-gui-avatar-punk-seed";
+export const PUNK_SEED_KEY = "musepi-gui-avatar-punk-seed";
 
 /** The user-chosen face seed (null when never customized — falls back to a
  *  stable per-install random face). */

@@ -164,7 +164,7 @@ export function ContextPanel({
 	// persisted per run.
 	const [width, setWidth] = useState(() => {
 		try {
-			const v = Number.parseInt(localStorage.getItem("omp-gui-right-width") ?? "", 10);
+			const v = Number.parseInt(localStorage.getItem("musepi-gui-right-width") ?? "", 10);
 			return Number.isFinite(v) && v >= 200 && v <= 560 ? v : 288;
 		} catch {
 			return 288;
@@ -184,7 +184,7 @@ export function ContextPanel({
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
 			try {
-				localStorage.setItem("omp-gui-right-width", String(width));
+				localStorage.setItem("musepi-gui-right-width", String(width));
 			} catch {
 				// storage unavailable
 			}
@@ -443,7 +443,7 @@ interface PlanFile {
 	createdAt: string;
 }
 
-const TODO_STORAGE_PREFIX = "omp-gui-todos:";
+const TODO_STORAGE_PREFIX = "musepi-gui-todos:";
 const TODO_TEXT_MAX = 120;
 
 function loadTodos(cwd: string): TodoItem[] {
@@ -1005,17 +1005,17 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	// openchamber GitSettings parity: flat/tree view, show-gitignored and
 	// gitmoji picker — localStorage keys shared with the settings Git tab.
 	const [view, setView] = useState<"flat" | "tree">(() =>
-		localStorage.getItem("omp-gui-git-view") === "tree" ? "tree" : "flat",
+		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
 	);
 	const [showIgnored, setShowIgnored] = useState<boolean>(
-		() => localStorage.getItem("omp-gui-git-show-ignored") === "1",
+		() => localStorage.getItem("musepi-gui-git-show-ignored") === "1",
 	);
-	const [gitmojiOn, setGitmojiOn] = useState<boolean>(() => localStorage.getItem("omp-gui-gitmoji") !== "0");
+	const [gitmojiOn, setGitmojiOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
 	// Git settings (Git tab) toggles this pref and dispatches
 	// omp-gitmoji-changed (same-window storage events don't fire) — keep
 	// the gitmoji badges in the context panel in sync.
 	useEffect(() => {
-		const sync = (): void => setGitmojiOn(localStorage.getItem("omp-gui-gitmoji") !== "0");
+		const sync = (): void => setGitmojiOn(localStorage.getItem("musepi-gui-gitmoji") !== "0");
 		window.addEventListener("omp-gitmoji-changed", sync);
 		return () => window.removeEventListener("omp-gitmoji-changed", sync);
 	}, []);
@@ -1073,11 +1073,11 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		setCommitting(true);
 		setCommitError(null);
 		try {
-			const raw = localStorage.getItem("omp-gui-git-identities");
+			const raw = localStorage.getItem("musepi-gui-git-identities");
 			let identity: GitCommitIdentity | undefined;
 			if (raw) {
 				const all = JSON.parse(raw) as GitCommitIdentity[];
-				const def = localStorage.getItem("omp-gui-git-default-identity");
+				const def = localStorage.getItem("musepi-gui-git-default-identity");
 				identity = all.find(i => i.id === def) ?? all[0];
 			}
 			const res = await rpc.request<{ ok?: boolean; error?: string }>("git.commit", {
@@ -1299,7 +1299,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						aria-label={t("flat list")}
 						onClick={() => {
 							setView("flat");
-							localStorage.setItem("omp-gui-git-view", "flat");
+							localStorage.setItem("musepi-gui-git-view", "flat");
 						}}
 					>
 						<Icon name="align-justify" className="h-3.5 w-3.5" />
@@ -1311,7 +1311,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						aria-label={t("tree view")}
 						onClick={() => {
 							setView("tree");
-							localStorage.setItem("omp-gui-git-view", "tree");
+							localStorage.setItem("musepi-gui-git-view", "tree");
 						}}
 					>
 						<Icon name="node-tree" className="h-3.5 w-3.5" />
@@ -1324,7 +1324,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						onClick={() => {
 							const next = !showIgnored;
 							setShowIgnored(next);
-							localStorage.setItem("omp-gui-git-show-ignored", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-git-show-ignored", next ? "1" : "0");
 						}}
 					>
 						<Icon name="eye-off" className="h-3.5 w-3.5" />
@@ -1646,7 +1646,7 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
  *  executeJavaScript for the element picker) with an iframe fallback for the
  *  plain-browser build. URL bar, back/forward history, quick ports, viewport
  *  presets and an element-picker that inserts the picked element into the
- *  chat composer via the omp-gui-insert-text window event. The "Agent 标签页"
+ *  chat composer via the musepi-gui-insert-text window event. The "Agent 标签页"
  *  strip mirrors the SHARED automation Chromium (the same instance the agent
  *  drives) — click a tab to open its URL here and see a live screenshot. */
 interface BrowserTabInfo {
@@ -1757,7 +1757,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			const picked = (await wv.executeJavaScript(BROWSER_INSPECT_SCRIPT, true)) as PickedElement | null;
 			if (picked?.text) {
 				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("inserted element selector")}: ${picked.selector}`;
-				window.dispatchEvent(new CustomEvent("omp-gui-insert-text", { detail: { text: insertion } }));
+				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
 			}
 		} catch {
 			// page not scriptable (about:blank / crashed) — ignore
@@ -1779,7 +1779,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			if (!picked?.text) return;
 			const rect = webviewRef.current?.getBoundingClientRect();
 			window.dispatchEvent(
-				new CustomEvent("omp-gui-ask", {
+				new CustomEvent("musepi-gui-ask", {
 					detail: {
 						text: picked.text,
 						x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2,

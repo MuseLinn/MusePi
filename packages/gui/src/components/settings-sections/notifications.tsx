@@ -65,7 +65,7 @@ const SOUND_USAGE_KEYS: Partial<Record<SoundName, TranslationKey>> = {
 
 /** One configurable activity row (opencode per-category sounds parity):
  *  activity name + trigger desc, a preview button for the current choice,
- *  and a palette select that persists under omp-gui-sfx:<event>. */
+ *  and a palette select that persists under musepi-gui-sfx:<event>. */
 export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 	const [name, setName] = useState<SoundName>(() => soundFor(ev));
 	return (
@@ -124,7 +124,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 		return out;
 	});
 	const [templates, setTemplates] = useState<NotifyTemplates>(() => loadNotifyTemplates());
-	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("omp-gui-sound") !== "0");
+	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("musepi-gui-sound") !== "0");
 	// Voice I/O settings (daemon-persisted, TUI parity: sherpa-ONNX ASR +
 	// Kokoro TTS — local models, no network).
 	const [sttEnabled, setSttEnabled] = useState<boolean>(false);
@@ -149,7 +149,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 			alive = false;
 		};
 	}, [rpc]);
-	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("omp-gui-haptic") !== "0");
+	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-haptic") !== "0");
 	const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
 	// Idle recap (daemon recap.enabled / recap.idleSeconds — TUI parity).
 	// Daemon-side settings (config.yml), unlike the renderer-local prefs
@@ -190,7 +190,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						onClick={() => {
 							const next = !notify;
 							setNotify(next);
-							localStorage.setItem("omp-gui-notify", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-notify", next ? "1" : "0");
 						}}
 						aria-label={t("enable notifications")}
 					>
@@ -211,7 +211,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							onClick={() => {
 								const next = !focused;
 								setFocused(next);
-								localStorage.setItem("omp-gui-notify-focused", next ? "1" : "0");
+								localStorage.setItem("musepi-gui-notify-focused", next ? "1" : "0");
 							}}
 							aria-label={t("notify when focused")}
 						>
@@ -336,7 +336,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						onClick={() => {
 							const next = !sound;
 							setSound(next);
-							localStorage.setItem("omp-gui-sound", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-sound", next ? "1" : "0");
 						}}
 						aria-label={t("sound effects")}
 					>
@@ -356,7 +356,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						onClick={() => {
 							const next = !hapticOn;
 							setHapticOn(next);
-							localStorage.setItem("omp-gui-haptic", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-haptic", next ? "1" : "0");
 						}}
 						aria-label={t("haptic feedback")}
 					>

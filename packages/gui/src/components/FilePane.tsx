@@ -249,7 +249,7 @@ export function FilePane({
 	const [viewH, setViewH] = useState(400);
 	const [treeW, setTreeW] = useState(() => {
 		try {
-			const v = Number.parseFloat(localStorage.getItem("omp-gui-filepane-tree") ?? "");
+			const v = Number.parseFloat(localStorage.getItem("musepi-gui-filepane-tree") ?? "");
 			return Number.isFinite(v) && v >= 0.28 && v <= 0.6 ? v : 0.42;
 		} catch {
 			return 0.42;
@@ -274,7 +274,7 @@ export function FilePane({
 		},
 		onDragEnd: () => {
 			try {
-				localStorage.setItem("omp-gui-filepane-tree", String(treeW));
+				localStorage.setItem("musepi-gui-filepane-tree", String(treeW));
 			} catch {
 				// storage unavailable
 			}

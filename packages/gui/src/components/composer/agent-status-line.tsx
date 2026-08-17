@@ -27,11 +27,11 @@ export function readStatusPrefs(): {
 	let indicator: AgentStatusIndicator = "braille";
 	let sweepColor: SweepColor = "default";
 	try {
-		const e = localStorage.getItem("omp-gui-statusbar");
+		const e = localStorage.getItem("musepi-gui-statusbar");
 		if (e === "kitt" || e === "plain" || e === "shimmer") effect = e;
-		const i = localStorage.getItem("omp-gui-statusbar-indicator");
+		const i = localStorage.getItem("musepi-gui-statusbar-indicator");
 		if (i === "orb" || i === "braille" || i === "lattice" || i === "ring") indicator = i;
-		const k = localStorage.getItem("omp-gui-statusbar-kitt-color");
+		const k = localStorage.getItem("musepi-gui-statusbar-kitt-color");
 		if (k === "accent" || k === "default") sweepColor = k;
 	} catch {
 		// localStorage unavailable — defaults stand

@@ -4,7 +4,7 @@ import { type TranslationKey, t } from "@musepi/desktop-web";
  * Empty-state composer draft suggestions (openchamber DraftPresetChips
  * parity). Built-in entries are i18n-keyed so labels/prompts localize at
  * render; custom entries carry literal text. The persisted list lives in
- * localStorage (omp-gui-suggestions) and changes broadcast via
+ * localStorage (musepi-gui-suggestions) and changes broadcast via
  * SUGGESTIONS_CHANGED_EVENT so the welcome composer updates live.
  */
 
@@ -42,8 +42,8 @@ export type StoredSuggestion =
 	| { labelKey: TranslationKey; promptKey: TranslationKey }
 	| { label: string; prompt: string };
 
-export const SUGGESTIONS_STORAGE_KEY = "omp-gui-suggestions";
-export const SUGGESTIONS_CHANGED_EVENT = "omp-gui-suggestions-changed";
+export const SUGGESTIONS_STORAGE_KEY = "musepi-gui-suggestions";
+export const SUGGESTIONS_CHANGED_EVENT = "musepi-gui-suggestions-changed";
 
 /** How many chips show before the + expansion. */
 export const SUGGESTIONS_COLLAPSED_COUNT = DEFAULT_SUGGESTIONS.length;

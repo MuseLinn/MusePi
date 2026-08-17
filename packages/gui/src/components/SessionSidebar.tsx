@@ -129,7 +129,7 @@ export function SessionSidebar({
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
 	const [pinned, setPinned] = useState<string[]>(() => {
 		try {
-			return JSON.parse(localStorage.getItem("omp-gui-pinned") ?? "[]") as string[];
+			return JSON.parse(localStorage.getItem("musepi-gui-pinned") ?? "[]") as string[];
 		} catch {
 			return [];
 		}
@@ -137,7 +137,7 @@ export function SessionSidebar({
 	const persistPinned = (next: string[]): void => {
 		setPinned(next);
 		try {
-			localStorage.setItem("omp-gui-pinned", JSON.stringify(next));
+			localStorage.setItem("musepi-gui-pinned", JSON.stringify(next));
 		} catch {
 			// storage unavailable
 		}
@@ -147,7 +147,7 @@ export function SessionSidebar({
 	// status for the row's left square.
 	const [manualTags, setManualTags] = useState<ReadonlyMap<string, SessionStatus>>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-session-tags");
+			const raw = localStorage.getItem("musepi-gui-session-tags");
 			return raw ? new Map(Object.entries(JSON.parse(raw) as Record<string, SessionStatus>)) : new Map();
 		} catch {
 			return new Map();
@@ -156,7 +156,7 @@ export function SessionSidebar({
 	const persistManualTags = (next: ReadonlyMap<string, SessionStatus>): void => {
 		setManualTags(next);
 		try {
-			localStorage.setItem("omp-gui-session-tags", JSON.stringify(Object.fromEntries(next)));
+			localStorage.setItem("musepi-gui-session-tags", JSON.stringify(Object.fromEntries(next)));
 		} catch {
 			// storage unavailable
 		}
@@ -200,7 +200,7 @@ export function SessionSidebar({
 	const [projSort, setProjSort] = useState<"updated" | "created">("updated");
 	const [groups, setGroups] = useState<{ name: string; sessions: string[]; color?: string }[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-groups");
+			const raw = localStorage.getItem("musepi-gui-groups");
 			return raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : [];
 		} catch {
 			return [];
@@ -213,7 +213,7 @@ export function SessionSidebar({
 	// can show the folder (tree nodes carry no cwd).
 	const [archived, setArchived] = useState<{ sessionId: string; archivedAt: number; cwd?: string }[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-archived");
+			const raw = localStorage.getItem("musepi-gui-archived");
 			return raw ? (JSON.parse(raw) as { sessionId: string; archivedAt: number }[]) : [];
 		} catch {
 			return [];
@@ -227,11 +227,11 @@ export function SessionSidebar({
 	useScrollShadow(sessionListRef);
 	// Persisted project list (projects tab): every folder the app knows —
 	// seeded from session cwds on first load and grown by folder picks
-	// (omp-gui-project-added, dispatched by app.tsx after pickDirectory) so
+	// (musepi-gui-project-added, dispatched by app.tsx after pickDirectory) so
 	// empty folders show up even before any session exists. Full paths.
 	const [projects, setProjects] = useState<string[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-projects");
+			const raw = localStorage.getItem("musepi-gui-projects");
 			const parsed: unknown = raw ? JSON.parse(raw) : [];
 			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
 		} catch {
@@ -241,7 +241,7 @@ export function SessionSidebar({
 	// Per-project collapse state, keyed by path (expanded by default).
 	const [collapsedProjects, setCollapsedProjects] = useState<string[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-projects-collapsed");
+			const raw = localStorage.getItem("musepi-gui-projects-collapsed");
 			const parsed: unknown = raw ? JSON.parse(raw) : [];
 			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
 		} catch {
@@ -281,21 +281,21 @@ export function SessionSidebar({
 		[onDeleteArchived],
 	);
 	useEffect(() => {
-		localStorage.setItem("omp-gui-groups", JSON.stringify(groups));
+		localStorage.setItem("musepi-gui-groups", JSON.stringify(groups));
 	}, [groups]);
 	useEffect(() => {
-		localStorage.setItem("omp-gui-archived", JSON.stringify(archived));
+		localStorage.setItem("musepi-gui-archived", JSON.stringify(archived));
 	}, [archived]);
 	useEffect(() => {
 		try {
-			localStorage.setItem("omp-gui-projects", JSON.stringify(projects));
+			localStorage.setItem("musepi-gui-projects", JSON.stringify(projects));
 		} catch {
 			// storage unavailable
 		}
 	}, [projects]);
 	useEffect(() => {
 		try {
-			localStorage.setItem("omp-gui-projects-collapsed", JSON.stringify(collapsedProjects));
+			localStorage.setItem("musepi-gui-projects-collapsed", JSON.stringify(collapsedProjects));
 		} catch {
 			// storage unavailable
 		}
@@ -308,21 +308,21 @@ export function SessionSidebar({
 			if (typeof path !== "string" || !path) return;
 			setProjects(prev => (prev.includes(path) ? prev : [...prev, path]));
 		};
-		window.addEventListener("omp-gui-project-added", onProjectAdded);
-		return () => window.removeEventListener("omp-gui-project-added", onProjectAdded);
+		window.addEventListener("musepi-gui-project-added", onProjectAdded);
+		return () => window.removeEventListener("musepi-gui-project-added", onProjectAdded);
 	}, []);
 	// The header's session ⋯ menu can archive the active session — re-read
 	// the shared archive list so this component's in-memory copy follows.
 	useEffect(() => {
 		const onArchived = (): void => {
 			try {
-				setArchived(JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as typeof archived);
+				setArchived(JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as typeof archived);
 			} catch {
 				// storage unavailable
 			}
 		};
-		window.addEventListener("omp-gui-sessions-archived", onArchived);
-		return () => window.removeEventListener("omp-gui-sessions-archived", onArchived);
+		window.addEventListener("musepi-gui-sessions-archived", onArchived);
+		return () => window.removeEventListener("musepi-gui-sessions-archived", onArchived);
 	}, []);
 	const archivedIds = new Set(archived.map(a => a.sessionId));
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
@@ -382,7 +382,7 @@ export function SessionSidebar({
 		const onArchivedChanged = (): void => {
 			try {
 				setArchived(
-					JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as {
+					JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as {
 						sessionId: string;
 						archivedAt: number;
 					}[],
@@ -391,8 +391,8 @@ export function SessionSidebar({
 				// ignore malformed storage
 			}
 		};
-		window.addEventListener("omp-gui-archived-changed", onArchivedChanged);
-		return () => window.removeEventListener("omp-gui-archived-changed", onArchivedChanged);
+		window.addEventListener("musepi-gui-archived-changed", onArchivedChanged);
+		return () => window.removeEventListener("musepi-gui-archived-changed", onArchivedChanged);
 	}, []);
 
 	const unarchiveSession = (id: string): void => {

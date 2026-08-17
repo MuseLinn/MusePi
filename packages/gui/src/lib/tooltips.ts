@@ -56,7 +56,7 @@ const MAX_W = 340;
 /** Pointer travel beyond this (px) resets the pending hover delay. */
 const TRAVEL_RESET = 4;
 
-const TIP_ID = "omp-gui-tooltip";
+const TIP_ID = "musepi-gui-tooltip";
 
 function ensureTip(): HTMLDivElement {
 	if (!tipEl) {

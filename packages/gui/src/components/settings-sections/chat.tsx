@@ -147,7 +147,7 @@ export function PrefSegmented<T extends string>({
 export function ChatSection(): ReactNode {
 	const [mermaidModeState, setMermaidModeState] = useState<"svg" | "ascii">(() => {
 		try {
-			return localStorage.getItem("omp-gui-chat-mermaid") === "ascii" ? "ascii" : "svg";
+			return localStorage.getItem("musepi-gui-chat-mermaid") === "ascii" ? "ascii" : "svg";
 		} catch {
 			return "svg";
 		}
@@ -156,14 +156,14 @@ export function ChatSection(): ReactNode {
 	// is inert (tool cards collapse; the widget lives on its own card).
 	const [widgetStandalone, setWidgetStandalone] = useState<boolean>(() => {
 		try {
-			return (localStorage.getItem("omp-gui-widget-standalone") ?? "1") !== "0";
+			return (localStorage.getItem("musepi-gui-widget-standalone") ?? "1") !== "0";
 		} catch {
 			return true;
 		}
 	});
 	const [diffLayoutState, setDiffLayoutState] = useState<"dynamic" | "inline" | "side-by-side">(() => {
 		try {
-			const v = localStorage.getItem("omp-gui-chat-difflayout");
+			const v = localStorage.getItem("musepi-gui-chat-difflayout");
 			return v === "dynamic" || v === "side-by-side" ? v : "inline";
 		} catch {
 			return "inline";
@@ -171,7 +171,7 @@ export function ChatSection(): ReactNode {
 	});
 	const [outputStyle, setOutputStyle] = useState<"default" | "kimi" | "zcode">(() => {
 		try {
-			const v = localStorage.getItem("omp-gui-chat-output-style");
+			const v = localStorage.getItem("musepi-gui-chat-output-style");
 			return v === "kimi" || v === "zcode" ? v : "default";
 		} catch {
 			return "default";
@@ -182,12 +182,12 @@ export function ChatSection(): ReactNode {
 	// font slider: shell chrome follows --gui-font-scale, chat text follows
 	// this one.
 	const [chatFontSize, setChatFontSize] = useState<number>(() =>
-		Number(localStorage.getItem("omp-gui-chat-font-size") ?? 14),
+		Number(localStorage.getItem("musepi-gui-chat-font-size") ?? 14),
 	);
 	const [typingEffect, setTypingEffect] = useState<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">(
 		() => {
 			try {
-				const v = localStorage.getItem("omp-gui-chat-effect");
+				const v = localStorage.getItem("musepi-gui-chat-effect");
 				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "ink";
 			} catch {
 				return "ink";
@@ -211,7 +211,7 @@ export function ChatSection(): ReactNode {
 				<PrefSegmented
 					label={t("user message rendering")}
 					description={t("user message rendering description")}
-					storageKey="omp-gui-chat-usermsg"
+					storageKey="musepi-gui-chat-usermsg"
 					defaultValue="markdown"
 					options={[
 						{ id: "markdown", label: t("markdown") },
@@ -221,24 +221,24 @@ export function ChatSection(): ReactNode {
 				<PrefToggle
 					label={t("collapse long user messages")}
 					description={t("collapse long user messages description")}
-					storageKey="omp-gui-chat-collapseuser"
+					storageKey="musepi-gui-chat-collapseuser"
 				/>
 				<PrefToggle
 					label={t("show reasoning traces")}
 					description={t("show reasoning traces description")}
-					storageKey="omp-gui-chat-thinking"
+					storageKey="musepi-gui-chat-thinking"
 					onClass="gui-chat-hide-thinking"
 				/>
 				<PrefToggle
 					label={t("widget standalone")}
 					description={t("widget standalone description")}
-					storageKey="omp-gui-widget-standalone"
+					storageKey="musepi-gui-widget-standalone"
 					onChange={setWidgetStandalone}
 				/>
 				<PrefToggle
 					label={t("widgets expanded")}
 					description={t("widgets expanded description")}
-					storageKey="omp-gui-widget-expanded"
+					storageKey="musepi-gui-widget-expanded"
 					disabled={widgetStandalone}
 				/>
 				<div className="gui-settings-row">
@@ -255,7 +255,7 @@ export function ChatSection(): ReactNode {
 								onClick={() => {
 									setMermaidModeState(m);
 									try {
-										localStorage.setItem("omp-gui-chat-mermaid", m);
+										localStorage.setItem("musepi-gui-chat-mermaid", m);
 									} catch {
 										// ignore
 									}
@@ -291,7 +291,7 @@ export function ChatSection(): ReactNode {
 								onClick={() => {
 									setDiffLayoutState(o.id);
 									try {
-										localStorage.setItem("omp-gui-chat-difflayout", o.id);
+										localStorage.setItem("musepi-gui-chat-difflayout", o.id);
 									} catch {
 										// ignore
 									}
@@ -316,24 +316,24 @@ export function ChatSection(): ReactNode {
 				<PrefToggle
 					label={t("preserve draft messages")}
 					description={t("preserve draft messages description")}
-					storageKey="omp-gui-chat-draft"
+					storageKey="musepi-gui-chat-draft"
 				/>
 				<PrefToggle
 					label={t("enable spell check in text input")}
 					description={t("enable spell check in text input description")}
-					storageKey="omp-gui-chat-spellcheck"
+					storageKey="musepi-gui-chat-spellcheck"
 					on={false}
 				/>
 				<PrefToggle
 					label={t("show timestamps")}
 					description={t("time next to assistant messages")}
-					storageKey="omp-gui-chat-time"
+					storageKey="musepi-gui-chat-time"
 					onClass="gui-chat-hide-time"
 				/>
 				<PrefToggle
 					label={t("row actions")}
 					description={t("row actions description")}
-					storageKey="omp-gui-chat-rowactions"
+					storageKey="musepi-gui-chat-rowactions"
 					onClass="gui-chat-hide-row-actions"
 				/>
 				<div className="gui-settings-row">
@@ -351,7 +351,7 @@ export function ChatSection(): ReactNode {
 						onChange={v => {
 							setChatFontSize(v);
 							try {
-								localStorage.setItem("omp-gui-chat-font-size", String(v));
+								localStorage.setItem("musepi-gui-chat-font-size", String(v));
 							} catch {
 								// ignore
 							}
@@ -380,7 +380,7 @@ export function ChatSection(): ReactNode {
 									tapFeedback();
 									setOutputStyle(o.id);
 									try {
-										localStorage.setItem("omp-gui-chat-output-style", o.id);
+										localStorage.setItem("musepi-gui-chat-output-style", o.id);
 									} catch {
 										// ignore
 									}
@@ -416,7 +416,7 @@ export function ChatSection(): ReactNode {
 									tapFeedback();
 									setTypingEffect(o.id);
 									try {
-										localStorage.setItem("omp-gui-chat-effect", o.id);
+										localStorage.setItem("musepi-gui-chat-effect", o.id);
 									} catch {
 										// ignore
 									}
@@ -456,13 +456,13 @@ export function ChatSection(): ReactNode {
 				<PrefToggle
 					label={t("streaming caret")}
 					description={t("streaming caret description")}
-					storageKey="omp-gui-chat-caret"
+					storageKey="musepi-gui-chat-caret"
 					onClass="gui-chat-no-caret"
 				/>
 				<PrefToggle
 					label={t("code highlight")}
 					description={t("code highlight description")}
-					storageKey="omp-gui-chat-codehl"
+					storageKey="musepi-gui-chat-codehl"
 					onClass="gui-chat-plain-code"
 				/>
 			</div>
@@ -501,7 +501,7 @@ export function TypewriterPreview(): ReactNode {
 	const smoothOn = (() => {
 		try {
 			// PrefToggle writes "1"/"0" — absent key = default on.
-			const v = localStorage.getItem("omp-gui-chat-smooth");
+			const v = localStorage.getItem("musepi-gui-chat-smooth");
 			return v === null ? true : v !== "0";
 		} catch {
 			return true;
@@ -509,7 +509,7 @@ export function TypewriterPreview(): ReactNode {
 	})();
 	const effect = (() => {
 		try {
-			const v = localStorage.getItem("omp-gui-chat-effect");
+			const v = localStorage.getItem("musepi-gui-chat-effect");
 			return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
 		} catch {
 			return "typewriter";

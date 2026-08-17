@@ -6,7 +6,7 @@ import { AVATAR_STORAGE_KEY, avatarPreset } from "./avatar-presets";
  * Agent avatar — a thinking-orb by default whose animation reflects the
  * agent's current state (idle → working, searching, composing…).
  * Alternative presets (hex, spark) swap in via 设置 → 常规 → Agent 头像
- * (pet-style switcher, persisted omp-gui-avatar); all presets receive
+ * (pet-style switcher, persisted musepi-gui-avatar); all presets receive
  * the same OrbState so the animation still tracks the agent.
  * Theme-aware via data-theme. Sizes: 20 (toolbar), 32, or 64 (chat avatar).
  *
@@ -55,7 +55,7 @@ export function AgentAvatar({
 	const [cycleIndex, setCycleIndex] = useState(0);
 	let motionOff = false;
 	try {
-		motionOff = localStorage.getItem("omp-gui-motion") === "off";
+		motionOff = localStorage.getItem("musepi-gui-motion") === "off";
 	} catch {
 		// storage unavailable — keep cycling on
 	}

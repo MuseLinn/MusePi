@@ -126,13 +126,13 @@ export function WelcomeComposer({
 	focused?: boolean;
 	onToggleFocus?(): void;
 	/** Daemon-settings default model (modelRoles.default; refreshed live via
-	 *  the omp-gui-default-model-changed event) — preselects the model
+	 *  the musepi-gui-default-model-changed event) — preselects the model
 	 *  button over the localStorage fallback. Resting state only: an
 	 *  explicit pick (modelTouched) overrides it for the next new session. */
 	presetModelId?: string | null;
 	/** Daemon-settings thinking default (modelRoles.default suffix, else
 	 *  settings.defaultThinkingLevel incl. auto) — boot snapshot replacing
-	 *  the old localStorage mirror (omp-gui-default-thinking removed). */
+	 *  the old localStorage mirror (musepi-gui-default-thinking removed). */
 	presetThinkingLevel?: ThinkingLevel | null | undefined;
 	/** Welcome-scene reminders (kimi 实时提醒 parity): background-working +
 	 *  completed-unread sessions rendered below the composer. */
@@ -209,8 +209,8 @@ export function WelcomeComposer({
 			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
-		window.addEventListener("omp-gui-insert-text", onInsert);
-		return () => window.removeEventListener("omp-gui-insert-text", onInsert);
+		window.addEventListener("musepi-gui-insert-text", onInsert);
+		return () => window.removeEventListener("musepi-gui-insert-text", onInsert);
 	}, []);
 	// Cmd/Ctrl+L quote cards (same style as the session Composer): quoted
 	// selections render as cards above the input and are sent as `> …`
@@ -225,8 +225,8 @@ export function WelcomeComposer({
 			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
-		window.addEventListener("omp-gui-quote-append", onQuoteAppend);
-		return () => window.removeEventListener("omp-gui-quote-append", onQuoteAppend);
+		window.addEventListener("musepi-gui-quote-append", onQuoteAppend);
+		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
 	}, []);
 	const [attachments, setAttachments] = useState<{ id: number; dataUrl: string; mimeType: string; name: string }[]>(
 		[],
@@ -251,7 +251,7 @@ export function WelcomeComposer({
 	// can still switch freely before the first prompt.
 	const [modelId, setModelId] = useState<string | null>(() => {
 		try {
-			return localStorage.getItem("omp-gui-default-model");
+			return localStorage.getItem("musepi-gui-default-model");
 		} catch {
 			return null;
 		}
@@ -321,10 +321,10 @@ export function WelcomeComposer({
 		};
 		load();
 		const onProjectChange = (): void => load();
-		window.addEventListener("omp-gui-project-added", onProjectChange);
+		window.addEventListener("musepi-gui-project-added", onProjectChange);
 		return () => {
 			cancelled = true;
-			window.removeEventListener("omp-gui-project-added", onProjectChange);
+			window.removeEventListener("musepi-gui-project-added", onProjectChange);
 		};
 	}, [rpc, project]);
 	const [switchingBranch, setSwitchingBranch] = useState(false);
@@ -337,7 +337,7 @@ export function WelcomeComposer({
 					| { ok: boolean; error?: string }
 					| undefined;
 				if (res && "error" in res && res.error) {
-					window.dispatchEvent(new CustomEvent("omp-gui-toast", { detail: res.error }));
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: res.error }));
 				} else if (res?.ok) {
 					setBranchInfo(prev => (prev ? { ...prev, current: branch } : prev));
 					setBranchOpen(false);
@@ -459,13 +459,13 @@ export function WelcomeComposer({
 		requestAnimationFrame(() => taRef.current?.focus());
 	};
 	// Dot-matrix brand backdrop pref (设置 → 常规 toggle + custom text,
-	// omp-gui-dotmatrix / omp-gui-dotmatrix-text).
-	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("omp-gui-dotmatrix") !== "0");
-	const [dotMatrixText, setDotMatrixText] = useState(() => localStorage.getItem("omp-gui-dotmatrix-text") ?? "MusePi");
+	// musepi-gui-dotmatrix / musepi-gui-dotmatrix-text).
+	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
+	const [dotMatrixText, setDotMatrixText] = useState(() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi");
 	useEffect(() => {
 		const on = (): void => {
-			setDotMatrixOn(localStorage.getItem("omp-gui-dotmatrix") !== "0");
-			setDotMatrixText(localStorage.getItem("omp-gui-dotmatrix-text") || "MusePi");
+			setDotMatrixOn(localStorage.getItem("musepi-gui-dotmatrix") !== "0");
+			setDotMatrixText(localStorage.getItem("musepi-gui-dotmatrix-text") || "MusePi");
 		};
 		window.addEventListener("omp-dotmatrix-changed", on);
 		window.addEventListener("storage", on);
@@ -543,12 +543,12 @@ export function WelcomeComposer({
 	const [projOpen, setProjOpen] = useState(false);
 	const [presetOpen, setPresetOpen] = useState(false);
 	// Saved workspaces (sidebar 项目 tab parity): every folder the app
-	// knows (omp-gui-projects localStorage — seeded from session cwds and
+	// knows (musepi-gui-projects localStorage — seeded from session cwds and
 	// grown by folder picks), so the workspace picker lists them for
 	// one-tap switching instead of only offering 打开文件夹/远程连接.
 	const [savedProjects, setSavedProjects] = useState<string[]>(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-projects");
+			const raw = localStorage.getItem("musepi-gui-projects");
 			const parsed: unknown = raw ? JSON.parse(raw) : [];
 			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
 		} catch {
@@ -556,21 +556,21 @@ export function WelcomeComposer({
 		}
 	});
 	// Keep the picker list in sync with the sidebar: folder picks dispatch
-	// omp-gui-project-added, and other windows (mini chat) write storage.
+	// musepi-gui-project-added, and other windows (mini chat) write storage.
 	useEffect(() => {
 		const refresh = (): void => {
 			try {
-				const raw = localStorage.getItem("omp-gui-projects");
+				const raw = localStorage.getItem("musepi-gui-projects");
 				const parsed: unknown = raw ? JSON.parse(raw) : [];
 				setSavedProjects(Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : []);
 			} catch {
 				setSavedProjects([]);
 			}
 		};
-		window.addEventListener("omp-gui-project-added", refresh);
+		window.addEventListener("musepi-gui-project-added", refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
-			window.removeEventListener("omp-gui-project-added", refresh);
+			window.removeEventListener("musepi-gui-project-added", refresh);
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);
@@ -1017,7 +1017,7 @@ export function WelcomeComposer({
 				{/* Interactive dot-matrix brand backdrop (kimi-style reference):
 				 * "MusePi" rasterized into a breathing dot grid with colored
 				 * accents, feather edge and click ripples; replaces the static
-				 * π watermark. Toggle lives in 设置 → 常规 (omp-gui-dotmatrix). */}
+				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
 				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
 				<div className="gui-welcome-inner relative z-10 flex w-full max-w-[560px] flex-col items-center">
 					{/* Workspace picker (openchamber/ZCode): dropdown list attached
@@ -1535,7 +1535,7 @@ export function WelcomeComposer({
 									placeholder={t(PLACEHOLDER_TIPS[tipIdx]!)}
 									spellCheck={(() => {
 										try {
-											return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
+											return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
 										} catch {
 											return false;
 										}
@@ -1586,7 +1586,7 @@ export function WelcomeComposer({
 									style={{ animationDelay: "60ms" }}
 									onClick={() =>
 										window.dispatchEvent(
-											new CustomEvent("omp-gui-open-settings-section", { detail: "suggestions" }),
+											new CustomEvent("musepi-gui-open-settings-section", { detail: "suggestions" }),
 										)
 									}
 								>

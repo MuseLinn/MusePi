@@ -196,7 +196,7 @@ export function GuiHeader({
 	const [openInScanning, setOpenInScanning] = useState(false);
 	const [openInAppId, setOpenInAppId] = useState<string | null>(() => {
 		try {
-			return localStorage.getItem("omp-gui-openin-app");
+			return localStorage.getItem("musepi-gui-openin-app");
 		} catch {
 			return null;
 		}
@@ -218,7 +218,7 @@ export function GuiHeader({
 		setOpenInAppId(app.id);
 		setOpenInOpen(false);
 		try {
-			localStorage.setItem("omp-gui-openin-app", app.id);
+			localStorage.setItem("musepi-gui-openin-app", app.id);
 		} catch {
 			// storage unavailable
 		}
@@ -299,7 +299,7 @@ export function GuiHeader({
 			if (devStopping) return;
 			setDevStopping(true);
 			setTimeout(() => {
-				window.dispatchEvent(new Event("omp-gui-terminal-stop"));
+				window.dispatchEvent(new Event("musepi-gui-terminal-stop"));
 				setDevRunning(false);
 				setDevStopping(false);
 				setDevPreviewUrl(null);
@@ -308,7 +308,7 @@ export function GuiHeader({
 		}
 		if (!terminalOpen) onToggleTerminal();
 		setTimeout(() => {
-			window.dispatchEvent(new CustomEvent("omp-gui-terminal-cmd", { detail: devCommand }));
+			window.dispatchEvent(new CustomEvent("musepi-gui-terminal-cmd", { detail: devCommand }));
 		}, 900);
 		setDevRunning(true);
 		setDevPreviewUrl(null);
@@ -453,7 +453,7 @@ export function GuiHeader({
 		if (!store) return;
 		let archived: { sessionId: string; archivedAt: number; cwd?: string }[] = [];
 		try {
-			archived = JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as typeof archived;
+			archived = JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as typeof archived;
 		} catch {
 			// fresh archive
 		}
@@ -461,16 +461,16 @@ export function GuiHeader({
 			archived.push({ sessionId: store.sessionId, archivedAt: Date.now(), cwd: store.cwd ?? undefined });
 		}
 		try {
-			localStorage.setItem("omp-gui-archived", JSON.stringify(archived));
+			localStorage.setItem("musepi-gui-archived", JSON.stringify(archived));
 		} catch {
 			// storage unavailable
 		}
-		window.dispatchEvent(new CustomEvent("omp-gui-sessions-archived"));
+		window.dispatchEvent(new CustomEvent("musepi-gui-sessions-archived"));
 		onNewSession();
 	};
 
 	/** Delete the active session — the confirm dialog lives in deleteSession
-	 *  (settings 会话 toggle omp-gui-confirm-delete), so the header must not
+	 *  (settings 会话 toggle musepi-gui-confirm-delete), so the header must not
 	 *  double-prompt. */
 	const deleteActiveSession = (): void => {
 		if (!store) return;

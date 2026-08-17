@@ -280,7 +280,7 @@ export function ScheduledTasksPage({
 			const ids = taskSessionIds(task);
 			if (ids.length > 0) {
 				try {
-					const raw = JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as {
+					const raw = JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as {
 						sessionId: string;
 						archivedAt: number;
 						cwd?: string;
@@ -290,8 +290,8 @@ export function ScheduledTasksPage({
 							raw.push({ sessionId: sid, archivedAt: Date.now(), cwd: task.cwd || undefined });
 						}
 					}
-					localStorage.setItem("omp-gui-archived", JSON.stringify(raw));
-					window.dispatchEvent(new CustomEvent("omp-gui-archived-changed"));
+					localStorage.setItem("musepi-gui-archived", JSON.stringify(raw));
+					window.dispatchEvent(new CustomEvent("musepi-gui-archived-changed"));
 				} catch {
 					// storage unavailable — keep the task delete going
 				}
@@ -595,7 +595,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 	const anchorRef = useRef<HTMLButtonElement | null>(null);
 	const projects = useMemo(() => {
 		try {
-			const raw = localStorage.getItem("omp-gui-projects");
+			const raw = localStorage.getItem("musepi-gui-projects");
 			const arr = raw ? (JSON.parse(raw) as string[]) : [];
 			return [...new Set(arr.filter((x): x is string => typeof x === "string" && x.length > 0))];
 		} catch {

@@ -19,10 +19,10 @@ export interface NotifyTemplate {
 }
 export type NotifyTemplates = Record<NotifyEvent, NotifyTemplate>;
 
-const NOTIFY_KEY = "omp-gui-notify";
-const FOCUSED_KEY = "omp-gui-notify-focused";
-const EVENTS_KEY = "omp-gui-notify-events";
-const TEMPLATES_KEY = "omp-gui-notify-templates";
+const NOTIFY_KEY = "musepi-gui-notify";
+const FOCUSED_KEY = "musepi-gui-notify-focused";
+const EVENTS_KEY = "musepi-gui-notify-events";
+const TEMPLATES_KEY = "musepi-gui-notify-templates";
 
 /** Default templates — openchamber's defaults, localized (zh-CN is the
  *  primary locale; English mirrors the openchamber originals). */

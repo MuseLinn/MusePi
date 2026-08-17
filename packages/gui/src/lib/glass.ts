@@ -9,8 +9,8 @@
 // opaque) — the direction the label now contradicts. readGlassLevel()
 // migrates the stored value once (40 v1 ≈ 60 v2) under a version marker.
 
-const GLASS_KEY = "omp-gui-glass";
-const GLASS_V2_KEY = "omp-gui-glass-v2";
+const GLASS_KEY = "musepi-gui-glass";
+const GLASS_V2_KEY = "musepi-gui-glass-v2";
 
 export const GLASS_MIN = 30;
 export const GLASS_MAX = 90;

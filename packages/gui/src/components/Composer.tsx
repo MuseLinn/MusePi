@@ -273,8 +273,8 @@ export function Composer({
 			if (!insertion) return;
 			setText(prev => (prev.length === 0 ? insertion : `${prev}\n${insertion}`));
 		};
-		window.addEventListener("omp-gui-insert-text", onInsert);
-		return () => window.removeEventListener("omp-gui-insert-text", onInsert);
+		window.addEventListener("musepi-gui-insert-text", onInsert);
+		return () => window.removeEventListener("musepi-gui-insert-text", onInsert);
 	}, []);
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
@@ -316,7 +316,7 @@ export function Composer({
 	useDraftPersistence({ sessionId, rpc, text, setText });
 	const spellcheckEnabled = (): boolean => {
 		try {
-			return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
+			return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
 		} catch {
 			return false;
 		}

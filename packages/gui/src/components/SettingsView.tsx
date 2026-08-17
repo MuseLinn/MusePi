@@ -397,7 +397,7 @@ export function SettingsView({
 		prevSearchRef.current = { q, section };
 		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [settingsQuery, section]);
-	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("omp-gui-avatars") !== "0");
+	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("musepi-gui-avatars") !== "0");
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
 	const [custom, setCustom] = useState<CustomProvider[]>([]);
@@ -664,7 +664,7 @@ export function SettingsView({
 									showAvatars={showAvatars}
 									onToggleAvatars={() => {
 										const next = !showAvatars;
-										localStorage.setItem("omp-gui-avatars", next ? "1" : "0");
+										localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
 										setShowAvatars(next);
 									}}
 								/>

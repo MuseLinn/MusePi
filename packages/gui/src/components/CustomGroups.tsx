@@ -372,9 +372,9 @@ function GroupBlock({
 	);
 }
 
-/** Per-group collapse state persisted by group name (omp-gui-group-open). */
+/** Per-group collapse state persisted by group name (musepi-gui-group-open). */
 function useStateOpen(name: string): [boolean, (v: (prev: boolean) => boolean) => void] {
-	const key = `omp-gui-group-open:${name}`;
+	const key = `musepi-gui-group-open:${name}`;
 	const [open, setOpen] = useState(() => {
 		try {
 			return localStorage.getItem(key) !== "0";

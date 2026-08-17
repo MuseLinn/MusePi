@@ -255,7 +255,7 @@ export function PetdexSprite({
 /** Unified pet renderer: builtin or petdex, sized via CSS font-size scale.
  *  `mood` accepts the petdex-only hover/dragging states (rows 1/2); the
  *  builtin SVG maps them to its closest faces. `scale` defaults to the
- *  settings slider (omp-gui-pet-scale, 0.6–1.5); pass it explicitly when
+ *  settings slider (musepi-gui-pet-scale, 0.6–1.5); pass it explicitly when
  *  the caller tracks the pref itself (desktop pet window). */
 export function PetSprite({
 	mood,

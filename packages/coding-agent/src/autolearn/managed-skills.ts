@@ -13,8 +13,10 @@ import * as path from "node:path";
 import { getAgentDir, isEnoent } from "@musepi/pi-utils";
 import { YAML } from "bun";
 
-/** Provider id stamped on discovered managed skills (distinguishes them from authored). */
-export const MANAGED_SKILLS_PROVIDER_ID = "omp-managed";
+/** Provider id stamped on discovered managed skills (distinguishes them from authored).
+ *  musepi 自有命名(musepi- 前缀);旧 omp-managed 不复用 —— provider id 对
+ *  agent 可见(skills.list source),按"对 agent 有改动的干净切换"原则直接改。 */
+export const MANAGED_SKILLS_PROVIDER_ID = "musepi-managed";
 
 /** Hard cap on a managed SKILL.md body to keep generated skills bounded. */
 export const MAX_MANAGED_SKILL_BYTES = 64_000;

@@ -9,7 +9,7 @@ import { Icon } from "../vendor/oc-icons";
 /**
  * Selection→ask popover (openchamber side-chat parity, minimal form):
  * "explain this selection" in a throwaway turn that never touches the
- * transcript. Opened by the omp-gui-ask window event (Cmd+Shift+L,
+ * transcript. Opened by the musepi-gui-ask window event (Cmd+Shift+L,
  * SelectionToolbar 提问 button, browser-pane 提问选中). The daemon answers
  * via session.ephemeralAsk (AgentSession.runEphemeralTurn side channel) —
  * no journal record, no SDK write, exactly the CLI --no-session semantics.
@@ -49,8 +49,8 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 			setError(null);
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
-		window.addEventListener("omp-gui-ask", onAsk);
-		return () => window.removeEventListener("omp-gui-ask", onAsk);
+		window.addEventListener("musepi-gui-ask", onAsk);
+		return () => window.removeEventListener("musepi-gui-ask", onAsk);
 	}, []);
 
 	const close = (): void => {

@@ -48,7 +48,7 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [saveMsg, setSaveMsg] = useState<string | null>(null);
 	/** 当前默认预设(新会话;localStorage 持久化,app.tsx welcome 同步)。 */
 	const [defaultModeId, setDefaultModeId] = useState<string | null>(
-		() => localStorage.getItem("omp-gui-default-mode") ?? "work",
+		() => localStorage.getItem("musepi-gui-default-mode") ?? "work",
 	);
 	/** 查看弹窗内容(null = 关闭)。 */
 	const [viewDef, setViewDef] = useState<ModeDef | null>(null);
@@ -119,9 +119,9 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const setDefault = (id: string): void => {
 		setDefaultModeId(id);
-		localStorage.setItem("omp-gui-default-mode", id);
-		// welcome 预设 chip 同步(与 omp-gui-default-model-changed 同模式)。
-		window.dispatchEvent(new CustomEvent("omp-gui-default-mode-changed", { detail: id }));
+		localStorage.setItem("musepi-gui-default-mode", id);
+		// welcome 预设 chip 同步(与 musepi-gui-default-model-changed 同模式)。
+		window.dispatchEvent(new CustomEvent("musepi-gui-default-mode-changed", { detail: id }));
 	};
 
 	const openView = (id: string): void => {

@@ -19,7 +19,7 @@ describe("managed-skills primitives", () => {
 	let originalAgentDir: string;
 	beforeEach(async () => {
 		originalAgentDir = getAgentDir();
-		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "omp-managed-skills-"));
+		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-managed-skills-"));
 		spyOn(os, "homedir").mockReturnValue(tempHome);
 		setAgentDir(path.join(tempHome, ".omp", "agent"));
 	});

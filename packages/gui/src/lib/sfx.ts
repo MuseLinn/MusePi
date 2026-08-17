@@ -8,7 +8,7 @@ import { play, type SoundName, sounds } from "cuelume";
 /** Effects preferences (Settings → 效果): sound on/off + motion level. */
 export function soundEnabled(): boolean {
 	try {
-		return localStorage.getItem("omp-gui-sound") !== "0";
+		return localStorage.getItem("musepi-gui-sound") !== "0";
 	} catch {
 		return true;
 	}
@@ -16,7 +16,7 @@ export function soundEnabled(): boolean {
 
 export function motionLevel(): "full" | "reduced" | "off" {
 	try {
-		return (localStorage.getItem("omp-gui-motion") as "full" | "reduced" | "off") ?? "full";
+		return (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full";
 	} catch {
 		return "full";
 	}
@@ -34,7 +34,7 @@ export function sfx(name: SoundName): void {
 /**
  * Activity → sound mapping (opencode-style per-category sounds). Every
  * wired activity is configurable in Settings → 通知与音效; the chosen sound
- * is stored renderer-local under `omp-gui-sfx:<event>`, defaulting to
+ * is stored renderer-local under `musepi-gui-sfx:<event>`, defaulting to
  * DEFAULT_SFX. `sfxFor` is what call sites use; `sfx(name)` stays for
  * one-off/preview plays.
  */
@@ -79,7 +79,7 @@ export const DEFAULT_SFX: Record<SfxEvent, SoundName> = {
 const SOUND_SET: ReadonlySet<string> = new Set(sounds);
 
 function prefKey(ev: SfxEvent): string {
-	return `omp-gui-sfx:${ev}`;
+	return `musepi-gui-sfx:${ev}`;
 }
 
 /** The configured sound for an activity (falls back to the default when the

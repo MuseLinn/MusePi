@@ -182,23 +182,23 @@ export function AppearanceSection({
 	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
 	// Custom appearance (persisted, applied on the root element).
 	const [motion, setMotion] = useState<"full" | "reduced" | "off">(
-		() => (localStorage.getItem("omp-gui-motion") as "full" | "reduced" | "off") ?? "full",
+		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
 	const [statusBarEffect, setStatusBarEffect] = useState<"shimmer" | "kitt" | "plain">(() => {
-		const v = localStorage.getItem("omp-gui-statusbar");
+		const v = localStorage.getItem("musepi-gui-statusbar");
 		return v === "kitt" || v === "plain" ? v : "shimmer";
 	});
 	const [statusBarIndicator, setStatusBarIndicator] = useState<"braille" | "orb" | "lattice" | "ring">(() => {
-		const v = localStorage.getItem("omp-gui-statusbar-indicator");
+		const v = localStorage.getItem("musepi-gui-statusbar-indicator");
 		return v === "orb" || v === "lattice" || v === "ring" ? v : "braille";
 	});
 	const [sweepColor, setSweepColor] = useState<"default" | "accent">(() => {
-		const v = localStorage.getItem("omp-gui-statusbar-kitt-color");
+		const v = localStorage.getItem("musepi-gui-statusbar-kitt-color");
 		return v === "accent" ? "accent" : "default";
 	});
-	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("omp-gui-images") !== "0");
-	const [fontScale, setFontScale] = useState<number>(() => Number(localStorage.getItem("omp-gui-font-scale") ?? 15));
-	const [termFont, setTermFont] = useState<number>(() => Number(localStorage.getItem("omp-gui-terminal-font") ?? 13));
+	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
+	const [fontScale, setFontScale] = useState<number>(() => Number(localStorage.getItem("musepi-gui-font-scale") ?? 15));
+	const [termFont, setTermFont] = useState<number>(() => Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13));
 	const [codeFont, setCodeFont] = useState<number>(() => Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13));
 	const [density, setDensity] = useState<number>(() => Number(localStorage.getItem(DENSITY_KEY) ?? 100));
 	const [timeFmt, setTimeFmt] = useState<"auto" | "12h" | "24h">(
@@ -221,7 +221,7 @@ export function AppearanceSection({
 	const [importingSkin, setImportingSkin] = useState(false);
 	const [glass, setGlass] = useState<number>(() => readGlassLevel());
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
-		() => localStorage.getItem("omp-gui-glass-enabled") !== "0",
+		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
 	const [lightCodeTheme, setLightCodeTheme] = useState<string>(
 		() => localStorage.getItem(CODE_THEME_LIGHT_KEY) ?? DEFAULT_LIGHT_CODE_THEME.id,
@@ -395,7 +395,7 @@ export function AppearanceSection({
 						defaultValue={15}
 						onChange={v => {
 							setFontScale(v);
-							setPref("omp-gui-font-scale", v);
+							setPref("musepi-gui-font-scale", v);
 							document.documentElement.style.setProperty("--gui-font-scale", `${v}px`);
 						}}
 					/>
@@ -597,7 +597,7 @@ export function AppearanceSection({
 						onClick={() => {
 							const next = !glassEnabled;
 							setGlassEnabled(next);
-							setPref("omp-gui-glass-enabled", next ? "1" : "0");
+							setPref("musepi-gui-glass-enabled", next ? "1" : "0");
 							// OFF = opaque panes: a global 100% overlay beats every
 							// per-rule translucency; ON restores the slider level.
 							if (next) {
@@ -628,7 +628,7 @@ export function AppearanceSection({
 								onChange={e => {
 									const v = Number(e.target.value);
 									setGlass(v);
-									setPref("omp-gui-glass", v);
+									setPref("musepi-gui-glass", v);
 									applyGlassLevel(v);
 								}}
 							/>
@@ -776,7 +776,7 @@ export function AppearanceSection({
 						defaultValue={13}
 						onChange={v => {
 							setTermFont(v);
-							setPref("omp-gui-terminal-font", v);
+							setPref("musepi-gui-terminal-font", v);
 						}}
 					/>
 				</div>
@@ -819,7 +819,7 @@ export function AppearanceSection({
 								className={`gui-seg-btn${motion === m ? " gui-seg-btn--active" : ""}`}
 								onClick={() => {
 									setMotion(m);
-									localStorage.setItem("omp-gui-motion", m);
+									localStorage.setItem("musepi-gui-motion", m);
 									document.documentElement.classList.toggle("gui-motion-off", m === "off");
 								}}
 							>
@@ -846,7 +846,7 @@ export function AppearanceSection({
 										className={`gui-seg-btn${statusBarIndicator === s ? " gui-seg-btn--active" : ""}`}
 										onClick={() => {
 											setStatusBarIndicator(s);
-											localStorage.setItem("omp-gui-statusbar-indicator", s);
+											localStorage.setItem("musepi-gui-statusbar-indicator", s);
 										}}
 									>
 										{s === "braille"
@@ -870,7 +870,7 @@ export function AppearanceSection({
 										className={`gui-seg-btn${statusBarEffect === s ? " gui-seg-btn--active" : ""}`}
 										onClick={() => {
 											setStatusBarEffect(s);
-											localStorage.setItem("omp-gui-statusbar", s);
+											localStorage.setItem("musepi-gui-statusbar", s);
 										}}
 									>
 										{s === "shimmer" ? t("shimmer") : s === "kitt" ? t("kitt") : t("plain")}
@@ -889,7 +889,7 @@ export function AppearanceSection({
 											className={`gui-seg-btn${sweepColor === k ? " gui-seg-btn--active" : ""}`}
 											onClick={() => {
 												setSweepColor(k);
-												localStorage.setItem("omp-gui-statusbar-kitt-color", k);
+												localStorage.setItem("musepi-gui-statusbar-kitt-color", k);
 											}}
 										>
 											{k === "default" ? t("default tone") : t("accent color")}
@@ -913,7 +913,7 @@ export function AppearanceSection({
 						onClick={() => {
 							const next = !inlineImages;
 							setInlineImages(next);
-							localStorage.setItem("omp-gui-images", next ? "1" : "0");
+							localStorage.setItem("musepi-gui-images", next ? "1" : "0");
 							document.documentElement.classList.toggle("gui-no-images", !next);
 						}}
 						aria-label={t("inline images")}

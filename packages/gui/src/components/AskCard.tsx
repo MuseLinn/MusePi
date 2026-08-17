@@ -65,7 +65,7 @@ const OTHER_LABEL = "Other (type your own)";
 /** localStorage key for in-flight multi-question draft answers — survives
  *  session switches/relaunches until the ask resolves (openchamber
  *  QuestionCard parity: re-opening the same card restores selections). */
-const draftKey = (requestId: string): string => `omp-gui-ask-draft:${requestId}`;
+const draftKey = (requestId: string): string => `musepi-gui-ask-draft:${requestId}`;
 
 interface AnswerState {
 	selected: string[];

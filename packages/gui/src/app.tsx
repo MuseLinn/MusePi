@@ -133,13 +133,13 @@ function AppInner(): ReactNode {
 	// effect toggles (motion level / inline images / sound).
 	useEffect(() => {
 		try {
-			const fs = localStorage.getItem("omp-gui-font-scale");
+			const fs = localStorage.getItem("musepi-gui-font-scale");
 			if (fs) document.documentElement.style.setProperty("--gui-font-scale", `${fs}px`);
 			// Glass transparency (slider value = transparency %) — migrates the
 			// v1 scrim-coefficient pref once, then applies scrim + adaptive text.
 			applyGlassLevel(readGlassLevel());
 			// Window-transparency toggle OFF → opaque panes (overrides the slider).
-			const glassEnabled = localStorage.getItem("omp-gui-glass-enabled") !== "0";
+			const glassEnabled = localStorage.getItem("musepi-gui-glass-enabled") !== "0";
 			if (!glassEnabled) {
 				document.documentElement.style.setProperty("--gui-glass-overlay", "100%");
 				document.documentElement.classList.remove("gui-glass-adaptive");
@@ -147,21 +147,21 @@ function AppInner(): ReactNode {
 			// Desktop shell: mirror the toggle + theme onto the native window
 			// material (light scheme → bright vibrancy, dark → under-window).
 			applyGlassMaterial(glassEnabled);
-			const motion = localStorage.getItem("omp-gui-motion");
+			const motion = localStorage.getItem("musepi-gui-motion");
 			if (motion === "off") document.documentElement.classList.add("gui-motion-off");
 			else document.documentElement.classList.remove("gui-motion-off");
-			if (localStorage.getItem("omp-gui-images") === "0") document.documentElement.classList.add("gui-no-images");
+			if (localStorage.getItem("musepi-gui-images") === "0") document.documentElement.classList.add("gui-no-images");
 			else document.documentElement.classList.remove("gui-no-images");
 			// Chat display prefs (settings → 聊天): applied as root classes so the
 			// shared transcript CSS can hide/keep rows without prop drilling.
 			const chat = (key: string, cls: string): void => {
 				document.documentElement.classList.toggle(cls, localStorage.getItem(key) === "0");
 			};
-			chat("omp-gui-chat-time", "gui-chat-hide-time");
-			chat("omp-gui-chat-rowactions", "gui-chat-hide-row-actions");
-			chat("omp-gui-chat-codehl", "gui-chat-plain-code");
-			chat("omp-gui-chat-thinking", "gui-chat-hide-thinking");
-			chat("omp-gui-chat-caret", "gui-chat-no-caret");
+			chat("musepi-gui-chat-time", "gui-chat-hide-time");
+			chat("musepi-gui-chat-rowactions", "gui-chat-hide-row-actions");
+			chat("musepi-gui-chat-codehl", "gui-chat-plain-code");
+			chat("musepi-gui-chat-thinking", "gui-chat-hide-thinking");
+			chat("musepi-gui-chat-caret", "gui-chat-no-caret");
 			// gui-chat-no-smooth is NOT mapped here: 平滑流式 is controlled
 			// solely by the daemon display.smoothStreaming setting (外观 →
 			// 显示) since the chat tab merged into 外观 (2026-08-12). ChatView
@@ -170,13 +170,13 @@ function AppInner(): ReactNode {
 			// Output style preset (settings → 聊天 → 输出风格): the same key
 			// the segmented picker writes, mirrored onto <html> at startup so
 			// the choice survives relaunches.
-			const outputStyle = localStorage.getItem("omp-gui-chat-output-style");
+			const outputStyle = localStorage.getItem("musepi-gui-chat-output-style");
 			document.documentElement.dataset.outputStyle =
 				outputStyle === "kimi" || outputStyle === "zcode" ? outputStyle : "default";
 			// 消息字号 (settings → 外观 → 消息字号): --tr-font-size drives the
 			// transcript body ladder (headings/code scale off it in
 			// transcript.css); output-style presets no longer set sizes.
-			const trFontSize = localStorage.getItem("omp-gui-chat-font-size");
+			const trFontSize = localStorage.getItem("musepi-gui-chat-font-size");
 			if (trFontSize) document.documentElement.style.setProperty("--tr-font-size", `${trFontSize}px`);
 			// Typing effect preset (settings → 聊天 → 逐字动效): NOT applied
 			// here — effect classes now live on the streaming block's own
@@ -186,16 +186,19 @@ function AppInner(): ReactNode {
 			// for line numbers / long-line wrap; themes + size re-apply below.
 			document.documentElement.classList.toggle(
 				"gui-code-lines",
-				localStorage.getItem("omp-gui-code-lines") !== "0",
+				localStorage.getItem("musepi-gui-code-lines") !== "0",
 			);
-			document.documentElement.classList.toggle("gui-code-wrap", localStorage.getItem("omp-gui-code-wrap") === "1");
+			document.documentElement.classList.toggle(
+				"gui-code-wrap",
+				localStorage.getItem("musepi-gui-code-wrap") === "1",
+			);
 			// Font picks (--font-ui / --font-mono) + spacing density (--gui-density):
 			// re-apply at startup so choices survive relaunches.
 			applyAppearancePrefs();
 			// Keep-awake (settings 常规 → 保持电脑运行): re-assert on launch —
 			// the main process holds the powerSaveBlocker assertion only
 			// while told to (cross-platform; no-op safe on any platform).
-			if (localStorage.getItem("omp-gui-keep-awake") === "1") {
+			if (localStorage.getItem("musepi-gui-keep-awake") === "1") {
 				void (
 					window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
 				).electronAPI?.setKeepAwake?.(true);
@@ -215,7 +218,7 @@ function AppInner(): ReactNode {
 			electronAPI?: { petActivity?(payload: unknown): Promise<unknown> };
 		};
 		const observer = new MutationObserver(() => {
-			applyGlassMaterial(localStorage.getItem("omp-gui-glass-enabled") !== "0");
+			applyGlassMaterial(localStorage.getItem("musepi-gui-glass-enabled") !== "0");
 			void electronAPI?.petActivity?.({
 				theme: root.dataset.theme === "light" ? "light" : "dark",
 			});
@@ -227,7 +230,15 @@ function AppInner(): ReactNode {
 		// Last successful connection wins (connect() persists it): a daemon on
 		// a non-default port keeps working across app restarts.
 		try {
-			return localStorage.getItem("omp-gui-url") ?? DEFAULT_URL;
+			// 迁移兼容:旧 omp-gui-url 键一次性迁移到 musepi-gui-url(旧键优先,
+			// 因为首次 boot 可能已把默认 8300 写进新键);迁移后删除旧键,避免
+			// 每次 boot 用旧值覆盖用户后来改的新键。
+			const legacyUrl = localStorage.getItem("omp-gui-url");
+			if (legacyUrl) {
+				localStorage.setItem("musepi-gui-url", legacyUrl);
+				localStorage.removeItem("omp-gui-url");
+			}
+			return localStorage.getItem("musepi-gui-url") ?? DEFAULT_URL;
 		} catch {
 			return DEFAULT_URL;
 		}
@@ -265,7 +276,7 @@ function AppInner(): ReactNode {
 	// growth past the last read count, kimi 实时提醒 parity).
 	const [unreadSessions, setUnreadSessions] = useState<Set<string>>(() => {
 		try {
-			return new Set(JSON.parse(localStorage.getItem("omp-gui-unread") ?? "[]") as string[]);
+			return new Set(JSON.parse(localStorage.getItem("musepi-gui-unread") ?? "[]") as string[]);
 		} catch {
 			return new Set();
 		}
@@ -276,7 +287,7 @@ function AppInner(): ReactNode {
 	// relaunches (single source, owned here).
 	useEffect(() => {
 		try {
-			localStorage.setItem("omp-gui-unread", JSON.stringify([...unreadSessions]));
+			localStorage.setItem("musepi-gui-unread", JSON.stringify([...unreadSessions]));
 		} catch {
 			// storage unavailable
 		}
@@ -304,9 +315,9 @@ function AppInner(): ReactNode {
 	if (!readCountLoadedRef.current) {
 		readCountLoadedRef.current = true;
 		try {
-			const raw = localStorage.getItem("omp-gui-read-count");
+			const raw = localStorage.getItem("musepi-gui-read-count");
 			if (raw) readCountRef.current = new Map(JSON.parse(raw) as [string, number][]);
-			readSeededRef.current = localStorage.getItem("omp-gui-read-count-seeded") === "1";
+			readSeededRef.current = localStorage.getItem("musepi-gui-read-count-seeded") === "1";
 		} catch {
 			// storage unavailable
 		}
@@ -342,14 +353,14 @@ function AppInner(): ReactNode {
 	const sessionLoadingTimerRef = useRef<Timer | null>(null);
 	// Panel collapse (ZCode-style): side rail and context panel fold to thin
 	// strips with a reopen button.
-	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("omp-gui-side") === "0");
-	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("omp-gui-side-w") ?? 256));
+	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
+	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
 	const startResize = (which: "side" | "right", startX: number, startW: number, min: number, max: number): void => {
 		const onMove = (e: MouseEvent): void => {
 			const w = Math.min(max, Math.max(min, startW + (e.clientX - startX) * (which === "side" ? 1 : -1)));
 			if (which === "side") {
 				setSideWidth(w);
-				localStorage.setItem("omp-gui-side-w", String(w));
+				localStorage.setItem("musepi-gui-side-w", String(w));
 			}
 		};
 		const onUp = (): void => {
@@ -361,10 +372,10 @@ function AppInner(): ReactNode {
 		document.addEventListener("mouseup", onUp);
 		document.body.classList.add("gui-resizing");
 	};
-	const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("omp-gui-right") === "0");
+	const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("musepi-gui-right") === "0");
 	const [project, setProject] = useState<string | null>(() => {
 		try {
-			return localStorage.getItem("omp-gui-project");
+			return localStorage.getItem("musepi-gui-project");
 		} catch {
 			return null;
 		}
@@ -408,8 +419,8 @@ function AppInner(): ReactNode {
 			}
 			const dir = `${parent.replace(/\/+$/, "")}/${name}`;
 			setProject(dir);
-			localStorage.setItem("omp-gui-project", dir);
-			window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+			localStorage.setItem("musepi-gui-project", dir);
+			window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
 			setNewProjectOpen(false);
 			setNewProjectName("");
 			setNewProjectParent(null);
@@ -573,8 +584,8 @@ function AppInner(): ReactNode {
 				openSettings();
 			}
 		};
-		window.addEventListener("omp-gui-open-settings-section", onOpenSection);
-		return () => window.removeEventListener("omp-gui-open-settings-section", onOpenSection);
+		window.addEventListener("musepi-gui-open-settings-section", onOpenSection);
+		return () => window.removeEventListener("musepi-gui-open-settings-section", onOpenSection);
 	}, [openSettings]);
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
@@ -596,7 +607,7 @@ function AppInner(): ReactNode {
 	 *  默认 Work(全量,= 未启用预设时的行为);与 presetModelId 同语义:
 	 *  一次选择应用到下一次新建,不随会话回写。 */
 	const [welcomeModeId, setWelcomeModeId] = useState<string | null>(
-		() => localStorage.getItem("omp-gui-default-mode") ?? "work",
+		() => localStorage.getItem("musepi-gui-default-mode") ?? "work",
 	);
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
@@ -605,7 +616,7 @@ function AppInner(): ReactNode {
 	 *  opening a session must not clobber the welcome default with that
 	 *  session's model (a pick in one session must not leak into the next
 	 *  new task). Updated by the boot settings snapshot and the
-	 *  omp-gui-default-model-changed event (selector target button +
+	 *  musepi-gui-default-model-changed event (selector target button +
 	 *  settings DEFAULT row). */
 	const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
 	/** Boot snapshot of the session thinking default (modelRoles.default suffix,
@@ -618,7 +629,7 @@ function AppInner(): ReactNode {
 	// Latest active-session tree label — read by the pet state pusher
 	// (effect closure) without re-subscribing the effect per render.
 	const activeLabelRef = useRef<string | null>(null);
-	// Delete-confirmation dialog (settings 会话 toggle omp-gui-confirm-delete).
+	// Delete-confirmation dialog (settings 会话 toggle musepi-gui-confirm-delete).
 	const { confirm } = useConfirm();
 	// Reconnect restoration: the open session id + re-open callback, kept in
 	// refs so onStatus (wired before openSession exists) can reach them.
@@ -634,7 +645,7 @@ function AppInner(): ReactNode {
 	 *  unavailable in sandboxed contexts). */
 	const persistReadCount = useCallback((): void => {
 		try {
-			localStorage.setItem("omp-gui-read-count", JSON.stringify([...readCountRef.current]));
+			localStorage.setItem("musepi-gui-read-count", JSON.stringify([...readCountRef.current]));
 		} catch {
 			// storage unavailable
 		}
@@ -650,7 +661,7 @@ function AppInner(): ReactNode {
 				readCountRef.current = new Map(rows.map(r => [r.id, r.messageCount ?? 0]));
 				readSeededRef.current = true;
 				try {
-					localStorage.setItem("omp-gui-read-count-seeded", "1");
+					localStorage.setItem("musepi-gui-read-count-seeded", "1");
 				} catch {
 					// storage unavailable
 				}
@@ -908,7 +919,7 @@ function AppInner(): ReactNode {
 				}
 				// Desktop notifications (kimi-code/openchamber parity): the
 				// agent turn completing and approval requests. Gated by the
-				// notifications setting (omp-gui-notify).
+				// notifications setting (musepi-gui-notify).
 				const payload = event.payload as
 					| { type?: string; message?: { role?: string; content?: unknown } }
 					| undefined;
@@ -940,7 +951,7 @@ function AppInner(): ReactNode {
 			}
 			client.run();
 			setRpc(client);
-			localStorage.setItem("omp-gui-url", targetUrl);
+			localStorage.setItem("musepi-gui-url", targetUrl);
 			// Fetch the session list; errors (unknown method) are non-fatal on
 			// older daemons — surface but keep the connection.
 			try {
@@ -1379,7 +1390,7 @@ function AppInner(): ReactNode {
 					...(opts?.cwd ? { cwd: opts.cwd } : {}),
 					// Settings → 会话 → 自动生成会话标题: off keeps the session
 					// title generic instead of falling back to the first message.
-					autoTitle: localStorage.getItem("omp-gui-autotitle") !== "0",
+					autoTitle: localStorage.getItem("musepi-gui-autotitle") !== "0",
 					// Welcome-composer choices ride INSIDE the create RPC: the
 					// daemon resolves modelPattern + thinkingLevel during initial
 					// session setup, collapsing the old create → setThinkingLevel
@@ -1637,13 +1648,13 @@ function AppInner(): ReactNode {
 
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
-	 *  confirm dialog honors the settings toggle (omp-gui-confirm-delete). */
+	 *  confirm dialog honors the settings toggle (musepi-gui-confirm-delete). */
 	const deleteSession = useCallback(
 		async (sessionId: string): Promise<boolean> => {
 			const client = rpcRef.current;
 			if (!client) return false;
 			try {
-				if (localStorage.getItem("omp-gui-confirm-delete") !== "0") {
+				if (localStorage.getItem("musepi-gui-confirm-delete") !== "0") {
 					const ok = await confirm(t("confirm delete session"));
 					if (!ok) return false;
 				}
@@ -1923,12 +1934,12 @@ function AppInner(): ReactNode {
 			const ref = (e as CustomEvent<string>).detail;
 			if (ref) setDefaultModelId(ref);
 		};
-		window.addEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
+		window.addEventListener("musepi-gui-default-model-changed", onDefaultModelChanged);
 		const onDefaultModeChanged = (e: Event): void => {
 			const ref = (e as CustomEvent<string | null>).detail;
 			if (ref !== undefined) setWelcomeModeId(ref);
 		};
-		window.addEventListener("omp-gui-default-mode-changed", onDefaultModeChanged);
+		window.addEventListener("musepi-gui-default-mode-changed", onDefaultModeChanged);
 		const unsubReq = electronAPI.onPetStateRequest?.(() => {
 			lastMood = null; // force a resend
 			lastStatePush = 0;
@@ -2019,8 +2030,8 @@ function AppInner(): ReactNode {
 			clearInterval(recentTimer);
 			window.removeEventListener("omp-pet-activity", onBubble);
 			window.removeEventListener("omp-pet-changed", onPetChanged);
-			window.removeEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
-			window.removeEventListener("omp-gui-default-mode-changed", onDefaultModeChanged);
+			window.removeEventListener("musepi-gui-default-model-changed", onDefaultModelChanged);
+			window.removeEventListener("musepi-gui-default-mode-changed", onDefaultModeChanged);
 			window.removeEventListener("omp-glow-setting", onGlowSetting);
 		};
 	}, [store, sendPrompt, decideApproval, createSession, markAllRead, persistReadCount]);
@@ -2048,7 +2059,7 @@ function AppInner(): ReactNode {
 					const sel = window.getSelection();
 					const rect = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).getBoundingClientRect() : null;
 					window.dispatchEvent(
-						new CustomEvent("omp-gui-ask", {
+						new CustomEvent("musepi-gui-ask", {
 							detail: {
 								text,
 								x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
@@ -2065,7 +2076,7 @@ function AppInner(): ReactNode {
 				e.preventDefault();
 				const text = captureSelectionText();
 				if (text) {
-					window.dispatchEvent(new CustomEvent("omp-gui-quote-append", { detail: { text } }));
+					window.dispatchEvent(new CustomEvent("musepi-gui-quote-append", { detail: { text } }));
 				} else {
 					(document.querySelector('[data-chat-input="true"] textarea') as HTMLTextAreaElement | null)?.focus();
 				}
@@ -2077,15 +2088,15 @@ function AppInner(): ReactNode {
 				void pickDirectory().then(dir => {
 					if (dir) {
 						setProject(dir);
-						localStorage.setItem("omp-gui-project", dir);
+						localStorage.setItem("musepi-gui-project", dir);
 						// Sidebar projects tab contract: surface the picked folder.
-						window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+						window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
 					}
 				});
 			} else if (mod && k === "b") {
 				e.preventDefault();
 				setSideCollapsed(v => {
-					localStorage.setItem("omp-gui-side", v ? "1" : "0");
+					localStorage.setItem("musepi-gui-side", v ? "1" : "0");
 					return !v;
 				});
 			} else if (mod && k === "j") {
@@ -2110,7 +2121,7 @@ function AppInner(): ReactNode {
 			} else if (mod && !e.shiftKey && k === "e") {
 				e.preventDefault();
 				setRightCollapsed(v => {
-					localStorage.setItem("omp-gui-right", v ? "1" : "0");
+					localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 					return !v;
 				});
 			}
@@ -2335,18 +2346,18 @@ function AppInner(): ReactNode {
 								void pickDirectory().then(dir => {
 									if (dir) {
 										setProject(dir);
-										localStorage.setItem("omp-gui-project", dir);
-										window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+										localStorage.setItem("musepi-gui-project", dir);
+										window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
 									}
 								});
 							} else if (action === "none") {
 								// "不在项目中": clear the workspace chip — never open the picker.
 								setProject(null);
-								localStorage.removeItem("omp-gui-project");
+								localStorage.removeItem("musepi-gui-project");
 							} else {
 								// A saved workspace picked from the list — switch to it.
 								setProject(action);
-								localStorage.setItem("omp-gui-project", action);
+								localStorage.setItem("musepi-gui-project", action);
 							}
 						}}
 						onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
@@ -2451,9 +2462,9 @@ function AppInner(): ReactNode {
 							void pickDirectory().then(dir => {
 								if (dir) {
 									setProject(dir);
-									localStorage.setItem("omp-gui-project", dir);
+									localStorage.setItem("musepi-gui-project", dir);
 									// Sidebar projects tab contract: surface the picked folder.
-									window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+									window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
 								}
 							});
 						}}
@@ -2470,7 +2481,7 @@ function AppInner(): ReactNode {
 							sideCollapsed={sideCollapsed}
 							onToggleSidebar={() => {
 								setSideCollapsed(v => {
-									localStorage.setItem("omp-gui-side", v ? "1" : "0");
+									localStorage.setItem("musepi-gui-side", v ? "1" : "0");
 									return !v;
 								});
 							}}
@@ -2488,7 +2499,7 @@ function AppInner(): ReactNode {
 							rightPanelOpen={!rightCollapsed}
 							onToggleRightPanel={() => {
 								setRightCollapsed(v => {
-									localStorage.setItem("omp-gui-right", v ? "1" : "0");
+									localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 									return !v;
 								});
 							}}
@@ -2497,7 +2508,7 @@ function AppInner(): ReactNode {
 								void pickDirectory().then(dir => {
 									if (dir) {
 										setProject(dir);
-										localStorage.setItem("omp-gui-project", dir);
+										localStorage.setItem("musepi-gui-project", dir);
 									}
 								});
 							}}
@@ -2544,20 +2555,22 @@ function AppInner(): ReactNode {
 										} else if (action === "none") {
 											// "不在项目中": clear the workspace chip — never open the picker.
 											setProject(null);
-											localStorage.removeItem("omp-gui-project");
+											localStorage.removeItem("musepi-gui-project");
 										} else if (action === "folder") {
 											void pickDirectory().then(dir => {
 												if (dir) {
 													setProject(dir);
-													localStorage.setItem("omp-gui-project", dir);
+													localStorage.setItem("musepi-gui-project", dir);
 													// Sidebar projects tab contract: surface the picked folder.
-													window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+													window.dispatchEvent(
+														new CustomEvent("musepi-gui-project-added", { detail: dir }),
+													);
 												}
 											});
 										} else {
 											// A saved workspace picked from the list — switch to it.
 											setProject(action);
-											localStorage.setItem("omp-gui-project", action);
+											localStorage.setItem("musepi-gui-project", action);
 										}
 									}}
 									onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
@@ -2567,13 +2580,13 @@ function AppInner(): ReactNode {
 									}}
 									onToggleRightPanel={() => {
 										setRightCollapsed(v => {
-											localStorage.setItem("omp-gui-right", v ? "1" : "0");
+											localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 											return !v;
 										});
 									}}
 									onExpandRightPanel={() => {
 										setRightCollapsed(false);
-										localStorage.setItem("omp-gui-right", "0");
+										localStorage.setItem("musepi-gui-right", "0");
 									}}
 									terminalOpen={bottomTerminal}
 									onCloseTerminal={() => setBottomTerminal(false)}
@@ -2803,23 +2816,23 @@ function AppInner(): ReactNode {
 					void pickDirectory().then(dir => {
 						if (dir) {
 							setProject(dir);
-							localStorage.setItem("omp-gui-project", dir);
+							localStorage.setItem("musepi-gui-project", dir);
 							// Sidebar projects tab contract: surface the picked folder.
-							window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+							window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
 						}
 					});
 				}}
 				onSettings={openSettings}
 				onToggleSidebar={() => {
 					setSideCollapsed(v => {
-						localStorage.setItem("omp-gui-side", v ? "1" : "0");
+						localStorage.setItem("musepi-gui-side", v ? "1" : "0");
 						return !v;
 					});
 				}}
 				onToggleTerminal={() => setBottomTerminal(v => !v)}
 				onTogglePreview={() => {
 					setRightCollapsed(v => {
-						localStorage.setItem("omp-gui-right", v ? "1" : "0");
+						localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 						return !v;
 					});
 				}}

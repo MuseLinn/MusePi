@@ -12,7 +12,7 @@
  * appearance: language + light/dark theme, applied live. A fresh install can
  * therefore go from zero to a working model without touching settings.
  *
- * Completing it stores omp-gui-onboarding-done so it never auto-opens
+ * Completing it stores musepi-gui-onboarding-done so it never auto-opens
  * again; the settings footer button reopens it on demand.
  */
 
@@ -164,7 +164,7 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 	// count stable across step changes.
 	const [pet, setPet] = useState<ReturnType<typeof petForId> | null>(() => {
 		try {
-			return petForId(localStorage.getItem("omp-gui-pet-id") ?? "musepi");
+			return petForId(localStorage.getItem("musepi-gui-pet-id") ?? "musepi");
 		} catch {
 			return petForId("musepi");
 		}
@@ -172,7 +172,7 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 	useEffect(() => {
 		const on = (): void => {
 			try {
-				setPet(petForId(localStorage.getItem("omp-gui-pet-id") ?? "musepi"));
+				setPet(petForId(localStorage.getItem("musepi-gui-pet-id") ?? "musepi"));
 			} catch {
 				// ignore
 			}
@@ -274,7 +274,7 @@ function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desk
 	}
 	// Step 6 — personalization: chat rows with the LIVE AgentAvatar
 	// (follows the orbs/hexagon/star choice) + the composer with the pet
-	// docked at its top-right — the REAL selected pet (omp-gui-pet-id,
+	// docked at its top-right — the REAL selected pet (musepi-gui-pet-id,
 	// builtin or petdex) shown as its static rest frame, like the actual
 	// composer (gui-composer-pet positioning). The pet is SMALLER than the
 	// real composer's (the mock window is scaled) and only shows in
@@ -1193,7 +1193,7 @@ export function OnboardingOverlay({
 	// composer — it lives in its own desktop window there.
 	const [persPetMode, setPersPetMode] = useState<"input" | "desktop">(() => {
 		try {
-			return localStorage.getItem("omp-gui-pet-mode") === "desktop" ? "desktop" : "input";
+			return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 		} catch {
 			return "input";
 		}

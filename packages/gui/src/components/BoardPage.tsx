@@ -25,8 +25,8 @@ import { WidgetEditor } from "./WidgetEditor";
  * and localStorage persistence. Legacy cell-layout data migrates on load.
  */
 
-const BOARDS_KEY = "omp-gui-board:boards";
-const ACTIVE_KEY = "omp-gui-board:active";
+const BOARDS_KEY = "musepi-gui-board:boards";
+const ACTIVE_KEY = "musepi-gui-board:active";
 /** Pixel snap — resize/drag adjustments land on multiples of 8 (fine
  *  enough for "a few pixels" while keeping cards grid-aligned). */
 const SNAP = 8;

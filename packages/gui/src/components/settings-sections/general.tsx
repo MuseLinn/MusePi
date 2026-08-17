@@ -1,23 +1,8 @@
-import {
-	type TranslationKey,
-	t,
-} from "@musepi/desktop-web";
-import {
-	GuiSelect,
-} from "../GuiSelect";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
+import { type TranslationKey, t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { RpcClient } from "../../lib/rpc";
+import { Icon } from "../../vendor/oc-icons";
 import {
 	AVATAR_PRESETS,
 	avatarPresetId,
@@ -26,9 +11,8 @@ import {
 	setPunkSeed,
 	userPunkSeed,
 } from "../avatar-presets";
-import {
-	DotMatrixMark,
-} from "../DotMatrixMark";
+import { DotMatrixMark } from "../DotMatrixMark";
+import { GuiSelect } from "../GuiSelect";
 
 /** Preview of the two task-card styles (display.taskCardStyle settings
  *  row): Swarm = the classic chat-message task tool-call card with the
@@ -148,7 +132,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			setUpdateChecking(false);
 		}
 	};
-	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("omp-gui-dotmatrix") !== "0");
+	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");
 	// Busy-state plain-Enter behavior (dsh parity): steer (TUI default) or
@@ -171,8 +155,10 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			.then(() => window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key: "busyEnter" } })))
 			.catch(() => {});
 	};
-	const [dotMatrixText, setDotMatrixText] = useState(() => localStorage.getItem("omp-gui-dotmatrix-text") ?? "MusePi");
-	const [keepAwake, setKeepAwake] = useState(() => localStorage.getItem("omp-gui-keep-awake") === "1");
+	const [dotMatrixText, setDotMatrixText] = useState(
+		() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi",
+	);
+	const [keepAwake, setKeepAwake] = useState(() => localStorage.getItem("musepi-gui-keep-awake") === "1");
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
@@ -206,7 +192,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	}, [rpc]);
 	const daemonUrl = (() => {
 		try {
-			return localStorage.getItem("omp-gui-url") ?? "ws://127.0.0.1:8300";
+			return localStorage.getItem("musepi-gui-url") ?? localStorage.getItem("omp-gui-url") ?? "ws://127.0.0.1:8300";
 		} catch {
 			return "ws://127.0.0.1:8300";
 		}
@@ -225,7 +211,10 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					value={busyEnter}
 					onChange={v => setBusyEnter(v === "queue" ? "queue" : "steer")}
 					ariaLabel={t("busy enter behavior")}
-					options={[{ value: "queue", label: t("busy enter queue") }, { value: "steer", label: t("busy enter steer") }]}
+					options={[
+						{ value: "queue", label: t("busy enter queue") },
+						{ value: "steer", label: t("busy enter steer") },
+					]}
 				/>
 			</div>
 			<div className="gui-settings-row">
@@ -243,7 +232,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							aria-pressed={avatarId === p.id}
 							onClick={() => {
 								setAvatarId(p.id);
-								localStorage.setItem("omp-gui-avatar", p.id);
+								localStorage.setItem("musepi-gui-avatar", p.id);
 								window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
 							}}
 						>
@@ -304,7 +293,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					onClick={() => {
 						const next = !dotMatrixOn;
 						setDotMatrixOn(next);
-						localStorage.setItem("omp-gui-dotmatrix", next ? "1" : "0");
+						localStorage.setItem("musepi-gui-dotmatrix", next ? "1" : "0");
 						window.dispatchEvent(new CustomEvent("omp-dotmatrix-changed"));
 					}}
 					aria-label={t("dot matrix background")}
@@ -325,7 +314,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							onChange={e => {
 								const v = e.target.value;
 								setDotMatrixText(v);
-								localStorage.setItem("omp-gui-dotmatrix-text", v);
+								localStorage.setItem("musepi-gui-dotmatrix-text", v);
 								window.dispatchEvent(new CustomEvent("omp-dotmatrix-changed"));
 							}}
 							aria-label={t("dot matrix text")}
@@ -349,7 +338,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					onClick={() => {
 						const next = !keepAwake;
 						setKeepAwake(next);
-						localStorage.setItem("omp-gui-keep-awake", next ? "1" : "0");
+						localStorage.setItem("musepi-gui-keep-awake", next ? "1" : "0");
 						void (
 							window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
 						).electronAPI?.setKeepAwake?.(next);

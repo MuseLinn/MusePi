@@ -38,6 +38,7 @@ import type { AgentEvent, SessionEntry, SessionHeader, SessionState, WireMessage
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
+import { MANAGED_SKILLS_PROVIDER_ID } from "../autolearn/managed-skills";
 import { reset as resetCapabilities } from "../capability";
 import {
 	ChannelCommandHandler,
@@ -3735,13 +3736,13 @@ export class DaemonServer {
 			}
 			case "skills.delete": {
 				// Remove a user-level skill's SKILL.md. Refuses builtin /
-				// omp-managed skills (auto-learn) — the GUI mirrors this guard.
+				// musepi-managed skills (auto-learn) — the GUI mirrors this guard.
 				const p = (params ?? {}) as { name: string };
 				const skills = await this.#getSkills();
 				const skill = skills.find(s => s.name === p.name);
 				if (!skill) throw new Error(`unknown skill: ${p.name}`);
 				const src = skill._source;
-				if (src?.level !== "user" || src.provider === "omp-managed" || src.provider === "native") {
+				if (src?.level !== "user" || src.provider === MANAGED_SKILLS_PROVIDER_ID || src.provider === "native") {
 					throw new Error("only user-level skills can be deleted");
 				}
 				const { rm } = await import("node:fs/promises");

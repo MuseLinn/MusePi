@@ -39,8 +39,8 @@ export interface ScrollbarSkin {
 	importedAt?: number;
 }
 
-export const SCROLLBAR_STYLE_KEY = "omp-gui-scrollbar-style";
-export const SCROLLBAR_SKINS_KEY = "omp-gui-scrollbar-skins";
+export const SCROLLBAR_STYLE_KEY = "musepi-gui-scrollbar-style";
+export const SCROLLBAR_SKINS_KEY = "musepi-gui-scrollbar-skins";
 /** Fired on the window when the imported-skin registry changes. */
 export const SCROLLBAR_SKINS_CHANGED_EVENT = "omp-scrollbar-skins-changed";
 /** Fired on the window when the active skin id changes. */
