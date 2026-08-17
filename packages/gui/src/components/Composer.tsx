@@ -3,6 +3,13 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
+import {
+	COMPOSER_DOCK_SLOT,
+	COMPOSER_LEFT_SLOT,
+	COMPOSER_RIGHT_SLOT,
+	SlotComponentHost,
+	useSlotComponents,
+} from "../lib/slot-components";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood } from "../lib/pet";
@@ -264,6 +271,12 @@ export function Composer({
 	sessionModeId,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
+	// composer 座位槽(DSH conversation.input.dock/left/right 对齐):
+	// dock = 输入卡上方行;left/right = 底部工具栏两端。list 语义 ——
+	// 扩展声明 composer.dock/left/right 槽位即注入组件。
+	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
+	const composerLeftItems = useSlotComponents(rpc, COMPOSER_LEFT_SLOT);
+	const composerRightItems = useSlotComponents(rpc, COMPOSER_RIGHT_SLOT);
 	const [text, setText] = useState("");
 	// Element picker (browser tool) inserts picked-page text into the draft.
 	useEffect(() => {
@@ -1404,7 +1417,12 @@ export function Composer({
 				// chips sit in the button row next to the thinking selector.
 				// Renders whenever ANY of them is present.
 				statusRow={
-					(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask ? (
+					composerDockItems.length > 0 ||
+					(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+					activeTask ? (
+						<div className="gui-composer-dock">
+							{composerDockItems.length > 0 && <SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} />}
+						{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask) && (
 						<div className="gui-mode-row gui-mode-row--status">
 							{activeTask && (
 								<SwarmChip
@@ -1463,10 +1481,15 @@ export function Composer({
 								</>
 							)}
 						</div>
+						)}
+					</div>
 					) : null
 				}
 				footerLeft={
 					<>
+						{/* composer.left 座位槽(DSH conversation.input.left 对齐):
+						 * 扩展声明 composer.left 槽位即注入工具栏左端。 */}
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} />
 						<AttachMenu
 							goalMode={modes?.goalMode?.enabled === true || goalArmed}
 							planMode={modes?.planMode === true}
@@ -1578,6 +1601,9 @@ export function Composer({
 				}
 				footerRight={
 					<>
+						{/* composer.right 座位槽(DSH conversation.input.right 对齐):
+						 * 扩展声明 composer.right 槽位即注入工具栏右端。 */}
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_RIGHT_SLOT} />
 						{contextUsage != null && (
 							<ContextRing
 								percent={contextUsage.percent}

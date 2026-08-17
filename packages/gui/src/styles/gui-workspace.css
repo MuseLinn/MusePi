@@ -6,6 +6,16 @@
 	position: relative;
 }
 
+/* composer.dock 座位槽容器(DSH conversation.input.dock 对齐):输入卡上方
+ * 整行,扩展注入 dock 组件 + 内置 status 行共用。 */
+.gui-composer-dock {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 4px;
+	padding: 4px 14px 0;
+}
+
 .gui-mode-chip {
 	display: inline-flex;
 	align-items: center;

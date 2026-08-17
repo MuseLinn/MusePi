@@ -28,6 +28,12 @@ export const RIGHT_RAIL_SLOT = "rail.right";
 export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
 export const SETTINGS_TAB_SLOT_PREFIX = "settings.tab.";
 export const RAIL_SLOT_PREFIX = "rail.";
+/** Composer 座位槽(DSH conversation.input.dock/left/right 对齐):
+ *  dock = 输入卡上方整行;left/right = 底部工具栏两端。list 语义 ——
+ *  多个扩展可同时往同一槽注入组件。 */
+export const COMPOSER_DOCK_SLOT = "composer.dock";
+export const COMPOSER_LEFT_SLOT = "composer.left";
+export const COMPOSER_RIGHT_SLOT = "composer.right";
 
 export interface SlotComponent {
 	slot: string;
