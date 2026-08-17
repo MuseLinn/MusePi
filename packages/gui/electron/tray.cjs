@@ -185,8 +185,25 @@ function createTrayController({ onAction, onSnapshot }) {
 		// acrylic) so the click toggles the self-drawn frosted menu window
 		// (main.cjs) instead — the native menu is never set there.
 		if (process.platform === "darwin" || process.platform === "win32") {
-			tray.on("click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
-			tray.on("right-click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
+			// macOS: the click event's `bounds` is NOT provided (unlike
+			// Windows) — tray.getBounds() returns the status-item frame on
+			// both platforms, so it is the reliable fallback. Without it the
+			// menu fell back to the hardcoded screen corner instead of
+			// docking to the icon.
+			const iconBounds = () => {
+				try {
+					if (tray && !tray.isDestroyed()) return tray.getBounds();
+				} catch {
+					// tray gone mid-click; caller falls back to the corner.
+				}
+				return null;
+			};
+			tray.on("click", (event) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			);
+			tray.on("right-click", (event) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			);
 		} else {
 			tray.on("click", () => onAction({ type: "show-main-window" }));
 		}

@@ -668,12 +668,23 @@ function createTrayMenuWindow() {
 
 function positionTrayMenu(win, bounds) {
 	const [width, height] = win.getSize();
-	if (!bounds) {
+	// macOS click events may carry no bounds at all; the caller (tray.cjs)
+	// falls back to tray.getBounds(), but guard against NaN/missing here
+	// too — the menu must never end up off-screen.
+	const b = bounds && Number.isFinite(bounds.x) && Number.isFinite(bounds.y) ? bounds : null;
+	if (!b) {
 		const work = screen.getPrimaryDisplay().workArea;
-		win.setPosition(work.x + work.width - width - 12, work.y + work.height - height - 12);
+		if (process.platform === "darwin") {
+			// Menu bar sits at the top: dock to the top-right corner, NOT
+			// the bottom (the old hardcoded corner rendered the menu in the
+			// wrong half of the screen on macOS).
+			win.setPosition(Math.round(work.x + work.width - width - 12), Math.round(work.y + 4));
+		} else {
+			win.setPosition(Math.round(work.x + work.width - width - 12), Math.round(work.y + work.height - height - 12));
+		}
 		return;
 	}
-	const display = screen.getDisplayNearestPoint({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 });
+	const display = screen.getDisplayNearestPoint({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
 	const work = display.workArea;
 	// Windows taskbar sits at the bottom by default: pop the menu ABOVE
 	// the icon, right-aligned with the tray column. Taskbar on top/side:
@@ -701,6 +712,20 @@ function toggleTrayMenu(bounds) {
 	}
 	positionTrayMenu(win, bounds);
 	trayMenuLastShow = Date.now();
+	if (win.webContents.isLoading()) {
+		// First open: the window was just created and tray-menu.html is
+		// still loading — showing now paints a blank/frosted rectangle
+		// (the "delayed menu" on Windows). Position first, reveal once the
+		// renderer finished, so the first click opens a fully-rendered menu.
+		trayLog("menu show (waiting for load)");
+		win.webContents.once("did-finish-load", () => {
+			if (trayMenuWindow === win && !win.isDestroyed()) {
+				win.show();
+				win.focus();
+			}
+		});
+		return;
+	}
 	win.show();
 	win.focus();
 	// Windows focus races the pointer click that opened the menu — the
@@ -2572,6 +2597,11 @@ app.whenReady().then(async () => {
 	// Menu-bar tray: session quick-switcher (openchamber parity). Lives
 	// past window close on macOS, so create it once at boot.
 	ensureTray();
+	// Warm the tray menu window at boot (hidden): loadFile is async, so a
+	// lazy first-open would show a blank rectangle while tray-menu.html
+	// loads — the "delayed menu" on Windows. Pre-created + hidden, the
+	// first click reveals an already-rendered menu.
+	createTrayMenuWindow();
 
 	// Dev hot-reload: `bun run dev:reload` rebuilds dist/ and touches
 	// .dev-reload-trigger (deliberately outside dist/ — the build's
