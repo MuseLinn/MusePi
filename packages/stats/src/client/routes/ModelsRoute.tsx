@@ -328,8 +328,7 @@ function ModelsTable({
 								<div className="grid gap-4" style={{ gridTemplateColumns: "200px 1fr" }}>
 									<div className="space-y-4 text-sm">
 										<div>
-											<div className="text-[var(--text-primary)] font-medium mb-2">{t("Quality")}</div>
-											<div className="space-y-1 text-[var(--text-secondary)]">
+											<div className="text-[var(--text-primary)] font-medium mb-2">Efficiency</div>											<div className="space-y-1 text-[var(--text-secondary)]">
 												<div className="flex items-center justify-between">
 													<span>{t("Error rate")}</span>
 													<span
@@ -341,10 +340,19 @@ function ModelsTable({
 													</span>
 												</div>
 												<div className="flex items-center justify-between">
-													<span>{t("Cache rate")}</span>
-													<span className="text-[var(--accent-cyan)]">
-														{(model.cacheRate * 100).toFixed(1)}%
-													</span>
+													<span>Cache rate</span>
+													<span className="font-mono">{(model.cacheRate * 100).toFixed(1)}%</span>
+												</div>
+												<div className="flex items-center justify-between">
+													<span>Cache savings</span>
+													<span
+														className={
+															model.cacheSavings < 0
+																? "text-[var(--accent-red)]"
+																: "text-[var(--accent-green)]"
+														}
+													>
+														{(model.cacheSavings * 100).toFixed(1)}%													</span>
 												</div>
 											</div>
 										</div>

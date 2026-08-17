@@ -4,11 +4,11 @@
 
 Settings are stored as plain YAML mappings. Every key, its type, default, and enum values come from the settings schema, and you can inspect or change any of them with `musepi config` or the interactive `/settings` panel.
 
-- For model/provider credentials, `.env` files, and the env-var table that resolves API keys, see [Providers](./providers.md).
-- For custom model definitions in `models.yml`, see [Models](./models.md).
-- For instruction files discovered into the agent context (`AGENTS.md`, `.musepi/`, etc.), see [Context files](./context-files.md).
-- For the full catalog of environment variables, see [Environment variables](./environment-variables.md).
-- For prompt words that activate specialized per-turn behavior, see [Magic keywords](./magic-keywords.md).
+- For model/provider credentials, `.env` files, and the env-var table that resolves API keys, see [Providers](./providers.html).
+- For custom model definitions in `models.yml`, see [Models](./models.html).
+- For instruction files discovered into the agent context (`AGENTS.md`, `.musepi/`, etc.), see [Context files](./context-files.html).
+- For the full catalog of environment variables, see [Environment variables](./environment-variables.html).
+- For prompt words that activate specialized per-turn behavior, see [Magic keywords](./magic-keywords.html).
 
 ## Where settings live
 
@@ -124,7 +124,7 @@ Environment variables are **not** a single settings layer. Each is read by the f
 | `PI_CODING_AGENT_DIR` | (relocates agent dir) | Moves `config.yml`, `agent.db`, and the whole agent base. |
 | `PI_CONFIG_FILES` | CLI config overlays | Platform path-list (`:` on Unix, `;` on Windows); files load in order before `--config` overlays. |
 
-Provider API keys are resolved separately (stored auth, OAuth, `models.yml`, environment, and `.env` files); see [Providers](./providers.md) and the full [Environment variables](./environment-variables.md) reference.
+Provider API keys are resolved separately (stored auth, OAuth, `models.yml`, environment, and `.env` files); see [Providers](./providers.html) and the full [Environment variables](./environment-variables.html) reference.
 
 ## Merge rules
 
@@ -184,7 +184,7 @@ bashInterceptor:
       message: "Use the read tool instead."
 ```
 
-The named replacement tool must be available in the current session or the interceptor does not block the Bash call. For a detailed comparison of permission policy and dedicated-tool routing, including compound-command behavior and ordering, see [the Bash tool documentation](tools/bash.md#command-policy-and-dedicated-tool-routing).
+The named replacement tool must be available in the current session or the interceptor does not block the Bash call. For a detailed comparison of permission policy and dedicated-tool routing, including compound-command behavior and ordering, see [the Bash tool documentation](tools/bash.html#command-policy-and-dedicated-tool-routing).
 
 ### Worked example: global vs. project
 
@@ -301,8 +301,8 @@ Only string values are kept; malformed scoped entries are ignored. Path scoping 
 
 | Entry kind | Example ids | Effect |
 |---|---|---|
-| Model providers | `anthropic`, `openai`, `gemini`, `groq`, `ollama`, `openrouter` | Removes those backends from model selection, even when credentials are available. See [Providers](./providers.md). |
-| Discovery sources | `native`, `claude`, `codex`, `gemini`, `github`, `opencode`, `cursor`, `agents-md` | Stops that source from contributing context files, MCP servers, commands, skills, hooks, tools, prompts, or settings. See [Context files](./context-files.md). |
+| Model providers | `anthropic`, `openai`, `gemini`, `groq`, `ollama`, `openrouter` | Removes those backends from model selection, even when credentials are available. See [Providers](./providers.html). |
+| Discovery sources | `native`, `claude`, `codex`, `gemini`, `github`, `opencode`, `cursor`, `agents-md` | Stops that source from contributing context files, MCP servers, commands, skills, hooks, tools, prompts, or settings. See [Context files](./context-files.html). |
 
 Most provider-control use cases list model provider ids. Disabling the `claude` discovery source is different from disabling the `anthropic` model provider — one stops Claude-format config discovery, the other stops the Anthropic model backend.
 
@@ -319,7 +319,7 @@ disabledProviders:
   - groq
 ```
 
-The default is an empty array (nothing disabled). For the two subsystems' provider ids and ordering, see [Providers](./providers.md) and [Context files](./context-files.md).
+The default is an empty array (nothing disabled). For the two subsystems' provider ids and ordering, see [Providers](./providers.html) and [Context files](./context-files.html).
 
 ## Settings catalog
 
@@ -361,21 +361,20 @@ enabledModels:
 | `disabledProviders` | array | `[]` | Disabled model/discovery providers; supports path-scoped entries. See [above](#provider-and-source-disabling). |
 | `includeModelInPrompt` | boolean | `true` | Include the active model name in the system prompt. |
 
-See [Models](./models.md) for the `models.yml` schema and custom-provider definitions.
+See [Models](./models.html) for the `models.yml` schema and custom-provider definitions.
 
 ### Advisor
 
 The advisor is a second model that reviews each completed turn and can inject advice into the primary session. Assign a model with `modelRoles.advisor`, then enable it with `advisor.enabled`, `/advisor on`, or by launching with the `--advisor` flag.
 
-See [Advisor and WATCHDOG.md](./advisor-watchdog.md) for runtime behavior, `WATCHDOG.md` discovery, and bounded catch-up semantics.
+See [Advisor and WATCHDOG.md](./advisor-watchdog.html) for runtime behavior, `WATCHDOG.md` discovery, and bounded catch-up semantics.
 
-| Key | Type | Default | Notes |
-|---|---|---|---|
-| `advisor.enabled` | boolean | `false` | Enable the advisor runtime when `modelRoles.advisor` resolves to an available model. |
-| `advisor.subagents` | boolean | `false` | Also enable advisor runtimes for spawned task/eval subagents. |
-| `advisor.syncBacklog` | enum | `off` | Bounded advisor catch-up delay: `off`, `1`, `3`, or `5`. The primary waits up to 30 seconds only while advisor backlog is at or above the threshold. |
-| `advisor.immuneTurns` | number | `3` | After a `concern`/`blocker` interrupts, route further concerns/blockers as non-interrupting asides for this many completed primary turns. |
-
+| Key                   | Type    | Default | Notes                                                                                                                                                |
+| --------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `advisor.enabled`     | boolean | `false` | Enable the advisor runtime when `modelRoles.advisor` resolves to an available model.                                                                 |
+| `task.agentAdvisor`   | record  | `{}`    | Per-agent subagent advisor: agent name → `"on"` / `"off"` / advisor model pattern. Overrides agent frontmatter `advisor`; configured from the `/agents` hub. |
+| `advisor.syncBacklog` | enum    | `off`   | Bounded advisor catch-up delay: `off`, `1`, `3`, or `5`. The primary waits up to 30 seconds only while advisor backlog is at or above the threshold. |
+| `advisor.immuneTurns` | number  | `3`     | After a `concern`/`blocker` interrupts, route further concerns/blockers as non-interrupting asides for this many completed primary turns.            |
 ### Thinking
 
 ```yaml
@@ -517,7 +516,7 @@ computer:
 | `computer.maxWidth` | number | `1920` | Maximum composite screenshot width in pixels. Image transports that cannot preserve original detail, including GitHub Copilot Responses and xAI OAuth, cap the effective width at `1280`; Claude-family models use the same cap as a compatibility fallback. |
 | `computer.maxHeight` | number | `1200` | Maximum composite screenshot height in pixels. Those coordinate-safe transports cap the effective height at `896`; other models retain the configured limit. |
 
-Computer settings are captured when the desktop controller is created. A model switch that crosses the coordinate-safe sizing boundary recreates the controller and resnapshots those settings; changing config alone does not, so start a new session after a settings change. The recreated controller has no prior coordinate frame, so capture a fresh screenshot before the next pointer action. Before enabling input, configure `tools.approvalMode` or `tools.approval.computer` and grant platform permissions. See [Native computer use](computer-use.md).
+Computer settings are captured when the desktop controller is created. A model switch that crosses the coordinate-safe sizing boundary recreates the controller and resnapshots those settings; changing config alone does not, so start a new session after a settings change. The recreated controller has no prior coordinate frame, so capture a fresh screenshot before the next pointer action. Before enabling input, configure `tools.approvalMode` or `tools.approval.computer` and grant platform permissions. See [Native computer use](computer-use.html).
 
 ### Shell, eval, and LSP
 
@@ -627,7 +626,7 @@ memory:
 | `autolearn.autoContinue` | boolean | `false` | When `autolearn.enabled`, auto-run one capture turn at stop (uses extra tokens). Off = a passive reminder rides your next turn. |
 | `autolearn.minToolCalls` | number | `5` | Only nudge after a turn that used at least this many tools. |
 
-`compaction` has additional tuning keys (idle compaction, supersede/drop heuristics) visible in `musepi config list`. See [Compaction](./compaction.md) for the full strategy reference.
+`compaction` has additional tuning keys (idle compaction, supersede/drop heuristics) visible in `musepi config list`. See [Compaction](./compaction.html) for the full strategy reference.
 
 ### Appearance and terminal
 
@@ -735,7 +734,7 @@ searxng:
 | `auth.broker.url` | string | _(unset)_ | Auth-broker URL. Overridden by `OMP_AUTH_BROKER_URL`. |
 | `auth.broker.token` | string | _(unset)_ | Auth-broker token. Overridden by `OMP_AUTH_BROKER_TOKEN`. |
 
-Provider credentials and custom model definitions are configured separately — see [Providers](./providers.md) and [Models](./models.md).
+Provider credentials and custom model definitions are configured separately — see [Providers](./providers.html) and [Models](./models.html).
 
 ### Other groups
 
@@ -787,7 +786,7 @@ Arrays replace; they do not append. If a project sets `disabledProviders`, `enab
 
 - Check whether you disabled the model provider id (e.g. `anthropic`) or a discovery source id (e.g. `claude`) — they are different namespaces with different effects.
 - Check for a project (or overlay) `disabledProviders` array replacing your global one.
-- Credentials can still come from environment variables, `.env`, OAuth, stored auth, or `models.yml`; disabling a provider blocks selection regardless, but verify you edited the right layer. See [Providers](./providers.md).
+- Credentials can still come from environment variables, `.env`, OAuth, stored auth, or `models.yml`; disabling a provider blocks selection regardless, but verify you edited the right layer. See [Providers](./providers.html).
 - Restart the session if the model list was already initialized.
 
 ### `musepi config set` changed the wrong file
@@ -804,7 +803,7 @@ Arrays replace; they do not append. If a project sets `disabledProviders`, `enab
 
 ### An environment variable beats my config
 
-Some settings (model roles, eval backends, tiny-model device/precision, auth broker, PTY) are overridable by env vars or CLI flags for per-machine convenience, and those take precedence over `config.yml`. Unset the variable or drop the flag to let the persisted value win. See [Environment overrides](#environment-overrides) and [Environment variables](./environment-variables.md).
+Some settings (model roles, eval backends, tiny-model device/precision, auth broker, PTY) are overridable by env vars or CLI flags for per-machine convenience, and those take precedence over `config.yml`. Unset the variable or drop the flag to let the persisted value win. See [Environment overrides](#environment-overrides) and [Environment variables](./environment-variables.html).
 
 ### `musepi config set <key>` says "Unknown setting"
 

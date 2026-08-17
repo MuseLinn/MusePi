@@ -32,7 +32,7 @@ import { MemoryRecallTool } from "@musepi/pi-coding-agent/tools/memory-recall";
 import { MemoryReflectTool } from "@musepi/pi-coding-agent/tools/memory-reflect";
 import { MemoryRetainTool } from "@musepi/pi-coding-agent/tools/memory-retain";
 import { resetMemoryForTests } from "@musepi/pi-mnemopi";
-import { TempDir } from "@musepi/pi-utils";
+import { logger, TempDir } from "@musepi/pi-utils";
 
 // Mnemopi is lazy-loaded at runtime; preload it for synchronous state construction.
 await Promise.all([loadMnemopi(), loadMnemopiCore()]);
@@ -482,6 +482,56 @@ describe("Mnemopi backend lifecycle", () => {
 		await expect(state.maybeRecallOnAgentStart()).resolves.toBeUndefined();
 		expect(state.hasRecalledForFirstTurn).toBe(false);
 	});
+
+	it("contains unavailable-bank failures from agent-end retention", async () => {
+		const listeners = new Set<AgentSessionEventListener>();
+		const entries = [{ type: "message", message: { role: "user", content: "turn one" } }];
+		const state = registerMnemopiState(makeMnemopiConfig({ retainEveryNTurns: 1 }), {
+			entries: () => entries,
+			listeners,
+		});
+		state.attachSessionListeners();
+		state.memory.beam.db.close();
+		const warning = Promise.withResolvers<void>();
+		const warn = vi.spyOn(logger, "warn").mockImplementation((message, context) => {
+			if (message === "Mnemopi: lifecycle hook failed") warning.resolve();
+			void context;
+		});
+
+		for (const listener of listeners) listener({ type: "agent_end", messages: [] } as never);
+		await warning.promise;
+
+		expect(warn).toHaveBeenCalledWith("Mnemopi: lifecycle hook failed", {
+			banks: ["test-bank"],
+			operation: "agent_end retention",
+			error: "Cannot use a closed database",
+		});
+	});
+
+	it("contains failures before agent-start recall reaches its internal bank guard", async () => {
+		const listeners = new Set<AgentSessionEventListener>();
+		const state = registerMnemopiState(makeMnemopiConfig(), {
+			entries: () => {
+				throw new Error("session journal unavailable");
+			},
+			listeners,
+		});
+		state.attachSessionListeners();
+		const warning = Promise.withResolvers<void>();
+		const warn = vi.spyOn(logger, "warn").mockImplementation((message, context) => {
+			if (message === "Mnemopi: lifecycle hook failed") warning.resolve();
+			void context;
+		});
+
+		for (const listener of listeners) listener({ type: "agent_start" } as never);
+		await warning.promise;
+
+		expect(warn).toHaveBeenCalledWith("Mnemopi: lifecycle hook failed", {
+			banks: ["test-bank"],
+			operation: "agent_start recall",
+			error: "session journal unavailable",
+		});
+	});
 	it("auto-retain stores only the not-yet-retained suffix", async () => {
 		const entries = Array.from({ length: 4 }, (_, index) => ({
 			type: "message",
@@ -738,11 +788,9 @@ describe("Mnemopi backend lifecycle", () => {
 		const state = registerMnemopiState(config, { cwd: "/work/project-alpha", entries: () => entries });
 		const ownedDbPaths = getMnemopiScopedDbPaths(config);
 		const sharedDbPath = ownedDbPaths.find(dbPath => dbPath === config.dbPath);
-		expect(sharedDbPath).toBeDefined();
 		const lock = new Database(sharedDbPath!);
 		lock.exec("BEGIN IMMEDIATE");
 		const sharedMemory = state.globalMemory;
-		expect(sharedMemory).toBeDefined();
 		const sharedFlushCalled = Promise.withResolvers<void>();
 		const sharedFlushSpy = vi.spyOn(sharedMemory!, "flushExtractions").mockImplementation(async () => {
 			// Signal first: the exec below may throw SQLITE_BUSY while the lock is
@@ -1347,7 +1395,6 @@ describe("memory_edit.execute (Mnemopi backend)", () => {
 			items: [{ content }],
 		});
 		const id = (await registeredMnemopiState?.recallResultsScoped(query))?.[0]?.id;
-		expect(id).toBeString();
 		return id!;
 	}
 

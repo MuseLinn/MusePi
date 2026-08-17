@@ -7,7 +7,12 @@
  */
 import * as fs from "node:fs/promises";
 import path from "node:path";
-import { formatHashlineHeader, formatNumberedLines, type SnapshotStore } from "@musepi/hashline";
+import {
+	formatHashlineHeader,
+	formatNumberedLines,
+	type SnapshotStore,
+	splitAddressableFileLines,
+} from "@musepi/hashline";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { ImageContent } from "@musepi/pi-ai";
 import { formatAge, formatBytes, isProbablyBinary, readImageMetadata } from "@musepi/pi-utils";
@@ -270,7 +275,8 @@ export async function generateFileMentionMessages(
 			const content = await Bun.file(absolutePath).text();
 			const snapshotStore = options?.useHashLines ? options.snapshotStore : undefined;
 			const normalized = snapshotStore ? normalizeToLF(content) : content;
-			let { output, lineCount } = buildTextOutput(normalized);
+			const displayText = snapshotStore ? splitAddressableFileLines(normalized).join("\n") : normalized;
+			let { output, lineCount } = buildTextOutput(displayText);
 			if (snapshotStore) {
 				const tag = snapshotStore.record(canonicalSnapshotKey(absolutePath), normalized);
 				output = `${formatHashlineHeader(resolvedPath, tag)}\n${formatNumberedLines(output)}`;

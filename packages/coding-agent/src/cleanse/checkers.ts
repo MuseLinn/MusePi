@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { $which, isRecord, ptree, sanitizeText } from "@musepi/pi-utils";
 import * as git from "../utils/git";
-import { type CleanseParserKind, parseCleanseDiagnostics } from "./parsers";
+import { CLEANSE_PARSER_KINDS, type CleanseParserKind, parseCleanseDiagnostics } from "./parsers";
 import type { CleanseCheckResult, CleanseDiagnostic, CleanseDiagnosticReport, SkippedCleanseCheck } from "./types";
 
 const IGNORED_DIRECTORIES: Record<string, true> = {
@@ -43,6 +43,8 @@ interface PlanRequest {
 	parser: CleanseParserKind;
 	executable?: string;
 	mutates?: boolean;
+	/** Skip silently instead of recording a skip when the binary is missing (alternative toolings). */
+	optional?: boolean;
 }
 
 interface DiscoveryState {
@@ -58,10 +60,21 @@ export interface CleanseDiagnosticSuiteOptions {
 	includeTests?: boolean;
 }
 
+/** Identity and display metadata for one runnable checker. */
+export interface CleanseCheckerDescriptor {
+	id: string;
+	label: string;
+	language: string;
+	command: string;
+}
+
 /** Re-runnable checker set discovered from one project snapshot. */
 export interface CleanseDiagnosticSuite {
-	readonly checkCount: number;
+	/** Every discovered checker; unaffected by {@link CleanseDiagnosticSuite.select}. */
+	readonly checkers: readonly CleanseCheckerDescriptor[];
 	readonly skipped: readonly SkippedCleanseCheck[];
+	/** Narrow subsequent {@link CleanseDiagnosticSuite.run} calls to the named checker ids. */
+	select(ids: readonly string[]): void;
 	run(signal?: AbortSignal): Promise<CleanseDiagnosticReport>;
 }
 
@@ -81,7 +94,7 @@ export async function discoverCleanseDiagnosticSuite(
 	};
 	await discoverRust(state);
 	discoverGo(state);
-	discoverPython(state);
+	await discoverPython(state);
 	await discoverJavaScript(state);
 	discoverRuby(state);
 	discoverPhp(state);
@@ -96,27 +109,107 @@ export async function discoverCleanseDiagnosticSuite(
 	discoverDotnet(state);
 	discoverZig(state);
 	discoverJvm(state);
+	discoverGitHubActions(state);
 
-	const allowedFiles = new Set(state.files);
+	return createSuite(resolvedCwd, state.plans, state.skipped, new Set(state.files));
+}
+
+function createSuite(
+	projectCwd: string,
+	plans: readonly CheckerPlan[],
+	skipped: SkippedCleanseCheck[],
+	allowedFiles: ReadonlySet<string>,
+): CleanseDiagnosticSuite {
+	let active = [...plans];
 	return {
-		checkCount: state.plans.length,
-		skipped: state.skipped,
+		checkers: plans.map(plan => ({ id: plan.id, label: plan.label, language: plan.language, command: plan.command })),
+		skipped,
+		select(ids: readonly string[]): void {
+			const wanted = new Set(ids);
+			active = plans.filter(plan => wanted.has(plan.id));
+		},
 		async run(signal?: AbortSignal): Promise<CleanseDiagnosticReport> {
 			const mutatingChecks: CleanseCheckResult[] = [];
-			for (const plan of state.plans) {
-				if (plan.mutates) mutatingChecks.push(await runChecker(plan, resolvedCwd, allowedFiles, signal));
+			for (const plan of active) {
+				if (plan.mutates) mutatingChecks.push(await runChecker(plan, projectCwd, allowedFiles, signal));
 			}
 			const parallelChecks = await Promise.all(
-				state.plans.filter(plan => !plan.mutates).map(plan => runChecker(plan, resolvedCwd, allowedFiles, signal)),
+				active.filter(plan => !plan.mutates).map(plan => runChecker(plan, projectCwd, allowedFiles, signal)),
 			);
 			const checks = [...mutatingChecks, ...parallelChecks];
 			return {
 				checks,
 				diagnostics: deduplicateProjectDiagnostics(checks.flatMap(check => check.diagnostics)),
-				skipped: [...state.skipped],
+				skipped: [...skipped],
 			};
 		},
 	};
+}
+
+/** One checker proposed by the prompted discovery agent. */
+export interface CustomCleanseCheckerSpec {
+	label: string;
+	language?: string;
+	cwd?: string;
+	command: string[];
+	parser?: string;
+}
+
+/** Build a runnable suite from discovery-agent checker specs, dropping unrunnable entries into `skipped`. */
+export async function buildCustomCleanseSuite(
+	projectCwd: string,
+	specs: readonly CustomCleanseCheckerSpec[],
+): Promise<CleanseDiagnosticSuite> {
+	const absoluteCwd = path.resolve(projectCwd);
+	const resolvedCwd = await fs.realpath(absoluteCwd).catch(() => absoluteCwd);
+	const files = await listProjectFiles(resolvedCwd);
+	const plans: CheckerPlan[] = [];
+	const skipped: SkippedCleanseCheck[] = [];
+	for (const [index, spec] of specs.entries()) {
+		const [binary, ...args] = spec.command;
+		const label = spec.label.trim() || `custom checker ${index + 1}`;
+		const language = spec.language?.trim() || "Custom";
+		if (!binary) {
+			skipped.push({ label, language, reason: "empty command" });
+			continue;
+		}
+		const root = normalizeCustomRoot(resolvedCwd, spec.cwd);
+		if (root === undefined) {
+			skipped.push({ label, language, reason: `working directory escapes the project: ${spec.cwd}` });
+			continue;
+		}
+		let executable: string | undefined;
+		if (/[\\/]/.test(binary)) {
+			const candidate = path.resolve(resolvedCwd, root, binary);
+			executable = (await Bun.file(candidate).exists()) ? candidate : undefined;
+		} else {
+			executable = resolveBinary(resolvedCwd, root, [binary]);
+		}
+		if (!executable) {
+			skipped.push({ label, language, reason: `executable not found: ${binary}` });
+			continue;
+		}
+		plans.push({
+			id: `custom-${index + 1}`,
+			label,
+			language,
+			cwd: path.resolve(resolvedCwd, root),
+			executable,
+			args,
+			parser: CLEANSE_PARSER_KINDS.find(kind => kind === spec.parser) ?? "generic",
+			command: formatCommand([path.basename(executable), ...args]),
+			mutates: false,
+		});
+	}
+	return createSuite(resolvedCwd, plans, skipped, new Set(files));
+}
+
+function normalizeCustomRoot(projectCwd: string, cwd: string | undefined): string | undefined {
+	const trimmed = cwd?.trim();
+	if (!trimmed || trimmed === ".") return ".";
+	const relative = path.relative(projectCwd, path.resolve(projectCwd, trimmed));
+	if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+	return relative.split(path.sep).join("/") || ".";
 }
 
 async function listProjectFiles(cwd: string): Promise<string[]> {
@@ -187,8 +280,8 @@ function rootsForPattern(files: readonly string[], pattern: RegExp): string[] {
 	return markerRoots(files, file => pattern.test(file));
 }
 
-function resolveBinary(state: DiscoveryState, root: string, names: readonly string[]): string | undefined {
-	const cwd = path.resolve(state.projectCwd, root);
+function resolveBinary(projectCwd: string, root: string, names: readonly string[]): string | undefined {
+	const cwd = path.resolve(projectCwd, root);
 	const searchDirectories: string[] = [];
 	let current = cwd;
 	while (true) {
@@ -198,10 +291,9 @@ function resolveBinary(state: DiscoveryState, root: string, names: readonly stri
 			path.join(current, "venv", process.platform === "win32" ? "Scripts" : "bin"),
 			path.join(current, "vendor", "bin"),
 		);
-		if (current === state.projectCwd) break;
+		if (current === projectCwd) break;
 		const parent = path.dirname(current);
-		if (parent === current || (!parent.startsWith(`${state.projectCwd}${path.sep}`) && parent !== state.projectCwd))
-			break;
+		if (parent === current || (!parent.startsWith(`${projectCwd}${path.sep}`) && parent !== projectCwd)) break;
 		current = parent;
 	}
 	const searchPath = [...new Set(searchDirectories), Bun.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
@@ -214,9 +306,10 @@ function resolveBinary(state: DiscoveryState, root: string, names: readonly stri
 
 function addPlan(state: DiscoveryState, request: PlanRequest): void {
 	const cwd = path.resolve(state.projectCwd, request.root);
-	const executable = request.executable ?? resolveBinary(state, request.root, request.binaries);
+	const executable = request.executable ?? resolveBinary(state.projectCwd, request.root, request.binaries);
 	const rootLabel = request.root === "." ? "." : request.root;
 	if (!executable) {
+		if (request.optional) return;
 		state.skipped.push({
 			label: `${request.label} (${rootLabel})`,
 			language: request.language,
@@ -244,7 +337,7 @@ function formatCommand(argv: readonly string[]): string {
 
 async function discoverRust(state: DiscoveryState): Promise<void> {
 	for (const root of rootsForBasenames(state.files, { "Cargo.toml": true })) {
-		const cargo = resolveBinary(state, root, ["cargo"]);
+		const cargo = resolveBinary(state.projectCwd, root, ["cargo"]);
 		if (!cargo) {
 			addPlan(state, {
 				id: "clippy",
@@ -363,6 +456,7 @@ function discoverGo(state: DiscoveryState): void {
 	const workRoots = rootsForBasenames(state.files, { "go.work": true });
 	const roots = workRoots.length > 0 ? workRoots : rootsForBasenames(state.files, { "go.mod": true });
 	for (const root of roots) {
+		const prefix = root === "." ? "" : `${root}/`;
 		addPlan(state, {
 			id: "go-vet",
 			label: "go vet",
@@ -371,6 +465,16 @@ function discoverGo(state: DiscoveryState): void {
 			binaries: ["go"],
 			args: ["vet", "-json", "./..."],
 			parser: "go",
+		});
+		addPlan(state, {
+			id: "staticcheck",
+			label: "staticcheck",
+			language: "Go",
+			root,
+			binaries: ["staticcheck"],
+			args: ["-f", "json", "./..."],
+			parser: "staticcheck",
+			optional: !state.files.includes(`${prefix}staticcheck.conf`),
 		});
 		if (state.includeTests) {
 			addPlan(state, {
@@ -384,9 +488,20 @@ function discoverGo(state: DiscoveryState): void {
 			});
 		}
 	}
+	for (const root of rootsForPattern(state.files, /(?:^|\/)\.golangci\.(?:ya?ml|toml|json)$/)) {
+		addPlan(state, {
+			id: "golangci",
+			label: "golangci-lint",
+			language: "Go",
+			root,
+			binaries: ["golangci-lint"],
+			args: ["run"],
+			parser: "golangci",
+		});
+	}
 }
 
-function discoverPython(state: DiscoveryState): void {
+async function discoverPython(state: DiscoveryState): Promise<void> {
 	if (!containsExtension(state.files, [".py", ".pyi"])) return;
 	const roots = rootsForBasenames(state.files, {
 		".ruff.toml": true,
@@ -423,9 +538,68 @@ function discoverPython(state: DiscoveryState): void {
 			label: "pyright",
 			language: "Python",
 			root,
-			binaries: ["pyright"],
+			binaries: ["pyright", "basedpyright"],
 			args: ["--outputjson"],
 			parser: "pyright",
+		});
+	}
+	const pyprojectRoots = rootsForBasenames(state.files, { "pyproject.toml": true });
+	const pyprojectContent = new Map<string, string>();
+	for (const root of pyprojectRoots) {
+		const file = root === "." ? "pyproject.toml" : `${root}/pyproject.toml`;
+		pyprojectContent.set(
+			root,
+			await Bun.file(path.resolve(state.projectCwd, file))
+				.text()
+				.catch(() => ""),
+		);
+	}
+	const withSection = (section: string): string[] =>
+		pyprojectRoots.filter(root => pyprojectContent.get(root)?.includes(section) === true);
+	const toolRoots = (basenames: Record<string, true>, section: string): string[] =>
+		topmostRoots([...rootsForBasenames(state.files, basenames), ...withSection(section)]);
+	for (const root of toolRoots({ "mypy.ini": true, ".mypy.ini": true }, "[tool.mypy")) {
+		addPlan(state, {
+			id: "mypy",
+			label: "mypy",
+			language: "Python",
+			root,
+			binaries: ["mypy"],
+			args: ["--no-error-summary", "--no-pretty", "."],
+			parser: "mypy",
+		});
+	}
+	for (const root of toolRoots({ ".pylintrc": true, pylintrc: true }, "[tool.pylint")) {
+		addPlan(state, {
+			id: "pylint",
+			label: "pylint",
+			language: "Python",
+			root,
+			binaries: ["pylint"],
+			args: ["--output-format=json", "--recursive=y", "."],
+			parser: "pylint",
+		});
+	}
+	for (const root of rootsForBasenames(state.files, { ".flake8": true })) {
+		addPlan(state, {
+			id: "flake8",
+			label: "flake8",
+			language: "Python",
+			root,
+			binaries: ["flake8"],
+			args: ["."],
+			parser: "flake8",
+		});
+	}
+	for (const root of toolRoots({ "ty.toml": true }, "[tool.ty")) {
+		addPlan(state, {
+			id: "ty",
+			label: "ty check",
+			language: "Python",
+			root,
+			binaries: ["ty"],
+			args: ["check", "--output-format", "concise"],
+			parser: "ty",
 		});
 	}
 }
@@ -457,14 +631,51 @@ async function discoverJavaScript(state: DiscoveryState): Promise<void> {
 		});
 	}
 	for (const root of rootsForBasenames(state.files, { "tsconfig.json": true })) {
+		const prefix = root === "." ? "" : `${root}/`;
+		const hasVue = state.files.some(file => file.startsWith(prefix) && file.endsWith(".vue"));
 		addPlan(state, {
 			id: "typescript",
-			label: "TypeScript",
+			label: hasVue ? "Vue TypeScript" : "TypeScript",
 			language: "TypeScript",
 			root,
-			binaries: ["tsgo", "tsc"],
+			binaries: hasVue ? ["vue-tsc", "tsgo", "tsc"] : ["tsgo", "tsc"],
 			args: ["--noEmit", "--pretty", "false"],
 			parser: "generic",
+		});
+	}
+	for (const root of rootsForBasenames(state.files, { ".oxlintrc.json": true })) {
+		addPlan(state, {
+			id: "oxlint",
+			label: "oxlint",
+			language: "JavaScript/TypeScript",
+			root,
+			binaries: ["oxlint"],
+			args: ["--format=unix"],
+			parser: "oxlint",
+		});
+	}
+	for (const root of rootsForBasenames(state.files, { "deno.json": true, "deno.jsonc": true })) {
+		addPlan(state, {
+			id: "deno-lint",
+			label: "deno lint",
+			language: "JavaScript/TypeScript",
+			root,
+			binaries: ["deno"],
+			args: ["lint", "--json"],
+			parser: "deno-lint",
+		});
+	}
+	const stylelintConfig =
+		/(?:^|\/)(?:\.stylelintrc(?:\.(?:json|ya?ml|js|cjs|mjs))?|stylelint\.config\.(?:js|cjs|mjs|ts))$/;
+	for (const root of rootsForPattern(state.files, stylelintConfig)) {
+		addPlan(state, {
+			id: "stylelint",
+			label: "stylelint",
+			language: "CSS",
+			root,
+			binaries: ["stylelint"],
+			args: ["**/*.{css,scss,sass,less}", "--formatter", "json", "--allow-empty-input"],
+			parser: "stylelint",
 		});
 	}
 	if (state.includeTests) await discoverPackageTests(state);
@@ -902,6 +1113,26 @@ function discoverJvm(state: DiscoveryState): void {
 				parser: "generic",
 			});
 		}
+	}
+}
+
+function discoverGitHubActions(state: DiscoveryState): void {
+	const roots = new Set<string>();
+	for (const file of state.files) {
+		const match = /^(?:(.*)\/)?\.github\/workflows\/[^/]+\.ya?ml$/.exec(file);
+		if (match) roots.add(match[1] ?? ".");
+	}
+	for (const root of topmostRoots([...roots])) {
+		addPlan(state, {
+			id: "actionlint",
+			label: "actionlint",
+			language: "GitHub Actions",
+			root,
+			binaries: ["actionlint"],
+			args: ["-format", "{{json .}}"],
+			parser: "actionlint",
+			optional: true,
+		});
 	}
 }
 

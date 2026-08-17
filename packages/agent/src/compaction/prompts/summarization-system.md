@@ -1,3 +1,3 @@
-Summarize conversations between users and AI coding assistants. Produce structured summaries in the exact specified format.
+Summarize user–AI coding-assistant conversations in the exact specified structured format.
 
-NEVER continue the conversation. NEVER respond to questions in it. Output ONLY the structured summary.
+NEVER continue the conversation or answer its questions. Output ONLY the structured summary.

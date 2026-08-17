@@ -2,10 +2,10 @@
 export function galleryDefaults(): Record<string, unknown> {
 	return {
 		items: [
-			{ title: "Kimi K3" },
-			{ title: "PerceptionBench" },
-			{ title: "Agent Swarm" },
-			{ title: "WorldVQA" },
+			{ title: "MusePi 桌面" },
+			{ title: "MusePi 看板" },
+			{ title: "MusePi 桌宠" },
+			{ title: "MusePi 引导" },
 		],
 	};
 }

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $which, APP_NAME, getToolsDir, logger, ptree, TempDir } from "@musepi/pi-utils";
+import { $which, getToolsDir, logger, ptree, TempDir, USER_AGENT } from "@musepi/pi-utils";
 import { extractArchive } from "./zip";
 
 const TOOLS_DIR = getToolsDir();
@@ -174,7 +174,7 @@ async function getLatestVersion(repo: string, signal?: AbortSignal): Promise<str
 	let response: Response;
 	try {
 		response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
-			headers: { "User-Agent": `${APP_NAME}-coding-agent` },
+			headers: { "User-Agent": USER_AGENT },
 			signal: ptree.combineSignals(signal, TOOL_METADATA_TIMEOUT_MS),
 		});
 	} catch (err) {

@@ -30,9 +30,18 @@ export function MetricCluster({ stats }: MetricClusterProps) {
 					<div className="stats-metric-label">{t("Requests")}</div>
 					<div className="stats-metric-value">{formatInteger(stats.totalRequests)}</div>
 				</div>
-				<div className="stats-metric-card primary">
-					<div className="stats-metric-label">{t("Cache Rate")}</div>
-					<div className="stats-metric-value">{formatPercent(stats.cacheRate)}</div>
+				<div
+					className="stats-metric-card primary"
+					title="Prompt-input cost saved versus billing the same tokens uncached; cache writes can make this negative"
+				>
+					<div className="stats-metric-label">Cache Savings</div>
+					<div className="stats-metric-value">{formatPercent(stats.cacheSavings)}</div>
+				</div>
+				<div
+					className="stats-metric-card primary"
+					title="Prompt input served from cache: cache reads / (uncached input + cache reads)"
+				>
+					<div className="stats-metric-label">Cache Rate</div>					<div className="stats-metric-value">{formatPercent(stats.cacheRate)}</div>
 				</div>
 				<div className="stats-metric-card primary">
 					<div className="stats-metric-label">{t("Error Rate")}</div>

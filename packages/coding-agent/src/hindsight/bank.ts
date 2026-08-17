@@ -63,6 +63,11 @@ function baseBankId(config: HindsightConfig): string {
  * worktree of one repo shares the same `project:<name>` tag.
  * Outside a repo (or when resolution fails), fall back to the cwd basename.
  *
+ * The basename is lowercased. The label becomes a tag, and Hindsight matches
+ * tags literally, so a checkout at `.../General` would otherwise retain into a
+ * `project:General` scope that never meets the `project:general` scope every
+ * other client of the same bank reads and writes.
+ *
  * Sync only: this runs on the hot path of `computeBankScope`, which is
  * exposed as a sync API to callers like `backend.ts` and must stay sync.
  * `git.repo.primaryRootSync` walks `.git`/`commondir` with sync file reads —
@@ -71,7 +76,7 @@ function baseBankId(config: HindsightConfig): string {
 function projectLabel(directory: string): string {
 	if (!directory) return UNKNOWN_PROJECT;
 	const primary = git.repo.primaryRootSync(directory);
-	return path.basename(primary ?? directory) || UNKNOWN_PROJECT;
+	return path.basename(primary ?? directory).toLowerCase() || UNKNOWN_PROJECT;
 }
 
 /**

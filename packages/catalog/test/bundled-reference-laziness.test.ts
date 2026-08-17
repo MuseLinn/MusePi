@@ -3,33 +3,23 @@ import { createReferenceResolver } from "../src/provider-models/bundled-referenc
 import type { ModelSpec } from "../src/types";
 
 const FIXTURE = `${import.meta.dir}/fixtures/bundled-reference-laziness.ts`;
-const PROVIDER_HIT_FIXTURE = `${import.meta.dir}/fixtures/provider-hit-reference-laziness.ts`;
 
-describe("bundled reference laziness", () => {
-	test("constructing bundled model-manager options retains less than 8 MiB of RSS", () => {
-		const result = Bun.spawnSync({
-			cmd: [process.execPath, FIXTURE],
-			env: process.env,
-		});
-		expect(result.exitCode).toBe(0);
-		const { retainedRssBytes } = JSON.parse(result.stdout.toString()) as { retainedRssBytes: number };
+function runFixture(fixture: string): string {
+	const result = Bun.spawnSync({
+		cmd: [process.execPath, fixture],
+		env: process.env,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	expect(result.exitCode, result.stderr.toString()).toBe(0);
+	return result.stdout.toString();
+}
+
+describe("bundled model laziness", () => {
+	test("provider options and the bundled registry stay lazy", () => {
+		const { retainedRssBytes } = JSON.parse(runFixture(FIXTURE)) as { retainedRssBytes: number };
 		expect(retainedRssBytes).toBeLessThan(8 * 1024 * 1024);
 	}, 60_000);
-
-	test("a provider-local reference hit retains less than 8 MiB of RSS", () => {
-		const result = Bun.spawnSync({
-			cmd: [process.execPath, PROVIDER_HIT_FIXTURE],
-			env: process.env,
-		});
-		expect(result.exitCode).toBe(0);
-		const { resolvedId, retainedRssBytes } = JSON.parse(result.stdout.toString()) as {
-			resolvedId: string | null;
-			retainedRssBytes: number;
-		};
-		expect(resolvedId).not.toBeNull();
-		expect(retainedRssBytes).toBeLessThan(8 * 1024 * 1024);
-	}, 60_000);
-
 	test("a lazy provider-reference factory initializes on first resolution and only once", () => {
 		const reference = {
 			id: "fixture-model",

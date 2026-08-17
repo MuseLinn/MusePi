@@ -470,7 +470,6 @@ describe("Agent hub Enter activation", () => {
 
 		controller.showAgentHub(new SessionObserverRegistry());
 
-		expect(capturedHub).toBeDefined();
 		expect(focusTargets[0]).toBe(capturedHub);
 
 		capturedHub!.handleInput("\r");
@@ -588,7 +587,6 @@ describe("Agent hub double-← gating", () => {
 
 		expect(shown()).toBeUndefined();
 		const shownHub = await shownReady;
-		expect(shownHub).toBeDefined();
 		expect(agents.get("Worker")?.sessionFile).toBe(workerSessionFile);
 		shownHub!.dispose();
 	});

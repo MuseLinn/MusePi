@@ -173,7 +173,8 @@ export function buildNotification(event: NotifyEvent, ctx: NotifyContext): { tit
 
 /** Electron preload bridge (present inside the desktop shell). */
 interface ElectronNotifier {
-	showNotification?: (title: string, body: string) => Promise<unknown>;
+	showNotification?: (title: string, body: string) => Promise<{ ok?: boolean; reason?: string } | undefined>;
+	onNotificationFailed?: (cb: (detail: { title: string; body: string; reason: string }) => void) => () => void;
 }
 
 function electronNotifier(): ElectronNotifier | undefined {
@@ -191,7 +192,11 @@ export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext): vo
 	if (!built) return;
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
-		void notifier.showNotification(built.title, built.body).catch(() => {});
+		void notifier.showNotification(built.title, built.body).then((result) => {
+			if (result?.ok === false) {
+				console.warn("[notify] notification disabled:", result.reason);
+			}
+		}).catch(() => {});
 		return;
 	}
 	if (!("Notification" in window) || Notification.permission !== "granted") return;
@@ -202,27 +207,52 @@ export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext): vo
 	}
 }
 
-/** Settings → 通知与音效 → 发送测试通知. */
-export function sendTestNotification(): void {
-	if (typeof window === "undefined") return;
+/** Settings → 通知与音效 → 发送测试通知. Resolves with delivery outcome so
+ *  the settings UI can surface success/failure instead of staying silent. */
+export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }> {
+	if (typeof window === "undefined") return Promise.resolve({ ok: false, reason: "unsupported" });
 	const title = isZh() ? "测试通知" : "Test notification";
 	const body = isZh() ? "通知设置已生效" : "Notifications are working";
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
-		void notifier.showNotification(title, body).catch(() => {});
-		return;
+		const { promise, resolve } = Promise.withResolvers<{ ok: boolean; reason?: string }>();
+		let settled = false;
+		const finish = (ok: boolean, reason?: string) => {
+			if (settled) return;
+			settled = true;
+			unsubscribe?.();
+			resolve({ ok, reason });
+		};
+		// Main-process delivery can fail asynchronously (macOS unsigned
+		// apps → 'failed' event); surface that reason here.
+		const unsubscribe = notifier.onNotificationFailed?.(detail => {
+			if (detail.title === title && detail.body === body) finish(false, detail.reason);
+		});
+		void notifier
+			.showNotification(title, body)
+			.then((result: unknown) => {
+				const r = result as { ok?: boolean; reason?: string } | undefined;
+				if (r && r.ok === false) finish(false, r.reason ?? "unauthorized");
+				else finish(true);
+			})
+			.catch(() => finish(false, "ipc-error"));
+		// 'failed' fires async after a successful invoke; give it a window
+		// before declaring success.
+		setTimeout(() => finish(true), 3000);
+		return promise;
 	}
-	if (!("Notification" in window)) return;
+	if (!("Notification" in window)) return Promise.resolve({ ok: false, reason: "unsupported" });
 	const request =
 		Notification.permission === "default"
 			? Notification.requestPermission()
 			: Promise.resolve(Notification.permission);
-	void request.then(permission => {
-		if (permission !== "granted") return;
+	return request.then(permission => {
+		if (permission !== "granted") return { ok: false, reason: permission };
 		try {
 			new Notification(title, { body, tag: "omp-test" });
-		} catch {
-			// permission revoked mid-flight
+			return { ok: true };
+		} catch (err) {
+			return { ok: false, reason: err instanceof Error ? err.message : String(err) };
 		}
 	});
 }

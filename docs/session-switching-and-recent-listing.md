@@ -24,10 +24,8 @@ It focuses on current implementation behavior, including fallback paths and cave
 
 `SessionManager` stores sessions under a cwd-scoped directory by default:
 
-- `~/.musepi/agent/sessions/<dir-encoded>/*.jsonl` (home-relative `-<rel>` names, `-tmp-<rel>` for temp paths, legacy `--<abs>--` otherwise)
-
-`SessionManager.list(cwd, sessionDir?)` reads only that directory unless an explicit `sessionDir` is provided.
-
+- `~/.musepi/agent/sessions/<encoded-cwd>/*.jsonl`
+`<encoded-cwd>` is the path-encoded canonical cwd (`-<relative>` under home, `-tmp-<relative>` under the temp root, `--<encoded-absolute>--` otherwise; see [session.md](session.html#on-disk-layout)). Buckets from the reverted 17.2.5-17.2.8 hashed scheme are migrated best-effort. `SessionManager.list(cwd, sessionDir?)` reads only the resolved bucket unless an explicit `sessionDir` is provided.
 ### Two listing paths with different payloads
 
 There are two different listing pipelines:

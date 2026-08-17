@@ -29,6 +29,18 @@ export interface SnapcompactSavingsView {
 	savedTokens: number;
 }
 
+/** Provider subscription quota (TUI /usage parity) shown in the popover
+ *  next to the token breakdown. */
+export interface UsageQuotaView {
+	provider: string;
+	limits: Array<{
+		label: string;
+		usedPercent: number;
+		leftPercent: number;
+		resetsIn?: string;
+	}>;
+}
+
 /**
  * Context-window usage ring (kimi-code-web / openchamber parity): a
  * conic-gradient donut showing the live session's context percentage,
@@ -44,6 +56,7 @@ export function ContextRing({
 	compacting = false,
 	compactFailed = false,
 	snapcompact = null,
+	fetchQuota,
 }: {
 	percent: number | null | undefined;
 	tokens: number | null | undefined;
@@ -56,18 +69,48 @@ export function ContextRing({
 	compactFailed?: boolean;
 	/** Snapcompact estimated wire savings (TUI /context parity); null/undefined hides the block. */
 	snapcompact?: SnapcompactSavingsView | null;
+	/** Provider subscription quota (TUI /usage parity) — fetched lazily
+	 *  when the popover opens; null/undefined hides the block. */
+	fetchQuota?: () => Promise<UsageQuotaView | null>;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
+	const [quota, setQuota] = useState<UsageQuotaView | null>(null);
+	const [quotaLoading, setQuotaLoading] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	useEffect(() => {
 		// Close when the data disappears (session gone).
 		if (percent == null) setOpen(false);
 	}, [percent]);
+	// Subscription quota is fetched lazily on first popover open (the
+	// provider call is a network round-trip — don't pay it on mount).
+	useEffect(() => {
+		if (!open || !fetchQuota) return;
+		let cancelled = false;
+		setQuotaLoading(true);
+		void fetchQuota()
+			.then(v => {
+				if (!cancelled) setQuota(v);
+			})
+			.catch(() => {
+				if (!cancelled) setQuota(null);
+			})
+			.finally(() => {
+				if (!cancelled) setQuotaLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, fetchQuota]);
 
 	const pct = percent ?? 0;
+	// The arc clamps at 100% (a full ring), but the displayed numbers keep
+	// the REAL value: a big-window model switched to a small one can exceed
+	// its window, and showing "100%" would hide the overflow (TUI shows the
+	// true "123.4%/200K" + error color).
 	const clamped = Math.min(100, Math.max(0, pct));
 	const tone = clamped >= 90 ? "danger" : clamped >= 70 ? "warn" : "ok";
-	const color = `var(--${tone === "ok" ? "color-ok" : "color-warning"})`;
+	const color =
+		tone === "danger" ? "var(--color-danger)" : tone === "warn" ? "var(--color-warning)" : "var(--color-ok)";
 	const radius = 8;
 	const circumference = 2 * Math.PI * radius;
 	const dash = (clamped / 100) * circumference;
@@ -84,8 +127,8 @@ export function ContextRing({
 			<button
 				type="button"
 				className="gui-context-ring-btn"
-				title={`${t("context usage")} · ${Math.round(clamped)}%`}
-				aria-label={`${t("context usage")} · ${Math.round(clamped)}%`}
+				title={`${t("context usage")} · ${Math.round(pct)}%`}
+				aria-label={`${t("context usage")} · ${Math.round(pct)}%`}
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
@@ -123,9 +166,14 @@ export function ContextRing({
 					<div className="gui-context-pop-row">
 						<span>{t("utilization")}</span>
 						<span className="gui-context-pop-val" style={{ color }}>
-							{Math.round(clamped)}%
+							{Math.round(pct)}%
 						</span>
 					</div>
+					{pct > 100 && (
+						<div className="gui-context-pop-note" style={{ color: "var(--color-danger)" }}>
+							{t("context over window")} — {t("over window: compact or switch to a larger-context model")}
+						</div>
+					)}
 					{snapcompact && (
 						<div className="gui-context-pop-snap">
 							<div className="gui-context-pop-row">
@@ -169,6 +217,38 @@ export function ContextRing({
 							)}
 						</div>
 					)}
+					{quotaLoading ? (
+						<div className="gui-context-pop-quota">
+							<div className="gui-context-pop-quota-title">{t("subscription usage")}</div>
+							<div className="gui-context-pop-note">…</div>
+						</div>
+					) : quota && quota.limits.length > 0 ? (
+						<div className="gui-context-pop-quota">
+							<div className="gui-context-pop-quota-title">
+								{t("subscription usage")} · {quota.provider}
+							</div>
+							{quota.limits.map((limit, i) => {
+								const tone =
+									limit.usedPercent >= 85 ? "gui-usage-bar--err" : limit.usedPercent >= 50 ? "gui-usage-bar--warn" : "gui-usage-bar--ok";
+								return (
+									<div key={`${limit.label}-${i}`} className="gui-context-pop-quota-row">
+										<div className="gui-context-pop-quota-label">
+											<span className="gui-context-pop-quota-name">{limit.label}</span>
+											<span className="gui-context-pop-quota-pct">
+												{Math.round(limit.usedPercent)}% used{limit.resetsIn ? ` · resets in ${limit.resetsIn}` : ""}
+											</span>
+										</div>
+										<div className="gui-usage-bar-track">
+											<div
+												className={`gui-usage-bar ${tone}`}
+												style={{ width: `${Math.min(100, Math.max(0, limit.usedPercent))}%` }}
+											/>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					) : null}
 					{onCompact && (
 						<button
 							type="button"

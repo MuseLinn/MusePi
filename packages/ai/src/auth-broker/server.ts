@@ -741,7 +741,7 @@ export function startAuthBroker(opts: AuthBrokerServerOptions): AuthBrokerServer
 				}
 				if (req.method === "POST" && pathname === "/v1/usage/stale") {
 					try {
-						opts.storage.invalidateUsageCache?.();
+						await opts.storage.invalidateUsageCache?.();
 						logger.info("auth-broker usage cache invalidated", { peer });
 						return json(200, { ok: true });
 					} catch (error) {

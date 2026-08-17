@@ -94,7 +94,7 @@ export function ImageCardStack({
 								: undefined
 						}
 					>
-						<img src={item.src} alt={item.alt} draggable={false} />
+						<img src={item.src} alt={item.alt} draggable={false} loading="lazy" decoding="async" />
 					</div>
 				);
 			})}

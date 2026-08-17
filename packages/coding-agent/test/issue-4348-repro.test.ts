@@ -22,7 +22,7 @@ import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage, Usage } from "@musepi/pi-ai";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { InteractiveModeContext, RenderSessionContextOptions } from "@musepi/pi-coding-agent/modes/types";
 import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
 import type { SessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import { Container } from "@musepi/pi-tui";
@@ -93,10 +93,13 @@ function makeRenderCtx(transcript: SessionContext): { ctx: InteractiveModeContex
 		},
 		addMessageToChat: (message: AgentMessage, options?: { populateHistory?: boolean }) =>
 			helpers.addMessageToChat(message, options),
-		renderSessionContext: (
+		renderSessionContext: (context: SessionContext, options?: RenderSessionContextOptions) =>
+			helpers.renderSessionContext(context, options),
+		renderSessionContextIncrementally: (
 			context: SessionContext,
-			options?: { updateFooter?: boolean; populateHistory?: boolean },
-		) => helpers.renderSessionContext(context, options),
+			options: RenderSessionContextOptions,
+			renderChunk?: () => void,
+		) => helpers.renderSessionContextIncrementally(context, options, renderChunk),
 		showStatus: vi.fn(),
 	} as unknown as InteractiveModeContext;
 	helpers = new UiHelpers(ctx);
@@ -118,7 +121,7 @@ function cursorTurn(): AgentMessage[] {
 				type: "toolCall",
 				id: "tc-bash",
 				name: "bash",
-				arguments: { command: "ls -1", cwd: undefined, timeout: undefined },
+				arguments: { command: "ls -1" },
 			},
 		],
 		api: "cursor-agent",
@@ -155,7 +158,7 @@ describe("issue #4348: cursor exec-channel tool results pair with synthesized to
 		const transcript = transcriptWith(cursorTurn());
 		const { ctx, chatContainer } = makeRenderCtx(transcript);
 
-		new UiHelpers(ctx).renderInitialMessages();
+		await new UiHelpers(ctx).renderInitialMessages();
 
 		// Component structure: an assistant message, then a bash
 		// ToolExecutionComponent for the synthesized bash block, then a
@@ -205,7 +208,7 @@ describe("issue #4348: cursor exec-channel tool results pair with synthesized to
 		]);
 		const { ctx, chatContainer } = makeRenderCtx(transcript);
 
-		new UiHelpers(ctx).renderInitialMessages();
+		await new UiHelpers(ctx).renderInitialMessages();
 
 		const rendered = Bun.stripANSI(chatContainer.render(120).join("\n"));
 		expect(rendered).toContain("Running command:");

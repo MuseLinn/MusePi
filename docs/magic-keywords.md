@@ -43,4 +43,4 @@ musepi config set magicKeywords.orchestrate false
 musepi config set magicKeywords.workflow false
 ```
 
-All four settings default to `true`. Run `musepi config list` to inspect every available setting and its current value. See [Settings](./settings.md) for configuration scopes, precedence, and project-local overrides.
+All four settings default to `true`. Run `musepi config list` to inspect every available setting and its current value. See [Settings](./settings.html) for configuration scopes, precedence, and project-local overrides.

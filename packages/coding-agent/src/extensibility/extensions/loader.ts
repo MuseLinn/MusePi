@@ -40,6 +40,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
+	ExtensionSetting,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
@@ -175,10 +176,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void {
-		this.extension.tools.set(tool.name, {
+		const registered = {
 			definition: tool,
 			extensionPath: this.extension.path,
-		});
+		};
+		this.extension.tools.set(tool.name, registered);
+		for (const listener of this.extension.toolRegistrationListeners ?? []) listener(tool.name);
 	}
 
 	registerCommand(
@@ -190,6 +193,10 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		},
 	): void {
 		this.extension.commands.set(name, { name, ...options });
+	}
+
+	registerSetting(setting: ExtensionSetting): void {
+		this.extension.settings.set(setting.key, setting);
 	}
 
 	setLabel(label: string): void {
@@ -316,11 +323,13 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		resolvedPath,
 		handlers: new Map(),
 		tools: new Map(),
+		toolRegistrationListeners: new Set(),
 		assistantThinkingRenderers: [],
 		messageRenderers: new Map(),
 		commands: new Map(),
 		flags: new Map(),
 		shortcuts: new Map(),
+		settings: new Map(),
 	};
 }
 

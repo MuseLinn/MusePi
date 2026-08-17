@@ -242,11 +242,9 @@ describe("openai-completions compatibility", () => {
 		};
 		const messages = convertMessages(model, { messages: [assistantMessage] }, compat);
 		const assistant = messages.find(message => message.role === "assistant");
-		expect(assistant).toBeDefined();
 		if (assistant?.role !== "assistant") {
 			throw new Error("assistant message missing");
 		}
-		expect(typeof assistant.content).toBe("string");
 		// Ordinary adjacent text blocks (bridge stitching, imported transcripts,
 		// streaming chunk splits) preserve their original byte sequence on
 		// flatten. The demoted-thinking separator is inserted by the flatten
@@ -289,11 +287,9 @@ describe("openai-completions compatibility", () => {
 			},
 		);
 		const assistant = messages.find(message => message.role === "assistant");
-		expect(assistant).toBeDefined();
 		if (assistant?.role !== "assistant") throw new Error("assistant message missing");
 		// Regression: thinking+text replay used to call `.unshift` on the string
 		// content set above (TypeError). Both blocks must survive as one string.
-		expect(typeof assistant.content).toBe("string");
 		expect(assistant.content).toBe(`${renderDemotedThinking(model.id, "chain of thought")} final answer`);
 	});
 
@@ -328,7 +324,6 @@ describe("openai-completions compatibility", () => {
 			},
 		);
 		const assistant = messages.find(message => message.role === "assistant");
-		expect(assistant).toBeDefined();
 		if (assistant?.role !== "assistant") throw new Error("assistant message missing");
 		expect(assistant.content).toBe(renderDemotedThinking(model.id, "only thoughts"));
 	});
@@ -572,7 +567,6 @@ describe("openai-completions compatibility", () => {
 		// block is present, and Fireworks was previously on the multi-system
 		// allowlist. The bundled entry must auto-detect single-system.
 		const model = getBundledModel<"openai-completions">("fireworks", "qwen3.7-plus");
-		expect(model.compat.supportsMultipleSystemMessages).toBe(false);
 
 		const messages = convertMessages(
 			model,
@@ -1079,9 +1073,7 @@ describe("openai-completions compatibility", () => {
 		const compat = { ...model.compat, requiresReasoningContentForToolCalls: true };
 		const messages = convertMessages(model, { messages: [result] }, compat);
 		const assistant = messages.find(message => message.role === "assistant");
-		expect(assistant).toBeDefined();
 		const assistantObject = toObject(assistant);
-		expect(assistantObject).toBeDefined();
 		expect(assistantObject?.reasoning_text).toBe("inspect tool output");
 		expect(assistantObject?.reasoning_content).toBeUndefined();
 	});
@@ -1322,7 +1314,6 @@ describe("kimi model detection via detectCompat", () => {
 		const messages = convertMessages(model, { messages: [toolCallMessage] }, compat);
 		const assistant = messages.find(m => m.role === "assistant");
 		const assistantObject = toObject(assistant);
-		expect(assistantObject).toBeDefined();
 		if (!assistantObject) {
 			throw new Error("assistant message missing");
 		}
@@ -1401,7 +1392,6 @@ describe("kimi model detection via detectCompat", () => {
 
 		const payload = (await promise) as { messages: Array<Record<string, unknown>> };
 		const assistant = payload.messages.find(m => m.role === "assistant");
-		expect(assistant).toBeDefined();
 		expect(assistant?.reasoning_content).toBe("Need to read the file before answering.");
 		// The streamed `reasoning` key must NOT land in the wire body alongside
 		// `reasoning_content`; opencode's strict schema rejects unknown fields.
@@ -1470,7 +1460,6 @@ describe("kimi model detection via detectCompat", () => {
 
 		const payload = (await promise) as { messages: Array<Record<string, unknown>> };
 		const assistant = payload.messages.find(m => m.role === "assistant");
-		expect(assistant).toBeDefined();
 		expect(assistant?.content).toBe(renderDemotedThinking(model.id, "Need to preserve cross-api reasoning."));
 		expect(assistant?.reasoning_content).toBe("");
 		expect(assistant?.reasoning).toBeUndefined();
@@ -1718,7 +1707,6 @@ describe("kimi model detection via detectCompat", () => {
 			tool_choice?: unknown;
 		};
 		const assistant = payload.messages.find(m => m.role === "assistant");
-		expect(assistant).toBeDefined();
 		expect(assistant?.reasoning_content).toBe("Plan first, then call the tool.");
 		expect(payload.reasoning_effort).toBe("high");
 		expect(payload.tool_choice).toBe("auto");
@@ -1881,7 +1869,6 @@ describe("kimi model detection via detectCompat", () => {
 
 		const payload = (await promise) as { messages: Array<Record<string, unknown>> };
 		const assistant = payload.messages.find(m => m.role === "assistant");
-		expect(assistant).toBeDefined();
 		expect(assistant?.reasoning_content).toBe("Need to read the file before answering.");
 		// DeepSeek's allowsSynthetic=false must keep the stale `reasoning` key
 		// off the wire body so opencode's schema validation does not flag it.
@@ -2053,7 +2040,6 @@ describe("kimi model detection via detectCompat", () => {
 		expect(compat.requiresReasoningContentForToolCalls).toBe(true);
 		const messages = convertMessages(model, { messages: [toolCallMessage] }, compat);
 		const assistant = messages.find(m => m.role === "assistant");
-		expect(assistant).toBeDefined();
 		expect(toObject(assistant)?.reasoning_content).toBe(".");
 	});
 

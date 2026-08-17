@@ -4,8 +4,10 @@ import {
 	IndexedSessionStorage,
 	type SessionStorageBackend,
 } from "@musepi/pi-coding-agent/session/indexed-session-storage";
-import { SessionManager, SessionPersistenceIndeterminateError } from "@musepi/pi-coding-agent/session/session-manager";
 import {
+	SessionManager,
+	SessionPersistenceIndeterminateError,
+} from "@musepi/pi-coding-agent/session/session-manager";import {
 	MemorySessionStorage,
 	type SessionStorageWriter,
 	type WriteTextAtomicOptions,
@@ -300,7 +302,7 @@ describe("SessionManager atomic rewrite race", () => {
 		// Simulate a Ctrl+C teardown: append a session_exit custom entry (fenced
 		// because the atomic rewrite is active) and flushSync it.
 		sessionManager.appendCustomEntry("session_exit", { reason: "sigterm", kind: "signal" });
-		expect(() => sessionManager.flushSync()).not.toThrow();
+		sessionManager.flushSync();
 
 		const sessionFile = sessionManager.getSessionFile();
 		if (!sessionFile) throw new Error("Expected session file");
@@ -525,7 +527,7 @@ describe("SessionManager fence relaxes when flushSync supersedes the atomic rewr
 
 		// (2) flushSync supersedes the pending atomic (bumps #diskEpoch) and
 		// publishes a synchronous body containing X1.
-		expect(() => sessionManager.flushSync()).not.toThrow();
+		sessionManager.flushSync();
 
 		// (3) Post-flushSync append MUST take the hot path: pre-fix, the fence
 		// stayed active and this entry was only marked dirty, then dropped when
@@ -669,7 +671,7 @@ describe("SessionManager fence handoff across superseded rewrites", () => {
 		// A fenced append flips fileIsCurrent so flushSync actually publishes,
 		// bumping the epoch to 1 with the fenced entry captured in the body.
 		sessionManager.appendCustomEntry("during_stale", { data: "X1" });
-		expect(() => sessionManager.flushSync()).not.toThrow();
+		sessionManager.flushSync();
 
 		// Newer rewrite scheduled at epoch=1. Parks at pauses[1]. Fence epoch = 1.
 		const newer = sessionManager.rewriteEntries();

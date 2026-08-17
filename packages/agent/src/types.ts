@@ -737,7 +737,17 @@ export type ToolLoadMode = "essential" | "discoverable";
  */
 export type ToolApprovalDecision =
 	| ToolTier
-	| { tier: ToolTier; reason?: string; override?: boolean; policy?: "allow" | "deny" | "prompt" };
+	| {
+			tier: ToolTier;
+			reason?: string;
+			override?: boolean;
+			policy?: "allow" | "deny" | "prompt";
+			/** User-policy key for this decision. When set, `tools.approval.<policyKey>`
+			 *  is consulted instead of `tools.approval.<tool.name>`. Lets a dispatcher
+			 *  tool (e.g. `write` for an `xd://` device call) scope user allow/deny/
+			 *  prompt policies to the tool it dispatches into. */
+			policyKey?: string;
+	  };
 export type ToolApproval = ToolApprovalDecision | ((args: unknown) => ToolApprovalDecision);
 
 /**

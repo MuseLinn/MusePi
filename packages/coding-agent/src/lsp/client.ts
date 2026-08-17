@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { isEnoent, logger, postmortem, ptree, untilAborted } from "@musepi/pi-utils";
 import { MessageFramer } from "../jsonrpc/message-framing";
 import { ToolAbortError, throwIfAborted } from "../tools/tool-errors";
-import { applyWorkspaceEdit } from "./edits";
+import { applyWorkspaceEdit, type ExecutedWorkspaceChange } from "./edits";
 import { getLspmuxCommand, isLspmuxSupported } from "./lspmux";
 import { connectSharedLspTransport } from "./mux/daemon";
 import type {
@@ -17,7 +17,7 @@ import type {
 	ServerConfig,
 	WorkspaceEdit,
 } from "./types";
-import { detectLanguageId, EquivalentUriMap, fileToUri } from "./utils";
+import { detectLanguageId, EquivalentUriMap, fileToUri, uriToFile } from "./utils";
 
 // =============================================================================
 // Client State
@@ -169,7 +169,7 @@ const CLIENT_CAPABILITIES = {
 		workspaceEdit: {
 			documentChanges: true,
 			resourceOperations: ["create", "rename", "delete"],
-			failureHandling: "textOnlyTransactional",
+			failureHandling: "abort",
 		},
 		configuration: true,
 		workspaceFolders: true,
@@ -188,9 +188,6 @@ const CLIENT_CAPABILITIES = {
 			willDelete: false,
 			didDelete: false,
 		},
-	},
-	experimental: {
-		snippetTextEdit: true,
 	},
 };
 
@@ -484,11 +481,116 @@ async function handleApplyEditRequest(client: LspClient, message: LspJsonRpcRequ
 	}
 
 	try {
-		await applyWorkspaceEdit(params.edit, client.cwd);
+		await applyWorkspaceEditWithLsp(params.edit, client.cwd);
 		await sendResponse(client, message.id, { applied: true }, "workspace/applyEdit");
 	} catch (err) {
 		await sendResponse(client, message.id, { applied: false, failureReason: String(err) }, "workspace/applyEdit");
 	}
+}
+
+function workspaceEditChanges(executed: ExecutedWorkspaceChange[]): {
+	finalUris: Set<string>;
+	deletedRoots: Set<string>;
+	watchedFiles: WatchedFileChange[];
+} {
+	const finalUris = new Set<string>();
+	const deletedRoots = new Set<string>();
+	const watchedFiles: WatchedFileChange[] = [];
+	const watch = (uri: string, type: FileChangeType) => {
+		watchedFiles.push({ filePath: uriToFile(uri), type });
+	};
+
+	for (const change of executed) {
+		if (change.kind === "edit") {
+			finalUris.add(change.uri);
+			watch(change.uri, FileChangeType.Changed);
+		} else if (change.kind === "create") {
+			finalUris.add(change.uri);
+			watch(change.uri, FileChangeType.Created);
+		} else if (change.kind === "rename") {
+			deletedRoots.add(change.oldUri);
+			finalUris.add(change.newUri);
+			watch(change.oldUri, FileChangeType.Deleted);
+			watch(change.newUri, FileChangeType.Created);
+		} else {
+			deletedRoots.add(change.uri);
+			watch(change.uri, FileChangeType.Deleted);
+		}
+	}
+
+	return { finalUris, deletedRoots, watchedFiles };
+}
+
+function uriIsWithin(uri: string, root: string): boolean {
+	return uri === root || uri.startsWith(root.endsWith("/") ? root : `${root}/`);
+}
+
+/** Reconcile open overlays and file watchers with the ops a workspace edit actually performed. */
+async function reconcileExecutedChanges(
+	executed: ExecutedWorkspaceChange[],
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<void> {
+	if (executed.length === 0) return;
+	const { finalUris, deletedRoots, watchedFiles } = workspaceEditChanges(executed);
+	const workspace = path.resolve(cwd);
+	const activeClients = Array.from(clients.values()).filter(
+		client => client.status === "ready" && path.resolve(client.cwd) === workspace,
+	);
+
+	for (const activeClient of activeClients) {
+		for (const uri of [...activeClient.openFiles.keys()]) {
+			let deleted = false;
+			for (const root of deletedRoots) {
+				if (uriIsWithin(uri, root)) {
+					deleted = true;
+					break;
+				}
+			}
+			if (!deleted) continue;
+			await sendNotification(activeClient, "textDocument/didClose", { textDocument: { uri } }, signal);
+			activeClient.openFiles.delete(uri);
+			activeClient.diagnostics.delete(uri);
+		}
+		for (const uri of finalUris) {
+			if (!activeClient.openFiles.has(uri)) continue;
+			await refreshFile(activeClient, uriToFile(uri), signal);
+		}
+	}
+	await notifyWorkspaceWatchedFiles(cwd, watchedFiles, signal);
+}
+
+/**
+ * Apply a server-provided workspace edit and reconcile every affected open LSP document.
+ * Runtime callers use this wrapper so later semantic requests observe the committed files.
+ * Reconciliation is derived from the ops that actually ran — an op skipped via
+ * `ignoreIfExists`/`ignoreIfNotExists` neither closes overlays nor notifies watchers, and
+ * when the edit fails partway the already-executed prefix is still reconciled before the
+ * error propagates so mutated files never keep stale overlays.
+ */
+export async function applyWorkspaceEditWithLsp(
+	edit: WorkspaceEdit,
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<string[]> {
+	const executed: ExecutedWorkspaceChange[] = [];
+	let applied: string[];
+	try {
+		({ applied } = await applyWorkspaceEdit(edit, cwd, change => executed.push(change)));
+	} catch (err) {
+		// Best-effort: overlays for the mutated prefix must not stay stale, but
+		// reconciliation problems must not mask the original apply failure.
+		try {
+			await reconcileExecutedChanges(executed, cwd, signal);
+		} catch (reconcileErr) {
+			logger.warn("LSP overlay reconciliation after failed workspace edit failed", {
+				error: reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr),
+			});
+		}
+		throw err;
+	}
+	await reconcileExecutedChanges(executed, cwd, signal);
+	return applied;
 }
 
 interface DynamicCapabilityRegistration {
@@ -1339,6 +1441,7 @@ export async function sendRequest(
 		timeout = setTimeout(() => {
 			if (client.pendingRequests.has(id)) {
 				client.pendingRequests.delete(id);
+				void sendNotification(client, "$/cancelRequest", { id }).catch(() => {});
 				const err = new Error(`LSP request ${method} timed out after ${effectiveTimeoutMs}ms`);
 				cleanup();
 				reject(err);
@@ -1405,6 +1508,7 @@ export async function sendNotification(
  * Shutdown all LSP clients.
  */
 export async function shutdownAll(): Promise<void> {
+	stopIdleChecker();
 	const clientsToShutdown = Array.from(clients.values());
 	clients.clear();
 	// Mid-initialize clients live only in clientLocks (publication is deferred

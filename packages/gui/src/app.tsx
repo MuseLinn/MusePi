@@ -1,16 +1,17 @@
-import { getLocaleSnapshot, LanguageToggle, setLocale, subscribeLocale, ThemeToggle, t } from "@musepi/collab-web";
+import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { AccentToggle } from "./components/AccentToggle";
+import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
+import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BlurText } from "./components/BlurText";
 import { BoardPage } from "./components/BoardPage";
 import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { DialogFrame } from "./components/DialogFrame";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
-import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
@@ -27,10 +28,11 @@ import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { RpcClient, type StreamEvent } from "./lib/rpc";
+import { captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { clearRoundDurations, dispatchPetActivity, GuiSessionStore, type PetBubbleKind } from "./lib/session-store";
-import { captureSelectionText } from "./lib/selection-capture";
 import { sfxFor } from "./lib/sfx";
+import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
@@ -101,6 +103,10 @@ interface SessionMetaRow {
 	messageCount?: number;
 	title?: string;
 	timestamp?: string;
+	/** Lifecycle status from the session file tail (TUI session-list parity):
+	 *  complete | interrupted | aborted | error | pending. Powers the
+	 *  sidebar's colored status square so unfinished history is visible. */
+	status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
 }
 
 /** Collect every session id in a session tree (drift check for the poll:
@@ -163,6 +169,11 @@ function AppInner(): ReactNode {
 			const outputStyle = localStorage.getItem("omp-gui-chat-output-style");
 			document.documentElement.dataset.outputStyle =
 				outputStyle === "kimi" || outputStyle === "zcode" ? outputStyle : "default";
+			// 消息字号 (settings → 外观 → 消息字号): --tr-font-size drives the
+			// transcript body ladder (headings/code scale off it in
+			// transcript.css); output-style presets no longer set sizes.
+			const trFontSize = localStorage.getItem("omp-gui-chat-font-size");
+			if (trFontSize) document.documentElement.style.setProperty("--tr-font-size", `${trFontSize}px`);
 			// Typing effect preset (settings → 聊天 → 逐字动效): NOT applied
 			// here — effect classes now live on the streaming block's own
 			// .tr-md root (Markdown.tsx reads the key per render), so finished
@@ -220,6 +231,10 @@ function AppInner(): ReactNode {
 	const [rpc, setRpc] = useState<RpcClient | null>(null);
 	const [status, setStatus] = useState<"idle" | "connecting" | "open" | "closed">("idle");
 	const [error, setError] = useState<string | null>(null);
+	// GUI motion packs (extension center → injected <style>): declared
+	// before any early return — the booting splash early-returns and React
+	// hook order must not shift between renders (see 2026-08-12 crash note).
+	useMotionExtensions(rpc);
 	// Error banner sound (effects prefs → error): play once per error.
 	const prevError = useRef<string | null>(null);
 	useEffect(() => {
@@ -352,6 +367,53 @@ function AppInner(): ReactNode {
 	});
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
+	// kimiwork parity: 新建空白项目 dialog (name + parent path → daemon
+	// fs.mkdir → open the folder). Kept always-mounted so the DialogFrame
+	// plays its enter/exit animation.
+	const [newProjectOpen, setNewProjectOpen] = useState(false);
+	const [newProjectName, setNewProjectName] = useState("");
+	const [newProjectParent, setNewProjectParent] = useState<string | null>(null);
+	const [newProjectBusy, setNewProjectBusy] = useState(false);
+	const [newProjectError, setNewProjectError] = useState<string | null>(null);
+	// Pending ask question (TUI ask parity): the agent asked mid-run and the
+	// daemon pushed an ask-request envelope — the AskCard answers it via
+	// session.askAnswer.
+	const [pendingAsk, setPendingAsk] = useState<AskRequest | null>(null);
+	// answerAsk is memoized on selectedId only — the ref keeps the current
+	// envelope reachable without rebuilding the callback.
+	const pendingAskRef = useRef<AskRequest | null>(null);
+	pendingAskRef.current = pendingAsk;
+	// mkdir the blank project under the chosen parent (daemon fs.mkdir is
+	// cwd-scoped, so the parent rides as cwd + the name as relative path),
+	// then open + surface it like 打开文件夹 does.
+	const createNewProject = async (): Promise<void> => {
+		const name = newProjectName.trim();
+		const parent = newProjectParent;
+		if (!name || !parent || !rpc || newProjectBusy) return;
+		setNewProjectBusy(true);
+		setNewProjectError(null);
+		try {
+			const res = (await rpc.request<{ ok?: boolean; error?: string }>("fs.mkdir", {
+				cwd: parent,
+				path: name,
+			})) as { ok?: boolean; error?: string };
+			if (res?.ok === false || res?.error) {
+				setNewProjectError(res?.error ?? t("create project failed"));
+				return;
+			}
+			const dir = `${parent.replace(/\/+$/, "")}/${name}`;
+			setProject(dir);
+			localStorage.setItem("omp-gui-project", dir);
+			window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+			setNewProjectOpen(false);
+			setNewProjectName("");
+			setNewProjectParent(null);
+		} catch {
+			setNewProjectError(t("create project failed"));
+		} finally {
+			setNewProjectBusy(false);
+		}
+	};
 	// daimon-canvas jump from chat: board id to open after the view swap.
 	const [boardJumpId, setBoardJumpId] = useState<string | null>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -489,6 +551,14 @@ function AppInner(): ReactNode {
 	/** Model chosen in the welcome composer — applied to the new session and
 	 *  reflected in the in-chat selector (preset). */
 	const [presetModelId, setPresetModelId] = useState<string | null>(null);
+	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
+	 *  resting preselect for new sessions. Kept SEPARATE from presetModelId:
+	 *  opening a session must not clobber the welcome default with that
+	 *  session's model (a pick in one session must not leak into the next
+	 *  new task). Updated by the boot settings snapshot and the
+	 *  omp-gui-default-model-changed event (selector target button +
+	 *  settings DEFAULT row). */
+	const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
 	/** Boot snapshot of the session thinking default (modelRoles.default suffix,
 	 *  else settings.defaultThinkingLevel incl. auto) — replaces the old
 	 *  localStorage mirror so the schema keys stay the single source. */
@@ -631,6 +701,7 @@ function AppInner(): ReactNode {
 								messageCount: r.messageCount ?? 0,
 								title: r.title,
 								timestamp: r.timestamp,
+								status: r.status,
 							},
 						]),
 					),
@@ -723,14 +794,20 @@ function AppInner(): ReactNode {
 				if (phase === "closed") setStatus("closed");
 				else if (phase === "connecting") setStatus("connecting");
 				else if (phase === "open") {
+					console.log("[gui] rpc open — restoring");
 					setStatus("open");
 					// Reconnect (daemon restart / machine sleep): clear the stale
 					// error bar, refresh the session tree, and re-open the session
 					// that was showing (openchamber parity — the UI comes back to
 					// the live session instead of a dead snapshot).
 					setError(null);
-					void refreshSessions(client);
+					console.log("[gui] refreshSessions…");
+					void refreshSessions(client).then(
+						() => console.log("[gui] refreshSessions done"),
+						err => console.log("[gui] refreshSessions err", String(err).slice(0, 80)),
+					);
 					const active = selectedIdRef.current;
+					console.log("[gui] reopen session", active?.slice(0, 8));
 					if (active) void openSessionRef.current?.(active);
 				}
 			};
@@ -781,6 +858,12 @@ function AppInner(): ReactNode {
 					| undefined;
 				if (event.kind === "approval-request") {
 					storeRef.current?.apply(event);
+					return;
+				}
+				if (event.kind === "ask-request") {
+					// Ask card (TUI ask parity): surface the question; the card
+					// answers via session.askAnswer.
+					setPendingAsk(event.payload as AskRequest);
 					return;
 				}
 				if (payload?.type === "turn_end") {
@@ -847,11 +930,13 @@ function AppInner(): ReactNode {
 					// to the configured defaultThinkingLevel; "off" → off).
 					if (role) {
 						setPresetModelId(role.model);
+						setDefaultModelId(role.model);
 						setPresetThinkingLevel(
 							role.level === null ? dfltLevel : role.level === "off" ? null : (role.level as ThinkingLevel),
 						);
 					} else {
 						setPresetModelId(res.modelRoles.default);
+						setDefaultModelId(res.modelRoles.default);
 					}
 				} else {
 					setPresetThinkingLevel(dfltLevel);
@@ -1032,13 +1117,25 @@ function AppInner(): ReactNode {
 				try {
 					const res = await client.request<{
 						stream: string | null;
-						initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
+						initial: {
+							entries: unknown[];
+							state?: unknown;
+							cursor: number;
+							header?: { cwd?: string };
+							tail?: { hasMore: boolean; beforeId: string | null };
+						};
 					}>("session.subscribe", { sessionId });
 					initial = res.initial;
 				} catch {
 					// Unknown session (history) — fall back to resume.
 					const res = await client.request<{
-						snapshot: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
+						snapshot: {
+							entries: unknown[];
+							state?: unknown;
+							cursor: number;
+							header?: { cwd?: string };
+							tail?: { hasMore: boolean; beforeId: string | null };
+						};
 					}>("session.resume", { sessionId });
 					initial = res.snapshot;
 				}
@@ -1062,6 +1159,7 @@ function AppInner(): ReactNode {
 						state: initial?.state as never,
 						cursor: initial?.cursor ?? 0,
 						roundDurations: (initial as { roundDurations?: [number, number][] } | null)?.roundDurations,
+						tail: (initial as { tail?: { hasMore: boolean; beforeId: string | null } } | null)?.tail,
 					},
 					cwd,
 				);
@@ -1211,6 +1309,12 @@ function AppInner(): ReactNode {
 					await client
 						.request("session.setModel", { sessionId: res.sessionId, model: { id: opts.modelId } })
 						.catch(() => {});
+				} else {
+					// No explicit model → the daemon resolves the DEFAULT role.
+					// Seed the carry-in with it so the composer never flashes a
+					// stale model from a previous session while contextUsage
+					// (the authoritative live model) loads.
+					setPresetModelId(defaultModelId);
 				}
 				// Welcome plan/goal: apply the mode right after creation so
 				// the new session opens in that mode (chip in the status row).
@@ -1230,7 +1334,7 @@ function AppInner(): ReactNode {
 				return null;
 			}
 		},
-		[openSession, refreshSessions],
+		[openSession, refreshSessions, defaultModelId],
 	);
 
 	/** New task = empty composer awaiting the first prompt (TUI-like): the
@@ -1422,6 +1526,21 @@ function AppInner(): ReactNode {
 		[selectedId],
 	);
 
+	/** Ask answer (TUI ask parity): the floating AskCard above the composer
+	 *  answered — resolve the daemon's ask-request promise. */
+	const answerAsk = useCallback(
+		(answer: AskAnswer): void => {
+			const ask = pendingAskRef.current;
+			if (!ask) return;
+			setPendingAsk(null);
+			const client = rpcRef.current;
+			const id = selectedId;
+			if (!client || !id) return;
+			void client.request("session.askAnswer", { sessionId: id, requestId: ask.requestId, answer }).catch(() => {});
+		},
+		[selectedId],
+	);
+
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
 	 *  confirm dialog honors the settings toggle (omp-gui-confirm-delete). */
@@ -1446,7 +1565,10 @@ function AppInner(): ReactNode {
 					setSelectedId(null);
 				}
 				return true;
-			} catch {
+			} catch (err) {
+				// e.g. the daemon refuses to delete a streaming session
+				// (TUI parity) — surface why instead of failing silently.
+				setError(fmtError("session.delete", err));
 				return false;
 			}
 		},
@@ -1698,6 +1820,16 @@ function AppInner(): ReactNode {
 		});
 		window.addEventListener("omp-pet-activity", onBubble);
 		window.addEventListener("omp-pet-changed", onPetChanged);
+		// DEFAULT-role model changed via the selector's "set as DEFAULT"
+		// target or the settings role tab: refresh the welcome preselect (a
+		// boot-time snapshot would otherwise keep showing the OLD default on
+		// the next new task). Deliberately NOT presetModelId — the in-chat
+		// selector shows each session's OWN model, never the global default.
+		const onDefaultModelChanged = (e: Event): void => {
+			const ref = (e as CustomEvent<string>).detail;
+			if (ref) setDefaultModelId(ref);
+		};
+		window.addEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
 		const unsubReq = electronAPI.onPetStateRequest?.(() => {
 			lastMood = null; // force a resend
 			lastStatePush = 0;
@@ -1750,22 +1882,15 @@ function AppInner(): ReactNode {
 			void (async () => {
 				const client = rpcRef.current;
 				if (!client) return;
+				// Read-only snapshot — MUST NOT session.subscribe: that would
+				// attach this connection's live stream to an extra session,
+				// which (with single-store routing) bleeds its events into the
+				// currently displayed session (cross-session 窜台).
 				let initial: { entries: unknown[] } | null = null;
 				try {
-					const res = await client.request<{ stream: string | null; initial: { entries: unknown[] } }>(
-						"session.subscribe",
-						{ sessionId },
-					);
-					initial = res.initial;
+					initial = await client.request<{ entries: unknown[] }>("session.snapshot", { sessionId });
 				} catch {
-					try {
-						const res = await client.request<{ snapshot: { entries: unknown[] } }>("session.resume", {
-							sessionId,
-						});
-						initial = res.snapshot;
-					} catch {
-						return;
-					}
+					return;
 				}
 				const messages: Array<{ role: string; text: string }> = [];
 				for (const e of initial?.entries ?? []) {
@@ -1795,6 +1920,7 @@ function AppInner(): ReactNode {
 			clearInterval(recentTimer);
 			window.removeEventListener("omp-pet-activity", onBubble);
 			window.removeEventListener("omp-pet-changed", onPetChanged);
+			window.removeEventListener("omp-gui-default-model-changed", onDefaultModelChanged);
 			window.removeEventListener("omp-glow-setting", onGlowSetting);
 		};
 	}, [store, sendPrompt, decideApproval, createSession, markAllRead, persistReadCount]);
@@ -1871,6 +1997,12 @@ function AppInner(): ReactNode {
 			} else if (mod && k === ",") {
 				e.preventDefault();
 				openSettings();
+			} else if (mod && k === "arrowdown") {
+				// settings → 快捷键 reference: jump the transcript to the
+				// latest message (smooth, like most chat apps).
+				e.preventDefault();
+				const scroller = document.querySelector<HTMLElement>(".gui-chat-surface .gui-transcript");
+				if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
 			} else if (mod && e.shiftKey && k === "e") {
 				// openchamber ⌘⇧E: focus mode (composer fills the surface).
 				e.preventDefault();
@@ -1958,11 +2090,6 @@ function AppInner(): ReactNode {
 							</button>
 						</form>
 					</details>
-				</div>
-				<div className="gui-connect-toggles">
-					<ThemeToggle />
-					<AccentToggle />
-					<LanguageToggle />
 				</div>
 			</div>
 		);
@@ -2089,6 +2216,7 @@ function AppInner(): ReactNode {
 							await openSession(forkId);
 						}}
 						presetModelId={presetModelId}
+						defaultModelId={defaultModelId}
 						presetThinkingLevel={presetThinkingLevel}
 						busy={status === "connecting"}
 						paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
@@ -2098,6 +2226,8 @@ function AppInner(): ReactNode {
 						onProject={action => {
 							if (action === "remote") {
 								setConnectOpen(true);
+							} else if (action === "new") {
+								setNewProjectOpen(true);
 							} else if (action === "folder") {
 								void pickDirectory().then(dir => {
 									if (dir) {
@@ -2125,6 +2255,8 @@ function AppInner(): ReactNode {
 						onSelectReminder={id => void openSession(id)}
 						onMarkAllRead={markAllRead}
 						sessionLoading={sessionLoading}
+						ask={pendingAsk}
+						onAskAnswer={answerAsk}
 					/>
 				</div>
 				<ConnectDialog
@@ -2220,6 +2352,7 @@ function AppInner(): ReactNode {
 								}
 							});
 						}}
+						onCreateProject={() => setNewProjectOpen(true)}
 						collapsed={sideCollapsed}
 						width={sideWidth}
 						onDeleteArchived={deleteSession}
@@ -2270,16 +2403,6 @@ function AppInner(): ReactNode {
 							connected={status === "open"}
 							daemonUrl={url}
 							onReconnect={() => void boot()}
-							onRestartDaemon={() => {
-								// Instance menu 重启 daemon: Electron main kills the
-								// current listener and spawns fresh code, then the
-								// boot chain reconnects (the daemon is detached —
-								// GUI relaunch alone never refreshes it).
-								const port = Number(/:(?<p>\d+)$/.exec(url)?.groups?.p) || 8300;
-								void restartDaemon(port).then(ok => {
-									if (ok !== null) void boot();
-								});
-							}}
 							onOpenCollab={() => setCollabOpen(true)}
 							onDeleteSession={deleteSession}
 						/>
@@ -2297,6 +2420,7 @@ function AppInner(): ReactNode {
 										await openSession(forkId);
 									}}
 									presetModelId={presetModelId}
+									defaultModelId={defaultModelId}
 									presetThinkingLevel={presetThinkingLevel}
 									busy={status === "connecting"}
 									paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
@@ -2306,6 +2430,8 @@ function AppInner(): ReactNode {
 									onProject={action => {
 										if (action === "remote") {
 											setConnectOpen(true);
+										} else if (action === "new") {
+											setNewProjectOpen(true);
 										} else if (action === "none") {
 											// "不在项目中": clear the workspace chip — never open the picker.
 											setProject(null);
@@ -2338,6 +2464,8 @@ function AppInner(): ReactNode {
 									onSelectReminder={id => void openSession(id)}
 									onMarkAllRead={markAllRead}
 									sessionLoading={sessionLoading}
+									ask={pendingAsk}
+									onAskAnswer={answerAsk}
 								/>
 							);
 							return leavingView === "board" ? (
@@ -2451,6 +2579,71 @@ function AppInner(): ReactNode {
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
 			/>
+			{/* kimiwork parity: 新建空白项目 — name + parent path, mkdir via the
+			 * daemon (works outside any session cwd), then open + surface it. */}
+			<DialogFrame
+				open={newProjectOpen}
+				onClose={() => setNewProjectOpen(false)}
+				label={t("new blank project")}
+				className="gui-new-project-dialog gui-dialog--confirm"
+			>
+				{" "}
+				<div className="flex flex-col gap-3">
+					<div className="gui-new-project-field">
+						<div className="gui-new-project-label">
+							{t("project name")} <span className="gui-new-project-req">*</span>
+						</div>
+						<input
+							className="gui-input w-full"
+							value={newProjectName}
+							placeholder={t("project name placeholder")}
+							autoFocus
+							spellCheck={false}
+							onChange={e => setNewProjectName(e.target.value)}
+							onKeyDown={e => {
+								if (e.key === "Enter") void createNewProject();
+							}}
+						/>
+					</div>
+					<div className="gui-new-project-field">
+						<div className="gui-new-project-label">
+							{t("project parent path")} <span className="gui-new-project-req">*</span>
+						</div>
+						<button
+							type="button"
+							className="gui-new-project-path"
+							onClick={() => {
+								void pickDirectory().then(dir => {
+									if (dir) setNewProjectParent(dir);
+								});
+							}}
+						>
+							<Icon name="folder" className="h-3.5 w-3.5 flex-none" />
+							<span className="min-w-0 flex-1 truncate">
+								{newProjectParent ?? t("project parent placeholder")}
+							</span>
+							<Icon name="arrow-right-s" className="h-3 w-3 flex-none opacity-60" />
+						</button>
+					</div>
+					{newProjectError && <div className="text-[12.5px] text-[var(--color-danger)]">{newProjectError}</div>}
+					<div className="mt-1 flex justify-end gap-2">
+						<button type="button" className="gui-btn" onClick={() => setNewProjectOpen(false)}>
+							{t("cancel")}
+						</button>
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary"
+							disabled={!newProjectName.trim() || !newProjectParent || newProjectBusy}
+							onClick={() => void createNewProject()}
+						>
+							{newProjectBusy ? t("creating…") : t("save")}
+						</button>
+					</div>
+				</div>
+			</DialogFrame>
+			{/* Ask card (TUI ask parity) renders inside ChatView as a floating
+			 * card above the composer (openchamber QuestionCard parity) —
+			 * see ChatView `ask`/`onAskAnswer` props. */}
 			{/* Always mounted — CommandPalette self-hides and plays its exit
 			 * animation when `open` flips false (Pop/DialogFrame parity). */}
 			<CommandPalette

@@ -496,17 +496,31 @@ export class Settings {
 	}
 
 	/**
+	 * Read an arbitrary dotted key (extension-contributed settings like
+	 * display.taskCardStyle are NOT in SETTINGS_SCHEMA, so `get()` would
+	 * crash on the missing path-segment table). Same dot-segment addressing
+	 * the schema uses — the extension setting's key IS its config path.
+	 */
+	getRaw(path: string): unknown {
+		return getByPath(this.#merged, path.split("."));
+	}
+
+	/**
 	 * Set a setting value (sync).
 	 * Updates global settings and queues a background save.
 	 * Triggers hooks for settings that have side effects.
 	 */
 	set<P extends SettingPath>(path: P, value: SettingValue<P>): void {
-		const prev = this.get(path);
-		const segments = path.split(".");
+		// Extension-contributed keys (registerSetting) are not in the schema
+		// path table — `get()` would crash on the missing segment entry. Read
+		// the previous value raw (dot segments) for hooks/change events.
+		const inSchema = path in SETTING_PATH_SEGMENTS;
+		const prev = inSchema ? this.get(path) : this.getRaw(path);
+		const segments = inSchema ? [...(SETTING_PATH_SEGMENTS[path] ?? [])] : path.split(".");
 		setByPath(this.#global, segments, value);
 		this.#modified.add(path);
 		this.#rebuildMerged();
-		const next = this.get(path);
+		const next = inSchema ? this.get(path) : this.getRaw(path);
 		this.#queueSave();
 
 		// Trigger hook if exists
@@ -1813,6 +1827,26 @@ export class Settings {
 		}
 		if (tierTouched) raw.tier = tierObj;
 		delete raw.fastModeScope;
+
+		// advisor.subagents (blanket advisor on every spawned subagent) → per-agent
+		// task.agentAdvisor, migrated to the bundled generic `task` agent. An
+		// explicit boolean maps to "on"/"off" IN THE SAME LAYER — migration runs
+		// per file, so a project-level `false` must keep overriding a global
+		// `true` after both layers migrate.
+		{
+			const advisorObj = isRecord(raw.advisor) ? raw.advisor : undefined;
+			const legacySubagents =
+				advisorObj && "subagents" in advisorObj ? advisorObj.subagents : raw["advisor.subagents"];
+			if (typeof legacySubagents === "boolean") {
+				const taskObj = isRecord(raw.task) ? raw.task : {};
+				const agentAdvisor = isRecord(taskObj.agentAdvisor) ? taskObj.agentAdvisor : {};
+				if (!("task" in agentAdvisor)) agentAdvisor.task = legacySubagents ? "on" : "off";
+				taskObj.agentAdvisor = agentAdvisor;
+				raw.task = taskObj;
+			}
+			if (advisorObj) delete advisorObj.subagents;
+			delete raw["advisor.subagents"];
+		}
 
 		// v17 renames that used to nest under a boolean parent path:
 		//   dev.autoqa.consent -> dev.autoqaConsent

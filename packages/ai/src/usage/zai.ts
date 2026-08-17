@@ -1,4 +1,5 @@
 import { toNumber } from "@musepi/pi-catalog/utils";
+import { USER_AGENT } from "@musepi/pi-utils";
 import type {
 	CredentialRankingStrategy,
 	UsageAmount,
@@ -228,7 +229,7 @@ async function fetchZaiUsage(params: UsageFetchParams, ctx: UsageFetchContext): 
 	const headers: Record<string, string> = {
 		Authorization: token,
 		"Content-Type": "application/json",
-		"User-Agent": "OpenCode-Status-Plugin/1.0",
+		"User-Agent": USER_AGENT,
 	};
 
 	let payload: ZaiQuotaPayload | null = null;

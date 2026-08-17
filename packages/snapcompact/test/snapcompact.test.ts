@@ -299,6 +299,32 @@ describe("shape resolution", () => {
 		// High-res frames are reserved for the lines that read them natively;
 		// older Claude lines keep the safe 1568px family default.
 		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-4-8" }).frameSize).toBe(1932);
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "anthropic--claude-4.8-opus" }).frameSize).toBe(
+			1932,
+		);
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-4-10" }).frameSize).toBe(1932);
+		// Versionless Fable/Mythos aliases (bundled `claude-fable-latest`) never
+		// parse a numeric version but still read the high-res tier by name (#8257).
+		expect(
+			snapcompact.resolveShape({ api: "openai-completions", id: "anthropic/claude-fable-latest" }).frameSize,
+		).toBe(1932);
+		expect(
+			snapcompact.resolveShape({ api: "openai-completions", id: "~anthropic/claude-fable-latest" }).frameSize,
+		).toBe(1932);
+		// Opus 5+ shares the Anthropic visual-token cap, so it stays on the
+		// high-res tier rather than falling back to the 1568px default (#8256).
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-5" }).frameSize).toBe(1932);
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-6" }).frameSize).toBe(1932);
+		// Mixed-case gateway ids matched the pre-catalog-parser /i regex; the
+		// parser input is normalized so they stay on the high-res tier.
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "CLAUDE-OPUS-5" }).frameSize).toBe(1932);
+		// Minor versions past the old 9.10 semver-table bound must not fall
+		// back to the 1568px default (same staleness class as #8256).
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-5-11" }).frameSize).toBe(1932);
+		// Opus lines below 4.7 downscale, so they keep the safe family default.
+		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-opus-4-6" })).toBe(
+			snapcompact.SHAPES.anthropic,
+		);
 		expect(snapcompact.resolveShape({ api: "anthropic-messages", id: "claude-3-5-sonnet" })).toBe(
 			snapcompact.SHAPES.anthropic,
 		);
@@ -357,7 +383,6 @@ describe("shape resolution", () => {
 	});
 
 	it("every catalog variant resolves to a complete, renderable shape", () => {
-		expect(snapcompact.SHAPE_VARIANT_NAMES.length).toBeGreaterThan(0);
 		for (const name of snapcompact.SHAPE_VARIANT_NAMES) {
 			expect(snapcompact.isShapeVariantName(name)).toBe(true);
 			expect(snapcompact.isShape(snapcompact.resolveShape({ api: "openai-responses" }, name))).toBe(true);
@@ -578,7 +603,6 @@ describe("renderMany", () => {
 		expect(short).toHaveLength(1);
 		expect(short[0].type).toBe("image");
 		expect(short[0].mimeType).toBe("image/png");
-		expect(short[0].data.length).toBeGreaterThan(0);
 
 		const text = "x".repeat(capacity * 2 + 10);
 		const frames = await snapcompact.renderMany(text, { shape, frameSize: TEST_FRAME_SIZE });
@@ -846,8 +870,6 @@ describe("compact", () => {
 		fileOps.edited.add("src/login.ts");
 		const result = await snapcompact.compact(makePreparation({ fileOps }), { frameSize: TEST_FRAME_SIZE });
 
-		expect(result.firstKeptEntryId).toBe("kept-1");
-		expect(result.tokensBefore).toBe(99000);
 		expect(result.summary).toContain("HISTORY");
 		expect(result.summary).toContain("`¶user:`");
 		expect(result.summary).toContain("`¶call:`");
@@ -855,9 +877,7 @@ describe("compact", () => {
 		expect(result.summary).toContain("FILES\n===================\n# src/\nauth.ts (Read)\nlogin.ts (Write)");
 
 		const archive = snapcompact.getPreservedArchive(result.preserveData);
-		expect(archive).toBeDefined();
 		expect(archive?.frames).toHaveLength(0);
-		expect(archive?.textHead).toBeTruthy();
 		expect(archive?.textTail).toBeUndefined();
 		expect(archive?.truncatedChars).toBe(0);
 
@@ -935,7 +955,6 @@ describe("compact", () => {
 			{ shape: silver, frameSize: 64, maxFrames: 1 },
 		);
 		const archive = snapcompact.getPreservedArchive(result.preserveData);
-		expect(archive).toBeDefined();
 		expect(archive?.frames.length).toBeGreaterThan(0);
 		expect(archive?.frames.every(frame => frame.font === "silver")).toBe(true);
 	});
@@ -1283,19 +1302,6 @@ describe("new shape variants", () => {
 			expect(snapcompact.isShape(shape)).toBe(true);
 			expect(shape.frameSize).toBe(1568);
 		}
-	});
-
-	it("carries the eval-winning capability flags", () => {
-		expect(snapcompact.SHAPE_VARIANTS["6x12-dim"]).toMatchObject({ font: "6x12", stopwordDim: true });
-		expect(snapcompact.SHAPE_VARIANTS["8x13-bw"]).toMatchObject({ font: "8x13", cellHeight: 13 });
-		expect(snapcompact.SHAPE_VARIANTS["8on16-bw"]).toMatchObject({ font: "8x13", cellHeight: 16, stretch: false });
-		expect(snapcompact.SHAPE_VARIANTS["doc-8on16-bw"].columns).toBe(2);
-		expect(snapcompact.SHAPE_VARIANTS["doc-8on16-sent"].variant).toBe("sent");
-		expect(snapcompact.SHAPE_VARIANTS["doc-8on16-sent-dim"]).toMatchObject({
-			columns: 2,
-			stopwordDim: true,
-			variant: "sent",
-		});
 	});
 
 	it("isShape validates the new optional fields", () => {

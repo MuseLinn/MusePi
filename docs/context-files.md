@@ -11,9 +11,9 @@ Four similarly named things behave differently. Keep them straight:
 - **Context files** are read as plain Markdown and shown to the agent inside a `<context>` block. They are advisory background that stays in the session's opening context.
 - **Sticky rules** come from a top-level `RULES.md`. They are converted into an always-apply rule that is re-attached near the current turn, so they keep their hold even after the visible conversation grows. See "Sticky rules vs normal context" below.
 - **Discovery providers** are the config-source adapters (`native`, `claude`, `codex`, `gemini`, `opencode`, `github`, `agents`, `agents-md`) that know where each tool keeps its files. The same provider that contributes context files may also contribute MCP servers, slash commands, skills, hooks, tools, prompts, and settings.
-- **Model providers** are inference backends such as `anthropic`, `openai`, `google`, `groq`, `ollama`, and `openrouter`. They have nothing to do with context files except that both kinds of id share the one `disabledProviders` list — see "Disabling discovery providers" below and [Providers](./providers.md).
+- **Model providers** are inference backends such as `anthropic`, `openai`, `google`, `groq`, `ollama`, and `openrouter`. They have nothing to do with context files except that both kinds of id share the one `disabledProviders` list — see "Disabling discovery providers" below and [Providers](./providers.html).
 
-Authoring **skills** and **rule** files (as opposed to the sticky `RULES.md`) is covered in [Skills](./skills.md). Customizing the system prompt with `SYSTEM.md` is covered in [System prompt customization](./system-prompt-customization.md).
+Authoring **skills** and **rule** files (as opposed to the sticky `RULES.md`) is covered in [Skills](./skills.html). Customizing the system prompt with `SYSTEM.md` is covered in [System prompt customization](./system-prompt-customization.html).
 
 ## Native `.musepi` files
 
@@ -56,18 +56,17 @@ Put broad, durable project background in `AGENTS.md`. Reserve `RULES.md` for sho
 
 `musepi` also discovers the context and rule files of other agent tools so existing projects keep working without migration.
 
-| Provider id | Convention path | Scope | Notes |
-|---|---|---|---|
-| `native` | `.musepi/AGENTS.md` | User + project | Recommended `musepi` format. User file at `~/.musepi/agent/AGENTS.md`; project file is the nearest non-empty `.musepi/AGENTS.md` walking up to the repo root. |
-| `claude` | `.claude/CLAUDE.md` | User + project | User file `~/.claude/CLAUDE.md`; project file `<cwd>/.claude/CLAUDE.md` only (no ancestor walk-up). |
-| `codex` | `.codex/AGENTS.md` | User | User file `~/.codex/AGENTS.md` only. Project-level Codex context comes from a standalone `AGENTS.md` via the `agents-md` provider, not from `<cwd>/.codex/AGENTS.md`. |
-| `gemini` | `.gemini/GEMINI.md` | User + project | User file `~/.gemini/GEMINI.md`; project file `<cwd>/.gemini/GEMINI.md` only (no ancestor walk-up). |
-| `opencode` | `.config/opencode/AGENTS.md` | User | User file `~/.config/opencode/AGENTS.md` only. |
-| `github` | `.github/copilot-instructions.md` | User + project | Project file `<cwd>/.github/copilot-instructions.md` only (no ancestor walk-up), plus a user-global `~/.copilot/copilot-instructions.md` (relocate with `COPILOT_HOME`) and an `AGENTS.md` from each `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` entry. |
-| `agents` | `.agent/AGENTS.md`, `.agents/AGENTS.md` | User + project | User files from `~/.agent/` and `~/.agents/`; project files discovered while walking up from the current directory to the repository root. |
-| `agents-md` | `AGENTS.md` | Project | Standalone (non-config-directory) `AGENTS.md` files, discovered by walking up from the current directory to the repository root (or home when no repo root is known). Files whose parent directory name starts with `.` are ignored — those belong to a config-directory provider instead. |
-| `github` | `.github/instructions/**/*.instructions.md` | Project rules | GitHub Copilot / VS Code instruction files become rules. `applyTo: '*'` or `applyTo: '**'` is injected as always-apply context; other `applyTo` globs are listed in the rulebook with `description` and are readable as `rule://<name>`. |
-
+| Provider id | Convention path                             | Scope          | Notes                                                                                                                                                                                                                                                                                                                                                        |
+| ----------- | ------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `native`    | `.omp/AGENTS.md`                            | User + project | Recommended OMP format. User file in the active native agent directory; project file is read only from the nearest non-empty `.omp/` directory walking toward the repo root.                                                                                                                                                                                 |
+| `claude`    | `.claude/CLAUDE.md`                         | User + project | User file `~/.claude/CLAUDE.md`; project file `<cwd>/.claude/CLAUDE.md` only (no ancestor walk-up).                                                                                                                                                                                                                                                          |
+| `codex`     | `.codex/AGENTS.md`                          | User           | User file `~/.codex/AGENTS.md` only. Project-level Codex context comes from a standalone `AGENTS.md` via the `agents-md` provider, not from `<cwd>/.codex/AGENTS.md`.                                                                                                                                                                                        |
+| `gemini`    | `.gemini/GEMINI.md`                         | User + project | User file `~/.gemini/GEMINI.md`; project file `<cwd>/.gemini/GEMINI.md` only (no ancestor walk-up).                                                                                                                                                                                                                                                          |
+| `opencode`  | `.config/opencode/AGENTS.md`                | User           | User file `~/.config/opencode/AGENTS.md` only.                                                                                                                                                                                                                                                                                                               |
+| `github`    | `.github/copilot-instructions.md`           | User + project | Project file `<cwd>/.github/copilot-instructions.md` only (no ancestor walk-up), plus a user-global `~/.copilot/copilot-instructions.md` (relocate with `COPILOT_HOME`). `AGENTS.md` candidates from `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` are also considered at user scope, where normal one-user-file deduplication applies.                                 |
+| `agents`    | `.agent/AGENTS.md`, `.agents/AGENTS.md`     | User + project | User files from `~/.agent/` and `~/.agents/`; project files discovered while walking up from the current directory to the repository root.                                                                                                                                                                                                                   |
+| `agents-md` | `AGENTS.md`                                 | Project        | Standalone (non-config-directory) `AGENTS.md` files, discovered by walking up from the current directory to the repository root and, when that repository is nested under the user's home directory, through enclosing workspace directories up to but not including the home directory. With no repository root, discovery uses the home directory as the boundary for sessions under home and includes that boundary file. Files whose parent directory name starts with `.` are ignored — those belong to a config-directory provider instead.                                                                   |
+| `github`    | `.github/instructions/**/*.instructions.md` | Project rules  | GitHub Copilot / VS Code instruction files become rules. `applyTo: '*'`, `applyTo: '**'`, or `applyTo: '**/*'` is injected as always-apply content; other `applyTo` globs are listed in the rulebook with a generated description when needed and are readable as `rule://<name>`. Missing `applyTo` also produces a rulebook entry and a discovery warning. |
 Providers marked "(no ancestor walk-up)" only look in the current working directory's config directory. If you need ancestor walk-up behavior, prefer the native `.musepi/AGENTS.md` format or a standalone `AGENTS.md` (the `agents-md` provider), or launch `musepi` from the directory that holds the config directory.
 
 ## Load order and shadowing
@@ -170,7 +169,7 @@ Do not edit generated files.
 
 - It is read **only** at the native locations — `~/.musepi/agent/RULES.md` and the nearest `<ancestor>/.musepi/RULES.md` from the cwd up to the repo root. A `RULES.md` anywhere else is not a context-file convention and is ignored.
 - It is loaded as an **always-apply rule**, not as a context file, so it is re-attached near the current turn and keeps its hold across long sessions.
-- It is **always sticky**: frontmatter cannot make it non-sticky. If you want conditional or opt-in behavior, write a normal rule file instead (see [Skills](./skills.md)).
+- It is **always sticky**: frontmatter cannot make it non-sticky. If you want conditional or opt-in behavior, write a normal rule file instead (see [Skills](./skills.html)).
 
 Keep `RULES.md` short. Long background belongs in `AGENTS.md`, where it costs context budget only once.
 
@@ -190,7 +189,7 @@ disabledProviders:
 | Id kind | Examples | Effect when listed |
 |---|---|---|
 | Discovery provider ids | `native`, `claude`, `codex`, `gemini`, `opencode`, `github`, `agents`, `agents-md` | The entire config source is removed — not just its context files, but also any MCP servers, slash commands, skills, hooks, tools, prompts, and settings it would have contributed. |
-| Model provider ids | `anthropic`, `openai`, `google`, `groq`, `ollama`, `openrouter` | The model backend is removed from selection even when its credentials are present. See [Providers](./providers.md). |
+| Model provider ids | `anthropic`, `openai`, `google`, `groq`, `ollama`, `openrouter` | The model backend is removed from selection even when its credentials are present. See [Providers](./providers.html). |
 
 Ids are exact and the two namespaces do not collide by accident: `google` disables the Google model backend, while `gemini` disables the Gemini CLI discovery files. Disabling a discovery provider is heavier than it looks — disabling `claude`, for instance, also drops Claude-discovered MCP servers, commands, skills, hooks, tools, and settings, not only `CLAUDE.md`.
 
@@ -206,7 +205,7 @@ disabledProviders:
 
 A scoped entry applies when the cwd equals the configured path or sits beneath it; `~` expands to home. Bare string entries apply everywhere.
 
-Remember that higher-precedence settings layers **replace** array settings rather than appending to them. If your global config disables `claude` but a project config sets `disabledProviders: [github]`, then inside that project Claude discovery is re-enabled and only GitHub is disabled. See [Settings](./settings.md) for the full layer precedence, merge rules, and path-scoped array details.
+Remember that higher-precedence settings layers **replace** array settings rather than appending to them. If your global config disables `claude` but a project config sets `disabledProviders: [github]`, then inside that project Claude discovery is re-enabled and only GitHub is disabled. See [Settings](./settings.html) for the full layer precedence, merge rules, and path-scoped array details.
 
 ## Troubleshooting
 

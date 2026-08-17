@@ -699,6 +699,68 @@ describe("CursorExecHandlers error results", () => {
 		const end = events.find(event => event.type === "tool_execution_end");
 		expect(end?.isError).toBe(true);
 	});
+
+	it("omits unset optional kwargs from shellStream start events and execute args", async () => {
+		// shellStream bypasses executeTool(), so omitUndefinedArgs must be
+		// applied here directly — otherwise absent cwd/timeout become
+		// present-undefined and ArkType rejects the bash call.
+		const events: AgentEvent[] = [];
+		const executeArgs: Record<string, unknown>[] = [];
+		const bashSchema = type({ command: "string", "cwd?": "string", "timeout?": "number" });
+		const bashTool: AgentTool<typeof bashSchema> = {
+			name: "bash",
+			label: "bash",
+			description: "records args",
+			parameters: bashSchema,
+			execute: async (_id, args) => {
+				executeArgs.push({ ...args });
+				return { content: [{ type: "text", text: "ok" }], details: {} };
+			},
+		};
+		const handlers = new CursorExecHandlers({
+			cwd: ".",
+			tools: new Map([["bash", bashTool]]),
+			emitEvent: event => events.push(event),
+		});
+
+		await handlers.shellStream(
+			create(ShellArgsSchema, {
+				toolCallId: "call-shell-omit",
+				command: "echo hi",
+				// Proto string defaults to ""; the bridge maps that to undefined.
+				workingDirectory: "",
+			}),
+			{ onStdout: () => {}, onStderr: () => {} },
+		);
+
+		const start = events.find(event => event.type === "tool_execution_start");
+		expect(start?.type).toBe("tool_execution_start");
+		if (start?.type !== "tool_execution_start") throw new Error("expected tool_execution_start");
+		expect(start.args).toEqual({ command: "echo hi" });
+		expect(Object.hasOwn(start.args, "cwd")).toBe(false);
+		expect(Object.hasOwn(start.args, "timeout")).toBe(false);
+		expect(executeArgs).toHaveLength(1);
+		expect(executeArgs[0]).toEqual({ command: "echo hi" });
+		expect(Object.hasOwn(executeArgs[0]!, "cwd")).toBe(false);
+		expect(Object.hasOwn(executeArgs[0]!, "timeout")).toBe(false);
+
+		executeArgs.length = 0;
+		events.length = 0;
+		await handlers.shellStream(
+			create(ShellArgsSchema, {
+				toolCallId: "call-shell-keep",
+				command: "pwd",
+				workingDirectory: "/tmp",
+				timeout: 12,
+			}),
+			{ onStdout: () => {}, onStderr: () => {} },
+		);
+		const keepStart = events.find(event => event.type === "tool_execution_start");
+		expect(keepStart?.type).toBe("tool_execution_start");
+		if (keepStart?.type !== "tool_execution_start") throw new Error("expected tool_execution_start");
+		expect(keepStart.args).toEqual({ command: "pwd", cwd: "/tmp", timeout: 12 });
+		expect(executeArgs[0]).toEqual({ command: "pwd", cwd: "/tmp", timeout: 12 });
+	});
 });
 
 describe("CursorExecHandlers mounted tool bridge", () => {
@@ -1537,9 +1599,9 @@ describe("CursorExecHandlers Pi frame translation", () => {
 
 		expect(calls).toEqual([
 			{ pattern: "x", path: ".", case: false },
-			// Case-sensitive is the local default, so `false` maps to "unset",
-			// not to `case: true`.
-			{ pattern: "x", path: ".", case: undefined },
+			// Case-sensitive is the local default, so `false` maps to unset —
+			// the key is omitted rather than written as `case: undefined`.
+			{ pattern: "x", path: "." },
 		]);
 	});
 

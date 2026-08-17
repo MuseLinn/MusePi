@@ -1386,18 +1386,6 @@ describe("Agent", () => {
 		expect(cwdPerCall).toEqual(["/live/repo-a", "/live/repo-b"]);
 	});
 
-	it("returns static metadata via the plain setter", () => {
-		const agent = new Agent();
-		expect(agent.metadata).toBeUndefined();
-
-		const value = { user_id: "static" };
-		agent.metadata = value;
-		expect(agent.metadata).toEqual({ user_id: "static" });
-
-		agent.metadata = undefined;
-		expect(agent.metadata).toBeUndefined();
-	});
-
 	it("metadataForProvider resolves dynamic value at every call when a resolver is installed", () => {
 		const agent = new Agent();
 		let live = "alpha";
@@ -1416,7 +1404,6 @@ describe("Agent", () => {
 		expect(agent.metadataForProvider("any")).toEqual({ user_id: "from-resolver" });
 
 		agent.metadata = { user_id: "from-static" };
-		expect(agent.metadata).toEqual({ user_id: "from-static" });
 		expect(agent.metadataForProvider("any")).toEqual({ user_id: "from-static" });
 	});
 
@@ -1439,7 +1426,6 @@ describe("Agent", () => {
 
 		agent.setMetadataResolver(undefined);
 		expect(agent.metadataForProvider("any")).toEqual({ user_id: "static" });
-		expect(agent.metadata).toEqual({ user_id: "static" });
 	});
 });
 

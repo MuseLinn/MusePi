@@ -136,8 +136,8 @@ describe("Transcript live tool rendering", () => {
 			working: true,
 		});
 
-		expect(countElements(html, ".tv-card")).toBe(1);
-		expect(countElements(html, '[aria-label="running"]')).toBe(1);
+				expect(countOccurrences(html, 'class="tv-card"')).toBe(1);
+		expect(countOccurrences(html, 'aria-label="Running"')).toBe(1);
 		expect(countOccurrences(html, TOOL_NAME)).toBe(1);
 		expect(html).not.toContain("thinking…");
 		expect(html).toContain(ACTIVE_TOOL_TARGET);
@@ -331,6 +331,70 @@ describe("TTSR / IRC custom_message rendering", () => {
 		expect(html).toContain("sub");
 		expect(html).toContain("我查一下 git 历史");
 	});
+
+	it("renders the long sender name in the body label, not the clipped gutter", () => {
+		// Agent ids like "SurveyOpenchamber" overflow the 40px gutter badge;
+		// the sender must render as a full-width label inside the body.
+		const entry: SessionEntry = {
+			type: "custom_message",
+			id: "irc-4",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:04Z",
+			customType: "irc:incoming",
+			content: "ignored",
+			display: true,
+			details: { id: "m4", from: "SurveyOpenchamber", message: "Where is the repo?" },
+		};
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc-from");
+		// The name sits inside the body (full row width), not the 40px gutter.
+		expect(html).toMatch(/tr-irc-from">SurveyOpenchamber</);
+		// The gutter div stays empty (no badge clipping long agent ids).
+		expect(html).toMatch(/tr-gutter[^>]*><\/div>/);
+		expect(html).toContain("Where is the repo?");
+	});
+
+	it("strips the LLM prompt wrapper from irc:incoming content", () => {
+		// The daemon persists the rendered irc-incoming.md template (literal
+		// <irc>…</irc> scaffolding + reply instructions) as content; the clean
+		// body lives in details.message. The row must render the body, not the
+		// prompt wrapper.
+		const entry: SessionEntry = {
+			type: "custom_message",
+			id: "irc-2",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:02Z",
+			customType: "irc:incoming",
+			content:
+				"<irc>\nIncoming IRC message from agent `scoutA`:\n\nWhere is the repo?\n\nIf response expected, reply via `hub` (`op: \"send\"`, `to: \"scoutA\"`); may finish current step first. No one replies on your behalf.\n</irc>",
+			display: true,
+			details: { id: "m2", from: "scoutA", message: "Where is the repo?" },
+		};
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc");
+		expect(html).toContain("Where is the repo?");
+		expect(html).not.toContain("<irc>");
+		expect(html).not.toContain("</irc>");
+		expect(html).not.toContain("Incoming IRC message from agent");
+		expect(html).not.toContain("If response expected");
+	});
+
+	it("strips the wrapper from irc:incoming without details (legacy snapshots)", () => {
+		const entry: SessionEntry = {
+			type: "custom_message",
+			id: "irc-3",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:03Z",
+			customType: "irc:incoming",
+			content: "<irc>\nIncoming IRC message from agent `scoutB`:\n\nlegacy body\n</irc>",
+			display: true,
+			details: null,
+		};
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("legacy body");
+		expect(html).not.toContain("<irc>");
+		expect(html).not.toContain("</irc>");
+	});
 });
 
 describe("Transcript display-settings parity (TUI)", () => {
@@ -430,5 +494,36 @@ describe("msgText (per-message copy / edit / fork source)", () => {
 	it("returns empty for unknown shapes", () => {
 		expect(msgText({ content: 42 })).toBe("");
 		expect(msgText({ content: undefined })).toBe("");
+	});
+});
+
+describe("Transcript work-timer round anchoring", () => {
+	it("keeps the live ticker off the previous round's message while the model is responding", () => {
+		// Old round assistant(100), then user(200) sent, model not replying yet:
+		// the last assistant entry does NOT belong to the current round, so no
+		// "已用时 X 秒" under the wrong message — the standalone ghost row shows it.
+		const html = renderTranscript({
+			entries: [assistantEntry({ timestamp: 100 }), userEntry(200)],
+			working: true,
+		});
+		expect(countElements(html, ".tr-ghost-working")).toBe(1);
+		expect(countElements(html, ".tr-working")).toBe(1);
+	});
+
+	it("mounts the ticker inside the current round's assistant message once it exists", () => {
+		const html = renderTranscript({
+			entries: [userEntry(200), assistantEntry({ timestamp: 300 })],
+			working: true,
+		});
+		expect(countElements(html, ".tr-ghost-working")).toBe(0);
+		expect(countElements(html, ".tr-working")).toBe(1);
+	});
+
+	it("renders no work timer for idle sessions", () => {
+		const html = renderTranscript({
+			entries: [userEntry(200), assistantEntry({ timestamp: 300 })],
+			working: false,
+		});
+		expect(countElements(html, ".tr-working")).toBe(0);
 	});
 });

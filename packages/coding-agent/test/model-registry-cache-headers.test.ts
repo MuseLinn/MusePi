@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { writeModelCache } from "@musepi/pi-catalog/model-cache";
 import { getBundledModels } from "@musepi/pi-catalog/models";
+import { resolveModelCacheProviderId } from "@musepi/pi-catalog/provider-models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { removeSyncWithRetries } from "@musepi/pi-utils";
@@ -29,7 +30,8 @@ describe("startup model cache header restoration (#5780)", () => {
 		expect(withHeaders.length).toBeGreaterThan(0);
 
 		// Prior process: cache the live copilot catalog. v10 never persists headers.
-		writeModelCache("github-copilot", Date.now(), bundled, true, "fp-test", dbPath, bundled);
+		const cacheProviderId = resolveModelCacheProviderId("github-copilot");
+		writeModelCache(cacheProviderId, Date.now(), bundled, true, "fp-test", dbPath, bundled);
 		const raw = fs.readFileSync(dbPath).toString("latin1");
 		for (const model of withHeaders) {
 			for (const value of Object.values(model.headers ?? {})) {

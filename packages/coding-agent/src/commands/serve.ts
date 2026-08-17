@@ -1,6 +1,6 @@
 /**
  * `musepi serve` — start the MusePi daemon (unix socket JSON-RPC, see
- * gui-architecture Phase 3). Prints the socket path and stays in the
+ * daemon Phase 3). Prints the socket path and stays in the
  * foreground until interrupted.
  *
  * Options:

@@ -406,11 +406,7 @@ function followedByInterruptedThinking(messages: AgentMessage[], index: number):
 	return next !== undefined && next.role === "custom" && next.customType === INTERRUPTED_THINKING_MESSAGE_TYPE;
 }
 
-/**
- * Drop the demoted trailing thinking run from an assistant message for the LLM
- * view only. The run is incomplete and unsigned, so providers reject it; the
- * continuity message that follows carries the reasoning instead.
- */
+/** Drop an incomplete trailing thinking run from an interrupted assistant in the LLM view. */
 function stripDemotedThinkingForLlm(message: AssistantMessage): AssistantMessage {
 	const demoted = demoteInterruptedThinking(message);
 	return demoted ? { ...message, content: demoted.strippedContent } : message;
@@ -496,6 +492,76 @@ export function isEmptyErrorTurn(message: Pick<AssistantMessage, "stopReason" | 
 				return true;
 		}
 	});
+}
+
+/** Non-whitespace text. Tolerates malformed blocks: transcripts replayed off
+ *  disk predate current shapes, and a missing field must not throw. */
+function hasText(content: { text?: unknown }): boolean {
+	return typeof content.text === "string" && content.text.trim().length > 0;
+}
+
+/**
+ * A block that is real output from the model.
+ *
+ * Everything the assistant can emit counts except two: unsigned thinking, which
+ * is not provider-authenticated and not actionable, and Anthropic's `fallback`
+ * marker, which records that the request was routed elsewhere rather than
+ * carrying any output. A native image response often arrives with no text and
+ * no tool call at all, so recognising only those would call it nothing.
+ */
+function isActionableContent(content: AssistantMessage["content"][number] | undefined): boolean {
+	switch (content?.type) {
+		case "toolCall":
+		case "image":
+		case "redactedThinking":
+		case "anthropicServerTool":
+			return true;
+		case "text":
+			return hasText(content);
+		case "thinking":
+			return typeof content.thinkingSignature === "string" && content.thinkingSignature.trim().length > 0;
+		default:
+			return false;
+	}
+}
+
+/** A `stop`/`toolUse` turn that produced nothing actionable. Any other stop
+ *  reason is not an "empty stop": an `error`/`aborted` turn is a failure rather
+ *  than an empty completion, and a `length` stop was cut off mid-output. */
+export function isEmptyAssistantStop(message: Pick<AssistantMessage, "stopReason" | "content">): boolean {
+	switch (message.stopReason) {
+		case "stop":
+			return !message.content.some(isActionableContent);
+		case "toolUse":
+			// An orphaned toolUse stop (no tool_use block) corrupts Anthropic history:
+			// a later tool_result has nothing to anchor to. Thinking alone cannot anchor
+			// a tool_result, so it does not rescue a toolUse stop here.
+			return !message.content.some(
+				content => content?.type === "toolCall" || (content?.type === "text" && hasText(content)),
+			);
+		default:
+			return false;
+	}
+}
+
+/**
+ * True when this assistant turn actually produced output, making its model the
+ * one that served the run.
+ *
+ * Attribution asks this from two places that MUST reach the same verdict: the
+ * live session, which flips a fallback to "served", and the offline walk
+ * replaying a transcript. `error` and `aborted` are both failures — a stalled or
+ * dropped stream is finalized as `aborted` with its partial block still
+ * attached, so a stop reason alone is not proof.
+ *
+ * Actionable content is required on top of the empty-stop rule, which only
+ * inspects `stop`/`toolUse`. A `length` stop burns the whole output budget
+ * without necessarily emitting anything usable, and every other stop reason
+ * bypasses that rule entirely.
+ */
+export function assistantTurnProducedOutput(message: Pick<AssistantMessage, "stopReason" | "content">): boolean {
+	if (message.stopReason === "error" || message.stopReason === "aborted") return false;
+	return !isEmptyAssistantStop(message) && message.content.some(isActionableContent);
 }
 
 /** Sentinel `errorMessage` the agent stamps on any abort that carried no custom
@@ -1081,17 +1147,16 @@ const convertCache = new WeakMap<AgentMessage, ConvertMemoEntry>();
 // The tail-identity guard on exact-repeat catches the streaming snapshot swap
 // (partial → trailing is a fresh identity), so a settled tail is never served
 // from a stale mid-stream fragment.
+interface ConvertArrayMemo {
+	generation: number;
+	length: number;
+	output: Message[];
+	tail: AgentMessage | undefined;
+	prefixOutputLen: number;
+}
+
 let convertGeneration = 0;
-let lastConvertInput: AgentMessage[] | undefined;
-let lastConvertLength = 0;
-let lastConvertOutput: Message[] | undefined;
-let lastConvertGeneration = -1;
-let lastConvertTail: AgentMessage | undefined;
-// Output-message count contributed by messages[0 .. lastConvertLength-1), i.e.
-// every message except the last. The last message is neighbor-sensitive (its LLM
-// view drops the trailing thinking run only while an interrupted-thinking marker
-// follows), so growth reconverts it rather than reusing its old fragment.
-let lastConvertPrefixOutputLen = 0;
+const convertArrayCache = new WeakMap<AgentMessage[], ConvertArrayMemo>();
 
 registerMessageCacheInvalidator(message => {
 	convertCache.delete(message);
@@ -1194,12 +1259,12 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 			return converted ? [converted] : [];
 		}
 		case "assistant": {
-			// A user-interrupted turn keeps its trailing thinking run on the
-			// persisted/displayed message so reload and display-reset rebuilds still
-			// show it. That run is incomplete/unsigned and gets rejected on
-			// resend, so strip it here — LLM path only — when the hidden
-			// interrupted-thinking continuity message follows.
-			const source = interruptedNext ? stripDemotedThinkingForLlm(m) : m;
+			// Persisted/displayed messages retain interrupted thinking. Signed or
+			// encrypted blocks replay natively; incomplete unsigned runs are
+			// stripped whether or not they were long enough for a continuity note.
+			const userInterrupted = m.stopReason === "aborted" && isUserInterruptAbort(m);
+			const source = interruptedNext || userInterrupted ? stripDemotedThinkingForLlm(m) : m;
+			if (userInterrupted && !interruptedNext && source.content.length === 0) return [];
 			const converted = convertMessageToLlm(source);
 			return converted ? [converted] : [];
 		}
@@ -1246,15 +1311,16 @@ function convertOneCached(m: AgentMessage, interruptedNext: boolean): Message[] 
  */
 export function convertToLlm(messages: AgentMessage[]): Message[] {
 	const len = messages.length;
-	const sameArray = messages === lastConvertInput && lastConvertGeneration === convertGeneration;
+	const memo = convertArrayCache.get(messages);
+	const sameGeneration = memo !== undefined && memo.generation === convertGeneration;
 	const tail = len > 0 ? messages[len - 1] : undefined;
 
 	// Exact-repeat: same array, same length, same trailing identity → reuse the
 	// outer array. The tail-identity check rejects the streaming snapshot swap
 	// (partial → settled trailing keeps array identity/length but mints a fresh
 	// tail), so a settled tail never reads a stale mid-stream fragment.
-	if (sameArray && lastConvertOutput !== undefined && len === lastConvertLength && tail === lastConvertTail) {
-		return lastConvertOutput;
+	if (sameGeneration && memo.length === len && tail === memo.tail) {
+		return memo.output;
 	}
 
 	// Slice-on-growth: same array grew by append. Every interior message is
@@ -1267,15 +1333,14 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 	let out: Message[];
 	let start: number;
 	if (
-		sameArray &&
-		lastConvertOutput !== undefined &&
-		len > lastConvertLength &&
-		lastConvertLength > 0 &&
-		messages[lastConvertLength - 1] === lastConvertTail &&
-		lastConvertPrefixOutputLen <= lastConvertOutput.length
+		sameGeneration &&
+		len > memo.length &&
+		memo.length > 0 &&
+		messages[memo.length - 1] === memo.tail &&
+		memo.prefixOutputLen <= memo.output.length
 	) {
-		out = lastConvertOutput.slice(0, lastConvertPrefixOutputLen);
-		start = lastConvertLength - 1;
+		out = memo.output.slice(0, memo.prefixOutputLen);
+		start = memo.length - 1;
 	} else {
 		out = [];
 		start = 0;
@@ -1294,12 +1359,13 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 	if (len === 0) prefixOutputLen = 0;
 
 	// Record for the next call's shortcuts. `out` is a fresh array (slice or new),
-	// so a prior caller holding the previous `lastConvertOutput` never sees it grow.
-	lastConvertInput = messages;
-	lastConvertLength = len;
-	lastConvertOutput = out;
-	lastConvertGeneration = convertGeneration;
-	lastConvertTail = tail;
-	lastConvertPrefixOutputLen = prefixOutputLen;
+	// so a prior caller holding the previous memo output never sees it grow.
+	convertArrayCache.set(messages, {
+		generation: convertGeneration,
+		length: len,
+		output: out,
+		tail,
+		prefixOutputLen,
+	});
 	return out;
 }

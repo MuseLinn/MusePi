@@ -286,6 +286,13 @@ function hasInteractiveShellArg(args: string[]): boolean {
 
 function ensureInteractiveShellArgs(shell: string, args: string[]): string[] {
 	if (!needsInteractiveShellArg(shell)) return args;
+	const isZsh = shellBasename(shell).includes("zsh");
+	// zsh -i without a tty makes starship's init run `zle -N`, which
+	// throws "can't change option: zle" twice before every non-interactive
+	// command (daemon/GUI `!` runs). `-o NO_zle` disables the line-editor
+	// module while the interactive rc still loads — aliases/functions keep
+	// working and the zle noise is gone (verified: rc loads, errors vanish).
+	const interactive = isZsh ? ["-i", "-o", "NO_zle"] : ["-i"];
 
 	// fish sources the same config files (config.fish + conf.d) for interactive
 	// shells as for login shells, so the inherited `-l` adds nothing — it only
@@ -301,15 +308,28 @@ function ensureInteractiveShellArgs(shell: string, args: string[]): string[] {
 
 	const commandIndex = effectiveArgs.findIndex(arg => arg === "-c" || arg === "--command");
 	if (commandIndex !== -1) {
-		return [...effectiveArgs.slice(0, commandIndex), "-i", ...effectiveArgs.slice(commandIndex)];
+		return [...effectiveArgs.slice(0, commandIndex), ...interactive, ...effectiveArgs.slice(commandIndex)];
 	}
 
 	const compactCommandIndex = effectiveArgs.findIndex(arg => /^-[^-]*c[^-]*$/.test(arg));
 	if (compactCommandIndex !== -1) {
+		if (isZsh) {
+			// A compact "-Xc" can't carry "-o NO_zle": split it into "-X" "-c"
+			// and insert the interactive flags before the command.
+			const arg = effectiveArgs[compactCommandIndex];
+			const flags = arg.slice(1, arg.length - 1).replace(/i/g, "");
+			return [
+				...effectiveArgs.slice(0, compactCommandIndex),
+				...(flags ? [`-${flags}`] : []),
+				...interactive,
+				"-c",
+				...effectiveArgs.slice(compactCommandIndex + 1),
+			];
+		}
 		return effectiveArgs.map((arg, index) => (index === compactCommandIndex ? arg.replace("c", "ic") : arg));
 	}
 
-	return [...effectiveArgs, "-i"];
+	return [...effectiveArgs, ...interactive];
 }
 
 function quoteShellArg(value: string): string {
@@ -366,6 +386,15 @@ export async function executeBash(command: string, options?: BashExecutorOptions
 		commandPrefix: prefix,
 	});
 	const commandEnv = buildNonInteractiveEnv(preflight.env);
+	// zsh `!` runs force -i (user-shell aliases), which loads ~/.zshrc; the
+	// rc's starship prompt renderer errors out on TERM=dumb ("Under a 'dumb'
+	// terminal"). Give the interactive-but-non-tty zsh a real TERM so the
+	// prompt is suppressed instead of erroring — execution is still
+	// non-interactive, only the rc's own render hooks see the difference.
+	// (bash/other shells don't force -i, so they keep TERM=dumb.)
+	if (options?.useUserShell === true && shellBasename(shell).includes("zsh")) {
+		commandEnv.TERM = "xterm-256color";
+	}
 	const runCdInPersistentShell = options?.useUserShell === true && !prefix && isPersistentShellCdCommand(command);
 	// Never wrap in cmd.exe: it is only the Windows no-bash fallback for spawn
 	// paths, and the embedded brush shell runs the POSIX line better directly.

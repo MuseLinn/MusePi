@@ -745,6 +745,7 @@ describe("requestCompactionV2Streaming", () => {
 		let sessionHeader: string | undefined;
 		let clientRequestHeader: string | undefined;
 		let legacySessionHeader: string | undefined;
+		let betaFeaturesHeader: string | undefined;
 		const fetchMock: FetchImpl = async (input, init) => {
 			expect(String(input)).toBe("https://compact.example/v1/responses");
 			if (!init?.headers || init.headers instanceof Headers || Array.isArray(init.headers)) {
@@ -753,9 +754,11 @@ describe("requestCompactionV2Streaming", () => {
 			const rawSessionHeader = init.headers.session_id;
 			const rawClientRequestHeader = init.headers["x-client-request-id"];
 			const rawLegacySessionHeader = init.headers["session-id"];
+			const rawBetaFeaturesHeader = init.headers["x-codex-beta-features"];
 			sessionHeader = typeof rawSessionHeader === "string" ? rawSessionHeader : undefined;
 			clientRequestHeader = typeof rawClientRequestHeader === "string" ? rawClientRequestHeader : undefined;
 			legacySessionHeader = typeof rawLegacySessionHeader === "string" ? rawLegacySessionHeader : undefined;
+			betaFeaturesHeader = typeof rawBetaFeaturesHeader === "string" ? rawBetaFeaturesHeader : undefined;
 			requestBody = JSON.parse(String(init.body)) as {
 				model: string;
 				input: Array<Record<string, unknown>>;
@@ -789,6 +792,7 @@ describe("requestCompactionV2Streaming", () => {
 		expect(sessionHeader).toBe("session-1");
 		expect(clientRequestHeader).toBe("session-1");
 		expect(legacySessionHeader).toBeUndefined();
+		expect(betaFeaturesHeader).toBeUndefined();
 		expect(requestBody?.model).toBe("gpt-5-compact");
 		expect(requestBody?.prompt_cache_key).toBe("cache-1");
 		expect(requestBody?.input[requestBody.input.length - 1]).toEqual({ type: "compaction_trigger" });
@@ -796,6 +800,52 @@ describe("requestCompactionV2Streaming", () => {
 		expect(result.usedTokens).toBe(123);
 		expect(result.usage?.cachedInputTokens).toBe(7);
 		expect(result.usage?.reasoningOutputTokens).toBe(1);
+	});
+
+	test("negotiates Codex V2 compaction for an explicit Responses endpoint", async () => {
+		const model = buildModel({
+			id: "gpt-5",
+			name: "GPT-5",
+			api: "openai-responses",
+			provider: "openai",
+			baseUrl: "https://api.openai.com/v1",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+			remoteCompaction: {
+				enabled: true,
+				api: "openai-codex-responses",
+				v2StreamingEnabled: true,
+				v2Endpoint: "https://compact.example/v1/responses",
+			},
+		});
+		const request = buildCompactionV2Request(
+			model,
+			[{ type: "message", role: "user", content: [{ type: "input_text", text: "real user" }] }],
+			"instructions",
+		);
+		let betaFeaturesHeader: string | undefined;
+		const fetchMock: FetchImpl = async (_input, init) => {
+			if (!init?.headers || init.headers instanceof Headers || Array.isArray(init.headers)) {
+				throw new Error("Expected V2 compaction to send headers as a plain object");
+			}
+			const rawBetaFeaturesHeader = init.headers["x-codex-beta-features"];
+			betaFeaturesHeader = typeof rawBetaFeaturesHeader === "string" ? rawBetaFeaturesHeader : undefined;
+			return sseResponse([
+				{
+					type: "response.output_item.done",
+					output_index: 0,
+					item: { type: "compaction", encrypted_content: "enc" },
+				},
+				{ type: "response.completed", response: { usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } },
+			]);
+		};
+
+		await requestCompactionV2Streaming(model, "test-key", request, undefined, { fetch: fetchMock });
+
+		expect(betaFeaturesHeader).toBe("remote_compaction_v2");
 	});
 
 	test("retries transient V2 stream failures with a fresh request attempt", async () => {

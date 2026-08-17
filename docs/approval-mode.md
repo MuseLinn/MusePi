@@ -56,7 +56,7 @@ approval: { tier: "exec", override: true, reason: "Critical pattern detected" }
 
 ### Native computer safety checks
 
-The disabled-by-default [`computer` tool](./computer-use.md) chooses its tier from the complete ordered batch:
+The disabled-by-default [`computer` tool](./computer-use.html) chooses its tier from the complete ordered batch:
 
 - batches containing only `screenshot` and `wait` use `read`;
 - any pointer or keyboard action uses `exec`;

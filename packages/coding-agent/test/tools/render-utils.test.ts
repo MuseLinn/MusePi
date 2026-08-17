@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import { KeybindingsManager, setKeyHintPlatform } from "@musepi/pi-coding-agent/config/keybindings";
 import { getThemeByName, initTheme, type Theme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import {
 	dedupeParseErrors,
@@ -328,9 +328,11 @@ describe("formatExpandHint / expandKeyHint", () => {
 	let previous: TuiKeybindingsManager;
 	beforeEach(() => {
 		previous = getKeybindings();
+		setKeyHintPlatform("linux");
 	});
 	afterEach(() => {
 		setKeybindings(previous);
+		setKeyHintPlatform(undefined);
 	});
 
 	it("reports the default tool-output expand key", () => {

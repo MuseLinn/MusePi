@@ -107,6 +107,7 @@ function daemonCommand(port) {
  */
 async function start(port, env = {}) {
 	const { program, args } = daemonCommand(port);
+	console.error("[daemon] start", program, args.join(" "));
 	const child = spawn(program, args, {
 		detached: true,
 		stdio: "ignore",
@@ -122,9 +123,13 @@ async function start(port, env = {}) {
 		const bound = probe();
 		// Only accept OUR port — a stale ws.port from another daemon must not
 		// satisfy the wait (the spawned process writes its own --port).
-		if (bound === port && (await portOpen(bound))) return bound;
+		if (bound === port && (await portOpen(bound))) {
+			console.error("[daemon] bound on :" + bound);
+			return bound;
+		}
 		// The spawned process died during startup.
 		if (child.exitCode !== null || child.signalCode !== null) {
+			console.error("[daemon] child exited", child.exitCode, child.signalCode);
 			throw new Error("daemon exited during startup");
 		}
 		await new Promise(r => setTimeout(r, 100));
@@ -160,16 +165,37 @@ function listenerPid(port) {
 async function kill(port) {
 	const pid = await listenerPid(port);
 	if (pid !== null) {
+		console.error("[daemon] kill", pid, "on :" + port);
 		try {
 			process.kill(pid, "SIGTERM");
 		} catch {
 			// already gone — proceed
 		}
-		const deadline = Date.now() + 5000;
+		// Grace window for a clean SIGTERM shutdown (a turn or a hung call
+		// can hold the process briefly). Short on purpose — the restart is
+		// an explicit user action; a 5s+3s wait reads as a frozen GUI.
+		const deadline = Date.now() + 3000;
 		while (Date.now() < deadline) {
 			if (!(await portOpen(port))) return;
 			await new Promise(r => setTimeout(r, 100));
 		}
+		// SIGTERM was ignored (stuck daemon): escalate to SIGKILL so the
+		// restart really replaces the listener. Without this, start() would
+		// spawn a fresh daemon, watch it bind a FALLBACK port (the old one
+		// still holds ours) and report success while the old process keeps
+		// serving — a restart that visibly does nothing.
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch {
+			// already gone
+		}
+		console.error("[daemon] SIGKILL", pid);
+		const killDeadline = Date.now() + 2000;
+		while (Date.now() < killDeadline) {
+			if (!(await portOpen(port))) return;
+			await new Promise(r => setTimeout(r, 100));
+		}
+		throw new Error(`daemon on :${port} did not exit after SIGTERM + SIGKILL`);
 	}
 }
 

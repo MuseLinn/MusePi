@@ -576,6 +576,19 @@ async function parseFeedToMarkdown(content: string, maxItems = 10): Promise<stri
  * local fallback renderers (trafilatura, lynx, native). See #1449.
  */
 const REMOTE_READER_MAX_MS = 10_000;
+const JINA_MARKDOWN_MARKER = "Markdown Content:";
+const JINA_READER_MAX_BYTES = 2 * 1024 * 1024;
+
+function parseJinaReaderContent(responseBody: string): string | null {
+	const markerStart = responseBody.indexOf(JINA_MARKDOWN_MARKER);
+	if (markerStart < 0) return null;
+
+	const content = responseBody.slice(markerStart + JINA_MARKDOWN_MARKER.length).trim();
+	if (content.length < 100 || content.startsWith("Loading...") || content.startsWith("Please enable JavaScript")) {
+		return null;
+	}
+	return content;
+}
 
 /** Reader backends for {@link renderHtmlToText}, in default priority order. */
 export type FetchProvider = "native" | "trafilatura" | "lynx" | "parallel" | "jina";
@@ -653,10 +666,16 @@ export async function renderHtmlToText(
 		},
 		jina: async () => {
 			const response = await fetchImpl(`https://r.jina.ai/${url}`, {
-				headers: { Accept: "text/markdown" },
+				headers: {
+					Accept: "text/markdown",
+					"X-No-Cache": "true",
+				},
 				signal: remoteSignal(),
 			});
-			return response.ok ? await response.text() : null;
+			if (!response.ok) return null;
+			const contentLength = Number(response.headers.get("content-length"));
+			if (Number.isFinite(contentLength) && contentLength > JINA_READER_MAX_BYTES) return null;
+			return parseJinaReaderContent(await response.text());
 		},
 	};
 

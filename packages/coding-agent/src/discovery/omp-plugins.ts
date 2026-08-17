@@ -27,6 +27,7 @@ import { type Rule, ruleCapability } from "../capability/rule";
 import { type Skill, skillCapability } from "../capability/skill";
 import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
 import { type CustomTool, toolCapability } from "../capability/tool";
+import { type GuiMotion, guiMotionCapability } from "../capability/gui-motion";
 import type { LoadContext, LoadResult } from "../capability/types";
 import { legacyProviderAllowed } from "./agent-plugin-format";
 import {
@@ -42,7 +43,7 @@ import { resolvePluginStdioPaths } from "./substitute-plugin-root";
 const PROVIDER_ID = "omp-plugins";
 const DISPLAY_NAME = "MusePi Extension Packages";
 const DESCRIPTION =
-	"Sub-discovery (skills, hooks, tools, commands, rules, prompts, .mcp.json) inside extension packages";
+	"Sub-discovery (skills, hooks, tools, commands, rules, prompts, .mcp.json, motion) inside extension packages";
 const PRIORITY = 90;
 
 /**
@@ -349,6 +350,31 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 }
 
 // =============================================================================
+// GUI Motion Packs
+// =============================================================================
+
+/** Load CSS motion packs from `<root>/motion/*.css` (one file = one pack). */
+async function loadGuiMotion(ctx: LoadContext): Promise<LoadResult<GuiMotion>> {
+	const roots = await allowedRoots(ctx, "other");
+	const results = await Promise.all(
+		roots.map(root =>
+			loadFilesFromDir<GuiMotion>(ctx, path.join(root.path, "motion"), PROVIDER_ID, root.level, {
+				extensions: ["css"],
+				transform: (name, _content, filePath, source) => ({
+					name: name.replace(/\.css$/, ""),
+					path: filePath,
+					_source: source,
+				}),
+			}),
+		),
+	);
+	return {
+		items: results.flatMap(r => r.items),
+		warnings: results.flatMap(r => r.warnings ?? []),
+	};
+}
+
+// =============================================================================
 // Provider Registration
 // =============================================================================
 
@@ -406,4 +432,12 @@ registerProvider<MCPServer>(mcpCapability.id, {
 	description: DESCRIPTION,
 	priority: PRIORITY,
 	load: loadMCPServers,
+});
+
+registerProvider<GuiMotion>(guiMotionCapability.id, {
+	id: PROVIDER_ID,
+	displayName: DISPLAY_NAME,
+	description: DESCRIPTION,
+	priority: PRIORITY,
+	load: loadGuiMotion,
 });

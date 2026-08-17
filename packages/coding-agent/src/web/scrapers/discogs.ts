@@ -5,7 +5,7 @@
  * API docs: https://www.discogs.com/developers
  */
 
-import { tryParseJson } from "@musepi/pi-utils";
+import { tryParseJson, USER_AGENT } from "@musepi/pi-utils";
 import type { RenderResult, SpecialHandler } from "./types";
 import { buildResult, loadPage } from "./types";
 
@@ -277,8 +277,7 @@ export const handleDiscogs: SpecialHandler = async (
 			signal,
 			headers: {
 				Accept: "application/json",
-				"User-Agent": "CodingAgent/1.0 +https://github.com/MuseLinn/MusePi",
-			},
+				"User-Agent": USER_AGENT,			},
 		});
 
 		if (!result.ok) return null;

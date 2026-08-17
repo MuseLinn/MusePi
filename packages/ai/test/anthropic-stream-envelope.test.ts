@@ -1735,7 +1735,7 @@ describe("anthropic stream envelope handling", () => {
 		expect(cacheControls[2]).toEqual({ type: "ephemeral" });
 	});
 
-	it("defaults API-key requests to 1h cache TTL where long retention is supported", async () => {
+	it("defaults Anthropic requests to 5m writes and keeps 1h retention opt-in", async () => {
 		type CapturedParams = { messages: Array<{ content: unknown }> };
 		const payloads: CapturedParams[] = [];
 		vi.spyOn(AnthropicMessages.prototype, "create").mockImplementation((params: unknown) => {
@@ -1758,7 +1758,7 @@ describe("anthropic stream envelope handling", () => {
 
 		await drain(model);
 		await drain(proxyModel);
-		await withEnv({ PI_CACHE_RETENTION: "short" }, () => drain(model));
+		await withEnv({ PI_CACHE_RETENTION: "long" }, () => drain(model));
 
 		const cacheControls = payloads.map(payload => {
 			const content = payload.messages.at(-1)?.content;
@@ -1766,13 +1766,8 @@ describe("anthropic stream envelope handling", () => {
 			const lastBlock: { cache_control?: { ttl?: string; type: string } } | undefined = content.at(-1);
 			return lastBlock?.cache_control;
 		});
-		// Agent sessions idle past 5 minutes on background jobs; the canonical
-		// Anthropic API defaults to the 1h breakpoint so resume doesn't cold-miss
-		// the whole prefix.
-		expect(cacheControls[0]).toEqual({ type: "ephemeral", ttl: "1h" });
-		// Endpoints without long-cache support keep the plain 5m breakpoint.
+		expect(cacheControls[0]).toEqual({ type: "ephemeral" });
 		expect(cacheControls[1]).toEqual({ type: "ephemeral" });
-		// PI_CACHE_RETENTION=short opts back out of the 1h default.
-		expect(cacheControls[2]).toEqual({ type: "ephemeral" });
+		expect(cacheControls[2]).toEqual({ type: "ephemeral", ttl: "1h" });
 	});
 });

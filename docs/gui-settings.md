@@ -1,9 +1,7 @@
 # MusePi GUI 设置面板与主题设计(现状参考)
 
 > 状态:与 `packages/gui` / `packages/collab-web` 当前实现同步(2026-08-04)。
-> 本文档取代 `docs/gui-architecture.md`、`docs/gui-migration.md`、`docs/gui-prototype.md`
-> 中关于设置面板、主题体系、磨砂玻璃的过时描述(那些文档停留在"规划/未开工"阶段)。
-> 全局 UI/UX 开发约定见 **`docs/gui-design.md`**(设计规范:布局/token/动效/组件模式)与 **`docs/gui-implementation.md`**(实现笔记:daemon 契约/踩坑/验证工作流)(2026-08-06 拆分为两份)。
+> 早期规划稿(gui-architecture / gui-migration / gui-prototype)已删除——实现已交付,本文档与 **`docs/gui-design.md`**(设计规范)和 **`docs/gui-implementation.md`**(实现笔记)是唯一现行参考(2026-08-06 拆分为两份)。
 
 ## 1. 桌面壳与入口
 

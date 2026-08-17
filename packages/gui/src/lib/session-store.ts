@@ -133,10 +133,24 @@ export class GuiSessionStore {
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
 	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
 	#snapshot: GuiSessionState;
+	/** Frame-coalesced streaming envelopes (dsh Notifier.markFrameDirty parity):
+	 *  daemon pushes per-message_update, but React only needs one render per
+	 *  animation frame — the burst collapses to a single snapshot rebuild +
+	 *  emit. Non-streaming envelopes (approval-request, recap) bypass this. */
+	#pending: StreamEvent[] = [];
+	#frameScheduled = false;
 
 	constructor(
 		sessionId: string,
-		snapshot: { entries: SessionEntry[]; state?: SessionState; cursor: number; roundDurations?: [number, number][] },
+		snapshot: {
+			entries: SessionEntry[];
+			state?: SessionState;
+			cursor: number;
+			roundDurations?: [number, number][];
+			/** Tail-window info from the daemon's initial snapshot: older
+			 *  history exists beyond the loaded tail (kimi/DSH lazy paging). */
+			tail?: { hasMore: boolean; beforeId: string | null };
+		},
 		cwd: string,
 	) {
 		this.#sessionId = sessionId;
@@ -148,7 +162,38 @@ export class GuiSessionStore {
 		const merged = roundDurationsFor(sessionId);
 		for (const [ts, ms] of snapshot.roundDurations ?? []) merged.set(ts, ms);
 		this.#roundDurations = merged;
+		this.#hasMore = snapshot.tail?.hasMore === true;
+		this.#beforeId = snapshot.tail?.beforeId ?? null;
 		this.#snapshot = this.#buildSnapshot();
+	}
+
+	/** Tail-window state: older history exists beyond the loaded tail. */
+	#hasMore = false;
+	/** Oldest loaded entry id — the session.history cursor. */
+	#beforeId: string | null = null;
+
+	/** True while the daemon still has history older than the loaded tail. */
+	get hasMore(): boolean {
+		return this.#hasMore;
+	}
+
+	/** session.history cursor for the next older page (null = exhausted). */
+	get historyBeforeId(): string | null {
+		return this.#beforeId;
+	}
+
+	/**
+	 * Prepend an older page (lazy backfill on scroll-up): the caller
+	 * fetched session.history with historyBeforeId; remaining = how many
+	 * older entries still exist beyond this page (re-arms the cursor).
+	 */
+	prependEntries(older: readonly SessionEntry[], remaining: number): void {
+		if (older.length === 0) return;
+		this.#view.prependEntries(older);
+		this.#beforeId = older[0]?.id ?? null;
+		this.#hasMore = remaining > 0 && this.#beforeId !== null;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
 	}
 
 	subscribe(listener: () => void): () => void {
@@ -215,8 +260,85 @@ export class GuiSessionStore {
 		for (const l of this.#listeners) l();
 	}
 
-	/** Apply one daemon stream envelope. */
+	/** Apply one daemon stream envelope. Non-streaming envelopes (approvals,
+	 *  recap, resume snapshots) apply synchronously — they carry UI-critical
+	 *  state. Streaming AgentEvents (message_*, tool_*, turn_*, agent_*) are
+	 *  frame-coalesced: the burst collapses to one snapshot rebuild + emit
+	 *  per animation frame (dsh Notifier.markFrameDirty parity). */
 	apply(event: StreamEvent): void {
+		if (event.kind === "approval-request" || event.kind === "recap") {
+			this.#applyNow(event);
+			this.#emit();
+			return;
+		}
+		const payload = event.payload as AgentEvent | undefined;
+		if (!payload || typeof payload !== "object") {
+			// Non-AgentEvent envelopes (state snapshots from resume etc.) are
+			// already folded into the snapshot by the daemon — nothing to do.
+			this.#emit();
+			return;
+		}
+		this.#pending.push(event);
+		this.#scheduleFlush();
+	}
+
+	/** Frame-coalesce: collapse the pending burst to one flush per frame. */
+	#scheduleFlush(): void {
+		if (this.#frameScheduled) return;
+		this.#frameScheduled = true;
+		const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
+		if (typeof raf === "function") {
+			raf(() => this.#flush());
+		} else {
+			queueMicrotask(() => this.#flush());
+		}
+	}
+
+	#flush(): void {
+		this.#frameScheduled = false;
+		const batch = this.#pending;
+		this.#pending = [];
+		if (batch.length === 0) return;
+		// Coalesce consecutive message_update envelopes of the same assistant
+		// message: only the latest cumulative payload matters (wire messages
+		// carry full state, no deltas).
+		const collapsed: StreamEvent[] = [];
+		for (const ev of batch) {
+			const prev = collapsed[collapsed.length - 1];
+			if (
+				prev &&
+				(prev.payload as AgentEvent | undefined)?.type === "message_update" &&
+				(ev.payload as AgentEvent | undefined)?.type === "message_update" &&
+				(prev.payload as { message?: { timestamp?: unknown } }).message?.timestamp ===
+					(ev.payload as { message?: { timestamp?: unknown } }).message?.timestamp
+			) {
+				collapsed[collapsed.length - 1] = ev;
+			} else {
+				collapsed.push(ev);
+			}
+		}
+		for (const ev of collapsed) this.#applyNow(ev);
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	/** Core envelope handling: state mutations + materialized view fold. */
+	#applyNow(event: StreamEvent): void {
+		// Authoritative state frames (daemon rebroadcast after revert/abort
+		// and the like): the event-driven #working flag can go stale when a
+		// turn is aborted without a turn_end — apply isStreaming whenever a
+		// state frame arrives so the stop button / thinking line never stay
+		// stuck on a phantom working turn.
+		if (event.kind === "state") {
+			const p = event.payload as { isStreaming?: unknown } | null;
+			if (typeof p?.isStreaming === "boolean") {
+				this.#working = p.isStreaming;
+				if (!p.isStreaming) this.#streaming = false;
+			}
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+			return;
+		}
 		// Pending tool approvals — the GUI answers via tool.approve / tool.deny.
 		if (event.kind === "approval-request") {
 			const p = event.payload as { requestId?: unknown; tool?: unknown };
@@ -428,8 +550,9 @@ export class GuiSessionStore {
 		// Any new wire activity supersedes the idle recap (TUI parity).
 		this.#recap = null;
 		this.#view.apply(ev);
-		this.#snapshot = this.#buildSnapshot();
-		this.#emit();
+		// NOTE: snapshot rebuild + emit are owned by the caller — the
+		// synchronous apply() path emits once, the frame flush emits once
+		// per animation frame after folding the whole batch.
 	}
 
 	dispose(): void {

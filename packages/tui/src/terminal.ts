@@ -945,10 +945,11 @@ export class ProcessTerminal implements Terminal {
 			// flush timeout elapses mid-sequence, the prefix `\x1b[?<digits>` arrives as
 			// one event and the tail `;...<terminator>` arrives as individual character
 			// events that would otherwise leak into the prompt as keystrokes. See #1238.
-			if (
-				this.#privateCsiResponseBuffer ||
-				(privateCsiPartialPattern.test(sequence) && this.#da1SentinelOwners.length > 0)
-			) {
+			// A private CSI (`\x1b[?…`) is a terminal->host report, never a keystroke, so
+			// reassembly stays armed for the whole session — not just while a probe
+			// sentinel is outstanding — otherwise a reply that lands after the sentinel
+			// FIFO drains (slow SSH/PTY links) leaks its tail into the composer (#8542).
+			if (this.#privateCsiResponseBuffer || privateCsiPartialPattern.test(sequence)) {
 				if (this.#privateCsiResponseBuffer && sequence.startsWith("\x1b")) {
 					// New escape arrived mid-reassembly — abandon partial and re-process the new sequence.
 					this.#privateCsiResponseBuffer = "";
@@ -1038,10 +1039,16 @@ export class ProcessTerminal implements Terminal {
 			}
 
 			// DA1 response: swallow our sentinel reply regardless of whether an
-			// earlier capability-specific response already succeeded. Other terminal
-			// probes should never see these replies.
-			if (da1ResponsePattern.test(sequence) && this.#da1SentinelOwners.length > 0) {
-				const owner = this.#da1SentinelOwners.shift()!;
+			// earlier capability-specific response already succeeded. `CSI ? … c` is
+			// exclusively a terminal->host report, so it is swallowed even with no
+			// outstanding sentinel — a reply that arrives after the FIFO drains (slow
+			// SSH/PTY links) must never reach the composer as literal text (#8542).
+			if (da1ResponsePattern.test(sequence)) {
+				const owner = this.#da1SentinelOwners.shift();
+				if (!owner) {
+					// Late/unowned reply: nothing to resolve, just drop the bytes.
+					return;
+				}
 				switch (owner.kind) {
 					case "osc11": {
 						if (this.#osc11Pending) {

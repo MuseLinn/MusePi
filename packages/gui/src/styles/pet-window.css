@@ -13,7 +13,7 @@
 }
 
 :root {
-	--color-accent: oklch(0.674 0.23 341);
+	--color-accent: oklch(0.72 0.16 162);
 	--color-text: oklch(0.93 0.008 60);
 	--color-danger: oklch(0.66 0.19 25);
 	--font-mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -26,6 +26,13 @@
 	--pet-surface: oklch(0.24 0.012 60 / 0.66);
 	--pet-chip-bg: oklch(0.28 0.014 60);
 	--pet-chip-bg-hover: oklch(0.36 0.016 60);
+	/* Unified bubble-stack width — the collapsed card AND the expanded list
+	 * share one OUTER box (240px card + 20px horizontal shadow room each
+	 * side), so the window width is constant across the collapsed ⇄
+	 * expanded switch. No vw-based width here: in the content-sized bubble
+	 * window a vw width feeds back into the reported window size and
+	 * converges to nothing. */
+	--pet-stack-width: 280px;
 }
 
 /* Light scheme (main window writes data-theme="light" — the pet window
@@ -113,6 +120,15 @@
 	bottom: 174px;
 	left: 50%;
 	transform: translateX(-50%);
+	/* Unified width (see --pet-stack-width): one fixed box for the
+	 * collapsed card and the expanded list, so the window width and the
+	 * shadow/feather boundary never change between states (the morph is
+	 * height-only). The 20px horizontal padding is the transparent shadow
+	 * room for the cards' box-shadow (0 4px 20px ≈ 20px each side) —
+	 * identical in both states so the boxes match. */
+	width: var(--pet-stack-width);
+	box-sizing: border-box;
+	padding: 0 20px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -122,17 +138,17 @@
 
 .pet-bubble {
 	position: relative;
-	max-width: 240px;
-	width: max-content;
+	width: 100%;
+	max-width: none;
+	box-sizing: border-box;
 	padding: 8px 12px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
 	border-radius: 16px;
-	/* Glass-look surface WITHOUT a vibrancy layer (the pet window must
-	 * stay fully transparent so the pet floats on the desktop — vibrancy
-	 * + transparent:true renders the whole window as an opaque panel): a
-	 * translucent tint lets the desktop read through, a top highlight
-	 * gradient fakes the glass sheen, and an inner top hairline adds the
-	 * catch-light. */
+	/* Glass-look surface. Fallback (Win/Linux transparent window): a
+	 * translucent tint + top highlight gradient + inner hairline fake the
+	 * frosted sheen (no vibrancy available). macOS: the window carries
+	 * native vibrancy and .pet-glass-native adds the real backdrop blur
+	 * on top of this same tint. */
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
 		var(--pet-surface);
@@ -144,12 +160,10 @@
 	transition: filter 160ms ease, opacity 160ms ease;
 }
 
-/* Collapsed stack card — content-sized like every .pet-bubble (the
- * bubble window sizes to its content; a vw-based width would shrink
- * with the window and converge to nothing). A tighter text cap so a
- * single bubble fits the room above the pet; the width morph to the
- * expanded list smooths the jump when the newest bubble and the widest
- * row differ. */
+/* Collapsed stack card — same fixed width as the expanded list (the
+ * --pet-stack-width box), so the window never resizes horizontally on
+ * expand/collapse. A tighter text cap so a single bubble fits the room
+ * above the pet. */
 .pet-bubble--stacked .pet-bubble__text {
 	max-height: 96px;
 }
@@ -179,11 +193,37 @@
  * in for huge stacks, which then scroll inside the window. */
 .pet-bubbles--expanded {
 	align-items: stretch;
-	width: min(248px, 74vw);
+	/* Vertical shadow room INSIDE the scrollport: overflow-y scrolls and
+	 * would clip the cards' box-shadows at the padding-box edge — 20px top
+	 * (head shadow 0 4px 16px ≈ 20px up) + 24px bottom (card shadow
+	 * 0 4px 20px ≈ 24px down) keep them inside the scroll area. */
+	padding: 20px 20px 24px;
 	max-height: 360px;
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
+}
+
+/* Content-boundary feather (transcript parity): the expanded list
+ * scrolls inside the window — data-top-scroll / data-bottom-scroll
+ * (useScrollShadow) fade the first/last card edges in from the scrollport
+ * so the list never reads as hard-cut against the glass. */
+.pet-bubbles--expanded[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 16px,
+		#000 calc(100% - 16px),
+		transparent 100%
+	);
+}
+
+.pet-bubbles--expanded[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+
+.pet-bubbles--expanded[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 16px);
 }
 
 /* During a collapsed ⇄ expanded morph the container height is animated
@@ -252,11 +292,6 @@
 	color: color-mix(in oklab, var(--color-text) 58%, transparent);
 }
 
-.pet-bubbles--expanded .pet-bubble {
-	width: 100%;
-	box-sizing: border-box;
-}
-
 .pet-bubbles--expanded .pet-bubble__text {
 	max-height: 88px;
 }
@@ -323,14 +358,12 @@
 	left: auto;
 	transform: none;
 	pointer-events: auto;
-	/* Content-sized: the reported box sizes the window, so any vw-based
-	 * width would shrink with the window and converge to nothing. The
-	 * margin is the transparent shadow room — the report adds the same
-	 * pad (PAD=24 in bubble-main.tsx) so the box-shadows (0 4px 20px,
-	 * 0 10px 30px) and the dismiss/stack-chip overhangs (-7px/-9px) are
-	 * never clipped at the window edge. */
-	width: max-content;
-	max-width: none;
+	/* Fixed --pet-stack-width (NOT vw-based): the reported box sizes the
+	 * window, so any vw-based width would shrink with the window and
+	 * converge to nothing. The margin is the transparent shadow room —
+	 * the report adds the same pad (PAD=24 in bubble-main.tsx) so the
+	 * box-shadows (0 4px 20px, 0 10px 30px) and the dismiss/stack-chip
+	 * overhangs (-7px/-9px) are never clipped at the window edge. */
 	margin: 24px;
 }
 
@@ -352,6 +385,21 @@
 	min-height: 0;
 }
 
+/* ── Real frosted glass (macOS) ────────────────────────────────────────
+ * The bubble window carries native under-window vibrancy on macOS
+ * (main.cjs — the main window's recipe, .pet-glass-native set by
+ * bubble-main.tsx), so the cards blur the desktop through it — same
+ * numbers as the main window's .gui-main glass (blur(24px)
+ * saturate(180%)). Win/Linux keep the self-drawn translucent recipe
+ * above (vibrancy unavailable there). */
+.pet-glass-native .pet-bubble,
+.pet-glass-native .pet-bubble__head,
+.pet-glass-native .pet-bubble__more,
+.pet-glass-native .pet-panel {
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
 /* ── Interaction panel (click the pet to toggle) ─────────────────────────
  * In the pet window (legacy positioning) the panel was absolute over the
  * pet; now it renders in the bubble window only. */
@@ -368,12 +416,13 @@
 	box-sizing: border-box;
 	border-radius: 14px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
-	/* Self-drawn glass (same recipe as .pet-bubble): the bubble window has
-	 * NO vibrancy layer (it must stay fully transparent), and backdrop-
-	 * filter cannot blur the desktop through a transparent window — the
-	 * translucent tint + top highlight + inner hairline fake the frosted
-	 * sheen. backdrop-filter stays as a best-effort for content layered
-	 * behind the panel inside the window (e.g. bubbles). */
+	/* Self-drawn glass (same recipe as .pet-bubble) on the fallback
+	 * (transparent) window: backdrop-filter cannot blur the desktop
+	 * through a transparent window — the translucent tint + top highlight
+	 * + inner hairline fake the frosted sheen, and the backdrop-filter
+	 * stays as a best-effort for content layered behind the panel. On
+	 * macOS the window carries native vibrancy and .pet-glass-native
+	 * overrides this with the real blur (blur(24px) saturate(180%)). */
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
 		var(--pet-panel-bg);

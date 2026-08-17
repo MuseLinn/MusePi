@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
 import { type } from "@musepi/omptype";
@@ -12,18 +12,26 @@ import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/se
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@musepi/pi-utils";
+import { TempDir, withTimeout } from "@musepi/pi-utils";
 
 const recordToolSchema = type({ value: type("string") });
 
 type Harness = {
 	session: AgentSession;
-	authStorage: AuthStorage;
 	tempDir: TempDir;
 };
 type SettingsOverrides = Partial<Record<SettingPath, unknown>>;
 
 const activeHarnesses: Harness[] = [];
+const sharedDir = TempDir.createSync("@pi-empty-stop-guard-shared-");
+const sharedAuthStorage = await AuthStorage.create(path.join(sharedDir.path(), "auth.db"));
+sharedAuthStorage.setRuntimeApiKey("mock", "test-key");
+const sharedModelRegistry = new ModelRegistry(sharedAuthStorage, path.join(sharedDir.path(), "models.yml"));
+
+afterAll(() => {
+	sharedAuthStorage.close();
+	sharedDir.removeSync();
+});
 
 const recordTool: AgentTool<typeof recordToolSchema, { value: string }> = {
 	name: "record",
@@ -69,6 +77,14 @@ function thinkingOnlyStop(): MockResponse {
 	};
 }
 
+function emptyProviderResponse(): MockResponse {
+	return {
+		content: [{ type: "thinking", thinking: "I finished reasoning but omitted the final answer." }],
+		stopReason: "error",
+		errorMessage: "Cloud Code Assist API returned a thought-only response without final output",
+	};
+}
+
 function signedThinkingOnlyStop(): MockResponse {
 	const content: ThinkingContent = { type: "thinking", thinking: "", thinkingSignature: "nonempty" };
 	return {
@@ -89,12 +105,11 @@ async function createHarness(
 	} = {},
 ): Promise<Harness & { mock: MockModel }> {
 	const tempDir = TempDir.createSync("@pi-empty-stop-guard-");
-	const authStorage = await AuthStorage.create(path.join(tempDir.path(), "auth.db"));
-	authStorage.setRuntimeApiKey("mock", "test-key");
+	const authStorage = sharedAuthStorage;
 
 	const mock = createMockModel({ provider: options.provider, id: options.id, responses });
 	authStorage.setRuntimeApiKey(mock.provider, "test-key");
-	const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
+	const modelRegistry = sharedModelRegistry;
 	const settings = Settings.isolated({
 		"compaction.enabled": false,
 		"retry.enabled": false,
@@ -129,7 +144,7 @@ async function createHarness(
 		toolRegistry: new Map(tools.map(tool => [tool.name, tool])),
 		extensionRunner: options.extensionRunner,
 	});
-	const harness = { session, authStorage, tempDir };
+	const harness = { session, tempDir };
 	activeHarnesses.push(harness);
 	return { ...harness, mock };
 }
@@ -165,18 +180,12 @@ function reminderMessages(messages: AgentMessage[]): AgentMessage[] {
 }
 
 async function expectPromptCompletes(prompt: Promise<boolean>): Promise<void> {
-	await Promise.race([
-		prompt,
-		Bun.sleep(1_000).then(() => {
-			throw new Error("Expected session prompt to settle after empty-stop retry cap");
-		}),
-	]);
+	await withTimeout(prompt, 1_000, "Expected session prompt to settle after empty-stop retry cap");
 }
 
 afterEach(async () => {
 	for (const harness of activeHarnesses.splice(0)) {
 		await harness.session.dispose();
-		harness.authStorage.close();
 		harness.tempDir.removeSync();
 	}
 	vi.restoreAllMocks();
@@ -242,6 +251,67 @@ describe("AgentSession empty stop guard", () => {
 		expect(assistantText(session.agent.state.messages)).toContain("finished after thinking-only retry");
 		expect(reminderMessages(session.agent.state.messages)).toHaveLength(1);
 		expect(emptyAssistantStops(session.agent.state.messages)).toHaveLength(0);
+	});
+
+	it("continues with an output reminder after a Cloud Code Assist empty response", async () => {
+		const { session, mock } = await createHarness([
+			emptyProviderResponse(),
+			{ content: ["finished after provider-empty retry"], stopReason: "stop" },
+		]);
+
+		await session.prompt("finish the response");
+		await session.waitForIdle();
+
+		expect(mock.calls).toHaveLength(2);
+		expect(assistantText(session.agent.state.messages)).toContain("finished after provider-empty retry");
+		expect(reminderMessages(session.agent.state.messages)).toHaveLength(1);
+		expect(
+			session.agent.state.messages.some(message => message.role === "assistant" && message.stopReason === "error"),
+		).toBe(false);
+	});
+
+	it("caps provider-empty recovery without consuming generic retries and accepts the next prompt", async () => {
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const { session, mock } = await createHarness(
+			[emptyProviderResponse(), emptyProviderResponse(), emptyProviderResponse(), emptyProviderResponse()],
+			{
+				"retry.enabled": true,
+				"retry.baseDelayMs": 5,
+				"retry.maxDelayMs": 5_000,
+				"retry.maxRetries": 2,
+			},
+		);
+		const retryStartEvents: Array<Extract<AgentSessionEvent, { type: "auto_retry_start" }>> = [];
+		const retryEndEvents: Array<Extract<AgentSessionEvent, { type: "auto_retry_end" }>> = [];
+		session.subscribe(event => {
+			if (event.type === "auto_retry_start") retryStartEvents.push(event);
+			if (event.type === "auto_retry_end") retryEndEvents.push(event);
+		});
+
+		await expectPromptCompletes(session.prompt("finish the response after reasoning"));
+		await session.waitForIdle();
+
+		expect(mock.calls).toHaveLength(4);
+		expect(reminderMessages(session.agent.state.messages)).toHaveLength(3);
+		expect(retryStartEvents).toHaveLength(0);
+		expect(retryEndEvents).toHaveLength(1);
+		expect(retryEndEvents[0]).toMatchObject({
+			type: "auto_retry_end",
+			success: false,
+			attempt: 3,
+		});
+		expect(retryEndEvents[0]?.finalError).toContain("no final output");
+		expect(session.isRetrying).toBe(false);
+		expect(session.retryAttempt).toBe(0);
+
+		mock.push({ content: ["fresh final answer"], stopReason: "stop" });
+		await expectPromptCompletes(session.prompt("continue"));
+		await session.waitForIdle();
+
+		expect(mock.calls).toHaveLength(5);
+		expect(retryEndEvents).toHaveLength(1);
+		expect(session.isRetrying).toBe(false);
+		expect(assistantText(session.agent.state.messages)).toContain("fresh final answer");
 	});
 
 	it("accepts a signed thinking-only stop without retrying", async () => {

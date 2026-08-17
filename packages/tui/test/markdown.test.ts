@@ -68,9 +68,6 @@ describe("Markdown component", () => {
 
 			const lines = markdown.render(80);
 
-			// Check that we have content
-			expect(lines.length > 0).toBeTruthy();
-
 			// Strip ANSI codes for checking
 			const plainLines = lines.map(line => stripVTControlCharacters(line));
 
@@ -257,6 +254,70 @@ describe("Markdown component", () => {
 			expect(plainLines.some(line => line.includes("-"))).toBeTruthy();
 		});
 
+		it("recovers rich Markdown after a lone closing fence from Gemini", () => {
+			const markdown = new Markdown(
+				`=== PACED IP ROTATION SOAK RESULTS ===
+Total Queries: 20
+Average Latency: 1,240 ms
+\`\`\`
+
+---
+
+### Production Deployment Status
+
+| Workload | Pod Status |
+| :--- | :--- |
+| google-scraper | **1/1 Running** |`,
+				0,
+				0,
+				defaultMarkdownTheme,
+			);
+			markdown.transientRenderCache = true;
+			markdown.render(80);
+
+			markdown.transientRenderCache = false;
+			const plainLines = markdown.render(80).map(line => stripVTControlCharacters(line).trimEnd());
+
+			expect(plainLines.some(line => line.includes("| :--- | :--- |"))).toBe(false);
+			expect(plainLines.filter(line => line.includes("+")).length).toBeGreaterThanOrEqual(2);
+			expect(plainLines.some(line => line.includes("google-scraper") && line.includes("1/1 Running"))).toBe(true);
+		});
+
+		it("keeps an intentional unclosed fenced Markdown example literal", () => {
+			const markdown = new Markdown(
+				`Markdown source:
+\`\`\`
+### Production Deployment Status
+
+| Workload | Pod Status |
+| :--- | :--- |
+| google-scraper | 1/1 Running |`,
+				0,
+				0,
+				defaultMarkdownTheme,
+			);
+			const plainLines = markdown.render(80).map(line => stripVTControlCharacters(line).trimEnd());
+
+			expect(plainLines.some(line => line.includes("| :--- | :--- |"))).toBe(true);
+			expect(plainLines.filter(line => line.includes("+"))).toHaveLength(0);
+		});
+
+		it("keeps an unfinished code block with a rule and heading literal when no table follows", () => {
+			const markdown = new Markdown(
+				`The process printed this
+\`\`\`
+---
+### Still inside the unfinished block`,
+				0,
+				0,
+				defaultMarkdownTheme,
+			);
+			const plainLines = markdown.render(80).map(line => stripVTControlCharacters(line).trimEnd());
+
+			expect(plainLines.some(line => line.includes("---"))).toBe(true);
+			expect(plainLines.some(line => line.includes("### Still inside the unfinished block"))).toBe(true);
+		});
+
 		it("should render row dividers between data rows", () => {
 			const markdown = new Markdown(
 				`| Name | Age |
@@ -337,9 +398,6 @@ describe("Markdown component", () => {
 			);
 
 			const lines = markdown.render(80);
-
-			// Should render without errors
-			expect(lines.length > 0).toBeTruthy();
 
 			const plainLines = lines.map(line => stripVTControlCharacters(line));
 			expect(plainLines.some(line => line.includes("Very long column header"))).toBeTruthy();
@@ -423,7 +481,6 @@ describe("Markdown component", () => {
 
 			// Borders should stay intact (exactly 2 vertical borders for a 1-col table)
 			const tableLines = plainLines.filter(line => line.startsWith("|"));
-			expect(tableLines.length > 0, "Expected table rows to render").toBeTruthy();
 			for (const line of tableLines) {
 				const borderCount = line.split("|").length - 1;
 				expect(borderCount, `Expected 2 borders, got ${borderCount}: "${line}"`).toBe(2);
@@ -529,9 +586,6 @@ describe("Markdown component", () => {
 			// Very narrow width
 			const lines = markdown.render(15);
 			const plainLines = lines.map(line => stripVTControlCharacters(line).trimEnd());
-
-			// Should not crash and should produce output
-			expect(lines.length > 0, "Should produce output").toBeTruthy();
 
 			// Lines should not exceed width
 			for (const line of plainLines) {

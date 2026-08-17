@@ -1558,7 +1558,14 @@ pub fn compile_subst_flags(
 				}
 				let location = ScriptLocation::at_position(lines, line);
 				let mut path = read_file_path(lines, line)?;
-				if let Some(cwd) = cwd && path.is_relative() { path = cwd.join(path); }
+				if let Some(cwd) = cwd {
+					let normalized = brush_core::sys::fs::normalize_shell_path(&path);
+					path = if normalized.is_absolute() {
+						normalized.into_owned()
+					} else {
+						cwd.join(normalized)
+					};
+				}
 				subst.write_file = Some(NamedWriter::new(path, location)?);
 				return Ok(()); // 'w' is the last flag allowed
 			},
@@ -1633,7 +1640,12 @@ fn compile_read_file_command(
 		return compilation_error(lines, line, ERR_SANDBOX);
 	}
 	let mut path = read_file_path(lines, line)?;
-	if path.is_relative() { path = context.cwd.join(path); }
+	let normalized = brush_core::sys::fs::normalize_shell_path(&path);
+	path = if normalized.is_absolute() {
+		normalized.into_owned()
+	} else {
+		context.cwd.join(normalized)
+	};
 	cmd.data = CommandData::Path(path);
 	Ok(CommandHandling::Continue)
 }
@@ -1651,7 +1663,12 @@ fn compile_write_file_command(
 	}
 	let location = ScriptLocation::at_position(lines, line);
 	let mut path = read_file_path(lines, line)?;
-	if path.is_relative() { path = context.cwd.join(path); }
+	let normalized = brush_core::sys::fs::normalize_shell_path(&path);
+	path = if normalized.is_absolute() {
+		normalized.into_owned()
+	} else {
+		context.cwd.join(normalized)
+	};
 	cmd.data = CommandData::NamedWriter(NamedWriter::new(path, location)?);
 	Ok(CommandHandling::Continue)
 }
@@ -7913,7 +7930,7 @@ fn re_or_saved_re<'a>(
 
 #[cfg(unix)]
 fn shell_command(cmd: &str, host: &Host) -> std::process::Command {
-	let mut c = std::process::Command::new("/bin/sh");
+	let mut c = std::process::Command::new("sh");
 	c.arg("-c").arg(cmd);
 	// run relative to the shell's cwd,
 	// not the host process cwd. `output()` already keeps the child's stdio
@@ -8822,9 +8839,15 @@ impl ScriptLineProvider {
 						line_number: 0,
 					};
 				} else {
-					// resolve `-f`
-					// script files against the shell working directory.
-					let resolved = if p.is_absolute() { p.clone() } else { self.cwd.join(p) };
+					// resolve `-f` script files against the shell working
+					// directory, normalizing MSYS/WSL drive aliases (`/c/...`)
+					// to native drive paths first — mirrors `Host::resolve`.
+					let normalized = brush_core::sys::fs::normalize_shell_path(p);
+					let resolved = if normalized.is_absolute() {
+						normalized.into_owned()
+					} else {
+						self.cwd.join(normalized)
+					};
 					let file = File::open(resolved)
 						.map_err_context(|| format!("error opening script file {}", p.quote()))?;
 					self.state = State::Active {
@@ -8913,6 +8936,30 @@ mod tests {
 		}
 
 		assert_eq!(lines, vec!["file line 1", "file line 2"]);
+	}
+
+	#[cfg(windows)]
+	#[test]
+	fn test_file_source_resolves_msys_drive_alias() {
+		let mut temp_file = NamedTempFile::new().unwrap();
+		writeln!(temp_file, "aliased line 1").unwrap();
+		writeln!(temp_file, "aliased line 2").unwrap();
+
+		let native = temp_file.path().to_string_lossy().replace('\\', "/");
+		let (drive, tail) = native
+			.split_once(":/")
+			.unwrap_or_else(|| panic!("expected drive-qualified temp path, got {native:?}"));
+		let alias = format!("/{}/{}", drive.to_ascii_lowercase(), tail);
+
+		let input = vec![ScriptValue::PathVal(PathBuf::from(alias))];
+		let mut provider = ScriptLineProvider::new(input);
+
+		let mut lines = Vec::new();
+		while let Some(line) = provider.next_line().unwrap() {
+			lines.push(line.trim_end().to_string());
+		}
+
+		assert_eq!(lines, vec!["aliased line 1", "aliased line 2"]);
 	}
 
 	#[test]

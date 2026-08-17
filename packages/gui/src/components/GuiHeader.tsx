@@ -64,7 +64,6 @@ export function GuiHeader({
 	connected,
 	daemonUrl,
 	onReconnect,
-	onRestartDaemon,
 	onOpenCollab,
 	onDeleteSession,
 }: {
@@ -112,9 +111,6 @@ export function GuiHeader({
 	daemonUrl: string;
 	/** Re-run the daemon boot/connect chain (instance menu 重新连接). */
 	onReconnect(): void;
-	/** Restart the daemon process itself (instance menu 重启 daemon) —
-	 *  kills the detached listener and spawns fresh code, then reconnects. */
-	onRestartDaemon(): void;
 	/** Open the collab remote-control dialog (session 分享). */
 	onOpenCollab(): void;
 	/** Permanently delete a session (journal + index); the caller also
@@ -1055,18 +1051,6 @@ export function GuiHeader({
 					>
 						<Icon name="restart" className="h-3.5 w-3.5" />
 						<span>{t("reconnect")}</span>
-					</button>
-					<button
-						type="button"
-						className="gui-view-opt"
-						title={t("restart daemon description")}
-						onClick={() => {
-							setInstanceOpen(false);
-							onRestartDaemon();
-						}}
-					>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-						<span>{t("restart daemon")}</span>
 					</button>
 					<div className="my-1 border-t border-[var(--border)]" />
 					<button

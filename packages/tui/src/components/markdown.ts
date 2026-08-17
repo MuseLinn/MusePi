@@ -11,13 +11,19 @@ import { latexToBlock } from "../latex-block";
 import { inlineMathSpanEnd, isBareMathEnvironment, latexToUnicode } from "../latex-to-unicode";
 import type { SymbolTheme } from "../symbols";
 import { TERMINAL } from "../terminal-capabilities";
-import type { Component, NativeScrollbackCommittedRows, NativeScrollbackReplay } from "../tui";
+import type {
+	Component,
+	NativeScrollbackCommittedRows,
+	NativeScrollbackReplay,
+	NativeScrollbackWidthEpoch,
+} from "../tui";
 import {
 	applyBackgroundToLine,
 	Ellipsis,
 	encodeTextSized,
 	getPaddingX,
 	getSegmenter,
+	isOsc66Line,
 	padding,
 	replaceTabs,
 	truncateToWidth,
@@ -37,16 +43,77 @@ function normalizeOsc8Terminators(text: string): string {
 	return text.replace(OSC8_ST_PREFIX_REGEX, "$1\x07");
 }
 
-// OSC 66 (Kitty text-sizing) heading spans are emitted as a single indivisible
-// unit by the H1 render path. Like image-protocol lines, they must bypass
-// ANSI wrapping and width padding: re-wrapping splits/normalizes the sized span
-// (recomputing the explicit `w=` cell count and hoisting SGR out of the OSC
-// payload), and padding would append trailing cells past the doubled glyph.
-const OSC66_LINE_PREFIX = "\x1b]66;";
+const MARKDOWN_FENCE_LINE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
+const MARKDOWN_HEADING_LINE = /^ {0,3}#{1,6}[ \t]+\S/;
+const FENCED_SOURCE_INTRO = /\b(?:code|example|markdown|output|snippet|source)\s*:?\s*$/i;
 
-function isOsc66Line(line: string): boolean {
-	return line.includes(OSC66_LINE_PREFIX);
+function isGfmTableDelimiter(line: string, headerLine: string | undefined): boolean {
+	if (!headerLine || !line.includes("|") || !headerLine.includes("|")) return false;
+	const delimiterCells = line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+	const headerCells = headerLine.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+	return (
+		delimiterCells.length >= 2 &&
+		headerCells.length === delimiterCells.length &&
+		delimiterCells.every(cell => /^:?-{3,}:?$/.test(cell.trim())) &&
+		headerCells.every(cell => cell.trim().length > 0)
+	);
 }
+
+/**
+ * Gemini can emit a bare closing fence without its opener, then continue with
+ * headings and tables. CommonMark must interpret that lone fence as an opener,
+ * which turns the rest of an otherwise valid report into one raw code block.
+ *
+ * Repair only the unambiguous rich-document shape at final render: one
+ * unmatched bare fence after prose, followed by both an ATX heading and a GFM
+ * table delimiter. Keep ordinary incomplete code blocks, fenced Markdown
+ * examples, and every matched fence untouched.
+ */
+function repairOrphanClosingFence(text: string): string {
+	const lines = text.split("\n");
+	let open: { index: number; marker: string; info: string } | undefined;
+	for (let index = 0; index < lines.length; index++) {
+		const match = MARKDOWN_FENCE_LINE.exec(lines[index]!);
+		if (!match) continue;
+		const marker = match[1]!;
+		const info = match[2]!.trim();
+		if (!open) {
+			open = { index, marker, info };
+			continue;
+		}
+		if (marker[0] === open.marker[0] && marker.length >= open.marker.length && info === "") {
+			open = undefined;
+		}
+	}
+	if (open?.info !== "") return text;
+
+	let previous = "";
+	for (let index = open.index - 1; index >= 0; index--) {
+		previous = lines[index]!.trim();
+		if (previous) break;
+	}
+	if (!previous || previous.endsWith(":") || FENCED_SOURCE_INTRO.test(previous)) return text;
+
+	let hasHeading = false;
+	let hasTableDelimiter = false;
+	for (let index = open.index + 1; index < lines.length; index++) {
+		const line = lines[index]!;
+		hasHeading ||= MARKDOWN_HEADING_LINE.test(line);
+		hasTableDelimiter ||= isGfmTableDelimiter(line, lines[index - 1]);
+		if (hasHeading && hasTableDelimiter) {
+			lines.splice(open.index, 1);
+			return lines.join("\n");
+		}
+	}
+	return text;
+}
+
+// OSC 66 (Kitty text-sizing) heading spans are emitted as a single indivisible
+// unit by the H1 render path. Like image-protocol lines, they bypass ANSI
+// wrapping and width padding (see `isOsc66Line` in ../utils): re-wrapping
+// splits/normalizes the sized span (recomputing the explicit `w=` cell count
+// and hoisting SGR out of the OSC payload), and padding would append trailing
+// cells past the doubled glyph.
 
 function normalizeHtmlEntitiesForTerminal(raw: string): string {
 	const parseCodePoint = (value: number): string => {
@@ -1412,7 +1479,9 @@ interface RenderedTableLayout extends TableLayoutLock {
 	endRow: number;
 }
 
-export class Markdown implements Component, NativeScrollbackCommittedRows, NativeScrollbackReplay {
+export class Markdown
+	implements Component, NativeScrollbackCommittedRows, NativeScrollbackReplay, NativeScrollbackWidthEpoch
+{
 	#text: string;
 	#paddingX: number; // Left/right padding
 	#paddingY: number; // Top/bottom padding
@@ -1450,6 +1519,16 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	// exposure to 0 and re-earns it — the exposure is hard-monotone within a
 	// text lineage.
 	#settledExposedText?: string;
+	// Semantic source state that produced the most recent render. Unlike #text,
+	// it does not advance when streaming updates arrive before the next paint.
+	#lastRenderedText?: string;
+	#lastRenderedTransientRenderCache = false;
+	#lastRenderedHasMutableTrailingRow = false;
+	#widthEpochBoundaries = new WeakMap<
+		object,
+		{ text: string; transientRenderCache: boolean; hasMutableTrailingRow: boolean }
+	>();
+
 	// True while #renderStreamingContentLines renders the frozen token range:
 	// frozen code blocks highlight even in transient mode so their bytes match
 	// the finalized render (they render once into the prefix line cache, so
@@ -1543,6 +1622,56 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	 */
 	getLastRenderSettledRows(): number {
 		return this.#lastRenderSettledRows;
+	}
+
+	captureNativeScrollbackWidthEpoch(): unknown {
+		if (this.#lastRenderedText === undefined) return undefined;
+		const marker = {};
+		this.#widthEpochBoundaries.set(marker, {
+			text: this.#lastRenderedText,
+			transientRenderCache: this.#lastRenderedTransientRenderCache,
+			hasMutableTrailingRow: this.#lastRenderedHasMutableTrailingRow,
+		});
+		return marker;
+	}
+
+	resolveNativeScrollbackWidthEpoch(boundary: unknown): number | undefined {
+		if (typeof boundary !== "object" || boundary === null || this.#cachedWidth === undefined) return undefined;
+		const captured = this.#widthEpochBoundaries.get(boundary);
+		if (captured === undefined) return undefined;
+		const snapshot = new Markdown(
+			captured.text,
+			this.#paddingX,
+			this.#paddingY,
+			this.#theme,
+			this.#defaultTextStyle,
+			this.#codeBlockIndent,
+		);
+		snapshot.#ignoreTight = this.#ignoreTight;
+		snapshot.#transientRenderCache = captured.transientRenderCache;
+		return Math.max(
+			0,
+			snapshot.render(this.#cachedWidth).length - this.#paddingY - (captured.hasMutableTrailingRow ? 1 : 0),
+		);
+	}
+
+	getNativeScrollbackWidthEpochRows(): number | undefined {
+		return this.#cachedLines === undefined ? undefined : this.#widthEpochRows(this.#cachedLines.length);
+	}
+
+	isNativeScrollbackWidthEpochAppendOnly(boundary: unknown): boolean {
+		if (typeof boundary !== "object" || boundary === null) return true;
+		return this.#widthEpochBoundaries.get(boundary)?.hasMutableTrailingRow !== true;
+	}
+
+	#widthEpochRows(renderedRows: number): number {
+		return Math.max(0, renderedRows - this.#paddingY - (this.#transientRenderCache ? 1 : 0));
+	}
+
+	#recordLastRenderedState(hasContentRows: boolean): void {
+		this.#lastRenderedText = this.#text;
+		this.#lastRenderedTransientRenderCache = this.#transientRenderCache;
+		this.#lastRenderedHasMutableTrailingRow = this.#transientRenderCache && hasContentRows;
 	}
 
 	/**
@@ -1644,6 +1773,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		// Returning the cached reference is load-bearing: parents memoize their
 		// concatenation on reference equality.
 		if (this.#cachedLines && this.#cachedText === this.#text && this.#cachedWidth === width) {
+			this.#recordLastRenderedState(this.#cachedLines.length > 0);
 			return this.#cachedLines;
 		}
 
@@ -1660,11 +1790,14 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			this.#cachedText = this.#text;
 			this.#cachedWidth = width;
 			this.#cachedLines = EMPTY_RENDER_LINES;
+			this.#recordLastRenderedState(false);
 			return EMPTY_RENDER_LINES;
 		}
 
 		// Replace tabs with 3 spaces for consistent rendering
-		const normalizedText = replaceTabs(this.#text);
+		const normalizedText = this.transientRenderCache
+			? replaceTabs(this.#text)
+			: repairOrphanClosingFence(replaceTabs(this.#text));
 		const signature = this.#renderSignature(width, paddingX);
 
 		// L2: module-level LRU — survives component disposal/recreation across
@@ -1695,6 +1828,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				this.#cachedText = this.#text;
 				this.#cachedWidth = width;
 				this.#cachedLines = cached.lines;
+				this.#recordLastRenderedState(cached.lines.length > 0);
 				return cached.lines;
 			}
 		}
@@ -1738,6 +1872,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				})),
 			});
 		}
+		this.#recordLastRenderedState(contentLines.length > 0);
 
 		return result;
 	}

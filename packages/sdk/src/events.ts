@@ -27,6 +27,16 @@ import type {
 } from "@musepi/pi-wire";
 import { Type } from "@sinclair/typebox";
 
+/** Wire shape of one multi-question ask-dialog question (mode "dialog"). */
+export interface AskDialogQuestionWire {
+	id: string;
+	question: string;
+	header?: string;
+	options: { label: string; description?: string; preview?: string }[];
+	multi?: boolean;
+	recommended?: number;
+}
+
 /** Runtime-validated envelope (kind + seq); payload is pinned by the type layer. */
 export const sessionStreamEnvelope = Type.Object({
 	kind: Type.Union([
@@ -34,6 +44,7 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("event"),
 		Type.Literal("state"),
 		Type.Literal("approval-request"),
+		Type.Literal("ask-request"),
 		Type.Literal("agent-lifecycle"),
 		Type.Literal("agent-progress"),
 		Type.Literal("pause-state"),
@@ -55,6 +66,29 @@ export type SessionStreamEvent =
 			kind: "approval-request";
 			seq: number;
 			payload: { requestId: string; tool: string; args: unknown; scope?: string };
+	  }
+	// ask tool question / custom input pushed to the GUI (TUI ask parity):
+	// the client answers via session.askAnswer. Single select/input keep the
+	// flat shape; multi-question dialogs (ask `questions: [...]`) carry the
+	// questions array and answer with an ExtensionAskDialogResult-shaped
+	// payload via session.askAnswer.
+	| {
+			kind: "ask-request";
+			seq: number;
+			payload:
+				| {
+						requestId: string;
+						title: string;
+						options: string[] | null;
+						multi: boolean;
+						mode: "select" | "input";
+				  }
+				| {
+						requestId: string;
+						title: string;
+						mode: "dialog";
+						questions: AskDialogQuestionWire[] | null;
+				  };
 	  }
 	| { kind: "agent-lifecycle"; seq: number; payload: SubagentLifecyclePayload }
 	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the

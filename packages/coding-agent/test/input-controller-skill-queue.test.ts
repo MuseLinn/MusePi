@@ -207,7 +207,7 @@ describe("InputController skill queue chip metadata", () => {
 		editor.setText("/goal set Ship the release");
 		await controller.handleFollowUp();
 
-		expect(handleGoalModeCommand).toHaveBeenCalledWith("set Ship the release");
+		expect(handleGoalModeCommand.mock.calls[0]?.[0]).toBe("set Ship the release");
 		expect(prompt).not.toHaveBeenCalled();
 		expect(editor.getText()).toBe("");
 	});

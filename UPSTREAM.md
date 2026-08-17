@@ -5,16 +5,125 @@
 ## 同步状态
 
 - 数据源：本地 oh-my-pi 仓库（`/Users/muselinn/harness-engineering/oh-my-pi`），已 fetch 全部 tags
-- 当前同步基线：**v17.2.12**（2026-08-09 完成，60 commits / 641 files / +88,543 / −87,950 原始 diff；**shell builtins 大重构**——`crates/vendor/brush-builtins` + `crates/pi-shell` 的 coreutils/moreutils 等 50+ 模块合并为第一方 `crates/pi-builtins`，vendor/uu-* 全部移除，crates 净 −96k 行；slash-command 注册表拆分为 builtin-{modes,session,control,lifecycle,marketplace,collaboration,completions}.ts 7 模块 + 统一 registry；新增 /cleanup 命令（scripts/cleanup-scan.ts）；若干修复）
-- 上次基线：v17.2.11（2026-08-08 完成，141 commits / 256 files / +11,890 / −15,938；含 **Agent Plugins 1.0.0 标准支持**、pi-voice miniaudio→原生平台音频后端、MCP header 策略、secrets 重构等。注意：同步内容被并发 GUI 会话合入 0e45e3551（"fix: maximized widget modal"），历史未拆分）
-- musepi 应用版本：**0.3.0**（独立于上游版本号，见「版本说明」）
+- 当前同步基线：**v17.3.0**（2026-08-13 完成，502 commits / 828 files / +46,389 / −10,977 原始 diff；**/agents 全屏 hub 重设计**（agents-hub.ts 1453 行替换 agent-dashboard.ts 1254 行）、**per-agent advisor**（移除全局 advisor.subagents → frontmatter `advisor` / `task.agentAdvisor`）、**/usage 官方配额**（OpenCode Go 真实用量替代估算）、**/compress 语义压缩命令**、**omp.rename 指针**（npm 包改名准备）、**session-title 生成回归修复**、**LSP 多项修复**（overlay 隔离/rename 回滚/diagnostics 语义）、**/shake 保留工具结果尾巴**、Grok 4.6 thinking-loop guard、Nix 构建支持（musepi 不采用）；见下方「验证记录（v17.3.0 移植）」
+- 上次基线：v17.2.12（2026-08-09 完成，60 commits / 641 files / +88,543 / −87,950 原始 diff；**shell builtins 大重构**——`crates/vendor/brush-builtins` + `crates/pi-shell` 的 coreutils/moreutils 等 50+ 模块合并为第一方 `crates/pi-builtins`，vendor/uu-* 全部移除，crates 净 −96k 行；slash-command 注册表拆分为 builtin-{modes,session,control,lifecycle,marketplace,collaboration,completions}.ts 7 模块 + 统一 registry；新增 /cleanup 命令（scripts/cleanup-scan.ts）；若干修复）
+- musepi 应用版本：**0.4.0**（独立于上游版本号，见「版本说明」）
 - ⚠️ **musepi 定制（2026-08-10，基线 v17.2.12 之后）**：`packages/coding-agent/src/tools/computer.ts` + `computer/{protocol,supervisor,worker}.ts` 含 ours 定制——**ComputerInputEvent 输入事件透出**（worker 的 Win/El 输入方法经 supervisor `run(…, onInput)` → computer.ts `_onUpdate` 推 `details.inputEvents`，驱动 GUI computer-use 光晕覆盖层的目标高亮）。上游同步时这 4 个文件按 OVERLAP 处理：保留 ours 事件透出 + 并入 theirs 变更；`test/computer-input-events.test.ts` 为 musepi 新增（NEW，无冲突）。参考：docs 的 computer-use.md/computer.md 同属 ours 深度定制
+
+## 选择性核对（v17.3.1–v17.3.4,2026-08-15 决策）
+
+> **决策（用户拍板）**：不再暴力全量移植。改为文件级选择性/手动核对合并,只吸收上游 bugfix 与必要 feature,版本不升。
+
+> **执行结果（2026-08-15）**：141 files changed, +5117/−1438。PURE 复制 94(src+test,终态+rename)+ OVERLAP 3-way 28(21+7 gap,含冲突手解 9:defs.bzl/alibaba test/config.ts/helpers.ts/agent-session.ts/gemini-cli.ts/models.json 9 块/executor.ts/acp test)+ ABSENT 补 2(claude-paths.ts 无需品牌化,issue-8542-repro.test.ts)+ skip-only src 补 19(ptree.ts 2 参 kill 等)。9 个受影响包 check:types 0 错误;CLI 冒烟 `musepi/17.3.0`。**测试**:移植修复相关 300+ 断言通过;失败均为 Windows 环境性(上游 CI=linux):terminal-appearance kitty push(win32 ConPTY)、foreign-session-stores(盘符冒号路径 ENOTDIR)、sdk-tool-activation(EBUSY 句柄)、read-multi-range/read-edit-out-of-cwd/browser-launch(path.join 反斜杠)、remote-compaction(既有挂起,基线确认)、status-line-vcs-refresh(有界轮询 >300s,单测全过)。claude-plugins 测试夹具 `.omp`→`getPluginsDir()` 品牌化修复(38/38 过)。**musepi 定制适配**:job-manager register/AsyncJob.type 联合补 `agnes-video`;gemini-cli 删除上游已移除的 ANTIGRAVITY_SYSTEM_INSTRUCTION 注入与 re-export。
+
+### 版本涟漪 v17.3.4 + MusePi 0.4.1(2026-08-15)
+
+- 14 个 workspace 包 version 17.3.0→**17.3.4**(agent/ai/catalog/coding-agent/hashline/mnemopi/natives/omptype/snapcompact/stats/swarm-extension/tui/utils/wire);root catalog 13 条同步;sdk 的 @musepi/pi-wire 依赖同步
+- **@musepi/pi-natives 哨兵 17.3.0→17.3.4**:crates/pi-natives/src/lib.rs js_name + packages/natives/native/index.js + index.d.ts;win32 addon 本机重建(bazel-natives.ts host → 本地 napi build);darwin/linux 需对应主机/交叉构建
+- **MusePi 应用 0.4.0→0.4.1**:src/musepi.ts MUSEPI_VERSION + src/musepi/branding/index.ts productVersion + packages/gui/package.json + gui/update-manifest.json;TUI 标注 `0.4.1 (OMP 17.3.4)`(cli.ts/main.ts displayVersion 自动拼接),GUI system.meta 派生显示
+- bun.lock:workspace 版本 + catalog + sdk 依赖替换(注意:全量 sed 会误伤第三方包——`lint-staged@17.3.0` 被改成 17.3.4 后 npm 404,已还原;只应替换 @musepi 与 workspace version 行);`bun install --frozen-lockfile` 通过(748 installs 无变化)
+
+### 测试清理与平台适配(2026-08-15)
+
+- **孤儿测试移除 5 个**(上游已删、musepi 保留):browser-tab-evaluate.test.ts、eval/js-context-manager.test.ts、utils/markit-mupdf-warnings.test.ts、catalog/test/fixtures/models-lazy-provider-cache.ts **+ catalog/test/models-lazy-provider-cache.test.ts**(初查漏网——test 经 `import.meta.dir + "/fixtures/…"` 运行时读 fixture,静态 import 查不出;已 `git rm` 两个)
+- **bundled-reference-laziness test/fixture 配对补齐**:fixture 已随 skip-only 批次移植为 v17.3.4(输出改走 stdout),test 仍是 v17.3.0(读 resultPath 文件)→ JSON.parse("") 必炸;已补移植 v17.3.4 test(读 stdout),catalog 563/563 全绿
+- **Windows 环境性测试适配**(上游 CI=linux,win32 行为差异):
+  - terminal-appearance kitty push:win32 走 ConPTY 分支推 `>1u`/`>3u`,测试期望集合扩为两种分支(契约=单推单弹)
+  - browser-launch:darwin/linux 候选路径 `path.join`→`path.posix.join`(实现级修复,候选路径本就是 posix 语义)
+  - read-multi-range/read-edit-out-of-cwd:期望路径 `path.join`→`path.posix.join`(实现输出恒正斜杠)
+  - sdk-tool-activation:afterAll 先 `modelRegistry.authStorage.close()` 再删目录(Windows 不能删打开中的 SQLite);temp.ts 清理重试窗口 2s→5s
+  - foreign-session-stores:`.projects/<encoded-cwd>` 布局 win32 盘符冒号不可建目录(生产代码 posix-only),4 个布局依赖测试 `describe.skipIf(process.platform==="win32")`
+- 汇总:25 个移植+适配测试文件 684 pass / 7 skip / 0 fail(mcp-http-transport 偶发并发抖动,隔离 10/10);CLI 冒烟 `musepi/0.4.1 (OMP 17.3.4)`
+
+### 跳过项分析与后续方案(2026-08-15 记录)
+
+| 上游提交 | 内容 | 规模 | 方案 |
+|---|---|---|---|
+| 04fab5ecb4 mupdf→native pdf | 删 7 个 markit pdf TS 转换器 + embed-mupdf-wasm.ts + read-pdf-images.ts(−3.6k 行),新增 crates/pi-natives/src/pdf.rs(Rust 原生渲染)+ read-pdf.ts | 42 files +1154/−3621 | 移植全部文件 + pdf.rs + Cargo 依赖 + **natives 全平台重建**;musepi 收益:PDF 读取走原生、省 mupdf-wasm 链路。Effort 中(重建占大头) |
+| a3c15d2dec pdf 截图 | read-pdf.ts 截图渲染 + read.ts 接线 + 测试 | 5 files +224/−35 | 随 04fab5ecb4 一起做 |
+| ad318c7572 docker 管道 | install-tests/*.dockerfile + 根 Dockerfile + build-bindings.ts 容器化支持 | 11 files +183/−39 | 建议做(纯移植):让 linux addon 构建可容器化,配合 WSL/CI 出 linux-x64/arm64 |
+| 28997c0d46 transcript 重构 | ui-helpers.ts 重组 + large-session.jsonl fixture 重写 + render-initial-messages 测试 | 5 files +1152/−1083 | 低风险,ui-helpers 已随移植到位;补 fixture+测试即可 |
+| b279db1790 测试重构 | 263 测试文件去 sleep/polling,确定性等待 | 263 files +4604/−6626 | 机械但量大;建议 natives/pdf 稳定后分批做,注意与 win32 适配交互 |
+
+### natives 平台矩阵与交叉编译(2026-08-15)
+
+- bazel-natives.ts 目标:`linux-x64-baseline/modern`、`linux-arm64`、`linux-musl-x64/arm64`、`darwin-x64/arm64`、`win32-x64-baseline`;**无 win32-arm64 目标**
+- **linux-x64 主机可交叉构建**:`linux-all` 聚合 = linux-arm64 + musl×2 + x64×2 + **win32-x64**(msvc toolchain 用 clang-cl+xwin)
+- **darwin 只能 mac 主机**(darwin-all);win32 主机不能用 bazel,`host` 伪目标委托本地 napi build(cargo,build-bindings.ts)
+- **ARM Windows(win32-arm64)**:上游/当前均不支持,需新增 bazel target + MSVC ARM64 交叉工具链,或 cargo `--target aarch64-pc-windows-msvc`(x64 Windows 主机 + VS ARM64 组件)
+- 验证平台:本机 Windows x64(win32-x64 重建中)、WSL Ubuntu(linux 端 + 交叉)、muselinn@100.73.130.97 ARM mac(darwin-arm64,需 SSH key 授权:`ssh-copy-id muselinn@100.73.130.97`)
+
+
+
+
+- 上游现状:oh-my-pi **v17.3.4**(2026-08-14 tag);musepi 基线 v17.3.0
+- 差异规模:96 commits(43 fix / 7 feat)/ 697 次文件触碰(76 个带文件提交)
+- 文件级评估(musepi HEAD vs 上游 v17.3.0,rename 归一后):**PURE 472**(musepi 未定制,可直接复制)/ **OVERLAP 209**(musepi 定制,需 3-way)/ **ABSENT 16**
+- 移植范围决策:**只搬 src/test/build 文件**;跳过 CHANGELOG.md、docs/*.md、package.json、bun.lock、Cargo.lock、MODULE.bazel.lock(版本涟漪,选择性移植不升版本)
+- 明确跳过(上游 feature 立项):`04fab5ecb4` mupdf→native pdf(需 natives 重建+新 pdf.rs/read-pdf.ts)、`a3c15d2dec` pdf 页截图渲染、`ad318c7572` docker 构建管道、`b279db1790` 测试去 sleep 化重构、`5dd0aca4b8` markit 测试套件移除、`28997c0d46` transcript 渲染重构;`834002adc5`(foreign alias→binary update)上游已回滚,跳过
+- PURE 执行方式:`git show v17.3.4:<file>` + `@oh-my-pi`→`@musepi` rename 写回工作树(终态复制,天然吸收同文件多个提交)
+- OVERLAP 执行方式:`git merge-file --diff3`(base=上游 v17.3.0+rename,ours=工作树,theirs=上游 v17.3.4+rename),无冲突自动应用,冲突按「保留 musepi 定制 + 吸收上游」手解
+- natives 注意:devicecheck.rs / cc.bzl / defs.bzl / BUILD.bazel 变更需重建 natives 才生效;`__piNativesV17_3_0` 哨兵不动(不涉及 lib.rs),重建前 prebuilt 仍可加载
+
+### A 组(COPY,纯 PURE 机械复制,12 提交)
+
+| 提交 | 内容 | 核心文件 |
+|---|---|---|
+| 5a0b2d460d | retry 退避 abort 规范化 | utils/src/fetch-retry.ts |
+| 9286b72b4f | omptype TypeBox 约束关键字 | omptype/src/typebox.ts |
+| a4adf17986 / 9d7e13a158 | unsafe schema run 属性/内嵌 schema 降级 | extensibility/legacy-typebox.ts |
+| 2d0eb6c41e | OpenRouter deepseek-v4-pro-0813 档位 | catalog/src/model-thinking.ts |
+| 85acb9ab70 | rpc 启动失败 stderr 透出 | modes/rpc/rpc-client.ts |
+| 9b389d6006 | tui direct herdr clears 保留 | tui/src/tui.ts |
+| 988ccc8268 / 42d5ca5128 | DeviceCheck GUI 会话守卫(+clippy 注释) | crates/pi-natives/src/devicecheck.rs |
+| f5911781c2 | hashline 悬空 range separator | hashline/src/tokenizer.ts |
+| fc9d40ca30 | mnemopi channelId 下全局行召回 | mnemopi/src/core/beam/recall.ts |
+| d7a8583f02 | gemini fetcher 参数类型 | catalog/src/wire/gemini-headers.ts |
+
+### B 组(人工核对,按模块)
+
+- **natives/Windows**:246dda7f1c+2e2bf1f3a5(win32 MSVC CRT 静态链接 /MT,免 VC++ redist——bazel/defs.bzl+pi-natives/BUILD.bazel OV,msvc/cc.bzl PURE);a9075ae509(Windows 外部编辑器修复,external-editor.ts PURE);cf1ff14f5f(browser 探测限 linux,launch.ts OV)
+- **providers**:b1ce77c109+fe33232298(gemini malformed/thought-only 恢复+retry 边界,google-gemini-cli.ts OV);e1d02c3b58(antigravity thinking-only STOP failover);c92ba97538+ce65a40539+c0394ba53d(Copilot 端点/超时/cache 按凭据,openai-compat.ts OV);335637de1e(北京 Token Plan 配额);ebcbdd5297+e5d59450c8+a821f4316a+e47b0207ac(usage cache 陈旧回放/动态超时,auth-storage.ts OV)
+- **session/TUI**:6563b16424+e62814b4b0(git 分支 stat-poll,status-line/component.ts OV);6fc50c3e41(post-yield TUI 卡死,agent-session.ts+executor.ts OV);bb0314a5a1+9b389d6006(HerdR 闪烁,tui.ts PURE);bdbea3f7f3(orphan fences,markdown.ts PURE);3f5cb91068(迟到 DA 响应,terminal.ts PURE)
+- **extensions/cli**:7463803c95(runtime mode 入 context,runner.ts OV);6980275a50+3749478239+4ce4874e78(allowlist 扩展工具/发现后校验,main.ts OV)
+- **discovery/update**:3629464cf9+406306f972(CLAUDE_CONFIG_DIR/plugin cache 按 home,config.ts+helpers.ts OV,新文件 claude-paths.ts ABSENT 需品牌化);1d6d35bd24+219123244e+642d6c0b31(并发自更新临时路径/目标锁/所有权,update-cli.ts 全 OV 手解)
+- **杂项**:a02f88994b(read hashline 头 workspace-relative);83d08936ae(MCP SSE 先初始化会话);2996f16a61(codex v2 compaction header,compaction-v2-streaming.ts OV)
+
+### C 组(暂缓立项)
+
+- 3ce33d436b Gemini Flash 模型(models.json OV 需手工并入 musepi 4 个自定 provider 块)
+- 58f319912e google 动态版本发现+rate limit(建议与 B providers 一起做)
+- 0d6a7146a3 browser scope allSettled/any(run-scope.ts PURE,小)
+- 04fab5ecb4+a3c15d2dec mupdf native pdf(大工程,单独立项)
+- ad318c7572 docker 管道(跳过)
+
+## 验证记录（v17.3.0 移植）
+
+- ✅ 分类（rename 归一后）：828 = PURE 590（复制+`@oh-my-pi`→`@musepi` rename）/ OVERLAP 143（77 无冲突自动 3-way；66 手动）/ NEW 89 / DEL 6
+- ✅ 执行方式：沿用树级合并（`git merge-file --diff3`，base 归一化 @oh-my-pi→@musepi，ours=工作树，theirs=原始上游）；diff3 输出写回工作树后逐块解决冲突标记，最后全局 rename @oh-my-pi→@musepi（102 文件，排除 3 个合法文件）
+- ✅ 手动解决要点（66 冲突）：
+  - **agents-hub/agent-hub**：上游全屏 hub 重设计（agents-hub.ts 新 1453 行 + agent-hub.ts/renderer 小改）——musepi 无独立定制冲突（56 处 t() 在 agent-hub.ts 保留），agents-hub.ts 为 NEW 直接复制
+  - **interactive-mode.ts**：goal 命令 ours t() i18n + theirs #openGoalMenu/#startGoalFromObjective(obj, input) 新签名——保留 ours i18n 与旧签名（行为不变），并入 copyLocalArtifacts import（/handoff 本地产物复制）
+  - **agent-session.ts**：ours #sideChannelModel 定制 + 上游新增 servingModel（retry-fallback 归属模型）——两者并存；上游删除 retryFallbackModel API（TurnRecovery 重构），musepi 死 getter 一并移除
+  - **update-cli.ts**：ours 常量（MuseLinn/MusePi repo）保留 + theirs NIX_STORE_DIR 行并入
+  - **settings-schema.ts**：advisor.subagents 移除 → task.agentAdvisor（自动迁移）；musepi tuiOnly/sideChannelModel/busyEnter 定制 3-way 保留
+  - **status-line/segments + user-message + collab/guest + codex-reset-fireworks + late-diagnostics**：musepi t() i18n import 保留（部分 import 粘连修复）
+  - **sdk.ts**：ours bundled-skills（widget-design/musepi-help）保留
+  - **prompts**：system-prompt/recap-user/scan-coordinator 等保留 ours（MusePi 品牌 + 中文定制）；computer.md/init.md/plan-mode-active.md/replace.md 取 theirs（上游精简/新内容，musepi 无实质定制）
+  - **bazel-natives.ts**：buildWindowsHostAddon 恢复完整 body（ours win32 定制）+ 上游新 buildLocalHostAddon 并存
+  - **ProjectsRoute.tsx**（stats）：musepi const columns 与 theirs useMemo 结构混拼修复（列数组结尾）
+  - **package.json**：coding-agent 保留 @musepi 名 + 17.3.0；agent 重复 key 清理
+- ✅ 版本涟漪：13 个 package.json 17.2.12→17.3.0（PURE 自动）+ coding-agent/swarm-extension 手动；collab-proto 17.2.8/swarm-core 17.2.2/tool-select 17.2.2/sdk 0.3.1 保留 musepi 自有版本；sdk 的 @musepi/pi-wire 17.2.12→17.3.0；root catalog 12 条 @musepi/pi-* 17.3.0 + 补 9 项缺失（linkedom/date-fns/lru-cache/chalk/arktype/@puppeteer/browsers/@xterm/headless/fast-xml-parser/header-generator——上游 root catalog 未含但 workspace 依赖引用 catalog:）；bun.lock 直接取上游 v17.3.0 + rename（`bun install --frozen-lockfile` 通过）；root workspaces 移除 python/robomp/web（musepi fork 已清理该目录）
+- ✅ natives：crates/pi-builtins 5 文件（host/ifne/ls/pgrep/proc_match/sed）+ pi-natives lib.rs/shell.rs + pi-shell + vendor brush-core 2 文件；哨兵 `__piNativesV17_3_0`；重建中（cargo，LINKEDIT 对齐自动）
+- ✅ 类型检查：20/21 包 check:types 0 错误（agent/ai/coding-agent/tui/utils/wire/catalog/omptype/hashline/snapcompact/mnemopi/stats/sdk/collab-web/gui 全绿）
+- ⚠️ 修复的合并残留（类型检查暴露）：① interactive-mode goal 块 try/catch 错位（ours 段与 theirs 段拼接）② agent-session servingModel 插入缺 getter 闭合 ③ 多个文件 import 粘连（`} from "x";import { y }`——3-way 输出行拼接）④ tests 缺 getProjectAgentDir import ⑤ relay-server.ts TS2349（tls.Server|net.Server 联合 once/listen 签名不兼容——HEAD 亦复现，基线既有问题；`server as unknown as tls.Server` 别名修复）⑥ ProjectsRoute JSX 闭合
+- ⚠️ 上游 17.3.0 无 GUI/daemon/sdk 层改动（collab-web/gui/daemon/server.ts/sdk 不在 828 文件内）——GUI 无需代码改动，仅内核升级后回归验证
 
 ## 验证记录（v17.2.12 移植）
 
 - ✅ 分类（rename 归一后）：641 = NEW 107 / PURE 123 / OVERLAP 36（17 无冲突自动 3-way；19 手动）/ REN-PURE 73 / DEL-SAFE 302；无 DEL-CHECK/REN-OVER（musepi crates/TS 相对 v17.2.11 全部纯净）
-- ✅ 执行方式：git diff v17.2.11 v17.2.12 -M --binary 生成补丁 → `git apply --3way` 因 oh-my-pi 对象库不在 musepi 仓库（partial clone 缺 theirs blob）失败 → 改用树级合并：/tmp/up1712 提取树 + git merge-file --diff3（base 归一化 @oh-my-pi→@musepi，ours=工作树，theirs=原始上游）
-- ⚠️ **树级合并的 rename 坑**：merge-file 的 theirs 传原始上游文件（含 @oh-my-pi 包名）时，ours==base 的 hunk 会采用 theirs 的 @oh-my-pi 名——合并后 30 个文件残留 @oh-my-pi（含 packages/wire/package.json 的 name 字段，导致 workspace 依赖解析失败）。处理：全局重命名 @oh-my-pi→@musepi（排除 3 个合法文件：pi-scope-aliases.test.ts、legacy-pi-bunfs-root.test.ts、tui/src/keys.ts 注释）
+- ✅ 执行方式：git diff v17.2.11 v17.2.12 -M --binary 生成补丁 → `git apply --3way` 因 oh-my-pi 对象库不在 musepi 仓库（partial clone 缺 theirs blob）失败 → 改用树级合并：/tmp/up1712 提取树 + git merge-file --diff3（base 归一化 @musepi→@musepi，ours=工作树，theirs=原始上游）
+- ⚠️ **树级合并的 rename 坑**：merge-file 的 theirs 传原始上游文件（含 @musepi 包名）时，ours==base 的 hunk 会采用 theirs 的 @musepi 名——合并后 30 个文件残留 @musepi（含 packages/wire/package.json 的 name 字段，导致 workspace 依赖解析失败）。处理：全局重命名 @musepi→@musepi（排除 3 个合法文件：pi-scope-aliases.test.ts、legacy-pi-bunfs-root.test.ts、tui/src/keys.ts 注释）
 - ✅ 手动解决（19）：6 个 package.json（@musepi 名 + 版本 17.2.12）；models.json（取 theirs + 补 musepi 4 个 provider 块 agnes/agnes-global/stepplan/stepplan-global——musepi 的非 agnes 数值差异是 c892aa9e2 AGNES regen 的副作用，如 qwen cost 0 占位、gemma maxTokens 32768，按上游 v17.2.12 覆盖）；generate-models.ts（ours 无 getProviderDefinition 引用）；session-manager.ts（ours 保留 truncateToIndex + pause 定制）；builtin-registry 系列（见下）；command-controller（theirs 的 logger.error #7993 + ours t() i18n）；CHANGELOG.md（ours 条目 + theirs 17.2.12 段）；ci.yml（取 theirs 整文件——HEAD==base，musepi 无定制）；README.md + 3 docs（theirs + .omp→.musepi 品牌化）；bun.lock（从 HEAD 重建 + sed 17.2.11→17.2.12，frozen install 校验通过）
 - ✅ **slash-command 拆分移植**（本次最大手工作业）：上游把 builtin-registry.ts（3431 行）拆成 7 个 builtin-*.ts + 统一 registry。musepi 定制 = ① i18n 层（statusLine(prefix, t(state)) 渲染时翻译 + registry 静态描述 t() 包装）② collab LAN/workspace/tunnel 特性（LocalShareManager、stopCollabSharing、扩展 collabLinkHint、/collab lan|tunnel|workspace 子命令、/leave 拆 transport）。移植：写脚本按命令名提取 musepi 旧 registry 的 getTuiAutocompleteDescription 回调（命令级 cmd_block 定位 + 括号深度感知的表达式匹配）移植进新模块 + statusLine/t import；collab 模块手工拼装（their 结构 + musepi helper/spec）。**踩坑**：① 回调正则遇字符串内逗号截断（one-liner 回调 "…, …" 断在逗号）→ 行级匹配改为括号深度计数；② 脚本把路径字符串当文件内容传给 cmd_block（len(src)=18 的幽灵 bug，耗时 1 小时定位——函数单独测没问题、放进脚本就 None，settrace 才暴露）；③ 前缀丢失（block[:idx] 排除了属性名）与双逗号/重复闭合（`}
 	},
@@ -27,7 +136,7 @@
 
 ## 验证记录（v17.2.11 移植）
 
-- ✅ 分类（rename 归一后）：256 = NEW 25 / PURE 173（复制+`@oh-my-pi`→`@musepi` rename，md5 校验 == v17.2.10+rename 0 mismatch）/ OVERLAP 55（46 无冲突自动 3-way；9 手动）/ D 2（bazel/patches/maudio-sys-target-bindings.patch + crates/pi-voice/bazel/maudio_layout.rs——miniaudio 移除）
+- ✅ 分类（rename 归一后）：256 = NEW 25 / PURE 173（复制+`@musepi`→`@musepi` rename，md5 校验 == v17.2.10+rename 0 mismatch）/ OVERLAP 55（46 无冲突自动 3-way；9 手动）/ D 2（bazel/patches/maudio-sys-target-bindings.patch + crates/pi-voice/bazel/maudio_layout.rs——miniaudio 移除）
 - ✅ 手动解决（9）：command-controller.ts（取 theirs handoff 语义——`session.handoff()` 现在把真实 provider 错误原样 re-throw、只有真正取消归一为 "Handoff cancelled"，去掉 ours 的 AbortError 分支，保留 t() i18n）；bazel-natives.ts（取 theirs win32 host 分支 buildWindowsHostAddon + 保留 ours 哨兵/source-hash/cargo 回退守卫，两者独立共存）；package.json（catalog 13 条 17.2.10→17.2.11 + 补回 @musepi/omptype 条目——v17.2.10 同步曾把 omptype 条目从字母序位置丢失、残留在 catalog 尾部，本次归位并去重）；MODULE.bazel.lock（取 theirs——生成物，musepi 无自定义 crate）；4 个 docs（advisor-watchdog/collab/keybindings/task-agent-discovery 取 theirs 新内容 + `.omp`→`.musepi` 品牌化；collab.md 的 my.omp.sh 是真实服务 URL 不动；computer-use.md 17 处 OMP 引用为既有内容不动）
 - ✅ 版本涟漪：14 个 package.json 17.2.10→17.2.11（root 0.3.0 不动；collab-proto 17.2.8/swarm-core 17.2.2/tool-select 17.2.2 保留 musepi 自有版本）；sdk 的 @musepi/pi-wire 依赖同步；root catalog 13 条 17.2.11；bun.lock 重写（28×17.2.11，0 个 17.2.10，`bun install --frozen-lockfile` 校验通过）；Cargo.toml/Cargo.lock/MODULE.bazel 直接取上游 v17.2.11
 - ✅ 品牌化：docs/agent-hub.md（新文件）`~/.omp/`→`~/.musepi/`；command-help.ts worktree 帮助文本 `~/.omp/wt`→`~/.musepi/wt`（实际路径 dirs.rootSubdir 本来就是 .musepi）；task-agent-discovery.md `~/.omp/agent/config.yml`→`.musepi`；其余 `.omp` 引用经核查均为既有内容/legacy 兼容/注释（secrets `.omp/secrets.yml` 等，非本次引入）
@@ -41,7 +150,7 @@
 
 ## 验证记录（v17.2.10 移植）
 
-- ✅ 分类（rename 归一后）：414 = NEW 81 / PURE 224（复制+`@oh-my-pi`→`@musepi` rename，逐文件 md5 校验 == v17.2.10+rename 0 mismatch）/ OVERLAP 109（65 无冲突自动 3-way；21 手动 + 23 含 EOF 微差走 3-way）
+- ✅ 分类（rename 归一后）：414 = NEW 81 / PURE 224（复制+`@musepi`→`@musepi` rename，逐文件 md5 校验 == v17.2.10+rename 0 mismatch）/ OVERLAP 109（65 无冲突自动 3-way；21 手动 + 23 含 EOF 微差走 3-way）
 - ✅ 手动解决（21 冲突 + 9 docs）：main.ts + args.ts + extensions/loader.ts（取 theirs——`--trusted-extension` 新安全特性）；agent-hub.ts（取 theirs 大重做 + t() i18n 重放：Agent Hub/read-only/Failed to register 等 key）；selector-controller.ts（theirs #showFullscreenMenu + ours settings.locale 定制）；persisted-revive.ts（theirs modelPattern/subagentSettings + ours pauseGate 定制，注意：初版合并丢失了 subagentSettings/persistedModelPattern 前置定义与 formatModelRoleAlias import，2 个测试失败暴露后补回）；agent-session-message-pipeline.test.ts（取 theirs pi.arktype——消除 v17.2.9 记录的 ZodLikeSchema 类型错误）；chart-shared.tsx（取 theirs pi-utils/dates）；formatters.ts（保留 ours——date-fns zh-CN locale 是 musepi 定制，pi-utils/dates 仅英文）；Markdown.tsx（保留 ours 172 行定制 + marked import 换 pi-utils/marked）；collab-web 其余定制保留
 - ✅ docs 合并：9 个冲突 docs 逐个处理（custom-tools/extensions/hooks/skills/browser 取 theirs omptype 语义；computer-use.md/computer.md 保留 ours 深度定制 + 并入 theirs platform 矩阵与 delivery 说明；porting-from-pi-mono 保留 musepi 品牌行 + theirs 新行；user-facing-packages 保留 swarm-extension + 并入 omptype 段）
 - ✅ 6 个 D 删除：zod-decontaminate.ts（musepi 无引用，上游 index.ts 已删 export）、mammoth.d.ts（docx.ts 已迁 pi-utils/docx）、issue-1215-legacy-pi-ai-import.test.ts（依赖已移除的 @mariozechner/pi-ai）、omptype bench zod.ts、winston-daily-rotate-file.d.ts、patches/@agentclientprotocol（依赖已随上游移除，root package.json + coding-agent package.json 同步清 catalog/patch 引用）
@@ -56,7 +165,7 @@
 - ⚠️ MCPManager resources 测试曾在直接全量并发下偶发 1 fail（FileLock/子进程竞争），分 bucket 后稳定；单独跑全过
 - ⚠️ 磁盘：natives bazel 重建因 macOS 27 磁盘空间不足（No space left on device）多次失败，清 bazel 缓存 + cargo nightly 重建解决；bazel 缓存重建后 ~5GB
 
-- ✅ 分类（rename 归一后）：256 = NEW 14 / PURE 176（复制+`@oh-my-pi`→`@musepi` rename，逐文件 md5 校验 == v17.2.9+rename 0 mismatch）/ THREE_WAY 80（58 无冲突自动 3-way；22 手动）
+- ✅ 分类（rename 归一后）：256 = NEW 14 / PURE 176（复制+`@musepi`→`@musepi` rename，逐文件 md5 校验 == v17.2.9+rename 0 mismatch）/ THREE_WAY 80（58 无冲突自动 3-way；22 手动）
 - ✅ 手动解决：auth-storage.ts（上游大重构，序列化迁入新文件 sqlite-credential-store.ts——musepi note 定制同步迁移：类型 note 字段 + authCredentialEquals + importApiKey/setCredentialNote + serialize/deserialize note 往返）；openai-codex-responses-lite.test.ts（取 theirs）；docs/python-repl.md + docs/tools/eval.md（取 theirs，agent() 签名文档去掉已删除的 model 参数）；README.md 包表（取 theirs 完整 17 包）；docs/mcp-config.md（theirs + `.musepi` 品牌化，找回被上次品牌化误删的 Imported tool configs 章节）；user-facing-packages.md（保留 ours——musepi 仍发行 swarm-extension）；tsconfig.base.json（+noImplicitOverride/noFallthroughCasesInSwitch）；2 个 CHANGELOG 保留 ours
 - ✅ 版本涟漪：13 个 catalog 条目 + 8 个 package.json version 17.2.8→17.2.9（root package.json 0.3.0 不动）；sdk 的 @musepi/pi-wire 依赖 17.2.8→17.2.9；bun.lock 重写（28×17.2.9，collab-proto 17.2.8 保留为 musepi 自有包）；Cargo.toml/Cargo.lock 直接取上游 v17.2.9（musepi 无自定义 crate，此前 Cargo.lock 与上游仅差 workspace 版本 17.2.4→17.2.9 的遗留未滚）
 - ✅ 测试：omptype 1198（0 fail）、catalog 563（0 fail）、agent 478（0 fail）、ai 4062（3725 pass / 337 skip / 0 fail）、coding-agent session 470 + daemon/auth 系列（含 auth-storage-note 相关 64+46）全过；workspace check:types 仅剩 1 个**既有**类型错误（见下）
@@ -85,7 +194,7 @@
 | ~~上游主 checkout 的 natives 加载差异~~ → 无 natives .node 的上游却测试通过:workspace 模式 loader 跳哨兵校验;上游环境另有加载路径,与 musepi 无碍（musepi 已用发布物） | 已澄清,不阻塞 |
 | **上游主 checkout 的 natives 加载差异**:上游仓库无任何 `pi_natives*.node`,但 ptree 测试通过;musepi 有本地 .node 反而并行抖动 | 待查(上游加载路径不明,可能 bun 缓存/安装差异) | 记录,不阻塞 |
 | **profiles.test 子进程段**(4 个 `dirs module import behavior`) | HEAD 版(合并前)同样失败 = 基线;与 17.2.4 同步无关(bun test 内 Bun.spawn 快速 pipe 退出偶发丢 stdout) | 基线环境问题,串行下亦偶发;上游同文件通过 |
-| **branding 修复**(本次):config-request-id-format(dirs-cache/profiles/dirs-python-gateway)的 `.omp`/XDG `omp` 字面量 → `.musepi`/`musepi` | NEW/PURE 复制只做 @oh-my-pi→@musepi rename,`.omp` 路径/XDG 目录名未品牌化;17.2.4 新增 XDG 逻辑(dir-s.ts APP_NAME 参数化)使旧字面量失效 | ✅ 已修 |
+| **branding 修复**(本次):config-request-id-format(dirs-cache/profiles/dirs-python-gateway)的 `.omp`/XDG `omp` 字面量 → `.musepi`/`musepi` | NEW/PURE 复制只做 @musepi→@musepi rename,`.omp` 路径/XDG 目录名未品牌化;17.2.4 新增 XDG 逻辑(dir-s.ts APP_NAME 参数化)使旧字面量失效 | ✅ 已修 |
 
 ## 已知问题（agent 包 2 测试失败）
 
@@ -162,7 +271,7 @@
 ## 移植方法（已固化）
 
 1. **三态分类**：NEW（musepi 无此文件）直接复制；PURE（musepi == 上一基线）直接覆盖；THREE_WAY 用 `git merge-file`（base=上一基线+rename，ours=musepi，theirs=新版+rename）
-2. **import 重命名**：全部 TS 文件 sed `@oh-my-pi` → `@musepi`（有意的 `@oh-my-pi` 引用保留：legacy-pi-compat 别名、测试夹具、release.ts 模式）
+2. **import 重命名**：全部 TS 文件 sed `@musepi` → `@musepi`（有意的 `@musepi` 引用保留：legacy-pi-compat 别名、测试夹具、release.ts 模式）
 3. **保留的 musepi 定制**：agnes/stepplan provider、视频 WIP（上游已吸收 video 支持）、collab-web i18n（t() + zh-CN）、品牌元数据（name/version/bin/homepage）
 4. **锁文件**：Cargo.lock / bun.lock 从上游复制（无本地定制时），crate 新增需补 Cargo.lock 条目
 5. **验证**：`bun build` → `bazel build //:natives-darwin-arm64` → 测试 → 冒烟

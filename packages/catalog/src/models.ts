@@ -1,6 +1,6 @@
 import { buildModel } from "./build";
 import MODELS from "./models.json" with { type: "json" };
-import type { Api, KnownProvider, Model, ModelSpec, Usage } from "./types";
+import type { Api, KnownProvider, Model, ModelSpec, TokenCost, Usage } from "./types";
 
 /**
  * Static bundled model registry loaded from `models.json`.
@@ -42,13 +42,27 @@ export function getBundledModels(provider: GeneratedProvider): Model<Api>[] {
 	const models = getProviderModels(provider);
 	return models ? (Array.from(models.values()) as Model<Api>[]) : [];
 }
+function resolveTokenCost(cost: Model["cost"], promptInputTokens: number): TokenCost {
+	const longContext = cost.longContext;
+	if (!longContext) return cost;
+	return promptInputTokens > longContext.inputThreshold ? longContext : cost;
+}
+
+/** Price a prompt as fully uncached input under its active context-length tier. */
+export function calculateUncachedInputCost(cost: Model["cost"], promptInputTokens: number): number {
+	const rates = resolveTokenCost(cost, promptInputTokens);
+	return (rates.input / 1_000_000) * promptInputTokens;
+}
 
 export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage): Usage["cost"] {
 	const orchestration = usage.orchestration;
-	usage.cost.input = (model.cost.input / 1000000) * (usage.input + (orchestration?.input ?? 0));
-	usage.cost.output = (model.cost.output / 1000000) * (usage.output + (orchestration?.output ?? 0));
-	usage.cost.cacheRead = (model.cost.cacheRead / 1000000) * (usage.cacheRead + (orchestration?.cacheRead ?? 0));
-	usage.cost.cacheWrite = cacheWriteCost(model, usage);
+	const promptInputTokens =
+		usage.input + usage.cacheRead + usage.cacheWrite + (orchestration?.input ?? 0) + (orchestration?.cacheRead ?? 0);
+	const rates = resolveTokenCost(model.cost, promptInputTokens);
+	usage.cost.input = (rates.input / 1000000) * (usage.input + (orchestration?.input ?? 0));
+	usage.cost.output = (rates.output / 1000000) * (usage.output + (orchestration?.output ?? 0));
+	usage.cost.cacheRead = (rates.cacheRead / 1000000) * (usage.cacheRead + (orchestration?.cacheRead ?? 0));
+	usage.cost.cacheWrite = cacheWriteCost(rates, usage);
 	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
 	return usage.cost;
 }
@@ -56,12 +70,12 @@ export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage
 /**
  * Price cache-write tokens, honoring the TTL breakdown when the provider reports one.
  *
- * `model.cost.cacheWrite` is the 5-minute write rate (Anthropic bills 5m writes at
- * 1.25x base input). When `usage.cttl` is present the write mixes 5m and 1h
- * breakpoints — omp defaults to 1h retention on first-party Anthropic, and 1h writes
- * bill at 2x base input — so each component is priced at its own rate instead of the
- * flat 5m rate. Deriving 1h from `input * 2` (Anthropic's published multiplier) is
- * model-independent and stays correct even for legacy entries whose stored
+ * `rates.cacheWrite` is the 5-minute write rate (Anthropic bills 5m writes at
+ * 1.25x base input). When `usage.cttl` is present the write can mix 5m and 1h
+ * breakpoints, and 1h writes bill at 2x base input, so each component is
+ * priced at its own rate instead of the flat 5m rate. Deriving 1h from
+ * `input * 2` (Anthropic's published multiplier) is model-independent and
+ * stays correct even for legacy entries whose stored
  * `cacheWrite` scalar drifts from 1.25x input. Providers that omit `cttl`
  * (everyone but Anthropic) keep the flat-rate calculation.
  *
@@ -70,14 +84,14 @@ export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage
  * so any unattributed remainder is priced at the flat rate instead of being dropped:
  * a partial or stale breakdown must never make write tokens free.
  */
-function cacheWriteCost<TApi extends Api>(model: Model<TApi>, usage: Usage): number {
-	const rate5m = model.cost.cacheWrite / 1000000;
+function cacheWriteCost(rates: TokenCost, usage: Usage): number {
+	const rate5m = rates.cacheWrite / 1000000;
 	const cttl = usage.cttl;
 	if (!cttl) return rate5m * usage.cacheWrite;
 	const fiveMinute = cttl.ephemeral5m ?? 0;
 	const oneHour = cttl.ephemeral1h ?? 0;
 	const residual = Math.max(0, usage.cacheWrite - fiveMinute - oneHour);
-	return rate5m * (fiveMinute + residual) + ((model.cost.input * 2) / 1000000) * oneHour;
+	return rate5m * (fiveMinute + residual) + ((rates.input * 2) / 1000000) * oneHour;
 }
 
 /**

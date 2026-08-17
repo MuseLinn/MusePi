@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@musepi/hashline",
-  "version": "17.2.12",
+  "version": "17.3.4",
   "description": "Hashline: a compact, line-anchored patch language and applier. Pluggable FS/IO so it works over disk, in-memory, or any custom backend.",
   "homepage": "https://github.com/MuseLinn/MusePi",
   "author": "MuseLinn",

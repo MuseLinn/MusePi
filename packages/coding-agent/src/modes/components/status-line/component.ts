@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage, UsageLimit, UsageReport } from "@musepi/pi-ai";
@@ -292,6 +291,7 @@ function hasGitBackedSegment(segments: readonly StatusLineSegmentId[]): boolean 
 // ═══════════════════════════════════════════════════════════════════════════
 
 export class StatusLineComponent implements Component {
+	#widthEpochRevision = 0;
 	#settings: StatusLineSettings = {};
 	#effectiveSettings: EffectiveStatusLineSettings | undefined;
 	#cachedBranch: string | null | undefined = undefined;
@@ -319,8 +319,7 @@ export class StatusLineComponent implements Component {
 	// dropped rather than overwrite the value the newer resolve committed.
 	// Mirrors #jjCacheGeneration / #getJjBranch in this file.
 	#branchCacheGeneration = 0;
-	#gitWatcher: fs.FSWatcher | null = null;
-	#gitWatcherErrorListener: (() => void) | undefined = undefined;
+	#gitUnwatch: (() => void) | null = null;
 	#gitWatcherUnavailable = false;
 	#onBranchChange: (() => void) | null = null;
 	#disposed = false;
@@ -398,6 +397,7 @@ export class StatusLineComponent implements Component {
 		tier?: string;
 		fiveHour?: { percent: number; resetMinutes?: number };
 		sevenDay?: { percent: number; resetHours?: number };
+		monthly?: { percent: number; resetHours?: number };
 	} | null = null;
 	#cachedUsageContextKey: string | null = null;
 	#usageFetchedAt = 0;
@@ -668,40 +668,29 @@ export class StatusLineComponent implements Component {
 			return;
 		}
 
-		const watchPath = git.repo.isReftableSync(repository)
-			? path.join(repository.gitDir, "reftable")
-			: repository.headPath;
-
+		// git swaps HEAD via `HEAD.lock` + atomic rename. That both unlinks the
+		// HEAD inode (freezing a file-bound `fs.watch` after the first switch —
+		// issue #8412) and, on Bun/Linux, permanently wedges an inotify-backed
+		// directory watch after the first rename event (oven-sh/bun#24875).
+		// `git.head.watch` stat-polls the HEAD path (or the reftable dir), which
+		// survives inode swaps on every platform. A vanished repo surfaces as a
+		// stat change too, so there is no separate watcher error path.
 		try {
-			const watcher = fs.watch(watchPath, () => {
-				if (this.#disposed || this.#gitWatcher !== watcher) return;
+			const unwatch = git.head.watch(repository, () => {
+				if (this.#disposed || this.#gitUnwatch !== unwatch) return;
 				this.invalidateGitCaches();
 				this.#onBranchChange?.();
 			});
-			const onError = () => {
-				if (this.#gitWatcher !== watcher) return;
-				this.#retireGitWatcher();
-				this.#gitWatcherUnavailable = true;
-				if (this.#disposed) return;
-				this.invalidateGitCaches();
-				this.#onBranchChange?.();
-			};
-			this.#gitWatcher = watcher;
-			this.#gitWatcherErrorListener = onError;
-			watcher.on("error", onError);
+			this.#gitUnwatch = unwatch;
 		} catch {
 			this.#gitWatcherUnavailable = true;
 		}
 	}
 
 	#retireGitWatcher(): void {
-		const watcher = this.#gitWatcher;
-		const onError = this.#gitWatcherErrorListener;
-		this.#gitWatcher = null;
-		this.#gitWatcherErrorListener = undefined;
-		if (!watcher) return;
-		if (onError) watcher.off("error", onError);
-		watcher.close();
+		const unwatch = this.#gitUnwatch;
+		this.#gitUnwatch = null;
+		unwatch?.();
 	}
 
 	dispose(): void {
@@ -723,6 +712,7 @@ export class StatusLineComponent implements Component {
 	}
 
 	invalidate(): void {
+		this.#widthEpochRevision++;
 		// Generic repaint invalidation (theme change, message event, model
 		// switch, …). Must NOT abort or restart a live reftable HEAD/PR resolve:
 		// the render path self-invalidates via cwd/context cache-miss checks, so
@@ -1263,8 +1253,12 @@ export class StatusLineComponent implements Component {
 		const normalized = this.#normalizeUsageReports(reports, activeProvider, activeIdentity);
 		const resetSnapshot =
 			activeProvider === "openai-codex" ? this.#normalizeCodexResetSnapshot(reports, activeIdentity) : null;
+		const usageChanged = this.#cachedUsage !== normalized;
 		this.#cachedUsage = normalized;
 		this.#usageFetchedAt = Date.now();
+		// Usage fetch is async; without a repaint the top border stays blank until
+		// some unrelated event (git resolve, keystroke, …) rebuilds it.
+		if (usageChanged) this.#onBranchChange?.();
 		if (!resetSnapshot) return;
 		const contextKey = this.#formatUsageContextKey(activeProvider, activeIdentity);
 		const previous = this.#codexResetSnapshots.get(contextKey);
@@ -1373,13 +1367,25 @@ export class StatusLineComponent implements Component {
 		tier?: string;
 		fiveHour?: { percent: number; resetMinutes?: number };
 		sevenDay?: { percent: number; resetHours?: number };
+		monthly?: { percent: number; resetHours?: number };
 	} | null {
 		if (!Array.isArray(reports)) return null;
 		let fiveHour: { percent: number; resetMinutes?: number } | undefined;
 		let sevenDay: { percent: number; resetHours?: number } | undefined;
+		let monthly: { percent: number; resetHours?: number } | undefined;
 		let fiveHourTier: string | undefined;
 		let sevenDayTier: string | undefined;
+		let monthlyTier: string | undefined;
+		let monthlyPriority = Number.POSITIVE_INFINITY;
 		const now = Date.now();
+		const cursorMonthlyPriority = (limitId: unknown): number => {
+			// When /auth/usage and /api/usage-summary are merged, prefer the personal
+			// dashboard rails over legacy per-model request fractions.
+			if (limitId === "cursor:usd:individual-auto") return 0;
+			if (limitId === "cursor:usd:individual-plan" || limitId === "cursor:usd:individual-overall") return 1;
+			if (typeof limitId === "string" && limitId.startsWith("cursor:usd:individual-")) return 2;
+			return 3;
+		};
 		for (const report of reports) {
 			if (!report || typeof report !== "object") continue;
 			const provider = (report as { provider?: unknown }).provider;
@@ -1393,8 +1399,9 @@ export class StatusLineComponent implements Component {
 					continue;
 				}
 				const l = limit as {
+					id?: string;
 					scope?: { windowId?: string; tier?: string };
-					window?: { resetsAt?: number };
+					window?: { resetsAt?: number; durationMs?: number };
 					amount?: { usedFraction?: number };
 				};
 				const fraction = l.amount?.usedFraction;
@@ -1402,9 +1409,22 @@ export class StatusLineComponent implements Component {
 				const windowId = l.scope?.windowId;
 				const tier = l.scope?.tier;
 				const resetsAt = l.window?.resetsAt;
+				// Canonical window ids win. Fall back to the reported span (same
+				// tolerance as the 5h priority-boost check) so providers that emit
+				// non-canonical ids, and cache rows written before a provider was
+				// canonicalized, still map onto the two subscription windows.
+				const durationMs = l.window?.durationMs;
+				const windowClass =
+					windowId === "5h" || windowId === "7d"
+						? windowId
+						: durationMs !== undefined && Math.abs(durationMs - 5 * 3_600_000) <= 60_000
+							? "5h"
+							: durationMs !== undefined && Math.abs(durationMs - 7 * 86_400_000) <= 60_000
+								? "7d"
+								: undefined;
 				// Accept tiered limits, but prefer untiered (backward compat with Anthropic).
 				// An untiered limit always replaces a tiered one; among same-tieredness, first wins.
-				if (windowId === "5h" && (!fiveHour || (fiveHourTier !== undefined && !tier))) {
+				if (windowClass === "5h" && (!fiveHour || (fiveHourTier !== undefined && !tier))) {
 					fiveHour = {
 						percent: fraction * 100,
 						resetMinutes:
@@ -1412,7 +1432,7 @@ export class StatusLineComponent implements Component {
 					};
 					fiveHourTier = tier || undefined;
 				}
-				if (windowId === "7d" && (!sevenDay || (sevenDayTier !== undefined && !tier))) {
+				if (windowClass === "7d" && (!sevenDay || (sevenDayTier !== undefined && !tier))) {
 					sevenDay = {
 						percent: fraction * 100,
 						resetHours:
@@ -1420,12 +1440,38 @@ export class StatusLineComponent implements Component {
 					};
 					sevenDayTier = tier || undefined;
 				}
+				// Monthly rendering is gated to providers with a single monthly
+				// bucket (Cursor's priority selector picks its personal rail;
+				// OpenCode Go emits exactly one). Copilot also emits monthly
+				// windows, but its multi-bucket shape needs a dedicated selector
+				// before we surface `mo N%` for it.
+				if (
+					(activeProvider === "cursor" || activeProvider === "opencode-go") &&
+					(windowId === "monthly" || windowId === "30d")
+				) {
+					const priority = cursorMonthlyPriority(l.id);
+					const shouldReplace =
+						!monthly ||
+						priority < monthlyPriority ||
+						(priority === monthlyPriority && monthlyTier !== undefined && !tier);
+					if (shouldReplace) {
+						monthly = {
+							percent: fraction * 100,
+							resetHours:
+								typeof resetsAt === "number"
+									? Math.max(0, Math.round((resetsAt - now) / 3_600_000))
+									: undefined,
+						};
+						monthlyTier = tier || undefined;
+						monthlyPriority = priority;
+					}
+				}
 			}
 		}
-		if (!fiveHour && !sevenDay) return null;
+		if (!fiveHour && !sevenDay && !monthly) return null;
 		// Single compact label; prefer the five-hour tier if displayed windows ever disagree.
-		const effectiveTier = fiveHourTier ?? sevenDayTier;
-		return { tier: effectiveTier, fiveHour, sevenDay };
+		const effectiveTier = fiveHourTier ?? sevenDayTier ?? monthlyTier;
+		return { tier: effectiveTier, fiveHour, sevenDay, monthly };
 	}
 
 	/**
@@ -1823,7 +1869,7 @@ export class StatusLineComponent implements Component {
 		return leftGroup + gapFill + rightGroup;
 	}
 
-	getTopBorder(width: number): { content: string; width: number } {
+	getTopBorder(width: number): { content: string; width: number; revision: number } {
 		let content = this.#buildStatusLine(width);
 		if (this.#focusedAgentId && content) {
 			// Dim the whole bar while focus-proxied. Group/cap terminators emit full
@@ -1833,6 +1879,7 @@ export class StatusLineComponent implements Component {
 		return {
 			content,
 			width: visibleWidth(content),
+			revision: this.#widthEpochRevision,
 		};
 	}
 

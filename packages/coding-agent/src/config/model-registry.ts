@@ -32,7 +32,7 @@ import {
 	resolveOllamaModelCacheProviderId,
 } from "@musepi/pi-catalog/provider-models";
 import { collapseBuiltModelVariants } from "@musepi/pi-catalog/variant-collapse";
-import { isBunTestRuntime, logger, wrapFetchForExtraCa } from "@musepi/pi-utils";
+import { getAgentDir, isBunTestRuntime, logger, wrapFetchForExtraCa } from "@musepi/pi-utils";
 import { resolveProviderModelReference } from "../config/model-resolver";
 import { generateCodexAttestation } from "../live/attestation";
 import type { AuthStorage } from "../session/auth-storage";
@@ -195,10 +195,10 @@ export class ModelRegistry {
 	#ignoreLocalModelConfig: boolean;
 	#fetch: FetchImpl;
 
-	#resolveCommandBackedApiKey(provider: string): CommandApiKeyResolution {
+	#resolveCommandBackedApiKey(provider: string, options?: { forceCommandRefresh?: boolean }): CommandApiKeyResolution {
 		const keyConfig = this.#customProviderApiKeys.get(provider);
 		if (!isCommandConfigValue(keyConfig)) return { configured: false };
-		const value = resolveConfigValue(keyConfig);
+		const value = resolveConfigValue(keyConfig, options);
 		if (value) {
 			this.authStorage.setConfigApiKey(provider, value);
 			return { configured: true, value };
@@ -246,7 +246,7 @@ export class ModelRegistry {
 			(isBunTestRuntime()
 				? () => Promise.reject(new Error("network disabled in model-registry runtime test"))
 				: wrapFetchForExtraCa(fetch));
-		this.#modelsConfigFile = ModelsConfigFile.relocate(modelsPath);
+		this.#modelsConfigFile = ModelsConfigFile.relocate(modelsPath ?? path.join(getAgentDir(), "models.yml"));
 		this.#cacheDbPath = modelsPath ? path.join(path.dirname(modelsPath), "models.db") : undefined;
 		// Set up fallback resolver for custom provider API keys
 		this.authStorage.setFallbackResolver(provider => {
@@ -1791,7 +1791,10 @@ export class ModelRegistry {
 		sessionId?: string,
 		options?: { baseUrl?: string; modelId?: string; forceRefresh?: boolean; signal?: AbortSignal },
 	): Promise<string | undefined> {
-		const commandKey = this.#resolveCommandBackedApiKey(provider);
+		const commandKey = this.#resolveCommandBackedApiKey(
+			provider,
+			options?.forceRefresh ? { forceCommandRefresh: true } : undefined,
+		);
 		if (commandKey.configured) return commandKey.value;
 		if (this.#keylessProviders.has(provider) && !this.authStorage.hasAuth(provider)) {
 			return kNoAuth;

@@ -412,9 +412,42 @@ describe("synthesizeCursorExecToolCall (issue #4348)", () => {
 			type: "toolCall",
 			id: "t2",
 			name: "bash",
-			arguments: { command: "echo hi", cwd: undefined, timeout: undefined },
+			// Undefined optional kwargs are dropped so ArkType optional-field
+			// validation does not reject the synthesized block.
+			arguments: { command: "echo hi" },
 		});
 		expect(t3).toMatchObject({ type: "text", text: "done" });
+	});
+
+	it("omits undefined optional kwargs from synthesized exec tool args", () => {
+		const h = newHarness();
+		synthesizeCursorExecToolCall(h.output, h.stream, h.state, "bash-1", "bash", {
+			command: "pwd",
+			cwd: undefined,
+			timeout: 30,
+		});
+		synthesizeCursorExecToolCall(h.output, h.stream, h.state, "grep-1", "grep", {
+			pattern: "needle",
+			path: ".",
+			case: undefined,
+			skip: undefined,
+		});
+		const [bashCall, grepCall] = h.output.content;
+		expect(bashCall).toMatchObject({
+			type: "toolCall",
+			id: "bash-1",
+			name: "bash",
+			arguments: { command: "pwd", timeout: 30 },
+		});
+		expect(Object.hasOwn((bashCall as { arguments: object }).arguments, "cwd")).toBe(false);
+		expect(grepCall).toMatchObject({
+			type: "toolCall",
+			id: "grep-1",
+			name: "grep",
+			arguments: { pattern: "needle", path: "." },
+		});
+		expect(Object.hasOwn((grepCall as { arguments: object }).arguments, "case")).toBe(false);
+		expect(Object.hasOwn((grepCall as { arguments: object }).arguments, "skip")).toBe(false);
 	});
 
 	it("emits toolcall events at the exact index the block occupies in content", () => {

@@ -7,13 +7,13 @@ This page indexes README-only user-facing package CLIs and features that need ro
 - **Include** root docs coverage for package-local CLIs, extension features, dashboards, and benchmark runners that users can run directly or through `musepi`.
 - **Exclude explicitly** when a package/crate is internal implementation only; point to the architecture doc that owns it.
 - Package READMEs and manifests remain the source of truth for package-local setup and flags; root docs make the feature discoverable and link to exact source paths.
-- Internal Rust crates remain covered by native architecture docs unless promoted as standalone user-facing commands or APIs. The contributor-facing map lives at [`native-crates.md`](./native-crates.md); today every `crates/*` entry is internal to `@musepi/pi-natives` and the embedded shell, so [`natives-architecture.md`](./natives-architecture.md) and the surrounding native docs own them.
+- Internal Rust crates remain covered by native architecture docs unless promoted as standalone user-facing commands or APIs. The contributor-facing map lives at [`native-crates.md`](./native-crates.html); today every `crates/*` entry is internal to `@musepi/pi-natives` and the embedded shell, so [`natives-architecture.md`](./natives-architecture.html) and the surrounding native docs own them.
 
 ## Package CLIs and features
 
 ### `packages/swarm-extension` — swarm orchestration
 
-Sources: [`packages/swarm-extension/README.md`](../packages/swarm-extension/README.md), [`packages/swarm-extension/package.json`](../packages/swarm-extension/package.json), [`packages/swarm-extension/src/cli.ts`](../packages/swarm-extension/src/cli.ts), [`packages/swarm-extension/src/extension.ts`](../packages/swarm-extension/src/extension.ts).
+Sources: [`packages/swarm-extension/README.md`](../packages/swarm-extension/README.html), [`packages/swarm-extension/package.json`](../packages/swarm-extension/package.json), [`packages/swarm-extension/src/cli.ts`](../packages/swarm-extension/src/cli.ts), [`packages/swarm-extension/src/extension.ts`](../packages/swarm-extension/src/extension.ts).
 
 - Package: `@musepi/swarm-extension`; bin: `omp-swarm`.
 - Feature: multi-agent DAG orchestration from YAML swarms, supporting `pipeline`, `parallel`, and `sequential` modes.
@@ -25,7 +25,7 @@ Sources: [`packages/swarm-extension/README.md`](../packages/swarm-extension/READ
 
 ### `packages/stats` — local usage dashboard
 
-Sources: [`packages/stats/README.md`](../packages/stats/README.md), [`packages/stats/package.json`](../packages/stats/package.json), [`packages/coding-agent/src/cli/stats-cli.ts`](../packages/coding-agent/src/cli/stats-cli.ts).
+Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages/stats/package.json`](../packages/stats/package.json), [`packages/coding-agent/src/cli/stats-cli.ts`](../packages/coding-agent/src/cli/stats-cli.ts).
 
 - Package: `@musepi/omp-stats`; bin: `omp-stats`; main user path: `musepi stats`.
 - Feature: local observability dashboard for AI usage statistics from session JSONL logs.
@@ -37,7 +37,7 @@ Sources: [`packages/stats/README.md`](../packages/stats/README.md), [`packages/s
 
 ### `packages/omptype` — schema validation library
 
-Sources: [`packages/omptype/README.md`](../packages/omptype/README.md), [`packages/omptype/package.json`](../packages/omptype/package.json), and the repository [omptype authoring guide](./omptype-guide.md).
+Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`packages/omptype/package.json`](../packages/omptype/package.json), and the repository [omptype authoring guide](./omptype-guide.html).
 
 - Package: public `@musepi/omptype`; install with `bun add @musepi/omptype`; requires Bun 1.3.14 or newer.
 - Feature: callable ArkType-compatible schemas with cheap interpreted startup, lazy hot-path compilation, validation errors, defaults and morphs, and JSON Schema emission.

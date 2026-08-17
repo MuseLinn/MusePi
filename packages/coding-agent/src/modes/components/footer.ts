@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { ThinkingLevel } from "@musepi/pi-agent-core";
 import { type Component, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
@@ -18,7 +16,7 @@ import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } f
  */
 export class FooterComponent implements Component {
 	#cachedBranch: string | null | undefined = undefined; // undefined = not checked yet, null = not in git repo, string = branch name
-	#gitWatcher: fs.FSWatcher | null = null;
+	#gitUnwatch: (() => void) | null = null;
 	#onBranchChange: (() => void) | null = null;
 	#autoCompactEnabled: boolean = true;
 	#extensionStatuses: Map<string, string> = new Map();
@@ -45,8 +43,9 @@ export class FooterComponent implements Component {
 	}
 
 	/**
-	 * Set up a file watcher on .git/HEAD to detect branch changes.
-	 * Call the provided callback when branch changes.
+	 * Watch the repository HEAD for branch changes; invokes the callback so the
+	 * footer repaints with the new branch. Uses `git.head.watch` (stat-poll) —
+	 * see that helper for why `fs.watch` cannot track git's atomic HEAD swaps.
 	 */
 	watchBranch(onBranchChange: () => void): void {
 		this.#onBranchChange = onBranchChange;
@@ -54,46 +53,29 @@ export class FooterComponent implements Component {
 	}
 
 	#setupGitWatcher(): void {
-		// Clean up existing watcher
-		if (this.#gitWatcher) {
-			this.#gitWatcher.close();
-			this.#gitWatcher = null;
-		}
+		this.#gitUnwatch?.();
+		this.#gitUnwatch = null;
 
 		if (!settings.get("git.enabled")) return;
+		const repository = git.repo.resolveSync(getProjectDir());
+		if (!repository) return;
 
-		void git.head
-			.resolve(getProjectDir())
-			.then(head => {
-				if (!head) {
-					return;
-				}
-
-				try {
-					const watchPath = head.isReftable ? path.join(head.gitDir, "reftable") : head.headPath;
-					this.#gitWatcher = fs.watch(watchPath, () => {
-						this.#cachedBranch = undefined; // Invalidate cache
-						if (this.#onBranchChange) {
-							this.#onBranchChange();
-						}
-					});
-				} catch {
-					// Silently fail if we can't watch
-				}
-			})
-			.catch(() => {
-				this.#cachedBranch = null;
+		try {
+			this.#gitUnwatch = git.head.watch(repository, () => {
+				this.#cachedBranch = undefined; // Invalidate cache
+				this.#onBranchChange?.();
 			});
+		} catch {
+			// Silently fail if we can't watch
+		}
 	}
 
 	/**
 	 * Clean up the file watcher
 	 */
 	dispose(): void {
-		if (this.#gitWatcher) {
-			this.#gitWatcher.close();
-			this.#gitWatcher = null;
-		}
+		this.#gitUnwatch?.();
+		this.#gitUnwatch = null;
 	}
 
 	invalidate(): void {

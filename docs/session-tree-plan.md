@@ -1,6 +1,6 @@
 # Session tree architecture (current)
 
-Reference: [session.md](../docs/session.md)
+Reference: [session.md](../docs/session.html)
 
 This document describes how session tree navigation works today: in-memory tree model, leaf movement rules, branching behavior, and extension/event integration.
 

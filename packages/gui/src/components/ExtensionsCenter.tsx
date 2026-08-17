@@ -76,6 +76,13 @@ function isDeletable(e: ExtensionItem): boolean {
 	);
 }
 
+/** GUI-only capability kinds (visual extensions with no TUI-side effect):
+ *  motion packs + the built-in style. Tagged with a badge in the list and
+ *  the detail pane so users can tell GUI-surface extensions apart. */
+function isGuiKind(e: ExtensionItem): boolean {
+	return e.kind === "gui-motion" || e.kind === "style";
+}
+
 export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [extensions, setExtensions] = useState<ExtensionItem[] | null>(null);
 	const [tabs, setTabs] = useState<ExtensionTab[]>([]);
@@ -393,6 +400,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																		className={`gui-ext-dot${e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 																	/>
 																	<span className="min-w-0 flex-1 truncate">{e.name}</span>
+																	{isGuiKind(e) && <span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>}
 																	<span className="gui-ext-item-tag">{levelLabel(e)}</span>
 																	<span className="gui-ext-item-ops">
 																		{isDeletable(e) && (
@@ -473,6 +481,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							<div className="gui-ext-detail-name">{selected.displayName}</div>
 							<div className="gui-ext-detail-meta">
 								{t("extension type")}: {kindLabel(selected.kind)}
+								{isGuiKind(selected) && <span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>}
 							</div>
 							{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
 							{selected.trigger && (

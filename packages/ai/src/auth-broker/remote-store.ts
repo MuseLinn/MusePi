@@ -253,6 +253,9 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 	#usageInflight?: Promise<UsageReport[] | null>;
 	#credentialBlockReconcileAfter: Map<string, number> = new Map();
 	#usageCacheEpoch = 0;
+	/** Raw broker credentials retained to size aggregate usage requests before account-pool filtering. */
+	#brokerUsageProviderByCredentialId = new Map<number, Provider>();
+	#brokerUsageAccountCounts = new Map<Provider, number>();
 	/** Per-snapshot lookup of oauth credentials by provider; rebuilt when `#snapshot` is replaced. */
 	#usageFilterLookup?: { snapshot: SnapshotResponse; byProvider: Map<Provider, OAuthCredential[]> };
 	/** Memoized `#filterUsageReports` output, keyed on (input identity, lookup identity). */
@@ -296,6 +299,7 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 
 	#applySnapshot(snapshot: SnapshotResponse, generation: number, protectNewBlocks = true): void {
 		const nowMs = Date.now();
+		this.#replaceBrokerUsageAccounts(snapshot.credentials);
 		const previousCredentials = this.#snapshot.credentials;
 		const credentials = snapshot.credentials
 			.filter(entry => isCredentialInAccountPool(entry, this.#accountPool))
@@ -427,8 +431,9 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 		generation: number,
 		serverNowMs: number,
 	): void {
+		this.#upsertBrokerUsageAccount(entry);
 		if (!isCredentialInAccountPool(entry, this.#accountPool)) {
-			this.#removeStreamCredential(entry.id, refresher, generation, serverNowMs);
+			this.#removeStreamCredential(entry.id, refresher, generation, serverNowMs, { retainBrokerUsageAccount: true });
 			return;
 		}
 		const incoming = this.#normalizeSnapshotEntryBlocks(entry, Date.now());
@@ -446,7 +451,14 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 		this.#snapshotReceivedAt = Date.now();
 	}
 
-	#removeStreamCredential(id: number, refresher: RefresherSchedule, generation: number, serverNowMs: number): void {
+	#removeStreamCredential(
+		id: number,
+		refresher: RefresherSchedule,
+		generation: number,
+		serverNowMs: number,
+		options?: { retainBrokerUsageAccount?: boolean },
+	): void {
+		if (!options?.retainBrokerUsageAccount) this.#removeBrokerUsageAccount(id);
 		const removed = this.#snapshot.credentials.find(entry => entry.id === id);
 		if (removed?.blocks && removed.blocks.length > 0) this.#invalidateUsageCache();
 		const credentials = this.#snapshot.credentials.filter(entry => entry.id !== id);
@@ -1066,6 +1078,39 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 		});
 	}
 
+	#replaceBrokerUsageAccounts(entries: readonly SnapshotEntry[]): void {
+		this.#brokerUsageProviderByCredentialId.clear();
+		this.#brokerUsageAccountCounts.clear();
+		for (const entry of entries) this.#upsertBrokerUsageAccount(entry);
+	}
+
+	#upsertBrokerUsageAccount(entry: Pick<SnapshotEntry, "id" | "provider">): void {
+		const previous = this.#brokerUsageProviderByCredentialId.get(entry.id);
+		if (previous === entry.provider) return;
+		if (previous !== undefined) {
+			const count = this.#brokerUsageAccountCounts.get(previous) ?? 0;
+			if (count <= 1) this.#brokerUsageAccountCounts.delete(previous);
+			else this.#brokerUsageAccountCounts.set(previous, count - 1);
+		}
+		this.#brokerUsageProviderByCredentialId.set(entry.id, entry.provider);
+		this.#brokerUsageAccountCounts.set(entry.provider, (this.#brokerUsageAccountCounts.get(entry.provider) ?? 0) + 1);
+	}
+
+	#removeBrokerUsageAccount(id: number): void {
+		const provider = this.#brokerUsageProviderByCredentialId.get(id);
+		if (provider === undefined) return;
+		this.#brokerUsageProviderByCredentialId.delete(id);
+		const count = this.#brokerUsageAccountCounts.get(provider) ?? 0;
+		if (count <= 1) this.#brokerUsageAccountCounts.delete(provider);
+		else this.#brokerUsageAccountCounts.set(provider, count - 1);
+	}
+
+	#maxBrokerUsageAccounts(): number {
+		let maximum = 1;
+		for (const count of this.#brokerUsageAccountCounts.values()) maximum = Math.max(maximum, count);
+		return maximum;
+	}
+
 	#loadUsageReports(): Promise<UsageReport[] | null> {
 		const cached = this.#usageCache;
 		if (cached && Date.now() - cached.fetchedAt < USAGE_CACHE_TTL_MS) {
@@ -1074,7 +1119,7 @@ export class RemoteAuthCredentialStore implements AuthCredentialStore {
 		if (this.#usageInflight) return this.#usageInflight;
 		const epoch = this.#usageCacheEpoch;
 		const inflight = this.#client
-			.fetchUsage()
+			.fetchUsage({ maxAccountsPerProvider: this.#maxBrokerUsageAccounts() })
 			.then(body => {
 				if (epoch !== this.#usageCacheEpoch) return this.#loadUsageReports();
 				this.#usageCache = { reports: body.reports, fetchedAt: Date.now() };

@@ -650,6 +650,83 @@ describe("processResponsesStream: terminal events", () => {
 		expect(finished.stopReason).toBe("stop");
 		expect(finished.stopDetails).toBeUndefined();
 	});
+
+	test("pauses a completed hosted web search that has no visible assistant output", async () => {
+		const output = makeOutput();
+		const stream = { push: () => {}, end: () => {} } as never;
+
+		await processResponsesStream(
+			makeStream([
+				{
+					type: "response.output_item.done",
+					output_index: 1,
+					item: { type: "web_search_call", id: "ws_1", status: "completed", action: { type: "search" } },
+				},
+				{ type: "response.completed", response: { id: "resp_search", status: "completed" } },
+			]),
+			output,
+			stream,
+			makeModel(),
+		);
+
+		expect(output.stopReason).toBe("stop");
+		expect(output.stopDetails).toEqual({ type: "pause_turn" });
+	});
+
+	test("pauses a status-less hosted web search done item that has no visible assistant output", async () => {
+		const output = makeOutput();
+		const stream = { push: () => {}, end: () => {} } as never;
+
+		await processResponsesStream(
+			makeStream([
+				{
+					type: "response.output_item.done",
+					output_index: 1,
+					item: { type: "web_search_call", id: "ws_1", action: { type: "search" } },
+				},
+				{ type: "response.completed", response: { id: "resp_search", status: "completed" } },
+			]),
+			output,
+			stream,
+			makeModel(),
+		);
+
+		expect(output.stopReason).toBe("stop");
+		expect(output.stopDetails).toEqual({ type: "pause_turn" });
+	});
+
+	test("finishes a hosted web search when the response includes visible output", async () => {
+		const output = makeOutput();
+		const stream = { push: () => {}, end: () => {} } as never;
+
+		await processResponsesStream(
+			makeStream([
+				{
+					type: "response.output_item.done",
+					output_index: 0,
+					item: { type: "web_search_call", id: "ws_1", status: "completed", action: { type: "search" } },
+				},
+				{
+					type: "response.output_item.done",
+					output_index: 1,
+					item: {
+						type: "message",
+						id: "msg_search",
+						role: "assistant",
+						status: "completed",
+						content: [{ type: "output_text", text: "Search complete", annotations: [] }],
+					},
+				},
+				{ type: "response.completed", response: { id: "resp_search", status: "completed" } },
+			]),
+			output,
+			stream,
+			makeModel(),
+		);
+
+		expect(output.content).toEqual([expect.objectContaining({ type: "text", text: "Search complete" })]);
+		expect(output.stopDetails).toBeUndefined();
+	});
 });
 
 describe("processResponsesStream: lost output_item.added recovery", () => {
@@ -835,6 +912,7 @@ describe("processResponsesStream: lost output_item.added recovery", () => {
 		if (block?.type !== "thinking") throw new Error("expected a thinking block");
 		expect(block.thinking).toBe("streamed thinking");
 		expect(block.thinkingSignature).toBeDefined();
+		expect(output.stopDetails).toBeUndefined();
 	});
 
 	test("treats content_filter incomplete responses as errors, not length", async () => {

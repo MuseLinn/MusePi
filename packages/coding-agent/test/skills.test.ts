@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { type Skill as CapabilitySkill, skillCapability } from "@musepi/pi-coding-agent/capability/skill";
 import { getCapability } from "@musepi/pi-coding-agent/discovery";
-import { getWslWindowsHomeCandidate } from "@musepi/pi-coding-agent/discovery/agents";
+import { getWslWindowsHomeCandidate, runHostProbe } from "@musepi/pi-coding-agent/discovery/agents";
 import {
 	loadSkills,
 	loadSkillsFromDir,
@@ -296,6 +296,27 @@ describe("skills", () => {
 			});
 
 			expect(resolved).toBe("/mnt/c/Users/alice");
+		});
+
+		it("kills a host probe that never exits instead of blocking startup (#8402)", () => {
+			// Integration test against real OS timer behavior: the contract is that
+			// runHostProbe's spawnSync `timeout` actually kills a genuinely blocked
+			// child. That is a native process-lifecycle effect the kernel drives, so
+			// fake timers cannot exercise it. The child would sleep a minute (stand-in
+			// for a wedged WSL->Windows interop pipe); the 500ms probe timeout must
+			// kill it and report "unavailable" rather than hang the calling thread.
+			const start = performance.now();
+			const result = runHostProbe([process.execPath, "-e", "await Bun.sleep(60_000)"]);
+			const elapsed = performance.now() - start;
+			expect(result).toBeUndefined();
+			// Loose bound: proves the probe returned via its own timeout, not via the
+			// child completing; a broken timeout would block far past this ceiling.
+			expect(elapsed).toBeLessThan(5_000);
+		});
+
+		it("returns trimmed stdout for a host probe that succeeds (#8402)", () => {
+			const result = runHostProbe([process.execPath, "-e", "process.stdout.write('  host-home  ')"]);
+			expect(result).toBe("host-home");
 		});
 
 		it("respects an explicit enableAgentsUser: false (#2401)", async () => {

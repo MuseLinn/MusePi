@@ -11,8 +11,8 @@ It covers runtime behavior as implemented today, including precedence, invalid-d
 - [`src/task/types.ts`](../packages/coding-agent/src/task/types.ts)
 - [`src/task/index.ts`](../packages/coding-agent/src/task/index.ts)
 - [`src/task/commands.ts`](../packages/coding-agent/src/task/commands.ts)
-- [`src/prompts/agents/task.md`](../packages/coding-agent/src/prompts/agents/task.md)
-- [`src/prompts/tools/task.md`](../packages/coding-agent/src/prompts/tools/task.md)
+- [`src/prompts/agents/task.md`](../packages/coding-agent/src/prompts/agents/task.html)
+- [`src/prompts/tools/task.md`](../packages/coding-agent/src/prompts/tools/task.html)
 - [`src/discovery/helpers.ts`](../packages/coding-agent/src/discovery/helpers.ts)
 - [`src/config.ts`](../packages/coding-agent/src/config.ts)
 - [`src/task/executor.ts`](../packages/coding-agent/src/task/executor.ts)
@@ -23,9 +23,9 @@ It covers runtime behavior as implemented today, including precedence, invalid-d
 
 Task agents normalize into `AgentDefinition` (`src/task/types.ts`):
 
-- `name`, `description`, `systemPrompt` (required for a valid loaded agent)
-- optional `tools`, `spawns`, `model`, `thinkingLevel`, `output`, `blocking`, `autoloadSkills`, `readSummarize`, `prewalk`
-- `source`: `"bundled" | "user" | "project"`
+- required `name`, `description`, and `systemPrompt`
+- optional `tools`, `spawns`, prioritized `model` list, `thinkingLevel`, `output`, `blocking`, `autoloadSkills`, `readSummarize`, `prewalk`, `advisor`
+- `source`: `"bundled" | "user" | "project"` (extension agents are tagged with their extension root's project/user level)
 - optional `filePath`
 
 Parsing comes from frontmatter via `parseAgentFields()` (`src/discovery/helpers.ts`):
@@ -40,7 +40,8 @@ Parsing comes from frontmatter via `parseAgentFields()` (`src/discovery/helpers.
 - `thinking-level` / `thinking` selects the agent's configured effort. When `task.enableEffort` (default `false`) exposes it, a task item's coarse `effort` (`lo`, `med`, `hi`) takes precedence at launch. musepi maps that hint to the selected model's lowest, middle, or highest supported effort, then clamps it to `task.maxEffort` (default `max`). The ceiling is carried across retry-fallback model switches. If the selected model has no supported effort at or below the ceiling, the spawn fails; models without a controllable effort surface instead fall back to their normal selector.
 - `blocking: true` makes the parent wait for that agent even when async task execution is enabled
 - `autoloadSkills` names skills from the parent session to inject before the first child prompt; unknown names are ignored
-- `prewalk: true` starts the subagent on its resolved model and hands off to the default prewalk target (the `smol` role) at its first edit/write, exactly like the session-level `--prewalk`; a string value (e.g. `prewalk: "@smol"` or `prewalk: "openai/gpt-5-mini"`) picks a custom target. The `task.agentPrewalk` settings record (agent name → `"on"` / `"off"` / pattern, toggled per agent from `/agents` with `P`) overrides the frontmatter. Resolution happens in `runSubprocess` (`src/task/executor.ts`). An unavailable target is skipped instead of failing the spawn. A resolved target is skipped only when both its model identity and its effective thinking mode/level match the starting selection after model clamping; a same-model effort downgrade is a real hand-off and still arms and switches at the first edit/write.
+- `prewalk: true` starts the subagent on its resolved model and hands off to the default prewalk target (the `smol` role) at its first edit/write, exactly like the session-level `--prewalk`; a string value (e.g. `prewalk: "@smol"` or `prewalk: "openai/gpt-5-mini"`) picks a custom target. The `task.agentPrewalk` settings record (agent name → `"on"` / `"off"` / pattern, configured per agent from the `/agents` hub via its prewalk strip) overrides the frontmatter. Resolution happens in `runSubprocess` (`src/task/executor.ts`). An unavailable target is skipped instead of failing the spawn. A resolved target is skipped only when both its model identity and its effective thinking mode/level match the starting selection after model clamping; a same-model effort downgrade is a real hand-off and still arms and switches at the first edit/write.
+- `advisor: true` pairs spawned sessions of the agent with an advisor running the model resolved for the `advisor` role; a string value (e.g. `advisor: "deepseek/deepseek-v4-flash"` or `advisor: "@smol:high"`) sets an explicit advisor model pattern (optional `:level` suffix), applied as the spawned session's `modelRoles.advisor`. The `task.agentAdvisor` settings record (agent name → `"on"` / `"off"` / pattern, configured per agent from the `/agents` hub via its advisor strip) overrides the frontmatter. Resolution happens in `runSubprocess` (`src/task/executor.ts`); subagents default to no advisor, and the effective opt-in is persisted in `session_init` so cold revival restores it.
 
 ## Role-backed custom agents
 
@@ -84,7 +85,7 @@ For a dispatch, set the agent name and task:
 
 ## Watch running agents
 
-After dispatch, press `Alt+A` to open [Agent Hub](./agent-hub.md). Its live roster shows each task agent's status, current activity, model, age, and usage. Select an agent to read its transcript and steer it directly; parked agents can be revived from the same view.
+After dispatch, press `Alt+A` to open [Agent Hub](./agent-hub.html). Its live roster shows each task agent's status, current activity, model, age, and usage. Select an agent to read its transcript and steer it directly; parked agents can be revived from the same view.
 
 ### `vibe_spawn` tier routing
 

@@ -1,7 +1,7 @@
 import { buildModel } from "./build";
 import { readModelCache, writeModelCache } from "./model-cache";
 import { type GeneratedProvider, getBundledModels } from "./models";
-import type { Api, Model, ModelSpec, Provider } from "./types";
+import type { Api, Model, ModelCost, ModelSpec, Provider, TokenCost } from "./types";
 import { isRecord } from "./utils";
 import { collapseBuiltModelVariants } from "./variant-collapse";
 
@@ -510,6 +510,7 @@ function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamic
 	const reasoning = dynamicReasoningAuthoritative
 		? dynamicModel.reasoning
 		: existingModel.reasoning || dynamicModel.reasoning;
+	const longContextCost = dynamicModel.cost.longContext ?? existingModel.cost.longContext;
 	// Re-build from spec stage: sparse compat comes from `compatConfig` (the
 	// verbatim override vocabulary), never the resolved `compat` record.
 	return buildModel({
@@ -523,6 +524,7 @@ function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamic
 			output: preferDiscoveryCost(dynamicModel.cost.output, existingModel.cost.output),
 			cacheRead: preferDiscoveryCost(dynamicModel.cost.cacheRead, existingModel.cost.cacheRead),
 			cacheWrite: preferDiscoveryCost(dynamicModel.cost.cacheWrite, existingModel.cost.cacheWrite),
+			...(longContextCost ? { longContext: longContextCost } : {}),
 		},
 		contextWindow: preferDiscoveryLimit(dynamicModel.contextWindow, existingModel.contextWindow),
 		maxTokens: preferDiscoveryLimit(dynamicModel.maxTokens, existingModel.maxTokens),
@@ -640,7 +642,7 @@ function isModelInputArray(value: unknown): value is ("text" | "image")[] {
 	return true;
 }
 
-function isModelCost(value: unknown): value is Model<Api>["cost"] {
+function isTokenCost(value: unknown): value is TokenCost {
 	if (!isRecord(value)) {
 		return false;
 	}
@@ -669,4 +671,13 @@ function isModelCost(value: unknown): value is Model<Api>["cost"] {
 		return false;
 	}
 	return true;
+}
+
+function isModelCost(value: unknown): value is ModelCost {
+	if (!isTokenCost(value)) return false;
+	const longContext = (value as TokenCost & { longContext?: unknown }).longContext;
+	if (longContext === undefined) return true;
+	if (!isTokenCost(longContext) || !isRecord(longContext)) return false;
+	const threshold = longContext.inputThreshold;
+	return typeof threshold === "number" && threshold > 0 && threshold < Infinity;
 }

@@ -371,6 +371,34 @@ export function visibleWidth(str: string): number {
 	return correctHangulCompatibilityJamoWidth(width, str);
 }
 
+/**
+ * True when a row carries a Kitty OSC 66 text-sizing span (`\x1b]66;…`).
+ * Scaled spans must bypass wrapping/padding and, when scaled up, reserve the
+ * terminal rows their multicell glyphs flow into.
+ */
+export function isOsc66Line(line: string): boolean {
+	return line.includes(OSC66_PREFIX);
+}
+
+/**
+ * Largest `s=` scale among the OSC 66 spans in a line (1 when none is scaled).
+ * A scale-`s` heading occupies `s` terminal rows, so the `s - 1` blank rows
+ * beneath it are the glyph's lower half and must never be erased or overdrawn.
+ */
+export function osc66MaxScale(line: string): number {
+	if (!line.includes(OSC66_PREFIX)) return 1;
+	let max = 1;
+	OSC66_SPAN_REGEX.lastIndex = 0;
+	for (let m = OSC66_SPAN_REGEX.exec(line); m !== null; m = OSC66_SPAN_REGEX.exec(line)) {
+		for (const part of m[1].split(":")) {
+			if (part.indexOf("=") !== 1 || part[0] !== "s") continue;
+			const value = Number.parseInt(part.slice(2), 10);
+			if (Number.isFinite(value) && value > max && value <= 7) max = value;
+		}
+	}
+	return max;
+}
+
 const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/g;
 
 /**

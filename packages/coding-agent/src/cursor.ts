@@ -18,6 +18,7 @@ import type {
 	ToolResultMessage,
 } from "@musepi/pi-ai";
 import {
+	omitUndefinedArgs,
 	piEscapeRegexLiteral,
 	piGrepSkip,
 	piJoinPath,
@@ -239,7 +240,11 @@ async function executeTool(
 		return createToolResultMessage(toolCallId, toolName, result, true);
 	}
 
-	options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args });
+	// Same rule as synthesizeCursorExecToolCall: optional kwargs must be absent,
+	// not `undefined`, or ArkType validation rejects the call.
+	const toolArgs = omitUndefinedArgs(args);
+
+	options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args: toolArgs });
 
 	let result: AgentToolResult<unknown>;
 	let isError = false;
@@ -254,7 +259,7 @@ async function executeTool(
 					type: "tool_execution_update",
 					toolCallId,
 					toolName,
-					args,
+					args: toolArgs,
 					partialResult: sanitizedResult,
 				});
 			}
@@ -263,7 +268,7 @@ async function executeTool(
 	try {
 		result = await tool.execute(
 			toolCallId,
-			args as Record<string, unknown>,
+			toolArgs as Record<string, unknown>,
 			undefined,
 			onUpdate,
 			options.getToolContext?.(),
@@ -509,11 +514,11 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 		}
 
 		const timeoutSeconds = args.timeout && args.timeout > 0 ? args.timeout : undefined;
-		const toolArgs: Record<string, unknown> = {
+		const toolArgs = omitUndefinedArgs({
 			command: args.command,
 			cwd: args.workingDirectory || undefined,
 			timeout: timeoutSeconds,
-		};
+		});
 
 		this.options.emitEvent?.({ type: "tool_execution_start", toolCallId, toolName, args: toolArgs });
 

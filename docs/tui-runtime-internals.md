@@ -3,7 +3,7 @@
 This document maps the non-theme runtime path from terminal input to rendered output in interactive mode. It focuses on behavior in `packages/tui` and its integration from `packages/coding-agent` controllers.
 
 > **Editing the rendering engine itself?** Read
-> [`tui-core-renderer.md`](./tui-core-renderer.md) first — it documents the
+> [`tui-core-renderer.md`](./tui-core-renderer.html) first — it documents the
 > failure modes (yank / corruption / flash / width crashes) and the invariants
 > the render planner, native-scrollback bookkeeping, and capability detection
 > must not violate.
@@ -115,7 +115,7 @@ This keeps key parsing/editor mechanics in `packages/tui` and mode semantics in 
 3. Extract and strip `CURSOR_MARKER`, normalize lines, slice the visible window, composite overlays into the window slice (screen coordinates; overlays freeze commits).
 4. Emit one of: gesture-driven full paint (initial / session replace / resize), scroll-append (chunk rows only), in-window row diff, or seam rewrite (chunk + full window).
 
-Native scrollback always equals the committed frame prefix — rows enter history exactly once, in order, when the seam says they are final. There are no viewport probes and no deferred reconciliation; see [`tui-core-renderer.md`](./tui-core-renderer.md).
+Native scrollback always equals the committed frame prefix — rows enter history exactly once, in order, when the seam says they are final. There are no viewport probes and no deferred reconciliation; see [`tui-core-renderer.md`](./tui-core-renderer.html).
 
 Render writes use synchronized output mode (`CSI ? 2026 h/l`) when enabled; capability detection, DECRQM, or `PI_NO_SYNC_OUTPUT` can disable the wrappers while leaving autowrap discipline on.
 
@@ -133,7 +133,7 @@ These constraints are runtime guards plus component conventions; renderers shoul
 The deeper reasons these guards exist — why the renderer cannot observe scroll
 position, why ED3 (`CSI 3 J`) is confined to one path, and why the hot path
 clamps instead of throwing — are documented in
-[`tui-core-renderer.md`](./tui-core-renderer.md).
+[`tui-core-renderer.md`](./tui-core-renderer.html).
 
 ## Resize handling
 
@@ -141,9 +141,10 @@ Resize events are event-driven from `ProcessTerminal` to `TUI.requestRender()`.
 
 Effects:
 
-- A resize is an explicit user gesture: outside multiplexers the engine erases and replays (`ED3` + full paint) so history rewraps at the new geometry; the commit ledger restarts from the replayed frame.
-- Inside terminal multiplexers, resize repaints the visible window in place after a settle debounce (issue #2088); pane history keeps its old wrap, like any shell output, because pane scrollback cannot be erased safely.
-- Terminals that re-report their size when the alternate screen buffer is toggled (Warp reports a height one row different for the alt buffer) take the in-place path too. The non-multiplexer fast path borrows the alternate screen for drag frames, so on these terminals each alt enter/leave emits a fresh resize event, which re-enters the fast path — a self-sustaining loop that floods ED3 full repaints with stable geometry. `resizeRepaintsInPlace()` (covering multiplexers and these terminals; overridable via `PI_TUI_RESIZE_IN_PLACE`) routes them through the in-place repaint, which never touches the alt buffer.
+- A resize is an explicit user gesture: on direct terminals and direct HerdR panes the engine erases and replays (`ED3` + full paint) so history rewraps at the new geometry; the commit ledger restarts from the replayed frame. HerdR's Ghostty core supports ED3, and replay avoids converting its reflowed soft wraps into permanent row boundaries.
+- Inside ED3-unsafe terminal multiplexers, height-only resize retains the append ledger and repaints the visible window in place after the settle debounce (issue #2088). A width change instead terminates the physical-row epoch: old committed coordinates become opaque, pane history remains immutable at its authored wrap, and the settled render leaves the host-reflowed viewport in place. The current frame length becomes a baseline independent of the native committed-row count. Subsequent growth writes the exact current-width rows newly crossing the scrollback seam, follows them with a bounded viewport repaint, and advances commits by exactly that emitted slice. Ordinary and forced renders arriving during the debounce are folded into the settled repaint without postponing source updates.
+- Nested tmux, screen, Zellij, or cmux sessions inside HerdR remain on the ED3-unsafe path because the inner multiplexer owns its history.
+- Terminals that re-report their size when the alternate screen buffer is toggled (Warp reports a height one row different for the alt buffer) take the in-place path too. The non-multiplexer fast path borrows the alternate screen for drag frames, so on these terminals each alt enter/leave emits a fresh resize event, which re-enters the fast path — a self-sustaining loop that floods ED3 full repaints with stable geometry. `resizeRepaintsInPlace()` (covering ED3-unsafe multiplexers and these terminals; overridable via `PI_TUI_RESIZE_IN_PLACE`) routes them through the in-place repaint, which never touches the alt buffer.
 - Overlay visibility can depend on terminal dimensions (`OverlayOptions.visible`); focus is corrected when overlays become non-visible after resize.
 
 ## Streaming and incremental UI updates

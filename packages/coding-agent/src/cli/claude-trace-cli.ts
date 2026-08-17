@@ -24,9 +24,13 @@ const DOUBLE_CRLF = Buffer.from("\r\n\r\n", "latin1");
 const CRLF = Buffer.from("\r\n", "latin1");
 const TEXT_DECODER = new TextDecoder();
 
-// Debug-only local MITM certificate. Claude is launched with
-// NODE_TLS_REJECT_UNAUTHORIZED=0, so the certificate has no trust value; it only
-// lets Node's TLS stack complete the CONNECT tunnel handshake.
+// Debug-only LOCAL MITM certificate + private key (self-signed, CN
+// "omp-claude-trace", 2026–2036). NOT a credential: it grants no access to
+// any remote service and has zero trust value — Claude is launched with
+// NODE_TLS_REJECT_UNAUTHORIZED=0, so the pair only lets Node's TLS stack
+// complete the CONNECT tunnel handshake for local trace interception. It is
+// safe to ship in the source (upstream oh-my-pi carries the same); treat any
+// scanner hit as a false positive. Replace both together if regenerated.
 export const CLAUDE_TRACE_DEBUG_CERT = `-----BEGIN CERTIFICATE-----
 MIIDFzCCAf+gAwIBAgIUAe9omAqLbydZc5ZYZGhwbbpMSF0wDQYJKoZIhvcNAQEL
 BQAwGzEZMBcGA1UEAwwQb21wLWNsYXVkZS10cmFjZTAeFw0yNjA2MDIwODA2MjFa

@@ -52,7 +52,7 @@ Discovery, the `/mcp` commands, and the config writer all follow the active prof
 
 Project-scoped MCP config (`.musepi/mcp.json`) is keyed to the working directory, not the profile, so it applies under every profile. External-tool configs (`.claude/`, `.cursor/`, etc.) are also profile-independent because they belong to those tools rather than to an OMP profile.
 
-MCP follows the same profile rules as the rest of OMP-native config; see [Configuration Discovery → Profiles](./config-usage.md#profiles).
+MCP follows the same profile rules as the rest of OMP-native config; see [Configuration Discovery → Profiles](./config-usage.html#profiles).
 
 ## Add a schema reference
 

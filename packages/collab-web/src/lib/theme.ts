@@ -1,3 +1,6 @@
+import { Monitor, Moon, Palette, Sun } from "lucide";
+import type { IconInput } from "morphicons";
+import { defineMorphIcon } from "morphicons/element";
 import { useSyncExternalStore } from "react";
 
 export type SystemTheme = "light" | "dark";
@@ -237,6 +240,10 @@ function initThemeModule(): void {
 	if (typeof window === "undefined") return;
 	applyResolvedTheme();
 	applyAccent();
+	// The module-init apply above is the "first paint" — user-initiated
+	// flips AFTER this point must show the veil (without this, the FIRST
+	// click skipped the overlay entirely).
+	themeBooted = true;
 	window.matchMedia(DARK_SCHEME_QUERY).addEventListener("change", () => {
 		// System changes only move the needle while following the system.
 		if (preference === "system") {
@@ -246,15 +253,182 @@ function initThemeModule(): void {
 	});
 }
 
-export function setThemePreference(next: ThemePreference): void {
-	preference = next;
-	try {
-		globalThis.localStorage.setItem(STORAGE_KEY, next);
-	} catch {
-		// Persistence is best-effort; still apply/emit the in-memory preference.
+/**
+ * Smooth theme/accent flips via a full-screen overlay + morphing icon
+ * (sun↔moon for the scheme, palette for accent): the overlay fades in,
+ * the icon morphs, the swap happens under it, then the overlay fades out.
+ * A transient `*` color transition on every element was too expensive on
+ * M1 (whole-window color tween) — the overlay hides the swap for a
+ * fraction of the cost. The module-init apply is skipped.
+ */
+let themeBooted = false;
+
+/** MorphIcons icon data (lucide IconNodes) keyed by the overlay icon
+ *  name — the shapes the veil's icon morphs BETWEEN (shape interpolation,
+ *  not a cross-fade of two stacked SVGs). */
+const MORPH_ICONS: Record<string, IconInput> = {
+	sun: Sun,
+	moon: Moon,
+	monitor: Monitor,
+	palette: Palette,
+};
+
+/** Theme-mode icons keyed by preference (monitor = follow system). */
+export const THEME_MODE_ICON: Record<ThemePreference, "monitor" | "sun" | "moon"> = {
+	system: "monitor",
+	light: "sun",
+	dark: "moon",
+};
+
+/** Picking the already-active theme/accent: no veil, jiggle the caller's
+ *  control instead. */
+function emitThemeShake(): void {
+	if (typeof window === "undefined") return;
+	window.dispatchEvent(new Event("omp-theme-toggle-shake"));
+}
+
+function readVar(name: string, fallback: string): string {
+	const root = document.documentElement;
+	const value = getComputedStyle(root).getPropertyValue(name).trim();
+	return value || fallback;
+}
+
+/**
+ * Predict a CSS variable's computed value for a TARGET theme/accent without
+ * repainting: flip the dataset attributes, read computed style, restore —
+ * all synchronous in one frame, so no paint ever shows the wrong theme.
+ */
+/** Restore a dataset attribute captured by a predictor; undefined = delete
+ *  (assigning undefined would write the literal string "undefined"). */
+function restoreDataset(name: string, prev: string | undefined): void {
+	const root = document.documentElement;
+	if (prev === undefined) delete root.dataset[name];
+	else root.dataset[name] = prev;
+}
+
+function predictBg(targetResolved: SystemTheme): string {
+	const root = document.documentElement;
+	const prevTheme = root.dataset.theme;
+	const prevColorScheme = root.dataset.colorScheme;
+	const prevUi = root.dataset.uiTheme;
+	const targetUi = unifiedMode ? unifiedThemeId : targetResolved === "light" ? lightThemeId : darkThemeId;
+	// tokens.css matches the light palette on EITHER data-theme OR
+	// data-color-scheme (applyResolvedTheme writes both) — flip both or a
+	// stale colorScheme keeps the wrong --bg.
+	root.dataset.theme = targetResolved;
+	root.dataset.colorScheme = targetResolved;
+	root.dataset.uiTheme = targetUi;
+	const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
+	restoreDataset("theme", prevTheme);
+	restoreDataset("colorScheme", prevColorScheme);
+	restoreDataset("uiTheme", prevUi);
+	return bg || (targetResolved === "dark" ? "#17151a" : "#f5f2ea");
+}
+
+function predictAccent(targetAccent: AccentPreference): string {
+	const root = document.documentElement;
+	const prev = root.dataset.accent;
+	root.dataset.accent = targetAccent;
+	const value = getComputedStyle(root).getPropertyValue("--accent").trim();
+	restoreDataset("accent", prev);
+	return value || "#34d399";
+}
+
+type ThemeOverlayOpts = {
+	/** Icon shown on the FROM side (defaults to `icon` = no morph). */
+	fromIcon?: string;
+	/** Veil color when the overlay appears (default: current --bg). */
+	fromColor?: string;
+	/** Veil color it fades INTO while the swap happens (default: fromColor). */
+	toColor?: string;
+	/** Accent color for the from-icon (default: current --accent). */
+	fromAccent?: string;
+	/** Accent color the to-icon morphs into (default: fromAccent). */
+	toAccent?: string;
+};
+
+/**
+ * Smooth theme/accent flips via a full-screen overlay + a MorphIcons icon
+ * that SHAPE-MORPHS (Procrustes-optimal rotation + polar-space
+ * interpolation, spring physics — the same morphicons.com effect the
+ * composer's send/stop icon uses) from the current mode's icon into the
+ * target's. The veil fades from the current scheme color to the target
+ * scheme color while the morph runs, the swap fires mid-fade, then the
+ * veil fades out. Picking the already-active mode skips the veil and
+ * emits `omp-theme-toggle-shake` so the caller's button can jiggle
+ * instead. The module-init apply is skipped.
+ */
+function withColorTransition(fn: () => void, icon: keyof typeof MORPH_ICONS, opts: ThemeOverlayOpts = {}): void {
+	const root = typeof document !== "undefined" ? document.documentElement : null;
+	if (!root || !themeBooted) {
+		fn();
+		themeBooted = true;
+		return;
 	}
-	applyResolvedTheme();
-	emit();
+	if (root.querySelector(".gui-theme-overlay")) return; // a flip is already running
+	const fromIcon = opts.fromIcon && MORPH_ICONS[opts.fromIcon] ? opts.fromIcon : icon;
+	const fromColor = opts.fromColor ?? readVar("--bg", "#17151a");
+	const toColor = opts.toColor ?? fromColor;
+	const fromAccent = opts.fromAccent ?? readVar("--accent", "#34d399");
+	const toAccent = opts.toAccent ?? fromAccent;
+	defineMorphIcon(); // idempotent per tag — registers <morph-icon>
+	const overlay = document.createElement("div");
+	overlay.className = "gui-theme-overlay";
+	overlay.setAttribute("role", "presentation");
+	overlay.style.setProperty("--overlay-from", fromColor);
+	overlay.style.setProperty("--overlay-to", toColor);
+	const iconEl = document.createElement("morph-icon");
+	iconEl.setAttribute("size", "76");
+	iconEl.setAttribute("stroke-width", "1.6");
+	iconEl.style.color = fromAccent;
+	// Plant the CURRENT icon with no animation; the TARGET morphs in at
+	// --morph (shape interpolation, not a cross-fade of two icons).
+	iconEl.set(MORPH_ICONS[fromIcon]);
+	overlay.appendChild(iconEl);
+	document.body.appendChild(overlay);
+	requestAnimationFrame(() => overlay.classList.add("gui-theme-overlay--in"));
+	setTimeout(() => {
+		overlay.classList.add("gui-theme-overlay--morph");
+		iconEl.morphTo(MORPH_ICONS[icon], "snappy");
+		iconEl.style.color = toAccent; // CSS color transition trails the morph
+	}, 200);
+	setTimeout(() => {
+		fn();
+		overlay.classList.remove("gui-theme-overlay--in");
+		overlay.classList.add("gui-theme-overlay--out");
+		setTimeout(() => overlay.remove(), 260);
+	}, 340);
+}
+
+export function setThemePreference(next: ThemePreference): void {
+	if (next === preference) {
+		emitThemeShake();
+		return;
+	}
+	const targetResolved: SystemTheme = next === "system" ? getSystemTheme() : next;
+	withColorTransition(
+		() => {
+			preference = next;
+			try {
+				globalThis.localStorage.setItem(STORAGE_KEY, next);
+			} catch {
+				// Persistence is best-effort; still apply/emit the in-memory preference.
+			}
+			applyResolvedTheme();
+			// Emit INSIDE the swap callback: the store must read the NEW
+			// preference. Emitting outside it (synchronously after
+			// withColorTransition returns) broadcasts the OLD value — the
+			// toggle buttons then lag one click behind (clicked "light",
+			// theme flips, but the button still shows "system").
+			emit();
+		},
+		THEME_MODE_ICON[next],
+		{
+			fromIcon: THEME_MODE_ICON[preference],
+			fromColor: readVar("--bg", "#17151a"),
+			toColor: predictBg(targetResolved),
+		},
+	);
 }
 
 function subscribe(callback: () => void): () => void {
@@ -400,14 +574,26 @@ function applyAccent(): void {
 }
 
 export function setAccentPreference(next: AccentPreference): void {
-	accent = next;
-	try {
-		globalThis.localStorage.setItem(ACCENT_STORAGE_KEY, next);
-	} catch {
-		// Persistence is best-effort; still apply/emit the in-memory preference.
-	}
-	applyAccent();
-	emitAccent();
+	if (next === accent) return; // already active — no veil
+	withColorTransition(
+		() => {
+			accent = next;
+			try {
+				globalThis.localStorage.setItem(ACCENT_STORAGE_KEY, next);
+			} catch {
+				// Persistence is best-effort; still apply/emit the in-memory preference.
+			}
+			applyAccent();
+			// Emit inside the swap (see setThemePreference) so the swatch
+			// buttons read the NEW accent, not the pre-swap value.
+			emitAccent();
+		},
+		"palette",
+		{
+			fromAccent: readVar("--accent", "#34d399"),
+			toAccent: predictAccent(next),
+		},
+	);
 }
 
 /** Pick a custom accent color; switches the accent axis to "custom". */
@@ -426,6 +612,38 @@ export function setCustomAccentColor(input: string): void {
 	emitAccent();
 }
 
+/**
+ * Apply a custom accent color: persists it, switches the accent axis to
+ * "custom", and runs the full-screen veil + morphicon transition — the
+ * exact experience of switching presets (the picker's 「应用」 button).
+ * Unlike setCustomAccentColor this ALWAYS veils, even when the custom axis
+ * is already active (a color change still reads as a switch).
+ */
+export function applyCustomAccent(input: string): void {
+	const hex = normalizeHex(input);
+	if (!hex) return;
+	withColorTransition(
+		() => {
+			customAccent = hex;
+			accent = "custom";
+			try {
+				globalThis.localStorage.setItem(CUSTOM_ACCENT_STORAGE_KEY, hex);
+				globalThis.localStorage.setItem(ACCENT_STORAGE_KEY, "custom");
+			} catch {
+				// Persistence is best-effort; still apply/emit the in-memory preference.
+			}
+			applyAccent();
+			// Emit inside the swap so subscribers read the NEW color.
+			emitAccent();
+		},
+		"palette",
+		{
+			fromAccent: readVar("--accent", "#34d399"),
+			toAccent: hex,
+		},
+	);
+}
+
 function subscribeAccent(callback: () => void): () => void {
 	accentListeners.add(callback);
 	return () => accentListeners.delete(callback);
@@ -437,6 +655,7 @@ export function useAccentPreference(): {
 	customAccent: string;
 	setAccent: (next: AccentPreference) => void;
 	setCustomAccent: (next: string) => void;
+	applyCustomAccent: (next: string) => void;
 } {
 	const value = useSyncExternalStore(
 		subscribeAccent,
@@ -453,6 +672,7 @@ export function useAccentPreference(): {
 		customAccent: custom,
 		setAccent: setAccentPreference,
 		setCustomAccent: setCustomAccentColor,
+		applyCustomAccent,
 	};
 }
 

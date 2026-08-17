@@ -50,6 +50,20 @@ export interface ActiveRetryFallbackState {
 	originalThinkingLevel: ConfiguredThinkingLevel | undefined;
 	lastAppliedFallbackThinkingLevel: ConfiguredThinkingLevel | undefined;
 	pinned: boolean;
+	/**
+	 * Set once a turn on the fallback target settles successfully. Until then the
+	 * switch is only a routing decision — nothing has been produced by the new
+	 * model, so no observer may report the run as having used it.
+	 */
+	served?: boolean;
+}
+
+/** Model a session's produced work is attributed to. */
+export interface ServingModel {
+	/** Full selector including routing and thinking level. */
+	selector: string;
+	/** Whether fallback routing, rather than the configured primary, owns it. */
+	isFallback: boolean;
 }
 
 const RETRY_BACKOFF_MAX_DELAY_MS = 8_000;

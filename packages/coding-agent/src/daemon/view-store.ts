@@ -1,6 +1,6 @@
 /**
  * SQLite materialized-view cache + cross-session query tables for the daemon
- * (gui-architecture Phase 3).
+ * (daemon Phase 3).
  *
  * Layers:
  * - `materialized_sessions` — one row per session holding the persisted

@@ -1,6 +1,6 @@
 /**
  * Append-only session journal — the event-sourcing store for the daemon
- * (gui-architecture Phase 3).
+ * (daemon Phase 3).
  *
  * Format: one JSON line per record, `{ seq, ts, event }`, where `event` is a
  * **wire-compatible** AgentEvent (guarded by `isWireAgentEvent`). Recording

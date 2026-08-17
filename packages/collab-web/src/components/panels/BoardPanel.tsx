@@ -2,7 +2,7 @@ import type { BoardData, BoardWidget as WireBoardWidget } from "@musepi/pi-wire"
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient, GuestSnapshot } from "../../lib/client";
+import type { GuestClient } from "../../lib/client";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { widgetDef } from "../../widgets/registry";
 
@@ -15,7 +15,6 @@ import { widgetDef } from "../../widgets/registry";
 
 interface BoardPanelProps {
 	client: GuestClient;
-	snapshot: GuestSnapshot;
 }
 
 export function BoardPanel({ client }: BoardPanelProps): ReactNode {
@@ -66,7 +65,9 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 						<div className="sh-board-grid">
 							{[...board.widgets]
 								.sort((a, b) => a.pos.y - b.pos.y || a.pos.x - b.pos.x)
-								.map(w => <BoardWidgetCard key={w.id} widget={w} update={noop} />)}
+								.map(w => (
+									<BoardWidgetCard key={w.id} widget={w} update={noop} />
+								))}
 						</div>
 					)}
 				</section>
@@ -85,7 +86,11 @@ function BoardWidgetCard({
 	const def = widgetDef(widget.type);
 	if (!def) return null;
 	return (
-		<div className="sh-board-widget" data-tone={def.tone ?? "default"} style={{ minHeight: `${Math.max(150, Math.min(320, widget.pos.h))}px` }}>
+		<div
+			className="sh-board-widget"
+			data-tone={def.tone ?? "default"}
+			style={{ minHeight: `${Math.max(150, Math.min(320, widget.pos.h))}px` }}
+		>
 			<div className="sh-board-widget-head">
 				<span className="sh-board-widget-title">{widget.title}</span>
 			</div>

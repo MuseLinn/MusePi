@@ -1,0 +1,307 @@
+/* MusePi GitHub Pages — brand visual language (parity with the desktop GUI
+ * dark theme: dot-matrix backdrop, frosted cards, brand accent
+ * oklch(0.72 0.16 162), 16px radii, 1px borders). */
+
+:root {
+  --bg: #1b191f;
+  --bg-2: #242128;
+  --surface: rgba(36, 33, 40, 0.72);
+  --surface-solid: #2a2730;
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #ece8e9;
+  --text-muted: rgba(236, 232, 233, 0.62);
+  --text-faint: rgba(236, 232, 233, 0.4);
+  --accent: oklch(0.72 0.16 162);
+  --accent-soft: color-mix(in oklab, oklch(0.72 0.16 162) 16%, transparent);
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg) 60%);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dot-matrix backdrop (DotMatrixMark language, coarser). */
+.mp-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgba(236, 232, 233, 0.06) 1px, transparent 1.6px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
+}
+
+.mp-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.mp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+
+.mp-brand img { display: block; }
+
+.mp-nav { display: flex; gap: 22px; }
+
+.mp-nav a {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.mp-nav a:hover { color: var(--accent); }
+
+/* ── Hero ────────────────────────────────────────────────── */
+.mp-hero {
+  padding: 72px 0 40px;
+  text-align: center;
+}
+
+.mp-hero h1 {
+  margin: 0 0 14px;
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, var(--text) 40%, var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mp-hero .mp-tagline {
+  margin: 0 auto 28px;
+  max-width: 620px;
+  color: var(--text-muted);
+  font-size: 17px;
+}
+
+.mp-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 22px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.mp-cta:hover {
+  background: color-mix(in oklab, var(--accent) 24%, transparent);
+  transform: translateY(-1px);
+}
+
+.mp-hero-code {
+  margin: 40px auto 0;
+  max-width: 640px;
+  padding: 18px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  text-align: left;
+  font-family: ui-monospace, "SF Mono", "Maple Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-x: auto;
+}
+
+.mp-hero-code .mp-cmd { color: var(--accent); }
+
+/* ── Sections ─────────────────────────────────────────────── */
+.mp-section { padding: 48px 0 8px; }
+
+.mp-section h2 {
+  margin: 0 0 22px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
+}
+
+.mp-card {
+  padding: 22px 22px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.mp-card:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+  transform: translateY(-2px);
+}
+
+.mp-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.mp-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.mp-card .mp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+/* Screenshots */
+.mp-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.mp-shot {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--surface-solid);
+}
+
+.mp-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.mp-shot figcaption {
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* ── Quick start ──────────────────────────────────────────── */
+.mp-quick {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  padding: 8px 24px 16px;
+}
+
+.mp-quick pre {
+  margin: 10px 0 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", "Maple Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mp-quick code { font-family: inherit; }
+
+.mp-quick .mp-cmd { color: var(--accent); }
+
+/* Docs index */
+.mp-docs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-docs a {
+  display: block;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.mp-docs a:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+  color: var(--accent);
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.mp-footer {
+  margin-top: 72px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+.mp-footer a { color: var(--text-muted); }
+
+/* Generic content (docs pages) */
+.mp-main h1, .mp-main h2, .mp-main h3 { color: var(--text); }
+.mp-main a { color: var(--accent); }
+.mp-main pre, .mp-main code {
+  font-family: ui-monospace, "SF Mono", "Maple Mono", Menlo, monospace;
+  font-size: 13px;
+}
+.mp-main pre {
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.32);
+  overflow-x: auto;
+}
+
+@media (max-width: 720px) {
+  .mp-hero h1 { font-size: 34px; }
+  .mp-nav { gap: 14px; }
+  .mp-nav a:nth-child(2), .mp-nav a:nth-child(3) { display: none; }
+}

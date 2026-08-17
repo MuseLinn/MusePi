@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** System notification (main-process Notification — the renderer HTML5
 	 *  API does not surface on macOS). Resolves { ok } or { ok:false }. */
 	showNotification: (title, body) => ipcRenderer.invoke("notification-show", { title, body }),
+	/** Main-process delivery failure (macOS unsigned apps). { reason } */
+	onNotificationFailed: (cb) => {
+		const listener = (_e, detail) => cb(detail);
+		ipcRenderer.on("notification-failed", listener);
+		return () => ipcRenderer.removeListener("notification-failed", listener);
+	},
 	/** Window glass on/off (true = native vibrancy, false = opaque); style is
 	 *  "light" | "dark" and selects the bright/dim material + opaque base. */
 	setWindowGlass: (enabled, style) => ipcRenderer.invoke("gui-vibrancy", enabled, style),

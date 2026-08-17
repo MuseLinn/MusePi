@@ -7,10 +7,10 @@ models (descriptors, discovery, identity, thinking metadata, pricing).
 
 Related references:
 
-- [Provider compat reference](./provider-compat-reference.md) — compat flags, reasoning levels, tool handling, forced tool choice
-- [Provider endpoint constraints](./provider-endpoint-constraints.md) — where new constraints should live
-- [Provider streaming internals](./provider-streaming-internals.md) — stream event normalization
-- [Providers](./providers.md) — availability, credentials, login flows
+- [Provider compat reference](./provider-compat-reference.html) — compat flags, reasoning levels, tool handling, forced tool choice
+- [Provider endpoint constraints](./provider-endpoint-constraints.html) — where new constraints should live
+- [Provider streaming internals](./provider-streaming-internals.html) — stream event normalization
+- [Providers](./providers.html) — availability, credentials, login flows
 
 
 ## OpenAI Chat Completions
@@ -188,11 +188,11 @@ Google Gemini integrations use REST/SSE over HTTP (`POST https://generativelangu
 - **`streamGenerateContent` SSE protocol**: Streams are consumed via `readSseJson<GenerateContentResponse>` in `streamGoogleGenAI`.
 - **Thought parts & signature retention**: `isThinkingPart` identifies reasoning text when `part.thought === true`. Encrypted `part.thoughtSignature` fields are preserved across deltas using `retainThoughtSignature`. In `convertMessages`, thought signatures are retained only when message provider/model match the target (`msg.provider === model.provider && msg.model === model.id`) and pass `isValidThoughtSignature` (base64 check). Gemini 3 tool calls lacking a signature fall back to `SKIP_THOUGHT_SIGNATURE` (`"skip_thought_signature_validator"`).
 - **Empty response retry loop**: `streamGoogleGenAI` guards against Gemini returning `finishReason: STOP` with blank content without calling tools. `hasMeaningfulGoogleContent` validates output; if empty, `streamGoogleGenAI` retries up to `MAX_EMPTY_STREAM_RETRIES` (2 retries, 3 total attempts) with exponential backoff (`EMPTY_STREAM_BASE_DELAY_MS * 2^attempt`) after resetting stream output via `resetGoogleStreamOutputForRetry`.
-- **Thinking loop guard**: Implemented in `packages/ai/src/utils/thinking-loop.ts` (`ThinkingLoopDetector`, `isGeminiThinkingModel`). Streams before tool calls are monitored for three runaway shapes:
+- **Thinking loop guard**: Implemented in `packages/ai/src/utils/thinking-loop.ts` (`ThinkingLoopDetector`). Gemini, DeepSeek, and Grok model-id families are monitored before tool calls for three runaway shapes:
   1. *Verbatim tail repetition* (`VERBATIM_TAIL_WINDOW = 250`, >= 180 repeated chars).
   2. *Near-duplicate segments* (trigram Jaccard similarity >= 0.8 across last 16 segments).
   3. *Progress-lexicon stall* (novelty <= 0.2 without new concrete reference anchors over 8 consecutive segments).
-  Additionally, `GEMINI_HEADER_RUNAWAY_THRESHOLD = 24` halts streams emitting excessive titled reasoning summaries without acting. Triggers emit a synthetic retryable `error` tagged with `AIError.Flag.ThinkingLoop`.
+  4. Gemini's `GEMINI_HEADER_RUNAWAY_THRESHOLD = 24` halts streams emitting excessive titled reasoning summaries without acting. Triggers emit a synthetic retryable `error` tagged with `AIError.Flag.ThinkingLoop`.
 - **Finish reason mapping & incomplete streams**: `candidate.finishReason` is mapped via `mapStopReason`; `stop`/`length` reasons upgrade to `toolUse` if output contains tool calls. Drops without `finishReason` throw `ProviderResponseError` with `kind: "incomplete-stream"`.
 - **UsageMetadata accounting**: Attached to trailing chunks in `consumeGoogleStream`. `input` is calculated as `promptTokenCount - (cachedContentTokenCount || 0)`; `output` as `candidatesTokenCount + (thoughtsTokenCount || 0)`; `cacheRead` as `cachedContentTokenCount || 0`; and `reasoningTokens` as `thoughtsTokenCount`. Token costs are computed via `calculateCost(model, output.usage)`.
 
@@ -570,7 +570,7 @@ Pi Native is a lossless internal server/client transport protocol used when a pi
 - **Idle & First-Event Watchdogs**: Client wraps SSE streams with `iterateWithIdleTimeout` using `PI_STREAM_FIRST_EVENT_TIMEOUT_MS` and `PI_STREAM_IDLE_TIMEOUT_MS`. `isPiNativeProgressEvent` in `packages/ai/src/providers/pi-native-client.ts` ignores `type: "start"` events so initial setup does not reset the idle timeout.
 - **Synthetic Terminal Boundaries**: If the SSE stream closes without a `done` or `error` event, client's `streamPiNative` constructs a synthetic assistant message via `makeSyntheticAssistant`. It pushes `{ type: "error", reason: "aborted", error: { ..., stopReason: "aborted", errorMessage: "stream closed without terminal event" } }` if caller aborted, or `{ type: "done", reason: "stop", message: { ..., stopReason: "stop" } }` on ungraceful clean close.
 - **Server Iterator Exception Fallback**: If the server's `encodeStream` event iterator throws, it enqueues `data: {"type":"error","reason":"error","errorMessage":"..."}\n\n` followed by `data: [DONE]\n\n` so client iterators resolve instead of hanging.
-- **Gemini Thinking Loop Guard**: `packages/ai/src/stream.ts` `streamSimple` wraps `streamPiNative` with `withGeminiThinkingLoopGuard` and `withProviderInFlightLimit`, ensuring degenerate Gemini thinking loops abort with empty-content retryable errors.
+- **Thinking loop guard**: `packages/ai/src/stream.ts` `streamSimple` wraps `streamPiNative` with `withThinkingLoopGuard` and `withProviderInFlightLimit`, ensuring Gemini, DeepSeek, and Grok runaway thinking streams abort with empty-content retryable errors.
 
 ### Auth & usage
 - **Bearer Token Authorization**: Client (`packages/ai/src/providers/pi-native-client.ts` `buildHeaders`) passes `options.apiKey` (the gateway bearer token) in `Authorization: Bearer <apiKey>`, unless `model.headers.Authorization` is explicitly provided.
@@ -741,7 +741,7 @@ CoreWeave Serverless Inference provides hosted AI model inference powered by Wei
 The DeepSeek provider interfaces directly with DeepSeek's API (`https://api.deepseek.com/v1`) using the OpenAI Chat Completions transport (`openai-completions`). It powers official DeepSeek models like `deepseek-v4-pro` and `deepseek-v4-flash`, implementing provider-specific reasoning flags, token-stripping stream filters, custom prompt-cache usage accounting, and Bearer-sanitized API key storage.
 
 ### Special casings
-- **Reasoning Compat & `whenThinking` Swap**: Direct DeepSeek reasoning models (`isDirectDeepseekReasoning` in `packages/catalog/src/compat/openai.ts`) configure `supportsToolChoice: false` (omitting `tool_choice` on reasoning calls) and `reasoningDisableMode: "zai-thinking-disabled"`. Active reasoning activates a `whenThinking` compat pointer-swap that merges `extraBody: { thinking: { type: "enabled" } }`. Setting any `tool_choice` drops reasoning fields (`disableReasoningOnToolChoice: true`). See [Provider compat reference](./provider-compat-reference.md).
+- **Reasoning Compat & `whenThinking` Swap**: Direct DeepSeek reasoning models (`isDirectDeepseekReasoning` in `packages/catalog/src/compat/openai.ts`) configure `supportsToolChoice: false` (omitting `tool_choice` on reasoning calls) and `reasoningDisableMode: "zai-thinking-disabled"`. Active reasoning activates a `whenThinking` compat pointer-swap that merges `extraBody: { thinking: { type: "enabled" } }`. Setting any `tool_choice` drops reasoning fields (`disableReasoningOnToolChoice: true`). See [Provider compat reference](./provider-compat-reference.html).
 - **Reasoning Content Invariants**: Replays exact prior `reasoning_content` on follow-up turns (`requiresReasoningContentForToolCalls` and `requiresReasoningContentForAllAssistantTurns`), rejecting synthetic `"."` placeholders (`allowsSyntheticReasoningContentForToolCalls: false`). Empty assistant content on tool turns is promoted to `"."` (`requiresAssistantContentForToolCalls: true`).
 - **Chat Template Token Stripping & Healing**: `stripDeepseekSpecialTokens` in `packages/ai/src/providers/openai-completions.ts` buffers and strips raw streamed chat-template tokens (`<｜User｜>`, `<｜Assistant｜>`, etc.). In-band DSML tool blocks (`<｜DSML｜tool_calls>`) are healed via `StreamMarkupHealing` with pattern `"dsml"`.
 - **Wire Parameters & Stream Watchdog**: Output token ceiling uses `max_tokens` (`maxTokensField: "max_tokens"`). Inter-event stream watchdog extends to 300 s (`DEEPSEEK_REASONING_STREAM_IDLE_TIMEOUT_MS`) to allow for lengthy prefill/thinking delays. `supportsStrictMode: true` is enabled for function tools.
@@ -1027,7 +1027,7 @@ LM Studio is a local OpenAI-compatible model server running on user hardware (de
 - **Static Catalog Generator Exclusion**: Listed in `DISCOVERY_ONLY_PROVIDERS` (`scripts/generate-models.ts`) and `LOCAL_ONLY_PROVIDERS` (`test/models-json-no-local-endpoints.test.ts`), ensuring local endpoints are never fetched during build or committed to static `models.json`.
 
 ### Stream behavior
-- **Watchdog Timeout Floors**: Configures `streamFirstEventTimeoutMs: 0` (`packages/catalog/src/compat/openai.ts`) to disable the pre-response first-event watchdog during long local model cold-loads or prompt prefills, and sets `streamIdleTimeoutMs: 300_000` (300s inter-event floor; see [Provider compat reference](./provider-compat-reference.md)) to prevent stream cancellation during slow token generation.
+- **Watchdog Timeout Floors**: Configures `streamFirstEventTimeoutMs: 0` (`packages/catalog/src/compat/openai.ts`) to disable the pre-response first-event watchdog during long local model cold-loads or prompt prefills, and sets `streamIdleTimeoutMs: 300_000` (300s inter-event floor; see [Provider compat reference](./provider-compat-reference.html)) to prevent stream cancellation during slow token generation.
 
 ### Auth & usage
 - **Keyless Local Auth**: Defined as a keyless provider (`lmStudioProvider` in `packages/ai/src/registry/lm-studio.ts`, `allowUnauthenticated: true` in `packages/catalog/src/provider-models/descriptors.ts`). Uses `DEFAULT_LOCAL_TOKEN = "lm-studio-local"` when `LM_STUDIO_API_KEY` is not provided.
@@ -1303,7 +1303,7 @@ OpenRouter is a unified multi-provider routing gateway serving hundreds of third
 - **Provider Order & Exclusion Preferences**: `applyOpenAIGatewayRouting` in `packages/ai/src/providers/openai-shared.ts` injects catalog `openRouterRouting` preferences (`OpenRouterRouting` interface with `only?: string[]` and `order?: string[]`) into the top-level `provider` request parameter when `compat.isOpenRouterHost` is true.
 - **Anthropic `cache_control` Breakpoints**: `isOpenRouterAnthropicModel` (`packages/ai/src/providers/openai-shared.ts`) identifies models matching `provider === "openrouter"` and ID starting with `anthropic/`. On the Chat Completions wire, `applyOpenAIChatCompletionsPromptCachePolicy` (`openai-completions.ts`) attaches `cache_control: { type: "ephemeral" }` to the last non-empty text part of the latest message. On the Responses wire, `applyOpenAIResponsesPromptCachePolicy` (`openai-responses.ts`) sets `params.cache_control = cacheRetention === "long" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" }`.
 - **Catalog Default Max-Tokens Omission**: `resolveOpenAIOutputTokenParam` in `packages/ai/src/providers/openai-shared.ts` omits default output token limits (`max_tokens`, `max_completion_tokens`, `max_output_tokens`) when `isOpenRouterHost` is true and `maxTokensExplicit` is false. This prevents OpenRouter from filtering out upstreams whose advertised output ceiling is below catalog maximums when executing `provider.order` / `only` fallbacks; explicitly specified caller `maxTokens` are retained.
-- **Custom Request Headers**: `getOpenRouterHeaders` in `packages/ai/src/utils/openrouter-headers.ts` attaches `User-Agent: Oh-My-Pi/<ver>`, `HTTP-Referer: https://omp.sh/`, `X-OpenRouter-Title: Oh-My-Pi`, `X-OpenRouter-Categories: cli-agent`, `X-OpenRouter-Cache: true`, and `X-OpenRouter-Cache-TTL: 3600` to all requests for edge response caching.
+- **Custom Request Headers**: `getOpenRouterHeaders` in `packages/ai/src/utils/openrouter-headers.ts` attaches `User-Agent: omp/<ver>`, `HTTP-Referer: https://omp.sh/`, `X-OpenRouter-Title: omp`, `X-OpenRouter-Categories: cli-agent`, `X-OpenRouter-Cache: true`, and `X-OpenRouter-Cache-TTL: 3600` to all requests for edge response caching.
 
 ### Auth & usage
 - **Auth Key Validation via `/api/v1/auth/key`**: `loginOpenRouter` in `packages/ai/src/registry/openrouter.ts` configures API key validation using `validateApiKeyAgainstModelsEndpoint` targeted at `https://openrouter.ai/api/v1/auth/key`. Public `/api/v1/models` returns HTTP 200 for unauthenticated requests, so `/api/v1/auth/key` is used as the canonical identity check (returning 200 for valid keys, 401 otherwise). Key resolution checks `OPENROUTER_API_KEY` via `getEnvApiKey` in `packages/ai/src/stream.ts`.

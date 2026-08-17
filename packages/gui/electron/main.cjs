@@ -81,6 +81,11 @@ if (!app.requestSingleInstanceLock()) {
 	app.quit();
 	return; // CJS top-level: skip the rest of the module, no window flash
 }
+// Explicit Cmd+Q (defensive): macOS should quit on Cmd+Q by default, but a
+// restart-in-flight (IPC awaiting kill/start) made it appear dead. A
+// before-quit log plus the standard accelerator keep the escape hatch
+// observable.
+app.on("before-quit", () => console.error("[main] before-quit"));
 app.on("second-instance", () => {
 	if (mainWindow && !mainWindow.isDestroyed()) {
 		if (mainWindow.isMinimized()) mainWindow.restore();
@@ -577,23 +582,25 @@ function createBubbleWindow() {
 		height: 120,
 		title: "MusePi Bubbles",
 		frame: false,
-		transparent: true,
-		// NO vibrancy: a vibrancy layer renders the whole window as an
-		// opaque glass panel. The window stays fully transparent and the
-		// frosted look lives on the bubbles/panel cards themselves (self-
-		// drawn glass: translucent surface + top highlight + inner hairline
-		// — backdrop-filter cannot blur the desktop through a transparent
-		// window, so a real blur is unavailable without vibrancy).
+		// macOS: REAL frosted glass — under-window vibrancy + transparent
+		// background, the main window's recipe (transparent:true + vibrancy
+		// renders the whole window as an opaque panel instead). The cards
+		// blur the vibrancy layer via CSS backdrop-filter (.pet-glass-native
+		// in pet-window.css). Win/Linux: vibrancy is unavailable, so stay on
+		// the transparent per-pixel window with the self-drawn fake glass.
+		transparent: process.platform !== "darwin",
+		...(process.platform === "darwin" ? { vibrancy: "under-window" } : {}),
 		backgroundColor: "#00000000",
 		alwaysOnTop: true,
 		skipTaskbar: true,
 		resizable: false,
 		fullscreenable: false,
-		// NO window shadow: on a transparent window macOS draws the shadow
-		// around the window RECTANGLE, which reads as a dark border around
-		// the floating card. The cards draw their own rounded shadow
-		// (CSS box-shadow), which follows the card shape.
-		hasShadow: false,
+		// Window shadow: on a transparent window (Win/Linux) macOS-style
+		// rectangle shadows are unavailable/ugly — the cards draw their own
+		// rounded shadow (CSS box-shadow). On the macOS vibrancy window the
+		// native shadow follows the rounded glass rect and gives the card
+		// its float depth, so enable it there.
+		hasShadow: process.platform === "darwin",
 		show: false,
 		webPreferences: {
 			preload: path.join(__dirname, "preload.cjs"),
@@ -1756,11 +1763,15 @@ ipcMain.handle("notification-show", (_event, { title, body }) => {
 			release();
 		});
 		notification.on("close", release);
-		notification.on("failed", (_event, error) => {
-			// Electron 42+ on macOS: unsigned apps fail silently here
-			// (UNNotification requires code signing) — surface the reason
-			// instead of swallowing it.
-			console.error("[notification] failed:", error?.message ?? error);
+		notification.on("failed", (event, error) => {
+			// macOS: unsigned/terminal-launched binaries get silently denied
+			// (UNNotification requires code signing) — surface the reason to
+			// the renderer (Settings → 测试通知) instead of swallowing it.
+			const reason = error?.message ?? String(error);
+			console.error("[notification] failed:", reason);
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				mainWindow.webContents.send("notification-failed", { title, body, reason });
+			}
 			release();
 		});
 		notification.show();
@@ -1943,7 +1954,16 @@ if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
 // ── IPC: daemon lifecycle (daemon_probe / daemon_start equivalents) ──────
 
 ipcMain.handle("daemon-probe", () => probe());
-ipcMain.handle("daemon-start", (_event, port) => start(Number(port), daemonEnv()));
+// A stale listener on the port (an orphaned daemon from a previous GUI
+// that wasn't torn down) makes the fresh spawn exit immediately with
+// EADDRINUSE — the GUI's daemon-start then reports "daemon exited during
+// startup" and the app shows 无法连接本地守护进程. Clear the port first
+// (kill has SIGTERM→SIGKILL escalation, so it cannot wedge on a stuck
+// process), then spawn.
+ipcMain.handle("daemon-start", async (_event, port) => {
+	await kill(Number(port)).catch(() => {});
+	return start(Number(port), daemonEnv());
+});
 ipcMain.handle("daemon-restart", (_event, port) => restart(Number(port), daemonEnv()));
 
 /**

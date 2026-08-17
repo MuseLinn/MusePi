@@ -217,11 +217,11 @@ export class ChildProcess<In extends InMask = InMask> {
 		return this;
 	}
 
-	kill(reason?: Exception) {
+	kill(reason?: Exception, gracefulMs?: number) {
 		if (reason && !this.#exitReasonPending) this.#exitReasonPending = reason;
 		if (!this.proc.killed)
 			void Process.fromPid(this.proc.pid)
-				?.terminate()
+				?.terminate(gracefulMs === undefined ? undefined : { gracefulMs })
 				?.catch(e => void e);
 	}
 
@@ -254,8 +254,8 @@ export class ChildProcess<In extends InMask = InMask> {
 		// stream emits more than one chunk (subprocess stdout chunks past ~128 KB).
 		// Normalize at the contract boundary so every caller — SSH read,
 		// `decodeUtf8Text`, callers slicing with `.subarray` — sees a `Uint8Array`.
-		const body = new Uint8Array(await new Response(this.stdout).arrayBuffer());
-		return body;
+		const body = (await new Response(this.stdout).bytes()) as Uint8Array | ArrayBuffer;
+		return body instanceof Uint8Array ? body : new Uint8Array(body);
 	}
 
 	// ── Wait ─────────────────────────────────────────────────────────────

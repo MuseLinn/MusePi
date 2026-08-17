@@ -2,13 +2,17 @@ import { describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ResetCreditAccountStatus, ResetCreditRedeemOutcome, ResetCreditTarget, UsageReport } from "@musepi/pi-ai";
+import type {
+	ResetCreditAccountStatus,
+	ResetCreditRedeemOutcome,
+	ResetCreditTarget,
+	UsageReport,
+} from "@musepi/pi-ai";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import type { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { executeAcpBuiltinSlashCommand } from "@musepi/pi-coding-agent/slash-commands/acp-builtins";
 import { removeWithRetries, setProjectDir } from "@musepi/pi-utils";
-
 interface FakeAcpBuiltinSession {
 	fastMode: boolean;
 	forcedToolChoice: string | undefined;
@@ -1080,8 +1084,7 @@ describe("wave 5 — adapters and polish", () => {
 			// Without this assertion, the command could succeed via a side-effect-free
 			// path that prints the success message without writing the host config.
 			expect(spy).toHaveBeenCalledTimes(1);
-			const [configPath, name, hostConfig] = spy.mock.calls[0]!;
-			expect(typeof configPath).toBe("string");
+			const [, name, hostConfig] = spy.mock.calls[0]!;
 			expect(name).toBe("foo");
 			expect(hostConfig).toMatchObject({ host: "x", username: "y" });
 		} finally {

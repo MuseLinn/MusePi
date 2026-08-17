@@ -94,10 +94,13 @@ describe("OAuthCallbackFlow /launch route", () => {
 		abort.abort("test done");
 		await login;
 
-		// Server has stopped and `#pendingAuthUrl` was cleared — the launch URL
-		// no longer connects. The correct end-state is that the redirect NEVER
-		// points at a stale URL; the loopback socket is gone so `fetch` rejects.
-		await expect(fetch(info.launchUrl!)).rejects.toThrow();
+		// Server has stopped and `#pendingAuthUrl` was cleared — the correct
+		// end-state is that the stale authorize URL is NEVER served again.
+		// Usually the loopback socket is gone and `fetch` rejects, but a parallel
+		// test may have reclaimed the freed ephemeral port, so tolerate any
+		// answer that is not our stale redirect.
+		const answer = await fetch(info.launchUrl!, { redirect: "manual" }).catch(() => null);
+		expect(answer?.headers.get("location") ?? null).not.toBe(info.url);
 	});
 
 	it("routes `/callback` and `/launch` on the same server without interfering", async () => {

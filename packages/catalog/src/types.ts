@@ -155,6 +155,7 @@ export type OpenAIReasoningFormat = "openai" | "openrouter" | "zai" | "kimi" | "
 export type OpenAIReasoningDisableMode =
 	| "omit"
 	| "lowest-effort"
+	| "none-effort"
 	| "openrouter-enabled-false"
 	| "zai-thinking-disabled"
 	| "qwen-enable-thinking-false"
@@ -190,13 +191,6 @@ export interface OpenAICompat {
 	reasoningEffortMap?: Partial<Record<Effort, string>>;
 	/** Whether the provider supports `stream_options: { include_usage: true }` for token usage in streaming responses. Default: true. */
 	supportsUsageInStreaming?: boolean;
-	/**
-	 * Enable the Gemini thinking-loop guard (pi-ai stream layer) for this model.
-	 * Defaults to true when the model id classifies as the gemini family. Set
-	 * explicitly to cover an opaque OpenAI-compat proxy alias (e.g. `my-model`)
-	 * that routes to Gemini, or to false to opt a gemini-family id out.
-	 */
-	enableGeminiThinkingLoopGuard?: boolean;
 	/** Which field to use for max tokens. Default: auto-detected from URL. */
 	maxTokensField?: "max_completion_tokens" | "max_tokens";
 	/** Whether tool results require the `name` field. Default: auto-detected from URL. */
@@ -627,8 +621,6 @@ export interface ResolvedOpenAISharedCompat {
 	isOpenRouterHost: boolean;
 	/** Whether this endpoint needs a max-token field even when caller did not set one. */
 	alwaysSendMaxTokens: boolean;
-	/** See {@link OpenAICompat.enableGeminiThinkingLoopGuard}. Set by the builder from the family classifier. */
-	enableGeminiThinkingLoopGuard?: boolean;
 	openRouterRouting?: OpenAICompat["openRouterRouting"];
 	/** Provider-specific wire model-id transform applied to the base id. */
 	wireModelIdMode: "raw" | "firepass" | "fireworks" | "openrouter";
@@ -697,7 +689,6 @@ export type ResolvedOpenAICompat = ResolvedOpenAISharedCompat &
 			| "thinkingKeep"
 			| "strictResponsesPairing"
 			| "supportsImageDetailOriginal"
-			| "enableGeminiThinkingLoopGuard"
 			| "whenThinking"
 		>
 	> & {
@@ -819,6 +810,28 @@ export interface RemoteCompactionConfig<TApi extends Api = Api> {
 	model?: string;
 }
 
+/** Per-million-token rates for one model pricing tier. */
+export interface TokenCost {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
+
+/**
+ * Rates applied to the full request when its prompt exceeds `inputThreshold`.
+ * Prompt input is the sum of uncached, cached-read, cache-write, and
+ * provider-orchestration input tokens.
+ */
+export interface LongContextTokenCost extends TokenCost {
+	inputThreshold: number;
+}
+
+/** Base token rates plus an optional long-context tier. */
+export interface ModelCost extends TokenCost {
+	longContext?: LongContextTokenCost;
+}
+
 // Model interface for the unified model system
 export interface Model<TApi extends Api = Api> {
 	id: string;
@@ -864,12 +877,7 @@ export interface Model<TApi extends Api = Api> {
 	gitlabDuoWorkflowRootNamespaceId?: string;
 	/** Cursor `max_mode` request flag returned by `GetUsableModels` for premium models that require max mode. */
 	cursorMaxMode?: boolean;
-	cost: {
-		input: number; // $/million tokens
-		output: number; // $/million tokens
-		cacheRead: number; // $/million tokens
-		cacheWrite: number; // $/million tokens
-	};
+	cost: ModelCost;
 	/** Premium Copilot requests charged per user-initiated request (defaults to 1). */
 	premiumMultiplier?: number;
 	contextWindow: number | null;

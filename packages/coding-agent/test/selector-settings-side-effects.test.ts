@@ -127,16 +127,13 @@ describe("selector setting side effects", () => {
 	}
 
 	for (const hidden of [true, false]) {
-		it(`applies display.hideToolActivity=${hidden} to existing tool components`, () => {
-			const setToolVisible = vi.fn();
+		it(`delegates display.hideToolActivity=${hidden} to the transcript container`, () => {
+			const setToolActivityVisible = vi.fn();
 			const setToolExpanded = vi.fn();
 			const tool = Object.create(ToolExecutionComponent.prototype) as ToolExecutionComponent;
-			tool.setToolActivityVisible = setToolVisible;
 			tool.setExpanded = setToolExpanded;
-			const setReadVisible = vi.fn();
 			const setReadExpanded = vi.fn();
 			const readGroup = Object.create(ReadToolGroupComponent.prototype) as ReadToolGroupComponent;
-			readGroup.setToolActivityVisible = setReadVisible;
 			readGroup.setExpanded = setReadExpanded;
 			const setToolResultImagesVisible = vi.fn();
 			const assistant = Object.create(AssistantMessageComponent.prototype) as AssistantMessageComponent;
@@ -146,7 +143,7 @@ describe("selector setting side effects", () => {
 			const ctx = {
 				hideToolActivity: !hidden,
 				toolOutputExpanded: true,
-				chatContainer: { children: [tool, readGroup, assistant] },
+				chatContainer: { children: [tool, readGroup, assistant], setToolActivityVisible },
 				ui: { clearInlineImages, resetDisplay },
 			};
 			const controller = new SelectorController(ctx as unknown as InteractiveModeContext);
@@ -154,8 +151,7 @@ describe("selector setting side effects", () => {
 			controller.handleSettingChange("display.hideToolActivity", hidden);
 
 			expect(ctx.hideToolActivity).toBe(hidden);
-			expect(setToolVisible).toHaveBeenCalledWith(!hidden);
-			expect(setReadVisible).toHaveBeenCalledWith(!hidden);
+			expect(setToolActivityVisible).toHaveBeenCalledWith(!hidden);
 			expect(setToolResultImagesVisible).toHaveBeenCalledWith(!hidden);
 			expect(setToolExpanded).toHaveBeenCalledTimes(hidden ? 0 : 1);
 			expect(setReadExpanded).toHaveBeenCalledTimes(hidden ? 0 : 1);

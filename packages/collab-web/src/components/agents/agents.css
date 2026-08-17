@@ -9,7 +9,7 @@
 	min-height: 0;
 	padding: 8px;
 	overflow-y: auto;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .ag-row {
@@ -88,7 +88,7 @@
 .ag-empty {
 	padding: 14px 10px;
 	color: var(--fg-faint);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-style: italic;
 	text-align: center;
 }
@@ -97,7 +97,7 @@
 .ag-fetch-error {
 	padding: 10px;
 	color: var(--err);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	text-align: center;
 	border-top: 1px solid color-mix(in srgb, var(--err) 25%, transparent);
 	overflow-wrap: anywhere;
@@ -235,7 +235,7 @@
 
 .ag-drawer-name {
 	overflow: hidden;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -260,7 +260,7 @@
 	background: var(--bg-raised);
 	color: var(--fg-muted);
 	font: inherit;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	transition:
 		background 150ms ease-out,
@@ -393,7 +393,7 @@
 	background: var(--bg-inset);
 	color: var(--fg);
 	font: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .ag-chat-input::placeholder {

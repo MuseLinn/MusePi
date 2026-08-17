@@ -6,12 +6,11 @@ This document describes how the coding-agent currently loads models, applies ove
 
 Primary implementation files:
 
-- `src/config/model-registry.ts` — loads built-in + custom models, provider overrides, runtime discovery, auth integration
-- `src/config/model-resolver.ts` — parses model patterns and selects initial/smol/slow models
-- `src/config/settings-schema.ts` — model-related settings (`modelRoles`, provider transport preferences)
-- `src/session/auth-storage.ts` — re-exports `AuthStorage` from `@musepi/pi-ai` (`packages/ai/src/auth-storage.ts`); API key + OAuth resolution order
-- `packages/catalog/src/models.ts` and `packages/catalog/src/types.ts` — built-in providers/models (`getBundledModels` / `getBundledProviders`) and `Model`/`compat` types
-
+- `packages/coding-agent/src/config/model-registry.ts` — loads built-in + custom models, provider overrides, runtime discovery, auth integration
+- `packages/coding-agent/src/config/model-resolver.ts` — parses model patterns and selects initial/smol/slow models
+- `packages/coding-agent/src/config/settings-schema.ts` — model-related settings (`modelRoles`, provider transport preferences)
+- `packages/coding-agent/src/session/auth-storage.ts` — re-exports `AuthStorage` from `@musepi/pi-ai`; API key + OAuth resolution order
+- `packages/catalog/src/models.ts` and `packages/catalog/src/types.ts` — built-in providers/models and public model types
 ## Config file location and legacy behavior
 
 Default config paths, in precedence order:
@@ -68,6 +67,7 @@ providers:
         api: openai-completions
         reasoning: false
         input: [text]
+        imageInputDecoder: stb # local STB decoder; OMP converts WebP before dispatch
         cost:
           input: 0
           output: 0
@@ -106,8 +106,8 @@ providers:
 
 - `auth`: `apiKey` (default), `none`, or `oauth`; for `models.yml` custom models, `oauth` is accepted by schema but does not waive the `apiKey` requirement
 - `discovery.type`: `ollama`, `llama.cpp`, `lm-studio`, `openai-models-list`, `proxy`, or `litellm`
-- `transport`: `pi-native` only. When set, every model under that provider is sent to an `musepi auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
-
+- `transport`: `pi-native` only. When set, every model under that provider is sent to an `omp auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
+- `imageInputDecoder`: `stb` only. Set this on a custom model or `modelOverrides` entry when the serving backend uses an STB-compatible image decoder that cannot accept WebP; OMP converts attached and historical WebP images before provider dispatch.
 ## Validation rules (current)
 
 ### Full custom provider (`models` is non-empty)
@@ -248,9 +248,12 @@ Provider defaults vs per-model overrides:
 
 - Provider `headers` are baseline.
 - Model `headers` override provider header keys.
-- `modelOverrides` can override model metadata (`name`, `reasoning`, `thinking`, `input`, `supportsTools`, `cost`, `premiumMultiplier`, `contextWindow`, `maxTokens`, `omitMaxOutputTokens`, `headers`, `compat`, `contextPromotionTarget`).
-- `compat` is deep-merged for nested routing blocks (`openRouterRouting`, `vercelGatewayRouting`, `extraBody`).
-
+- `modelOverrides` can override model metadata (`name`, `reasoning`, `thinking`, `input`, `imageInputDecoder`,
+  `supportsTools`, `cost`, `premiumMultiplier`, `contextWindow`, `maxTokens`,
+  `omitMaxOutputTokens`, `headers`, `compat`, `contextPromotionTarget`, `compactionModel`, and
+  `remoteCompaction`).
+- `compat` is deep-merged for nested routing blocks (`openRouterRouting`, `vercelGatewayRouting`,
+  `extraBody`, and `whenThinking`).
 ## Runtime discovery integration
 
 ### Implicit Ollama discovery
@@ -404,7 +407,7 @@ Keyless providers:
 
 When `OMP_AUTH_BROKER_URL` (or `auth.broker.url`) is set, the local SQLite credential store is replaced by `RemoteAuthCredentialStore`. Layers 3, 4, and 6 above (stored OAuth and API-key credentials) are served from a broker-supplied snapshot whose `refresh` tokens are redacted; expiry triggers `POST /v1/credential/:id/refresh` on the broker rather than a local refresh.
 
-`AuthStorage.setConfigApiKey` lets a `models.yml` `apiKey` win over a broker-resolved OAuth token without overriding a runtime `--api-key`. See [`auth-broker-gateway.md`](./auth-broker-gateway.md) for the full broker / gateway design and env surface (`OMP_AUTH_BROKER_URL`, `OMP_AUTH_BROKER_TOKEN`, `auth.broker.url`, `auth.broker.token`).
+`AuthStorage.setConfigApiKey` lets a `models.yml` `apiKey` win over a broker-resolved OAuth token without overriding a runtime `--api-key`. See [`auth-broker-gateway.md`](./auth-broker-gateway.html) for the full broker / gateway design and env surface (`OMP_AUTH_BROKER_URL`, `OMP_AUTH_BROKER_TOKEN`, `auth.broker.url`, `auth.broker.token`).
 
 ## Model availability vs all models
 
@@ -560,7 +563,7 @@ The built-in model policy currently links OpenAI `codex-spark` variants to `gpt-
 
 The `compat` block on a provider or model overrides the URL-based auto-detection in `packages/catalog/src/compat/openai.ts` (`buildOpenAICompat`). It is validated by `OpenAICompatSchema` in `packages/coding-agent/src/config/models-config-schema.ts` and consumed by every `openai-completions` transport (`packages/ai/src/providers/openai-completions.ts`). The canonical type is `OpenAICompat` in `packages/catalog/src/types.ts`.
 
-Endpoint-specific exceptions that interact with these fields are cataloged in [Provider endpoint constraints](./provider-endpoint-constraints.md).
+Endpoint-specific exceptions that interact with these fields are cataloged in [Provider endpoint constraints](./provider-endpoint-constraints.html).
 
 `models.yml` accepts the following keys (all optional; unset falls back to URL detection):
 
@@ -645,7 +648,7 @@ providers:
 Tool schemas going on the wire are normalized by the unified flow in
 `packages/ai/src/utils/schema/normalize.ts` (Google/CCA/MCP dispatchers
 plus the OpenAI strict-mode sanitize+enforce pipeline). See
-[`ai-schema-normalize.md`](./ai-schema-normalize.md) for the strict-mode
+[`ai-schema-normalize.md`](./ai-schema-normalize.html) for the strict-mode
 edge cases (local `$ref` inlining, single-item `allOf` collapse,
 `anyOf`-wrapper description hoist, enum/const primitive-type inference)
 and the per-provider dispatcher mapping.

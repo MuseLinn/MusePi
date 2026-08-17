@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/swarm-extension",
-	"version": "17.2.12",
+	"version": "17.3.4",
 	"description": "Swarm orchestration extension for omp",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "Derek Rynd",

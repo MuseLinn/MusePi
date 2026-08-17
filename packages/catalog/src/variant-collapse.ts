@@ -265,22 +265,32 @@ function geminiFlashFamily(mode: "budget" | "google-level"): EffortVariantFamily
 	};
 }
 
-const GEMINI_36_FLASH_FAMILY: EffortVariantFamily = {
-	id: "gemini-3.6-flash",
-	name: "Gemini 3.6 Flash",
-	members: ["gemini-3.6-flash-low", "gemini-3.6-flash-medium", "gemini-3.6-flash-high", "gemini-3.6-flash-tiered"],
-	routing: {
-		[Effort.Minimal]: "gemini-3.6-flash-low",
-		[Effort.Low]: "gemini-3.6-flash-low",
-		[Effort.Medium]: "gemini-3.6-flash-medium",
-		[Effort.High]: "gemini-3.6-flash-high",
-	},
-	thinking: {
-		mode: "google-level",
-		efforts: GEMINI_3_FLASH_FAMILY_EFFORTS,
-		requiresEffort: true,
-	},
-};
+/**
+ * Gemini 3.6+ Flash exposes one mandatory-reasoning wire id per thinking
+ * level. Some generations retain additional discovery-only aliases.
+ */
+function geminiLevelFlashFamily(version: "3.6" | "3.7", ...additionalMembers: string[]): EffortVariantFamily {
+	const id = `gemini-${version}-flash`;
+	return {
+		id,
+		name: `Gemini ${version} Flash`,
+		members: [`${id}-low`, `${id}-medium`, `${id}-high`, ...additionalMembers],
+		routing: {
+			[Effort.Minimal]: `${id}-low`,
+			[Effort.Low]: `${id}-low`,
+			[Effort.Medium]: `${id}-medium`,
+			[Effort.High]: `${id}-high`,
+		},
+		thinking: {
+			mode: "google-level",
+			efforts: GEMINI_3_FLASH_FAMILY_EFFORTS,
+			requiresEffort: true,
+		},
+	};
+}
+
+const GEMINI_36_FLASH_FAMILY = geminiLevelFlashFamily("3.6", "gemini-3.6-flash-tiered");
+const GEMINI_37_FLASH_FAMILY = geminiLevelFlashFamily("3.7");
 
 function geminiProFamily(mode: "budget" | "google-level"): EffortVariantFamily {
 	const budget = mode === "budget";
@@ -364,13 +374,20 @@ const SHARED_CCA_FAMILIES: readonly EffortVariantFamily[] = [
 
 /** `google-antigravity` Gemini families, using each generation's native transport. */
 export const ANTIGRAVITY_VARIANT_COLLAPSE_TABLE: VariantCollapseTable = {
-	families: [GEMINI_36_FLASH_FAMILY, geminiFlashFamily("budget"), geminiProFamily("budget"), ...SHARED_CCA_FAMILIES],
+	families: [
+		GEMINI_36_FLASH_FAMILY,
+		GEMINI_37_FLASH_FAMILY,
+		geminiFlashFamily("budget"),
+		geminiProFamily("budget"),
+		...SHARED_CCA_FAMILIES,
+	],
 };
 
 /** `google-gemini-cli` Gemini families on the official CLI's level transport. */
 export const GEMINI_CLI_VARIANT_COLLAPSE_TABLE: VariantCollapseTable = {
 	families: [
 		GEMINI_36_FLASH_FAMILY,
+		GEMINI_37_FLASH_FAMILY,
 		geminiFlashFamily("google-level"),
 		geminiProFamily("google-level"),
 		...SHARED_CCA_FAMILIES,

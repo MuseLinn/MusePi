@@ -178,7 +178,9 @@ function QuestionBlock({ q, answer }: { q: AskQuestion; answer: AskAnswer | unde
 				return (
 					<Row key={i} k={<span className={isSelected ? "tv-ok-text" : undefined}>{marker}</span>}>
 						<span className={answer && !isSelected ? "tv-muted" : undefined}>{opt.label}</span>
-						{i === q.recommended && <Badge tone="accent">{t("recommended")}</Badge>}
+						{/* The corner star on the live ask card already marks the
+						 * recommended option — a text badge here is redundant. */}
+						{i === q.recommended && <Badge tone="accent">★</Badge>}
 						{opt.description && <span className="tv-muted"> — {opt.description}</span>}
 					</Row>
 				);

@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@musepi/pi-ai",
-  "version": "17.2.12",
+  "version": "17.3.4",
   "description": "Unified LLM API with automatic model discovery and provider configuration",
   "homepage": "https://github.com/MuseLinn/MusePi",
   "author": "MuseLinn",
@@ -38,11 +38,10 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "catalog:",
+    "@musepi/omptype": "catalog:",
     "@musepi/pi-catalog": "catalog:",
     "@musepi/pi-utils": "catalog:",
-    "@musepi/pi-wire": "catalog:",
-    "@musepi/omptype": "catalog:"
-  },
+    "@musepi/pi-wire": "catalog:"  },
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "catalog:",
     "@types/bun": "catalog:"

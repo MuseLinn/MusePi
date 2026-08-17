@@ -1,8 +1,8 @@
 import type { WorkspaceEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient, GuestSnapshot } from "../../lib/client";
+import type { GuestClient } from "../../lib/client";
 
 /**
  * Guest workspace file panel: workspace.tree rendered as an expandable
@@ -14,7 +14,9 @@ import type { GuestClient, GuestSnapshot } from "../../lib/client";
 
 interface FilePanelProps {
 	client: GuestClient;
-	snapshot: GuestSnapshot;
+	/** Session cwd; null before the first state frame. */
+	cwd: string | null;
+	readOnly: boolean;
 }
 
 interface TreeNode extends WorkspaceEntry {
@@ -22,8 +24,7 @@ interface TreeNode extends WorkspaceEntry {
 	expanded: boolean;
 }
 
-export function FilePanel({ client, snapshot }: FilePanelProps): ReactNode {
-	const cwd = snapshot.state?.cwd ?? null;
+export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode {
 	const [tree, setTree] = useState<TreeNode[] | null>(null);
 	const [rootPath, setRootPath] = useState<string>("");
 	const [error, setError] = useState<string | null>(null);
@@ -123,8 +124,6 @@ export function FilePanel({ client, snapshot }: FilePanelProps): ReactNode {
 			setBusy(false);
 		}
 	}, [client, load, newFileName, rootPath, selected]);
-
-	const readOnly = snapshot.readOnly;
 
 	return (
 		<div className="sh-files">

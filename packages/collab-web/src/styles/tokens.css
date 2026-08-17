@@ -92,8 +92,10 @@
 	--radius-2xl: 16px;
 	--radius-full: 999px;
 
-	/* type ladder */
-	--ui-font-size: 14px;
+	/* type ladder — base follows the GUI's --gui-font-scale (set on the
+	 * document root by the desktop settings stepper); plain web/guest pages
+	 * fall back to 15px (openchamber text parity) */
+	--ui-font-size: var(--gui-font-scale, 15px);
 	--ui-font-size-sm: calc(var(--ui-font-size) - 1px);
 	--ui-font-size-xs: calc(var(--ui-font-size) - 2px);
 	--ui-font-size-lg: calc(var(--ui-font-size) + 1px);
@@ -151,11 +153,11 @@
 	--fg-muted: oklch(0.46 0.03 60);
 	--fg-faint: oklch(0.58 0.025 60);
 
-	--accent: oklch(0.62 0.23 341);
-	--accent-fg: oklch(0.99 0.01 341);
-	--accent-muted: oklch(0.62 0.23 341 / 14%);
-	--accent-hover: oklch(0.55 0.23 341);
-	--accent-bd: oklch(0.62 0.23 341 / 30%);
+	--accent: oklch(0.62 0.16 162);
+	--accent-fg: oklch(0.99 0.01 162);
+	--accent-muted: oklch(0.62 0.16 162 / 14%);
+	--accent-hover: oklch(0.55 0.16 162);
+	--accent-bd: oklch(0.62 0.16 162 / 30%);
 
 	--ok: oklch(0.55 0.13 150);
 	--warn: oklch(0.6 0.13 85);
@@ -217,11 +219,11 @@
 		--fg-muted: oklch(0.46 0.03 60);
 		--fg-faint: oklch(0.58 0.025 60);
 
-		--accent: oklch(0.62 0.23 341);
-		--accent-fg: oklch(0.99 0.01 341);
-		--accent-muted: oklch(0.62 0.23 341 / 14%);
-		--accent-hover: oklch(0.55 0.23 341);
-		--accent-bd: oklch(0.62 0.23 341 / 30%);
+		--accent: oklch(0.62 0.16 162);
+		--accent-fg: oklch(0.99 0.01 162);
+		--accent-muted: oklch(0.62 0.16 162 / 14%);
+		--accent-hover: oklch(0.55 0.16 162);
+		--accent-bd: oklch(0.62 0.16 162 / 30%);
 
 		--ok: oklch(0.55 0.13 150);
 		--warn: oklch(0.6 0.13 85);
@@ -269,7 +271,7 @@
 
 /* ── shadcn/openchamber compatibility layer ──────────────────────────────
  * Standard shadcn new-york variable names consumed by openchamber-derived
- * components (gui-migration Phase A). All values derive from the orthogonal
+ * components (migration Phase A). All values derive from the orthogonal
  * theme tokens above, so data-theme × data-color-scheme × data-accent keep
  * driving them without any component changes. Define once on :root; the
  * light/accent selectors above re-set their --color-* / --bg / --accent
@@ -304,7 +306,7 @@
 	--chart-2: var(--ok);
 	--chart-3: var(--warn);
 	--chart-4: var(--err);
-	--chart-5: oklch(0.674 0.23 341);
+	--chart-5: oklch(0.674 0.16 162);
 	--sidebar: var(--bg);
 	--sidebar-foreground: var(--fg);
 	--sidebar-primary: var(--accent);
@@ -686,3 +688,82 @@
 	--border-strong: oklch(0.2435 0.0000 89.9);
 }
 
+/* Motion springs (motion.dev linear() curves — damped-spring physics).
+ * Mirrors gui/src/styles/gui.css :root so collab-web components carry the
+ * same easing language when rendered outside the GUI shell. */
+:root {
+	--spring: linear(
+		0.0000, 0.0126 3.23%, 0.0458 6.45%, 0.0935 9.68%, 0.1511 12.90%,
+		0.2147 16.13%, 0.2812 19.35%, 0.3483 22.58%, 0.4143 25.81%, 0.4778 29.03%,
+		0.5379 32.26%, 0.5941 35.48%, 0.6460 38.71%, 0.6933 41.94%, 0.7362 45.16%,
+		0.7747 48.39%, 0.8089 51.61%, 0.8392 54.84%, 0.8657 58.06%, 0.8888 61.29%,
+		0.9088 64.52%, 0.9260 67.74%, 0.9407 70.97%, 0.9531 74.19%, 0.9635 77.42%,
+		0.9722 80.65%, 0.9794 83.87%, 0.9853 87.10%, 0.9900 90.32%, 0.9938 93.55%,
+		0.9968 96.77%, 1
+	);
+}
+
+/* Theme/accent flip overlay (theme.ts withColorTransition): a full-screen
+ * frosted veil fades in, the big sun/moon/palette icon morphs, the swap
+ * happens underneath, the veil fades out — hides the color snap without
+ * tweening every element (cheap on M1). */
+.gui-theme-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 999999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Veil color tracks the scheme: --overlay-from (current) fades into
+	 * --overlay-to (target) via the background transition when --morph
+	 * lands — deep→light turns the whole veil, not just the icon. */
+	background: var(--overlay-from);
+	backdrop-filter: blur(20px) saturate(140%);
+	-webkit-backdrop-filter: blur(20px) saturate(140%);
+	opacity: 0;
+	transition:
+		opacity 200ms ease,
+		background 340ms ease;
+	pointer-events: none;
+}
+
+.gui-theme-overlay--in {
+	opacity: 1;
+}
+
+.gui-theme-overlay--morph {
+	background: var(--overlay-to);
+}
+
+.gui-theme-overlay--out {
+	opacity: 0;
+}
+
+/* The veil's icon is a <morph-icon> (morphicons.com) whose shape
+ * interpolates from the current mode's icon into the target's — the same
+ * effect the composer's send/stop button uses. Its color (--accent
+ * family) trails the accent change via a color transition. */
+.gui-theme-overlay morph-icon {
+	transition: color 340ms ease;
+}
+
+/* Picking the already-active theme: jiggle the active button's icon. */
+.gui-seg-btn--shake {
+	animation: gui-theme-shake 400ms var(--spring);
+}
+
+@keyframes gui-theme-shake {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	25% {
+		transform: translateX(-3px);
+	}
+	50% {
+		transform: translateX(3px);
+	}
+	75% {
+		transform: translateX(-2px);
+	}
+}

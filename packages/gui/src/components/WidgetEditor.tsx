@@ -81,6 +81,19 @@ export function WidgetEditor({
 							onChange={v => onUpdate(widget.id, { [field.key]: v })}
 						/>
 					))}
+					{/* Live card-face preview: the REAL widget component renders with
+					 * the current data (and tone), so every field edit reflects
+					 * instantly — no static mock. */}
+					<div className="gui-widget-editor-preview">
+						<div className="gui-widget-editor-label">{t("widget preview")}</div>
+						<div
+							className="gui-widget-editor-preview-stage"
+							data-tone={def.tone ?? "default"}
+							style={{ aspectRatio: `${widget.pos.w} / ${widget.pos.h}` }}
+						>
+							<def.Component data={widget.data} update={() => {}} />
+						</div>
+					</div>
 					<button type="button" className="gui-widget-editor-danger" onClick={() => onDelete(widget.id)}>
 						<Icon name="delete-bin" className="h-3.5 w-3.5" />
 						<span>{t("widget remove")}</span>

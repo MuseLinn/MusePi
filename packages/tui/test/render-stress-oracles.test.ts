@@ -6,7 +6,11 @@ import {
 	duplicateNonblankLines,
 	expectedFrameFromLines,
 	expectedScrollbackBuffer,
+	multiplexerHistoryPrefixChanged,
 	resolveExpectedOverlayLayout,
+	runHerdrWidthEpochCollapseReplayRegression,
+	runWidthEpochHeightAppendReplayRegression,
+	runWidthEpochOverlayReplayRegression,
 	scrollbackProbePositions,
 	stripPlainTerminalText,
 } from "./render-stress-harness";
@@ -22,6 +26,11 @@ describe("render stress oracle helpers", () => {
 
 	it("chooses bounded scrollback probe positions", () => {
 		expect(scrollbackProbePositions(40, 100, 10)).toEqual([0, 20, 40]);
+	});
+
+	it("distinguishes mux history replacement from live-tail updates", () => {
+		expect(multiplexerHistoryPrefixChanged(["a", "b", "c"], 2, ["a", "b", "c", "d"], 2)).toBe(false);
+		expect(multiplexerHistoryPrefixChanged(["a", "b", "c"], 2, ["x", "b", "c"], 2)).toBe(true);
 	});
 
 	it("detects only repeated nonblank frame lines", () => {
@@ -57,5 +66,16 @@ describe("render stress oracle helpers", () => {
 
 	it("composites overlay text by terminal columns", () => {
 		expect(stripPlainTerminalText(compositeExpectedLineAt("abcdef", "XY", 2, 2, 6))).toBe("abXYef");
+	});
+
+	it("replays overlay-hidden growth across a multiplexer width epoch", async () => {
+		await runWidthEpochOverlayReplayRegression();
+	});
+
+	it("replays append growth concurrent with a height shrink inside a multiplexer width epoch", async () => {
+		await runWidthEpochHeightAppendReplayRegression();
+	});
+	it("replays a direct HerdR width epoch through a foreground-stream collapse", async () => {
+		await runHerdrWidthEpochCollapseReplayRegression();
 	});
 });

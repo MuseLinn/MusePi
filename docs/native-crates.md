@@ -5,9 +5,9 @@ Contributor-facing map of the Rust crates under `crates/`. These crates back
 internal: end users see `@musepi/pi-natives` exports, not these crate APIs.
 
 For the consumer-side runtime contract see
-[`natives-architecture.md`](./natives-architecture.md). For inclusion policy
+[`natives-architecture.md`](./natives-architecture.html). For inclusion policy
 covering when a crate should be promoted to user-facing docs, see
-[`user-facing-packages.md`](./user-facing-packages.md).
+[`user-facing-packages.md`](./user-facing-packages.html).
 
 ## Crate map
 
@@ -26,19 +26,19 @@ covering when a crate should be promoted to user-facing docs, see
 ## What lives where
 
 - Native API surface and loader (`@musepi/pi-natives`):
-  [`natives-architecture.md`](./natives-architecture.md),
-  [`natives-addon-loader-runtime.md`](./natives-addon-loader-runtime.md),
-  [`natives-binding-contract.md`](./natives-binding-contract.md),
-  [`natives-build-release-debugging.md`](./natives-build-release-debugging.md),
-  [`natives-media-system-utils.md`](./natives-media-system-utils.md),
-  [`natives-rust-task-cancellation.md`](./natives-rust-task-cancellation.md),
-  [`natives-shell-pty-process.md`](./natives-shell-pty-process.md),
-  [`natives-text-search-pipeline.md`](./natives-text-search-pipeline.md).
+  [`natives-architecture.md`](./natives-architecture.html),
+  [`natives-addon-loader-runtime.md`](./natives-addon-loader-runtime.html),
+  [`natives-binding-contract.md`](./natives-binding-contract.html),
+  [`natives-build-release-debugging.md`](./natives-build-release-debugging.html),
+  [`natives-media-system-utils.md`](./natives-media-system-utils.html),
+  [`natives-rust-task-cancellation.md`](./natives-rust-task-cancellation.html),
+  [`natives-shell-pty-process.md`](./natives-shell-pty-process.html),
+  [`natives-text-search-pipeline.md`](./natives-text-search-pipeline.html).
 - Porting cross-references:
-  [`porting-from-pi-mono.md`](./porting-from-pi-mono.md),
-  [`porting-to-natives.md`](./porting-to-natives.md).
+  [`porting-from-pi-mono.md`](./porting-from-pi-mono.html),
+  [`porting-to-natives.md`](./porting-to-natives.html).
 - Filesystem scan cache contract that consumes `pi-walker`:
-  [`fs-scan-cache-architecture.md`](./fs-scan-cache-architecture.md).
+  [`fs-scan-cache-architecture.md`](./fs-scan-cache-architecture.html).
 
 ## Policy
 
@@ -83,19 +83,19 @@ The root `Cargo.toml` includes `crates/pi-*` and `crates/vendor/*` as workspace 
 
 For the loader and JS boundary, see:
 
-- [`natives-architecture.md`](./natives-architecture.md)
-- [`natives-addon-loader-runtime.md`](./natives-addon-loader-runtime.md)
-- [`natives-binding-contract.md`](./natives-binding-contract.md)
+- [`natives-architecture.md`](./natives-architecture.html)
+- [`natives-addon-loader-runtime.md`](./natives-addon-loader-runtime.html)
+- [`natives-binding-contract.md`](./natives-binding-contract.html)
 
 Subsystem details live in:
 
-- [`natives-build-release-debugging.md`](./natives-build-release-debugging.md)
-- [`natives-media-system-utils.md`](./natives-media-system-utils.md)
-- [`natives-rust-task-cancellation.md`](./natives-rust-task-cancellation.md)
-- [`natives-shell-pty-process.md`](./natives-shell-pty-process.md)
-- [`natives-text-search-pipeline.md`](./natives-text-search-pipeline.md)
-- [`fs-scan-cache-architecture.md`](./fs-scan-cache-architecture.md)
+- [`natives-build-release-debugging.md`](./natives-build-release-debugging.html)
+- [`natives-media-system-utils.md`](./natives-media-system-utils.html)
+- [`natives-rust-task-cancellation.md`](./natives-rust-task-cancellation.html)
+- [`natives-shell-pty-process.md`](./natives-shell-pty-process.html)
+- [`natives-text-search-pipeline.md`](./natives-text-search-pipeline.html)
+- [`fs-scan-cache-architecture.md`](./fs-scan-cache-architecture.html)
 
 ## Documentation policy
 
-These crates remain contributor-facing implementation details. Promote one to standalone user-facing documentation only when it gains a public API or executable consumed independently of `@musepi/pi-natives`; see [`user-facing-packages.md`](./user-facing-packages.md).
+These crates remain contributor-facing implementation details. Promote one to standalone user-facing documentation only when it gains a public API or executable consumed independently of `@musepi/pi-natives`; see [`user-facing-packages.md`](./user-facing-packages.html).

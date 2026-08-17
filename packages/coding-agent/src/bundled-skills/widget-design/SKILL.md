@@ -1,6 +1,6 @@
 ---
 name: widget-design
-description: 看板与对话内联 widget 卡片的设计与使用规范——何时主动生成活卡片、怎么写 data、卡面与布局原则（kimi widget design-system parity）。触发：用户要求可视化/看板/交互卡片，或回答包含数值对比、清单、流程、行情、时序数据时。
+description: 看板与对话内联 widget 卡片的设计与使用规范——何时主动生成活卡片、怎么写 data、卡面与布局原则（活卡片设计规范）。触发：用户要求可视化/看板/交互卡片，或回答包含数值对比、清单、流程、行情、时序数据时。
 ---
 
 # Widget 设计规范
@@ -40,6 +40,48 @@ MusePi 的 widget 是**活卡片**：渲染在对话内联或看板网格里，�
 - 卡内滚动：列表内容超卡高时用卡内滚动（history 事件列表），不要撑破卡片。
 - 聚焦交互：点击封面播放（video）、拖滑杆（slider）、勾选（todo）——交互
   都要即时反馈，禁止无响应的装饰按钮。
+- **渲染提示**：聊天内联与看板画布共用同一卡面——内联宽度随消息自适应；
+  看板上卡片受 ChromaGrid 组光效（鼠标 RGB 色散光晕）氛围影响，暗色大卡
+  读感好——卡面数据完整是主体，光效只是氛围，不要为光效改变配色。
+
+## 自定义 HTML 组件（html 类型）
+
+`html` 卡是"自由面"——sandbox 内运行你的 HTML/CSS/JS，覆盖内置组件
+之外的场景（统计面板、流程可视化、复合交互）。写得像 kimiwork
+blueprint 组件一样可用的要点：
+
+### 结构（自包含单文件）
+- **一个 `<style>` + body 内一个根元素**；所有 CSS 写进 `<style>`
+  （沙箱无外部 CSS 文件）。
+- 根元素撑满视口：`html, body { height: 100%; margin: 0; }`，内容用
+  flex/grid 布局——**不要固定像素宽**（卡尺寸可变）。
+- 数据从 `window.__WIDGET_DATA__` 读（agent 塞的 `data` 字段），不要
+  硬编码。
+
+### 样式
+- **两套主题**（深色为主）：`.omp-theme-dark body { … }` +
+  `.omp-theme-light body { … }`，所有有颜色的元素都要两套（铁律，
+  宿主热切换会重建 iframe）。
+- 深底配浅字、浅底配深字（对比度 ≥4.5:1）；设了 `background` 的元素
+  必须同时设 `color`。
+- 配色用 CSS 变量组织（`:root { --bg; --fg; --accent }`，两套主题换值），
+  比到处硬编码好维护；字号 12-14px，卡内边距 12-16px。
+
+### 交互（JS）
+- 按钮/滑杆/勾选**即时反馈**（hover/点击态），禁止无响应装饰。
+- 需要外部数据：**先取好注入 data**（沙箱禁第三方 fetch）；`<img src="https://…">`
+  可用（不回读字节，不受 CORS 限制）。
+- 高度自适应：内容变化后
+  `parent.postMessage({ type: "omp-widget-resize", mountId: window.DaimonCanvas.mountId, height: document.documentElement.scrollHeight }, "*")`
+  ——宿主自动跟随，别让内容溢出卡片。
+- 主题切换宿主重建 iframe，无需自己监听。
+
+### 检查清单
+- [ ] 两套主题都有、对比度够
+- [ ] 数据来自 `__WIDGET_DATA__` 而非硬编码
+- [ ] 布局自适应卡尺寸（flex/grid，无固定像素墙）
+- [ ] 交互有反馈、高度上报正确
+- [ ] 总长 ≤64KB
 
 ## 组合成板（看板）
 

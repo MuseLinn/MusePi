@@ -14,24 +14,24 @@ import { type } from "@musepi/omptype";
 import { usageReportSchema } from "@musepi/pi-ai";
 import { usageResponseSchema } from "@musepi/pi-ai/auth-broker/wire-schemas";
 
-const DISCLAIMER = "OMP-observed spend only; OpenCode usage outside OMP is not included.";
+const PROVIDER_NOTE = "Usage data can be delayed by up to five minutes.";
 
 function reportWithNotes() {
 	return {
-		provider: "opencode-go",
+		provider: "anthropic",
 		fetchedAt: Date.now(),
 		limits: [
 			{
-				id: "rolling-5h",
-				label: "5 Hour limit",
-				scope: { provider: "opencode-go", windowId: "rolling-5h" },
-				window: { id: "rolling-5h", label: "5 Hour", durationMs: 5 * 3_600_000 },
-				amount: { used: 3, limit: 12, remaining: 9, usedFraction: 0.25, remainingFraction: 0.75, unit: "usd" },
+				id: "anthropic:5h",
+				label: "5 Hour",
+				scope: { provider: "anthropic", windowId: "5h" },
+				window: { id: "5h", label: "5 Hour", durationMs: 5 * 3_600_000 },
+				amount: { usedFraction: 0.25, remainingFraction: 0.75, unit: "percent" },
 				status: "ok",
 			},
 		],
-		notes: [DISCLAIMER],
-		metadata: { planType: "OpenCode Go" },
+		notes: [PROVIDER_NOTE],
+		metadata: { planType: "Pro" },
 	};
 }
 
@@ -39,7 +39,7 @@ describe("usage report notes wire schema", () => {
 	it("usageReportSchema accepts report-level notes and preserves them", () => {
 		const validated = usageReportSchema(reportWithNotes());
 		expect(validated).not.toBeInstanceOf(type.errors);
-		expect(validated).toHaveProperty("notes", [DISCLAIMER]);
+		expect(validated).toHaveProperty("notes", [PROVIDER_NOTE]);
 	});
 
 	it("usageResponseSchema preserves report-level notes through the broker reject gate", () => {
@@ -52,6 +52,6 @@ describe("usage report notes wire schema", () => {
 		expect(validated).toHaveProperty("reports");
 		if (validated instanceof type.errors) throw new Error("expected valid response");
 		const reports = validated.reports;
-		expect(reports[0]).toHaveProperty("notes", [DISCLAIMER]);
+		expect(reports[0]).toHaveProperty("notes", [PROVIDER_NOTE]);
 	});
 });

@@ -453,7 +453,7 @@ export class CollabGuestLink {
 		this.#assistantStreamSynced = false;
 		setSessionTerminalTitle(pending.state.sessionName ?? pending.header.title, pending.state.cwd);
 		this.#ctx.chatContainer.clear();
-		this.#ctx.renderInitialMessages({ clearTerminalHistory: true });
+		await this.#ctx.renderInitialMessages({ clearTerminalHistory: true });
 		await this.#ctx.reloadTodos();
 		this.#updateStatusSegment();
 		this.#readOnly = pending.readOnly;
@@ -750,7 +750,7 @@ export class CollabGuestLink {
 		this.#ctx.statusLine.resetActiveTime();
 		this.#ctx.ui.requestRender();
 		this.#ctx.updateEditorBorderColor();
-		this.#ctx.renderInitialMessages({ clearTerminalHistory: true });
+		await this.#ctx.renderInitialMessages({ clearTerminalHistory: true });
 		await this.#ctx.reloadTodos();
 		this.#ctx.ui.requestRender(true, { clearScrollback: true });
 	}

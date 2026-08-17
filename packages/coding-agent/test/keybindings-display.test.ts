@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { getDefaultPasteImageKeys, KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import {
+	getDefaultPasteImageKeys,
+	KeybindingsManager,
+	setKeyHintPlatform,
+} from "@musepi/pi-coding-agent/config/keybindings";
 import { keyText } from "@musepi/pi-coding-agent/extensibility/legacy-pi-coding-agent-shim";
 import { getKeybindings, setKeybindings, type KeybindingsManager as TuiKeybindingsManager } from "@musepi/pi-tui";
 
 describe("KeybindingsManager.getDisplayString", () => {
+	beforeEach(() => setKeyHintPlatform("linux"));
+	afterEach(() => setKeyHintPlatform(undefined));
+
 	it("formats a single binding as a human-readable key hint", () => {
 		const keybindings = KeybindingsManager.inMemory({
 			"app.message.dequeue": "alt+up",
@@ -33,6 +40,28 @@ describe("KeybindingsManager.getDisplayString", () => {
 
 		expect(keybindings.getDisplayString("app.clipboard.copyPrompt")).toBe("");
 	});
+
+	it("renders macOS modifier labels for alt and super", () => {
+		setKeyHintPlatform("darwin");
+		const keybindings = KeybindingsManager.inMemory({
+			"app.display.reset": "alt+l",
+			"app.clipboard.pasteImage": ["ctrl+v", "super+v"],
+		});
+
+		expect(keybindings.getDisplayString("app.display.reset")).toBe("Option+L");
+		expect(keybindings.getDisplayString("app.clipboard.pasteImage")).toBe("Ctrl+V/Cmd+V");
+	});
+
+	it("keeps Alt and Super labels off macOS", () => {
+		setKeyHintPlatform("linux");
+		const keybindings = KeybindingsManager.inMemory({
+			"app.display.reset": "alt+l",
+			"app.clipboard.pasteImage": ["ctrl+v", "super+v"],
+		});
+
+		expect(keybindings.getDisplayString("app.display.reset")).toBe("Alt+L");
+		expect(keybindings.getDisplayString("app.clipboard.pasteImage")).toBe("Ctrl+V/Super+V");
+	});
 });
 
 describe("legacy keyText", () => {
@@ -40,10 +69,12 @@ describe("legacy keyText", () => {
 
 	beforeEach(() => {
 		previous = getKeybindings();
+		setKeyHintPlatform("linux");
 	});
 
 	afterEach(() => {
 		setKeybindings(previous);
+		setKeyHintPlatform(undefined);
 	});
 
 	it("formats the active binding for legacy extensions", () => {

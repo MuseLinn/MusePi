@@ -16,6 +16,7 @@ import { invalidate as invalidateFsCache, readDirEntries, readFile } from "../ca
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
+import { resolveClaudePaths } from "../config/claude-paths";
 import type { MCPRequestIdFormat } from "../mcp/types";
 import { type ConfiguredThinkingLevel, parseConfiguredThinkingLevel } from "../thinking";
 import { normalizeToolNames } from "../tools/builtin-names";
@@ -90,10 +91,9 @@ export type SourceId = keyof typeof SOURCE_PATHS;
  */
 export function getUserPath(ctx: LoadContext, source: SourceId, subpath: string): string | null {
 	// Native user config is profile-scoped via getAgentDir() (the active profile's
-	// agent dir), matching builtin.ts and getMCPConfigPath("user"). External tools
-	// (~/.claude, ~/.gemini, …) are intentionally not profile-scoped, so they keep
-	// resolving against ctx.home below.
+	// agent dir), matching builtin.ts and getMCPConfigPath("user").
 	if (source === "native") return path.join(getAgentDir(), subpath);
+	if (source === "claude") return path.join(resolveClaudePaths(ctx.home).configDir, subpath);
 	const paths = SOURCE_PATHS[source];
 	if (!paths.userAgent) return null;
 	return path.join(ctx.home, paths.userAgent, subpath);
@@ -245,6 +245,8 @@ export interface ParsedAgentFields {
 	blocking?: boolean;
 	/** `true` = prewalk into the default target; string = prewalk into that model pattern. */
 	prewalk?: boolean | string;
+	/** `true` = advise with the default advisor-role model; string = advise with that model pattern. */
+	advisor?: boolean | string;
 }
 
 /**
@@ -305,6 +307,12 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 		const trimmed = frontmatter.prewalk.trim();
 		if (trimmed) prewalk = trimmed;
 	}
+	// advisor: true → advise with the default advisor-role model; "<pattern>" → custom advisor model.
+	let advisor: boolean | string | undefined = parseBoolean(frontmatter.advisor);
+	if (advisor === undefined && typeof frontmatter.advisor === "string") {
+		const trimmed = frontmatter.advisor.trim();
+		if (trimmed) advisor = trimmed;
+	}
 	const autoloadSkills = parseArrayOrCSV(frontmatter.autoloadSkills)
 		?.map(s => s.trim())
 		.filter(Boolean);
@@ -320,6 +328,7 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 		autoloadSkills,
 		readSummarize,
 		prewalk,
+		advisor,
 	};
 }
 
@@ -894,20 +903,21 @@ export function registerPluginCacheInvalidator(invalidator: () => void): void {
 }
 
 /**
- * List all installed Claude Code plugin roots from the plugin cache.
- * Reads ~/.claude/plugins/installed_plugins.json (user) and the nearest project-scoped
- * `.omp/plugins/installed_plugins.json` (Claude Code layout compat) resolved from `cwd`.
+ * List all installed Claude Code plugin roots from its active plugin cache and
+ * ~/.omp/plugins/installed_plugins.json, plus the nearest project registry when present.
  *
- * Results are cached per home, project registry, and canonical active project.
+ * Results are cached per Claude and OMP config directories, project registry, and canonical active project.
  */
 export async function listClaudePluginRoots(
 	home: string,
 	cwd?: string,
 ): Promise<{ roots: ClaudePluginRoot[]; warnings: string[] }> {
+	const claudeConfigDir = resolveClaudePaths(home).configDir;
+	const ompRegistryPath = path.join(getPluginsDir(home), "installed_plugins.json");
 	const resolvedProjectPath = cwd ? await resolveActiveProjectRegistryPath(cwd) : null;
 	const projectRoot = resolvedProjectPath ? path.dirname(path.dirname(path.dirname(resolvedProjectPath))) : cwd;
 	const activeClaudeProjectPath = projectRoot ? await canonicalClaudeProjectPath(projectRoot) : null;
-	const cacheKey = `${home}:${resolvedProjectPath ?? ""}:${activeClaudeProjectPath ?? ""}`;
+	const cacheKey = `${claudeConfigDir}:${ompRegistryPath}:${resolvedProjectPath ?? ""}:${activeClaudeProjectPath ?? ""}`;
 	const cached = pluginRootsCache.get(cacheKey);
 	if (cached) return cached;
 
@@ -917,7 +927,7 @@ export async function listClaudePluginRoots(
 	const canonicalClaudeProjectPaths = new Map<string, string | null>();
 
 	// ── Claude Code registry ──────────────────────────────────────────────────
-	const registryPath = path.join(home, ".claude", "plugins", "installed_plugins.json");
+	const registryPath = path.join(claudeConfigDir, "plugins", "installed_plugins.json");
 	const content = await readFile(registryPath);
 
 	if (content) {
@@ -974,7 +984,7 @@ export async function listClaudePluginRoots(
 	// In production `home` is `os.homedir()`, so `getPluginsDir(home)` resolves to the
 	// same XDG-aware path the marketplace writer uses (reads and writes always agree).
 	// Tests pass a temp dir, which short-circuits the resolver for deterministic isolation.
-	const ompRegistryPath = path.join(getPluginsDir(home), "installed_plugins.json");
+	// Computed before the cache lookup because isolated SDK homes select distinct OMP registries.
 	const ompContent = await readFile(ompRegistryPath);
 	if (ompContent) {
 		const ompRegistry = parseClaudePluginsRegistry(ompContent);
@@ -1098,7 +1108,7 @@ export function clearClaudePluginRootsCache(): void {
  * installing/uninstalling/enabling/disabling plugins.
  */
 export function clearPluginRootsAndCaches(extraPaths?: readonly string[]): void {
-	invalidateFsCache(path.join(os.homedir(), ".claude", "plugins", "installed_plugins.json"));
+	invalidateFsCache(path.join(resolveClaudePaths().configDir, "plugins", "installed_plugins.json"));
 	invalidateFsCache(path.join(getPluginsDir(), "installed_plugins.json"));
 	for (const p of extraPaths ?? []) invalidateFsCache(p);
 	clearClaudePluginRootsCache();

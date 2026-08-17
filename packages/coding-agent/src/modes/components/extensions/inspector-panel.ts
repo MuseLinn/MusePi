@@ -303,6 +303,7 @@ export class InspectorPanel implements Component {
 			"context-file": "dim",
 			instruction: "muted",
 			"slash-command": "accent",
+			"gui-motion": "accent",
 		};
 
 		const color = kindColors[kind] || "muted";

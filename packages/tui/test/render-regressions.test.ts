@@ -1429,7 +1429,6 @@ describe("TUI terminal-state regressions", () => {
 						await settle(term);
 
 						const paint = writes.find(write => write.includes("\x1b[3J"));
-						expect(paint).toBeDefined();
 						expect(paint).toContain("\x1b[?2026h");
 						expect(paint).toContain("\x1b[?2026l");
 						expect(visible(term)).toEqual(["resumed-5", "resumed-6", "resumed-7"]);

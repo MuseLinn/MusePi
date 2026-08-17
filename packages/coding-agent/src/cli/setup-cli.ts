@@ -8,7 +8,6 @@ import { APP_NAME, getProjectDir, getPythonEnvDir } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { Settings, settings } from "../config/settings";
 import { checkPythonKernelAvailability } from "../eval/py/kernel";
-import { t } from "../i18n/index.ts";
 import { theme } from "../modes/theme/theme";
 import { downloadSttModel, isSttModelCached } from "../stt/downloader";
 import { isSttModelKey, STT_MODEL_OPTIONS } from "../stt/models";
@@ -39,15 +38,15 @@ export function parseSetupArgs(args: string[]): SetupCommandArgs | undefined {
 	}
 
 	if (args.length < 2) {
-		console.error(chalk.red(t("Usage: {0} setup <component>", APP_NAME)));
-		console.error(t("Valid components: {0}", VALID_COMPONENTS.join(", ")));
+		console.error(chalk.red(`Usage: ${APP_NAME} setup <component>`));
+		console.error(`Valid components: ${VALID_COMPONENTS.join(", ")}`);
 		process.exit(1);
 	}
 
 	const component = args[1];
 	if (!VALID_COMPONENTS.includes(component as SetupComponent)) {
-		console.error(chalk.red(t("Unknown component: {0}", component)));
-		console.error(t("Valid components: {0}", VALID_COMPONENTS.join(", ")));
+		console.error(chalk.red(`Unknown component: ${component}`));
+		console.error(`Valid components: ${VALID_COMPONENTS.join(", ")}`);
 		process.exit(1);
 	}
 
@@ -67,7 +66,7 @@ export function parseSetupArgs(args: string[]): SetupCommandArgs | undefined {
 	};
 }
 
-interface PythonCheckResult {
+export interface PythonCheckResult {
 	available: boolean;
 	pythonPath?: string;
 	usingManagedEnv?: boolean;
@@ -83,7 +82,7 @@ function managedPythonPath(): string {
 /**
  * Check Python environment and kernel dependencies.
  */
-async function checkPythonSetup(cwd: string, interpreter?: string): Promise<PythonCheckResult> {
+export async function checkPythonSetup(cwd: string, interpreter?: string): Promise<PythonCheckResult> {
 	const availability = await checkPythonKernelAvailability(cwd, interpreter, { forceProbe: true });
 	return {
 		available: availability.ok,
@@ -128,22 +127,22 @@ async function handlePythonSetup(flags: { json?: boolean; check?: boolean }): Pr
 	}
 
 	if (!check.pythonPath) {
-		console.error(chalk.red(`${theme.status.error} ${t("Python not found")}`));
-		console.error(chalk.dim(t("Install Python 3.8+ and ensure it's in your PATH")));
+		console.error(chalk.red(`${theme.status.error} Python not found`));
+		console.error(chalk.dim("Install Python 3.8+ or set python.interpreter to its executable path"));
 		process.exit(1);
 	}
 
-	console.log(chalk.dim(t("Python: {0}", check.pythonPath)));
-	if (check.usingManagedEnv && check.managedEnvPath) {
-		console.log(chalk.dim(t("Using managed environment: {0}", check.managedEnvPath)));
+	console.log(chalk.dim(`Python: ${check.pythonPath}`));
+	if (check.usingManagedEnv) {
+		console.log(chalk.dim(`Using managed environment: ${check.managedEnvPath}`));
 	}
 
 	if (check.available) {
-		console.log(chalk.green(`\n${theme.status.success} ${t("Python execution is ready")}`));
+		console.log(chalk.green(`\n${theme.status.success} Python execution is ready`));
 		return;
 	}
 
-	console.error(chalk.red(`\n${theme.status.error} ${t("Python interpreter reported failure")}`));
+	console.error(chalk.red(`\n${theme.status.error} Python interpreter reported failure`));
 	process.exit(1);
 }
 
@@ -167,16 +166,12 @@ function buildSpeechComponents(): SpeechComponent[] {
 			isReady: () => isSttModelCached(settings.get("stt.modelName")),
 			status: async () => {
 				const key = settings.get("stt.modelName");
-				return (await isSttModelCached(key)) ? key : t("{0} — not downloaded", key);
+				return (await isSttModelCached(key)) ? key : `${key} — not downloaded`;
 			},
 			pick: async () => {
 				const chosen = await selectSetupModel(
-					t("Speech-to-Text model"),
-					STT_MODEL_OPTIONS.map(({ value, label, description }) => ({
-						value,
-						label: t(label),
-						description: t(description),
-					})),
+					"Speech-to-Text model",
+					[...STT_MODEL_OPTIONS],
 					settings.get("stt.modelName"),
 				);
 				if (chosen === null) return false;
@@ -188,7 +183,7 @@ function buildSpeechComponents(): SpeechComponent[] {
 			},
 			ensure: onProgress =>
 				downloadSttModel(settings.get("stt.modelName"), progress =>
-					onProgress({ stage: t("Downloading {0} model", progress.label), percent: progress.percent }),
+					onProgress({ stage: `Downloading ${progress.label} model`, percent: progress.percent }),
 				),
 		},
 		{
@@ -196,16 +191,12 @@ function buildSpeechComponents(): SpeechComponent[] {
 			isReady: () => isTtsModelCached(settings.get("tts.localModel")),
 			status: async () => {
 				const key = settings.get("tts.localModel");
-				return (await isTtsModelCached(key)) ? key : t("{0} — model/runtime not installed", key);
+				return (await isTtsModelCached(key)) ? key : `${key} — model/runtime not installed`;
 			},
 			pick: async () => {
 				const chosen = await selectSetupModel(
-					t("Text-to-Speech model"),
-					TTS_LOCAL_MODEL_OPTIONS.map(({ value, label, description }) => ({
-						value,
-						label: t(label),
-						description: t(description),
-					})),
+					"Text-to-Speech model",
+					[...TTS_LOCAL_MODEL_OPTIONS],
 					settings.get("tts.localModel"),
 				);
 				if (chosen === null) return false;
@@ -219,7 +210,7 @@ function buildSpeechComponents(): SpeechComponent[] {
 				const ok = await downloadTtsModel(settings.get("tts.localModel"), progress =>
 					onProgress({ stage: progress.stage, percent: progress.percent }),
 				);
-				if (!ok) throw new Error(t("Failed to download the local text-to-speech model."));
+				if (!ok) throw new Error("Failed to download the local text-to-speech model.");
 			},
 		},
 	];
@@ -249,13 +240,13 @@ async function handleSpeechSetup(flags: { json?: boolean; check?: boolean }): Pr
 	}
 
 	if (flags.check) {
-		console.log(chalk.bold(t("Speech dependencies:")));
+		console.log(chalk.bold("Speech dependencies:"));
 		let allReady = true;
 		for (const component of components) {
 			const ready = await component.isReady();
 			if (!ready) allReady = false;
-			const mark = ready ? chalk.green(t("[ok]")) : chalk.yellow(t("[missing]"));
-			console.log(`  ${mark} ${t(component.name)}: ${await component.status()}`);
+			const mark = ready ? chalk.green("[ok]") : chalk.yellow("[missing]");
+			console.log(`  ${mark} ${component.name}: ${await component.status()}`);
 		}
 		if (!allReady) process.exit(1);
 		return;
@@ -267,30 +258,28 @@ async function handleSpeechSetup(flags: { json?: boolean; check?: boolean }): Pr
 			await component.pick();
 		}
 		if (await component.isReady()) {
-			console.log(chalk.green(`${theme.status.success} ${t("{0} ready", t(component.name))}`));
+			console.log(chalk.green(`${theme.status.success} ${component.name} ready`));
 			continue;
 		}
-		console.log(chalk.dim(t("Preparing {0}...", t(component.name))));
+		console.log(chalk.dim(`Preparing ${component.name}...`));
 		try {
 			await component.ensure(progress => {
 				const percent = typeof progress.percent === "number" ? ` (${progress.percent}%)` : "";
-				process.stdout.write(`\r${chalk.dim(`${t(progress.stage)}${percent}`)}\x1b[K`);
+				process.stdout.write(`\r${chalk.dim(`${progress.stage}${percent}`)}\x1b[K`);
 			});
 			process.stdout.write("\n");
 		} catch (err) {
 			process.stdout.write("\n");
-			const msg = err instanceof Error ? err.message : t("Failed to set up {0}", t(component.name));
+			const msg = err instanceof Error ? err.message : `Failed to set up ${component.name}`;
 			console.error(chalk.red(`${theme.status.error} ${msg}`));
 			process.exit(1);
 		}
 	}
 
-	console.log(chalk.green(`\n${theme.status.success} ${t("Speech is ready")}`));
+	console.log(chalk.green(`\n${theme.status.success} Speech is ready`));
 	console.log(
 		chalk.dim(
-			t(
-				"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
-			),
+			"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
 		),
 	);
 }
@@ -299,22 +288,25 @@ async function handleSpeechSetup(flags: { json?: boolean; check?: boolean }): Pr
  * Print setup command help.
  */
 export function printSetupHelp(): void {
-	console.log(
-		`${chalk.bold(`${APP_NAME} setup`)} - ${t("Run onboarding or install dependencies for optional features")}\n\n` +
-			`${chalk.bold(t("Usage:"))}\n` +
-			`  ${APP_NAME} setup                     ${t("Run the onboarding wizard")}\n` +
-			`  ${APP_NAME} setup <component> [options]\n\n` +
-			`${chalk.bold(t("Components:"))}\n` +
-			`  python    ${t("Verify a Python 3 interpreter is reachable for code execution")}\n` +
-			`  speech    ${t("Pick and download speech-to-text and text-to-speech models")}\n\n` +
-			`${chalk.bold(t("Options:"))}\n` +
-			`  -c, --check   ${t("Check if dependencies are installed without installing")}\n` +
-			`  --json        ${t("Output status as JSON")}\n\n` +
-			`${chalk.bold(t("Examples:"))}\n` +
-			`  ${APP_NAME} setup                  ${t("Run the onboarding wizard")}\n` +
-			`  ${APP_NAME} setup python           ${t("Check Python execution dependencies")}\n` +
-			`  ${APP_NAME} setup speech           ${t("Pick and download the STT and TTS models")}\n` +
-			`  ${APP_NAME} setup speech --check   ${t("Check if speech dependencies are available")}\n` +
-			`  ${APP_NAME} setup python --check   ${t("Check if Python execution is available")}\n`,
-	);
+	console.log(`${chalk.bold(`${APP_NAME} setup`)} - Run onboarding or install dependencies for optional features
+
+${chalk.bold("Usage:")}
+  ${APP_NAME} setup                     Run the onboarding wizard
+  ${APP_NAME} setup <component> [options]
+
+${chalk.bold("Components:")}
+  python    Verify a Python 3 interpreter is reachable for code execution
+  speech    Pick and download speech-to-text and text-to-speech models
+
+${chalk.bold("Options:")}
+  -c, --check   Check if dependencies are installed without installing
+  --json        Output status as JSON
+
+${chalk.bold("Examples:")}
+  ${APP_NAME} setup                  Run the onboarding wizard
+  ${APP_NAME} setup python           Check Python execution dependencies
+  ${APP_NAME} setup speech           Pick and download the STT and TTS models
+  ${APP_NAME} setup speech --check   Check if speech dependencies are available
+  ${APP_NAME} setup python --check   Check if Python execution is available
+`);
 }

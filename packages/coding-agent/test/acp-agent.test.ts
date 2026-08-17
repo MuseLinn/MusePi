@@ -661,7 +661,6 @@ describe("ACP agent", () => {
 		await harness.agent.setSessionMode({ sessionId: created.sessionId, modeId: "plan" });
 
 		const handler = session.planProposalHandler;
-		expect(typeof handler).toBe("function");
 
 		// No plan file written → handler surfaces a ToolError telling the
 		// agent to write the plan before requesting approval.

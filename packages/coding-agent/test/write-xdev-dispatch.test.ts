@@ -8,6 +8,7 @@ import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
 import { ToolChoiceQueue } from "@musepi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { requiresApproval, resolveApproval } from "@musepi/pi-coding-agent/tools/approval";
 import { githubToolRenderer } from "@musepi/pi-coding-agent/tools/gh-renderer";
 import { ToolError } from "@musepi/pi-coding-agent/tools/tool-errors";
 import { WriteTool, writeToolRenderer } from "@musepi/pi-coding-agent/tools/write";
@@ -87,7 +88,7 @@ describe("read and write route xd:// device URLs", () => {
 			const approval = write!.approval;
 			expect(typeof approval).toBe("function");
 			if (typeof approval === "function") {
-				expect(approval({ path: "xd://ast_edit", content })).toBe("write");
+				expect(approval({ path: "xd://ast_edit", content })).toEqual({ tier: "write", policyKey: "ast_edit" });
 			}
 
 			// Execute dispatches through the xdev registry to the mounted ast_edit,
@@ -129,6 +130,51 @@ describe("read and write route xd:// device URLs", () => {
 		const result = await write.execute("write-xdev-read", { path: "xd://peek", content: JSON.stringify({ q: "x" }) });
 		expect(result.isError).toBeUndefined();
 		expect(result.details?.xdev).toMatchObject({ tool: "peek", mode: "execute", tier: "read" });
+	});
+
+	it("resolves device dispatches against the device's user policy, falling back to write's", async () => {
+		// Like the pi-knowledge plugin in #7923: the mounted device declares no
+		// approval, so it defaults to exec tier — but a device-scoped user policy
+		// must still gate, and without one the dispatch must honor `write`'s policy.
+		const device: AgentTool = {
+			name: "knowledge_search",
+			label: "Knowledge Search",
+			description: "Read-only device without a tier declaration",
+			parameters: type({ q: "string" }),
+			async execute() {
+				return { content: [{ type: "text", text: "ok" }] };
+			},
+		};
+		const xdev = createTestXdevState([device]);
+		const write = new WriteTool(xdevSession(process.cwd(), { xdev }));
+		const args = { path: "xd://knowledge_search", content: JSON.stringify({ q: "x" }) };
+
+		const approval = write.approval;
+		expect(typeof approval).toBe("function");
+		if (typeof approval !== "function") throw new Error("expected a function approval");
+		// The gate reports the mounted tool's (default exec) tier and keys user
+		// policy on the device name.
+		expect(approval(args)).toEqual({ tier: "exec", policyKey: "knowledge_search" });
+
+		// No device policy → falls back to the write tool's own policy.
+		expect(resolveApproval(write, args, "always-ask", { write: "prompt" }).policy).toBe("prompt");
+		expect(resolveApproval(write, args, "always-ask", { write: "allow" }).policy).toBe("allow");
+
+		// Device-scoped allow lets the dispatch through even while the blanket
+		// write policy stays prompt — the exact scenario from #7923.
+		const allowed = resolveApproval(write, args, "always-ask", { write: "prompt", knowledge_search: "allow" });
+		expect(allowed).toMatchObject({ policy: "allow", source: "user", policyKey: "knowledge_search" });
+
+		// Device-scoped deny blocks the dispatch and names the device in the refusal.
+		expect(() => requiresApproval(write, args, "always-ask", { knowledge_search: "deny" })).toThrow(
+			'remove "tools.approval.knowledge_search: deny"',
+		);
+
+		// Device-scoped prompt forces a prompt for this device.
+		expect(resolveApproval(write, args, "always-ask", { knowledge_search: "prompt" }).policy).toBe("prompt");
+
+		// An unrelated device's policy does not leak into this dispatch.
+		expect(resolveApproval(write, args, "always-ask", { other_device: "deny" }).policy).toBe("prompt");
 	});
 
 	it("records the effective tier reported after an execution decorator rewrites device args", async () => {
@@ -223,12 +269,18 @@ describe("read and write route xd:// device URLs", () => {
 				ops: [{ pat: "a", out: "b" }],
 				paths: ["artifact://abc"],
 			});
-			expect(tier("xd://ast_edit", astFsPath)).toBe("write");
-			expect(tier("xd://ast_edit", astInternalPath)).toBe("read");
+			expect(tier("xd://ast_edit", astFsPath)).toEqual({ tier: "write", policyKey: "ast_edit" });
+			expect(tier("xd://ast_edit", astInternalPath)).toEqual({ tier: "read", policyKey: "ast_edit" });
 
 			// debug: inspection action → read; a real launch → exec (control).
-			expect(tier("xd://debug", JSON.stringify({ action: "sessions" }))).toBe("read");
-			expect(tier("xd://debug", JSON.stringify({ action: "launch", program: "./app" }))).toBe("exec");
+			expect(tier("xd://debug", JSON.stringify({ action: "sessions" }))).toEqual({
+				tier: "read",
+				policyKey: "debug",
+			});
+			expect(tier("xd://debug", JSON.stringify({ action: "launch", program: "./app" }))).toEqual({
+				tier: "exec",
+				policyKey: "debug",
+			});
 
 			// Fail closed: malformed JSON, non-object or schema-invalid payloads,
 			// missing content, and unknown devices all stay exec so the gate never

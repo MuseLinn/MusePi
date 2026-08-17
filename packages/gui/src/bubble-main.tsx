@@ -25,13 +25,17 @@
 import { setLocale, t } from "@musepi/collab-web";
 import { type ReactNode, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { initTooltips } from "./lib/tooltips";
 import type { PetActivity } from "./lib/pet";
+import { initTooltips } from "./lib/tooltips";
+import { useScrollShadow } from "./lib/use-scroll-shadow";
 
 import "./styles/pet-window.css";
 import "./styles/gui.css";
 
 interface BubbleBridge {
+	/** Node platform of the desktop shell ("darwin" | "win32" | "linux") —
+	 *  gates the native vibrancy glass path (preload exposes it). */
+	platform?: string;
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
 	onPetPanelToggle?(cb: () => void): () => void;
 	petSetPanel?(open: boolean): Promise<unknown>;
@@ -56,6 +60,15 @@ interface BubbleBridge {
 
 const BUBBLE_MS = 8000;
 const MAX_VISIBLE_BUBBLES = 5;
+
+// macOS: the bubble window carries native under-window vibrancy
+// (main.cjs — the main window's recipe), and the glass cards blur it via
+// CSS backdrop-filter (.pet-glass-native in pet-window.css) for REAL
+// frosted glass. Win/Linux keep the transparent-window self-drawn recipe
+// (vibrancy unavailable there). Set BEFORE first paint (module scope),
+// not in an effect — otherwise the cards flash non-frosted on open.
+const electronAPI = (window as unknown as { electronAPI?: BubbleBridge }).electronAPI;
+if (electronAPI?.platform === "darwin") document.documentElement.classList.add("pet-glass-native");
 
 interface Bubble {
 	id: number;
@@ -353,6 +366,12 @@ function BubbleApp(): ReactNode {
 		setStackExpanded(next);
 		setStackMorph(r ? { from: { width: r.width, height: r.height } } : null);
 	};
+
+	// Expanded list scroll feather (transcript parity): the stack scrolls
+	// inside the window, and data-top-scroll / data-bottom-scroll flip the
+	// mask-image top/bottom fade on as content overflows and scrolls away
+	// from an edge — no hard-cut rows at the scrollport.
+	useScrollShadow(stackRef);
 
 	useEffect(() => {
 		if (!stackMorph) return;
@@ -692,6 +711,8 @@ function BubbleApp(): ReactNode {
 								? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` }
 								: undefined
 						}
+						data-top-scroll="false"
+						data-bottom-scroll="false"
 						aria-live="polite"
 					>
 						<div className="pet-bubbles__head" role="button" tabIndex={0} onClick={() => switchStack(false)}>

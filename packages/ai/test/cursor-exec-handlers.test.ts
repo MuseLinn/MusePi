@@ -1069,7 +1069,6 @@ describe("Cursor grepArgs empty-pattern guard (issue #4574)", () => {
 
 	it("rejects an empty pattern with a glob-aware hint when only a glob is present", () => {
 		const message = emptyGrepPatternRejection("", "**/*snapcompact*");
-		expect(message).not.toBeNull();
 		expect(message).toContain("grep pattern is required");
 		expect(message).toContain('"**/*snapcompact*"');
 		expect(message).toContain("ls/read tool");

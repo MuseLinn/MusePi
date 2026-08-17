@@ -10,6 +10,7 @@ import {
 	parseNumstat,
 } from "../commit/git/diff";
 import type { FileDiff, FileHunks, NumstatEntry } from "../commit/types";
+import { REJECT_PROMPT_COMMAND } from "../exec/non-interactive-env";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tools/tool-errors";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -199,7 +200,7 @@ const GIT_NON_INTERACTIVE_ENV = {
 	GIT_TERMINAL_PROMPT: "0",
 	LC_ALL: undefined,
 	LC_MESSAGES: "C",
-	SSH_ASKPASS: "/usr/bin/false",
+	SSH_ASKPASS: REJECT_PROMPT_COMMAND,
 } satisfies Record<string, string | undefined>;
 const GH_NON_INTERACTIVE_ENV = {
 	...GIT_NON_INTERACTIVE_ENV,
@@ -225,6 +226,11 @@ export const GIT_COMMAND_OUTPUT_LIMIT_BYTES = 8 * 1024 * 1024;
  * degrades instead of freezing the UI indefinitely.
  */
 export const GIT_SPAWN_SYNC_TIMEOUT_MS = 5_000;
+/**
+ * Stat-poll interval for {@link head.watch}. One `stat` per interval keeps an
+ * always-on status line cheap while surfacing a branch switch within a second.
+ */
+export const HEAD_WATCH_INTERVAL_MS = 1000;
 
 const GIT_COMMAND_TIMEOUT_EXIT_CODE = 124;
 // Exit code returned when the `git` binary cannot be launched at all (spawn
@@ -2294,6 +2300,28 @@ export const head = {
 		const result = await git(cwd, ["rev-parse", `--short=${length}`, "HEAD"], { readOnly: true, signal });
 		if (result.exitCode !== 0) return null;
 		return result.stdout.trim() || null;
+	},
+
+	/**
+	 * Watch the repository's HEAD for branch moves. Returns a disposer.
+	 *
+	 * Deliberately stat-polls via `fs.watchFile` instead of `fs.watch`: git
+	 * swaps HEAD with `HEAD.lock` + atomic rename, which unlinks the HEAD inode
+	 * — and Bun's inotify-backed `fs.watch` permanently stops delivering events
+	 * after observing a rename in the watched directory (oven-sh/bun#24875), so
+	 * an event watcher fires once and then freezes on Linux (issue #8412 was
+	 * the same freeze for file-inode watches on every platform). A path-based
+	 * stat poll re-resolves the path each interval and survives inode swaps
+	 * everywhere. Reftable repos keep ref state in `<gitDir>/reftable` (their
+	 * HEAD file is a static stub), so the poll targets that directory instead.
+	 */
+	watch(repository: GitRepository, onChange: () => void): () => void {
+		const target = isReftableRepoSync(repository) ? path.join(repository.gitDir, "reftable") : repository.headPath;
+		const listener = (curr: fs.Stats, prev: fs.Stats) => {
+			if (curr.mtimeMs !== prev.mtimeMs || curr.ino !== prev.ino || curr.size !== prev.size) onChange();
+		};
+		fs.watchFile(target, { interval: HEAD_WATCH_INTERVAL_MS }, listener).unref();
+		return () => fs.unwatchFile(target, listener);
 	},
 };
 

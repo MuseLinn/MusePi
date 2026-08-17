@@ -125,9 +125,9 @@ export const streamDevin: StreamFunction<"devin-agent"> = (
 		const toolBlocks = new Map<string, ToolCall>();
 		const toolPartialJson = new Map<string, string>();
 		// Last-parsed argument-buffer length per tool-call id — bounds the
-		// mid-stream parse work to O(N) via `parseStreamingJsonThrottled`; the
-		// authoritative final parse still runs unconditionally in the toolcall_end
-		// loop below.
+		// mid-stream parse work to O(N log N) via `parseStreamingJsonThrottled`;
+		// the authoritative final parse still runs unconditionally in the
+		// toolcall_end loop below.
 		const toolLastParseLen = new Map<string, number>();
 		let activeToolCallId: string | undefined;
 		let latestStopReason = StopReason.UNSPECIFIED;

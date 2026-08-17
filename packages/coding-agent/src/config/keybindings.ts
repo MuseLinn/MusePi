@@ -654,12 +654,52 @@ export class KeybindingsManager extends TuiKeybindingsManager {
 
 /**
  * Key hint formatting utilities for UI labels.
+ *
+ * Modifier labels are platform-aware: macOS names the physical keys `Option`
+ * (`alt`) and `Cmd` (`super`), so rendering `Alt`/`Super` there would name keys
+ * absent from a Mac keyboard. Every other platform keeps `Alt`/`Super`.
  */
-const MODIFIER_LABELS: Record<string, string> = {
-	ctrl: "Ctrl",
-	shift: "Shift",
-	alt: "Alt",
-};
+
+/**
+ * Platform override for key-hint rendering; `undefined` resolves to the host
+ * `process.platform`. Mirrors `setKittyProtocolActive` in the TUI keys module:
+ * a single seam that keeps hint output deterministic in tests without mutating
+ * the global `process.platform`.
+ */
+let keyHintPlatformOverride: NodeJS.Platform | undefined;
+
+/** Pin the platform used to render modifier labels (test seam). */
+export function setKeyHintPlatform(platform: NodeJS.Platform | undefined): void {
+	keyHintPlatformOverride = platform;
+}
+
+/** Platform currently used for key-hint rendering. */
+export function keyHintPlatform(): NodeJS.Platform {
+	return keyHintPlatformOverride ?? process.platform;
+}
+
+type Modifier = "ctrl" | "shift" | "alt" | "super";
+
+function isModifier(part: string): part is Modifier {
+	return part === "ctrl" || part === "shift" || part === "alt" || part === "super";
+}
+
+/**
+ * Human label for a modifier, using each platform's own key names. `ctrl` and
+ * `shift` are the same everywhere; `alt`/`super` become `Option`/`Cmd` on macOS.
+ */
+export function modifierLabel(mod: Modifier, platform: NodeJS.Platform = keyHintPlatform()): string {
+	switch (mod) {
+		case "ctrl":
+			return "Ctrl";
+		case "shift":
+			return "Shift";
+		case "alt":
+			return platform === "darwin" ? "Option" : "Alt";
+		case "super":
+			return platform === "darwin" ? "Cmd" : "Super";
+	}
+}
 
 const KEY_LABELS: Record<string, string> = {
 	esc: "Esc",
@@ -680,10 +720,9 @@ const KEY_LABELS: Record<string, string> = {
 	right: "Right",
 };
 
-function formatKeyPart(part: string): string {
+function formatKeyPart(part: string, platform: NodeJS.Platform): string {
 	const lower = part.toLowerCase();
-	const modifier = MODIFIER_LABELS[lower];
-	if (modifier) return modifier;
+	if (isModifier(lower)) return modifierLabel(lower, platform);
 	const label = KEY_LABELS[lower];
 	if (label) return label;
 	if (part.length === 1) return part.toUpperCase();
@@ -691,7 +730,11 @@ function formatKeyPart(part: string): string {
 }
 
 export function formatKeyHint(key: KeyId): string {
-	return key.split("+").map(formatKeyPart).join("+");
+	const platform = keyHintPlatform();
+	return key
+		.split("+")
+		.map(part => formatKeyPart(part, platform))
+		.join("+");
 }
 
 export function formatKeyHints(keys: KeyId | KeyId[]): string {

@@ -327,6 +327,141 @@ describe("usage status-line segment", () => {
 		expect(content).not.toContain("7d");
 	});
 
+	it("renders monthly Cursor usage when five-hour and seven-day windows are absent", () => {
+		const result = renderSegment("usage", {
+			usage: { monthly: { percent: 1.88, resetHours: 743 } },
+		} as unknown as SegmentContext);
+		const content = stripVTControlCharacters(result.content);
+
+		expect(result.visible).toBe(true);
+		expect(content).toContain("mo");
+		// Match Cursor web dashboard flooring (1.88 → 1%), not Math.round → 2%.
+		expect(content).toContain("1%");
+		expect(content).not.toContain("2%");
+		expect(content).toContain("30d 23h");
+		expect(content).not.toContain("5h");
+		expect(content).not.toContain("7d");
+	});
+
+	it("keeps monthly Cursor personal usage from the active provider", async () => {
+		const component = makeComponent(
+			[
+				{
+					provider: "cursor",
+					limits: [
+						{
+							id: "cursor:usd:individual-plan",
+							scope: { windowId: "monthly" },
+							window: { id: "monthly", resetsAt: Date.now() + 743 * 3_600_000 },
+							amount: { usedFraction: 0.132 },
+						},
+					],
+				},
+			],
+			{ provider: "cursor" },
+		);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).toContain("mo");
+		expect(content).toContain("13%");
+	});
+
+	it("prefers Cursor personal dashboard rails over legacy monthly request limits", async () => {
+		const component = makeComponent(
+			[
+				{
+					provider: "cursor",
+					limits: [
+						{
+							id: "cursor:requests:gpt-4",
+							scope: { windowId: "monthly" },
+							amount: { usedFraction: 0.9 },
+						},
+						{
+							id: "cursor:usd:individual-auto",
+							scope: { windowId: "monthly" },
+							amount: { usedFraction: 0.0185 },
+						},
+					],
+				},
+			],
+			{ provider: "cursor" },
+		);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).toContain("mo");
+		expect(content).toContain("1%");
+		expect(content).not.toContain("90%");
+	});
+
+	it("renders all three OpenCode Go windows including monthly", async () => {
+		const now = Date.now();
+		const component = makeComponent(
+			[
+				{
+					provider: "opencode-go",
+					limits: [
+						{
+							id: "rolling-5h",
+							scope: { windowId: "5h" },
+							window: { id: "5h", durationMs: 5 * 3_600_000, resetsAt: now + 90 * 60_000 },
+							amount: { used: 12, usedFraction: 0.12, unit: "percent" },
+						},
+						{
+							id: "weekly",
+							scope: { windowId: "7d" },
+							window: { id: "7d", durationMs: 7 * 86_400_000, resetsAt: now + 100 * 3_600_000 },
+							amount: { used: 8, usedFraction: 0.08, unit: "percent" },
+						},
+						{
+							id: "monthly",
+							scope: { windowId: "monthly" },
+							window: { id: "monthly", resetsAt: now + 160 * 3_600_000 },
+							amount: { used: 42, usedFraction: 0.42, unit: "percent" },
+						},
+					],
+				},
+			],
+			{ provider: "opencode-go" },
+		);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).toContain("5h");
+		expect(content).toContain("12%");
+		expect(content).toContain("7d");
+		expect(content).toContain("8%");
+		expect(content).toContain("mo");
+		expect(content).toContain("42%");
+	});
+
+	it("does not render monthly usage for providers outside the single-bucket gate", async () => {
+		const component = makeComponent(
+			[
+				{
+					provider: "github-copilot",
+					limits: [{ id: "copilot:premium", scope: { windowId: "monthly" }, amount: { usedFraction: 0.42 } }],
+				},
+			],
+			{ provider: "github-copilot" },
+		);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).not.toContain("mo");
+		expect(content).not.toContain("42%");
+	});
+
 	it("uses a distinct error color at the eighty-percent threshold", () => {
 		const high = renderSegment("usage", { usage: { fiveHour: { percent: 80 } } } as unknown as SegmentContext);
 		const low = renderSegment("usage", { usage: { fiveHour: { percent: 24 } } } as unknown as SegmentContext);
@@ -337,5 +472,81 @@ describe("usage status-line segment", () => {
 		expect(low.visible).toBe(true);
 		expect(stripVTControlCharacters(highWithoutValue)).toBe(stripVTControlCharacters(lowWithoutValue));
 		expect(highWithoutValue).not.toBe(lowWithoutValue);
+	});
+
+	it("maps non-canonical window ids onto subscription windows by reported span", async () => {
+		// Kimi-shaped rows: the burst window reports duration/timeUnit instead
+		// of a canonical id, and rows written before canonicalization keep the
+		// old id. The reported span still identifies the window.
+		const now = Date.now();
+		const component = makeComponent([
+			{
+				limits: [
+					{
+						scope: { windowId: "300time_unit_minute" },
+						window: { durationMs: 5 * 3_600_000, resetsAt: now + 30 * 60_000 },
+						amount: { usedFraction: 0.24 },
+					},
+					{
+						scope: { windowId: "weekly" },
+						window: { durationMs: 7 * 86_400_000, resetsAt: now + 141 * 3_600_000 },
+						amount: { usedFraction: 0.08 },
+					},
+				],
+			},
+		]);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).toContain("5h");
+		expect(content).toContain("24%");
+		expect(content).toContain("7d");
+		expect(content).toContain("8%");
+	});
+
+	it("ignores non-canonical windows without a reported span", async () => {
+		const component = makeComponent([
+			{
+				limits: [
+					{ scope: { windowId: "default" }, window: {}, amount: { usedFraction: 0.24 } },
+					{
+						scope: { windowId: "monthly" },
+						window: { durationMs: 30 * 86_400_000 },
+						amount: { usedFraction: 0.5 },
+					},
+				],
+			},
+		]);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).not.toContain("24%");
+		expect(content).not.toContain("50%");
+	});
+
+	it("prefers canonical window ids over a conflicting reported span", async () => {
+		const component = makeComponent([
+			{
+				limits: [
+					{
+						scope: { windowId: "5h" },
+						window: { durationMs: 7 * 86_400_000 },
+						amount: { usedFraction: 0.24 },
+					},
+				],
+			},
+		]);
+
+		component.refreshUsageInBackground();
+		await flushUsageRefresh();
+		const content = stripVTControlCharacters(component.getTopBorder(200).content);
+
+		expect(content).toContain("5h");
+		expect(content).toContain("24%");
+		expect(content).not.toContain("7d");
 	});
 });

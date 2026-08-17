@@ -2003,7 +2003,6 @@ export const zhCN: TranslationMap = {
 		"启用 generate_image 工具（文生图及图像编辑）。当 tools.xdev 开启时，以 xd:// 设备形式暴露。",
 	"Enable the select_tools tool for progressive tool disclosure. When disabled, the agent sees all tools immediately.":
 		"启用 select_tools 工具以实现渐进式工具披露。禁用时，Agent 立即看到所有工具。",
-	"Enable the swarm_run tool for parallel multi-agent task execution.": "启用 swarm_run 工具以并行执行多 Agent 任务。",
 	"Controls the inspect_image tool, which delegates image understanding to a vision-capable model. 'auto' exposes it only when the active model lacks native image input; 'on' always exposes it; 'off' never does.":
 		"控制 inspect_image 工具，它将图像理解委托给具备视觉能力的模型。'auto' 仅在当前模型缺乏原生图像输入时暴露；'on' 始终暴露；'off' 从不暴露。",
 	"Enable native host-desktop screenshots and input for OpenAI computer use":

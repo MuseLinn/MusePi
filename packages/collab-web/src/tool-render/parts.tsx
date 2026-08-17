@@ -350,12 +350,17 @@ function SideBySideDiff({
 	const cells = useMemo(() => {
 		let li = 0;
 		let ri = 0;
+		// Content-only cell body (NO tv-diff-sbs-cell class): the caller
+		// wraps it in the outer .tv-diff-sbs-cell (with the line number).
+		// Returning a cell-classed span here nested the class (padding 9px
+		// applied twice) and broke left/right column alignment — every row
+		// must start its line-number gutter at the same x.
 		const cell = (text: string | null, html: string | null): ReactNode =>
 			html !== null && html.length > 0 ? (
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans built by highlightToCodeHtml
-				<span className="tv-diff-sbs-cell tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
+				<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
 			) : (
-				<span className="tv-diff-sbs-cell">{text ?? ""}</span>
+				text ?? ""
 			);
 		/**
 		 * Paired del+add rows (a same-line replacement): render a word-level
@@ -385,7 +390,7 @@ function SideBySideDiff({
 				.join("");
 			return (
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped by escapeHtml
-				<span className="tv-diff-sbs-cell tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
+				<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
 			);
 		};
 		return paired.map(row => {

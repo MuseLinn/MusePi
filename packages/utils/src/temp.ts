@@ -78,10 +78,11 @@ function normalizePrefix(prefix?: string): string {
 }
 
 const kRemoveOptions = { recursive: true, force: true } as const;
-const kRemoveRetries = 40;
-// 50ms × 40 retries = 2s total retry window. Windows holds file locks on
-// SQLite DBs for up to ~1.5s after close(); the previous 25ms (1s total)
-// was too short for some test cleanup scenarios.
+const kRemoveRetries = 100;
+// 50ms × 100 retries = 5s total retry window. Windows holds file locks on
+// SQLite DBs for up to ~1.5s after close() and shared registry dirs can be
+// touched by several sessions; the previous 40 retries (2s) still hit EBUSY
+// on busy hosts (defender scans, delayed SQLite checkpoint threads).
 const kRemoveRetryDelayMs = 50;
 const kRetryableRemoveErrorCodes = new Set(["EBUSY", "EPERM", "ENOTEMPTY"]);
 const kSleepBuffer = new Int32Array(new SharedArrayBuffer(4));

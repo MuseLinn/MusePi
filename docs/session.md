@@ -35,17 +35,10 @@ Does not cover `/tree` UI rendering behavior beyond semantics that affect sessio
 Default session file location:
 
 ```text
-~/.musepi/agent/sessions/<dir-encoded>/<timestamp>_<sessionId>.jsonl
-```
+~/.musepi/agent/sessions/<encoded-cwd>/<timestamp>_<sessionId>.jsonl```
 
-`<dir-encoded>` depends on where the canonicalized cwd lives:
-
-- inside the home directory: `-<relative-path>` with `/`, `\\`, and `:` replaced by `-` (bare `-` for home itself)
-- inside the OS temp root: `-tmp-<relative-path>` with the same replacement
-- anywhere else: legacy absolute form `--<cwd-without-leading-slash-with-same-replacement>--`
-
-Old `--<home-encoded>-*--` directories are migrated to the new home-relative names once per sessions root on first access (best-effort).
-
+`<encoded-cwd>` is derived from the canonicalized cwd (so symlink aliases share a bucket): `-<relative>` for directories under home, `-tmp-<relative>` for directories under the temp root, and `--<encoded-absolute>--` for anything else, with path separators replaced by `-`.
+On access, buckets written by the short-lived hashed scheme (`<scope>-<project-basename>-<sha256(canonical-cwd)>`, used in 17.2.5-17.2.8 and reverted in 17.2.9 by #7397) are migrated back into the path-encoded names best-effort, along with older `--<home-encoded>-*--` spellings of home-relative buckets.
 Blob store location:
 
 ```text

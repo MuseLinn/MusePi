@@ -6,7 +6,7 @@ import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/compone
 import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";
-import { type Component, Text } from "@musepi/pi-tui";
+import { type Component, Container, Text } from "@musepi/pi-tui";
 
 // Models a transcript block that re-lays-out (tool preview collapsing, assistant
 // message finalizing, late async result) after newer blocks were appended below
@@ -53,6 +53,12 @@ class StreamingBlock implements Component {
 	}
 }
 
+class UnfinalizedText extends Text {
+	isTranscriptBlockFinalized(): boolean {
+		return false;
+	}
+}
+
 // A still-live block that can declare a byte-stable rendered prefix. The
 // transcript container may commit only those declared rows before finalization.
 class DeclaredSettledStreamingBlock extends StreamingBlock {
@@ -69,6 +75,20 @@ class DeclaredSettledStreamingBlock extends StreamingBlock {
 
 	getTranscriptBlockSettledRows(): number {
 		return this.#settledRows;
+	}
+}
+
+class WidthEpochStreamingBlock extends DeclaredSettledStreamingBlock {
+	captureNativeScrollbackWidthEpoch(): unknown {
+		return {};
+	}
+
+	resolveNativeScrollbackWidthEpoch(_boundary: unknown): number | undefined {
+		return 1;
+	}
+
+	getNativeScrollbackWidthEpochRows(): number | undefined {
+		return 1;
 	}
 }
 
@@ -263,6 +283,176 @@ describe("TranscriptContainer", () => {
 		expect(rendered).toContain("The config file write went through despite the interruption.");
 		expect(rendered).toContain("Copied raw SSE stream");
 		expect(container.getNativeScrollbackLiveRegionStart()).toBeUndefined();
+	});
+
+	it("resolves a finalized transcript tail at the settled width before appended blocks", () => {
+		const container = new TranscriptContainer();
+		container.addChild(new Text("first block with enough words to wrap after the pane narrows", 0, 0));
+		container.render(80);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+
+		container.addChild(new Text("new block queued during resize", 0, 0));
+		container.render(24);
+		const previousRows = container.resolveNativeScrollbackWidthEpoch(boundary);
+		const currentRows = container.getNativeScrollbackWidthEpochRows();
+
+		expect(previousRows).toBeGreaterThan(0);
+		expect(currentRows).toBeGreaterThan(previousRows!);
+	});
+
+	it("does not invent a width-epoch boundary for an unfinalized block without a source watermark", () => {
+		const container = new TranscriptContainer();
+		container.addChild(new UnfinalizedText("width-dependent content that wraps after the pane narrows", 0, 0));
+		const oldRows = container.render(40).length;
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+
+		const newRows = container.render(17).length;
+
+		expect(newRows).toBeGreaterThan(oldRows);
+		expect(container.resolveNativeScrollbackWidthEpoch(boundary)).toBeUndefined();
+	});
+
+	it("maps a streaming Markdown source prefix without rendering the assistant twice", () => {
+		const container = new TranscriptContainer();
+		const assistant = new AssistantMessageComponent();
+		assistant.updateContent(
+			makeAssistantMessage({
+				content: [{ type: "text", text: "A streaming answer with a stable source prefix." }],
+			}),
+			{ transient: true },
+		);
+		container.addChild(assistant);
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+		const settledRows = container.resolveNativeScrollbackWidthEpoch(boundary);
+		expect(container.getNativeScrollbackWidthEpochRows()).toBe(settledRows);
+
+		assistant.updateContent(
+			makeAssistantMessage({
+				content: [
+					{
+						type: "text",
+						text: "A streaming answer with a stable source prefix. More output arrived while the pane resized.",
+					},
+				],
+			}),
+			{ transient: true },
+		);
+		container.render(17);
+		const previousRows = container.resolveNativeScrollbackWidthEpoch(boundary);
+		const currentRows = container.getNativeScrollbackWidthEpochRows();
+
+		expect(previousRows).toBeGreaterThan(0);
+		expect(currentRows).toBeGreaterThan(previousRows!);
+	});
+
+	it("keeps a width epoch anchored to a live source above a finalized notice", () => {
+		const container = new TranscriptContainer();
+		const assistant = new AssistantMessageComponent();
+		assistant.updateContent(
+			makeAssistantMessage({ content: [{ type: "text", text: "A streaming answer with a stable prefix." }] }),
+			{ transient: true },
+		);
+		container.addChild(assistant);
+		container.addChild(new Text("Finalized notice", 0, 0));
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+		expect(container.isNativeScrollbackWidthEpochAppendOnly(boundary)).toBe(false);
+		container.render(17);
+		const settledPreviousRows = container.resolveNativeScrollbackWidthEpoch(boundary);
+		expect(container.getNativeScrollbackWidthEpochRows()).toBe(settledPreviousRows);
+
+		assistant.updateContent(
+			makeAssistantMessage({
+				content: [
+					{
+						type: "text",
+						text: "A streaming answer with a stable prefix. More output arrived while the pane resized.",
+					},
+				],
+			}),
+			{ transient: true },
+		);
+		const rendered = container.render(17);
+		const previousRows = container.resolveNativeScrollbackWidthEpoch(boundary);
+		const currentRows = container.getNativeScrollbackWidthEpochRows();
+
+		expect(previousRows).toBeGreaterThan(0);
+		expect(currentRows).toBeLessThan(rendered.length);
+		expect(currentRows).toBeGreaterThan(previousRows!);
+		expect(rendered.at(-1)).toContain("Finalized notice");
+	});
+
+	it("replays conservatively when finalized history before a live source has no mutation version", () => {
+		const container = new TranscriptContainer();
+		const history = new CountingFinalizedBlock(["history"]);
+		const live = new WidthEpochStreamingBlock(["stable", "pending"], 1);
+		container.addChild(history);
+		container.addChild(live);
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+
+		history.set(["history", "late image"]);
+		container.render(17);
+
+		expect(container.resolveNativeScrollbackWidthEpoch(boundary)).toBeUndefined();
+	});
+
+	it("rejects a width epoch when versioned finalized history before its live source grows", () => {
+		const container = new TranscriptContainer();
+		const history = new VersionedFinalizedBlock(["history"]);
+		const live = new WidthEpochStreamingBlock(["stable", "pending"], 1);
+		container.addChild(history);
+		container.addChild(live);
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+		container.render(17);
+		expect(container.resolveNativeScrollbackWidthEpoch(boundary)).toBeGreaterThan(0);
+
+		history.mutate(["history", "late image"]);
+		container.render(17);
+
+		expect(container.resolveNativeScrollbackWidthEpoch(boundary)).toBeUndefined();
+	});
+
+	it("rejects a captured live tail that mutates while finalizing", () => {
+		const container = new TranscriptContainer();
+		const assistant = new AssistantMessageComponent();
+		assistant.updateContent(makeAssistantMessage({ content: [{ type: "text", text: "Stable source marker." }] }), {
+			transient: true,
+		});
+		const trailing = new StreamingBlock(["pending-tail"]);
+		container.addChild(assistant);
+		container.addChild(trailing);
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+
+		trailing.finalize(["final-tail", "additional-final-row"]);
+		container.render(17);
+
+		expect(container.resolveNativeScrollbackWidthEpoch(boundary)).toBeUndefined();
+	});
+
+	it("propagates a nested child's non-prefix width transition", () => {
+		const container = new TranscriptContainer();
+		const nested = new Container();
+		const assistant = new AssistantMessageComponent();
+		assistant.updateContent(makeAssistantMessage({ content: [{ type: "text", text: "Nested live source." }] }), {
+			transient: true,
+		});
+		nested.addChild(assistant);
+		nested.addChild(new Text("Nested finalized notice", 0, 0));
+		container.addChild(nested);
+		container.render(40);
+		const boundary = container.captureNativeScrollbackWidthEpoch();
+
+		assistant.updateContent(
+			makeAssistantMessage({ content: [{ type: "text", text: `Nested live source. ${"growth ".repeat(20)}` }] }),
+			{ transient: true },
+		);
+		container.render(17);
+
+		expect(container.isNativeScrollbackWidthEpochAppendOnly(boundary)).toBe(false);
 	});
 
 	it("starts the live region at the earliest of several unfinalized blocks", () => {

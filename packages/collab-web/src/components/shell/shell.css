@@ -29,7 +29,7 @@
 /* Plaintext (no-E2E) session warning strip — sits between header and main. */
 .plaintext-banner {
 	padding: 6px 14px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	text-align: center;
 	background: var(--color-warning-bg, inherit);
@@ -84,7 +84,7 @@
 	align-items: center;
 	gap: 5px;
 	padding: 4px 10px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	color: var(--fg-muted);
 	background: var(--bg-raised);
@@ -227,7 +227,7 @@
 }
 
 .sh-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	white-space: nowrap;
@@ -360,7 +360,7 @@
 	flex: 1;
 	min-width: 0;
 	padding: 6px 4px;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	line-height: 22px;
 	color: var(--fg);
 	background: transparent;
@@ -397,7 +397,7 @@
 .sh-ask-title {
 	max-width: 880px;
 	margin: 0 auto;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--fg);
 	white-space: pre-wrap;
@@ -445,12 +445,12 @@
 }
 
 .sh-ask-option-label {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 }
 
 .sh-ask-option-description {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.35;
 	color: var(--fg-muted);
 }
@@ -482,7 +482,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 3px 12px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	white-space: nowrap;
 	color: var(--warn);
 	background: var(--bg-overlay);
@@ -522,12 +522,12 @@
 }
 
 .sh-ended-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 }
 
 .sh-ended-reason {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 }
 
@@ -556,7 +556,7 @@
 	align-items: flex-start;
 	gap: 8px;
 	padding: 8px 10px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg);
 	background: var(--bg-overlay);
 	border: 1px solid var(--border-strong);
@@ -650,7 +650,7 @@
 }
 
 .sh-connect-sub {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 	margin-top: -4px;
 }
@@ -676,7 +676,7 @@
 
 .sh-input {
 	padding: 6px 9px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--fg);
 	background: var(--bg-inset);
 	border: 1px solid var(--border);
@@ -698,11 +698,11 @@
 
 .sh-input-mono {
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .sh-connect-error {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--err);
 }
 
@@ -959,7 +959,7 @@
 }
 
 .sh-ws-sidebar-empty {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-faint, var(--dim));
 	padding: 8px 6px;
 }
@@ -996,7 +996,7 @@
 }
 
 .sh-workspace-empty {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--fg-faint, var(--dim));
 	text-align: center;
 	padding: 40px 0;
@@ -1137,7 +1137,7 @@
 }
 
 .sh-panel-muted {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 }
 
@@ -1148,12 +1148,12 @@
 	gap: 10px;
 	padding: 28px 0;
 	color: var(--fg-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .sh-panel-error {
 	color: var(--err);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	margin: 0;
 }
 
@@ -1171,7 +1171,7 @@
 }
 
 .sh-board-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 	color: var(--fg);
 	margin: 0;
@@ -1238,7 +1238,7 @@
 	border-radius: var(--radius-sm);
 	padding: 6px 8px;
 	font: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .sh-task-list {
@@ -1279,13 +1279,13 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--fg);
 }
 
 .sh-task-schedule {
 	flex: none;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 	white-space: nowrap;
 }
@@ -1308,7 +1308,7 @@
 }
 
 .sh-runs-summary {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 	cursor: pointer;
 	user-select: none;
@@ -1318,7 +1318,7 @@
 	width: 100%;
 	margin-top: 8px;
 	border-collapse: collapse;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .sh-runs-table td {
@@ -1416,14 +1416,14 @@
 
 .sh-files-preview-name {
 	font-weight: 600;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--fg);
 }
 
 .sh-files-preview-text {
 	margin: 0;
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.6;
 	color: var(--fg);
 	white-space: pre-wrap;
@@ -1451,7 +1451,7 @@
 	align-items: center;
 	gap: 4px;
 	min-width: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 22px;
 }
 
@@ -1522,5 +1522,5 @@
 	flex: 1;
 	min-width: 0;
 	padding: 2px 6px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }

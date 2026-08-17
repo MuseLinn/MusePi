@@ -5,6 +5,7 @@ export type SessionStreamEnvelope = {
 		| "event"
 		| "state"
 		| "approval-request"
+		| "ask-request"
 		| "agent-lifecycle"
 		| "agent-progress"
 		| "pause-state"

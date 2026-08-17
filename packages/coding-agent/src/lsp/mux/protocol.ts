@@ -2,9 +2,9 @@
  * Cross-process contract for the broker-owned LSP mux daemon.
  *
  * One mux daemon runs per project scope (launched through the same daemon
- * broker that owns the shared Chromium and `hub start` processes). It spawns
- * each language server once and multiplexes every omp instance in the project
- * onto that single server over a local socket. The link speaks plain
+ * broker that owns the shared Chromium and `hub start` processes). It assigns
+ * each concurrent OMP link its own language-server process, then retains idle
+ * processes briefly for reuse by later links. The link speaks plain
  * Content-Length-framed LSP JSON-RPC after a one-request handshake
  * ({@link MUX_CONNECT_METHOD}); everything below is shared by the worker
  * entry (`server.ts`), the client connector (`daemon.ts`), and tests.
@@ -46,9 +46,9 @@ export function lspMuxEndpoint(projectDir: string, runtimeDir: string): string {
 
 /**
  * First (and only pre-LSP) request on a fresh connection: binds the link to
- * one shared server instance, spawning it on first use. Params:
- * {@link MuxConnectParams}, result: {@link MuxConnectResult}. After the
- * response the link carries ordinary LSP traffic for that server.
+ * an idle server instance or spawns one. Params: {@link MuxConnectParams},
+ * result: {@link MuxConnectResult}. After the response the link carries
+ * ordinary LSP traffic for that server.
  */
 export const MUX_CONNECT_METHOD = "omp/muxConnect";
 
@@ -60,15 +60,14 @@ export const MUX_PING_METHOD = "omp/muxPing";
 export const MUX_PING_RESULT = "pong";
 
 /**
- * Notification on a bound link: kill the shared server process (all sessions
- * on it are disconnected). Sent by `lsp reload` when the generic reload path
- * decides the server is wedged — a plain per-session `shutdown`/`exit` is
- * intercepted by the mux and would leave the wedged server running for
- * every other instance.
+ * Notification on a bound link: kill that link's server process. Sent by
+ * `lsp reload` when the generic reload path decides the server is wedged —
+ * a plain per-session `shutdown`/`exit` is intercepted by the mux so the
+ * process can linger for reuse.
  */
 export const MUX_RESTART_METHOD = "omp/muxRestartServer";
 
-/** Handshake parameters identifying (and if needed spawning) a shared server. */
+/** Handshake parameters identifying a reusable server process. */
 export interface MuxConnectParams {
 	/** Executable to spawn (the client's `resolvedCommand ?? command`). */
 	command: string;
@@ -86,7 +85,7 @@ export interface MuxConnectResult {
 	key: string;
 	/** True when this handshake spawned the server process. */
 	spawned: boolean;
-	/** Pid of the shared server process. */
+	/** Pid of the server process assigned to this link. */
 	pid?: number;
 }
 

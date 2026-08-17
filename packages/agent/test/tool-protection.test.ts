@@ -84,7 +84,9 @@ describe("conditional tool-result protection", () => {
 			fileResult,
 		];
 
-		const regions = collectShakeRegions(entries, AGGRESSIVE_SHAKE_CONFIG);
+		// protectTokens: 0 isolates the matcher behavior from the aggressive
+		// preset's recent-tail window (covered by shake.test.ts).
+		const regions = collectShakeRegions(entries, { ...AGGRESSIVE_SHAKE_CONFIG, protectTokens: 0 });
 
 		expect(regions).toHaveLength(1);
 		expect(regions[0]?.kind).toBe("toolResult");

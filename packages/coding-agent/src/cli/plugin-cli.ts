@@ -464,7 +464,7 @@ async function handleInstall(
 async function handleUninstall(
 	manager: PluginManager,
 	packages: string[],
-	flags: { json?: boolean; scope?: "user" | "project" },
+	flags: { json?: boolean; dryRun?: boolean; scope?: "user" | "project" },
 ): Promise<void> {
 	if (packages.length === 0) {
 		console.error(chalk.red(`Usage: ${APP_NAME} plugin uninstall <package> ...`));
@@ -477,7 +477,35 @@ async function handleUninstall(
 	const installedPlugins = new Set((await mktMgr.listInstalledPlugins()).map(p => p.id));
 
 	for (const name of packages) {
-		if (installedPlugins.has(name)) {
+		const viaMarketplace = installedPlugins.has(name);
+
+		if (flags.dryRun) {
+			if (viaMarketplace) {
+				try {
+					await mktMgr.uninstallPlugin(name, flags.scope, { dryRun: true });
+				} catch (err) {
+					console.error(chalk.red(`${theme.status.error} Failed to uninstall ${name}: ${err}`));
+					process.exit(1);
+				}
+			}
+
+			// Marketplace dry-runs validate the requested scope before reporting.
+			if (flags.json) {
+				console.log(
+					JSON.stringify({
+						dryRun: true,
+						action: "uninstall",
+						plugin: name,
+						source: viaMarketplace ? "marketplace" : "npm",
+					}),
+				);
+			} else {
+				console.log(chalk.dim(`[dry-run] Would uninstall ${name}`));
+			}
+			continue;
+		}
+
+		if (viaMarketplace) {
 			// Exact match against installed marketplace plugin IDs (name@marketplace)
 			try {
 				await mktMgr.uninstallPlugin(name, flags.scope);

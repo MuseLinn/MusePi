@@ -189,6 +189,12 @@
 		"fileTypes": [".py"],
 		"rootMarkers": ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"]
 	},
+	"ty": {
+		"command": "ty",
+		"args": ["server"],
+		"fileTypes": [".py", ".pyi"],
+		"rootMarkers": ["pyproject.toml", "ty.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"]
+	},
 	"ruff": {
 		"command": "ruff",
 		"args": ["server"],

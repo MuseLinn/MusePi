@@ -1014,7 +1014,6 @@ describe("normalizeSchemaForCCA", () => {
 		};
 		(circular.properties as Record<string, unknown>).self = circular;
 
-		expect(() => normalizeSchemaForCCA(circular)).not.toThrow();
 		expect(normalizeSchemaForCCA(circular)).toEqual({
 			type: "object",
 			properties: {

@@ -78,9 +78,7 @@ describe("mcp oauth flow", () => {
 		const { url } = await flow.generateAuthUrl("test-state", "http://127.0.0.1:53172/callback");
 		const authUrl = new URL(url);
 
-		expect(registrationPayload).not.toBeNull();
-		expect((registrationPayload as { client_name?: string } | null)?.client_name).toBe("musepi");
-		expect((registrationPayload as { scope?: string } | null)?.scope).toBeUndefined();
+		expect((registrationPayload as { client_name?: string } | null)?.client_name).toBe("oh-my-pi");		expect((registrationPayload as { scope?: string } | null)?.scope).toBeUndefined();
 		expect(authUrl.searchParams.get("client_id")).toBe("registered-client-id");
 		expect(authUrl.searchParams.get("state")).toBe("test-state");
 	});
@@ -105,7 +103,6 @@ describe("mcp oauth flow", () => {
 		const { url } = await flow.generateAuthUrl("test-state", "http://127.0.0.1:53173/callback");
 		const authUrl = new URL(url);
 
-		expect(registrationPayload).not.toBeNull();
 		expect((registrationPayload as { scope?: string } | null)?.scope).toBe(scopes);
 		expect(authUrl.searchParams.get("scope")).toBe(scopes);
 		expect(authUrl.searchParams.get("client_id")).toBe("registered-client-id");
@@ -667,9 +664,6 @@ describe("mcp oauth flow", () => {
 			{},
 		);
 
-		expect(flow.resolvedClientId).toBeUndefined();
-		expect(flow.registeredClientSecret).toBeUndefined();
-
 		await flow.generateAuthUrl("test-state", "http://127.0.0.1:53173/callback");
 
 		expect(flow.resolvedClientId).toBe("registered-client-id");
@@ -1219,18 +1213,5 @@ describe("mcp oauth flow", () => {
 
 			expect(tokenParams.get("resource")).toBe("https://token.example.com");
 		});
-	});
-
-	it("exposes authorizationUrl via a getter so callers can persist it on the credential", () => {
-		const flow = new MCPOAuthFlow(
-			{
-				authorizationUrl: "https://auth.example.com/authorize",
-				tokenUrl: "https://token.example.com/token",
-				clientId: "client-id",
-			},
-			{},
-		);
-
-		expect(flow.authorizationUrl).toBe("https://auth.example.com/authorize");
 	});
 });

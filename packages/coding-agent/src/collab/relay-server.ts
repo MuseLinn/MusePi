@@ -503,10 +503,11 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	}
 
 	const { promise, resolve, reject } = Promise.withResolvers<RelayServerHandle>();
-	server.once("error", reject);
-	server.listen(options.port, host, () => {
-		server.off("error", reject);
-		const port = (server.address() as AddressInfo).port;
+	const srv = server as unknown as tls.Server;
+	srv.once("error", reject);
+	srv.listen({ port: options.port, host }, () => {
+		srv.off("error", reject);
+		const port = (srv.address() as AddressInfo).port;
 		resolve({
 			port,
 			origin: `${options.tls ? "wss" : "ws"}://${host}:${port}`,

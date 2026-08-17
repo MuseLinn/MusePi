@@ -47,8 +47,8 @@ function baseAssistant(model: Model<Api>, content: AssistantMessage["content"]):
 	};
 }
 
-function thinkingAssistant(model: Model<Api>, errorMessage: string): AssistantMessage {
-	const thinking: ThinkingContent = { type: "thinking", thinking: REASONING_TEXT };
+function thinkingAssistant(model: Model<Api>, errorMessage: string, reasoning = REASONING_TEXT): AssistantMessage {
+	const thinking: ThinkingContent = { type: "thinking", thinking: reasoning };
 	return { ...baseAssistant(model, [thinking]), errorMessage };
 }
 
@@ -160,8 +160,8 @@ describe("AgentSession interrupted thinking persistence", () => {
 		expect(hidden).toBeDefined();
 		expect(hidden?.display).toBe(false);
 		expect(hidden?.attribution).toBe("agent");
-		expect(typeof hidden?.content === "string" ? hidden.content : JSON.stringify(hidden?.content)).toContain(
-			REASONING_TEXT,
+		expect(typeof hidden?.content === "string" ? hidden.content : JSON.stringify(hidden?.content)).toBe(
+			`You were saying this but I interrupted you:\n\`\`\`\n${REASONING_TEXT}\n\`\`\``,
 		);
 		expect(hidden?.details).toMatchObject({
 			provider: "anthropic",
@@ -203,6 +203,39 @@ describe("AgentSession interrupted thinking persistence", () => {
 		).toBe(false);
 		const developerLlm = llm.filter(entry => entry.role === "developer");
 		expect(developerLlm.some(entry => JSON.stringify(entry.content).includes(REASONING_TEXT))).toBe(true);
+	});
+	it("skips hidden continuity for interrupted reasoning shorter than 60 characters", async () => {
+		const harness = createSession();
+		const reasoning = "x".repeat(59);
+		await emitAssistantEnd(
+			harness.session,
+			harness.sessionManager,
+			thinkingAssistant(harness.model, USER_INTERRUPT_LABEL, reasoning),
+			entry => entry.type === "message" && entry.message.role === "assistant",
+		);
+
+		const messages = harness.session.agent.state.messages;
+		expect(messages.find(isAssistantMessage)?.content).toEqual([{ type: "thinking", thinking: reasoning }]);
+		expect(messages.some(isInterruptedThinkingMessage)).toBe(false);
+		const llm = convertToLlm(messages);
+		expect(llm.some(entry => entry.role === "assistant")).toBe(false);
+		expect(llm.some(entry => JSON.stringify(entry.content).includes(reasoning))).toBe(false);
+	});
+
+	it("keeps hidden continuity for exactly 60 characters", async () => {
+		const harness = createSession();
+		const reasoning = "x".repeat(60);
+		await emitAssistantEnd(
+			harness.session,
+			harness.sessionManager,
+			thinkingAssistant(harness.model, USER_INTERRUPT_LABEL, reasoning),
+			entry => entry.type === "custom_message" && entry.customType === INTERRUPTED_THINKING_MESSAGE_TYPE,
+		);
+
+		const hidden = harness.session.agent.state.messages.find(isInterruptedThinkingMessage);
+		expect(typeof hidden?.content === "string" ? hidden.content : JSON.stringify(hidden?.content)).toContain(
+			reasoning,
+		);
 	});
 
 	it("makes hidden continuity available in agent state before awaited message_end delivery finishes", async () => {

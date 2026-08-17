@@ -31,7 +31,11 @@ import {
 	wrapInbandToolStream,
 } from "@musepi/pi-ai/dialect";
 import * as AIError from "@musepi/pi-ai/error";
-import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@musepi/pi-ai/utils/block-symbols";
+import {
+	type CursorExecResolvedCarrier,
+	copyCursorExecResolved,
+	kCursorExecResolved,
+} from "@musepi/pi-ai/utils/block-symbols";
 import {
 	createHarmonyAuditEvent,
 	detectHarmonyLeakInAssistantMessage,
@@ -356,12 +360,18 @@ function snapshotAssistantContentBlock(block: AssistantContentBlock): AssistantC
 			return { ...block, block: structuredCloneJSON(block.block) };
 		case "fallback":
 			return { ...block, from: { ...block.from }, to: { ...block.to } };
-		case "toolCall":
-			return {
+		case "toolCall": {
+			const snap = {
 				...block,
 				arguments: structuredCloneJSON(block.arguments),
 				providerMetadata: snapshotToolCallProviderMetadata(block.providerMetadata),
 			};
+			// Object spread copies enumerable symbols in Bun, but the Cursor
+			// exec-resolved marker is load-bearing for skip-on-dispatch — copy
+			// it explicitly so a projector/snapshot path cannot drop it.
+			copyCursorExecResolved(snap, block);
+			return snap;
+		}
 	}
 }
 

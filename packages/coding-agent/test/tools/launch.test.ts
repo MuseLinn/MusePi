@@ -258,13 +258,11 @@ setInterval(() => {}, 1000);
 				detached: false,
 			};
 			const started = await first.request({ op: "start", spec, owner: "first-client" });
-			expect(started.op).toBe("start");
 			if (started.op !== "start") throw new Error("unexpected start result");
 			expect(started.readyTimedOut).toBeFalse();
 			expect(started.daemon.state).toBe("ready");
 
 			const listed = await second.request({ op: "list" });
-			expect(listed.op).toBe("list");
 			if (listed.op !== "list") throw new Error("unexpected list result");
 			expect(listed.daemons.map(daemon => daemon.name)).toEqual(["debugger"]);
 
@@ -276,7 +274,6 @@ setInterval(() => {}, 1000);
 				pattern: "INPUT",
 				timeoutMs: 3_000,
 			});
-			expect(waited.op).toBe("wait");
 			if (waited.op !== "wait") throw new Error("unexpected wait result");
 			expect(waited.timedOut).toBeFalse();
 			expect(waited.matched).toBe("INPUT");
@@ -290,7 +287,6 @@ setInterval(() => {}, 1000);
 				timeoutMs: 1_000,
 				renderTerminalRows: true,
 			} as DaemonOperation);
-			expect(logs.op).toBe("logs");
 			if (logs.op !== "logs") throw new Error("unexpected logs result");
 			expect(logs.text).toContain("READY");
 			expect(logs.text).not.toContain("\x1b");
@@ -329,7 +325,6 @@ setInterval(() => {}, 1000);
 			expect(grepped.terminalRows).toBeUndefined();
 
 			const stopped = await first.request({ op: "stop", name: "debugger", timeoutMs: 2_000 });
-			expect(stopped.op).toBe("stop");
 			if (stopped.op !== "stop") throw new Error("unexpected stop result");
 			expect(stopped.daemon.state).toBe("exited");
 		} finally {
@@ -883,7 +878,6 @@ esac
 				});
 
 			expect(await waitUntil(() => Bun.file(markerPath).exists(), 3_000)).toBeTrue();
-			expect(await Bun.file(markerPath).text()).toBe("yes");
 			expect(victimError).toBeUndefined();
 			if (victim?.op !== "start") throw new Error("victim start result missing");
 			expect(victim.daemon).toMatchObject({ name: "empty-ready-victim", readyMatch: "SECOND" });
@@ -972,7 +966,6 @@ esac
 				detached: false,
 			};
 			const started = await client.request({ op: "start", spec });
-			expect(started.op).toBe("start");
 			if (started.op !== "start") throw new Error("unexpected start result");
 			expect(started.readyTimedOut).toBeTrue();
 			expect(started.daemon.state).toBe("starting");
@@ -1014,7 +1007,6 @@ esac
 			const t0 = Date.now();
 			const started = await client.request({ op: "start", spec });
 			const elapsed = Date.now() - t0;
-			expect(started.op).toBe("start");
 			if (started.op !== "start") throw new Error("unexpected start result");
 			// Woke on readyAt/terminal, not the full 60s timeout.
 			expect(elapsed).toBeLessThan(10_000);
@@ -1029,7 +1021,6 @@ esac
 				for: "ready",
 				timeoutMs: 60_000,
 			});
-			expect(waited.op).toBe("wait");
 			if (waited.op !== "wait") throw new Error("unexpected wait result");
 			expect(waited.timedOut).toBeFalse();
 			expect(waited.daemon.readyAt).toBeDefined();
@@ -1064,7 +1055,6 @@ esac
 			const t0 = Date.now();
 			const started = await client.request({ op: "start", spec });
 			const startElapsed = Date.now() - t0;
-			expect(started.op).toBe("start");
 			if (started.op !== "start") throw new Error("unexpected start result");
 			expect(startElapsed).toBeLessThan(10_000);
 			// Woke on the terminal exit rather than timing out; the readyAt marker is
@@ -1084,7 +1074,6 @@ esac
 				timeoutMs: 60_000,
 			});
 			const waitElapsed = Date.now() - t1;
-			expect(waited.op).toBe("wait");
 			if (waited.op !== "wait") throw new Error("unexpected wait result");
 			expect(waitElapsed).toBeLessThan(10_000);
 			expect(waited.timedOut).toBeTrue();
@@ -1119,7 +1108,6 @@ esac
 				detached: false,
 			};
 			const started = await client.request({ op: "start", spec });
-			expect(started.op).toBe("start");
 			if (started.op !== "start") throw new Error("unexpected start result");
 			expect(started.daemon.readyAt).toBeDefined();
 

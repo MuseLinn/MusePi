@@ -99,7 +99,7 @@ describe("system Chromium candidates", () => {
 });
 
 describe("browser executable selection", () => {
-	it.skipIf(process.platform === "win32")(
+	it.skipIf(process.platform !== "linux")(
 		"rejects executable wrappers that are not Chromium-family browsers",
 		async () => {
 			const tempDir = TempDir.createSync("@browser-probe-");
@@ -123,7 +123,7 @@ describe("browser executable selection", () => {
 		},
 	);
 
-	it.skipIf(process.platform === "win32")("rejects wrappers that hang during the version probe", async () => {
+	it.skipIf(process.platform !== "linux")("rejects wrappers that hang during the version probe", async () => {
 		const tempDir = TempDir.createSync("@browser-probe-hanging-");
 		try {
 			const hangingWrapper = path.join(tempDir.path(), "google-chrome");
@@ -135,6 +135,32 @@ describe("browser executable selection", () => {
 			expect(performance.now() - startedAt).toBeLessThan(5000);
 		} finally {
 			await tempDir.remove();
+		}
+	});
+
+	it("does not launch the candidate to probe its version off Linux (#8445)", async () => {
+		for (const platform of ["win32", "darwin"] as const) {
+			const tempDir = TempDir.createSync(`@browser-probe-${platform}-`);
+			try {
+				const marker = path.join(tempDir.path(), "gui-launched");
+				const fakeChrome = path.join(tempDir.path(), "chrome.exe");
+				// A GUI browser handoff: executing it has a side effect (this marker)
+				// but prints nothing a console version probe would accept.
+				await Bun.write(fakeChrome, `#!/bin/sh\ntouch "${marker}"\necho "activating existing window"\n`);
+				fs.chmodSync(fakeChrome, 0o755);
+
+				const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+				Object.defineProperty(process, "platform", { value: platform, configurable: true });
+				try {
+					await expect(chromiumExecutableProbeForTest(fakeChrome)).resolves.toBe(true);
+				} finally {
+					if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
+				}
+
+				expect(fs.existsSync(marker)).toBe(false);
+			} finally {
+				await tempDir.remove();
+			}
 		}
 	});
 

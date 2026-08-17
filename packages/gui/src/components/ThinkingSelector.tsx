@@ -71,7 +71,7 @@ export function ThinkingSelector({
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			{renderMenu(
-				<div className="gui-model-menu">
+				<div className="gui-model-menu gui-model-menu--compact">
 					<button
 						type="button"
 						className={`gui-model-opt${value == null ? " gui-model-opt--active" : ""}`}

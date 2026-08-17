@@ -33,6 +33,20 @@ describe("ModelRegistry default custom models config", () => {
 		expect(model?.baseUrl).toBe("https://yaml-default.example.com/v1");
 	});
 
+	test("retains STB decoder metadata on a renamed custom provider", () => {
+		writeModelsYaml("models.yml", {
+			provider: "managed-primary",
+			modelId: "local-vision",
+			modelName: "Local vision",
+			baseUrl: "http://127.0.0.1:8080/v1",
+			imageInputDecoder: "stb",
+		});
+
+		const model = loadDefaultRegistryModel({ provider: "managed-primary", modelId: "local-vision" });
+
+		expect(model?.imageInputDecoder).toBe("stb");
+	});
+
 	test("loads Bedrock cache capabilities from a model override", () => {
 		writeBedrockCacheOverride();
 
@@ -112,6 +126,7 @@ interface ProviderFixture {
 	modelId: string;
 	modelName: string;
 	baseUrl: string;
+	imageInputDecoder?: "stb";
 }
 
 interface ModelLookup {
@@ -124,6 +139,7 @@ interface ModelSnapshot {
 	id: string;
 	name: string;
 	baseUrl: string | undefined;
+	imageInputDecoder?: "stb";
 	compat: {
 		promptCacheMode: string;
 		supportsLongPromptCacheRetention: boolean;
@@ -134,6 +150,9 @@ interface ModelSnapshot {
 }
 
 function writeModelsYaml(file: "models.yml" | "models.yaml", fixture: ProviderFixture): void {
+	const decoderLine = fixture.imageInputDecoder
+		? `        imageInputDecoder: ${fixture.imageInputDecoder}`
+		: undefined;
 	fs.writeFileSync(
 		path.join(tempDir.path(), file),
 		[
@@ -146,7 +165,8 @@ function writeModelsYaml(file: "models.yml" | "models.yaml", fixture: ProviderFi
 			`      - id: ${fixture.modelId}`,
 			`        name: ${fixture.modelName}`,
 			"        reasoning: false",
-			"        input: [text]",
+			fixture.imageInputDecoder ? "        input: [text, image]" : "        input: [text]",
+			...(decoderLine ? [decoderLine] : []),
 			"        cost:",
 			"          input: 0",
 			"          output: 0",
@@ -217,6 +237,7 @@ function loadDefaultRegistryModel(lookup: ModelLookup): ModelSnapshot | undefine
 				id: model.id,
 				name: model.name,
 				baseUrl: model.baseUrl,
+				imageInputDecoder: model.imageInputDecoder,
 				compat: model.compat,
 			} : null));
 		} finally {

@@ -20,9 +20,26 @@ function oversizedMessageHistory(prefix: string) {
 }
 
 describe("RPC frame encoding", () => {
-	it("preserves frames that already fit", () => {
+	it("preserves fitting frames and serializes stateful message frames once", () => {
 		const frame = { id: "request-1", type: "response", command: "get_state", success: true, data: { ok: true } };
 		expect(encodeRpcFrame(frame)).toBe(`${JSON.stringify(frame)}\n`);
+
+		for (const version of [1, 2] as const) {
+			let messageReads = 0;
+			const message = { role: "assistant", content: [{ type: "text", text: "done" }] };
+			const event = {
+				type: "message_end",
+				get message() {
+					messageReads++;
+					return message;
+				},
+			};
+			const encoder = new RpcFrameEncoder();
+			encoder.setProtocolVersion(version);
+
+			expect(decode(encoder.encode(event))).toEqual({ type: "message_end", message });
+			expect(messageReads).toBe(1);
+		}
 	});
 
 	it("compacts agent_end after message events have streamed", () => {

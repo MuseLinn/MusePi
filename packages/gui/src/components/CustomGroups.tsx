@@ -3,7 +3,7 @@ import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { Reveal } from "./Reveal";
-import { type GuiTreeNode, SessionTree } from "./SessionTree";
+import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
 
 export interface CustomGroup {
 	name: string;
@@ -45,6 +45,11 @@ export function CustomGroups({
 	onEditStart,
 	onRename,
 	onReorderMember,
+	unread,
+	pausedIds,
+	workingIds,
+	statuses,
+	manualTags,
 }: {
 	groups: CustomGroup[];
 	/** Session tree for rendering each group's members. */
@@ -68,6 +73,16 @@ export function CustomGroups({
 	onRename?(index: number, name: string): void;
 	/** Reorder one member session within its group (drag to a new row). */
 	onReorderMember?(groupIndex: number, sessionId: string, to: number): void;
+	/** Session ids with the 未读 marker. */
+	unread?: ReadonlySet<string>;
+	/** Paused session ids — pause chip on rows. */
+	pausedIds?: ReadonlySet<string>;
+	/** Live sessions with a running agent turn — pulsing dot on rows. */
+	workingIds?: ReadonlySet<string>;
+	/** Lifecycle status per session id — tints member rows' left square. */
+	statuses?: ReadonlyMap<string, SessionStatus>;
+	/** User-assigned color per session id (manual override of status). */
+	manualTags?: ReadonlyMap<string, SessionStatus>;
 }): ReactNode {
 	const dropSession = (index: number) => (e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -75,6 +90,9 @@ export function CustomGroups({
 		// Group-header drags carry a `group:` payload — never add them as members.
 		if (id && !id.startsWith("group:")) onDropSession(index, id);
 	};
+	// Group member status pin: working sessions first, unread next. Stable
+	// sort — the manual drag-reorder order survives within each rank.
+	const statusRank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
 	return (
 		<div className="gui-groups">
 			{groups.length === 0 && (
@@ -94,7 +112,8 @@ export function CustomGroups({
 					onUserToggle={onOverrideClear}
 					memberNodes={g.sessions
 						.map(id => nodes.find(n => n.entry.id === id))
-						.filter((n): n is GuiTreeNode => n !== undefined)}
+						.filter((n): n is GuiTreeNode => n !== undefined)
+						.sort((a, b) => statusRank(b.entry.id) - statusRank(a.entry.id))}
 					selectedId={selectedId}
 					onSelect={onSelect}
 					onSessionContextMenu={onSessionContextMenu}
@@ -111,6 +130,11 @@ export function CustomGroups({
 					onEditStart={onEditStart}
 					onRename={onRename}
 					onReorderMember={onReorderMember}
+					unread={unread}
+					pausedIds={pausedIds}
+					workingIds={workingIds}
+					statuses={statuses}
+					manualTags={manualTags}
 				/>
 			))}
 		</div>
@@ -135,6 +159,11 @@ function GroupBlock({
 	onEditStart,
 	onRename,
 	onReorderMember,
+	unread,
+	pausedIds,
+	workingIds,
+	statuses,
+	manualTags,
 }: {
 	group: CustomGroup;
 	index: number;
@@ -156,6 +185,16 @@ function GroupBlock({
 	onRename?(index: number, name: string): void;
 	/** Reorder one member session within this group (drag to a new row). */
 	onReorderMember?(groupIndex: number, sessionId: string, to: number): void;
+	/** Session ids with the 未读 marker. */
+	unread?: ReadonlySet<string>;
+	/** Paused session ids — pause chip on rows. */
+	pausedIds?: ReadonlySet<string>;
+	/** Live sessions with a running agent turn — pulsing dot on rows. */
+	workingIds?: ReadonlySet<string>;
+	/** Lifecycle status per session id — tints member rows' left square. */
+	statuses?: ReadonlyMap<string, SessionStatus>;
+	/** User-assigned color per session id (manual override of status). */
+	manualTags?: ReadonlyMap<string, SessionStatus>;
 }): ReactNode {
 	const [localOpen, setLocalOpen] = useStateOpen(group.name);
 	const open = openOverride ?? localOpen;
@@ -203,20 +242,23 @@ function GroupBlock({
 					e.dataTransfer.effectAllowed = "move";
 				}}
 				onDragOver={e => {
-					if (onReorder) {
-						e.preventDefault();
-						setDragOver(true);
-					}
+					e.preventDefault();
+					setDragOver(true);
 				}}
 				onDragLeave={() => setDragOver(false)}
 				onDrop={e => {
-					e.preventDefault();
-					e.stopPropagation();
 					setDragOver(false);
 					const data = e.dataTransfer.getData("text/plain");
 					if (data.startsWith("group:")) {
+						// Group-header drag (reorder) — handled here, never a member.
+						e.preventDefault();
+						e.stopPropagation();
 						const from = Number(data.slice(6));
 						if (Number.isInteger(from) && from !== index) onReorder?.(from, index);
+					} else {
+						// Session drag onto the header row — join the group, same as
+						// the member list area (the outer block's add-drop).
+						onDrop(e);
 					}
 				}}
 				onClick={() => {
@@ -311,6 +353,12 @@ function GroupBlock({
 							selectedId={selectedId}
 							onSelect={onSelect}
 							onContextMenu={onSessionContextMenu}
+							unread={unread}
+							pausedIds={pausedIds}
+							workingIds={workingIds}
+							statuses={statuses}
+							manualTags={manualTags}
+							sort="none"
 						/>
 					</div>
 				)}

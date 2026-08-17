@@ -2,13 +2,15 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { Notice } from "../../lib/client";
+import type { GuestClient } from "../../lib/client";
+import { useGuestSelector } from "../../lib/use-guest";
 
 const INFO_TTL_MS = 4000;
 const WARNING_TTL_MS = 8000;
 const MAX_VISIBLE = 4;
 
-export function Toasts({ notices }: { notices: readonly Notice[] }): ReactNode {
+export function Toasts({ client }: { client: GuestClient }): ReactNode {
+	const notices = useGuestSelector(client, s => s.notices);
 	// Dynamic membership keyed by notice id — runtime collection.
 	const [dismissed, setDismissed] = useState<Set<number>>(() => new Set());
 

@@ -20,7 +20,6 @@ describe("Tool argument coercion", () => {
 
 		const result = validateToolArguments(tool, toolCall) as { timeout: number };
 		expect(result.timeout).toBe(300);
-		expect(typeof result.timeout).toBe("number");
 	});
 
 	it("preserves string values when schema expects string", () => {
@@ -39,7 +38,6 @@ describe("Tool argument coercion", () => {
 
 		const result = validateToolArguments(tool, toolCall) as { label: string };
 		expect(result.label).toBe("300");
-		expect(typeof result.label).toBe("string");
 	});
 
 	it("stringifies object values when schema expects string", () => {
@@ -1057,7 +1055,6 @@ describe("Tool argument coercion", () => {
 		};
 		const result = validateToolArguments(tool, toolCall);
 		expect(result.tick_size).toBe(1);
-		expect(typeof result.tick_size).toBe("number");
 	});
 
 	it("leaves Optional<number> as undefined when absent", () => {
@@ -1075,6 +1072,7 @@ describe("Tool argument coercion", () => {
 		const result = validateToolArguments(tool, toolCall);
 		expect(result.tick_size).toBeUndefined();
 	});
+
 	it("strips string 'null' on optional boolean field", () => {
 		const tool: Tool = {
 			name: "edit-tool",
@@ -1311,7 +1309,6 @@ describe("Tool argument coercion", () => {
 		// which `JSON.parse` rejects unless the control char is escaped.
 		const stringifiedPhases =
 			'[{"name":"Investigation","tasks":[{"content":"Locate code","details":"line one\nline two"}]}]';
-		expect(stringifiedPhases.includes("\n")).toBe(true);
 
 		const toolCall: ToolCall = {
 			type: "toolCall",

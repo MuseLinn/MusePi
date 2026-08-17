@@ -85,9 +85,11 @@ export const isDeepseekModelIdOrName = memo((value: string): boolean => {
 
 /**
  * DeepSeek V4 Flash SKU in any host/namespace form (`deepseek-v4-flash`, dated
- * `deepseek-v4-flash-0731`, `deepseek-ai/DeepSeek-V4-Flash`). Flash is the only
- * V4 model whose `reasoning_effort` accepts the `low` tier; V4 Pro tops out at
- * `high`/`max`. See https://api-docs.deepseek.com/api/create-chat-completion.
+ * `deepseek-v4-flash-0731`, `deepseek-ai/DeepSeek-V4-Flash`). Both V4 SKUs
+ * (Flash and Pro) accept the `low` reasoning_effort tier; this predicate keeps
+ * Flash distinguishable from Pro where a host quirk splits them (e.g.
+ * OpenRouter exposes `low` on Flash but only `high` on non-Flash V4).
+ * See https://api-docs.deepseek.com/api/create-chat-completion.
  */
 export const isDeepseekV4FlashModelId = memo((modelId: string): boolean => {
 	return bareModelId(modelId).toLowerCase().includes("deepseek-v4-flash");
@@ -96,6 +98,16 @@ export const isDeepseekV4FlashModelId = memo((modelId: string): boolean => {
 /** Xiaomi MiMo family by id or display name. */
 export const isMimoModelIdOrName = memo((value: string): boolean => {
 	return value.toLowerCase().includes("mimo");
+});
+
+/** Gemini family ids in any namespace form (`gemini-*`, `google/gemini-*`, `openrouter/google/gemini-…`). */
+export const isGeminiModelId = memo((modelId: string): boolean => {
+	return /(^|\/)gemini[-.]?/i.test(modelId);
+});
+
+/** Grok family ids across namespace and delimiter forms (`grok-*`, `cursor-grok-*`, `xai/grok-*`). */
+export const isGrokModelId = memo((modelId: string): boolean => {
+	return /(?:^|[./_-])grok(?:[-.]|$)/i.test(modelId);
 });
 
 const GROK_EFFORT_CAPABLE_PREFIXES = ["grok-3-mini", "grok-4.20-multi-agent", "grok-4.3", "grok-4.5"] as const;
@@ -259,12 +271,14 @@ export const modelFamilyToken = memo((modelId: string): string => {
 	const parsed = parseKnownModel(modelId);
 	if (parsed.family !== "unknown") return parsed.family;
 	if (isClaudeModelId(modelId) || isAnthropicNamespacedModelId(modelId)) return "anthropic";
+	if (isGeminiModelId(modelId)) return "gemini";
+	if (isGrokModelId(modelId)) return "grok";
+	if (isDeepseekModelIdOrName(modelId)) return "deepseek";
 	if (isOpenAIModelId(modelId)) return "openai";
 	if (isKimiModelId(modelId)) return "kimi";
 	if (isQwenModelId(modelId)) return "qwen";
 	if (isMinimaxM2FamilyModelId(modelId) || isMinimaxM3FamilyModelId(modelId)) return "minimax";
 	if (isOpenAIGptOssModelId(modelId)) return "gpt-oss";
-	if (isDeepseekModelIdOrName(modelId)) return "deepseek";
 	if (isMimoModelIdOrName(modelId)) return "mimo";
 	if (isGemmaModelId(modelId)) return "gemma";
 	if (parseGlmModel(bareModelId(modelId))) return "glm";

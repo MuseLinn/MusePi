@@ -74,6 +74,7 @@ import type { ToolResultMessage } from "../../types";
  * and their translation are consumed together.
  */
 export {
+	omitUndefinedArgs,
 	piEscapeRegexLiteral,
 	piGrepSkip,
 	piJoinPath,

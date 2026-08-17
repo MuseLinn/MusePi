@@ -47,6 +47,7 @@ export const enUS = {
 	"stop the current turn": "Stop the current turn",
 	"compact context": "Compact context",
 	"compacting…": "Compacting…",
+	"stop compaction": "Stop compaction",
 	"compaction failed": "Compaction failed",
 	"retry last turn": "Retry last turn",
 	"nothing to retry": "Nothing to retry",
@@ -93,6 +94,8 @@ export const enUS = {
 	"reason: insufficient savings": "Reason: insufficient savings",
 	"reason: image budget": "Reason: image budget",
 	"tool results: {imaged} imaged (saves ~{saved})": "Tool results: {imaged} imaged (saves ~{saved})",
+	"tool results: none imaged ({total} in history)": "Tool results: none imaged ({total} in history)",
+	"next request: ~{tokens} tokens on the wire": "Next request: ~{tokens} tokens on the wire",
 
 	// ── Slash commands (composer / TUI parity) ─────────────────────────
 	"unknown slash command": "Unknown slash command",
@@ -137,7 +140,8 @@ export const enUS = {
 	"enhancing…": "Enhancing…",
 	"thinking level": "Thinking level",
 	"default thinking level": "Default thinking level",
-	"default thinking level hint": "Default thinking level for new sessions; can be toggled temporarily on the welcome page",
+	"default thinking level hint":
+		"Default thinking level for new sessions; can be toggled temporarily on the welcome page",
 	"model cap": "Model cap",
 	"thinking capped by model": "Thinking level not supported by this model",
 	"default model hint": "Default model for new sessions; can be toggled temporarily on the welcome page",
@@ -195,8 +199,8 @@ export const enUS = {
 	"rename group": "Rename group",
 	"delete group": "Delete group",
 	"context compacted · {count} tokens": "Context compacted · {count} tokens",
-	"model → {model}": "Model → {model}",
-	"thinking → {model}": "Thinking → {model}",
+	"model → {model}": "model → {model}",
+	"thinking → {model}": "thinking → {model}",
 	"no activity yet": "No activity yet",
 	"show earlier messages": "Show earlier messages",
 	"show pre-compaction history": "Show pre-compaction history",
@@ -208,11 +212,13 @@ export const enUS = {
 		"Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
 	General: "General",
 	"No memory subsystem runs": "No memory subsystem runs",
-	"Local rollout summarisation pipeline (memory_summary.md)": "Local rollout summarisation pipeline (memory_summary.md)",
+	"Local rollout summarisation pipeline (memory_summary.md)":
+		"Local rollout summarisation pipeline (memory_summary.md)",
 	Hindsight: "Hindsight",
 	"Vectorize Hindsight remote memory service": "Vectorize Hindsight remote memory service",
 	Mnemopi: "Mnemopi",
-	"Local SQLite recall/retain backend with optional embeddings": "Local SQLite recall/retain backend with optional embeddings",
+	"Local SQLite recall/retain backend with optional embeddings":
+		"Local SQLite recall/retain backend with optional embeddings",
 	"Auto-Learn (experimental)": "Auto-Learn (experimental)",
 	"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills":
 		"After the agent stops, nudge it to capture lessons to memory and create/enhance isolated managed skills",
@@ -221,7 +227,8 @@ export const enUS = {
 	"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.":
 		"When on, auto-run one private capture turn at stop (uses extra tokens). When off, only standing auto-learn guidance remains.",
 	"Mnemopi DB Path": "Mnemopi DB Path",
-	"Optional SQLite DB path. Defaults to the agent memories directory.": "Optional SQLite DB path. Defaults to the agent memories directory.",
+	"Optional SQLite DB path. Defaults to the agent memories directory.":
+		"Optional SQLite DB path. Defaults to the agent memories directory.",
 	"Mnemopi Bank": "Mnemopi Bank",
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
@@ -244,9 +251,11 @@ export const enUS = {
 	"intfloat/multilingual-e5-large (1024d), cross-language recall":
 		"intfloat/multilingual-e5-large (1024d), cross-language recall",
 	"Mnemopi Auto Recall": "Mnemopi Auto Recall",
-	"Recall local memories into the first turn of each session": "Recall local memories into the first turn of each session",
+	"Recall local memories into the first turn of each session":
+		"Recall local memories into the first turn of each session",
 	"Mnemopi Auto Retain": "Mnemopi Auto Retain",
-	"Retain completed conversation turns into local Mnemopi memory": "Retain completed conversation turns into local Mnemopi memory",
+	"Retain completed conversation turns into local Mnemopi memory":
+		"Retain completed conversation turns into local Mnemopi memory",
 	"Mnemopi Polyphonic Recall": "Mnemopi Polyphonic Recall",
 	"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion":
 		"Enable 4-voice recall (vector, graph, fact, temporal) fused with reciprocal rank fusion",
@@ -257,12 +266,14 @@ export const enUS = {
 	"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories":
 		"Ingest new memories into the episodic graph as they are stored, linking them to related entities and memories",
 	"Mnemopi Disable Embeddings": "Mnemopi Disable Embeddings",
-	"Force deterministic FTS-only recall instead of vector embeddings": "Force deterministic FTS-only recall instead of vector embeddings",
+	"Force deterministic FTS-only recall instead of vector embeddings":
+		"Force deterministic FTS-only recall instead of vector embeddings",
 	"Mnemopi Embedding Model": "Mnemopi Embedding Model",
 	"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.":
 		"Advanced: explicit embedding model id that overrides the variant. Leave empty to use mnemopi.embeddingVariant.",
 	"Mnemopi Embedding API URL": "Mnemopi Embedding API URL",
-	"Optional OpenAI-compatible embedding endpoint passed to Mnemopi": "Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
+	"Optional OpenAI-compatible embedding endpoint passed to Mnemopi":
+		"Optional OpenAI-compatible embedding endpoint passed to Mnemopi",
 	"Mnemopi Embedding API Key": "Mnemopi Embedding API Key",
 	"Optional embedding API key passed to Mnemopi": "Optional embedding API key passed to Mnemopi",
 	"Mnemopi LLM Mode": "Mnemopi LLM Mode",
@@ -276,7 +287,8 @@ export const enUS = {
 	Remote: "Remote",
 	"Use the Mnemopi remote LLM settings below": "Use the Mnemopi remote LLM settings below",
 	"Mnemopi LLM Base URL": "Mnemopi LLM Base URL",
-	"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode": "Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
+	"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode":
+		"Optional OpenAI-compatible LLM endpoint for Mnemopi remote mode",
 	"Mnemopi LLM API Key": "Mnemopi LLM API Key",
 	"Optional LLM API key for Mnemopi remote mode": "Optional LLM API key for Mnemopi remote mode",
 	"Mnemopi LLM Model": "Mnemopi LLM Model",
@@ -298,7 +310,8 @@ export const enUS = {
 	"Hindsight Auto Recall": "Hindsight Auto Recall",
 	"Recall memories on the first turn of each session": "Recall memories on the first turn of each session",
 	"Hindsight Auto Retain": "Hindsight Auto Retain",
-	"Retain transcript every N turns and at session boundaries": "Retain transcript every N turns and at session boundaries",
+	"Retain transcript every N turns and at session boundaries":
+		"Retain transcript every N turns and at session boundaries",
 	"Hindsight Retain Mode": "Hindsight Retain Mode",
 	"full-session = upsert one document per session, last-turn = chunked":
 		"full-session = upsert one document per session, last-turn = chunked",
@@ -317,7 +330,8 @@ export const enUS = {
 		"Select the edit tool variant (replace, patch, hashline, or apply_patch)",
 	Editing: "Editing",
 	"Fuzzy Match": "Fuzzy Match",
-	"Accept high-confidence fuzzy matches for whitespace differences": "Accept high-confidence fuzzy matches for whitespace differences",
+	"Accept high-confidence fuzzy matches for whitespace differences":
+		"Accept high-confidence fuzzy matches for whitespace differences",
 	"Fuzzy Match Threshold": "Fuzzy Match Threshold",
 	"Similarity threshold (0-1) for accepting fuzzy matches": "Similarity threshold (0-1) for accepting fuzzy matches",
 	Lenient: "Lenient",
@@ -325,7 +339,8 @@ export const enUS = {
 	Default: "Default",
 	Strict: "Strict",
 	"Abort on Failed Preview": "Abort on Failed Preview",
-	"Abort streaming edit tool calls when patch preview fails": "Abort streaming edit tool calls when patch preview fails",
+	"Abort streaming edit tool calls when patch preview fails":
+		"Abort streaming edit tool calls when patch preview fails",
 	"Block Auto-Generated Files": "Block Auto-Generated Files",
 	"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)":
 		"Prevent editing of files that appear to be auto-generated (protoc, sqlc, swagger, etc.)",
@@ -336,7 +351,8 @@ export const enUS = {
 	"Prepend line numbers to read tool output by default": "Prepend line numbers to read tool output by default",
 	Reading: "Reading",
 	"Default Read Limit": "Default Read Limit",
-	"Default number of lines returned when agent calls read without a limit": "Default number of lines returned when agent calls read without a limit",
+	"Default number of lines returned when agent calls read without a limit":
+		"Default number of lines returned when agent calls read without a limit",
 	"Markdown Previews": "Markdown Previews",
 	"Render Markdown read results as formatted terminal Markdown previews instead of raw source":
 		"Render Markdown read results as formatted terminal Markdown previews instead of raw source",
@@ -344,11 +360,14 @@ export const enUS = {
 	"Return structural code summaries when read is called without an explicit selector":
 		"Return structural code summaries when read is called without an explicit selector",
 	"Prose Summaries": "Prose Summaries",
-	"Return structural summaries for Markdown and plain text reads": "Return structural summaries for Markdown and plain text reads",
+	"Return structural summaries for Markdown and plain text reads":
+		"Return structural summaries for Markdown and plain text reads",
 	"Read Summary Body Lines": "Read Summary Body Lines",
-	"Minimum multiline body or literal length before read summaries collapse it": "Minimum multiline body or literal length before read summaries collapse it",
+	"Minimum multiline body or literal length before read summaries collapse it":
+		"Minimum multiline body or literal length before read summaries collapse it",
 	"Read Summary Comment Lines": "Read Summary Comment Lines",
-	"Minimum multiline block comment length before read summaries collapse it": "Minimum multiline block comment length before read summaries collapse it",
+	"Minimum multiline block comment length before read summaries collapse it":
+		"Minimum multiline block comment length before read summaries collapse it",
 	"Read Summary Minimum File Length": "Read Summary Minimum File Length",
 	"Files with fewer total lines are read verbatim instead of structurally summarized":
 		"Files with fewer total lines are read verbatim instead of structurally summarized",
@@ -395,9 +414,11 @@ export const enUS = {
 	"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.":
 		"Best consolidation/dedup; lighter footprint, but leaks small talk during extraction.",
 	"Qwen2.5 1.5B": "Qwen2.5 1.5B",
-	"Best extraction granularity (atomic facts); weaker consolidation.": "Best extraction granularity (atomic facts); weaker consolidation.",
+	"Best extraction granularity (atomic facts); weaker consolidation.":
+		"Best extraction granularity (atomic facts); weaker consolidation.",
 	"LFM2 1.2B": "LFM2 1.2B",
-	"Fastest load; solid all-rounder, slightly noisier extraction labels.": "Fastest load; solid all-rounder, slightly noisier extraction labels.",
+	"Fastest load; solid all-rounder, slightly noisier extraction labels.":
+		"Fastest load; solid all-rounder, slightly noisier extraction labels.",
 	"keep stored credential unless replaced": "Keep stored credential unless replaced",
 	"comma separated values": "Comma separated values",
 	"invalid json": "Invalid JSON",
@@ -407,7 +428,8 @@ export const enUS = {
 		"These options only affect the terminal interface (TUI): theme, status line, terminal escape sequences, etc. They have no effect in the desktop interface, but changes will apply the next time you use the TUI.",
 	"tui only": "TUI only",
 	"memory settings": "Memory",
-	"memory settings description": "Memory subsystem settings (backend selection, auto-learn, Mnemopi, Hindsight), same source as the terminal settings panel",
+	"memory settings description":
+		"Memory subsystem settings (backend selection, auto-learn, Mnemopi, Hindsight), same source as the terminal settings panel",
 	"turn rail position": "Turn rail position",
 	"turn rail position hint": "Position of the session turn rail on the left or right side of the message area",
 	"turn rail style": "Turn rail style",
@@ -535,7 +557,8 @@ export const enUS = {
 	location: "Location",
 	"exit code": "Exit code",
 	configuration: "Configuration",
-	"pending configurationDone — set breakpoints, then continue": "Pending configurationDone — set breakpoints, then continue",
+	"pending configurationDone — set breakpoints, then continue":
+		"Pending configurationDone — set breakpoints, then continue",
 	function: "Function",
 	name: "Name",
 	condition: "Condition",
@@ -590,6 +613,7 @@ export const enUS = {
 	"swarm progress": "Progress {done}/{total}",
 	"swarm running": "Running {count}",
 	"swarm done summary": "Done {completed} · failed {failed}",
+	"swarm members": "Swarm members",
 	"operation failed": "Operation failed",
 	"resume {name}": "Resume {name}",
 	paused: "Paused",
@@ -599,20 +623,23 @@ export const enUS = {
 	"select a session to pause it": "Select a session to pause it",
 	"pause all sessions": "Pause all sessions",
 	"resume all sessions": "Resume all sessions",
-	"all sessions are frozen until you resume": "All sessions are frozen (main agent, subagents, advisors) — click anywhere to resume",
+	"all sessions are frozen until you resume":
+		"All sessions are frozen (main agent, subagents, advisors) — click anywhere to resume",
 	"no changes": "No changes",
 	"not a git repository": "Not a git repository",
 	"daemon meta unavailable: {reason}": "Daemon metadata unavailable: {reason}",
 	version: "Version",
 	engine: "Engine",
 	"plugins settings": "List of discovered extension plugins",
-	"skills settings": "Manage project-level and user-level skills. Once enabled, they can be used in chat via skill://.",
+	"skills settings":
+		"Manage project-level and user-level skills. Once enabled, they can be used in chat via skill://.",
 	extensions: "Extensions",
 	"browser settings description": "Shared browser (agent and UI share one Chromium instance) and default behavior",
 	"headless browser": "Headless browser",
 	"headless browser description": "When off, the browser used by the agent shows its UI (hidden by default)",
 	"browser relay": "Browser relay (real Chrome)",
-	"browser relay description": "Drive your own Chrome tabs through the MusePi Browser Relay extension (extension required)",
+	"browser relay description":
+		"Drive your own Chrome tabs through the MusePi Browser Relay extension (extension required)",
 	"browser relay extension": "MusePi Browser Relay extension",
 	"browser relay extension description":
 		"After the extension files are written, enable Developer mode in chrome://extensions and use “Load unpacked” to select the directory",
@@ -627,11 +654,30 @@ export const enUS = {
 		"One-time import of cookies and localStorage from Chrome's most recently used profile; does not keep syncing, refresh open pages, or modify Chrome data",
 	"import browser data": "Import browser data",
 	"clear browser cache": "Clear built-in browser cache",
-	"clear browser cache description": "Clears HTTP cache, Cache Storage, and Service Workers, keeping cookies and local site data",
+	"clear browser cache description":
+		"Clears HTTP cache, Cache Storage, and Service Workers, keeping cookies and local site data",
 	"clear cache": "Clear cache",
 	"clear all browser data": "Clear all browser data",
-	"clear all browser data description": "Deletes cookies, site data, and cache from the built-in browser. This action cannot be undone",
+	"clear all browser data description":
+		"Deletes cookies, site data, and cache from the built-in browser. This action cannot be undone",
 	"clear all": "Clear all",
+	"computer read-only": "read-only",
+	"computer screenshots {count}": "{count} screenshots",
+	"computer no screenshots": "no screenshots",
+	"computer screenshot {count}": "Desktop screenshot {count}",
+	"computer action": "Action",
+	"computer failed": "Desktop action failed",
+	"return value": "Return value",
+	"vibe pending": "pending",
+	"vibe settled": "settled",
+	"vibe settled {count}": "{count} settled",
+	"vibe running {count}": "{count} running",
+	"vibe timed out": "wait timed out",
+	"vibe booting": "booting CLI…",
+	"vibe delivering": "delivering…",
+	"vibe spawned": "spawned",
+	"vibe sent": "sent",
+	"vibe still running {list}": "still running: {list}",
 	"computer glow": "Desktop operation glow",
 	"computer glow description":
 		"When the AI operates the desktop with the computer tool, show an edge glow, status badge, and target highlight on screen so you always see what the AI is doing",
@@ -639,7 +685,7 @@ export const enUS = {
 	"interface and input": "Interface & input",
 	"output style preview": "Output style preview",
 	"output style preview description":
-		"The options above switch typography presets (font size, line height, paragraph spacing, code density); below, a character-by-character animation demonstrates the “smooth streaming” output effect — a solid caret means output is in progress, a blinking one means it has finished",
+		"The options above switch typography presets (line height, paragraph spacing, code density; font sizes come from the message font size setting); below, a character-by-character animation demonstrates the “streaming rendering” text effect — a solid caret means output is in progress, a blinking one means it has finished",
 	"preview heading": "This is a heading",
 	"preview paragraph":
 		"This is a body paragraph showing the line height and paragraph spacing of the current output style. Body text stays compact so you can compare how the three styles differ in reading density.",
@@ -667,7 +713,8 @@ export const enUS = {
 	"close and destroy browser": "Close and destroy the managed browser",
 	"managed browser local only": "Login state stored locally only",
 	"risky navigation": "Risky navigation confirmation",
-	"risky navigation description": "The agent requested navigation to an unusual address; it will continue only after confirmation:",
+	"risky navigation description":
+		"The agent requested navigation to an unusual address; it will continue only after confirmation:",
 	allow: "Allow",
 	deny: "Deny",
 	canceled: "Canceled",
@@ -677,7 +724,8 @@ export const enUS = {
 		"Restrict browser navigation to public http/https: block localhost, private networks, and URLs with credentials, and re-check DNS before navigating (against DNS rebinding). Off by default — accessing local dev servers is a core feature.",
 	"scheduled tasks completed": "Scheduled tasks completed",
 	"extensions control center": "Extensions control center",
-	"extensions settings": "Manage skills, rules, MCP servers, context files, and other extensions in one place (consistent with TUI /extensions)",
+	"extensions settings":
+		"Manage skills, rules, MCP servers, context files, and other extensions in one place (consistent with TUI /extensions)",
 	"subagents settings": "Currently running subagents",
 	"no plugins loaded": "No plugins loaded",
 	"no skills found": "No skills found",
@@ -721,6 +769,8 @@ export const enUS = {
 	"ext kind context-file": "Context file",
 	"ext kind hook": "Hook",
 	"ext kind slash-command": "Slash command",
+	"ext kind gui-motion": "Motion pack",
+	"ext kind style": "Style",
 	"ext shadowed": "Shadowed",
 	"ext provider disabled": "Disabled (source turned off)",
 	"ext item disabled": "Disabled",
@@ -754,7 +804,7 @@ export const enUS = {
 	failedJobs: "Failed jobs",
 	"workflow runs": "Workflow runs",
 	"run {name}": "Run {name}",
-	"watching run #{id} on {repo}": "Watching run #{id} on {repo}",
+	"watching run #{id} on {repo}": "watching run #{id} on {repo}",
 	"run #{id} on {repo}": "Run #{id} on {repo}",
 	"watching {name} on {repo}": "Watching {name} on {repo}",
 	"workflow runs for {name} on {repo}": "Workflow runs for {name} on {repo}",
@@ -808,9 +858,9 @@ export const enUS = {
 	elapsed: "Elapsed",
 	set: "Set",
 	plan: "Plan",
-	"proposed → resolved": "Proposed → resolved",
-	"proposed → rejected": "Proposed → rejected",
-	"plan proposed": "Plan proposed",
+	"proposed → resolved": "proposed → resolved",
+	"proposed → rejected": "proposed → rejected",
+	"plan proposed": "plan proposed",
 	update: "Update",
 	"{count} item(s)": "{count} item(s)",
 	"{phases} phase(s) · {tasks} tasks": "{phases} phase(s) · {tasks} tasks",
@@ -827,9 +877,11 @@ export const enUS = {
 
 	// ── Settings dialog: model / provider management ──────────────────────────
 	"model settings": "Models & providers",
-	"model settings description": "Manage the default model for new sessions, the current session model, per-role presets, and provider login state",
+	"model settings description":
+		"Manage the default model for new sessions, the current session model, per-role presets, and provider login state",
 	"side channel model": "Side-channel model",
-	"side channel model description": "Model for side-channel turns: selection→ask, prompt enhance, idle recap and auto titles",
+	"side channel model description":
+		"Model for side-channel turns: selection→ask, prompt enhance, idle recap and auto titles",
 	"side channel model label desc": "Leave empty to follow the session model (same as the terminal)",
 	"follow session model": "Follow session model",
 	"busy enter behavior": "Enter behavior while busy",
@@ -837,15 +889,21 @@ export const enUS = {
 	"busy enter queue": "Queue",
 	"busy enter steer": "Steer",
 	"compaction model id (optional)": "Compaction model ID (optional)",
-	"role models description": "Preset models for roles such as default and advisor; new sessions pick automatically per role (aligned with the /model command)",
+	"role models description":
+		"Preset models for roles such as default and advisor; new sessions pick automatically per role (aligned with the /model command)",
 	"basic settings": "Basic settings",
 	"tasks & subagents": "Tasks & subagents",
-	"tasks & subagents settings": "Task mode, subagent parameters, isolation, and commands/skills (same source as the terminal settings panel)",
-	"interaction settings description": "Input, approvals, notifications, voice, collaboration, and startup behavior (same source as the terminal settings panel)",
-	"context settings description": "Workspace context, compaction, TTSR rules, and experimental items (same source as the terminal settings panel)",
+	"tasks & subagents settings":
+		"Task mode, subagent parameters, isolation, and commands/skills (same source as the terminal settings panel)",
+	"interaction settings description":
+		"Input, approvals, notifications, voice, collaboration, and startup behavior (same source as the terminal settings panel)",
+	"context settings description":
+		"Workspace context, compaction, TTSR rules, and experimental items (same source as the terminal settings panel)",
 	"shell settings description": "Bash and Eval/runtime behavior (same source as the terminal settings panel)",
-	"tools settings description": "Available tools, output limits, execution, and MCP discovery (same source as the terminal settings panel)",
-	"providers settings description": "Providers, protocols, timeouts, and privacy (same source as the terminal settings panel)",
+	"tools settings description":
+		"Available tools, output limits, execution, and MCP discovery (same source as the terminal settings panel)",
+	"providers settings description":
+		"Providers, protocols, timeouts, and privacy (same source as the terminal settings panel)",
 	interaction: "Interaction",
 	shell: "Shell",
 	"agent capabilities": "Agent capabilities",
@@ -868,15 +926,17 @@ export const enUS = {
 	"login to {name}": "Login to {name}",
 	"paste the code or redirect URL": "Paste the code or redirect URL",
 	"subscription accounts": "Subscription accounts",
-	"subscription accounts hint": "Login to subscription accounts such as Codex / Antigravity / OpenCode to use them directly as model APIs",
+	"subscription accounts hint":
+		"Login to subscription accounts such as Codex / Antigravity / OpenCode to use them directly as model APIs",
 	"api providers": "API providers",
 	"api providers hint": "Import a provider's API key to use its models",
 	"providers unified": "Model providers",
-	"providers unified hint": "Login to subscription accounts or import API keys to manage all model providers in one place",
+	"providers unified hint":
+		"Login to subscription accounts or import API keys to manage all model providers in one place",
 	"search providers…": "Search providers…",
 	"search sessions…": "Search sessions…",
 	"search settings…": "Search settings…",
-	"clear": "Clear",
+	clear: "Clear",
 	"no matching providers": "No matching providers",
 	configured: "Configured",
 	"show all {count}": "Show all {count}",
@@ -899,12 +959,23 @@ export const enUS = {
 	"insert / command": "Insert / command",
 	replying: "Replying",
 	working: "Working",
-	"working for {seconds}s": "Working for {seconds}s",
-	"took {seconds}s": "Took {seconds}s",
+	"working for {seconds}s": "working for {seconds}s",
+	"working for {minutes}m {seconds}s": "working for {minutes}m {seconds}s",
+	"working for {hours}h {minutes}m {seconds}s": "working for {hours}h {minutes}m {seconds}s",
+	"took {seconds}s": "took {seconds}s",
+	"took {minutes}m {seconds}s": "took {minutes}m {seconds}s",
+	"took {hours}h {minutes}m {seconds}s": "took {hours}h {minutes}m {seconds}s",
 	idle: "Idle",
 	"ask the agent…": "Ask the agent…",
-	"open folder": "Open folder",
-	"remote connection": "Remote connection",
+	"open folder": "Open Folder",
+	"new blank project": "New Blank Project",
+	"project name": "Project Name",
+	"project name placeholder": "Enter folder name",
+	"project parent path": "Project Path",
+	"project parent placeholder": "Choose parent folder…",
+	"create project failed": "Failed to create project",
+	"creating…": "Creating…",
+	"remote connection": "Remote Connection",
 	"remote workspace": "Remote workspace",
 	remote: "Remote",
 	"not in a project": "Not working in a project",
@@ -919,7 +990,8 @@ export const enUS = {
 	"mobile remote control": "Mobile remote control",
 	settings: "Settings",
 	"scan to connect": "Scan to connect",
-	"scan with your phone camera to open this workspace": "Scan with your phone camera to open this workspace on your phone.",
+	"scan with your phone camera to open this workspace":
+		"Scan with your phone camera to open this workspace on your phone.",
 	"waiting for phone connection": "Waiting for phone connection",
 	ready: "Ready",
 	stop: "Stop",
@@ -928,8 +1000,10 @@ export const enUS = {
 	"link copied": "Copied",
 	copied: "Copied",
 	"start sharing": "Start sharing",
-	"share this session live on the local network": "Share the current session live on the local network; scan with your phone to join.",
-	'share session "{title}" live on the local network': "Share the current session “{title}” live on the local network; scan with your phone to join.",
+	"share this session live on the local network":
+		"Share the current session live on the local network; scan with your phone to join.",
+	'share session "{title}" live on the local network':
+		"Share the current session “{title}” live on the local network; scan with your phone to join.",
 	"open or create a session first to share it": "Open or create a session first, then start sharing.",
 	"use bot channel": "Use Bot Channel",
 	"connect a chat bot for longer mobile access": "Connect a chat bot for longer mobile access.",
@@ -982,7 +1056,7 @@ export const enUS = {
 	"edit and resend": "Edit and resend",
 	"up to date": "Up to date",
 	"new version": "New version available",
-	"no update source configured": "No update source configured",
+	"no update source configured": "No public update source yet (available after release)",
 	"updates only in the desktop app": "Available only in the desktop app",
 	"checking…": "Checking…",
 	check: "Check",
@@ -990,10 +1064,16 @@ export const enUS = {
 	"choose light, dark or follow the system": "Choose light, dark, or follow the system theme.",
 	"glass opacity": "Frosted glass opacity",
 	"window transparency": "Window transparency",
-	"window transparency description": "When off, the glass background becomes opaque and the transparency slider is hidden.",
+	"window transparency description":
+		"When off, the glass background becomes opaque and the transparency slider is hidden.",
 	"custom accent": "Custom accent",
 	"interface font size": "Interface font size",
 	"accent color": "Accent color",
+	"pick color": "Pick a color",
+	hue: "Hue",
+	"preset colors": "Preset colors",
+	"background contrast": "Background contrast",
+	"contrast low": "Low contrast",
 	"interface settings": "Interface settings",
 	"interface settings description": "Set the app theme and interface text size.",
 	"interface theme": "Interface theme",
@@ -1027,7 +1107,8 @@ export const enUS = {
 	"unified theme": "Color theme",
 	"unified theme description": "Color theme applied to both light and dark interfaces in unified mode.",
 	"code settings": "Code settings",
-	"code settings description": "Set the theme, size, and display of code content, independent of the interface font size.",
+	"code settings description":
+		"Set the theme, size, and display of code content, independent of the interface font size.",
 	"light code theme": "Light code theme",
 	"light code theme description": "Highlight theme used for code content in light mode.",
 	"dark code theme": "Dark code theme",
@@ -1037,9 +1118,11 @@ export const enUS = {
 	"wrap long lines": "Wrap long lines",
 	"wrap long lines description": "Wrap long lines in code content automatically.",
 	"code font size": "Code font size",
-	"code font size description": "Adjust the default font size for code blocks, file previews, and diff views.",
+	"code font size description":
+		"Adjust the default font size for code in file previews and diff views (transcript code blocks follow the message font size).",
 	"code preview": "Code preview",
-	"code preview description": "Preview both light and dark code themes; the theme currently in use is marked “active”.",
+	"code preview description":
+		"Preview both light and dark code themes; the theme currently in use is marked “active”.",
 	"currently active": "Currently active",
 	"light preview": "Light preview",
 	"dark preview": "Dark preview",
@@ -1056,6 +1139,12 @@ export const enUS = {
 	"mark as unread": "Mark as unread",
 	"real-time reminders": "Real-time reminders",
 	"mark all read": "Mark all read",
+	"tag complete": "Completed",
+	"tag interrupted": "Interrupted",
+	"tag error": "Error",
+	"tag aborted": "Aborted",
+	"tag pending": "Pending",
+	"clear tag": "Clear tag",
 	"in progress": "In progress",
 	"expand reminders": "Expand reminders",
 	"collapse reminders": "Collapse reminders",
@@ -1068,7 +1157,8 @@ export const enUS = {
 	"group color {color}": "Group color: {color}",
 	"bot management": "Bot management",
 	"show avatars": "Show avatars",
-	"agent orb avatar beside replies, your avatar at the bubble": "Animated orb avatar beside agent replies; your avatar at the message bubble",
+	"agent orb avatar beside replies, your avatar at the bubble":
+		"Animated orb avatar beside agent replies; your avatar at the message bubble",
 	"remove attachment": "Remove attachment",
 	"preview image": "Preview image",
 	"previous image": "Previous",
@@ -1083,7 +1173,8 @@ export const enUS = {
 	"scheduled name": "Name",
 	"scheduled name placeholder": "Task name, e.g. Daily finance briefing",
 	"scheduled prompt": "Execution prompt",
-	"scheduled prompt placeholder": "Prompt sent to the agent at the scheduled time, e.g. Summarize today's A-share market close…",
+	"scheduled prompt placeholder":
+		"Prompt sent to the agent at the scheduled time, e.g. Summarize today's A-share market close…",
 	"scheduled type": "Schedule type",
 	"scheduled type once": "One-time",
 	"scheduled type daily": "Daily",
@@ -1095,7 +1186,8 @@ export const enUS = {
 	"scheduled weekdays": "Weekdays",
 	"scheduled day of month": "Day of month",
 	"scheduled cron": "Expression",
-	"scheduled cron hint": "5-field cron (minute hour day month weekday), e.g. */5 * * * * every 5 minutes, 0 9 * * 1-5 weekdays at 9am",
+	"scheduled cron hint":
+		"5-field cron (minute hour day month weekday), e.g. */5 * * * * every 5 minutes, 0 9 * * 1-5 weekdays at 9am",
 	"scheduled cwd": "Working directory",
 	"scheduled cwd placeholder": "Leave empty for the default working directory",
 	"scheduled empty title": "No scheduled tasks yet",
@@ -1139,7 +1231,8 @@ export const enUS = {
 	"scheduled delete archive desc": "{count} session(s) move to archive; they can be restored anytime",
 	"scheduled delete delete": "Delete the sessions",
 	"scheduled delete delete desc": "Permanently delete {count} session(s) (cannot be undone)",
-	"scheduled empty desc": "Set a time and let MusePi run whatever you want — morning briefings, weekly reports, health checks, data syncs…",
+	"scheduled empty desc":
+		"Set a time and let MusePi run whatever you want — morning briefings, weekly reports, health checks, data syncs…",
 	"scheduled untitled": "Untitled task",
 	"scheduled next": "Next",
 	"scheduled last": "Last",
@@ -1189,11 +1282,13 @@ export const enUS = {
 	general: "General",
 	"dot matrix background": "Dot matrix brand background",
 	"agent avatar style": "Agent avatar style",
-	"agent avatar style description": "Animation style for the agent avatar in chat (orbs is the default thinking orb; swap in a hexagon or spark glyph)",
+	"agent avatar style description":
+		"Animation style for the agent avatar in chat (orbs is the default thinking orb; swap in a hexagon or spark glyph)",
 	"avatar orbs": "Orbs",
 	"avatar hex": "Hexagon",
 	"avatar spark": "Spark",
-	"dot matrix background description": "Dot-matrix decorative background on the welcome page (feathered edges, flowing color, click ripples)",
+	"dot matrix background description":
+		"Dot-matrix decorative background on the welcome page (feathered edges, flowing color, click ripples)",
 	"dot matrix text": "Dot matrix text",
 	"dot matrix text description": "Custom text displayed on the welcome page background (live preview)",
 	appearance: "Appearance",
@@ -1203,6 +1298,20 @@ export const enUS = {
 	"no matching models": "No matching models",
 	"favorite model": "Favorite model",
 	"unfavorite model": "Unfavorite model",
+	"default model": "Default for new sessions",
+	"set as default model": "Set as default for new sessions",
+	"ask input placeholder": "Type your answer…",
+	"no answer": "No answer",
+	"select multiple": "Select multiple",
+	"answered {count} of {total}": "Answered {count} of {total}",
+	"switch question": "switch question",
+	"submit on summary": "submit on summary",
+	"preview empty": "Select an option to preview",
+	"add note": "Add note",
+	note: "Note",
+	"note placeholder": "Note about your answer…",
+	"chat about this": "Chat about this",
+	questions: "Questions",
 	back: "Back",
 	delete: "Delete",
 	cancel: "Cancel",
@@ -1220,10 +1329,10 @@ export const enUS = {
 	"ask browser selection": "Ask about browser selection",
 	"ask about selection placeholder": "Ask a question about this selection…",
 	"selection context": "Selection",
-	"ask": "Ask",
+	ask: "Ask",
 	"ask another question": "Ask another question",
-	"copy": "Copy",
-	"close": "Close",
+	copy: "Copy",
+	close: "Close",
 	"new session from selection": "New session from selection",
 	"add to notes": "Add to notes",
 	"save as image": "Save as image",
@@ -1263,11 +1372,13 @@ export const enUS = {
 	"board new title": "Untitled board",
 	"board chat create": "Create from chat",
 	"board mine": "Mine",
-	"board create placeholder": "Type the widget you want below and let MusePi add it to your board (e.g. pomodoro, K-line chart, exchange rates)…",
+	"board create placeholder":
+		"Type the widget you want below and let MusePi add it to your board (e.g. pomodoro, K-line chart, exchange rates)…",
 	"board open": "Open board",
 	"board saved": "Saved",
 	"board generate": "AI-generate widget",
-	"board generate placeholder": "Describe the widget you want; it will be generated and added to the current board (e.g. US stock market dashboard, system resource monitor)…",
+	"board generate placeholder":
+		"Describe the widget you want; it will be generated and added to the current board (e.g. US stock market dashboard, system resource monitor)…",
 	"board generating": "Generating…",
 	"board generated": "Generated {count} widget(s)",
 	"board generate fail": "Generation failed: {error}",
@@ -1294,7 +1405,8 @@ export const enUS = {
 	"widgets expanded": "Widget cards expanded by default",
 	"widgets expanded description": "Visual cards in chat are expanded by default (collapsible to save space)",
 	"widget standalone": "Widgets displayed standalone",
-	"widget standalone description": "Visual widgets render as standalone cards in the message stream (like file preview cards); tool calls stay collapsed by default",
+	"widget standalone description":
+		"Visual widgets render as standalone cards in the message stream (like file preview cards); tool calls stay collapsed by default",
 	"widget fullscreen": "Fullscreen view",
 	"widget preview": "Widget preview",
 	"widget preview empty": "No widget preview yet — visual widgets rendered in chat will stay here",
@@ -1391,7 +1503,8 @@ export const enUS = {
 	"widget index sz": "SZSE Component",
 	"widget daily checklist": "Daily checklist",
 	"haptic feedback": "Haptic feedback (trackpad taps)",
-	"haptic feedback description": "On Taptic Engine devices, provide light haptic feedback for actions (copy, quote, approve, send, etc.)",
+	"haptic feedback description":
+		"On Taptic Engine devices, provide light haptic feedback for actions (copy, quote, approve, send, etc.)",
 	"pet close panel": "Close panel",
 	"pet open main window": "Open main window",
 	"pet new message placeholder": "Send a new message…",
@@ -1419,7 +1532,8 @@ export const enUS = {
 	Submit: "Submit",
 	"add to group": "Add to group",
 	agent: "Agent",
-	"ask anything, / for commands, @ for context…": "@ to mention files and folders; / for commands; # to insert a session",
+	"ask anything, / for commands, @ for context…":
+		"@ to mention files and folders; / for commands; # to insert a session",
 	"welcome tip search web": "Try searching the web for the latest info",
 	"welcome tip generate image": "Try generating an image",
 	"welcome tip create board": "Try creating a kanban board",
@@ -1488,9 +1602,11 @@ export const enUS = {
 	"local container": "Local container",
 	"docker coming soon": "Coming soon",
 	"coming soon": "Coming soon",
-	"usage statistics description": "Cross-session model usage and cost statistics (same source as the terminal `musepi stats`, aggregated from local session files)",
+	"usage statistics description":
+		"Cross-session model usage and cost statistics (same source as the terminal `musepi stats`, aggregated from local session files)",
 	"stats sync": "Sync session data",
-	"stats sync description": "Incrementally scan all historical sessions (already-synced files are skipped), then refresh statistics",
+	"stats sync description":
+		"Incrementally scan all historical sessions (already-synced files are skipped), then refresh statistics",
 	"syncing…": "Syncing…",
 	"total requests": "Total requests",
 	"success rate": "Success rate",
@@ -1504,7 +1620,8 @@ export const enUS = {
 	"by model": "By model",
 	"by folder": "By project",
 	requests: "Requests",
-	"index library description": "Code library: index workspace file contents for instant search (data stays local); below is historical session message search",
+	"index library description":
+		"Code library: index workspace file contents for instant search (data stays local); below is historical session message search",
 	"code library": "Code library",
 	"index new folders": "Index new folders",
 	"index new folders description": "Automatically index new folders with fewer than 50,000 files",
@@ -1518,15 +1635,18 @@ export const enUS = {
 	indexing: "Indexing",
 	"message search": "Historical message search",
 	"session history": "Session history",
-	"session history description": "Browse message content across all historical sessions; the search box searches across sessions and locates hits; click the top-right to open a session",
+	"session history description":
+		"Browse message content across all historical sessions; the search box searches across sessions and locates hits; click the top-right to open a session",
 	"no messages": "This session has no messages",
 	"search messages placeholder": "Search historical messages (at least 2 characters)…",
-	"hooks description": "Pre/post tool execution hook scripts — like other extensions, they come from the extensions directory and can be enabled or disabled here",
+	"hooks description":
+		"Pre/post tool execution hook scripts — like other extensions, they come from the extensions directory and can be enabled or disabled here",
 	"no hooks": "No hook scripts found",
 	"onboarding badge": "First-run setup",
 	"onboarding title": "Welcome to MusePi",
 	"onboarding step1": "Welcome to MusePi! First, choose the interface language — you can change it anytime.",
-	"onboarding step2": "Choose theme and colors: dark, light, or follow the system; switch freely from brand color to monochrome.",
+	"onboarding step2":
+		"Choose theme and colors: dark, light, or follow the system; switch freely from brand color to monochrome.",
 	"onboarding step3": "The left sidebar manages all your sessions:",
 	"onboarding feat s1": "Create, archive and restore past sessions",
 	"onboarding feat s2": "Project groups and folder management, run multiple projects",
@@ -1540,7 +1660,8 @@ export const enUS = {
 	"onboarding feat t2": "Theme, fonts, density and glass effects",
 	"onboarding feat t3": "Companion pet and skill extensions",
 	"onboarding feat t4": "Scheduled tasks, shortcuts and notifications",
-	"onboarding step6": "Connect your model providers: one-click authorize built-in providers, or add any OpenAI-compatible endpoint. Once configured, start chatting.",
+	"onboarding step6":
+		"Connect your model providers: one-click authorize built-in providers, or add any OpenAI-compatible endpoint. Once configured, start chatting.",
 	"accent brand": "Brand",
 	"accent mono": "Monochrome",
 	"accent ocean": "Ocean",
@@ -1549,10 +1670,11 @@ export const enUS = {
 	"search providers": "Search providers",
 	"onboarding custom": "Custom compatible",
 	"test connection": "Test connection",
-	"testing": "Testing",
+	testing: "Testing",
 	"connection ok": "Connection OK",
 	"api key required to test the connection": "An API key is required to test the connection",
-	"authorize in browser": "Complete authorization in your browser; if it doesn't open automatically, copy the link and visit it manually",
+	"authorize in browser":
+		"Complete authorization in your browser; if it doesn't open automatically, copy the link and visit it manually",
 	"paste verification code": "Paste verification code",
 	"confirm login": "Confirm",
 	"authorization done": "Authorization complete",
@@ -1562,7 +1684,8 @@ export const enUS = {
 	"provider added body": "{name} is ready; models are immediately available. You can modify it anytime in settings.",
 	"get started": "Get started",
 	"keep computer awake": "Keep computer awake",
-	"keep computer awake description": "When on, prevents the system from sleeping due to inactivity (manual sleep / closing the lid still works). Applies globally on desktop.",
+	"keep computer awake description":
+		"When on, prevents the system from sleeping due to inactivity (manual sleep / closing the lid still works). Applies globally on desktop.",
 	login: "Login",
 	logout: "Logout",
 	"manual connection": "Manual connection",
@@ -1656,17 +1779,26 @@ export const enUS = {
 	"time next to assistant messages": "Show time next to assistant messages",
 	"row actions": "Message action buttons",
 	"row actions description": "Edit / retry / quote / read aloud",
-	"smooth streaming": "Smooth streaming",
-	"onboarding step7": "Personalize your experience: pick the agent avatar style, the streaming reveal and the desktop-pet theme — all changeable in settings later.",
+	"smooth streaming": "Streaming rendering",
+	"onboarding step7":
+		"Personalize your experience: pick the agent avatar style, the streaming effect and the desktop-pet theme — all changeable in settings later.",
 	"pet theme": "Pet theme",
+	"pet display mode": "Pet display mode",
+	"pet mode input": "In composer",
+	"pet mode desktop": "On desktop",
 	"pet theme description": "Appearance theme for the desktop pet",
-	"smooth streaming description": "Animated character-by-character reply rendering",
+	"smooth streaming description":
+		"Renders replies character by character (uses the Streaming effect chosen below when enabled)",
+	"message font size": "Message font size",
+	"message font size description":
+		"Adjust the font size of chat message text; headings and code scale with it. Independent of the interface font size.",
 	"output style": "Output style",
-	"output style description": "Preset typography and pacing for replies (font size, line height, paragraph spacing, code block density)",
+	"output style description":
+		"Preset layout and pacing for replies (line height, paragraph spacing, code block density) — font sizes come from the message font size setting",
 	"output style default": "MusePi default",
 	"output style kimi": "Kimi compact",
 	"output style zcode": "ZCode reading",
-	"typing effect": "Typing effect",
+	"typing effect": "Streaming effect",
 	"typing effect description":
 		"Visual effect while characters stream in: typewriter (characters fade in with a caret that disappears when done) / burst (rainbow burst that settles) / shimmer (gloss sweep) / glitch (glitchy characters settling) / 3D flip (characters flip in) / ink (ink blooms in)",
 	"typing effect typewriter": "Typewriter",
@@ -1688,6 +1820,8 @@ export const enUS = {
 	"notify when focused description": "Also send notifications when the window is visible (default: only when hidden)",
 	"send test notification": "Send test notification",
 	"send test notification description": "Immediately send a test notification",
+	"notification sent": "Notification sent",
+	"delivery failed": "Delivery failed",
 	"idle recap": "Idle recap",
 	"Idle Recap": "Idle Recap",
 	"Idle Recap Delay": "Idle Recap Delay",
@@ -1707,13 +1841,16 @@ export const enUS = {
 	"agent companion": "Companion",
 	"pet settings": "Control how the companion is displayed and personalize your MusePi",
 	"dock to screen edge": "Dock to screen edge",
-	"dock to screen edge description": "Snap to the left/right screen edge when dragged there (shows an edge indicator); when off, dragging off-screen bounces back",
+	"dock to screen edge description":
+		"Snap to the left/right screen edge when dragged there (shows an edge indicator); when off, dragging off-screen bounces back",
 	"show agent companion": "Show companion",
 	"show agent companion description": "Show the companion above the input box or as a floating desktop pet",
 	"display position": "Display position",
-	"display position description": "Choose whether the companion shows at the top-right of the input box or as a floating desktop pet",
+	"display position description":
+		"Choose whether the companion shows at the top-right of the input box or as a floating desktop pet",
 	"pet size": "Companion size",
-	"pet size description": "Uniform display size for all characters (60%–150%); imported large-frame pets are normalized automatically",
+	"pet size description":
+		"Uniform display size for all characters (60%–150%); imported large-frame pets are normalized automatically",
 	"pet display input": "Top-right of input box",
 	"pet display desktop": "Floating desktop pet",
 	"companion appearance": "Companion appearance",
@@ -1727,9 +1864,11 @@ export const enUS = {
 	"pet imported": "Imported",
 	// ── Builtin pet preset names/descriptions (English source = key) ──
 	Boxcat: "Boxcat",
-	"A tiny cat tucked inside a cardboard box for cozy coding sessions.": "A tiny cat tucked inside a cardboard box for cozy coding sessions.",
+	"A tiny cat tucked inside a cardboard box for cozy coding sessions.":
+		"A tiny cat tucked inside a cardboard box for cozy coding sessions.",
 	Capy: "Capy",
-	"An original emotionally stable capybara with a tiny orange on its head.": "An original emotionally stable capybara with a tiny orange on its head.",
+	"An original emotionally stable capybara with a tiny orange on its head.":
+		"An original emotionally stable capybara with a tiny orange on its head.",
 	Jiyi: "Jiyi",
 	"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.":
 		"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.",
@@ -1737,14 +1876,16 @@ export const enUS = {
 	"A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.":
 		"A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.",
 	Usagi: "Usagi",
-	"A tiny cream rabbit companion based on the provided Usagi reference.": "A tiny cream rabbit companion based on the provided Usagi reference.",
+	"A tiny cream rabbit companion based on the provided Usagi reference.":
+		"A tiny cream rabbit companion based on the provided Usagi reference.",
 	"Han Li": "Han Li",
 	"A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.":
 		"A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.",
 	Doraemon: "Doraemon",
 	"A compact blue robot-cat pet inspired by Doraemon.": "A compact blue robot-cat pet inspired by Doraemon.",
 	"Noir Webling": "Noir Webling",
-	"A tiny monochrome spider detective in a fedora and trench coat.": "A tiny monochrome spider detective in a fedora and trench coat.",
+	"A tiny monochrome spider detective in a fedora and trench coat.":
+		"A tiny monochrome spider detective in a fedora and trench coat.",
 	Feixue: "Feixue",
 	"A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.":
 		"A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.",
@@ -1757,7 +1898,8 @@ export const enUS = {
 	"pet market empty": "No matching pets found",
 	"pet market error": "Petdex search failed: {reason}",
 	"sound effects catalog": "Sound library",
-	"preview each effect; dimmed ones are not wired to the UI yet": "Preview each effect; dimmed ones are not wired to the UI yet",
+	"preview each effect; dimmed ones are not wired to the UI yet":
+		"Preview each effect; dimmed ones are not wired to the UI yet",
 	preview: "Preview",
 	"not wired to the UI yet": "Not wired to the UI yet",
 	"send message, approval request": "Send message, approval request arrives",
@@ -1829,7 +1971,7 @@ export const enUS = {
 	unstage: "Unstage",
 	commit: "Commit",
 	"commit message": "Commit message (⌘⏎ to commit)",
-	"staged count": "{count} files staged",
+	"staged count": "staged count",
 	"committing…": "Committing…",
 	ignored: "Ignored",
 	shortcuts: "Shortcuts",
@@ -1839,7 +1981,8 @@ export const enUS = {
 	agents: "Agents",
 	"role models": "Role models",
 	"model behavior": "Model behavior",
-	"model behavior description": "Thinking, sampling, retry & fallback, advisor, prewalk, and other model call behavior (same source as the terminal settings panel)",
+	"model behavior description":
+		"Thinking, sampling, retry & fallback, advisor, prewalk, and other model call behavior (same source as the terminal settings panel)",
 	"add role": "Add role",
 	"new role name": "New role name",
 	"remove role": "Remove role",
@@ -1885,6 +2028,37 @@ export const enUS = {
 	"advisory concern": "Concern",
 	"advisory nit": "Nit",
 	"context usage": "Context usage",
+	"subscription usage": "Subscription usage",
+	"no subscription usage reported": "No subscription usage reported",
+	"usage {time} ago": "Usage {time} ago",
+	"in use by this session: {account}": "In use by this session: {account}",
+	"saved rate-limit resets": "Saved rate-limit resets",
+	"saved reset": "saved reset",
+	"saved resets": "saved resets",
+	"expires in {time}": "Expires in {time}",
+	"expired ({date})": "Expired ({date})",
+	"no limits": "No limits",
+	"{count} windows": "{count} windows",
+	"{percent}% free": "{percent}% free",
+	"{count} accts": "{count} accts",
+	"resets in {time}": "Resets in {time}",
+	"resets in {min}–{max}": "Resets in {min}–{max}",
+	"account {count}": "Account {count}",
+	"show context usage": "Show context usage",
+	"show subscription usage": "Show subscription usage",
+	"start a conversation to view usage": "Start a conversation to view usage",
+	"context system prompt": "System prompt",
+	"context system tools": "System tools",
+	"context system context": "System context",
+	"context skills": "Skills",
+	"context messages": "Messages",
+	"context free": "Free",
+	"context autocompact buffer": "Autocompact buffer",
+	"context usage unavailable": "Context usage unavailable",
+	"context over window": "Context over window",
+	"over window: compact or switch to a larger-context model":
+		"Over window: compact the context or switch to a larger-context model",
+	"context window {tokens} ({percent} used)": "Context window: {tokens} ({percent} used)",
 	used: "Used",
 	window: "Window",
 	utilization: "Utilization",
@@ -1948,6 +2122,12 @@ export const enUS = {
 	"toggle sidebar shortcut": "Toggle left panel",
 	"scroll transcript shortcut": "Scroll to latest message",
 	"stop agent shortcut": "Stop current reply",
+	"focus mode shortcut": "Toggle focus mode",
+	"toggle terminal shortcut": "Toggle bottom terminal",
+	"open folder shortcut": "Open folder",
+	"quote selection shortcut": "Quote selection into composer",
+	"ask selection shortcut": "Ask about selection",
+	"send message shortcut": "Send (opposite of Enter behavior)",
 	"toggle terminal": "Toggle terminal",
 	"focus mode": "Focus mode",
 	local: "Local",
@@ -2064,6 +2244,7 @@ export const enUS = {
 	"agent working — send steers the agent now, /queue waits for the turn to end…":
 		"Agent working — Send steers the agent immediately; prefix with /queue to queue until the turn ends…",
 	"steer message": "Steer now",
+	"send now": "Send now",
 	Steering: "Steering",
 	"After yield": "After this turn",
 	"queue message": "Queue message",
@@ -2182,7 +2363,8 @@ export const enUS = {
 	"Let transformers.js choose per device": "Let transformers.js choose per device",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "Hide Tool Activity",
-	"Hide model-initiated tool calls and results from the transcript": "Hide model-initiated tool calls and results from the transcript",
+	"Hide model-initiated tool calls and results from the transcript":
+		"Hide model-initiated tool calls and results from the transcript",
 	"Agnes Video Generation": "Agnes Video Generation",
 	Slash: "Slash",
 	Pipe: "Pipe",
@@ -2255,7 +2437,8 @@ export const enUS = {
 		"Whisper large-v3-turbo, 99 languages. Widest language coverage; large download, slower.",
 	"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.":
 		"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
-	"Never automatically submit; insert dictation and remain in editor.": "Never automatically submit; insert dictation and remain in editor.",
+	"Never automatically submit; insert dictation and remain in editor.":
+		"Never automatically submit; insert dictation and remain in editor.",
 	"Submit on release if the utterance has 2+ words to avoid accidental sends.":
 		"Submit on release if the utterance has 2+ words to avoid accidental sends.",
 	"Submit on release if the utterance ends with sentence-terminal punctuation (. ? ! etc.).":
@@ -2314,7 +2497,8 @@ export const enUS = {
 		"Credential-free browser-backed scrape of Ecosia (Google-backed) results",
 	"Credential-free browser-backed fallback; slower and may be bot-challenged":
 		"Credential-free browser-backed fallback; slower and may be bot-challenged",
-	"Credential-free browser-backed scrape of Mojeek's independent index": "Credential-free browser-backed scrape of Mojeek's independent index",
+	"Credential-free browser-backed scrape of Mojeek's independent index":
+		"Credential-free browser-backed scrape of Mojeek's independent index",
 	"Queries every credential-free engine in parallel and consolidates deduplicated results":
 		"Queries every credential-free engine in parallel and consolidates deduplicated results",
 	"Requires AGNES_API_KEY": "Requires AGNES_API_KEY",
@@ -2333,11 +2517,14 @@ export const enUS = {
 		"Online title generation: the TINY model role (set one in /models) when assigned, otherwise the online fallback (commit role, then @smol). No local download or on-device inference.",
 	"Recommended local model; best speed/quality balance, about 212 MB cached.":
 		"Recommended local model; best speed/quality balance, about 212 MB cached.",
-	"Most robust local option; slower first load, about 500 MB cached.": "Most robust local option; slower first load, about 500 MB cached.",
+	"Most robust local option; slower first load, about 500 MB cached.":
+		"Most robust local option; slower first load, about 500 MB cached.",
 	"Smallest viable local option; lower quality, lowest cache footprint.":
 		"Smallest viable local option; lower quality, lowest cache footprint.",
-	"Balanced local fallback; moderate quality and cache footprint.": "Balanced local fallback; moderate quality and cache footprint.",
-	"Highest-quality local option; larger and slower than LFM2 350M.": "Highest-quality local option; larger and slower than LFM2 350M.",
+	"Balanced local fallback; moderate quality and cache footprint.":
+		"Balanced local fallback; moderate quality and cache footprint.",
+	"Highest-quality local option; larger and slower than LFM2 350M.":
+		"Highest-quality local option; larger and slower than LFM2 350M.",
 	"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.":
 		"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.",
 	"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.":
@@ -2479,7 +2666,8 @@ export const enUS = {
 	"All segments including time": "All segments including time",
 	"Allow every concern/blocker to interrupt.": "Allow every concern/blocker to interrupt.",
 	"Allow repetition": "Allow repetition",
-	"Allow retry recovery to switch to configured fallback models": "Allow retry recovery to switch to configured fallback models",
+	"Allow retry recovery to switch to configured fallback models":
+		"Allow retry recovery to switch to configured fallback models",
 	"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.":
 		"Allow subagents spawned via the task tool to use the lsp tool. Off by default to keep subagents cheap; enable when LSP-aware delegation is worth the extra tokens.",
 	"Allow the eval tool to dispatch JavaScript cells to the in-process runtime":
@@ -2494,7 +2682,8 @@ export const enUS = {
 	"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)":
 		"Also block all system sleep on AC and declare the user active (caffeinate -i -d -s -u)",
 	"Also enable the advisor on spawned task/eval subagents.": "Also enable the advisor on spawned task/eval subagents.",
-	"Also keep the display from idle-sleeping (caffeinate -i -d)": "Also keep the display from idle-sleeping (caffeinate -i -d)",
+	"Also keep the display from idle-sleeping (caffeinate -i -d)":
+		"Also keep the display from idle-sleeping (caffeinate -i -d)",
 	always: "Always",
 	Always: "Always",
 	"Always ask": "Always ask",
@@ -2503,7 +2692,8 @@ export const enUS = {
 	"Always select the next eligible configured fallback": "Always select the next eligible configured fallback",
 	"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.":
 		"Amount of head content kept inline alongside the tail when output spills to artifact (middle elision). 0 disables — keep tail only.",
-	"Amount of tail content kept inline when output spills to artifact": "Amount of tail content kept inline when output spills to artifact",
+	"Amount of tail content kept inline when output spills to artifact":
+		"Amount of tail content kept inline when output spills to artifact",
 	"Animation style for working/loading messages": "Animation style for working/loading messages",
 	"Anthropic Server-Side Fallback (Fable 5)": "Anthropic Server-Side Fallback (Fable 5)",
 	"Antigravity Endpoint Mode": "Antigravity Endpoint Mode",
@@ -2561,8 +2751,10 @@ export const enUS = {
 	"Automatically background long-running bash commands and deliver the result later":
 		"Automatically background long-running bash commands and deliver the result later",
 	"Automatically compact context when it gets too large": "Automatically compact context when it gets too large",
-	"Automatically enter plan mode at the start of every new session": "Automatically enter plan mode at the start of every new session",
-	"Automatically resume the most recent session in the current directory": "Automatically resume the most recent session in the current directory",
+	"Automatically enter plan mode at the start of every new session":
+		"Automatically enter plan mode at the start of every new session",
+	"Automatically resume the most recent session in the current directory":
+		"Automatically resume the most recent session in the current directory",
 	"Available Tools": "Available Tools",
 	"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice":
 		"Backend for the tts tool: local on-device neural TTS (Kokoro-82M) or xAI Grok Voice",
@@ -2571,7 +2763,8 @@ export const enUS = {
 	"Balanced safety margin": "Balanced safety margin",
 	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
 		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.",
-	"Base URL of a self-hosted SearXNG instance used for web search": "Base URL of a self-hosted SearXNG instance used for web search",
+	"Base URL of a self-hosted SearXNG instance used for web search":
+		"Base URL of a self-hosted SearXNG instance used for web search",
 	"Bash Approval Patterns": "Bash Approval Patterns",
 	"Bash Auto-Background": "Bash Auto-Background",
 	"Bash Interceptor": "Bash Interceptor",
@@ -2607,7 +2800,8 @@ export const enUS = {
 	"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request":
 		"Check thresholds at safe mid-turn tool-loop boundaries before the next provider request",
 	"Checkpoint/Rewind": "Checkpoint/Rewind",
-	"Cherry-picked high-quality providers (only defined for select models)": "Cherry-picked high-quality providers (only defined for select models)",
+	"Cherry-picked high-quality providers (only defined for select models)":
+		"Cherry-picked high-quality providers (only defined for select models)",
 	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)":
 		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
 	"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.":
@@ -2632,15 +2826,24 @@ export const enUS = {
 	"Collapse Compacted History": "Collapse Compacted History",
 	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
 		"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
+	"Task Card Style": "Task Card Style",
+	"Render style for the task/swarm tool card. Swarm shows the Kimi-parity member grid with per-agent avatars, progress bars and accordion outputs; classic uses the plain tool-call card":
+		"Render style for the task/swarm tool card. Swarm shows the Kimi-parity member grid with per-agent avatars, progress bars and accordion outputs; classic uses the plain tool-call card",
+	"Kimi-parity member grid: avatars, progress bars, per-member accordions":
+		"Kimi-parity member grid: avatars, progress bars, per-member accordions",
+	"Plain tool-call card with summary chips": "Plain tool-call card with summary chips",
+	"Swarm Task Card": "Swarm Task Card",
 	"Color-Blind Mode": "Color-Blind Mode",
 	"Combine diffs and git apply": "Combine diffs and git apply",
 	"Commands & Skills": "Commands & Skills",
 	"Commit message style for nested repo changes (generic or AI-generated)":
 		"Commit message style for nested repo changes (generic or AI-generated)",
 	"Commit per task, merge with --no-ff": "Commit per task, merge with --no-ff",
-	"Communication style rendered into the system prompt's personality block": "Communication style rendered into the system prompt's personality block",
+	"Communication style rendered into the system prompt's personality block":
+		"Communication style rendered into the system prompt's personality block",
 	Compact: "Compact",
-	"Compact context while idle when token count exceeds threshold": "Compact context while idle when token count exceeds threshold",
+	"Compact context while idle when token count exceeds threshold":
+		"Compact context while idle when token count exceeds threshold",
 	"Compact the session context, then re-submit the prompt": "Compact the session context, then re-submit the prompt",
 	"Compact Thinking Level": "Compact Thinking Level",
 	Compaction: "Compaction",
@@ -2737,8 +2940,10 @@ export const enUS = {
 		"Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
 	"Emoji Autocomplete": "Emoji Autocomplete",
 	"Enable Advisor": "Enable Advisor",
-	"Enable async bash commands and background task execution": "Enable async bash commands and background task execution",
-	"Enable automatic stream loop detection for model reasoning and prose": "Enable automatic stream loop detection for model reasoning and prose",
+	"Enable async bash commands and background task execution":
+		"Enable async bash commands and background task execution",
+	"Enable automatic stream loop detection for model reasoning and prose":
+		"Enable automatic stream loop detection for model reasoning and prose",
 	"Enable for known prefix-cache providers (recommended)": "Enable for known prefix-cache providers (recommended)",
 	"Enable Git Integration": "Enable Git Integration",
 	"Enable hidden notices for standalone ultrathink, orchestrate, and workflowz keywords":
@@ -2749,14 +2954,16 @@ export const enUS = {
 		"Enable plan mode for read-only exploration and planning before execution",
 	"Enable Prewalk": "Enable Prewalk",
 	"Enable speech-to-text input via microphone": "Enable speech-to-text input via microphone",
-	"Enable the agnes_video_gen tool for Agnes AI video generation": "Enable the agnes_video_gen tool for Agnes AI video generation",
+	"Enable the agnes_video_gen tool for Agnes AI video generation":
+		"Enable the agnes_video_gen tool for Agnes AI video generation",
 	"Enable the ask tool for interactive user questions": "Enable the ask tool for interactive user questions",
 	"Enable the ast_edit tool for structural AST rewrites": "Enable the ast_edit tool for structural AST rewrites",
 	"Enable the ast_grep tool for structural AST search": "Enable the ast_grep tool for structural AST search",
 	"Enable the bash tool for shell command execution": "Enable the bash tool for shell command execution",
 	"Enable the browser tool for scripted Chromium automation (puppeteer)":
 		"Enable the browser tool for scripted Chromium automation (puppeteer)",
-	"Enable the checkpoint and rewind tools for context checkpointing": "Enable the checkpoint and rewind tools for context checkpointing",
+	"Enable the checkpoint and rewind tools for context checkpointing":
+		"Enable the checkpoint and rewind tools for context checkpointing",
 	"Enable the debug tool for DAP-based debugging": "Enable the debug tool for DAP-based debugging",
 	"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.":
 		"Enable the generate_image tool (text-to-image generation and editing). Exposed as an xd:// device when tools.xdev is on.",
@@ -2825,7 +3032,8 @@ export const enUS = {
 	"GitHub Cache Hard TTL": "GitHub Cache Hard TTL",
 	"GitHub Cache Soft TTL": "GitHub Cache Soft TTL",
 	"GitHub View Cache": "GitHub View Cache",
-	"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)": "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
+	"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)":
+		"Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
 	"Goal Continuation Modes": "Goal Continuation Modes",
 	"Goal Mode": "Goal Mode",
 	"Goal Status in Footer": "Goal Status in Footer",
@@ -2854,7 +3062,8 @@ export const enUS = {
 		"How long a `hub` wait watches background jobs before returning the current state. A fixed value waits that exact duration every time. `smart` adapts: it starts at 5s and lengthens with each back-to-back wait (up to 5m), then resets to 5s after about a minute without waiting.",
 	"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.":
 		"How long an idle subagent stays live in memory before being parked to disk (ms). Parked agents are revived automatically when messaged or resumed. 0 keeps idle agents live until exit.",
-	"How many levels deep subagents can spawn their own subagents": "How many levels deep subagents can spawn their own subagents",
+	"How many levels deep subagents can spawn their own subagents":
+		"How many levels deep subagents can spawn their own subagents",
 	"How rules can repeat: once per session or after a message gap":
 		"How rules can repeat: once per session or after a message gap",
 	"How strongly to push automatic todo-list creation after the first message":
@@ -2875,7 +3084,8 @@ export const enUS = {
 	"Inject MCP resource updates into the agent conversation": "Inject MCP resource updates into the agent conversation",
 	"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.":
 		"Inject one steering notice when a subagent crosses its soft request budget, asking it to wrap up before the 1.5x forced-yield stop.",
-	"Inline built-in docs; fetch MCP and extension docs on demand.": "Inline built-in docs; fetch MCP and extension docs on demand.",
+	"Inline built-in docs; fetch MCP and extension docs on demand.":
+		"Inline built-in docs; fetch MCP and extension docs on demand.",
 	"Inline descriptors for Gemini models; keep them in tool schemas otherwise":
 		"Inline descriptors for Gemini models; keep them in tool schemas otherwise",
 	"Inline docs and schemas for every mounted device.": "Inline docs and schemas for every mounted device.",
@@ -2907,21 +3117,24 @@ export const enUS = {
 		"Keep interactive sessions on the primary until confirmed; background agents auto-fallback",
 	"Keep the IPython kernel alive across eval calls or start fresh each time":
 		"Keep the IPython kernel alive across eval calls or start fresh each time",
-	"Keep the system awake while a session is open (caffeinate -i)": "Keep the system awake while a session is open (caffeinate -i)",
+	"Keep the system awake while a session is open (caffeinate -i)":
+		"Keep the system awake while a session is open (caffeinate -i)",
 	"Keep the system prompt as text.": "Keep the system prompt as text.",
 	"Kimi API Format": "Kimi API Format",
 	"KITT Scanner": "KITT Scanner",
 	"Knight Rider 1982 red light bouncing left-right": "Knight Rider 1982 red light bouncing left-right",
 	"Kokoro voice used by the local TTS backend (American/British, female/male)":
 		"Kokoro voice used by the local TTS backend (American/British, female/male)",
-	"Kokoro voice used when speaking the assistant's output aloud": "Kokoro voice used when speaking the assistant's output aloud",
+	"Kokoro voice used when speaking the assistant's output aloud":
+		"Kokoro voice used when speaking the assistant's output aloud",
 	Language: "Language",
 	"Language for the TUI and the setup wizard": "Language for the TUI and the setup wizard",
 	"Large context window": "Large context window",
 	"Large Headings (Kitty)": "Large Headings (Kitty)",
 	"Large Paste Menu": "Large Paste Menu",
 	Launch: "Launch",
-	"Launch browser in headless mode (disable to show browser UI)": "Launch browser in headless mode (disable to show browser UI)",
+	"Launch browser in headless mode (disable to show browser UI)":
+		"Launch browser in headless mode (disable to show browser UI)",
 	"Legacy reserve-based threshold": "Legacy reserve-based threshold",
 	"Let standalone orchestrate append its hidden multi-agent orchestration notice":
 		"Let standalone orchestrate append its hidden multi-agent orchestration notice",
@@ -3003,7 +3216,8 @@ export const enUS = {
 	Minimal: "Minimal",
 	"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing":
 		"Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
-	"Minimum probability threshold (0-1, -1 = provider default)": "Minimum probability threshold (0-1, -1 = provider default)",
+	"Minimum probability threshold (0-1, -1 = provider default)":
+		"Minimum probability threshold (0-1, -1 = provider default)",
 	"Model decides when to delegate": "Model decides when to delegate",
 	"Model decides; no automatic todo list": "Model decides; no automatic todo list",
 	"Model ID for Gemini Google Search grounding. Defaults to gemini-2.5-flash.":
@@ -3015,7 +3229,8 @@ export const enUS = {
 	"Moderate reasoning (~8k tokens)": "Moderate reasoning (~8k tokens)",
 	"Moderately early maintenance": "Moderately early maintenance",
 	Modes: "Modes",
-	"Move the full system prompt to images, when that saves tokens.": "Move the full system prompt to images, when that saves tokens.",
+	"Move the full system prompt to images, when that saves tokens.":
+		"Move the full system prompt to images, when that saves tokens.",
 	"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it":
 		"Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it",
 	"Name shown to other collab participants (default: OS username)":
@@ -3046,7 +3261,8 @@ export const enUS = {
 	"Obsidian Vault": "Obsidian Vault",
 	Off: "Off",
 	"Ollama Cloud Max Concurrency": "Ollama Cloud Max Concurrency",
-	"Omit code blocks from thinking summaries and replace them with an ellipsis": "Omit code blocks from thinking summaries and replace them with an ellipsis",
+	"Omit code blocks from thinking summaries and replace them with an ellipsis":
+		"Omit code blocks from thinking summaries and replace them with an ellipsis",
 	"Omit the personality block entirely": "Omit the personality block entirely",
 	"Omit Thinking summaries": "Omit Thinking summaries",
 	On: "On",
@@ -3073,7 +3289,8 @@ export const enUS = {
 	"Orchestrate Keyword": "Orchestrate Keyword",
 	"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.":
 		"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.",
-	"Original X.org 5x8 glyphs on the 2576px frame, black ink.": "Original X.org 5x8 glyphs on the 2576px frame, black ink.",
+	"Original X.org 5x8 glyphs on the 2576px frame, black ink.":
+		"Original X.org 5x8 glyphs on the 2576px frame, black ink.",
 	"Output Column Cap": "Output Column Cap",
 	"Output Limits": "Output Limits",
 	"Pair a second model (assigned to the 'advisor' role) that passively reviews each turn and injects notes.":
@@ -3101,7 +3318,8 @@ export const enUS = {
 	"Picks a shape tuned for the current model, falling back to its provider family.":
 		"Picks a shape tuned for the current model, falling back to its provider family.",
 	"Plain unscii square cell with sentence-hue ink.": "Plain unscii square cell with sentence-hue ink.",
-	"Plain unscii square cell, single-printed lines, black ink.": "Plain unscii square cell, single-printed lines, black ink.",
+	"Plain unscii square cell, single-printed lines, black ink.":
+		"Plain unscii square cell, single-printed lines, black ink.",
 	"Plan Mode": "Plan Mode",
 	"Power (macOS)": "Power (macOS)",
 	Pragmatic: "Pragmatic",
@@ -3144,7 +3362,8 @@ export const enUS = {
 	"Prose Only Thinking": "Prose Only Thinking",
 	"prose-only": "Prose only",
 	Protocol: "Protocol",
-	"Providers that web_search should never use, even as fallbacks": "Providers that web_search should never use, even as fallbacks",
+	"Providers that web_search should never use, even as fallbacks":
+		"Providers that web_search should never use, even as fallbacks",
 	"Prune older read results when the same file is read again (cache-aware, runs every turn)":
 		"Prune older read results when the same file is read again (cache-aware, runs every turn)",
 	"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)":
@@ -3156,7 +3375,8 @@ export const enUS = {
 	"Python Kernel Mode": "Python Kernel Mode",
 	"Quarter of a 200K window": "Quarter of a 200K window",
 	"Quiet Startup": "Quiet Startup",
-	"Re-submit the prompt as a follow-up message (current behavior)": "Re-submit the prompt as a follow-up message (current behavior)",
+	"Re-submit the prompt as a follow-up message (current behavior)":
+		"Re-submit the prompt as a follow-up message (current behavior)",
 	"Read URLs": "Read URLs",
 	"Reader backend priority for the fetch/read URL tool": "Reader backend priority for the fetch/read URL tool",
 	"Reasoning depth for thinking-capable models": "Reasoning depth for thinking-capable models",
@@ -3185,7 +3405,8 @@ export const enUS = {
 		"Render non-JSON MCP text results as Markdown in the transcript",
 	"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.":
 		"Render the workspace directory tree in the system prompt. WARNING: This can bust prompt caching across sessions when files are modified.",
-	"Repeated grid with ink cycling six hues at sentence boundaries.": "Repeated grid with ink cycling six hues at sentence boundaries.",
+	"Repeated grid with ink cycling six hues at sentence boundaries.":
+		"Repeated grid with ink cycling six hues at sentence boundaries.",
 	"Repetition Penalty": "Repetition Penalty",
 	"Requires lynx system package": "Requires lynx system package",
 	"Requires Nerd Font": "Requires Nerd Font",
@@ -3200,7 +3421,8 @@ export const enUS = {
 	"Retry Attempts": "Retry Attempts",
 	"Retry Fallback Chains": "Retry Fallback Chains",
 	"Retry Model Fallback": "Retry Model Fallback",
-	"Return to the primary model after its suppression window ends": "Return to the primary model after its suppression window ends",
+	"Return to the primary model after its suppression window ends":
+		"Return to the primary model after its suppression window ends",
 	"Reveal assistant text and streamed tool input smoothly while chunks arrive":
 		"Reveal assistant text and streamed tool input smoothly while chunks arrive",
 	"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure":
@@ -3211,7 +3433,8 @@ export const enUS = {
 	"Rule names to ignore entirely (applies to bundled defaults and your own rules)":
 		"Rule names to ignore entirely (applies to bundled defaults and your own rules)",
 	"Rules (TTSR)": "Rules (TTSR)",
-	"Run modes where active goals may auto-continue between turns": "Run modes where active goals may auto-continue between turns",
+	"Run modes where active goals may auto-continue between turns":
+		"Run modes where active goals may auto-continue between turns",
 	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)":
 		"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
 	"Sample from top-K tokens (-1 = provider default)": "Sample from top-K tokens (-1 = provider default)",
@@ -3224,7 +3447,8 @@ export const enUS = {
 	"Save Handoff Docs": "Save Handoff Docs",
 	"Save project role models in .musepi/config.yml; missing project roles use global defaults":
 		"Save project role models in .musepi/config.yml; missing project roles use global defaults",
-	"Save role models in the active profile config (current behavior)": "Save role models in the active profile config (current behavior)",
+	"Save role models in the active profile config (current behavior)":
+		"Save role models in the active profile config (current behavior)",
 	Scale: "Scale",
 	"Screen Glow Indicator": "Screen Glow Indicator",
 	"Screenshot Directory": "Screenshot Directory",
@@ -3266,7 +3490,8 @@ export const enUS = {
 	"Show Hardware Cursor": "Show Hardware Cursor",
 	"Show Hook Status": "Show Hook Status",
 	"Show Inline Images": "Show Inline Images",
-	"Show newly added onboarding steps once per setup version": "Show newly added onboarding steps once per setup version",
+	"Show newly added onboarding steps once per setup version":
+		"Show newly added onboarding steps once per setup version",
 	"Show per-turn token usage on assistant messages": "Show per-turn token usage on assistant messages",
 	"Show release and change counts with a /changelog hint": "Show release and change counts with a /changelog hint",
 	"Show Resolved Model Badge": "Show Resolved Model Badge",
@@ -3279,7 +3504,8 @@ export const enUS = {
 	"Show the recent release notes in full": "Show the recent release notes in full",
 	"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.":
 		"Show the thinking level as a single icon on the model name instead of a separate ` · <level>` suffix.",
-	"Show token budget alongside the goal indicator in the status line": "Show token budget alongside the goal indicator in the status line",
+	"Show token budget alongside the goal indicator in the status line":
+		"Show token budget alongside the goal indicator in the status line",
 	"Show Token Usage": "Show Token Usage",
 	Single: "Single",
 	"Skill Commands": "Skill Commands",
@@ -3287,7 +3513,7 @@ export const enUS = {
 	"Sleep Prevention": "Sleep Prevention",
 	"Slightly aggressive": "Slightly aggressive",
 	Smart: "Smart",
-	"Smooth Streaming": "Smooth Streaming",
+	"Smooth Streaming": "Streaming rendering",
 	"Snapcompact Shape": "Snapcompact Shape",
 	"Snapcompact System Prompt": "Snapcompact System Prompt",
 	"Snapcompact Tool Results": "Snapcompact Tool Results",
@@ -3333,7 +3559,8 @@ export const enUS = {
 	Subagents: "Subagents",
 	"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`":
 		"Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
-	"Suggests a todo list on the first message (reminder, not forced)": "Suggests a todo list on the first message (reminder, not forced)",
+	"Suggests a todo list on the first message (reminder, not forced)":
+		"Suggests a todo list on the first message (reminder, not forced)",
 	"Summarize in-place and keep the current session": "Summarize in-place and keep the current session",
 	Summary: "Summary",
 	"Supersede Stale Reads": "Supersede Stale Reads",
@@ -3345,7 +3572,8 @@ export const enUS = {
 	Temperature: "Temperature",
 	"Terminal Hyperlinks": "Terminal Hyperlinks",
 	"Terminal Title Run State": "Terminal Title Run State",
-	"Terse, evidence-first engineer; dense, action-oriented replies": "Terse, evidence-first engineer; dense, action-oriented replies",
+	"Terse, evidence-first engineer; dense, action-oriented replies":
+		"Terse, evidence-first engineer; dense, action-oriented replies",
 	"Text Verbosity": "Text Verbosity",
 	"Text-to-Speech Provider": "Text-to-Speech Provider",
 	"The original snapcompact shape (pre-shape-table sessions rendered this).":
@@ -3383,7 +3611,8 @@ export const enUS = {
 	"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.":
 		"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.",
 	Triple: "Triple",
-	"Try production endpoint, fail over to sandbox on 5xx/429": "Try production endpoint, fail over to sandbox on 5xx/429",
+	"Try production endpoint, fail over to sandbox on 5xx/429":
+		"Try production endpoint, fail over to sandbox on 5xx/429",
 	"TTSR Context Mode": "TTSR Context Mode",
 	"TTSR Interrupt Mode": "TTSR Interrupt Mode",
 	"TTSR Repeat Gap": "TTSR Repeat Gap",
@@ -3392,7 +3621,8 @@ export const enUS = {
 	"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.":
 		"Two word-wrapped newspaper columns of 8x13 glyphs on a 16px pitch, black ink.",
 	"Two-column doc layout with sentence-hue ink.": "Two-column doc layout with sentence-hue ink.",
-	"Two-column doc layout, sentence-hue ink, function words dimmed gray.": "Two-column doc layout, sentence-hue ink, function words dimmed gray.",
+	"Two-column doc layout, sentence-hue ink, function words dimmed gray.":
+		"Two-column doc layout, sentence-hue ink, function words dimmed gray.",
 	"Typical threshold": "Typical threshold",
 	"Ultrathink Keyword": "Ultrathink Keyword",
 	"Unexpected Stop Model": "Unexpected Stop Model",
@@ -3419,7 +3649,8 @@ export const enUS = {
 	"Use Hermes-style in-band tool calls.": "Use Hermes-style in-band tool calls.",
 	"Use Kimi-style in-band tool calls.": "Use Kimi-style in-band tool calls.",
 	"Use model/provider default websocket behavior": "Use model/provider default websocket behavior",
-	"Use native tool calls unless the model is known not to support them.": "Use native tool calls unless the model is known not to support them.",
+	"Use native tool calls unless the model is known not to support them.":
+		"Use native tool calls unless the model is known not to support them.",
 	"Use percentage-based threshold": "Use percentage-based threshold",
 	"Use provider default": "Use provider default",
 	"Use provider defaults and PI_* timeout env vars": "Use provider defaults and PI_* timeout env vars",
@@ -3451,7 +3682,8 @@ export const enUS = {
 	"Very permissive": "Very permissive",
 	Vision: "Vision",
 	"Voice used by Codex-backed realtime voice sessions": "Voice used by Codex-backed realtime voice sessions",
-	"Warm, encouraging collaborator focused on momentum and morale": "Warm, encouraging collaborator focused on momentum and morale",
+	"Warm, encouraging collaborator focused on momentum and morale":
+		"Warm, encouraging collaborator focused on momentum and morale",
 	"Web Search": "Web Search",
 	"Web Search Provider Order": "Web Search Provider Order",
 	"Web Search Timeout": "Web Search Timeout",
@@ -3474,7 +3706,8 @@ export const enUS = {
 		"When an image is attached to a model without vision support, save it under local:// and inject a description from a vision-capable model instead of dropping it",
 	"When I Say Submit": 'Say "Submit" to trigger',
 	"When steering messages interrupt tool execution": "When steering messages interrupt tool execution",
-	"When to interrupt mid-stream vs inject warning after completion": "When to interrupt mid-stream vs inject warning after completion",
+	"When to interrupt mid-stream vs inject warning after completion":
+		"When to interrupt mid-stream vs inject warning after completion",
 	"When to return to the primary model after a fallback": "When to return to the primary model after a fallback",
 	"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.":
 		"When xd:// Prompt Docs is Built-ins Only, inline dynamic devices whose names match these glob patterns (for example mcp__context_mode_*). Catalog Only ignores this setting.",
@@ -3489,7 +3722,8 @@ export const enUS = {
 	"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)":
 		"Wrap paths and URLs in OSC 8 hyperlinks for terminal-native click-to-open (auto: detect support; off: never; always: unconditional)",
 	Write: "Write",
-	"X.org 6x12 glyphs, black ink, function words dimmed gray.": "X.org 6x12 glyphs, black ink, function words dimmed gray.",
+	"X.org 6x12 glyphs, black ink, function words dimmed gray.":
+		"X.org 6x12 glyphs, black ink, function words dimmed gray.",
 	"X.org 8x13 glyphs, black ink.": "X.org 8x13 glyphs, black ink.",
 	"xAI Grok Voice": "xAI Grok Voice",
 	"xd:// Inline Devices": "xd:// Inline Devices",

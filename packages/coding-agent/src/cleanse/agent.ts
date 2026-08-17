@@ -1,4 +1,4 @@
-import { getProjectDir, prompt } from "@musepi/pi-utils";
+import { getProjectDir, isRecord, prompt } from "@musepi/pi-utils";
 import { ModelRegistry } from "../config/model-registry";
 import { formatModelString, resolveCliModel } from "../config/model-resolver";
 import { Settings } from "../config/settings";
@@ -9,7 +9,10 @@ import { mapWithConcurrencyLimitAllSettled } from "../task/parallel";
 import { runStructuredSubagent } from "../task/structured-subagent";
 import type { ToolSession } from "../tools";
 import { EventBus } from "../utils/event-bus";
+import type { CustomCleanseCheckerSpec } from "./checkers";
+import { CLEANSE_PARSER_KINDS } from "./parsers";
 import assignmentPrompt from "./prompts/assignment.md" with { type: "text" };
+import discoveryPrompt from "./prompts/discovery.md" with { type: "text" };
 import type {
 	CleanseAgentOutcome,
 	CleanseAssignment,
@@ -21,6 +24,28 @@ import type {
 
 const MAX_DIAGNOSTIC_MESSAGE = 4_000;
 
+/** Structured output contract for the prompted checker-discovery agent. */
+const DISCOVERY_SCHEMA = {
+	type: "object",
+	required: ["checkers"],
+	properties: {
+		checkers: {
+			type: "array",
+			items: {
+				type: "object",
+				required: ["label", "command"],
+				properties: {
+					label: { type: "string" },
+					language: { type: "string" },
+					cwd: { type: "string" },
+					command: { type: "array", items: { type: "string" }, minItems: 1 },
+					parser: { type: "string", enum: [...CLEANSE_PARSER_KINDS] },
+				},
+			},
+		},
+	},
+};
+
 /** Hooks used by the standalone command to render subagent lifecycle progress. */
 export interface CleanseAgentHooks {
 	onStart?(name: string, assignment: CleanseAssignment): void;
@@ -31,6 +56,8 @@ export interface CleanseAgentHooks {
 export interface CleanseAgentRuntime {
 	readonly model: string;
 	readonly sessionFile: string;
+	/** Run one discovery subagent that translates a user request into runnable checker specs. */
+	discoverCheckers(request: string, signal?: AbortSignal): Promise<CustomCleanseCheckerSpec[]>;
 	dispatch(
 		assignments: CleanseAssignment[],
 		wave: number,
@@ -80,7 +107,7 @@ export async function createCleanseAgentRuntime(options: {
 		getArtifactsDir: () => sessionManager.getArtifactsDir(),
 		getArtifactManager: () => sessionManager.getArtifactManager(),
 		getAgentId: () => MAIN_AGENT_ID,
-		getSessionSpawns: () => "sonic",
+		getSessionSpawns: () => "sonic,task",
 		getModelString: () => modelSelector,
 		getActiveModelString: () => modelSelector,
 		getActiveModel: () => resolved.model,
@@ -94,6 +121,23 @@ export async function createCleanseAgentRuntime(options: {
 	return {
 		model: modelDisplay,
 		sessionFile,
+		async discoverCheckers(request: string, signal?: AbortSignal): Promise<CustomCleanseCheckerSpec[]> {
+			sessionManager.appendCustomEntry("cleanse_discovery", { request });
+			const result = await runStructuredSubagent({
+				session: toolSession,
+				invocationKind: "task",
+				assignment: prompt.render(discoveryPrompt, { request }),
+				agent: "task",
+				model: modelSelector,
+				outputSchema: DISCOVERY_SCHEMA,
+				identity: { label: "CleanseDiscovery" },
+				enableLsp: true,
+				enableIrc: false,
+				signal,
+			});
+			if (result.result.error) throw new Error(`Checker discovery failed: ${result.result.error}`);
+			return parseDiscoverySpecs(result.result.structuredOutput?.data);
+		},
 		async dispatch(
 			assignments: CleanseAssignment[],
 			wave: number,
@@ -164,6 +208,27 @@ export async function createCleanseAgentRuntime(options: {
 			await sessionManager.close();
 		},
 	};
+}
+
+/** Defensively validate discovery-agent output into runnable checker specs. */
+function parseDiscoverySpecs(data: unknown): CustomCleanseCheckerSpec[] {
+	if (!isRecord(data) || !Array.isArray(data.checkers)) return [];
+	const specs: CustomCleanseCheckerSpec[] = [];
+	for (const value of data.checkers) {
+		if (!isRecord(value)) continue;
+		const command = Array.isArray(value.command)
+			? value.command.filter((part): part is string => typeof part === "string" && part.length > 0)
+			: [];
+		if (typeof value.label !== "string" || !value.label.trim() || command.length === 0) continue;
+		specs.push({
+			label: value.label.trim(),
+			language: typeof value.language === "string" ? value.language : undefined,
+			cwd: typeof value.cwd === "string" ? value.cwd : undefined,
+			command,
+			parser: typeof value.parser === "string" ? value.parser : undefined,
+		});
+	}
+	return specs;
 }
 
 function renderAssignment(

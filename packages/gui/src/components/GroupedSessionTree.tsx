@@ -1,6 +1,6 @@
 import { t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
-import { type GuiTreeNode, SessionTree } from "./SessionTree";
+import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
 
 /** Bucket a timestamp into a date-group label (ZCode groups tab). */
 function dateGroup(ts: string): string {
@@ -30,6 +30,8 @@ export function GroupedSessionTree({
 	unread,
 	pausedIds,
 	workingIds,
+	statuses,
+	manualTags,
 }: {
 	nodes: GuiTreeNode[];
 	selectedId: string | null;
@@ -38,6 +40,10 @@ export function GroupedSessionTree({
 	unread?: ReadonlySet<string>;
 	pausedIds?: ReadonlySet<string>;
 	workingIds?: ReadonlySet<string>;
+	/** Lifecycle status per session id — tints member rows' left square. */
+	statuses?: ReadonlyMap<string, SessionStatus>;
+	/** User-assigned color per session id (manual override of status). */
+	manualTags?: ReadonlyMap<string, SessionStatus>;
 }): ReactNode {
 	const groups = new Map<string, GuiTreeNode[]>();
 	for (const n of nodes) {
@@ -67,6 +73,8 @@ export function GroupedSessionTree({
 						unread={unread}
 						pausedIds={pausedIds}
 						workingIds={workingIds}
+						statuses={statuses}
+						manualTags={manualTags}
 					/>
 				</div>
 			))}

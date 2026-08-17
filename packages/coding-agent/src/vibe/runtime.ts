@@ -18,7 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { logger, prompt, Snowflake } from "@musepi/pi-utils";
 import type { AsyncJob, AsyncJobManager } from "../async/job-manager";
-import { resolveAgentModelPatterns } from "../config/model-resolver";
+import { resolveAgentModelSelection } from "../config/model-resolver";
 import type { LocalProtocolOptions } from "../internal-urls";
 import { registerArtifactsDir } from "../internal-urls/registry-helpers";
 import { MCPManager } from "../mcp/manager";
@@ -43,7 +43,7 @@ export type VibeCli = "fast" | "good";
  * CLI flavor → bundled agent type. This IS the model-tier mapping: `sonic`
  * carries `model: "@smol"` (the configured fast/low-latency role) and `task`
  * carries `model: "@task"` (inherits the session's strong model).
- * Resolution goes through {@link resolveAgentModelPatterns} exactly like a
+ * Resolution goes through {@link resolveAgentModelSelection} exactly like a
  * `task` spawn, so `task.agentModelOverrides` and model-role settings apply.
  */
 export const VIBE_CLI_AGENT: Record<VibeCli, string> = {
@@ -144,6 +144,8 @@ interface VibeRestoreCandidate {
 interface ResolvedVibeWorker {
 	agent: AgentDefinition;
 	modelOverride?: string | string[];
+	/** Pre-expansion role alias behind {@link modelOverride}, when the worker agent named one. */
+	modelRole?: string;
 }
 
 interface VibeTurn {
@@ -165,6 +167,8 @@ interface VibeRecord {
 	childSessionFile?: string;
 	agent: AgentDefinition;
 	modelOverride?: string | string[];
+	/** Pre-expansion role alias behind {@link modelOverride}, when the worker agent named one. */
+	modelRole?: string;
 	state: VibeSessionState;
 	createdAt: number;
 	lastActivityAt: number;
@@ -490,16 +494,17 @@ export class VibeSessionRegistry {
 			throw new ToolError(`Bundled agent "${agentName}" for vibe cli "${cli}" is unavailable.`);
 		}
 		const agentModelOverrides = session.settings.get("task.agentModelOverrides");
-		return {
-			agent,
-			modelOverride: resolveAgentModelPatterns({
-				settingsOverride: agentModelOverrides[agentName],
-				agentModel: agent.model,
-				settings: session.settings,
-				activeModelPattern: session.getActiveModelString?.(),
-				fallbackModelPattern: session.getModelString?.(),
-			}),
-		};
+		// Same contract as the task spawn path: the expansion discards the role
+		// alias (`@task`, `@smol`), so patterns and role identity come from one
+		// call — the child's inherited retry-fallback chain is keyed off the role.
+		const { patterns, role } = resolveAgentModelSelection({
+			settingsOverride: agentModelOverrides[agentName],
+			agentModel: agent.model,
+			settings: session.settings,
+			activeModelPattern: session.getActiveModelString?.(),
+			fallbackModelPattern: session.getModelString?.(),
+		});
+		return { agent, modelOverride: patterns, modelRole: role };
 	}
 
 	async #appendLifecycleEvent(
@@ -890,7 +895,7 @@ export class VibeSessionRegistry {
 				existing.sessionFile === childSessionFile &&
 				(existing.status === "idle" || existing.status === "parked");
 			const blockedByCollision = Boolean(existing && !existingIsResumable);
-			const { agent, modelOverride } = this.#resolveWorker(session, spawn.cli);
+			const { agent, modelOverride, modelRole } = this.#resolveWorker(session, spawn.cli);
 			if (!existing) {
 				AgentRegistry.global().register({
 					id: spawn.id,
@@ -911,6 +916,7 @@ export class VibeSessionRegistry {
 				childSessionFile,
 				agent,
 				modelOverride,
+				modelRole,
 				state: "idle",
 				createdAt: spawn.createdAt,
 				lastActivityAt: candidate.lastActivityAt,
@@ -945,7 +951,7 @@ export class VibeSessionRegistry {
 			throw new ToolError("Vibe mode has exited; enter Vibe mode again before spawning a worker.");
 		}
 		const manager = this.#manager(session);
-		const { agent, modelOverride } = this.#resolveWorker(session, args.cli);
+		const { agent, modelOverride, modelRole } = this.#resolveWorker(session, args.cli);
 		if (!session.agentOutputManager) {
 			session.agentOutputManager = new AgentOutputManager(session.getArtifactsDir ?? (() => null));
 		}
@@ -969,6 +975,7 @@ export class VibeSessionRegistry {
 			childSessionFile,
 			agent,
 			modelOverride,
+			modelRole,
 			state: "starting",
 			createdAt,
 			lastActivityAt: createdAt,
@@ -1419,6 +1426,7 @@ export class VibeSessionRegistry {
 			taskDepth: session.taskDepth ?? 0,
 			detached: true,
 			modelOverride: record.modelOverride,
+			modelRole: record.modelRole,
 			parentActiveModelPattern: session.getActiveModelString?.(),
 			thinkingLevel: record.agent.thinkingLevel,
 			sessionFile,

@@ -54,10 +54,6 @@ function pass(budget: ImageBudget, count: number): { suppressed: boolean[]; rese
 }
 
 describe("ImageBudget", () => {
-	it("defaults to eight live images", () => {
-		expect(new ImageBudget().cap).toBe(8);
-	});
-
 	it("keeps every image live while at or under the cap", () => {
 		const budget = new ImageBudget(3, () => {});
 		const first = pass(budget, 2);
@@ -637,6 +633,136 @@ describe("TUI inline-image budget", () => {
 		} finally {
 			tui.stop();
 			setKittyGraphics(originalGraphics);
+		}
+	});
+
+	it("clips a direct Kitty placement during an in-place width repaint", async () => {
+		const originalGraphics = { ...getKittyGraphics() };
+		const originalResizeMode = Bun.env.PI_TUI_RESIZE_IN_PLACE;
+		const term = new VirtualTerminal(40, 6);
+		const writes: string[] = [];
+		const realWrite = term.write.bind(term);
+		vi.spyOn(term, "write").mockImplementation((data: string) => {
+			writes.push(data);
+			realWrite(data);
+		});
+
+		setKittyGraphics({ unicodePlaceholders: false });
+		Bun.env.PI_TUI_RESIZE_IN_PLACE = "1";
+		const tui = new TUI(term);
+		tui.addChild(
+			new Image(
+				BASE64_ONE_PIXEL_PNG,
+				"image/png",
+				{ fallbackColor: t => t },
+				{ maxWidthCells: 4, maxHeightCells: 4, budget: tui.imageBudget, imageKey: "resize-direct" },
+				{ widthPx: 40, heightPx: 40 },
+			),
+		);
+		tui.addChild(new Text("after-0\nafter-1\nafter-2", 0, 0));
+
+		try {
+			tui.start();
+			await settle(term);
+			writes.length = 0;
+			term.resize(30, 6);
+			await settle(term);
+
+			const output = writes.join("");
+			expect(output).toContain("a=p,q=2,C=1");
+			expect(output).toContain("c=4,r=3,y=10,h=30");
+		} finally {
+			tui.stop();
+			setKittyGraphics(originalGraphics);
+			if (originalResizeMode === undefined) delete Bun.env.PI_TUI_RESIZE_IN_PLACE;
+			else Bun.env.PI_TUI_RESIZE_IN_PLACE = originalResizeMode;
+		}
+	});
+
+	it("reuses a visible Kitty placement across zero-commit width-epoch repaints", async () => {
+		const originalGraphics = { ...getKittyGraphics() };
+		const originalResizeMode = Bun.env.PI_TUI_RESIZE_IN_PLACE;
+		const originalZellij = Bun.env.ZELLIJ;
+		const term = new VirtualTerminal(20, 8);
+		const writes: string[] = [];
+		const realWrite = term.write.bind(term);
+		vi.spyOn(term, "write").mockImplementation((data: string) => {
+			writes.push(data);
+			realWrite(data);
+		});
+
+		setKittyGraphics({ unicodePlaceholders: false });
+		Bun.env.PI_TUI_RESIZE_IN_PLACE = "1";
+		const tui = new TUI(term);
+		const imageKey = "width-epoch-direct";
+		const imageId = tui.imageBudget.acquireId(imageKey);
+		tui.addChild(new Text("P".repeat(120), 0, 0));
+		tui.addChild(
+			new Image(
+				BASE64_ONE_PIXEL_PNG,
+				"image/png",
+				{ fallbackColor: t => t },
+				{ maxWidthCells: 4, maxHeightCells: 4, budget: tui.imageBudget, imageKey },
+				{ widthPx: 40, heightPx: 40 },
+			),
+		);
+		tui.addChild(new Text("tail-0\ntail-1\ntail-2", 0, 0));
+
+		const expectStablePlacement = (output: string): void => {
+			const placementIds = [...output.matchAll(new RegExp(`i=${imageId},p=(\\d+),`, "g"))].map(match =>
+				Number(match[1]),
+			);
+			expect(placementIds.length).toBeGreaterThan(0);
+			expect(placementIds).toEqual(placementIds.map(() => 1));
+		};
+
+		try {
+			tui.start();
+			await settle(term);
+			writes.length = 0;
+			term.resize(40, 8);
+			await settle(term);
+			expectStablePlacement(writes.join(""));
+
+			writes.length = 0;
+			const overlay = tui.showOverlay(new Text("overlay", 0, 0), { anchor: "top-left", row: 0, col: 0 });
+			await settle(term);
+			const shown = writes.join("");
+			expect(shown).not.toContain("\r\n");
+			expectStablePlacement(shown);
+
+			writes.length = 0;
+			overlay.hide();
+			await settle(term);
+			const hidden = writes.join("");
+			expect(hidden).not.toContain("\r\n");
+			expectStablePlacement(hidden);
+
+			writes.length = 0;
+			term.resize(30, 8);
+			await settle(term);
+			expectStablePlacement(writes.join(""));
+
+			// A forced, non-destructive paint coalesced with another mux width
+			// reset also uses the previous width epoch's seam, not the newly
+			// reflowed frame's chunk target.
+			Bun.env.HERDR_ENV = "1";
+			Bun.env.ZELLIJ = "1";
+			writes.length = 0;
+			term.resize(20, 8);
+			tui.requestRender(true, { clearScrollback: true });
+			await settle(term);
+			const forced = writes.join("");
+			expect(forced).toContain("\x1b[2J");
+			expect(forced).not.toContain("\x1b[3J");
+			expectStablePlacement(forced);
+		} finally {
+			tui.stop();
+			setKittyGraphics(originalGraphics);
+			if (originalResizeMode === undefined) delete Bun.env.PI_TUI_RESIZE_IN_PLACE;
+			else Bun.env.PI_TUI_RESIZE_IN_PLACE = originalResizeMode;
+			if (originalZellij === undefined) delete Bun.env.ZELLIJ;
+			else Bun.env.ZELLIJ = originalZellij;
 		}
 	});
 

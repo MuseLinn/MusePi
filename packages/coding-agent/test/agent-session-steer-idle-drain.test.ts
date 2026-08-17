@@ -123,6 +123,41 @@ describe("AgentSession steer idle drain", () => {
 		expect(continueSpy).toHaveBeenCalledTimes(1);
 	});
 
+	it("sendQueuedMessage pulls one queued steer out and re-injects it immediately", async () => {
+		await createSession([{ role: "user", content: "hello", timestamp: Date.now() }, createAssistantMessage()]);
+		// Queue directly on the agent core (no idle-drain side effects); the
+		// steer path's timers would hang under the suite's fake clock, so the
+		// re-inject is observed via a sendUserMessage spy instead.
+		session.agent.steer({ role: "user", content: "first", timestamp: 1 });
+		session.agent.steer({ role: "user", content: "second", timestamp: 2 });
+		expect(session.getQueuedMessages().steering).toEqual(["first", "second"]);
+
+		const sendSpy = vi.spyOn(session, "sendUserMessage").mockImplementation(async () => {});
+		const sent = await session.sendQueuedMessage("steering", "first");
+		expect(sent).toBe(true);
+		// Removed from its slot; the re-inject is handed to sendUserMessage as
+		// an immediate steer (queue tail / GUI send-now parity).
+		expect(session.getQueuedMessages().steering).toEqual(["second"]);
+		expect(sendSpy).toHaveBeenCalledWith("first", { deliverAs: "steer" });
+	});
+
+	it("sendQueuedMessage moves a followUp out and rejects unknown text", async () => {
+		await createSession([{ role: "user", content: "hello", timestamp: Date.now() }, createAssistantMessage()]);
+		session.agent.followUp({ role: "user", content: "later", timestamp: 1 });
+		expect(session.getQueuedMessages().followUp).toEqual(["later"]);
+
+		const sendSpy = vi.spyOn(session, "sendUserMessage").mockImplementation(async () => {});
+		const sent = await session.sendQueuedMessage("followUp", "later");
+		expect(sent).toBe(true);
+		// Re-injected as an immediate steer, so the followUp group is now empty.
+		expect(session.getQueuedMessages().followUp).toEqual([]);
+		expect(sendSpy).toHaveBeenCalledWith("later", { deliverAs: "steer" });
+
+		// Unknown text: no match, nothing sent, queue untouched.
+		expect(await session.sendQueuedMessage("steering", "not queued")).toBe(false);
+		expect(session.getQueuedMessages().steering).toEqual([]);
+	});
+
 	it("round-trips queued images through clearQueue for editor restoration", async () => {
 		// A steer queued mid-stream stays in the queue (the idle drain stands down while
 		// streaming), so clearQueue round-trips session.steer's normalized image payload

@@ -9,10 +9,10 @@ Reference for four subsystems of `packages/ai` (with type definitions in `packag
 
 Related references:
 
-- [Provider endpoint constraints](./provider-endpoint-constraints.md) — where a new constraint should live
-- [Provider streaming internals](./provider-streaming-internals.md) — stream event normalization
-- [Provider quirks](./provider-quirks.md) — per-provider special casings, stream behavior, auth/usage, catalog handling
-- [Model and Provider Configuration](./models.md) — `models.yml` and user-facing `compat` overrides
+- [Provider endpoint constraints](./provider-endpoint-constraints.html) — where a new constraint should live
+- [Provider streaming internals](./provider-streaming-internals.html) — stream event normalization
+- [Provider quirks](./provider-quirks.html) — per-provider special casings, stream behavior, auth/usage, catalog handling
+- [Model and Provider Configuration](./models.html) — `models.yml` and user-facing `compat` overrides
 
 ## 1. OpenAI compat flags
 
@@ -102,7 +102,6 @@ Types: `OpenAICompat` / `ResolvedOpenAISharedCompat` in `packages/catalog/src/ty
 | `stripDeepseekSpecialTokens` | DeepSeek on NVIDIA NIM or direct API | Strips leaked chat-template tokens (`<｜User｜>`, …) from visible text |
 | `streamMarkupHealingPattern` | `"kimi"` (Kimi/Moonshot), `"dsml"` (DeepSeek DSML hosts), `"thinking"` (generic compat hosts), unset for official OpenAI | Selects the `StreamMarkupHealing` pattern for leaked template markup |
 | `emptyLengthFinishIsContextError` | Ollama | Empty completion with `finish_reason: "length"` → context-overflow error |
-| `enableGeminiThinkingLoopGuard` | Gemini-family model ids | Activates the thinking-loop guard on OpenAI-compat streams (`utils/thinking-loop.ts`) |
 | `streamFirstEventTimeoutMs` | `0` for local backends | First-event watchdog hint (`0` = unbounded prefill/model-load time) |
 | `streamIdleTimeoutMs` | GLM/Alibaba coding plans 600 s; MiMo, Kimi reasoning, DeepSeek reasoning, local backends 300 s | Inter-event idle watchdog floor (`stream.ts`) |
 
@@ -174,7 +173,7 @@ If a host rejects the emitted effort with 400/422, `resolveOpenAIReasoningEffort
 - **Structured deltas**: providers emit `thinking_start` / `thinking_delta` / `thinking_end` stream events.
 - **History replay**: prior thinking is replayed via `reasoningContentField` on assistant messages (KV-cache preservation on DeepSeek/Z.AI/Qwen/local backends); models that demand reasoning content on tool-call turns get real content or a `"."` placeholder per `allowsSyntheticReasoningContentForToolCalls`.
 - **Leaked thinking healing**: `wrapLeakedThinkingStream` (`utils/leaked-thinking-stream.ts`) converts in-band ` ```thinking ` / `<think>` fences from misbehaving hosts into structured thinking blocks live.
-- **Loop guard**: `withGeminiThinkingLoopGuard` (`utils/thinking-loop.ts`) detects runaway reasoning (verbatim repeats, near-duplicate trigram clusters, progress-lexicon stalls) and kills the stream with a retryable `AIError.Flag.ThinkingLoop`.
+- **Loop guard**: `withThinkingLoopGuard` (`utils/thinking-loop.ts`) detects runaway reasoning (verbatim repeats, near-duplicate trigram clusters, progress-lexicon stalls) and kills the stream with a retryable `AIError.Flag.ThinkingLoop`.
 
 ### Interactions
 

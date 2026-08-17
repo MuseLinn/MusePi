@@ -15,6 +15,7 @@ Local observability dashboard for AI usage statistics.
 |--------|-------------|
 | Tokens/s | `output_tokens / (duration / 1000)` |
 | Cache Rate | `cache_read / (input + cache_read) * 100` |
+| Cache Savings | `(uncached prompt cost - actual prompt cost) / uncached prompt cost * 100` |
 | Error Rate | `count(stopReason=error) / total_calls * 100` |
 | Total Cost | Sum of `usage.cost.total` |
 | Avg Latency | Mean of `duration` |
@@ -71,7 +72,7 @@ console.log(stats.byModel[0].avgTokensPerSecond);
 
 The web dashboard provides:
 
-- Overall metrics cards (requests, cost, cache rate, error rate, duration, tokens/s)
+- Overall metrics cards (requests, cost, cache rate, cache savings, error rate, duration, tokens/s)
 - Time series chart showing requests and errors over time
 - Per-model breakdown table
 - Per-folder breakdown table

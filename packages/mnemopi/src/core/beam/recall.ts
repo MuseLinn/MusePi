@@ -527,10 +527,6 @@ function buildWhere(
 		clauses.push(`${prefix}author_type = ?`);
 		params.push(authorType);
 	}
-	if (channelId !== null && channelId !== "") {
-		clauses.push(`${prefix}channel_id = ?`);
-		params.push(channelId);
-	}
 	return { where: clauses.join(" AND "), params };
 }
 

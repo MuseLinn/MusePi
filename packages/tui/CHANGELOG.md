@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [17.3.0] - 2026-08-13
+
+### Fixed
+
+- Fixed an issue where repeated pane-width adjustments or terminal resizing could corrupt native scrollback and soft-wrap behavior.
+- Fixed an issue where scaled OSC 66 Markdown headings (such as "Large Headings" on Kitty) would render as invisible placeholders or get partially cleared after a redraw or terminal resize.
+
+## [17.2.13] - 2026-08-11
+
+### Fixed
+
+- Fixed inline images rendering permanently cropped on Kitty direct-placement terminals (WezTerm, Warp) when an image block straddled the viewport top during streaming: placements are now clipped to the visible slice at write time, and a placement id whose cells reached native scrollback is never re-used ([#8070](https://github.com/can1357/oh-my-pi/pull/8070) by [@voonfoo](https://github.com/voonfoo))
+
 ## [17.2.12] - 2026-08-08
 
 ### Fixed

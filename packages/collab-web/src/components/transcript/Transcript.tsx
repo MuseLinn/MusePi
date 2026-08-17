@@ -43,13 +43,15 @@ import { fmtTokens } from "../../lib/format";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
+import { BashCard } from "./bash-card";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
-import { FileCards, turnArtifacts } from "./FileCards";
+import { FileCards, type FileCardItem } from "./FileCards";
+import { finalArtifacts } from "./file-artifacts.js";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
-import { BashCard } from "./bash-card";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
+import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
 import { useWorkingNow } from "./use-working-now";
 import { WidgetStandaloneCards } from "./widget-standalone";
 import "./transcript.css";
@@ -69,7 +71,12 @@ const WINDOW_JUMP = 500;
  *  rest mount when the user hits 展开全部 (a giant reasoning block pays
  *  ~100 Markdown mounts otherwise, even while the body is collapsed). */
 const MAX_THINK_SENTENCES = 80;
-const AVG_ROW_HEIGHT = 44; // px; refined by measurement once rows mount
+// Initial row-height estimate for the folded spacer. Refined by
+// measurement once rows mount, but the STARTING value matters: too low
+// and the spacer underrepresents the folded region — the scrollbar
+// compresses and expanding the window shifts content (jump). Real
+// message rows (text + padding) run 60-100px, so 64 is closer than 44.
+const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
 
 export interface TranscriptProps {
 	entries: readonly SessionEntry[];
@@ -106,6 +113,9 @@ export interface TranscriptProps {
 	/** TUI display.collapseCompacted parity: fold pre-compaction history
 	 *  behind the first compaction divider. */
 	collapseCompacted?: boolean;
+	/** TUI display.taskCardStyle parity: "classic" swaps the swarm member
+	 *  grid card for the plain tool-call card. */
+	taskCardStyle?: "swarm" | "classic";
 	/** TUI colorBlindMode parity: diff additions render blue instead of
 	 *  green (root gets `data-colorblind`). */
 	colorBlind?: boolean;
@@ -119,9 +129,18 @@ export interface TranscriptProps {
 	onRetry?(messageId: string, text: string): void;
 	/** Revert (撤回): truncate the session to before this user message. */
 	onRevert?(messageId: string, text: string): void;
-	/** Fork (分叉): copy the session truncated to before this user message
-	 *  into a NEW session (non-destructive — the original is untouched). */
-	onFork?(messageId: string, text: string): void;
+	/** Fork (分叉): copy the session truncated at this message into a NEW
+	 *  session (non-destructive — the original is untouched). user messages
+	 *  re-answer via backfilled `text`; assistant/toolResult nodes pass
+	 *  `includeTarget: true` to keep the node and continue from it. */
+	onFork?(messageId: string, text: string | undefined, includeTarget?: boolean): void;
+	/** Lazy history backfill (kimi/DSH parity): fires when the tail window
+	 *  is fully expanded AND the user keeps scrolling up — the caller pages
+	 *  the next older chunk from session.history and prepends it. */
+	onLoadOlder?(): void;
+	/** True while the caller is paging the next older chunk — the top
+	 *  spacer shows a shimmer so the wait reads as loading, not emptiness. */
+	loadingOlder?: boolean;
 	/** Read an assistant reply aloud (TTS). */
 	onSpeak?(text: string): void;
 	/** Save an assistant reply as an image to the clipboard (openchamber). */
@@ -155,9 +174,11 @@ function Row({
 	onRetry?(messageId: string, text: string): void;
 	/** Revert (撤回): truncate the session to before this user message. */
 	onRevert?(messageId: string, text: string): void;
-	/** Fork (分叉): copy the session truncated to before this user message
-	 *  into a NEW session (non-destructive — the original is untouched). */
-	onFork?(messageId: string, text: string): void;
+	/** Fork (分叉): copy the session truncated at this message into a NEW
+	 *  session (non-destructive — the original is untouched). user messages
+	 *  re-answer via backfilled `text`; assistant/toolResult nodes pass
+	 *  `includeTarget: true` to keep the node and continue from it. */
+	onFork?(messageId: string, text: string | undefined, includeTarget?: boolean): void;
 	onSpeak?(text: string): void;
 	/** The user message whose reply this row is — retry truncates to it and
 	 *  re-sends it (assistant rows only). */
@@ -291,6 +312,25 @@ function Row({
 							}}
 						>
 							<RefreshCw size={13} />
+						</button>
+					)}
+					{onFork && kind === "assistant" && id && (
+						<button
+							type="button"
+							className="tr-action"
+							title={t("fork session from this message")}
+							aria-label={t("fork session from this message")}
+							onClick={() => {
+								play("press");
+								hapticTap();
+								// includeTarget: keep THIS reply as the new
+								// session's last record and continue from it
+								// with a fresh prompt (TUI navigateTree parity
+								// for non-user nodes).
+								onFork(id, undefined, true);
+							}}
+						>
+							<GitFork size={13} />
 						</button>
 					)}
 					{onSpeak && kind === "assistant" && (
@@ -503,6 +543,11 @@ function MsgContent({
 			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("attachment") }));
 	}, [content]);
 	if (typeof content === "string") {
+		// ACP-mode `/usage` report (buildUsageReportText) renders as a card,
+		// not raw monospace text — the output is code-generated with a stable
+		// shape, so parsing it is safe.
+		const usage = isUsageReport(content) ? parseUsageReport(content) : null;
+		if (usage) return <UsageCard usage={usage} />;
 		const { content: rest, blocks } = extractCanvasJumpBlocks(content);
 		return (
 			<>
@@ -520,6 +565,11 @@ function MsgContent({
 			{content.map((block, i) => {
 				switch (block.type) {
 					case "text": {
+						// /usage report → card (same as the plain-string path).
+						const usage = isUsageReport(block.text) ? parseUsageReport(block.text) : null;
+						if (usage) {
+							return <UsageCard usage={usage} />;
+						}
 						// Anonymous content blocks have no stable id — index is identity.
 						// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 						const { content: rest, blocks: jumps } = extractCanvasJumpBlocks(block.text);
@@ -534,43 +584,21 @@ function MsgContent({
 							</Fragment>
 						);
 					}
-					case "image": {
-						// Multiple images collapse into the interactive card
-						// stack (rendered after the blocks); only a lone image
-						// stays a plain clickable thumbnail.
+					case "image":
+						// A lone image keeps its in-flow position (the old
+						// thumbnail's spot); multiple images collapse into
+						// one stack after the blocks (craft-agents parity).
 						if (images.length > 1) return null;
-						const src = `data:${block.mimeType};base64,${block.data}`;
-						const imgIndex = images.findIndex(img => img.src === src);
+						// Anonymous content blocks have no stable id — index is identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 						return (
-							<img
-								// Anonymous content blocks have no stable id — index is identity.
-								// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
-								key={`img${i}`}
-								className="tr-msg-img"
-								src={src}
-								alt={t("attachment")}
-								loading="lazy"
-								decoding="async"
-								role="button"
-								tabIndex={0}
-								title={t("preview image")}
-								onClick={() => onPreviewImage?.(images, imgIndex)}
-								onKeyDown={e => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										onPreviewImage?.(images, imgIndex);
-									}
-								}}
-							/>
+							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
 						);
-					}
 					default:
 						return null;
 				}
 			})}
-			{images.length > 1 && (
-				<ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />
-			)}
+			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
 		</>
 	);
 }
@@ -623,45 +651,44 @@ function UserMsgContent({
 						// Anonymous content blocks have no stable id — index is identity.
 						// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 						return <UserText key={`t${i}`} text={block.text} plain={plain} collapse={collapse} />;
-					case "image": {
-						// Multiple images collapse into the interactive card
-						// stack (rendered after the blocks); only a lone image
-						// stays a plain clickable thumbnail.
+					case "image":
+						// A lone image keeps its in-flow position (the old
+						// thumbnail's spot); multiple images collapse into
+						// one stack after the blocks (craft-agents parity).
 						if (images.length > 1) return null;
-						const src = `data:${block.mimeType};base64,${block.data}`;
-						const imgIndex = images.findIndex(img => img.src === src);
+						// Anonymous content blocks have no stable id — index is identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 						return (
-							<img
-								// Anonymous content blocks have no stable id — index is identity.
-								// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
-								key={`img${i}`}
-								className="tr-msg-img"
-								src={src}
-								alt={t("attachment")}
-								loading="lazy"
-								decoding="async"
-								role="button"
-								tabIndex={0}
-								title={t("preview image")}
-								onClick={() => onPreviewImage?.(images, imgIndex)}
-								onKeyDown={e => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										onPreviewImage?.(images, imgIndex);
-									}
-								}}
-							/>
+							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
 						);
-					}
 					default:
 						return null;
 				}
 			})}
-			{images.length > 1 && (
-				<ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />
-			)}
+			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
 		</>
 	);
+}
+
+/** Escalate granularity as the round grows: <1 min → seconds only,
+ *  <1 h → minutes+seconds, ≥1 h → hours+minutes+seconds — long tasks stay
+ *  readable ("已工作 17 分 49 秒" / "1 时 2 分 3 秒") instead of a bare
+ *  seconds counter. */
+function workingLabel(kind: "working" | "took", seconds: number): string {
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	const s = seconds % 60;
+	if (h > 0)
+		return kind === "working"
+			? t("working for {hours}h {minutes}m {seconds}s", { hours: h, minutes: m, seconds: s })
+			: t("took {hours}h {minutes}m {seconds}s", { hours: h, minutes: m, seconds: s });
+	if (m > 0)
+		return kind === "working"
+			? t("working for {minutes}m {seconds}s", { minutes: m, seconds: s })
+			: t("took {minutes}m {seconds}s", { minutes: m, seconds: s });
+	return kind === "working"
+		? t("working for {seconds}s", { seconds })
+		: t("took {seconds}s", { seconds });
 }
 
 /** ZCode-style live "已工作 X 秒" row under the working message — craft-agents
@@ -674,10 +701,8 @@ function UserMsgContent({
 function WorkingLine({ start, freezeMs }: { start: number; freezeMs?: number }): ReactNode {
 	const now = useWorkingNow(freezeMs === undefined);
 	const seconds =
-		freezeMs !== undefined
-			? Math.max(0, Math.round(freezeMs / 1000))
-			: Math.max(0, Math.round((now - start) / 1000));
-	const label = freezeMs !== undefined ? t("took {seconds}s", { seconds }) : t("working for {seconds}s", { seconds });
+		freezeMs !== undefined ? Math.max(0, Math.round(freezeMs / 1000)) : Math.max(0, Math.round((now - start) / 1000));
+	const label = workingLabel(freezeMs !== undefined ? "took" : "working", seconds);
 	return (
 		<div className="tr-working" role="status">
 			{freezeMs === undefined && <span className="tr-working-spin" aria-hidden="true" />}
@@ -743,6 +768,10 @@ function AssistantBody({
 	hideToolActivity = false,
 	showTokenUsage = false,
 	smoothStreaming = true,
+	taskCardStyle = "swarm",
+	/** Turn-final aggregated file artifacts (本轮文件卡片展示在最底部):
+	 *  set only on the turn's FINAL assistant message; undefined elsewhere. */
+	artifacts,
 }: {
 	message: AssistantMessage;
 	results: ReadonlyMap<string, ToolResultMessage>;
@@ -762,6 +791,11 @@ function AssistantBody({
 	showTokenUsage?: boolean;
 	/** display.smoothStreaming parity: false disables the reveal. */
 	smoothStreaming?: boolean;
+	/** display.taskCardStyle parity: "classic" swaps the swarm member grid
+	 *  card for the plain tool-call card. */
+	taskCardStyle?: "swarm" | "classic";
+	/** Turn-final aggregated file artifacts (see above). */
+	artifacts?: FileCardItem[];
 }): ReactNode {
 	// Caret goes on the LAST text block only (not the last block of any
 	// kind — a trailing thinking/tool block must not get the caret).
@@ -823,6 +857,7 @@ function AssistantBody({
 						host={host}
 						running={!result && (act !== undefined || pending)}
 						partialResult={act?.partialResult}
+						taskCardStyle={taskCardStyle}
 					/>
 				);
 			}
@@ -832,14 +867,6 @@ function AssistantBody({
 	});
 	const stop = message.stopReason;
 	const failed = !pending && (stop === "error" || stop === "aborted");
-	// ZCode-style artifact cards: final files this turn produced, deduped
-	// (last write wins), shown once their tool results have settled.
-	const artifacts = useMemo(
-		() => turnArtifacts(message.content, results),
-		// message.content is a stable array per message; results map identity
-		// changes on every session update — recompute is cheap (few blocks).
-		[message.content, results],
-	);
 	return (
 		<>
 			{blocks}
@@ -851,7 +878,7 @@ function AssistantBody({
 					)}
 				</div>
 			)}
-			{!pending && artifacts.length > 0 && <FileCards items={artifacts} />}
+			{!pending && artifacts !== undefined && <FileCards items={artifacts} />}
 			{/* Standalone widget display (config 开启): the visualization
 			 * renders as its own adaptive card in the message flow, like a
 			 * file-preview card — the tool-call card folds to its summary. */}
@@ -886,6 +913,11 @@ interface EntryRowProps {
 	hideToolActivity?: boolean;
 	showTokenUsage?: boolean;
 	smoothStreaming?: boolean;
+	/** display.taskCardStyle parity: "classic" swaps the swarm member grid
+	 *  card for the plain tool-call card. */
+	taskCardStyle?: "swarm" | "classic";
+	/** Turn-final aggregated file artifacts (undefined = no cards). */
+	artifacts?: FileCardItem[];
 	onQuote?(text: string): void;
 	onEdit?(messageId: string, text: string): void;
 	onRetry?(messageId: string, text: string): void;
@@ -911,11 +943,13 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 		prev.roundDuration !== next.roundDuration ||
 		prev.hideToolActivity !== next.hideToolActivity ||
 		prev.showTokenUsage !== next.showTokenUsage ||
-		prev.smoothStreaming !== next.smoothStreaming
+		prev.smoothStreaming !== next.smoothStreaming ||
+		prev.taskCardStyle !== next.taskCardStyle
 	) {
 		return false;
 	}
 	if (prev.onQuote !== next.onQuote || prev.onEdit !== next.onEdit || prev.onRetry !== next.onRetry) return false;
+	if (prev.artifacts !== next.artifacts) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
 	if (prev.retryTarget !== next.retryTarget) return false;
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
@@ -945,6 +979,8 @@ const EntryRow = memo(function EntryRow({
 	hideToolActivity = false,
 	showTokenUsage = false,
 	smoothStreaming = true,
+	taskCardStyle = "swarm",
+	artifacts,
 	onQuote,
 	onEdit,
 	onRetry,
@@ -985,10 +1021,12 @@ const EntryRow = memo(function EntryRow({
 					return (
 						<Row
 							kind="assistant"
+							id={entry.id}
 							gutter={agentGutter ?? t("agent")}
 							title={entry.timestamp}
 							onQuote={onQuote}
 							onRetry={onRetry}
+							onFork={onFork}
 							onSpeak={onSpeak}
 							onSaveImage={onSaveImage}
 							quoteText={msgText(msg)}
@@ -1005,6 +1043,8 @@ const EntryRow = memo(function EntryRow({
 								hideToolActivity={hideToolActivity}
 								showTokenUsage={showTokenUsage}
 								smoothStreaming={smoothStreaming}
+								taskCardStyle={taskCardStyle}
+								artifacts={artifacts}
 							/>
 						</Row>
 					);
@@ -1048,12 +1088,26 @@ const EntryRow = memo(function EntryRow({
 				);
 			}
 			if (entry.customType.startsWith("irc:")) {
-				const details = entry.details as { from?: string; message?: string } | null | undefined;
+				const details = entry.details as { from?: string; message?: string; body?: string } | null | undefined;
 				const from = details?.from ?? "irc";
+				// irc:incoming content is the rendered LLM prompt template
+				// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
+				// reply instructions that must not reach the UI. The clean
+				// body lives in details.message (mirror the TUI card, which
+				// renders card.body = details.message); fall back to content
+				// with the wrapper stripped for snapshots without details.
+				// relay/autoreply content is already display-shaped
+				// ([IRC a → b] header + body), so keep it verbatim.
+				const content =
+					entry.customType === "irc:incoming"
+						? details?.message ??
+							msgText(entry).replace(/^\s*<irc>\s*/i, "").replace(/\s*<\/irc>\s*$/i, "")
+						: entry.content;
 				return (
-					<Row kind="custom" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
+					<Row kind="custom" gutter="" title={entry.timestamp}>
 						<div className="tr-irc">
-							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
+							<span className="tr-irc-from">{from}</span>
+							<MsgContent content={content} onPreviewImage={onPreviewImage} />
 						</div>
 					</Row>
 				);
@@ -1096,7 +1150,7 @@ const EntryRow = memo(function EntryRow({
 	}
 }, entryRowEqual);
 
-export function Transcript(props: TranscriptProps): ReactNode {
+export const Transcript = memo(function Transcript(props: TranscriptProps): ReactNode {
 	const {
 		entries,
 		stream,
@@ -1111,6 +1165,7 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		userPlain = false,
 		collapseLongUserMessages = false,
 		smoothStreaming = true,
+		taskCardStyle = "swarm",
 		hideToolActivity = false,
 		showTokenUsage = false,
 		collapseCompacted = false,
@@ -1120,6 +1175,8 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		onRetry,
 		onRevert,
 		onFork,
+		onLoadOlder,
+		loadingOlder = false,
 		onSpeak,
 		onSaveImage,
 	} = props;
@@ -1151,6 +1208,45 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		}
 		return map;
 	}, [entries]);
+
+	// Turn-final file artifacts (本轮文件卡片展示在最底部): a turn spans
+	// multiple assistant messages (one per agent step), so the final files
+	// the turn produced aggregate across ALL of them and render once, under
+	// the turn's FINAL assistant message. Keyed by the final message's entry
+	// id; built over the full entries (window-safe). Turns without artifacts
+	// are omitted so untouched rows keep their memo (undefined prop = no
+	// cards) — only settled results count (finalArtifacts' completed gate).
+	const turnArtifactsByFinal = useMemo(() => {
+		const byFinal = new Map<string, FileCardItem[]>();
+		let turn: AssistantMessage[] = [];
+		let finalId: string | null = null;
+		const flush = (): void => {
+			if (finalId !== null && turn.length > 0) {
+				const artifacts = finalArtifacts(
+					turn.flatMap(m => m.content),
+					id => {
+						const r = results.get(id);
+						return r !== undefined && r.isError !== true;
+					},
+				);
+				if (artifacts.length > 0) byFinal.set(finalId, artifacts);
+			}
+			turn = [];
+			finalId = null;
+		};
+		for (const entry of entries) {
+			if (entry.type !== "message") continue;
+			const m = entry.message;
+			if (m.role === "user") {
+				flush();
+			} else if (m.role === "assistant") {
+				turn.push(m);
+				finalId = entry.id;
+			}
+		}
+		flush();
+		return byFinal;
+	}, [entries, results]);
 
 	// display.collapseCompacted parity: fold everything before the FIRST
 	// compaction divider behind a toggle row ("show pre-compaction
@@ -1193,7 +1289,10 @@ export function Transcript(props: TranscriptProps): ReactNode {
 	// Extend the window when the sentinel enters the visible pane. The
 	// scroller is an ANCESTOR of .tr-root in both hosts (GUI
 	// .gui-transcript, web .sh-transcript); observing with it as the root
-	// keeps the sentinel tied to the pane, not the viewport.
+	// keeps the sentinel tied to the pane, not the viewport. The bottom
+	// lock gate matters: while the tail is followed (streaming), batched
+	// renders can transiently swing the sentinel into the root margin and
+	// must not expand the window to the full history.
 	useEffect(() => {
 		const el = sentinelRef.current;
 		if (!el) return;
@@ -1204,15 +1303,31 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		const scroller = el.closest<HTMLElement>(".gui-transcript") ?? undefined;
 		const obs = new IntersectionObserver(
 			([entry]) => {
-				if (entry?.isIntersecting) {
-					setVisibleCount(c => Math.min(entries.length, c + WINDOW_STEP));
+				if (entry?.isIntersecting && !lockRef.current) {
+					if (hidden > 0) {
+						setVisibleCount(c => Math.min(entries.length, c + WINDOW_STEP));
+						// Game-style streaming prefetch: when the expanded
+						// window is within two pages of its top edge, start
+						// paging the next older chunk BEFORE the user hits
+						// the end — by the time they scroll there, the rows
+						// are already mounted (no blank-then-pop).
+						if (hidden <= WINDOW_STEP * 2) onLoadOlder?.();
+					} else {
+						// Fully expanded and still scrolling up — page the
+						// next chunk. The caller guards concurrency.
+						onLoadOlder?.();
+					}
 				}
 			},
-			{ root: scroller, rootMargin: "480px 0px" },
+			// Large lookahead: expansion must finish BEFORE the user reaches
+			// the new rows. At 1200px headroom a fast scroll (~1500px/s) has
+			// ~800ms for React to mount the next page — without it, the
+			// scroller runs into unmounted space and shows blank.
+			{ root: scroller, rootMargin: "1200px 0px" },
 		);
 		obs.observe(el);
 		return () => obs.disconnect();
-	}, [hidden > 0, entries.length]);
+	}, [hidden > 0, entries.length, onLoadOlder]);
 
 	// Refine the spacer's row-height estimate from the mounted rows.
 	useLayoutEffect(() => {
@@ -1254,6 +1369,18 @@ export function Transcript(props: TranscriptProps): ReactNode {
 	// (craft-agents parity) — the round's start, data-driven so a session
 	// switch mid-round resumes the count instead of restarting it.
 	const lastUserTs = useMemo(() => lastUserMessageTs(entries), [entries]);
+	// Round-true tail: the last assistant entry must BELONG to the current
+	// round (timestamp >= the last user message). Right after a send the
+	// previous round's final message is still the last assistant entry —
+	// mounting the live ticker on it makes "已用时 X 秒" appear under the
+	// WRONG message until message_start lands (the jump the user saw).
+	// Gate streamingLast on this, and render the ticker as a standalone
+	// ghost row under the user message until the new entry exists.
+	const lastAssistantEntry = lastAssistantIdx >= 0 ? entries[lastAssistantIdx] : undefined;
+	const lastAssistantInRound =
+		lastAssistantEntry?.type === "message" &&
+		lastUserTs !== undefined &&
+		new Date(lastAssistantEntry.message.timestamp).getTime() >= lastUserTs;
 	useEffect(() => {
 		// followKey is only ever a re-run trigger (the scroll itself is stateless).
 		void followKey;
@@ -1306,6 +1433,19 @@ export function Transcript(props: TranscriptProps): ReactNode {
 					>
 						{t("show earlier messages")} ({hidden})
 					</button>
+					{loadingOlder && (
+						<div className="tr-window-loading" aria-hidden="true">
+							<span className="tr-window-loading-bar" />
+						</div>
+					)}
+				</div>
+			)}
+			{hidden === 0 && loadingOlder && (
+				// Fully expanded + paging: the spacer collapsed, but the fetch
+				// is in flight — keep a slim loading line so the top edge
+				// reads as "more is coming" instead of an empty end.
+				<div className="tr-window-loading" aria-hidden="true">
+					<span className="tr-window-loading-bar" />
 				</div>
 			)}
 			{(() => {
@@ -1347,7 +1487,7 @@ export function Transcript(props: TranscriptProps): ReactNode {
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.
 					const isTail = isAssistantMessage && i + hidden === lastAssistantIdx;
-					const streamingLast = working && isTail;
+					const streamingLast = working && isTail && lastAssistantInRound;
 					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
 					const row = (
 						<EntryRow
@@ -1363,6 +1503,8 @@ export function Transcript(props: TranscriptProps): ReactNode {
 							hideToolActivity={hideToolActivity}
 							showTokenUsage={showTokenUsage}
 							smoothStreaming={smoothStreaming}
+							taskCardStyle={taskCardStyle}
+							artifacts={turnArtifactsByFinal.get(entry.id)}
 							streamingLast={streamingLast}
 							runStartTs={streamingLast ? lastUserTs : undefined}
 							roundDuration={roundDuration}
@@ -1389,6 +1531,17 @@ export function Transcript(props: TranscriptProps): ReactNode {
 					return row;
 				});
 			})()}
+			{/* Model-response gap (working but no assistant entry yet): the
+			 * ticker stands alone under the user message — the exact spot
+			 * where the reply will land — instead of hanging off the
+			 * previous round's message. */}
+			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
+				<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+					<div className="tr-ghost-working">
+						<WorkingLine start={lastUserTs} />
+					</div>
+				</Row>
+			)}
 			{stream !== null && (
 				<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
 					<AssistantBody
@@ -1402,6 +1555,7 @@ export function Transcript(props: TranscriptProps): ReactNode {
 						hideToolActivity={hideToolActivity}
 						showTokenUsage={showTokenUsage}
 						smoothStreaming={smoothStreaming}
+						taskCardStyle={taskCardStyle}
 					/>
 				</Row>
 			)}
@@ -1417,6 +1571,7 @@ export function Transcript(props: TranscriptProps): ReactNode {
 							running
 							partialResult={tool.partialResult}
 							host={host}
+							taskCardStyle={taskCardStyle}
 						/>
 					))}
 				</Row>
@@ -1432,4 +1587,4 @@ export function Transcript(props: TranscriptProps): ReactNode {
 			/>
 		</div>
 	);
-}
+});

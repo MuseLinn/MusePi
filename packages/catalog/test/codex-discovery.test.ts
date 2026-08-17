@@ -5,8 +5,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { fetchCodexModels } from "@musepi/pi-catalog/discovery/codex";
+import { Effort } from "@musepi/pi-catalog/effort";
 import { writeModelCache } from "@musepi/pi-catalog/model-cache";
 import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { openaiCodexModelManagerOptions } from "@musepi/pi-catalog/provider-models/special";
 import type { ModelSpec } from "@musepi/pi-catalog/types";
 
@@ -139,6 +141,44 @@ describe("Codex model discovery", () => {
 		expect(sol?.contextWindow).toBe(372_000);
 		const legacy = result?.models.find(model => model.id === "gpt-5.5");
 		expect(legacy?.contextWindow).toBe(272_000);
+	});
+
+	it("normalizes Codex Daybreak aliases to the GPT-5.6 window and effort ladder", async () => {
+		const fetchFn: typeof fetch = Object.assign(
+			async () =>
+				new Response(
+					JSON.stringify({
+						models: [
+							{
+								slug: "gpt-daybreak-blue-latest",
+								display_name: "Daybreak Blue",
+								default_reasoning_level: "high",
+								supported_reasoning_levels: ["minimal", "low", "medium", "high", "xhigh"],
+								input_modalities: ["text", "image"],
+								supported_in_api: true,
+							},
+						],
+					}),
+				),
+			{ preconnect() {} },
+		);
+		const result = await fetchCodexModels({
+			accessToken: "test-token",
+			baseUrl: "https://codex.example/backend-api",
+			clientVersion: "0.99.0",
+			fetchFn,
+		});
+		const spec = result?.models.find(model => model.id === "gpt-daybreak-blue-latest");
+		if (!spec) throw new Error("Expected discovered Daybreak model");
+
+		expect(spec.contextWindow).toBe(372_000);
+		expect(getSupportedEfforts(buildModel(spec))).toEqual([
+			Effort.Low,
+			Effort.Medium,
+			Effort.High,
+			Effort.XHigh,
+			Effort.Max,
+		]);
 	});
 
 	it("honors context_window when upstream actively reports it for GPT-5.6 SKUs", async () => {

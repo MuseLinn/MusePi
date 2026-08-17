@@ -92,4 +92,4 @@ Agent Hub is the human-facing live session view. Adjacent commands and internal 
 
 Advisor rows are intentionally excluded from the agent-facing `hub`, `history://`, and `agent://` peer workflows.
 
-See also [Task Agent Discovery and Selection](./task-agent-discovery.md), [Collaboration](./collab.md), and [Advisor, WATCHDOG.md, and WATCHDOG.yml](./advisor-watchdog.md).
+See also [Task Agent Discovery and Selection](./task-agent-discovery.html), [Collaboration](./collab.html), and [Advisor, WATCHDOG.md, and WATCHDOG.yml](./advisor-watchdog.html).

@@ -2,7 +2,7 @@
 
 `computer` captures and controls the desktop that is running `musepi`. It uses native screen-capture and input APIs; it does not launch Chromium, use Puppeteer, or expose a DOM.
 
-Use it for visible desktop applications: IDEs, terminals, native apps, browser windows, menus, and system dialogs. Use [`browser`](./tools/browser.md) instead when you need headless/CDP browser tabs, DOM or ARIA inspection, selectors, JavaScript evaluation, or deterministic page automation.
+Use it for visible desktop applications: IDEs, terminals, native apps, browser windows, menus, and system dialogs. Use [`browser`](./tools/browser.html) instead when you need headless/CDP browser tabs, DOM or ARIA inspection, selectors, JavaScript evaluation, or deterministic page automation.
 
 > [!WARNING]
 > Enabling `computer` gives the model mouse and keyboard access to your real desktop. Close unrelated sensitive applications, use a dedicated OS account or VM when practical, and configure approval policy before enabling it.
@@ -188,7 +188,7 @@ Operational guidance:
 - Prefer a dedicated desktop session for untrusted sites or documents.
 - Stop when the visible state differs from the user's stated target.
 
-See [Tool approval mode](./approval-mode.md) for general policy resolution.
+See [Tool approval mode](./approval-mode.html) for general policy resolution.
 
 ## Platform setup and support
 
@@ -325,4 +325,4 @@ This proves the native macOS host path through the worker and desktop session. I
 - Missing tool: verify effective `computer.enabled`, then start a new session after config changes.
 - Permission/backend errors: inspect `desktop.capabilities()` and grant the platform permissions listed above.
 
-For implementation-level inputs, outputs, lifecycle, and error surfaces, see [`docs/tools/computer.md`](./tools/computer.md).
+For implementation-level inputs, outputs, lifecycle, and error surfaces, see [`docs/tools/computer.md`](./tools/computer.html).

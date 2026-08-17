@@ -11,7 +11,7 @@
  * Transport note: this server is local-only (unix socket), so auth is
  * effectively local for every method. The public/session/local matrix in
  * @musepi/sdk becomes a real gate when a remote transport (relay/tunnel) is
- * added — see gui-architecture decision 7.
+ * added — see the daemon design decisions.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -21,6 +21,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { getDashboardStats } from "@musepi/omp-stats";
 import { AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
+import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { PROVIDER_REGISTRY } from "@musepi/pi-ai/registry";
 import {
@@ -42,6 +43,7 @@ import type { WorkspaceSessionInfo } from "../collab/protocol";
 import { isWireAgentEvent, toWireAgentEvent } from "../collab/wire-guard";
 import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
+import { resolveProviderModelReference } from "../config/model-resolver";
 import type { Settings } from "../config/settings";
 import type { SettingPath } from "../config/settings-schema";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
@@ -52,7 +54,7 @@ import { computeContextBreakdown } from "../modes/utils/context-usage";
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { CompactMode } from "../session/compact-modes";
 import { SKILL_PROMPT_MESSAGE_TYPE } from "../session/messages";
-import type { SessionInfo } from "../session/session-listing";
+import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { executeAcpBuiltinSlashCommand } from "../slash-commands/acp-builtins";
 import { lookupBuiltinSlashCommand } from "../slash-commands/builtin-registry";
@@ -369,7 +371,7 @@ async function snapshotFromJsonl(file: string, sessionId: string): Promise<Stati
 }
 
 import { ModelsConfigFile } from "../config/models-config";
-import type { ExtensionUIContext } from "../extensibility/extensions/types";
+import type { ExtensionSetting, ExtensionUIContext } from "../extensibility/extensions/types";
 import type { AgentSession } from "../session/agent-session";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
@@ -501,6 +503,42 @@ function estimateSnapcompactSavings(session: AgentSession): SnapcompactSavingsEs
 
 /** Live sessions with no activity (send or event) for this long are auto-closed. */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/**
+ * Live-session LRU cap: the GUI switch keeps every visited session live
+ * (idle-close only after IDLE_TIMEOUT_MS), so a long session-switching
+ * session would accumulate full agent runtimes (journal + materialized
+ * view + agent loop) with no bound. When the live map exceeds the cap the
+ * scanner closes the oldest IDLE sessions — never a working/compacting
+ * one — and they stay listed + resumable as snapshot-only history
+ * (activate() re-attaches on open).
+ */
+const MAX_LIVE_SESSIONS = 8;
+
+/**
+ * Tail-window the initial snapshot (kimi/DSH parity): the GUI opens a
+ * session showing the LATEST messages and pages older history up as the
+ * user scrolls (session.history) — the full transcript is never shipped
+ * (or held) up front. `tail` rides on the returned snapshot: hasMore =
+ * older history exists, beforeId = cursor for session.history (the
+ * oldest entry in the tail).
+ */
+const TAIL_ENTRIES = 200;
+interface TailInfo {
+	hasMore: boolean;
+	beforeId: string | null;
+}
+function tailSnapshot<T extends { entries?: readonly unknown[] }>(snap: T): T & { tail: TailInfo } {
+	const entries = snap.entries ?? [];
+	if (entries.length <= TAIL_ENTRIES) {
+		return { ...snap, tail: { hasMore: false, beforeId: null } };
+	}
+	const firstKept = entries[entries.length - TAIL_ENTRIES] as { id?: unknown } | undefined;
+	return {
+		...snap,
+		entries: entries.slice(-TAIL_ENTRIES),
+		tail: { hasMore: true, beforeId: typeof firstKept?.id === "string" ? firstKept.id : null },
+	};
+}
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 /** Idle-recap delay bounds (TUI event-controller parity). */
@@ -521,6 +559,9 @@ interface RpcRequest {
 interface LiveSession {
 	sessionId: string;
 	agentSession: AgentSession;
+	/** Settings contributed by loaded extensions (registerSetting), keyed by
+	 *  setting key — merged into settings.schema for the GUI/TUI panels. */
+	extensionSettings: Map<string, ExtensionSetting>;
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
@@ -551,7 +592,9 @@ interface LiveSession {
 	/** Broadcast a wire event (journal + materialized view + subscribers)
 	 *  without touching agent state — for RPC paths whose side effects are
 	 *  already recorded in the session (see session.bashCommand). */
-	publishWireEvent(event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never): void;
+	publishWireEvent(
+		event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never,
+	): void;
 	dispose: () => void;
 }
 
@@ -593,6 +636,11 @@ export class DaemonSessionHost {
 	/** Global settings instance (first live session's, reused for the
 	 *  session-less settings.* RPCs — one config, one writer). */
 	#settings: Settings | null = null;
+	/** Extension-contributed settings (registerSetting), cached at the host
+	 *  level so the settings panel shows them even without a live session
+	 *  (the owning extension registers at session creation; the cache
+	 *  survives session close). */
+	readonly #extensionSettings = new Map<string, ExtensionSetting>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
 	/** Workspace file-content index (settings → 索引库 → 代码库); lazily
@@ -664,6 +712,16 @@ export class DaemonSessionHost {
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
 		});
 		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
+		// Extension-contributed settings (registerSetting): merge every loaded
+		// extension's settings into the host-level cache AND the live session
+		// so settings.schema surfaces them (the swarm style extension's
+		// display.taskCardStyle) even after the session closes.
+		for (const ext of result.extensionsResult?.extensions ?? []) {
+			for (const [key, setting] of ext.settings) {
+				live.extensionSettings.set(key, setting);
+				this.#extensionSettings.set(key, setting);
+			}
+		}
 		live.autoTitle = params.autoTitle !== false;
 		return { sessionId: live.sessionId };
 	}
@@ -734,19 +792,53 @@ export class DaemonSessionHost {
 		// GUI approval gate: enable UI so the wrapper's approval select is
 		// reachable, then inject the bridge context that pauses tool calls
 		// until a GUI client answers via tool.approve / tool.deny.
-		const approvals = createApprovalBridge(record => {
-			for (const send of live.subscribers.values()) {
-				try {
-					send({
-						kind: "approval-request",
-						seq: ++live.seq,
-						payload: { requestId: record.requestId, tool: record.tool, args: null },
-					});
-				} catch {
-					// subscriber socket died; removed on close
+		const approvals = createApprovalBridge(
+			record => {
+				for (const send of live.subscribers.values()) {
+					try {
+						send({
+							kind: "approval-request",
+							seq: ++live.seq,
+							payload: { requestId: record.requestId, tool: record.tool, args: null },
+						});
+					} catch {
+						// subscriber socket died; removed on close
+					}
 				}
-			}
-		});
+			},
+			record => {
+				// ask tool questions / custom input (TUI ask parity): push the
+				// question card to every GUI subscriber; they answer via
+				// session.askAnswer. Multi-question dialogs (mode "dialog")
+				// carry the questions array; single select/input keep the
+				// flat title/options shape.
+				for (const send of live.subscribers.values()) {
+					try {
+						send({
+							kind: "ask-request",
+							seq: ++live.seq,
+							payload:
+								record.mode === "dialog"
+									? {
+											requestId: record.requestId,
+											title: record.title,
+											mode: "dialog",
+											questions: record.questions,
+										}
+									: {
+											requestId: record.requestId,
+											title: record.title,
+											options: record.options,
+											multi: record.multi,
+											mode: record.mode,
+										},
+						});
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
+		);
 		setToolUIContext(approvals.uiContext, true);
 		// Keep the first session's registry for provider/model management RPCs
 		// that legitimately run outside any live session.
@@ -824,6 +916,7 @@ export class DaemonSessionHost {
 		const live: LiveSession = {
 			sessionId,
 			agentSession,
+			extensionSettings: new Map(),
 			autoTitle: true,
 			seq: viewFinal.cursor,
 			journal,
@@ -854,7 +947,9 @@ export class DaemonSessionHost {
 			// are already recorded in the session (e.g. session.bashCommand: the
 			// BashRunner appended the bashExecution message itself; the GUI
 			// transcript still needs the message_start/end events to fold it in).
-			publishWireEvent: (event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never) => {
+			publishWireEvent: (
+				event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never,
+			) => {
 				const wireEvent = toWireAgentEvent(event);
 				if (!wireEvent) return;
 				const seq = ++live.seq;
@@ -887,10 +982,16 @@ export class DaemonSessionHost {
 					console.error(`[daemon] view-store persist failed on dispose: ${String(error)}`);
 				}
 				void journal.close();
-				void agentSession.dispose();
+				// Fire-and-forget, but never into a void: a mid-turn dispose
+				// must not kill the daemon via an unhandled rejection from
+				// the agent teardown.
+				void agentSession.dispose().catch(error => {
+					console.error(`[daemon] agent session dispose failed: ${String(error)}`);
+				});
 			},
 		};
-		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);		live.idleTimer.unref?.();
+		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);
+		live.idleTimer.unref?.();
 		// Subagent progress/lifecycle (task tool) rides the GUI stream: the
 		// EventBus channels are per-daemon shared, so payloads from any session
 		// are keyed by agent id and fan out to this session's subscribers like
@@ -993,6 +1094,17 @@ export class DaemonSessionHost {
 
 	sessions(): IterableIterator<string> {
 		return this.#sessions.keys();
+	}
+
+	/** All live sessions (extension-settings collection, …). */
+	allSessions(): IterableIterator<LiveSession> {
+		return this.#sessions.values();
+	}
+
+	/** Extension-contributed settings (registerSetting), host-level cache —
+	 *  populated on session creation, survives session close. */
+	extensionSettings(): ReadonlyMap<string, ExtensionSetting> {
+		return this.#extensionSettings;
 	}
 
 	get(sessionId: string): LiveSession | undefined {
@@ -1187,6 +1299,18 @@ export class DaemonSessionHost {
 
 	/** Persist a materialized snapshot to the view store (revert path). */
 	persistSnapshot(sessionId: string, snapshot: unknown): void {
+		// Persisted snapshots represent the ARCHIVED state. A stored
+		// isStreaming=true (daemon shut down mid-stream) would make the GUI
+		// show the session as working forever — an "un-stoppable" phantom
+		// turn. Normalize to idle on write; live streaming state is only
+		// ever served through the live-session snapshot override, never
+		// from the store.
+		const snap = snapshot;
+		if (snap && typeof snap === "object" && "state" in snap && snap.state && typeof snap.state === "object") {
+			const state = snap.state as { isStreaming?: unknown; queuedMessageCount?: unknown };
+			state.isStreaming = false;
+			state.queuedMessageCount = 0;
+		}
 		this.#store.upsert(sessionId, snapshot as never);
 	}
 
@@ -1233,6 +1357,16 @@ export class DaemonSessionHost {
 		const now = Date.now();
 		for (const [id, live] of this.#sessions) {
 			if (now - live.lastActivity > IDLE_TIMEOUT_MS) this.close(id);
+		}
+		// LRU cap: close the oldest idle sessions past MAX_LIVE_SESSIONS.
+		// lastActivity is touched on resume/send, so a session the user just
+		// switched away from ages naturally while active ones stay live.
+		if (this.#sessions.size > MAX_LIVE_SESSIONS) {
+			const excess = this.#sessions.size - MAX_LIVE_SESSIONS;
+			const candidates = [...this.#sessions.entries()]
+				.filter(([, live]) => !live.agentSession?.isStreaming && !live.agentSession?.isCompacting)
+				.sort((a, b) => a[1].lastActivity - b[1].lastActivity);
+			for (const [id] of candidates.slice(0, excess)) this.close(id);
 		}
 	}
 
@@ -1329,7 +1463,13 @@ export class DaemonSessionHost {
 		const live = this.#sessions.get(sessionId);
 		if (live) {
 			const snap = live.view.snapshot() as Static<typeof sessionSnapshot> & {
-				state: { goalMode?: unknown; planMode?: unknown; todo?: unknown; isStreaming?: boolean };
+				state: {
+					goalMode?: unknown;
+					planMode?: unknown;
+					todo?: unknown;
+					isStreaming?: boolean;
+					isCompacting?: boolean;
+				};
 			};
 			// Live mode state rides along on the snapshot so the GUI badges
 			// reflect goal/plan/todo without extra round-trips.
@@ -1337,6 +1477,9 @@ export class DaemonSessionHost {
 			snap.state.goalMode = modes.goalMode;
 			snap.state.planMode = modes.planMode;
 			snap.state.todo = modes.todo;
+			// Compaction state rides along too: the GUI's compaction status
+			// line keys off the live getter (the view has no compaction event).
+			snap.state.isCompacting = modes.isCompacting;
 			// The view's isStreaming flag is event-driven and can go stale
 			// (abort paths never emit turn_end) — the agent's live getter is
 			// authoritative for what the GUI should show as working.
@@ -1348,6 +1491,15 @@ export class DaemonSessionHost {
 		}
 		// History path: no running session — serve the persisted materialized
 		// snapshot, degrading to a journal replay when the cache is absent.
+		// Archived sessions are by definition idle: a stored isStreaming=true
+		// (daemon shut down mid-stream) must never make the GUI show a phantom
+		// working turn with an un-stoppable stop button.
+		const idleHistory = (view: MaterializedView): Static<typeof sessionSnapshot> => {
+			const snap = view.snapshot();
+			snap.state.isStreaming = false;
+			snap.state.queuedMessageCount = 0;
+			return snap;
+		};
 		const persisted = this.#store.load(sessionId);
 		if (persisted) {
 			const headerCwd =
@@ -1355,7 +1507,7 @@ export class DaemonSessionHost {
 					? String((persisted.header as { cwd?: string }).cwd ?? "")
 					: "";
 			const view = MaterializedView.fromSnapshot(sessionId, headerCwd, persisted);
-			if (view) return view.snapshot();
+			if (view) return idleHistory(view);
 		}
 		const journal = new AppendJournal(JOURNAL_DIR, sessionId);
 		await journal.open();
@@ -1366,7 +1518,7 @@ export class DaemonSessionHost {
 					? (MaterializedView.fromSnapshot(sessionId, "", checkpoint.snapshot) ??
 						MaterializedView.replay(sessionId, "", events))
 					: MaterializedView.replay(sessionId, "", events);
-				return view.snapshot();
+				return idleHistory(view);
 			}
 		} finally {
 			void journal.close();
@@ -1411,7 +1563,9 @@ export class DaemonSessionHost {
 		this.#historyCache = null;
 	}
 
-	async knownSessions(): Promise<(ReturnType<ViewStore["list"]>[number] & { liveCursor?: number; title?: string })[]> {
+	async knownSessions(): Promise<
+		(ReturnType<ViewStore["list"]>[number] & { liveCursor?: number; title?: string; status?: SessionStatus })[]
+	> {
 		const live = new Map<string, number>();
 		for (const [id, s] of this.#sessions) live.set(id, s.view.cursor);
 		const rows = this.#store.list();
@@ -1426,7 +1580,9 @@ export class DaemonSessionHost {
 			history = { at: Date.now(), rows: scan };
 			this.#historyCache = history;
 		}
-		const merged = new Map<string, MaterializedRow & { title?: string }>(rows.map(r => [r.sessionId, r]));
+		const merged = new Map<string, MaterializedRow & { title?: string; status?: SessionStatus }>(
+			rows.map(r => [r.sessionId, r]),
+		);
 		for (const h of history.rows) {
 			const existing = merged.get(h.id);
 			const first = h.firstMessage && h.firstMessage !== "(no messages)" ? h.firstMessage : undefined;
@@ -1436,6 +1592,10 @@ export class DaemonSessionHost {
 				// Backfill the jsonl title slot when the stored title is empty
 				// so daemon-restarted sessions keep their generated titles.
 				if (!existing.title && h.title) existing.title = h.title;
+				// Lifecycle status (complete/interrupted/aborted/error/pending)
+				// comes from the jsonl tail — the store snapshot has no such
+				// field, so the SDK scan is authoritative for it.
+				if (!existing.status && h.status) existing.status = h.status;
 				continue;
 			}
 			merged.set(h.id, {
@@ -1457,6 +1617,7 @@ export class DaemonSessionHost {
 				// when present; SDK-transcript fallback is the first user
 				// message. listAllSessions reads the slot now.
 				title: h.title ?? first,
+				status: h.status,
 			});
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1486,6 +1647,13 @@ export class DaemonSessionHost {
 	 * workspace files are never touched.
 	 */
 	async deleteSession(sessionId: string): Promise<void> {
+		// TUI parity (`/session delete` refuses while streaming): tearing a
+		// session down mid-turn leaves the agent's in-flight runLoop
+		// rejecting into a void — the daemon must not delete under it.
+		const live = this.#sessions.get(sessionId);
+		if (live && (live.view.snapshot().state.isStreaming || live.agentSession.isStreaming)) {
+			throw new Error("Cannot delete the session while streaming.");
+		}
 		this.close(sessionId);
 		this.#store.remove(sessionId);
 		try {
@@ -1619,6 +1787,13 @@ export class DaemonSessionHost {
 		// opening them in the GUI yields a live stream, not a dead snapshot.
 		let live = this.#sessions.get(sessionId);
 		if (!live) live = await this.activate(sessionId);
+		// Single active subscription per connection: the GUI keeps exactly one
+		// current session store and routes every envelope to it (StreamEvent
+		// carries no sessionId), trusting the daemon to push only the selected
+		// session. Without this, switching sessions leaves this conn subscribed
+		// to every session it ever opened — a background session's events then
+		// bleed into the currently displayed session (cross-session 窜台).
+		this.unsubscribeAll(conn.id);
 		live.subscribers.set(conn.id, event => conn.send(event));
 		return { seq: live.seq };
 	}
@@ -1755,16 +1930,6 @@ class DaemonServer {
 			saveCronTasks(this.#cronTasks);
 			this.#cronStarting.delete(task.id);
 		}
-	}
-
-	/** Recompute nextRunAt for every task after edits (keep state honest
-	 *  without waiting for the next tick). */
-	#cronRecompute(): void {
-		const now = Date.now();
-		for (const task of this.#cronTasks) {
-			if (task.enabled) task.state.nextRunAt = computeNextRun(task, now) ?? undefined;
-		}
-		saveCronTasks(this.#cronTasks);
 	}
 
 	/**
@@ -2110,42 +2275,42 @@ class DaemonServer {
 				// one source of truth, no double-push. `force` peeks the
 				// three most recent entries WITHOUT advancing the marker
 				// (manual "what's new" re-open).
-				const { parseChangelog, resolveStartupChangelogForDisplay, selectStartupChangelog } =
-					await import("../utils/changelog");
+				const { parseChangelog, resolveStartupChangelogForDisplay, selectStartupChangelog } = await import(
+					"../utils/changelog"
+				);
 				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
 				const force = (params as { force?: boolean } | undefined)?.force === true;
 				if (force) {
 					const entries = await parseChangelog(undefined);
 					const sel = selectStartupChangelog(entries, "0.0.0", currentVersion);
-					return sel
-						? { markdown: sel.markdown, latestVersion: sel.latestVersion }
-						: null;
+					return sel ? { markdown: sel.markdown, latestVersion: sel.latestVersion } : null;
 				}
 				const settings = await this.#settingsForRpc();
-				const mode = String(
-					settings.get("startup.changelogMode") ?? "summary",
-				) as "summary" | "expanded" | "hidden";
+				const mode = String(settings.get("startup.changelogMode") ?? "summary") as
+					| "summary"
+					| "expanded"
+					| "hidden";
 				const changelog = await resolveStartupChangelogForDisplay({
 					mode,
 					currentVersion,
 					agentDir: getAgentDir(),
 				});
-				return changelog
-					? { markdown: changelog.markdown, latestVersion: changelog.latestVersion }
-					: null;
+				return changelog ? { markdown: changelog.markdown, latestVersion: changelog.latestVersion } : null;
 			}
 			case "updates.check": {
-				// npm-registry latest-version probe (TUI checkForNewVersion
-				// parity). Respects startup.checkUpdate; network failure or
-				// up-to-date resolve to null so the GUI never nags.
+				// Version manifest probe (Electron updater.cjs parity — same
+				// raw.githubusercontent manifest the GUI OTA checks). Respects
+				// startup.checkUpdate; network failure or up-to-date resolve
+				// to null so the GUI never nags.
 				const settings = await this.#settingsForRpc();
 				if (!settings.get("startup.checkUpdate")) {
 					return { latest: null };
 				}
 				try {
-					const res = await fetch("https://registry.npmjs.org/@musepi/pi-coding-agent/latest", {
-						signal: AbortSignal.timeout(5_000),
-					});
+					const res = await fetch(
+						"https://raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json",
+						{ signal: AbortSignal.timeout(5_000) },
+					);
 					if (!res.ok) return { latest: null };
 					const data = (await res.json()) as { version?: unknown };
 					const latest = typeof data.version === "string" ? data.version : undefined;
@@ -2173,7 +2338,7 @@ class DaemonServer {
 						id: r.sessionId,
 						parentId: r.parentId,
 						kind: "session",
-						timestamp: new Date(r.updatedAt).toISOString(),
+						timestamp: new Date(r.createdAt).toISOString(),
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
@@ -2188,6 +2353,10 @@ class DaemonServer {
 						working: live?.pauseGate.paused === true ? false : (live?.view.snapshot().state.isStreaming ?? false),
 						live: live !== undefined,
 						source: cronIds.has(r.sessionId) ? "cron" : undefined,
+						// Lifecycle status (TUI session-list parity): derived from
+						// the session file tail (complete/interrupted/aborted/
+						// error/pending) — lets the GUI color unfinished history.
+						status: r.status ?? undefined,
 						// Title = stored auto-title, else the first user message
 						// (session.tree parity; the history viewer shows it).
 						title:
@@ -2215,7 +2384,7 @@ class DaemonServer {
 					id: r.sessionId,
 					parentId: r.parentId,
 					kind: "session",
-					timestamp: new Date(r.updatedAt).toISOString(),
+					timestamp: new Date(r.createdAt).toISOString(),
 					model: r.model ?? undefined,
 					messageCount: r.messageCount,
 					cwd: r.cwd || undefined,
@@ -2336,7 +2505,7 @@ class DaemonServer {
 							type: "session",
 							id: r.sessionId,
 							parentId: r.parentId,
-							timestamp: new Date(r.updatedAt).toISOString(),
+							timestamp: new Date(r.createdAt).toISOString(),
 							source: cronIds.has(r.sessionId) ? "cron" : undefined,
 							// Title = first user request (opencode/Codex convention);
 							// omit when empty so the GUI falls back to the id.
@@ -2378,7 +2547,17 @@ class DaemonServer {
 			case "session.subscribe": {
 				const p = (params ?? {}) as { sessionId: string };
 				await this.#host.subscribe(p.sessionId, conn);
-				return { stream: conn.id, initial: await this.#host.snapshot(p.sessionId) };
+				return { stream: conn.id, initial: tailSnapshot(await this.#host.snapshot(p.sessionId)) };
+			}
+			case "session.snapshot": {
+				// Read-only snapshot of any session WITHOUT subscribing or
+				// activating it — used by secondary surfaces (pet panel content
+				// preview) that need one shot of entries but must not attach the
+				// connection's live stream to an extra session (that would bleed
+				// its events into the GUI's single-store routing).
+				const p = (params ?? {}) as { sessionId: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				return tailSnapshot(await this.#host.snapshot(p.sessionId));
 			}
 			case "index.status": {
 				// Workspace file-index state (settings → 索引库 → 代码库).
@@ -2555,6 +2734,17 @@ class DaemonServer {
 				// three states (active/disabled/shadowed). raw is heavy and
 				// served lazily via extensions.raw for the inspector.
 				const extensions = await this.#getExtensions();
+				// Builtin style extension state mirrors display.taskCardStyle
+				// (the setting is the source of truth; setEnabled writes it).
+				const s = this.#host.settings();
+				const rawStyle = s?.getRaw("display.taskCardStyle");
+				const styleSetting: "swarm" | "classic" = rawStyle === "classic" ? "classic" : "swarm";
+				for (const ext of extensions) {
+					if (ext.id === "style:task-card-swarm") {
+						ext.state = styleSetting === "classic" ? "disabled" : "active";
+						ext.disabledReason = styleSetting === "classic" ? "item-disabled" : undefined;
+					}
+				}
 				const { buildProviderTabs } = await import("../modes/components/extensions/state-manager");
 				const tabs = buildProviderTabs(extensions);
 				const { getAllProvidersInfo } = await import("../capability");
@@ -2583,7 +2773,9 @@ class DaemonServer {
 				// settings.disabledExtensions with the same `kind:name` ids
 				// the dashboard uses. MCP toggles route through the canonical
 				// mcp.json denylist so /mcp list, the MCP runtime and this
-				// center agree (issue #3827).
+				// center agree (issue #3827). The builtin style extension
+				// (task-card-swarm) maps to display.taskCardStyle instead —
+				// the setting IS the source of truth for render style.
 				const p = (params ?? {}) as { id: string; enabled: boolean };
 				let settings = this.#host.settings();
 				if (!settings) {
@@ -2591,6 +2783,17 @@ class DaemonServer {
 					settings = this.#host.settings();
 				}
 				if (!settings) throw new Error("settings unavailable");
+				if (p.id === "style:task-card-swarm") {
+					// Extension-owned key (registered by the task-card style
+					// extension — not in the static SettingPath union).
+					settings.set(
+						"display.taskCardStyle" as Parameters<Settings["set"]>[0],
+						(p.enabled ? "swarm" : "classic") as never,
+					);
+					await settings.flush();
+					this.#extensionsCache = null;
+					return { ok: true };
+				}
 				if (p.id.startsWith("mcp:")) {
 					const { setMcpServerEnabled } = await import("../mcp/config-writer");
 					const { getMCPConfigPath } = await import("@musepi/pi-utils");
@@ -3291,6 +3494,30 @@ class DaemonServer {
 				const [exit, err] = await Promise.all([proc.exited.catch(() => null), new Response(proc.stderr).text()]);
 				return { ok: exit === 0, detail: exit === 0 ? undefined : err.trim() };
 			}
+			case "session.history": {
+				// Bounded paging over the materialized entries (DSH
+				// session.history parity): the GUI folds a long session's
+				// oldest region into a marker and pages it back in with this
+				// cursor. beforeId = the oldest entry the client still holds;
+				// returns up to maxMessages entries BEFORE it (oldest→newest)
+				// plus how many older entries remain — nothing is ever
+				// dropped, the fold is purely a client-side window.
+				const p = (params ?? {}) as { sessionId: string; beforeId?: string; maxMessages?: number };
+				const max = Math.min(Math.max(Number.isFinite(p.maxMessages) ? (p.maxMessages ?? 500) : 500, 1), 1000);
+				const snap = (await this.#host.snapshot(p.sessionId)) as { entries?: unknown[] } | null;
+				const entries = Array.isArray(snap?.entries) ? snap.entries : [];
+				let start = entries.length;
+				if (p.beforeId) {
+					const idx = entries.findIndex(e => (e as { id?: unknown } | null)?.id === p.beforeId);
+					if (idx !== -1) start = idx;
+				}
+				const from = Math.max(0, start - max);
+				return {
+					entries: entries.slice(from, start),
+					hasMore: from > 0,
+					remaining: from,
+				};
+			}
 			case "session.resume": {
 				const p = (params ?? {}) as { sessionId: string; cursor?: number };
 				const snapshot = await this.#host.snapshot(p.sessionId);
@@ -3303,7 +3530,11 @@ class DaemonServer {
 				// into the snapshot, so the client must refresh derived state.
 				const checkpointSeq = await this.#host.checkpointSeq(p.sessionId);
 				const compacted = typeof p.cursor === "number" && checkpointSeq > p.cursor;
-				return { stream: live ? conn.id : null, snapshot, compactedThrough: compacted };
+				return {
+					stream: live ? conn.id : null,
+					snapshot: tailSnapshot(snapshot),
+					compactedThrough: compacted,
+				};
 			}
 			case "session.setDraft": {
 				// GUI composer un-sent draft state — the daemon-side analogue
@@ -3561,7 +3792,12 @@ class DaemonServer {
 				// The revert succeeded — keep the backup for restoreRevert.
 				if (removedTail.length > 0) {
 					const backups = this.#host.revertBackupsFor(p.sessionId);
-					backups.push({ wireEntries: removedTail, fileLines: removedFileLines, text: text ?? "", messageId: p.messageId });
+					backups.push({
+						wireEntries: removedTail,
+						fileLines: removedFileLines,
+						text: text ?? "",
+						messageId: p.messageId,
+					});
 				}
 				return { ok: true, text, cursor };
 			}
@@ -3601,9 +3837,7 @@ class DaemonServer {
 						if (e.type === "message") existingKeys.add(messageKey(e.message as WireMessage));
 					}
 				}
-				const dedupEntries = (
-					entries: SessionEntry[],
-				): Array<Extract<SessionEntry, { type: "message" }>> =>
+				const dedupEntries = (entries: SessionEntry[]): Array<Extract<SessionEntry, { type: "message" }>> =>
 					entries.filter((e): e is Extract<SessionEntry, { type: "message" }> => {
 						if (e.type !== "message") return false;
 						const key = messageKey(e.message as WireMessage);
@@ -3733,9 +3967,7 @@ class DaemonServer {
 							const view = MaterializedView.replay(p.sessionId, cwd, events);
 							// Keep totals of rounds completed before the revert that
 							// produced this backup (replay records none).
-							view.seedRoundDurations(
-								(snapshot as { roundDurations?: [number, number][] }).roundDurations,
-							);
+							view.seedRoundDurations((snapshot as { roundDurations?: [number, number][] }).roundDurations);
 							this.#host.persistSnapshot(p.sessionId, view.snapshot());
 						} finally {
 							void journal.close();
@@ -3779,7 +4011,28 @@ class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const wasStreaming = live.view.snapshot().state.isStreaming === true;
 				await live.agentSession.abort({ reason: "interrupted" });
+				// Abort paths never emit turn_end (the loop unwinds without
+				// one), so the view's isStreaming flag stays true and the GUI
+				// would keep showing the turn as working — the stop button
+				// looks like it does nothing. Emit a synthetic turn_end:
+				// resets the view state, journals the reset (so replayed
+				// history is idle) and broadcasts it so the GUI store drops
+				// working immediately.
+				if (wasStreaming) {
+					const turnEnd = { type: "turn_end" } as const;
+					live.journal?.append(turnEnd as never);
+					live.view.apply(turnEnd as never);
+					const seq = ++live.seq;
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "event", seq, payload: turnEnd });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				}
 				return { ok: true };
 			}
 			case "session.ephemeralAsk": {
@@ -4076,8 +4329,14 @@ class DaemonServer {
 				const live = this.#host.get(p.sessionId);
 				if (live) {
 					// setModelTemporary resolves the model by id from the registry.
+					// Same bare id can be served by several providers (opencode-go
+					// vs opencode-zen both offering deepseek-v4-flash) — the
+					// provider qualifier picks the exact one.
 					const models = live.agentSession.getAvailableModels();
-					const model = models.find(m => m.id === p.model.id);
+					const model = p.model.provider
+						? (models.find(m => m.provider === p.model.provider && m.id === p.model.id) ??
+							models.find(m => m.id === p.model.id))
+						: models.find(m => m.id === p.model.id);
 					if (!model) throw new Error(`Unknown model: ${p.model.id}`);
 					await live.agentSession.setModelTemporary(model);
 					return { ok: true };
@@ -4230,6 +4489,51 @@ class DaemonServer {
 				await session.prompt(text, { streamingBehavior: "steer" });
 				return { ok: true, sessionId: session.sessionId };
 			}
+			case "agents.transcript": {
+				// Desktop parity with the collab host's fetch-transcript frame:
+				// incremental read of a subagent's persisted session file, from
+				// a byte cursor. Returns { text, newSize, error? } — the GUI
+				// trajectory panel polls with the returned cursor (terminal
+				// `error` stops polling; `null` on missing file).
+				const { AgentRegistry } = await import("../registry/agent-registry");
+				const p = (params ?? {}) as { agentId?: unknown; fromByte?: unknown };
+				const agentId = typeof p.agentId === "string" ? p.agentId : "";
+				const fromByte = typeof p.fromByte === "number" && Number.isFinite(p.fromByte) ? p.fromByte : 0;
+				if (!agentId) throw new Error("agents.transcript: missing agentId");
+				const file = AgentRegistry.global().get(agentId)?.sessionFile;
+				if (!file) return { text: "", newSize: fromByte, error: "no transcript available" };
+				try {
+					const stat = await fs.promises.stat(file);
+					if (stat.size <= fromByte) return { text: "", newSize: stat.size };
+					const want = Math.min(stat.size - fromByte, 4 * 1024 * 1024);
+					const handle = await fs.promises.open(file, "r");
+					let bytesRead: number;
+					const buf = Buffer.allocUnsafe(want);
+					try {
+						({ bytesRead } = await handle.read(buf, 0, want, fromByte));
+					} finally {
+						await handle.close();
+					}
+					let slice = buf.subarray(0, bytesRead);
+					const reachedEof = fromByte + bytesRead >= stat.size;
+					if (!reachedEof) {
+						// Trim to the last complete JSONL line so no line or
+						// UTF-8 char is split mid-read.
+						const lastNewline = slice.lastIndexOf(0x0a);
+						if (lastNewline < 0) {
+							return {
+								text: "",
+								newSize: fromByte,
+								error: `transcript entry exceeds transcript fetch cap (${4 * 1024 * 1024} bytes)`,
+							};
+						}
+						slice = slice.subarray(0, lastNewline + 1);
+					}
+					return { text: slice.toString("utf-8"), newSize: reachedEof ? stat.size : fromByte + slice.byteLength };
+				} catch (err) {
+					return { text: "", newSize: fromByte, error: String(err) };
+				}
+			}
 			case "commands.list": {
 				// Slash-command catalog for the GUI composer's / completion
 				// (same source of truth as the TUI's builtin registry, plus the
@@ -4364,8 +4668,7 @@ class DaemonServer {
 				if (typeof p.command !== "string" || !p.command.startsWith("!")) {
 					throw new Error("bash command required");
 				}
-				const excludeFromContext =
-					p.excludeFromContext === true || p.command.startsWith("!!");
+				const excludeFromContext = p.excludeFromContext === true || p.command.startsWith("!!");
 				const command = (excludeFromContext ? p.command.slice(2) : p.command.slice(1)).trim();
 				if (!command) throw new Error("command required");
 				const live = this.#host.get(p.sessionId);
@@ -4538,7 +4841,45 @@ class DaemonServer {
 				const usage = stats.contextUsage ?? null;
 				if (!usage) return usage;
 				const snapcompact = estimateSnapcompactSavings(live.agentSession);
-				return snapcompact ? { ...usage, snapcompact } : usage;
+				// Full category breakdown (TUI /context panel parity) for the
+				// GUI's native /context dialog — the ring only needs the
+				// aggregate, but the breakdown is already computed server-side.
+				const breakdown =
+					live.agentSession.getContextBreakdown({ contextWindow: usage.contextWindow }) ?? undefined;
+				const modelId = live.agentSession.model?.id ?? undefined;
+				// Autocompact buffer + free tokens (TUI /context panel parity):
+				// the buffer is the reserve the compaction strategy keeps below
+				// the threshold; free is what's left after used + buffer.
+				const cw = usage.contextWindow;
+				const used = breakdown?.usedTokens ?? usage.tokens;
+				let autoCompactBufferTokens = 0;
+				let freeTokens = 0;
+				if (cw > 0) {
+					const comp = live.agentSession.settings.getGroup("compaction") as
+						| { enabled?: boolean; strategy?: string }
+						| undefined;
+					if (comp?.enabled && comp.strategy !== "off") {
+						const threshold = resolveThresholdTokens(cw, comp as Parameters<typeof resolveThresholdTokens>[1]);
+						autoCompactBufferTokens = Math.max(0, cw - threshold);
+					} else if (comp?.enabled) {
+						autoCompactBufferTokens = effectiveReserveTokens(
+							cw,
+							comp as Parameters<typeof effectiveReserveTokens>[1],
+						);
+					}
+					autoCompactBufferTokens = Math.min(autoCompactBufferTokens, Math.max(0, cw - used));
+					freeTokens = Math.max(0, cw - used - autoCompactBufferTokens);
+				}
+				return snapcompact || breakdown || modelId || autoCompactBufferTokens > 0
+					? {
+							...usage,
+							...(modelId ? { model: modelId } : {}),
+							...(snapcompact ? { snapcompact } : {}),
+							...(breakdown ? { breakdown } : {}),
+							autoCompactBufferTokens,
+							freeTokens,
+						}
+					: usage;
 			}
 			case "session.modes": {
 				// Goal / plan mode + todo progress (TUI /goal /plan parity):
@@ -4889,6 +5230,10 @@ class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				const keys = p.keys && p.keys.length > 0 ? p.keys : ["modelRoles", "cycleOrder", "knownRoleIds"];
 				const { SETTINGS_SCHEMA, hasUi, isCredential } = await import("../config/settings-schema");
+				// Extension-contributed settings (registerSetting) are also
+				// readable — they're not in SETTINGS_SCHEMA, so hasUi() would
+				// otherwise skip them.
+				const extKeys = new Set(this.#host.extensionSettings().keys());
 				const out: Record<string, unknown> = {};
 				for (const key of keys) {
 					// Anything the TUI settings panel exposes (hasUi) plus the
@@ -4906,7 +5251,7 @@ class DaemonServer {
 						key === "modelProviderOrder" ||
 						key === "sideChannelModel" ||
 						key === "busyEnter";
-					if (!legacy && !hasUiMeta) continue;
+					if (!legacy && !hasUiMeta && !extKeys.has(key)) continue;
 					if (key in SETTINGS_SCHEMA && isCredential(key as Parameters<typeof isCredential>[0])) {
 						out[key] = undefined;
 						continue;
@@ -4923,7 +5268,7 @@ class DaemonServer {
 					) {
 						continue;
 					}
-					out[key] = settings.get(key as Parameters<Settings["get"]>[0]);
+					out[key] = extKeys.has(key) ? settings.getRaw(key) : settings.get(key as Parameters<Settings["get"]>[0]);
 				}
 				if (keys.includes("knownRoleIds")) {
 					// TUI /model parity: canonical role list = built-ins +
@@ -4979,7 +5324,7 @@ class DaemonServer {
 							return k;
 						})();
 					const available = registry?.getAvailable() ?? [];
-					const resolved: Record<string, { id: string; name: string } | null> = {};
+					const resolved: Record<string, { id: string; name: string; efforts: string[] } | null> = {};
 					for (const role of known) {
 						const value = roles[role];
 						// TUI model-hub parity: unconfigured roles fall back to
@@ -4991,7 +5336,17 @@ class DaemonServer {
 							available,
 							{ settings: settings as never },
 						);
-						resolved[role] = r.model ? { id: r.model.id, name: r.model.name } : null;
+						// The role model's exact thinking ladder (TUI model-hub
+						// parity): the role row's level select offers inherit/off
+						// plus these rungs — NOT a fixed seven-rung list, since
+						// different models support different efforts.
+						resolved[role] = r.model
+							? {
+									id: r.model.id,
+									name: r.model.name,
+									efforts: r.model.thinking ? getSupportedEfforts(r.model as never).map(e => String(e)) : [],
+								}
+							: null;
 					}
 					out.resolvedRoleModels = resolved;
 				}
@@ -5008,10 +5363,22 @@ class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				const { SETTINGS_SCHEMA, hasUi, isCredential } = await import("../config/settings-schema");
 				const legacy =
-					["modelRoles", "cycleOrder", "modelTags", "modelProviderOrder", "sideChannelModel", "busyEnter"].includes(p.key) ||
+					[
+						"modelRoles",
+						"cycleOrder",
+						"modelTags",
+						"modelProviderOrder",
+						"sideChannelModel",
+						"busyEnter",
+					].includes(p.key) ||
 					p.key.startsWith("lsp.") ||
 					p.key === "read.toolResultPreview";
-				if (!legacy && !(p.key in SETTINGS_SCHEMA && hasUi(p.key as Parameters<typeof hasUi>[0]))) {
+				const extKeys = new Set(this.#host.extensionSettings().keys());
+				if (
+					!legacy &&
+					!(p.key in SETTINGS_SCHEMA && hasUi(p.key as Parameters<typeof hasUi>[0])) &&
+					!extKeys.has(p.key)
+				) {
 					throw new Error(`read-only setting: ${p.key}`);
 				}
 				// Credentials: an empty/absent value keeps the stored one
@@ -5032,6 +5399,11 @@ class DaemonServer {
 				// hardcoded copy that drifts.
 				const p = (params ?? {}) as { tabs?: string[] };
 				const { getEnumValues, SETTINGS_SCHEMA, SETTING_TABS } = await import("../config/settings-schema");
+				// Extension-contributed settings (registerSetting, e.g. the
+				// swarm style extension's display.taskCardStyle) live in the
+				// host-level cache — merged so the panel shows them without
+				// requiring a live session.
+				const extSettings = this.#host.extensionSettings();
 				// Whitelist the requested tabs (B-class audit: the schema walk
 				// only knows the TUI's SETTING_TABS). Unknown tab names are
 				// dropped — a client cannot ask for an invented tab, and a
@@ -5065,6 +5437,13 @@ class DaemonServer {
 							item.runtimeOptions = await getAvailableThemes();
 						}
 						items.push(item);
+					}
+					// Merge extension-contributed settings for this tab (they
+					// win over nothing — keys are extension-owned namespaces).
+					for (const [key, setting] of extSettings) {
+						if (setting.ui.tab !== tab) continue;
+						if (items.some(item => (item as { key: string }).key === key)) continue;
+						items.push({ key, type: setting.type, default: setting.default, ui: setting.ui });
 					}
 					out[tab] = items;
 				}
@@ -5112,6 +5491,23 @@ class DaemonServer {
 				};
 				agent.clearQueue();
 				return { ok: true };
+			}
+			case "session.queuedSend": {
+				// 立即发出指定排队消息 (TUI 引导消息回车即发 parity): the GUI's
+				// per-item "send now" button pulls the matched message out of the
+				// steering/follow-up queue and re-injects it as an immediate steer.
+				const p = (params ?? {}) as { sessionId: string; group?: "steering" | "followUp"; text?: string };
+				if (typeof p.sessionId !== "string" || typeof p.text !== "string" || !p.text) {
+					throw new Error("sessionId and text required");
+				}
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const agent = live.agentSession as unknown as {
+					sendQueuedMessage(group: "steering" | "followUp", text: string): Promise<boolean>;
+				};
+				const sent = await agent.sendQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text);
+				if (!sent) throw new Error("Queued message not found");
+				return { sent: true };
 			}
 			case "notes.get": {
 				// Project notes (right-panel 项目笔记): one markdown file per
@@ -5237,7 +5633,19 @@ class DaemonServer {
 				if (!p.id) throw new Error("model id required");
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) return null;
-				const model = registry.getAvailable().find(m => m.id === p.id);
+				const available = registry.getAvailable();
+				// Accept both bare ids ("deepseek-v4-flash") and provider-qualified
+				// selectors ("opencode-go/deepseek-v4-flash" — the modelRoles
+				// default format the welcome composer preselects from). The old
+				// exact-id match never resolved the prefixed form, so the empty
+				// state collapsed the thinking ladder to off/auto while the
+				// session selector (session.thinkingInfo) showed the real rungs.
+				const slash = p.id.indexOf("/");
+				const model =
+					slash > 0
+						? (resolveProviderModelReference(p.id.slice(0, slash), p.id.slice(slash + 1), available) ??
+							available.find(m => m.id === p.id))
+						: available.find(m => m.id === p.id);
 				return model ? modelDetailRow(model) : null;
 			}
 			case "models.add": {
@@ -5336,6 +5744,64 @@ class DaemonServer {
 				if (!live.approvals.resolve(p.requestId, false))
 					throw new Error(`Unknown approval request: ${p.requestId}`);
 				return { ok: true };
+			}
+			case "session.askAnswer": {
+				// Answer a pending ask card (TUI ask parity): select mode takes
+				// one option label, input mode the custom text; null cancels.
+				const p = (params ?? {}) as { sessionId: string; requestId: string; answer: string | null };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				if (!live.approvals.resolveAsk(p.requestId, p.answer ?? null))
+					throw new Error(`Unknown ask request: ${p.requestId}`);
+				return { ok: true };
+			}
+			case "usage.reports": {
+				// Provider subscription quota (TUI /usage parity): the live
+				// session's fetchUsageReports — the same data the ACP-mode
+				// `_omp/usage` RPC serves. The GUI composer's context-usage
+				// popover shows it next to the token breakdown.
+				//
+				// /usage is NOT model-bound (unlike /context): the data is
+				// every account across every provider, so the RPC also serves
+				// session-less — the empty-state composer fetches the same
+				// global view without a live session. Only the ● active-account
+				// marker needs the session, so it is omitted on the global path.
+				const p = (params ?? {}) as { sessionId?: string };
+				const live = p.sessionId ? this.#host.get(p.sessionId) : undefined;
+				if (p.sessionId && !live) throw new Error("No active session");
+				if (!live) {
+					// Session-less path (empty-state composer): bootstrap the
+					// daemon-level registry like models.list / auth.list do and
+					// fetch from its auth storage. The antigravity sandbox
+					// special-case is session-settings-driven, so it stays on
+					// the session path.
+					const registry = await this.#host.ensureRegistry();
+					if (!registry) throw new Error("No model registry yet");
+					const reports = await registry.authStorage.fetchUsageReports({
+						baseUrlResolver: provider => registry.getProviderBaseUrl?.(provider),
+					});
+					return { reports: reports ?? [] };
+				}
+				const reports = await live.agentSession.fetchUsageReports();
+				// TUI /usage parity: resolve the credential this session is
+				// actually using so the GUI can mark the active account (●)
+				// the way the TUI panel does.
+				const provider = live.agentSession.model?.provider;
+				let activeAccount: { provider: string; accountId?: string; email?: string } | undefined;
+				if (provider) {
+					const identity = live.agentSession.modelRegistry.authStorage.getOAuthAccountIdentity(
+						provider,
+						live.agentSession.sessionId,
+					);
+					if (identity) {
+						activeAccount = {
+							provider,
+							...(identity.accountId ? { accountId: identity.accountId } : {}),
+							...(identity.email ? { email: identity.email } : {}),
+						};
+					}
+				}
+				return { reports: reports ?? [], ...(activeAccount ? { activeAccount } : {}) };
 			}
 			case "fs.read": {
 				// Minimal safe file read (dev-server detection): text files
@@ -5572,6 +6038,13 @@ let sdkPrewarmed = false;
 export async function startDaemon(
 	options: DaemonOptions = {},
 ): Promise<{ socketPath: string; wsPort?: number; close: () => Promise<void> }> {
+	// A daemon must outlive stray async rejections (e.g. a provider stream
+	// tearing down while a session is disposed mid-turn): Bun's default
+	// handler prints and exits with code 1. Log with the stack instead so a
+	// single teardown race cannot take the whole GUI backend down.
+	process.on("unhandledRejection", (reason: unknown) => {
+		logger.error("Unhandled rejection in daemon", { reason: String(reason) });
+	});
 	const socketPath = options.socketPath ?? DEFAULT_SOCKET;
 	await fs.promises.mkdir(path.dirname(socketPath), { recursive: true });
 	try {

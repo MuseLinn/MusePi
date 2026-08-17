@@ -1,4 +1,5 @@
 import { CodeHighlightProvider, relTime, Transcript, t } from "@musepi/collab-web";
+import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
@@ -13,6 +14,7 @@ import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
+import { AskCard, type AskAnswer, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
@@ -21,6 +23,7 @@ import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { SubagentPanel } from "./SubagentPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnRail } from "./TurnRail";
@@ -160,6 +163,7 @@ export function ChatView({
 	onReloadSession,
 	onForkSession,
 	presetModelId,
+	defaultModelId,
 	presetThinkingLevel,
 	busy,
 	project,
@@ -178,6 +182,8 @@ export function ChatView({
 	onSelectReminder,
 	onMarkAllRead,
 	sessionLoading,
+	ask,
+	onAskAnswer,
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
@@ -193,8 +199,13 @@ export function ChatView({
 	/** Open a forked session (session.forkAt result) — switches the UI to
 	 *  the new branch and refreshes the tree. */
 	onForkSession?(sessionId: string): Promise<void> | void;
-	/** Model chosen in the welcome composer before the session existed. */
+	/** Model chosen in the welcome composer before the session existed —
+	 *  carried into the session composer as its initial seed. */
 	presetModelId?: string | null;
+	/** The DEFAULT-role model (modelRoles.default): the welcome composer's
+	 *  resting preselect for NEW sessions. Separate from presetModelId so
+	 *  opening/switching sessions never changes what the welcome shows. */
+	defaultModelId?: string | null;
 	/** Daemon thinking default (boot snapshot) for the welcome composer. */
 	presetThinkingLevel?: ThinkingLevel | null | undefined;
 	/** Welcome scene (before the first session of the run). */
@@ -238,6 +249,11 @@ export function ChatView({
 	/** History-session cold open in flight: show the skeleton overlay
 	 *  over the transcript until the store lands. */
 	sessionLoading?: boolean;
+	/** Pending ask question (TUI ask parity): the daemon pushed an
+	 *  ask-request envelope — the floating card above the composer answers
+	 *  via onAskAnswer (session.askAnswer). */
+	ask?: AskRequest | null;
+	onAskAnswer?(answer: AskAnswer): void;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
 	const snap = useStore(
@@ -279,6 +295,7 @@ export function ChatView({
 						"display.hideToolActivity",
 						"display.showTokenUsage",
 						"display.collapseCompacted",
+						"display.taskCardStyle",
 					],
 				})
 				.then(v => {
@@ -435,11 +452,20 @@ export function ChatView({
 	// rows play a staggered fade-in (逐字错峰) so the context swap reads as a
 	// transition instead of a hard cut. The marker is removed after the
 	// animation so streaming updates re-render normally.
+	//
+	// Entering a session always lands on the LATEST message round (TUI
+	// resume parity): the .gui-transcript element is reused across sessions
+	// (no remount), so its scrollTop and the Transcript's bottom-lock ref
+	// would otherwise leak from the previous session — a stale mid-history
+	// position on every switch. Jump the scroller to the tail here; the
+	// programmatic scroll fires the Transcript's scroll listener, which
+	// re-arms the bottom lock so follow-up streaming stays pinned.
 	useEffect(() => {
 		if (!store) return;
 		const el = transcriptRef.current;
 		if (!el) return;
 		el.dataset.switched = "1";
+		el.scrollTop = el.scrollHeight;
 		const timer = setTimeout(() => {
 			delete el.dataset.switched;
 		}, 700);
@@ -620,6 +646,55 @@ export function ChatView({
 			// daemon rejected (unknown message/session) — keep as-is
 		}
 	};
+	// Lazy history backfill (kimi/DSH parity): the transcript fires this
+	// when its tail window is fully expanded and the user scrolls up past
+	// the oldest loaded entry. Pages the next chunk from session.history
+	// (cursor = oldest loaded entry id) and prepends it into the store —
+	// the daemon keeps the full transcript, nothing is lost.
+	const loadOlderRef = useRef(false);
+	const [loadingOlder, setLoadingOlder] = useState(false);
+	const loadOlder = useCallback(async (): Promise<void> => {
+		if (!rpc || !store || loadOlderRef.current || !store.hasMore) return;
+		const beforeId = store.historyBeforeId;
+		if (!beforeId) return;
+		loadOlderRef.current = true;
+		setLoadingOlder(true);
+		// Anchor the scroll: prepending grows the top spacer, which would
+		// shove the visible content down by the inserted height. Compensate
+		// with the real scrollHeight delta after React commits (double rAF).
+		const scroller = transcriptRef.current;
+		const scrollTop = scroller?.scrollTop ?? 0;
+		const scrollHeight = scroller?.scrollHeight ?? 0;
+		try {
+			const res = await rpc.request<{
+				entries: SessionEntry[];
+				hasMore: boolean;
+				remaining: number;
+			}>("session.history", {
+				sessionId: store.sessionId,
+				beforeId,
+				maxMessages: 500,
+			});
+			if (res?.entries?.length) {
+				store.prependEntries(res.entries, res.remaining);
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						if (scroller) scroller.scrollTop = scrollTop + (scroller.scrollHeight - scrollHeight);
+					});
+				});
+			}
+		} catch {
+			// daemon rejected (unknown session) — keep as-is
+		} finally {
+			loadOlderRef.current = false;
+			setLoadingOlder(false);
+		}
+	}, [rpc, store]);
+	// Stable identity for the Transcript observer (rebuilding the observer
+	// on every render would thrash the IntersectionObserver).
+	const onLoadOlderStable = useCallback((): void => {
+		void loadOlder();
+	}, [loadOlder]);
 	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
 	// ladder rungs are disabled in the composer's ThinkingSelector, and the
 	// ladder itself is the current model's supported efforts. GuiHeader runs
@@ -643,9 +718,17 @@ export function ChatView({
 		}
 		return thinkingInfoAuto ? "auto" : (level ?? thinkingInfoLevel ?? null);
 	})();
+	// Subagent trajectory panel (kimiwork parity): opening an agent from a
+	// swarm-card member row or the right rail slides the panel out over the
+	// chat column; the selected agent resolves against the live snapshot.
+	const [panelAgentId, setPanelAgentId] = useState<string | null>(null);
+	const panelAgent = panelAgentId !== null ? (snap?.agents.find(a => a.id === panelAgentId) ?? null) : null;
+	const panelProgress = panelAgentId !== null ? (snap?.progress.get(panelAgentId)?.progress ?? null) : null;
 	const host = {
-		hasAgent: () => false,
-		openAgent: () => {},
+		hasAgent: (id: string) => snap?.agents.some(a => a.id === id) === true,
+		openAgent: (id: string) => {
+			if (snap?.agents.some(a => a.id === id) === true) setPanelAgentId(id);
+		},
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => onSend(text),
@@ -778,7 +861,7 @@ export function ChatView({
 								onProject={onProject}
 								focused={focusMode}
 								onToggleFocus={onToggleFocus}
-								presetModelId={presetModelId}
+								presetModelId={defaultModelId}
 								presetThinkingLevel={presetThinkingLevel}
 								onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
 								reminders={reminders}
@@ -893,10 +976,17 @@ export function ChatView({
 														hideToolActivity={displaySettings["display.hideToolActivity"] === true}
 														showTokenUsage={displaySettings["display.showTokenUsage"] === true}
 														collapseCompacted={displaySettings["display.collapseCompacted"] !== false}
+														taskCardStyle={
+															displaySettings["display.taskCardStyle"] === "classic" ? "classic" : "swarm"
+														}
 														colorBlind={displaySettings.colorBlindMode === true}
 														onQuote={text => appendQuote(text)}
 														onRevert={(id, text) => void revertToMessage(id, text, false)}
-														onFork={(id, text) => void forkFromMessage(id, text)}
+														onFork={(id, text, includeTarget) =>
+															void forkFromMessage(id, text, includeTarget)
+														}
+														onLoadOlder={onLoadOlderStable}
+														loadingOlder={loadingOlder}
 														onRetry={(id, text) => void retryFromUserMessage(id, text)}
 														onSpeak={text => {
 															// TTS read-aloud via the daemon's local Kokoro worker.
@@ -1103,6 +1193,9 @@ export function ChatView({
 												onDecide={onDecideApproval}
 											/>
 										))}
+										{ask && onAskAnswer && (
+											<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
+										)}
 										<Composer
 											working={snap?.working ?? false}
 											petMood={moodFromState({
@@ -1127,6 +1220,14 @@ export function ChatView({
 											onEditConsumed={() => setPendingEdit(null)}
 											focused={focusMode}
 											onToggleFocus={onToggleFocus}
+											activeTask={
+												displaySettings["display.taskCardStyle"] === "classic"
+													? null
+													: ([...(snap?.activeTools?.values() ?? [])]
+															.filter(t => t.toolName === "task")
+															.at(-1) ?? null)
+											}
+											swarmHost={host}
 										/>
 									</div>
 								</div>
@@ -1142,6 +1243,18 @@ export function ChatView({
 						</div>
 					)}
 				</div>
+				{/* Subagent trajectory drawer (kimiwork parity): slides over the
+				 * chat column when a swarm-card member row / right-rail agent
+				 * is opened; the same ag-drawer chrome as the collab guest. */}
+				{panelAgent !== null && !focusMode && (
+					<SubagentPanel
+						agent={panelAgent}
+						rpc={rpc}
+						progress={panelProgress}
+						host={host}
+						onClose={() => setPanelAgentId(null)}
+					/>
+				)}
 				{/* Terminal dock: stays MOUNTED so open/close animates (height
 				 * 0 ↔ dockHeight) and running pty/xterm sessions survive the
 				 * toggle — closing the last tab folds the dock instead. */}
@@ -1155,11 +1268,7 @@ export function ChatView({
 					{/* Drag handle: the dock pushes the composer up and its
 					 * height is user-adjustable (openchamber bottom dock). */}
 					<div className="gui-dock-handle" onPointerDown={dockResize} aria-hidden />
-					<TerminalPanel
-						rpc={rpc}
-						cwd={store?.cwd ?? project ?? ""}
-						onAllClosed={onCloseTerminal}
-					/>
+					<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
 				</div>
 			</div>
 			{/* 保存为图片 export dialog (always mounted — DialogFrame drives its

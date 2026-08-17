@@ -1,7 +1,10 @@
 /** `task` — spawn subagents: batch shape, streamed progress, per-agent results.
  *  Kimi SwarmTool parity (2026-08-11): the head carries a done/total chip,
- *  the body opens with a phase overview (segmented bar + legend), and each
- *  member row gets a phase dot plus a per-row accordion for its full output. */
+ *  and the native card body lists one compact line per subagent (status
+ *  badge + description + stats) with output previews — the "one subagent
+ *  per line" progress style. The rich avatar member grid (kimiwork parity)
+ *  is an ADDITIVE component (`SwarmCard`) the host renders as a floating
+ *  hover card, not inline under the tool call. */
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -153,6 +156,88 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	);
 }
 
+/** Derive the card head label: the task intent, else the first task's
+ *  description/id, else the plain tool name. */
+
+/**
+ * Additive swarm card (Kimi SwarmTool parity / kimiwork member grid). NOT a
+ * replacement for the native task tool-call card — it renders BESIDE it
+ * (swarm style extension): the member grid with per-agent avatars, progress
+ * bars and accordion outputs. Registered as `SwarmCard` so ToolView renders
+ * it alongside the generic tool chrome when display.taskCardStyle=swarm.
+ */
+function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
+	const details = detailsRecord(result);
+	const results = details && Array.isArray(details.results) ? details.results.filter(isRecord) : [];
+	const progress = details && Array.isArray(details.progress) ? details.progress.filter(isRecord) : [];
+	const showProgress = results.length === 0 && progress.length > 0;
+	const counts = swarmCounts(results, progress);
+
+	// Per-member accordion: each agent's output folds behind its row.
+	const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
+	const toggleRow = (key: string): void => {
+		setOpenRows(prev => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	};
+
+	// Finished agents first, by runtime ascending — same order as the TUI.
+	const ordered = [...results].sort(
+		(a, b) => (num(a.durationMs) ?? 0) - (num(b.durationMs) ?? 0) || (num(a.index) ?? 0) - (num(b.index) ?? 0),
+	);
+
+	// Run footer: outcome counts + total wall time (mirrors the TUI's bracket line).
+	let footer: ReactNode = null;
+	const totalDurationMs = details ? num(details.totalDurationMs) : null;
+	if (results.length > 0) {
+		footer = (
+			<Row>
+				{counts.done > 0 && <Badge tone="ok">{t("{count} succeeded", { count: String(counts.done) })}</Badge>}{" "}
+				{counts.mergeFailed > 0 && (
+					<Badge tone="warn">{t("{count} merge failed", { count: String(counts.mergeFailed) })}</Badge>
+				)}{" "}
+				{counts.failed > 0 && <Badge tone="err">{t("{count} failed", { count: String(counts.failed) })}</Badge>}{" "}
+				{counts.aborted > 0 && <Badge tone="err">{t("{count} aborted", { count: String(counts.aborted) })}</Badge>}{" "}
+				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
+			</Row>
+		);
+	}
+
+	return (
+		<div className="tv-swarm-card">
+			<SwarmOverview counts={counts} />
+			{ordered.length > 0 && (
+				<div className="tv-list tv-swarm-members">
+					{ordered.map((res, i) => {
+						const key = str(res.id) ?? `#${i}`;
+						return (
+							<SwarmAgentResult
+								key={key}
+								res={res}
+								host={host}
+								open={openRows.has(key)}
+								onToggle={() => toggleRow(key)}
+							/>
+						);
+					})}
+					{footer}
+				</div>
+			)}
+			{showProgress && (
+				<div className="tv-list tv-swarm-members">
+					{progress.map((p, i) => (
+						<SwarmAgentProgressRow key={str(p.id) ?? i} p={p} host={host} />
+					))}
+				</div>
+			)}
+			{ordered.length === 0 && !showProgress && <ResultText result={result} maxLines={12} />}
+		</div>
+	);
+}
+
 /** Phase overview: progress line + segmented bar + legend (Kimi parity). */
 type SwarmPhase = "done" | "merge failed" | "running" | "failed" | "aborted";
 
@@ -209,8 +294,10 @@ function SwarmOverview({ counts }: { counts: SwarmCounts }): ReactNode {
 }
 
 /** Final snapshot for one agent: phase dot + status row, with the output
- *  details folded behind a per-member accordion (Kimi parity). */
-function AgentResult({
+ *  details folded behind a per-member accordion (Kimi parity). Rendered in
+ *  the floating SwarmCard grid, not the native card body (which keeps the
+ *  compact one-line-per-subagent rows). */
+function SwarmAgentResult({
 	res,
 	host,
 	open,
@@ -255,22 +342,35 @@ function AgentResult({
 	// patch/branch lines render even when everything else is empty (a clean
 	// patch-only run must stay expandable to show where the work landed).
 	const hasDetails = hasBody || Boolean(patchPath) || Boolean(branchName);
+	const avatarText = taskIdLabel(id)
+		.split(/[>_]/)
+		.map(part => (part.length > 0 ? part[0] : ""))
+		.join("")
+		.slice(0, 2)
+		.toUpperCase();
 	return (
 		<div className={`tv-swarm-member tv-swarm-member--${phase}`}>
 			<div className="tv-swarm-member-head">
-				<span className={`tv-swarm-dot ${phase}`} aria-hidden="true" />
-				<Row
-					k={
+				<span className={`tv-swarm-avatar tv-swarm-avatar--${phase}`} aria-hidden="true">
+					{avatarText}
+				</span>
+				<div className="tv-swarm-member-main">
+					<div className="tv-swarm-member-title">
 						<AgentLink id={id} host={host}>
 							{taskIdLabel(id)}
 						</AgentLink>
-					}
-				>
-					<Badge tone={tone}>{t(label)}</Badge>{" "}
-					{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}{" "}
-					{description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
-					{stats.length > 0 && <span className="tv-faint">{stats.join(" · ")}</span>}
-				</Row>
+						<Badge tone={tone}>{t(label)}</Badge>{" "}
+						{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}
+					</div>
+					{description && <div className="tv-swarm-member-desc">{truncate(normalizeWs(description), 120)}</div>}
+					{stats.length > 0 && <div className="tv-swarm-member-stats">{stats.join(" · ")}</div>}
+					<div className="tv-swarm-bar" aria-hidden="true">
+						<span
+							className={`tv-swarm-bar-fill tv-swarm-bar-fill--${phase}`}
+							style={{ width: `${phase === "ok" ? 100 : phase === "warn" ? 66 : 34}%` }}
+						/>
+					</div>
+				</div>
 				{hasDetails && (
 					<button
 						type="button"
@@ -299,8 +399,9 @@ function AgentResult({
 	);
 }
 
-/** Live (still-running) snapshot for one agent: phase dot + status row. */
-function AgentProgressRow({ p, host }: { p: Record<string, unknown>; host?: ToolRenderHost }): ReactNode {
+/** Live (still-running) snapshot for one agent: phase dot + status row.
+ *  Rendered in the floating SwarmCard grid. */
+function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?: ToolRenderHost }): ReactNode {
 	const status = str(p.status) ?? "running";
 	const tone =
 		status === "completed"
@@ -321,24 +422,184 @@ function AgentProgressRow({ p, host }: { p: Record<string, unknown>; host?: Tool
 	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
 	const durationMs = num(p.durationMs);
 	if (durationMs) bits.push(fmtDuration(durationMs));
+	const avatarText = taskIdLabel(id)
+		.split(/[>_]/)
+		.map(part => (part.length > 0 ? part[0] : ""))
+		.join("")
+		.slice(0, 2)
+		.toUpperCase();
 	return (
 		<div className={`tv-swarm-member tv-swarm-member--${phase}`}>
 			<div className="tv-swarm-member-head">
-				<span className={`tv-swarm-dot ${phase}`} aria-hidden="true" />
-				<Row
-					k={
+				<span className={`tv-swarm-avatar tv-swarm-avatar--${phase}`} aria-hidden="true">
+					{avatarText}
+				</span>
+				<div className="tv-swarm-member-main">
+					<div className="tv-swarm-member-title">
 						<AgentLink id={id} host={host}>
 							{taskIdLabel(id)}
 						</AgentLink>
-					}
-				>
-					<Badge tone={tone}>{status}</Badge>{" "}
-					{description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
-					{intent && <span className="tv-muted">{truncate(normalizeWs(intent), 64)}</span>}{" "}
-					{bits.length > 0 && <span className="tv-faint">{bits.join(" · ")}</span>}
-				</Row>
+						<Badge tone={tone}>{status}</Badge>
+					</div>
+					{description && <div className="tv-swarm-member-desc">{truncate(normalizeWs(description), 120)}</div>}
+					{intent && (
+						<div className="tv-swarm-member-desc tv-swarm-member-intent">{truncate(normalizeWs(intent), 96)}</div>
+					)}
+					{bits.length > 0 && <div className="tv-swarm-member-stats">{bits.join(" · ")}</div>}
+					{status === "running" && (
+						<div className="tv-swarm-bar" aria-hidden="true">
+							<span className="tv-swarm-bar-fill tv-swarm-bar-fill--run tv-swarm-bar-fill--live" />
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
+	);
+}
+
+/** Final snapshot for one agent: compact status row (one line per subagent)
+ *  with a chevron folding that agent's output/notes behind it — TUI task
+ *  component parity (per-agent output folds behind expand). The rich avatar
+ *  grid lives in the floating SwarmCard instead. */
+function AgentResult({
+	res,
+	host,
+	open,
+	onToggle,
+}: {
+	res: Record<string, unknown>;
+	host?: ToolRenderHost;
+	open: boolean;
+	onToggle(): void;
+}): ReactNode {
+	const { label, tone } = resultStatus(res);
+	const id = str(res.id) ?? t("agent");
+	const description = str(res.description);
+	const stats: string[] = [];
+	const tokens = num(res.tokens);
+	if (tokens) stats.push(t("{count} tok", { count: fmtCount(tokens) }));
+	const requests = num(res.requests);
+	if (requests) stats.push(t("{count} req", { count: String(requests) }));
+	const durationMs = num(res.durationMs);
+	if (durationMs != null) stats.push(fmtDuration(durationMs));
+	const model = str(res.resolvedModel);
+	if (model) stats.push(model);
+
+	// The runtime prepends a one-line warning when a subagent never called
+	// yield; lift it out of the output preview like the TUI does.
+	let output = str(res.output) ?? "";
+	let warning: string | null = null;
+	const nl = output.indexOf("\n");
+	const firstLine = (nl === -1 ? output : output.slice(0, nl)).trim();
+	if (firstLine.startsWith(MISSING_YIELD_PREFIX)) {
+		warning = firstLine;
+		output = nl === -1 ? "" : output.slice(nl + 1).replace(/^\s*\n+/, "");
+	}
+	const error = str(res.error);
+	const aborted = res.aborted === true;
+	const abortReason = str(res.abortReason);
+	const patchPath = str(res.patchPath);
+	const branchName = str(res.branchName);
+	const bodyBits = [warning, output.trim(), error, abortReason];
+	const hasBody = bodyBits.some(b => Boolean(b));
+	const hasDetails = hasBody || Boolean(patchPath) || Boolean(branchName);
+	return (
+		<>
+			<Row
+				k={
+					<AgentLink id={id} host={host}>
+						{taskIdLabel(id)}
+					</AgentLink>
+				}
+			>
+				<Badge tone={tone}>{t(label)}</Badge>{" "}
+				{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}{" "}
+				{description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
+				{stats.length > 0 && <span className="tv-faint">{stats.join(" · ")}</span>}
+				{hasDetails && (
+					<button
+						type="button"
+						className="tv-swarm-chev"
+						aria-expanded={open}
+						aria-label={t(open ? "collapse" : "expand")}
+						onClick={onToggle}
+					>
+						<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
+					</button>
+				)}
+			</Row>
+			{open && (
+				<>
+					{warning && <Note tone="warn">{warning}</Note>}
+					{aborted && abortReason && <Note tone="err">{abortReason}</Note>}
+					{output.trim() !== "" && <Output text={output} maxLines={8} error={tone === "err"} />}
+					{error && !aborted && error !== abortReason && (
+						<Note tone={tone === "warn" ? "warn" : "err"}>{error}</Note>
+					)}
+					{patchPath && <div className="tv-faint">{t("patch: {path}", { path: patchPath })}</div>}
+					{!patchPath && branchName && <div className="tv-faint">{t("branch: {name}", { name: branchName })}</div>}
+				</>
+			)}
+		</>
+	);
+}
+
+/** Live (still-running) snapshot for one agent: compact status row (one
+ *  line per subagent) — the native task card body. */
+function AgentProgressRow({
+	p,
+	host,
+	open,
+	onToggle,
+}: {
+	p: Record<string, unknown>;
+	host?: ToolRenderHost;
+	open: boolean;
+	onToggle(): void;
+}): ReactNode {
+	const status = str(p.status) ?? "running";
+	const tone =
+		status === "completed"
+			? ("ok" as const)
+			: status === "failed" || status === "aborted"
+				? ("err" as const)
+				: status === "running"
+					? ("accent" as const)
+					: undefined;
+	const id = str(p.id) ?? t("agent");
+	const description = str(p.description);
+	const intent = str(p.lastIntent) ?? str(p.currentTool);
+	const bits: string[] = [];
+	const toolCount = num(p.toolCount);
+	if (toolCount) bits.push(t("{count} tools", { count: String(toolCount) }));
+	const tokens = num(p.tokens);
+	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
+	const durationMs = num(p.durationMs);
+	if (durationMs) bits.push(fmtDuration(durationMs));
+	return (
+		<Row
+			k={
+				<AgentLink id={id} host={host}>
+					{taskIdLabel(id)}
+				</AgentLink>
+			}
+		>
+			<Badge tone={tone}>{status}</Badge> {description && <span>{truncate(normalizeWs(description), 96)}</span>}{" "}
+			{intent && <span className="tv-muted">{truncate(normalizeWs(intent), 64)}</span>}{" "}
+			{bits.length > 0 && <span className="tv-faint">{bits.join(" · ")}</span>}
+			{intent && (
+				<button
+					type="button"
+					className="tv-swarm-chev"
+					aria-expanded={open}
+					aria-label={t(open ? "collapse" : "expand")}
+					onClick={onToggle}
+				>
+					<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
+				</button>
+			)}
+			{open && intent && <span className="tv-muted tv-progress-detail">{truncate(normalizeWs(intent), 96)}</span>}
+		</Row>
 	);
 }
 
@@ -352,7 +613,8 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 	const showProgress = results.length === 0 && progress.length > 0;
 	const counts = swarmCounts(results, progress);
 
-	// Per-member accordion: each agent's output folds behind its row.
+	// Per-agent accordion: each subagent's output folds behind its row
+	// (TUI task component parity).
 	const [openRows, setOpenRows] = useState<ReadonlySet<string>>(new Set());
 	const toggleRow = (key: string): void => {
 		setOpenRows(prev => {
@@ -375,9 +637,7 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 				)}{" "}
 				{counts.failed > 0 && <Badge tone="err">{t("{count} failed", { count: String(counts.failed) })}</Badge>}{" "}
 				{counts.aborted > 0 && <Badge tone="err">{t("{count} aborted", { count: String(counts.aborted) })}</Badge>}{" "}
-				{totalDurationMs != null && (
-					<span className="tv-faint">{fmtDuration(totalDurationMs)}</span>
-				)}
+				{totalDurationMs != null && <span className="tv-faint">{fmtDuration(totalDurationMs)}</span>}
 			</Row>
 		);
 	}
@@ -391,8 +651,7 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 		<>
 			{resume && <Badge>{t("resume {name}", { name: resume })}</Badge>}
 			{context && <Output text={context} maxLines={4} title={t("context")} />}
-			<SwarmOverview counts={counts} />
-			{tasks.length > 0 && (
+			{tasks.length > 0 && tasks.some(task => task.description || task.assignment || task.isolated || task.id) && (
 				<div className="tv-list">
 					{tasks.map((task, i) =>
 						// A batch entry with nothing but an index renders zero
@@ -421,7 +680,7 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{ordered.length > 0 && (
-				<div className="tv-list tv-swarm-members">
+				<div className="tv-list">
 					{ordered.map((res, i) => {
 						const key = str(res.id) ?? `#${i}`;
 						return (
@@ -438,10 +697,19 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{showProgress && (
-				<div className="tv-list tv-swarm-members">
-					{progress.map((p, i) => (
-						<AgentProgressRow key={str(p.id) ?? i} p={p} host={host} />
-					))}
+				<div className="tv-list">
+					{progress.map((p, i) => {
+						const key = str(p.id) ?? String(i);
+						return (
+							<AgentProgressRow
+								key={key}
+								p={p}
+								host={host}
+								open={openRows.has(key)}
+								onToggle={() => toggleRow(key)}
+							/>
+						);
+					})}
 				</div>
 			)}
 			{ordered.length === 0 && !showProgress && <ResultText result={result} maxLines={12} />}
@@ -449,4 +717,4 @@ function Body({ args, result, host }: ToolRenderProps): ReactNode {
 	);
 }
 
-export const taskRenderer: ToolRenderer = { Summary, Body };
+export const taskRenderer: ToolRenderer = { Summary, Body, SwarmCard };

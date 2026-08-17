@@ -101,6 +101,14 @@ pub(crate) struct Host {
 	stdin_is_search_input: bool,
 }
 
+struct CancelOnDrop(Arc<AtomicBool>);
+
+impl Drop for CancelOnDrop {
+	fn drop(&mut self) {
+		self.0.store(true, Ordering::Relaxed);
+	}
+}
+
 impl Host {
 	/// The name the utility was invoked as. Differs from [`Utility::NAME`] when
 	/// one implementation backs several builtins (`grep` and `rg`).
@@ -119,7 +127,8 @@ impl Host {
 	/// filesystem: the host process's current directory is unrelated to the
 	/// shell's.
 	pub fn resolve(&self, path: impl AsRef<Path>) -> PathBuf {
-		let path = path.as_ref();
+		let normalized_path = brush_core::sys::fs::normalize_shell_path(path.as_ref());
+		let path = normalized_path.as_ref();
 		if path.is_absolute() {
 			path.to_path_buf()
 		} else {
@@ -578,6 +587,7 @@ async fn run_utility<U: Utility, SE: ShellExtensions>(
 	let mut host = build_host(&context, U::NAME)?;
 	let cancel = context.cancel_token();
 	let cancel_flag = host.cancel_flag();
+	let _cancel_on_drop = CancelOnDrop(Arc::clone(&cancel_flag));
 	drop(context);
 
 	let mut handle = tokio::task::spawn_blocking(move || {
@@ -867,6 +877,14 @@ mod testing {
 		pub(crate) fn cancel_for_test(&self) {
 			self.cancel.store(true, super::Ordering::Relaxed);
 		}
+	}
+
+	#[cfg(windows)]
+	#[test]
+	fn resolves_msys_drive_aliases_to_native_drive() {
+		let (host, _) = Host::for_test("test", "", r"C:\workspace");
+
+		assert_eq!(host.resolve("/c/Users/Adam/file.txt"), PathBuf::from(r"C:\Users\Adam\file.txt"));
 	}
 
 	/// Parses `argv` and runs `U` against an in-memory host, mirroring what the

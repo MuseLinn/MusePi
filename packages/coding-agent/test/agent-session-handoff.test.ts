@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Agent, type AgentMessage, type StreamFn } from "@musepi/pi-agent-core";
 import * as compactionModule from "@musepi/pi-agent-core/compaction";
@@ -13,6 +14,7 @@ import {
 	loadExtensionFromFactory,
 	loadExtensions,
 } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { resolveLocalUrlToPath } from "@musepi/pi-coding-agent/internal-urls";
 import { SecretObfuscator } from "@musepi/pi-coding-agent/secrets";
 import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
@@ -175,6 +177,35 @@ describe("AgentSession handoff", () => {
 
 		expect(session.peekPendingInvoker()).toBeUndefined();
 		expect(session.nextToolChoiceDirective()).toBeUndefined();
+	});
+
+	it("carries local:// artifacts into the handed-off session", async () => {
+		// Handoff is a continuity operation: the generated document references
+		// plans/scratch files the old session wrote under its local:// root. The
+		// fresh session mints a new local root, so the artifacts must be copied
+		// forward or every reference the handoff document carries dangles.
+		vi.spyOn(compactionModule, "generateHandoffFromContext").mockResolvedValue("## Goal\nContinue from here");
+		const localOptions = {
+			getArtifactsDir: () => sessionManager.getArtifactsDir(),
+			getSessionId: () => sessionManager.getSessionId(),
+		};
+		const oldLocalRoot = resolveLocalUrlToPath("local://", localOptions);
+		const oldPlanPath = resolveLocalUrlToPath("local://my-plan.md", localOptions);
+		const oldNestedPath = resolveLocalUrlToPath("local://research/notes.txt", localOptions);
+		await fs.mkdir(path.dirname(oldNestedPath), { recursive: true });
+		await Bun.write(oldPlanPath, "# Plan\n\nbody\n");
+		await Bun.write(oldNestedPath, "scratch notes");
+
+		await session.handoff();
+
+		const newLocalRoot = resolveLocalUrlToPath("local://", localOptions);
+		expect(newLocalRoot).not.toBe(oldLocalRoot);
+		expect(await Bun.file(resolveLocalUrlToPath("local://my-plan.md", localOptions)).text()).toBe("# Plan\n\nbody\n");
+		expect(await Bun.file(resolveLocalUrlToPath("local://research/notes.txt", localOptions)).text()).toBe(
+			"scratch notes",
+		);
+		// The source session's artifacts remain untouched on disk.
+		expect(await Bun.file(oldPlanPath).text()).toBe("# Plan\n\nbody\n");
 	});
 
 	it("emits handoff lifecycle hooks on the outgoing and replacement sessions", async () => {

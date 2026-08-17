@@ -132,7 +132,13 @@ function collectMessageParts(error: unknown, captured: CapturedHttpErrorResponse
 	return parts.join("\n");
 }
 
-const REASONING_EFFORT_FIELD_PATTERN = /reasoning[_. ]effort|reasoning value/i;
+/**
+ * Text that identifies a 400 as being about the reasoning-effort field.
+ * OpenAI-compatible gateways (cliproxy, …) never name the field — they reject
+ * the value alone with `level "none" not supported, valid levels: low, …` — so
+ * the allowed-level phrasing counts as a mention too.
+ */
+const REASONING_EFFORT_FIELD_PATTERN = /reasoning[_. ]effort|reasoning value|(?:valid|supported|allowed) levels?/i;
 
 function mentionsReasoningEffort(error: unknown, captured: CapturedHttpErrorResponse | undefined): boolean {
 	const param = capturedStringField(captured, "param");
@@ -168,10 +174,13 @@ function isInvalidReasoningEffortError(
 	if (/(?:unsupported|not supported)[^\n]*(?:reasoning[_. ]effort|reasoning value)/i.test(message)) {
 		return true;
 	}
-	return new RegExp(
-		`(?:invalid|unsupported|not supported)[^\\n]*["'\`]${escapeRegExp(currentEffort)}["'\`]`,
-		"i",
-	).test(message);
+	// Gateways put the rejected value first (`level "none" not supported`), the
+	// official API puts the verdict first (`Unsupported value: 'none'`).
+	const quoted = `["'\`]${escapeRegExp(currentEffort)}["'\`]`;
+	return (
+		new RegExp(`(?:invalid|unsupported|not supported)[^\\n]*${quoted}`, "i").test(message) ||
+		new RegExp(`${quoted}[^\\n]*(?:invalid|unsupported|not supported)`, "i").test(message)
+	);
 }
 
 function escapeRegExp(value: string): string {
@@ -186,9 +195,12 @@ function parseKnownReasoningValues(text: string): Set<string> {
 		values.add(quotedMatch[1]!.toLowerCase());
 		quotedMatch = quotedPattern.exec(text);
 	}
-	const allowedMatch = /(?:must be|one of|allowed values?|supported values?(?: are)?|expected)([^.\n]+)/i.exec(text);
+	const allowedMatch =
+		/(?:must be|one of|allowed values?|supported values?(?: are)?|expected|(?:valid|supported|allowed) levels?(?: are)?)[^.\n]+/i.exec(
+			text,
+		);
 	if (allowedMatch) {
-		const allowedText = allowedMatch[1]!;
+		const allowedText = allowedMatch[0]!;
 		const barePattern = /\b(none|minimal|low|medium|high|xhigh|max)\b/gi;
 		let bareMatch = barePattern.exec(allowedText);
 		while (bareMatch !== null) {
@@ -201,7 +213,8 @@ function parseKnownReasoningValues(text: string): Set<string> {
 
 function parseAllowedReasoningValues(message: string, currentEffort: string): Set<string> | undefined {
 	const values = parseKnownReasoningValues(message);
-	const hasAllowedCue = /must be|one of|allowed values?|supported values?|expected/i.test(message);
+	const hasAllowedCue =
+		/must be|one of|allowed values?|supported values?|expected|(?:valid|supported|allowed) levels?/i.test(message);
 	values.delete(currentEffort.toLowerCase());
 	if (!hasAllowedCue && values.size === 0) return undefined;
 	return values;

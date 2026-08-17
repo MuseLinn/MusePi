@@ -63,9 +63,9 @@ const GEMINI_3_FLASH_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, E
 const GPT_5_2_PLUS_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High, Effort.XHigh];
 const GPT_5_1_CODEX_MINI_EFFORTS: readonly Effort[] = [Effort.Medium, Effort.High];
 const LOW_MEDIUM_HIGH_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High];
-/** Wire-exact `low`/`high`/`max` scale used by Kimi K3 and DeepSeek V4 Flash (direct API and aggregators). */
+/** Wire-exact `low`/`high`/`max` scale used by Kimi K3 and DeepSeek V4 (Flash and Pro, direct API and aggregators). */
 const LOW_HIGH_MAX_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High, Effort.Max];
-/** Wire-exact two-tier scale (`high`/`max`): GLM-5.2 on Z.ai/Umans/Ollama Cloud/Baseten, Sakana Fugu, DeepSeek V4 Pro. */
+/** Wire-exact two-tier scale (`high`/`max`): GLM-5.2 on Z.ai/Umans/Ollama Cloud/Baseten, Sakana Fugu, older DeepSeek reasoners (V3.x/R1). */
 const HIGH_MAX_REASONING_EFFORTS: readonly Effort[] = [Effort.High, Effort.Max];
 /** OpenRouter's DeepSeek route accepts only `high`. */
 const HIGH_ONLY_REASONING_EFFORTS: readonly Effort[] = [Effort.High];
@@ -366,13 +366,28 @@ function getModelDefinedEfforts<TApi extends Api>(
 	if (spec.provider === "ollama") {
 		return OLLAMA_REASONING_EFFORTS;
 	}
-	if (isOpenAICompatReasoningApi(spec.api) && isDeepseekReasoningModel(spec)) {
-		// DeepSeek V4 Flash accepts the wire-exact low/high/max ladder on every
-		// host — the direct API and aggregators alike (medium/xhigh map to
-		// high). V4 Pro and the older reasoners top out at high/max, and
-		// OpenRouter's non-flash DeepSeek route exposes only high.
+	if (
+		(isOpenAICompatReasoningApi(spec.api) || (spec.api === "ollama-chat" && spec.provider === "ollama-cloud")) &&
+		isDeepseekReasoningModel(spec)
+	) {
+		// DeepSeek V4 (Flash and Pro) accepts the wire-exact low/high/max ladder
+		// on every first-party/aggregator host — the direct API, aggregators, and
+		// Ollama Cloud alike (medium/xhigh fold into high, max is a real wire
+		// tier). See https://api-docs.deepseek.com/api/create-chat-completion.
+		// OpenRouter's non-Flash V4 route exposes only high, except the dated
+		// `deepseek-v4-pro-0813` SKU: its /models metadata advertises (and the
+		// route accepts) the full low/high/max ladder like every other host.
+		// The older reasoners (V3.x, R1, deepseek-reasoner) top out at high/max.
 		if (isDeepseekV4FlashModelId(spec.id)) {
 			return LOW_HIGH_MAX_REASONING_EFFORTS;
+		}
+		if (bareModelId(spec.id).toLowerCase().includes("deepseek-v4")) {
+			if (!isOpenRouterThinkingFormat(compat)) {
+				return LOW_HIGH_MAX_REASONING_EFFORTS;
+			}
+			return bareModelId(spec.id).toLowerCase() === "deepseek-v4-pro-0813"
+				? LOW_HIGH_MAX_REASONING_EFFORTS
+				: HIGH_ONLY_REASONING_EFFORTS;
 		}
 		return isOpenRouterThinkingFormat(compat) ? HIGH_ONLY_REASONING_EFFORTS : HIGH_MAX_REASONING_EFFORTS;
 	}

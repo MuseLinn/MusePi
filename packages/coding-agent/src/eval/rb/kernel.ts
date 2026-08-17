@@ -8,8 +8,6 @@
  * (eval/py/kernel.ts); the IPC loop, lifecycle, and display rendering are shared
  * with it via BaseKernel.
  */
-import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { $flag, isBunTestRuntime, logger, Snowflake } from "@musepi/pi-utils";
 import { $ } from "bun";
@@ -17,6 +15,7 @@ import { Settings } from "../../config/settings";
 import { BaseKernel, getRemainingTimeMs, type KernelRuntimeEnv, type KernelStartOptions } from "../kernel-base";
 import type { KernelDisplayOutput } from "../py/display";
 import { hostHasInheritableConsole, shouldDetachKernel, shouldHideKernelWindow } from "../py/spawn-options";
+import { stageRunnerScript } from "../runner-cache";
 import { RUBY_PRELUDE } from "./prelude";
 import RUNNER_SCRIPT from "./runner.rb" with { type: "text" };
 import {
@@ -32,23 +31,6 @@ export type { KernelDisplayOutput, PythonStatusEvent } from "../py/display";
 export { renderKernelDisplay } from "../py/display";
 
 const TRACE_IPC = $flag("PI_RUBY_IPC_TRACE");
-
-// Cache the runner script on disk so the subprocess loads it normally. Cached
-// per script hash so installs don't race across versions.
-const RUNNER_CACHE_DIR = path.join(os.tmpdir(), "omp-ruby-runner");
-let RUNNER_SCRIPT_PATH: string | null = null;
-
-async function ensureRunnerScript(): Promise<string> {
-	if (RUNNER_SCRIPT_PATH) return RUNNER_SCRIPT_PATH;
-	await fs.promises.mkdir(RUNNER_CACHE_DIR, { recursive: true });
-	const hash = Bun.hash(RUNNER_SCRIPT).toString(36);
-	const target = path.join(RUNNER_CACHE_DIR, `runner-${hash}.rb`);
-	if (!fs.existsSync(target)) {
-		await Bun.write(target, RUNNER_SCRIPT);
-	}
-	RUNNER_SCRIPT_PATH = target;
-	return target;
-}
 
 const SHUTDOWN_GRACE_MS = 1_000;
 const STARTUP_TIMEOUT_MS = 10_000;
@@ -181,7 +163,7 @@ export class RubyKernel extends BaseKernel<KernelExecuteOptions> {
 			if (typeof value === "string") spawnEnv[key] = value;
 		}
 
-		const scriptPath = await ensureRunnerScript();
+		const scriptPath = await stageRunnerScript("omp-ruby-runner", "rb", RUNNER_SCRIPT);
 		const kernel = new RubyKernel(Snowflake.next());
 
 		const proc = Bun.spawn([runtime.rubyPath, scriptPath], {

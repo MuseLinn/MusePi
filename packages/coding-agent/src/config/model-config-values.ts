@@ -10,11 +10,19 @@ const commandValueCache = new Map<string, string>();
 const COMMAND_FAILURE_RETRY_MS = 30_000;
 const commandFailureRetryAt = new Map<string, number>();
 
+interface ResolveConfigValueOptions {
+	forceCommandRefresh?: boolean;
+}
+
 export function isCommandConfigValue(valueConfig: string | undefined): valueConfig is string {
 	return valueConfig?.startsWith("!") === true;
 }
 
-function resolveCommandConfig(command: string): string | undefined {
+function resolveCommandConfig(command: string, options?: ResolveConfigValueOptions): string | undefined {
+	if (options?.forceCommandRefresh === true) {
+		commandValueCache.delete(command);
+		commandFailureRetryAt.delete(command);
+	}
 	const cached = commandValueCache.get(command);
 	if (cached !== undefined) return cached;
 	const retryAt = commandFailureRetryAt.get(command);
@@ -44,8 +52,8 @@ export interface CommandApiKeyResolution {
  * `!cmd` runs a shell command and returns trimmed stdout, otherwise env vars are
  * checked first and the input falls back to a literal value.
  */
-export function resolveConfigValue(valueConfig: string): string | undefined {
-	if (valueConfig.startsWith("!")) return resolveCommandConfig(valueConfig.slice(1).trim());
+export function resolveConfigValue(valueConfig: string, options?: ResolveConfigValueOptions): string | undefined {
+	if (valueConfig.startsWith("!")) return resolveCommandConfig(valueConfig.slice(1).trim(), options);
 	const envValue = $envExact(valueConfig);
 	if (envValue) return envValue;
 	return valueConfig;

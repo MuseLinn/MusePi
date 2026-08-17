@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="{{ page.lang | default: site.lang | default: 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title | default: site.title }}</title>
+  <meta name="description" content="{{ site.description }}">
+  <meta property="og:title" content="{{ page.title | default: site.title }}">
+  <meta property="og:description" content="{{ site.description }}">
+  <meta property="og:image" content="{{ '/assets/hero.png' | absolute_url }}">
+  <link rel="icon" type="image/svg+xml" href="{{ '/assets/icon.svg' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
+</head>
+<body>
+  <div class="mp-bg" aria-hidden="true"></div>
+  <div class="mp-wrap">
+    <header class="mp-topbar">
+      <a class="mp-brand" href="{{ '/' | relative_url }}">
+        <img src="{{ '/assets/icon.svg' | relative_url }}" alt="MusePi" width="22" height="16">
+        <span>MusePi</span>
+      </a>
+      <nav class="mp-nav">
+        <a href="#features">Features</a>
+        <a href="#screens">Screens</a>
+        <a href="{{ '/docs/' | relative_url }}">Docs</a>
+        <a href="#quick-start">Quick Start</a>
+      </nav>
+    </header>
+
+    <main class="mp-main">
+      {{ content }}
+    </main>
+
+    <footer class="mp-footer">
+      <span>MusePi — desktop-first AI coding agent · fork of <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
+    </footer>
+  </div>
+</body>
+</html>

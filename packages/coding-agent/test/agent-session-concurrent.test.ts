@@ -2,7 +2,7 @@
  * Tests for AgentSession concurrent prompt guard.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -43,11 +43,27 @@ const originalSchedulerWait = scheduler.wait.bind(scheduler);
 function collapseSchedulerSettleDelays(): void {
 	vi.spyOn(scheduler, "wait").mockImplementation((_delayMs, options) => originalSchedulerWait(0, options));
 }
+let sharedDir: string;
+let sharedAuthStorage: AuthStorage;
+let sharedModelRegistry: ModelRegistry;
+
+beforeAll(async () => {
+	sharedDir = path.join(os.tmpdir(), `pi-concurrent-shared-${Snowflake.next()}`);
+	fs.mkdirSync(sharedDir, { recursive: true });
+	sharedAuthStorage = await AuthStorage.create(path.join(sharedDir, "auth.db"));
+	sharedAuthStorage.setRuntimeApiKey("anthropic", "test-key");
+	sharedAuthStorage.setRuntimeApiKey("openai-codex", "test-key");
+	sharedModelRegistry = new ModelRegistry(sharedAuthStorage, path.join(sharedDir, "models.yml"));
+});
+
+afterAll(() => {
+	sharedAuthStorage.close();
+	removeSyncWithRetries(sharedDir);
+});
 
 describe("AgentSession concurrent prompt guard", () => {
 	let session: AgentSession;
 	let tempDir: string;
-	const authStorages: AuthStorage[] = [];
 
 	beforeEach(() => {
 		// Collapse scheduler settle delays so the post-abort auto-continue and
@@ -60,9 +76,6 @@ describe("AgentSession concurrent prompt guard", () => {
 	afterEach(async () => {
 		if (session) {
 			await session.dispose();
-		}
-		for (const authStorage of authStorages.splice(0)) {
-			authStorage.close();
 		}
 		if (tempDir && fs.existsSync(tempDir)) {
 			removeSyncWithRetries(tempDir);
@@ -104,11 +117,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated(settingsOverrides);
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -289,11 +298,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -372,11 +377,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		await session.prompt("First message");
@@ -443,11 +444,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		await session.prompt("First message");
@@ -487,11 +484,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 		vi.spyOn(session.goalRuntime, "onAgentEnd").mockImplementation(() => {
 			settleReached.resolve();
@@ -543,10 +536,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		);
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		const extensionRunner = new ExtensionRunner(
 			[extension],
 			extensionRuntime,
@@ -614,11 +604,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		await session.prompt("First message");
@@ -647,11 +633,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		await session.prompt("First message");
@@ -680,11 +662,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		await session.prompt("First message");
@@ -720,11 +698,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 		session.setClientBridge({
 			capabilities: {},
@@ -765,11 +739,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -803,11 +773,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -839,11 +805,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-idle-followup.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models-idle-followup.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -878,11 +840,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry });
 
 		const observedIsStreamingAtAgentEnd: boolean[] = [];
@@ -926,10 +884,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		} as unknown as ExtensionRunner;
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, extensionRunner });
 
 		const { promise: publicAgentEnd, resolve: onPublicAgentEnd } = Promise.withResolvers<void>();
@@ -961,11 +916,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-acp-idle.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models-acp-idle.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -1027,11 +978,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-acp-async.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models-acp-async.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		const ownerId = "acp-session-a";
 		const deliveryGate = Promise.withResolvers<void>();
 		let deliveryStarted = false;
@@ -1106,10 +1053,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 	it("scopes ACP async job snapshots and drains to the owning session id", async () => {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-acp-scope.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models-acp-scope.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		const settings = Settings.isolated();
 		const deliveryGate = Promise.withResolvers<void>();
 		const delivered: string[] = [];
@@ -1179,7 +1123,6 @@ describe("AgentSession concurrent prompt guard", () => {
 describe("AgentSession TTSR resume gate", () => {
 	let session: AgentSession;
 	let tempDir: string;
-	const authStorages: AuthStorage[] = [];
 
 	beforeEach(() => {
 		tempDir = path.join(os.tmpdir(), `pi-ttsr-gate-test-${Snowflake.next()}`);
@@ -1189,9 +1132,6 @@ describe("AgentSession TTSR resume gate", () => {
 	afterEach(async () => {
 		if (session) {
 			await session.dispose();
-		}
-		for (const authStorage of authStorages.splice(0)) {
-			authStorage.close();
 		}
 		if (tempDir && fs.existsSync(tempDir)) {
 			removeSyncWithRetries(tempDir);
@@ -1314,11 +1254,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-int.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -1379,10 +1315,7 @@ describe("AgentSession TTSR resume gate", () => {
 			"todo.enabled": false,
 			"todo.reminders": false,
 		});
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-will-continue.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		const extensionRuntime = new ExtensionRuntime();
 		const extension = await loadExtensionFromFactory(
 			pi => {
@@ -1580,10 +1513,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-abort-reason.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, ttsrManager });
 
 		await session.prompt("Write some Rust code");
@@ -1698,10 +1628,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-abort-reason.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, ttsrManager });
 
 		await session.prompt("Write some Rust code");
@@ -1768,11 +1695,7 @@ describe("AgentSession TTSR resume gate", () => {
 		});
 
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-rel.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({ agent, sessionManager, settings, modelRegistry, ttsrManager });
 
 		await session.prompt("Write some Rust code");
@@ -1844,11 +1767,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-def.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -1915,11 +1834,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-abt.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -2027,11 +1942,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-tool.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -2136,11 +2047,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-never-tool.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -2272,11 +2179,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 		const sessionManager = SessionManager.inMemory();
 		const settings = Settings.isolated();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-dup.db"));
-		authStorages.push(authStorage);
-		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir, "models.yml"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-
+		const modelRegistry = sharedModelRegistry;
 		session = new AgentSession({
 			agent,
 			sessionManager,
@@ -2302,9 +2205,7 @@ describe("AgentSession TTSR resume gate", () => {
 
 	it("prompt() waits for context-promotion continuation to finish", async () => {
 		collapseSchedulerSettleDelays();
-		const authStorage = await AuthStorage.create(path.join(tempDir, "testauth-promo.db"));
-		authStorages.push(authStorage);
-		authStorage.setRuntimeApiKey("openai-codex", "test-key");
+		const authStorage = sharedAuthStorage;
 		// The bundled catalog has no codex model whose promotion target carries a
 		// strictly larger window (gpt-5.5's bundled target gpt-5.4 is same-window),
 		// so pin gpt-5.5 (272k) -> gpt-5.6-sol (372k) via modelOverrides.

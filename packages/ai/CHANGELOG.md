@@ -2,6 +2,66 @@
 
 ## [Unreleased]
 
+## [17.3.0] - 2026-08-13
+
+### Breaking Changes
+
+- Renamed `withGeminiThinkingLoopGuard` to `withThinkingLoopGuard`; the guard applies to Gemini, DeepSeek, and Grok model-id families.
+
+### Changed
+
+- Updated OpenCode Go integration to use the official usage endpoint, removing hardcoded caps, enabling real-time credential validation, and routing multi-key pools based on rolling and weekly headroom.
+- Optimized Anthropic prompt caching with rolling 5-minute breakpoints and idle refreshes to keep the prompt prefix warm.
+
+### Fixed
+
+- Fixed Ollama chat adapter to correctly forward sampling parameters like temperature and topP to the provider.
+- Fixed OpenAI agent turns ending prematurely after a web search with no visible answer, ensuring the agent continues processing the search results.
+- Fixed a resource leak where completed model streams retained provider concurrency permits longer than necessary.
+- Fixed image input support for qwen3.8-max and newer models when using DashScope compatible-mode.
+- Fixed xAI usage reporting falling back to a stale cache when a new weekly cycle starts with 0% consumed credits.
+- Fixed Together AI login validation failures by querying the authenticated models list instead of a hardcoded model.
+- Fixed credential-health probes and usage fetches failing when using reference-stored API keys (such as environment variables or commands) by ensuring secrets are correctly resolved.
+- Fixed Perplexity email-OTP login by preserving the session cookies required for verification.
+- Fixed thinking configuration for OpenAI and Daybreak models to correctly send reasoning.effort: "none" when thinking is disabled.
+- Fixed Grok runaway thinking streams bypassing the thinking-loop guard.
+
+### Removed
+
+- Removed legacy local request-cost estimation machinery and database schemas previously used for OpenCode Go estimates.
+
+## [17.2.15] - 2026-08-12
+
+### Fixed
+
+- Fixed an issue where AWS_BEDROCK_SKIP_AUTH failed to expose Amazon Bedrock models when AWS credential files were unavailable.
+- Fixed an issue where forceReasoningOff was ignored by Anthropic and Google transports, which allowed native thinking alongside a caller-supplied external scratchpad.
+
+## [17.2.14] - 2026-08-11
+
+### Added
+
+- Added `forceReasoningOff` and `disableReasoning` options to disable reasoning in OpenAI and Azure OpenAI models
+
+## [17.2.13] - 2026-08-11
+
+### Changed
+
+- Standardized first-party outbound User-Agent headers on `omp/<version>` via the shared `USER_AGENT` utility.
+
+### Fixed
+
+- Fixed the Amazon Bedrock and Cursor transports ignoring `StreamOptions.headers`; both built their request headers from scratch, so caller-supplied tracing or attribution headers were silently dropped while working on every other provider ([#8107](https://github.com/can1357/oh-my-pi/pull/8107) by [@svperfecta](https://github.com/svperfecta)).
+- Fixed Antigravity Flash turns hanging after successful response headers when the endpoint never emitted an SSE event; the provider now cancels the stalled body and fails over after 60 seconds while retaining the longer allowance for Pro reasoning starts.
+- Fixed Cursor exec-bridge bash/grep calls failing ArkType validation when the server omitted optional frame fields: synthesized and executed tool args now drop `undefined` keys (`cwd`, `case`, `skip`, `timeout`) instead of writing `optional: value || undefined`.
+- Fixed Cursor sessions double-executing settled tools when `tools.format` is an owned dialect (e.g. `gemini`): `wrapInbandToolStream` rebuilt toolCall blocks without copying `kCursorExecResolved`, so agent-loop re-ran bash/grep/todo and appended a second result for the same call id.
+- Fixed Codex Responses Lite requests for opaque model codenames such as Daybreak omitting the required `reasoning.context: "all_turns"` value and failing with HTTP 400.
+- Fixed Cursor personal usage reporting for current Pro / Pro+ / Ultra `/api/usage-summary` payloads that expose `individualUsage.plan` (and optional `onDemand`) instead of the older `individualUsage.overall` bucket ([#7998](https://github.com/can1357/oh-my-pi/pull/7998) by [@dnth](https://github.com/dnth)).
+- Allowed passive Google callers to accept empty or thinking-only `STOP` responses as successful silence instead of exhausting the provider's empty-response retry budget. ([#8223](https://github.com/can1357/oh-my-pi/issues/8223))
+- Fixed the AWS credential resolver ignoring `role_arn` profiles: shared-config role chaining (`source_profile` recursion, `web_identity_token_file`, `credential_source`) now resolves via STS `AssumeRole`/`AssumeRoleWithWebIdentity`, honoring `role_session_name`/`duration_seconds`/`external_id`, so Bedrock is detected on EKS/IRSA and multi-account setups instead of reporting "No models available" ([#8209](https://github.com/can1357/oh-my-pi/issues/8209)).
+- Fixed Bedrock availability being under-detected on Nitro/EKS hosts: the EC2 metadata probe now recognizes Nitro DMI markers (`board_asset_tag` instance ids, `Amazon EC2` vendor fields) in addition to the Xen `ec2` UUID prefix ([#8209](https://github.com/can1357/oh-my-pi/issues/8209)).
+- Fixed DeepSeek Responses targets (opencode-go) rejecting a thinking-mode continuation with `400 The reasoning_text in the thinking mode must be passed back to the API` after a prewalk hand-off plus mid-run compaction: the Responses input builder re-encoded replayed assistant turns without a reasoning item, so the request enabled reasoning but shipped no `reasoning_text`. The encoder now synthesizes a `reasoning_text` reasoning item for every replayed assistant turn when the target requires reasoning replay in thinking mode (`requiresReasoningContentForAllAssistantTurns` / `requiresReasoningContentForToolCalls`), mirroring the chat-completions `reasoning_content` safety net ([#8248](https://github.com/can1357/oh-my-pi/issues/8248)).
+
 ## [17.2.12] - 2026-08-08
 
 ### Fixed

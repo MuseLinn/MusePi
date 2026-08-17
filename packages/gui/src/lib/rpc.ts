@@ -129,6 +129,7 @@ export class RpcClient {
 		try {
 			await this.connect();
 			this.#failures = 0;
+			console.log("[rpc] reconnected");
 			this.run();
 		} catch {
 			// Requests sent on the dead connection can never be answered —

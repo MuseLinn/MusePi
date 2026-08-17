@@ -1,6 +1,5 @@
-import { Container, Text } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { formatDiagnostics } from "../../tools/render-utils";
+import { Container, Text } from "@musepi/pi-tui";import { formatDiagnostics } from "../../tools/render-utils";
 import { getLanguageFromPath, theme } from "../theme/theme";
 
 /** One file's worth of late LSP diagnostics, as carried on the transcript message. */
@@ -18,7 +17,7 @@ export interface LateDiagnosticsFile {
  */
 export class LateDiagnosticsMessageComponent extends Container {
 	#expanded = false;
-
+	#toolActivityVisible = true;
 	constructor(private readonly files: LateDiagnosticsFile[]) {
 		super();
 		this.#rebuild();
@@ -28,6 +27,17 @@ export class LateDiagnosticsMessageComponent extends Container {
 		if (this.#expanded === expanded) return;
 		this.#expanded = expanded;
 		this.#rebuild();
+	}
+
+	setToolActivityVisible(visible: boolean): void {
+		if (this.#toolActivityVisible === visible) return;
+		this.#toolActivityVisible = visible;
+		this.invalidate();
+	}
+
+	override render(width: number): readonly string[] {
+		if (!this.#toolActivityVisible) return [];
+		return super.render(width);
 	}
 
 	override invalidate(): void {

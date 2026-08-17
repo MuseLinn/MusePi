@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import { Container, setKeybindings } from "@musepi/pi-tui";
+import { Container, type OverlayOptions, setKeybindings } from "@musepi/pi-tui";
 import { KeybindingsManager } from "../../../src/config/keybindings";
 import type { ExtensionAskDialogQuestion, ExtensionUIContext } from "../../../src/extensibility/extensions";
 import { AskDialogComponent } from "../../../src/modes/components/ask-dialog";
@@ -25,12 +25,19 @@ function makeHarness() {
 	const requestRender = vi.fn();
 	const setFocus = vi.fn();
 	const addAutocompleteProvider = vi.fn();
+	const fakeHandle = {
+		hide: vi.fn(),
+		setHidden: vi.fn(),
+		isHidden: vi.fn(() => false),
+	};
+	const showOverlay = vi.fn(() => fakeHandle);
 	let uiContext: ExtensionUIContext | undefined;
 	const ctx = {
 		editor,
 		ui: {
 			requestRender,
 			setFocus,
+			showOverlay,
 			terminal: { rows: 40 },
 		},
 		editorContainer,
@@ -53,6 +60,8 @@ function makeHarness() {
 		addAutocompleteProvider,
 		editorContainer,
 		setFocus,
+		showOverlay,
+		fakeHandle,
 		controller,
 		async init(): Promise<ExtensionUIContext> {
 			await controller.initHooksAndCustomTools();
@@ -246,5 +255,65 @@ describe("ExtensionUiController editor UI", () => {
 
 		expect(harness.addAutocompleteProvider).toHaveBeenCalledTimes(1);
 		expect(harness.addAutocompleteProvider).toHaveBeenCalledWith(factory);
+	});
+});
+
+describe("ExtensionUiController custom overlay", () => {
+	// showHookCustom mounts the overlay in the `.then` of a Promise.try chain;
+	// draining the microtask queue a few times settles it without real timers.
+	const flushMicrotasks = async () => {
+		for (let i = 0; i < 3; i++) await Promise.resolve();
+	};
+
+	it("forwards overlayOptions to showOverlay and invokes onHandle", async () => {
+		const harness = makeHarness();
+		const ui = await harness.init();
+		const onHandle = vi.fn();
+		const overlayOptions: OverlayOptions = {
+			anchor: "bottom-center",
+			width: "85%",
+			maxHeight: "55%",
+			margin: { bottom: 1, left: 2, right: 2 },
+		};
+
+		ui.custom<void>(() => new Container(), { overlay: true, overlayOptions, onHandle });
+
+		await flushMicrotasks();
+		expect(harness.showOverlay).toHaveBeenCalledTimes(1);
+		expect(harness.showOverlay).toHaveBeenCalledWith(expect.any(Container), overlayOptions);
+		expect(onHandle).toHaveBeenCalledTimes(1);
+		expect(onHandle).toHaveBeenCalledWith(harness.fakeHandle);
+	});
+
+	it("resolves overlayOptions factories before showing the overlay", async () => {
+		const harness = makeHarness();
+		const ui = await harness.init();
+		const overlayOptions: OverlayOptions = { anchor: "top-right", width: 40 };
+		const resolveOverlayOptions = vi.fn(() => overlayOptions);
+
+		ui.custom<void>(() => new Container(), {
+			overlay: true,
+			overlayOptions: resolveOverlayOptions,
+		});
+
+		await flushMicrotasks();
+		expect(resolveOverlayOptions).toHaveBeenCalledTimes(1);
+		expect(harness.showOverlay).toHaveBeenCalledWith(expect.any(Container), overlayOptions);
+	});
+
+	it("falls back to the full-cover defaults when overlayOptions is absent", async () => {
+		const harness = makeHarness();
+		const ui = await harness.init();
+
+		ui.custom<void>(() => new Container(), { overlay: true });
+
+		await flushMicrotasks();
+		expect(harness.showOverlay).toHaveBeenCalledTimes(1);
+		expect(harness.showOverlay).toHaveBeenCalledWith(expect.any(Container), {
+			anchor: "bottom-center",
+			width: "100%",
+			maxHeight: "100%",
+			margin: 0,
+		});
 	});
 });

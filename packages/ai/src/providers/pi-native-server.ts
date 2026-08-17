@@ -78,6 +78,7 @@ const ALLOWED_OPTION_KEYS: ReadonlySet<keyof SimpleStreamOptions> = new Set([
 	"preferWebsockets",
 	"openrouterVariant",
 	"loopGuard",
+	"acceptEmptyResponse",
 ] as const satisfies readonly (keyof SimpleStreamOptions)[]);
 
 // ---------------------------------------------------------------------------

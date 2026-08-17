@@ -90,6 +90,19 @@ describe("AgentSession shake", () => {
 		});
 	}
 
+	/** Build enough recent content to place a seeded result outside manual shake's protected tail. */
+	function recentProtectedTail(label: string): string {
+		return `${label}\n${"tail ".repeat(4_000)}`;
+	}
+
+	function appendRecentProtectedTail(): void {
+		sessionManager.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: recentProtectedTail("newer context") }],
+			timestamp: Date.now() + 2,
+		});
+	}
+
 	function branchToolResults(): ToolResultMessage[] {
 		return sessionManager
 			.getBranch()
@@ -100,6 +113,7 @@ describe("AgentSession shake", () => {
 	describe("elide", () => {
 		it("drops the tool result, offloads to an artifact, and embeds the recovery link", async () => {
 			seedHeavyToolResult("X".repeat(4000));
+			appendRecentProtectedTail();
 			const replaceSpy = vi.spyOn(session.agent, "replaceMessages");
 
 			const result = await session.shake("elide");
@@ -121,7 +135,7 @@ describe("AgentSession shake", () => {
 			seedHeavyToolResult("X".repeat(20_000));
 			sessionManager.appendMessage({
 				role: "assistant",
-				content: [{ type: "text", text: "done" }],
+				content: [{ type: "text", text: recentProtectedTail("done") }],
 				...apiInfo,
 				stopReason: "stop",
 				usage: { ...usage, input: 20_000, totalTokens: 20_008 },
@@ -157,7 +171,7 @@ describe("AgentSession shake", () => {
 			seedHeavyToolResult("X".repeat(20_000));
 			sessionManager.appendMessage({
 				role: "assistant",
-				content: [{ type: "text", text: "anchored" }],
+				content: [{ type: "text", text: recentProtectedTail("anchored") }],
 				...apiInfo,
 				stopReason: "stop",
 				usage: { ...usage, input: 20_000, totalTokens: 20_008 },
@@ -213,7 +227,7 @@ describe("AgentSession shake", () => {
 			});
 			sessionManager.appendMessage({
 				role: "assistant",
-				content: [{ type: "text", text: "post-compaction" }],
+				content: [{ type: "text", text: recentProtectedTail("post-compaction") }],
 				...apiInfo,
 				stopReason: "stop",
 				usage: { ...usage, input: 20_000, totalTokens: 20_008 },

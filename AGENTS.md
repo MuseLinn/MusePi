@@ -1,5 +1,18 @@
 # Development Rules
 
+## GUI Development Rules (`packages/gui`, `packages/collab-web`)
+
+The desktop GUI follows its own living spec — **`docs/gui-design.md`** (design/interaction standards) and **`docs/gui-implementation.md`** (RPC contracts, gotchas, verification workflow). Update them when you change GUI behavior. Key rules that bite:
+
+- **Modals must own the keyboard while open.** `DialogFrame` captures Escape on `document` in the capture phase (wins over handlers behind), moves focus into the dialog and restores it on close; confirm boxes confirm on Enter; the onboarding overlay advances on Enter / steps back on Escape. Never let a modal rely on the page behind keeping focus — the composer swallows Enter and sends a message.
+- **`DialogFrame` is always mounted and driven by `open`** — conditional mounting (`{x && <DialogFrame/>}`) kills the exit animation. Same rule for prompt/confirm dialogs (`lib/prompt-dialog.tsx`): closing defers the promise resolution until the 180ms exit plays.
+- **Small-content dialogs must use the compact style** (`gui-dialog--confirm`): auto-sized, `max-width: 380px`. The base `.gui-dialog` is a 600×420 settings box — a desc + two buttons floating in it reads broken.
+- **Every hook must be declared before any early return** (`if (!open) return null`). A hook after a conditional return flips the hook count and crashes with "Rendered more hooks than during the previous render" (AnnouncementOverlay regression, fixed 2026-08-14).
+- **Model identity is `provider/id`, never a bare id.** Two providers can serve the same bare id (opencode-go vs opencode-zen both offering `deepseek-v4-flash`): favorites, the DEFAULT pin, the selection state and role assignments all key on `provider/id`, and `session.setModel` carries `provider` so the daemon resolves the exact model. The daemon's model resolver already understands `provider/id` references.
+- **Model selection is session-scoped** (TUI `/switch` parity): the in-chat composer's pick calls `session.setModel` for THAT session only. The welcome composer's resting preselect is the DEFAULT role (`modelRoles.default`) kept in its own `defaultModelId` app state — opening/switching sessions must NEVER write it, and `ModelSelector` resets its `userPicked` seed lock on session change (the composer stays mounted across switches, so a pick in session A must not freeze session B's selector on A's model). Seed precedence in session mode: live model (`contextUsage.model`) → session preselect → DEFAULT → list head.
+- **Role thinking ladders are per-model.** The role rows' thinking select renders the resolved model's `getSupportedEfforts` (daemon `resolvedRoleModels.efforts`) — never a fixed seven-rung list; re-fetch the resolution after every role-model change (`applyRoleModels`).
+- **CSS-only interactions stay CSS-only** (chroma group glow via CSS vars + hover; recap slide via sibling selectors) — no React state for pointer tracks.
+
 ## Default Context
 
 This repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.
@@ -237,6 +250,21 @@ For the bash tool specifically:
 Test the contract the system exposes — not the easiest internal detail to assert.
 
 - Every new test must defend one **concrete, externally observable contract**: behavior, output shape, state transition, error mapping, or a regression-prone parsing boundary. If you cannot name the contract, do not add the test.
+
+### Good vs. bad test filter
+
+- **Name the failure mode.** Every test MUST state what a consumer observes if it regresses. Cannot name one? NEVER add it.
+- **Good: transformation.** One fixture MAY prove parse/render/normalize/encode/resolve behavior when output is computed, not echoed.
+- **Good: branch or boundary.** Distinct inputs, empty values, malformed input, version/provider routing, and state transitions MUST prove distinct outcomes.
+- **Good: external contract.** Exact bytes/shape MAY be asserted when a provider, parser, protocol, or persisted consumer reads them.
+- **Good: precedence or negative contract.** Keep explicit `false`/override-wins assertions and required absence only when they prevent a documented leak, downgrade, 400, or incompatible wire field.
+- **Good: regression.** A repro MUST trigger the prior real failure path and assert the corrected observable result.
+- **Bad: static echo.** NEVER test a constructor/builder merely copied a fixture or baked constant into an in-memory config/metadata field.
+- **Bad: success passthrough.** NEVER assert `fn(x) === x` when `x` was already supplied/declared valid; assert a transform, rejection, or downstream effect instead.
+- **Bad: wording/defaults.** NEVER assert prompt/UI boilerplate, a default literal, object existence, non-empty output, or length growth without a consumer contract.
+- **Bad: duplicate rows.** Parameterized/loop rows MUST each cover a distinct branch, provider/model path, or consumer contract; delete same-path duplicates.
+- **Metadata exception.** Exact metadata, identity, ordering, or `undefined` MAY remain only when a downstream consumer depends on it and the test establishes branch, precedence, negative-contract, wire, or regression evidence.
+- **Termination exception.** For cyclic/large inputs, assert a bounded output, surfaced error, or state change; bare `not.toThrow()` is insufficient.
 - No placeholder tests, tautologies, or "the code ran" assertions (`expect(true).toBe(true)`, bare `not.toThrow()`, non-empty string checks, length-grew checks, "prompt exists" checks without semantic assertion).
 - Prefer contract-level tests over implementation details. Avoid asserting internal helper wiring, field assignment, singleton identity, incidental ordering, prompt boilerplate, or passthrough option forwarding unless another component depends on that exact detail.
 - Don't duplicate coverage across abstraction levels. If an integration test already proves the behavior, drop the narrower unit test that restates it through mocks.

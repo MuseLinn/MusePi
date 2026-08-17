@@ -8,13 +8,13 @@ import { ScheduledPanel } from "./components/panels/ScheduledPanel";
 import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
-import { HeaderBar, type GuestPanel } from "./components/shell/HeaderBar";
+import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { Toasts } from "./components/shell/Toasts";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { Transcript } from "./components/transcript/Transcript";
 import { t } from "./i18n/index.js";
 import { GuestClient } from "./lib/client";
-import { useGuestSnapshot } from "./lib/use-guest";
+import { useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
 import "./components/shell/shell.css";
 
@@ -144,17 +144,74 @@ interface SessionProps {
 	onRejoin(): void;
 }
 
+/**
+ * Message-plane fields only: entries/stream/activeTools change on every
+ * transcript frame, so this pane is the only thing that re-renders during
+ * a stream — never the shell, header, composer, or toasts.
+ */
+function TranscriptPane({ client, host }: { client: GuestClient; host: ToolRenderHost }): ReactNode {
+	const entries = useGuestSelector(client, s => s.entries);
+	const stream = useGuestSelector(client, s => s.stream);
+	const streamDone = useGuestSelector(client, s => s.streamDone);
+	const activeTools = useGuestSelector(client, s => s.activeTools);
+	const working = useGuestSelector(client, s => s.working);
+	const roundDurations = useGuestSelector(client, s => s.roundDurations);
+	return (
+		<Transcript
+			entries={entries}
+			stream={stream}
+			streamDone={streamDone}
+			activeTools={activeTools}
+			working={working}
+			roundDurations={roundDurations}
+			host={host}
+		/>
+	);
+}
+
+/** Subagent rail state: agents/progress/lifecycle change independently of the transcript. */
+function AgentsRail({
+	client,
+	selectedId,
+	onSelect,
+}: {
+	client: GuestClient;
+	selectedId: string | null;
+	onSelect(id: string | null): void;
+}): ReactNode {
+	const agents = useGuestSelector(client, s => s.agents);
+	const progress = useGuestSelector(client, s => s.progress);
+	const lifecycle = useGuestSelector(client, s => s.lifecycle);
+	return (
+		<AgentsPanel
+			agents={agents}
+			progress={progress}
+			lifecycle={lifecycle}
+			selectedId={selectedId}
+			onSelect={onSelect}
+		/>
+	);
+}
+
 function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
-	const snap = useGuestSnapshot(client);
 	const [railOpen, setRailOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
 	const autoOpenedRef = useRef(false);
 
-	const subCount = useMemo(() => snap.agents.filter(a => a.kind === "sub").length, [snap.agents]);
+	// Low-frequency fields only. The shell never subscribes to the message
+	// plane (entries/stream/activeTools) — those live in TranscriptPane.
+	const phase = useGuestSelector(client, s => s.phase);
+	const endedReason = useGuestSelector(client, s => s.endedReason);
+	const header = useGuestSelector(client, s => s.header);
+	const state = useGuestSelector(client, s => s.state);
+	const agents = useGuestSelector(client, s => s.agents);
+	const workspace = useGuestSelector(client, s => s.workspace);
+	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	const readOnly = useGuestSelector(client, s => s.readOnly);
 
-	// Task-card agent chips drill into the same drawer the rail uses.
-	const agentIds = useMemo(() => new Set(snap.agents.map(a => a.id)), [snap.agents]);
+	const subCount = agents.filter(a => a.kind === "sub").length;
+	const agentIds = useMemo(() => new Set(agents.map(a => a.id)), [agents]);
 	const toolHost = useMemo<ToolRenderHost>(
 		() => ({
 			hasAgent: id => agentIds.has(id),
@@ -174,51 +231,45 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 		}
 	}, [subCount]);
 
-	const title = snap.header?.title ?? snap.state?.sessionName ?? t("session");
+	const title = header?.title ?? state?.sessionName ?? t("session");
 	useEffect(() => {
 		document.title = `${title} · ${t("musepi collab")}`;
 	}, [title]);
 
-	const drawerAgent = selectedId != null ? snap.agents.find(a => a.id === selectedId) : undefined;
-	const inWorkspace = snap.workspace !== null && snap.focusedSessionId === null;
+	const drawerAgent = selectedId != null ? agents.find(a => a.id === selectedId) : undefined;
+	const inWorkspace = workspace !== null && focusedSessionId === null;
 	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
+	const sessionCwd = state?.cwd ?? null;
 
 	return (
 		<div className="sh-app">
 			<HeaderBar
-				snapshot={snap}
-				subCount={subCount}
+				client={client}
 				railOpen={railOpen}
 				onToggleRail={() => setRailOpen(open => !open)}
 				onLeave={onLeave}
-				onBack={inWorkspace ? undefined : snap.workspace !== null ? backToWorkspace : undefined}
+				onBack={inWorkspace ? undefined : workspace !== null ? backToWorkspace : undefined}
 				activePanel={activePanel}
 				onSelectPanel={setActivePanel}
 			/>
 			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">
-				{inWorkspace && snap.workspace !== null ? (
-					<WorkspaceView client={client} sessions={snap.workspace} onSelect={id => client.selectWorkspaceSession(id)} />
+				{inWorkspace && workspace !== null ? (
+					<WorkspaceView client={client} sessions={workspace} onSelect={id => client.selectWorkspaceSession(id)} />
 				) : activePanel !== null ? (
 					<section className="sh-content" data-rail="false">
 						<div className="sh-panel">
-							{activePanel === "board" && <BoardPanel client={client} snapshot={snap} />}
-							{activePanel === "scheduled" && <ScheduledPanel client={client} snapshot={snap} />}
-							{activePanel === "files" && <FilePanel client={client} snapshot={snap} />}
+							{activePanel === "board" && <BoardPanel client={client} />}
+							{activePanel === "scheduled" && (
+								<ScheduledPanel client={client} cwd={sessionCwd} readOnly={readOnly} />
+							)}
+							{activePanel === "files" && <FilePanel client={client} cwd={sessionCwd} readOnly={readOnly} />}
 						</div>
 					</section>
 				) : (
 					<section className="sh-content" data-rail={railOpen ? "true" : "false"}>
 						<div className="sh-transcript">
-							<Transcript
-								entries={snap.entries}
-								stream={snap.stream}
-								streamDone={snap.streamDone}
-								activeTools={snap.activeTools}
-								working={snap.working}
-								roundDurations={snap.roundDurations}
-								host={toolHost}
-							/>
+							<TranscriptPane client={client} host={toolHost} />
 						</div>
 					</section>
 				)}
@@ -226,33 +277,26 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 					<>
 						<div className="sh-rail-backdrop" onClick={() => setRailOpen(false)} />
 						<aside className="sh-rail">
-							<AgentsPanel
-								agents={snap.agents}
-								progress={snap.progress}
-								lifecycle={snap.lifecycle}
-								selectedId={selectedId}
-								onSelect={setSelectedId}
-							/>
+							<AgentsRail client={client} selectedId={selectedId} onSelect={setSelectedId} />
 						</aside>
 					</>
 				)}
 			</main>
-			{!inWorkspace && activePanel === null && <Composer client={client} snapshot={snap} />}
+			{!inWorkspace && activePanel === null && <Composer client={client} />}
 			{drawerAgent && (
 				<>
 					<div className="ag-drawer-backdrop" onClick={() => setSelectedId(null)} />
 					<AgentDrawer
 						agent={drawerAgent}
-						progress={snap.progress.get(drawerAgent.id)}
 						client={client}
-						readOnly={snap.readOnly}
+						readOnly={readOnly}
 						host={toolHost}
 						onClose={() => setSelectedId(null)}
 					/>
 				</>
 			)}
-			<Banners phase={snap.phase} endedReason={snap.endedReason} onRejoin={onRejoin} onNewLink={onLeave} />
-			<Toasts notices={snap.notices} />
+			<Banners phase={phase} endedReason={endedReason} onRejoin={onRejoin} onNewLink={onLeave} />
+			<Toasts client={client} />
 		</div>
 	);
 }

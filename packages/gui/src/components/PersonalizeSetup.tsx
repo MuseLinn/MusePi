@@ -12,7 +12,17 @@ import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
  * all live-previewed and persisted exactly like the settings rows they
  * mirror (设置 → 常规 / 伙伴 / display.smoothStreaming).
  */
-export function PersonalizeSetup({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function PersonalizeSetup({
+	rpc,
+	petMode,
+	onPetModeChange,
+}: {
+	rpc: RpcClient | null;
+	/** Pet display mode — lifted to OnboardingOverlay so the preview (right
+	 *  pane) hides the pet in "desktop" mode and shows it in "input". */
+	petMode: "input" | "desktop";
+	onPetModeChange: (mode: "input" | "desktop") => void;
+}): ReactNode {
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [smooth, setSmooth] = useState(true);
 	const [selectedPet, setSelectedPet] = useState<string>(() => {
@@ -70,9 +80,44 @@ export function PersonalizeSetup({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	};
 
 	const petOptions = [...BUILTIN_PETDEX, ...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" }))];
+	// Where the pet lives: docked inside the composer ("input") or its own
+	// desktop window ("desktop") — omp-gui-pet-mode, same key the pet host
+	// reads. State is lifted (OnboardingOverlay) so the chat preview on the
+	// right reflects the choice live.
+	const pickPetMode = (mode: "input" | "desktop"): void => {
+		onPetModeChange(mode);
+		try {
+			localStorage.setItem("omp-gui-pet-mode", mode);
+		} catch {
+			// ignore
+		}
+		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+	};
 
 	return (
 		<div className="gui-obo-personalize">
+			<div className="gui-obo-pers-section">
+				<div className="gui-obo-pers-label">{t("pet display mode")}</div>
+				<div className="flex items-center gap-1.5">
+					<button
+						type="button"
+						className={`gui-obo-seg${petMode === "input" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={petMode === "input"}
+						onClick={() => pickPetMode("input")}
+					>
+						{t("pet mode input")}
+					</button>
+					<button
+						type="button"
+						className={`gui-obo-seg${petMode === "desktop" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={petMode === "desktop"}
+						onClick={() => pickPetMode("desktop")}
+					>
+						{t("pet mode desktop")}
+					</button>
+				</div>
+			</div>
+
 			<div className="gui-obo-pers-section">
 				<div className="gui-obo-pers-label">{t("agent avatar style")}</div>
 				<div className="flex items-center gap-1.5">
@@ -118,7 +163,7 @@ export function PersonalizeSetup({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							onClick={() => pickPet(p.id)}
 						>
 							<Icon name={selectedPet === p.id ? "checkbox-circle" : "checkbox-blank"} className="h-3.5 w-3.5" />
-							<span className="truncate">{p.displayName}</span>
+							<span className="gui-obo-pet-name">{p.displayName}</span>
 						</button>
 					))}
 				</div>

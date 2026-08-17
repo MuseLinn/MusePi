@@ -15,8 +15,7 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
   暂停、`/steer` 转向、`/tasks` 任务、`/extensions` 扩展）。
 - **桌面 GUI**：`packages/gui`（Electron）——daemon 架构：GUI 连 daemon
   （端口 8300）驱动会话；`musepi --gui` 或应用启动。
-- **看板（dashboard）**：widget 卡片板——/board 打开；卡片可拖拽/缩放
-  （网格 92×44、gutter 12）；组件即卡（无外框）；可 pin 到桌面。
+- **看板（dashboard）**：widget 卡片墙——GUI 侧栏「看板」进入（画布随窗口自适应缩放 + ChromaGrid 组光效）；`board` 工具读写（list/get/schema/save，agent 可建板/加卡）；卡片可拖拽/缩放（网格 92×44、gutter 12）；组件即卡（无外框）。
 - **对话内联 widget**：`widget` 工具在对话里渲染活卡片（计算器/滑杆/行情/
   待办/番茄钟/视频等），交互结果可"发送给对话"回传给 agent。
 
@@ -26,7 +25,7 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 - 技能：`~/.musepi/agent/skills/<name>/SKILL.md`（用户级，设置里可开关）
 - 扩展：`~/.musepi/agent/extensions/<name>/index.ts`（用户级）；MCP：`.mcp.json`
 - 上下文：从 cwd 向上找 `AGENTS.md`（项目约定）
-- 看板数据：`boards.json`（会话数据目录，GUI 看板持久化）
+- 看板数据：`~/.musepi/boards/boards.json`（daemon 共享看板存储，GUI 同源）
 
 ## 常见问答要点
 

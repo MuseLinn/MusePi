@@ -166,24 +166,6 @@ export interface UsageHistoryQuery {
 	/** Inclusive lower bound on {@link UsageHistoryEntry.recordedAt} (epoch ms). */
 	sinceMs?: number;
 }
-/** One observed provider request cost, attributed to the credential that made it. */
-export interface UsageCostHistoryEntry {
-	/** Epoch ms the request completed. */
-	recordedAt: number;
-	provider: Provider;
-	/** Stable credential identity key (account/email/project/secret derived). */
-	accountKey: string;
-	/** Estimated request cost in USD. */
-	costUsd: number;
-}
-
-/** Filter for reading observed request costs. */
-export interface UsageCostHistoryQuery {
-	provider?: string;
-	accountKey?: string;
-	/** Inclusive lower bound on {@link UsageCostHistoryEntry.recordedAt} (epoch ms). */
-	sinceMs?: number;
-}
 
 /**
  * Aggregated request usage a client observed for one (provider, model) pair.
@@ -346,8 +328,6 @@ export interface UsageFetchContext {
 	fetch: FetchImpl;
 	logger?: UsageLogger;
 	retryWait?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
-	/** Observed request-cost history for providers without upstream usage APIs. */
-	listUsageCosts?: (query?: UsageCostHistoryQuery) => UsageCostHistoryEntry[];
 }
 
 /** Provider implementation for fetching usage information. */

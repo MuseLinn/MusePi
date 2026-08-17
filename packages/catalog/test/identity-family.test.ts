@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
 	hasOpus47ApiRestrictions,
 	isClaudeModelId,
+	isGeminiModelId,
 	isGlmVisionModelId,
+	isGrokModelId,
 	isGrokReasoningEffortCapable,
 	isKimiK26ModelId,
 	isKimiModelId,
@@ -75,6 +77,21 @@ describe("parseAnthropicModel", () => {
 			version: { major: 4, minor: 6, patch: 0 },
 		});
 		expect(parseAnthropicModel("anthropic--claude-4.8-haiku")).toBeNull();
+	});
+
+	test("parses versions past the precompute table instead of classifying the model unknown", () => {
+		// The semver precompute table gates parsing; a too-small bound silently
+		// downgraded `claude-opus-5-11`-shaped ids to unknown (#8256 class).
+		expect(parseAnthropicModel("claude-opus-5-11")).toEqual({
+			family: "anthropic",
+			kind: "opus",
+			version: { major: 5, minor: 11, patch: 0 },
+		});
+		expect(parseAnthropicModel("claude-sonnet-4.25")).toEqual({
+			family: "anthropic",
+			kind: "sonnet",
+			version: { major: 4, minor: 25, patch: 0 },
+		});
 	});
 });
 
@@ -227,6 +244,17 @@ describe("isReasoningGlmModelId", () => {
 		expect(isReasoningGlmModelId("glm-4.5v")).toBe(false);
 		expect(isReasoningGlmModelId("qwen3.5")).toBe(false);
 	});
+
+	test("matches uppercase provider-prefixed GLM ids", () => {
+		// Baseten, CoreWeave, HuggingFace, etc. serve GLM under uppercase ids.
+		expect(isReasoningGlmModelId("zai-org/GLM-5.2")).toBe(true);
+		expect(isReasoningGlmModelId("zai-org/GLM-5.2-Fast")).toBe(true);
+		expect(isReasoningGlmModelId("zai-org/GLM-4.7")).toBe(true);
+		expect(isReasoningGlmModelId("zai-org/GLM-4.5-Air")).toBe(true);
+		expect(isReasoningGlmModelId("zai-org/GLM-5-Turbo")).toBe(true);
+		// Vision SKUs are still excluded even in uppercase.
+		expect(isReasoningGlmModelId("zai-org/GLM-4.5V")).toBe(false);
+	});
 });
 
 describe("isGlmVisionModelId", () => {
@@ -268,8 +296,12 @@ describe("modelFamilyToken", () => {
 	test("classifies non-first-party families", () => {
 		expect(modelFamilyToken("moonshotai/kimi-k2")).toBe("kimi");
 		expect(modelFamilyToken("qwen/qwen3-coder")).toBe("qwen");
+		expect(modelFamilyToken("google/gemini-2.5-flash")).toBe("gemini");
+		expect(modelFamilyToken("xai/grok-4.6")).toBe("grok");
+		expect(modelFamilyToken("openai/gemini-pro")).toBe("gemini");
+		expect(modelFamilyToken("openai/deepseek-r1")).toBe("deepseek");
+		expect(modelFamilyToken("openai/grok-4.6")).toBe("grok");
 	});
-
 	test("classifies GLM across provider mirrors so same-lineage SKUs fold together", () => {
 		expect(modelFamilyToken("glm-5.2")).toBe("glm");
 		expect(modelFamilyToken("zai/glm-5.2")).toBe(modelFamilyToken("zhipu-coding-plan/glm-5.2"));
@@ -278,6 +310,25 @@ describe("modelFamilyToken", () => {
 
 	test("returns an empty token for unclassifiable ids so callers fall back to provider", () => {
 		expect(modelFamilyToken("some-unknown-model")).toBe("");
+	});
+});
+describe("isGeminiModelId", () => {
+	test("matches gemini ids across namespaces", () => {
+		expect(isGeminiModelId("gemini-3.5-flash")).toBe(true);
+		expect(isGeminiModelId("google/gemini-3-pro")).toBe(true);
+		expect(isGeminiModelId("openrouter/google/gemini-2.5-flash")).toBe(true);
+		expect(isGeminiModelId("gpt-4o")).toBe(false);
+	});
+});
+
+describe("isGrokModelId", () => {
+	test("matches grok ids across namespaces and delimiters", () => {
+		expect(isGrokModelId("grok-4-6")).toBe(true);
+		expect(isGrokModelId("xai/grok-3")).toBe(true);
+		expect(isGrokModelId("venice/grok-4.5")).toBe(true);
+		expect(isGrokModelId("cursor-grok-4.5-high")).toBe(true);
+		expect(isGrokModelId("notgrok-4.6")).toBe(false);
+		expect(isGrokModelId("gpt-4o")).toBe(false);
 	});
 });
 

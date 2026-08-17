@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { toNumber } from "@musepi/pi-catalog/utils";
+import { USER_AGENT } from "@musepi/pi-utils";
 import type {
 	CredentialRankingContext,
 	CredentialRankingStrategy,
@@ -417,7 +418,7 @@ export const openaiCodexUsageProvider: UsageProvider = {
 
 		const headers: Record<string, string> = {
 			Authorization: `Bearer ${accessToken}`,
-			"User-Agent": "OpenCode-Status-Plugin/1.0",
+			"User-Agent": USER_AGENT,
 		};
 		if (accountId) {
 			headers["ChatGPT-Account-Id"] = accountId;

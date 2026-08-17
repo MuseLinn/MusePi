@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { buildNonInteractiveEnv } from "@musepi/pi-coding-agent/exec/non-interactive-env";
+import { buildNonInteractiveEnv, NON_INTERACTIVE_ENV } from "@musepi/pi-coding-agent/exec/non-interactive-env";
 
 describe("buildNonInteractiveEnv", () => {
 	it("defaults Windows child-process encoding to UTF-8 when inherited env is unset", () => {
@@ -58,6 +58,31 @@ describe("buildNonInteractiveEnv", () => {
 		const env = buildNonInteractiveEnv({ GPG_TTY: "/dev/pts/7" }, {}, "linux");
 
 		expect(env.GPG_TTY).toBe("/dev/pts/7");
+	});
+
+	it("uses an executable SSH askpass rejector on POSIX", async () => {
+		if (process.platform === "win32") return;
+		const proc = Bun.spawn([NON_INTERACTIVE_ENV.SSH_ASKPASS], {
+			stdout: "ignore",
+			stderr: "ignore",
+		});
+
+		expect(await proc.exited).toBe(1);
+	});
+
+	it("injects clap-compatible CI=true by default", () => {
+		expect(buildNonInteractiveEnv(undefined, {}, "linux").CI).toBe("true");
+		expect(buildNonInteractiveEnv(undefined, {}, "win32").CI).toBe("true");
+	});
+
+	it("drops CI when PI_BASH_NO_CI or its legacy alias is set", () => {
+		expect(buildNonInteractiveEnv(undefined, { PI_BASH_NO_CI: "1" }, "linux")).not.toHaveProperty("CI");
+		expect(buildNonInteractiveEnv(undefined, { CLAUDE_BASH_NO_CI: "1" }, "linux")).not.toHaveProperty("CI");
+		expect(buildNonInteractiveEnv(undefined, { PI_BASH_NO_CI: "1" }, "win32")).not.toHaveProperty("CI");
+	});
+
+	it("lets a per-command CI override win over the opt-out", () => {
+		expect(buildNonInteractiveEnv({ CI: "0" }, { PI_BASH_NO_CI: "1" }, "linux").CI).toBe("0");
 	});
 });
 

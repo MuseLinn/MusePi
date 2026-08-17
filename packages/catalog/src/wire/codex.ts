@@ -11,6 +11,8 @@ export const CODEX_CLIENT_VERSION = "0.144.1";
 
 export const OPENAI_HEADERS = {
 	BETA: "OpenAI-Beta",
+	/** Codex feature-negotiation header; values identify opt-in wire protocols. */
+	CODEX_BETA_FEATURES: "x-codex-beta-features",
 	ACCOUNT_ID: "chatgpt-account-id",
 	ORIGINATOR: "originator",
 	VERSION: "version",
@@ -32,6 +34,7 @@ export const OPENAI_HEADERS = {
 export const OPENAI_HEADER_VALUES = {
 	BETA_RESPONSES: "responses=experimental",
 	BETA_RESPONSES_WEBSOCKETS_V2: "responses_websockets=2026-02-06",
+	REMOTE_COMPACTION_V2: "remote_compaction_v2",
 	ORIGINATOR_CODEX: "pi",
 } as const;
 

@@ -1,4 +1,4 @@
-import type { AgentSnapshot, SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
+import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -6,6 +6,7 @@ import { t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
 import { fmtCost, fmtDuration, fmtTokens } from "../../lib/format";
 import { decideTranscriptPoll } from "../../lib/transcript-poll";
+import { useGuestSelector } from "../../lib/use-guest";
 import type { TranscriptProps } from "../transcript/Transcript";
 import { Transcript } from "../transcript/Transcript";
 
@@ -14,7 +15,6 @@ const POLL_MS = 1200;
 
 export function AgentDrawer(props: {
 	agent: AgentSnapshot;
-	progress?: SubagentProgressPayload;
 	client: GuestClient;
 	/** View-link guests: hide kill/revive/chat (the host rejects them anyway). */
 	readOnly?: boolean;
@@ -22,7 +22,10 @@ export function AgentDrawer(props: {
 	host?: TranscriptProps["host"];
 	onClose(): void;
 }): ReactNode {
-	const { agent, progress, client, readOnly, host, onClose } = props;
+	const { agent, client, readOnly, host, onClose } = props;
+	// Live subagent progress — subscribed here so shell frames don't churn
+	// the drawer's transcript while progress ticks.
+	const progress = useGuestSelector(client, s => s.progress.get(agent.id));
 	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");

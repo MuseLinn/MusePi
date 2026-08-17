@@ -531,6 +531,68 @@ describe("searchCodex model selection", () => {
 		expect(result.sources).toEqual([{ title: "Example Article", url: "https://example.com/article" }]);
 	});
 
+	it("requests and merges web-search action sources with citation metadata", async () => {
+		process.env.PI_CODEX_WEB_SEARCH_MODEL = "gpt-5.4";
+		const answer = "The Responses API supports hosted web search.";
+		const citationStart = answer.indexOf("hosted web search");
+		const sse = [
+			`data: ${JSON.stringify({
+				type: "response.created",
+				response: { id: "resp_created_id", model: "gpt-5.4" },
+			})}`,
+			"",
+			`data: ${JSON.stringify({
+				type: "response.output_item.done",
+				item: {
+					type: "web_search_call",
+					action: {
+						sources: [
+							{
+								url: "https://example.com/article?utm_source=openai",
+								title: "Search result title",
+							},
+						],
+					},
+				},
+			})}`,
+			"",
+			`data: ${JSON.stringify({
+				type: "response.output_item.done",
+				item: {
+					type: "message",
+					content: [
+						{
+							type: "output_text",
+							text: answer,
+							annotations: [
+								{
+									type: "url_citation",
+									url: "https://example.com/article?utm_source=openai",
+									title: "Example Article",
+									start_index: citationStart,
+									end_index: citationStart + "hosted web search".length,
+								},
+							],
+						},
+					],
+				},
+			})}`,
+			"",
+		].join("\n");
+
+		const result = await searchCodex(makeSearchParams("action sources", mockCodexFetch("gpt-5.4", sse)));
+
+		expect(capturedRequest?.body?.include).toEqual(["web_search_call.action.sources"]);
+		expect(result.requestId).toBe("resp_created_id");
+		expect(result.sources).toEqual([
+			{
+				title: "Search result title",
+				url: "https://example.com/article",
+				snippet: answer,
+			},
+		]);
+	});
+
 	it("extracts plain text URLs when annotations are absent", async () => {
 		process.env.PI_CODEX_WEB_SEARCH_MODEL = "gpt-5.4";
 		const result = await searchCodex(
@@ -768,5 +830,23 @@ describe("searchCodex model selection", () => {
 		await expect(searchCodex(makeSearchParams("structured failure", fetchMock))).rejects.toThrow(
 			"Codex request failed (model_snapshot_unavailable): The requested model snapshot is unavailable.",
 		);
+	});
+
+	it("classifies rate-limit failures delivered inside a successful SSE response", async () => {
+		const sse = [
+			`data: ${JSON.stringify({
+				type: "response.failed",
+				response: {
+					error: { code: "rate_limit_exceeded", message: "Too many requests" },
+				},
+			})}`,
+			"",
+		].join("\n");
+		const fetchMock: FetchImpl = () =>
+			Promise.resolve(new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+
+		await expect(searchCodex(makeSearchParams("rate-limited search", fetchMock))).rejects.toMatchObject({
+			status: 429,
+		});
 	});
 });

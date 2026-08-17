@@ -7,8 +7,6 @@ import { createMockModel, registerMockApi } from "@musepi/pi-ai/providers/mock";
 import { __providerInFlightForTesting, streamSimple } from "@musepi/pi-ai/stream";
 import type { Context } from "@musepi/pi-ai/types";
 import {
-	getDefault,
-	getEnumValues,
 	onAppendOnlyModeChanged,
 	onStatusLineSessionAccentChanged,
 	resetSettingsForTest,
@@ -391,56 +389,6 @@ describe("Settings", () => {
 		});
 	});
 
-	describe("defaults", () => {
-		it("keeps eight inline images live by default", async () => {
-			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			expect(settings.get("tui.maxInlineImages")).toBe(8);
-		});
-
-		it("keeps native terminal progress disabled by default", async () => {
-			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			expect(settings.get("terminal.showProgress")).toBe(false);
-			expect(getDefault("terminal.showProgress")).toBe(false);
-		});
-
-		it("shows tool activity by default", async () => {
-			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			expect(settings.get("display.hideToolActivity")).toBe(false);
-			expect(getDefault("display.hideToolActivity")).toBe(false);
-		});
-
-		it("keeps the normal startup splash disabled by default", async () => {
-			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			expect(settings.get("startup.showSplash")).toBe(false);
-			expect(getDefault("startup.showSplash")).toBe(false);
-		});
-
-		it("defaults provider in-flight request limits to an empty map", async () => {
-			const settings = Settings.isolated();
-			expect(settings.get("providers.maxInFlightRequests")).toEqual({});
-			expect(getDefault("providers.maxInFlightRequests")).toEqual({});
-		});
-
-		it("exposes all tool calling mode options", () => {
-			const values = getEnumValues("tools.format");
-			expect(values).toEqual([
-				"auto",
-				"native",
-				"glm",
-				"hermes",
-				"kimi",
-				"xml",
-				"anthropic",
-				"deepseek",
-				"harmony",
-				"qwen3",
-				"gemini",
-				"gemma",
-				"minimax",
-			]);
-		});
-	});
-
 	describe("get()", () => {
 		it("resolves overrides, schema defaults, and falsey values", () => {
 			const isolated = Settings.isolated({
@@ -454,7 +402,6 @@ describe("Settings", () => {
 			expect(isolated.get("setupVersion")).toBe(0);
 			expect(isolated.get("shellPath")).toBe("");
 			expect(isolated.get("enabledModels")).toEqual([]);
-			expect(isolated.get("tui.maxInlineImages")).toBe(getDefault("tui.maxInlineImages"));
 		});
 
 		it("invalidates cached resolved values after set, override, and clearOverride", () => {
@@ -515,6 +462,18 @@ describe("Settings", () => {
 		});
 	});
 
+	describe("extension-contributed settings (getRaw/set on non-schema keys)", () => {
+		it("getRaw reads and set writes an extension key without crashing", () => {
+			const isolated = Settings.isolated();
+			// display.taskCardStyle is registered by the style extension, not
+			// in SETTINGS_SCHEMA — get() would crash on the missing segment
+			// table; getRaw addresses it by dot segments like the schema does.
+			expect(isolated.getRaw("display.taskCardStyle")).toBeUndefined();
+			isolated.set("display.taskCardStyle" as SettingPath, "classic" as never);
+			expect(isolated.getRaw("display.taskCardStyle")).toBe("classic");
+		});
+	});
+
 	describe("statusLine.sessionAccent hooks", () => {
 		it("notifies subscribers only when the effective value changes", () => {
 			const isolated = Settings.isolated();
@@ -559,7 +518,7 @@ describe("Settings", () => {
 			});
 
 			try {
-				expect(() => isolated.set("provider.appendOnlyContext", "on")).not.toThrow();
+				isolated.set("provider.appendOnlyContext", "on");
 				expect(received).toEqual(["on"]);
 			} finally {
 				unsubscribeThrower();

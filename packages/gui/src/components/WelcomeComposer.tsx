@@ -7,10 +7,18 @@ import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
+import { isContextCommand } from "../lib/context-command";
+import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { BlurText } from "./BlurText";
+import {
+	fmtQuotaDuration,
+	UsageProviderSection,
+	type UsageActiveAccountView,
+	type UsageReportView,
+} from "./Composer";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
 import { ModelSelector } from "./ModelSelector";
@@ -95,8 +103,10 @@ export function WelcomeComposer({
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
-	/** Daemon-settings default model (modelRoles.default, boot snapshot) —
-	 *  preselects the model button over the localStorage fallback. */
+	/** Daemon-settings default model (modelRoles.default; refreshed live via
+	 *  the omp-gui-default-model-changed event) — preselects the model
+	 *  button over the localStorage fallback. Resting state only: an
+	 *  explicit pick (modelTouched) overrides it for the next new session. */
 	presetModelId?: string | null;
 	/** Daemon-settings thinking default (modelRoles.default suffix, else
 	 *  settings.defaultThinkingLevel incl. auto) — boot snapshot replacing
@@ -110,6 +120,42 @@ export function WelcomeComposer({
 }): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
+	// GUI-native /usage (empty state): no session yet, but /usage is NOT
+	// model-bound (TUI parity) — the data is every account across every
+	// provider, so the panel fetches the same global view the session
+	// composer shows (usage.reports is session-optional on the daemon).
+	// /context IS session-bound, so it stays a "start a conversation" note.
+	const [usagePanel, setUsagePanel] = useState<{
+		open: boolean;
+		loading: boolean;
+		data: { reports: UsageReportView[]; activeAccount: UsageActiveAccountView | null; fetchedAt: number } | null;
+	}>({ open: false, loading: false, data: null });
+	const [contextNote, setContextNote] = useState(false);
+	// Floating card above the composer (query results near the input, not
+	// a modal dialog — same direction as the session Composer).
+	// No className on the floating shell — card styles live on the inner
+	// .gui-quota-panel div (a className here double-draws the rounded card).
+	const quotaOpen = usagePanel.open || contextNote;
+	const { anchorRef: quotaAnchorRef, renderMenu: renderQuotaMenu } = useFloatingMenu(quotaOpen, open => {
+		if (open) return;
+		setUsagePanel(s => ({ ...s, open: false }));
+		setContextNote(false);
+	}, {
+		align: "right",
+	});
+	// Centered dialog + veil (same as the session Composer — a floating
+	// layer over the composer card read as nested rounded cards).
+	useEffect(() => {
+		if (!quotaOpen) return;
+		const onKey = (e: globalThis.KeyboardEvent): void => {
+			if (e.key === "Escape") {
+				setUsagePanel(s => ({ ...s, open: false }));
+				setContextNote(false);
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [quotaOpen]);
 	// Global selection append (Cmd/Ctrl+L, openchamber parity): any
 	// non-composer selection lands here through the shared window event,
 	// exactly like the session Composer's handler.
@@ -119,6 +165,7 @@ export function WelcomeComposer({
 			const insertion = detail?.text;
 			if (!insertion) return;
 			setText(prev => (prev.length === 0 ? insertion : `${prev}\n${insertion}`));
+			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
 		window.addEventListener("omp-gui-insert-text", onInsert);
@@ -134,6 +181,7 @@ export function WelcomeComposer({
 			const text = detail?.text;
 			if (!text) return;
 			setQuotes(q => (q.includes(text) ? q : [...q, text]));
+			requestAnimationFrame(() => autosize(taRef.current));
 			requestAnimationFrame(() => taRef.current?.focus());
 		};
 		window.addEventListener("omp-gui-quote-append", onQuoteAppend);
@@ -167,6 +215,12 @@ export function WelcomeComposer({
 			return null;
 		}
 	});
+	// A real pick (onSelect) wins at create time: presetModelId (the app's
+	// DEFAULT/memory snapshot) is non-null whenever a DEFAULT is configured
+	// or any session was opened, so `presetModelId ?? modelId` would silently
+	// drop an explicit welcome selection and the new session would run the
+	// DEFAULT while the selector highlighted the picked model.
+	const modelTouched = useRef(false);
 	// Current model's exact thinking ladder (models.detail → getSupported
 	// efforts): the selector shows off/auto + the model's real rungs, and
 	// re-queries when the selection changes.
@@ -181,7 +235,11 @@ export function WelcomeComposer({
 		void rpc
 			.request<{ efforts?: string[] } | null>("models.detail", { id: effectiveModelId })
 			.then(detail => {
-				if (!cancelled) setThinkingEfforts(detail?.efforts?.length ? detail.efforts : []);
+				if (cancelled) return;
+				// null = id not resolved (e.g. provider-qualified selector the
+				// daemon couldn't match) → full ladder; a resolved model with
+				// empty efforts genuinely has no controllable surface → off+auto.
+				setThinkingEfforts(detail === null ? null : detail.efforts?.length ? detail.efforts : []);
 			})
 			.catch(() => {
 				if (!cancelled) setThinkingEfforts(null);
@@ -293,6 +351,7 @@ export function WelcomeComposer({
 	}, []);
 	const applySuggestion = (key: TranslationKey): void => {
 		setText(t(key));
+		requestAnimationFrame(() => autosize(taRef.current));
 		requestAnimationFrame(() => taRef.current?.focus());
 	};
 	// Dot-matrix brand backdrop pref (设置 → 常规 toggle + custom text,
@@ -331,15 +390,24 @@ export function WelcomeComposer({
 	const [hashSessions, setHashSessions] = useState<{ id: string; cwd?: string }[] | null>(null);
 	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
 	const [hashIdx, setHashIdx] = useState(0);
-	const slashFilter =
-		slashCmds?.filter(c => {
-			const q = slashQuery.toLowerCase();
-			// /skill, /skills, /skill: — surface every skill command (the
-			// literal "skills" text never appears in skill:foo names).
-			const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
-			if (isSkillQuery && c.kind === "skill") return true;
-			return c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q);
-		}) ?? [];
+	const slashFilter = (() => {
+		const q = slashQuery.toLowerCase();
+		// /skill, /skills, /skill: — surface every skill command (the
+		// literal "skills" text never appears in skill:foo names).
+		const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
+		// GUI-native /usage (empty state — no session yet). The daemon's
+		// catalog already carries the TUI usage entry; keep only the GUI one.
+		const guiUsageCmd: SlashEntry = {
+			name: "usage",
+			description: t("show subscription usage"),
+			kind: "command",
+			category: "GUI",
+		};
+		const list = [...(slashCmds ?? []).filter(c => c.name !== "usage"), guiUsageCmd];
+		return list.filter(c =>
+			isSkillQuery && c.kind === "skill" ? true : c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
+		);
+	})();
 	const atFilter =
 		atEntries?.filter(
 			e =>
@@ -672,12 +740,55 @@ export function WelcomeComposer({
 		e.preventDefault();
 		const trimmed = text.trim();
 		if ((!trimmed && quotes.length === 0 && attachments.length === 0) || busy) return;
+		// GUI-native /usage (empty state): no session, but /usage is NOT
+		// model-bound — fetch the global quota view session-less instead of
+		// submitting the command (the agent's reply would be TUI ANSI text).
+		if (isUsageCommand(trimmed)) {
+			setText("");
+			setContextNote(false);
+			setUsagePanel({ open: true, loading: true, data: null });
+			sfxFor("send");
+			void rpc
+				.request<{ reports: UsageReportView[]; activeAccount?: UsageActiveAccountView | null }>(
+					"usage.reports",
+					{},
+				)
+				.then(res => {
+					setUsagePanel(s =>
+						s.open
+							? {
+									open: true,
+									loading: false,
+									data: {
+										reports: res?.reports ?? [],
+										activeAccount: res?.activeAccount ?? null,
+										fetchedAt: Date.now(),
+									},
+								}
+							: s,
+					);
+				})
+				.catch(() => {
+					setUsagePanel(s => (s.open ? { open: true, loading: false, data: null } : s));
+				});
+			return;
+		}
+		// /context IS session-bound — empty state shows a note, not data.
+		if (isContextCommand(trimmed)) {
+			setText("");
+			setUsagePanel(s => ({ ...s, open: false }));
+			setContextNote(true);
+			sfxFor("send");
+			return;
+		}
 		const quotePrefix =
 			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 		const payload = quotePrefix ? `${quotePrefix}${trimmed}`.trim() : trimmed;
 		setText("");
 		setQuotes([]);
 		setAttachments([]);
+		// Re-measure after the programmatic clear (onChange doesn't fire).
+		requestAnimationFrame(() => autosize(taRef.current));
 		sfxFor("first");
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
@@ -686,7 +797,7 @@ export function WelcomeComposer({
 		setPlanArmed(false);
 		void onSubmit(payload, {
 			thinkingLevel: thinking,
-			modelId,
+			modelId: modelTouched.current ? modelId : effectiveModelId,
 			images: attachments.map(a => ({
 				type: "image" as const,
 				data: a.dataUrl.split(",")[1] ?? "",
@@ -703,7 +814,57 @@ export function WelcomeComposer({
 		 * inside one container. Focus mode (⌘⇧E) expands the composer to
 		 * fill the surface (openchamber parity): brand/greeting/tips hide
 		 * and the input grows. */
-		<div
+		<>
+			{renderQuotaMenu(
+				<div className="gui-quota-panel" role="dialog" aria-label={t("subscription usage")}>
+					<button
+						type="button"
+						className="gui-quota-close"
+						onClick={() => {
+							setUsagePanel(s => ({ ...s, open: false }));
+							setContextNote(false);
+						}}
+						aria-label={t("close")}
+					>
+						<Icon name="close" className="h-3.5 w-3.5" />
+					</button>
+					{contextNote ? (
+						<>
+							<div className="gui-quota-title">{t("context usage")}</div>
+							<div className="gui-quota-note">{t("context usage unavailable")}</div>
+						</>
+					) : usagePanel.loading ? (
+						<>
+							<div className="gui-quota-title">{t("subscription usage")}</div>
+							<div className="gui-quota-note">…</div>
+						</>
+					) : usagePanel.data && usagePanel.data.reports.length > 0 ? (
+						<>
+							<div className="gui-quota-title">
+								{t("subscription usage")}
+								{usagePanel.data.fetchedAt
+									? ` · ${t("usage {time} ago", { time: fmtQuotaDuration(Date.now() - usagePanel.data.fetchedAt) })}`
+									: null}
+							</div>
+							<div className="gui-usage-reports">
+								{usagePanel.data.reports.map(report => (
+									<UsageProviderSection
+										key={report.provider}
+										report={report}
+										activeAccount={usagePanel.data!.activeAccount}
+									/>
+								))}
+							</div>
+						</>
+					) : (
+						<>
+							<div className="gui-quota-title">{t("subscription usage")}</div>
+							<div className="gui-quota-note">{t("no subscription usage reported")}</div>
+						</>
+					)}
+				</div>,
+			)}
+			<div
 			className="gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
 			data-focused={focused ? "1" : undefined}
 		>
@@ -788,6 +949,17 @@ export function WelcomeComposer({
 									>
 										<Icon name="folder-open" className="h-3.5 w-3.5" />
 										<span>{t("open folder")}</span>
+									</button>
+									<button
+										type="button"
+										className="gui-view-opt"
+										onClick={() => {
+											setProjOpen(false);
+											onProject("new");
+										}}
+									>
+										<Icon name="folder-add" className="h-3.5 w-3.5" />
+										<span>{t("new blank project")}</span>
 									</button>
 									<button
 										type="button"
@@ -894,6 +1066,7 @@ export function WelcomeComposer({
 										const end = ta.selectionEnd ?? text.length;
 										ta.setRangeText(token, start, end, "end");
 										setText(ta.value);
+										autosize(ta);
 									}}
 								/>
 								{/* Focus mode sits between the attach menu and the model
@@ -914,7 +1087,11 @@ export function WelcomeComposer({
 									rpc={rpc}
 									sessionId={null}
 									presetId={presetModelId ?? modelId}
-									onSelect={setModelId}
+									allowSetDefault
+									onSelect={v => {
+										modelTouched.current = true;
+										setModelId(v);
+									}}
 								/>
 								<ThinkingSelector
 									value={thinking}
@@ -954,6 +1131,7 @@ export function WelcomeComposer({
 						footerRight={
 							<button
 								type="submit"
+								ref={quotaAnchorRef}
 								className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
 								disabled={!canSend}
 								aria-label={t("send message")}
@@ -1212,5 +1390,6 @@ export function WelcomeComposer({
 				)}
 			</div>
 		</div>
+		</>
 	);
 }

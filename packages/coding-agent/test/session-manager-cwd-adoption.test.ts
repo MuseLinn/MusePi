@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { FileSessionStorage } from "@musepi/pi-coding-agent/session/session-storage";
 import { removeWithRetries, TempDir } from "@musepi/pi-utils";
 
 const tempDirs: TempDir[] = [];
@@ -115,18 +116,28 @@ describe("SessionManager cwd adoption on resume", () => {
 		expect(manager.getSessionDir()).toBe(path.resolve(launchSessions));
 	});
 
-	it("falls back to the launch cwd when opening a session whose project directory is gone", async () => {
+	it("falls back to the launch cwd with one full read when the recorded project directory is gone", async () => {
 		const launch = makeTempDir("@pi-cwd-launch-");
 		const store = makeTempDir("@pi-cwd-store-");
 		const goneProject = makeTempDir("@pi-cwd-gone-");
 		const file = await writeSession(goneProject, store);
 		await removeWithRetries(goneProject);
+		class CountingFileSessionStorage extends FileSessionStorage {
+			fullReads = 0;
 
-		const manager = await SessionManager.open(file, undefined, undefined, { initialCwd: launch });
+			override readText(filePath: string): Promise<string> {
+				this.fullReads++;
+				return super.readText(filePath);
+			}
+		}
+		const storage = new CountingFileSessionStorage();
+
+		const manager = await SessionManager.open(file, undefined, storage, { initialCwd: launch });
 
 		expect(manager.getCwd()).toBe(path.resolve(launch));
 		// /new and /branch anchor to the launch cwd, not the deleted project's store.
 		expect(manager.getSessionDir()).toBe(SessionManager.getDefaultSessionDir(launch));
 		expect(manager.getSessionDir()).not.toBe(path.resolve(store));
+		expect(storage.fullReads).toBe(1);
 	});
 });

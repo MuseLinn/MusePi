@@ -11,8 +11,8 @@ The advisor is not a second executor: it cannot approve actions or change primar
 - [`src/advisor/emission-guard.ts`](../packages/coding-agent/src/advisor/emission-guard.ts)
 - [`src/advisor/watchdog.ts`](../packages/coding-agent/src/advisor/watchdog.ts)
 - [`src/advisor/transcript-recorder.ts`](../packages/coding-agent/src/advisor/transcript-recorder.ts)
-- [`src/prompts/advisor/system.md`](../packages/coding-agent/src/prompts/advisor/system.md)
-- [`src/prompts/advisor/advise-tool.md`](../packages/coding-agent/src/prompts/advisor/advise-tool.md)
+- [`src/prompts/advisor/system.md`](../packages/coding-agent/src/prompts/advisor/system.html)
+- [`src/prompts/advisor/advise-tool.md`](../packages/coding-agent/src/prompts/advisor/advise-tool.html)
 - [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
 - [`src/slash-commands/builtin-registry.ts`](../packages/coding-agent/src/slash-commands/builtin-registry.ts)
 - [`src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
@@ -267,12 +267,13 @@ Fields:
 
 ## Subagents
 
-`advisor.subagents` controls whether spawned task/eval subagents also get an advisor runtime.
+Subagents run unadvised by default; advisors are opted in **per agent** instead of via a blanket toggle:
 
-- `false` (default): only the main session can run an advisor.
-- `true`: eligible subagent sessions build their own advisor with the same settings/model-role resolution, then rerun `WATCHDOG.md` discovery for that subagent session's `cwd` and agent directory.
+- Agent definition frontmatter `advisor`: `true` advises spawned sessions of that agent with the model resolved for the `advisor` role; a string (e.g. `advisor: "deepseek/deepseek-v4-flash"` or `advisor: "@smol:high"`) sets an explicit advisor model pattern with an optional `:level` thinking suffix.
+- The `task.agentAdvisor` settings record (agent name → `"on"` / `"off"` / model pattern) overrides the frontmatter, and is configured per agent from the `/agents` hub: Enter on an agent opens its property strip; the advisor strip offers on/off, a model-browser pick, or a raw pattern.
+The legacy `advisor.subagents: true` setting migrates to `task.agentAdvisor: { task: "on" }` — the bundled generic `task` agent keeps its advisor, other agents start unadvised.
 
-Subagent advisors remain isolated from the subagent's primary tool session in the same way the main advisor is isolated from the main agent.
+An advised subagent session builds its own advisor subsystem with the same settings/model-role resolution (an explicit pattern lands on the spawned session's `modelRoles.advisor`), then reruns both `WATCHDOG.md` and `WATCHDOG.yml` discovery for that subagent session's `cwd` and agent directory. Subagent advisors remain isolated from the subagent's primary tool session in the same way the main advisor is isolated from the main agent.
 
 ## Cost and context behavior
 
@@ -290,16 +291,16 @@ The advisor's live context is in-memory and append-only; it is retained while th
 
 The advisor is a passive reviewer with its own model usage, so — like a task subagent — every finalized advisor turn is appended to a JSONL inside the owning session's artifacts dir:
 
-- main session: `<session>/__advisor.jsonl`
-- subagent advisor (`advisor.subagents: true`): `<session>/<SubId>/__advisor.jsonl`
-
+- legacy/default advisor: `<session>/__advisor.jsonl`
+- named advisor: `<session>/__advisor.<slug>.jsonl`
+- subagent advisor (frontmatter `advisor` / `task.agentAdvisor`): `<session>/<SubId>/__advisor[.<slug>].jsonl`
 The path is derived from the session file (not the artifacts dir, which subagents share with their parent), so each advisor writes a distinct file. The reserved `__advisor` stem cannot collide with a task subagent's `<id>.jsonl` (task id allocation reserves it).
 
 Why a file:
 
 - **Usage attribution.** `musepi stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
-- **Observability.** [Agent Hub](./agent-hub.md) discovers legacy and named `__advisor*.jsonl` files on open and shows each as a read-only `advisor`-kind transcript under its owning session.
+- **Observability.** [Agent Hub](./agent-hub.html) discovers legacy and named `__advisor*.jsonl` files on open and shows each as a read-only `advisor`-kind transcript under its owning session.
 
 The file follows session switches: on `/new`, resume/switch, and branch the recorder reopens at the new session's path on the next advisor turn; before a `/drop` deletes the old artifacts dir the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
 
-The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or [revived or killed from Agent Hub](./agent-hub.md#persisted-agents-and-advisors) or collab. It is not addressable as a peer, regardless of what tools it has been granted.
+The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or [revived or killed from Agent Hub](./agent-hub.html#persisted-agents-and-advisors) or collab. It is not addressable as a peer, regardless of what tools it has been granted.

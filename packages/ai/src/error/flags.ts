@@ -24,6 +24,7 @@ export const Flag = {
 	StaleResponsesItem: 0x0010_0000,
 	MalformedFunctionCall: 0x0020_0000,
 	ProviderFinishError: 0x0040_0000,
+	EmptyResponse: 0x0000_2000,
 	ContentBlocked: 0x0000_8000,
 	/** Account-scoped provider policy denial that may succeed with another credential. */
 	AccountPolicy: 0x0000_4000,
@@ -50,6 +51,7 @@ const KIND_MASK =
 	Flag.StaleResponsesItem |
 	Flag.MalformedFunctionCall |
 	Flag.ProviderFinishError |
+	Flag.EmptyResponse |
 	Flag.ContentBlocked |
 	Flag.AccountPolicy |
 	Flag.ContextOverflow |
@@ -62,7 +64,12 @@ const KIND_MASK =
 	Flag.OAuthExpiry;
 
 const RETRIABLE_KINDS =
-	Flag.Transient | Flag.UsageLimit | Flag.ThinkingLoop | Flag.StaleResponsesItem | Flag.ProviderFinishError;
+	Flag.Transient |
+	Flag.UsageLimit |
+	Flag.ThinkingLoop |
+	Flag.StaleResponsesItem |
+	Flag.ProviderFinishError |
+	Flag.EmptyResponse;
 
 const OVERFLOW_PATTERNS = [
 	/prompt is too long/i, // Anthropic
@@ -104,6 +111,7 @@ const AUTH_FAILURE_PATTERN =
 	/\b(?:401|403|unauthorized|forbidden|authentication|auth[_ ]?unavailable|no auth available|(?:invalid|no)[_ ]?api[_ ]?key)\b/i;
 const MALFORMED_FUNCTION_CALL_PATTERN = /\bmalformed.?function.?call\b/i;
 const PROVIDER_FINISH_ERROR_PATTERN = /\bProvider (?:returned error finish_reason|finish_reason:\s*error)\b/i;
+const EMPTY_RESPONSE_PATTERN = /\bthought-only response without final output\b/i;
 const CONTENT_FILTER_PATTERN = /\b(?:incomplete:\s*)?content_filter\b/i;
 const ACCOUNT_POLICY_PATTERN = /\bcyber_policy\b|trusted access for cyber/i;
 const STALE_RESPONSE_ITEM_PATTERNS = [/\bItem with id ['"][^'"]+['"] not found\.?/i, /previous[ _]?response/i] as const;
@@ -197,6 +205,7 @@ const ERROR_KIND_LABELS: readonly [Flag, string][] = [
 	[Flag.StaleResponsesItem, "stale-responses-item"],
 	[Flag.MalformedFunctionCall, "malformed-function-call"],
 	[Flag.ProviderFinishError, "provider-finish-error"],
+	[Flag.EmptyResponse, "empty-response"],
 	[Flag.ContentBlocked, "content-blocked"],
 	[Flag.AccountPolicy, "account-policy"],
 	[Flag.ContextOverflow, "context-overflow"],
@@ -340,6 +349,7 @@ function classifyText(errorMessage: string | undefined, errorStatus: number | un
 		if (matchesOverflowText(errorMessage)) kinds |= Flag.ContextOverflow;
 		if (isMalformedFunctionCallText(errorMessage)) kinds |= Flag.MalformedFunctionCall;
 		if (isProviderFinishErrorText(errorMessage)) kinds |= Flag.ProviderFinishError;
+		if (EMPTY_RESPONSE_PATTERN.test(errorMessage)) kinds |= Flag.EmptyResponse | Flag.Transient;
 		if (isContentBlockedText(errorMessage)) kinds |= Flag.ContentBlocked;
 		if (ACCOUNT_POLICY_PATTERN.test(errorMessage)) kinds |= Flag.AccountPolicy | Flag.ContentBlocked;
 		if (isAuthFailureText(errorMessage)) kinds |= Flag.AuthFailed;

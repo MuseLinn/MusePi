@@ -97,6 +97,7 @@ export interface PublishDiagnosticsParams {
 export interface TextEdit {
 	range: Range;
 	newText: string;
+	insertTextFormat?: 1 | 2;
 }
 
 export interface AnnotatedTextEdit extends TextEdit {

@@ -25,8 +25,9 @@ import { effectiveReserveTokens, estimateTokens, prepareCompaction } from "@muse
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { encodeRpcFrame, MAX_RPC_FRAME_BYTES } from "@musepi/pi-coding-agent/modes/rpc/rpc-frame";
 import { computeNonMessageTokens } from "@musepi/pi-coding-agent/modes/utils/context-usage";
-import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
@@ -282,5 +283,86 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 		await session.compact(undefined, { mode: "snapcompact" });
 
 		expect(compactSpy.mock.calls[0]?.[1]?.maxFrames).toBe(snapcompact.maxFramesForDataBudget());
+	});
+
+	it("keeps the frame archive out of the RPC result after persisting it", async () => {
+		const branchEntries = sessionManager.getBranch();
+		const lastEntry = branchEntries[branchEntries.length - 1];
+		if (!lastEntry?.id) throw new Error("Expected branch entry with id");
+		const archive = {
+			frames: [
+				{
+					data: "A".repeat(MAX_RPC_FRAME_BYTES),
+					mimeType: "image/png",
+					cols: 10,
+					rows: 10,
+					chars: 10,
+				},
+			],
+			totalChars: 10,
+			truncatedChars: 0,
+		};
+		vi.spyOn(snapcompact, "compact").mockResolvedValue({
+			summary: "stubbed snapcompact",
+			shortSummary: "stub",
+			firstKeptEntryId: lastEntry.id,
+			tokensBefore: 100_000,
+			details: { readFiles: [], modifiedFiles: [] },
+			preserveData: {
+				extensionState: "keep-me",
+				[snapcompact.PRESERVE_KEY]: archive,
+			},
+		});
+
+		const result = await session.compact(undefined, { mode: "snapcompact" });
+		const response = JSON.parse(
+			encodeRpcFrame({ id: "c1", type: "response", command: "compact", success: true, data: result }),
+		) as { success: boolean; error?: string };
+
+		expect(response).toMatchObject({ success: true });
+		expect(result.preserveData).toEqual({ extensionState: "keep-me" });
+		const compactionEntry = sessionManager.getEntries().find(entry => entry.type === "compaction");
+		if (compactionEntry?.type !== "compaction") throw new Error("Expected persisted compaction entry");
+		expect(compactionEntry.preserveData).toEqual({
+			extensionState: "keep-me",
+			[snapcompact.PRESERVE_KEY]: archive,
+		});
+	});
+
+	it("keeps the frame archive out of the auto_compaction_end event after persisting it", async () => {
+		const branchEntries = sessionManager.getBranch();
+		const lastEntry = branchEntries[branchEntries.length - 1];
+		if (!lastEntry?.id) throw new Error("Expected branch entry with id");
+		// A zero-frame archive clears the payload/projection gates on the auto
+		// path while still carrying PRESERVE_KEY, so the strip is what removes it.
+		const archive = { frames: [], totalChars: 1000, truncatedChars: 0 };
+		vi.spyOn(snapcompact, "compact").mockResolvedValue({
+			summary: "stubbed snapcompact",
+			shortSummary: "stub",
+			firstKeptEntryId: lastEntry.id,
+			tokensBefore: 100_000,
+			details: { readFiles: [], modifiedFiles: [] },
+			preserveData: {
+				extensionState: "keep-me",
+				[snapcompact.PRESERVE_KEY]: archive,
+			},
+		});
+		const events: AgentSessionEvent[] = [];
+		session.subscribe(event => events.push(event));
+
+		await session.runIdleCompaction();
+
+		const endEvent = events.find(
+			(event): event is Extract<AgentSessionEvent, { type: "auto_compaction_end" }> =>
+				event.type === "auto_compaction_end" && event.result !== undefined,
+		);
+		if (!endEvent?.result) throw new Error("Expected a result-carrying auto_compaction_end event");
+		expect(endEvent.result.preserveData).toEqual({ extensionState: "keep-me" });
+		const compactionEntry = sessionManager.getEntries().find(entry => entry.type === "compaction");
+		if (compactionEntry?.type !== "compaction") throw new Error("Expected persisted compaction entry");
+		expect(compactionEntry.preserveData).toEqual({
+			extensionState: "keep-me",
+			[snapcompact.PRESERVE_KEY]: archive,
+		});
 	});
 });

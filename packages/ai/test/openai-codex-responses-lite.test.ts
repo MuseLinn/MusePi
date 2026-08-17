@@ -129,12 +129,13 @@ function createCodexFetchMock(sse: string, onRequest: (captured: CapturedCodexRe
 }
 
 describe("openai-codex optional response controls", () => {
-	it("omits optional controls on full requests and forwards explicit controls", async () => {
+	it("defaults reasoning.summary on and forwards explicit controls", async () => {
 		const model = createCodexModel("gpt-5.5");
 
+		// The backend emits no reasoning summaries at all unless `summary` is
+		// sent, so an unset `reasoningSummary` must still request one.
 		const defaulted = await transformRequestBody({ model: model.id }, model, { reasoningEffort: "medium" });
-		expect(defaulted.reasoning).toEqual({ effort: "medium" });
-		expect("summary" in (defaulted.reasoning ?? {})).toBe(false);
+		expect(defaulted.reasoning).toEqual({ effort: "medium", summary: "auto" });
 		expect("context" in (defaulted.reasoning ?? {})).toBe(false);
 		expect("text" in defaulted).toBe(false);
 		expect("stream_options" in defaulted).toBe(false);
@@ -151,7 +152,7 @@ describe("openai-codex optional response controls", () => {
 			context: "all_turns",
 		});
 		expect(explicit.text).toEqual({ verbosity: "low" });
-		expect(explicit.stream_options).toEqual({ reasoning_summary_delivery: "sequential_cutoff" });
+		expect("stream_options" in explicit).toBe(false);
 	});
 
 	it("omits reasoning.summary when explicitly suppressed", async () => {
@@ -163,6 +164,14 @@ describe("openai-codex optional response controls", () => {
 		expect(suppressed.reasoning).toEqual({ effort: "medium" });
 		expect("summary" in (suppressed.reasoning ?? {})).toBe(false);
 		expect("stream_options" in suppressed).toBe(false);
+	});
+
+	it("disables native reasoning with effort none when an external scratchpad replaces it", async () => {
+		const model = createCodexModel("gpt-5.5");
+		const body = await buildTransformedCodexRequestBody(model, createCodexTestContext(), {
+			forceReasoningOff: true,
+		});
+		expect(body.reasoning).toEqual({ effort: "none" });
 	});
 
 	it("forces reasoning.context to all_turns for Responses Lite", async () => {
@@ -178,7 +187,7 @@ describe("openai-codex optional response controls", () => {
 			responsesLite: true,
 			reasoningContext: "current_turn",
 		});
-		expect(noneEffort.reasoning).toEqual({ effort: "none", context: "all_turns" });
+		expect(noneEffort.reasoning).toEqual({ effort: "none", summary: "auto", context: "all_turns" });
 
 		const plainRequest = await transformRequestBody({ model: model.id }, model, {
 			responsesLite: false,
@@ -665,8 +674,8 @@ describe("openai-codex Responses Lite and client metadata wire format", () => {
 		]);
 	});
 
-	it("sends the lite header when the model defaults to Responses Lite", async () => {
-		const model = createCodexModel("gpt-5.6-terra", { useResponsesLite: true });
+	it("sends required lite context for opaque model codenames", async () => {
+		const model = createCodexModel("gpt-daybreak-blue-latest", { useResponsesLite: true });
 		let captured: CapturedCodexRequest | undefined;
 		const fetchMock = createCodexFetchMock(createCodexSse(COMPLETED_CODEX_EVENTS), request => {
 			captured = request;
@@ -678,7 +687,6 @@ describe("openai-codex Responses Lite and client metadata wire format", () => {
 		}).result();
 
 		expect(result.stopReason).toBe("stop");
-		expect(captured).toBeDefined();
 		expect(captured!.headers.get("x-openai-internal-codex-responses-lite")).toBe("true");
 		expect(captured!.headers.get("version")).toBe("0.144.1");
 		const body = captured!.body;
@@ -763,18 +771,36 @@ describe("openai-codex websocket append with client metadata", () => {
 });
 
 describe("openai-codex concurrent reasoning summaries", () => {
+	// Sequential-cutoff delivery is opt-in (it cancels in-flight summary
+	// sections), so the response-side contract is exercised with it enabled.
+	let previousConcurrent: string | undefined;
+	beforeEach(() => {
+		previousConcurrent = Bun.env.PI_CODEX_CONCURRENT_SUMMARIES;
+		Bun.env.PI_CODEX_CONCURRENT_SUMMARIES = "1";
+	});
+	afterEach(() => {
+		if (previousConcurrent === undefined) delete Bun.env.PI_CODEX_CONCURRENT_SUMMARIES;
+		else Bun.env.PI_CODEX_CONCURRENT_SUMMARIES = previousConcurrent;
+	});
+
 	it("counts atomic summary dones as websocket watchdog progress", () => {
 		expect(isOpenAIResponsesProgressEvent({ type: "response.reasoning_summary_text.done" })).toBe(true);
 	});
 
-	it("sends stream_options only when a summary is requested and supported", async () => {
+	it("sends stream_options only when opted in, with a supported summary requested", async () => {
 		const terra = createCodexModel("gpt-5.6-terra");
-		const withSummary = await transformRequestBody({ model: terra.id }, terra, {
-			reasoningEffort: "medium",
-			reasoningSummary: "detailed",
-		});
+		const summaryRequest = { reasoningEffort: "medium", reasoningSummary: "detailed" } as const;
+
+		const withSummary = await transformRequestBody({ model: terra.id }, terra, summaryRequest);
 		expect(withSummary.stream_options).toEqual({ reasoning_summary_delivery: "sequential_cutoff" });
 		expect(withSummary.reasoning?.summary).toBe("detailed");
+
+		// Opted out: the summary is still requested, only the delivery mode drops.
+		delete Bun.env.PI_CODEX_CONCURRENT_SUMMARIES;
+		const optedOut = await transformRequestBody({ model: terra.id }, terra, summaryRequest);
+		expect(optedOut.stream_options).toBeUndefined();
+		expect(optedOut.reasoning?.summary).toBe("detailed");
+		Bun.env.PI_CODEX_CONCURRENT_SUMMARIES = "1";
 
 		const suppressed = await transformRequestBody({ model: terra.id }, terra, {
 			reasoningEffort: "medium",

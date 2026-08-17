@@ -92,6 +92,48 @@ describe("InteractiveMode todo HUD persistence", () => {
 		expect(session.getTodoPhases()).toEqual(phases);
 	});
 
+	/**
+	 * Auto-clear used to fire on any list holding a closed task, so a plan the
+	 * agent was mid-way through had its finished tasks deleted from the HUD's
+	 * copy: the phase counter reset, the checked row vanished, and the stage
+	 * renumbered — the panel reported no progress at all until the next `todo`
+	 * call restored the real snapshot. It may only fire on a settled list.
+	 */
+	const unfinishedPlan = (): TodoPhase[] => [
+		{
+			name: "Implementation",
+			tasks: [
+				{ content: "done task", status: "completed" },
+				{ content: "abandoned task", status: "abandoned" },
+				{ content: "current task", status: "in_progress" },
+			],
+		},
+	];
+
+	it("keeps an unfinished plan's progress when the auto-clear delay elapses", async () => {
+		await createMode(1);
+		vi.useFakeTimers();
+
+		mode.setTodos(unfinishedPlan());
+		vi.advanceTimersByTime(60_000);
+
+		const rendered = renderTodos(mode);
+		// Progress counts every closed task, abandoned included: the walking
+		// viewport hides both, so the counter is the only signal they existed.
+		expect(rendered).toContain("2/3");
+		expect(rendered).toContain("current task");
+	});
+
+	it("keeps an unfinished plan's progress when auto-clear is instant", async () => {
+		await createMode(0);
+
+		mode.setTodos(unfinishedPlan());
+
+		const rendered = renderTodos(mode);
+		expect(rendered).toContain("2/3");
+		expect(rendered).toContain("current task");
+	});
+
 	it("leaves closed todos visible when auto-clear is disabled", async () => {
 		await createMode(-1);
 
@@ -249,13 +291,15 @@ describe("InteractiveMode todo HUD anchor", () => {
 		const root = lines.find(line => line.includes("Todos"));
 		expect(root).toContain("1/2");
 		// Active stage: highlighted header with its own task progress, expanded as a
-		// connector tree; the completed task slid out of the open-task window.
+		// connector tree; the just-completed task stays as the lead row so progress
+		// is visible while the stage still has open work.
 		expect(lines.some(line => line.includes("I. Foundation") && line.includes("1/3"))).toBe(true);
 		const secondLine = lines.find(line => line.includes("second task"));
 		expect(secondLine).toContain(theme.tree.branch);
 		expect(secondLine).toContain(theme.checkbox.unchecked);
 		expect(lines.some(line => line.includes("third task"))).toBe(true);
-		expect(lines.some(line => line.includes("first task"))).toBe(false);
+		const firstLine = lines.find(line => line.includes("first task"));
+		expect(firstLine).toContain(theme.checkbox.checked);
 		// Upcoming stage: header with its own progress, but collapsed (no task rows).
 		expect(lines.some(line => line.includes("II. Verification") && line.includes("0/1"))).toBe(true);
 		expect(lines.some(line => line.includes("run tests"))).toBe(false);

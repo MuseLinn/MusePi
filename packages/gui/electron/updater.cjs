@@ -37,6 +37,12 @@ async function checkForUpdates(timeoutMs = 8000) {
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
 		const res = await fetch(url, { signal: controller.signal, headers: { "Cache-Control": "no-cache" } });
+		if (res.status === 404) {
+			// The manifest repo is private or the file was never published —
+			// equivalent to having no update source. The settings button must
+			// not show a scary error for a not-yet-released app.
+			return { enabled: false, reason: "no-update-source" };
+		}
 		if (!res.ok) return { enabled: true, error: `manifest ${res.status}` };
 		const manifest = await res.json();
 		if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {

@@ -13,13 +13,32 @@
  */
 import * as os from "node:os";
 import { $env } from "@musepi/pi-utils";
-import { $ } from "bun";
+import { $, Cookie, CookieMap } from "bun";
 import * as AIError from "../../error";
 import type { OAuthController, OAuthCredentials } from "./types";
 
 const API_VERSION = "2.18";
 const NATIVE_APP_BUNDLE = "ai.perplexity.mac";
 const APP_USER_AGENT = "Perplexity/641 CFNetwork/1568 Darwin/25.2.0";
+
+function serializeCookies(cookies: CookieMap): string {
+	let header = "";
+	for (const [name, value] of cookies) {
+		header += `${header ? "; " : ""}${name}=${value}`;
+	}
+	return header;
+}
+
+function rememberCookies(cookies: CookieMap, response: Response): void {
+	for (const setCookie of response.headers.getSetCookie()) {
+		const cookie = Cookie.parse(setCookie);
+		if (cookie.isExpired()) {
+			cookies.delete(cookie.name);
+		} else {
+			cookies.set(cookie.name, cookie.value);
+		}
+	}
+}
 
 // ---------------------------------------------------------------------------
 // JWT helpers
@@ -101,9 +120,18 @@ async function httpEmailLogin(ctrl: OAuthController): Promise<OAuthCredentials> 
 			provider: "perplexity",
 		});
 	if (ctrl.signal?.aborted) throw new AIError.LoginCancelledError();
+	const fetchImpl = ctrl.fetch ?? fetch;
+	const cookies = new CookieMap();
+	const request = async (url: string, init: RequestInit = {}): Promise<Response> => {
+		const headers = new Headers(init.headers);
+		if (cookies.size > 0) headers.set("Cookie", serializeCookies(cookies));
+		const response = await fetchImpl(url, { ...init, headers });
+		rememberCookies(cookies, response);
+		return response;
+	};
 
 	ctrl.onProgress?.("Fetching Perplexity CSRF token...");
-	const csrfResponse = await fetch("https://www.perplexity.ai/api/auth/csrf", {
+	const csrfResponse = await request("https://www.perplexity.ai/api/auth/csrf", {
 		headers: {
 			"User-Agent": APP_USER_AGENT,
 			"X-App-ApiVersion": API_VERSION,
@@ -126,7 +154,7 @@ async function httpEmailLogin(ctrl: OAuthController): Promise<OAuthCredentials> 
 		});
 	}
 	ctrl.onProgress?.("Sending login code to your email...");
-	const sendResponse = await fetch("https://www.perplexity.ai/api/auth/signin-email", {
+	const sendResponse = await request("https://www.perplexity.ai/api/auth/signin-email", {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
@@ -156,7 +184,7 @@ async function httpEmailLogin(ctrl: OAuthController): Promise<OAuthCredentials> 
 		throw new AIError.OAuthError("OTP code is required", { kind: "validation", provider: "perplexity" });
 	if (ctrl.signal?.aborted) throw new AIError.LoginCancelledError();
 	ctrl.onProgress?.("Verifying login code...");
-	const verifyResponse = await fetch("https://www.perplexity.ai/api/auth/signin-otp", {
+	const verifyResponse = await request("https://www.perplexity.ai/api/auth/signin-otp", {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",

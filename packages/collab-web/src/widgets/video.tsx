@@ -93,8 +93,11 @@ export function VideoCard({
 				<iframe
 					className="gui-widget-video-el"
 					src={`https://player.bilibili.com/player.html?bvid=${encodeURIComponent(bvid)}&autoplay=1&high_quality=1`}
-					allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-					allowFullScreen
+					// No fullscreen permission: the video must stay embedded in
+					// the board card. allowFullScreen let the Bilibili player
+					// take over the whole window when its fullscreen button was
+					// clicked, which read as "jumps to the Bilibili player".
+					allow="autoplay; encrypted-media; picture-in-picture"
 					scrolling="no"
 					title={title}
 				/>

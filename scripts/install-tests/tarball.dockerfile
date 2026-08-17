@@ -8,9 +8,12 @@ RUN apt-get update && apt-get install -y curl ca-certificates unzip jq procps bu
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
-# Install Rust (needed to build native addon)
+# Install Rust (needed to build native addon). The natives build defaults to
+# Bazel; this image has no bazelisk and needs only the host addon, so route it
+# through the cargo/napi-rs backend.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.cargo/bin:$PATH" \
+    OMP_NATIVE_BUILD_BACKEND=cargo
 
 # Install Node.js (needed for verdaccio and npm)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
@@ -101,7 +104,7 @@ for pkg in "${PACKAGES[@]}"; do
     
     # Show what we're publishing
     echo "Dependencies:"
-    jq '.dependencies | to_entries[] | select(.value | startswith("@oh-my-pi") or startswith("workspace"))' package.json 2>/dev/null || true
+    jq '.dependencies | to_entries[] | select(.value | startswith("@musepi") or startswith("workspace"))' package.json 2>/dev/null || true
     
     # Publish
     npm publish --registry "$REGISTRY"

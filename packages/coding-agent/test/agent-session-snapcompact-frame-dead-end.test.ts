@@ -269,7 +269,7 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 		});
 
 		const notices = collectNotices();
-		const compactionEnds: { result?: unknown; skipped?: boolean }[] = [];
+		const compactionEnds: { result?: compactionModule.CompactionResult; skipped?: boolean }[] = [];
 		session.subscribe(event => {
 			if (event.type === "auto_compaction_end") {
 				compactionEnds.push({ result: event.result, skipped: event.skipped });
@@ -283,6 +283,7 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 		expect(compactionEnds.length).toBe(1);
 		expect(compactionEnds[0].result).toBeTruthy();
 		expect(compactionEnds[0].skipped).toBeFalsy();
+		expect(compactionEnds[0].result?.preserveData).toBeUndefined();
 		const [, compactOptions] = compactSpy.mock.calls[0] as [unknown, { maxFrames?: number }];
 		expect(compactOptions.maxFrames).toBeDefined();
 		expect(compactOptions.maxFrames as number).toBeLessThan(SEEDED_FRAME_COUNT);

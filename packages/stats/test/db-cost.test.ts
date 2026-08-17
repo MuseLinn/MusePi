@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { closeDb, getRecentRequests, initDb, insertMessageStats } from "@musepi/omp-stats/db";
+import { closeDb, getOverallStats, getRecentRequests, initDb, insertMessageStats } from "@musepi/omp-stats/db";
 import type { MessageStats } from "@musepi/omp-stats/types";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { getStatsDbPath } from "@musepi/pi-utils";
@@ -43,6 +43,32 @@ function expectedCodexGptCost() {
 		output,
 		cacheRead,
 		total: input + output + cacheRead,
+	};
+}
+
+function createAnthropicCacheStats(entryId: string, cacheRead: number, cacheWrite: number): MessageStats {
+	const input = 1_000 - cacheRead - cacheWrite;
+	return {
+		sessionFile: "/tmp/anthropic-session.jsonl",
+		entryId,
+		folder: "/tmp/project",
+		model: "claude-sonnet-4-6",
+		provider: "anthropic",
+		api: "anthropic-messages",
+		timestamp: Date.now(),
+		duration: 1000,
+		ttft: 100,
+		stopReason: "stop",
+		errorMessage: null,
+		usage: {
+			input,
+			output: 0,
+			cacheRead,
+			cacheWrite,
+			totalTokens: 1_000,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		agentType: "main",
 	};
 }
 
@@ -105,5 +131,57 @@ describe("stats GPT cost correction", () => {
 
 		const request = getRecentRequests(1)[0];
 		expect(request?.usage.cost.total).toBeCloseTo(expectedCodexGptCost().total, 8);
+	});
+});
+
+describe("stats cache metrics", () => {
+	it("subtracts 5-minute writes from the savings produced by cache reads", async () => {
+		await initDb();
+		insertMessageStats([createAnthropicCacheStats("mixed-cache", 800, 100)]);
+
+		// 100 uncached + 800 reads at 0.1x + 100 writes at 1.25x = 305,
+		// versus 1,000 tokens at the uncached input rate.
+		expect(getOverallStats().cacheSavings).toBeCloseTo(0.695, 8);
+		expect(getOverallStats().cacheRate).toBeCloseTo(800 / 900, 8);
+	});
+
+	it("reports cache writes without reads as negative savings", async () => {
+		await initDb();
+		insertMessageStats([createAnthropicCacheStats("cache-write", 0, 1_000)]);
+
+		expect(getOverallStats().cacheSavings).toBeCloseTo(-0.25, 8);
+	});
+
+	it("charges 1-hour cache writes at their full overhead", async () => {
+		await initDb();
+		const stats = createAnthropicCacheStats("one-hour-write", 0, 1_000);
+		stats.usage.cost = {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0.006,
+			total: 0.006,
+		};
+		insertMessageStats([stats]);
+
+		expect(getOverallStats().cacheSavings).toBeCloseTo(-1, 8);
+	});
+
+	it("excludes unpriced custom models from the savings ratio", async () => {
+		await initDb();
+		const known = createAnthropicCacheStats("known", 800, 100);
+		const unpriced = createAnthropicCacheStats("unpriced", 0, 0);
+		unpriced.provider = "custom";
+		unpriced.model = "custom-model";
+		unpriced.usage.cost = {
+			input: 1,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			total: 1,
+		};
+		insertMessageStats([known, unpriced]);
+
+		expect(getOverallStats().cacheSavings).toBeCloseTo(0.695, 8);
 	});
 });

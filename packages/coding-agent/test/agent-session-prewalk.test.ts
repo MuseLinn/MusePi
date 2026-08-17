@@ -100,31 +100,13 @@ describe("AgentSession prewalk", () => {
 		return { content: [{ type: "toolCall", id, name, arguments: {} }], stopReason: "toolUse" };
 	}
 
-	function contextMessagesHaveMarker(contextMessages: ReadonlyArray<{ role: string }>, marker: string): boolean {
-		return contextMessages.some(message => {
-			if (message.role !== "user" && message.role !== "developer") return false;
-			if (!("content" in message)) return false;
-			const content: unknown = message.content;
-			if (typeof content === "string") return content.includes(marker);
-			if (!Array.isArray(content)) return false;
-			return content.some(block => {
-				if (typeof block !== "object" || block === null) return false;
-				if (!("type" in block) || block.type !== "text") return false;
-				return "text" in block && typeof block.text === "string" && block.text.includes(marker);
-			});
-		});
-	}
-
 	it("prewalks at the first edit/write after the todo gate opens; bash and todo don't trigger", async () => {
 		const primary = modelOrThrow("claude-sonnet-4-5");
 		const target = modelOrThrow("claude-sonnet-4-6");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const planMarker = "complete plan in your NEXT reply";
-		const checklistMarker = "grep for every other call site";
 
-		// Turn 1: read-only (nudge injected after). Turn 2: bash — excluded.
-		// Turn 3: todo — opens the gate, must NOT itself switch. Turn 4: write —
-		// first post-todo edit/write, switch.
+		// Turn 1: read-only. Turn 2: bash is excluded. Turn 3: todo opens the gate.
+		// Turn 4: write is the first post-todo edit/write, so it switches.
 		const mock = createMockModel({
 			responses: [
 				toolCall("t1", "record"),
@@ -134,7 +116,7 @@ describe("AgentSession prewalk", () => {
 				{ content: ["done"] },
 			],
 		});
-		const calls: Array<{ model: string; hasNudge: boolean; hasChecklist: boolean }> = [];
+		const calls: string[] = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -145,13 +127,9 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (model, context, options) => {
-				calls.push({
-					model: `${model.provider}/${model.id}`,
-					hasNudge: contextMessagesHaveMarker(context.messages, planMarker),
-					hasChecklist: contextMessagesHaveMarker(context.messages, checklistMarker),
-				});
-				return mock.stream(model, context, options);
+			streamFn: (model, _context, options) => {
+				calls.push(`${model.provider}/${model.id}`);
+				return mock.stream(model, _context, options);
 			},
 		});
 		session = new AgentSession({
@@ -165,17 +143,13 @@ describe("AgentSession prewalk", () => {
 
 		await session.prompt("do the task");
 
-		expect(calls.map(call => call.model)).toEqual([
+		expect(calls).toEqual([
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${target.provider}/${target.id}`,
 		]);
-		// Nudge absent on turn 1 (not yet injected), present turns 2-4, scrubbed after the switch.
-		expect(calls.map(call => call.hasNudge)).toEqual([false, true, true, true, false]);
-		// Checklist present only once the target model is running.
-		expect(calls.map(call => call.hasChecklist)).toEqual([false, false, false, false, true]);
 		expect(session.model?.id).toBe(target.id);
 	});
 
@@ -183,11 +157,9 @@ describe("AgentSession prewalk", () => {
 		const primary = modelOrThrow("claude-sonnet-4-5");
 		const target = modelOrThrow("claude-sonnet-4-6");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const planMarker = "complete plan in your NEXT reply";
 
-		// Turn 1: exploration (nudge after). Turn 2: write with the gate still
-		// closed — no switch; the fast model must not inherit a todo-less run.
-		// Turn 3: todo — gate opens. Turn 4: write — switch.
+		// Turn 1: exploration. Turn 2: write while the gate is closed.
+		// Turn 3: todo opens the gate. Turn 4: write switches.
 		const mock = createMockModel({
 			responses: [
 				toolCall("t1", "record"),
@@ -197,7 +169,7 @@ describe("AgentSession prewalk", () => {
 				{ content: ["done"] },
 			],
 		});
-		const calls: Array<{ model: string; hasNudge: boolean }> = [];
+		const calls: string[] = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -208,12 +180,9 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (model, context, options) => {
-				calls.push({
-					model: `${model.provider}/${model.id}`,
-					hasNudge: contextMessagesHaveMarker(context.messages, planMarker),
-				});
-				return mock.stream(model, context, options);
+			streamFn: (model, _context, options) => {
+				calls.push(`${model.provider}/${model.id}`);
+				return mock.stream(model, _context, options);
 			},
 		});
 		session = new AgentSession({
@@ -227,15 +196,13 @@ describe("AgentSession prewalk", () => {
 
 		await session.prompt("do the task");
 
-		expect(calls.map(call => call.model)).toEqual([
+		expect(calls).toEqual([
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${primary.provider}/${primary.id}`,
 			`${target.provider}/${target.id}`,
 		]);
-		// The turn-2 write landed while the gate was closed — still primary on turn 3.
-		expect(calls.map(call => call.hasNudge)).toEqual([false, true, true, true, false]);
 		expect(session.model?.id).toBe(target.id);
 	});
 
@@ -707,12 +674,10 @@ describe("AgentSession prewalk", () => {
 		).toHaveLength(1);
 	});
 
-	it("armPrewalk rejects a same-model same-effort no-op before injecting the plan nudge", async () => {
+	it("armPrewalk rejects a same-model same-effort no-op", async () => {
 		const model = modelOrThrow("claude-sonnet-4-5");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const planMarker = "complete plan in your NEXT reply";
 		const mock = createMockModel({ responses: [{ content: ["status only"] }] });
-		const calls: Array<{ hasNudge: boolean }> = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -723,10 +688,7 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (streamModel, context, options) => {
-				calls.push({ hasNudge: contextMessagesHaveMarker(context.messages, planMarker) });
-				return mock.stream(streamModel, context, options);
-			},
+			streamFn: (streamModel, _context, options) => mock.stream(streamModel, _context, options),
 		});
 		session = new AgentSession({
 			agent,
@@ -744,7 +706,6 @@ describe("AgentSession prewalk", () => {
 		expect(session.armPrewalk(model, Effort.Medium)).toBe(false);
 		await session.prompt("report current status");
 
-		expect(calls).toEqual([{ hasNudge: false }]);
 		expect(notices.some(message => message.includes("nothing to switch"))).toBe(true);
 	});
 
@@ -866,13 +827,11 @@ describe("AgentSession prewalk", () => {
 		// this must still switch.
 		const model = modelOrThrow("claude-sonnet-4-5");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const checklistMarker = "grep for every other call site";
 
 		// todo excluded from the active slate → the gate opens; record then write.
 		const mock = createMockModel({
 			responses: [toolCall("t1", "record"), toolCall("t2", "write"), { content: ["done"] }],
 		});
-		const calls: Array<{ model: string; hasChecklist: boolean }> = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -883,13 +842,7 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (streamModel, context, options) => {
-				calls.push({
-					model: `${streamModel.provider}/${streamModel.id}`,
-					hasChecklist: contextMessagesHaveMarker(context.messages, checklistMarker),
-				});
-				return mock.stream(streamModel, context, options);
-			},
+			streamFn: (streamModel, _context, options) => mock.stream(streamModel, _context, options),
 		});
 		session = new AgentSession({
 			agent,
@@ -908,23 +861,16 @@ describe("AgentSession prewalk", () => {
 		// The model id never changes, but the effort drops after the first write.
 		expect(session.model?.id).toBe(model.id);
 		expect(session.thinkingLevel).toBe(Effort.Low);
-		// The switch ran: the post-switch checklist is present on the final turn.
-		expect(calls.at(-1)?.hasChecklist).toBe(true);
 	});
 
-	it("emits a notice and skips the checklist when the prewalk target is a genuine no-op", async () => {
-		// Same model AND same effective thinking level: nothing to switch. The
-		// early return must be visible (a notice), not silent, and must not fire
-		// the post-switch checklist.
+	it("emits a notice when the prewalk target is a genuine no-op", async () => {
+		// Same model and same effective thinking level: no state change.
 		const model = modelOrThrow("claude-sonnet-4-5");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const planMarker = "complete plan in your NEXT reply";
-		const checklistMarker = "grep for every other call site";
 
 		const mock = createMockModel({
 			responses: [toolCall("t1", "record"), toolCall("t2", "write"), { content: ["done"] }],
 		});
-		const calls: Array<{ hasNudge: boolean; hasChecklist: boolean }> = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -935,13 +881,7 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (streamModel, context, options) => {
-				calls.push({
-					hasNudge: contextMessagesHaveMarker(context.messages, planMarker),
-					hasChecklist: contextMessagesHaveMarker(context.messages, checklistMarker),
-				});
-				return mock.stream(streamModel, context, options);
-			},
+			streamFn: (streamModel, _context, options) => mock.stream(streamModel, _context, options),
 		});
 		session = new AgentSession({
 			agent,
@@ -963,25 +903,17 @@ describe("AgentSession prewalk", () => {
 		expect(session.thinkingLevel).toBe(Effort.Medium);
 		// The no-op is announced, not silent.
 		expect(notices.some(message => message.includes("nothing to switch"))).toBe(true);
-		// The checklist steer only fires on a real switch.
-		// A genuine no-op must be rejected before the disruptive plan nudge is injected.
-		expect(calls.every(call => !call.hasNudge)).toBe(true);
-		expect(calls.every(call => !call.hasChecklist)).toBe(true);
 	});
 
 	it("treats a target effort the model clamps back to the active effort as a no-op", async () => {
-		// Review edge case: a model capped at `high` running at `high` with a
-		// prewalk target of `xhigh`. The raw selectors differ, but the target
-		// clamps to `high`, so switching would reset the model and inject the
-		// nudges for no effective change — it must be recognized as a no-op.
+		// A model capped at high resolves an xhigh target back to high.
+		// The equal effective settings must be recognized as a no-op.
 		const model = modelOrThrow("claude-sonnet-4-6"); // supported efforts cap at high
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const checklistMarker = "grep for every other call site";
 
 		const mock = createMockModel({
 			responses: [toolCall("t1", "record"), toolCall("t2", "write"), { content: ["done"] }],
 		});
-		const calls: Array<{ hasChecklist: boolean }> = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -992,10 +924,7 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.High,
 			},
 			convertToLlm,
-			streamFn: (streamModel, context, options) => {
-				calls.push({ hasChecklist: contextMessagesHaveMarker(context.messages, checklistMarker) });
-				return mock.stream(streamModel, context, options);
-			},
+			streamFn: (streamModel, _context, options) => mock.stream(streamModel, _context, options),
 		});
 		session = new AgentSession({
 			agent,
@@ -1015,7 +944,6 @@ describe("AgentSession prewalk", () => {
 
 		expect(session.thinkingLevel).toBe(Effort.High);
 		expect(notices.some(message => message.includes("nothing to switch"))).toBe(true);
-		expect(calls.every(call => !call.hasChecklist)).toBe(true);
 	});
 
 	it("switches when a same-model target clears auto mode even though efforts both resolve to undefined", async () => {
@@ -1025,12 +953,10 @@ describe("AgentSession prewalk", () => {
 		// collapse to a no-op.
 		const model = modelOrThrow("claude-sonnet-4-5");
 		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.yml"));
-		const checklistMarker = "grep for every other call site";
 
 		const mock = createMockModel({
 			responses: [toolCall("t1", "record"), toolCall("t2", "write"), { content: ["done"] }],
 		});
-		const calls: Array<{ hasChecklist: boolean }> = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -1041,10 +967,7 @@ describe("AgentSession prewalk", () => {
 				thinkingLevel: Effort.Medium,
 			},
 			convertToLlm,
-			streamFn: (streamModel, context, options) => {
-				calls.push({ hasChecklist: contextMessagesHaveMarker(context.messages, checklistMarker) });
-				return mock.stream(streamModel, context, options);
-			},
+			streamFn: (streamModel, _context, options) => mock.stream(streamModel, _context, options),
 		});
 		session = new AgentSession({
 			agent,
@@ -1064,9 +987,8 @@ describe("AgentSession prewalk", () => {
 
 		await session.prompt("do the task");
 
-		// The hand-off ran: auto is cleared and the post-switch checklist fired.
+		// The hand-off clears automatic thinking.
 		expect(session.isAutoThinking).toBe(false);
 		expect(notices.some(message => message.includes("nothing to switch"))).toBe(false);
-		expect(calls.at(-1)?.hasChecklist).toBe(true);
 	});
 });

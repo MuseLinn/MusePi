@@ -9,7 +9,7 @@ import { CustomGroups } from "./CustomGroups";
 import { GroupedSessionTree } from "./GroupedSessionTree";
 import { Pop } from "./Pop";
 import { Reveal } from "./Reveal";
-import { type GuiTreeNode, SessionTree } from "./SessionTree";
+import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
 
 /**
  * Left pane — ZCode-style: menu (new/search/scheduled/skills), a group/
@@ -50,6 +50,7 @@ export function SessionSidebar({
 	cronGlow,
 	onOpenSettings,
 	onPickFolder,
+	onCreateProject,
 	onOpenCollab,
 	onRenameSession,
 	onOpenSearch,
@@ -62,8 +63,17 @@ export function SessionSidebar({
 }: {
 	nodes: GuiTreeNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
-	 *  column + sidebar pause chip + working/unread derivation. */
-	sessionMeta: Map<string, { cwd?: string; model?: string; paused?: boolean; working?: boolean }>;
+	 *  column + sidebar pause chip + working/unread derivation + status color. */
+	sessionMeta: Map<
+		string,
+		{
+			cwd?: string;
+			model?: string;
+			paused?: boolean;
+			working?: boolean;
+			status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
+		}
+	>;
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onNewSession(): void;
@@ -80,6 +90,9 @@ export function SessionSidebar({
 	onOpenSettings(): void;
 	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
+	/** kimiwork parity: create a blank project — a dialog asks for a name
+	 *  + parent path and the app mkdirs + opens it (daemon fs.mkdir). */
+	onCreateProject?(): void;
 	/** Open the ZCode-style collab remote-control dialog. */
 	onOpenCollab?(): void;
 	/** Persist a user-set session title (daemon session.rename). */
@@ -120,6 +133,42 @@ export function SessionSidebar({
 			// storage unavailable
 		}
 	};
+	// Manual per-session status tags (ContextMenu #完成/#中断/#错误…) —
+	// persisted locally like pinned/groups; overrides the derived lifecycle
+	// status for the row's left square.
+	const [manualTags, setManualTags] = useState<ReadonlyMap<string, SessionStatus>>(() => {
+		try {
+			const raw = localStorage.getItem("omp-gui-session-tags");
+			return raw ? new Map(Object.entries(JSON.parse(raw) as Record<string, SessionStatus>)) : new Map();
+		} catch {
+			return new Map();
+		}
+	});
+	const persistManualTags = (next: ReadonlyMap<string, SessionStatus>): void => {
+		setManualTags(next);
+		try {
+			localStorage.setItem("omp-gui-session-tags", JSON.stringify(Object.fromEntries(next)));
+		} catch {
+			// storage unavailable
+		}
+	};
+	const setSessionTag = (id: string, tag: SessionStatus | null): void => {
+		const next = new Map(manualTags);
+		if (tag === null) next.delete(id);
+		else next.set(id, tag);
+		persistManualTags(next);
+	};
+	// Derived lifecycle status per session (complete/interrupted/aborted/
+	// error/pending) — TUI session-list parity, from session.list.
+	const statuses = useMemo(
+		() =>
+			new Map<string, SessionStatus>(
+				[...sessionMeta.entries()]
+					.filter(([, m]) => m.status !== undefined)
+					.map(([id, m]) => [id, m.status as SessionStatus]),
+			),
+		[sessionMeta],
+	);
 	const { prompt } = usePrompt();
 	const { confirm } = useConfirm();
 	const renameSession = (id: string): void => {
@@ -283,7 +332,10 @@ export function SessionSidebar({
 		};
 		return list.map(walk).filter((x): x is GuiTreeNode => x !== null);
 	}, []);
-	const searchedNodes = useMemo(() => matchTree(visibleNodes, sessionQuery.trim()), [matchTree, visibleNodes, sessionQuery]);
+	const searchedNodes = useMemo(
+		() => matchTree(visibleNodes, sessionQuery.trim()),
+		[matchTree, visibleNodes, sessionQuery],
+	);
 	// Scheduled-task sessions get their own section (定时任务) instead of
 	// cluttering the regular session flow. Pinned wins (pinned section
 	// owns them while pinned).
@@ -303,6 +355,8 @@ export function SessionSidebar({
 				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 				pausedIds={pausedIds}
 				workingIds={workingIds}
+				statuses={statuses}
+				manualTags={manualTags}
 			/>
 		</div>
 	);
@@ -497,7 +551,14 @@ export function SessionSidebar({
 				 * (not an inline block) so it overlays the tree like the other
 				 * menus. */}
 				{tab === "projects" && (
-					<Pop open={viewMenu} className="gui-view-menu" portal anchor={viewMenuAnchorRef.current} align="right" onOpenChange={setViewMenu}>
+					<Pop
+						open={viewMenu}
+						className="gui-view-menu"
+						portal
+						anchor={viewMenuAnchorRef.current}
+						align="right"
+						onOpenChange={setViewMenu}
+					>
 						<div className="px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
 							{t("view")}
 						</div>
@@ -678,6 +739,17 @@ export function SessionSidebar({
 											className="gui-view-opt"
 											onClick={() => {
 												setProjMenu(false);
+												onCreateProject?.();
+											}}
+										>
+											<Icon name="folder-add" className="h-3.5 w-3.5" />
+											<span>{t("new blank project")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-view-opt"
+											onClick={() => {
+												setProjMenu(false);
 												onOpenConnect();
 											}}
 										>
@@ -698,6 +770,8 @@ export function SessionSidebar({
 													onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 													pausedIds={pausedIds}
 													workingIds={workingIds}
+													statuses={statuses}
+													manualTags={manualTags}
 												/>
 											</div>
 										)}
@@ -710,6 +784,8 @@ export function SessionSidebar({
 											unread={unread}
 											pausedIds={pausedIds}
 											workingIds={workingIds}
+											statuses={statuses}
+											manualTags={manualTags}
 										/>
 									</>
 								) : (
@@ -757,6 +833,8 @@ export function SessionSidebar({
 															onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 															pausedIds={pausedIds}
 															workingIds={workingIds}
+															statuses={statuses}
+															manualTags={manualTags}
 														/>
 													</div>
 												)}
@@ -830,6 +908,8 @@ export function SessionSidebar({
 																		unread={unread}
 																		pausedIds={pausedIds}
 																		workingIds={workingIds}
+																		statuses={statuses}
+																		manualTags={manualTags}
 																	/>
 																)}
 															</ProjectCollapse>
@@ -853,6 +933,8 @@ export function SessionSidebar({
 															unread={unread}
 															pausedIds={pausedIds}
 															workingIds={workingIds}
+															statuses={statuses}
+															manualTags={manualTags}
 														/>
 													</div>
 												)}
@@ -875,6 +957,8 @@ export function SessionSidebar({
 											onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 											pausedIds={pausedIds}
 											workingIds={workingIds}
+											statuses={statuses}
+											manualTags={manualTags}
 										/>
 									</div>
 								)}
@@ -930,11 +1014,16 @@ export function SessionSidebar({
 												if (from < 0) return g;
 												const next = [...g.sessions];
 												next.splice(from, 1);
-												next.splice(Math.max(0, Math.min(to, next.length)), 0, sessionId);
+												next.splice(to, 0, sessionId);
 												return { ...g, sessions: next };
 											}),
 										)
 									}
+									unread={unread}
+									pausedIds={pausedIds}
+									workingIds={workingIds}
+									statuses={statuses}
+									manualTags={manualTags}
 								/>
 								{cronNodes.length > 0 && cronSection}
 								<GroupedSessionTree
@@ -945,6 +1034,8 @@ export function SessionSidebar({
 									unread={unread}
 									pausedIds={pausedIds}
 									workingIds={workingIds}
+									statuses={statuses}
+									manualTags={manualTags}
 								/>
 							</>
 						)}
@@ -1019,6 +1110,31 @@ export function SessionSidebar({
 									label: unread?.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),
 									icon: "chat-1",
 									onSelect: () => onToggleUnread?.(sessionCtx.id),
+								},
+								{ divider: true },
+								// Status tag (#完成/#中断/#错误…): manually tag a session
+								// so unfinished history reads at a glance even without
+								// grouping. The tag overrides the derived lifecycle
+								// status on the row's left square; 清除标记 restores it.
+								...(
+									[
+										{ tag: "complete", dot: "ok", label: t("tag complete") },
+										{ tag: "interrupted", dot: "warning", label: t("tag interrupted") },
+										{ tag: "error", dot: "danger", label: t("tag error") },
+										{ tag: "aborted", dot: "muted", label: t("tag aborted") },
+										{ tag: "pending", dot: "accent", label: t("tag pending") },
+									] as const
+								).map(({ tag, dot, label }) => ({
+									label: `#${label}`,
+									icon: "circle" as const,
+									color: dot,
+									onSelect: () => setSessionTag(sessionCtx.id, tag),
+								})),
+								{
+									label: t("clear tag"),
+									icon: "palette",
+									disabled: !manualTags.has(sessionCtx.id),
+									onSelect: () => setSessionTag(sessionCtx.id, null),
 								},
 								{ divider: true },
 								{

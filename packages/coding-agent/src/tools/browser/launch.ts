@@ -204,6 +204,15 @@ function isExecutableFile(p: string): boolean {
 
 async function isChromiumExecutable(p: string): Promise<boolean> {
 	if (!isExecutableFile(p)) return false;
+	// The version probe below launches the candidate. It exists to reject
+	// non-Chromium `chrome`/`chromium` wrapper scripts that appear on a Linux
+	// PATH (ecb22957, "validate Linux browser executables"). On Windows and
+	// macOS the candidates are fixed GUI application paths, not PATH wrappers,
+	// and executing them is harmful: a GUI `chrome.exe --version` does not print
+	// to a detached stdout and can hand off to the user's running instance,
+	// opening/activating a normal browser window (#8445). Confine the probe to
+	// Linux and trust the executable-file check elsewhere.
+	if (process.platform !== "linux") return true;
 	try {
 		const probeTimeoutMs = 3000;
 		const proc = Bun.spawn([p, "--version"], {
@@ -235,14 +244,14 @@ function systemChromiumCandidates(
 	const candidates: string[] = [];
 	switch (platform) {
 		case "darwin": {
-			for (const root of ["/Applications", path.join(home, "Applications")]) {
+			for (const root of ["/Applications", path.posix.join(home, "Applications")]) {
 				candidates.push(
-					path.join(root, "Google Chrome.app/Contents/MacOS/Google Chrome"),
-					path.join(root, "Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"),
-					path.join(root, "Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"),
-					path.join(root, "Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"),
-					path.join(root, "Chromium.app/Contents/MacOS/Chromium"),
-					path.join(root, "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+					path.posix.join(root, "Google Chrome.app/Contents/MacOS/Google Chrome"),
+					path.posix.join(root, "Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"),
+					path.posix.join(root, "Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"),
+					path.posix.join(root, "Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"),
+					path.posix.join(root, "Chromium.app/Contents/MacOS/Chromium"),
+					path.posix.join(root, "Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
 				);
 			}
 			break;
@@ -267,7 +276,10 @@ function systemChromiumCandidates(
 				onNixos = fs.existsSync("/etc/NIXOS");
 			} catch {}
 			if (onNixos) {
-				candidates.push(path.join(home, ".nix-profile/bin/chromium"), "/run/current-system/sw/bin/chromium");
+				candidates.push(
+					path.posix.join(home, ".nix-profile/bin/chromium"),
+					"/run/current-system/sw/bin/chromium",
+				);
 			}
 			for (const name of ["ungoogled-chromium", "ungoogled-chromium-browser"]) {
 				const found = which(name);
@@ -280,7 +292,7 @@ function systemChromiumCandidates(
 				"/usr/bin/ungoogled-chromium",
 				"/usr/bin/ungoogled-chromium-browser",
 				`/var/lib/flatpak/exports/bin/${UNGOOGLED_CHROMIUM_FLATPAK_ID}`,
-				path.join(home, ".local/share/flatpak/exports/bin", UNGOOGLED_CHROMIUM_FLATPAK_ID),
+				path.posix.join(home, ".local/share/flatpak/exports/bin", UNGOOGLED_CHROMIUM_FLATPAK_ID),
 			);
 			break;
 		}

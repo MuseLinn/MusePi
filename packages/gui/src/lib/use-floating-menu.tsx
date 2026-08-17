@@ -25,6 +25,13 @@ let activeMenu: { close(): void } | null = null;
  * backdrop-filter only after the element settles, so animating opacity on
  * the very first frame made frosted menus flash transparent → suddenly
  * glassy; the pre-paint lets the blur layer composite before the fade.
+ *
+ * Card-surface ownership: the `className` option lands on THIS wrapper.
+ * Menus that pass one (gui-proj-menu, gui-todo-popup, …) render plain
+ * content; panels that are self-contained cards (gui-quota-panel,
+ * gui-color-picker) must NOT pass a className and carry their surface on
+ * the inner root. Applying the same card class to BOTH layers double-draws
+ * the rounded frosted container (nested glass boxes behind the content).
  */
 export function useFloatingMenu(
 	open: boolean,

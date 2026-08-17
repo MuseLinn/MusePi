@@ -2419,6 +2419,7 @@ export class AcpAgent implements Agent {
 				compact: instructionsOrOptions => runExtensionCompact(record.session, instructionsOrOptions),
 			},
 			uiContext,
+			"rpc",
 		);
 		await extensionRunner.emit({ type: "session_start" });
 		record.extensionsConfigured = true;

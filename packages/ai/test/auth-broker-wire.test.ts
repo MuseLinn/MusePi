@@ -153,6 +153,42 @@ describe("auth-broker wire surface", () => {
 		}
 	});
 
+	test("GET /v1/usage outlives the base timeout for a serialized account batch", async () => {
+		vi.useFakeTimers();
+		const response = Promise.withResolvers<Response>();
+		let usageSignal: AbortSignal | undefined;
+		const fetchImpl: typeof fetch = Object.assign(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				const signal = init?.signal;
+				if (signal) usageSignal = signal;
+				return response.promise;
+			},
+			{ preconnect: fetch.preconnect },
+		);
+		const client = new AuthBrokerClient({
+			url: "http://broker.invalid",
+			token,
+			timeoutMs: 10_000,
+			maxRetries: 0,
+			fetchImpl,
+		});
+		try {
+			const usage = client.fetchUsage({ maxAccountsPerProvider: 3 });
+			await Promise.resolve();
+			const baseTimeout = AbortSignal.timeout(10_000);
+			vi.advanceTimersByTime(10_001);
+			await Promise.resolve();
+			expect(baseTimeout.aborted).toBe(true);
+			expect(usageSignal?.aborted).toBe(false);
+
+			const generatedAt = Date.now();
+			response.resolve(Response.json({ generatedAt, reports: [] }));
+			expect(await usage).toEqual({ generatedAt, reports: [] });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	test("GET /v1/snapshot returns generation headers and 304 for unchanged long-poll", async () => {
 		const res = await fetch(`${handle!.url}/v1/snapshot`, {
 			headers: { Authorization: `Bearer ${token}` },

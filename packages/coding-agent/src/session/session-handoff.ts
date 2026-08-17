@@ -14,6 +14,7 @@ import { logger, Snowflake } from "@musepi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { ExtensionRunner, SessionBeforeSwitchResult } from "../extensibility/extensions";
+import { copyLocalArtifacts, resolveLocalUrlToPath } from "../internal-urls";
 import { obfuscateProviderContext } from "../secrets/message-transform";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { HandoffResult, SessionHandoffOptions } from "./agent-session-types";
@@ -255,6 +256,15 @@ export class SessionHandoff {
 			// Stop and settle in-flight advisors while the old-session feeds can still
 			// observe message_end, then mute before opening the replacement session.
 			await this.#host.drainAndDetachAdvisorRecorders();
+			// Snapshot the outgoing session's local:// root BEFORE newSession() mints a
+			// fresh session id (and therefore a fresh, empty local root). The handoff
+			// document routinely references plans/scratch files under local://, so those
+			// artifacts must follow the session switch or every reference dangles.
+			const localProtocolOptions = {
+				getArtifactsDir: () => this.#host.sessionManager.getArtifactsDir(),
+				getSessionId: () => this.#host.sessionManager.getSessionId(),
+			};
+			const previousLocalRoot = resolveLocalUrlToPath("local://", localProtocolOptions);
 			const bashTransition = this.#host.beginBashSessionTransition();
 			this.#host.cancelOwnAsyncJobs();
 			try {
@@ -291,6 +301,17 @@ export class SessionHandoff {
 			await this.#host.resetMemoryContextForNewTranscript();
 			this.#host.clearPendingNextTurnMessages();
 			this.#host.resetTodoCycle();
+
+			// Carry local:// artifacts into the replacement session (best-effort: the
+			// switch is already committed, so a copy failure must not fail the handoff).
+			try {
+				const newLocalRoot = resolveLocalUrlToPath("local://", localProtocolOptions);
+				await copyLocalArtifacts(previousLocalRoot, newLocalRoot);
+			} catch (error) {
+				logger.warn("Failed to copy local artifacts into handoff session", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 
 			// Inject the handoff document as a custom message
 			const handoffContent = createHandoffContext(handoffText);

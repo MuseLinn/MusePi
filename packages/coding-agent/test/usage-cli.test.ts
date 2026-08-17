@@ -422,29 +422,29 @@ describe("formatUsageBreakdown", () => {
 	});
 
 	it("renders provider-level notes once per provider, not duplicated per account or limit", () => {
-		const disclaimer = "OMP-observed spend only; OpenCode usage outside OMP is not included.";
+		const providerNote = "Usage data can be delayed by up to five minutes.";
 		const multiAccount = [
 			makeReport(
-				"opencode-go",
+				"anthropic",
 				"acct-a@example.test",
 				[makeLimit({ id: "5 Hour", usedFraction: 0.3, durationMs: FIVE_HOURS, windowId: "5h" })],
-				[disclaimer],
+				[providerNote],
 			),
 			makeReport(
-				"opencode-go",
+				"anthropic",
 				"acct-b@example.test",
 				[makeLimit({ id: "5 Hour", usedFraction: 0.6, durationMs: FIVE_HOURS, windowId: "5h" })],
-				[disclaimer],
+				[providerNote],
 			),
 		];
 		const text = stripVTControlCharacters(formatUsageBreakdown(multiAccount, [], Date.now()));
-		// The disclaimer appears exactly once, not once per account or limit.
-		const occurrences = text.split(disclaimer).length - 1;
+		// The provider note appears exactly once, not once per account or limit.
+		const occurrences = text.split(providerNote).length - 1;
 		expect(occurrences).toBe(1);
 		// It appears above the per-account rows, not inline with a limit line.
-		const disclaimerIdx = text.indexOf(disclaimer);
+		const noteIdx = text.indexOf(providerNote);
 		const firstLimitIdx = text.indexOf("5 Hour");
-		expect(disclaimerIdx).toBeLessThan(firstLimitIdx);
+		expect(noteIdx).toBeLessThan(firstLimitIdx);
 	});
 
 	it("renders Antigravity weekly windows in the usage breakdown", () => {

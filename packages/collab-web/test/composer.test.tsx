@@ -1,43 +1,37 @@
 import { describe, expect, it } from "bun:test";
 import type { KeyboardEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import type { GuestSnapshot } from "../src/lib/client";
 import { GuestClient } from "../src/lib/client";
 import { Composer, shouldSubmitOnEnter } from "../src/components/shell/Composer";
-import { encodeBase64Url } from "@musepi/collab-proto";
+import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
-const client = new GuestClient(LINK, "tester");
 
-function snapshot(uiRequest: GuestSnapshot["uiRequest"]): GuestSnapshot {
-	return {
-		phase: "live",
-		endedReason: null,
-		header: null,
-		entries: [],
-		state: { isStreaming: true, queuedMessageCount: 0, cwd: "/work", participants: [] },
-		agents: [],
-		progress: new Map(),
-		lifecycle: new Map(),
-		stream: null,
-		streamDone: false,
-		activeTools: new Map(),
-		working: true,
-		roundDurations: new Map(),
-		readOnly: false,
-		workspace: null,
-		focusedSessionId: null,
-		uiRequest,
-		notices: [],
-	};
+const HEADER: SessionHeader = { type: "session", id: "s1", timestamp: "2026-06-12T00:00:00Z", cwd: "/work" };
+const STATE: SessionState = { isStreaming: true, queuedMessageCount: 0, cwd: "/work", participants: [] };
+
+/** Seed a live client through the real frame path (Composer subscribes to the client now). */
+function clientWithAsk(uiRequest: GuestSnapshot["uiRequest"]): GuestClient {
+	const client = new GuestClient(LINK, "tester");
+	client.applyFrameForTest({
+		t: "welcome",
+		proto: COLLAB_PROTO,
+		header: HEADER,
+		state: STATE,
+		agents: [] as AgentSnapshot[],
+		entryCount: 0,
+	});
+	if (uiRequest) client.applyFrameForTest({ t: "ui-request", request: uiRequest });
+	return client;
 }
 
 describe("Composer host UI requests", () => {
 	it("renders selectable ask responses for mobile guests", () => {
 		const html = renderToStaticMarkup(
 			<Composer
-				client={client}
-				snapshot={snapshot({
+				client={clientWithAsk({
 					reqId: 1,
 					kind: "select",
 					title: "Continue?",
@@ -54,7 +48,7 @@ describe("Composer host UI requests", () => {
 
 	it("renders a submit field for custom ask responses", () => {
 		const html = renderToStaticMarkup(
-			<Composer client={client} snapshot={snapshot({ reqId: 2, kind: "editor", title: "Other", prefill: "draft" })} />,
+			<Composer client={clientWithAsk({ reqId: 2, kind: "editor", title: "Other", prefill: "draft" })} />,
 		);
 
 		expect(html).toContain("Other");
@@ -64,15 +58,17 @@ describe("Composer host UI requests", () => {
 
 	it("keeps the editor submit enabled for whitespace-only drafts", () => {
 		const html = renderToStaticMarkup(
-			<Composer client={client} snapshot={snapshot({ reqId: 3, kind: "editor", title: "Other", prefill: "   " })} />,
+			<Composer client={clientWithAsk({ reqId: 3, kind: "editor", title: "Other", prefill: "   " })} />,
 		);
 
 		const submit = { found: false, disabled: false };
 		new HTMLRewriter()
-			.on('button[title="submit response"]', {
+			.on("button", {
 				element(el) {
-					submit.found = true;
-					submit.disabled = el.hasAttribute("disabled");
+					if (el.getAttribute("title") === "Submit response") {
+						submit.found = true;
+						submit.disabled = el.hasAttribute("disabled");
+					}
 				},
 			})
 			.transform(html);

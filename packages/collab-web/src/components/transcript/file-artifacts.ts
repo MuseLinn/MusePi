@@ -13,13 +13,34 @@ const WRITE_TOOL_RE = /^(?:write|fs_write|fs-write|create)$/i;
 const EDIT_TOOL_RE = /^(?:edit|apply_patch|patch|file_diff|diff|ast_edit)$/i;
 const IMAGE_TOOL_RE = /^generate[_-]image$/i;
 
+/** Internal URL schemes resolve to virtual devices / resources, not
+ *  filesystem paths (xd:// mounts execute mounted tools via read/write;
+ *  skill://, agent://, … route elsewhere). Never file artifacts — the
+ *  file card's preview/open actions would fail on them. Mirrors the
+ *  scheme list in internal-urls/router.ts. */
+const INTERNAL_URL_RE =
+	/^(?:xd|skill|agent|artifact|memory|history|local|rule|omp|mcp|issue|pr|ssh|vault|security|file):\/\//i;
+
+/** OS temp roots — throwaway by definition: the agent cleans these up, so
+ *  a card would outlive its file (preview/open → ENOENT). macOS: /tmp
+ *  (→ /private/tmp) and per-user /var/folders; Linux: /tmp; Windows:
+ *  %TEMP% (C:\Users\…\AppData\Local\Temp, C:\Temp). */
+const TMP_PATH_RE =
+	/^(?:\/private\/tmp\/|\/tmp\/|\/private\/var\/folders\/|\/var\/folders\/|C:\\Users\\[^\\/]+\\AppData\\Local\\Temp\\|C:\\Temp\\|%TEMP%\\|%TMP%\\|TMPDIR)/i;
+
+/** Paths that survive as durable file artifacts: real filesystem paths
+ *  only, outside internal URL schemes and OS temp roots. */
+function isArtifactPath(p: string): boolean {
+	return !INTERNAL_URL_RE.test(p) && !TMP_PATH_RE.test(p);
+}
+
 /** File paths produced by a single tool call (write/edit/patch families). */
 export function artifactPaths(name: string, args: unknown): string[] {
 	const n = name.toLowerCase();
 	const a = isRecord(args) ? args : {};
 	if (WRITE_TOOL_RE.test(n)) {
 		const p = str(a.file_path ?? a.path ?? a.filePath);
-		return p ? [p] : [];
+		return p && isArtifactPath(p) ? [p] : [];
 	}
 	if (EDIT_TOOL_RE.test(n)) {
 		const content = str(a.content ?? a.patch ?? a.diff ?? a.replacement) ?? "";
@@ -29,11 +50,11 @@ export function artifactPaths(name: string, args: unknown): string[] {
 				if (typeof p === "string" && !paths.includes(p)) paths.push(p);
 			}
 		}
-		return paths;
+		return paths.filter(isArtifactPath);
 	}
 	if (IMAGE_TOOL_RE.test(n)) {
 		const p = str(a.path ?? a.file_path ?? a.output);
-		return p ? [p] : [];
+		return p && isArtifactPath(p) ? [p] : [];
 	}
 	return [];
 }

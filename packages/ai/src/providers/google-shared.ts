@@ -233,6 +233,8 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 			const parts: Part[] = [];
 			// Check if message is from same provider and model - only then keep thinking blocks
 			const isSameProviderAndModel = msg.provider === model.provider && msg.model === model.id;
+			const dropsUnsignedThinking =
+				model.provider === "google-antigravity" && model.id.toLowerCase().includes("claude");
 
 			for (const block of msg.content) {
 				if (block.type === "text") {
@@ -247,6 +249,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 					// Skip empty thinking blocks
 					if (!block.thinking || block.thinking.trim() === "") continue;
 					const thoughtSignature = resolveThoughtSignature(isSameProviderAndModel, block.thinkingSignature);
+					if (dropsUnsignedThinking && !thoughtSignature) continue;
 					if (thoughtSignature) {
 						parts.push({
 							thought: true,
@@ -858,13 +861,18 @@ export function buildGoogleGenerateContentParams<T extends "google-generative-ai
 		config.toolConfig = undefined;
 	}
 
-	if (options.thinking?.enabled && model.reasoning) {
-		const cfg: ThinkingConfig = { includeThoughts: !options.hideThinkingSummary };
-		if (options.thinking.level !== undefined) {
-			// GoogleThinkingLevel mirrors the SDK's `ThinkingLevel` string enum values 1:1.
-			cfg.thinkingLevel = options.thinking.level as ThinkingLevel;
-		} else if (options.thinking.budgetTokens !== undefined) {
-			cfg.thinkingBudget = options.thinking.budgetTokens;
+	const thinking = options.thinking;
+	if (
+		thinking &&
+		model.reasoning &&
+		(thinking.enabled || thinking.level !== undefined || thinking.budgetTokens !== undefined)
+	) {
+		const cfg: ThinkingConfig = { includeThoughts: thinking.enabled && !options.hideThinkingSummary };
+		if (thinking.level !== undefined) {
+			// GoogleThinkingLevel mirrors the SDK's ThinkingLevel string enum values 1:1.
+			cfg.thinkingLevel = thinking.level as ThinkingLevel;
+		} else if (thinking.budgetTokens !== undefined) {
+			cfg.thinkingBudget = thinking.budgetTokens;
 		}
 		config.thinkingConfig = cfg;
 	}
@@ -1031,7 +1039,13 @@ export function streamGoogleGenAI<T extends "google-generative-ai" | "google-ver
 					},
 				});
 
-				if (output.stopReason !== "stop" || hasMeaningfulGoogleContent(output)) break;
+				if (
+					output.stopReason !== "stop" ||
+					hasMeaningfulGoogleContent(output) ||
+					options?.acceptEmptyResponse === true
+				) {
+					break;
+				}
 				if (emptyAttempt >= MAX_EMPTY_STREAM_RETRIES) {
 					throw new AIError.ProviderResponseError(
 						`Google API returned an empty response (finishReason STOP with no content) after ${MAX_EMPTY_STREAM_RETRIES + 1} attempts`,

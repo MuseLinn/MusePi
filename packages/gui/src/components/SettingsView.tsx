@@ -24,6 +24,7 @@ import {
 } from "@musepi/collab-web";
 import type { SoundName } from "cuelume";
 import { LoaderCircle as LoaderCircleIconData, RefreshCw as RefreshCwIconData } from "lucide";
+import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -107,10 +108,13 @@ import {
 	soundFor,
 	WIRED_SOUNDS,
 } from "../lib/sfx";
+import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
+import { ChromaGroup } from "./ChromaGroup";
+import { ColorPickerPanel } from "./ColorPicker";
 import { AgentStatusLine } from "./Composer";
 import { DialogFrame } from "./DialogFrame";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -122,7 +126,6 @@ import { Pop } from "./Pop";
 import { Reveal } from "./Reveal";
 import { type SchemaItem, SchemaSettings } from "./SchemaSettings";
 import { SpotlightCard } from "./SpotlightCard";
-import { ThinkingSelector } from "./ThinkingSelector";
 import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
@@ -170,6 +173,200 @@ interface SectionDef {
 	/** Implemented sections are clickable; placeholders stay disabled. */
 	enabled: boolean;
 }
+
+/**
+ * Settings search terms per section (id → keywords found in that section's
+ * actual settings rows: labels, descriptions, option names). The nav filter
+ * matches a section when the query hits its label OR any of these keywords —
+ * so searching "头像" finds the 常规 section even though its nav label is
+ * just "常规". Bilingual on purpose (users search in either language).
+ */
+const SECTION_SEARCH_TERMS: Record<string, string[]> = {
+	general: [
+		"头像",
+		"avatar",
+		"点阵",
+		"dot",
+		"brand",
+		"enter",
+		"回车",
+		"防休眠",
+		"caffeinate",
+		"存储",
+		"storage",
+		"路径",
+		"path",
+		"守护",
+		"daemon",
+		"版本",
+		"version",
+		"引擎",
+		"engine",
+		"语言",
+		"language",
+		"时区",
+		"timezone",
+		"更新",
+		"update",
+		"检查",
+		"check",
+	],
+	appearance: [
+		"主题",
+		"theme",
+		"强调",
+		"accent",
+		"字体",
+		"font",
+		"字号",
+		"density",
+		"密度",
+		"暗色",
+		"dark",
+		"浅色",
+		"light",
+		"颜色",
+		"color",
+		"动画",
+		"animation",
+		"动效",
+		"motion",
+		"圆角",
+		"radius",
+	],
+	notifications: ["通知", "notification", "声音", "sound", "提示", "提醒", "alert", "横幅", "banner"],
+	pet: [
+		"桌宠",
+		"pet",
+		"宠物",
+		"伙伴",
+		"companion",
+		"动画",
+		"animation",
+		"尾巴",
+		"tail",
+		"皮肤",
+		"skin",
+		"交互",
+		"interact",
+	],
+	sessions: ["会话", "session", "恢复", "resume", "归档", "archive", "历史", "history", "标题", "title"],
+	git: [
+		"git",
+		"仓库",
+		"repository",
+		"提交",
+		"commit",
+		"认证",
+		"auth",
+		"登录",
+		"sign",
+		"gh",
+		"github",
+		"拉取",
+		"push",
+		"推送",
+	],
+	shortcuts: ["快捷键", "shortcut", "按键", "key", "组合", "绑定", "bind", "⌘", "command"],
+	model: [
+		"模型",
+		"model",
+		"供应商",
+		"provider",
+		"角色",
+		"role",
+		"思考",
+		"thinking",
+		"外部",
+		"external",
+		"视觉",
+		"vision",
+		"侧信道",
+		"side",
+		"channel",
+		"api",
+		"key",
+	],
+	interaction: [
+		"交互",
+		"enter",
+		"回车",
+		"补全",
+		"completion",
+		"滚动",
+		"scroll",
+		"粘贴",
+		"paste",
+		"光标",
+		"cursor",
+		"ime",
+		"输入",
+		"input",
+		"自动",
+		"auto",
+		"建议",
+		"suggest",
+	],
+	context: ["上下文", "context", "压缩", "compact", "窗口", "window", "token", "令牌", "限制", "limit"],
+	shell: [
+		"终端",
+		"terminal",
+		"shell",
+		"pty",
+		"命令",
+		"command",
+		"bash",
+		"zsh",
+		"环境",
+		"env",
+		"最大",
+		"max",
+		"输出",
+		"output",
+	],
+	tools: ["工具", "tool", "权限", "permission", "批准", "approval", "审批", "自动", "auto", "确认", "confirm"],
+	files: [
+		"文件",
+		"file",
+		"lsp",
+		"语言服务",
+		"language",
+		"索引",
+		"index",
+		"搜索",
+		"search",
+		"忽略",
+		"ignore",
+		"排除",
+		"exclude",
+	],
+	memory: ["记忆", "memory", "上下文", "context", "摘要", "summary", "向量", "vector", "嵌入", "embed"],
+	plugins: ["插件", "plugin", "扩展", "extension", "加载", "load", "启用", "enable"],
+	skills: [
+		"技能",
+		"skill",
+		"扩展",
+		"extension",
+		"内置",
+		"builtin",
+		"市场",
+		"market",
+		"搜索",
+		"search",
+		"安装",
+		"install",
+		"目录",
+		"dir",
+	],
+	subagents: ["子代理", "subagent", "任务", "task", "并行", "parallel", "并发", "concurrency", "数量", "count"],
+	mcp: ["mcp", "服务", "server", "工具", "tool", "端点", "endpoint", "url"],
+	commands: ["命令", "command", "slash", "斜杠", "自定义", "custom", "快捷", "quick"],
+	hooks: ["钩子", "hook", "事件", "event", "触发", "trigger", "toml", "脚本", "script"],
+	browser: ["浏览器", "browser", "网页", "web", "受管", "managed", "代理", "proxy", "截图", "screenshot"],
+	history: ["历史", "history", "会话", "session", "时间", "time", "保留", "retention", "清理", "clean"],
+	indexes: ["索引", "index", "库", "代码库", "搜索", "search", "扫描", "scan", "cwd", "工作区"],
+	usage: ["统计", "usage", "用量", "成本", "cost", "token", "模型", "model", "月度", "monthly"],
+};
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
  * openchamber-parity tabs (chat / notifications / sessions / shortcuts /
@@ -310,6 +507,31 @@ export function SettingsView({
 	const [section, setSection] = useState<SectionId>(initialSection ?? "appearance");
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
+	// Settings search highlight: with an active query, imperatively mark the
+	// matching setting rows inside the content area (.gui-settings-field for
+	// hand-written sections, .gui-settings-row for schema-driven ones) and
+	// scroll the first match into view — once per new query and once per
+	// section switch, so further typing never re-scrolls and the pane can't
+	// jitter. The class is applied outside React, keeping every section
+	// component unaware of the search state.
+	const prevSearchRef = useRef<{ q: string; section: SectionId }>({ q: "", section: section ?? "appearance" });
+	useEffect(() => {
+		const content = settingsContentRef.current;
+		if (!content) return;
+		const q = settingsQuery.trim().toLowerCase();
+		content
+			.querySelectorAll<HTMLElement>(".gui-settings-match")
+			.forEach(el => el.classList.remove("gui-settings-match"));
+		if (!q) return;
+		const rows = Array.from(content.querySelectorAll<HTMLElement>(".gui-settings-field, .gui-settings-row")).filter(
+			row => !row.closest("[aria-hidden='true'], [inert]") && (row.textContent ?? "").toLowerCase().includes(q),
+		);
+		rows.forEach(el => el.classList.add("gui-settings-match"));
+		const prev = prevSearchRef.current;
+		const scroll = q !== prev.q || section !== prev.section;
+		prevSearchRef.current = { q, section };
+		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [settingsQuery, section]);
 	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("omp-gui-avatars") !== "0");
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
@@ -498,29 +720,34 @@ export function SettingsView({
 							.map(group => ({
 								...group,
 								items: settingsQuery.trim()
-									? group.items.filter(item => item.label.toLowerCase().includes(settingsQuery.trim().toLowerCase()))
+									? group.items.filter(item => {
+											const q = settingsQuery.trim().toLowerCase();
+											if (item.label.toLowerCase().includes(q)) return true;
+											const terms = SECTION_SEARCH_TERMS[item.id] ?? [];
+											return terms.some(k => k.includes(q) || q.includes(k));
+										})
 									: group.items,
 							}))
 							.filter(group => group.items.length > 0)
 							.map(group => (
-							<div key={group.title} className="mb-1">
-								<div className="gui-settings-nav-group">{group.title}</div>
-								{group.items.map(item => (
-									<button
-										key={item.id}
-										type="button"
-										title={item.enabled ? item.label : `${item.label} · ${t("coming soon")}`}
-										className={`gui-settings-nav${section === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
-										onClick={() => {
-											if (item.enabled) setSection(item.id as SectionId);
-										}}
-									>
-										<Icon name={item.icon} className="h-4 w-4" />
-										<span className="gui-settings-nav-label">{item.label}</span>
-									</button>
-								))}
-							</div>
-						))}
+								<div key={group.title} className="mb-1">
+									<div className="gui-settings-nav-group">{group.title}</div>
+									{group.items.map(item => (
+										<button
+											key={item.id}
+											type="button"
+											title={item.enabled ? item.label : `${item.label} · ${t("coming soon")}`}
+											className={`gui-settings-nav${section === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
+											onClick={() => {
+												if (item.enabled) setSection(item.id as SectionId);
+											}}
+										>
+											<Icon name={item.icon} className="h-4 w-4" />
+											<span className="gui-settings-nav-label">{item.label}</span>
+										</button>
+									))}
+								</div>
+							))}
 					</div>
 					{/* Bottom: onboarding + announcements + daemon status (user-area slot). */}
 					<div className="flex flex-col gap-0.5 border-t border-[var(--border)] px-2 py-2">
@@ -612,18 +839,35 @@ export function SettingsView({
 	);
 }
 
-/** Accent preset → swatch color (light scheme; tokens own the real value). */
+/** Accent preset → swatch color (display tints readable on both schemes;
+ *  the tokens own the real values: brand = emerald #34d399). */
 const ACCENT_SWATCH: Record<string, string> = {
-	brand: "#7c5cff",
+	brand: "#34d399",
 	mono: "#8a8a93",
 	ocean: "#38bdf8",
-	jade: "#34d399",
+	jade: "#44b782",
+};
+
+/** Accent preset → localized name (swatch tooltip/aria). */
+const ACCENT_NAMES: Record<string, TranslationKey> = {
+	brand: "accent brand",
+	mono: "accent mono",
+	ocean: "accent ocean",
+	jade: "accent jade",
 };
 
 const THEME_OPTIONS = [
 	{ id: "system", label: t("follow system") },
 	{ id: "light", label: t("light") },
 	{ id: "dark", label: t("dark") },
+] as const;
+
+/** Same options as a segmented picker with per-mode icons (monitor / sun /
+ *  moon) — the theme flip overlay morphs between these same icons. */
+const TYPE_THEME_OPTIONS = [
+	{ id: "system", label: t("follow system"), Icon: MonitorIcon },
+	{ id: "light", label: t("light"), Icon: SunIcon },
+	{ id: "dark", label: t("dark"), Icon: MoonIcon },
 ] as const;
 
 /**
@@ -643,8 +887,31 @@ function AppearanceSection({
 	onToggleAvatars(): void;
 	rpc: RpcClient | null;
 }): ReactNode {
+	// Picking the already-active theme (theme.ts setThemePreference) emits
+	// omp-theme-toggle-shake — jiggle the active segmented button instead
+	// of running another overlay. The class is removed on animationend (no
+	// timer: background-window timers throttle and would leave it stuck).
+	const [themeShake, setThemeShake] = useState(false);
+	useEffect(() => {
+		const on = (): void => {
+			setThemeShake(false);
+			requestAnimationFrame(() => setThemeShake(true));
+		};
+		window.addEventListener("omp-theme-toggle-shake", on);
+		return () => window.removeEventListener("omp-theme-toggle-shake", on);
+	}, []);
 	const { preference, resolved, setPreference } = useThemePreference();
-	const { accent, setAccent, customAccent, setCustomAccent } = useAccentPreference();
+	const { accent, setAccent, customAccent, applyCustomAccent } = useAccentPreference();
+	// Custom-accent picker popover (app-styled ColorPickerPanel, replaces the
+	// native <input type="color"> — portaled via useFloatingMenu). NOTE: no
+	// className here — ColorPickerPanel's root carries the card surface;
+	// passing one double-draws the rounded card (WelcomeComposer lesson).
+	// Interaction: opening snapshots the current preference into a LOCAL
+	// preview; edits touch only the preview (no veil/apply); 「应用」 applies
+	// it (veil + morphicon); closing discards the preview.
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [pickerPreview, setPickerPreview] = useState<string | null>(null);
+	const { anchorRef: accentPickerRef, renderMenu: renderAccentPicker } = useFloatingMenu(pickerOpen, setPickerOpen);
 	const {
 		lightThemeId,
 		darkThemeId,
@@ -674,7 +941,7 @@ function AppearanceSection({
 		return v === "accent" ? "accent" : "default";
 	});
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("omp-gui-images") !== "0");
-	const [fontScale, setFontScale] = useState<number>(() => Number(localStorage.getItem("omp-gui-font-scale") ?? 14));
+	const [fontScale, setFontScale] = useState<number>(() => Number(localStorage.getItem("omp-gui-font-scale") ?? 15));
 	const [termFont, setTermFont] = useState<number>(() => Number(localStorage.getItem("omp-gui-terminal-font") ?? 13));
 	const [codeFont, setCodeFont] = useState<number>(() => Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13));
 	const [density, setDensity] = useState<number>(() => Number(localStorage.getItem(DENSITY_KEY) ?? 100));
@@ -781,17 +1048,22 @@ function AppearanceSection({
 					<div className="gui-settings-field-label">{t("interface theme")}</div>
 					<div className="gui-settings-field-hint">{t("choose light, dark or follow the system")}</div>
 					<div className="gui-settings-field-control">
-						<select
-							className="gui-settings-select"
-							value={preference}
-							onChange={e => setPreference(e.target.value as "system" | "light" | "dark")}
-						>
-							{THEME_OPTIONS.map(o => (
-								<option key={o.id} value={o.id}>
-									{o.label}
-								</option>
+						<div className="gui-segmented gui-theme-seg" role="radiogroup" aria-label={t("interface theme")}>
+							{TYPE_THEME_OPTIONS.map(o => (
+								<button
+									key={o.id}
+									type="button"
+									role="radio"
+									aria-checked={preference === o.id}
+									className={`gui-seg-btn${preference === o.id ? " gui-seg-btn--active" : ""}${themeShake && preference === o.id ? " gui-seg-btn--shake" : ""}`}
+									onAnimationEnd={() => setThemeShake(false)}
+									onClick={() => setPreference(o.id)}
+								>
+									<o.Icon size={14} />
+									<span>{o.label}</span>
+								</button>
 							))}
-						</select>
+						</div>
 					</div>
 				</div>
 				<div className="gui-settings-field">
@@ -883,7 +1155,7 @@ function AppearanceSection({
 						min={12}
 						max={18}
 						unit="px"
-						defaultValue={14}
+						defaultValue={15}
 						onChange={v => {
 							setFontScale(v);
 							setPref("omp-gui-font-scale", v);
@@ -991,28 +1263,35 @@ function AppearanceSection({
 									type="button"
 									className={`gui-accent-swatch${accent === id ? " gui-accent-swatch--active" : ""}`}
 									style={{ background: color }}
-									aria-label={id}
-									title={id}
+									aria-label={t(ACCENT_NAMES[id] ?? "accent brand")}
+									title={t(ACCENT_NAMES[id] ?? "accent brand")}
 									onClick={() => setAccent(id as "brand" | "mono" | "ocean" | "jade")}
 								/>
 							))}
-							<label
+							<button
+								ref={accentPickerRef}
+								type="button"
 								className={`gui-accent-swatch gui-accent-swatch--custom${accent === "custom" ? " gui-accent-swatch--active" : ""}`}
 								style={{ background: customAccent }}
 								title={t("custom accent")}
-							>
-								<input
-									type="color"
-									className="gui-accent-picker"
-									value={customAccent}
-									aria-label={t("custom accent")}
-									onChange={e => {
-										setAccent("custom");
-										setCustomAccent(e.target.value);
-									}}
-								/>
-							</label>
+								aria-label={t("custom accent")}
+								aria-haspopup="dialog"
+								onClick={() => {
+									// Open only — no accent switch, no veil. Snapshot
+									// the current preference as the starting preview;
+									// apply happens exclusively via the card buttons.
+									setPickerPreview(customAccent);
+									setPickerOpen(o => !o);
+								}}
+							/>
 						</div>
+						{renderAccentPicker(
+							<ColorPickerPanel
+								value={pickerPreview ?? customAccent}
+								onChange={setPickerPreview}
+								onApply={applyCustomAccent}
+							/>,
+						)}
 					</div>
 				</div>
 				<div className="gui-settings-row">
@@ -1716,13 +1995,20 @@ function ChatSection(): ReactNode {
 			return "default";
 		}
 	});
+	// 消息字号 — transcript body ladder (--tr-font-size on <html>; headings
+	// and code scale off it in transcript.css). Independent of the interface
+	// font slider: shell chrome follows --gui-font-scale, chat text follows
+	// this one.
+	const [chatFontSize, setChatFontSize] = useState<number>(() =>
+		Number(localStorage.getItem("omp-gui-chat-font-size") ?? 14),
+	);
 	const [typingEffect, setTypingEffect] = useState<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">(
 		() => {
 			try {
 				const v = localStorage.getItem("omp-gui-chat-effect");
-				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
+				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "ink";
 			} catch {
-				return "typewriter";
+				return "ink";
 			}
 		},
 	);
@@ -1868,6 +2154,29 @@ function ChatSection(): ReactNode {
 					storageKey="omp-gui-chat-rowactions"
 					onClass="gui-chat-hide-row-actions"
 				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("message font size")}</div>
+						<div className="gui-settings-row-desc">{t("message font size description")}</div>
+					</div>
+					<NumberStepper
+						label={t("message font size")}
+						value={chatFontSize}
+						min={12}
+						max={20}
+						unit="px"
+						defaultValue={14}
+						onChange={v => {
+							setChatFontSize(v);
+							try {
+								localStorage.setItem("omp-gui-chat-font-size", String(v));
+							} catch {
+								// ignore
+							}
+							document.documentElement.style.setProperty("--tr-font-size", `${v}px`);
+						}}
+					/>
+				</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("output style")}</div>
@@ -2842,6 +3151,7 @@ function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [templates, setTemplates] = useState<NotifyTemplates>(() => loadNotifyTemplates());
 	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("omp-gui-sound") !== "0");
 	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("omp-gui-haptic") !== "0");
+	const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
 	// Idle recap (daemon recap.enabled / recap.idleSeconds — TUI parity).
 	// Daemon-side settings (config.yml), unlike the renderer-local prefs
 	// above; null = still loading.
@@ -2914,10 +3224,29 @@ function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							<div className="gui-settings-row-label">{t("send test notification")}</div>
 							<div className="gui-settings-row-desc">{t("send test notification description")}</div>
 						</div>
-						<button type="button" className="gui-btn" onClick={() => sendTestNotification()}>
+						<button
+							type="button"
+							className="gui-btn"
+							onClick={async () => {
+								setTestResult(null);
+								const result = await sendTestNotification();
+								setTestResult(result);
+							}}
+						>
 							<Icon name="notification-3" className="h-3.5 w-3.5" />
 							{t("send test notification")}
 						</button>
+						{testResult && (
+							<p
+								className={
+									testResult.ok
+										? "text-[13px] text-[var(--color-ok)]"
+										: "text-[13px] text-[var(--color-error)]"
+								}
+							>
+								{testResult.ok ? t("notification sent") : (testResult.reason ?? t("delivery failed"))}
+							</p>
+						)}
 					</div>
 				</Reveal>
 			</div>
@@ -3824,7 +4153,13 @@ function ShortcutsSection(): ReactNode {
 		{ keys: "⌘K", action: t("search shortcut") },
 		{ keys: "⌘,", action: t("settings shortcut") },
 		{ keys: "⌘E", action: t("toggle panel shortcut") },
-		{ keys: "⌘⇧E", action: t("toggle sidebar shortcut") },
+		{ keys: "⌘⇧E", action: t("focus mode shortcut") },
+		{ keys: "⌘B", action: t("toggle sidebar shortcut") },
+		{ keys: "⌘J", action: t("toggle terminal shortcut") },
+		{ keys: "⌘O", action: t("open folder shortcut") },
+		{ keys: "⌘L", action: t("quote selection shortcut") },
+		{ keys: "⌘⇧L", action: t("ask selection shortcut") },
+		{ keys: "⌘↩", action: t("send message shortcut") },
 		{ keys: "⌘↓", action: t("scroll transcript shortcut") },
 		{ keys: "⎋", action: t("stop agent shortcut") },
 	];
@@ -3924,6 +4259,85 @@ function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 /** Schema-driven settings tab: fetches settings.schema + current values
  *  from the daemon and renders every item via {@link SchemaSettings}.
  *  Changes are optimistic settings.set calls (reverted on failure). */
+/** Preview of the two task-card styles (display.taskCardStyle settings
+ *  row): Swarm = the classic chat-message task tool-call card with the
+ *  floating frosted member-grid card beneath it (the composer chip opens
+ *  that floating card); Classic = the plain tool-call card only. Static
+ *  mock-ups — clicking either card switches the style (the preview IS the
+ *  control; the standard select is hidden for this row). */
+function TaskCardStylePreview({
+	value,
+	onPick,
+}: {
+	value: unknown;
+	onPick(style: "swarm" | "classic"): void;
+}): ReactNode {
+	const active = value === "classic" ? "classic" : "swarm";
+	const classicCard = (
+		<div className="gui-taskstyle-preview-chat">
+			<div className="gui-taskstyle-preview-head">
+				<span className="gui-taskstyle-preview-tool">task</span>
+				<span className="gui-taskstyle-preview-chip">4 个任务</span>
+				<span className="gui-taskstyle-preview-chip">4 / 4</span>
+			</div>
+		</div>
+	);
+	const swarm = (
+		<div className="gui-taskstyle-preview-stack">
+			{classicCard}
+			{/* Floating member grid (composer chip → frosted card mock). */}
+			<div className="gui-taskstyle-preview-float">
+				<div className="gui-taskstyle-preview-head">
+					<span className="gui-taskstyle-preview-title">Survey repos</span>
+					<span className="gui-taskstyle-preview-chip">4 / 4</span>
+				</div>
+				<div className="gui-taskstyle-preview-grid">
+					{[
+						["SD", "ok"],
+						["PR", "ok"],
+						["OC", "ok"],
+						["KC", "err"],
+					].map(([ab, tone]) => (
+						<div key={ab} className={`gui-taskstyle-preview-member gui-taskstyle-preview-member--${tone}`}>
+							<span className={`gui-taskstyle-preview-avatar gui-taskstyle-preview-avatar--${tone}`}>{ab}</span>
+							<span className="gui-taskstyle-preview-bar">
+								<span className={`gui-taskstyle-preview-fill gui-taskstyle-preview-fill--${tone}`} />
+							</span>
+						</div>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+	const classic = (
+		<div className="gui-taskstyle-preview-stack">
+			{classicCard}
+		</div>
+	);
+	return (
+		<div className="gui-taskstyle-preview">
+			<button
+				type="button"
+				className={`gui-taskstyle-preview-option${active === "swarm" ? " gui-taskstyle-preview-option--active" : ""}`}
+				aria-pressed={active === "swarm"}
+				onClick={() => onPick("swarm")}
+			>
+				{swarm}
+				<span className="gui-taskstyle-preview-label">Swarm</span>
+			</button>
+			<button
+				type="button"
+				className={`gui-taskstyle-preview-option${active === "classic" ? " gui-taskstyle-preview-option--active" : ""}`}
+				aria-pressed={active === "classic"}
+				onClick={() => onPick("classic")}
+			>
+				{classic}
+				<span className="gui-taskstyle-preview-label">Classic</span>
+			</button>
+		</div>
+	);
+}
+
 function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: string[] }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -3964,7 +4378,19 @@ function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: string[]
 				setError(err instanceof Error ? err.message : String(err));
 			});
 	};
-	return <SchemaSettings items={schema ?? []} values={values} onChange={onChange} error={error} />;
+	return (
+		<SchemaSettings
+			items={schema ?? []}
+			values={values}
+			onChange={onChange}
+			error={error}
+			renderExtra={(key, value, commit) =>
+				key === "display.taskCardStyle" ? (
+					<TaskCardStylePreview value={value} onPick={style => commit("display.taskCardStyle", style)} />
+				) : null
+			}
+		/>
+	);
 }
 
 function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
@@ -4475,7 +4901,8 @@ function ModelSection({
 		name: "",
 		baseUrl: "",
 		apiKey: "",
-		api: "openai-completions",		modelId: "",
+		api: "openai-completions",
+		modelId: "",
 		modelName: "",
 		compactionModel: "",
 	});
@@ -4487,25 +4914,12 @@ function ModelSection({
 	const [formError, setFormError] = useState<string | null>(null);
 	const [inputValue, setInputValue] = useState("");
 	const [copied, setCopied] = useState(false);
-	// Current-session thinking effort (TUI /model parity): seeded once from
-	// the live session (session.thinkingInfo), then tracks what was last
-	// applied here via session.setThinkingLevel.
-	const [liveThinking, setLiveThinking] = useState<string | null>(null);
 	// Per-role model presets (TUI /model parity): role -> model selector.
 	const [roleModels, setRoleModels] = useState<Record<string, string> | null>(null);
 	// Default model for new sessions (daemon settings "model" key).
 	// Role cycle order (TUI ctrl+p cycleOrder) — roles render in this order.
 	const [cycleOrder, setCycleOrder] = useState<string[] | null>(null);
 	const { prompt } = usePrompt();
-	const liveThinkingSeeded = useRef(false);
-	// Per-model effort ceiling (TUI parity): rungs above it are disabled in
-	// the ThinkingSelector, same as the composer.
-	const [thinkingCeiling, setThinkingCeiling] = useState<string | null>(null);
-	// Live session's current model — shown as a label + preselected.
-	const [currentModel, setCurrentModel] = useState<{ id: string; name: string; provider: string } | null>(null);
-	// Current model's exact thinking ladder (session.thinkingInfo efforts) —
-	// the settings thinking selector mirrors the composer's rungs.
-	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
 	// Stored credentials per provider (multi-account logout dropdown).
 	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
 	// Side-channel model override (settings.sideChannelModel): "" = follow
@@ -4531,7 +4945,9 @@ function ModelSection({
 			.then(list => setCatalogModels(list ?? []))
 			.catch(() => {});
 		void rpc
-			.request<Record<string, unknown> | null>("settings.get", { keys: ["modelRoles", "cycleOrder", "sideChannelModel"] })
+			.request<Record<string, unknown> | null>("settings.get", {
+				keys: ["modelRoles", "cycleOrder", "sideChannelModel"],
+			})
 			.then(v => setSideChannelModel((v?.sideChannelModel as string | undefined) ?? ""))
 			.catch(() => {});
 	}, [rpc]);
@@ -4636,9 +5052,27 @@ function ModelSection({
 	// Per-role auto-resolved model (TUI model-hub parity): what each role
 	// would select — explicit assignment, or the derived default/priority
 	// resolution when unset.
-	const [resolvedRoleModels, setResolvedRoleModels] = useState<Record<string, { id: string; name: string } | null>>(
-		{},
-	);
+	const [resolvedRoleModels, setResolvedRoleModels] = useState<
+		Record<string, { id: string; name: string; efforts: string[] } | null>
+	>({});
+	// Persist a role-assignment change, then re-fetch the daemon's per-role
+	// resolution. The "自动选择" lines (SMOL/SLOW/VISION/…) derive from the
+	// DEFAULT model — without the re-fetch they keep showing the OLD model
+	// until the settings pane remounts.
+	const applyRoleModels = (next: Record<string, string>): void => {
+		setRoleModels(next);
+		if (!rpc) return;
+		void rpc
+			.request("settings.set", { key: "modelRoles", value: next })
+			.then(() =>
+				rpc
+					.request<{
+						resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
+					}>("settings.get", { keys: ["resolvedRoleModels"] })
+					.then(res => setResolvedRoleModels(res?.resolvedRoleModels ?? {})),
+			)
+			.catch(() => {});
+	};
 	// Retry fallback chains (TUI /model `f` parity, settings
 	// "retry.fallbackChains"): role -> ordered model selectors tried after
 	// the assigned model fails.
@@ -4671,7 +5105,15 @@ function ModelSection({
 					],
 				},
 			});
-			setForm({ name: "", baseUrl: "", apiKey: "", api: "openai-completions", modelId: "", modelName: "", compactionModel: "" });
+			setForm({
+				name: "",
+				baseUrl: "",
+				apiKey: "",
+				api: "openai-completions",
+				modelId: "",
+				modelName: "",
+				compactionModel: "",
+			});
 			onChanged();
 		} catch (err) {
 			setFormError(err instanceof Error ? err.message : String(err));
@@ -4690,36 +5132,6 @@ function ModelSection({
 		}
 	};
 
-	// Live session controls: thinking ceiling + current model. One RPC keeps
-	// the card in lockstep with what the composer sees (TUI parity).
-	const refreshThinking = useCallback(async (): Promise<void> => {
-		if (!rpc || !sessionId) return;
-		try {
-			const info = await rpc.request<{
-				ceiling?: string | null;
-				level?: string | null;
-				auto?: boolean;
-				efforts?: string[];
-				model?: { id: string; name: string; provider: string } | null;
-			}>("session.thinkingInfo", { sessionId });
-			setThinkingCeiling(info?.ceiling ?? null);
-			setCurrentModel(info?.model ?? null);
-			setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
-			if (!liveThinkingSeeded.current) {
-				liveThinkingSeeded.current = true;
-				// Auto mode reads as the user's selector ("auto"), not the
-				// provisional level it resolved to (TUI parity).
-				setLiveThinking(info?.auto ? "auto" : (info?.level ?? null));
-			}
-		} catch {
-			// session not live — the current-session card just doesn't show
-		}
-	}, [rpc, sessionId]);
-
-	useEffect(() => {
-		void refreshThinking();
-	}, [refreshThinking]);
-
 	// Role presets only exist on a live session (settings live there).
 	useEffect(() => {
 		if (!rpc) {
@@ -4734,7 +5146,7 @@ function ModelSection({
 				modelRoles?: Record<string, string>;
 				cycleOrder?: string[];
 				knownRoleIds?: string[];
-				resolvedRoleModels?: Record<string, { id: string; name: string } | null>;
+				resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
 				"retry.fallbackChains"?: Record<string, string[]>;
 			}>("settings.get", {
 				keys: ["modelRoles", "cycleOrder", "knownRoleIds", "resolvedRoleModels", "retry.fallbackChains"],
@@ -4887,16 +5299,24 @@ function ModelSection({
 						onChange={e => {
 							const nextLevel = e.target.value;
 							const next = { ...roleModels, [role]: joinRoleValue(model, nextLevel) };
-							setRoleModels(next);
-							void rpc.request("settings.set", { key: "modelRoles", value: next }).catch(() => {});
+							applyRoleModels(next);
 						}}
 					>
 						<option value="inherit">{t("inherit")}</option>
-						{ROLE_THINK_LEVELS.map(lv => (
-							<option key={lv} value={lv}>
-								{lv === "off" ? t("thinking off") : t(`thinking ${lv}`)}
-							</option>
-						))}
+						<option value="off">{t("thinking off")}</option>
+						{/* Model-specific ladder (daemon resolvedRoleModels.efforts,
+						 * TUI model-hub parity): the level select offers exactly
+						 * the resolved model's supported efforts — not a fixed
+						 * seven-rung list, since different models differ. A model
+						 * without thinking support offers only inherit + off. */}
+						{(() => {
+							const efforts = resolvedRoleModels[role]?.efforts;
+							return (efforts && efforts.length > 0 ? efforts : []).map(lv => (
+								<option key={lv} value={lv}>
+									{t(`thinking ${lv}` as TranslationKey)}
+								</option>
+							));
+						})()}
 					</select>
 					{/* Fallback chain editor toggle (TUI `f` parity) — always
 					 * available so the FIRST fallback can be added. */}
@@ -4931,23 +5351,33 @@ function ModelSection({
 						rpc={rpc}
 						sessionId={null}
 						presetId={model || undefined}
-						onSelect={id => {
+						maxLabelWidth="230px"
+						onSelect={(id, provider) => {
 							if (!id) return;
+							// Store the provider-qualified reference: the daemon
+							// resolves "provider/id" exactly, so assigning
+							// opencode-go's deepseek-v4-flash never leaks onto
+							// opencode-zen's same-id model.
+							const ref = provider ? `${provider}/${id}` : id;
 							if (role === "default") {
 								// The DEFAULT role IS the default model for new
 								// sessions — keep the welcome-composer preselect
-								// in sync with the role assignment.
+								// in sync with the role assignment. The bare ref
+								// (no :level suffix) mirrors the daemon's
+								// modelRoles.default value.
 								try {
-									localStorage.setItem("omp-gui-default-model", id);
+									localStorage.setItem("omp-gui-default-model", ref);
 								} catch {
 									// storage unavailable
 								}
+								window.dispatchEvent(
+									new CustomEvent("omp-gui-default-model-changed", { detail: ref }),
+								);
 							}
 							// Keep the role's thinking suffix when the model
 							// changes (TUI assign preserves the level).
-							const next = { ...roleModels, [role]: joinRoleValue(id, level) };
-							setRoleModels(next);
-							void rpc.request("settings.set", { key: "modelRoles", value: next }).catch(() => {});
+							const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
+							applyRoleModels(next);
 						}}
 					/>
 					{model && (
@@ -4959,8 +5389,7 @@ function ModelSection({
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
-								setRoleModels(next);
-								void rpc.request("settings.set", { key: "modelRoles", value: next }).catch(() => {});
+								applyRoleModels(next);
 							}}
 						>
 							<Icon name="refresh" className="h-3.5 w-3.5" />
@@ -4975,8 +5404,7 @@ function ModelSection({
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
-								setRoleModels(next);
-								void rpc.request("settings.set", { key: "modelRoles", value: next }).catch(() => {});
+								applyRoleModels(next);
 							}}
 						>
 							<Icon name="delete-bin" className="h-3.5 w-3.5" />
@@ -5075,149 +5503,104 @@ function ModelSection({
 				<HeightMorph morphKey={activeTab} className="gui-model-pane-body">
 					{activeTab === "roles" && rpc && (
 						<>
-						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("role models")}</div>
-							<div className="gui-settings-section-desc">
-								{t("role models description")}
-								{roleModels !== null && (
-									<span className="gui-role-count">
-										{t("configured count {count}/{total}", {
-											count: String(rolesOrder.filter(r => roleModels?.[r]).length),
-											total: String(rolesOrder.length),
-										})}
-									</span>
-								)}
-							</div>
-							{/* Current session sits above the roles: the DEFAULT role IS
-							 * the default model for new sessions (same modelRoles
-							 * storage key the TUI /model panel writes), so the whole
-							 * model decision chain lives on this one page. */}
-							{sessionId && (
-								<div className="gui-settings-row">
-									<div>
-										<div className="gui-settings-row-label">{t("current session")}</div>
-										<div className="gui-settings-row-desc">{t("current session model hint")}</div>
-										{currentModel && (
-											<div className="mt-0.5 text-[12px] text-[var(--color-text-faint)]">
-												{t("current model")}: {currentModel.name || currentModel.id}
+							<div className="gui-settings-section">
+								<div className="gui-settings-section-title">{t("role models")}</div>
+								<div className="gui-settings-section-desc">
+									{t("role models description")}
+									{roleModels !== null && (
+										<span className="gui-role-count">
+											{t("configured count {count}/{total}", {
+												count: String(rolesOrder.filter(r => roleModels?.[r]).length),
+												total: String(rolesOrder.length),
+											})}
+										</span>
+									)}
+								</div>
+								{/* No current-session row here: the composer's model
+								 * selector already switches the live session's model
+								 * (same session.setModel the TUI /switch runs), and
+								 * the thinking level sits beside it in the composer —
+								 * a per-session override does not belong in global
+								 * settings. The DEFAULT role below IS the default
+								 * model for new sessions. */}
+								{roleModels === null ? (
+									<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
+								) : (
+									<>
+										{rolesOrder.map(role => renderRoleRow(role, BUILTIN_ROLE_TAGS[role] === undefined))}
+										<button
+											type="button"
+											className="gui-connect-add"
+											onClick={() => {
+												void prompt({ title: t("new role name") }).then((role: string | null) => {
+													if (!role?.trim() || !rpc) return;
+													const next = { ...roleModels, [role.trim()]: "" };
+													applyRoleModels(next);
+												});
+											}}
+										>
+											<Icon name="add-circle" className="h-4 w-4" />
+											<span>{t("add role")}</span>
+										</button>
+										{(cycleOrder?.length ?? 0) > 0 && (
+											<div className="gui-role-cycle-track">
+												<span className="text-[12px] text-[var(--color-text-faint)]">
+													{t("cycle order")}:
+												</span>
+												{cycleOrder!.map(role => (
+													<span key={role} className="gui-role-cycle-chip">
+														{BUILTIN_ROLE_TAGS[role] ?? role}
+													</span>
+												))}
 											</div>
 										)}
-									</div>
-									<div className="flex items-center gap-1.5">
-										<ModelSelector
-											rpc={rpc}
-											sessionId={sessionId}
-											presetId={currentModel?.id ?? null}
-											onSelect={id => {
-												if (!id) return;
-												void rpc
-													.request("session.setModel", { sessionId, model: { id } })
-													.then(() => {
-														// Ceiling + level follow the new model.
-														liveThinkingSeeded.current = false;
-														return refreshThinking();
-													})
-													.catch(() => {});
-											}}
-										/>
-										<ThinkingSelector
-											value={liveThinking}
-											ceiling={thinkingCeiling}
-											efforts={thinkingEfforts}
-											onChange={level => {
-												setLiveThinking(level);
-												void rpc
-													.request("session.setThinkingLevel", {
-														sessionId,
-														thinkingLevel: level ?? undefined,
-													})
-													.catch(() => {});
-											}}
-										/>
-									</div>
-								</div>
-							)}
-							{roleModels === null ? (
-								<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
-							) : (
-								<>
-									{rolesOrder.map(role => renderRoleRow(role, BUILTIN_ROLE_TAGS[role] === undefined))}
-									<button
-										type="button"
-										className="gui-connect-add"
-										onClick={() => {
-											void prompt({ title: t("new role name") }).then((role: string | null) => {
-												if (!role?.trim() || !rpc) return;
-												const next = { ...roleModels, [role.trim()]: "" };
-												setRoleModels(next);
-												void rpc
-													.request("settings.set", { key: "modelRoles", value: next })
-													.catch(() => {});
-											});
-										}}
-									>
-										<Icon name="add-circle" className="h-4 w-4" />
-										<span>{t("add role")}</span>
-									</button>
-									{(cycleOrder?.length ?? 0) > 0 && (
-										<div className="gui-role-cycle-track">
-											<span className="text-[12px] text-[var(--color-text-faint)]">{t("cycle order")}:</span>
-											{cycleOrder!.map(role => (
-												<span key={role} className="gui-role-cycle-chip">
-													{BUILTIN_ROLE_TAGS[role] ?? role}
-												</span>
-											))}
-										</div>
-									)}
-								</>
-							)}
-						</div>
-					</>
+									</>
+								)}
+							</div>
+						</>
 					)}
 
 					{activeTab === "behavior" && rpc && (
 						<>
-						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("model behavior")}</div>
-							<div className="gui-settings-section-desc">
-								{t("model behavior description")}
+							<div className="gui-settings-section">
+								<div className="gui-settings-section-title">{t("model behavior")}</div>
+								<div className="gui-settings-section-desc">{t("model behavior description")}</div>
 							</div>
-						</div>
-						<div className="gui-schema-card">
-							{/* Model behaviour (thinking/sampling/prompt/retry & fallback/
-							 * advisor/prewalk/vision) — TUI settings model-tab parity.
-							 * Own tab so role assignment stays focused. */}
-							<SchemaTabSection rpc={rpc} tabs={["model"]} />
-						</div>
-						<div className="gui-settings-section mt-4">
-							<div className="gui-settings-section-title">{t("side channel model")}</div>
-							<div className="gui-settings-section-desc">{t("side channel model description")}</div>
-							<div className="gui-settings-row">
-								<div>
-									<div className="gui-settings-row-label">{t("side channel model")}</div>
-									<div className="gui-settings-row-desc">{t("side channel model label desc")}</div>
+							<div className="gui-schema-card">
+								{/* Model behaviour (thinking/sampling/prompt/retry & fallback/
+								 * advisor/prewalk/vision) — TUI settings model-tab parity.
+								 * Own tab so role assignment stays focused. */}
+								<SchemaTabSection rpc={rpc} tabs={["model"]} />
+							</div>
+							<div className="gui-settings-section mt-4">
+								<div className="gui-settings-section-title">{t("side channel model")}</div>
+								<div className="gui-settings-section-desc">{t("side channel model description")}</div>
+								<div className="gui-settings-row">
+									<div>
+										<div className="gui-settings-row-label">{t("side channel model")}</div>
+										<div className="gui-settings-row-desc">{t("side channel model label desc")}</div>
+									</div>
+									<select
+										className="gui-input max-w-[260px]"
+										value={sideChannelModel}
+										onChange={e => {
+											const next = e.target.value;
+											setSideChannelModel(next);
+											void rpc
+												.request("settings.set", { key: "sideChannelModel", value: next })
+												.catch(() => {});
+										}}
+										aria-label={t("side channel model")}
+									>
+										<option value="">{t("follow session model")}</option>
+										{(catalogModels ?? []).map(m => (
+											<option key={m.id} value={m.id}>
+												{m.name ?? m.id}
+											</option>
+										))}
+									</select>
 								</div>
-								<select
-									className="gui-input max-w-[260px]"
-									value={sideChannelModel}
-									onChange={e => {
-										const next = e.target.value;
-										setSideChannelModel(next);
-										void rpc
-											.request("settings.set", { key: "sideChannelModel", value: next })
-											.catch(() => {});
-									}}
-									aria-label={t("side channel model")}
-								>
-									<option value="">{t("follow session model")}</option>
-									{(catalogModels ?? []).map(m => (
-										<option key={m.id} value={m.id}>
-											{m.name ?? m.id}
-										</option>
-									))}
-								</select>
 							</div>
-						</div>
 						</>
 					)}
 
@@ -5257,7 +5640,9 @@ function ModelSection({
 											)}
 										</div>
 									)}
-									{loginState.instructions && <div className="gui-github-flow-hint">{loginState.instructions}</div>}
+									{loginState.instructions && (
+										<div className="gui-github-flow-hint">{loginState.instructions}</div>
+									)}
 									{loginState.message && <div className="gui-github-flow-hint">{loginState.message}</div>}
 									{loginState.waitingInput ? (
 										<div className="mt-2 flex items-center gap-2">
@@ -5314,213 +5699,217 @@ function ModelSection({
 												aria-label={t("search providers…")}
 											/>
 										</div>
-										<HeightMorph morphKey={`${showAll}:${providerQ}`} className="gui-provider-grid">
-											{visibleProviders.map(p => {
-												const creds = credentialsByProvider[p.id] ?? [];
-												const active = p.loggedIn || p.configured;
-												return (
-													<SpotlightCard
-														key={p.id}
-														className="gui-provider-card"
-														spotlightColor="rgba(255, 255, 255, 0.08)"
-													>
-														<div className="gui-provider-card-head">
-															<div className="min-w-0 flex-1">
-																<div className="gui-provider-card-name" title={p.name}>
-																	{p.name}
-																</div>
-																<div
-																	className={`gui-provider-card-status${
-																		active ? " gui-provider-card-status--ok" : ""
-																	}`}
-																>
-																	<span
-																		className={`gui-provider-status-dot${
-																			active ? " gui-provider-status-dot--on" : ""
+										<HeightMorph morphKey={`${showAll}:${providerQ}`}>
+											<ChromaGroup className="gui-provider-grid">
+												{visibleProviders.map(p => {
+													const creds = credentialsByProvider[p.id] ?? [];
+													const active = p.loggedIn || p.configured;
+													return (
+														<SpotlightCard
+															key={p.id}
+															className="gui-provider-card"
+															spotlightColor="rgba(255, 255, 255, 0.08)"
+														>
+															<div className="gui-provider-card-head">
+																<div className="min-w-0 flex-1">
+																	<div className="gui-provider-card-name" title={p.name}>
+																		{p.name}
+																	</div>
+																	<div
+																		className={`gui-provider-card-status${
+																			active ? " gui-provider-card-status--ok" : ""
 																		}`}
-																		aria-hidden="true"
-																	/>
-																	{p.loggedIn
-																		? creds.length > 1
-																			? t("logged in · {count}", { count: String(creds.length) })
-																			: t("logged in")
-																		: p.configured
-																			? t("configured")
-																			: p.canImport
-																				? `${p.modelCount} ${t("models")}`
-																				: t("not logged in")}
+																	>
+																		<span
+																			className={`gui-provider-status-dot${
+																				active ? " gui-provider-status-dot--on" : ""
+																			}`}
+																			aria-hidden="true"
+																		/>
+																		{p.loggedIn
+																			? creds.length > 1
+																				? t("logged in · {count}", { count: String(creds.length) })
+																				: t("logged in")
+																			: p.configured
+																				? t("configured")
+																				: p.canImport
+																					? `${p.modelCount} ${t("models")}`
+																					: t("not logged in")}
+																	</div>
 																</div>
-															</div>
-															{active ? (
-																<div className="relative shrink-0">
-																	<button
-																		type="button"
-																		className="gui-btn gui-btn-stop"
-																		ref={el => {
-																			if (el) cardMenuAnchors.current.set(p.id, el);
-																			else cardMenuAnchors.current.delete(p.id);
-																		}}
-																		aria-expanded={credsMenu === p.id}
-																		onClick={() =>
-																			setCredsMenu(menu => (menu === p.id ? null : p.id))
-																		}
-																	>
-																		{t("logout")}
-																		<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-																	</button>
-																	<Pop
-																		open={credsMenu === p.id}
-																		className="gui-creds-menu"
-																		anchor={cardMenuAnchors.current.get(p.id) ?? null}
-																		portal
-																		align="right"
-																		onOpenChange={open => {
-																			if (!open && credsMenu === p.id) setCredsMenu(null);
-																		}}
-																	>
-																		<div className="gui-creds-menu-label">{t("accounts")}</div>
-																		{creds.map(c => (
-																			<div key={c.id} className="gui-creds-row">
-																				<div className="min-w-0 flex-1">
-																					<div className="truncate text-[13px] text-[var(--color-text)]">
-																						{c.accountLabel}
-																					</div>
-																					{c.note && (
-																						<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-																							{c.note}
+																{active ? (
+																	<div className="relative shrink-0">
+																		<button
+																			type="button"
+																			className="gui-btn gui-btn-stop"
+																			ref={el => {
+																				if (el) cardMenuAnchors.current.set(p.id, el);
+																				else cardMenuAnchors.current.delete(p.id);
+																			}}
+																			aria-expanded={credsMenu === p.id}
+																			onClick={() =>
+																				setCredsMenu(menu => (menu === p.id ? null : p.id))
+																			}
+																		>
+																			{t("logout")}
+																			<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+																		</button>
+																		<Pop
+																			open={credsMenu === p.id}
+																			className="gui-creds-menu"
+																			anchor={cardMenuAnchors.current.get(p.id) ?? null}
+																			portal
+																			align="right"
+																			onOpenChange={open => {
+																				if (!open && credsMenu === p.id) setCredsMenu(null);
+																			}}
+																		>
+																			<div className="gui-creds-menu-label">{t("accounts")}</div>
+																			{creds.map(c => (
+																				<div key={c.id} className="gui-creds-row">
+																					<div className="min-w-0 flex-1">
+																						<div className="truncate text-[13px] text-[var(--color-text)]">
+																							{c.accountLabel}
 																						</div>
-																					)}
+																						{c.note && (
+																							<div className="truncate text-[12px] text-[var(--color-text-faint)]">
+																								{c.note}
+																							</div>
+																						)}
+																					</div>
+																					<button
+																						type="button"
+																						className="gui-btn gui-btn--icon"
+																						title={t("edit credential note")}
+																						aria-label={t("edit credential note")}
+																						onClick={() =>
+																							void editCredentialNote(p.id, c.id, c.note ?? null)
+																						}
+																					>
+																						<Icon name="pencil" className="h-3 w-3" />
+																					</button>
+																					<button
+																						type="button"
+																						className="gui-btn gui-btn--icon"
+																						title={t("remove credential")}
+																						aria-label={t("remove credential")}
+																						onClick={() => void logoutCredential(p.id, c.id)}
+																					>
+																						<Icon name="delete-bin" className="h-3 w-3" />
+																					</button>
 																				</div>
-																				<button
-																					type="button"
-																					className="gui-btn gui-btn--icon"
-																					title={t("edit credential note")}
-																					aria-label={t("edit credential note")}
-																					onClick={() =>
-																						void editCredentialNote(p.id, c.id, c.note ?? null)
+																			))}
+																			<div className="gui-creds-menu-sep" />
+																			<button
+																				type="button"
+																				className="gui-view-opt"
+																				onClick={() => {
+																					setCredsMenu(null);
+																					if (p.canImport) {
+																						setApiKeyTarget(p.id);
+																						setApiKeyValue("");
+																					} else {
+																						void onLogin(p.id);
 																					}
-																				>
-																					<Icon name="pencil" className="h-3 w-3" />
-																				</button>
+																				}}
+																			>
+																				<Icon name="add-circle" className="h-3.5 w-3.5" />
+																				<span className="min-w-0 flex-1">
+																					{t("add another credential")}
+																				</span>
+																			</button>
+																			<button
+																				type="button"
+																				className="gui-view-opt gui-view-opt--danger"
+																				onClick={() => {
+																					setCredsMenu(null);
+																					void onLogout(p.id);
+																				}}
+																			>
+																				<span className="min-w-0 flex-1">{t("logout all")}</span>
+																			</button>
+																		</Pop>
+																	</div>
+																) : (
+																	<div className="relative shrink-0">
+																		<button
+																			type="button"
+																			className="gui-btn gui-btn--icon"
+																			ref={el => {
+																				if (el) cardMenuAnchors.current.set(`actions-${p.id}`, el);
+																				else cardMenuAnchors.current.delete(`actions-${p.id}`);
+																			}}
+																			aria-expanded={actionsMenu === p.id}
+																			aria-label={t("provider actions")}
+																			title={t("provider actions")}
+																			onClick={() =>
+																				setActionsMenu(menu => (menu === p.id ? null : p.id))
+																			}
+																		>
+																			<Icon name="more" className="h-3.5 w-3.5" />
+																		</button>
+																		<Pop
+																			open={actionsMenu === p.id}
+																			className="gui-creds-menu"
+																			anchor={cardMenuAnchors.current.get(`actions-${p.id}`) ?? null}
+																			portal
+																			align="right"
+																			onOpenChange={open => {
+																				if (!open && actionsMenu === p.id) setActionsMenu(null);
+																			}}
+																		>
+																			{p.canLogin && (
 																				<button
 																					type="button"
-																					className="gui-btn gui-btn--icon"
-																					title={t("remove credential")}
-																					aria-label={t("remove credential")}
-																					onClick={() => void logoutCredential(p.id, c.id)}
+																					className="gui-view-opt"
+																					disabled={!p.available || busy}
+																					onClick={() => {
+																						setActionsMenu(null);
+																						void onLogin(p.id);
+																					}}
 																				>
-																					<Icon name="delete-bin" className="h-3 w-3" />
+																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">{t("login")}</span>
 																				</button>
-																			</div>
-																		))}
-																		<div className="gui-creds-menu-sep" />
-																		<button
-																			type="button"
-																			className="gui-view-opt"
-																			onClick={() => {
-																				setCredsMenu(null);
-																				if (p.canImport) {
-																					setApiKeyTarget(p.id);
-																					setApiKeyValue("");
-																				} else {
-																					void onLogin(p.id);
-																				}
-																			}}
-																		>
-																			<Icon name="add-circle" className="h-3.5 w-3.5" />
-																			<span className="min-w-0 flex-1">
-																				{t("add another credential")}
-																			</span>
-																		</button>
-																		<button
-																			type="button"
-																			className="gui-view-opt gui-view-opt--danger"
-																			onClick={() => {
-																				setCredsMenu(null);
-																				void onLogout(p.id);
-																			}}
-																		>
-																			<span className="min-w-0 flex-1">{t("logout all")}</span>
-																		</button>
-																	</Pop>
-																</div>
-															) : (
-																<div className="relative shrink-0">
-																	<button
-																		type="button"
-																		className="gui-btn gui-btn--icon"
-																		ref={el => {
-																			if (el) cardMenuAnchors.current.set(`actions-${p.id}`, el);
-																			else cardMenuAnchors.current.delete(`actions-${p.id}`);
-																		}}
-																		aria-expanded={actionsMenu === p.id}
-																		aria-label={t("provider actions")}
-																		title={t("provider actions")}
-																		onClick={() =>
-																			setActionsMenu(menu => (menu === p.id ? null : p.id))
-																		}
-																	>
-																		<Icon name="more" className="h-3.5 w-3.5" />
-																	</button>
-																	<Pop
-																		open={actionsMenu === p.id}
-																		className="gui-creds-menu"
-																		anchor={cardMenuAnchors.current.get(`actions-${p.id}`) ?? null}
-																		portal
-																		align="right"
-																		onOpenChange={open => {
-																			if (!open && actionsMenu === p.id) setActionsMenu(null);
-																		}}
-																	>
-																		{p.canLogin && (
-																			<button
-																				type="button"
-																				className="gui-view-opt"
-																				disabled={!p.available || busy}
-																				onClick={() => {
-																					setActionsMenu(null);
-																					void onLogin(p.id);
-																				}}
-																			>
-																				<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-																				<span className="min-w-0 flex-1">{t("login")}</span>
-																			</button>
-																		)}
-																		{p.canImport && (
-																			<button
-																				type="button"
-																				className="gui-view-opt"
-																				onClick={() => {
-																					setActionsMenu(null);
-																					setApiKeyTarget(p.id);
-																					setApiKeyValue("");
-																				}}
-																			>
-																				<Icon name="key" className="h-3.5 w-3.5" />
-																				<span className="min-w-0 flex-1">{t("import api key")}</span>
-																			</button>
-																		)}
-																	</Pop>
-																</div>
-															)}
-														</div>
-														{p.models.length > 0 && (
-															<div className="gui-provider-tags">
-																{p.models.map(m => (
-																	<span key={m} className="gui-provider-tag">
-																		{m}
-																	</span>
-																))}
-																{p.modelCount > p.models.length && (
-																	<span className="gui-provider-tag gui-provider-tag--more">
-																		+{p.modelCount - p.models.length}
-																	</span>
+																			)}
+																			{p.canImport && (
+																				<button
+																					type="button"
+																					className="gui-view-opt"
+																					onClick={() => {
+																						setActionsMenu(null);
+																						setApiKeyTarget(p.id);
+																						setApiKeyValue("");
+																					}}
+																				>
+																					<Icon name="key" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">
+																						{t("import api key")}
+																					</span>
+																				</button>
+																			)}
+																		</Pop>
+																	</div>
 																)}
 															</div>
-														)}
-													</SpotlightCard>
-												);
-											})}
+															{p.models.length > 0 && (
+																<div className="gui-provider-tags">
+																	{p.models.map(m => (
+																		<span key={m} className="gui-provider-tag">
+																			{m}
+																		</span>
+																	))}
+																	{p.modelCount > p.models.length && (
+																		<span className="gui-provider-tag gui-provider-tag--more">
+																			+{p.modelCount - p.models.length}
+																		</span>
+																	)}
+																</div>
+															)}
+														</SpotlightCard>
+													);
+												})}
+											</ChromaGroup>
 										</HeightMorph>
 										{filteredProviders.length > PROVIDER_COLLAPSE_LIMIT && (
 											<button
@@ -5550,7 +5939,6 @@ function ModelSection({
 							<div className="gui-schema-card">
 								<SchemaTabSection rpc={rpc} tabs={["providers"]} />
 							</div>
-
 						</>
 					)}
 
@@ -7087,6 +7475,35 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
+				{glow === true && (
+					<div className="gui-computer-glow-preview" aria-hidden="true">
+						<div className="gui-cgp-edge" />
+						<div className="gui-cgp-badge">
+							<span className="gui-cgp-dot" />
+							<span>AI 正在操作桌面</span>
+						</div>
+						<div className="gui-cgp-finder">
+							<div className="gui-cgp-finder-bar">
+								<span className="gui-cgp-light gui-cgp-light--close" />
+								<span className="gui-cgp-light gui-cgp-light--min" />
+								<span className="gui-cgp-light gui-cgp-light--max" />
+								<span className="gui-cgp-finder-title">Finder</span>
+							</div>
+							<div className="gui-cgp-finder-body">
+								<div className="gui-cgp-finder-side" />
+								<div className="gui-cgp-finder-files">
+									<i />
+									<i />
+									<i />
+									<i />
+									<i />
+									<i />
+								</div>
+							</div>
+						</div>
+						<div className="gui-cgp-ring" />
+					</div>
+				)}
 			</div>
 			{/* Browser data (zcode 浏览器数据 parity): one-time Chrome
 			 * import, cache clear, full clear. */}

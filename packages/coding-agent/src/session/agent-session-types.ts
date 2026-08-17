@@ -165,6 +165,8 @@ export interface AgentSessionConfig {
 	createMemoryTools?: () => Promise<AgentTool[]>;
 	/** Creates the built-in `computer` tool for session-scoped runtime enablement (see {@link AgentSession.setComputerToolEnabled}). */
 	createComputerTool?: () => Promise<AgentTool | null>;
+	/** Creates the private `think` scratchpad tool for runtime setting changes. */
+	createThinkTool?: () => Promise<AgentTool | null>;
 	/** Creates the built-in `inspect_image` tool for session-scoped runtime enablement (see {@link AgentSession.setInspectImageMode}). */
 	createInspectImageTool?: () => Promise<AgentTool | null>;
 	/** Model registry for API key resolution and model discovery. */
@@ -175,6 +177,8 @@ export interface AgentSessionConfig {
 	createVibeTools?: () => AgentTool[];
 	/** Names whose current registry entry is the built-in implementation. */
 	builtInToolNames?: Iterable<string>;
+	/** MCP names whose initial registry entries came from the manager snapshot. */
+	mcpManagerToolNames?: Iterable<string>;
 	/** Updates tool-session predicates from the live active tool set. */
 	setActiveToolNames?: (names: Iterable<string>) => void;
 	/** Registers the write transport when runtime xdev mounts first need it. */

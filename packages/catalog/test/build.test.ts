@@ -763,6 +763,52 @@ describe("model cache spec round trip", () => {
 		}
 	});
 
+	it("preserves static long-context pricing through dynamic refresh and cache restore", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-catalog-tiered-cost-"));
+		const dbPath = path.join(tempDir, "models.db");
+		const staticModel = completionsSpec({
+			id: "tiered-model",
+			provider: "tiered-cost-test",
+			cost: {
+				input: 1,
+				output: 2,
+				cacheRead: 0.1,
+				cacheWrite: 1.25,
+				longContext: {
+					inputThreshold: 272_000,
+					input: 2,
+					output: 3,
+					cacheRead: 0.2,
+					cacheWrite: 2.5,
+				},
+			},
+		});
+		const dynamicModel = completionsSpec({
+			...staticModel,
+			cost: { input: 3, output: 4, cacheRead: 0.3, cacheWrite: 3.75 },
+		});
+		const options = {
+			providerId: "tiered-cost-test",
+			staticModels: [staticModel],
+			cacheDbPath: dbPath,
+		};
+		try {
+			const online = await resolveProviderModels<"openai-completions">(
+				{ ...options, fetchDynamicModels: async () => [dynamicModel] },
+				"online",
+			);
+			expect(online.models[0]?.cost).toEqual({
+				...dynamicModel.cost,
+				longContext: staticModel.cost.longContext,
+			});
+
+			const offline = await resolveProviderModels<"openai-completions">(options, "offline");
+			expect(offline.models[0]?.cost.longContext).toEqual(staticModel.cost.longContext);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	it("invalidates schema-v10 rows that predate computer-use capability provenance", async () => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-catalog-legacy-computer-cache-"));
 		const dbPath = path.join(tempDir, "models.db");

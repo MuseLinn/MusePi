@@ -28,6 +28,9 @@ import { t } from "../i18n/index.js";
 
 export type ConnectionPhase = "connecting" | "waiting" | "live" | "workspace" | "reconnecting" | "ended";
 
+/** Listener notification window: frames inside it coalesce into one render. */
+const BATCH_WINDOW_MS = 16;
+
 export interface ActiveTool {
 	toolCallId: string;
 	toolName: string;
@@ -140,6 +143,8 @@ export class GuestClient {
 	#uiRequestQueue: CollabUiRequest[] = [];
 	#notices: readonly Notice[] = [];
 	#snapshot: GuestSnapshot;
+	/** Non-null while a window flush of listener notifications is pending. */
+	#flushTimer: Timer | null = null;
 
 	/** @throws Error when the link does not parse. */
 	constructor(link: string, displayName: string, options: { plaintext?: boolean } = {}) {
@@ -681,8 +686,29 @@ export class GuestClient {
 		};
 	}
 
+	/**
+	 * Publish a state change. The snapshot is updated synchronously —
+	 * `getSnapshot()` always reflects the latest applied frame, so callers
+	 * (and tests) may read it immediately. Only the listener notification is
+	 * deferred: frames arriving within one BATCH_WINDOW_MS window coalesce
+	 * into a single render.
+	 *
+	 * The window is wall-clock (not a microtask) because wire frames arrive
+	 * one task apart (a WS message per chunk) — a microtask flush would run
+	 * between frames and batch nothing. 16ms bounds the echo delay below a
+	 * perceptible frame while folding a token burst into ~1 render per
+	 * animation frame.
+	 *
+	 * No `notifyNow` path exists because no controlled input reads the
+	 * snapshot — composer drafts and ask editors keep local state, so a
+	 * window-delayed echo can never roll a caret back.
+	 */
 	#commit(): void {
 		this.#snapshot = this.#buildSnapshot();
-		for (const listener of this.#listeners) listener();
+		if (this.#flushTimer !== null) return;
+		this.#flushTimer = setTimeout(() => {
+			this.#flushTimer = null;
+			for (const listener of this.#listeners) listener();
+		}, BATCH_WINDOW_MS);
 	}
 }

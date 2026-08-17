@@ -1,9 +1,9 @@
 {
 	"type": "module",
 	"name": "@musepi/gui",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"private": true,
-	"description": "MusePi desktop GUI — React SPA over the musepi daemon JSON-RPC (gui-architecture Phase 4)",
+	"description": "MusePi desktop GUI — React SPA over the musepi daemon JSON-RPC (daemon Phase 4)",
 	"license": "MIT",
 	"main": "./electron/main.cjs",
 	"types": "./src/index.ts",
@@ -62,7 +62,7 @@
 		"src"
 	],
 	"update": {
-		"manifestUrl": ""
+		"manifestUrl": "https://raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json"
 	},
 	"build": {
 		"appId": "com.musepi.gui",

@@ -1,3 +1,5 @@
+import { PERSONAL_GITHUB_COPILOT_BASE_URL } from "../wire/github-copilot";
+
 export interface ModelCacheProviderIdOptions {
 	apiKey?: string;
 	baseUrl?: string;
@@ -55,6 +57,18 @@ export function resolveModelCacheProviderId(providerId: string, options: ModelCa
 			const discoveryBaseUrl = trimmedBaseUrl.endsWith("/v1") ? trimmedBaseUrl : `${trimmedBaseUrl}/v1`;
 			const scope = `${options.apiKey ?? ""}\u0000${discoveryBaseUrl}`;
 			return `${providerId}:models-v1:${Bun.hash(scope).toString(36)}`;
+		}
+		case "github-copilot": {
+			// Copilot model specs bake in the plan-specific endpoint (personal vs
+			// Business/Enterprise) resolved from the credential. Discovery writes an
+			// authoritative cache, so `online-if-uncached` serves it for the full
+			// TTL without re-probing. Keying the namespace on the credential means
+			// switching `COPILOT_GITHUB_TOKEN` to a different account misses the
+			// prior endpoint's cache and re-runs discovery instead of hitting the
+			// stale host and 403ing (PR #8510 review).
+			const baseUrl = options.baseUrl ?? PERSONAL_GITHUB_COPILOT_BASE_URL;
+			const scope = `${options.apiKey ?? ""}\u0000${baseUrl}`;
+			return `github-copilot:models-v1:${Bun.hash(scope).toString(36)}`;
 		}
 		case "openrouter":
 			return "openrouter:pseudo-api";

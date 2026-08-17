@@ -2,11 +2,11 @@ import { SendHorizontal, Square } from "lucide-react";
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient, GuestSnapshot } from "../../lib/client";
+import type { GuestClient } from "../../lib/client";
+import { useGuestSelector } from "../../lib/use-guest";
 
 export interface ComposerProps {
 	client: GuestClient;
-	snapshot: GuestSnapshot;
 }
 
 /** Textarea metrics: line-height 20px + 8px vertical padding × 2 (kept in sync with shell.css). */
@@ -109,18 +109,21 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 	);
 }
 
-export function Composer({ client, snapshot }: ComposerProps): ReactNode {
+export function Composer({ client }: ComposerProps): ReactNode {
 	const [text, setText] = useState("");
 	const taRef = useRef<HTMLTextAreaElement | null>(null);
 	const { composingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard();
 
-	const live = snapshot.phase === "live";
-	const readOnly = snapshot.readOnly;
-	const uiRequest = snapshot.uiRequest;
+	// Field-level subscriptions: input state and turn liveness only — never
+	// re-rendered on transcript or notice frames.
+	const live = useGuestSelector(client, s => s.phase) === "live";
+	const readOnly = useGuestSelector(client, s => s.readOnly);
+	const uiRequest = useGuestSelector(client, s => s.uiRequest);
+	const busy = useGuestSelector(client, s => s.working);
+	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
 	const canPrompt = live && !readOnly;
-	const busy = snapshot.working;
-	const queued = snapshot.state?.queuedMessageCount ?? 0;
-	const canSend = canPrompt && text.trim().length > 0;
+	// editor-draft mode keeps submit enabled even for whitespace-only prefill
+	const canSend = canPrompt && (text.trim().length > 0 || uiRequest?.kind === "editor");
 
 	useLayoutEffect(() => {
 		autosize(taRef.current);

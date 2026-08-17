@@ -7,6 +7,7 @@ import { fuzzyMatch } from "@musepi/pi-tui";
 import { getMCPConfigPath, logger } from "@musepi/pi-utils";
 import type { ContextFile } from "../../../capability/context-file";
 import type { ExtensionModule } from "../../../capability/extension-module";
+import type { GuiMotion } from "../../../capability/gui-motion";
 import type { Hook } from "../../../capability/hook";
 import type { MCPServer } from "../../../capability/mcp";
 import type { Prompt } from "../../../capability/prompt";
@@ -314,6 +315,37 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	} catch (error) {
 		logger.warn("Failed to load context-files capability", { error: String(error) });
 	}
+
+	// Load GUI motion packs (CSS overrides for the standard motion tokens
+	// and keyframes; the renderer reads the file via fs.read on `path`).
+	try {
+		const motions = await loadCapability<GuiMotion>("gui-motion", loadOpts);
+		addItems(motions.all, "gui-motion", {
+			getDescription: () => "CSS motion pack (motion tokens + keyframes overrides)",
+		});
+	} catch (error) {
+		logger.warn("Failed to load gui-motion capability", { error: String(error) });
+	}
+
+	// Builtin UI style extension: the task/swarm card render style. Not a
+	// file-backed capability — its state mirrors display.taskCardStyle via
+	// the daemon's extensions.list/setEnabled mapping (the daemon rewrites
+	// this entry's state from the setting; setEnabled writes the setting).
+	const styleId = makeExtensionId("style", "task-card-swarm");
+	extensions.push({
+		id: styleId,
+		kind: "style",
+		name: "task-card-swarm",
+		displayName: "Swarm Task Card",
+		description:
+			"Kimi-parity task/swarm card style: member grid with per-agent avatars, progress bars and accordion outputs",
+		trigger: undefined,
+		path: "",
+		source: { provider: "native", providerName: "Builtin", level: "native" },
+		state: disabledExtensions.has(styleId) ? "disabled" : "active",
+		disabledReason: disabledExtensions.has(styleId) ? "item-disabled" : undefined,
+		raw: { name: "task-card-swarm", style: "swarm" },
+	});
 
 	return extensions;
 }

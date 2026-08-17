@@ -266,6 +266,21 @@ export interface AutoRetryEndEvent {
 	retryErrors?: RetryErrorUpdate[];
 }
 
+/** Fired when auto-retry switches to a configured fallback model/provider. */
+export interface RetryFallbackAppliedEvent {
+	type: "retry_fallback_applied";
+	from: string;
+	to: string;
+	role: string;
+}
+
+/** Fired when a request succeeds on the fallback model applied by auto-retry. */
+export interface RetryFallbackSucceededEvent {
+	type: "retry_fallback_succeeded";
+	model: string;
+	role: string;
+}
+
 // ============================================================================
 // TTSR / Todo Reminders
 // ============================================================================

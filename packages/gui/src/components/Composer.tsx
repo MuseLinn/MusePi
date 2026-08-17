@@ -4,21 +4,25 @@ import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
+import { resolveToolRenderer, type ToolRenderHost } from "@musepi/collab-web";
 import { ComposerFrame } from "../lib/composer-frame";
+import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sessionAccentHex } from "../lib/session-accent";
 import { sfxFor } from "../lib/sfx";
+import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { startDictation } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
-import { ContextRing, type SnapcompactSavingsView } from "./ContextRing";
+import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView } from "./ContextRing";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
+import { Reveal } from "./Reveal";
 import type { GuiTreeNode } from "./SessionTree";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
@@ -64,9 +68,41 @@ export interface ComposerProps {
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
+	/** Live `task` tool running in this session (ChatView passes the last
+	 *  active task tool's partialResult) — drives the temporary swarm status
+	 *  chip above the input. Clicking the chip opens the frosted floating
+	 *  member grid (avatar + progress), kimiwork parity. null → no chip. */
+	activeTask?: { partialResult?: unknown } | null;
+	/** Host for the floating member grid (agent trajectory drill-down). */
+	swarmHost?: import("@musepi/collab-web").ToolRenderHost;
 }
 
 type EnhanceState = "idle" | "enhancing" | "enhanced";
+
+/**
+ * Floating member grid (kimiwork parity): renders the collab-web task
+ * renderer's SwarmCard against the live task tool's partialResult details
+ * (progress/results) — the frosted card opened from the composer's
+ * temporary swarm status chip. Host wires agent-trajectory drill-down.
+ */
+function SwarmCardPreview({
+	details,
+	host,
+}: {
+	details?: unknown;
+	host?: ToolRenderHost;
+}): ReactNode {
+	const SwarmCard = resolveToolRenderer("task").SwarmCard;
+	if (!SwarmCard) return null;
+	return (
+		<SwarmCard
+			name="task"
+			args={{}}
+			result={{ content: [], details }}
+			host={host}
+		/>
+	);
+}
 
 function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
 	if (e.key !== "Enter") return false;
@@ -86,11 +122,7 @@ function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: b
  * Falls back to the original prompt when the daemon is unreachable or
  * the model returns empty, so the enhance button never destroys input.
  */
-async function enhancePrompt(
-	prompt: string,
-	rpc: RpcClient | null,
-	sessionId: string | null,
-): Promise<string> {
+async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: string | null): Promise<string> {
 	if (!rpc || !sessionId) return prompt;
 	try {
 		const res = await rpc.request<{ replyText?: string }>("session.ephemeralAsk", {
@@ -174,22 +206,23 @@ function AgentStatusLine({
 }): ReactNode {
 	const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
 	const [braille, setBraille] = useState(0);
-	const timer = useRef<number | null>(null);
+	// Phase transitions are pure state changes; the idle-revert timer lives
+	// in its OWN effect so the re-render triggered by thinking→done (which
+	// re-runs this effect and its cleanup) cannot clear the timer it just
+	// set — the old shape left "思考完毕" pinned forever after a stop.
 	useEffect(() => {
 		if (working) {
 			setPhase("thinking");
-			if (timer.current !== null) {
-				clearTimeout(timer.current);
-				timer.current = null;
-			}
 		} else if (phase === "thinking") {
 			setPhase("done");
-			timer.current = window.setTimeout(() => setPhase("idle"), 1500);
 		}
-		return () => {
-			if (timer.current !== null) clearTimeout(timer.current);
-		};
 	}, [working, phase]);
+	// "done" reverts to idle after a beat (keeps the static ⠿ ack visible).
+	useEffect(() => {
+		if (phase !== "done") return;
+		const id = window.setTimeout(() => setPhase("idle"), 1500);
+		return () => clearTimeout(id);
+	}, [phase]);
 	// Braille frame clock — only while thinking; "done" holds a static ⠿.
 	useEffect(() => {
 		if (phase !== "thinking") return;
@@ -244,6 +277,38 @@ function AgentStatusLine({
 
 export { AgentStatusLine };
 
+/**
+ * Compaction status line — replaces the agent status line while the
+ * session context is being compacted (manual ring action or daemon auto
+ * compaction). Same floating chip above the input card, plus a stop
+ * button: the TUI's Esc path (session.abort → AgentSession.abort →
+ * abortCompaction) without a confirm — compaction is cheap to re-run.
+ */
+function CompactionStatusLine({ onCancel }: { onCancel(): void }): ReactNode {
+	const [braille, setBraille] = useState(0);
+	useEffect(() => {
+		const id = window.setInterval(() => setBraille(i => (i + 1) % BRAILLE_FRAMES.length), 80);
+		return () => clearInterval(id);
+	}, []);
+	return (
+		<div className="gui-compact-line" role="status" aria-live="polite">
+			<span className="gui-agent-status-braille" aria-hidden>
+				{BRAILLE_FRAMES[braille]}
+			</span>
+			<span className="gui-compact-line-text">{t("compacting…")}</span>
+			<button
+				type="button"
+				className="gui-compact-line-stop"
+				onClick={onCancel}
+				title={t("stop compaction")}
+				aria-label={t("stop compaction")}
+			>
+				<Square size={11} fill="currentColor" />
+			</button>
+		</div>
+	);
+}
+
 export function Composer({
 	working,
 	petMood,
@@ -264,6 +329,8 @@ export function Composer({
 	presetModelId,
 	focused,
 	onToggleFocus,
+	activeTask,
+	swarmHost,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
@@ -510,52 +577,74 @@ export function Composer({
 		tokens: number;
 		contextWindow: number;
 		percent: number;
+		model?: string | null;
 		snapcompact?: SnapcompactSavingsView | null;
+		breakdown?: ContextBreakdownView | null;
 	} | null>(null);
+	// Shared by the 3s poll and the model-switch immediate refresh — the
+	// ring/card must follow a model change without waiting for the next tick.
+	const refreshUsage = useCallback((): void => {
+		if (!rpc || !sessionId) return;
+		void rpc
+			.request<{
+				tokens: number;
+				contextWindow: number;
+				percent: number;
+				model?: string | null;
+				snapcompact?: SnapcompactSavingsView | null;
+				breakdown?: ContextBreakdownView | null;
+				autoCompactBufferTokens?: number;
+				freeTokens?: number;
+			} | null>("session.contextUsage", {
+				sessionId,
+			})
+			.then(usage => {
+				// Value-compare: skip the setState (and the re-render)
+				// when the ring's numbers did not move. contextWindow is
+				// part of the identity: an empty/low-use session switching
+				// to a differently-sized model keeps percent=0 and
+				// tokens=0, and without this the window line would freeze
+				// on the old model's capacity. model rides along: the
+				// composer's model selector seeds from it, and an external
+				// switch (auto downshift, same-window-size model) must not
+				// leave the displayed model stale.
+				setContextUsage(prev =>
+					usage &&
+					prev &&
+					prev.tokens === usage.tokens &&
+					prev.percent === usage.percent &&
+					prev.contextWindow === usage.contextWindow &&
+					prev.model === usage.model
+						? prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
+							? prev
+							: usage
+						: usage,
+				);
+				// Keep the /context card in step with the live session:
+				// model switches change contextWindow/percent and the
+				// card must follow instead of freezing at open time.
+				setContextPanel(s => (s?.open ? { open: true, loading: false, data: usage } : s));
+			})
+			.catch(() => {});
+	}, [rpc, sessionId]);
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
-		let disposed = false;
-		const tick = (): void => {
-			void rpc
-				.request<{
-					tokens: number;
-					contextWindow: number;
-					percent: number;
-					snapcompact?: SnapcompactSavingsView | null;
-				} | null>("session.contextUsage", {
-					sessionId,
-				})
-				.then(usage => {
-					if (disposed) return;
-					// Value-compare: skip the setState (and the re-render)
-					// when the ring's numbers did not move.
-					setContextUsage(prev =>
-						usage && prev && prev.tokens === usage.tokens && prev.percent === usage.percent
-							? prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
-								? prev
-								: usage
-							: usage,
-					);
-				})
-				.catch(() => {});
-		};
-		tick();
+		refreshUsage();
 		// Same 3s cadence + visibility pause as the modes poll above.
-		let id = setInterval(tick, 3000);
+		let id = setInterval(refreshUsage, 3000);
 		const onVis = (): void => {
 			clearInterval(id);
 			if (document.visibilityState === "visible") {
-				tick();
-				id = setInterval(tick, 3000);
+				refreshUsage();
+				id = setInterval(refreshUsage, 3000);
 			}
 		};
 		document.addEventListener("visibilitychange", onVis);
 		return () => {
-			disposed = true;
 			clearInterval(id);
 			document.removeEventListener("visibilitychange", onVis);
 		};
-	}, [rpc, sessionId]);
+	}, [rpc, sessionId, refreshUsage]);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
 	// The ring shows usage; this is the escape hatch when it fills up. The
@@ -564,6 +653,10 @@ export function Composer({
 	// that via a transient error state instead of swallowing it.
 	const [compactBusy, setCompactBusy] = useState(false);
 	const [compactFailed, setCompactFailed] = useState(false);
+	// Set by cancelCompaction: the in-flight session.compact RPC rejects
+	// with CompactionCancelledError once the daemon aborts it — a
+	// deliberate cancel must NOT flash the red "compaction failed" state.
+	const compactCancelledRef = useRef(false);
 	const compactContext = useCallback((): void => {
 		if (!rpc || !sessionId) return;
 		setCompactBusy(true);
@@ -588,11 +681,197 @@ export function Composer({
 					.catch(() => {});
 			})
 			.catch(() => {
+				if (compactCancelledRef.current) return;
 				setCompactFailed(true);
 				window.setTimeout(() => setCompactFailed(false), 3000);
 			})
-			.finally(() => setCompactBusy(false));
+			.finally(() => {
+				compactCancelledRef.current = false;
+				setCompactBusy(false);
+			});
 	}, [rpc, sessionId, refreshModes]);
+
+	// ── Cancel compaction (TUI Esc parity) ────────────────────────────────
+	// The daemon's session.abort routes into AgentSession.abort →
+	// abortCompaction (the same path the TUI Esc uses), so the stop
+	// button on the compaction status line cancels BOTH a manual
+	// compactContext run and a daemon auto-compaction. No confirm —
+	// aborting is cheap and the action can be re-triggered.
+	const cancelCompaction = useCallback((): void => {
+		if (!rpc || !sessionId) return;
+		compactCancelledRef.current = true;
+		void rpc.request("session.abort", { sessionId }).catch(() => {});
+	}, [rpc, sessionId]);
+	/** Compaction in flight: manual RPC pending OR daemon reports it (auto). */
+	const compacting = compactBusy || modes?.isCompacting === true;
+
+	// ── Provider subscription quota (TUI /usage parity) ───────────────────
+	// Fetched lazily by the ContextRing popover (hover/focus); converts the
+	// daemon's UsageReport[] wire shape into the compact popover view.
+	const fetchUsageQuota = useCallback(async (): Promise<UsageQuotaView | null> => {
+		if (!rpc || !sessionId) return null;
+		try {
+			const res = await rpc.request<{
+				reports: Array<{
+					provider: string;
+					limits: Array<{
+						label: string;
+						amount?: { usedFraction?: number; remainingFraction?: number };
+						window?: { resetsAt?: number; resetLabel?: string };
+					}>;
+				}>;
+			}>("usage.reports", { sessionId });
+			const reports = res?.reports ?? [];
+			if (reports.length === 0) return null;
+			const limits: UsageQuotaView["limits"] = [];
+			for (const report of reports) {
+				for (const limit of report.limits ?? []) {
+					const usedFraction = limit.amount?.usedFraction;
+					if (usedFraction === undefined) continue;
+					const usedPercent = usedFraction * 100;
+					const leftPercent = (limit.amount?.remainingFraction ?? Math.max(0, 1 - usedFraction)) * 100;
+					const resetsAt = limit.window?.resetsAt;
+					limits.push({
+						label: limit.label,
+						usedPercent,
+						leftPercent,
+						...(resetsAt && resetsAt > Date.now() ? { resetsIn: fmtQuotaDuration(resetsAt - Date.now()) } : {}),
+					});
+				}
+			}
+			if (limits.length === 0) return null;
+			return { provider: reports[0]!.provider, limits };
+		} catch {
+			return null;
+		}
+	}, [rpc, sessionId]);
+
+	// GUI-native /usage: typing /usage in the composer shows this quota
+	// panel (structured RPC data) instead of sending the command to the
+	// agent (whose reply is TUI panel ANSI text). Panel is transient —
+	// dismiss with the × button or Escape.
+	const [usagePanel, setUsagePanel] = useState<{
+		open: boolean;
+		loading: boolean;
+		data: {
+			reports: UsageReportView[];
+			activeAccount: UsageActiveAccountView | null;
+			fetchedAt: number;
+		} | null;
+	}>({
+		open: false,
+		loading: false,
+		data: null,
+	});
+	// Full report shape from usage.reports (daemon passes the raw
+	// @musepi/pi-ai UsageReport[] through) — the panel renders TUI /usage
+	// parity, while the ContextRing popover keeps its compact fetchUsageQuota.
+	const fetchUsageReports = useCallback(async (): Promise<{
+		reports: UsageReportView[];
+		activeAccount: UsageActiveAccountView | null;
+	} | null> => {
+		if (!rpc || !sessionId) return null;
+		try {
+			const res = await rpc.request<{
+				reports: UsageReportView[];
+				activeAccount?: UsageActiveAccountView | null;
+			}>("usage.reports", { sessionId });
+			if (!res || !Array.isArray(res.reports)) return null;
+			return { reports: res.reports, activeAccount: res.activeAccount ?? null };
+		} catch {
+			return null;
+		}
+	}, [rpc, sessionId]);
+	const openUsagePanel = useCallback((): void => {
+		setContextPanel(null);
+		setUsagePanel({ open: true, loading: true, data: null });
+		void fetchUsageReports().then(data => {
+			setUsagePanel(s =>
+				s.open ? { open: true, loading: false, data: data ? { ...data, fetchedAt: Date.now() } : null } : s,
+			);
+		});
+	}, [fetchUsageReports]);
+	// Quota panel: a floating card above the composer (user direction —
+	// query results belong near the input, not in a modal dialog). Portaled
+	// + fixed like the todo/queue panels so the chat surface can't clip it.
+	const { anchorRef: quotaAnchorRef, renderMenu: renderQuotaMenu } = useFloatingMenu(
+		usagePanel.open,
+		v => setUsagePanel(s => ({ ...s, open: v })),
+		// NOTE: no className here — the outer gui-menu-popup container must
+		// NOT carry the card styles (that would double-draw the rounded card:
+		// outer shell + inner .gui-quota-panel dialog). Card styles live on
+		// the inner div only.
+		{ align: "right" },
+	);
+	const closeUsagePanel = useCallback((): void => {
+		setUsagePanel(s => ({ ...s, open: false }));
+	}, []);
+	// GUI-native /context: categorized context-window dialog (TUI /context
+	// panel parity). Fetched from session.contextUsage with the full
+	// breakdown the daemon now attaches; centered dialog like /usage.
+	const [contextPanel, setContextPanel] = useState<{
+		open: boolean;
+		loading: boolean;
+		data: {
+			tokens: number;
+			contextWindow: number;
+			percent: number;
+			model?: string | null;
+			snapcompact?: SnapcompactSavingsView | null;
+			breakdown?: ContextBreakdownView | null;
+			autoCompactBufferTokens?: number;
+			freeTokens?: number;
+		} | null;
+	} | null>(null);
+	const openContextPanel = useCallback((): void => {
+		if (!rpc || !sessionId) {
+			setContextPanel({ open: true, loading: false, data: null });
+			return;
+		}
+		setUsagePanel(s => ({ ...s, open: false }));
+		setContextPanel({ open: true, loading: true, data: null });
+		void rpc
+			.request<{
+				tokens: number;
+				contextWindow: number;
+				percent: number;
+				model?: string | null;
+				snapcompact?: SnapcompactSavingsView | null;
+				breakdown?: ContextBreakdownView | null;
+				autoCompactBufferTokens?: number;
+				freeTokens?: number;
+			} | null>("session.contextUsage", { sessionId })
+			.then(usage => {
+				setContextPanel(s => (s?.open ? { open: true, loading: false, data: usage } : s));
+			})
+			.catch(() => {
+				setContextPanel(s => (s?.open ? { open: true, loading: false, data: null } : s));
+			});
+	}, [rpc, sessionId]);
+
+	// Context dialog: same floating card (mutually exclusive with quota —
+	// opening one closes the other).
+	const { anchorRef: contextAnchorRef, renderMenu: renderContextMenu } = useFloatingMenu(
+		contextPanel?.open ?? false,
+		v => setContextPanel(s => (s ? { ...s, open: v } : s)),
+		// NOTE: no className here — the outer gui-menu-popup container must
+		// NOT carry the card styles (that would double-draw the rounded card:
+		// outer shell + inner .gui-quota-panel dialog). Card styles live on
+		// the inner div only.
+		{ align: "right" },
+	);
+
+	useEffect(() => {
+		if (!usagePanel.open && !contextPanel?.open) return;
+		const onKey = (e: globalThis.KeyboardEvent): void => {
+			if (e.key === "Escape") {
+				setUsagePanel(s => ({ ...s, open: false }));
+				setContextPanel(s => (s ? { ...s, open: false } : s));
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [usagePanel.open, contextPanel?.open]);
 
 	// ── Retry last failed turn (TUI /retry parity) ─────────────────────────
 	// The engine decides whether there is anything to retry (no failed turn
@@ -675,6 +954,29 @@ export function Composer({
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
+	// 立即发出: pull one queued message out and inject it as an immediate
+	// steer (TUI 引导消息回车即发 parity). Drop it from the local snapshot
+	// right away; the 3s poll reconciles anything the daemon re-queues.
+	const sendQueued = useCallback(
+		(group: "steering" | "followUp", text: string, index: number): Promise<void> => {
+			if (!rpc || !sessionId) return Promise.resolve();
+			return rpc
+				.request("session.queuedSend", { sessionId, group, text })
+				.then(() => {
+					setQueued(prev =>
+						prev
+							? {
+									...prev,
+									count: Math.max(0, prev.count - 1),
+									[group]: prev[group].filter((_, i) => i !== index),
+								}
+							: prev,
+					);
+				})
+				.catch(() => {});
+		},
+		[rpc, sessionId],
+	);
 	useEffect(() => {
 		if (!rpc || !sessionId || !working) return;
 		let disposed = false;
@@ -735,18 +1037,40 @@ export function Composer({
 		setAttachments(prev => [...prev, ...entries]);
 	};
 
-	const slashFilter =
-		slashCmds?.filter(c => {
-			const q = slashQuery.toLowerCase();
-			// /skill, /skills, /skill: — the user's intent is the skill list:
-			// surface every skill command (kind: skill) instead of matching
-			// against literal "skills" text (skill:foo doesn't contain it).
-			const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
-			if (isSkillQuery && c.kind === "skill") return true;
-			return (
-				c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q)
-			);
-		}) ?? [];
+	const slashFilter = (() => {
+		const q = slashQuery.toLowerCase();
+		// /skill, /skills, /skill: — the user's intent is the skill list:
+		// surface every skill command (kind: skill) instead of matching
+		// against literal "skills" text (skill:foo doesn't contain it).
+		const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
+		// GUI-native /usage + /context: the daemon's catalog already carries
+		// the TUI's commands (with show/reset subcommands) — sending either
+		// to the agent returns ANSI panel text, and the composer intercepts
+		// the bare commands anyway, so keep ONE GUI entry per command (with
+		// the friendly description + GUI category) and drop the daemon's.
+		const guiUsageCmd: SlashEntry = {
+			name: "usage",
+			description: t("show subscription usage"),
+			kind: "command",
+			category: "GUI",
+		};
+		const guiContextCmd: SlashEntry = {
+			name: "context",
+			description: t("show context usage"),
+			kind: "command",
+			category: "GUI",
+		};
+		const list = [
+			...(slashCmds ?? []).filter(c => c.name !== "usage" && c.name !== "context"),
+			guiUsageCmd,
+			guiContextCmd,
+		];
+		return list.filter(c =>
+			isSkillQuery && c.kind === "skill"
+				? true
+				: c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
+		);
+	})();
 
 	const onSlashInput = (value: string): void => {
 		// Trigger when the current line starts with "/".
@@ -941,6 +1265,13 @@ export function Composer({
 	const { anchorRef: todoAnchorRef, renderMenu: renderTodoMenu } = useFloatingMenu(todoOpen, setTodoOpen, {
 		className: "gui-todo-popup",
 	});
+	// Swarm status chip (kimiwork parity): while a `task` tool is running,
+	// a temporary chip sits above the input; clicking opens the frosted
+	// floating member grid (avatars + progress) — same portaled pattern.
+	const [swarmOpen, setSwarmOpen] = useState(false);
+	const { anchorRef: swarmAnchorRef, renderMenu: renderSwarmMenu } = useFloatingMenu(swarmOpen, setSwarmOpen, {
+		className: "gui-swarm-popup",
+	});
 	// Pending-queue panel: same overflow clip as the todo panel — portaled.
 	const { anchorRef: queueAnchorRef, renderMenu: renderQueueMenu } = useFloatingMenu(queueOpen, setQueueOpen, {
 		className: "gui-queue-popup",
@@ -1040,6 +1371,23 @@ export function Composer({
 		(accelerated = false): void => {
 			const trimmed = text.trim();
 			if (!trimmed && quotes.length === 0 && attachments.length === 0) return;
+			// GUI-native /usage: show the structured quota panel instead of
+			// sending the command to the agent (whose reply is TUI panel
+			// ANSI text that never parses cleanly).
+			if (isUsageCommand(trimmed)) {
+				openUsagePanel();
+				setText("");
+				sfxFor("send");
+				return;
+			}
+			// GUI-native /context: categorized context-window dialog (same
+			// reason — the agent's /context reply is ANSI panel text).
+			if (isContextCommand(trimmed)) {
+				openContextPanel();
+				setText("");
+				sfxFor("send");
+				return;
+			}
 			// Delivery semantics MUST match the TUI:
 			//  - Enter while the agent works → the configured busy behavior
 			//    (busyEnter: steer = insert into the running turn now, TUI
@@ -1056,70 +1404,99 @@ export function Composer({
 					? "followUp"
 					: "steer"
 				: undefined;
-		const queueMatch = /^\/queue\s+(.+)$/s.exec(trimmed);
-		const arrowMatch = /^=>\s+(.+)$/s.exec(trimmed);
-		if (queueMatch) {
-			payload = queueMatch[1].trim();
-			delivery = "followUp";
-		} else if (arrowMatch) {
-			payload = arrowMatch[1].trim();
-			delivery = "followUp";
-		} else if (trimmed === "/queue") {
+			const queueMatch = /^\/queue\s+(.+)$/s.exec(trimmed);
+			const arrowMatch = /^=>\s+(.+)$/s.exec(trimmed);
+			if (queueMatch) {
+				payload = queueMatch[1].trim();
+				delivery = "followUp";
+			} else if (arrowMatch) {
+				payload = arrowMatch[1].trim();
+				delivery = "followUp";
+			} else if (trimmed === "/queue") {
+				setText("");
+				return;
+			} else if (
+				trimmed.startsWith("/") &&
+				!trimmed.startsWith("//") &&
+				quotes.length === 0 &&
+				attachments.length === 0
+			) {
+				// Slash command (TUI parity): execute via the daemon's builtin
+				// registry. "//" escapes to literal text — the doubled slash
+				// parses to no command, the daemon returns consumed:false and
+				// we fall through to a normal send below. Close the completion
+				// menu now — the RPC round-trip takes longer than the menu's
+				// exit animation, and leaving it up reads as "Enter did nothing".
+				setSlashOpen(false);
+				runSlash(trimmed);
+				return;
+			} else if (
+				trimmed.startsWith("!") &&
+				(trimmed.startsWith("!!") ? trimmed.slice(2) : trimmed.slice(1)).trim().length > 0 &&
+				quotes.length === 0 &&
+				attachments.length === 0
+			) {
+				// Bash command (TUI !/!! parity): "!cmd" runs the shell command
+				// with its output kept in the model context; "!!cmd" excludes
+				// it. A bare "!" (or "!!") falls through to a normal send.
+				setSlashOpen(false);
+				runBash(trimmed);
+				return;
+			}
+			if (!payload && attachments.length === 0) return;
+			// Armed goal (openchamber parity): the sent message becomes the
+			// objective — no popup dialog. The daemon creates the goal from the
+			// prompt text; the chip confirms via the modes poll.
+			if (goalArmed && payload && rpc && sessionId) {
+				void rpc
+					.request("session.setGoal", { sessionId, objective: payload })
+					.then(res => setModes(res as typeof modes))
+					.catch(() => {});
+				setGoalArmed(false);
+			}
+			const quotePrefix =
+				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
+			onSend(
+				quotePrefix ? `${quotePrefix}${payload}`.trim() : payload,
+				attachments.map(a => ({
+					type: "image" as const,
+					data: a.dataUrl.split(",")[1] ?? "",
+					mimeType: a.mimeType,
+				})),
+				// Working → steer (TUI Enter parity: processed immediately);
+				// "/queue"/"=>" → followUp (after the current turn yields).
+				delivery,
+			);
+			if (quotes.length > 0) {
+				handledQuoteCountRef.current = 0;
+				onQuotesChange([]);
+			}
 			setText("");
-			return;
-		} else if (trimmed.startsWith("/") && !trimmed.startsWith("//") && quotes.length === 0 && attachments.length === 0) {
-			// Slash command (TUI parity): execute via the daemon's builtin
-			// registry. "//" escapes to literal text — the doubled slash
-			// parses to no command, the daemon returns consumed:false and
-			// we fall through to a normal send below. Close the completion
-			// menu now — the RPC round-trip takes longer than the menu's
-			// exit animation, and leaving it up reads as "Enter did nothing".
-			setSlashOpen(false);
-			runSlash(trimmed);
-			return;
-		} else if (
-			trimmed.startsWith("!") &&
-			(trimmed.startsWith("!!") ? trimmed.slice(2) : trimmed.slice(1)).trim().length > 0 &&
-			quotes.length === 0 &&
-			attachments.length === 0
-		) {
-			// Bash command (TUI !/!! parity): "!cmd" runs the shell command
-			// with its output kept in the model context; "!!cmd" excludes
-			// it. A bare "!" (or "!!") falls through to a normal send.
-			setSlashOpen(false);
-			runBash(trimmed);
-			return;
-		}
-		if (!payload && attachments.length === 0) return;
-		// Armed goal (openchamber parity): the sent message becomes the
-		// objective — no popup dialog. The daemon creates the goal from the
-		// prompt text; the chip confirms via the modes poll.
-		if (goalArmed && payload && rpc && sessionId) {
-			void rpc
-				.request("session.setGoal", { sessionId, objective: payload })
-				.then(res => setModes(res as typeof modes))
-				.catch(() => {});
-			setGoalArmed(false);
-		}
-		const quotePrefix =
-			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-		onSend(
-			quotePrefix ? `${quotePrefix}${payload}`.trim() : payload,
-			attachments.map(a => ({ type: "image" as const, data: a.dataUrl.split(",")[1] ?? "", mimeType: a.mimeType })),
-			// Working → steer (TUI Enter parity: processed immediately);
-			// "/queue"/"=>" → followUp (after the current turn yields).
-			delivery,
-		);
-		if (quotes.length > 0) {
-			handledQuoteCountRef.current = 0;
-			onQuotesChange([]);
-		}
-		setText("");
-		setAttachments([]);
-		setEnhance("idle");
-		sfxFor("send");
-		tapFeedback();
-	}, [text, onSend, attachments, working, goalArmed, rpc, sessionId, quotes, onQuotesChange, busyEnter]);
+			setAttachments([]);
+			setEnhance("idle");
+			// Clear re-measures: the controlled value="", onChange never fires for
+			// the programmatic clear, so the stretched inline height would stick
+			// (send with a multi-line draft leaves the box tall). rAF runs after
+			// React commits the empty value.
+			requestAnimationFrame(() => autosize(taRef.current));
+			sfxFor("send");
+			tapFeedback();
+		},
+		[
+			text,
+			onSend,
+			attachments,
+			working,
+			goalArmed,
+			rpc,
+			sessionId,
+			quotes,
+			onQuotesChange,
+			busyEnter,
+			openUsagePanel,
+			openContextPanel,
+		],
+	);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
 		// IME composition: every key (including the confirming Enter) belongs
@@ -1211,13 +1588,7 @@ export function Composer({
 		}
 		// Cmd/Ctrl+Enter (dsh parity): send with the OPPOSITE busy behavior
 		// of the configured plain-Enter mode.
-		if (
-			e.key === "Enter" &&
-			(e.metaKey || e.ctrlKey) &&
-			!e.shiftKey &&
-			!e.altKey &&
-			!composingRef.current
-		) {
+		if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !composingRef.current) {
 			e.preventDefault();
 			send(true);
 			return;
@@ -1236,6 +1607,10 @@ export function Composer({
 		void enhancePrompt(text, rpc, sessionId)
 			.then(enhanced => {
 				setText(enhanced);
+				// The rewritten prompt is typically longer — re-measure (the
+				// enhanced value lands via state, not onChange, so autosize
+				// never ran).
+				requestAnimationFrame(() => autosize(taRef.current));
 				setEnhance("enhanced");
 				sfxFor("first");
 			})
@@ -1286,13 +1661,174 @@ export function Composer({
 	}, [focused]);
 
 	return (
-		<div className={`gui-composer${focused ? " gui-composer--focused" : ""}`}>
+		<div
+			className={`gui-composer${focused ? " gui-composer--focused" : ""}`}
+			ref={el => {
+				quotaAnchorRef(el);
+				contextAnchorRef(el);
+			}}
+		>
+			{/* GUI-native /usage result — floating card above the composer
+			 * (user direction: query results belong near the input, not a
+			 * modal dialog). Portaled + fixed so the surface can't clip it. */}
+			{renderQuotaMenu(
+				<div className="gui-quota-panel" role="dialog" aria-label={t("subscription usage")}>
+					<button type="button" className="gui-quota-close" onClick={closeUsagePanel} aria-label={t("close")}>
+						<Icon name="close" className="h-3.5 w-3.5" />
+					</button>
+					<div className="gui-quota-title">
+						{t("subscription usage")}
+						{usagePanel.data?.fetchedAt
+							? ` · ${t("usage {time} ago", { time: fmtQuotaDuration(Date.now() - usagePanel.data.fetchedAt) })}`
+							: null}
+					</div>
+					{usagePanel.loading ? (
+						<div className="gui-quota-note">…</div>
+					) : usagePanel.data && usagePanel.data.reports.length > 0 ? (
+						<div className="gui-usage-reports">
+							{usagePanel.data.reports.map(report => (
+								<UsageProviderSection
+									key={report.provider}
+									report={report}
+									activeAccount={usagePanel.data!.activeAccount}
+								/>
+							))}
+						</div>
+					) : (
+						<div className="gui-quota-note">{t("no subscription usage reported")}</div>
+					)}
+				</div>,
+			)}
+			{/* GUI-native /context — categorized context-window card above
+			 * the composer (TUI /context panel parity), floating like /usage. */}
+			{contextPanel
+				? renderContextMenu(
+						<div className="gui-quota-panel" role="dialog" aria-label={t("context usage")}>
+							<button
+								type="button"
+								className="gui-quota-close"
+								onClick={() => setContextPanel(s => (s ? { ...s, open: false } : s))}
+								aria-label={t("close")}
+							>
+								<Icon name="close" className="h-3.5 w-3.5" />
+							</button>
+							<div className="gui-quota-title">{t("context usage")}</div>
+							{contextPanel!.loading ? (
+								<div className="gui-quota-note">…</div>
+							) : contextPanel!.data ? (
+								<>
+									{contextPanel!.data.model && (
+										<div className="gui-context-model">{contextPanel!.data.model}</div>
+									)}
+									<div className="gui-context-summary">
+										<span className="gui-context-summary-tokens">
+											{t("context window {tokens} ({percent} used)", {
+												tokens: fmtTokens(contextPanel!.data.contextWindow),
+												percent: `${Math.round(contextPanel!.data.percent)}%`,
+											})}
+										</span>
+									</div>
+									{contextPanel!.data.breakdown &&
+										renderContextGrid(
+											contextPanel!.data.breakdown,
+											contextPanel!.data.autoCompactBufferTokens ?? 0,
+										)}
+									{contextPanel!.data.snapcompact && (
+										<div className="gui-context-snap">
+											<div className="gui-context-snap-title">
+												{contextPanel!.data.snapcompact.visionCapable
+													? t("snapcompact savings")
+													: `Snapcompact: ${t("model does not support images")}`}
+											</div>
+											{contextPanel!.data.snapcompact.visionCapable &&
+												renderSnapcompactLines(
+													contextPanel!.data.snapcompact,
+													contextPanel!.data.tokens ?? contextPanel!.data.breakdown?.usedTokens ?? 0,
+												)}
+										</div>
+									)}
+									{contextPanel!.data.breakdown ? (
+										<div className="gui-context-cats">
+											{renderContextCat(
+												"context system prompt",
+												contextPanel!.data.breakdown.systemPromptTokens,
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_FILLED,
+												"gui-context-glyph--system",
+											)}
+											{renderContextCat(
+												"context system tools",
+												contextPanel!.data.breakdown.systemToolsTokens,
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_FILLED,
+												"gui-context-glyph--tools",
+											)}
+											{renderContextCat(
+												"context system context",
+												contextPanel!.data.breakdown.systemContextTokens,
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_FILLED,
+												"gui-context-glyph--context",
+											)}
+											{renderContextCat(
+												"context skills",
+												contextPanel!.data.breakdown.skillsTokens,
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_FILLED,
+												"gui-context-glyph--skills",
+											)}
+											{renderContextCat(
+												"context messages",
+												contextPanel!.data.breakdown.messagesTokens,
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_MESSAGES,
+												"gui-context-glyph--messages",
+											)}
+											{renderContextCat(
+												"context free",
+												contextPanel!.data.freeTokens ??
+													Math.max(
+														0,
+														contextPanel!.data.contextWindow -
+															contextPanel!.data.breakdown.usedTokens -
+															(contextPanel!.data.autoCompactBufferTokens ?? 0),
+													),
+												contextPanel!.data.contextWindow,
+												CONTEXT_CELL_FREE,
+												"gui-context-glyph--free",
+											)}
+											{(contextPanel!.data.autoCompactBufferTokens ?? 0) > 0 &&
+												renderContextCat(
+													"context autocompact buffer",
+													contextPanel!.data.autoCompactBufferTokens ?? 0,
+													contextPanel!.data.contextWindow,
+													CONTEXT_CELL_BUFFER,
+													"gui-context-glyph--buffer",
+												)}
+										</div>
+									) : (
+										<div className="gui-quota-note">{t("context usage unavailable")}</div>
+									)}
+								</>
+							) : (
+								<div className="gui-quota-note">{t("context usage unavailable")}</div>
+							)}
+						</div>,
+					)
+				: null}
 			{/* Agent status line — hangs ABOVE the input card, outside the
 			 * frame (user: the thinking state belongs here, not inside
 			 * the input, not duplicated in the transcript): braille
 			 * spinner or orb + label on one line. Shows 思考中… while
-			 * working and briefly 思考完毕 when the turn ends. */}
-			<AgentStatusLine working={working} sessionKey={sessionId || undefined} {...readStatusPrefs()} />
+			 * working and briefly 思考完毕 when the turn ends. While the
+			 * context is being compacted it is replaced by the compaction
+			 * line (spinner + 停止 button) — compaction runs between
+			 * turns, so the two never overlap. */}
+			{compacting ? (
+				<CompactionStatusLine onCancel={cancelCompaction} />
+			) : (
+				<AgentStatusLine working={working} sessionKey={sessionId || undefined} {...readStatusPrefs()} />
+			)}
 			<ComposerFrame
 				flipAnchor="session"
 				// openchamber parity: the selection-capture module excludes
@@ -1316,8 +1852,33 @@ export function Composer({
 				// chips sit in the button row next to the thinking selector.
 				// Renders whenever ANY of them is present.
 				statusRow={
-					modes && (todoTotal > 0 || (working && queued != null && queued.count > 0)) ? (
+					modes && (todoTotal > 0 || (working && queued != null && queued.count > 0)) || activeTask ? (
 						<div className="gui-mode-row gui-mode-row--status">
+							{activeTask && (
+								<>
+									<button
+										type="button"
+										ref={swarmAnchorRef}
+										className={`gui-swarm-chip${swarmOpen ? " gui-swarm-chip--open" : ""}`}
+										title={t("swarm members")}
+										aria-expanded={swarmOpen}
+										onClick={() => setSwarmOpen(v => !v)}
+									>
+										<span className="gui-swarm-chip-dot" aria-hidden="true" />
+										<span className="gui-swarm-chip-label">{t("swarm members")}</span>
+									</button>
+									{renderSwarmMenu(
+										<div className="gui-swarm-popup-card" role="region" aria-label={t("swarm members")}>
+											<SwarmCardPreview
+												details={
+													(activeTask.partialResult as { details?: unknown } | null | undefined)?.details
+												}
+												host={swarmHost}
+											/>
+										</div>,
+									)}
+								</>
+							)}
 							{todoTotal > 0 && (
 								<button
 									type="button"
@@ -1445,9 +2006,9 @@ export function Composer({
 											</div>
 										</div>
 									))}
-							</div>
-						)}
-						{/* Pending-message queue (TUI /queue parity): editable list
+								</div>,
+							)}
+							{/* Pending-message queue (TUI /queue parity): editable list
 							 * above the input — 取回 pops the newest queued message
 							 * back into the editor. */}
 							{working && queued && queued.count > 0 && (
@@ -1476,6 +2037,15 @@ export function Composer({
 															<span className="gui-queue-item-text" title={msg}>
 																{msg}
 															</span>
+															<button
+																type="button"
+																className="gui-queue-send"
+																title={t("send now")}
+																aria-label={t("send now")}
+																onClick={() => void sendQueued("steering", msg, i)}
+															>
+																<Icon name="arrow-up" className="h-3 w-3" />
+															</button>
 														</div>
 													))}
 												</>
@@ -1490,6 +2060,15 @@ export function Composer({
 															<span className="gui-queue-item-text" title={msg}>
 																{msg}
 															</span>
+															<button
+																type="button"
+																className="gui-queue-send"
+																title={t("send now")}
+																aria-label={t("send now")}
+																onClick={() => void sendQueued("followUp", msg, i)}
+															>
+																<Icon name="arrow-up" className="h-3 w-3" />
+															</button>
 														</div>
 													))}
 												</>
@@ -1512,7 +2091,7 @@ export function Composer({
 													<span>{t("clear queue")}</span>
 												</button>
 											</div>
-										</div>
+										</div>,
 									)}
 								</>
 							)}
@@ -1570,8 +2149,15 @@ export function Composer({
 							rpc={rpc}
 							sessionId={sessionId}
 							presetId={presetModelId}
+							currentModelId={contextUsage?.model ?? null}
+							allowSetDefault
 							onSelect={id => {
 								if (id) onModelChange?.(id);
+								// The daemon finished the switch before this
+								// fires — refresh the ring/card immediately so
+								// they show the new model's window without
+								// waiting for the next 3s poll.
+								refreshUsage();
 							}}
 						/>
 						{onSetThinking && (
@@ -1657,9 +2243,10 @@ export function Composer({
 								tokens={contextUsage.tokens}
 								contextWindow={contextUsage.contextWindow}
 								onCompact={compactContext}
-								compacting={compactBusy || modes?.isCompacting === true}
+								compacting={compacting}
 								compactFailed={compactFailed}
 								snapcompact={contextUsage.snapcompact ?? null}
+								fetchQuota={fetchUsageQuota}
 							/>
 						)}
 						<button
@@ -1862,6 +2449,506 @@ export function Composer({
 					</>,
 				)}
 			</ComposerFrame>
+		</div>
+	);
+}
+
+/** Compact "resets in …" label from a duration in ms (TUI formatDuration
+ *  parity): 2h, 3d5h, 12m — coarse but stable for popover width. */
+export function fmtQuotaDuration(ms: number): string {
+	const mins = Math.max(0, Math.round(ms / 60000));
+	if (mins < 60) return `${mins}m`;
+	const hours = Math.floor(mins / 60);
+	if (hours < 24) return `${hours}h${mins % 60 ? `${mins % 60}m` : ""}`;
+	const days = Math.floor(hours / 24);
+	return `${days}d${hours % 24 ? `${hours % 24}h` : ""}`;
+}
+
+/** Compact token count (K/M) for the context dialog. */
+function fmtTokens(n: number): string {
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (n >= 1000) return `${Math.round(n / 1000)}K`;
+	return String(n);
+}
+
+/** Snapcompact wire-savings detail lines (TUI /context legend parity):
+ *  per-source savings when the model is vision-capable. `usedTokens` feeds
+ *  the "next request" projection, mirroring the TUI's
+ *  `Math.max(0, usedTokens - savedTokens)`. */
+function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number): ReactNode {
+	const lines: ReactNode[] = [];
+	if (snap.systemPrompt) {
+		const sp = snap.systemPrompt;
+		lines.push(
+			<div className="gui-context-snap-line" key="sp">
+				{sp.applied
+					? t("system prompt imaged: {text} text → {frames} frames (saves ~{saved})", {
+							text: fmtTokens(sp.textTokens),
+							frames: String(sp.frames),
+							saved: fmtTokens(sp.savedTokens),
+						})
+					: t("system prompt stays text ({reason})", {
+							reason: t(
+								sp.reason === "empty"
+									? "reason: empty"
+									: sp.reason === "margin"
+										? "reason: insufficient savings"
+										: "reason: image budget",
+							),
+						})}
+			</div>,
+		);
+	}
+	if (snap.toolResults) {
+		const tr = snap.toolResults;
+		lines.push(
+			<div className="gui-context-snap-line" key="tr">
+				{tr.swapped > 0
+					? t("tool results: {imaged} imaged (saves ~{saved})", {
+							imaged: String(tr.swapped),
+							saved: fmtTokens(tr.savedTokens),
+						})
+					: t("tool results: none imaged ({total} in history)", { total: String(tr.total) })}
+			</div>,
+		);
+	}
+	if (snap.savedTokens > 0) {
+		lines.push(
+			<div className="gui-context-snap-line" key="next">
+				{t("next request: ~{tokens} tokens on the wire", {
+					tokens: fmtTokens(Math.max(0, usedTokens - snap.savedTokens)),
+				})}
+			</div>,
+		);
+	}
+	return lines;
+}
+
+/** /usage wire shape — mirror of @musepi/pi-ai UsageReport served by the
+ *  daemon's usage.reports RPC (TUI /usage parity). Shared with the
+ *  empty-state composer, which fetches the same global view session-less. */
+export interface UsageAmountView {
+	used?: number;
+	limit?: number;
+	unit?: string;
+	usedFraction?: number;
+	remainingFraction?: number;
+}
+export interface UsageLimitView {
+	id: string;
+	label: string;
+	scope?: { accountId?: string; projectId?: string; tier?: string; windowId?: string };
+	window?: { id?: string; label?: string; resetsAt?: number; resetLabel?: string };
+	amount: UsageAmountView;
+	status?: string;
+	notes?: string[];
+}
+export interface UsageReportView {
+	provider: string;
+	fetchedAt?: number;
+	limits: UsageLimitView[];
+	resetCredits?: { availableCount: number; credits?: Array<{ expiresAt?: string; status?: string }> };
+	notes?: string[];
+	metadata?: Record<string, unknown>;
+}
+/** The credential the live session is actually using (daemon resolves it). */
+export interface UsageActiveAccountView {
+	provider: string;
+	accountId?: string;
+	email?: string;
+}
+
+/** Title-case a provider id ("openai-codex" → "Openai Codex", TUI parity). */
+function usageProviderTitle(provider: string): string {
+	return provider
+		.split(/[-_]/g)
+		.map(part => (part ? part[0]!.toUpperCase() + part.slice(1) : ""))
+		.join(" ");
+}
+
+/** Account label for one limit row: email → accountId → projectId → "account N". */
+function usageAccountLabel(limit: UsageLimitView, report: UsageReportView, index: number): string {
+	const meta = report.metadata ?? {};
+	const email = typeof meta.email === "string" && meta.email ? meta.email : undefined;
+	if (email) return email;
+	const accountId =
+		(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : limit.scope?.accountId) ?? undefined;
+	if (accountId) return accountId;
+	const projectId =
+		(typeof meta.projectId === "string" && meta.projectId ? meta.projectId : limit.scope?.projectId) ?? undefined;
+	if (projectId) return projectId;
+	return t("account {count}", { count: String(index + 1) });
+}
+
+/** Used fraction 0..1 — mirrors @musepi/pi-ai resolveUsedFraction. */
+function usageResolveUsedFraction(limit: UsageLimitView): number | undefined {
+	const amount = limit.amount;
+	if (amount.usedFraction !== undefined) return amount.usedFraction;
+	if (amount.used !== undefined && amount.limit !== undefined && amount.limit > 0) {
+		return amount.used / amount.limit;
+	}
+	if (amount.unit === "percent" && amount.used !== undefined) return amount.used / 100;
+	if (amount.remainingFraction !== undefined) return Math.max(0, 1 - amount.remainingFraction);
+	return undefined;
+}
+
+/** Whether a limit row belongs to the session's active credential (TUI ●). */
+function usageLimitIsActive(
+	limit: UsageLimitView,
+	report: UsageReportView,
+	activeAccount: UsageActiveAccountView | null,
+): boolean {
+	if (!activeAccount || activeAccount.provider !== report.provider) return false;
+	const meta = report.metadata ?? {};
+	return (
+		(activeAccount.accountId !== undefined &&
+			(meta.accountId === activeAccount.accountId || limit.scope?.accountId === activeAccount.accountId)) ||
+		(activeAccount.email !== undefined && meta.email === activeAccount.email)
+	);
+}
+
+/** Trailing amount for a limit group ("N% free" / "N accts", TUI parity). */
+function usageAggregateAmount(limits: UsageLimitView[]): string {
+	const fractions = limits.map(usageResolveUsedFraction).filter((value): value is number => value !== undefined);
+	if (fractions.length === limits.length && fractions.length > 0) {
+		const sum = fractions.reduce((total, value) => total + value, 0);
+		const avgRemaining = Math.max(0, ((limits.length - sum) / limits.length) * 100);
+		return t("{percent}% free", { percent: String(Math.round(avgRemaining)) });
+	}
+	const amounts = limits
+		.map(limit => limit.amount)
+		.filter(amount => amount.used !== undefined && amount.limit !== undefined && amount.limit > 0);
+	if (amounts.length === limits.length && amounts.length > 0) {
+		const totalUsed = amounts.reduce((sum, amount) => sum + (amount.used ?? 0), 0);
+		const totalLimit = amounts.reduce((sum, amount) => sum + (amount.limit ?? 0), 0);
+		const remainingPct = totalLimit > 0 ? Math.max(0, 100 - (totalUsed / totalLimit) * 100) : 0;
+		return t("{percent}% free", { percent: String(Math.round(remainingPct)) });
+	}
+	if (limits.length > 0) {
+		const uniqueAccounts = new Set(
+			limits
+				.map(limit => limit.scope?.accountId)
+				.filter((id): id is string => typeof id === "string" && id.length > 0),
+		);
+		const count = uniqueAccounts.size > 0 ? uniqueAccounts.size : limits.length;
+		return t("{count} accts", { count: String(count) });
+	}
+	return "";
+}
+
+/** "resets in 2h" / "resets in 2h–3h" for a limit group (TUI parity). */
+function usageResetRange(limits: UsageLimitView[], nowMs: number): string | null {
+	const windows = limits
+		.map(limit => limit.window)
+		.filter(
+			(window): window is NonNullable<UsageLimitView["window"]> =>
+				window?.resetsAt !== undefined && window.resetsAt > nowMs,
+		);
+	if (windows.length === 0) return null;
+	const offsets = windows.map(window => window.resetsAt!).sort((a, b) => a - b);
+	const minReset = offsets[0]!;
+	const maxReset = offsets[offsets.length - 1]!;
+	if (maxReset - minReset > 60_000) {
+		return t("resets in {min}–{max}", {
+			min: fmtQuotaDuration(minReset - nowMs),
+			max: fmtQuotaDuration(maxReset - nowMs),
+		});
+	}
+	return t("resets in {time}", { time: fmtQuotaDuration(minReset - nowMs) });
+}
+
+/** Status tone for a limit's bar + dot ("ok" | "warn" | "err"). */
+function usageTone(status: string | undefined): "ok" | "warn" | "err" {
+	if (status === "exhausted") return "err";
+	if (status === "warning") return "warn";
+	return "ok";
+}
+
+/** Status tone class for a limit's bar (exhausted/warning → ok). */
+function usageStatusTone(status: string | undefined): string {
+	return `gui-usage-bar--${usageTone(status)}`;
+}
+
+/** One provider section of the /usage card (TUI /usage panel parity).
+ *  Collapsible per provider (desktop Reveal standard): the header shows
+ *  the aggregate status dot + window count, the detail folds underneath —
+ *  a multi-provider /usage card stays scannable without dumping every
+ *  window group at once. */
+export function UsageProviderSection({
+	report,
+	activeAccount,
+}: {
+	report: UsageReportView;
+	activeAccount: UsageActiveAccountView | null;
+}): ReactNode {
+	const [expanded, setExpanded] = useState(false);
+	const nowMs = Date.now();
+	const limits = report.limits ?? [];
+	// Group limits by window (label + window id, TUI parity) so 5h and 7d
+	// windows (and any per-tier buckets) render as separate sections.
+	const groups = new Map<string, { label: string; windowLabel: string; limits: UsageLimitView[] }>();
+	for (const limit of limits) {
+		const tier = limit.scope?.tier;
+		const label =
+			tier && !limit.label.toLowerCase().includes(tier.toLowerCase()) ? `${limit.label} (${tier})` : limit.label;
+		const windowId = limit.window?.id ?? limit.scope?.windowId ?? "default";
+		const windowLabel = limit.window?.label ?? windowId;
+		const key = `${label}|${windowId}`;
+		const group = groups.get(key) ?? { label, windowLabel, limits: [] };
+		group.limits.push(limit);
+		groups.set(key, group);
+	}
+	const groupList = [...groups.values()].filter(group => group.limits.length > 0);
+	const unlimitedReports = limits.length === 0;
+	const resets = report.resetCredits;
+	const activeHere =
+		activeAccount?.provider === report.provider
+			? (activeAccount.email ?? activeAccount.accountId ?? undefined)
+			: undefined;
+	// Aggregate tone across all of the provider's limits → the header dot.
+	const allStatuses = limits.map(limit => limit.status).filter(Boolean);
+	const aggregateTone = usageTone(
+		allStatuses.includes("exhausted") ? "exhausted" : allStatuses.includes("warning") ? "warning" : "ok",
+	);
+
+	return (
+		<div className="gui-usage-section" key={report.provider}>
+			<button
+				type="button"
+				className="gui-usage-provider-head"
+				onClick={() => setExpanded(v => !v)}
+				aria-expanded={expanded}
+			>
+				<span className={`gui-usage-dot gui-usage-dot--${aggregateTone}`} />
+				<span className="gui-usage-provider">{usageProviderTitle(report.provider)}</span>
+				{groupList.length > 0 && (
+					<span className="gui-usage-provider-summary">
+						{t("{count} windows", { count: String(groupList.length) })}
+					</span>
+				)}
+				<Icon name="arrow-down" className={`gui-usage-chevron${expanded ? " gui-usage-chevron--open" : ""}`} />
+			</button>
+			<Reveal open={expanded}>
+				<div className="gui-usage-provider-body">
+					{activeHere && (
+						<div className="gui-usage-note">
+							{t("in use by this session: {account}", { account: activeHere })}
+						</div>
+					)}
+					{Array.isArray(report.notes) && report.notes.length > 0 && (
+						<div className="gui-usage-note">{report.notes.join(" • ")}</div>
+					)}
+					{resets && resets.availableCount > 0 && (
+						<div className="gui-usage-resets">
+							<span className="gui-usage-resets-title">{t("saved rate-limit resets")}</span>
+							{(() => {
+								const meta = report.metadata ?? {};
+								const label =
+									(typeof meta.email === "string" && meta.email ? meta.email : undefined) ??
+									(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : undefined) ??
+									t("account {count}", { count: "1" });
+								const isActive =
+									activeAccount?.provider === report.provider &&
+									((activeAccount.email !== undefined && meta.email === activeAccount.email) ||
+										(activeAccount.accountId !== undefined && meta.accountId === activeAccount.accountId));
+								const rows: ReactNode[] = [
+									<span key="row">
+										• {label}: {resets.availableCount}{" "}
+										{resets.availableCount === 1 ? t("saved reset") : t("saved resets")}
+										{isActive ? ` (${t("active")})` : ""}
+									</span>,
+								];
+								for (const credit of resets.credits ?? []) {
+									if (!credit.expiresAt) continue;
+									const expiryMs = Date.parse(credit.expiresAt);
+									if (Number.isNaN(expiryMs)) continue;
+									const remaining = expiryMs - nowMs;
+									const date = credit.expiresAt.slice(0, 10);
+									rows.push(
+										<span key={`${credit.expiresAt}-${date}`}>
+											{remaining > 0
+												? t("expires in {time}", { time: fmtQuotaDuration(remaining) })
+												: t("expired ({date})", { date })}
+										</span>,
+									);
+								}
+								return rows;
+							})()}
+						</div>
+					)}
+					{groupList.map(group => {
+						const statuses = group.limits.map(limit => limit.status).filter(Boolean);
+						const aggregate = statuses.includes("exhausted")
+							? "exhausted"
+							: statuses.includes("warning")
+								? "warning"
+								: "ok";
+						const amount = usageAggregateAmount(group.limits);
+						const resetRange = usageResetRange(group.limits, nowMs);
+						const windowSuffix =
+							group.windowLabel.toLowerCase() === "quota window" ||
+							group.label.toLowerCase().includes(group.windowLabel.toLowerCase())
+								? ""
+								: group.windowLabel;
+						return (
+							<div className="gui-usage-group" key={group.label + group.windowLabel}>
+								<div className="gui-usage-group-head">
+									<span className={`gui-usage-dot gui-usage-dot--${usageTone(aggregate)}`} />
+									<span className="gui-usage-group-name">{group.label}</span>
+									{windowSuffix && <span className="gui-usage-group-window">({windowSuffix})</span>}
+									{amount && <span className="gui-usage-amount">{amount}</span>}
+								</div>
+								{group.limits.map((limit, i) => {
+									const fraction = usageResolveUsedFraction(limit);
+									const percent = fraction !== undefined ? Math.min(100, Math.max(0, fraction * 100)) : 0;
+									const active = usageLimitIsActive(limit, report, activeAccount);
+									const resetShort =
+										limit.window?.resetsAt !== undefined && limit.window.resetsAt > nowMs
+											? t("resets in {time}", { time: fmtQuotaDuration(limit.window.resetsAt - nowMs) })
+											: undefined;
+									return (
+										<div className="gui-quota-row" key={limit.id || `${limit.label}-${i}`}>
+											<div className="gui-quota-label">
+												<span
+													className={`gui-usage-acct-name${active ? " gui-usage-acct-name--active" : ""}`}
+												>
+													{active ? "● " : ""}
+													{usageAccountLabel(limit, report, i)}
+												</span>
+												{resetShort && <span className="gui-usage-acct-reset">({resetShort})</span>}
+											</div>
+											<div className="gui-quota-bar">
+												<div className="gui-usage-bar-track">
+													<div
+														className={`gui-usage-bar ${usageStatusTone(limit.status)}`}
+														style={{ width: `${percent}%` }}
+													/>
+												</div>
+												<span className="gui-quota-pct">
+													{fraction !== undefined ? `${Math.round(fraction * 100)}% used` : "—"}
+												</span>
+											</div>
+										</div>
+									);
+								})}
+								{resetRange && <div className="gui-usage-resetline">{resetRange}</div>}
+								{(() => {
+									const notes = [...new Set(group.limits.flatMap(limit => limit.notes ?? []))];
+									return notes.length > 0 ? <div className="gui-usage-note">{notes.join(" • ")}</div> : null;
+								})()}
+							</div>
+						);
+					})}
+					{unlimitedReports && (
+						<div className="gui-usage-unlimited">
+							• {usageAccountLabel({ id: "", label: "", amount: {} }, report, 0)}
+							{typeof report.metadata?.planType === "string" && report.metadata.planType
+								? ` (${report.metadata.planType})`
+								: ""}{" "}
+							<span className="gui-usage-note">— {t("no limits")}</span>
+						</div>
+					)}
+				</div>
+			</Reveal>
+		</div>
+	);
+}
+
+/** One category row of the /context dialog: glyph + name, tokens, percent
+ *  bar. The glyph and color match the board cells (TUI /context legend
+ *  parity) so the grid reads without hunting. */
+function renderContextCat(label: string, tokens: number, window: number, glyph: string, colorClass: string): ReactNode {
+	const percent = window > 0 ? (tokens / window) * 100 : 0;
+	const isFree = label === "context free";
+	return (
+		<div className="gui-context-cat" key={label}>
+			<div className="gui-context-cat-label">
+				<span className="gui-context-cat-name">
+					<span className={`gui-context-cat-glyph ${colorClass}`}>{glyph}</span>
+					{t(label as never)}
+				</span>
+				<span className="gui-context-cat-pct">
+					{fmtTokens(tokens)} tokens · {percent.toFixed(1)}%
+				</span>
+			</div>
+			<div className="gui-usage-bar-track">
+				<div
+					className={`gui-usage-bar ${isFree ? "gui-usage-bar--ok" : "gui-usage-bar--accent"}`}
+					style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+				/>
+			</div>
+		</div>
+	);
+}
+
+/** TUI /context panel parity (modes/utils/context-usage.ts): the board is a
+ *  20×10 = 200 cell grid. Categories render as filled ⛁ glyphs (messages as
+ *  ⛃), free space as empty ⛶, the autocompact reserve as ⛝. Cells flow
+ *  categories → free → buffer, same as the TUI. */
+const CONTEXT_GRID_COLS = 20;
+const CONTEXT_GRID_ROWS = 10;
+const CONTEXT_GRID_CELLS = CONTEXT_GRID_COLS * CONTEXT_GRID_ROWS;
+const CONTEXT_CELL_FILLED = "⛁";
+const CONTEXT_CELL_MESSAGES = "⛃";
+const CONTEXT_CELL_FREE = "⛶";
+const CONTEXT_CELL_BUFFER = "⛝";
+
+function renderContextGrid(breakdown: ContextBreakdownView, autoCompactBufferTokens = 0): ReactNode {
+	const total = Math.max(1, breakdown.contextWindow);
+	const cells = CONTEXT_GRID_CELLS;
+	const cats: Array<{ n: number; cls: string; glyph: string }> = [
+		{ n: breakdown.systemPromptTokens, cls: "gui-context-cell--system", glyph: CONTEXT_CELL_FILLED },
+		{ n: breakdown.systemToolsTokens, cls: "gui-context-cell--tools", glyph: CONTEXT_CELL_FILLED },
+		{ n: breakdown.systemContextTokens, cls: "gui-context-cell--context", glyph: CONTEXT_CELL_FILLED },
+		{ n: breakdown.skillsTokens, cls: "gui-context-cell--skills", glyph: CONTEXT_CELL_FILLED },
+		{ n: breakdown.messagesTokens, cls: "gui-context-cell--messages", glyph: CONTEXT_CELL_MESSAGES },
+	];
+	// TUI /context parity: every non-zero category occupies AT LEAST one
+	// cell (Math.max(1, …)) — plain rounding drops small-but-present
+	// categories (system prompt / skills / messages) to zero.
+	const tokensPerCell = total / cells;
+	const ratioCells = (tokens: number): number => (tokens <= 0 ? 0 : Math.max(1, Math.round(tokens / tokensPerCell)));
+	const counts = cats.map(c => ratioCells(c.n));
+	// Autocompact reserve cells come AFTER free space (TUI order); free fills
+	// the remainder so the board sums to exactly 200.
+	const bufferCount =
+		autoCompactBufferTokens > 0 ? Math.max(1, Math.round(autoCompactBufferTokens / tokensPerCell)) : 0;
+	let used = counts.reduce((a, b) => a + b, 0) + bufferCount;
+	// Over-allocation (small windows where the at-least-one rule overruns):
+	// trim from the LARGEST categories first so the board never overflows.
+	if (used > cells) {
+		const idx = counts.map((_, i) => i).sort((a, b) => counts[b]! - counts[a]!);
+		for (const i of idx) {
+			if (used <= cells) break;
+			if (counts[i]! > 1) {
+				counts[i] = counts[i]! - 1;
+				used--;
+			}
+		}
+	}
+	const free = Math.max(0, cells - used);
+	const cellList: Array<{ glyph: string; cls: string }> = [];
+	for (let i = 0; i < cats.length; i++) {
+		for (let j = 0; j < (counts[i] ?? 0); j++) cellList.push({ glyph: cats[i]!.glyph, cls: cats[i]!.cls });
+	}
+	for (let j = 0; j < free; j++) cellList.push({ glyph: CONTEXT_CELL_FREE, cls: "gui-context-cell--free" });
+	for (let j = 0; j < bufferCount; j++) cellList.push({ glyph: CONTEXT_CELL_BUFFER, cls: "gui-context-cell--buffer" });
+	return (
+		<div className="gui-context-grid" role="img" aria-label="Context window visualization">
+			{Array.from({ length: CONTEXT_GRID_ROWS }, (_, r) => (
+				<div className="gui-context-grid-row" key={r}>
+					{Array.from({ length: CONTEXT_GRID_COLS }, (_, c) => {
+						const cell = cellList[r * CONTEXT_GRID_COLS + c];
+						return cell ? (
+							// Anonymous visual cells — index is identity.
+							// biome-ignore lint/suspicious/noArrayIndexKey: grid cells
+							<span key={c} className={`gui-context-cell ${cell.cls}`}>
+								{cell.glyph}
+							</span>
+						) : null;
+					})}
+				</div>
+			))}
 		</div>
 	);
 }

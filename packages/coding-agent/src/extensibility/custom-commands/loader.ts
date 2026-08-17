@@ -10,6 +10,7 @@ import { type } from "@musepi/omptype";
 import * as zod from "@musepi/omptype/zod";
 import { getAgentDir, getProjectDir, isEnoent, logger } from "@musepi/pi-utils";
 import { getConfigDirs } from "../../config";
+
 import { execCommand } from "../../exec/exec";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
@@ -24,6 +25,8 @@ import type {
 	CustomCommandsLoadResult,
 	LoadedCustomCommand,
 } from "./types";
+
+const arktype = Object.assign(Function.prototype.bind.call(type, undefined) as typeof type, type, { type });
 
 /**
  * Load a single command module using native Bun import.
@@ -187,7 +190,7 @@ export async function loadCustomCommands(options: LoadCustomCommandsOptions = {}
 		exec: (command: string, args: string[], execOptions) =>
 			execCommand(command, args, execOptions?.cwd ?? cwd, execOptions),
 		typebox,
-		arktype: type,
+		arktype,
 		zod,
 		pi: PiCodingAgent,
 	};

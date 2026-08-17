@@ -65,6 +65,7 @@ export interface AzureOpenAIResponsesOptions extends StreamOptions {
 	azureDeploymentName?: string;
 	toolChoice?: ToolChoice;
 	serviceTier?: ServiceTier;
+	disableReasoning?: boolean;
 }
 
 type AzureOpenAIResponsesSamplingParams = ResponseCreateParamsStreaming & {

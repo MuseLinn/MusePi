@@ -145,6 +145,15 @@ describe("pi-native parseRequest", () => {
 		expect(parsed.options.loopGuard).toEqual({ enabled: false });
 	});
 
+	it("forwards acceptEmptyResponse so a passive Google advisor can accept silence server-side", () => {
+		const parsed = parseRequest({
+			modelId: "google/gemini-3.6-flash",
+			context: baseContext,
+			options: { acceptEmptyResponse: true },
+		});
+		expect(parsed.options.acceptEmptyResponse).toBe(true);
+	});
+
 	it("forwards an explicit statefulResponses disablement to the native stream", () => {
 		const parsed = parseRequest({
 			modelId: "openai/gpt-5",

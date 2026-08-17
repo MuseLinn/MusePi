@@ -16,6 +16,9 @@ export interface ToolCardProps {
 	running?: boolean;
 	partialResult?: unknown;
 	host?: ToolRenderHost;
+	/** display.taskCardStyle parity: "classic" uses the plain tool-call card
+	 *  instead of the swarm member-grid card. */
+	taskCardStyle?: "swarm" | "classic";
 }
 
 /** Widget cards render expanded by default (GUI setting
@@ -37,7 +40,7 @@ function widgetDefaultOpen(): boolean {
 
 /** Wire-type adapter over the shared per-tool renderer stack. */
 export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode {
-	const { name, intent, args, result, running, partialResult, host } = props;
+	const { name, intent, args, result, running, partialResult, host, taskCardStyle } = props;
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
 	// With the standalone widget display on, the widget's visual lives on
@@ -56,6 +59,7 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 			kind={toolKind(name, intent)}
 			partial={partial || undefined}
 			host={host}
+			taskCardStyle={taskCardStyle}
 			/* ZCode parity: live tools open while they run, fold when done;
 			 * artifacts (widget/board cards) stay open per the user setting. */
 			defaultOpen={isArtifactCard(name) ? artifactDefaultOpen : running === true}

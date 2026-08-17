@@ -17,6 +17,128 @@ describe("Editor component", () => {
 		setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
 	});
 
+	it("advances its width-epoch revision for text changes but not cursor movement", () => {
+		const editor = new Editor(defaultEditorTheme);
+		const initial = editor.getNativeScrollbackWidthEpochRevision();
+		editor.setText("draft");
+		const changed = editor.getNativeScrollbackWidthEpochRevision();
+		expect(changed).toBeGreaterThan(initial);
+		editor.moveToLineStart();
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBe(changed);
+	});
+
+	it("advances its width-epoch revision when max height exposes more draft rows", () => {
+		const editor = new Editor(defaultEditorTheme);
+		editor.setText("draft-0\ndraft-1\ndraft-2\ndraft-3");
+		editor.setMaxHeight(3);
+		const clippedRows = editor.render(40).length;
+		const clippedRevision = editor.getNativeScrollbackWidthEpochRevision();
+
+		editor.setMaxHeight(6);
+
+		expect(editor.render(40).length).toBeGreaterThan(clippedRows);
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBeGreaterThan(clippedRevision);
+	});
+
+	it("advances its width-epoch revision when terminal-cursor layout adds a row", () => {
+		const editor = new Editor(defaultEditorTheme);
+		editor.focused = true;
+		editor.setText("draft");
+		editor.setImeSafeCursorLayout(true);
+		const inlineRows = editor.render(40).length;
+		const inlineRevision = editor.getNativeScrollbackWidthEpochRevision();
+
+		editor.setUseTerminalCursor(true);
+
+		expect(editor.render(40).length).toBeGreaterThan(inlineRows);
+		const terminalCursorRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(terminalCursorRevision).toBeGreaterThan(inlineRevision);
+		editor.setUseTerminalCursor(true);
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBe(terminalCursorRevision);
+	});
+
+	it("advances its width-epoch revision when border visibility adds rows", () => {
+		const editor = new Editor(defaultEditorTheme);
+		editor.setText("draft");
+		editor.setBorderVisible(false);
+		const borderlessRows = editor.render(40).length;
+		const borderlessRevision = editor.getNativeScrollbackWidthEpochRevision();
+
+		editor.setBorderVisible(true);
+
+		expect(editor.render(40).length).toBeGreaterThan(borderlessRows);
+		const borderedRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(borderedRevision).toBeGreaterThan(borderlessRevision);
+		editor.setBorderVisible(true);
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBe(borderedRevision);
+	});
+
+	it("tracks lazy top-border changes independently of width reflow", () => {
+		const editor = new Editor(defaultEditorTheme);
+		let status = "idle";
+		let revision = 0;
+		editor.setTopBorderProvider(availableWidth => {
+			const content = `${status}:${availableWidth}`;
+			return { content, width: visibleWidth(content), revision };
+		});
+		editor.render(40);
+		const idleRevision = editor.getNativeScrollbackWidthEpochRevision();
+
+		status = "streaming";
+		revision++;
+		editor.render(30);
+		const streamingRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(streamingRevision).toBeGreaterThan(idleRevision);
+
+		editor.render(50);
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBe(streamingRevision);
+	});
+
+	it("advances its width-epoch revision when autocomplete changes without changing text", async () => {
+		const editor = new Editor(defaultEditorTheme);
+		const { promise: autocompleteUpdated, resolve: resolveAutocompleteUpdated } = Promise.withResolvers<void>();
+		editor.setAutocompleteProvider({
+			async getSuggestions() {
+				return {
+					items: Array.from({ length: 8 }, (_value, index) => ({
+						label: `/item-${index}`,
+						value: `/item-${index}`,
+						description:
+							index === 1
+								? "A deliberately long description that wraps across several narrow popup rows."
+								: "Short",
+					})),
+					prefix: "/",
+				};
+			},
+			applyCompletion(lines, cursorLine, cursorCol) {
+				return { lines, cursorLine, cursorCol };
+			},
+		});
+		editor.onAutocompleteUpdate = resolveAutocompleteUpdated;
+		editor.handleInput("/");
+		const textRevision = editor.getNativeScrollbackWidthEpochRevision();
+
+		await autocompleteUpdated;
+		const popupRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(editor.getText()).toBe("/");
+		expect(popupRevision).toBeGreaterThan(textRevision);
+		const initialPopupRows = editor.render(30).length;
+
+		editor.handleInput("\x1b[B");
+		const selectedRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(selectedRevision).toBeGreaterThan(popupRevision);
+
+		editor.setAutocompleteMaxVisible(8);
+		const resizedRevision = editor.getNativeScrollbackWidthEpochRevision();
+		expect(resizedRevision).toBeGreaterThan(selectedRevision);
+		expect(editor.render(30).length).toBeGreaterThan(initialPopupRows);
+
+		editor.handleInput("\x1b");
+		expect(editor.isShowingAutocomplete()).toBe(false);
+		expect(editor.getNativeScrollbackWidthEpochRevision()).toBeGreaterThan(resizedRevision);
+	});
+
 	describe("Word delete keybindings", () => {
 		it("honors a keybindings.yml remap of deleteWordBackward in the multi-line editor", () => {
 			setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS, { "tui.editor.deleteWordBackward": "alt+g" }));

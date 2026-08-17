@@ -210,6 +210,7 @@ import {
 	buildPiWriteError,
 	buildPiWriteRejected,
 	buildPiWriteResult,
+	omitUndefinedArgs,
 	piEscapeRegexLiteral,
 	piGrepSkip,
 	piJoinPath,
@@ -222,6 +223,67 @@ import {
 
 export const CURSOR_API_URL = "https://api2.cursor.sh";
 export const CURSOR_CLIENT_VERSION = "cli-2026.07.23-e383d2b";
+
+/**
+ * HTTP/1 connection-specific headers that HTTP/2 forbids. Node's `http2.request()`
+ * throws `ERR_HTTP2_INVALID_CONNECTION_HEADERS` on these rather than dropping
+ * them, so a caller sending one would kill the request outright.
+ */
+const HTTP2_FORBIDDEN_HEADERS = new Set([
+	"connection",
+	"keep-alive",
+	"proxy-connection",
+	"transfer-encoding",
+	"upgrade",
+	"http2-settings",
+]);
+
+/**
+ * Header names the Cursor request sets for itself. A caller copy in ANY casing
+ * has to go: the spread below adds the fixed lower-case name regardless, and two
+ * spellings of one field are a duplicate rather than an override.
+ */
+const CURSOR_RESERVED_HEADERS = new Set([
+	"content-type",
+	"connect-protocol-version",
+	"te",
+	"authorization",
+	"x-ghost-mode",
+	"x-cursor-client-version",
+	"x-cursor-client-type",
+	"x-request-id",
+	// Transport-owned even though this request never sets it: node's http2 client
+	// suppresses the `:authority` it derives from the URL when a plain `host`
+	// header is present, so a caller value here silently retargets the request at
+	// a different virtual host.
+	"host",
+	// The Connect body is streamed after the headers (initial frame, heartbeats,
+	// tool responses), so no caller-supplied length can describe it and an HTTP/2
+	// peer resets the stream once the body diverges.
+	"content-length",
+]);
+
+/**
+ * Reduce caller-supplied headers to what this HTTP/2 request can legally carry.
+ *
+ * Everything is lower-cased, because HTTP/2 field names are lower-case and node
+ * compares them that way. A caller `Authorization` next to the fixed
+ * `authorization` does not lose to it, it DUPLICATES it, and node throws
+ * `ERR_HTTP2_HEADER_SINGLE_VALUE` before the request goes out. Same for a `TE`
+ * that is not `trailers`. Node throws on all three classes here rather than
+ * ignoring them, so a miss turns a harmless header into a dead request.
+ */
+function sanitizeCursorCallerHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+	const sanitized: Record<string, string> = {};
+	for (const [name, value] of Object.entries(headers ?? {})) {
+		const field = name.toLowerCase();
+		if (field.startsWith(":")) continue;
+		if (HTTP2_FORBIDDEN_HEADERS.has(field)) continue;
+		if (CURSOR_RESERVED_HEADERS.has(field)) continue;
+		sanitized[field] = value;
+	}
+	return sanitized;
+}
 
 const CURSOR_PROXY_TUNNEL_TIMEOUT_MS = 30_000;
 
@@ -545,7 +607,22 @@ export const streamCursor: StreamFunction<"cursor-agent"> = (
 
 			const baseUrl = model.baseUrl || CURSOR_API_URL;
 			const requestPath = "/agent.v1.AgentService/Run";
+			// Caller headers are additive, and are spread FIRST so the protocol
+			// framing, auth, and request id below always win. Cursor built this map
+			// from scratch and never read `options.headers`, so tracing/attribution
+			// headers set by a caller (or a `before_provider_headers` extension) were
+			// silently dropped here while working on other providers.
+			//
+			// Two classes are stripped because node's http2 client THROWS on them
+			// rather than ignoring them, which would turn a harmless header into a
+			// dead request: pseudo-headers, which belong to the transport, and the
+			// HTTP/1 connection-specific headers HTTP/2 forbids outright
+			// (ERR_HTTP2_INVALID_CONNECTION_HEADERS). `te` needs no filtering here —
+			// HTTP/2 allows it only as `trailers`, which is exactly what the fixed
+			// set below re-applies over anything a caller sent.
+			const callerHeaders = sanitizeCursorCallerHeaders(options?.headers);
 			const requestHeaders = {
+				...callerHeaders,
 				":method": "POST",
 				":path": requestPath,
 				"content-type": "application/connect+proto",
@@ -3592,11 +3669,14 @@ export function synthesizeCursorExecToolCall(
 ): void {
 	endCurrentTextBlock(output, stream, state);
 	endCurrentThinkingBlock(output, stream, state);
+	// Exec-frame translators often write `optional: value || undefined`. A
+	// present `undefined` fails ArkType optional-field validation; drop those
+	// keys so the transcript block matches what a model-native call would omit.
 	const block: ToolCallState = {
 		type: "toolCall",
 		id: toolCallId,
 		name: toolName,
-		arguments: args,
+		arguments: omitUndefinedArgs(args),
 		[kStreamingBlockIndex]: output.content.length,
 		[kStreamingBlockKind]: "cursor-exec",
 		[kCursorExecResolved]: true,

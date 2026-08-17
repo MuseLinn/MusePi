@@ -161,4 +161,4 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.3.1）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@oh-my-pi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.3.1）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。

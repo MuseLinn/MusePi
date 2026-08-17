@@ -3,7 +3,7 @@ import { WidgetErrorBoundary } from "@musepi/collab-web/src/widgets/error-bounda
 import { WidgetFit } from "@musepi/collab-web/src/widgets/fit";
 import { type BoardWidget, widgetDef } from "@musepi/collab-web/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -188,12 +188,12 @@ function seedBoards(): BoardData[] {
 			],
 		};
 	}
-	// PROMO REEL cover: title/subtitle/duration until an agent fills url.
+	// PROMO REEL cover: video widget defaults (widget.ts: 凡人修仙传 /
+	// BILIBILI · 年番) show until an agent fills url/bvid.
 	const vd = h.find(w => w.type === "video");
 	if (vd) {
-		vd.data.title = "Kimi Work 介绍";
-		vd.data.subtitle = "PROMO REEL";
-		vd.data.duration = "00:05";
+		vd.data.title = "凡人修仙传";
+		vd.data.subtitle = "BILIBILI · 年番";
 	}
 	return [
 		{ id: "finance", title: t("board finance title"), widgets: f, builtin: true },
@@ -602,13 +602,13 @@ function BoardHome({
 					]}
 				/>
 			)}
-			{confirmBoard && (
-				<DialogFrame
-					open
-					label={t("board remove")}
-					onClose={() => setConfirmBoard(null)}
-					className="gui-board-remove-dialog"
-				>
+			<DialogFrame
+				open={confirmBoard !== null}
+				onClose={() => setConfirmBoard(null)}
+				label={t("board remove")}
+				className="gui-board-remove-dialog gui-dialog--confirm"
+			>
+				{confirmBoard && (
 					<div className="gui-board-remove">
 						<p className="gui-board-remove-desc">{t("board remove confirm", { name: confirmBoard.title })}</p>
 						<p className="gui-board-remove-hint">
@@ -623,8 +623,8 @@ function BoardHome({
 							</button>
 						</div>
 					</div>
-				</DialogFrame>
-			)}
+				)}
+			</DialogFrame>
 			<SpotlightCard
 				className="gui-board-home-create"
 				spotlightColor="color-mix(in oklab, var(--color-accent) 10%, transparent)"
@@ -765,8 +765,11 @@ export function BoardPage({
 	const activeRef = useRef<BoardData | null>(null);
 	activeRef.current = active;
 	// Track the canvas width so the surface scales proportionally (kimi
-	// dynamic reflow): scale = containerWidth / BASE_W. Re-runs when the
-	// active board mounts the canvas (the ref is null on the home view).
+	// dynamic reflow): scale = containerWidth / BASE_W. Depends on activeId
+	// because the canvas only mounts on the board view — with an empty dep
+	// array the effect ran once at mount (home view, ref null) and the
+	// scale stayed 1 forever, so a window narrower than BASE_W clipped the
+	// canvas sides. Re-running per board open re-measures and re-observes.
 	useEffect(() => {
 		const el = canvasRef.current;
 		if (!el) return;
@@ -778,7 +781,7 @@ export function BoardPage({
 		const ro = new ResizeObserver(apply);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, []);
+	}, [activeId]);
 	const updateBoard = (id: string, patch: Partial<BoardData>): void => {
 		persist(boards.map(b => (b.id === id ? { ...b, ...patch } : b)));
 	};
@@ -1294,6 +1297,17 @@ export function BoardPage({
 
 	// Board view JSX (active is non-null here) — rendered for the
 	// leave/enter transition frames below.
+	// Group-level chroma glow (reactbits ChromaGrid parity): the pointer
+	// over the canvas drives one chromatic light that lights ALL cards
+	// together — vs each card's own SpotlightCard. Coordinates are written
+	// straight to CSS vars on the scroll container (no re-render), so the
+	// glow layer is pure CSS and stays put while the canvas scrolls.
+	const onCanvasPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+		const el = e.currentTarget;
+		const rect = el.getBoundingClientRect();
+		el.style.setProperty("--cg-x", `${Math.round(e.clientX - rect.left)}px`);
+		el.style.setProperty("--cg-y", `${Math.round(e.clientY - rect.top)}px`);
+	};
 	const boardView = (
 		<div className="gui-board">
 			<div className="gui-board-head">
@@ -1363,7 +1377,7 @@ export function BoardPage({
 					</button>
 				</div>
 			</div>
-			<div className="gui-board-canvas" ref={canvasRef}>
+			<div className="gui-board-canvas" ref={canvasRef} onPointerMove={onCanvasPointerMove}>
 				<div className="gui-board-surface" style={{ width: BASE_W, transform: `scale(${canvasScale})` }}>
 					{active.widgets.length === 0 && (
 						<div className="gui-board-empty">
@@ -1459,6 +1473,7 @@ export function BoardPage({
 						);
 					})}
 				</div>
+				<div className="gui-chroma-glow" aria-hidden="true" />
 			</div>
 			{genOpen && !genBusy && (
 				<DialogFrame

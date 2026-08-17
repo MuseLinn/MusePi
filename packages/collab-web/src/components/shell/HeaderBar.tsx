@@ -1,8 +1,9 @@
 import { ArrowLeft, CalendarClock, Folder, LayoutDashboard, LogOut, MessageSquare, PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { t, type TranslationKey } from "../../i18n/index.js";
-import type { GuestSnapshot } from "../../lib/client";
+import { type TranslationKey, t } from "../../i18n/index.js";
+import type { GuestClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
+import { useGuestSelector } from "../../lib/use-guest";
 import { AccentToggle } from "./AccentToggle";
 import { LanguageToggle } from "./LanguageToggle";
 import { ThemeToggle } from "./ThemeToggle";
@@ -11,8 +12,7 @@ import { ThemeToggle } from "./ThemeToggle";
 export type GuestPanel = "board" | "scheduled" | "files";
 
 export interface HeaderBarProps {
-	snapshot: GuestSnapshot;
-	subCount: number;
+	client: GuestClient;
 	railOpen: boolean;
 	onToggleRail(): void;
 	onLeave(): void;
@@ -30,8 +30,7 @@ const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: 
 ];
 
 export function HeaderBar({
-	snapshot,
-	subCount,
+	client,
 	railOpen,
 	onToggleRail,
 	onLeave,
@@ -39,7 +38,13 @@ export function HeaderBar({
 	activePanel,
 	onSelectPanel,
 }: HeaderBarProps): ReactNode {
-	const { header, state, phase, readOnly } = snapshot;
+	// Field-level subscriptions: the header only re-renders when its own
+	// fields change, never on every transcript/notice frame.
+	const header = useGuestSelector(client, s => s.header);
+	const state = useGuestSelector(client, s => s.state);
+	const phase = useGuestSelector(client, s => s.phase);
+	const readOnly = useGuestSelector(client, s => s.readOnly);
+	const subCount = useGuestSelector(client, s => s.agents.filter(a => a.kind === "sub").length);
 	const title = header?.title ?? state?.sessionName ?? t("session");
 	const usage = state?.contextUsage;
 	let pct: number | null = null;

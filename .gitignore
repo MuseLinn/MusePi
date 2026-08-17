@@ -14,6 +14,8 @@ target/
 .bun-build
 *[0-9a-f]*.bun-build
 *.b64.js
+/result
+/result-*
 
 # Environment
 .env

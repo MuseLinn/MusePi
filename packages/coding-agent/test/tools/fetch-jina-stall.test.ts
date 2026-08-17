@@ -94,3 +94,63 @@ describe("renderHtmlToText: jina stall does not starve local fallbacks (#1449)",
 		).toBe(true);
 	});
 });
+
+describe("renderHtmlToText: Jina response validation", () => {
+	it("requests fresh markdown and strips the Jina metadata preamble", async () => {
+		const settings = Settings.isolated({ "providers.fetch": "jina" });
+		const markdown = `# Extracted article\n\n${"Substantive reader content. ".repeat(8)}`.trim();
+		let requestHeaders: Headers | undefined;
+		const fetchMock = asGlobalFetch((_input, init) => {
+			requestHeaders = new Headers(init?.headers);
+			return new Response(`Title: Example\nURL Source: https://example.com/article\nMarkdown Content:\n${markdown}`);
+		});
+
+		const result = await renderHtmlToText(
+			"https://example.com/article",
+			"<html><body>short</body></html>",
+			1,
+			settings,
+			undefined,
+			null,
+			fetchMock,
+		);
+
+		expect(result).toEqual({ content: markdown, ok: true, method: "jina" });
+		expect(requestHeaders?.get("accept")).toBe("text/markdown");
+		expect(requestHeaders?.get("x-no-cache")).toBe("true");
+	});
+
+	for (const { label, readerBody, headers } of [
+		{ label: "missing marker", readerBody: "Plausible but unstructured output. ".repeat(8) },
+		{ label: "short body", readerBody: "Markdown Content:\nToo short" },
+		{ label: "loading shell", readerBody: `Markdown Content:\nLoading...${" ".repeat(120)}` },
+		{ label: "JavaScript gate", readerBody: `Markdown Content:\nPlease enable JavaScript${" ".repeat(120)}` },
+		{
+			label: "declared oversized body",
+			readerBody: `Markdown Content:\n${"Substantive content. ".repeat(8)}`,
+			headers: { "Content-Length": String(2 * 1024 * 1024 + 1) },
+		},
+	]) {
+		it(`falls back when Jina returns a ${label}`, async () => {
+			const settings = Settings.isolated({ "providers.fetch": "jina" });
+			const paragraph =
+				"This locally rendered article contains enough meaningful prose to satisfy the shared reader quality gate. ";
+			const html = `<html><body><article><h1>Fallback article</h1><p>${paragraph.repeat(4)}</p></article></body></html>`;
+			const fetchMock = asGlobalFetch(() => new Response(readerBody, { headers }));
+
+			const result = await renderHtmlToText(
+				"https://example.com/article",
+				html,
+				1,
+				settings,
+				undefined,
+				null,
+				fetchMock,
+			);
+
+			expect(result.ok).toBe(true);
+			expect(result.method).toBe("native");
+			expect(result.content).toContain("Fallback article");
+		});
+	}
+});

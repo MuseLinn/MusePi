@@ -2,7 +2,7 @@ import type { CronRun, CronSchedule, CronTask } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient, GuestSnapshot } from "../../lib/client";
+import type { GuestClient } from "../../lib/client";
 import { relTime } from "../../lib/format";
 
 /**
@@ -19,10 +19,12 @@ const WEEKDAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 interface ScheduledPanelProps {
 	client: GuestClient;
-	snapshot: GuestSnapshot;
+	/** Session cwd; null before the first state frame. */
+	cwd: string | null;
+	readOnly: boolean;
 }
 
-export function ScheduledPanel({ client, snapshot }: ScheduledPanelProps): ReactNode {
+export function ScheduledPanel({ client, cwd, readOnly }: ScheduledPanelProps): ReactNode {
 	const [tasks, setTasks] = useState<CronTask[] | null>(null);
 	const [runs, setRuns] = useState<CronRun[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -44,17 +46,14 @@ export function ScheduledPanel({ client, snapshot }: ScheduledPanelProps): React
 		return () => window.clearInterval(id);
 	}, [load]);
 
-	const runTask = useCallback(
-		async (fn: () => Promise<{ tasks: CronTask[] } | void>): Promise<void> => {
-			try {
-				const res = await fn();
-				if (res && "tasks" in res) setTasks(res.tasks);
-			} catch (err) {
-				setError(err instanceof Error ? err.message : String(err));
-			}
-		},
-		[],
-	);
+	const runTask = useCallback(async (fn: () => Promise<{ tasks: CronTask[] } | void>): Promise<void> => {
+		try {
+			const res = await fn();
+			if (res && "tasks" in res) setTasks(res.tasks);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, []);
 
 	if (error !== null) {
 		return (
@@ -70,14 +69,12 @@ export function ScheduledPanel({ client, snapshot }: ScheduledPanelProps): React
 		return <div className="sh-panel-state">{t("loading…")}</div>;
 	}
 
-	const readOnly = snapshot.readOnly;
-
 	return (
 		<div className="sh-scheduled">
 			<div className="sh-panel-head">
 				<h2 className="sh-panel-title">{t("scheduled tasks")}</h2>
 			</div>
-			{!readOnly && <TaskForm client={client} snapshot={snapshot} onAdded={load} />}
+			{!readOnly && <TaskForm client={client} cwd={cwd} onAdded={load} />}
 			{tasks.length === 0 ? (
 				<p className="sh-panel-muted">{t("no tasks yet")}</p>
 			) : (
@@ -123,11 +120,11 @@ export function ScheduledPanel({ client, snapshot }: ScheduledPanelProps): React
 
 function TaskForm({
 	client,
-	snapshot,
+	cwd,
 	onAdded,
 }: {
 	client: GuestClient;
-	snapshot: GuestSnapshot;
+	cwd: string | null;
 	onAdded(): Promise<void>;
 }): ReactNode {
 	const [prompt, setPrompt] = useState("");
@@ -155,7 +152,7 @@ function TaskForm({
 			enabled: true,
 			schedule,
 			prompt: text,
-			cwd: snapshot.state?.cwd ?? "",
+			cwd: cwd ?? "",
 			state: { createdAt: Date.now() },
 		};
 		setBusy(true);
@@ -169,7 +166,7 @@ function TaskForm({
 		} finally {
 			setBusy(false);
 		}
-	}, [client, snapshot.state?.cwd, prompt, kind, time, weekday, onAdded]);
+	}, [client, cwd, prompt, kind, time, weekday, onAdded]);
 
 	return (
 		<form
@@ -191,7 +188,11 @@ function TaskForm({
 			<div className="sh-task-form-row">
 				<label className="sh-field">
 					<span className="sh-field-label">{t("schedule kind")}</span>
-					<select className="sh-input" value={kind} onChange={e => setKind(e.target.value as CronSchedule["kind"])}>
+					<select
+						className="sh-input"
+						value={kind}
+						onChange={e => setKind(e.target.value as CronSchedule["kind"])}
+					>
 						<option value="once">{t("once")}</option>
 						<option value="daily">{t("daily")}</option>
 						<option value="weekly">{t("weekly")}</option>

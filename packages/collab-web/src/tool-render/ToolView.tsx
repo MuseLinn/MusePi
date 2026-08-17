@@ -6,11 +6,19 @@ import { INTENT_FIELD } from "@musepi/pi-wire";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
-import { useCollapseHeight, collapseStyle } from "../lib/use-collapse.js";
+import { collapseStyle, useCollapseHeight } from "../lib/use-collapse.js";
 import { resolveToolRenderer } from "./registry";
 import type { ToolKind, ToolRenderHost, ToolRenderProps, ToolResultLike } from "./types";
 import { isRecord, replaceTabs, stripAnsi } from "./util";
 import "./tool-render.css";
+
+/**
+ * Grace period before a completed tool card auto-folds: the user just
+ * watched it run — collapsing the instant it finishes yanks the result
+ * away mid-glance. Delaying (and honouring a manual expand during the
+ * wait) keeps the reveal readable without piling up open cards.
+ */
+const COLLAPSE_DELAY_MS = 1800;
 
 export interface ToolViewProps {
 	name: string;
@@ -24,6 +32,9 @@ export interface ToolViewProps {
 	partial?: string;
 	/** aicss-style treatment hint (transcript ToolCard sets it). */
 	kind?: ToolKind;
+	/** display.taskCardStyle parity: "classic" bypasses dedicated Card
+	 *  chrome (e.g. the task swarm card) and uses the plain tool card. */
+	taskCardStyle?: "swarm" | "classic";
 	defaultOpen?: boolean;
 	/** ZCode parity: collapse the card when the tool finishes running (the
 	 *  process trace folds away once the turn completes). Manual expand
@@ -69,22 +80,46 @@ export function ToolView(props: ToolViewProps): ReactNode {
 	// running, e.g. the active-tool map arrives after the message row)
 	// opens the card so a live trace is visible while it runs. Manual
 	// expand after the first auto-collapse is respected (doneRef guard).
+	// The fold itself is DELAYED (COLLAPSE_DELAY_MS) so a freshly
+	// completed card is readable for a moment — collapsing instantly
+	// yanks content away the second it finishes, which reads as churn.
 	const collapseDoneRef = useRef(false);
 	const wasRunningRef = useRef(false);
+	const collapseTimerRef = useRef<Timer | null>(null);
 	useEffect(() => {
 		if (props.collapseWhenDone !== true) return;
 		if (props.running === true) {
 			collapseDoneRef.current = false;
+			// Any pending delayed fold is cancelled — the tool is running
+			// again, the card must stay open for the live trace.
+			if (collapseTimerRef.current !== null) {
+				clearTimeout(collapseTimerRef.current);
+				collapseTimerRef.current = null;
+			}
 			if (!wasRunningRef.current) setOpen(true);
 			wasRunningRef.current = true;
 			return;
 		}
 		wasRunningRef.current = false;
 		if (props.result !== undefined && collapseDoneRef.current === false) {
-			collapseDoneRef.current = true;
-			setOpen(false);
+			collapseTimerRef.current = setTimeout(() => {
+				collapseTimerRef.current = null;
+				// Manual interaction since scheduling (collapsed-then-
+				// re-expanded, or auto-folded-then-expanded) sets the guard
+				// — never auto-fold a card the user has handled.
+				if (collapseDoneRef.current) return;
+				collapseDoneRef.current = true;
+				setOpen(false);
+			}, COLLAPSE_DELAY_MS);
 		}
-	}, [props.collapseWhenDone, props.running, props.result]);	const xdev = executeXdevDispatch(props);
+	}, [props.collapseWhenDone, props.running, props.result]);
+	useEffect(
+		() => () => {
+			if (collapseTimerRef.current !== null) clearTimeout(collapseTimerRef.current);
+		},
+		[],
+	);
+	const xdev = executeXdevDispatch(props);
 	const { args, intent: argIntent } = normalizeArgs(props.args);
 	const intent = props.intent?.trim() || argIntent;
 	const name = xdev?.tool ?? props.name;
@@ -99,6 +134,7 @@ export function ToolView(props: ToolViewProps): ReactNode {
 		running: props.running,
 		host: props.host,
 		kind: props.kind,
+		intent,
 	};
 
 	const isError = props.result?.isError === true;
@@ -108,13 +144,35 @@ export function ToolView(props: ToolViewProps): ReactNode {
 	// with a stagger, plus a steady caret while the tool keeps streaming.
 	const partialLines = useMemo(() => partial.split("\n"), [partial]);
 
-	return (
+	// The dedicated full-card chrome (`Card`) is legacy and bypasses the
+	// generic head entirely.
+	if (renderer.Card && props.taskCardStyle !== "classic") {
+		return <renderer.Card {...renderProps} />;
+	}
+
+	const nativeCard = (
 		<div className={`tv-card${isError ? " tv-card--error" : ""}${props.kind ? ` tr-card--${props.kind}` : ""}`}>
 			<button
 				type="button"
 				className="tv-head"
 				aria-expanded={open}
-				onClick={() => setOpen(v => !v)}
+				onClick={() => {
+					// Any manual click cancels the pending delayed fold. The
+					// card is OPEN during the grace period, so the first
+					// click there is a collapse (the timer would have done
+					// the same — no point waiting it out); re-expanding
+					// afterwards means the user drives the state, and the
+					// one-shot guard keeps it from auto-folding again.
+					if (collapseTimerRef.current !== null) {
+						clearTimeout(collapseTimerRef.current);
+						collapseTimerRef.current = null;
+					}
+					setOpen(v => {
+						const next = !v;
+						if (next) collapseDoneRef.current = true;
+						return next;
+					});
+				}}
 				title={intent || undefined}
 			>
 				{status === "run" ? (
@@ -153,4 +211,9 @@ export function ToolView(props: ToolViewProps): ReactNode {
 			)}
 		</div>
 	);
+	// The additive swarm member grid is NOT rendered in the transcript: the
+	// native tool-call card lists one collapsible line per subagent (TUI
+	// parity), and the floating avatar grid is hosted by the GUI composer's
+	// temporary status chip when taskCardStyle=swarm.
+	return nativeCard;
 }

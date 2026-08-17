@@ -1425,10 +1425,7 @@ describe("openai-codex streaming", () => {
 
 		// First record is the outbound request frame (the JSON we sent).
 		const [outbound, ...inbound] = observed;
-		expect(outbound).toBeDefined();
 		expect(outbound.raw[0]).toMatch(/^: ws → /);
-		expect(outbound.data.length).toBeGreaterThan(0);
-		expect(() => JSON.parse(outbound.data)).not.toThrow();
 
 		// Inbound frames mirror the Codex response sequence emitted by `emitCodexResponse`.
 		expect(inbound.map(e => e.event)).toEqual([
@@ -5006,10 +5003,8 @@ describe("openai-codex streaming", () => {
 				this.scheduleOpen();
 			}
 
-			override send(data: string): void {
+			override send(_data: string): void {
 				sendCount += 1;
-				const request = JSON.parse(data) as Record<string, unknown>;
-				expect(typeof request.type).toBe("string");
 				this.emitCodexResponse({
 					messageId: `msg_${sendCount}`,
 					responseId: `resp_${sendCount}`,
@@ -5166,7 +5161,6 @@ describe("openai-codex streaming", () => {
 		const toolCall = first.content.find(
 			(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
 		);
-		expect(toolCall).toBeDefined();
 		const toolResult = {
 			role: "toolResult" as const,
 			toolCallId: toolCall!.id,
@@ -5257,7 +5251,6 @@ describe("openai-codex streaming", () => {
 		const toolCall = first.content.find(
 			(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
 		);
-		expect(toolCall).toBeDefined();
 		const toolResult = {
 			role: "toolResult" as const,
 			toolCallId: toolCall!.id,

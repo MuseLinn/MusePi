@@ -1,4 +1,4 @@
-import { getGeminiCliHeaders } from "../providers/google-gemini-cli";
+import { getGeminiCliHeaders } from "@musepi/pi-catalog/wire/gemini-headers";
 import type {
 	UsageAmount,
 	UsageFetchContext,

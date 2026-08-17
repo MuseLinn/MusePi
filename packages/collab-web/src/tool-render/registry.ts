@@ -9,6 +9,7 @@ import { astGrepRenderer } from "./tools/ast-grep";
 import { bashRenderer } from "./tools/bash";
 import { boardRenderer } from "./tools/board";
 import { browserRenderer } from "./tools/browser";
+import { computerRenderer } from "./tools/computer";
 import { debugRenderer } from "./tools/debug";
 import { editRenderer } from "./tools/edit";
 import { evalRenderer } from "./tools/eval";
@@ -31,9 +32,10 @@ import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
 import { taskRenderer } from "./tools/task";
 import { todoRenderer } from "./tools/todo";
+import { vibeRenderer } from "./tools/vibe";
 import { webSearchRenderer } from "./tools/web-search";
-import { writeRenderer } from "./tools/write";
 import { widgetRenderer } from "./tools/widget";
+import { writeRenderer } from "./tools/write";
 import { yieldRenderer } from "./tools/yield";
 import type { ToolRenderer } from "./types";
 
@@ -45,6 +47,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	board: boardRenderer,
 	browser: browserRenderer,
 	puppeteer: browserRenderer,
+	computer: computerRenderer,
 	debug: debugRenderer,
 	edit: editRenderer,
 	apply_patch: editRenderer,
@@ -77,8 +80,12 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	grep: grepRenderer,
 	search: grepRenderer,
 	task: taskRenderer,
-	swarm_run: taskRenderer,
 	todo: todoRenderer,
+	vibe_spawn: vibeRenderer,
+	vibe_send: vibeRenderer,
+	vibe_wait: vibeRenderer,
+	vibe_kill: vibeRenderer,
+	vibe_list: vibeRenderer,
 	web_search: webSearchRenderer,
 	write: writeRenderer,
 	widget: widgetRenderer,

@@ -135,6 +135,28 @@ describe("withEmptyCompletionRetry", () => {
 		expect(result.content).toEqual([]);
 	});
 
+	it("does not retry an empty pause_turn completion", async () => {
+		let attempts = 0;
+		const waits: number[] = [];
+		const stream = withEmptyCompletionRetry({}, CTX, { providerRetryWait: async ms => void waits.push(ms) }, () => {
+			attempts++;
+			const message = assistant();
+			message.stopDetails = { type: "pause_turn" };
+			return streamFromEvents([
+				{ type: "start", partial: message },
+				{ type: "done", reason: "stop", message },
+			] as unknown as AssistantMessageEvent[]);
+		});
+
+		const events = await drain(stream);
+		const result = await stream.result();
+
+		expect(attempts).toBe(1);
+		expect(waits).toEqual([]);
+		expect(events.filter(event => event.type === "start")).toHaveLength(1);
+		expect(result.stopDetails).toEqual({ type: "pause_turn" });
+	});
+
 	it("does not retry when the first attempt streams content", async () => {
 		let attempts = 0;
 		let waited = false;

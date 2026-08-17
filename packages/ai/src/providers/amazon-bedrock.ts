@@ -47,6 +47,19 @@ import { decodeEventStream } from "./aws-eventstream";
 import { signRequest } from "./aws-sigv4";
 import { transformMessages } from "./transform-messages";
 
+/**
+ * Headers SigV4 generates for itself. A caller cannot be allowed to supply these:
+ * `signRequest` would sign the caller's value but return its own, so the signature
+ * would not match what goes on the wire.
+ */
+const SIGNER_OWNED_HEADERS = new Set(["host", "x-amz-date", "x-amz-content-sha256", "x-amz-security-token"]);
+
+/** Headers the Bedrock request sets itself; a caller copy in any casing duplicates them. */
+// `content-length` included: the fetch layer recomputes it from the serialized
+// body, so a caller value would be signed but not sent, and AWS rejects the
+// mismatch.
+const BEDROCK_RESERVED_HEADERS = new Set(["content-type", "accept", "authorization", "content-length"]);
+
 export type BedrockThinkingDisplay = "summarized" | "omitted";
 
 export interface BedrockOptions extends StreamOptions {
@@ -356,7 +369,32 @@ export const streamBedrock: StreamFunction<"bedrock-converse-stream"> = (
 
 			const bodyText = JSON.stringify(commandInput);
 			const body = new TextEncoder().encode(bodyText);
+			// Caller headers are merged BEFORE signing, so SigV4 covers them and they
+			// reach the wire. Bedrock built its header map from scratch and ignored
+			// `options.headers` entirely, so tracing/attribution headers set by a
+			// caller (or by a `before_provider_headers` extension) were silently
+			// dropped here while working on every other provider. Content-type and
+			// accept stay last: the eventstream framing is not the caller's to change.
+			//
+			// The signer's OWN headers are dropped first, and that is load-bearing:
+			// `signRequest` lets a caller value overwrite `host`/`x-amz-*` in the map
+			// it signs, but always RETURNS the generated ones, which `requestHeaders`
+			// below then puts on the wire. A caller supplying any of them would sign
+			// one set of values and send another, and Bedrock would reject every
+			// request with a signature mismatch.
+			// Lower-cased, and names the request sets itself are dropped. Keeping a
+			// caller `Content-Type` beside the fixed `content-type` leaves TWO object
+			// keys: SigV4 signs one value while fetch canonicalizes both into a single
+			// comma-joined wire header, so AWS validates different bytes than were
+			// signed and rejects the request.
+			const callerHeaders: Record<string, string> = {};
+			for (const [name, value] of Object.entries(options?.headers ?? {})) {
+				const field = name.toLowerCase();
+				if (SIGNER_OWNED_HEADERS.has(field) || BEDROCK_RESERVED_HEADERS.has(field)) continue;
+				callerHeaders[field] = value;
+			}
 			const baseHeaders: Record<string, string> = {
+				...callerHeaders,
 				"content-type": "application/json",
 				accept: "application/vnd.amazon.eventstream",
 			};

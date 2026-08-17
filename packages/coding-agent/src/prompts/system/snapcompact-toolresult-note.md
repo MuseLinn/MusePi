@@ -1,1 +1,1 @@
-[The result of this tool call is in the PNG frame(s) below — read them as the output; they contain it verbatim. Delivering it as an image is deliberate harness behavior to save context, not a tool malfunction. NEVER re-run the call or report a tool issue because of it.]
+[Tool result: PNG frame(s) below; read as verbatim output. Image delivery: deliberate harness context-saving behavior, not malfunction. NEVER re-run call or report tool issue.]

@@ -10,8 +10,6 @@ import type { ReactNode } from "react";
 import { memo } from "react";
 import { t } from "../../i18n/index.js";
 import { electronBridge } from "../../lib/electron-bridge";
-import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
-import { finalArtifacts } from "./file-artifacts.js";
 
 export interface FileCardItem {
 	id: string;
@@ -47,17 +45,6 @@ function extBadge(path: string): string {
 	const dot = name.lastIndexOf(".");
 	if (dot <= 0 || dot === name.length - 1) return "";
 	return name.slice(dot + 1).toUpperCase().slice(0, 6);
-}
-
-/** Final (last-write-wins, deduped) artifacts of an assistant message. */
-export function turnArtifacts(
-	content: AssistantContent[],
-	results: ReadonlyMap<string, ToolResultMessage>,
-): FileCardItem[] {
-	return finalArtifacts(content, id => {
-		const r = results.get(id);
-		return r !== undefined && r.isError !== true;
-	});
 }
 
 export const FileCards = memo(function FileCards({ items }: { items: FileCardItem[] }): ReactNode | null {

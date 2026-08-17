@@ -84,10 +84,10 @@ describe("TinyFish web search provider", () => {
 		});
 
 		expect(captured).toHaveLength(1);
-		expect(captured[0].searchParams.get("query")).toBe(
-			'"error handling" rust site:github.com -site:gitlab.com filetype:pdf',
-		);
-		expectTinyFishParams(captured[0], ["query", "num_results", "page"]);
+		expect(captured[0].searchParams.get("query")).toBe('"error handling" rust filetype:pdf');
+		expect(captured[0].searchParams.get("include_domains")).toBe("github.com");
+		expect(captured[0].searchParams.get("exclude_domains")).toBe("gitlab.com");
+		expectTinyFishParams(captured[0], ["query", "num_results", "page", "include_domains", "exclude_domains"]);
 	});
 
 	it("sends directive-free queries verbatim", async () => {
@@ -230,6 +230,43 @@ describe("TinyFish web search provider", () => {
 		expect(response.sources).toHaveLength(11);
 		expect(response.sources[0]?.url).toBe("https://example.com/raw-page-1");
 		expect(response.sources.at(-1)?.url).toBe("https://example.com/raw-page-11");
+	});
+
+	it("deduplicates and normalizes results across pages", async () => {
+		const captured: URL[] = [];
+		const firstPage = tinyFishResults("dedupe", 10);
+		firstPage[0] = {
+			title: "  Primary title  ",
+			url: "  https://example.com/dedupe-0  ",
+			snippet: "  spaced \n snippet  ",
+			site_name: "  Example  ",
+		};
+		firstPage[1] = {
+			title: "Duplicate title",
+			url: "https://example.com/dedupe-0",
+			snippet: "duplicate snippet",
+		};
+		const fetchMock: FetchImpl = async input => {
+			const url = input instanceof URL ? input : new URL(typeof input === "string" ? input : input.url);
+			captured.push(url);
+			const page = Number(url.searchParams.get("page") ?? 0);
+			const results = page === 0 ? firstPage : tinyFishResults("dedupe", 1, 10);
+			return new Response(JSON.stringify(tinyFishPage(results, page, 11)), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		const response = await searchTinyFish({ ...makeParams("dedupe fish"), limit: 10, fetch: fetchMock });
+
+		expect(captured.map(url => url.searchParams.get("page"))).toEqual(["0", "1"]);
+		expect(response.sources).toHaveLength(10);
+		expect(response.sources[0]).toMatchObject({
+			title: "Primary title",
+			url: "https://example.com/dedupe-0",
+			snippet: "spaced snippet",
+		});
+		expect(response.sources.at(-1)?.url).toBe("https://example.com/dedupe-10");
 	});
 
 	it("stops early for limit 20 when page 0 returns fewer than 10 raw results", async () => {

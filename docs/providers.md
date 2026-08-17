@@ -4,7 +4,7 @@ Providers are the model backends `musepi` can route requests to: Anthropic, Open
 
 A **provider** is the account or backend namespace, such as `anthropic`, `openai`, `google`, or `ollama`. A **model** is a concrete model under that provider, selected as `provider/model-id`, such as `anthropic/claude-opus-4-6`. Disabling a provider removes every model under it from selection; if you only want to narrow individual models, use model settings instead.
 
-This page covers how providers become available, how credentials are resolved, the provider/environment-variable map, local engines, disabling providers, and custom providers. For endpoint-specific request, reasoning, tool, stream, usage, and retry constraints, see [Provider endpoint constraints](./provider-endpoint-constraints.md). For model selection and the full `models.yml` schema, see [Model and Provider Configuration](./models.md). For config-file locations and merge precedence, see [Settings](./settings.md). For credential storage and login flows in depth, see [Secrets and credentials](./secrets.md). For the complete environment-variable reference, see [Environment variables](./environment-variables.md). For local engine setup, see [Local models](./local-models.md). For context-file discovery providers, see [Context files](./context-files.md).
+This page covers how providers become available, how credentials are resolved, the provider/environment-variable map, local engines, disabling providers, and custom providers. For endpoint-specific request, reasoning, tool, stream, usage, and retry constraints, see [Provider endpoint constraints](./provider-endpoint-constraints.html). For model selection and the full `models.yml` schema, see [Model and Provider Configuration](./models.html). For config-file locations and merge precedence, see [Settings](./settings.html). For credential storage and login flows in depth, see [Secrets and credentials](./secrets.html). For the complete environment-variable reference, see [Environment variables](./environment-variables.html). For local engine setup, see [Local models](./local-models.html). For context-file discovery providers, see [Context files](./context-files.html).
 
 ## How `musepi` decides a provider is available
 
@@ -47,13 +47,13 @@ Use the interactive slash commands inside a session:
 - `/login` — opens the OAuth/key selector. `/login <provider>` jumps straight to one provider (e.g. `/login anthropic`); for an OAuth flow that needs a pasted callback, run `/login <redirect-url>` to complete it.
 - `/logout` — opens the provider selector to remove stored credentials.
 
-For headless or remote setups backed by a shared auth broker, the CLI exposes `musepi auth-broker login <provider>` / `musepi auth-broker logout` (and `status`, `list`, `import`, `migrate`). See [Secrets and credentials](./secrets.md) for the broker model.
+For headless or remote setups backed by a shared auth broker, the CLI exposes `musepi auth-broker login <provider>` / `musepi auth-broker logout` (and `status`, `list`, `import`, `migrate`). See [Secrets and credentials](./secrets.html) for the broker model.
 
 When a model has no credentials, `musepi` tells you to run `/login` or set the provider's environment variable.
 
 ### Pinning a key in `models.yml`
 
-A custom provider's `apiKey` is resolved as **environment-variable-name-or-literal**: if the value names an existing environment variable, that variable's value is used; otherwise the string itself is the key. Prefixing the value with `!` runs it as a shell command and uses the trimmed stdout (see [Model and Provider Configuration](./models.md) for the full value syntax).
+A custom provider's `apiKey` is resolved as **environment-variable-name-or-literal**: if the value names an existing environment variable, that variable's value is used; otherwise the string itself is the key. Prefixing the value with `!` runs it as a shell command and uses the trimmed stdout (see [Model and Provider Configuration](./models.html) for the full value syntax).
 
 ```yaml
 # ~/.musepi/agent/models.yml
@@ -134,7 +134,7 @@ Each provider has one or more environment variables that supply a key when no st
 | `lm-studio` | `LM_STUDIO_API_KEY` (optional; keyless by default) |
 | `llama.cpp` | `LLAMA_CPP_API_KEY` (only when the server requires auth) |
 
-OAuth-backed providers such as `anthropic`, `github-copilot`, `cursor`, `ollama-cloud`, `qwen-portal`, `kimi-code`, `xai-oauth`, `wafer-serverless`, `google-gemini-cli`, and `google-antigravity` are normally reached through `/login` rather than an environment variable. See [Environment variables](./environment-variables.md) for search-tool and configuration variables not listed here.
+OAuth-backed providers such as `anthropic`, `github-copilot`, `cursor`, `ollama-cloud`, `qwen-portal`, `kimi-code`, `xai-oauth`, `wafer-serverless`, `google-gemini-cli`, and `google-antigravity` are normally reached through `/login` rather than an environment variable. See [Environment variables](./environment-variables.html) for search-tool and configuration variables not listed here.
 
 ### `.env` discovery and precedence
 
@@ -179,7 +179,7 @@ These implicit engines are **skipped** when:
 - a provider with the same ID is already configured in `models.yml` (your explicit config wins); or
 - the provider ID appears in the effective `disabledProviders` list.
 
-For installing and running these engines, see [Local models](./local-models.md).
+For installing and running these engines, see [Local models](./local-models.html).
 
 ## Disabling model providers
 
@@ -237,7 +237,7 @@ Effective result inside the project:
 ["groq"]
 ```
 
-The project array re-enables `anthropic`, `openai`, and `google` for sessions launched from that project. If you want a project to *add* to the global set, repeat the global IDs in the project file. See [Settings](./settings.md) for the full precedence chain, including `--config` overlays and runtime overrides.
+The project array re-enables `anthropic`, `openai`, and `google` for sessions launched from that project. If you want a project to *add* to the global set, repeat the global IDs in the project file. See [Settings](./settings.html) for the full precedence chain, including `--config` overlays and runtime overrides.
 
 ## Path-scoped `disabledProviders`
 
@@ -268,7 +268,7 @@ For the example above:
 - `anthropic` and `openai` are additionally disabled under `~/projects/sensitive`.
 - `openrouter` is additionally disabled under `~/work/client-a` and `~/work/client-b`.
 
-Path scopes are resolved **after** the settings merge. Because a higher-precedence layer replaces the whole array, a project-level `disabledProviders` array drops any scoped entries that only existed in the global array. `enabledModels` is the only other setting that supports the same path-scoped form. See [Settings](./settings.md) for details.
+Path scopes are resolved **after** the settings merge. Because a higher-precedence layer replaces the whole array, a project-level `disabledProviders` array drops any scoped entries that only existed in the global array. `enabledModels` is the only other setting that supports the same path-scoped form. See [Settings](./settings.html) for details.
 
 ## Provider IDs vs discovery provider IDs
 
@@ -282,7 +282,7 @@ Path scopes are resolved **after** the settings merge. Because a higher-preceden
 | Model provider ID | `anthropic`, `openai`, `google`, `groq`, `openrouter`, `ollama`, `my-gateway` | Removes that provider's models from availability. |
 | Discovery provider ID | `native`, `claude`, `codex`, `gemini`, `agents`, `github` | Stops that discovery source from contributing capability items. |
 
-Watch the related names. The Google Gemini **API** models use the model provider ID `google`; `gemini` is a **discovery** provider ID (the source that reads `GEMINI.md`), not the Google model provider. Use discovery IDs only when you intend to disable an entire config source. See [Context files](./context-files.md) for the discovery-provider side.
+Watch the related names. The Google Gemini **API** models use the model provider ID `google`; `gemini` is a **discovery** provider ID (the source that reads `GEMINI.md`), not the Google model provider. Use discovery IDs only when you intend to disable an entire config source. See [Context files](./context-files.html) for the discovery-provider side.
 
 ## Custom providers in `models.yml`
 
@@ -331,7 +331,7 @@ providers:
       type: proxy
 ```
 
-For the full schema, all allowed `api` values, discovery `type`s, model overrides, and equivalence settings, see [Model and Provider Configuration](./models.md).
+For the full schema, all allowed `api` values, discovery `type`s, model overrides, and equivalence settings, see [Model and Provider Configuration](./models.html).
 
 To disable a custom provider, list its ID exactly:
 
@@ -347,8 +347,8 @@ disabledProviders:
 
 **The wrong key is being used (a stale key from `.env`).** Resolution favors runtime `--api-key`, then a `models.yml` config key, stored OAuth, a key saved by `/login`, environment or `.env`, other stored API keys, and finally the `models.yml` fallback resolver. An already-set process environment variable also beats every `.env` file, and `<cwd>/.env` beats `~/.env`. If an unexpected key wins, check for an exported shell variable and the four `.env` files in precedence order, and clear the one that should not apply.
 
-**A provider still appears even though I disabled it.** `disabledProviders` arrays are replaced, not merged: a project `<project>/.musepi/config.yml` array fully overrides the global one. Verify the *effective* list for the directory you are in (path-scoped entries only apply at or under their configured path), and confirm the ID is spelled exactly. Use `musepi config get disabledProviders` to inspect the merged value (see [Settings](./settings.md)).
+**A provider still appears even though I disabled it.** `disabledProviders` arrays are replaced, not merged: a project `<project>/.musepi/config.yml` array fully overrides the global one. Verify the *effective* list for the directory you are in (path-scoped entries only apply at or under their configured path), and confirm the ID is spelled exactly. Use `musepi config get disabledProviders` to inspect the merged value (see [Settings](./settings.html)).
 
 **A discovery provider name had no effect on models (or vice-versa).** The ID namespace is shared. `gemini`, `codex`, `claude`, `native`, and `agents` are discovery-source IDs; the Google model backend is `google`. Make sure you are disabling the right kind of provider.
 
-**A custom `models.yml` provider does not load.** A YAML or schema error makes the registry skip the custom file. Validate the file with `musepi models` (use `musepi models find <substr>` to scope it to one provider), confirm each provider has a `baseUrl`, a valid `api`, and at least one model entry, and that an implicit local engine is not silently shadowing it (an explicit `ollama`/`lm-studio`/`llama.cpp` entry replaces the built-in discovery for that ID). See [Model and Provider Configuration](./models.md).
+**A custom `models.yml` provider does not load.** A YAML or schema error makes the registry skip the custom file. Validate the file with `musepi models` (use `musepi models find <substr>` to scope it to one provider), confirm each provider has a `baseUrl`, a valid `api`, and at least one model entry, and that an implicit local engine is not silently shadowing it (an explicit `ollama`/`lm-studio`/`llama.cpp` entry replaces the built-in discovery for that ID). See [Model and Provider Configuration](./models.html).

@@ -342,13 +342,6 @@ describe("ModelRegistry", () => {
 			}
 		});
 
-		test("rerouted bundled OpenAI models recompute inferred computer capability", () => {
-			const model = openaiProxy.find("openai", "gpt-5.4");
-
-			expect(model?.baseUrl).toBe("https://openai-proxy.example.com/v1");
-			expect(model?.supportsComputerUse).toBe(false);
-		});
-
 		test("overriding headers merges with model headers", () => {
 			const anthropicModels = getModelsForProvider(anthropicProxyHeaders, "anthropic");
 			for (const model of anthropicModels) {
@@ -362,6 +355,13 @@ describe("ModelRegistry", () => {
 			for (const model of anthropicModels) {
 				expect(model.headers?.["X-Custom-Header"]).toBe("custom-only");
 			}
+		});
+
+		test("rerouted bundled OpenAI models recompute inferred computer capability", () => {
+			const model = openaiProxy.find("openai", "gpt-5.4");
+
+			expect(model?.baseUrl).toBe("https://openai-proxy.example.com/v1");
+			expect(model?.supportsComputerUse).toBe(false);
 		});
 
 		test("provider header lookup excludes unrelated model overrides", () => {
@@ -551,9 +551,9 @@ describe("ModelRegistry", () => {
 	describe("provider compat overrides", () => {
 		let providerCompat: ModelRegistry;
 		let customCompat: ModelRegistry;
+		let customAnthropicCompat: ModelRegistry;
 		let customModelCompat: ModelRegistry;
 		let customResponsesCompat: ModelRegistry;
-		let customAnthropicCompat: ModelRegistry;
 		beforeAll(() => {
 			providerCompat = readonlyRegistry({
 				providers: {
@@ -692,6 +692,22 @@ describe("ModelRegistry", () => {
 			}
 		});
 
+		test("provider-level compat applies to custom models", () => {
+			const model = customCompat.find("demo", "demo-model");
+			const compat = getOpenAICompat(model);
+			expect(compat?.supportsUsageInStreaming).toBe(false);
+			expect(compat?.maxTokensField).toBe("max_tokens");
+			expect(compat?.cacheControlFormat).toBe("anthropic");
+		});
+
+		test("custom Anthropic providers can opt into eager tool input streaming", () => {
+			const model = customAnthropicCompat.find("anthropic-proxy", "claude-haiku-4.5");
+			expect(model?.compat).toMatchObject({
+				supportsEagerToolInputStreaming: true,
+				allowAnthropicHeaderOverrides: true,
+			});
+		});
+
 		test("provider-level Anthropic compat survives dynamic discovery refresh", async () => {
 			writeRawModelsJson({
 				anthropic: {
@@ -716,22 +732,6 @@ describe("ModelRegistry", () => {
 			await registry.refreshProvider("anthropic", "online");
 
 			expect(getReplayUnsignedThinking(registry.find("anthropic", "claude-sonnet-5"))).toBe(false);
-		});
-
-		test("provider-level compat applies to custom models", () => {
-			const model = customCompat.find("demo", "demo-model");
-			const compat = getOpenAICompat(model);
-			expect(compat?.supportsUsageInStreaming).toBe(false);
-			expect(compat?.maxTokensField).toBe("max_tokens");
-			expect(compat?.cacheControlFormat).toBe("anthropic");
-		});
-
-		test("custom Anthropic providers can opt into eager tool input streaming", () => {
-			const model = customAnthropicCompat.find("anthropic-proxy", "claude-haiku-4.5");
-			expect(model?.compat).toMatchObject({
-				supportsEagerToolInputStreaming: true,
-				allowAnthropicHeaderOverrides: true,
-			});
 		});
 
 		test("custom Responses providers can disable original image detail", () => {
@@ -1312,7 +1312,7 @@ describe("ModelRegistry", () => {
 				},
 			});
 			costPartial = readonlyRegistry({
-				providers: { openrouter: { modelOverrides: { "anthropic/claude-sonnet-4": { cost: { input: 99 } } } } },
+				providers: { openai: { modelOverrides: { "gpt-5.6": { cost: { input: 99 } } } } },
 			});
 			addHeaders = readonlyRegistry({
 				providers: {
@@ -1438,12 +1438,15 @@ describe("ModelRegistry", () => {
 			expect(invalid.find("myprovider", "my-model")).toBeUndefined();
 		});
 
-		test("model override can change cost fields partially", () => {
-			const sonnet = getModelsForProvider(costPartial, "openrouter").find(m => m.id === "anthropic/claude-sonnet-4");
-			// Input cost should be overridden
-			expect(sonnet?.cost.input).toBe(99);
-			// Other cost fields should be preserved from built-in
-			expect(sonnet?.cost.output).toBeGreaterThan(0);
+		test("model override can change cost fields partially without dropping long-context pricing", () => {
+			const gpt56 = getModelsForProvider(costPartial, "openai").find(m => m.id === "gpt-5.6");
+			expect(gpt56?.cost.input).toBe(99);
+			expect(gpt56?.cost.output).toBeGreaterThan(0);
+			expect(gpt56?.cost.longContext).toMatchObject({
+				inputThreshold: 272_000,
+				input: 10,
+				output: 45,
+			});
 		});
 
 		test("model override can add headers", () => {

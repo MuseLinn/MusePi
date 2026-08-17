@@ -35,7 +35,7 @@ function openRouterModel(thinking: ThinkingConfig): Model<"openai-completions"> 
 
 async function captureBody(
 	model: Model<"openai-completions">,
-	options: { reasoning?: Effort; disableReasoning?: boolean },
+	options: { reasoning?: Effort; disableReasoning?: boolean; forceReasoningOff?: boolean },
 ): Promise<CapturedBody> {
 	let requestBody: string | undefined;
 	const fetchMock: FetchImpl = (_input, init) => {
@@ -64,6 +64,14 @@ describe("thinking.requiresEffort clamping", () => {
 		const body = await captureBody(openRouterModel(MANDATORY_THINKING), { disableReasoning: true });
 		// The pre-fix payload was `reasoning: { enabled: false }` — the exact
 		// shape OpenRouter rejects with "Reasoning is mandatory".
+		expect(body.reasoning).toEqual({ effort: "minimal" });
+	});
+
+	it("clamps forceReasoningOff when the endpoint cannot disable reasoning", async () => {
+		const body = await captureBody(openRouterModel(MANDATORY_THINKING), {
+			reasoning: Effort.High,
+			forceReasoningOff: true,
+		});
 		expect(body.reasoning).toEqual({ effort: "minimal" });
 	});
 

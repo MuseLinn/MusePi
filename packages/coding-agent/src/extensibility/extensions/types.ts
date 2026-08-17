@@ -11,7 +11,6 @@
 import type { type as ArkType } from "@musepi/omptype";
 import type * as TypeBox from "@musepi/omptype/typebox";
 import type * as zod from "@musepi/omptype/zod";
-
 import type {
 	AgentMessage,
 	AgentToolResult,
@@ -39,9 +38,18 @@ import type {
 	TSchema,
 } from "@musepi/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@musepi/pi-ai/oauth/types";
-import type { AutocompleteItem, AutocompleteProvider, Component, EditorTheme, KeyId, TUI } from "@musepi/pi-tui";
+import type {
+	AutocompleteItem,
+	AutocompleteProvider,
+	Component,
+	EditorTheme,
+	KeyId,
+	OverlayHandle,
+	OverlayOptions,
+	TUI,
+} from "@musepi/pi-tui";
 import type { logger as PiLogger } from "@musepi/pi-utils";
-import type { AsyncJobManager } from "../../async";
+import type { AsyncJobManager } from "../../async/job-manager";
 import type { KeybindingsManager } from "../../config/keybindings";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { EditToolDetails } from "../../edit";
@@ -79,6 +87,8 @@ import type {
 	AutoRetryStartEvent,
 	ContextEvent,
 	GoalUpdatedEvent,
+	RetryFallbackAppliedEvent,
+	RetryFallbackSucceededEvent,
 	SessionBeforeBranchEvent,
 	SessionBeforeBranchResult,
 	SessionBeforeCompactEvent,
@@ -107,6 +117,7 @@ import type {
 } from "../shared-events";
 import type { SlashCommandInfo } from "../slash-commands";
 
+export type { OverlayHandle, OverlayOptions } from "@musepi/pi-tui";
 export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
 export type { ExecOptions, ExecResult } from "../../exec/exec";
 export type { AgentToolResult, AgentToolUpdateCallback };
@@ -216,6 +227,16 @@ export type ExtensionUiComponent = Component & { dispose?(): void };
 export type ExtensionUiComponentFactory = (tui: TUI, theme: Theme) => ExtensionUiComponent;
 export type ExtensionWidgetContent = string[] | ExtensionUiComponentFactory | undefined;
 
+/** Options for `ExtensionUIContext.custom()` (overlay rendering of a custom component). */
+export interface ExtensionCustomOptions {
+	/** Render the component as an overlay over the transcript instead of replacing the editor area. */
+	overlay?: boolean;
+	/** Static or lazily resolved overlay positioning/sizing options forwarded to `showOverlay`. */
+	overlayOptions?: OverlayOptions | (() => OverlayOptions);
+	/** Invoked with the overlay handle once the overlay is created (overlay mode only). */
+	onHandle?: (handle: OverlayHandle) => void;
+}
+
 /** Wrap the current autocomplete provider with additional behavior (pi-compatible). */
 export type AutocompleteProviderFactory = (current: AutocompleteProvider) => AutocompleteProvider;
 
@@ -282,7 +303,7 @@ export interface ExtensionUIContext {
 			keybindings: KeybindingsManager,
 			done: (result: T) => void,
 		) => ExtensionUiComponent | Promise<ExtensionUiComponent>,
-		options?: { overlay?: boolean },
+		options?: ExtensionCustomOptions,
 	): Promise<T>;
 
 	/** Set the text in the core input editor. */
@@ -414,9 +435,14 @@ export interface ExtensionModelQuery {
 	family(model: Model): string;
 }
 
+/** Runtime host mode exposed to Pi-compatible extensions. */
+export type ExtensionMode = "tui" | "rpc" | "json" | "print";
+
 export interface ExtensionContext {
 	/** UI methods for user interaction */
 	ui: ExtensionUIContext;
+	/** Current run mode. Use `"tui"` to guard terminal-only UI such as custom components. */
+	mode: ExtensionMode;
 	/** Get current context usage for the active model. */
 	getContextUsage(): ContextUsage | undefined;
 	/** Get a read-only snapshot of async jobs owned by this session. */
@@ -722,7 +748,10 @@ export interface MessageUpdateEvent {
 	assistantMessageEvent: AssistantMessageEvent;
 }
 
-/** Fired when a message ends */
+/**
+ * Fired when a message ends. Notification-only: the message is a detached
+ * snapshot, so in-place changes do not rewrite agent or provider context.
+ */
 export interface MessageEndEvent {
 	type: "message_end";
 	message: AgentMessage;
@@ -760,6 +789,8 @@ export type {
 	AutoCompactionStartEvent,
 	AutoRetryEndEvent,
 	AutoRetryStartEvent,
+	RetryFallbackAppliedEvent,
+	RetryFallbackSucceededEvent,
 	TodoReminderEvent,
 	TtsrTriggeredEvent,
 } from "../shared-events";
@@ -1022,6 +1053,8 @@ export type ExtensionEvent =
 	| AutoCompactionEndEvent
 	| AutoRetryStartEvent
 	| AutoRetryEndEvent
+	| RetryFallbackAppliedEvent
+	| RetryFallbackSucceededEvent
 	| TtsrTriggeredEvent
 	| TodoReminderEvent
 	| GoalUpdatedEvent
@@ -1209,6 +1242,8 @@ export interface ExtensionAPI {
 	on(event: "auto_compaction_end", handler: ExtensionHandler<AutoCompactionEndEvent>): void;
 	on(event: "auto_retry_start", handler: ExtensionHandler<AutoRetryStartEvent>): void;
 	on(event: "auto_retry_end", handler: ExtensionHandler<AutoRetryEndEvent>): void;
+	on(event: "retry_fallback_applied", handler: ExtensionHandler<RetryFallbackAppliedEvent>): void;
+	on(event: "retry_fallback_succeeded", handler: ExtensionHandler<RetryFallbackSucceededEvent>): void;
 	on(event: "ttsr_triggered", handler: ExtensionHandler<TtsrTriggeredEvent>): void;
 	on(event: "todo_reminder", handler: ExtensionHandler<TodoReminderEvent>): void;
 	on(event: "goal_updated", handler: ExtensionHandler<GoalUpdatedEvent>): void;
@@ -1242,6 +1277,11 @@ export interface ExtensionAPI {
 			handler: RegisteredCommand["handler"];
 		},
 	): void;
+
+	/** Contribute a setting to the settings panel (schema-driven GUI/TUI).
+	 *  The setting shows only while this extension is enabled, and its
+	 *  stored value lives under `key` like any static setting. */
+	registerSetting(setting: ExtensionSetting): void;
 
 	/** Register a keyboard shortcut. */
 	registerShortcut(
@@ -1478,6 +1518,9 @@ export interface RegisteredTool<TParams extends TSchema = TSchema, TDetails = un
 	extensionPath: string;
 }
 
+/** Internal observer invoked when an already-loaded extension registers or replaces a tool. */
+export type ToolRegistrationListener = (toolName: string) => void;
+
 export interface ExtensionFlag {
 	name: string;
 	description?: string;
@@ -1600,11 +1643,31 @@ export interface Extension {
 	label?: string;
 	handlers: Map<string, HandlerFn[]>;
 	tools: Map<string, RegisteredTool<any, any>>;
+	toolRegistrationListeners?: Set<ToolRegistrationListener>;
 	assistantThinkingRenderers: AssistantThinkingRenderer[];
 	messageRenderers: Map<string, MessageRenderer>;
 	commands: Map<string, RegisteredCommand>;
 	flags: Map<string, ExtensionFlag>;
 	shortcuts: Map<KeyId, ExtensionShortcut>;
+	/** Settings contributed by the extension (registerSetting). Merged into
+	 *  the settings.schema surface so the GUI/TUI settings panel shows them
+	 *  only while the extension is enabled (swarm style extension). */
+	settings: Map<string, ExtensionSetting>;
+}
+
+/** One setting contributed by an extension via registerSetting. Mirrors the
+ *  static settings-schema item shape (key, type, default, ui metadata). */
+export interface ExtensionSetting {
+	key: string;
+	type: "boolean" | "enum" | "string" | "number";
+	default: unknown;
+	ui: {
+		tab: string;
+		group: string;
+		label: string;
+		description?: string;
+		options?: { value: string; label: string; description?: string }[];
+	};
 }
 
 /** Result of loading extensions. */

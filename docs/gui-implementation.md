@@ -95,6 +95,7 @@ daemon RPC:
 11. **legacy keyframes 烤静态 transform 在 flow 布局下错位**(2026-08-11):面板 keyframes 烤 `translateX(-50%)`(旧 absolute 居中残留),新布局已 `transform: none`(flow + margin 居中)——动画播放时把元素左移半宽,"先露右半再突现左半"。**教训:改布局定位方式时必须同步审计 keyframes 里的静态 transform;动画与静态布局解耦用 flat keyframes(只动位移/缩放/模糊的相对量)**。
 12. **动画中 `getBoundingClientRect` 含 transform**(2026-08-11):scale(0.98) 入场动画中 rect 是缩小值——内容驱动窗口按它报告会把窗口定小,animationend 后跳变。**内容尺寸报告对动画中元素用 `offsetWidth/offsetHeight`(布局盒)**;检测 `el.getAnimations().some(a => a.playState === "running")`。
 13. **锁宽测量 `width:"auto"` 覆盖 CSS `max-content`**(2026-08-11):morph 测量目标宽度时 `style.width = "auto"` 对块级元素=撑满包含块(覆盖 CSS `width:max-content`),toW 退化为容器宽 → 宽度过渡静默跳过(高度正常,视觉"只缩高不缩宽"再跳变)。**必须 `style.width = ""`(删 inline 声明回 CSS 值)**。
+14. **浮层卡面 class 双应用 = 嵌套双画圆角**(2026-08-15,自定义强调色选色器):`useFloatingMenu(…, { className })` 的 class 落在**外层 portal 容器**,内容组件根若带**同一卡面 class**(ColorPickerPanel 根 `gui-color-picker`),两层同时拿到磨砂+圆角+阴影 → 背景多画一层圆角容器(`div.gui-menu-popup.gui-color-picker.gui-menu-popup--entered > div.gui-color-picker`)。规则:**卡面 class 只能出现在一层**——传 className 时内容平铺(proj/todo/queue/creds 类);不传时内容根自持卡面(quota/context/color-picker 类)。验证:`document.querySelectorAll('.gui-color-picker').length === 1` 且外层 computed `border-radius: 0`、`background: transparent`。
 
 ## 7. macOS 应用图标处理(2026-08-06 查证 + 修复)
 

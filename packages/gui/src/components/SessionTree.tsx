@@ -18,6 +18,29 @@ export interface GuiTreeEntry {
 	source?: string;
 }
 
+/** Session lifecycle status (TUI session-list parity). */
+export type SessionStatus = "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
+
+/**
+ * Status → color token (kimiwork 状态色 parity): the row's left square uses
+ * this. Interrupted = warning (orange) so unfinished work pops; complete =
+ * success (green); error = danger; aborted = muted; pending = accent.
+ */
+const STATUS_COLOR: Record<SessionStatus, string | undefined> = {
+	complete: "var(--color-ok)",
+	interrupted: "var(--color-warning)",
+	aborted: "var(--color-text-faint)",
+	error: "var(--color-danger)",
+	pending: "var(--color-accent)",
+	unknown: undefined,
+};
+
+/** Row's left-square fill: a manual status tag wins over the derived
+ *  status, both resolved through the same STATUS_COLOR map. */
+function statusFill(status: SessionStatus | undefined, manualTag: SessionStatus | undefined): string | undefined {
+	return manualTag ? STATUS_COLOR[manualTag] : status ? STATUS_COLOR[status] : undefined;
+}
+
 /** Compact row time (openchamber: 0.72rem muted right-aligned). */
 function rowTime(ts: string): string {
 	const d = new Date(ts);
@@ -51,6 +74,9 @@ export function SessionTree({
 	unread,
 	pausedIds,
 	workingIds,
+	statuses,
+	manualTags,
+	sort = "statusTime",
 }: {
 	nodes: GuiTreeNode[];
 	selectedId: string | null;
@@ -65,9 +91,29 @@ export function SessionTree({
 	/** Live sessions with a running agent turn (kimi 进行中 parity) —
 	 *  pulsing accent dot on the row. */
 	workingIds?: ReadonlySet<string>;
+	/** Lifecycle status per session id (TUI session-list parity: complete /
+	 *  interrupted / aborted / error / pending) — tints the row's left
+	 *  square so unfinished history reads at a glance without grouping. */
+	statuses?: ReadonlyMap<string, SessionStatus>;
+	/** User-assigned status TAG per session id (ContextMenu #完成/#中断/
+	 *  #错误…) — persisted locally, wins over the derived status. */
+	manualTags?: ReadonlyMap<string, SessionStatus>;
+	/** Row order: "statusTime" (default) pins working, then unread
+	 *  sessions to the top and sorts the rest newest-first; "none"
+	 *  preserves the caller's order (groups keep manual drag-reorder
+	 *  order below their own status pins). */
+	sort?: "statusTime" | "none";
 }): ReactNode {
 	const flat = flattenTree(nodes);
 	if (flat.length === 0) return null;
+	if (sort !== "none") {
+		const rank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
+		flat.sort(
+			(a, b) =>
+				rank(b.node.entry.id) - rank(a.node.entry.id) ||
+				Date.parse(b.node.entry.timestamp) - Date.parse(a.node.entry.timestamp),
+		);
+	}
 	// Parent lookup for fork markers (OMP /tree parity: sessions forked from
 	// another session show a branch glyph + the parent's label on hover).
 	const byId = new Map(flat.map(f => [f.node.entry.id, f.node]));
@@ -75,6 +121,7 @@ export function SessionTree({
 		<ul className="gui-session-list">
 			{flat.map(({ node, ...flatProps }) => {
 				const parent = node.entry.parentId ? byId.get(node.entry.parentId) : null;
+				const fill = statusFill(statuses?.get(node.entry.id), manualTags?.get(node.entry.id));
 				return (
 					<li key={node.entry.id}>
 						<button
@@ -86,12 +133,13 @@ export function SessionTree({
 							}}
 							onContextMenu={e => {
 								e.preventDefault();
+								e.stopPropagation();
 								onContextMenu?.(node.entry.id, e.clientX, e.clientY);
 							}}
 							title={
 								parent
 									? `${t("forked from")}: ${parent.entry.label ?? t("untitled session")} · ${node.entry.id}`
-									: node.entry.id
+									: (node.entry.label ?? t("untitled session"))
 							}
 							{...((node.entry.label ?? "").trim() ? {} : { "data-untitled": "1" })}
 							draggable
@@ -100,6 +148,15 @@ export function SessionTree({
 								e.dataTransfer.effectAllowed = "copy";
 							}}
 						>
+							{/* Lifecycle status square (TUI session-list parity): a
+							 * per-session color chip that survives without grouping —
+							 * interrupted (warning) / complete (success) / error /
+							 * aborted / pending, or the user's manual color. */}
+							<span
+								className="gui-session-status"
+								aria-hidden="true"
+								style={fill ? { background: fill } : undefined}
+							/>
 							<span className="gui-tree-prefix">
 								{treePrefix(flatProps.indent, flatProps.showConnector, flatProps.isLast)}
 							</span>

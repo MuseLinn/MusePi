@@ -28,10 +28,18 @@ import { MorphIcon } from "morphicons/react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
+import { useFloatingMenu } from "../lib/use-floating-menu";
+import { ColorPickerPanel } from "./ColorPicker";
+
+/** Exit animation duration (mirrors gui-obo-card-out below). */
+const ONBOARDING_EXIT_MS = 200;
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
+import { AgentAvatar } from "./AgentAvatar";
 import { PersonalizeSetup } from "./PersonalizeSetup";
+import { PetSprite } from "./PetSprite";
+import { petForId } from "../lib/pet";
 
 const STEPS = [
 	{ icon: Languages, key: "onboarding step1" },
@@ -88,80 +96,108 @@ interface ApiProviderInfo {
 /** Animated feature previews — pure CSS loops, no live data. The window
  *  mock is the same "software window" frame every step's visual uses
  *  (统一窗口尺寸演示), recolored by the live theme/accent vars. */
-function StepDemo({ step }: { step: number }): ReactNode {
+/**
+ * Step demos: ONE morph window frame (traffic-light title bar + sidebar)
+ * persists across every step — the sidebar's active item transfers
+ * smoothly, and only the content pane remounts per step so each step's
+ * entrance animations replay. The right preview container (rounded panel)
+ * never remounts; the content morphs inside it.
+ */
+function StepDemo({ step, petMode }: { step: number; petMode: "input" | "desktop" }): ReactNode {
+	// Sidebar active row: steps 0-2 highlight their row, the rest use row 1.
+	const sideActive = [0, 1, 2].includes(step) ? step : 0;
+	return (
+		<div className="gui-obo-demo">
+			<div className="gui-obo-morph-window">
+				<div className="gui-obo-window-bar">
+					<span className="gui-obo-window-light gui-obo-window-light--close" />
+					<span className="gui-obo-window-light gui-obo-window-light--min" />
+					<span className="gui-obo-window-light gui-obo-window-light--max" />
+				</div>
+				<div className="gui-obo-morph-body">
+					<div className="gui-obo-morph-side">
+						{[0, 1, 2].map(i => (
+							<div
+								key={i}
+								className={`gui-obo-morph-side-item${sideActive === i ? " gui-obo-morph-side-item--active" : ""}`}
+							/>
+						))}
+					</div>
+					<div className="gui-obo-morph-content" key={`morph-${step}`}>
+						<DemoContent step={step} petMode={petMode} />
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function DemoContent({ step, petMode }: { step: number; petMode: "input" | "desktop" }): ReactNode {
+	// Hooks MUST run before every early return (React hook rules — the step
+	// branches below bail out early). The pet state is only rendered at
+	// step 6, but loading it unconditionally is cheap and keeps the hook
+	// count stable across step changes.
+	const [pet, setPet] = useState<ReturnType<typeof petForId> | null>(() => {
+		try {
+			return petForId(localStorage.getItem("omp-gui-pet-id") ?? "musepi");
+		} catch {
+			return petForId("musepi");
+		}
+	});
+	useEffect(() => {
+		const on = (): void => {
+			try {
+				setPet(petForId(localStorage.getItem("omp-gui-pet-id") ?? "musepi"));
+			} catch {
+				// ignore
+			}
+		};
+		window.addEventListener("omp-pet-changed", on);
+		return () => window.removeEventListener("omp-pet-changed", on);
+	}, []);
 	if (step === 0) {
-		// Language — window mock + a bilingual speech bubble.
+		// Language — bilingual speech bubbles.
 		return (
-			<div className="gui-obo-demo">
-				<div className="gui-obo-window">
-					<div className="gui-obo-sidebar">
-						<div className="gui-obo-sidebar-item" />
-						<div className="gui-obo-sidebar-item gui-obo-sidebar-item--active" />
-						<div className="gui-obo-sidebar-item" />
-					</div>
-					<div className="gui-obo-main">
-						<div className="gui-obo-main-bar" />
-						<div className="gui-obo-lang-row">
-							<span className="gui-obo-lang-bubble">你好，MusePi</span>
-						</div>
-						<div className="gui-obo-lang-row gui-obo-lang-row--alt">
-							<span className="gui-obo-lang-bubble">Hello, MusePi</span>
-						</div>
-					</div>
+			<div className="gui-obo-morph-fill">
+				<div className="gui-obo-main-bar" />
+				<div className="gui-obo-lang-row">
+					<span className="gui-obo-lang-bubble">你好，MusePi</span>
+				</div>
+				<div className="gui-obo-lang-row gui-obo-lang-row--alt">
+					<span className="gui-obo-lang-bubble">Hello, MusePi</span>
 				</div>
 			</div>
 		);
 	}
 	if (step === 1) {
-		// Appearance — the same window frame, themed live (CSS vars follow
-		// data-theme / data-accent, so switching recolors the preview).
+		// Appearance — themed accent + content lines (live CSS vars).
 		return (
-			<div className="gui-obo-demo">
-				<div className="gui-obo-window">
-					<div className="gui-obo-sidebar">
-						<div className="gui-obo-sidebar-item" />
-						<div className="gui-obo-sidebar-item gui-obo-sidebar-item--active" />
-						<div className="gui-obo-sidebar-item" />
-					</div>
-					<div className="gui-obo-main">
-						<div className="gui-obo-main-bar" />
-						<div className="gui-obo-main-lines" />
-						<div className="gui-obo-theme-accent" />
-					</div>
-				</div>
+			<div className="gui-obo-morph-fill">
+				<div className="gui-obo-main-bar" />
+				<div className="gui-obo-main-lines" />
+				<div className="gui-obo-theme-accent" />
 			</div>
 		);
 	}
 	if (step === 2) {
 		// Sessions — sidebar navigation mock.
 		return (
-			<div className="gui-obo-demo">
-				<div className="gui-obo-window">
-					<div className="gui-obo-sidebar">
-						<div className="gui-obo-sidebar-item" />
-						<div className="gui-obo-sidebar-item gui-obo-sidebar-item--active" />
-						<div className="gui-obo-sidebar-item" />
-					</div>
-					<div className="gui-obo-main">
-						<div className="gui-obo-main-bar" />
-						<div className="gui-obo-main-lines" />
-					</div>
-				</div>
+			<div className="gui-obo-morph-fill">
+				<div className="gui-obo-main-bar" />
+				<div className="gui-obo-main-lines" />
 			</div>
 		);
 	}
 	if (step === 3) {
 		// Chat — conversation mock.
 		return (
-			<div className="gui-obo-demo">
-				<div className="gui-obo-chat">
-					<div className="gui-obo-bubble gui-obo-bubble--user" />
-					<div className="gui-obo-bubble gui-obo-bubble--assistant" />
-					<div className="gui-obo-typing">
-						<span />
-						<span />
-						<span />
-					</div>
+			<div className="gui-obo-morph-fill gui-obo-morph-fill--chat">
+				<div className="gui-obo-bubble gui-obo-bubble--user" />
+				<div className="gui-obo-bubble gui-obo-bubble--assistant" />
+				<div className="gui-obo-typing">
+					<span />
+					<span />
+					<span />
 				</div>
 			</div>
 		);
@@ -169,35 +205,79 @@ function StepDemo({ step }: { step: number }): ReactNode {
 	if (step === 4) {
 		// Settings — toggle rows mock.
 		return (
-			<div className="gui-obo-demo">
-				<div className="gui-obo-settings">
-					<div className="gui-obo-setting-row">
-						<div className="gui-obo-setting-label" />
-						<div className="gui-obo-toggle gui-obo-toggle--on" />
-					</div>
-					<div className="gui-obo-setting-row">
-						<div className="gui-obo-setting-label" />
-						<div className="gui-obo-toggle" />
-					</div>
-					<div className="gui-obo-setting-row gui-obo-setting-row--open">
-						<div className="gui-obo-setting-label" />
-						<div className="gui-obo-setting-expand" />
-					</div>
+			<div className="gui-obo-morph-fill">
+				<div className="gui-obo-setting-row">
+					<div className="gui-obo-setting-label" />
+					<div className="gui-obo-toggle gui-obo-toggle--on" />
+				</div>
+				<div className="gui-obo-setting-row">
+					<div className="gui-obo-setting-label" />
+					<div className="gui-obo-toggle" />
+				</div>
+				<div className="gui-obo-setting-row gui-obo-setting-row--open">
+					<div className="gui-obo-setting-label" />
+					<div className="gui-obo-setting-expand" />
 				</div>
 			</div>
 		);
 	}
-	// Step 5 — the app ↔ model connection the provider setup produces.
+	if (step === 5) {
+		// Provider — provider rows; the middle one cycles 登录 → ✓ 已登录
+		// (the login morph the setup produces).
+		return (
+			<div className="gui-obo-morph-fill gui-obo-providers">
+				<div className="gui-obo-provider-row">
+					<span className="gui-obo-provider-dot" />
+					<span className="gui-obo-provider-skel" />
+					<span className="gui-obo-provider-ok">✓ 已登录</span>
+				</div>
+				<div className="gui-obo-provider-row">
+					<span className="gui-obo-provider-dot" />
+					<span className="gui-obo-provider-skel" />
+					<span className="gui-obo-provider-btn">
+						<span className="gui-obo-login-txt">{t("login")}</span>
+						<span className="gui-obo-login-ok">✓ 已登录</span>
+					</span>
+				</div>
+				<div className="gui-obo-provider-row">
+					<span className="gui-obo-provider-dot" />
+					<span className="gui-obo-provider-skel" />
+					<span className="gui-obo-provider-btn">{t("login")}</span>
+				</div>
+			</div>
+		);
+	}
+	// Step 6 — personalization: chat rows with the LIVE AgentAvatar
+	// (follows the orbs/hexagon/star choice) + the composer with the pet
+	// docked at its top-right — the REAL selected pet (omp-gui-pet-id,
+	// builtin or petdex) shown as its static rest frame, like the actual
+	// composer (gui-composer-pet positioning). The pet is SMALLER than the
+	// real composer's (the mock window is scaled) and only shows in
+	// "input" mode — "desktop" moves it to its own window.
 	return (
-		<div className="gui-obo-connect">
-			<div className="gui-obo-connect-node gui-obo-connect-node--app">
-				<Icon name="check" className="h-6 w-6" />
+		<div className="gui-obo-morph-fill gui-obo-morph-fill--chat">
+			<div className="gui-obo-pers-row gui-obo-pers-row--user">
+				<div className="gui-obo-bubble gui-obo-bubble--user" />
 			</div>
-			<div className="gui-obo-connect-line">
-				<span className="gui-obo-connect-pulse" />
+			<div className="gui-obo-pers-row">
+				<AgentAvatar size={20} />
+				<div className="gui-obo-bubble gui-obo-bubble--assistant" />
 			</div>
-			<div className="gui-obo-connect-node gui-obo-connect-node--model">
-				<Icon name="cloud" className="h-6 w-6" />
+			<div className="gui-obo-pers-row">
+				<AgentAvatar size={20} />
+				<div className="gui-obo-pers-typing">
+					<span />
+					<span />
+					<span />
+				</div>
+			</div>
+			<div className="gui-obo-pers-composer">
+				<div className="gui-obo-pers-input" />
+				{petMode === "input" && pet && (
+					<div className="gui-obo-pers-pet" aria-hidden="true">
+						<PetSprite mood="rest" pet={pet} size={16} frozen />
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -810,16 +890,24 @@ const ACCENT_OPTIONS = [
 	{ id: "mono", key: "accent mono" },
 	{ id: "ocean", key: "accent ocean" },
 	{ id: "jade", key: "accent jade" },
+	{ id: "custom", key: "custom accent" },
 ] as const;
 
 /** Step 2 — appearance: theme (dark/light/system) + accent (brand/mono/
- *  ocean/jade), applied live through collab-web's theme module so the
- *  data-theme × data-color-scheme × data-ui-theme × data-accent axes all
+ *  ocean/jade + custom), applied live through collab-web's theme module so
+ *  the data-theme × data-color-scheme × data-ui-theme × data-accent axes all
  *  stay in sync (same path as the settings toggle). The right-pane window
  *  preview recolors through the same CSS vars. */
 function AppearanceSetup(): ReactNode {
 	const { preference, setPreference } = useThemePreference();
-	const { accent, setAccent } = useAccentPreference();
+	const { accent, setAccent, customAccent, applyCustomAccent } = useAccentPreference();
+	// Custom-accent picker popover (same app-styled panel as the settings).
+	// No className — the panel root owns the card surface (see SettingsView).
+	// Preview-first: opening snapshots the preference; edits stay local;
+	// 「应用」 applies (veil); closing discards.
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [pickerPreview, setPickerPreview] = useState<string | null>(null);
+	const { anchorRef: customAccentRef, renderMenu: renderAccentMenu } = useFloatingMenu(pickerOpen, setPickerOpen);
 
 	return (
 		<div className="gui-obo-appearance">
@@ -844,22 +932,41 @@ function AppearanceSetup(): ReactNode {
 			<div className="gui-obo-appearance-group">
 				<span className="gui-obo-quick-label">{t("accent color")}</span>
 				<div className="gui-obo-appearance-options">
-					{ACCENT_OPTIONS.map(opt => (
-						<button
-							type="button"
-							key={opt.id}
-							className={`gui-obo-appearance-card${accent === opt.id ? " gui-obo-appearance-card--active" : ""}`}
-							onClick={() => {
-								tapFeedback();
-								setAccent(opt.id);
-							}}
-						>
-							<span className="gui-obo-accent-swatch" data-accent={opt.id} />
-							<span>{t(opt.key)}</span>
-						</button>
-					))}
+					{ACCENT_OPTIONS.map(opt => {
+						const isCustom = opt.id === "custom";
+						return (
+							<button
+								type="button"
+								key={opt.id}
+								ref={isCustom ? customAccentRef : undefined}
+								className={`gui-obo-appearance-card${accent === opt.id ? " gui-obo-appearance-card--active" : ""}`}
+								onClick={() => {
+									tapFeedback();
+									if (isCustom) {
+										// Open only — no accent switch, no veil; the
+										// card edits a local preview, apply happens via
+										// the card buttons (settings parity).
+										setPickerPreview(customAccent);
+										setPickerOpen(true);
+									} else {
+										setAccent(opt.id);
+									}
+								}}
+							>
+								{isCustom ? (
+									<span className="gui-obo-accent-swatch" style={{ background: customAccent }} />
+								) : (
+									<span className="gui-obo-accent-swatch" data-accent={opt.id} />
+								)}
+								<span>{t(opt.key)}</span>
+							</button>
+						);
+					})}
 				</div>
 			</div>
+			{renderAccentMenu(
+				<ColorPickerPanel value={pickerPreview ?? customAccent} onChange={setPickerPreview} onApply={applyCustomAccent} />,
+			)}
 		</div>
 	);
 }
@@ -873,15 +980,37 @@ export function OnboardingOverlay({
 }): ReactNode {
 	const [open, setOpen] = useState(onboardingPending);
 	const [step, setStep] = useState(0);
+	// Pet display mode shared by the personalize step's controls (left) and
+	// the chat preview (right): "desktop" hides the pet from the preview's
+	// composer — it lives in its own desktop window there.
+	const [persPetMode, setPersPetMode] = useState<"input" | "desktop">(() => {
+		try {
+			return localStorage.getItem("omp-gui-pet-mode") === "desktop" ? "desktop" : "input";
+		} catch {
+			return "input";
+		}
+	});
+	// Stay mounted through the exit (Pop/DialogFrame parity): closing plays
+	// the fade-out before unmounting, so close animates instead of cutting.
+	const [closing, setClosing] = useState(false);
 	// Two-phase enter: the 24px frosted backdrop paints at opacity 0 first
 	// so it composites before gui-fade-in (mount-frame animation on a
 	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
 	const enteredCls = useTwoPhaseEnter(open);
 
+	const requestClose = useCallback((): void => {
+		setClosing(true);
+		setTimeout(() => {
+			setOpen(false);
+			setClosing(false);
+		}, ONBOARDING_EXIT_MS);
+	}, []);
+
 	// Settings footer 引导 button reopens the primer on demand.
 	useEffect(() => {
 		const onOpen = (): void => {
 			setStep(0);
+			setClosing(false);
 			setOpen(true);
 		};
 		window.addEventListener("omp-open-onboarding", onOpen);
@@ -894,18 +1023,59 @@ export function OnboardingOverlay({
 		} catch {
 			// ignore
 		}
-		setOpen(false);
+		requestClose();
 		// First-run flow continues into the what's-new announcement when one
-		// is pending (AnnouncementOverlay listens for this).
-		window.dispatchEvent(new CustomEvent("omp-onboarding-finished"));
-	}, []);
+		// is pending (AnnouncementOverlay listens for this) — after the exit
+		// animation, so the announcement fades in over the settled screen.
+		setTimeout(() => window.dispatchEvent(new CustomEvent("omp-onboarding-finished")), ONBOARDING_EXIT_MS + 40);
+	}, [requestClose]);
+
+	// Keyboard priority: while the primer is up, Enter advances (next step /
+	// finish) and Escape steps back / closes on the first step — the page
+	// behind (composer) must not swallow them. Inputs keep their own Enter
+	// (import key / login prompt), so the handler skips text fields. The
+	// panel is focused on open so keys land on it.
+	useEffect(() => {
+		if (!open) return;
+		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		const onKey = (e: KeyboardEvent): void => {
+			const t = e.target as HTMLElement | null;
+			const typing =
+				t &&
+				(t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+			if (e.key === "Enter" && !typing) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (step === STEPS.length - 1) finish();
+				else setStep(s => Math.min(s + 1, STEPS.length - 1));
+			} else if (e.key === "Escape") {
+				e.preventDefault();
+				e.stopPropagation();
+				if (step > 0) setStep(s => s - 1);
+				else requestClose();
+			}
+		};
+		document.addEventListener("keydown", onKey, true);
+		const raf = requestAnimationFrame(() => {
+			document.querySelector<HTMLElement>(".gui-onboarding-backdrop button")?.focus();
+		});
+		return () => {
+			document.removeEventListener("keydown", onKey, true);
+			cancelAnimationFrame(raf);
+			prevActive?.focus();
+		};
+	}, [open, step, finish, requestClose]);
 
 	if (!open) return null;
 	const current = STEPS[step];
 	const last = step === STEPS.length - 1;
 	return (
-		<div className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}`}>
-			<div className="gui-onboarding-card">
+		<div
+			className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${
+				closing ? " gui-onboarding-backdrop--closing" : ""
+			}`}
+		>
+			<div className={`gui-onboarding-card${closing ? " gui-onboarding-card--closing" : ""}`}>
 				<div className="gui-onboarding-topbar">
 					<span className="gui-onboarding-badge">{t("onboarding badge")}</span>
 					<button
@@ -935,13 +1105,20 @@ export function OnboardingOverlay({
 						<div className="gui-onboarding-body" key={`body-${step}`}>
 							{t(current.key)}
 						</div>
-						{step >= 2 && step <= 4 && (
-							<FeatureList key={`feat-${step}`} keys={PROMO_FEATURES[current.key as keyof typeof PROMO_FEATURES] ?? []} />
-						)}
-						{step === 0 && <LanguageSetup />}
-						{step === 1 && <AppearanceSetup />}
-						{step === 5 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
-						{step === 6 && <PersonalizeSetup rpc={rpc} />}
+						{/* Step content scrolls inside the pane (provider config and
+						 * personalization are tall); dots + actions stay pinned. */}
+						<div className="gui-obo-step-body">
+							{step >= 2 && step <= 4 && (
+								<FeatureList
+									key={`feat-${step}`}
+									keys={PROMO_FEATURES[current.key as keyof typeof PROMO_FEATURES] ?? []}
+								/>
+							)}
+							{step === 0 && <LanguageSetup />}
+							{step === 1 && <AppearanceSetup />}
+							{step === 5 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
+							{step === 6 && <PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />}
+						</div>
 						<div className="gui-onboarding-dots">
 							{STEPS.map((s, i) => (
 								<span
@@ -978,7 +1155,7 @@ export function OnboardingOverlay({
 						</div>
 					</div>
 					<div className="gui-onboarding-visual">
-						<StepDemo step={step} />
+						<StepDemo step={step} petMode={persPetMode} />
 					</div>
 				</div>
 			</div>

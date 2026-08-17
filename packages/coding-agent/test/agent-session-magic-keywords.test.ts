@@ -171,6 +171,18 @@ describe("AgentSession magic keyword settings", () => {
 		expect(promptMessages.map(message => message.customType).filter(Boolean)).toEqual([]);
 	});
 
+	it("skips orchestrate notice when the task tool is inactive", async () => {
+		const created = await createMagicKeywordSession(root, []);
+		session = created.session;
+		authStorage = created.authStorage;
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined);
+
+		await session.prompt("please orchestrate this");
+
+		const promptMessages = promptSpy.mock.calls[0]![0] as unknown as Array<{ customType?: string }>;
+		expect(promptMessages.map(message => message.customType).filter(Boolean)).toEqual([]);
+	});
+
 	it("skips workflowz notice when the eval tool is inactive", async () => {
 		const created = await createMagicKeywordSession(root, [mockTaskTool]);
 		session = created.session;

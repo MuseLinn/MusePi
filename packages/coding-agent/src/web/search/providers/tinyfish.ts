@@ -19,7 +19,7 @@ const MAX_NUM_RESULTS = 20;
 const MAX_PAGE = 10;
 
 /** TinyFish is SERP-backed: common Google-style operators pass through. */
-const TINYFISH_QUERY_SYNTAX: QuerySyntax = { phrases: true, negation: true, site: true, filetype: true };
+const TINYFISH_QUERY_SYNTAX: QuerySyntax = { phrases: true, negation: true, filetype: true };
 
 const RECENCY_MINUTES: Record<NonNullable<SearchParams["recency"]>, number> = {
 	day: 1440,
@@ -33,6 +33,8 @@ export interface TinyFishSearchParams {
 	num_results?: number;
 	recency?: SearchParams["recency"];
 	page?: number;
+	include_domains?: string[];
+	exclude_domains?: string[];
 	signal?: AbortSignal;
 	timeoutMs?: number;
 	fetch?: FetchImpl;
@@ -66,6 +68,12 @@ async function callTinyFishSearch(apiKey: string, params: TinyFishSearchParams):
 	if (params.recency) {
 		url.searchParams.set("recency_minutes", String(RECENCY_MINUTES[params.recency]));
 	}
+	if (params.include_domains?.length) {
+		url.searchParams.set("include_domains", params.include_domains.join(","));
+	}
+	if (params.exclude_domains?.length) {
+		url.searchParams.set("exclude_domains", params.exclude_domains.join(","));
+	}
 	if (params.num_results !== undefined) {
 		url.searchParams.set("num_results", String(params.num_results));
 	}
@@ -96,16 +104,33 @@ async function callTinyFishSearch(apiKey: string, params: TinyFishSearchParams):
 	return (await response.json()) as TinyFishSearchResponse;
 }
 
-function appendTinyFishSources(sources: SearchSource[], results: readonly TinyFishSearchResult[]): void {
+function appendTinyFishSources(
+	sources: SearchSource[],
+	results: readonly TinyFishSearchResult[],
+	seenUrls: Set<string>,
+): void {
 	for (const result of results) {
-		if (!result.url) continue;
+		const url = result.url?.trim();
+		if (!url || seenUrls.has(url)) continue;
+		seenUrls.add(url);
+		const siteName = result.site_name?.trim();
 		sources.push({
-			title: result.title ?? result.site_name ?? result.url,
-			url: result.url,
-			snippet: result.snippet ?? undefined,
-			author: result.site_name ?? undefined,
+			title: result.title?.trim() || siteName || url,
+			url,
+			snippet: result.snippet?.replace(/\s+/g, " ").trim() || undefined,
+			author: siteName || undefined,
 		});
 	}
+}
+
+/** Bare hosts from `site:` values; path constraints remain centrally post-filtered. */
+function siteHosts(sites: readonly string[]): string[] {
+	const hosts = new Set<string>();
+	for (const site of sites) {
+		const host = site.split("/", 1)[0];
+		if (host) hosts.add(host);
+	}
+	return [...hosts];
 }
 
 /** Execute TinyFish web search. */
@@ -121,6 +146,12 @@ export async function searchTinyFish(params: SearchParams): Promise<SearchRespon
 		timeoutMs: params.timeoutMs,
 		fetch: params.fetch,
 	};
+	if (parsed.hasDirectives) {
+		const includeDomains = siteHosts(parsed.sites);
+		const excludeDomains = siteHosts(parsed.excludedSites);
+		if (includeDomains.length > 0) tinyFishParams.include_domains = includeDomains;
+		if (excludeDomains.length > 0) tinyFishParams.exclude_domains = excludeDomains;
+	}
 	const keyOrResolver: ApiKey = params.authStorage.resolver("tinyfish", {
 		sessionId: params.sessionId,
 	});
@@ -128,11 +159,14 @@ export async function searchTinyFish(params: SearchParams): Promise<SearchRespon
 		keyOrResolver,
 		async key => {
 			const collected: SearchSource[] = [];
+			const seenUrls = new Set<string>();
 			for (let page = 0; page <= MAX_PAGE && collected.length < numResults; page += 1) {
 				const searchPage = await callTinyFishSearch(key, { ...tinyFishParams, page });
-				const results = searchPage.results ?? [];
-				appendTinyFishSources(collected, results);
-				if (results.length < pageSize) break;
+				if (!Array.isArray(searchPage.results)) {
+					throw new Error("TinyFish Search API returned an unexpected response shape");
+				}
+				appendTinyFishSources(collected, searchPage.results, seenUrls);
+				if (searchPage.results.length < pageSize) break;
 			}
 
 			return collected.slice(0, numResults);

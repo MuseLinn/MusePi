@@ -151,9 +151,10 @@ function userMessage(text: string, timestamp: number): AgentMessage {
 }
 
 describe("convertToLlm caching", () => {
-	it("reuses the outer array on an exact repeat of the same history", () => {
+	it("reuses each history's outer array after another history converts", () => {
 		const messages: AgentMessage[] = [userMessage("hello", 1), settledAssistant("hi")];
 		const first = convertToLlm(messages);
+		convertToLlm([userMessage("other", 2)]);
 		const second = convertToLlm(messages);
 		expect(second).toBe(first);
 	});

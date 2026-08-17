@@ -82,6 +82,23 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		return () => window.removeEventListener("omp-open-announcement", onOpen);
 	}, [rpc]);
 
+	// Keyboard priority: Escape closes the announcement — the page behind
+	// must not keep focus/keys while this overlay is up. Declared BEFORE
+	// the early return (hooks rule: no hook may follow a conditional
+	// return, or the hook count flips between renders).
+	useEffect(() => {
+		if (!open || !markdown) return;
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") {
+				e.preventDefault();
+				e.stopPropagation();
+				setOpen(false);
+			}
+		};
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [open, markdown]);
+
 	if (!open || !markdown) return null;
 	return (
 		<div className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}`}>

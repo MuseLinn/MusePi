@@ -3,8 +3,56 @@
  * (--color-* / --radius-* / --ui-font-size-*); no raw values here, so the
  * light/dark scheme and brand/mono accent axes both apply to the shell. */
 
+/* Motion springs (motion.dev linear() curves, generated from damped-spring
+ * physics — jakearchibald/linear-easing-generator semantics). Reusable
+ * easing tokens: prefer these over ad-hoc cubic-beziers so every transition
+ * shares one spring language.
+ *  --spring          spring(300, 30)  — default UI morph (slight overshoot)
+ *  --spring-snappy   spring(400, 34)  — small elements, quick feedback
+ *  --spring-bouncy   spring(320, 16)  — playful/emphasis moments */
+:root {
+	--spring: linear(
+		0.0000, 0.0126 3.23%, 0.0458 6.45%, 0.0935 9.68%, 0.1511 12.90%,
+		0.2147 16.13%, 0.2812 19.35%, 0.3483 22.58%, 0.4143 25.81%, 0.4778 29.03%,
+		0.5379 32.26%, 0.5941 35.48%, 0.6460 38.71%, 0.6933 41.94%, 0.7362 45.16%,
+		0.7747 48.39%, 0.8089 51.61%, 0.8392 54.84%, 0.8657 58.06%, 0.8888 61.29%,
+		0.9088 64.52%, 0.9260 67.74%, 0.9407 70.97%, 0.9531 74.19%, 0.9635 77.42%,
+		0.9722 80.65%, 0.9794 83.87%, 0.9853 87.10%, 0.9900 90.32%, 0.9938 93.55%,
+		0.9968 96.77%, 1
+	);
+	--spring-snappy: linear(
+		0.0000, 0.0034 3.23%, 0.0130 6.45%, 0.0284 9.68%, 0.0488 12.90%,
+		0.0737 16.13%, 0.1026 19.35%, 0.1349 22.58%, 0.1701 25.81%, 0.2075 29.03%,
+		0.2463 32.26%, 0.2858 35.48%, 0.3252 38.71%, 0.3638 41.94%, 0.4010 45.16%,
+		0.4362 48.39%, 0.4690 51.61%, 0.4991 54.84%, 0.5265 58.06%, 0.5512 61.29%,
+		0.5734 64.52%, 0.5933 67.74%, 0.6111 70.97%, 0.6271 74.19%, 0.6414 77.42%,
+		0.6544 80.65%, 0.6662 83.87%, 0.6769 87.10%, 0.6867 90.32%, 0.6956 93.55%,
+		0.7038 96.77%, 1
+	);
+	--spring-bouncy: linear(
+		0.0000, 0.0120 2.56%, 0.0432 5.13%, 0.0880 7.69%, 0.1410 10.26%,
+		0.1972 12.82%, 0.2524 15.38%, 0.3026 17.95%, 0.3449 20.51%, 0.3770 23.08%,
+		0.3975 25.64%, 0.4067 28.21%, 0.4061 30.77%, 0.3978 33.33%, 0.3846 35.90%,
+		0.3693 38.46%, 0.3548 41.03%, 0.3440 43.59%, 0.3394 46.15%, 0.3431 48.72%,
+		0.3570 51.28%, 0.3824 53.85%, 0.4198 56.41%, 0.4690 58.97%, 0.5291 61.54%,
+		0.5986 64.10%, 0.6754 66.67%, 0.7569 69.23%, 0.8404 71.79%, 0.9227 74.36%,
+		0.9640 76.92%, 0.9865 79.49%, 0.9971 82.05%, 1.0000 84.62%, 0.9974 87.18%,
+		0.9928 89.74%, 0.9895 92.31%, 0.9900 94.87%, 0.9958 97.44%, 1
+	);
+}
+
+/* Motion duration tokens for the shared animation primitives (floating
+ * menus, chips, dialogs). gui-motion packs override these by injecting
+ * CSS; the keyframes themselves are overridable by same-name redefinition
+ * (the injected stylesheet loads last, so later wins). */
+:root {
+	--gui-motion-menu-in: 130ms;
+	--gui-motion-menu-out: 130ms;
+	--gui-motion-chip: 180ms;
+}
+
 .gui-shell {
-	font-size: var(--gui-font-scale, 14px);
+	font-size: var(--gui-font-scale, 15px);
 	/* ZCode/openchamber shell: a ROW — the three panes run edge-to-edge
 	 * full height to the window top; the window header is the center
 	 * column's header (traffic lights live over the left pane's drag
@@ -15,7 +63,7 @@
 	flex-direction: row;
 	/* Collapse/expand transition (openchamber): smooth width animation
 	 * on toggle, none while a resize drag is in flight. */
-	--gui-pane-transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	--gui-pane-transition: width 220ms var(--spring);
 	height: 100dvh;
 	/* Transparent over the native window glass (vibrancy): panels paint
 	 * their own translucent scrims; opaque surfaces (chat card, settings
@@ -120,7 +168,7 @@ html.gui-glass-adaptive {
 	background: var(--color-accent);
 	color: var(--color-accent-fg);
 	font-weight: 700;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .gui-topbar-actions {
@@ -260,7 +308,7 @@ html.gui-glass-adaptive {
 	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	width: 100%;
 	text-align: left;
 }
@@ -406,6 +454,19 @@ html.gui-glass-adaptive {
 	transition: transform 160ms ease-out;
 }
 
+/* Lifecycle status square (TUI session-list parity): a small color chip at
+ * the row's left edge — interrupted (warning) / complete (ok) / error /
+ * aborted / pending, or the user's manual color. Hidden when the status is
+ * unknown/unset (no fill), so only meaningful state reads as color. */
+.gui-session-status {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+	background: transparent;
+	margin-left: 2px;
+}
+
 .gui-session-row:hover {
 	background: var(--color-surface-raised);
 }
@@ -428,7 +489,7 @@ html.gui-glass-adaptive {
 .gui-session-title {
 	flex: 1;
 	min-width: 0;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -436,7 +497,7 @@ html.gui-glass-adaptive {
 
 .gui-session-time {
 	flex-shrink: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -448,25 +509,39 @@ html.gui-glass-adaptive {
 	text-overflow: ellipsis;
 }
 
-/* ZCode group section header: sentence case, low contrast, roomy. */
+/* ZCode group section header: sentence-case pill badge, low contrast. */
 .gui-group-label {
-	font-size: 13px;
+	display: inline-block;
+	margin-left: 8px;
+	padding: 1px 10px;
+	border-radius: 999px;
+	font-size: 11px;
 	font-weight: 600;
-	color: var(--color-text-muted);
-	opacity: 0.75;
-	text-transform: none;
 	letter-spacing: 0.02em;
-	/* openchamber-style sticky zone header: keeps the date group label
-	 * visible while scrolling a long session list. NO painted background —
-	 * the sidebar is frosted glass, so a solid tint reads as a wrong
-	 * patch; a backdrop blur lets scrolled rows blur through exactly like
-	 * the pane itself (zero color delta). */
+	line-height: 1.6;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
+	/* openchamber-style sticky zone header: keeps the date group badge
+	 * visible while scrolling a long session list. The accent-tinted pill
+	 * is translucent on purpose — a solid fill would read as a wrong
+	 * patch over the frosted sidebar, and the blur lets rows pass through
+	 * exactly like the pane itself (zero color delta). */
 	position: sticky;
-	top: 0;
+	top: 4px;
 	z-index: 5;
-	background: transparent;
 	backdrop-filter: blur(24px) saturate(180%);
 	-webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Settings search match (SettingsView): active query marks the matching
+ * setting rows in the content area — accent wash + hairline, same palette
+ * language as the grouped-label badge above. */
+.gui-settings-match {
+	background: color-mix(in oklab, var(--color-accent) 13%, transparent) !important;
+	outline: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
+	outline-offset: 2px;
+	border-radius: 10px;
 }
 
 /* ── Details pane (right column, 300px) ────────────────────────────── */
@@ -529,7 +604,7 @@ html.gui-glass-adaptive {
 .gui-tree-prefix {
 	color: var(--color-text-faint);
 	font-family: var(--font-mono);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	white-space: pre;
 }
 
@@ -749,7 +824,7 @@ html.gui-glass-adaptive {
  * opening a folder reads as an accordion, not an instant list swap.
  * Short enough that virtualized re-renders on scroll stay unobtrusive. */
 .gui-filepane-vrow {
-	animation: gui-filepane-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-filepane-in 140ms var(--spring) both;
 }
 @keyframes gui-filepane-in {
 	from {
@@ -837,7 +912,7 @@ html.gui-glass-adaptive {
 	overflow: auto;
 	max-height: 360px;
 	background: var(--color-bg);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 /* HTML live preview (openchamber parity): sandboxed page + toggle bar. */
@@ -960,7 +1035,7 @@ html.gui-glass-adaptive {
 
 .gui-approval-tool {
 	font-family: var(--font-mono);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1051,7 +1126,7 @@ html.gui-glass-adaptive {
 	background: transparent;
 	color: inherit;
 	font: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 20px;
 	padding: 6px 2px;
 	max-height: 176px;
@@ -1122,12 +1197,12 @@ html.gui-glass-adaptive {
 		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
 		0 6px 6px -3px rgba(0, 0, 0, 0.16),
 		0 12px 32px rgba(0, 0, 0, 0.45);
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 	transform-origin: top left;
 }
 
 .gui-attach-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-attach-opt {
@@ -1182,7 +1257,7 @@ html.gui-glass-adaptive {
 	height: 14px;
 	border-radius: 999px;
 	background: #fff;
-	transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+	transition: transform 0.2s var(--spring);
 }
 
 .gui-attach-switch--on .gui-attach-switch-knob {
@@ -1239,7 +1314,7 @@ html.gui-glass-adaptive {
 
 .gui-context-pop-title {
 	margin-bottom: 6px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	color: var(--color-text-muted);
 }
@@ -1250,7 +1325,7 @@ html.gui-glass-adaptive {
 	justify-content: space-between;
 	gap: 16px;
 	padding: 2px 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -1271,7 +1346,7 @@ html.gui-glass-adaptive {
 	border-radius: 8px;
 	background: color-mix(in oklab, var(--color-text) 4%, transparent);
 	color: var(--color-text);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	cursor: pointer;
 	transition:
@@ -1319,10 +1394,10 @@ html.gui-glass-adaptive {
 	padding: 6px 10px;
 	border: 1px solid var(--border);
 	border-radius: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.45;
 	background: color-mix(in oklab, var(--color-surface-2) 70%, transparent);
-	animation: gui-composer-note-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-composer-note-in 180ms var(--spring) both;
 }
 
 .gui-composer-slash-note--error {
@@ -1351,7 +1426,7 @@ html.gui-glass-adaptive {
 	inset: 0;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: background 150ms var(--spring);
 }
 
 .gui-composer-ico:hover::before {
@@ -1374,11 +1449,11 @@ html.gui-glass-adaptive {
 	border-radius: 999px;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
-	transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: color 150ms var(--spring);
 }
 
 .gui-composer-pill::before {
@@ -1387,7 +1462,7 @@ html.gui-glass-adaptive {
 	inset: 0;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: background 150ms var(--spring);
 }
 
 .gui-composer-pill:hover::before {
@@ -1480,16 +1555,16 @@ html.gui-glass-adaptive {
 	opacity: 0;
 	transform: translateY(4px) scale(0.98);
 	transition:
-		opacity 120ms cubic-bezier(0.22, 1, 0.36, 1),
-		transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+		opacity 120ms var(--spring),
+		transform 120ms var(--spring);
 }
 
 .gui-tooltip--show {
 	opacity: 1;
 	transform: none;
 	transition:
-		opacity 120ms cubic-bezier(0.22, 1, 0.36, 1),
-		transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+		opacity 120ms var(--spring),
+		transform 120ms var(--spring);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1510,7 +1585,7 @@ html.gui-glass-adaptive {
 	background: var(--color-surface);
 	color: inherit;
 	font: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 }
 
@@ -1577,7 +1652,7 @@ html.gui-glass-adaptive {
 	 * one-shot settle (scale+deblur+glow bloom, both-fill holds it) then
 	 * a slow brand pulse. gui-motion-off kills both (static logo). */
 	animation:
-		gui-splash-logo-in 620ms cubic-bezier(0.22, 1, 0.36, 1) both,
+		gui-splash-logo-in 620ms var(--spring) both,
 		gui-splash-blink 1.8s ease-in-out 700ms infinite;
 }
 
@@ -1616,7 +1691,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-splash-tagline {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	letter-spacing: 0.04em;
 	color: var(--color-text-faint);
 }
@@ -1640,7 +1715,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-connect-sub {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 	margin: 0;
 }
@@ -1658,13 +1733,13 @@ html.gui-glass-adaptive {
 .gui-connect-launch {
 	width: 100%;
 	justify-content: center;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	padding: 10px 16px;
 }
 
 .gui-connect-advanced {
 	width: 100%;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -1676,14 +1751,6 @@ html.gui-glass-adaptive {
 
 .gui-connect-advanced .gui-connect-form {
 	margin-top: 8px;
-}
-
-.gui-connect-toggles {
-	position: absolute;
-	top: 12px;
-	right: 14px;
-	display: flex;
-	gap: 6px;
 }
 
 .gui-note {
@@ -1770,7 +1837,7 @@ html.gui-glass-adaptive {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 	transition: background 120ms ease-out, color 120ms ease-out;
@@ -1817,7 +1884,7 @@ html.gui-glass-adaptive {
 
 .gui-menu-kbd {
 	margin-left: auto;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 	font-family: var(--font-mono);
 }
@@ -1833,7 +1900,7 @@ html.gui-glass-adaptive {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition: background 140ms ease-out, color 140ms ease-out;
 }
@@ -1955,7 +2022,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-dialog--entered {
-	animation: gui-dialog-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-dialog-in 160ms var(--spring);
 }
 
 .gui-dialog--closing {
@@ -2042,7 +2109,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-saveimg-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 	color: var(--color-text);
 }
@@ -2092,7 +2159,7 @@ html.gui-glass-adaptive {
 	position: absolute;
 	right: 12px;
 	bottom: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text);
 	opacity: 0.35;
 	pointer-events: none;
@@ -2115,7 +2182,7 @@ html.gui-glass-adaptive {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 	white-space: nowrap;
 }
@@ -2142,14 +2209,14 @@ html.gui-glass-adaptive {
 
 .gui-dialog--confirm p {
 	margin-top: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.55;
 	color: var(--color-text-muted);
 }
 
 .gui-dialog--confirm .gui-btn,
 .gui-dialog--prompt .gui-btn {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .gui-conn-card {
@@ -2183,7 +2250,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-field-label {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -2193,7 +2260,7 @@ html.gui-glass-adaptive {
 	border: 1px solid var(--border);
 	background: var(--color-bg);
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	outline: none;
 }
 
@@ -2237,7 +2304,7 @@ html.gui-glass-adaptive {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 	transition: background 120ms ease-out, color 120ms ease-out;
@@ -2269,10 +2336,10 @@ html.gui-glass-adaptive {
 	border: 0;
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	cursor: pointer;
-	transition: background 150ms cubic-bezier(0.22, 1, 0.36, 1), color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: background 150ms var(--spring), color 150ms var(--spring);
 }
 
 .gui-model-btn:hover {
@@ -2285,8 +2352,8 @@ html.gui-glass-adaptive {
 	z-index: 1;
 	display: flex;
 	flex-direction: column;
-	min-width: 220px;
-	max-width: 300px;
+	min-width: 260px;
+	max-width: 344px;
 	/* Fixed height, not max-height: with max-height the flex content (search
 	 * + list) re-measures on scrollbar state and list-loading, and because
 	 * the popup is bottom-anchored the search box visibly jumps when the
@@ -2311,6 +2378,16 @@ html.gui-glass-adaptive {
 		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
 		0 6px 6px -3px rgba(0, 0, 0, 0.16),
 		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Thinking-effort selector (ThinkingSelector): content-sized. The fixed
+ * 320px shell above exists to pin the model selector's search box above a
+ * long scrollable list; a 2-8 row ladder must hug its rows instead —
+ * constant height left a mostly-empty glass box at any item count. */
+.gui-model-menu--compact {
+	height: auto;
+	max-height: 320px;
+	overflow-y: auto;
 }
 
 /* The search box is pinned above the list — only the model rows scroll. */
@@ -2358,7 +2435,7 @@ html.gui-glass-adaptive {
 .gui-menu-popup--entered {
 	opacity: 1;
 	pointer-events: auto;
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 }
 
 /* Pop.tsx two-phase enter: first frame after mount is painted at opacity 0
@@ -2370,7 +2447,7 @@ html.gui-glass-adaptive {
 
 .gui-menu-popup--closing {
 	opacity: 1;
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 @keyframes gui-menu-in {
@@ -2396,7 +2473,7 @@ html.gui-glass-adaptive {
 	overflow: hidden;
 	background: var(--color-surface-raised);
 	/* Desktop-card entrance: resolves from a soft blur (kimi 固定至桌面). */
-	animation: gui-pin-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-pin-in 320ms var(--spring);
 	box-shadow:
 		0 2px 2px -1px rgba(0, 0, 0, 0.3),
 		0 6px 12px -4px rgba(0, 0, 0, 0.35),
@@ -2437,7 +2514,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-pin-title {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	color: var(--color-text-secondary);
 	white-space: nowrap;
@@ -2501,7 +2578,7 @@ html.gui-glass-adaptive {
 	align-items: center;
 	justify-content: center;
 	color: var(--color-text-secondary);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-motion-off .gui-pin-actions {
@@ -2542,7 +2619,7 @@ html.gui-glass-adaptive {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 }
@@ -2585,7 +2662,7 @@ html.gui-glass-adaptive {
 
 .gui-model-empty {
 	padding: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -2601,7 +2678,7 @@ html.gui-glass-adaptive {
 	border: 1px dashed var(--border-strong);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition: border-color 120ms ease-out, color 120ms ease-out;
 }
@@ -2629,7 +2706,7 @@ html.gui-glass-adaptive {
 	border: 1px dashed var(--border-strong);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition: border-color 120ms ease-out, color 120ms ease-out;
 }
@@ -2690,7 +2767,7 @@ html.gui-glass-adaptive {
 	border-top: 1px dashed var(--border);
 	background: transparent;
 	color: var(--color-text-faint);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	text-align: left;
 	cursor: pointer;
 }
@@ -2730,7 +2807,7 @@ html.gui-glass-adaptive {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 }
@@ -2794,21 +2871,21 @@ html.gui-glass-adaptive {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-accent);
 }
 
 .gui-login-url {
 	font-family: var(--font-mono);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-accent);
 	word-break: break-all;
 	line-height: 1.4;
 }
 
 .gui-login-msg {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -2918,7 +2995,7 @@ html.gui-glass-adaptive {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	/* mac title-bar text: 14px / weight 500 / secondary (openchamber header) */
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 500;
 	color: var(--color-text-muted);
 	pointer-events: none;
@@ -2958,7 +3035,7 @@ html.gui-glass-adaptive {
 
 .gui-context-menu--entered {
 	opacity: 1;
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 }
 
 /* Context menu nested inside a useFloatingMenu popup (CardMenuButton):
@@ -2975,7 +3052,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-context-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 
@@ -2989,7 +3066,7 @@ html.gui-glass-adaptive {
 	border-radius: 6px;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 }
@@ -3003,7 +3080,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-context-hint {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -3416,7 +3493,7 @@ html.gui-glass-adaptive {
 	 * starting value when display changes, so the morph would snap. */
 	display: flex;
 	flex-direction: column;
-	transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: height 280ms var(--spring);
 }
 
 .gui-welcome[data-focused] form {
@@ -3425,7 +3502,7 @@ html.gui-glass-adaptive {
 
 .gui-welcome-input {
 	transition:
-		min-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+		min-height 280ms var(--spring),
 		box-shadow 160ms ease-out;
 }
 
@@ -3434,7 +3511,7 @@ html.gui-glass-adaptive {
 	 * a lone min-height shorthand here would REPLACE it and make autosize
 	 * growth snap. */
 	transition:
-		min-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+		min-height 280ms var(--spring),
 		height 160ms ease;
 }
 
@@ -3482,7 +3559,7 @@ html.gui-glass-adaptive {
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition: background 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
 }
@@ -3598,7 +3675,7 @@ html.gui-glass-adaptive {
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-family: inherit;
 	cursor: pointer;
 	min-width: 180px;
@@ -3650,7 +3727,7 @@ html.gui-glass-adaptive {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 }
 
@@ -3664,7 +3741,7 @@ html.gui-glass-adaptive {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -3713,7 +3790,7 @@ html.gui-glass-adaptive {
 }
 
 .gui-collab-hint {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -3760,7 +3837,7 @@ html.gui-glass-adaptive {
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 }
 
@@ -3895,7 +3972,7 @@ html.gui-glass-adaptive {
 
 .gui-slash-row-name {
 	flex-shrink: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 650;
 	letter-spacing: 0.01em;
 	color: var(--color-accent);
@@ -3964,7 +4041,7 @@ html.gui-glass-adaptive {
 	font-size: 11px;
 	font-weight: 600;
 	cursor: pointer;
-	animation: gui-chip-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
 }
 
 .gui-queue-chip--open {
@@ -3992,7 +4069,7 @@ html.gui-glass-adaptive {
 		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
 		0 0 0 1px rgba(0, 0, 0, 0.36),
 		0 8px 24px rgba(0, 0, 0, 0.4);
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 }
 
 .gui-queue-item {
@@ -4017,8 +4094,38 @@ html.gui-glass-adaptive {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
+}
+
+/* Per-item "send now" (立即发出): icon button that turns accent on hover,
+ * visible only on row hover so the list stays scannable. */
+.gui-queue-send {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex: none;
+	padding: 0;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 120ms ease,
+		color 120ms ease,
+		background 120ms ease;
+}
+.gui-queue-item:hover .gui-queue-send,
+.gui-queue-send:focus-visible {
+	opacity: 1;
+}
+.gui-queue-send:hover {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
 .gui-queue-panel-actions {
@@ -4057,7 +4164,7 @@ html.gui-glass-adaptive {
 	flex-shrink: 0;
 	min-width: 13px;
 	text-align: center;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1;
 	color: var(--gui-status-accent, var(--color-accent));
 	font-family: ui-monospace, "SF Mono", "Maple Mono NF CN", monospace;
@@ -4211,6 +4318,47 @@ html.gui-glass-adaptive {
 	100% { background-position: -200% 0; }
 }
 
+/* ── Compaction status line ────────────────────────────────────────────
+ * Replaces the agent status line while the session context is being
+ * compacted (manual ring action / daemon auto): same floating chip,
+ * warning-tinted border so the in-flight state reads at a glance, plus
+ * a small stop button (session.abort → abortCompaction, TUI Esc path). */
+.gui-compact-line {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 10px;
+	margin-bottom: 8px;
+	border: 1px solid color-mix(in oklab, var(--color-warning) 45%, var(--border));
+	border-radius: 10px;
+	background: var(--color-surface-sunken);
+	width: fit-content;
+}
+
+.gui-compact-line-text {
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-compact-line-stop {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	margin-left: 2px;
+	border: none;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+	color: var(--color-danger);
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.gui-compact-line-stop:hover {
+	background: color-mix(in oklab, var(--color-danger) 26%, transparent);
+}
+
 @keyframes gui-orb-pulse {
 	0%, 100% { opacity: 1; transform: scale(1); }
 	50% { opacity: 0.55; transform: scale(0.85); }
@@ -4258,6 +4406,12 @@ html.gui-glass-adaptive {
 .gui-dot-blue { background: #60a5fa; }
 .gui-dot-purple { background: #a78bfa; }
 .gui-dot-pink { background: #f472b6; }
+/* Status tokens for the session 手动上色 menu dots (same palette as the
+ * row's status square). */
+.gui-dot-ok { background: var(--color-ok); }
+.gui-dot-warning { background: var(--color-warning); }
+.gui-dot-danger { background: var(--color-danger); }
+.gui-dot-muted { background: var(--color-text-faint); }
 
 /* Unread session marker (ZCode 标记为未读). */
 .gui-session-row--unread .gui-session-title::after {
@@ -4320,23 +4474,216 @@ html.gui-glass-adaptive {
 	box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
 }
 
-/* Custom-accent picker: an invisible color input stretched over a swatch
- * showing the current color — clicking anywhere opens the native picker. */
+/* Custom-accent swatch: a plain button whose fill shows the current color;
+ * clicking opens the app-styled picker popover (.gui-color-picker). */
 .gui-accent-swatch--custom {
 	position: relative;
-	overflow: hidden;
 }
 
-.gui-accent-picker {
+/* ── Accent color picker (replaces the native <input type="color">) ──────
+ * Panel content portaled via useFloatingMenu — .gui-menu-popup owns the
+ * fixed positioning + two-phase enter/exit; this card carries the same
+ * frosted-glass surface as every other popup menu. */
+.gui-color-picker {
+	width: 240px;
+	padding: 12px;
+	border-radius: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Saturation/value field. */
+.gui-cp-field {
+	position: relative;
+	width: 100%;
+	height: 130px;
+	border-radius: 10px;
+	overflow: hidden;
+	cursor: crosshair;
+	touch-action: none;
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-strong) 60%, transparent);
+}
+.gui-cp-field-hue {
 	position: absolute;
 	inset: 0;
-	width: 100%;
-	height: 100%;
-	padding: 0;
-	border: none;
-	background: transparent;
+}
+.gui-cp-field-s {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, #fff, transparent);
+}
+.gui-cp-field-v {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(0deg, #000, transparent);
+}
+.gui-cp-field-handle {
+	position: absolute;
+	width: 16px;
+	height: 16px;
+	margin: -8px 0 0 -8px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.45),
+		0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+/* Hue slider. */
+.gui-cp-hue {
+	position: relative;
+	height: 14px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
 	cursor: pointer;
-	opacity: 0;
+	touch-action: none;
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-strong) 60%, transparent);
+}
+.gui-cp-hue-handle {
+	position: absolute;
+	top: 50%;
+	width: 18px;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.45),
+		0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+/* HEX + RGB inputs. */
+.gui-cp-inputs {
+	display: grid;
+	grid-template-columns: 1.5fr 1fr 1fr 1fr;
+	gap: 6px;
+}
+.gui-cp-input {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+.gui-cp-input > span {
+	font: 600 10px/1 var(--font-mono);
+	letter-spacing: 0.06em;
+	color: var(--color-text-faint);
+}
+.gui-cp-input input {
+	width: 100%;
+	min-width: 0;
+	padding: 4px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: var(--bg-inset);
+	color: var(--color-text);
+	font: 12px/1.4 var(--font-mono);
+}
+.gui-cp-input input:focus {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 1px var(--accent-bd);
+}
+/* Number spinners off — the app style never shows them. */
+.gui-cp-input input[type="number"]::-webkit-inner-spin-button,
+.gui-cp-input input[type="number"]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* Quick-pick preset dots (the four preset accent colors). */
+.gui-cp-presets {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.gui-cp-label {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-cp-preset {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 1px solid color-mix(in oklab, #fff 18%, transparent);
+	cursor: pointer;
+	transition: transform 120ms ease-out;
+}
+.gui-cp-preset:hover {
+	transform: scale(1.15);
+}
+.gui-cp-preset--active {
+	box-shadow:
+		0 0 0 2px var(--color-bg),
+		0 0 0 4px var(--accent);
+}
+
+/* Contrast against the app background (WCAG grade). */
+.gui-cp-contrast {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+.gui-cp-contrast-grade {
+	font-weight: 650;
+	white-space: nowrap;
+}
+.gui-cp-contrast-grade--ok {
+	color: var(--ok);
+}
+.gui-cp-contrast-grade--bad {
+	color: var(--err);
+}
+
+/* Footer actions: 「应用」(primary, accent). */
+.gui-cp-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.gui-cp-btn {
+	padding: 5px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border-strong);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		border-color 120ms ease-out;
+}
+.gui-cp-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	border-color: var(--accent-bd);
+}
+.gui-cp-btn--primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-fg);
+}
+.gui-cp-btn--primary:hover {
+	background: var(--accent-hover);
+	border-color: var(--accent-hover);
 }
 
 .gui-range {
@@ -4412,12 +4759,12 @@ html.gui-glass-adaptive {
 }
 
 .gui-view-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-add-project-menu.gui-menu-popup--closing,
 .gui-proj-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 /* ── Command palette (ZCode/openchamber parity, ⌘K) ──────────────────── */
@@ -4465,11 +4812,11 @@ html.gui-glass-adaptive {
 
 .gui-palette--entered {
 	opacity: 1;
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 }
 
 .gui-palette--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-palette-search {
@@ -4487,7 +4834,7 @@ html.gui-glass-adaptive {
 	outline: none;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 }
 
 .gui-palette-search input::placeholder {
@@ -4509,7 +4856,7 @@ html.gui-glass-adaptive {
 	border-bottom: 2px solid transparent;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 }
 
@@ -4566,7 +4913,7 @@ html.gui-glass-adaptive {
 
 .gui-palette-empty {
 	padding: 10px 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -4661,7 +5008,7 @@ body.gui-resizing {
 	gap: 8px;
 	padding: 28px 12px;
 	text-align: center;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.6;
 	color: var(--color-text-faint);
 }
@@ -4769,14 +5116,14 @@ body.gui-resizing {
 	gap: 12px;
 }
 .gui-obo-pers-label {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 550;
 	color: var(--fg);
 	flex: none;
 }
 .gui-obo-pet-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
 	gap: 6px;
 	flex: 1;
 }
@@ -4789,8 +5136,16 @@ body.gui-resizing {
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	color: var(--fg-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	min-width: 0;
+}
+/* Pet names wrap instead of ellipsis-ing — "Noir Webling" must stay fully
+ * readable; chips in the same grid row share the tallest height. */
+.gui-obo-pet-name {
+	min-width: 0;
+	white-space: normal;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
 }
 .gui-obo-pet-chip:hover {
 	background: color-mix(in oklab, var(--fg) 7%, transparent);
@@ -4935,9 +5290,10 @@ body.gui-resizing {
 	color: var(--code-fg-light, var(--fg));
 }
 
-.tr-md pre code {
-	font-size: var(--gui-code-size, 13.5px);
-}
+/* Transcript code blocks follow 消息字号 (--tr-font-size via collab-web's
+ * --tr-code-size ladder), NOT --gui-code-size — the message font setting
+ * owns everything inside a message (正文/标题/代码). --gui-code-size
+ * still drives file previews, diff views and the code-preview card. */
 
 /* Line numbers (CSS counters; the ::before gutter is not copied). */
 .gui-code-lines .tr-md pre code {
@@ -5020,7 +5376,7 @@ body.gui-resizing {
 	gap: 14px;
 	padding: 9px 14px;
 	border-bottom: 1px solid var(--border);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .gui-kbd-row:last-child {
@@ -5028,7 +5384,7 @@ body.gui-resizing {
 }
 
 .gui-kbd-row--head {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
@@ -5047,7 +5403,7 @@ body.gui-resizing {
 	border-bottom-width: 2px;
 	background: var(--color-surface-raised);
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text);
 }
 
@@ -5095,13 +5451,13 @@ body.gui-resizing {
 }
 
 .gui-blur-morph {
-	animation: gui-blur-morph-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-blur-morph-in 220ms var(--spring);
 }
 
 .gui-agent-status {
 	padding: 2px 9px;
 	border-radius: 999px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	border: 1px solid var(--border);
 	color: var(--color-text-muted);
 }
@@ -5200,7 +5556,7 @@ body.gui-resizing {
 	outline: none;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 .gui-model-picker-list {
@@ -5211,7 +5567,7 @@ body.gui-resizing {
 .gui-model-picker-empty {
 	padding: 18px 10px;
 	text-align: center;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -5294,7 +5650,7 @@ body.gui-resizing {
 	/* Open/close animation: height animates 0 ↔ dockHeight; the border
 	 * fades in with it so a closed dock leaves no hairline. */
 	transition:
-		height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+		height 220ms var(--spring),
 		border-color 220ms ease-out;
 }
 
@@ -5443,7 +5799,7 @@ body.gui-resizing {
 /* Session composer column — focus mode animates height px↔100% (JS pins
  * the current height, then transitions to the target; flex:1 would snap). */
 .gui-composer-wrap {
-	transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: height 280ms var(--spring);
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
@@ -5601,7 +5957,7 @@ body.gui-resizing {
 }
 
 .gui-notify-tpl-name {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text);
 	margin-bottom: 4px;
@@ -5610,7 +5966,7 @@ body.gui-resizing {
 .gui-notify-tpl-label {
 	display: block;
 	margin: 8px 0 3px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.4;
 	color: var(--color-text-muted);
 }
@@ -5623,7 +5979,7 @@ body.gui-resizing {
 
 .gui-sound-name {
 	font-family: ui-monospace, "SF Mono", "Maple Mono NF CN", monospace;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.3;
 	color: var(--color-text);
 }
@@ -5672,7 +6028,7 @@ body.gui-resizing {
 .gui-effect-preview-input {
 	flex: 1;
 	min-width: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -5896,7 +6252,7 @@ body.gui-resizing {
 	color: var(--color-text);
 	font-size: 12.5px;
 	-webkit-app-region: no-drag;
-	animation: gui-pause-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-pause-in 220ms var(--spring);
 }
 
 @keyframes gui-pause-in {
@@ -5933,7 +6289,7 @@ body.gui-resizing {
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	color: var(--color-text);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	transition: background 140ms ease;
 }
 
@@ -5958,10 +6314,10 @@ body.gui-resizing {
 	backdrop-filter: blur(0px) saturate(100%);
 	background: color-mix(in oklab, var(--color-bg) 0%, transparent);
 	transition:
-		opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 320ms var(--spring),
 		visibility 0s linear 320ms,
-		backdrop-filter 320ms cubic-bezier(0.22, 1, 0.36, 1),
-		-webkit-backdrop-filter 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		backdrop-filter 320ms var(--spring),
+		-webkit-backdrop-filter 320ms var(--spring);
 	-webkit-app-region: no-drag;
 }
 
@@ -5969,10 +6325,10 @@ body.gui-resizing {
 	visibility: visible;
 	opacity: 1;
 	transition:
-		opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 240ms var(--spring),
 		visibility 0s linear 0s,
-		backdrop-filter 240ms cubic-bezier(0.22, 1, 0.36, 1),
-		-webkit-backdrop-filter 240ms cubic-bezier(0.22, 1, 0.36, 1);
+		backdrop-filter 240ms var(--spring),
+		-webkit-backdrop-filter 240ms var(--spring);
 	/* Frosted glass: heavy dynamic blur over the live window content. */
 	-webkit-backdrop-filter: blur(24px) saturate(150%);
 	backdrop-filter: blur(24px) saturate(150%);
@@ -5992,8 +6348,8 @@ body.gui-resizing {
 	transform: translateY(10px) scale(0.97);
 	opacity: 0;
 	transition:
-		transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-		opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		transform 320ms var(--spring),
+		opacity 320ms var(--spring);
 }
 
 .gui-global-pause--active .gui-global-pause-card {
@@ -6128,7 +6484,7 @@ body.gui-resizing {
 
 .gui-openin-menu.gui-menu-popup--closing,
 .gui-instance-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 /* ── Instance info pill (openchamber DesktopServicesMenu) ────────────── */
@@ -6140,7 +6496,7 @@ body.gui-resizing {
 	border-radius: 8px;
 	padding: 0 8px;
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-instance-btn:hover {
@@ -6224,7 +6580,7 @@ body.gui-resizing {
 }
 
 .gui-header-title-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-header-session-row {
@@ -6238,7 +6594,7 @@ body.gui-resizing {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 	transition: background 120ms ease-out, color 120ms ease-out;
@@ -6318,7 +6674,7 @@ body.gui-resizing {
 	color: var(--color-text-muted);
 	pointer-events: none;
 	white-space: nowrap;
-	animation: gui-menu-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
 	transform-origin: top right;
 }
 
@@ -6365,7 +6721,7 @@ body.gui-resizing {
 }
 
 .gui-overlay-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-pane-side,
@@ -6501,7 +6857,7 @@ body.gui-resizing .gui-pane-right {
 	width: auto;
 	padding: 5px 8px;
 	border-radius: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text-muted);
 	text-align: left;
@@ -6519,7 +6875,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-project-count {
 	flex-shrink: 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 400;
 	color: var(--color-text-faint);
 }
@@ -6538,7 +6894,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-project-empty {
 	padding: 4px 8px 10px 24px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 
@@ -6647,7 +7003,7 @@ body.gui-resizing .gui-pane-right {
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	cursor: pointer;
 	transition: background 120ms ease-out, color 120ms ease-out;
@@ -6774,7 +7130,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-settings-page-desc {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.5;
 	color: var(--color-text-muted);
 	margin: 4px 0 0;
@@ -6801,7 +7157,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-settings-section-desc {
 	margin: 3px 0 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.5;
 	color: var(--color-text-muted);
 }
@@ -6821,7 +7177,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-settings-field-label {
 	grid-area: label;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	line-height: 1.3;
 	color: var(--color-text);
 	margin: 0;
@@ -6858,10 +7214,19 @@ body.gui-resizing .gui-pane-right {
 	justify-content: space-between;
 	gap: 32px;
 	padding: 7px 0;
+	/* Rows whose renderExtra is a full-width block (task card style preview)
+	 * must wrap: the label column keeps its width and the extra lands on its
+	 * own line below — without wrap, basis-full squeezes the label column to
+	 * near-zero and CJK descriptions wrap into a vertical strip. */
+	flex-wrap: wrap;
 }
 
-/* A conflicting pref makes the row inert (e.g. widget 卡片默认展开 while
- * 独立展示 is on) — dimmed, switch visually disabled. */
+/* Full-width extra (custom control previews): force it to its own line
+ * below the label + standard control. */
+.gui-settings-row > .gui-settings-row-extra {
+	flex: 0 0 100%;
+}
+
 .gui-settings-row--disabled {
 	opacity: 0.45;
 }
@@ -6917,7 +7282,7 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text);
 }
 .gui-settings-tui-heading {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text-muted);
 	transition: color 160ms ease;
@@ -6938,14 +7303,14 @@ body.gui-resizing .gui-pane-right {
 	font-size: 10px;
 	color: var(--color-text-faint);
 	transform: rotate(0deg);
-	transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: transform 200ms var(--spring);
 }
 .gui-settings-tui-chevron--open {
 	transform: rotate(90deg);
 }
 .gui-settings-tui-note {
 	margin-top: 4px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.55;
 	color: var(--color-text-faint);
 }
@@ -7004,7 +7369,7 @@ body.gui-resizing .gui-pane-right {
 	width: 100%;
 	padding: 7px 10px;
 	border-radius: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.2;
 	text-align: left;
 	color: var(--color-text-muted);
@@ -7093,7 +7458,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-provider-card-name {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	line-height: 1.3;
 	color: var(--color-text);
@@ -7107,7 +7472,7 @@ body.gui-resizing .gui-pane-right {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.3;
 	color: var(--color-text-faint);
 	white-space: nowrap;
@@ -7167,7 +7532,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	border-radius: 10px;
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 	cursor: pointer;
 	transition:
@@ -7216,12 +7581,12 @@ body.gui-resizing .gui-pane-right {
 	width: auto;
 	min-width: 96px;
 	padding: 4px 6px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-role-count {
 	margin-left: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -7241,7 +7606,7 @@ body.gui-resizing .gui-pane-right {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -7259,7 +7624,7 @@ body.gui-resizing .gui-pane-right {
 .gui-role-fallback-arrow {
 	flex-shrink: 0;
 	color: var(--color-text-faint);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-role-fallback-count {
@@ -7301,7 +7666,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-settings-row-label {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	line-height: 1.3;
 	color: var(--color-text);
 }
@@ -7398,7 +7763,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-pet-import-error {
 	margin: 6px 0 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--danger, #e5484d);
 }
@@ -7453,7 +7818,7 @@ body.gui-resizing .gui-pane-right {
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text);
 	white-space: nowrap;
@@ -7559,7 +7924,7 @@ body.gui-resizing .gui-pane-right {
 	border: none;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-family: var(--font-mono);
 	text-align: center;
 	appearance: textfield;
@@ -7577,7 +7942,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-settings-stepper-unit {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -7587,7 +7952,7 @@ body.gui-resizing .gui-pane-right {
 	min-width: 36px;
 	padding: 4px 2px;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-family: var(--font-mono);
 	text-align: center;
 }
@@ -7650,7 +8015,7 @@ body.gui-resizing .gui-pane-right {
 	background: var(--color-surface);
 }
 .gui-github-flow-title {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 }
 .gui-github-flow-hint {
@@ -7800,7 +8165,7 @@ body.gui-resizing .gui-pane-right {
 
 /* Right panel width collapse: stays mounted, animates 288px → 0px. */
 .gui-pane-right--inner {
-	transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease;
+	transition: width 220ms var(--spring), opacity 160ms ease;
 }
 
 .gui-pane-right--inner--closed {
@@ -7918,7 +8283,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--color-border);
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	color: var(--color-text-muted);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition:
 		background 120ms ease-out,
@@ -7962,7 +8327,7 @@ body.gui-resizing .gui-pane-right {
 	width: 100%;
 	padding: 8px 12px;
 	text-align: left;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	color: var(--color-text);
 	cursor: pointer;
@@ -8022,7 +8387,7 @@ body.gui-resizing .gui-pane-right {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
@@ -8078,9 +8443,9 @@ body.gui-resizing .gui-pane-right {
 	visibility: hidden;
 	pointer-events: none;
 	transition:
-		opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
-		transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-		filter 200ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 200ms var(--spring),
+		transform 200ms var(--spring),
+		filter 200ms var(--spring),
 		visibility 0s linear 200ms;
 }
 
@@ -8091,9 +8456,9 @@ body.gui-resizing .gui-pane-right {
 	visibility: visible;
 	pointer-events: auto;
 	transition:
-		opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
-		transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-		filter 200ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 200ms var(--spring),
+		transform 200ms var(--spring),
+		filter 200ms var(--spring),
 		visibility 0s linear 0s;
 }
 
@@ -8122,7 +8487,7 @@ body.gui-resizing .gui-pane-right {
 	border: none;
 	outline: none;
 	background: transparent;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text);
 }
 
@@ -8166,7 +8531,7 @@ body.gui-resizing .gui-pane-right {
 	padding: 3px 6px;
 	border-radius: 6px;
 	text-align: left;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text);
 }
 
@@ -8236,7 +8601,7 @@ body.gui-resizing .gui-pane-right {
 .gui-mtree-empty {
 	padding: 16px;
 	text-align: center;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -8407,8 +8772,17 @@ body.gui-resizing .gui-pane-right {
 	max-height: 25px;
 	overflow: hidden;
 	transition:
-		max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
+		bottom 180ms var(--spring),
+		max-height 240ms var(--spring),
 		box-shadow 160ms ease-out;
+}
+
+/* At the bottom the jump button hides — the recap drops into its slot
+ * (bottom 20px) hugging the message flow; scrolled away the button fades
+ * in and the recap rises to 56px so the two never overlap. Driven purely
+ * by the transcript's data-bottom-scroll attribute (useScrollShadow). */
+.gui-transcript-wrap [data-bottom-scroll="false"] ~ .gui-recap-row {
+	bottom: 20px;
 }
 
 .gui-recap-row--expanded {
@@ -8452,7 +8826,7 @@ body.gui-resizing .gui-pane-right {
 	width: 14px;
 	height: 14px;
 	opacity: 0.55;
-	transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: transform 160ms var(--spring);
 }
 
 .gui-recap-chevron--open {
@@ -8519,7 +8893,7 @@ body.gui-resizing .gui-pane-right {
 .gui-user-avatar {
 	width: 28px;
 	height: 28px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 }
 
@@ -8580,13 +8954,13 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-creds-menu.gui-menu-popup--closing {
-	animation: gui-menu-out 130ms ease-in forwards;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 .gui-creds-menu-label {
 	padding: 5px 8px 4px;
 	color: var(--color-text-faint);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
@@ -8610,7 +8984,7 @@ body.gui-resizing .gui-pane-right {
 	padding: 1px 6px;
 	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
 	color: var(--color-danger);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-creds-menu-sep {
@@ -8639,11 +9013,11 @@ body.gui-resizing .gui-pane-right {
 	backdrop-filter: blur(16px) saturate(180%);
 	-webkit-backdrop-filter: blur(16px) saturate(180%);
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 16px;
 	cursor: pointer;
 	/* Entrance pop when the mode turns on (composer row). */
-	animation: gui-chip-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
 	transition: color 120ms ease-out, border-color 120ms ease-out;
 }
 
@@ -8679,7 +9053,7 @@ body.gui-resizing .gui-pane-right {
 	border-style: dashed;
 	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 	color: var(--color-accent);
-	animation: gui-chip-in 180ms cubic-bezier(0.22, 1, 0.36, 1), gui-armed-pulse 2s ease-in-out infinite;
+	animation: gui-chip-in 180ms var(--spring), gui-armed-pulse 2s ease-in-out infinite;
 }
 
 .gui-mode-chip--armed:hover {
@@ -8715,6 +9089,69 @@ body.gui-resizing .gui-pane-right {
 	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
 }
 
+/* Temporary swarm status chip (kimiwork parity): while a `task` tool runs,
+ * a small frosted chip above the input shows swarm activity; clicking opens
+ * the floating member grid below. */
+.gui-swarm-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(16px) saturate(180%);
+	-webkit-backdrop-filter: blur(16px) saturate(180%);
+	cursor: pointer;
+	transition: border-color 140ms ease, background 140ms ease;
+}
+
+.gui-swarm-chip:hover,
+.gui-swarm-chip--open {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
+}
+
+.gui-swarm-chip-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	animation: gui-swarm-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes gui-swarm-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.gui-swarm-chip-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+/* Frosted floating member grid (the composer swarm chip's popup). The
+ * collab-web SwarmCard renders inside with its own member chrome. */
+.gui-swarm-popup-card {
+	width: min(400px, calc(100vw - 24px));
+	max-height: 320px;
+	overflow-y: auto;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
+	animation: gui-todo-in 200ms var(--spring);
+}
+
 /* Expanded todo board (TUI todo panel parity): phases with per-phase bars,
  * status icons, blocked-task notes. */
 .gui-todo-panel {
@@ -8730,7 +9167,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: var(--color-surface);
 	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
-	animation: gui-todo-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-todo-in 200ms var(--spring);
 }
 
 @keyframes gui-todo-in {
@@ -8914,7 +9351,7 @@ body.gui-resizing .gui-pane-right {
 	background: transparent;
 	color: var(--color-text);
 	font-family: inherit;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	transition: background 110ms ease-out;
 }
@@ -9004,7 +9441,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	border-radius: 7px;
 	background: transparent;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	transition: background 110ms ease-out;
 }
@@ -9063,7 +9500,7 @@ body.gui-resizing .gui-pane-right {
 	height: 100%;
 	border-radius: 999px;
 	background: var(--color-accent);
-	transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: width 220ms var(--spring);
 }
 
 .gui-todo-label {
@@ -9281,7 +9718,7 @@ body.gui-resizing .gui-pane-right {
 .gui-turn-panel-text {
 	min-width: 0;
 	flex: 1;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.4;
 	color: var(--color-text-muted);
 	display: -webkit-box;
@@ -9316,7 +9753,7 @@ body.gui-resizing .gui-pane-right {
 	width: auto;
 	justify-content: center;
 	padding: 4px 6px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 16px;
 	border-radius: 999px;
 	overflow: hidden;
@@ -9397,7 +9834,7 @@ body.gui-resizing .gui-pane-right {
 	gap: 5px;
 	padding: 4px 10px;
 	border-radius: 999px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 	border: 1px solid var(--border);
 	background: transparent;
@@ -9550,7 +9987,7 @@ body.gui-resizing .gui-pane-right {
 	gap: 5px;
 	padding: 4px 10px;
 	border-radius: 999px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	flex-shrink: 0;
 	color: var(--color-text-muted);
 	background: transparent;
@@ -9634,7 +10071,7 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-ext-empty {
 	padding: 8px 6px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 .gui-ext-item {
@@ -9733,6 +10170,14 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	color: var(--color-text-faint);
 }
+/* GUI-only extension badge (motion packs, builtin style): accent-tinted
+ * so GUI-surface extensions stand out from daemon-side capabilities. */
+.gui-ext-item-tag--gui {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-weight: 600;
+}
 .gui-ext-item-ops {
 	display: none;
 	align-items: center;
@@ -9782,7 +10227,7 @@ body.gui-resizing .gui-pane-right {
 	place-items: center;
 	height: 100%;
 	min-height: 300px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
 }
 .gui-ext-detail-name {
@@ -9792,7 +10237,7 @@ body.gui-resizing .gui-pane-right {
 }
 .gui-ext-detail-meta {
 	margin-top: 2px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 .gui-ext-detail-desc {
@@ -9874,7 +10319,7 @@ body.gui-resizing .gui-pane-right {
  * transformed onto the outgoing rect in the layout phase, then eased back
  * to identity — one continuous shape/position animation, no cross-fade. */
 .gui-flip-morph {
-	transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: transform 420ms var(--spring);
 	will-change: transform;
 }
 
@@ -9883,7 +10328,7 @@ body.gui-resizing .gui-pane-right {
  * px (grid-template-rows 0fr↔1fr only transitions one way in Chromium:
  * 1fr→0fr snaps instantly), so the container is a plain block that clips
  * while the inner animates. The outer fades 160ms; the inner height
- * eases 240ms cubic-bezier(0.22, 1, 0.36, 1). */
+ * eases 240ms var(--spring). */
 .gui-collapse {
 	overflow: hidden;
 	opacity: 0;
@@ -9950,7 +10395,7 @@ body.gui-resizing .gui-pane-right {
 	width: 100%;
 	padding: 6px 8px;
 	border-radius: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 	text-align: left;
 	transition: background 130ms ease, color 130ms ease;
@@ -10282,7 +10727,7 @@ body.gui-resizing .gui-pane-right {
 	border-radius:8px;
 	height:24px;
 	padding:0 10px;
-	font-size:12px;
+	font-size: var(--ui-font-size-xs);
 	white-space:nowrap;
 	flex-shrink:0;
 }
@@ -10373,7 +10818,7 @@ body.gui-resizing .gui-pane-right {
 	border:1px solid #0000;
 	border-radius:6px;
 	padding:1px 4px;
-	font-size:13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight:500;
 	line-height:20px;
 }
@@ -10443,7 +10888,7 @@ body.gui-resizing .gui-pane-right {
 	text-overflow:ellipsis;
 	white-space:nowrap;
 	max-width:100%;
-	font-size:12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight:500;
 }
 .gui-pet-market-card__thumb
@@ -10462,7 +10907,7 @@ body.gui-resizing .gui-pane-right {
 {
 	color:var(--color-text-muted);
 	margin-top:8px;
-	font-size:12px;
+	font-size: var(--ui-font-size-xs);
 }
 .gui-pet-market__grid
 {
@@ -10704,7 +11149,7 @@ body.gui-resizing .gui-pane-right {
 	transition:
 		filter 280ms ease,
 		opacity 280ms ease,
-		transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+		transform 280ms var(--spring);
 	will-change: filter, opacity, transform;
 }
 
@@ -10746,7 +11191,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-select-pop--entered {
 	opacity: 1;
-	animation: gui-select-pop-in 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-select-pop-in 130ms var(--spring);
 }
 
 .gui-select-pop--closing {
@@ -10794,8 +11239,8 @@ body.gui-resizing .gui-pane-right {
 	transition:
 		background 120ms ease,
 		color 120ms ease,
-		width 160ms cubic-bezier(0.22, 1, 0.36, 1),
-		padding 160ms cubic-bezier(0.22, 1, 0.36, 1);
+		width 160ms var(--spring),
+		padding 160ms var(--spring);
 }
 
 .gui-select-pop-btn:hover {
@@ -10819,11 +11264,11 @@ body.gui-resizing .gui-pane-right {
 	max-width: 0;
 	overflow: hidden;
 	opacity: 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1;
 	white-space: nowrap;
 	transition:
-		max-width 160ms cubic-bezier(0.22, 1, 0.36, 1),
+		max-width 160ms var(--spring),
 		opacity 120ms ease 70ms;
 }
 
@@ -10857,7 +11302,7 @@ body.gui-resizing .gui-pane-right {
 
 .gui-ask-pop--entered {
 	opacity: 1;
-	animation: gui-ask-pop-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-ask-pop-in 140ms var(--spring);
 }
 
 @keyframes gui-ask-pop-in {
@@ -10909,7 +11354,7 @@ body.gui-resizing .gui-pane-right {
 	border-radius: 8px;
 	background: var(--color-surface-sunken);
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	word-break: break-word;
 	display: -webkit-box;
@@ -11000,7 +11445,7 @@ body.gui-resizing .gui-pane-right {
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
 	font-family: var(--font-mono, ui-monospace, monospace);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.55;
 	white-space: pre-wrap;
 	word-break: break-word;
@@ -11011,7 +11456,7 @@ body.gui-resizing .gui-pane-right {
 	border-radius: 8px;
 	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
 	color: var(--color-danger, #e5484d);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-ask-pop-actions {
@@ -11028,7 +11473,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 }
 
@@ -11137,7 +11582,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-board-saved {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-ok);
 	flex-shrink: 0;
 }
@@ -11158,7 +11603,17 @@ body.gui-resizing .gui-pane-right {
 	position: relative;
 	flex: 1;
 	min-height: 0;
-	overflow: auto;
+	/* Chroma-grid pointer coordinate (board view writes --cg-x/--cg-y). */
+	--cg-x: 50%;
+	--cg-y: 50%;
+	/* Vertical scrolling only. The surface's LAYOUT width is the fixed
+	 * BASE_W (transform: scale shrinks only the painting, not layout), so
+	 * when the window is narrower than 1092px the layout overflow would
+	 * surface a spurious horizontal scrollbar — while the scaled visual
+	 * already fills the container exactly. Horizontal panning is pointless
+	 * (the canvas is always fitted to the width), so clip it. */
+	overflow-x: hidden;
+	overflow-y: auto;
 	/* Dot-matrix backdrop (coarser than the old 8px grid — cards read
 	 * larger; kimi uses dots, not fine gridlines) with feathered edges. */
 	background-image: radial-gradient(color-mix(in oklab, var(--color-text) 7%, transparent) 1px, transparent 1.6px);
@@ -11166,6 +11621,43 @@ body.gui-resizing .gui-pane-right {
 	-webkit-mask-image: radial-gradient(120% 90% at 50% 40%, #000 62%, transparent 100%);
 	mask-image: radial-gradient(120% 90% at 50% 40%, #000 62%, transparent 100%);
 	--board-ghost-bd: color-mix(in oklab, var(--color-accent) 65%, transparent);
+}
+
+/* Group-level chroma glow (reactbits ChromaGrid parity) — shared by the
+ * board canvas, provider grid, pet market and pet preset grid: ONE
+ * chromatic light over the whole group, driven by the shared pointer, so
+ * every card lights up together (vs each card's own SpotlightCard).
+ * Three offset RGB gradients read as chromatic dispersion; screen
+ * blending keeps it additive over dark cards. The pointer writes
+ * --cg-x/--cg-y straight to the container (no re-render); the glow is
+ * pure CSS, fades in on group hover, hides under gui-motion-off. */
+.gui-chroma {
+	position: relative;
+	--cg-x: 50%;
+	--cg-y: 50%;
+}
+
+.gui-chroma-glow {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+	mix-blend-mode: screen;
+	opacity: 0;
+	transition: opacity 320ms ease;
+	background:
+		radial-gradient(620px circle at var(--cg-x, 50%) var(--cg-y, 50%), rgba(255, 70, 130, 0.10), transparent 58%),
+		radial-gradient(500px circle at calc(var(--cg-x, 50%) - 7px) calc(var(--cg-y, 50%) - 7px), rgba(70, 255, 140, 0.07), transparent 58%),
+		radial-gradient(500px circle at calc(var(--cg-x, 50%) + 7px) calc(var(--cg-y, 50%) + 7px), rgba(80, 150, 255, 0.08), transparent 58%);
+}
+
+.gui-chroma:hover .gui-chroma-glow,
+.gui-board-canvas:hover .gui-chroma-glow {
+	opacity: 1;
+}
+
+.gui-motion-off .gui-chroma-glow {
+	display: none;
 }
 
 /* The scaled surface: base-width coordinate space, transform-scaled to
@@ -11278,7 +11770,7 @@ body.gui-resizing .gui-pane-right {
 	border: none;
 	outline: none;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	padding: 2px 6px;
 	border-radius: 6px;
@@ -11501,7 +11993,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-video-empty-text {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 }
 
@@ -11524,7 +12016,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-gauge-title {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 }
 
@@ -11600,7 +12092,7 @@ body.gui-resizing .gui-pane-right {
 	align-items: center;
 	justify-content: center;
 	color: var(--color-text-secondary);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	height: 100%;
 }
 
@@ -11779,7 +12271,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-indextape-value {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -11824,7 +12316,7 @@ body.gui-resizing .gui-pane-right {
 	position: relative;
 	overflow: hidden;
 	cursor: pointer;
-	transition: flex-grow 380ms cubic-bezier(0.22, 1, 0.36, 1), filter 200ms ease;
+	transition: flex-grow 380ms var(--spring), filter 200ms ease;
 	/* Gradient placeholder palette (kimi 画览-style) when no image. */
 	background-image:
 		linear-gradient(160deg, color-mix(in oklab, var(--color-accent) 45%, #1c1c22), #26262e),
@@ -11851,7 +12343,7 @@ body.gui-resizing .gui-pane-right {
 	position: absolute;
 	left: 8px;
 	bottom: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	color: #fff;
 	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
@@ -11864,7 +12356,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-gallery-item--active .gui-widget-gallery-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 }
 
 .gui-widget-gallery-empty {
@@ -11872,7 +12364,7 @@ body.gui-resizing .gui-pane-right {
 	align-items: center;
 	justify-content: center;
 	color: var(--color-text-secondary);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-widget-fit {
@@ -11918,7 +12410,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-board-empty-desc {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 
 /* Widget internals (shared by board cards and future inline widgets). */
@@ -11962,7 +12454,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	transition: border-color 120ms ease, background 120ms ease;
 }
@@ -12009,7 +12501,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-slider-label {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 	min-width: 52px;
 }
@@ -12022,7 +12514,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-slider-val {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-variant-numeric: tabular-nums;
 	color: var(--color-accent);
 	min-width: 38px;
@@ -12077,7 +12569,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-variant-numeric: tabular-nums;
 	padding: 0 10px;
 	outline: none;
@@ -12099,7 +12591,7 @@ body.gui-resizing .gui-pane-right {
 	height: 100%;
 	background: var(--color-accent);
 	opacity: 0.85;
-	transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: width 200ms var(--spring);
 }
 
 .gui-widget-calc-bar-label {
@@ -12150,7 +12642,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-calc-cell-val {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 500;
 	font-variant-numeric: tabular-nums;
 }
@@ -12172,7 +12664,7 @@ body.gui-resizing .gui-pane-right {
 .gui-widget-calc-rule {
 	display: flex;
 	justify-content: space-between;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
@@ -12197,12 +12689,12 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-ticker-label {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
 .gui-widget-ticker-delta {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-ok);
 	font-variant-numeric: tabular-nums;
 }
@@ -12244,7 +12736,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 }
 
@@ -12267,7 +12759,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-metric-label {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
@@ -12276,7 +12768,7 @@ body.gui-resizing .gui-pane-right {
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 }
 
 .gui-widget-metric-tick:hover {
@@ -12296,7 +12788,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-metric-delta {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-ok);
 	font-variant-numeric: tabular-nums;
 }
@@ -12336,7 +12828,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-widget-todo-empty {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 	padding: 8px 2px;
 }
@@ -12394,7 +12886,7 @@ body.gui-resizing .gui-pane-right {
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	opacity: 0;
 	transition: opacity 120ms ease;
 }
@@ -12429,7 +12921,7 @@ body.gui-resizing .gui-pane-right {
 	background: rgba(77, 163, 255, 0.2);
 }
 .gui-widget-send-arrow {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1;
 }
 
@@ -12648,7 +13140,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-board-home-desc {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 }
 
@@ -12740,7 +13232,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-board-home-count {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -12792,7 +13284,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: none;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	padding: 0 14px;
 	outline: none;
 }
@@ -12833,7 +13325,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	/* No fill retention: the dot-mask is a transition artifact — after the
 	 * animation the surface must return to a plain unmasked element, or a
 	 * 68px dot lattice stays punched through the board permanently. */
-	animation: gui-pixel-reveal 460ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-pixel-reveal 460ms var(--spring);
 }
 
 @keyframes gui-pixel-reveal {
@@ -13000,7 +13492,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	 * blur(0px) filter layer alive — on the real compositor that can
 	 * leave the surface looking frosted even though CDP screenshots are
 	 * clean). Height keeps the inner flex-1 surface chain intact. */
-	animation: gui-view-blur-in 300ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-view-blur-in 300ms var(--spring);
 	/* Flex-1 inside the chat column (below the header) — height:100%
 	 * overflowed the window by the header height, clipping the bottom
 	 * of every view's rounded surface (board create bar was cut off). */
@@ -13038,7 +13530,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
-	animation: gui-focus-zoom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-focus-zoom 220ms var(--spring);
 }
 
 .gui-widget-editor-head {
@@ -13048,7 +13540,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-widget-editor-title {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 }
 
@@ -13056,6 +13548,43 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
+}
+
+/* Live card-face preview: real widget component at the card's aspect
+ * ratio; the tone tokens re-apply the board card surface so the preview
+ * reads exactly like the rendered card. */
+.gui-widget-editor-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.gui-widget-editor-preview-stage {
+	width: 100%;
+	max-height: 240px;
+	overflow: hidden;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	padding: 8px;
+}
+
+.gui-widget-editor-preview-stage[data-tone="dark"] {
+	background: #1b1b20;
+	border-color: #2c2c34;
+	--color-text: #e8e8ea;
+	--color-text-secondary: #9c9ca4;
+	--color-surface-sunken: #232329;
+	--color-surface-hover: #2a2a31;
+	--border: #2c2c34;
+}
+
+.gui-widget-editor-preview-stage[data-tone="blue"] {
+	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
+	--color-text: #1c2b3a;
+	--color-text-secondary: #40566c;
+	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
 }
 
 .gui-widget-editor-label {
@@ -13080,13 +13609,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
 	color: var(--color-danger, #e5484d);
 	padding: 7px 10px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	justify-content: center;
 }
 
 .gui-widget-editor-hint {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-secondary);
 	padding: 8px 0;
 	text-align: center;
@@ -13111,7 +13640,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 7px;
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	padding: 4px 9px;
 	cursor: pointer;
 	transition: border-color 120ms ease, background 120ms ease;
@@ -13166,7 +13695,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
-	animation: gui-focus-zoom 260ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-focus-zoom 260ms var(--spring);
 }
 
 .gui-task-modal-head {
@@ -13193,7 +13722,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-task-label {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	color: var(--color-text-secondary);
 }
@@ -13209,7 +13738,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	padding: 7px 10px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--color-text);
 	width: 100%;
 	box-sizing: border-box;
@@ -13227,7 +13756,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-task-runs-empty {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-secondary);
 	opacity: 0.7;
 }
@@ -13236,7 +13765,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 .gui-task-run-time {
@@ -13330,7 +13859,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	}
 	.gui-widget-kline-tab,
 	.gui-widget-indextape-tab {
-		font-size: 13px;
+		font-size: var(--ui-font-size-sm);
 	}
 	.gui-widget-heatwall-tile {
 		min-height: 42px;
@@ -13339,10 +13868,10 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 		min-height: 60px;
 	}
 	.gui-widget-gauge-status {
-		font-size: 13px;
+		font-size: var(--ui-font-size-sm);
 	}
 	.gui-widget-clock-market {
-		font-size: 13px;
+		font-size: var(--ui-font-size-sm);
 	}
 }
 
@@ -13391,7 +13920,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 /* Natural autosize zoom-in: the focused card scales from its board size
  * into the centered container (kimi "autosize 动效自然放大"). */
 .gui-board-focus-card {
-	animation: gui-focus-zoom 300ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-focus-zoom 300ms var(--spring);
 }
 
 /* Maximized-card exit: brief blur-out before unmounting. */
@@ -13469,7 +13998,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	margin: 0;
 }
 .gui-scheduled-desc {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	opacity: 0.55;
 	margin: 0;
 }
@@ -13520,7 +14049,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	font-weight: 600;
 }
 .gui-scheduled-empty-desc {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	opacity: 0.55;
 	max-width: 340px;
 	line-height: 1.6;
@@ -13550,11 +14079,11 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 3px;
 }
 .gui-scheduled-item-name {
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 }
 .gui-scheduled-item-schedule {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	opacity: 0.7;
 	display: flex;
 	gap: 6px;
@@ -13671,7 +14200,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 7px;
 	background: transparent;
 	color: inherit;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 }
 .gui-cron-weekday--on {
@@ -13737,7 +14266,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-top: 1px solid rgba(128, 128, 128, 0.1);
 	background: transparent;
 	color: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 }
@@ -13774,7 +14303,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	margin: 0;
 }
 .gui-scheduled-detail-sched {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	opacity: 0.7;
 }
 .gui-scheduled-detail-status {
@@ -13786,7 +14315,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	gap: 7px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 .gui-scheduled-detail-status-key {
 	opacity: 0.55;
@@ -13800,7 +14329,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 .gui-scheduled-detail-prompt {
 	display: flex;
@@ -13809,7 +14338,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-scheduled-detail-prompt-text {
 	margin: 0;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.6;
 	opacity: 0.9;
 	white-space: pre-wrap;
@@ -13886,7 +14415,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 }
 .gui-cron-enabled input {
@@ -13934,7 +14463,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid rgba(128, 128, 128, 0.2);
 	border-radius: 7px;
 	padding: 4px 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: inherit;
 	cursor: pointer;
 	text-align: left;
@@ -14027,7 +14556,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	justify-content: flex-end;
 }
 .gui-calendar-foot .gui-btn {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	padding: 3px 9px;
 }
 @media (max-width: 1100px) {
@@ -14097,7 +14626,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 7px;
 	color: inherit;
 	font: inherit;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	text-align: left;
 }
@@ -14117,7 +14646,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
  * hover, play nudges, delete leans — subtle, one-off, no layout shift. */
 .gui-tool-btn .oc-icon-spin,
 .gui-btn .oc-icon-spin {
-	transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+	transition: transform 0.35s var(--spring);
 }
 .gui-tool-btn:hover .oc-icon-spin,
 .gui-btn:hover .oc-icon-spin {
@@ -14131,6 +14660,9 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 /* Task-delete confirm (session disposition) */
 .gui-cron-delete-dialog {
 	width: min(440px, calc(100vw - 80px));
+	/* The base .gui-dialog fixes height:min(420px,80vh) — a small confirm
+	 * box must size to its content instead of leaving dead space. */
+	height: auto;
 }
 .gui-cron-delete {
 	display: flex;
@@ -14140,7 +14672,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-cron-delete-desc {
 	margin: 0;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 }
 .gui-cron-delete-sessions {
@@ -14161,7 +14693,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid rgba(128, 128, 128, 0.22);
 	border-radius: 9px;
 	cursor: pointer;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 }
 .gui-cron-delete-opt:hover {
 	border-color: var(--color-accent);
@@ -14178,7 +14710,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-cron-delete-opt small {
 	opacity: 0.55;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 
 /* Collection previews honor the widget tone (dark/blue/light) exactly
@@ -14288,7 +14820,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 		linear-gradient(158deg, #1c1e23 0%, #141519 40%, #0e0f12 100%);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 	color: #f4f4f5;
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	overflow: hidden;
 }
 .gui-widget-music::after {
@@ -14443,7 +14975,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-widget-music-by {
 	margin-top: 6px;
 	color: rgba(255, 255, 255, 0.55);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -14455,7 +14987,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 5px;
 	padding: 4px 9px;
 	border-radius: 8px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
 	color: rgba(255, 255, 255, 0.55);
@@ -14660,7 +15192,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-widget-music-qmeta { flex: 1; min-width: 0; }
 .gui-widget-music-qmeta b {
 	display: block;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 650;
 	color: #fff;
 	white-space: nowrap;
@@ -14672,7 +15204,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	align-items: center;
 	gap: 5px;
 	margin-top: 3px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: rgba(255, 255, 255, 0.55);
 	white-space: nowrap;
 	overflow: hidden;
@@ -15157,7 +15689,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	grid-template-columns: clamp(72px, 20%, 88px) minmax(0, 1fr);
 	column-gap: 12px;
 	align-items: stretch;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.7;
 	color: rgba(255, 255, 255, 0.88);
 	margin-bottom: 1em;
@@ -15184,7 +15716,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-widget-history-state {
 	text-align: center;
 	padding: 1.5em 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: #8e9390;
 }
 .gui-widget-history-foot {
@@ -15213,7 +15745,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 0;
 	background: #002e58;
 	color: #ffffff;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	letter-spacing: 0.18em;
 	padding: 8px 14px;
@@ -15398,7 +15930,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	cursor: pointer;
 	background: rgba(255, 255, 255, 0.14);
 	color: #fff;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	display: grid;
 	place-items: center;
 	transition: background 0.15s;
@@ -15469,13 +16001,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-board-remove-desc {
 	margin: 0 0 6px;
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	font-weight: 600;
 	color: var(--color-text);
 }
 .gui-board-remove-hint {
 	margin: 0 0 16px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
 
@@ -15491,7 +16023,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-board-gen-desc {
 	margin: 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--color-text-muted);
 }
@@ -15504,7 +16036,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
 	background: color-mix(in oklab, var(--color-surface) 80%, var(--color-text) 4%);
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.55;
 	font-family: inherit;
 	outline: none;
@@ -15517,7 +16049,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 .gui-board-gen-error {
 	margin: 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.45;
 	color: var(--color-danger, #e5484d);
 }
@@ -15547,6 +16079,36 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	opacity: 1;
 	animation: gui-fade-in 160ms ease;
 }
+/* Exit: fade the frost out (closing state, kept mounted for the duration). */
+.gui-onboarding-backdrop--closing {
+	animation: gui-onboarding-backdrop-out 200ms ease-in forwards;
+}
+@keyframes gui-onboarding-backdrop-out {
+	to {
+		opacity: 0;
+	}
+}
+.gui-onboarding-card.gui-onboarding-card--closing {
+	animation: gui-obo-card-out 200ms var(--spring) forwards;
+}
+@keyframes gui-obo-card-out {
+	to {
+		opacity: 0;
+		transform: translateY(10px) scale(0.98);
+	}
+}
+/* Motion-off / reduced-motion: exit snaps instead of animating (the
+ * mount timer in OnboardingOverlay still un-mounts after the duration). */
+.gui-motion-off .gui-onboarding-backdrop--closing,
+.gui-motion-off .gui-onboarding-card.gui-onboarding-card--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-onboarding-backdrop--closing,
+	.gui-onboarding-card.gui-onboarding-card--closing {
+		animation: none;
+	}
+}
 .gui-onboarding-card {
 	position: relative;
 	display: flex;
@@ -15561,7 +16123,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: var(--bg-raised);
 	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 	overflow: hidden;
-	animation: gui-obo-card-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-card-in 240ms var(--spring) both;
 }
 .gui-onboarding-topbar {
 	display: flex;
@@ -15576,7 +16138,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid var(--border);
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--fg) 5%, transparent);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 500;
 	color: var(--fg-muted);
 }
@@ -15597,9 +16159,12 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-onboarding-grid {
 	flex: 1;
 	min-height: 0;
-	overflow-y: auto;
+	/* NOT scrollable: the pane must keep dots + actions pinned. Step
+	 * content scrolls inside gui-obo-step-body instead. */
+	overflow: hidden;
 	display: grid;
 	grid-template-columns: 1.25fr 1fr;
+	grid-template-rows: minmax(0, 1fr);
 	gap: 20px;
 	padding: 22px 24px 24px;
 }
@@ -15607,7 +16172,24 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	animation: gui-obo-pane-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	min-height: 0;
+	overflow: hidden;
+	animation: gui-obo-pane-in 200ms var(--spring) both;
+}
+/* Step content (provider config, personalization, feature lists) scrolls
+ * here; dots and the back/next actions stay pinned to the card bottom. */
+.gui-obo-step-body {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	overflow-y: auto;
+	margin-top: 12px;
+	padding-right: 4px;
+	scrollbar-width: thin;
+	/* Flex column so step components that opt in (provider form) can fill
+	 * the available height instead of overflowing the scroll container. */
+	display: flex;
+	flex-direction: column;
 }
 .gui-onboarding-icon {
 	display: flex;
@@ -15625,7 +16207,9 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	font-weight: 650;
 	letter-spacing: -0.01em;
 	color: var(--fg);
-	animation: gui-obo-item-in 320ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
+	/* Element-level morph (spring): heading + body translate/scale in on
+	 * step change, matching the right preview's content language. */
+	animation: gui-obo-content-in 420ms var(--spring) 60ms both;
 }
 .gui-onboarding-body {
 	margin-top: 8px;
@@ -15633,7 +16217,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	line-height: 1.7;
 	color: var(--fg-muted);
 	max-width: 34em;
-	animation: gui-obo-item-in 320ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
+	animation: gui-obo-content-in 420ms var(--spring) 150ms both;
 }
 .gui-onboarding-dots {
 	display: flex;
@@ -15678,7 +16262,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	font-weight: 650;
 	letter-spacing: -0.01em;
 	color: var(--fg);
-	animation: gui-obo-item-in 320ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
+	animation: gui-obo-item-in 320ms var(--spring) 60ms both;
 }
 .gui-announcement-latest {
 	display: inline-flex;
@@ -15700,7 +16284,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	font-size: 13.5px;
 	line-height: 1.7;
 	color: var(--fg-muted);
-	animation: gui-obo-item-in 320ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
+	animation: gui-obo-item-in 320ms var(--spring) 140ms both;
 }
 .gui-announcement-body :is(h1, h2, h3) {
 	margin: 14px 0 6px;
@@ -15721,7 +16305,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	padding: 1px 5px;
 	border-radius: 4px;
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
 }
 .gui-announcement-body a {
@@ -15742,6 +16326,126 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 		radial-gradient(120% 100% at 85% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 62%),
 		linear-gradient(165deg, color-mix(in oklab, var(--color-surface) 60%, transparent), color-mix(in oklab, var(--bg) 55%, transparent));
 	overflow: hidden;
+}
+
+/* Cross-fading demo slots: all step demos stay mounted and stack on the
+ * same point; the active one fades/scales in, the rest sit hidden — the
+ * container keeps its radius while the content morphs in place. */
+.gui-obo-demo {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	min-height: 296px;
+}
+
+/* The morph window: one frame for every step — traffic-light title bar
+ * and sidebar persist; the content pane remounts per step so its
+ * entrance animations replay. Sidebar active row transfers with a
+ * background transition. */
+.gui-obo-morph-window {
+	display: flex;
+	flex-direction: column;
+	width: 280px;
+	height: 190px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+	overflow: hidden;
+}
+
+.gui-obo-window-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--border);
+	flex: none;
+}
+
+.gui-obo-window-light {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+.gui-obo-window-light--close {
+	background: #ff5f57;
+}
+
+.gui-obo-window-light--min {
+	background: #febc2e;
+}
+
+.gui-obo-window-light--max {
+	background: #28c840;
+}
+
+.gui-obo-morph-body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-obo-morph-side {
+	width: 66px;
+	flex: none;
+	padding: 12px 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	border-right: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+
+.gui-obo-morph-side-item {
+	height: 16px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+	transition: background 260ms var(--spring);
+}
+
+.gui-obo-morph-side-item--active {
+	background: color-mix(in oklab, var(--accent) 72%, transparent);
+	animation: gui-obo-active-pulse 2.6s ease-in-out 1.6s infinite;
+}
+
+.gui-obo-morph-content {
+	flex: 1;
+	min-width: 0;
+	padding: 12px 14px;
+	display: flex;
+	animation: gui-obo-content-in 420ms var(--spring) both;
+}
+
+@keyframes gui-obo-content-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.gui-obo-morph-fill {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	justify-content: center;
+}
+
+.gui-obo-morph-fill--chat {
+	justify-content: center;
+}
+
+.gui-obo-morph-fill .gui-obo-bubble--assistant {
+	width: 62%;
 }
 
 /* ---- Onboarding demos: purely visual CSS loops ---- */
@@ -15768,7 +16472,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	height: 16px;
 	border-radius: 6px;
 	background: color-mix(in oklab, var(--fg) 18%, transparent);
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-sidebar-item:nth-child(1) {
 	animation-delay: 260ms;
@@ -15782,7 +16486,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-obo-sidebar-item--active {
 	background: color-mix(in oklab, var(--accent) 72%, transparent);
 	animation:
-		gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) 520ms both,
+		gui-obo-item-in 380ms var(--spring) 520ms both,
 		gui-obo-active-pulse 2.6s ease-in-out 1.6s infinite;
 }
 .gui-obo-main {
@@ -15797,13 +16501,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	width: 68%;
 	border-radius: 5px;
 	background: color-mix(in oklab, var(--fg) 14%, transparent);
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) 380ms both;
+	animation: gui-obo-item-in 380ms var(--spring) 380ms both;
 }
 .gui-obo-main-lines {
 	flex: 1;
 	border-radius: 9px;
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) 640ms both;
+	animation: gui-obo-item-in 380ms var(--spring) 640ms both;
 }
 .gui-obo-chat {
 	display: flex;
@@ -15823,7 +16527,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-obo-bubble {
 	height: 34px;
 	border-radius: 11px;
-	animation: gui-obo-bubble-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-bubble-in 360ms var(--spring) both;
 }
 .gui-obo-bubble--user {
 	width: 62%;
@@ -15844,7 +16548,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	padding: 7px 11px;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
-	animation: gui-obo-bubble-in 360ms cubic-bezier(0.22, 1, 0.36, 1) 880ms both;
+	animation: gui-obo-bubble-in 360ms var(--spring) 880ms both;
 }
 .gui-obo-typing span {
 	width: 5px;
@@ -15878,7 +16582,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-setting-row:nth-child(1) {
 	animation-delay: 260ms;
@@ -15931,7 +16635,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	height: 42px;
 	border-radius: 9px;
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
-	animation: gui-obo-expand-in 520ms cubic-bezier(0.22, 1, 0.36, 1) 960ms both;
+	animation: gui-obo-expand-in 520ms var(--spring) 960ms both;
 }
 
 @keyframes gui-fade-in {
@@ -16042,7 +16746,12 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 8px;
 	width: 100%;
 	margin-top: 14px;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	/* Fill the step body so the tab row stays pinned and only the provider
+	 * list scrolls — previously the fixed 248px list + fixed floors made the
+	 * whole step scroll, pushing the builtin/custom tabs out of view. */
+	flex: 1;
+	min-height: 0;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-tabs {
 	display: flex;
@@ -16068,10 +16777,11 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	/* Shared content-area size across the builtin/custom tabs (the custom
-	 * form measures ~299px): both tabs keep this floor so the step
-	 * actions below never jump when switching. */
-	min-height: 300px;
+	/* Fills the form; the list below absorbs all remaining height (no fixed
+	 * floor — a taller step body shows more providers, a shorter one keeps
+	 * the list scrollable with the tabs pinned above). */
+	flex: 1;
+	min-height: 0;
 }
 .gui-obo-search {
 	display: flex;
@@ -16099,26 +16809,14 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-obo-provider-scroll {
 	flex: 1;
 	min-height: 0;
-	max-height: 248px;
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	/* No top fade mask: the -webkit-mask-image on a scrolling container
+	 * made every row's text unreadable on some builds (names read as
+	 * empty progress bars) — a thin scrollbar already signals more. */
 	padding: 2px 2px 4px;
-	-webkit-mask-image: linear-gradient(
-		to bottom,
-		transparent,
-		#000 14px,
-		#000 calc(100% - 14px),
-		transparent
-	);
-	mask-image: linear-gradient(
-		to bottom,
-		transparent,
-		#000 14px,
-		#000 calc(100% - 14px),
-		transparent
-	);
 	scrollbar-width: thin;
 }
 .gui-obo-provider-row {
@@ -16129,7 +16827,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	padding: 4px 2px;
 }
 .gui-obo-provider-name {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	color: var(--fg);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -16140,13 +16838,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	align-items: center;
 	gap: 4px;
 	flex: none;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-success);
 }
 .gui-obo-provider-login {
 	flex: none;
 	padding: 3px 12px;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 }
 .gui-obo-provider-empty {
 	padding: 10px 2px;
@@ -16171,7 +16869,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	min-height: 300px;
+	/* Same adaptive height as the builtin tab; content taller than the
+	 * step body scrolls inside instead of pushing the tabs away. */
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: 2px;
+	scrollbar-width: thin;
 }
 .gui-obo-quick {
 	display: flex;
@@ -16194,7 +16898,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 999px;
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 	transition:
 		border-color 120ms ease,
@@ -16207,7 +16911,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: color-mix(in oklab, var(--accent) 10%, transparent);
 }
 .gui-obo-provider-form .gui-input {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	padding: 6px 10px;
 }
 .gui-obo-provider-error {
@@ -16244,7 +16948,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
 	background: color-mix(in oklab, var(--color-success) 8%, transparent);
 	text-align: center;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-provider-added-icon {
 	display: flex;
@@ -16276,12 +16980,12 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: color-mix(in oklab, var(--accent) 6%, transparent);
 }
 .gui-obo-login-title {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 550;
 	color: var(--fg);
 }
 .gui-obo-login-url {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--accent);
 	word-break: break-all;
 	text-decoration: underline;
@@ -16306,7 +17010,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: color-mix(in oklab, var(--accent) 20%, transparent);
 }
 .gui-obo-login-msg {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--fg-muted);
 }
@@ -16331,7 +17035,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 999px;
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
 	transition:
 		border-color 120ms ease,
@@ -16344,7 +17048,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	background: color-mix(in oklab, var(--accent) 10%, transparent);
 }
 .gui-obo-provider-form .gui-input {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	padding: 6px 10px;
 }
 .gui-obo-provider-error {
@@ -16369,7 +17073,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
 	background: color-mix(in oklab, var(--color-success) 8%, transparent);
 	text-align: center;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-provider-added-icon {
 	display: flex;
@@ -16396,7 +17100,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	gap: 20px;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-connect-node {
 	display: flex;
@@ -16450,7 +17154,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--bg) 60%, transparent);
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	transition: border-color 120ms ease;
 }
 .gui-settings-input::placeholder {
@@ -16505,7 +17209,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
  * (160ms fade standard + shared ease-out curve; no static transform is
  * animated so nothing can jump). */
 .gui-history-swap {
-	animation: gui-history-swap-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-history-swap-in 180ms var(--spring);
 }
 @keyframes gui-history-swap-in {
 	from {
@@ -16556,7 +17260,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	opacity: 0;
 	transition:
 		opacity 100ms ease-out,
-		transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+		transform 160ms var(--spring);
 	z-index: 60;
 }
 [data-tip]:hover::after {
@@ -16574,6 +17278,9 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 12px;
 	background: var(--color-surface-raised);
 	overflow: hidden;
+	/* Body text mirrors the transcript: --tr-font-size (消息字号), not the
+	 * shell font — the preview has no .tr-root ancestor to inherit it. */
+	font-size: var(--tr-font-size, 14px);
 }
 .gui-chat-preview-style .tr-md {
 	max-height: 260px;
@@ -16729,7 +17436,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 4px;
 	background: transparent;
 	color: var(--color-text-faint, inherit);
-	font-size: 14px;
+	font-size: var(--ui-font-size);
 	line-height: 1;
 	cursor: pointer;
 }
@@ -16750,7 +17457,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 6px;
 	background: transparent;
 	color: var(--color-text, inherit);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -16787,7 +17494,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 6px;
 	background: var(--color-bg-input, rgba(128, 128, 128, 0.1));
 	color: var(--color-text, inherit);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	outline: none;
 }
 
@@ -16803,7 +17510,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 6px;
 	background: var(--color-accent, rgba(120, 160, 255, 0.85));
 	color: #fff;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1;
 	cursor: pointer;
 }
@@ -16916,7 +17623,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-reminders-title {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	color: var(--color-text-muted);
 	overflow: hidden;
@@ -16941,7 +17648,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 }
 
 .gui-reminders-readall {
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 	border: none;
 	background: none;
@@ -16966,7 +17673,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	height: var(--list-h, 0px);
 	padding: 2px 6px 4px;
 	overflow-y: auto;
-	transition: height 240ms cubic-bezier(0.22, 1, 0.36, 1), padding 240ms cubic-bezier(0.22, 1, 0.36, 1);
+	transition: height 240ms var(--spring), padding 240ms var(--spring);
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in oklab, var(--color-text-faint) 30%, transparent) transparent;
 }
@@ -17008,7 +17715,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border: none;
 	background: transparent;
 	color: var(--color-text);
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
 	/* <button> UA styles text center — the title/badge children inherit
 	 * it unless reset here. */
@@ -17073,7 +17780,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	align-items: center;
 	gap: 6px;
 	flex-shrink: 0;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-accent);
 }
 
@@ -17084,7 +17791,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	flex-shrink: 0;
 	min-width: 7ch;
 	text-align: right;
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
@@ -17095,7 +17802,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 14px;
 	width: 100%;
 	margin-top: 14px;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-appearance-group {
 	display: flex;
@@ -17121,13 +17828,15 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	font-size: 12.5px;
 	color: var(--fg-muted);
 	transition:
-		border-color 120ms ease,
-		background 120ms ease,
-		color 120ms ease;
+		border-color 240ms var(--spring),
+		background 240ms var(--spring),
+		color 240ms var(--spring),
+		transform 300ms var(--spring);
 }
 .gui-obo-appearance-card:hover {
 	border-color: color-mix(in oklab, var(--accent) 55%, transparent);
 	color: var(--fg);
+	transform: translateY(-1px);
 }
 .gui-obo-appearance-card--active {
 	border-color: var(--accent);
@@ -17135,7 +17844,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	color: var(--accent);
 }
 .gui-obo-appearance-lang {
-	font-size: 13px;
+	font-size: var(--ui-font-size-sm);
 	font-weight: 550;
 }
 /* Accent preset swatch — the accent colors of each preset, theme-agnostic. */
@@ -17165,7 +17874,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 6px;
 	width: 100%;
 	margin-top: 12px;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-feature {
 	display: flex;
@@ -17191,7 +17900,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-obo-lang-row {
 	display: flex;
 	padding: 2px 0;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 .gui-obo-lang-row--alt {
 	justify-content: flex-end;
@@ -17208,7 +17917,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	animation: gui-obo-item-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	animation: gui-obo-item-in 380ms var(--spring) both;
 }
 /* Accent strip inside the window mock (step 2 demo) — recolors live. */
 .gui-obo-theme-accent {
@@ -17217,7 +17926,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	margin-top: 10px;
 	border-radius: 6px;
 	background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 40%, transparent));
-	animation: gui-obo-accent-in 520ms cubic-bezier(0.22, 1, 0.36, 1) 620ms both;
+	animation: gui-obo-accent-in 520ms var(--spring) 620ms both;
 }
 @keyframes gui-obo-accent-in {
 	from {
@@ -17230,4 +17939,1547 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 		transform: scaleX(1);
 		transform-origin: left;
 	}
+}
+
+/* New blank project dialog (kimiwork parity): the path picker renders as
+ * a folder button; the label's red asterisk keeps the required mark. */
+.gui-new-project-dialog {
+	min-width: 360px;
+}
+
+.gui-new-project-path {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-new-project-path:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+/* New blank project dialog fields (kimiwork parity): label above control
+ * (the settings-pane .gui-settings-field two-column grid is too wide for
+ * a compact dialog). Required asterisk in the accent-danger tone. */
+.gui-new-project-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-new-project-label {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-new-project-req {
+	color: var(--color-danger);
+}
+
+/* Ask card (TUI ask parity): question + option rows or free-text input.
+ * Floating card ABOVE the composer (openchamber QuestionCard / proma
+ * AskUserBanner parity) — full composer width so long titles wrap instead
+ * of clipping, glass surface like gui-ask-pop, enter animation only (the
+ * answer resolves the daemon promise and unmounts immediately). */
+.gui-ask-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: calc(100% - 16px);
+	max-width: 400px;
+	/* Left-aligned with the message rows + composer frame: the wrap adds
+	 * px-5 (20px) and the composer frame carries its own 16px padding, so
+	 * a 16px margin puts the card's left edge on the same 300px column the
+	 * messages and input share. Centering reads as detached from the
+	 * message flow (2026-08-15). */
+	align-self: flex-start;
+	margin-left: 16px;
+	padding: 10px;
+	margin-bottom: 8px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow:
+		0 10px 32px rgba(0, 0, 0, 0.22),
+		0 0 0 1px rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(18px) saturate(160%);
+	opacity: 0;
+}
+
+.gui-ask-card--entered {
+	opacity: 1;
+	animation: gui-ask-pop-in 140ms var(--spring);
+}
+
+/* Exit: answering/cancelling plays the reverse before the parent unmounts
+ * (the card stays mounted through the animation, then onAnswer resolves). */
+.gui-ask-card--closing {
+	animation: gui-ask-pop-out 140ms var(--spring) forwards;
+	pointer-events: none;
+}
+
+@keyframes gui-ask-pop-out {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(4px) scale(0.97);
+	}
+}
+
+/* Tab-switch body transition: re-mounting with a new key plays the slide-in. */
+.gui-ask-body {
+	min-width: 0;
+	animation: gui-ask-body-in 160ms var(--spring);
+}
+
+@keyframes gui-ask-body-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Reveal for the note / Other inputs: mount plays a small slide + fade. */
+.gui-ask-reveal {
+	animation: gui-ask-reveal-in 160ms var(--spring);
+}
+
+@keyframes gui-ask-reveal-in {
+	from {
+		opacity: 0;
+		transform: translateY(-3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.gui-ask-card-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	color: var(--color-text);
+}
+
+.gui-ask-card-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.gui-ask-card-x {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.gui-ask-card-x:hover {
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+.gui-ask-opts {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.gui-ask-opt {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	position: relative;
+	flex-wrap: wrap;
+	width: 100%;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	color: var(--color-text);
+	font-size: 13px;
+	/* Buttons default to text-align: center — the label has an explicit
+	 * left alignment but the description inherits and would center. */
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-ask-opt:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+/* Recommended option: a corner triangle in the top-right with a star
+ * badge — never collides with the option label text at narrow widths
+ * (the old inline pill reflowed into the label row). */
+/* Recommended option: a corner triangle in the top-right with a star
+ * badge — never collides with the option label text at narrow widths
+ * (the old inline pill reflowed into the label row). The triangle is a
+ * full half-corner (clip-path), and the star sits on an opaque accent
+ * disc so it never hangs into the transparent part of the fold. */
+.gui-ask-opt--rec {
+	border-color: color-mix(in oklab, var(--color-accent) 30%, var(--border));
+}
+
+/* Corner badge never covers the label: reserve the top-right corner. */
+.gui-ask-opt--rec .gui-ask-opt-label {
+	padding-right: 20px;
+}
+
+.gui-ask-opt-rec {
+	position: absolute;
+	top: -1px;
+	right: -1px;
+	width: 24px;
+	height: 24px;
+	color: var(--color-surface-raised);
+	pointer-events: none;
+}
+
+.gui-ask-opt-rec::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	/* Half-corner triangle: the accent-tinted top-right fold. */
+	background: color-mix(in oklab, var(--color-accent) 62%, transparent);
+	clip-path: polygon(100% 0, 0 0, 100% 100%);
+	border-top-right-radius: 10px;
+	pointer-events: none;
+}
+
+.gui-ask-opt-rec svg {
+	position: absolute;
+	top: 3px;
+	right: 3px;
+	width: 10px;
+	height: 10px;
+	padding: 1px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	color: var(--color-surface-raised);
+}
+
+/* Multi-question dialog: tab bar, selected option rows, summary review. */
+.gui-ask-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.gui-ask-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.gui-ask-tab:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-tab--active {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-tab--done {
+	color: var(--color-text);
+}
+
+.gui-ask-tab--submit {
+	opacity: 0.85;
+}
+
+.gui-ask-progress {
+	margin-left: auto;
+	align-self: center;
+	font-size: 11px;
+	font-weight: 550;
+	color: var(--color-text-faint);
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	white-space: nowrap;
+}
+
+.gui-ask-kbd-hint {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	margin-top: -2px;
+}
+
+.gui-ask-kbd-hint span {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 4px;
+	height: 16px;
+	border-radius: 4px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+	color: var(--color-text-muted);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10px;
+	line-height: 1;
+}
+
+/* Side-by-side option + markdown preview pane (harness ask parity): the
+ * card widens for the two-column layout; options keep the left column and
+ * the selected/recommended option's preview renders on the right. */
+.gui-ask-card--preview {
+	max-width: 760px;
+}
+
+.gui-ask-dialog-preview {
+	display: flex;
+	gap: 10px;
+	min-height: 120px;
+}
+
+.gui-ask-dialog-preview-empty {
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+
+.gui-ask-opt--previewed {
+	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--border));
+}
+
+.gui-ask-opt-preview-tag {
+	display: inline-flex;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+
+/* Per-question note + chat row (harness ask parity): note toggles an
+ * inline editor (`n` key or the button), chat hands the question off to
+ * the conversation instead of answering. */
+.gui-ask-opt-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+.gui-ask-note-btn,
+.gui-ask-chat-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 11.5px;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.gui-ask-note-btn:hover,
+.gui-ask-chat-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-ask-note-btn--open {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-note-btn--filled {
+	color: var(--color-accent);
+}
+
+/* Preview pane column budget: options keep ~half, preview gets the rest —
+ * markdown needs width for code/table readability, so never squeeze the
+ * right pane below ~300px. */
+.gui-ask-dialog-preview-left {
+	flex: 0 0 46%;
+	min-width: 0;
+}
+
+.gui-ask-dialog-preview-pane {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-width: 280px;
+	max-height: 300px;
+	overflow-y: auto;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 3%, transparent);
+}
+
+.gui-ask-multi-hint {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	margin-bottom: -2px;
+}
+
+.gui-ask-opt--selected {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.gui-ask-opt-check {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--color-accent);
+}
+
+.gui-ask-opt-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	flex: 1;
+}
+
+/* Full option label rendering — never ellipsize: a truncated option name
+ * hides what the user is choosing. Long labels wrap within the row. */
+.gui-ask-opt-label > span:first-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	text-align: left;
+}
+
+.gui-ask-opt-desc {
+	display: block;
+	flex-basis: 100%;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+	margin-top: 2px;
+	/* Justified multi-line description (user: 两端对齐比居中好). */
+	text-align: justify;
+}
+
+.gui-ask-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-ask-summary-row {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	width: 100%;
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.gui-ask-summary-row:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-ask-summary-row--empty {
+	opacity: 0.75;
+}
+
+.gui-ask-summary-q {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+}
+
+.gui-ask-summary-a {
+	font-size: 12.5px;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-ask-summary-row--empty .gui-ask-summary-a {
+	color: var(--color-text-faint);
+	font-style: italic;
+}
+
+.gui-ask-summary-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+/* Computer-use glow preview (settings 桌面操作提示): a miniature desktop
+ * mock reproducing the full-screen glow window — four breathing accent
+ * edge rings, the top status badge, the target frame + click pulse. */
+.gui-computer-glow-preview {
+	position: relative;
+	margin-top: 14px;
+	width: 100%;
+	height: 170px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 6%, transparent), transparent 40%),
+		repeating-linear-gradient(0deg, transparent, transparent 23px, color-mix(in oklab, var(--color-text) 5%, transparent) 23px, color-mix(in oklab, var(--color-text) 5%, transparent) 24px);
+	overflow: hidden;
+}
+
+.gui-cgp-edge {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background:
+		radial-gradient(130% 22% at 50% 0%, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent 72%),
+		radial-gradient(130% 22% at 50% 100%, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent 72%),
+		radial-gradient(22% 130% at 0% 50%, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent 72%),
+		radial-gradient(22% 130% at 100% 50%, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent 72%);
+	animation: gui-glow-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes gui-glow-breathe {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+.gui-cgp-badge {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	white-space: nowrap;
+	font-size: 11px;
+	font-weight: 500;
+	color: #fff;
+	background: color-mix(in oklab, var(--color-accent) 26%, #1b191f);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 65%, transparent);
+	box-shadow: 0 4px 16px color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+.gui-cgp-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	box-shadow: 0 0 8px var(--color-accent);
+	animation: gui-glow-breathe 1.6s ease-in-out infinite;
+}
+
+
+.gui-cgp-ring {
+	position: absolute;
+	top: 116px;
+	left: calc(26% + 210px - 12px);
+	width: 20px;
+	height: 20px;
+	border: 2px solid color-mix(in oklab, var(--color-accent) 90%, transparent);
+	border-radius: 50%;
+	animation: gui-cgp-pulse 1.2s ease-out infinite;
+}
+
+@keyframes gui-cgp-target-pop {
+	from {
+		transform: scale(0.96);
+		opacity: 0;
+	}
+	to {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+@keyframes gui-cgp-pulse {
+	0% {
+		transform: scale(0.5);
+		opacity: 0.9;
+	}
+	100% {
+		transform: scale(2.2);
+		opacity: 0;
+	}
+}
+
+/* Preview title bar with macOS traffic lights (matches the host platform
+ * the glow window overlays). */
+.gui-cgp-finder {
+	position: absolute;
+	top: 44px;
+	left: 26%;
+	width: 210px;
+	height: 96px;
+	border-radius: 9px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 88%, var(--color-surface-raised));
+	box-shadow: 0 6px 20px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
+	overflow: hidden;
+	animation: gui-cgp-target-pop 220ms ease-out both;
+}
+
+.gui-cgp-finder-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 9px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-cgp-finder-title {
+	margin-left: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+	letter-spacing: 0.01em;
+}
+
+.gui-cgp-finder-body {
+	display: flex;
+	gap: 8px;
+	padding: 7px 9px;
+}
+
+.gui-cgp-finder-side {
+	width: 44px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-cgp-finder-files {
+	flex: 1;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 5px;
+}
+
+.gui-cgp-finder-files i {
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.gui-cgp-light {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+.gui-cgp-light--close {
+	background: #ff5f57;
+}
+
+.gui-cgp-light--min {
+	background: #febc2e;
+}
+
+.gui-cgp-light--max {
+	background: #28c840;
+}
+
+/* Personalization demo (onboarding step 6): mini chat window — traffic
+ * lights, user bubble, assistant rows with the live AgentAvatar, typing
+ * dots, and the composer mock with the desktop pet. */
+
+
+
+
+
+
+.gui-obo-pers-light--close {
+	background: #ff5f57;
+}
+
+.gui-obo-pers-light--min {
+	background: #febc2e;
+}
+
+.gui-obo-pers-light--max {
+	background: #28c840;
+}
+
+.gui-obo-pers-chat {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 9px;
+	padding: 10px 14px;
+}
+
+.gui-obo-pers-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-obo-pers-row--user {
+	justify-content: flex-end;
+}
+
+.gui-obo-pers-row .gui-obo-bubble--assistant {
+	width: 58%;
+}
+
+.gui-obo-pers-row--user .gui-obo-bubble--user {
+	margin-left: auto;
+}
+
+.gui-obo-pers-typing {
+	display: inline-flex;
+	gap: 4px;
+	padding: 9px 12px;
+	border-radius: 11px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+}
+
+.gui-obo-pers-typing span {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--fg) 45%, transparent);
+	animation: gui-obo-typing-bounce 1.1s ease-in-out infinite;
+}
+
+.gui-obo-pers-typing span:nth-child(2) {
+	animation-delay: 140ms;
+}
+
+.gui-obo-pers-typing span:nth-child(3) {
+	animation-delay: 280ms;
+}
+
+@keyframes gui-obo-typing-bounce {
+	0%,
+	60%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.5;
+	}
+	30% {
+		transform: translateY(-4px);
+		opacity: 1;
+	}
+}
+
+.gui-obo-pers-composer {
+	position: relative;
+	display: flex;
+	align-items: center;
+	padding: 6px 12px 9px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-obo-pers-input {
+	flex: 1;
+	height: 20px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 12%, transparent);
+}
+
+/* Pet docked at the input's top-right — mirrors the real composer
+ * (.gui-composer-pet: absolute above the input, right-aligned). */
+.gui-obo-pers-pet {
+	position: absolute;
+	right: 10px;
+	bottom: calc(100% + 2px);
+	display: flex;
+	align-items: flex-end;
+	pointer-events: none;
+	filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
+}
+
+/* Provider step demo: rows mirroring the real ProviderSetup list; the
+ * middle row's login button cycles to "✓ 已登录" (in-place morph). */
+.gui-obo-providers {
+	gap: 8px;
+	justify-content: center;
+}
+
+.gui-obo-provider-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-obo-provider-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+}
+
+.gui-obo-provider-skel {
+	flex: 1;
+	height: 8px;
+	border-radius: 4px;
+	background: color-mix(in oklab, var(--fg) 16%, transparent);
+}
+
+.gui-obo-provider-ok {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.gui-obo-provider-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 52px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+}
+
+.gui-obo-provider-btn .gui-obo-login-ok {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	color: #fff;
+	background: color-mix(in oklab, var(--accent) 82%, transparent);
+	animation: gui-obo-login-morph 3.4s var(--spring) infinite;
+}
+
+@keyframes gui-obo-login-morph {
+	0%,
+	42% {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+	52%,
+	84% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	96%,
+	100% {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+}
+
+/* Personalize segmented control (pet display mode + language pills):
+ * pill pair with a spring background transfer. */
+.gui-obo-seg {
+	padding: 5px 13px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	cursor: pointer;
+	transition:
+		background 260ms var(--spring),
+		color 260ms var(--spring),
+		border-color 260ms var(--spring);
+}
+
+.gui-obo-seg--active {
+	color: #fff;
+	background: color-mix(in oklab, var(--color-accent) 82%, transparent);
+}
+
+/* ── ContextRing popover: provider subscription quota (TUI /usage) ── */
+.gui-context-pop-quota {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-context-pop-quota-title {
+	font-size: 11px;
+	font-weight: 650;
+	color: var(--fg-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.gui-context-pop-quota-row {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-context-pop-quota-label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-context-pop-quota-name {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	color: var(--fg);
+}
+
+.gui-context-pop-quota-pct {
+	font-size: 11px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+
+.gui-usage-bar-track {
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 9%, transparent);
+	overflow: hidden;
+}
+
+.gui-usage-bar {
+	height: 100%;
+	border-radius: 999px;
+	transition: width 340ms var(--spring);
+}
+
+.gui-usage-bar--ok {
+	background: var(--ok);
+}
+
+.gui-usage-bar--warn {
+	background: var(--warn);
+}
+
+.gui-usage-bar--err {
+	background: var(--err);
+}
+
+/* ── GUI-native /usage result panel (composer, structured quota) ── */
+.gui-quota-panel {
+	width: min(520px, calc(100vw - 64px));
+	/* Clearance above the composer card so the panel floats over the chat
+	 * area, clearly separated from the card below (14px read as a nested
+	 * card; 28px reads as a floating panel). */
+	margin-bottom: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--bg-overlay);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
+	pointer-events: auto;
+}
+
+.gui-quota-close {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-faint);
+	cursor: pointer;
+}
+
+.gui-quota-close:hover {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+
+.gui-quota-title {
+	font-size: 12.5px;
+	font-weight: 650;
+	color: var(--fg);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding-right: 24px;
+}
+
+.gui-quota-provider {
+	font-weight: 550;
+	color: var(--fg-muted);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.gui-quota-limits {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-quota-row {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-quota-label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-quota-name {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	color: var(--fg);
+}
+
+.gui-quota-pct {
+	font-size: 11px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+
+.gui-quota-note {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+/* /usage card — TUI /usage panel parity: per-provider sections with window
+ * groups, per-account bars, saved resets and notes. */
+.gui-usage-reports {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.gui-usage-section {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-usage-provider-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 2px 0;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	cursor: pointer;
+	color: var(--fg);
+	text-align: left;
+}
+
+.gui-usage-provider-head:hover .gui-usage-provider {
+	color: var(--color-accent);
+}
+
+.gui-usage-provider-summary {
+	font-size: 11px;
+	color: var(--fg-faint);
+	margin-left: 2px;
+}
+
+.gui-usage-chevron {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	margin-left: auto;
+	color: var(--color-text-faint);
+	transition: transform 200ms ease;
+}
+
+.gui-usage-chevron--open {
+	transform: rotate(180deg);
+}
+
+.gui-usage-provider-body {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding-left: 13px;
+	margin-top: 2px;
+}
+
+.gui-usage-provider {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-usage-note {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-resets {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-resets-title {
+	font-weight: 600;
+	color: var(--fg-muted);
+}
+
+.gui-usage-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-usage-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-usage-group-window {
+	font-size: 11px;
+	font-weight: 400;
+	color: var(--fg-faint);
+}
+
+.gui-usage-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.gui-usage-dot--ok {
+	background: var(--color-ok);
+}
+
+.gui-usage-dot--warn {
+	background: var(--color-warning);
+}
+
+.gui-usage-dot--err {
+	background: var(--color-danger);
+}
+
+.gui-usage-amount {
+	margin-left: auto;
+	font-size: 11px;
+	font-weight: 400;
+	color: var(--fg-faint);
+}
+
+.gui-usage-acct-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-usage-acct-name--active {
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-usage-acct-reset {
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-quota-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-quota-bar .gui-usage-bar-track {
+	flex: 1;
+}
+
+.gui-usage-resetline {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-unlimited {
+	font-size: 11.5px;
+	color: var(--color-ok);
+}
+
+/* /context dialog — category rows (inside the shared quota dialog shell). */
+.gui-context-summary {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-context-cats {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-context-cat {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-context-cat-label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-context-cat-name {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.gui-context-cat-pct {
+	font-size: 11px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+
+.gui-usage-bar--accent {
+	background: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+/* /context grid — miniature category visualization (TUI /context panel
+ * parity): a 20×10 glyph board — ⛁ filled categories (⛃ messages), ⛶ free
+ * space, ⛝ autocompact reserve — colored per category. The legend rows
+ * below carry the same glyph + color so the board reads without hunting. */
+.gui-context-model {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.gui-context-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--fg) 2.5%, transparent);
+}
+
+.gui-context-grid-row {
+	display: grid;
+	grid-template-columns: repeat(20, 1fr);
+	gap: 2px;
+}
+
+.gui-context-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-mono), "Apple Symbols", Menlo, monospace;
+	font-size: 11px;
+	line-height: 1.3;
+	user-select: none;
+}
+
+/* TUI theme-color parity (modes/theme dark.json): system prompt = accent,
+ * system tools = warning, system context = customMessageLabel (purple),
+ * skills = success, messages = userMessageText, free = dim, buffer = warning. */
+.gui-context-cell--system,
+.gui-context-glyph--system {
+	color: var(--accent);
+}
+
+.gui-context-cell--tools,
+.gui-context-glyph--tools {
+	color: var(--warn);
+}
+
+.gui-context-cell--context,
+.gui-context-glyph--context {
+	color: var(--chart-4);
+}
+
+.gui-context-cell--skills,
+.gui-context-glyph--skills {
+	color: var(--ok);
+}
+
+.gui-context-cell--messages,
+.gui-context-glyph--messages {
+	color: var(--fg);
+}
+
+.gui-context-cell--free,
+.gui-context-glyph--free {
+	color: var(--fg-faint);
+}
+
+.gui-context-cell--buffer,
+.gui-context-glyph--buffer {
+	color: var(--warn);
+}
+
+.gui-context-cat-glyph {
+	font-family: var(--font-mono), "Apple Symbols", Menlo, monospace;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-context-cat-name {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.gui-context-snap {
+	font-size: 11px;
+	color: var(--fg-faint);
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.gui-context-snap-title {
+	font-weight: 600;
+}
+
+.gui-context-snap-line {
+	padding-left: 12px;
+}
+
+/* ── Task card style preview (display.taskCardStyle settings row) ────── */
+.gui-taskstyle-preview {
+	display: flex;
+	gap: 10px;
+	margin-top: 8px;
+	width: 100%;
+}
+
+.gui-taskstyle-preview-option {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 8px;
+	border: 1.5px solid var(--border);
+	border-radius: 10px;
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-align: inherit;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.gui-taskstyle-preview-option:hover {
+	border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+}
+
+.gui-taskstyle-preview-option--active {
+	border-color: var(--accent);
+}
+
+.gui-taskstyle-preview-label {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--fg-muted);
+	text-align: center;
+}
+
+/* Stacked mock: the classic chat-message card above, the floating member
+ * grid card below it (Swarm style = native card + floating card). */
+.gui-taskstyle-preview-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-chat {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 7px;
+	background: var(--surface);
+}
+
+/* Frosted floating card mock (composer chip → member grid): subtle blur +
+ * shadow to read as a card floating over the transcript. */
+.gui-taskstyle-preview-float {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 7px;
+	background: color-mix(in oklab, var(--surface) 82%, transparent);
+	backdrop-filter: blur(6px);
+	box-shadow: 0 6px 18px oklch(0 0 0 / 0.25);
+}
+
+.gui-taskstyle-preview-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-taskstyle-preview-tool {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	color: var(--fg-muted);
+}
+
+.gui-taskstyle-preview-chip {
+	flex: none;
+	font-size: 10px;
+	padding: 0 5px;
+	border-radius: 6px;
+	background: var(--accent-muted);
+	color: var(--accent);
+	font-family: var(--font-mono);
+}
+
+.gui-taskstyle-preview-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 5px;
+}
+
+.gui-taskstyle-preview-member {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-avatar {
+	flex: none;
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-mono);
+	font-size: 8.5px;
+	font-weight: 700;
+}
+
+.gui-taskstyle-preview-avatar--ok {
+	background: color-mix(in oklab, #4caf7d 18%, transparent);
+	color: #4caf7d;
+}
+
+.gui-taskstyle-preview-avatar--err {
+	background: color-mix(in oklab, #e5484d 18%, transparent);
+	color: #e5484d;
+}
+
+.gui-taskstyle-preview-bar {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+	overflow: hidden;
+}
+
+.gui-taskstyle-preview-fill {
+	display: block;
+	height: 100%;
+	border-radius: 2px;
+}
+
+.gui-taskstyle-preview-fill--ok {
+	width: 100%;
+	background: #4caf7d;
+}
+
+.gui-taskstyle-preview-fill--err {
+	width: 60%;
+	background: #e5484d;
 }

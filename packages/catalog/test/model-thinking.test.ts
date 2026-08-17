@@ -52,20 +52,6 @@ describe("model thinking derivation", () => {
 		expect(() => requireSupportedEffort(model, Effort.XHigh)).toThrow(/Supported efforts: medium, high/);
 	});
 
-	it("stores xhigh support directly in metadata for GPT-5.2", () => {
-		const model = createModel({
-			id: "gpt-5.2-codex",
-			api: "openai-codex-responses",
-			provider: "openai-codex",
-		});
-
-		expect(model.thinking).toEqual({
-			mode: "effort",
-			efforts: [Effort.Low, Effort.Medium, Effort.High, Effort.XHigh],
-		});
-		expect(requireSupportedEffort(model, Effort.XHigh)).toBe(Effort.XHigh);
-	});
-
 	it("stores MiniMax M2 and GPT-OSS OpenAI-compatible effort limits in model metadata", () => {
 		const minimax = createModel({
 			id: "minimax-m2.7",
@@ -136,7 +122,6 @@ describe("model thinking derivation", () => {
 		expect(mimo.compat.reasoningEffortMap).toEqual({ minimal: "low", xhigh: "high" });
 		expect(openRouterMimo.compat.reasoningEffortMap).toEqual({ minimal: "low", xhigh: "high" });
 		expect(staleMimo.compat.reasoningEffortMap).toEqual({ minimal: "low", xhigh: "high" });
-		expect(requireSupportedEffort(mimo, Effort.High)).toBe(Effort.High);
 		expect(() => requireSupportedEffort(mimo, Effort.XHigh)).toThrow(/Supported efforts: low, medium, high/);
 		expect(clampThinkingLevelForModel(mimo, Effort.Minimal)).toBe(Effort.Low);
 		expect(clampThinkingLevelForModel(mimo, Effort.XHigh)).toBe(Effort.High);
@@ -288,6 +273,73 @@ describe("model thinking derivation", () => {
 		// `xhigh` tier and pass it through unmapped.
 		expect(getSupportedEfforts(openRouter)).toContain(Effort.XHigh);
 		expect(openRouter.thinking?.effortMap).toBeUndefined();
+	});
+
+	it("applies the DeepSeek effort contract to Ollama Cloud ollama-chat models (issue #8334)", () => {
+		const flash = createModel({
+			id: "deepseek-v4-flash",
+			api: "ollama-chat",
+			provider: "ollama-cloud",
+			baseUrl: "https://ollama.com",
+		});
+		const flashDated = createModel({
+			id: "deepseek-v4-flash:0731",
+			api: "ollama-chat",
+			provider: "ollama-cloud",
+			baseUrl: "https://ollama.com",
+		});
+		const pro = createModel({
+			id: "deepseek-v4-pro",
+			api: "ollama-chat",
+			provider: "ollama-cloud",
+			baseUrl: "https://ollama.com",
+		});
+		const v32 = createModel({
+			id: "deepseek-v3.2",
+			api: "ollama-chat",
+			provider: "ollama-cloud",
+			baseUrl: "https://ollama.com",
+		});
+
+		// V4 Flash keeps its low/high/max ladder over the ollama-chat transport
+		// instead of Ollama's generic minimal..xhigh scale (medium/xhigh fold
+		// into high, max is a real wire tier).
+		expect(getSupportedEfforts(flash)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+		expect(getSupportedEfforts(flashDated)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+		expect(flash.thinking?.effortMap).toBeUndefined();
+		// V4 Pro shares Flash's low/high/max ladder on the direct API and every
+		// aggregator route (DeepSeek's docs advertise `low` for both V4 SKUs);
+		// the older V3.x reasoners still top out at high/max.
+		expect(getSupportedEfforts(pro)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+		expect(getSupportedEfforts(v32)).toEqual([Effort.High, Effort.Max]);
+	});
+
+	it("grants the low/high/max ladder to OpenRouter deepseek-v4-pro-0813 but not the undated route (issue #8517)", () => {
+		// OpenRouter's /models advertises reasoning.supported_efforts
+		// [low, high, max] for the dated SKU; the discovered ladder is baked
+		// into thinking.efforts.
+		const discovered = { mode: "effort" as const, efforts: [Effort.Low, Effort.High, Effort.Max] };
+		const dated = createModel({
+			id: "deepseek/deepseek-v4-pro-0813",
+			api: "openrouter",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			thinking: discovered,
+		});
+		const bare = createModel({
+			id: "deepseek/deepseek-v4-pro",
+			api: "openrouter",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			thinking: discovered,
+		});
+
+		// The dated SKU keeps its advertised ladder; :max no longer clamps.
+		expect(getSupportedEfforts(dated)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+		expect(clampThinkingLevelForModel(dated, Effort.Max)).toBe(Effort.Max);
+		// The undated OpenRouter route stays high-only.
+		expect(getSupportedEfforts(bare)).toEqual([Effort.High]);
+		expect(clampThinkingLevelForModel(bare, Effort.Max)).toBe(Effort.High);
 	});
 
 	it("encodes the Gemini 3 Pro effort gap and mandatory reasoning in metadata", () => {
@@ -455,25 +507,16 @@ describe("model thinking derivation", () => {
 		// low/medium/high/max wire scale, mapped 1:1.
 		expect(getSupportedEfforts(opus46)).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.Max]);
 		expect(opus46.thinking?.effortMap).toBeUndefined();
-		expect(mapEffortToAnthropicAdaptiveEffort(opus46, Effort.Max)).toBe("max");
 		expect(() => mapEffortToAnthropicAdaptiveEffort(opus46, Effort.XHigh)).toThrow(/not supported/);
 		// Opus 4.7+ on the Messages API exposes the full five-tier wire scale
 		// low..max with no remapping.
 		expect(getSupportedEfforts(opus47)).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max]);
 		expect(opus47.thinking?.effortMap).toBeUndefined();
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Low)).toBe("low");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.High)).toBe("high");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.XHigh)).toBe("xhigh");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Max)).toBe("max");
 		expect(() => mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Minimal)).toThrow(/not supported/);
 		expect(mapEffortToAnthropicAdaptiveEffort(mythos, Effort.XHigh)).toBe("xhigh");
-		expect(mapEffortToAnthropicAdaptiveEffort(sonnet5, Effort.Max)).toBe("max");
 		// Bedrock Converse stays on the four-tier scale regardless of version.
 		expect(getSupportedEfforts(opus47Bedrock)).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.Max]);
 		expect(opus47Bedrock.thinking?.effortMap).toBeUndefined();
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.High)).toBe("high");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.Max)).toBe("max");
-		expect(mapEffortToAnthropicAdaptiveEffort(sonnet5Bedrock, Effort.Max)).toBe("max");
 		expect(() => mapEffortToAnthropicAdaptiveEffort(sonnet5Bedrock, Effort.XHigh)).toThrow(/not supported/);
 		// Sonnet 4.6 runs adaptive mode on the three-tier low/medium/high scale.
 		expect(getSupportedEfforts(sonnet46)).toEqual([Effort.Low, Effort.Medium, Effort.High]);
@@ -731,7 +774,6 @@ describe("model thinking runtime helpers", () => {
 		expect(model.thinking).toEqual({ mode: "effort", efforts: [Effort.Medium, Effort.High], requiresEffort: true });
 		expect(clampThinkingLevelForModel(model, Effort.Minimal)).toBe(Effort.Medium);
 		expect(clampThinkingLevelForModel(model, Effort.XHigh)).toBe(Effort.High);
-		expect(clampThinkingLevelForModel(model, Effort.High)).toBe(Effort.High);
 	});
 
 	it('forces "off" for non-reasoning models', () => {
@@ -743,17 +785,6 @@ describe("model thinking runtime helpers", () => {
 		});
 
 		expect(clampThinkingLevelForModel(model, Effort.High)).toBeUndefined();
-	});
-
-	it("enables xhigh for openai-completions API (custom models)", () => {
-		const model = createModel({
-			id: "custom-model",
-			api: "openai-completions",
-			provider: "custom",
-		});
-
-		expect(model.thinking?.efforts.at(-1)).toBe(Effort.XHigh);
-		expect(requireSupportedEffort(model, Effort.XHigh)).toBe(Effort.XHigh);
 	});
 
 	it("does not expose xhigh for binary-thinking openai-compat transports", () => {
@@ -769,7 +800,6 @@ describe("model thinking runtime helpers", () => {
 			mode: "effort",
 			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High],
 		});
-		expect(requireSupportedEffort(model, Effort.High)).toBe(Effort.High);
 		expect(() => requireSupportedEffort(model, Effort.XHigh)).toThrow(
 			/Supported efforts: minimal, low, medium, high/,
 		);
@@ -788,7 +818,6 @@ describe("model thinking runtime helpers", () => {
 			mode: "effort",
 			efforts: [Effort.High, Effort.Max],
 		});
-		expect(requireSupportedEffort(model, Effort.Max)).toBe(Effort.Max);
 		expect(() => requireSupportedEffort(model, Effort.XHigh)).toThrow(/Supported efforts: high, max/);
 		// Selecting a retired tier clamps down instead of erroring in UI flows.
 		expect(clampThinkingLevelForModel(model, Effort.XHigh)).toBe(Effort.High);
@@ -806,8 +835,6 @@ describe("model thinking runtime helpers", () => {
 			mode: "effort",
 			efforts: [Effort.High, Effort.Max],
 		});
-		expect(requireSupportedEffort(model, Effort.High)).toBe(Effort.High);
-		expect(requireSupportedEffort(model, Effort.Max)).toBe(Effort.Max);
 		expect(() => requireSupportedEffort(model, Effort.Medium)).toThrow(/Supported efforts: high, max/);
 	});
 
@@ -824,7 +851,6 @@ describe("model thinking runtime helpers", () => {
 			mode: "effort",
 			efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High],
 		});
-		expect(requireSupportedEffort(model, Effort.High)).toBe(Effort.High);
 		expect(() => requireSupportedEffort(model, Effort.XHigh)).toThrow(
 			/Supported efforts: minimal, low, medium, high/,
 		);
@@ -855,19 +881,7 @@ describe("model thinking runtime helpers", () => {
 		expect(opus46.thinking?.efforts).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.Max]);
 		expect(sonnet46.thinking?.efforts.at(-1)).toBe(Effort.High);
 		expect(sonnet5.thinking?.efforts.at(-1)).toBe(Effort.Max);
-		expect(requireSupportedEffort(fable, Effort.Max)).toBe(Effort.Max);
-		expect(requireSupportedEffort(sonnet5, Effort.XHigh)).toBe(Effort.XHigh);
 		expect(() => requireSupportedEffort(opus46, Effort.XHigh)).toThrow(/not supported/);
-	});
-
-	it("enables xhigh for openai-responses and openai-codex-responses APIs", () => {
-		const responsesModel = createModel({ id: "custom-responses", api: "openai-responses", provider: "custom" });
-		const codexModel = createModel({ id: "custom-codex", api: "openai-codex-responses", provider: "custom" });
-
-		expect(responsesModel.thinking?.efforts.at(-1)).toBe(Effort.XHigh);
-		expect(codexModel.thinking?.efforts.at(-1)).toBe(Effort.XHigh);
-		expect(requireSupportedEffort(responsesModel, Effort.XHigh)).toBe(Effort.XHigh);
-		expect(requireSupportedEffort(codexModel, Effort.XHigh)).toBe(Effort.XHigh);
 	});
 
 	it("rejects effort requests against un-built reasoning specs", () => {

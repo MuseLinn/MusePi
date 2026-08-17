@@ -81,8 +81,8 @@ import { copyToClipboard } from "../../utils/clipboard";
 import { repo } from "../../utils/git";
 import { setSessionTerminalTitle } from "../../utils/title-generator";
 import { type AdvisorConfigDeps, AdvisorConfigOverlayComponent } from "../components/advisor-config";
-import { AgentDashboard } from "../components/agent-dashboard";
 import { AgentHubOverlayComponent } from "../components/agent-hub";
+import { AgentsHubComponent } from "../components/agents-hub";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import { CopySelectorComponent } from "../components/copy-selector";
 import { ExtensionDashboard } from "../components/extensions";
@@ -100,7 +100,6 @@ import { SessionAccountSelectorComponent } from "../components/session-account-s
 import { SessionSelectorComponent, type SessionSelectorOptions } from "../components/session-selector";
 import { invalidateSettingDefsCache } from "../components/settings-defs.js";
 import { SettingsSelectorComponent } from "../components/settings-selector";
-import { StrippedToolCallsPlaceholder } from "../components/stripped-tool-calls-placeholder";
 import { ToolExecutionComponent } from "../components/tool-execution";
 import { TranscriptBlock } from "../components/transcript-container";
 import { TreeSelectorComponent } from "../components/tree-selector";
@@ -393,31 +392,36 @@ export class SelectorController {
 	}
 
 	/**
-	 * Show the Agent Control Center dashboard.
+	 * Fullscreen agents hub on the alternate screen (the /models idiom): scope
+	 * sidebar, agent rows, and chip strips that dive into the model browser.
 	 */
 	async showAgentsDashboard(): Promise<void> {
 		const activeModel = this.ctx.session.model;
 		const activeModelPattern = activeModel ? `${activeModel.provider}/${activeModel.id}` : undefined;
 		const defaultModelPattern = this.ctx.settings.getModelRole("default");
-		const dashboard = await AgentDashboard.create(getProjectDir(), this.ctx.settings, this.ctx.ui.terminal.rows, {
-			modelRegistry: this.ctx.session.modelRegistry,
-			activeModelPattern,
-			defaultModelPattern,
-		});
-		const overlay = this.ctx.ui.showOverlay(dashboard, {
-			width: "100%",
-			maxHeight: "100%",
-			anchor: "top-left",
-			margin: 0,
-		});
-		dashboard.onClose = () => {
-			overlay.hide();
+		let overlayHandle: OverlayHandle | undefined;
+		let hub: AgentsHubComponent | undefined;
+		let closed = false;
+		const done = () => {
+			if (closed) return;
+			closed = true;
+			hub?.dispose();
+			overlayHandle?.hide();
 			this.focusActiveEditorArea();
 			this.ctx.ui.requestRender();
 		};
-		dashboard.onRequestRender = () => {
-			this.ctx.ui.requestRender();
-		};
+		hub = await AgentsHubComponent.create(
+			this.ctx.ui,
+			getProjectDir(),
+			this.ctx.settings,
+			{
+				modelRegistry: this.ctx.session.modelRegistry,
+				activeModelPattern,
+				defaultModelPattern,
+			},
+			{ onCancel: () => done() },
+		);
+		overlayHandle = this.#showFullscreenMenu(hub);
 	}
 
 	/**
@@ -483,6 +487,11 @@ export class SelectorController {
 					this.ctx.showError(`Failed to apply vision mode: ${err}`);
 				});
 				break;
+			case "externalThinking":
+				void this.ctx.session.setThinkToolEnabled(value as boolean).catch(err => {
+					this.ctx.showError(`Failed to apply external thinking: ${err}`);
+				});
+				break;
 
 			case "autocompleteMaxVisible":
 				this.ctx.editor.setAutocompleteMaxVisible(typeof value === "number" ? value : Number(value));
@@ -494,15 +503,13 @@ export class SelectorController {
 				this.ctx.hideToolActivity = hidden;
 				if (!hidden) this.ctx.toolOutputExpanded = false;
 				for (const child of this.ctx.chatContainer.children) {
-					if (child instanceof ToolExecutionComponent || child instanceof ReadToolGroupComponent) {
-						if (!hidden) child.setExpanded(false);
-						child.setToolActivityVisible(!hidden);
+					if (!hidden && (child instanceof ToolExecutionComponent || child instanceof ReadToolGroupComponent)) {
+						child.setExpanded(false);
 					} else if (child instanceof AssistantMessageComponent) {
 						child.setToolResultImagesVisible(!hidden);
-					} else if (child instanceof StrippedToolCallsPlaceholder) {
-						child.setToolActivityVisible(!hidden);
 					}
 				}
+				this.ctx.chatContainer.setToolActivityVisible(!hidden);
 				if (hidden) this.ctx.ui.clearInlineImages();
 				this.ctx.ui.resetDisplay();
 				break;
@@ -1162,7 +1169,7 @@ export class SelectorController {
 						return;
 					}
 
-					this.ctx.renderInitialMessages({ clearTerminalHistory: true });
+					await this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 					this.ctx.editor.setDraft(result.selectedText, result.selectedImages);
 					done();
 					this.ctx.showStatus("Branched to previous message");
@@ -1335,7 +1342,7 @@ export class SelectorController {
 
 						// Update UI — rebuild the display transcript for the new leaf (the
 						// context from navigateTree is the LLM context, not the transcript).
-						this.ctx.renderInitialMessages({ clearTerminalHistory: true });
+						await this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 						await this.ctx.reloadTodos();
 						if (result.editorText && !this.ctx.editor.getText().trim()) {
 							this.ctx.editor.setDraft(result.editorText, result.editorImages);
@@ -1575,7 +1582,7 @@ export class SelectorController {
 		this.ctx.statusLine.resetActiveTime();
 		this.ctx.ui.requestRender();
 		this.ctx.updateEditorBorderColor();
-		this.ctx.renderInitialMessages({ clearTerminalHistory: true });
+		await this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 		await this.ctx.reloadTodos();
 		this.ctx.ui.requestRender(true, { clearScrollback: true });
 		return true;
@@ -1609,7 +1616,7 @@ export class SelectorController {
 		this.ctx.updateEditorBorderColor();
 
 		// Clear and re-render the chat
-		this.ctx.renderInitialMessages({ clearTerminalHistory: true });
+		await this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 		await this.ctx.reloadTodos();
 		this.ctx.showStatus(movedProject ? `Resumed session in ${shortenPath(newCwd)}` : "Resumed session");
 		return true;

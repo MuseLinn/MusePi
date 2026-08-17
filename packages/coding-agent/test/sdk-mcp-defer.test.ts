@@ -2,11 +2,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { type } from "@musepi/omptype";
 import { AuthStorage } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import { type CustomTool, createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
@@ -76,6 +77,20 @@ describe("createAgentSession MCP deferral (B1)", () => {
 			// The explicitly requested MCP tool is a known, resolvable tool even
 			// though no server has connected — deterministic, not "unknown tool".
 			expect(session.getActiveToolNames()).toContain(PENDING_MCP_TOOL);
+			await session.refreshMCPTools([
+				{
+					name: PENDING_MCP_TOOL,
+					label: "Connected MCP tool",
+					description: "Connected replacement.",
+					parameters: type({}),
+					mcpServerName: "pending",
+					mcpToolName: "connectingtool",
+					async execute() {
+						return { content: [{ type: "text", text: "connected" }] };
+					},
+				} satisfies CustomTool,
+			]);
+			expect(session.getToolByName(PENDING_MCP_TOOL)?.label).toBe("Connected MCP tool");
 		} finally {
 			await session.dispose();
 		}

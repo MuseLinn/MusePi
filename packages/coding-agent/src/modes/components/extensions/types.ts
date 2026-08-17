@@ -16,7 +16,9 @@ export type ExtensionKind =
 	| "instruction"
 	| "context-file"
 	| "hook"
-	| "slash-command";
+	| "slash-command"
+	| "style"
+	| "gui-motion";
 
 /**
  * Extension state (active, disabled, or shadowed).

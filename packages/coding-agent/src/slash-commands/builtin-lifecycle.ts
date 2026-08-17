@@ -66,7 +66,7 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 			{
 				name: "add",
 				description: "Add an SSH host",
-				usage: "<name> --host <host> [--user <user>] [--port <port>] [--key <keyPath>]",
+				usage: "<name> --host <host> [--user <user>] [--port <port>] [--key <keyPath>] [--scope project|user]",
 			},
 			{ name: "list", description: "List all configured SSH hosts" },
 			{ name: "remove", description: "Remove an SSH host", usage: "<name> [--scope project|user]" },

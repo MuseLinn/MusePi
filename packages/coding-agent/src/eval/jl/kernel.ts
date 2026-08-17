@@ -5,8 +5,6 @@
  * Ruby runners via BaseKernel; this module supplies the Julia binary, runner
  * script, and the runner's TSV/Base64 wire protocol.
  */
-import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { $flag, Snowflake } from "@musepi/pi-utils";
 import { $ } from "bun";
@@ -14,6 +12,7 @@ import { Settings } from "../../config/settings";
 import { BaseKernel, getRemainingTimeMs, type KernelStartOptions } from "../kernel-base";
 import type { KernelDisplayOutput } from "../py/display";
 import { hostHasInheritableConsole, shouldDetachKernel, shouldHideKernelWindow } from "../py/spawn-options";
+import { stageRunnerScript } from "../runner-cache";
 import { JULIA_PRELUDE } from "./prelude";
 import RUNNER_SCRIPT from "./runner.jl" with { type: "text" };
 import {
@@ -29,23 +28,6 @@ export { renderKernelDisplay } from "../py/display";
 export type { KernelDisplayOutput };
 
 const TRACE_IPC = $flag("PI_JULIA_IPC_TRACE");
-
-// Cache the runner script on disk so the subprocess loads it normally. Cached
-// per script hash so installs don't race across versions.
-const RUNNER_CACHE_DIR = path.join(os.tmpdir(), "omp-julia-runner");
-let RUNNER_SCRIPT_PATH: string | null = null;
-
-async function ensureRunnerScript(): Promise<string> {
-	if (RUNNER_SCRIPT_PATH) return RUNNER_SCRIPT_PATH;
-	await fs.promises.mkdir(RUNNER_CACHE_DIR, { recursive: true });
-	const hash = Bun.hash(RUNNER_SCRIPT).toString(36);
-	const target = path.join(RUNNER_CACHE_DIR, `runner-${hash}.jl`);
-	if (!fs.existsSync(target)) {
-		await Bun.write(target, RUNNER_SCRIPT);
-	}
-	RUNNER_SCRIPT_PATH = target;
-	return target;
-}
 
 const SHUTDOWN_GRACE_MS = 1_000;
 const STARTUP_TIMEOUT_MS = 15_000; // Julia compile/warmup can be slightly slower
@@ -180,7 +162,7 @@ export class JuliaKernel extends BaseKernel<KernelExecuteOptions> {
 			if (typeof value === "string") spawnEnv[key] = value;
 		}
 
-		const scriptPath = await ensureRunnerScript();
+		const scriptPath = await stageRunnerScript("omp-julia-runner", "jl", RUNNER_SCRIPT);
 		const kernel = new JuliaKernel(Snowflake.next());
 
 		const proc = Bun.spawn(

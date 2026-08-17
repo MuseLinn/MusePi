@@ -108,6 +108,18 @@ function pipeDelimitedReasoningEffortResponse(): Response {
 	);
 }
 
+/**
+ * cliproxy-style gateway rejection: the field is never named and the rejected
+ * value comes before the verdict (`level "none" not supported, valid levels: …`).
+ */
+function unsupportedLevelResponse(value: string): Response {
+	const message = `level "${value}" not supported, valid levels: low, medium, high, xhigh, max`;
+	return new Response(JSON.stringify({ error: { message, type: "invalid_request_error" } }), {
+		status: 400,
+		headers: { "content-type": "application/json" },
+	});
+}
+
 function summaryReasoningErrorResponse(): Response {
 	return new Response(
 		JSON.stringify({
@@ -341,6 +353,28 @@ describe("OpenAI reasoning effort fallback retry", () => {
 
 		expect(result.stopReason).toBe("stop");
 		expect(bodies.map(body => (body.reasoning as { effort?: string } | undefined)?.effort)).toEqual(["xhigh", "max"]);
+	});
+
+	it("clamps a rejected reasoning-off request to the lowest level the gateway allows", async () => {
+		const bodies: Record<string, unknown>[] = [];
+		const fetchMock: FetchImpl = Object.assign(
+			async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+				const body = parseJsonBody(init);
+				bodies.push(body);
+				return bodies.length === 1 ? unsupportedLevelResponse("none") : createResponsesSseResponse();
+			},
+			{ preconnect: fetch.preconnect },
+		);
+
+		const result = await streamOpenAIResponses(createMaxLadderResponsesModel(), testContext, {
+			apiKey: "test-key",
+			fetch: fetchMock,
+			reasoning: "high",
+			forceReasoningOff: true,
+		}).result();
+
+		expect(result.stopReason).toBe("stop");
+		expect(bodies.map(body => (body.reasoning as { effort?: string } | undefined)?.effort)).toEqual(["none", "low"]);
 	});
 
 	it("does not retry unrelated reasoning parameter errors", async () => {

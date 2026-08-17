@@ -7,13 +7,13 @@ import { balanceDiagnostics } from "@musepi/pi-coding-agent/cleanse/balance";
 import * as cleanseCheckers from "@musepi/pi-coding-agent/cleanse/checkers";
 import { runCleanseCommand } from "@musepi/pi-coding-agent/cleanse/index";
 import { runCleanseLoop } from "@musepi/pi-coding-agent/cleanse/loop";
-import { parseCleanseDiagnostics } from "@musepi/pi-coding-agent/cleanse/parsers";
-import { createCleanseProgressReporter } from "@musepi/pi-coding-agent/cleanse/progress";
+import { type CleanseParserKind, parseCleanseDiagnostics } from "@musepi/pi-coding-agent/cleanse/parsers";
 import type {
 	CleanseAgentOutcome,
 	CleanseDiagnostic,
 	CleanseDiagnosticReport,
 } from "@musepi/pi-coding-agent/cleanse/types";
+import { createProgressReporter } from "@musepi/pi-coding-agent/cli/progress-reporter";
 import { resolveCliArgv } from "@musepi/pi-coding-agent/cli-commands";
 
 afterEach(() => {
@@ -99,8 +99,8 @@ describe("cleanse diagnostics", () => {
 			const withTests = await cleanseCheckers.discoverCleanseDiagnosticSuite(root, { includeTests: true });
 			const report = await withTests.run();
 
-			expect(withoutTests.checkCount).toBe(0);
-			expect(withTests.checkCount).toBe(1);
+			expect(withoutTests.checkers).toHaveLength(0);
+			expect(withTests.checkers).toHaveLength(1);
 			expect(report.checks[0]).toMatchObject({
 				label: "bun test (.)",
 				exitCode: 3,
@@ -122,7 +122,7 @@ describe("cleanse diagnostics", () => {
 
 			const suite = await cleanseCheckers.discoverCleanseDiagnosticSuite(root, { includeTests: true });
 
-			expect(suite.checkCount).toBe(0);
+			expect(suite.checkers).toHaveLength(0);
 		} finally {
 			await fs.rm(root, { recursive: true, force: true });
 		}
@@ -132,7 +132,7 @@ describe("cleanse diagnostics", () => {
 describe("cleanse progress", () => {
 	test("updates an interactive completion bar as workers finish", () => {
 		const writes: string[] = [];
-		const progress = createCleanseProgressReporter({
+		const progress = createProgressReporter("Repairing", {
 			isTTY: true,
 			write(text) {
 				writes.push(text);
@@ -169,8 +169,9 @@ describe("cleanse progress", () => {
 		const clean = report([]);
 		let runCount = 0;
 		const suite: cleanseCheckers.CleanseDiagnosticSuite = {
-			checkCount: 1,
+			checkers: [{ id: "mock", label: "mock", language: "Test", command: "mock" }],
 			skipped: [],
+			select() {},
 			async run() {
 				runCount += 1;
 				return runCount === 1 ? initial : clean;
@@ -180,6 +181,9 @@ describe("cleanse progress", () => {
 		const runtime: cleanseAgent.CleanseAgentRuntime = {
 			model: "test/model",
 			sessionFile: "/tmp/cleanse.jsonl",
+			async discoverCheckers() {
+				return [];
+			},
 			async dispatch(assignments) {
 				return assignments.map((assignment, index) => {
 					const name = `CleanseW1A${index + 1}`;
@@ -198,7 +202,7 @@ describe("cleanse progress", () => {
 		});
 
 		try {
-			const result = await runCleanseCommand({ maxAgents: 2 });
+			const result = await runCleanseCommand({ maxAgents: 2, all: true });
 
 			expect(result.status).toBe("clean");
 			const updates = output.filter(chunk => chunk.startsWith("\rRepairing ["));
@@ -214,7 +218,7 @@ describe("cleanse progress", () => {
 
 	test("stays silent for non-TTY output", () => {
 		const writes: string[] = [];
-		const progress = createCleanseProgressReporter({
+		const progress = createProgressReporter("Repairing", {
 			isTTY: false,
 			write(text) {
 				writes.push(text);
@@ -289,6 +293,211 @@ describe("cleanse orchestration", () => {
 		expect(resolveCliArgv(["cleanse", "-n", "4", "-m", "opus"])).toEqual({
 			argv: ["cleanse", "-n", "4", "-m", "opus"],
 		});
+	});
+});
+
+describe("cleanse alternative-tooling parsers", () => {
+	const parse = (kind: CleanseParserKind, stdout: string) =>
+		parseCleanseDiagnostics(kind, {
+			checker: "checker",
+			projectCwd: "/repo",
+			checkerCwd: "/repo",
+			stdout,
+			stderr: "",
+		});
+
+	test("normalizes staticcheck JSON lines into project-relative diagnostics", () => {
+		const stdout = `{"code":"S1002","severity":"error","location":{"file":"/repo/main.go","line":5,"column":7},"end":{"line":5,"column":20},"message":"should omit comparison to bool constant"}`;
+		expect(parse("staticcheck", stdout)).toEqual([
+			{
+				checker: "checker",
+				file: "main.go",
+				line: 5,
+				column: 7,
+				endLine: 5,
+				endColumn: 20,
+				code: "S1002",
+				severity: "error",
+				message: "should omit comparison to bool constant",
+				suggestion: undefined,
+			},
+		]);
+	});
+
+	test("parses golangci-lint text output with the linter name as code", () => {
+		const diagnostics = parse("golangci", "main.go:10:2: ineffectual assignment to err (ineffassign)\n");
+		expect(diagnostics).toMatchObject([
+			{ file: "main.go", line: 10, column: 2, code: "ineffassign", severity: "warning" },
+		]);
+	});
+
+	test("converts pylint JSON zero-based columns to one-based", () => {
+		const stdout = JSON.stringify([
+			{
+				type: "error",
+				path: "src/app.py",
+				line: 3,
+				column: 0,
+				endLine: 3,
+				endColumn: 10,
+				symbol: "undefined-variable",
+				"message-id": "E0602",
+				message: "Undefined variable 'x'",
+			},
+		]);
+		expect(parse("pylint", stdout)).toMatchObject([
+			{ file: "src/app.py", line: 3, column: 1, endColumn: 11, code: "undefined-variable", severity: "error" },
+		]);
+	});
+
+	test("classifies flake8 pyflakes codes as errors and style codes as warnings", () => {
+		const diagnostics = parse(
+			"flake8",
+			["src/app.py:1:1: F401 'os' imported but unused", "src/app.py:2:80: W291 trailing whitespace"].join("\n"),
+		);
+		expect(diagnostics).toMatchObject([
+			{ file: "src/app.py", line: 1, code: "F401", severity: "error" },
+			{ file: "src/app.py", line: 2, code: "W291", severity: "warning" },
+		]);
+	});
+
+	test("parses ty concise output", () => {
+		const diagnostics = parse(
+			"ty",
+			"src/main.py:1:8: error[unresolved-import] Cannot resolve imported module `foo`\nFound 1 diagnostic\n",
+		);
+		expect(diagnostics).toEqual([
+			{
+				checker: "checker",
+				file: "src/main.py",
+				line: 1,
+				column: 8,
+				endLine: undefined,
+				endColumn: undefined,
+				code: "unresolved-import",
+				severity: "error",
+				message: "Cannot resolve imported module `foo`",
+				suggestion: undefined,
+			},
+		]);
+	});
+
+	test("parses oxlint unix-format lines with bracketed severity and rule", () => {
+		const diagnostics = parse(
+			"oxlint",
+			"src/index.ts:4:10: Variable 'x' is declared but never used. [Warning/no-unused-vars]\n",
+		);
+		expect(diagnostics).toMatchObject([
+			{ file: "src/index.ts", line: 4, column: 10, code: "no-unused-vars", severity: "warning" },
+		]);
+	});
+
+	test("resolves deno lint file URLs and zero-based columns", () => {
+		const stdout = JSON.stringify({
+			diagnostics: [
+				{
+					filename: "file:///repo/mod.ts",
+					range: { start: { line: 2, col: 4 }, end: { line: 2, col: 9 } },
+					code: "no-var",
+					message: "`var` keyword is not allowed.",
+					hint: "Use `let` or `const` instead.",
+				},
+			],
+			errors: [],
+		});
+		expect(parse("deno-lint", stdout)).toMatchObject([
+			{
+				file: "mod.ts",
+				line: 2,
+				column: 5,
+				code: "no-var",
+				severity: "warning",
+				suggestion: "Use `let` or `const` instead.",
+			},
+		]);
+	});
+
+	test("flattens stylelint per-file warnings", () => {
+		const stdout = JSON.stringify([
+			{
+				source: "/repo/styles/site.css",
+				warnings: [
+					{
+						line: 7,
+						column: 3,
+						rule: "color-no-invalid-hex",
+						severity: "error",
+						text: "Unexpected invalid hex color",
+					},
+				],
+			},
+		]);
+		expect(parse("stylelint", stdout)).toMatchObject([
+			{ file: "styles/site.css", line: 7, column: 3, code: "color-no-invalid-hex", severity: "error" },
+		]);
+	});
+
+	test("parses actionlint JSON output", () => {
+		const stdout = JSON.stringify([
+			{
+				message: "shellcheck reported issue",
+				filepath: ".github/workflows/ci.yml",
+				line: 12,
+				column: 9,
+				kind: "shellcheck",
+			},
+		]);
+		expect(parse("actionlint", stdout)).toMatchObject([
+			{ file: ".github/workflows/ci.yml", line: 12, column: 9, code: "shellcheck", severity: "error" },
+		]);
+	});
+});
+
+describe("cleanse custom suite", () => {
+	test("builds runnable plans from discovery specs and skips unrunnable ones", async () => {
+		const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-cleanse-custom-"));
+		try {
+			await Bun.write(path.join(root, "src", "a.ts"), "export const value = 1;\n");
+			const suite = await cleanseCheckers.buildCustomCleanseSuite(root, [
+				{
+					label: "fake tsc",
+					language: "TypeScript",
+					command: ["bun", "-e", "console.log('src/a.ts:1:1: error: boom'); process.exit(1)"],
+				},
+				{ label: "missing tool", command: ["definitely-not-a-real-binary-xyz"] },
+				{ label: "escaping cwd", cwd: "../outside", command: ["bun", "-e", "1"] },
+			]);
+
+			expect(suite.checkers).toMatchObject([{ id: "custom-1", label: "fake tsc", language: "TypeScript" }]);
+			expect(suite.skipped).toMatchObject([
+				{ label: "missing tool", reason: "executable not found: definitely-not-a-real-binary-xyz" },
+				{ label: "escaping cwd" },
+			]);
+
+			const report = await suite.run();
+			expect(report.checks).toHaveLength(1);
+			expect(report.diagnostics).toMatchObject([
+				{ checker: "fake tsc", file: "src/a.ts", line: 1, severity: "error", message: "boom" },
+			]);
+		} finally {
+			await fs.rm(root, { recursive: true, force: true });
+		}
+	});
+
+	test("select() narrows which checkers a run executes", async () => {
+		const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-cleanse-select-"));
+		try {
+			const suite = await cleanseCheckers.buildCustomCleanseSuite(root, [
+				{ label: "first", command: ["bun", "-e", "console.log('ok')"] },
+				{ label: "second", command: ["bun", "-e", "console.log('ok')"] },
+			]);
+			suite.select(["custom-2"]);
+
+			const report = await suite.run();
+			expect(report.checks.map(check => check.id)).toEqual(["custom-2"]);
+		} finally {
+			await fs.rm(root, { recursive: true, force: true });
+		}
 	});
 });
 

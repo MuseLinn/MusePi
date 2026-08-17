@@ -67,7 +67,7 @@ export const WIDGET_TYPES: Record<string, { fields: Array<{ key: string; type: s
 	video: { fields: [{ key: "url", type: "string" }], defaults: { url: "", bvid: "BV1vT411d7QE", title: "凡人修仙传", subtitle: "BILIBILI · 年番" } },
 	gallery: {
 		fields: [{ key: "items", type: "array" }],
-		defaults: { items: [{ title: "Kimi K3" }, { title: "PerceptionBench" }, { title: "Agent Swarm" }, { title: "WorldVQA" }] },
+		defaults: { items: [{ title: "MusePi 桌面" }, { title: "MusePi 看板" }, { title: "MusePi 桌宠" }, { title: "MusePi 引导" }] },
 	},
 	gauge: { fields: [{ key: "value", type: "number" }, { key: "status", type: "string" }], defaults: { label: "A股市场温度", value: 70, status: "活跃 · 沪深创" } },
 	kline: { fields: [{ key: "candles", type: "array" }], defaults: { symbol: "腾讯控股", price: 478.8, delta: -0.08, candles: [], stocks: ["腾讯控股", "阿里巴巴", "贵州茅台", "宁德时代"] } },

@@ -155,6 +155,7 @@ describe("plan-read protection in compaction", () => {
 
 		const regions = collectShakeRegions(entries, {
 			...AGGRESSIVE_SHAKE_CONFIG,
+			protectTokens: 0,
 			protectedTools: [...AGGRESSIVE_SHAKE_CONFIG.protectedTools, matcher],
 		});
 

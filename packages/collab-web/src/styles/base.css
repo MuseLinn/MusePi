@@ -44,7 +44,7 @@ body {
 }
 
 body {
-	font: 400 13px / 1.5 var(--font-ui);
+	font: 400 var(--ui-font-size) / 1.5 var(--font-ui);
 	background: var(--bg);
 	color: var(--fg);
 	-webkit-font-smoothing: antialiased;

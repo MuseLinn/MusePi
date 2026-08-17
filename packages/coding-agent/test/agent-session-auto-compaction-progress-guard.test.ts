@@ -247,7 +247,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 		expect(promptSpy).not.toHaveBeenCalled();
 		expect(continueSpy).not.toHaveBeenCalled();
 		expect(todoReminders.length).toBe(0);
-		expect(session.isStreaming).toBe(false);
 
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(1);
@@ -334,7 +333,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 
 		expect(promptSpy).not.toHaveBeenCalled();
 		expect(continueSpy).toHaveBeenCalledTimes(1);
-		expect(session.agent.hasQueuedMessages()).toBe(false);
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(1);
 	});
@@ -401,7 +399,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 
 		expect(promptSpy).not.toHaveBeenCalled();
 		expect(continueSpy).toHaveBeenCalledTimes(1);
-		expect(session.agent.hasQueuedMessages()).toBe(false);
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(1);
 	});
@@ -797,7 +794,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 
 		expect(promptSpy).not.toHaveBeenCalled();
 		expect(continueSpy).toHaveBeenCalledTimes(1);
-		expect(session.agent.hasQueuedMessages()).toBe(false);
 		expect(sessionManager.getBranch()).toContainEqual(
 			expect.objectContaining({
 				type: "message",
@@ -1191,7 +1187,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 
 		expect(startCount()).toBe(1);
 		expect(continueSpy).not.toHaveBeenCalled();
-		expect(session.isStreaming).toBe(false);
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(1);
 		expect(noProgress[0].level).toBe("warning");

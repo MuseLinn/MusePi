@@ -11,10 +11,9 @@ import {
 	isEnoent,
 	logger,
 } from "@musepi/pi-utils";
-import { withHostGuard } from "../utils";
+import { loadExtensions } from "../extensions/loader";
 import { refreshBunGitCache } from "./bun-git-cache";
 import { type GitSource, parseGitUrl } from "./git-url";
-import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "./legacy-pi-compat";
 import { resolvePluginManifestEntries } from "./loader";
 import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "./marketplace/registry";
 import { parsePluginId } from "./marketplace/types";
@@ -93,14 +92,6 @@ function findGitPackageName(source: GitSource, deps: Record<string, string>): st
 		}
 	}
 	return undefined;
-}
-
-function hasDefaultExport(value: unknown): value is { default?: unknown } {
-	return typeof value === "object" && value !== null && "default" in value;
-}
-
-function hasExtensionFactoryExport(module: unknown): boolean {
-	return typeof module === "function" || (hasDefaultExport(module) && typeof module.default === "function");
 }
 
 interface PluginPackageSnapshot {
@@ -372,17 +363,9 @@ export class PluginManager {
 		}
 
 		if (loadable.length > 0) {
-			installLegacyPiSpecifierShim();
-			for (const extensionPath of loadable) {
-				try {
-					const module = await withHostGuard(() => loadLegacyPiModule(extensionPath));
-					if (!hasExtensionFactoryExport(module)) {
-						errors.push(`${extensionPath}: extension does not export a valid factory function`);
-					}
-				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err);
-					errors.push(`${extensionPath}: ${message}`);
-				}
+			const result = await loadExtensions(loadable, this.#cwd);
+			for (const failure of result.errors) {
+				errors.push(`${failure.path}: ${failure.error}`);
 			}
 		}
 

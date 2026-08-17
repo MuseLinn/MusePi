@@ -104,7 +104,7 @@ export class SessionFocusController {
 			await this.ctx.eventController.handleEvent(event);
 		});
 		this.ctx.statusLine.setSession(target, this.#focusedAgentId);
-		this.ctx.renderInitialMessages({ clearTerminalHistory: true });
+		await this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 		// Sync the run-state title to the attached target: a streaming target has no
 		// agent_start incoming, so arm the loader/working title manually; an idle
 		// target would otherwise inherit the previous session's stuck spinner, so

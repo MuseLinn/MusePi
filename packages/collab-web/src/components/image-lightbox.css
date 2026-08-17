@@ -36,11 +36,11 @@
 }
 
 .tr-img-lb-frame--next {
-	animation: tr-img-lb-in-right 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: tr-img-lb-in-right 180ms var(--spring);
 }
 
 .tr-img-lb-frame--prev {
-	animation: tr-img-lb-in-left 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: tr-img-lb-in-left 180ms var(--spring);
 }
 
 /* Exit: fade the overlay, shrink the frame slightly (must match EXIT_MS). */
@@ -125,7 +125,7 @@
 	background: var(--bg-overlay);
 	color: var(--fg-muted);
 	font-family: var(--font-ui);
-	font-size: 12px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 20px;
 }
 

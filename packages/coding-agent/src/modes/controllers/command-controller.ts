@@ -1529,7 +1529,7 @@ export class CommandController {
 
 			// Rebuild chat from the new session (which now contains the handoff document).
 			this.ctx.clearTransientSessionUi();
-			this.ctx.renderInitialMessages();
+			await this.ctx.renderInitialMessages();
 			this.ctx.statusLine.invalidate();
 			this.ctx.updateEditorBorderColor();
 			await this.ctx.reloadTodos();

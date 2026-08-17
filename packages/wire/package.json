@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@musepi/pi-wire",
-  "version": "17.2.12",
+  "version": "17.3.4",
   "description": "Shared wire protocol types for Oh My Pi packages",
   "homepage": "https://github.com/MuseLinn/MusePi",
   "author": "MuseLinn",

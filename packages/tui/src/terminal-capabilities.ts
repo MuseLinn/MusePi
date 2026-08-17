@@ -732,6 +732,80 @@ export function encodeKittyPlacement(options: {
 }
 
 /**
+ * Exact shape of the direct-placement line {@link Image} emits as its block's
+ * last row: optional `ESC 7` + `CUU(rows-1)` prefix, the {@link encodeKittyPlacement}
+ * APC, optional `ESC 8` suffix. tmux-passthrough-wrapped lines deliberately do
+ * not match (passthrough placements stay untouched).
+ */
+const KITTY_DIRECT_PLACEMENT_LINE =
+	/^(?:\x1b7(?:\x1b\[(\d+)A)?)?\x1b_Ga=p,q=2,C=1,i=(\d+)(?:,p=(\d+))?(?:,c=(\d+))?(?:,r=(\d+))?\x1b\\(?:\x1b8)?$/;
+
+export interface ParsedKittyPlacementLine {
+	imageId: number;
+	placementId: number | undefined;
+	columns: number;
+	rows: number;
+}
+
+/**
+ * Parse a frame line that consists solely of a Kitty direct placement (the
+ * last line of an {@link Image} block). Returns null for anything else —
+ * placeholder grids, tmux-wrapped placements, sixel/iTerm2 payloads — so
+ * callers fall back to writing the line verbatim.
+ */
+export function parseKittyDirectPlacementLine(line: string): ParsedKittyPlacementLine | null {
+	const m = KITTY_DIRECT_PLACEMENT_LINE.exec(line);
+	if (!m) return null;
+	const columns = m[4] !== undefined ? Number(m[4]) : 0;
+	const rows = m[5] !== undefined ? Number(m[5]) : 0;
+	if (columns <= 0 || rows <= 0) return null;
+	return {
+		imageId: Number(m[2]),
+		placementId: m[3] !== undefined ? Number(m[3]) : undefined,
+		columns,
+		rows,
+	};
+}
+
+/**
+ * Rebuild an {@link Image} direct-placement line for the viewport row it is
+ * written at. The component-rendered line encodes `CUU(rows-1)`, which clamps
+ * at the viewport top once the block's leading rows have scrolled out — the
+ * placement then re-anchors the full image shifted down over foreign rows.
+ * Anchor at the block's first *visible* row instead, clipping the source
+ * rectangle (`y=`/`h=`, image pixels) to the visible bottom slice.
+ */
+export function encodeKittyPlacementLine(options: {
+	imageId: number;
+	placementId: number;
+	columns: number;
+	/** Total cell rows of the image block. */
+	rows: number;
+	/** Viewport row the block's last line is being written at. */
+	screenRow: number;
+	/** Source image height in pixels, for the clipped source rectangle. */
+	imageHeightPx: number;
+}): string {
+	// Without a source pixel height the slice cannot be expressed — emit the
+	// component's own full form (status quo) rather than squashing the whole
+	// image into the reduced row count.
+	const clippable = options.imageHeightPx > 0;
+	const hiddenRows = clippable ? Math.max(0, options.rows - 1 - options.screenRow) : 0;
+	const visibleRows = options.rows - hiddenRows;
+	const params: string[] = ["a=p", "q=2", "C=1", `i=${options.imageId}`, `p=${options.placementId}`];
+	params.push(`c=${options.columns}`, `r=${visibleRows}`);
+	if (hiddenRows > 0) {
+		const srcY = Math.floor((options.imageHeightPx * hiddenRows) / options.rows);
+		params.push(`y=${srcY}`, `h=${Math.max(1, options.imageHeightPx - srcY)}`);
+	}
+	// No tmux passthrough: inside tmux the component's own line arrives
+	// wrapped, never parses, and never reaches this rewrite.
+	const apc = `\x1b_G${params.join(",")}\x1b\\`;
+	const cuu = visibleRows - 1;
+	return cuu > 0 ? `\x1b7\x1b[${cuu}A${apc}\x1b8` : apc;
+}
+
+/**
  * Kitty graphics delete command for a single image id. Uses `d=I` (capital)
  * which removes the image and every one of its placements — on screen *and* in
  * scrollback — and frees the backing data. `q=2` suppresses the terminal reply.
@@ -740,6 +814,16 @@ export function encodeKittyPlacement(options: {
  */
 export function encodeKittyDeleteImage(imageId: number): string {
 	return wrapTmuxPassthroughIfNeeded(`\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`);
+}
+
+/**
+ * Delete a single placement of an image (`d=i`, lowercase): removes its cells
+ * and registry entry but keeps the transmitted data, so a later `a=p` under a
+ * fresh placement id needs no retransmit. Used to clear stale placement-epoch
+ * entries after a destructive history clear.
+ */
+export function encodeKittyDeletePlacement(imageId: number, placementId: number): string {
+	return wrapTmuxPassthroughIfNeeded(`\x1b_Ga=d,d=i,i=${imageId},p=${placementId},q=2\x1b\\`);
 }
 
 export function encodeITerm2(

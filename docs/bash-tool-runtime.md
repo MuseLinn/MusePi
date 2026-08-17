@@ -138,7 +138,7 @@ The per-command child environment is built by `buildNonInteractiveEnv()` (`src/e
 
 - pagers disabled (`PAGER=cat`, `GIT_PAGER=cat`, … and `LESS=FRX`),
 - editor prompts disabled (`GIT_EDITOR=true`, `EDITOR=true`, `VISUAL=true`),
-- terminal/credential prompts reduced (`TERM=dumb`, `GIT_TERMINAL_PROMPT=0`, `SSH_ASKPASS=/usr/bin/false`, `NO_COLOR=1`, `CI=1`),
+- terminal/credential prompts reduced (`TERM=dumb`, `GIT_TERMINAL_PROMPT=0`, `SSH_ASKPASS=/usr/bin/false`, `NO_COLOR=1`, `CI=true` unless `PI_BASH_NO_CI`/`CLAUDE_BASH_NO_CI` is set),
 - package-manager/tooling automation flags for non-interactive behavior (npm/pnpm/yarn/pip/cargo/terraform/gh, …),
 - on Windows, UTF-8 locale/codepage defaults are added when absent.
 

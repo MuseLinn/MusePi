@@ -208,10 +208,14 @@ fi
 /**
  * Create a shell snapshot, caching the result.
  * Returns the path to the snapshot file, or null if creation failed.
+ *
+ * `timeoutMs` is configurable so callers exercising failure handling do not
+ * have to wait out the production startup budget.
  */
 export async function getOrCreateSnapshot(
 	shell: string,
 	env: Record<string, string | undefined>,
+	timeoutMs = SNAPSHOT_TIMEOUT_MS,
 ): Promise<string | null> {
 	const cacheKey = shell;
 	// Return cached snapshot if valid
@@ -284,7 +288,7 @@ export async function getOrCreateSnapshot(
 			stdin: "ignore",
 			stdout: "ignore",
 			stderr: "ignore",
-			timeout: SNAPSHOT_TIMEOUT_MS,
+			timeout: timeoutMs,
 			killSignal: "SIGKILL",
 		});
 

@@ -29,6 +29,9 @@ export const MAIN_CONFIG_FILENAMES = ["config.yml", "config.yaml"] as const;
 /** Version (e.g. "1.0.0") */
 export const VERSION: string = version;
 
+/** Default User-Agent header string (e.g. "omp/17.2.12") */
+export const USER_AGENT = `omp/${VERSION}`;
+
 /** Minimum Bun version */
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
 

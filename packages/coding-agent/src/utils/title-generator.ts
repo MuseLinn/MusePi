@@ -271,6 +271,11 @@ export async function generateTitleOnline(
 				apiKey: registry.resolver(model, sessionId),
 				maxTokens,
 				disableReasoning: true,
+				// Greedy decode: titling is extraction, not generation. Backends that
+				// default temperature high (e.g. Ollama's 0.8) otherwise garble names
+				// from the message ("hashline" → "HasHroshi"). Providers whose models
+				// reject sampling params drop this via `supportsSamplingParams`.
+				temperature: 0,
 				metadata,
 				signal,
 			},

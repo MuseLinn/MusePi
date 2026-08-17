@@ -61,13 +61,23 @@ function emit(): void {
 /** Set locale at runtime (e.g., from settings change). */
 export function setLocale(locale: string): void {
 	if (currentLocale === locale) return;
-	currentLocale = locale;
-	try {
-		globalThis.localStorage.setItem("omp.collab.locale", locale);
-	} catch {
-		// storage unavailable — non-fatal
+	const doc = globalThis.document as (Document & { startViewTransition?: (cb: () => void) => void }) | undefined;
+	const swap = (): void => {
+		currentLocale = locale;
+		try {
+			globalThis.localStorage.setItem("omp.collab.locale", locale);
+		} catch {
+			// storage unavailable — non-fatal
+		}
+		emit();
+	};
+	if (doc?.startViewTransition) {
+		// Whole-UI cross-fade on language switch — text would snap without
+		// it (View Transitions API, Chromium 111+; safe no-op elsewhere).
+		doc.startViewTransition(swap);
+	} else {
+		swap();
 	}
-	emit();
 }
 
 /** Subscribe to locale changes. Returns an unsubscribe function. */

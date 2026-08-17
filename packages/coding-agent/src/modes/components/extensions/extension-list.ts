@@ -344,6 +344,7 @@ export class ExtensionList implements Component {
 			"prompt",
 			"context-file",
 			"instruction",
+			"gui-motion",
 		];
 
 		for (const kind of kindOrder) {
@@ -386,6 +387,8 @@ export class ExtensionList implements Component {
 				return t("Context");
 			case "instruction":
 				return t("Instructions");
+			case "gui-motion":
+				return t("GUI Motion");
 			default:
 				return kind;
 		}

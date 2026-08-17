@@ -111,6 +111,15 @@ export function renderMermaidHtml(source: string, mode: MermaidMode): string {
 	} catch {
 		// fall through to the async placeholder
 	}
+	// A source that names no mermaid diagram type is not a diagram — render
+	// it as a plain code block instead of an async placeholder that would
+	// just fail downstream. (Known types like gantt/pie/timeline still take
+	// the official-mermaid fallback path.)
+	const KNOWN_TYPES =
+		/\b(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|timeline|quadrant|journey|requirementDiagram|gitGraph|mindmap|block-beta|sankey-beta)\b/i;
+	if (!KNOWN_TYPES.test(source)) {
+		return `<pre class="tr-mermaid-fallback"><code class="language-mermaid">${escapeHtml(source)}</code></pre>`;
+	}
 	// Outside beautiful-mermaid coverage or unparseable → async official
 	// mermaid fallback placeholder (filled by Markdown's effect).
 	const hash = fnv1a(source).toString(36);

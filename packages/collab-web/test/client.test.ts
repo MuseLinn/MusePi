@@ -112,7 +112,7 @@ describe("GuestClient frame apply", () => {
 			vi.advanceTimersByTime(1);
 			const snap = client.getSnapshot();
 			expect(snap.phase).toBe("ended");
-			expect(snap.endedReason).toBe("timed out waiting for the host's session snapshot");
+			expect(snap.endedReason).toBe("Timed out waiting for the host's session snapshot");
 
 			const completeClient = new GuestClient(LINK, "tester");
 			completeClient.applyFrameForTest(welcomeFrame(1));

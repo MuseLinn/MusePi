@@ -4,7 +4,7 @@
  * The collab host and the daemon stream only pi-wire-compatible events to
  * peers (the SDK contract pins AgentEvent/SessionEntry payloads). Non-wire
  * session internals never cross the boundary — keeping the journal, the
- * stream and the SDK contract on one format (gui-architecture Phase 3:
+ * stream and the SDK contract on one format (daemon Phase 3:
  * journal records wire events).
  */
 import type {

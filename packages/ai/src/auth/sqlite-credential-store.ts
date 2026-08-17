@@ -25,8 +25,6 @@ import type {
 	ClientProviderUsage,
 	ClientUsageReport,
 	ClientUsageSummary,
-	UsageCostHistoryEntry,
-	UsageCostHistoryQuery,
 	UsageHistoryEntry,
 	UsageHistoryQuery,
 } from "../usage";
@@ -395,8 +393,6 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 	#releaseCredentialRefreshLeaseStmt: Statement;
 	#credentialBlockReconcileAfter: Map<string, number> = new Map();
 	#insertUsageHistoryStmt: Statement;
-	#insertUsageCostStmt: Statement;
-	#listUsageCostsStmt: Statement;
 	#lastUsageHistoryStmt: Statement;
 	#listUsageHistoryStmt: Statement;
 	#updateUsageHistoryStmt: Statement;
@@ -524,12 +520,6 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 		this.#listUsageHistoryStmt = this.#db.prepare(
 			"SELECT recorded_at, provider, account_key, email, account_id, limit_id, label, window_label, used_fraction, status, resets_at FROM usage_history WHERE recorded_at >= ? AND (? IS NULL OR provider = ?) ORDER BY recorded_at ASC",
 		);
-		this.#insertUsageCostStmt = this.#db.prepare(
-			"INSERT INTO usage_cost_history (recorded_at, provider, account_key, cost_usd) VALUES (?, ?, ?, ?)",
-		);
-		this.#listUsageCostsStmt = this.#db.prepare(
-			"SELECT recorded_at, provider, account_key, cost_usd FROM usage_cost_history WHERE recorded_at >= ? AND (? IS NULL OR provider = ?) AND (? IS NULL OR account_key = ?) ORDER BY recorded_at ASC",
-		);
 	}
 
 	static async open(dbPath: string = getAgentDbPath()): Promise<SqliteAuthCredentialStore> {
@@ -642,14 +632,6 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 				resets_at INTEGER
 			);
 			CREATE INDEX IF NOT EXISTS idx_usage_history_series ON usage_history(provider, account_key, limit_id, recorded_at);
-			CREATE TABLE IF NOT EXISTS usage_cost_history (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				recorded_at INTEGER NOT NULL,
-				provider TEXT NOT NULL,
-				account_key TEXT NOT NULL,
-				cost_usd REAL NOT NULL
-			);
-			CREATE INDEX IF NOT EXISTS idx_usage_cost_history_lookup ON usage_cost_history(provider, account_key, recorded_at);
 			CREATE INDEX IF NOT EXISTS idx_usage_history_recorded ON usage_history(recorded_at);
 			CREATE TABLE IF NOT EXISTS clients (
 				install_id TEXT PRIMARY KEY,
@@ -1777,42 +1759,6 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 			return [];
 		}
 	}
-	recordUsageCosts(entries: UsageCostHistoryEntry[]): void {
-		try {
-			for (const entry of entries) {
-				this.#insertUsageCostStmt.run(entry.recordedAt, entry.provider, entry.accountKey, entry.costUsd);
-			}
-		} catch {
-			// Cost history is best-effort; never break request persistence.
-		}
-	}
-
-	listUsageCosts(query?: UsageCostHistoryQuery): UsageCostHistoryEntry[] {
-		try {
-			const provider = query?.provider ?? null;
-			const accountKey = query?.accountKey ?? null;
-			const rows = this.#listUsageCostsStmt.all(
-				query?.sinceMs ?? 0,
-				provider,
-				provider,
-				accountKey,
-				accountKey,
-			) as Array<{
-				recorded_at: number;
-				provider: string;
-				account_key: string;
-				cost_usd: number;
-			}>;
-			return rows.map(row => ({
-				recordedAt: row.recorded_at,
-				provider: row.provider as Provider,
-				accountKey: row.account_key,
-				costUsd: row.cost_usd,
-			}));
-		} catch {
-			return [];
-		}
-	}
 
 	recordClientUsage(report: ClientUsageReport): void {
 		const now = Date.now();
@@ -2059,8 +2005,6 @@ export class SqliteAuthCredentialStore implements AuthCredentialStore {
 		this.#lastUsageHistoryStmt.finalize();
 		this.#listUsageHistoryStmt.finalize();
 		this.#updateUsageHistoryStmt.finalize();
-		this.#insertUsageCostStmt.finalize();
-		this.#listUsageCostsStmt.finalize();
 		this.#updateIfMatchesStmt.finalize();
 		this.#updateIfMatchesWithLeaseStmt.finalize();
 		this.#deleteIfMatchesWithLeaseStmt.finalize();

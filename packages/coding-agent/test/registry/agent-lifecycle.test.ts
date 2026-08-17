@@ -621,4 +621,96 @@ describe("AgentLifecycleManager", () => {
 		await registerPersistedSubagents(restoredRegistry, rootSessionFile);
 		expect(restoredRegistry.get(workerId)?.status).toBe("aborted");
 	});
+
+	it("a cold revive whose factory resolves after dispose rejects without adopting or arming a TTL", async () => {
+		vi.useFakeTimers();
+		const gate = deferred();
+		const revived = makeSessionStub();
+		let reviverRuns = 0;
+		// Restored-from-disk parked ref: never adopted, so dispose() does not track it.
+		registry.register({
+			id: "Cold-DisposeRace",
+			displayName: "task",
+			kind: "sub",
+			session: null,
+			sessionFile: "/tmp/Cold-DisposeRace.jsonl",
+			status: "parked",
+		});
+		lifecycle.setPersistedSubagentReviverFactory(async () => {
+			await gate.promise;
+			return async () => {
+				reviverRuns++;
+				return revived.session;
+			};
+		}, TTL);
+
+		const revival = lifecycle.ensureLive("Cold-DisposeRace");
+		await flushAsync(); // reach the factory await
+		await lifecycle.dispose(Date.now()); // teardown while the factory is in flight
+		gate.resolve(); // factory completes for a superseded owner
+
+		await expect(revival).rejects.toThrow(/disposed/);
+		// Rejected before the reviver ran: no session was ever created.
+		expect(reviverRuns).toBe(0);
+		expect(revived.disposeCalls()).toBe(0);
+		// No adoption, no live session, no armed TTL that could fire a late park.
+		expect(lifecycle.has("Cold-DisposeRace")).toBe(false);
+		expect(registry.get("Cold-DisposeRace")?.session ?? null).toBeNull();
+		expect(registry.get("Cold-DisposeRace")?.status).not.toBe("idle");
+		vi.advanceTimersByTime(TTL * 10);
+		await flushAsync();
+		expect(revived.disposeCalls()).toBe(0);
+	});
+
+	it("a cold revive whose session resolves after dispose disposes that session and rejects", async () => {
+		const gate = deferred();
+		const revived = makeSessionStub();
+		registry.register({
+			id: "Cold-SessionRace",
+			displayName: "task",
+			kind: "sub",
+			session: null,
+			sessionFile: "/tmp/Cold-SessionRace.jsonl",
+			status: "parked",
+		});
+		// Factory resolves immediately (cold-adopts), but the reviver — which builds
+		// the live session — is held open across dispose().
+		lifecycle.setPersistedSubagentReviverFactory(
+			async () => async () => {
+				await gate.promise;
+				return revived.session;
+			},
+			TTL,
+		);
+
+		const revival = lifecycle.ensureLive("Cold-SessionRace");
+		await flushAsync(); // reach the reviver await
+		await lifecycle.dispose(Date.now()); // teardown while the reviver is in flight
+		gate.resolve(); // reviver hands back a live session for a disposed owner
+
+		await expect(revival).rejects.toThrow(/disposed/);
+		expect(revived.disposeCalls()).toBe(1);
+		expect(lifecycle.has("Cold-SessionRace")).toBe(false);
+		expect(registry.get("Cold-SessionRace")?.session ?? null).toBeNull();
+	});
+
+	it("a new top-level owner can cold-revive after the previous global lifecycle was disposed", async () => {
+		await lifecycle.dispose(Date.now());
+		const revived = makeSessionStub();
+		registry.register({
+			id: "Next-Owner",
+			displayName: "task",
+			kind: "sub",
+			session: null,
+			sessionFile: "/tmp/Next-Owner.jsonl",
+			status: "parked",
+		});
+
+		const nextLifecycle = AgentLifecycleManager.global();
+		nextLifecycle.setPersistedSubagentReviverFactory(async () => async () => revived.session, 0);
+
+		await expect(nextLifecycle.ensureLive("Next-Owner")).resolves.toBe(revived.session);
+		expect(registry.get("Next-Owner")).toMatchObject({ status: "idle", session: revived.session });
+		expect(revived.disposeCalls()).toBe(0);
+	});
 });

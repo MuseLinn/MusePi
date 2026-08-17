@@ -10,9 +10,9 @@ This document covers the current extension runtime in:
 - `src/extensibility/extensions/index.ts`
 - `src/modes/controllers/extension-ui-controller.ts`
 
-For discovery paths and filesystem loading rules, see [`extension-loading.md`](./extension-loading.md).
+For discovery paths and filesystem loading rules, see [`extension-loading.md`](./extension-loading.html).
 
-For packaged user-facing extension CLIs/features, see [`user-facing-packages.md`](./user-facing-packages.md).
+For packaged user-facing extension CLIs/features, see [`user-facing-packages.md`](./user-facing-packages.html).
 
 ## What an extension is
 
@@ -250,7 +250,7 @@ Cancelable pre-events:
 - `agent_start` / `agent_end` — agent loop lifecycle notification; `agent_end` remains notification-only
 - `session_stop` — main-session stop hook, awaited before settle; may continue with `{ continue: true, additionalContext }` or `{ decision: "block", reason }`; capped at 8 consecutive continuations and never fires for task/subagent sessions
 - `turn_start` / `turn_end`
-- `message_start` / `message_update` / `message_end`
+- `message_start` / `message_update` / `message_end` — lifecycle notifications; `message_end` receives a detached message snapshot, so use `tool_result` or `context` when an extension needs to change provider context
 
 ### Tool lifecycle
 

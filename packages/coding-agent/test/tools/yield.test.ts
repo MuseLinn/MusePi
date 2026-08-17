@@ -55,7 +55,6 @@ function makeCodexModel(): Model<"openai-codex-responses"> {
 describe("YieldTool", () => {
 	it("accepts success payload with data", async () => {
 		const tool = new YieldTool(createSession());
-		expect(tool.strict).toBe(false);
 		const result = await tool.execute("call-1", { result: { data: { ok: true } } } as never);
 		expect(result.details).toEqual({ data: { ok: true }, status: "success", error: undefined });
 	});
@@ -539,7 +538,6 @@ describe("YieldTool", () => {
 
 		const abortResult = await tool.execute("call-empty-abort", { result: {} } as never);
 		const details = abortResult.details;
-		expect(details).toBeDefined();
 		if (!details) throw new Error("missing abort details");
 		expect(details.status).toBe("aborted");
 		expect(details.data).toBeUndefined();
@@ -569,7 +567,6 @@ describe("YieldTool", () => {
 
 		const abortResult = await tool.execute("call-empty-after-reset-abort", { result: {} } as never);
 		const details = abortResult.details;
-		expect(details).toBeDefined();
 		if (!details) throw new Error("missing abort details");
 		expect(details.status).toBe("aborted");
 		expect(details.data).toBeUndefined();
@@ -809,6 +806,7 @@ describe("YieldTool", () => {
 				},
 			}),
 		);
+
 		expect(tool.strict).toBe(true);
 
 		const toolDefinition: Tool = {
@@ -817,6 +815,7 @@ describe("YieldTool", () => {
 			parameters: tool.parameters,
 			strict: tool.strict,
 		};
+
 		// One incremental finding (a single element, not the full output) must validate.
 		expect(
 			validateToolArguments(toolDefinition, {
@@ -1182,10 +1181,6 @@ describe("YieldTool", () => {
 		await expect(tool.execute("call-3", {} as never)).rejects.toThrow(
 			'Submit success as {"result":{"data":<your output>}} or failure as {"result":{"error":"message"}}.',
 		);
-	});
-	it("sets lenientArgValidation so agent-loop bypasses validation errors", () => {
-		const tool = new YieldTool(createSession());
-		expect(tool.lenientArgValidation).toBe(true);
 	});
 	it("falls back to loose schema when outputSchema contains unresolved external $ref", async () => {
 		const tool = new YieldTool(

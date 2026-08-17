@@ -694,7 +694,6 @@ describe("extensions discovery", () => {
 		const loadedHook = result.extensions.find(extension => extension.path === hookPath);
 
 		expect(result.errors).toHaveLength(0);
-		expect(loadedHook).toBeDefined();
 		expect(loadedHook?.handlers.has("tool_call")).toBe(true);
 	});
 
@@ -726,7 +725,6 @@ describe("extensions discovery", () => {
 
 		expect(result.errors).toHaveLength(0);
 		expect(result.extensions.find(extension => extension.path === extensionPath)).toBeUndefined();
-		expect(loadedHook).toBeDefined();
 		expect(loadedHook?.handlers.has("tool_call")).toBe(true);
 	});
 

@@ -249,12 +249,23 @@ export class AuthBrokerClient {
 		}
 	}
 
-	fetchUsage(signal?: AbortSignal): Promise<UsageResponse> {
-		// Validates the envelope (`generatedAt`, `reports[].provider`, `limits`,
-		// `metadata`) but leaves provider-specific extension fields permissive so
-		// the broker can ship new shapes ahead of the client. `raw` is accepted
-		// but normally stripped by the broker before send.
-		return this.#request<UsageResponse>("GET", "/v1/usage", { schema: "usageResponseSchema", signal });
+	/**
+	 * Fetch aggregate broker usage with a timeout sized for serialized
+	 * same-provider account probes.
+	 */
+	fetchUsage(options: { signal?: AbortSignal; maxAccountsPerProvider?: number } = {}): Promise<UsageResponse> {
+		const requestedAccountCount = options.maxAccountsPerProvider;
+		const accountCount =
+			typeof requestedAccountCount === "number" && Number.isFinite(requestedAccountCount)
+				? Math.max(1, Math.floor(requestedAccountCount))
+				: 1;
+		const perAccountTimeoutMs = Math.max(DEFAULT_TIMEOUT_MS, this.#timeoutMs);
+		const timeoutMs = perAccountTimeoutMs * (accountCount + 1);
+		return this.#request<UsageResponse>("GET", "/v1/usage", {
+			schema: "usageResponseSchema",
+			signal: options.signal,
+			timeoutMs,
+		});
 	}
 
 	/** Recorded usage-limit snapshots from the broker host, oldest first. */
@@ -369,7 +380,13 @@ export class AuthBrokerClient {
 	async #request<t>(
 		method: "GET" | "POST" | "DELETE",
 		path: string,
-		opts: { schema: AuthBrokerResponseSchemaName; auth?: boolean; body?: unknown; signal?: AbortSignal },
+		opts: {
+			schema: AuthBrokerResponseSchemaName;
+			auth?: boolean;
+			body?: unknown;
+			signal?: AbortSignal;
+			timeoutMs?: number;
+		},
 	): Promise<t> {
 		const response = await this.#fetchRaw(method, path, opts);
 		const text = await response.text();

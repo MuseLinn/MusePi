@@ -1,10 +1,11 @@
 import { getProjectDir, sanitizeText } from "@musepi/pi-utils";
+import { pickCleanseTarget, promptCleanseRequest } from "../cli/cleanse-picker";
+import { createProgressReporter } from "../cli/progress-reporter";
 import { shortenPath } from "../tools/render-utils";
-import { type CleanseAgentRuntime, createCleanseAgentRuntime } from "./agent";
+import { type CleanseAgentHooks, type CleanseAgentRuntime, createCleanseAgentRuntime } from "./agent";
 import { groupDiagnosticsByFile } from "./balance";
-import { discoverCleanseDiagnosticSuite } from "./checkers";
+import { buildCustomCleanseSuite, type CleanseDiagnosticSuite, discoverCleanseDiagnosticSuite } from "./checkers";
 import { runCleanseLoop } from "./loop";
-import { createCleanseProgressReporter } from "./progress";
 import type { CleanseAgentOutcome, CleanseAssignment, CleanseDiagnosticReport, CleanseLoopResult } from "./types";
 
 const DEFAULT_MODEL = "@smol";
@@ -15,6 +16,10 @@ export interface CleanseCommandOptions {
 	maxAgents?: number;
 	model?: string;
 	includeTests?: boolean;
+	/** Free-form description handed to a discovery agent instead of built-in checker discovery. */
+	request?: string;
+	/** Run every discovered checker without the interactive picker. */
+	all?: boolean;
 }
 
 /** Observable completion state returned to the CLI adapter. */
@@ -27,7 +32,7 @@ export interface CleanseCommandResult {
 
 /** Detect project diagnostics, dispatch one bounded repair batch, and verify it. */
 export async function runCleanseCommand(options: CleanseCommandOptions = {}): Promise<CleanseCommandResult> {
-	const maxAgents = options.maxAgents ?? 8;
+	const maxAgents = options.maxAgents ?? 32;
 	if (!Number.isInteger(maxAgents) || maxAgents <= 0) throw new Error("--agents must be a positive integer");
 	const model = options.model?.trim() || DEFAULT_MODEL;
 	const cwd = getProjectDir();
@@ -37,7 +42,7 @@ export async function runCleanseCommand(options: CleanseCommandOptions = {}): Pr
 	process.once("SIGTERM", abort);
 	let runtime: CleanseAgentRuntime | undefined;
 	let loopResult: CleanseLoopResult | undefined;
-	const progress = createCleanseProgressReporter();
+	const progress = createProgressReporter("Repairing");
 	const interactiveFailures: CleanseAgentOutcome[] = [];
 	let interactiveFailuresPrinted = false;
 	const printInteractiveFailures = (): void => {
@@ -45,15 +50,85 @@ export async function runCleanseCommand(options: CleanseCommandOptions = {}): Pr
 		interactiveFailuresPrinted = true;
 		for (const outcome of interactiveFailures) printAgentOutcome(outcome);
 	};
+	const hooks: CleanseAgentHooks = {
+		onStart(name, assignment) {
+			if (progress.interactive) return;
+			process.stdout.write(`[start] ${name}: ${formatAssignmentFiles(assignment)} (weight ${assignment.weight})\n`);
+		},
+		onFinish(outcome) {
+			progress.complete();
+			if (progress.interactive) {
+				if (!outcome.success) interactiveFailures.push(outcome);
+				return;
+			}
+			printAgentOutcome(outcome);
+		},
+	};
+	const ensureRuntime = async (): Promise<CleanseAgentRuntime> => {
+		if (runtime) return runtime;
+		process.stdout.write(`Resolving model ${model}...\n`);
+		runtime = await createCleanseAgentRuntime({ cwd, model, hooks });
+		process.stdout.write(`Model: ${runtime.model}\nSession: ${shortenPath(runtime.sessionFile)}\n`);
+		return runtime;
+	};
 
 	try {
-		process.stdout.write("Detecting configured project checkers...\n");
-		const suite = await discoverCleanseDiagnosticSuite(cwd, { includeTests: options.includeTests });
-		if (suite.checkCount === 0) {
-			const report: CleanseDiagnosticReport = { checks: [], diagnostics: [], skipped: [...suite.skipped] };
+		let request = options.request?.trim() || undefined;
+		let suite: CleanseDiagnosticSuite | undefined;
+		if (!request) {
+			process.stdout.write("Detecting configured project checkers...\n");
+			suite = await discoverCleanseDiagnosticSuite(cwd, { includeTests: options.includeTests });
+			const interactive = options.all !== true && process.stdin.isTTY === true && process.stdout.isTTY === true;
+			if (interactive) {
+				if (suite.checkers.length > 0) {
+					const choice = await pickCleanseTarget(suite.checkers);
+					if (choice.kind === "cancel") {
+						process.stderr.write("Cleanse cancelled.\n");
+						return {
+							exitCode: 130,
+							status: "cancelled",
+							report: { checks: [], diagnostics: [], skipped: [...suite.skipped] },
+						};
+					}
+					if (choice.kind === "checker") suite.select([choice.id]);
+					if (choice.kind === "request") {
+						request = choice.request;
+						suite = undefined;
+					}
+				} else {
+					printSkippedChecks({ checks: [], diagnostics: [], skipped: [...suite.skipped] });
+					process.stdout.write("No supported checker with an available executable was found.\n");
+					const answer = await promptCleanseRequest();
+					if (answer === null) {
+						return {
+							exitCode: 1,
+							status: "unsupported",
+							report: { checks: [], diagnostics: [], skipped: [...suite.skipped] },
+						};
+					}
+					request = answer;
+					suite = undefined;
+				}
+			}
+		}
+		if (request) {
+			const activeRuntime = await ensureRuntime();
+			process.stdout.write(`Discovering checkers for "${request}"...\n`);
+			const specs = await activeRuntime.discoverCheckers(request, abortController.signal);
+			suite = await buildCustomCleanseSuite(cwd, specs);
+			for (const checker of suite.checkers) {
+				process.stdout.write(`[checker] ${checker.label}: ${checker.command}\n`);
+			}
+		}
+		if (!suite || suite.checkers.length === 0) {
+			const report: CleanseDiagnosticReport = { checks: [], diagnostics: [], skipped: [...(suite?.skipped ?? [])] };
 			printSkippedChecks(report);
-			process.stderr.write("No supported checker with an available executable was found.\n");
-			return { exitCode: 1, status: "unsupported", report };
+			process.stderr.write(
+				request
+					? "Checker discovery produced no runnable command.\n"
+					: "No supported checker with an available executable was found.\n",
+			);
+			return { exitCode: 1, status: "unsupported", report, sessionFile: runtime?.sessionFile };
 		}
 		const initialReport = await suite.run(abortController.signal);
 		printCheckReport(initialReport);
@@ -61,7 +136,7 @@ export async function runCleanseCommand(options: CleanseCommandOptions = {}): Pr
 			process.stdout.write(
 				`Clean: ${initialReport.checks.length} checker${initialReport.checks.length === 1 ? "" : "s"} passed.\n`,
 			);
-			return { exitCode: 0, status: "clean", report: initialReport };
+			return { exitCode: 0, status: "clean", report: initialReport, sessionFile: runtime?.sessionFile };
 		}
 
 		const assignments = groupDiagnosticsByFile(initialReport.diagnostics);
@@ -70,33 +145,12 @@ export async function runCleanseCommand(options: CleanseCommandOptions = {}): Pr
 		process.stdout.write(
 			`Found ${initialReport.diagnostics.length} diagnostic${initialReport.diagnostics.length === 1 ? "" : "s"} across ${fileCount} file${fileCount === 1 ? "" : "s"}; launching ${agentCount} subagent${agentCount === 1 ? "" : "s"}.\n`,
 		);
-		process.stdout.write(`Resolving model ${model}...\n`);
-		const activeRuntime = await createCleanseAgentRuntime({
-			cwd,
-			model,
-			hooks: {
-				onStart(name, assignment) {
-					if (progress.interactive) return;
-					process.stdout.write(
-						`[start] ${name}: ${formatAssignmentFiles(assignment)} (weight ${assignment.weight})\n`,
-					);
-				},
-				onFinish(outcome) {
-					progress.complete();
-					if (progress.interactive) {
-						if (!outcome.success) interactiveFailures.push(outcome);
-						return;
-					}
-					printAgentOutcome(outcome);
-				},
-			},
-		});
-		runtime = activeRuntime;
-		process.stdout.write(`Model: ${activeRuntime.model}\nSession: ${shortenPath(activeRuntime.sessionFile)}\n`);
+		const activeRuntime = await ensureRuntime();
+		const activeSuite = suite;
 		loopResult = await runCleanseLoop(
 			{ maxAgents, initialReport, signal: abortController.signal },
 			{
-				collect: signal => suite.run(signal),
+				collect: signal => activeSuite.run(signal),
 				dispatch: (batch, wave, report, signal) => activeRuntime.dispatch(batch, wave, report, signal),
 				onWave(_wave, batch) {
 					process.stdout.write(

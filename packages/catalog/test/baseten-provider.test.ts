@@ -42,6 +42,20 @@ describe("Baseten provider discovery", () => {
 								input_cache_read: "0.000000145",
 							},
 						},
+						{
+							id: "zai-org/GLM-5.2-Fast",
+							object: "model",
+							name: "GLM 5.2 Fast",
+							context_length: 524288,
+							max_completion_tokens: 262144,
+							supported_features: ["tools", "json_mode", "structured_outputs", "reasoning"],
+							input_modalities: ["text"],
+							pricing: {
+								prompt: "0.0000021",
+								completion: "0.0000066",
+								input_cache_read: "0.00000021",
+							},
+						},
 					],
 				}),
 				{ status: 200, headers: { "content-type": "application/json" } },
@@ -91,6 +105,18 @@ describe("Baseten provider discovery", () => {
 				output: 3.48,
 				cacheRead: 0.145,
 				cacheWrite: 0,
+			},
+		});
+
+		const glmFast = models?.find(model => model.id === "zai-org/GLM-5.2-Fast");
+		expect(glmFast).toBeDefined();
+		expect(glmFast).toMatchObject({
+			provider: "baseten",
+			api: "openai-completions",
+			reasoning: true,
+			thinking: {
+				mode: "effort",
+				efforts: ["high", "max"],
 			},
 		});
 	});

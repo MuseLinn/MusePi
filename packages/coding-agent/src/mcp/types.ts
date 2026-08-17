@@ -151,6 +151,19 @@ export interface MCPConfigFile {
 // MCP Protocol Types
 // =============================================================================
 
+/**
+ * Latest MCP protocol revision this client negotiates.
+ *
+ * Sent as `protocolVersion` in the `initialize` request and, for Streamable
+ * HTTP, echoed back to the server in the `MCP-Protocol-Version` header on every
+ * subsequent request (per the MCP HTTP transport spec). Must track the current
+ * stable revision: AWS Bedrock AgentCore Gateway refuses tool calls on an
+ * outbound per-user OAuth (`AUTHORIZATION_CODE`) target below `2025-11-25`, and
+ * it checks the version *before* consulting its token vault, so an older client
+ * is refused even for a caller whose consent is already stored.
+ */
+export const MCP_PROTOCOL_VERSION = "2025-11-25";
+
 /** MCP implementation info */
 export interface MCPImplementation {
 	name: string;
@@ -268,6 +281,14 @@ export interface MCPTransport {
 
 	/** Close the transport */
 	close(): Promise<void>;
+
+	/**
+	 * Record the protocol version negotiated in the `initialize` response.
+	 * Streamable HTTP transports echo it in the `MCP-Protocol-Version` header on
+	 * every subsequent request; transports that need no per-request version
+	 * (stdio) omit this.
+	 */
+	setProtocolVersion?(version: string): void;
 
 	/** Whether the transport is connected */
 	readonly connected: boolean;

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [17.3.0] - 2026-08-13
+
+### Added
+
+- Added `type.withJsonSchema(schema, json)` to wrap a validation-only schema, ensuring JSON Schema emission yields the provided `json` verbatim even when nested inside objects, arrays, or unions. Schemas with defaults or output-changing morphs are rejected to prevent transformed outputs from being discarded.
+
 ## [17.2.10] - 2026-08-06
 
 ### Changed

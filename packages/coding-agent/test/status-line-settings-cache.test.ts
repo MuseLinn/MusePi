@@ -157,7 +157,7 @@ describe("StatusLineComponent effective settings cache", () => {
 		const customComponent = makeComponent({ preset: "custom", leftSegments: [], rightSegments: [] });
 		expect(customComponent.getEffectiveSettingsForTest().leftSegments).toEqual([]);
 		expect(customComponent.getEffectiveSettingsForTest().rightSegments).toEqual([]);
-		expect(customComponent.getTopBorder(120)).toEqual({ content: "", width: 0 });
+		expect(customComponent.getTopBorder(120)).toEqual({ content: "", width: 0, revision: 0 });
 	});
 
 	it("surfaces active subagents even when custom segments omit subagents", () => {

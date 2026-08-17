@@ -70,6 +70,8 @@ export interface ToolRenderProps {
 	host?: ToolRenderHost;
 	/** Transcript-derived rendering kind (see {@link ToolKind}). */
 	kind?: ToolKind;
+	/** Model-provided intent (`i` field) — already stripped from `args`. */
+	intent?: string;
 }
 
 export interface ToolRenderer {
@@ -77,4 +79,19 @@ export interface ToolRenderer {
 	Summary: ComponentType<ToolRenderProps>;
 	/** Expanded body. Omit when the summary already says everything. */
 	Body?: ComponentType<ToolRenderProps>;
+	/**
+	 * Optional full-card chrome (e.g. the task swarm card). When present the
+	 * generic tool-call card (`tv-head` with tool name + summary + intent
+	 * line) is bypassed and this renderer owns the entire card — including
+	 * its own open/collapse state. Summary/Body remain available for
+	 * hosts that render the two-part contract directly.
+	 */
+	Card?: ComponentType<ToolRenderProps>;
+	/**
+	 * Optional ADDITIVE card rendered BESIDE the native tool-call card
+	 * (the swarm style extension): the tool's own Summary/Body chrome stays,
+	 * and this component renders alongside it (e.g. the kimiwork-style
+	 * member grid). Gated by the host's taskCardStyle setting.
+	 */
+	SwarmCard?: ComponentType<ToolRenderProps>;
 }

@@ -57,6 +57,9 @@ function createContext(opts: {
 	const requestRender = vi.fn();
 	const showError = vi.fn();
 
+	const handleGoalModeCommand = vi.fn(async (_prompt?: string, _input?: unknown) => true);
+	const handlePlanModeCommand = vi.fn(async (_prompt?: string, _input?: unknown) => true);
+	const handleVibeModeCommand = vi.fn(async (_prompt?: string, _input?: unknown) => true);
 	const ctx = {
 		editor,
 		ui: { requestRender },
@@ -74,10 +77,18 @@ function createContext(opts: {
 		locallySubmittedUserSignatures: new Set<string>(),
 		updatePendingMessagesDisplay,
 		showError,
+		planModeEnabled: false,
+		planModePaused: false,
+		vibeModeEnabled: false,
+		goalModeEnabled: false,
+		goalModePaused: false,
+		handleGoalModeCommand,
+		handlePlanModeCommand,
+		handleVibeModeCommand,
 		withLocalSubmission: async (_text: string, fn: () => unknown) => fn(),
 	} as unknown as InteractiveModeContext;
 
-	return { ctx, editor, prompt, showError };
+	return { ctx, editor, handleGoalModeCommand, handlePlanModeCommand, handleVibeModeCommand, prompt, showError };
 }
 
 describe("InputController.handleFollowUp image forwarding", () => {
@@ -193,5 +204,25 @@ describe("InputController.handleFollowUp image forwarding", () => {
 		expect(ctx.editor.pendingImages).toEqual([image]);
 		expect(ctx.editor.pendingImageLinks).toEqual([undefined]);
 		expect(ctx.editor.imageLinks).toEqual([undefined]);
+	});
+
+	it("forwards follow-up mode attachments before the command clears the draft", async () => {
+		const image: ImageContent = { type: "image", mimeType: "image/png", data: "aW1hZ2U=" };
+		const { ctx, editor, handleGoalModeCommand } = createContext({
+			isStreaming: false,
+			pendingImages: [image],
+			pendingImageLinks: ["local://draft.png"],
+		});
+
+		const controller = new InputController(ctx);
+		editor.setText("/goal set Ship the release");
+		await controller.handleFollowUp();
+
+		expect(handleGoalModeCommand).toHaveBeenCalledWith("set Ship the release", {
+			images: [image],
+			imageLinks: ["local://draft.png"],
+		});
+		expect(ctx.editor.pendingImages).toEqual([]);
+		expect(ctx.editor.pendingImageLinks).toEqual([]);
 	});
 });

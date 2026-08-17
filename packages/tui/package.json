@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@musepi/pi-tui",
-  "version": "17.2.12",
+  "version": "17.3.4",
   "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
   "homepage": "https://github.com/MuseLinn/MusePi",
   "author": "MuseLinn",
@@ -38,9 +38,7 @@
   },
   "dependencies": {
     "@musepi/pi-natives": "catalog:",
-    "@musepi/pi-utils": "catalog:",
-    "lru-cache": "catalog:"
-  },
+    "@musepi/pi-utils": "catalog:"  },
   "devDependencies": {
     "chalk": "catalog:",
     "ghostty-web": "catalog:"

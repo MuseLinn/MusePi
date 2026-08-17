@@ -115,11 +115,18 @@ export function SchemaSettings({
 	values,
 	onChange,
 	error,
+	renderExtra,
 }: {
 	items: SchemaItem[];
 	values: Record<string, unknown>;
 	onChange(key: string, value: unknown): void;
 	error?: string | null;
+	/** Optional per-key extra renderer under a row (e.g. the task-card-style
+	 *  preview). Third arg is the row's commit(key, value) so the extra can
+	 *  act as the control (click-to-switch preview). When it renders for a
+	 *  key, the row's standard control (select/toggle) is hidden — the extra
+	 *  IS the control. */
+	renderExtra?(key: string, value: unknown, commit: (key: string, value: unknown) => void): ReactNode;
 }): ReactNode {
 	const isCredential = (item: SchemaItem): boolean => {
 		// Credential keys are masked by convention (daemon never echoes
@@ -172,6 +179,11 @@ export function SchemaSettings({
 								const credential = isCredential(item);
 								const cond = item.ui?.condition;
 								const rowShown = !cond || (CONDITIONS[cond]?.(values) ?? true);
+								// Custom per-key extra (e.g. the click-to-switch
+								// task-card-style preview): when it renders, it
+								// IS the control — hide the standard one.
+								const extra = renderExtra?.(item.key, value, commit);
+								const hasExtra = extra !== undefined && extra !== null;
 								return (
 									<Reveal key={item.key} open={rowShown}>
 										<div className={`gui-settings-row${tui ? " gui-settings-row--tui" : ""}`}>
@@ -186,114 +198,121 @@ export function SchemaSettings({
 													</div>
 												)}
 											</div>
-											{item.type === "boolean" ? (
-												<button
-													type="button"
-													role="switch"
-													aria-checked={value === true}
-													className={`gui-toggle${value === true ? " gui-toggle--on" : ""}`}
-													onClick={() => commit(item.key, value !== true)}
-												>
-													<span className="gui-toggle-knob" />
-												</button>
-											) : item.type === "enum" && Array.isArray(item.ui?.options) ? (
-												<select
-													className="gui-settings-select !w-auto max-w-[240px]"
-													value={typeof value === "string" ? value : ""}
-													onChange={e => commit(item.key, e.target.value)}
-												>
-													{item.ui.options.map(opt => (
-														<option
-															key={opt.value}
-															value={opt.value}
-															title={opt.description ? t(opt.description as TranslationKey) : undefined}
-														>
-															{t(opt.label as TranslationKey)}
-														</option>
-													))}
-												</select>
-											) : item.ui?.options === "runtime" ? (
-												// Runtime-populated select (TUI theme registry):
-												// the daemon resolves the list into
-												// runtimeOptions, so the GUI renders a real
-												// select. Without the list (older daemon) it
-												// falls back to a read-only input — typing a
-												// bogus id would corrupt config.yml (F3 audit).
-												Array.isArray(item.runtimeOptions) && item.runtimeOptions.length > 0 ? (
+											{!hasExtra ? (
+												item.type === "boolean" ? (
+													<button
+														type="button"
+														role="switch"
+														aria-checked={value === true}
+														className={`gui-toggle${value === true ? " gui-toggle--on" : ""}`}
+														onClick={() => commit(item.key, value !== true)}
+													>
+														<span className="gui-toggle-knob" />
+													</button>
+												) : item.type === "enum" && Array.isArray(item.ui?.options) ? (
 													<select
 														className="gui-settings-select !w-auto max-w-[240px]"
 														value={typeof value === "string" ? value : ""}
 														onChange={e => commit(item.key, e.target.value)}
 													>
-														{/* Keep a stored value that is no longer in the
-														 * registry selectable instead of a blank box. */}
-														{typeof value === "string" &&
-															value !== "" &&
-															!item.runtimeOptions.includes(value) && (
-																<option key={value} value={value}>
-																	{value}
-																</option>
-															)}
-														{item.runtimeOptions.map(opt => (
-															<option key={opt} value={opt}>
-																{opt}
+														{item.ui.options.map(opt => (
+															<option
+																key={opt.value}
+																value={opt.value}
+																title={
+																	opt.description ? t(opt.description as TranslationKey) : undefined
+																}
+															>
+																{t(opt.label as TranslationKey)}
 															</option>
 														))}
 													</select>
-												) : (
+												) : item.ui?.options === "runtime" ? (
+													// Runtime-populated select (TUI theme registry):
+													// the daemon resolves the list into
+													// runtimeOptions, so the GUI renders a real
+													// select. Without the list (older daemon) it
+													// falls back to a read-only input — typing a
+													// bogus id would corrupt config.yml (F3 audit).
+													Array.isArray(item.runtimeOptions) && item.runtimeOptions.length > 0 ? (
+														<select
+															className="gui-settings-select !w-auto max-w-[240px]"
+															value={typeof value === "string" ? value : ""}
+															onChange={e => commit(item.key, e.target.value)}
+														>
+															{/* Keep a stored value that is no longer in the
+															 * registry selectable instead of a blank box. */}
+															{typeof value === "string" &&
+																value !== "" &&
+																!item.runtimeOptions.includes(value) && (
+																	<option key={value} value={value}>
+																		{value}
+																	</option>
+																)}
+															{item.runtimeOptions.map(opt => (
+																<option key={opt} value={opt}>
+																	{opt}
+																</option>
+															))}
+														</select>
+													) : (
+														<input
+															type="text"
+															className="gui-settings-select !w-auto max-w-[240px]"
+															value={typeof value === "string" ? value : ""}
+															disabled
+															title={t("options come from the TUI runtime")}
+														/>
+													)
+												) : item.type === "number" ? (
+													<input
+														type="number"
+														className="gui-settings-select !w-auto max-w-[120px]"
+														value={typeof value === "number" ? value : 0}
+														onChange={e => commit(item.key, Number(e.target.value))}
+													/>
+												) : item.type === "array" ? (
 													<input
 														type="text"
 														className="gui-settings-select !w-auto max-w-[240px]"
-														value={typeof value === "string" ? value : ""}
-														disabled
-														title={t("options come from the TUI runtime")}
+														placeholder={t("comma separated values")}
+														defaultValue={Array.isArray(value) ? value.join(", ") : ""}
+														key={`${item.key}:${Array.isArray(value) ? value.join(",") : ""}`}
+														onBlur={e =>
+															commit(
+																item.key,
+																e.target.value
+																	.split(",")
+																	.map(s => s.trim())
+																	.filter(Boolean),
+															)
+														}
+													/>
+												) : item.type === "record" ? (
+													<RecordInput item={item} value={value} onChange={commit} />
+												) : (
+													<input
+														type={credential ? "password" : "text"}
+														className="gui-settings-select !w-auto max-w-[240px]"
+														placeholder={
+															credential
+																? t("keep stored credential unless replaced")
+																: typeof item.default === "string"
+																	? item.default
+																	: undefined
+														}
+														defaultValue={credential ? "" : typeof value === "string" ? value : ""}
+														key={`${item.key}:${String(value)}`}
+														onBlur={e => {
+															if (credential && e.target.value === "") return; // keep stored
+															commit(item.key, e.target.value);
+														}}
 													/>
 												)
-											) : item.type === "number" ? (
-												<input
-													type="number"
-													className="gui-settings-select !w-auto max-w-[120px]"
-													value={typeof value === "number" ? value : 0}
-													onChange={e => commit(item.key, Number(e.target.value))}
-												/>
-											) : item.type === "array" ? (
-												<input
-													type="text"
-													className="gui-settings-select !w-auto max-w-[240px]"
-													placeholder={t("comma separated values")}
-													defaultValue={Array.isArray(value) ? value.join(", ") : ""}
-													key={`${item.key}:${Array.isArray(value) ? value.join(",") : ""}`}
-													onBlur={e =>
-														commit(
-															item.key,
-															e.target.value
-																.split(",")
-																.map(s => s.trim())
-																.filter(Boolean),
-														)
-													}
-												/>
-											) : item.type === "record" ? (
-												<RecordInput item={item} value={value} onChange={commit} />
-											) : (
-												<input
-													type={credential ? "password" : "text"}
-													className="gui-settings-select !w-auto max-w-[240px]"
-													placeholder={
-														credential
-															? t("keep stored credential unless replaced")
-															: typeof item.default === "string"
-																? item.default
-																: undefined
-													}
-													defaultValue={credential ? "" : typeof value === "string" ? value : ""}
-													key={`${item.key}:${String(value)}`}
-													onBlur={e => {
-														if (credential && e.target.value === "") return; // keep stored
-														commit(item.key, e.target.value);
-													}}
-												/>
-											)}
+											) : null}
+											{extra !== undefined && extra !== null ? (
+												<div className="gui-settings-row-extra">{extra}</div>
+											) : null}
 										</div>
 									</Reveal>
 								);

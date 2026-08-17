@@ -25,8 +25,13 @@ export interface AggregatedStats {
 	totalCacheReadTokens: number;
 	/** Total cache write tokens */
 	totalCacheWriteTokens: number;
-	/** Cache hit rate (0-1) */
+	/** Percentage of prompt input tokens served from cache (0-1). */
 	cacheRate: number;
+	/**
+	 * Prompt-input cost saved relative to billing the same tokens uncached
+	 * (0-1; negative when cache writes cost more than reads save).
+	 */
+	cacheSavings: number;
 	/** Total cost */
 	totalCost: number;
 	/** Total premium requests */

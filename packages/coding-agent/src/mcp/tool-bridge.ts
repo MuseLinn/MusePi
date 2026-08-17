@@ -357,6 +357,18 @@ export function createMCPToolName(serverName: string, toolName: string): string 
 	return `mcp__${sanitizedServerName}_${normalizedToolName}`;
 }
 
+export interface MCPToolOriginSource {
+	readonly name: string;
+	readonly mcpServerName?: unknown;
+	readonly mcpToolName?: unknown;
+}
+
+/** Stable identity for a tool's original MCP route, before its public name was normalized. */
+export function getMCPToolOriginKey(tool: MCPToolOriginSource): string | undefined {
+	if (typeof tool.mcpServerName !== "string" || typeof tool.mcpToolName !== "string") return undefined;
+	return `${tool.mcpServerName}\u0000${tool.mcpToolName}`;
+}
+
 /**
  * Keeps one MCP tool per minted name and logs collisions between distinct MCP
  * origins. The winner is chosen by a stable origin key (server name + original
@@ -365,19 +377,16 @@ export function createMCPToolName(serverName: string, toolName: string): string 
  * silently flip ownership of the minted name. Non-MCP tools pass through
  * unchanged.
  */
-export function deduplicateMCPToolsByName<T extends { name: string; mcpServerName?: unknown; mcpToolName?: unknown }>(
-	tools: readonly T[],
-): T[] {
+export function deduplicateMCPToolsByName<T extends MCPToolOriginSource>(tools: readonly T[]): T[] {
 	const deduplicated: T[] = [];
 	const registered = new Map<string, { tool: T; originKey: string; index: number }>();
 
 	for (const tool of tools) {
-		if (typeof tool.mcpServerName !== "string" || typeof tool.mcpToolName !== "string") {
+		const originKey = getMCPToolOriginKey(tool);
+		if (originKey === undefined) {
 			deduplicated.push(tool);
 			continue;
 		}
-
-		const originKey = `${tool.mcpServerName}\u0000${tool.mcpToolName}`;
 		const existing = registered.get(tool.name);
 		if (!existing) {
 			registered.set(tool.name, { tool, originKey, index: deduplicated.length });

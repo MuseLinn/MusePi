@@ -69,6 +69,7 @@ async function cleanBundleOutputs(): Promise<void> {
 			.filter(
 				entry =>
 					entry === "cli.js" ||
+					entry === "docs-index.generated.txt" ||
 					entry.endsWith(".node") ||
 					entry.endsWith(".js.map") ||
 					(entry.startsWith("CHANGELOG-") && entry.endsWith(".md")) ||
@@ -85,7 +86,12 @@ async function main(): Promise<void> {
 	// archive the same way compiled binaries do (scripts/build-binary.ts). Reset
 	// afterwards to keep the checked-in placeholder empty.
 	await runCommand(["bun", "--cwd=../stats", "run", "gen:stats"]);
+	// One payload for both consumers: inlined into dist/cli.js via `--define` for
+	// the bundled CLI entrypoint, and written to dist/docs-index.generated.txt so
+	// SDK consumers importing `@musepi/pi-coding-agent/*` (TypeScript source, no
+	// build-time embed) can still resolve omp:// docs (see src/internal-urls/docs-index.ts).
 	try {
+		const docsPayload = await buildDocsIndexPayload();
 		// Build in-process: the docs embed payload is far larger than Linux's
 		// 128KiB per-argv-string cap, so it can never be passed as a CLI
 		// `--define` (posix_spawn fails with E2BIG).
@@ -96,12 +102,7 @@ async function main(): Promise<void> {
 			external: [...ALWAYS_EXTERNAL, ...RUNTIME_EXTERNAL],
 			define: {
 				"process.env.PI_BUNDLED": JSON.stringify("true"),
-				"process.env.PI_DOCS_EMBED": JSON.stringify((await buildDocsIndexPayload()).payload),
-				// Mirror src/musepi.ts: the published bundle is the MusePi entry, so
-				// it must report the MusePi version (0.3.1), not the OMP-derived
-				// 17.1.8 that `@musepi/pi-utils` would otherwise resolve.
-				"process.env.MUSEPI_VERSION": JSON.stringify("0.3.1"),
-			},
+				"process.env.PI_DOCS_EMBED": JSON.stringify(docsPayload.payload),			},
 			minify: {
 				whitespace: true,
 				syntax: true,
@@ -113,10 +114,17 @@ async function main(): Promise<void> {
 		if (!output.success) {
 			throw new Error(`CLI bundle failed:\n${output.logs.map(log => log.message).join("\n")}`);
 		}
+		await ensureShebang();
+		await Bun.write(path.join(outDir, "docs-index.generated.txt"), docsPayload.payload);
+		// Multi-file bundled skills (ui-ux-pro-max: data/scripts/references)
+		// are read from disk at install time — ship the tree next to the
+		// entrypoint so the bundled CLI can seed them into agentDir/skills.
+		await fs.cp(path.join(packageDir, "src/bundled-skills"), path.join(outDir, "bundled-skills"), {
+			recursive: true,
+		});
 	} finally {
 		await runCommand(["bun", "--cwd=../stats", "run", "gen:stats:reset"]);
 	}
-	await ensureShebang();
 	const stat = await fs.stat(cliPath);
 	const elapsedMs = (Bun.nanoseconds() - start) / 1_000_000;
 	process.stdout.write(

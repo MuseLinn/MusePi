@@ -183,6 +183,7 @@ export interface ModelPatch {
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
 	input?: ("text" | "image")[];
+	imageInputDecoder?: Model<Api>["imageInputDecoder"];
 	supportsTools?: boolean;
 	cost?: Partial<Model<Api>["cost"]>;
 	contextWindow?: number;
@@ -210,6 +211,7 @@ export function applyModelPatch(base: Model<Api>, patch: ModelPatch, transport: 
 	if (patch.reasoning !== undefined) result.reasoning = patch.reasoning;
 	if (patch.thinking !== undefined) result.thinking = patch.thinking;
 	if (patch.input !== undefined) result.input = patch.input;
+	if (patch.imageInputDecoder !== undefined) result.imageInputDecoder = patch.imageInputDecoder;
 	if (patch.supportsTools !== undefined) result.supportsTools = patch.supportsTools;
 	if (patch.contextWindow !== undefined) result.contextWindow = patch.contextWindow;
 	if (patch.maxTokens !== undefined) result.maxTokens = patch.maxTokens;
@@ -221,11 +223,13 @@ export function applyModelPatch(base: Model<Api>, patch: ModelPatch, transport: 
 	}
 	if (patch.premiumMultiplier !== undefined) result.premiumMultiplier = patch.premiumMultiplier;
 	if (patch.cost) {
+		const longContext = patch.cost.longContext ?? base.cost.longContext;
 		result.cost = {
 			input: patch.cost.input ?? base.cost.input,
 			output: patch.cost.output ?? base.cost.output,
 			cacheRead: patch.cost.cacheRead ?? base.cost.cacheRead,
 			cacheWrite: patch.cost.cacheWrite ?? base.cost.cacheWrite,
+			...(longContext ? { longContext } : {}),
 		};
 	}
 	let compat: ModelSpec<Api>["compat"];

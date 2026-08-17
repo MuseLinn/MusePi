@@ -1,6 +1,6 @@
 /**
  * Materialized session view — the projection layer of the daemon's
- * event-sourcing pipeline (gui-architecture Phase 3), shared with browser
+ * event-sourcing pipeline (daemon Phase 3), shared with browser
  * clients.
  *
  * The journal (append-only wire AgentEvents) is the single source of truth.
@@ -54,7 +54,7 @@ export class MaterializedView {
 	#cursor = 0;
 	readonly #createdAt: string;
 	readonly #messages = new Map<string, MessageEntry>();
-	readonly #entries: SessionEntry[] = [];
+	#entries: SessionEntry[] = [];
 	#mainAgent: AgentSnapshot | null = null;
 	#isStreaming = false;
 	// Extra header fields (user-picked model/thinking/title for history
@@ -286,6 +286,24 @@ export class MaterializedView {
 	/** Current cursor (= last applied event seq). */
 	get cursor(): number {
 		return this.#cursor;
+	}
+
+	/**
+	 * Prepend an older page of entries (lazy history backfill — kimi/DSH
+	 * parity): the GUI opens a tail-windowed snapshot and pages older
+	 * history in as the user scrolls up. `older` is oldest→newest; loaded
+	 * messages are re-keyed so streamed updates to them still upsert.
+	 * The view stays a plain full projection of whatever has been loaded —
+	 * nothing is ever folded or evicted.
+	 */
+	prependEntries(older: readonly SessionEntry[]): void {
+		if (older.length === 0) return;
+		for (const e of older) {
+			// Key exactly like #upsertMessage (messageKey, not entry.id) so a
+			// streamed update to a backfilled message still replaces it.
+			if (e.type === "message") this.#messages.set(messageKey(e.message), e);
+		}
+		this.#entries = [...older, ...this.#entries];
 	}
 
 	/** SDK-contract snapshot. Cheap: no journal read. */
