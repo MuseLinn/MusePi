@@ -209,6 +209,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	searchPetdex: (query) => ipcRenderer.invoke("pet-search", query),
 	/** Download + install a petdex zip by URL (same unpack path as import). */
 	installPetdexUrl: (zipUrl) => ipcRenderer.invoke("pet-install-url", zipUrl),
+	/** Import a scrollbar skin zip (dialog + unpack); null when cancelled.
+	 *  Shape: { id, displayName, base, colors?, size?, pacGlyph? } or
+	 *  { error }. */
+	importScrollbarSkin: () => ipcRenderer.invoke("scrollbar-skin-import"),
+	/** Scrollbar skin market (reserved skeleton — empty until a site exists). */
+	searchScrollbarSkins: () => ipcRenderer.invoke("scrollbar-skin-search"),
+	/** Scrollbar skin market install (reserved skeleton). */
+	installScrollbarSkinUrl: (zipUrl) => ipcRenderer.invoke("scrollbar-skin-install-url", zipUrl),
 	/** Managed in-app browser (right-pane tool): open the panel browser
 	 *  (WebContentsView tabs owned by main) and return its projected state. */
 	managedBrowserOpen: () => ipcRenderer.invoke("managed-browser:open"),
@@ -243,5 +251,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const listener = (_e, payload) => cb(payload);
 		ipcRenderer.on("managed-browser:confirm", listener);
 		return () => ipcRenderer.removeListener("managed-browser:confirm", listener);
+	},
+	/** Self-drawn frosted tray menu (tray-menu.html) bridge. */
+	trayMenu: {
+		onSnapshot: (cb) => {
+			const listener = (_e, snapshot) => cb(snapshot);
+			ipcRenderer.on("tray-menu:snapshot", listener);
+			return () => ipcRenderer.removeListener("tray-menu:snapshot", listener);
+		},
+		action: (type, params) => ipcRenderer.send("tray-menu:action", { type, ...params }),
 	},
 });

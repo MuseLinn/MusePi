@@ -1,0 +1,199 @@
+/* MusePi GUI shell — layout chrome on top of the desktop-web component styles.
+ * Colors come exclusively from the v2 semantic tokens in tokens.css
+ * (--color-* / --radius-* / --ui-font-size-*); no raw values here, so the
+ * light/dark scheme and brand/mono accent axes both apply to the shell. */
+
+/* Motion springs (motion.dev linear() curves, generated from damped-spring
+ * physics — jakearchibald/linear-easing-generator semantics). Reusable
+ * easing tokens: prefer these over ad-hoc cubic-beziers so every transition
+ * shares one spring language.
+ *  --spring          spring(300, 30)  — default UI morph (slight overshoot)
+ *  --spring-snappy   spring(400, 34)  — small elements, quick feedback
+ *  --spring-bouncy   spring(320, 16)  — playful/emphasis moments */
+:root {
+	--spring: linear(
+		0.0000, 0.0126 3.23%, 0.0458 6.45%, 0.0935 9.68%, 0.1511 12.90%,
+		0.2147 16.13%, 0.2812 19.35%, 0.3483 22.58%, 0.4143 25.81%, 0.4778 29.03%,
+		0.5379 32.26%, 0.5941 35.48%, 0.6460 38.71%, 0.6933 41.94%, 0.7362 45.16%,
+		0.7747 48.39%, 0.8089 51.61%, 0.8392 54.84%, 0.8657 58.06%, 0.8888 61.29%,
+		0.9088 64.52%, 0.9260 67.74%, 0.9407 70.97%, 0.9531 74.19%, 0.9635 77.42%,
+		0.9722 80.65%, 0.9794 83.87%, 0.9853 87.10%, 0.9900 90.32%, 0.9938 93.55%,
+		0.9968 96.77%, 1
+	);
+	--spring-snappy: linear(
+		0.0000, 0.0034 3.23%, 0.0130 6.45%, 0.0284 9.68%, 0.0488 12.90%,
+		0.0737 16.13%, 0.1026 19.35%, 0.1349 22.58%, 0.1701 25.81%, 0.2075 29.03%,
+		0.2463 32.26%, 0.2858 35.48%, 0.3252 38.71%, 0.3638 41.94%, 0.4010 45.16%,
+		0.4362 48.39%, 0.4690 51.61%, 0.4991 54.84%, 0.5265 58.06%, 0.5512 61.29%,
+		0.5734 64.52%, 0.5933 67.74%, 0.6111 70.97%, 0.6271 74.19%, 0.6414 77.42%,
+		0.6544 80.65%, 0.6662 83.87%, 0.6769 87.10%, 0.6867 90.32%, 0.6956 93.55%,
+		0.7038 96.77%, 1
+	);
+	--spring-bouncy: linear(
+		0.0000, 0.0120 2.56%, 0.0432 5.13%, 0.0880 7.69%, 0.1410 10.26%,
+		0.1972 12.82%, 0.2524 15.38%, 0.3026 17.95%, 0.3449 20.51%, 0.3770 23.08%,
+		0.3975 25.64%, 0.4067 28.21%, 0.4061 30.77%, 0.3978 33.33%, 0.3846 35.90%,
+		0.3693 38.46%, 0.3548 41.03%, 0.3440 43.59%, 0.3394 46.15%, 0.3431 48.72%,
+		0.3570 51.28%, 0.3824 53.85%, 0.4198 56.41%, 0.4690 58.97%, 0.5291 61.54%,
+		0.5986 64.10%, 0.6754 66.67%, 0.7569 69.23%, 0.8404 71.79%, 0.9227 74.36%,
+		0.9640 76.92%, 0.9865 79.49%, 0.9971 82.05%, 1.0000 84.62%, 0.9974 87.18%,
+		0.9928 89.74%, 0.9895 92.31%, 0.9900 94.87%, 0.9958 97.44%, 1
+	);
+}
+
+/* Motion duration tokens for the shared animation primitives (floating
+ * menus, chips, dialogs). gui-motion packs override these by injecting
+ * CSS; the keyframes themselves are overridable by same-name redefinition
+ * (the injected stylesheet loads last, so later wins).
+ *
+ * DSH-style extension: every primitive reads its duration / easing /
+ * travel / blur from a token — a gui-motion pack (or a theme) overrides
+ * the token, never the keyframes. Convention (docs/gui-design.md §3):
+ * menus 130ms, fade 160ms, height/morph 240ms (capped 480ms), chip
+ * 180ms, blur 280ms. */
+:root {
+	--gui-motion-menu-in: 130ms;
+	--gui-motion-menu-out: 130ms;
+	--gui-motion-chip: 180ms;
+	--gui-motion-fade-in: 160ms;
+	--gui-motion-fade-out: 160ms;
+	--gui-motion-height: 240ms;
+	--gui-motion-height-max: 480ms;
+	--gui-motion-blur: 280ms;
+	--gui-motion-roll: 240ms;
+	/* Travel distances / amounts — the "how far" half of a motion. */
+	--gui-motion-slide-y: 6px;
+	--gui-motion-slide-y-lg: 10px;
+	--gui-motion-blur-amt: 8px;
+	--gui-motion-blur-lg: 24px;
+	/* Standard easing aliases beyond the springs (all one source). */
+	--gui-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+	--gui-ease-in-out: ease;
+}
+
+/* Legacy aliases — existing rules keep their names; new rules prefer the
+ * canonical tokens above. */
+:root {
+	--gui-motion-menu-in: 130ms;
+}
+
+.gui-shell {
+	font-size: var(--gui-font-scale, 15px);
+	/* ZCode/openchamber shell: a ROW — the three panes run edge-to-edge
+	 * full height to the window top; the window header is the center
+	 * column's header (traffic lights live over the left pane's drag
+	 * strip, so the button cluster never shifts). Relative so the
+	 * TitlebarLeftControls overlay anchors to the WINDOW, not a pane. */
+	position: relative;
+	display: flex;
+	flex-direction: row;
+	/* Collapse/expand transition (openchamber): smooth width animation
+	 * on toggle, none while a resize drag is in flight. */
+	--gui-pane-transition: width 220ms var(--spring);
+	height: 100dvh;
+	/* Transparent over the native window glass (vibrancy): panels paint
+	 * their own translucent scrims; opaque surfaces (chat card, settings
+	 * card) stay solid. When the window-transparency toggle is OFF the
+	 * main process restores an opaque window base. */
+	background: transparent;
+	color: var(--color-text);
+}
+
+/* Desktop glass: desktop-web's base.css paints body with var(--bg) (needed
+ * by the browser guest); the desktop window carries the native material, so
+ * the body must stay clear for the shell's translucent scrims to show it.
+ * The main process paints the opaque base when glass is toggled off. */
+html body {
+	background: transparent;
+}
+
+/* ── Glass transparency pipeline (settings → 外观) ────────────────────
+ * --gui-glass-alpha   = slider transparency 0.3–0.9 (set by JS in
+ *                       src/lib/glass.ts). The slider reads as
+ *                       TRANSPARENCY: higher = more see-through.
+ * --gui-glass-overlay = scrim strength derived here, in the same
+ *                       direction as the label (more transparency →
+ *                       lighter scrim), with floors so text stays
+ *                       readable over light wallpaper. The
+ *                       window-transparency toggle still overrides
+ *                       everything via an inline 100%.
+ * .gui-glass-adaptive = set by JS when transparency ≥ 50%: glass-pane
+ *                       text blends toward white (dark scheme) or stays
+ *                       dark (light scheme) — the direction matches each
+ *                       scheme's own text lightness, so contrast only
+ *                       gets stronger, never inverted. */
+:root {
+	--gui-glass-overlay: clamp(24%, calc(55% * (1 - var(--gui-glass-alpha, 0.55))), 55%);
+}
+
+/* Light scheme: the backdrop behind the window is DIMMED by the native
+ * under-window material (and macOS has no bright vibrancy variant on this
+ * system) — a thin white scrim over that reads as dirty grey, not glass
+ * ("灰蒙蒙"). The scrim is therefore heavy enough to dominate: 76% white
+ * at minimum transparency → 58% at maximum, which still lets the desktop
+ * tint through without ever going grey. The window-level override keeps
+ * every glass surface (menus, composer, topbar) on the same derivation. */
+[data-theme="light"] {
+	--gui-glass-overlay: clamp(58%, calc(85% - 30% * var(--gui-glass-alpha, 0.55)), 76%);
+}
+
+/* Adaptive text on glass panes at high transparency. Blended from the raw
+ * --fg tokens (never from --color-text: a custom property referencing
+ * itself is guaranteed-invalid at computed-value time and would nuke every
+ * color in the document). html. prefix beats tokens.css :root, which the
+ * bundler emits AFTER gui.css — same specificity would lose the cascade. */
+html.gui-glass-adaptive {
+	--gui-glass-blend: clamp(0%, calc((var(--gui-glass-alpha, 0.55) - 0.5) * 250%), 100%);
+	--color-text: color-mix(in oklab, var(--fg) calc(100% - var(--gui-glass-blend)), #fff);
+	--color-text-muted: color-mix(in oklab, var(--fg-muted) calc(100% - var(--gui-glass-blend) * 0.65), #fff);
+	--color-text-faint: color-mix(in oklab, var(--fg-faint) calc(100% - var(--gui-glass-blend) * 0.45), #fff);
+}
+/* Light scheme: the frosted glass reads near-white, so text keeps its dark
+ * theme color instead of blending toward white. Compound selector: both the
+ * data-theme attribute and the adaptive class live on <html>. */
+[data-theme="light"].gui-glass-adaptive {
+	--color-text: color-mix(in oklab, var(--fg) calc(100% - var(--gui-glass-blend)), #000);
+	--color-text-muted: color-mix(in oklab, var(--fg-muted) calc(100% - var(--gui-glass-blend) * 0.65), #000);
+	--color-text-faint: color-mix(in oklab, var(--fg-faint) calc(100% - var(--gui-glass-blend) * 0.45), #000);
+}
+
+/* ── Scrollbar: hidden globally, drawn by FloatingScrollbar overlay ────
+ * Chromium still parses `overflow: overlay` but lays it out exactly like
+ * `auto` — the floating (zero-layout-width) scrollbar is gone. System
+ * scrollbars are therefore hidden everywhere so no container ever
+ * squeezes or shifts when its content becomes scrollable; the fixed
+ * overlay in FloatingScrollbar.tsx (skin-driven: gummy capsule or
+ * pac-man bead rail) draws the progress indicator in its place. Every
+ * window imports gui.css, so this is the single source of truth.
+ * `!important` is load-bearing: container rules that set
+ * scrollbar-width:thin have higher specificity, and Chromium 150
+ * standard properties win over ::-webkit-scrollbar pseudo-elements. */
+* {
+	scrollbar-width: none !important;
+	scrollbar-color: transparent transparent !important;
+}
+*::-webkit-scrollbar {
+	display: none !important;
+	width: 0;
+	height: 0;
+}
+*::-webkit-scrollbar-track {
+	display: none !important;
+}
+*::-webkit-scrollbar-thumb {
+	display: none !important;
+}
+*::-webkit-scrollbar-corner {
+	display: none !important;
+}
+
+/* Center column: toolbar on top, chat surface below. */
+.gui-center {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	position: relative;
+}
+

@@ -209,6 +209,7 @@ describe("openai-completions compatibility", () => {
 			supportsStrictMode: true,
 			toolStrictMode: "none",
 			supportsReasoningParams: true,
+			supportsPenaltyAndStopParams: true,
 			supportsSamplingParams: true,
 			alwaysSendMaxTokens: false,
 			isOpenRouterHost: false,

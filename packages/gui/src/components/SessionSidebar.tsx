@@ -1,7 +1,8 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
@@ -48,6 +49,8 @@ export function SessionSidebar({
 	onOpenScheduled,
 	scheduledActive,
 	cronGlow,
+	onOpenAgents,
+	agentsActive,
 	onOpenSettings,
 	onPickFolder,
 	onCreateProject,
@@ -60,6 +63,7 @@ export function SessionSidebar({
 	onDeleteArchived,
 	unread,
 	onToggleUnread,
+	onImportSessions,
 }: {
 	nodes: GuiTreeNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -87,6 +91,9 @@ export function SessionSidebar({
 	cronGlow?: boolean;
 	/** Board view is the active scene — its nav item renders selected. */
 	boardActive?: boolean;
+	/** Agents center view is the active scene — its nav item renders selected. */
+	onOpenAgents?(): void;
+	agentsActive?: boolean;
 	onOpenSettings(): void;
 	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -113,6 +120,8 @@ export function SessionSidebar({
 	unread?: ReadonlySet<string>;
 	/** Context-menu 标记为已读/未读 toggle. */
 	onToggleUnread?(sessionId: string): void;
+	/** Open the session-import dialog (projects tab entry). */
+	onImportSessions?(): void;
 }): ReactNode {
 	const [tab, setTab] = useState<"groups" | "projects">("groups");
 	const [projMenu, setProjMenu] = useState(false);
@@ -421,12 +430,12 @@ export function SessionSidebar({
 					<button type="button" className="gui-menu-item" onClick={onNewSession}>
 						<Icon name="add-circle" className="h-4 w-4" />
 						<span>{t("new task")}</span>
-						<span className="gui-menu-kbd">⌘N</span>
+						<span className="gui-menu-kbd">{shortcutLabel("⌘N")}</span>
 					</button>
 					<button type="button" className="gui-menu-item" onClick={onOpenSearch} title={t("search")}>
 						<Icon name="search" className="h-4 w-4" />
 						<span>{t("search")}</span>
-						<span className="gui-menu-kbd">⌘K</span>
+						<span className="gui-menu-kbd">{shortcutLabel("⌘K")}</span>
 					</button>
 					{onOpenScheduled && (
 						<button
@@ -448,6 +457,17 @@ export function SessionSidebar({
 						>
 							<Icon name="layout-column" className="h-4 w-4" />
 							<span>{t("board")}</span>
+						</button>
+					)}
+					{onOpenAgents && (
+						<button
+							type="button"
+							className={`gui-menu-item${agentsActive ? " gui-menu-item--active" : ""}`}
+							onClick={onOpenAgents}
+							title={t("agents center")}
+						>
+							<Icon name="ai-agent-fill" className="h-4 w-4" />
+							<span>{t("agents center")}</span>
 						</button>
 					)}
 					<button type="button" className="gui-menu-item" onClick={onOpenSkills} title={t("extensions")}>
@@ -755,6 +775,17 @@ export function SessionSidebar({
 										>
 											<Icon name="server" className="h-3.5 w-3.5" />
 											<span>{t("remote connection")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-view-opt"
+											onClick={() => {
+												setProjMenu(false);
+												onImportSessions?.();
+											}}
+										>
+											<Icon name="download" className="h-3.5 w-3.5" />
+											<span>{t("import sessions")}</span>
 										</button>
 									</Pop>
 								</div>

@@ -463,7 +463,7 @@ describe("relay server rooms", () => {
 		expect(res.status).toBe(426);
 	});
 
-	it("serves collab-web static files and guards path traversal", async () => {
+	it("serves desktop-web static files and guards path traversal", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "relay-static-"));
 		writeFileSync(join(dir, "index.html"), "<html>collab-ui</html>");
 		writeFileSync(join(dir, "app.js"), "console.log(1)");

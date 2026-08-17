@@ -1,5 +1,5 @@
-import { t } from "@musepi/collab-web";
-import { CountUp } from "@musepi/collab-web/src/widgets/count-up";
+import { t } from "@musepi/desktop-web";
+import { CountUp } from "@musepi/desktop-web/src/widgets/count-up";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -30,15 +30,27 @@ export interface SnapcompactSavingsView {
 }
 
 /** Provider subscription quota (TUI /usage parity) shown in the popover
- *  next to the token breakdown. */
+ *  next to the token breakdown. Same-provider credentials merge into
+ *  side-by-side columns with the aggregate at the far right (the tray /
+ *  TUI /usage treatment — several opencode-go credentials no longer show
+ *  as an ambiguous flattened list). */
 export interface UsageQuotaView {
-	provider: string;
-	limits: Array<{
-		label: string;
-		usedPercent: number;
-		leftPercent: number;
-		resetsIn?: string;
+	providers: Array<{
+		provider: string;
+		/** Per limit-window: one column per credential + trailing total. */
+		windows: Array<{
+			label: string;
+			resetsIn?: string;
+			cells: Array<{ cred: string; usedPercent: number; resetsIn?: string }>;
+		}>;
 	}>;
+}
+
+/** Bar tone for the popover quota meters (err ≥85%, warn ≥50%). */
+function quotaTone(usedPercent: number): string {
+	if (usedPercent >= 85) return "gui-usage-bar--err";
+	if (usedPercent >= 50) return "gui-usage-bar--warn";
+	return "gui-usage-bar--ok";
 }
 
 /**
@@ -222,31 +234,59 @@ export function ContextRing({
 							<div className="gui-context-pop-quota-title">{t("subscription usage")}</div>
 							<div className="gui-context-pop-note">…</div>
 						</div>
-					) : quota && quota.limits.length > 0 ? (
+					) : quota && quota.providers.length > 0 ? (
 						<div className="gui-context-pop-quota">
-							<div className="gui-context-pop-quota-title">
-								{t("subscription usage")} · {quota.provider}
-							</div>
-							{quota.limits.map((limit, i) => {
-								const tone =
-									limit.usedPercent >= 85 ? "gui-usage-bar--err" : limit.usedPercent >= 50 ? "gui-usage-bar--warn" : "gui-usage-bar--ok";
-								return (
-									<div key={`${limit.label}-${i}`} className="gui-context-pop-quota-row">
-										<div className="gui-context-pop-quota-label">
-											<span className="gui-context-pop-quota-name">{limit.label}</span>
-											<span className="gui-context-pop-quota-pct">
-												{Math.round(limit.usedPercent)}% used{limit.resetsIn ? ` · resets in ${limit.resetsIn}` : ""}
-											</span>
-										</div>
-										<div className="gui-usage-bar-track">
-											<div
-												className={`gui-usage-bar ${tone}`}
-												style={{ width: `${Math.min(100, Math.max(0, limit.usedPercent))}%` }}
-											/>
-										</div>
-									</div>
-								);
-							})}
+							<div className="gui-context-pop-quota-title">{t("subscription usage")}</div>
+							{quota.providers.map(provider => (
+								<div key={provider.provider} className="gui-context-pop-provider">
+									<div className="gui-context-pop-provider-name">{provider.provider}</div>
+									{provider.windows.map((win, wi) => {
+										const avg =
+											win.cells.reduce((sum, cell) => sum + cell.usedPercent, 0) /
+											Math.max(1, win.cells.length);
+										const cols = `${win.cells.map(() => "minmax(0, 1fr)").join(" ")} 44px`;
+										const resetsIn = win.cells.find(cell => cell.resetsIn)?.resetsIn;
+										return (
+											<div key={`${win.label}|${wi}`} className="gui-context-pop-window">
+												<div className="gui-context-pop-window-label">
+													{win.label}
+													{resetsIn ? ` · resets in ${resetsIn}` : ""}
+												</div>
+												<div className="gui-context-pop-cols" style={{ gridTemplateColumns: cols }}>
+													{win.cells.slice(0, 4).map((cell, ci) => (
+														<div
+															key={`${provider.provider}|${wi}|${ci}:${cell.cred}`}
+															className="gui-context-pop-cell"
+															title={cell.cred}
+														>
+															<div className="gui-context-pop-cell-label">{cell.cred}</div>
+															<div className="gui-usage-bar-track">
+																<div
+																	className={`gui-usage-bar ${quotaTone(cell.usedPercent)}`}
+																	style={{ width: `${Math.min(100, Math.max(0, cell.usedPercent))}%` }}
+																/>
+															</div>
+															<div className="gui-context-pop-cell-pct">
+																{Math.round(cell.usedPercent)}%
+															</div>
+														</div>
+													))}
+													<div className="gui-context-pop-cell gui-context-pop-cell--total">
+														<div className="gui-context-pop-cell-label">{t("total")}</div>
+														<div className="gui-usage-bar-track">
+															<div
+																className={`gui-usage-bar ${quotaTone(avg)}`}
+																style={{ width: `${Math.min(100, Math.max(0, avg))}%` }}
+															/>
+														</div>
+														<div className="gui-context-pop-cell-pct">{Math.round(avg)}%</div>
+													</div>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							))}
 						</div>
 					) : null}
 					{onCompact && (

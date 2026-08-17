@@ -50,6 +50,7 @@ const compat: ResolvedOpenAICompat = {
 	supportsStrictMode: true,
 	toolStrictMode: "none",
 	supportsReasoningParams: true,
+	supportsPenaltyAndStopParams: true,
 	supportsSamplingParams: true,
 	alwaysSendMaxTokens: false,
 	isOpenRouterHost: false,

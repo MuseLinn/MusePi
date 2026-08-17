@@ -13,7 +13,7 @@ MusePi 看板是 musepi-omp 在 2026 年 8 月立项的"组件看板"平台—�
 
 看板最核心的设计决策是**组件运行环境**。团队没有选择"AI 自由生成任意 HTML"的开放模式作为首选，而是维护一个编译进 GUI 的白名单组件注册表（`WidgetRegistry`）：组件是 TSX 源码，来自 reactbits 视觉件（CountUp、ShinyText、SpotlightCard 等已落地）加自研功能件，agent 只能通过工具**选类型 + 填数据**。理由很实在：其一，Kimi 式的消息内联 widget 若每条消息都开一个 iframe 沙箱代价太重，注册表组件可以直接渲染在消息流里；其二，reactbits 组件全是声明式受控组件，白名单本身就是**类型级隔离**，无需运行沙箱；其三，经过 schema 校验的数据流比任意 HTML 更可靠、可审计、可 diff。
 
-一份组件可以三处复用：看板卡、transcript 消息内联卡（kimi 式），以及钉在桌面的常驻小窗。collab-web 里已有的 `tool-render/registry.ts`（30+ 工具渲染器）正是消息内联 widget 的雏形，扩展它加入通用 `widget.*` 渲染器即可复用整条管线。
+一份组件可以三处复用：看板卡、transcript 消息内联卡（kimi 式），以及钉在桌面的常驻小窗。desktop-web 里已有的 `tool-render/registry.ts`（30+ 工具渲染器）正是消息内联 widget 的雏形，扩展它加入通用 `widget.*` 渲染器即可复用整条管线。
 
 ## 三、组件库：十七种类型与四种色调
 

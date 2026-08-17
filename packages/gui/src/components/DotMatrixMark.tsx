@@ -47,6 +47,7 @@ export function DotMatrixMark({
 		let W = 0;
 		let H = 0;
 		let raf = 0;
+		let lastFrameT = 0;
 		let disposed = false;
 		const mouse = { x: -9999, y: -9999, active: true };
 		let time = 0;
@@ -350,8 +351,19 @@ export function DotMatrixMark({
 			build();
 		};
 
-		const frame = (): void => {
+		const frame = (t: number): void => {
 			if (disposed) return;
+			// Idle throttle to ~30fps: the breathing is a slow
+			// sin/cos drift — a 60fps full-grid redraw on a transparent
+			// window is wasted compositing (GPU burn on Windows). Mouse
+			// halo / click ripples stay at full rate (smooth interaction).
+			const busy = mouse.active || ripples.length > 0;
+			const idleFrameMs = 33.3;
+			if (!busy && t - lastFrameT < idleFrameMs) {
+				raf = requestAnimationFrame(frame);
+				return;
+			}
+			lastFrameT = t;
 			time += 0.016;
 			ctx.clearRect(0, 0, W, H);
 			// Background dots first, text dots on top (pre-built indices —

@@ -4,4 +4,4 @@
  * existing component styles keep precedence. */
 @import "tailwindcss";
 @source "./src/**/*.{ts,tsx}";
-@source "../collab-web/src/**/*.{ts,tsx}";
+@source "../desktop-web/src/**/*.{ts,tsx}";

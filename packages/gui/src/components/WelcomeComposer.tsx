@@ -1,13 +1,24 @@
-import { type TranslationKey, t } from "@musepi/collab-web";
-import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ComposerFrame } from "../lib/composer-frame";
+import { t } from "@musepi/desktop-web";
+import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { X } from "lucide-react";
+import { MorphIcon } from "morphicons/react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ComposerFrame } from "../lib/composer-frame";
+import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
-import { isContextCommand } from "../lib/context-command";
+import { modLabel, shortcutLabel } from "../lib/shortcuts";
+import { rankSlashEntries } from "../lib/slash-rank";
+import {
+	loadSuggestions,
+	resolveSuggestion,
+	type StoredSuggestion,
+	SUGGESTIONS_CHANGED_EVENT,
+	SUGGESTIONS_COLLAPSED_COUNT,
+} from "../lib/suggestions";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
@@ -15,9 +26,14 @@ import { AttachMenu } from "./AttachMenu";
 import { BlurText } from "./BlurText";
 import {
 	fmtQuotaDuration,
-	UsageProviderSection,
 	type UsageActiveAccountView,
+	type UsageDisabledCredentialView,
+	UsageGapLines,
+	UsageProviderSection,
+	type UsageReloginDeadlineView,
+	type UsageReportsData,
 	type UsageReportView,
+	type UsageUnreportedAccountView,
 } from "./Composer";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -26,14 +42,14 @@ import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { ShinyText } from "./ShinyText";
 import { type SlashEntry, SlashRow } from "./SlashRow";
+import { TextMorph } from "./TextMorph";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
 
 /** Time-aware greeting (ZCode-style): 早上好 / 下午好 / 晚上好 / 夜深了. */
-function greeting(): string {
-	const h = new Date().getHours();
-	if (h < 5) return t("it is late, take care");
-	if (h < 12) return t("good morning");
-	if (h < 18) return t("good afternoon");
+function greeting(hour: number): string {
+	if (hour < 5) return t("it is late, take care");
+	if (hour < 12) return t("good morning");
+	if (hour < 18) return t("good afternoon");
 	return t("good evening");
 }
 
@@ -41,14 +57,16 @@ function greeting(): string {
  * translated at render time (t is locale-aware), so a locale switch updates
  * the tip line without a reload. */
 // English keys double as the en-US fallback (the i18n map only carries
-// zh-CN); zh translations live in collab-web/src/i18n/zh-CN.ts.
+// zh-CN); zh translations live in desktop-web/src/i18n/zh-CN.ts.
 const TIP_KEYS = [
 	"try / for commands and @ for context",
-	"press ⌘N to start a new session",
+	"press {mod}N to start a new session",
 	"ask the agent to explain a file with @",
 	"approval cards appear when a tool needs your ok",
-	"your sessions persist across restarts",
-	"switch accent colors from the top bar",
+	"dictate with the mic button in the composer",
+	"annotate images before sending them",
+	"schedule idle-window tasks from the task center",
+	"type /autoresearch to run experiments",
 ] as const;
 
 /** Pick a random tip key, avoiding the current one. */
@@ -75,6 +93,10 @@ export function WelcomeComposer({
 	reminders,
 	onSelectReminder,
 	onMarkAllRead,
+	/** 预设(mode)chip(项目行旁,DSH hero 对齐):欢迎页选择,新会话创建时应用。 */
+	modes,
+	modeId,
+	onModeChange,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -117,9 +139,24 @@ export function WelcomeComposer({
 	reminders?: readonly ReminderRow[];
 	onSelectReminder?(sessionId: string): void;
 	onMarkAllRead?(): void;
+	/** 预设(mode)chip 选项(项目行旁)。 */
+	modes?: { id: string; label: string }[] | null;
+	modeId?: string | null;
+	onModeChange?(id: string | null): void;
 }): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
+	// Hour-of-day clock: re-renders only when the greeting bracket flips
+	// (早上好→下午好…), so the TextMorph greeting rolls over at the
+	// boundary instead of freezing at mount time.
+	const [hour, setHour] = useState(() => new Date().getHours());
+	useEffect(() => {
+		const id = window.setInterval(() => {
+			const h = new Date().getHours();
+			setHour(prev => (prev === h ? prev : h));
+		}, 60_000);
+		return () => window.clearInterval(id);
+	}, []);
 	// GUI-native /usage (empty state): no session yet, but /usage is NOT
 	// model-bound (TUI parity) — the data is every account across every
 	// provider, so the panel fetches the same global view the session
@@ -128,7 +165,7 @@ export function WelcomeComposer({
 	const [usagePanel, setUsagePanel] = useState<{
 		open: boolean;
 		loading: boolean;
-		data: { reports: UsageReportView[]; activeAccount: UsageActiveAccountView | null; fetchedAt: number } | null;
+		data: UsageReportsData | null;
 	}>({ open: false, loading: false, data: null });
 	const [contextNote, setContextNote] = useState(false);
 	// Floating card above the composer (query results near the input, not
@@ -136,13 +173,17 @@ export function WelcomeComposer({
 	// No className on the floating shell — card styles live on the inner
 	// .gui-quota-panel div (a className here double-draws the rounded card).
 	const quotaOpen = usagePanel.open || contextNote;
-	const { anchorRef: quotaAnchorRef, renderMenu: renderQuotaMenu } = useFloatingMenu(quotaOpen, open => {
-		if (open) return;
-		setUsagePanel(s => ({ ...s, open: false }));
-		setContextNote(false);
-	}, {
-		align: "right",
-	});
+	const { anchorRef: quotaAnchorRef, renderMenu: renderQuotaMenu } = useFloatingMenu(
+		quotaOpen,
+		open => {
+			if (open) return;
+			setUsagePanel(s => ({ ...s, open: false }));
+			setContextNote(false);
+		},
+		{
+			align: "right",
+		},
+	);
 	// Centered dialog + veil (same as the session Composer — a floating
 	// layer over the composer card read as nested rounded cards).
 	useEffect(() => {
@@ -309,37 +350,100 @@ export function WelcomeComposer({
 		},
 		[rpc, project, switchingBranch],
 	);
-	// Suggestion chips (openchamber new-session parity): one tap fills the
-	// composer; the user hits Enter to send.
-	const SUGGESTIONS = [
-		{ key: "suggest explore codebase", labelKey: "chip explore codebase" },
-		{ key: "suggest catch me up", labelKey: "chip catch me up" },
-		{ key: "suggest weigh options", labelKey: "chip weigh options" },
-		{ key: "suggest start feature planning", labelKey: "chip start feature planning" },
-		{ key: "suggest create goal", labelKey: "chip create goal" },
-		{ key: "suggest schedule task", labelKey: "chip schedule task" },
-		{ key: "suggest debug issue", labelKey: "chip debug issue" },
-		{ key: "suggest review changes", labelKey: "chip review changes" },
-	] as const;
+	// Draft suggestions (openchamber DraftPresetChips parity): user-curated
+	// via 设置 → 预设提示词 (lib/suggestions — localStorage + change event);
+	// builtins fall back to the i18n-keyed defaults. Collapsed shows the
+	// first 8 chips; + expands with a staggered blur-in and morphs into ✕;
+	// a 自定义补充 chip jumps to the settings section.
+	const [suggestions, setSuggestions] = useState<StoredSuggestion[]>(() => loadSuggestions());
+	useEffect(() => {
+		const reload = (): void => setSuggestions(loadSuggestions());
+		window.addEventListener(SUGGESTIONS_CHANGED_EVENT, reload);
+		window.addEventListener("storage", reload);
+		return () => {
+			window.removeEventListener(SUGGESTIONS_CHANGED_EVENT, reload);
+			window.removeEventListener("storage", reload);
+		};
+	}, []);
+	const [showMore, setShowMore] = useState(false);
+	// Incremental expansion (增量展开): chips join one per stage and the
+	// container height follows each stage (dynamic stretch — no abrupt
+	// jump). revealCount runs COLLAPSED..suggestions.length+1; the +1 is
+	// the 自定义补充 chip, revealed last.
+	const [revealCount, setRevealCount] = useState(SUGGESTIONS_COLLAPSED_COUNT);
+	const [collapsing, setCollapsing] = useState(false);
+	const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const suggestRevealRef = useRef<HTMLDivElement | null>(null);
+	useEffect(
+		() => () => {
+			if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+		},
+		[],
+	);
+	const expandSuggestions = (): void => {
+		if (showMore || collapsing) return;
+		setShowMore(true);
+		revealTimerRef.current = setInterval(() => {
+			setRevealCount(c => {
+				const next = c + 1;
+				if (next > suggestions.length + 1) {
+					if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+					revealTimerRef.current = null;
+				}
+				return next;
+			});
+		}, 90);
+	};
+	const collapseSuggestions = (): void => {
+		if (!showMore || collapsing) return;
+		setCollapsing(true);
+		window.setTimeout(() => {
+			setCollapsing(false);
+			setShowMore(false);
+			setRevealCount(SUGGESTIONS_COLLAPSED_COUNT);
+		}, 150);
+	};
+	// Height follows each reveal stage: pin the current height, ease to the
+	// new natural height, settle back to auto (HeightMorph mechanism, but
+	// without its per-key fade restart — a full re-fade per 90ms stage
+	// would strobe).
+	useLayoutEffect(() => {
+		const node = suggestRevealRef.current;
+		if (!node) return;
+		const current = node.getBoundingClientRect().height;
+		const target = node.scrollHeight;
+		const delta = Math.abs(target - current);
+		if (delta < 1) return;
+		node.style.transition = "none";
+		node.style.height = `${current}px`;
+		node.style.overflow = "hidden";
+		void node.offsetHeight;
+		const duration = Math.min(480, Math.max(240, Math.round(delta / 6)));
+		node.style.transition = `height ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+		node.style.height = `${target}px`;
+		const settle = window.setTimeout(() => {
+			node.style.height = "auto";
+			node.style.overflow = "";
+			node.style.transition = "";
+		}, duration + 30);
+		return () => window.clearTimeout(settle);
+	}, [showMore, revealCount, collapsing]);
+	// Chips shown: base 8 always; extras join as revealCount grows, and
+	// stay mounted during the collapse fade-out.
+	const extraShown = showMore || collapsing ? Math.max(0, revealCount - SUGGESTIONS_COLLAPSED_COUNT) : 0;
+	const visibleSuggestions =
+		showMore || collapsing
+			? suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT + extraShown)
+			: suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT);
 	// Empty-state placeholder carousel (new-task 空态 hints).
 	const PLACEHOLDER_TIPS = [
 		"ask anything, / for commands, @ for context…",
 		"welcome tip search web",
-		"welcome tip generate image",
-		"welcome tip create board",
-		"welcome tip draw diagram",
+		"welcome tip voice input",
+		"welcome tip task center",
+		"welcome tip annotate image",
+		"welcome tip autoresearch",
 	] as const;
-	const EXTRA_SUGGESTIONS = [
-		{ key: "suggest write tests", labelKey: "chip write tests" },
-		{ key: "suggest refactor", labelKey: "chip refactor" },
-		{ key: "suggest performance", labelKey: "chip performance" },
-		{ key: "suggest web search", labelKey: "chip web search" },
-		{ key: "suggest generate image", labelKey: "chip generate image" },
-		{ key: "suggest create board", labelKey: "chip create board" },
-		{ key: "suggest draw diagram", labelKey: "chip draw diagram" },
-	] as const;
-	const [showMore, setShowMore] = useState(false);
-	const ALL_SUGGESTIONS = [...SUGGESTIONS, ...EXTRA_SUGGESTIONS] as const;
 	// Empty-state placeholder rotates through capability hints (new-task
 	// 空态): keep the base shortcut hint first, then surface the newer
 	// features (web search / images / boards / diagrams) so the empty
@@ -349,8 +453,8 @@ export function WelcomeComposer({
 		const id = setInterval(() => setTipIdx(i => (i + 1) % PLACEHOLDER_TIPS.length), 4000);
 		return () => clearInterval(id);
 	}, []);
-	const applySuggestion = (key: TranslationKey): void => {
-		setText(t(key));
+	const applySuggestion = (prompt: string): void => {
+		setText(prompt);
 		requestAnimationFrame(() => autosize(taRef.current));
 		requestAnimationFrame(() => taRef.current?.focus());
 	};
@@ -395,6 +499,9 @@ export function WelcomeComposer({
 		// /skill, /skills, /skill: — surface every skill command (the
 		// literal "skills" text never appears in skill:foo names).
 		const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
+		// Composer-intercepted slash commands (open GUI panels instead of
+		// hitting the agent) — they win ties in the / completion ranking.
+		const guiNative: ReadonlySet<string> = new Set(["usage"]);
 		// GUI-native /usage (empty state — no session yet). The daemon's
 		// catalog already carries the TUI usage entry; keep only the GUI one.
 		const guiUsageCmd: SlashEntry = {
@@ -404,8 +511,17 @@ export function WelcomeComposer({
 			category: "GUI",
 		};
 		const list = [...(slashCmds ?? []).filter(c => c.name !== "usage"), guiUsageCmd];
-		return list.filter(c =>
-			isSkillQuery && c.kind === "skill" ? true : c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
+		// Ranked (slash-rank.ts): exact/prefix matches first, GUI-native
+		// commands win ties — /usage opens the panel instead of hitting the
+		// agent, so it belongs above look-alike daemon entries.
+		return rankSlashEntries(
+			list.filter(c =>
+				isSkillQuery && c.kind === "skill"
+					? true
+					: c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
+			),
+			q,
+			guiNative,
 		);
 	})();
 	const atFilter =
@@ -425,6 +541,7 @@ export function WelcomeComposer({
 		);
 	});
 	const [projOpen, setProjOpen] = useState(false);
+	const [presetOpen, setPresetOpen] = useState(false);
 	// Saved workspaces (sidebar 项目 tab parity): every folder the app
 	// knows (omp-gui-projects localStorage — seeded from session cwds and
 	// grown by folder picks), so the workspace picker lists them for
@@ -465,6 +582,10 @@ export function WelcomeComposer({
 	// Single-layer: className carries the visual (gui-proj-menu), the hook
 	// provides portal + position + animation (Pop parity — no nested Pop).
 	const { anchorRef: projAnchorRef, renderMenu: renderProjMenu } = useFloatingMenu(projOpen, setProjOpen, {
+		className: "gui-proj-menu",
+	});
+	// 预设(mode)选择菜单:与项目选择同款浮层样式(DSH hero 对齐)。
+	const { anchorRef: presetAnchorRef, renderMenu: renderPresetMenu } = useFloatingMenu(presetOpen, setPresetOpen, {
 		className: "gui-proj-menu",
 	});
 	const { anchorRef: branchAnchorRef, renderMenu: renderBranchMenu } = useFloatingMenu(branchOpen, setBranchOpen, {
@@ -749,10 +870,13 @@ export function WelcomeComposer({
 			setUsagePanel({ open: true, loading: true, data: null });
 			sfxFor("send");
 			void rpc
-				.request<{ reports: UsageReportView[]; activeAccount?: UsageActiveAccountView | null }>(
-					"usage.reports",
-					{},
-				)
+				.request<{
+					reports: UsageReportView[];
+					activeAccount?: UsageActiveAccountView | null;
+					unreportedAccounts?: UsageUnreportedAccountView[];
+					disabledCredentials?: UsageDisabledCredentialView[];
+					reloginDeadlines?: UsageReloginDeadlineView[];
+				}>("usage.reports", {})
 				.then(res => {
 					setUsagePanel(s =>
 						s.open
@@ -762,6 +886,9 @@ export function WelcomeComposer({
 									data: {
 										reports: res?.reports ?? [],
 										activeAccount: res?.activeAccount ?? null,
+										unreportedAccounts: res?.unreportedAccounts ?? [],
+										disabledCredentials: res?.disabledCredentials ?? [],
+										reloginDeadlines: res?.reloginDeadlines ?? [],
 										fetchedAt: Date.now(),
 									},
 								}
@@ -838,7 +965,11 @@ export function WelcomeComposer({
 							<div className="gui-quota-title">{t("subscription usage")}</div>
 							<div className="gui-quota-note">…</div>
 						</>
-					) : usagePanel.data && usagePanel.data.reports.length > 0 ? (
+					) : usagePanel.data &&
+						(usagePanel.data.reports.length > 0 ||
+							usagePanel.data.unreportedAccounts.length > 0 ||
+							usagePanel.data.disabledCredentials.length > 0 ||
+							usagePanel.data.reloginDeadlines.length > 0) ? (
 						<>
 							<div className="gui-quota-title">
 								{t("subscription usage")}
@@ -847,13 +978,28 @@ export function WelcomeComposer({
 									: null}
 							</div>
 							<div className="gui-usage-reports">
-								{usagePanel.data.reports.map(report => (
-									<UsageProviderSection
-										key={report.provider}
-										report={report}
-										activeAccount={usagePanel.data!.activeAccount}
-									/>
-								))}
+								{(() => {
+									const data = usagePanel.data!;
+									const providers = [
+										...new Set([
+											...data.reports.map(report => report.provider),
+											...data.unreportedAccounts.map(account => account.provider),
+											...data.disabledCredentials.map(credential => credential.provider),
+											...data.reloginDeadlines.map(deadline => deadline.provider),
+										]),
+									];
+									return providers.map(provider => {
+										const reports = data.reports.filter(report => report.provider === provider);
+										return (
+											<Fragment key={provider}>
+												{reports.length > 0 && (
+													<UsageProviderSection reports={reports} activeAccount={data.activeAccount} />
+												)}
+												<UsageGapLines provider={provider} data={data} />
+											</Fragment>
+										);
+									});
+								})()}
 							</div>
 						</>
 					) : (
@@ -865,531 +1011,611 @@ export function WelcomeComposer({
 				</div>,
 			)}
 			<div
-			className="gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
-			data-focused={focused ? "1" : undefined}
-		>
-			{/* Interactive dot-matrix brand backdrop (kimi-style reference):
-			 * "MusePi" rasterized into a breathing dot grid with colored
-			 * accents, feather edge and click ripples; replaces the static
-			 * π watermark. Toggle lives in 设置 → 常规 (omp-gui-dotmatrix). */}
-			{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
-			<div className="gui-welcome-inner relative z-10 flex w-full max-w-[560px] flex-col items-center">
-				{/* Workspace picker (openchamber/ZCode): dropdown list attached
-				 * right above the input — current project, open folder, remote. */}
-				<div className="gui-brand mb-2 flex items-center gap-2">
-					<span className="gui-brand-mark">π</span>
-					<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
-				</div>
-				<p className="gui-welcome-greet mb-4">
-					<ShinyText text={greeting()} speed={3.2} />
-				</p>
-				{/* Project target — an independent row above the composer,
-				 * left-aligned (openchamber DraftTargetSelectors). */}
-				{onProject && (
-					<div className="gui-project-row mb-2 flex w-full min-w-0 items-center gap-1.5 px-0.5">
-						<div className="relative z-20" ref={projAnchorRef}>
-							<button
-								type="button"
-								className="gui-project-chip"
-								onClick={() => setProjOpen(v => !v)}
-								aria-label={t("current project")}
-							>
-								<Icon name="folder" className="h-3.5 w-3.5" />
-								<span className="max-w-[200px] truncate">
-									{project ? projectName(project) : t("not in a project")}
-								</span>
-								<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-							</button>
-							{renderProjMenu(
-								<>
-									{project && (
+				className="gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
+				data-focused={focused ? "1" : undefined}
+			>
+				{/* Interactive dot-matrix brand backdrop (kimi-style reference):
+				 * "MusePi" rasterized into a breathing dot grid with colored
+				 * accents, feather edge and click ripples; replaces the static
+				 * π watermark. Toggle lives in 设置 → 常规 (omp-gui-dotmatrix). */}
+				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
+				<div className="gui-welcome-inner relative z-10 flex w-full max-w-[560px] flex-col items-center">
+					{/* Workspace picker (openchamber/ZCode): dropdown list attached
+					 * right above the input — current project, open folder, remote. */}
+					<div className="gui-brand mb-2 flex items-center gap-2">
+						<span className="gui-brand-mark">π</span>
+						<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
+					</div>
+					<p className="gui-welcome-greet pointer-events-none mb-4">
+						<ShinyText text={greeting(hour)} speed={3.2} />
+					</p>
+					{/* Project target — an independent row above the composer,
+					 * left-aligned (openchamber DraftTargetSelectors). */}
+					{onProject && (
+						<div className="gui-project-row mb-2 flex w-full min-w-0 items-center gap-1.5 px-0.5">
+							<div className="relative z-20" ref={projAnchorRef}>
+								<button
+									type="button"
+									className="gui-project-chip"
+									onClick={() => setProjOpen(v => !v)}
+									aria-label={t("current project")}
+								>
+									<Icon name="folder" className="h-3.5 w-3.5" />
+									<span className="max-w-[200px] truncate">
+										{project ? projectName(project) : t("not in a project")}
+									</span>
+									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+								</button>
+								{/* 预设(mode)chip:项目按钮旁(DSH hero 对齐),新会话创建时应用。
+								 * 样式与项目选择同款(按钮 + 浮层菜单)。 */}
+								{modes && (
+									<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
 										<button
 											type="button"
-											className="gui-view-opt gui-view-opt--active"
-											onClick={() => setProjOpen(false)}
+											className="gui-project-chip"
+											onClick={() => setPresetOpen(v => !v)}
+											aria-label={t("modes title")}
 										>
-											<Icon name="folder" className="h-3.5 w-3.5" />
-											<span className="min-w-0 flex-1 truncate">{projectName(project)}</span>
-											<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+											<Icon name="stack" className="h-3.5 w-3.5" />
+											<span className="max-w-[160px] truncate">
+												{modeId ? (modes.find(m => m.id === modeId)?.label ?? modeId) : t("modes none")}
+											</span>
+											<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 										</button>
-									)}
-									{/* Saved workspaces (sidebar 项目 tab parity): every folder
-									 * the app knows, one tap to switch. Current project is
-									 * already listed above with the check — skip it here. */}
-									{savedProjects.filter(p => p !== project).length > 0 && (
-										<>
-											<div className="gui-proj-menu-label">{t("saved workspaces")}</div>
-											{savedProjects
-												.filter(p => p !== project)
-												.map(p => (
+										{renderPresetMenu(
+											<>
+												<button
+													type="button"
+													className={`gui-view-opt${!modeId ? " gui-view-opt--active" : ""}`}
+													onClick={() => {
+														onModeChange?.(null);
+														setPresetOpen(false);
+													}}
+												>
+													<span className="min-w-0 flex-1 truncate">{t("modes none")}</span>
+													{!modeId && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
+												</button>
+												{modes.map(m => (
 													<button
-														key={p}
+														key={m.id}
 														type="button"
-														className="gui-view-opt"
-														title={p}
+														className={`gui-view-opt${modeId === m.id ? " gui-view-opt--active" : ""}`}
 														onClick={() => {
-															setProjOpen(false);
-															onProject?.(p);
+															onModeChange?.(m.id);
+															setPresetOpen(false);
 														}}
 													>
-														<Icon name="folder" className="h-3.5 w-3.5" />
-														<span className="min-w-0 flex-1 truncate">{projectName(p)}</span>
+														<span className="min-w-0 flex-1 truncate">{m.label}</span>
+														{modeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
 													</button>
 												))}
-											<div className="gui-proj-menu-sep" />
-										</>
-									)}
-									<button
-										type="button"
-										className="gui-view-opt"
-										onClick={() => {
-											setProjOpen(false);
-											onProject("folder");
-										}}
-									>
-										<Icon name="folder-open" className="h-3.5 w-3.5" />
-										<span>{t("open folder")}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-view-opt"
-										onClick={() => {
-											setProjOpen(false);
-											onProject("new");
-										}}
-									>
-										<Icon name="folder-add" className="h-3.5 w-3.5" />
-										<span>{t("new blank project")}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-view-opt"
-										onClick={() => {
-											setProjOpen(false);
-											onProject("remote");
-										}}
-									>
-										<Icon name="server" className="h-3.5 w-3.5" />
-										<span>{t("remote connection")}</span>
-									</button>
-									{project && (
+											</>,
+										)}
+									</div>
+								)}
+								{renderProjMenu(
+									<>
+										{project && (
+											<button
+												type="button"
+												className="gui-view-opt gui-view-opt--active"
+												onClick={() => setProjOpen(false)}
+											>
+												<Icon name="folder" className="h-3.5 w-3.5" />
+												<span className="min-w-0 flex-1 truncate">{projectName(project)}</span>
+												<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+											</button>
+										)}
+										{/* Saved workspaces (sidebar 项目 tab parity): every folder
+										 * the app knows, one tap to switch. Current project is
+										 * already listed above with the check — skip it here. */}
+										{savedProjects.filter(p => p !== project).length > 0 && (
+											<>
+												<div className="gui-proj-menu-label">{t("saved workspaces")}</div>
+												{savedProjects
+													.filter(p => p !== project)
+													.map(p => (
+														<button
+															key={p}
+															type="button"
+															className="gui-view-opt"
+															title={p}
+															onClick={() => {
+																setProjOpen(false);
+																onProject?.(p);
+															}}
+														>
+															<Icon name="folder" className="h-3.5 w-3.5" />
+															<span className="min-w-0 flex-1 truncate">{projectName(p)}</span>
+														</button>
+													))}
+												<div className="gui-proj-menu-sep" />
+											</>
+										)}
 										<button
 											type="button"
 											className="gui-view-opt"
 											onClick={() => {
 												setProjOpen(false);
-												onProject("none");
+												onProject("folder");
 											}}
 										>
-											<Icon name="folder" className="h-3.5 w-3.5" />
-											<span>{t("not in a project")}</span>
+											<Icon name="folder-open" className="h-3.5 w-3.5" />
+											<span>{t("open folder")}</span>
 										</button>
-									)}
-								</>,
-							)}
-						</div>
-						{branchInfo && (
-							<div className="relative z-20" ref={branchAnchorRef}>
-								<button
-									type="button"
-									className="gui-project-chip"
-									onClick={() => setBranchOpen(v => !v)}
-									aria-label={t("git branch")}
-									title={t("git branch")}
-								>
-									<Icon name="git-branch" className="h-3.5 w-3.5" />
-									<span className="max-w-[160px] truncate">{branchInfo.current ?? "—"}</span>
-									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-								</button>
-								{renderBranchMenu(
-									<>
-										{branchInfo.branches.map(b => (
+										<button
+											type="button"
+											className="gui-view-opt"
+											onClick={() => {
+												setProjOpen(false);
+												onProject("new");
+											}}
+										>
+											<Icon name="folder-add" className="h-3.5 w-3.5" />
+											<span>{t("new blank project")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-view-opt"
+											onClick={() => {
+												setProjOpen(false);
+												onProject("remote");
+											}}
+										>
+											<Icon name="server" className="h-3.5 w-3.5" />
+											<span>{t("remote connection")}</span>
+										</button>
+										{project && (
 											<button
-												key={b}
 												type="button"
-												className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
-												disabled={switchingBranch}
+												className="gui-view-opt"
 												onClick={() => {
-													if (b === branchInfo.current) {
-														setBranchOpen(false);
-														return;
-													}
-													void switchBranch(b);
+													setProjOpen(false);
+													onProject("none");
 												}}
 											>
-												<Icon name="git-branch" className="h-3.5 w-3.5" />
-												<span className="min-w-0 flex-1 truncate">{b}</span>
-												{b === branchInfo.current && (
-													<Icon name="check" className="h-3 w-3 flex-shrink-0" />
-												)}
+												<Icon name="folder" className="h-3.5 w-3.5" />
+												<span>{t("not in a project")}</span>
 											</button>
-										))}
+										)}
 									</>,
 								)}
 							</div>
-						)}
-					</div>
-				)}
-				<form
-					ref={formRef}
-					className="gui-welcome-form relative w-full"
-					onSubmit={submit}
-					onFocus={() => setBeamOn(true)}
-					onBlur={() => setBeamOn(false)}
-				>
-					<ComposerFrame
-						className="gui-welcome-input"
-						hero
-						heroActive={beamOn}
-						chatInput
-						flipAnchor="welcome"
-						pet={pet.enabled && pet.mode === "input" ? <PetSprite mood="rest" pet={pet.pet} size={34} /> : null}
-						attachments={attachments}
-						onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-						footerLeft={
-							<>
-								<AttachMenu
-									goalMode={goalArmed}
-									planMode={planArmed}
-									// Welcome toggles ARM the mode chip only — no popup
-									// dialog, no session creation (the input keeps its
-									// shape). The first sent message applies the mode
-									// to the session it creates.
-									onToggleGoal={() => setGoalArmed(v => !v)}
-									onTogglePlan={() => setPlanArmed(v => !v)}
-									onPickImages={files => void addImageFiles(files)}
-									onInsert={token => {
-										const ta = taRef.current;
-										if (!ta) return;
-										ta.focus();
-										const start = ta.selectionStart ?? text.length;
-										const end = ta.selectionEnd ?? text.length;
-										ta.setRangeText(token, start, end, "end");
-										setText(ta.value);
-										autosize(ta);
-									}}
-								/>
-								{/* Focus mode sits between the attach menu and the model
-								 * selector (openchamber ComposerFooter order). */}
-								{onToggleFocus && (
+							{branchInfo && (
+								<div className="relative z-20" ref={branchAnchorRef}>
 									<button
 										type="button"
-										className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
-										onClick={onToggleFocus}
-										title={t("focus mode")}
-										aria-label={t("focus mode")}
-										aria-pressed={focused}
+										className="gui-project-chip"
+										onClick={() => setBranchOpen(v => !v)}
+										aria-label={t("git branch")}
+										title={t("git branch")}
 									>
-										<Icon name="expand-up-down" className="h-3.5 w-3.5" />
+										<Icon name="git-branch" className="h-3.5 w-3.5" />
+										<span className="max-w-[160px] truncate">{branchInfo.current ?? "—"}</span>
+										<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 									</button>
-								)}
-								<ModelSelector
-									rpc={rpc}
-									sessionId={null}
-									presetId={presetModelId ?? modelId}
-									allowSetDefault
-									onSelect={v => {
-										modelTouched.current = true;
-										setModelId(v);
-									}}
-								/>
-								<ThinkingSelector
-									value={thinking}
-									onChange={v => {
-										thinkingTouched.current = true;
-										setThinking(v);
-									}}
-									efforts={thinkingEfforts}
-								/>
-								{/* Armed mode chips (plan/goal): shown IN the button row
-								 * right of the thinking selector so the armed state is
-								 * visible without opening the attach menu. */}
-								{goalArmed && (
-									<button
-										type="button"
-										className="gui-mode-chip gui-mode-chip--armed"
-										title={t("next message becomes the goal objective")}
-										onClick={() => setGoalArmed(false)}
-									>
-										<Icon name="target" className="h-3 w-3" />
-										<span>{t("goal")}</span>
-									</button>
-								)}
-								{planArmed && (
-									<button
-										type="button"
-										className="gui-mode-chip gui-mode-chip--armed"
-										title={t("plan mode")}
-										onClick={() => setPlanArmed(false)}
-									>
-										<Icon name="compass-3" className="h-3 w-3" />
-										<span>{t("plan")}</span>
-									</button>
-								)}
-							</>
-						}
-						footerRight={
-							<button
-								type="submit"
-								ref={quotaAnchorRef}
-								className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
-								disabled={!canSend}
-								aria-label={t("send message")}
-							>
-								<Icon name="send-plane" className="h-4 w-4" />
-							</button>
-						}
-					>
-						<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
-							{quotes.length > 0 && (
-								<div className="gui-welcome-quotes">
-									{quotes.map((q, i) => (
-										<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
-											<div className="gui-quote-text">{q}</div>
-											<button
-												type="button"
-												className="gui-quote-close"
-												onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
-												title={t("remove quote")}
-												aria-label={t("remove quote")}
-											>
-												<X size={12} />
-											</button>
-										</div>
-									))}
+									{renderBranchMenu(
+										<>
+											{branchInfo.branches.map(b => (
+												<button
+													key={b}
+													type="button"
+													className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
+													disabled={switchingBranch}
+													onClick={() => {
+														if (b === branchInfo.current) {
+															setBranchOpen(false);
+															return;
+														}
+														void switchBranch(b);
+													}}
+												>
+													<Icon name="git-branch" className="h-3.5 w-3.5" />
+													<span className="min-w-0 flex-1 truncate">{b}</span>
+													{b === branchInfo.current && (
+														<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+													)}
+												</button>
+											))}
+										</>,
+									)}
 								</div>
 							)}
-							{renderCompMenu(
-								<div
-									className="gui-slash-menu gui-slash-menu--rich"
-									style={{ minWidth: 300 }}
-									ref={completionMenuRef}
-								>
-									{slashOpen && slashFilter.length > 0 && (
-										<>
-											<div className="gui-slash-rows">
-												{slashFilter.map((c, i) => (
-													<SlashRow
-														key={c.name}
-														item={c}
-														active={i === slashIdx}
-														onClick={() => insertCompletion("slash", c.name)}
-													/>
-												))}
-											</div>
-											<div className="gui-slash-footer">{t("slash completion hints")}</div>
-										</>
+						</div>
+					)}
+					<form
+						ref={formRef}
+						className="gui-welcome-form relative w-full"
+						onSubmit={submit}
+						onFocus={() => setBeamOn(true)}
+						onBlur={() => setBeamOn(false)}
+					>
+						<ComposerFrame
+							className="gui-welcome-input"
+							hero
+							heroActive={beamOn}
+							chatInput
+							flipAnchor="welcome"
+							pet={
+								pet.enabled && pet.mode === "input" ? <PetSprite mood="rest" pet={pet.pet} size={34} /> : null
+							}
+							attachments={attachments}
+							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+							footerLeft={
+								<>
+									<AttachMenu
+										goalMode={goalArmed}
+										planMode={planArmed}
+										// Welcome toggles ARM the mode chip only — no popup
+										// dialog, no session creation (the input keeps its
+										// shape). The first sent message applies the mode
+										// to the session it creates.
+										onToggleGoal={() => setGoalArmed(v => !v)}
+										onTogglePlan={() => setPlanArmed(v => !v)}
+										// Guided goal needs a live session (the interview
+										// runs in chat); the welcome state has none, and
+										// the goal row is already disabled there.
+										onGuidedGoal={() => {}}
+										onPickImages={files => void addImageFiles(files)}
+										onInsert={token => {
+											const ta = taRef.current;
+											if (!ta) return;
+											ta.focus();
+											const start = ta.selectionStart ?? text.length;
+											const end = ta.selectionEnd ?? text.length;
+											ta.setRangeText(token, start, end, "end");
+											setText(ta.value);
+											autosize(ta);
+										}}
+									/>
+									{/* Focus mode sits between the attach menu and the model
+									 * selector (openchamber ComposerFooter order). */}
+									{onToggleFocus && (
+										<button
+											type="button"
+											className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
+											onClick={onToggleFocus}
+											title={t("focus mode")}
+											aria-label={t("focus mode")}
+											aria-pressed={focused}
+										>
+											<Icon name="expand-up-down" className="h-3.5 w-3.5" />
+										</button>
 									)}
-									{atOpen &&
-										atFilter.length > 0 &&
-										atFilter.map((e, i) => (
-											<button
-												key={e.path}
-												type="button"
-												className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-												onClick={() => insertCompletion("at", e.path)}
-											>
-												<span className="min-w-0 flex-1 truncate">
-													{e.isDir ? "📁 " : "📄 "}
-													{e.path}
-												</span>
-											</button>
+									<ModelSelector
+										rpc={rpc}
+										sessionId={null}
+										presetId={presetModelId ?? modelId}
+										allowSetDefault
+										onSelect={v => {
+											modelTouched.current = true;
+											setModelId(v);
+										}}
+									/>
+									<ThinkingSelector
+										value={thinking}
+										onChange={v => {
+											thinkingTouched.current = true;
+											setThinking(v);
+										}}
+										efforts={thinkingEfforts}
+									/>
+									{/* Armed mode chips (plan/goal): shown IN the button row
+									 * right of the thinking selector so the armed state is
+									 * visible without opening the attach menu. */}
+									{goalArmed && (
+										<button
+											type="button"
+											className="gui-mode-chip gui-mode-chip--armed"
+											title={t("next message becomes the goal objective")}
+											onClick={() => setGoalArmed(false)}
+										>
+											<Icon name="target" className="h-3 w-3" />
+											<span>{t("goal")}</span>
+										</button>
+									)}
+									{planArmed && (
+										<button
+											type="button"
+											className="gui-mode-chip gui-mode-chip--armed"
+											title={t("plan mode")}
+											onClick={() => setPlanArmed(false)}
+										>
+											<Icon name="compass-3" className="h-3 w-3" />
+											<span>{t("plan")}</span>
+										</button>
+									)}
+								</>
+							}
+							footerRight={
+								<button
+									type="submit"
+									ref={quotaAnchorRef}
+									className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
+									disabled={!canSend}
+									aria-label={t("send message")}
+								>
+									<Icon name="send-plane" className="h-4 w-4" />
+								</button>
+							}
+						>
+							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
+								{quotes.length > 0 && (
+									<div className="gui-welcome-quotes">
+										{quotes.map((q, i) => (
+											<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
+												<div className="gui-quote-text">{q}</div>
+												<button
+													type="button"
+													className="gui-quote-close"
+													onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
+													title={t("remove quote")}
+													aria-label={t("remove quote")}
+												>
+													<X size={12} />
+												</button>
+											</div>
 										))}
-									{hashOpen &&
-										hashFilter.length > 0 &&
-										hashFilter.map((s, i) => (
-											<button
-												key={s.id}
-												type="button"
-												className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
-												onClick={() => insertCompletion("hash", s.id)}
-											>
-												<span className="min-w-0 flex-1 truncate">
-													#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
-												</span>
-											</button>
-										))}
-								</div>,
-							)}
-							<textarea
-								ref={el => {
-									taRef.current = el;
-									compAnchorRef(el);
-								}}
-								className="w-full min-w-0 flex-1 resize-none bg-transparent px-1 py-3.5 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
-								rows={3}
-								data-focused={focused ? "1" : "0"}
-								value={text}
-								onPaste={e => {
-									const files = [...e.clipboardData.items]
-										.filter(i => i.type.startsWith("image/"))
-										.map(i => i.getAsFile())
-										.filter((f): f is File => f !== null);
-									if (files.length > 0) {
-										e.preventDefault();
-										void addImageFiles(files);
-									}
-								}}
-								onDrop={e => {
-									const files = [...e.dataTransfer.files];
-									if (files.some(f => f.type.startsWith("image/"))) {
-										e.preventDefault();
-										void addImageFiles(files);
-									}
-								}}
-								onChange={e => {
-									setText(e.target.value);
-									if (clearAllRef.current) {
-										clearAllRef.current = false;
-										if (e.target.value === "") setAttachments([]);
-									}
-									onCompletionInput(e.target.value);
-									// Initial height equals the content height, so
-									// first lines never resize the card.
-									autosize(taRef.current);
-								}}
-								onKeyDown={e => {
-									// IME composition: the confirming Enter commits the
-									// candidate text — never submit while composing.
-									if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-									// Attachment keyboard flow (WeChat parity): Backspace/
-									// Delete on an empty input removes the last image chip;
-									// a select-all delete empties attachments too.
-									if (e.key === "Backspace" || e.key === "Delete") {
-										const ta = taRef.current;
-										if (ta) {
-											if (ta.value.length === 0 && attachments.length > 0) {
+									</div>
+								)}
+								{renderCompMenu(
+									<div
+										className="gui-slash-menu gui-slash-menu--rich"
+										style={{ minWidth: 300 }}
+										ref={completionMenuRef}
+									>
+										{slashOpen && slashFilter.length > 0 && (
+											<>
+												<div className="gui-slash-rows">
+													{slashFilter.map((c, i) => (
+														<SlashRow
+															key={c.name}
+															item={c}
+															active={i === slashIdx}
+															onClick={() => insertCompletion("slash", c.name)}
+														/>
+													))}
+												</div>
+												<div className="gui-slash-footer">{t("slash completion hints")}</div>
+											</>
+										)}
+										{atOpen &&
+											atFilter.length > 0 &&
+											atFilter.map((e, i) => (
+												<button
+													key={e.path}
+													type="button"
+													className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
+													onClick={() => insertCompletion("at", e.path)}
+												>
+													<span className="min-w-0 flex-1 truncate">
+														{e.isDir ? "📁 " : "📄 "}
+														{e.path}
+													</span>
+												</button>
+											))}
+										{hashOpen &&
+											hashFilter.length > 0 &&
+											hashFilter.map((s, i) => (
+												<button
+													key={s.id}
+													type="button"
+													className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
+													onClick={() => insertCompletion("hash", s.id)}
+												>
+													<span className="min-w-0 flex-1 truncate">
+														#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
+													</span>
+												</button>
+											))}
+									</div>,
+								)}
+								<textarea
+									ref={el => {
+										taRef.current = el;
+										compAnchorRef(el);
+									}}
+									className="w-full min-w-0 flex-1 resize-none bg-transparent px-1 py-3.5 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
+									rows={3}
+									data-focused={focused ? "1" : "0"}
+									value={text}
+									onPaste={e => {
+										const files = [...e.clipboardData.items]
+											.filter(i => i.type.startsWith("image/"))
+											.map(i => i.getAsFile())
+											.filter((f): f is File => f !== null);
+										if (files.length > 0) {
+											e.preventDefault();
+											void addImageFiles(files);
+										}
+									}}
+									onDrop={e => {
+										const files = [...e.dataTransfer.files];
+										if (files.some(f => f.type.startsWith("image/"))) {
+											e.preventDefault();
+											void addImageFiles(files);
+										}
+									}}
+									onChange={e => {
+										setText(e.target.value);
+										if (clearAllRef.current) {
+											clearAllRef.current = false;
+											if (e.target.value === "") setAttachments([]);
+										}
+										onCompletionInput(e.target.value);
+										// Initial height equals the content height, so
+										// first lines never resize the card.
+										autosize(taRef.current);
+									}}
+									onKeyDown={e => {
+										// IME composition: the confirming Enter commits the
+										// candidate text — never submit while composing.
+										if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+										// Attachment keyboard flow (WeChat parity): Backspace/
+										// Delete on an empty input removes the last image chip;
+										// a select-all delete empties attachments too.
+										if (e.key === "Backspace" || e.key === "Delete") {
+											const ta = taRef.current;
+											if (ta) {
+												if (ta.value.length === 0 && attachments.length > 0) {
+													e.preventDefault();
+													setAttachments(prev => prev.slice(0, -1));
+													return;
+												}
+												if (
+													ta.selectionStart === 0 &&
+													ta.selectionEnd === ta.value.length &&
+													ta.value.length > 0
+												) {
+													clearAllRef.current = true;
+												}
+											}
+										}
+										const menus: {
+											open: boolean;
+											list: unknown[];
+											idx: number;
+											setIdx: (n: number) => void;
+											insert: () => void;
+										}[] = [
+											{
+												open: slashOpen,
+												list: slashFilter,
+												idx: slashIdx,
+												setIdx: setSlashIdx,
+												insert: () =>
+													slashFilter[slashIdx] && insertCompletion("slash", slashFilter[slashIdx]!.name),
+											},
+											{
+												open: atOpen,
+												list: atFilter,
+												idx: atIdx,
+												setIdx: setAtIdx,
+												insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
+											},
+											{
+												open: hashOpen,
+												list: hashFilter,
+												idx: hashIdx,
+												setIdx: setHashIdx,
+												insert: () =>
+													hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
+											},
+										];
+										for (const m of menus) {
+											if (!m.open || m.list.length === 0) continue;
+											if (e.key === "ArrowDown") {
 												e.preventDefault();
-												setAttachments(prev => prev.slice(0, -1));
+												m.setIdx((m.idx + 1) % m.list.length);
 												return;
 											}
-											if (
-												ta.selectionStart === 0 &&
-												ta.selectionEnd === ta.value.length &&
-												ta.value.length > 0
-											) {
-												clearAllRef.current = true;
+											if (e.key === "ArrowUp") {
+												e.preventDefault();
+												m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
+												return;
+											}
+											if (e.key === "Enter" || e.key === "Tab") {
+												e.preventDefault();
+												m.insert();
+												return;
+											}
+											if (e.key === "Escape") {
+												e.preventDefault();
+												setSlashOpen(false);
+												setAtOpen(false);
+												setHashOpen(false);
+												return;
 											}
 										}
-									}
-									const menus: {
-										open: boolean;
-										list: unknown[];
-										idx: number;
-										setIdx: (n: number) => void;
-										insert: () => void;
-									}[] = [
-										{
-											open: slashOpen,
-											list: slashFilter,
-											idx: slashIdx,
-											setIdx: setSlashIdx,
-											insert: () =>
-												slashFilter[slashIdx] && insertCompletion("slash", slashFilter[slashIdx]!.name),
-										},
-										{
-											open: atOpen,
-											list: atFilter,
-											idx: atIdx,
-											setIdx: setAtIdx,
-											insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
-										},
-										{
-											open: hashOpen,
-											list: hashFilter,
-											idx: hashIdx,
-											setIdx: setHashIdx,
-											insert: () => hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
-										},
-									];
-									for (const m of menus) {
-										if (!m.open || m.list.length === 0) continue;
-										if (e.key === "ArrowDown") {
+										if (e.key === "Enter" && !e.shiftKey) {
 											e.preventDefault();
-											m.setIdx((m.idx + 1) % m.list.length);
-											return;
+											submit(e as unknown as FormEvent<HTMLFormElement>);
 										}
-										if (e.key === "ArrowUp") {
-											e.preventDefault();
-											m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
-											return;
+									}}
+									placeholder={t(PLACEHOLDER_TIPS[tipIdx]!)}
+									spellCheck={(() => {
+										try {
+											return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
+										} catch {
+											return false;
 										}
-										if (e.key === "Enter" || e.key === "Tab") {
-											e.preventDefault();
-											m.insert();
-											return;
+									})()}
+									autoFocus
+									autoComplete="off"
+								/>
+							</div>
+						</ComposerFrame>
+					</form>
+					{/* Rotating tip with shimmer refresh (key change re-triggers);
+					 * t() runs at render time so locale switches land immediately. */}
+					<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
+						{t(tipKey).replace("{mod}", modLabel()).replace("⌘", modLabel())}
+					</p>
+					{/* Suggestion chips (openchamber new-session parity): one tap
+					 * fills the composer; the user hits Enter to send. */}
+					<div className="gui-suggest-reveal mt-4" ref={suggestRevealRef}>
+						<div className="gui-suggest">
+							{visibleSuggestions.map((s, i) => {
+								const r = resolveSuggestion(s);
+								const extra = i >= SUGGESTIONS_COLLAPSED_COUNT;
+								const chipCls = extra
+									? `gui-suggest-chip${collapsing ? " gui-suggest-chip--leaving" : " gui-suggest-chip--expand"}`
+									: "gui-suggest-chip";
+								return (
+									<button
+										key={`${i}-${r.label}`}
+										type="button"
+										className={chipCls}
+										style={
+											extra && !collapsing
+												? ({
+														animationDelay: `${(i - SUGGESTIONS_COLLAPSED_COUNT) * 40}ms`,
+													} as CSSProperties)
+												: undefined
 										}
-										if (e.key === "Escape") {
-											e.preventDefault();
-											setSlashOpen(false);
-											setAtOpen(false);
-											setHashOpen(false);
-											return;
-										}
+										onClick={() => applySuggestion(r.prompt)}
+									>
+										{r.label}
+									</button>
+								);
+							})}
+							{showMore && revealCount > suggestions.length && (
+								<button
+									type="button"
+									className="gui-suggest-chip gui-suggest-chip--manage gui-suggest-chip--expand"
+									style={{ animationDelay: "60ms" }}
+									onClick={() =>
+										window.dispatchEvent(
+											new CustomEvent("omp-gui-open-settings-section", { detail: "suggestions" }),
+										)
 									}
-									if (e.key === "Enter" && !e.shiftKey) {
-										e.preventDefault();
-										submit(e as unknown as FormEvent<HTMLFormElement>);
-									}
-								}}
-								placeholder={t(PLACEHOLDER_TIPS[tipIdx]!)}
-								spellCheck={(() => {
-									try {
-										return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
-									} catch {
-										return false;
-									}
-								})()}
-								autoFocus
-								autoComplete="off"
-							/>
+								>
+									{t("custom supplement")}
+								</button>
+							)}
+							<button
+								type="button"
+								className="gui-suggest-chip gui-suggest-chip--more"
+								title={showMore ? t("collapse suggestions") : t("more suggestions")}
+								aria-label={showMore ? t("collapse suggestions") : t("more suggestions")}
+								onClick={showMore ? collapseSuggestions : expandSuggestions}
+							>
+								<MorphIcon icon={showMore ? XIcon : PlusIcon} size={13} spring="snappy" />
+							</button>
 						</div>
-					</ComposerFrame>
-				</form>
-				{/* Rotating tip with shimmer refresh (key change re-triggers);
-				 * t() runs at render time so locale switches land immediately. */}
-				<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
-					{t(tipKey)}
-				</p>
-				{/* Suggestion chips (openchamber new-session parity): one tap
-				 * fills the composer; the user hits Enter to send. */}
-				<div className="gui-suggest mt-4">
-					{(showMore ? ALL_SUGGESTIONS : SUGGESTIONS).map(s => (
-						<button key={s.key} type="button" className="gui-suggest-chip" onClick={() => applySuggestion(s.key)}>
-							{t(s.labelKey)}
-						</button>
-					))}
-					{!showMore && (
-						<button
-							type="button"
-							className="gui-suggest-chip gui-suggest-chip--more"
-							onClick={() => setShowMore(true)}
-						>
-							+
-						</button>
-					)}
-					{showMore && (
-						<button
-							type="button"
-							className="gui-suggest-chip gui-suggest-chip--more"
-							onClick={() => setShowMore(false)}
-						>
-							{t("more suggestions")}
-						</button>
+					</div>
+					{/* Real-time reminders (kimi 实时提醒 parity): background-working
+					 * sessions (进行中) + completed-but-unread ones below the empty
+					 * composer; click opens the session, 一键已读 clears unread. */}
+					{reminders && reminders.length > 0 && (
+						<RemindersPanel
+							reminders={reminders}
+							onSelect={onSelectReminder ?? (() => {})}
+							onMarkAllRead={onMarkAllRead ?? (() => {})}
+						/>
 					)}
 				</div>
-				{/* Real-time reminders (kimi 实时提醒 parity): background-working
-				 * sessions (进行中) + completed-but-unread ones below the empty
-				 * composer; click opens the session, 一键已读 clears unread. */}
-				{reminders && reminders.length > 0 && (
-					<RemindersPanel
-						reminders={reminders}
-						onSelect={onSelectReminder ?? (() => {})}
-						onMarkAllRead={onMarkAllRead ?? (() => {})}
-					/>
-				)}
 			</div>
-		</div>
 		</>
 	);
 }

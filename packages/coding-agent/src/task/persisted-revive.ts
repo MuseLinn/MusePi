@@ -161,12 +161,9 @@ export function createPersistedSubagentReviverFactory(
 			await session.setActiveToolsByName([...init.tools, ...session.getMountedXdevToolNames()]);
 			// Cold revives must drive registry status themselves — createAgentSession
 			// doesn't wire this generically (the live path does it in the executor).
-			// Without it the idle-TTL timer never clears on a turn and the lifecycle
-			// could park the agent mid-run.
-			session.subscribe(event => {
-				if (event.type === "agent_start") registry.setStatus(ref.id, "running", session);
-				else if (event.type === "agent_end") registry.setStatus(ref.id, "idle", session);
-			});
+			// The internal run-state signal precedes deferrable public `agent_end`,
+			// keeping idle-TTL ownership synchronized even while prompts unwind.
+			registry.syncSessionStatus(ref.id, session);
 			// Persisted files predate an agent-source field, so cold-revived frames
 			// report the runtime-neutral `user` source; name comes from the ref.
 			const wakeAgent: AgentDefinition = {

@@ -42,7 +42,8 @@ App version `0.4.0` (independent of upstream versioning; see [UPSTREAM.md](UPSTR
   - `#` session references: session-list completion that inserts `history://<id>` (a read-tool-resolvable internal URL).
 - **Context management**: context donut (`session.contextUsage` live usage), `/compact`-parity manual compaction, snapcompact savings estimate (same planner as TUI `/context`).
 - **Settings panel**: all 336 TUI settings merged into the desktop settings (schema-driven via the `settings.schema` RPC, same source of truth as the TUI), 10+ tabs; shared controls (toggle / segmented / select / masked credential inputs). The sidebar search matches actual setting rows (keyword-indexed, bilingual), highlights the matching rows in the content area and scrolls to the first one; role-model rows show each model's real thinking ladder (per-model `getSupportedEfforts`, not a fixed seven-rung list) and re-resolve auto-selection live when the DEFAULT role changes.
-- **Rich interactions**: image attachments pre-scaled client-side (`images.autoResize` honored on both ends), image lightbox preview (multi-image stacks, zoom/pan), attachment keyboard deletion, voice input, per-session draft persistence, idle recap (`recap.enabled`), reminders panel (live `working`/`live` session states), ⌘K command palette, Board kanban (canvas auto-scales to the window, no horizontal scrollbar, ChromaGrid-style group glow over the cards), widget system (custom HTML widgets with theme hot-swap).
+- **Rich interactions**: image attachments pre-scaled client-side (`images.autoResize` honored on both ends), image lightbox preview (multi-image stacks, zoom/pan), attachment keyboard deletion, voice input (dictation with live level/seconds feedback, read-aloud with per-message playing state, `tts.autoRead` auto-reading new replies), per-session draft persistence, idle recap (`recap.enabled`), reminders panel (live `working`/`live` session states), ⌘K command palette, Board kanban (canvas auto-scales to the window, no horizontal scrollbar, ChromaGrid-style group glow over the cards), widget system (custom HTML widgets with theme hot-swap).
+- **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`, built-in standard/minimal templates). The welcome composer's project row carries a preset chip (DSH hero parity); sessions show a read-only preset label. CLI/TUI: `--preset <id>` at startup, `/preset` to inspect. Managed in Settings → 智能体 → 预设 (card panel with validate/delete; `modes.validate` for agent self-checks). Extension center splits **OMP Extension Packages** (upstream ecosystem) and **MusePi Extensions** (own extension system) into separate tabs.
 - **Session lifecycle status** (TUI session-list parity): every sidebar row carries a colored status square (complete / interrupted / aborted / error / pending, from the session-file tail) with a manual tag override via the row context menu (`#完成`/`#中断`/…); group member rows pin working/unread sessions first. Archived snapshots are normalized to idle, so a daemon shut down mid-stream never leaves a phantom "working" turn with an unstoppable stop button.
 - **Swarm task visualizer** (kimiwork parity): while a `task` tool runs, a frosted member chip hovers above the composer (`display.taskCardStyle=swarm`) — click opens the floating avatar/progress grid (agent trajectory drill-down); the transcript keeps compact one-line-per-subagent rows.
 - **Compaction status line**: the agent status line swaps to a braille spinner + stop button while the context compacts (daemon `isCompacting`), cancel via `session.abort` (TUI Esc parity).
@@ -381,7 +382,7 @@ Config lives under `~/.musepi/` (branding delta; override with `PI_CONFIG_DIR`).
 ┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
 │  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
 │  packages/gui │   WS event stream (journal)   │  packages/coding-agent│
-│  + collab-web │                               │  AgentSession host    │
+│  + desktop-web │                               │  AgentSession host    │
 └──────┬───────┘                               └──────────┬───────────┘
        │                                                    │
        │  pet.html / bubble.html / pin.html                 │ agent engine
@@ -389,13 +390,13 @@ Config lives under `~/.musepi/` (branding delta; override with `PI_CONFIG_DIR`).
        │                                         packages/agent · ai · tui
        │                                         natives (Rust N-API)
        ▼
-  collab-web: transcript / tool-render / widget / i18n (zh-CN single source)
+  desktop-web: transcript / tool-render / widget / i18n (per-domain zh-CN/en-US maps)
 ```
 
 | Package | Role |
 |---|---|
 | `gui` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
-| `collab-web` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI |
+| `desktop-web` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI |
 | `coding-agent` | CLI entry (`musepi`), daemon server, slash/bash commands, tool implementations |
 | `collab-proto` | GUI ↔ daemon transport (WS frames, crypto, links) |
 | `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | Upstream-derived engine / provider registry / TUI / model catalog / wire types / utils |
@@ -440,7 +441,7 @@ bun run gen:nix
 The command uses `bun2nix` from `nix develop` when available, otherwise enters the development shell through Nix, then falls back to the pinned `bunx bun2nix@2.1.2`. Do not edit `nix/bun.nix` manually.
 - Full test runs prefer `OMP_TEST_CONCURRENCY=4` (default concurrency 8 is memory-heavy on this machine).
 - The Rust bucket needs `cargo-nextest` and a PATH with `~/.cargo/bin` first.
-- After touching `collab-web`, rebuild the GUI (`bun --cwd=packages/gui run build`) before verifying — browsers cache the old bundle.
+- After touching `desktop-web`, rebuild the GUI (`bun --cwd=packages/gui run build`) before verifying — browsers cache the old bundle.
 - GUI/daemon E2E isolation: run a test daemon on :8310 with `PI_CONFIG_DIR=musepi-test`; launch the test GUI with `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`; puppeteer connects to **9223** (the CDP endpoint) only.
 
 Commit convention: `git commit --no-verify` (husky/biome baseline warnings); natives changes need a rebuild (`bun run build:native`, LINKEDIT alignment handled automatically).

@@ -12,7 +12,7 @@
  * its persistent login state; agent operations surface in the activity line
  * and auto-open the panel (ContextPanel listens for agentActivity).
  */
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";

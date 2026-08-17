@@ -109,4 +109,24 @@ describe("hub unified wait", () => {
 		expect(text).toContain("No running background jobs to wait for.");
 		expect(result.useless).toBe(true);
 	});
+
+	test("bare wait ignores a detached ref whose running status is stale", async () => {
+		const registry = AgentRegistry.global();
+		registry.register({ id: SELF_ID, displayName: "main", kind: "main", session: null });
+		registry.register({
+			id: "Zombie",
+			displayName: "stale task",
+			kind: "sub",
+			parentId: SELF_ID,
+			session: null,
+			status: "running",
+		});
+
+		const manager = new AsyncJobManager({ onJobComplete: () => {} });
+		const result = await new HubTool(makeSession(manager)).execute("call_4", { op: "wait", timeoutMs: 0 });
+		const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+		expect(text).toContain("No running background jobs to wait for.");
+		expect(result.useless).toBe(true);
+	});
 });

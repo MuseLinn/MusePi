@@ -39,7 +39,7 @@
 		"fix": "biome check --write --unsafe . && bun run format-prompts",
 		"fmt": "biome format --write . && bun run format-prompts",
 		"format-prompts": "bun scripts/format-prompts.ts",
-		"gen:tool-views": "bun --cwd=../collab-web run gen:tool-views",
+		"gen:tool-views": "bun --cwd=../desktop-web run gen:tool-views",
 		"gen:bundle": "bun scripts/bundle-dist.ts",
 		"gen:mupdf": "bun scripts/embed-mupdf-wasm.ts --generate",
 		"gen:mupdf:reset": "bun scripts/embed-mupdf-wasm.ts --reset",
@@ -93,7 +93,9 @@
 		"sherpa-onnx-node": "1.13.2"
 	},
 	"devDependencies": {
-		"@types/bun": "catalog:"
+		"@larksuiteoapi/node-sdk": "^1.73.0",
+		"@types/bun": "catalog:",
+		"react": "19.2.7"
 	},
 	"engines": {
 		"bun": ">=1.3.14"
@@ -409,6 +411,10 @@
 			"types": "./src/mcp/transports/*.ts",
 			"import": "./src/mcp/transports/*.ts"
 		},
+		"./presets/*": {
+			"types": "./src/presets/*.ts",
+			"import": "./src/presets/*.ts"
+		},
 		"./memories": {
 			"types": "./src/memories/index.ts",
 			"import": "./src/memories/index.ts"
@@ -436,10 +442,6 @@
 		"./modes": {
 			"types": "./src/modes/index.ts",
 			"import": "./src/modes/index.ts"
-		},
-		"./modes/*": {
-			"types": "./src/modes/*.ts",
-			"import": "./src/modes/*.ts"
 		},
 		"./modes/acp": {
 			"types": "./src/modes/acp/index.ts",
@@ -504,6 +506,10 @@
 		"./plan-mode/*": {
 			"types": "./src/plan-mode/*.ts",
 			"import": "./src/plan-mode/*.ts"
+		},
+		"./prompts/composer": {
+			"types": "./src/prompts/composer.ts",
+			"import": "./src/prompts/composer.ts"
 		},
 		"./prompts/*": "./src/prompts/*.md",
 		"./secrets": {

@@ -1,4 +1,4 @@
-import { relTime, t } from "@musepi/collab-web";
+import { relTime, t } from "@musepi/desktop-web";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Icon } from "../vendor/oc-icons";
 

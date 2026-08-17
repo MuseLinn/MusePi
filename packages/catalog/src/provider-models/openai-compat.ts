@@ -1,5 +1,6 @@
 import { USER_AGENT } from "@musepi/pi-utils";
 import * as logger from "@musepi/pi-utils/logger";
+import { xaiResponsesReasoningEffortMap } from "../compat/openai";
 import {
 	DEFAULT_OPENAI_COMPATIBLE_DISCOVERY_TIMEOUT_MS,
 	fetchOpenAICompatibleModels,
@@ -20,7 +21,17 @@ import {
 import { resolveModelReference } from "../identity/reference";
 import type { ModelManagerOptions } from "../model-manager";
 import { type GeneratedProvider, getBundledModels } from "../models";
-import type { Api, FetchImpl, Model, ModelSpec, OpenAICompat, Provider, ThinkingConfig } from "../types";
+import { OPENAI_GPT_56_CYBER_STANDARD_COST, OPENAI_GPT_56_SOL_STANDARD_COST } from "../openai-pricing";
+import type {
+	Api,
+	FetchImpl,
+	LongContextTokenCost,
+	Model,
+	ModelSpec,
+	OpenAICompat,
+	Provider,
+	ThinkingConfig,
+} from "../types";
 import { discoveryFetch, isAnthropicOAuthToken, isRecord, toBoolean, toNumber, toPositiveNumber } from "../utils";
 import { ALIBABA_TOKEN_PLAN_BASE_URL, parseAlibabaTokenPlanCredential } from "../wire/alibaba-token-plan";
 import { coreWeaveProjectHeaders } from "../wire/coreweave";
@@ -869,6 +880,7 @@ export function umansModelManagerOptions(config?: UmansModelManagerConfig): Mode
 // ---------------------------------------------------------------------------
 
 const OPENAI_API_BASE_URL = "https://api.openai.com/v1";
+/** GPT-5.6 rates applied when a first-party request exceeds 272K input tokens. */
 export const OPENAI_GPT_56_LONG_CONTEXT_COSTS = {
 	luna: {
 		inputThreshold: 272_000,
@@ -891,20 +903,7 @@ export const OPENAI_GPT_56_LONG_CONTEXT_COSTS = {
 		cacheRead: 0.4,
 		cacheWrite: 5,
 	},
-} as const;
-const OPENAI_GPT_56_SOL_STANDARD_COST = {
-	input: 5,
-	output: 30,
-	cacheRead: 0.5,
-	cacheWrite: 6.25,
-	longContext: OPENAI_GPT_56_LONG_CONTEXT_COSTS.sol,
-} as const;
-const OPENAI_GPT_56_CYBER_STANDARD_COST = {
-	input: 12.5,
-	output: 75,
-	cacheRead: 1.25,
-	cacheWrite: 15.625,
-} as const;
+} as const satisfies Readonly<Record<"luna" | "sol" | "terra", LongContextTokenCost>>;
 
 export interface OpenAIModelManagerConfig {
 	apiKey?: string;
@@ -938,7 +937,10 @@ export const OPENAI_DAYBREAK_CURATED_FALLBACK_MODELS: readonly ModelSpec<"openai
 		baseUrl: OPENAI_API_BASE_URL,
 		reasoning: true,
 		input: ["text", "image"],
-		cost: OPENAI_GPT_56_SOL_STANDARD_COST,
+		cost: {
+			...OPENAI_GPT_56_SOL_STANDARD_COST,
+			longContext: OPENAI_GPT_56_LONG_CONTEXT_COSTS.sol,
+		},
 		contextWindow: 1_050_000,
 		maxTokens: 128_000,
 	},
@@ -1257,8 +1259,23 @@ export interface XaiModelManagerConfig {
 	fetch?: FetchImpl;
 }
 
-export function xaiModelManagerOptions(config?: XaiModelManagerConfig): ModelManagerOptions<"openai-completions"> {
-	return createSimpleOpenAICompletionsOptions("xai", "https://api.x.ai/v1", config);
+export function xaiModelManagerOptions(config?: XaiModelManagerConfig): ModelManagerOptions<"openai-responses"> {
+	return {
+		...createOpenAICompatibleModelManagerOptions({
+			api: "openai-responses",
+			providerId: "xai",
+			defaultBaseUrl: "https://api.x.ai/v1",
+			config,
+			requireApiKey: true,
+			mapModel: mapWithBundledReference,
+		}),
+		// Completions → Responses migration: a fresh authoritative cache written
+		// by the old resolver stores `api: "openai-completions"` for these ids.
+		// Without a drop list, `online-if-uncached` skips the network and
+		// `mergeDynamicModel` lets the cached api win over the new static
+		// Responses entries until TTL expiry.
+		dropCachedModelIdsOnStaticMismatch: getBundledModels("xai").map(model => model.id),
+	};
 }
 
 export interface XaiOAuthModelManagerConfig {
@@ -1316,6 +1333,7 @@ export const XAI_OAUTH_CURATED_MODELS: readonly XAICuratedModel[] = [
 	},
 	{ id: "grok-4.3", contextWindow: 1_000_000, name: "Grok 4.3", input: ["text", "image"] },
 	{ id: "grok-4.5", contextWindow: 500_000, name: "Grok 4.5", input: ["text", "image"] },
+	{ id: "grok-4.6", contextWindow: 500_000, name: "Grok 4.6", input: ["text", "image"] },
 	// grok-4.20-multi-agent-0309 is text-only per the bundled catalog; omit `input` for the default.
 	{ id: "grok-4.20-multi-agent-0309", contextWindow: 2_000_000, name: "Grok 4.20 (Multi-Agent)" },
 	{
@@ -1352,21 +1370,47 @@ const XAI_NON_CHAT_PREFIXES = ["grok-imagine-", "grok-stt-", "grok-voice-"] as c
 function withXaiOAuthCompatDefaults(model: ModelSpec<"openai-responses">): ModelSpec<"openai-responses"> {
 	const compat = {
 		...(model.compat ?? {}),
-		includeEncryptedReasoning: model.compat?.includeEncryptedReasoning ?? false,
-		filterReasoningHistory: model.compat?.filterReasoningHistory ?? true,
+		includeEncryptedReasoning: model.compat?.includeEncryptedReasoning ?? true,
+		filterReasoningHistory: model.compat?.filterReasoningHistory ?? false,
 		supportsImageDetailOriginal: model.compat?.supportsImageDetailOriginal ?? false,
 		omitReasoningEffort: model.compat?.omitReasoningEffort ?? !isGrokReasoningEffortCapable(model.id),
 	};
 	return { ...model, compat };
 }
 
-// Hermes-agent parity: only the `minimal -> low` clamp is applied (see
-// hermes-agent/agent/transports/codex.py:92 `_effort_clamp = {"minimal":
-// "low"}`). Hermes sends `xhigh` to xAI verbatim and we match that contract
-// — let xAI decide if the level is valid for the specific Grok model.
-// `resolveModelThinking` folds this into `model.thinking.effortMap`, downstream
-// of the omitReasoningEffort gate in pi-ai's stream.ts.
-const XAI_REASONING_EFFORT_MAP = { minimal: "low" } as const;
+// Hermes-agent parity for `minimal -> low` (see hermes-agent/agent/transports/
+// codex.py:92). Multi-agent Grok keeps `xhigh` unmapped (agent-count mode);
+// other first-party SKUs clamp leftover `xhigh`/`max` to `high`.
+// `resolveModelThinking` folds this into `model.thinking.effortMap`.
+
+/**
+ * Bake first-party xAI Responses effort-dial metadata onto a catalog spec.
+ *
+ * models.dev marks many Grok SKUs as reasoners and the thinking rebake would
+ * otherwise emit a default `minimal/low/medium/high` dial. api.x.ai only
+ * accepts `reasoning.effort` for {@link isGrokReasoningEffortCapable} ids —
+ * off-allowlist reasoners (`grok-code-fast-1`, `grok-build-0.1`,
+ * `grok-4.20-0309-reasoning`, …) 400 if the param is sent. SuperGrok
+ * (`xai-oauth`) already curates this via {@link mergeCuratedIntoModel}; paid
+ * `xai` rows come from stencil.so and need the same wire facts in the exported
+ * `models.json` so direct catalog readers do not present an unsupported dial.
+ *
+ * Explicit `compat.supportsReasoningEffort` / `omitReasoningEffort` win.
+ */
+export function applyXaiResponsesThinkingPolicy(model: ModelSpec<"openai-responses">): ModelSpec<"openai-responses"> {
+	const effortCapable = model.compat?.supportsReasoningEffort ?? isGrokReasoningEffortCapable(model.id);
+	const compat = {
+		...(model.compat ?? {}),
+		supportsReasoningEffort: effortCapable,
+		omitReasoningEffort: model.compat?.omitReasoningEffort ?? !effortCapable,
+	};
+	if (effortCapable) {
+		compat.reasoningEffortMap = { ...xaiResponsesReasoningEffortMap(model.id) };
+	} else {
+		delete compat.reasoningEffortMap;
+	}
+	return { ...model, compat };
+}
 
 // xai-oauth's /v1/models exposes no per-request output limit on the OAuth
 // (Grok Build / SuperGrok) surface, so the curated catalog owns `maxTokens`
@@ -1381,9 +1425,9 @@ const XAI_REASONING_EFFORT_MAP = { minimal: "low" } as const;
 // reasoning metadata and fetchOpenAICompatibleModels defaults reasoning to
 // false). Caller supplies a `base` Model (either a freshly synthesised seed
 // or a dynamic-fetched entry); the helper layers curated fields on top.
-// The `minimal -> low` effort clamp (XAI_REASONING_EFFORT_MAP) is always
-// merged in so dynamic-fetched models — which arrive without curated
-// compat keys — still get the clamp applyResponsesReasoningParams expects.
+// The effort remap from {@link xaiResponsesReasoningEffortMap} is merged
+// only onto effort-capable rows. Off-allowlist reasoners omit the wire
+// param, so a map on those specs is dead weight.
 // The effort-dial pair (`supportsReasoningEffort`/`omitReasoningEffort`) is
 // authoritative: a stale flag on `base` (previous snapshot or dynamic fetch)
 // must not outlive an allowlist change in identity/family.ts.
@@ -1394,13 +1438,17 @@ function mergeCuratedIntoModel(
 	const effortCapable = curated.supportsReasoningEffort ?? isGrokReasoningEffortCapable(curated.id);
 	const compat = {
 		...(base.compat ?? {}),
-		reasoningEffortMap: { ...XAI_REASONING_EFFORT_MAP, ...(base.compat?.reasoningEffortMap ?? {}) },
-		includeEncryptedReasoning: base.compat?.includeEncryptedReasoning ?? false,
-		filterReasoningHistory: base.compat?.filterReasoningHistory ?? true,
+		includeEncryptedReasoning: base.compat?.includeEncryptedReasoning ?? true,
+		filterReasoningHistory: false,
 		supportsImageDetailOriginal: base.compat?.supportsImageDetailOriginal ?? false,
 		omitReasoningEffort: !effortCapable,
 		supportsReasoningEffort: effortCapable,
 	};
+	if (effortCapable) {
+		compat.reasoningEffortMap = { ...xaiResponsesReasoningEffortMap(curated.id) };
+	} else {
+		delete compat.reasoningEffortMap;
+	}
 	return {
 		...base,
 		contextWindow: curated.contextWindow,
@@ -1502,7 +1550,7 @@ export function buildXaiOAuthStaticSeed(baseUrl?: string): ModelSpec<"openai-res
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: curated.contextWindow,
 			maxTokens: curated.contextWindow,
-			compat: { reasoningEffortMap: XAI_REASONING_EFFORT_MAP },
+			compat: { reasoningEffortMap: xaiResponsesReasoningEffortMap(curated.id) },
 		};
 		return mergeCuratedIntoModel(base, curated);
 	});
@@ -3634,15 +3682,19 @@ export function basetenModelManagerOptions(
 			const features = Array.isArray(raw.supported_features) ? raw.supported_features : [];
 			const modalities = Array.isArray(raw.input_modalities) ? raw.input_modalities : [];
 
-			// Baseten's reasoning router accepts only the high/max
-			// effort tiers for its GLM-5.2 and gpt-oss routes.
-			const isEffortReasoning =
+			// Baseten's discovery flags are not enough to enable OMP reasoning for every
+			// model. Only models with a verified Baseten reasoning policy are enabled
+			// here; an unknown model may use a different reasoning wire shape or effort
+			// vocabulary, which OMP must not guess.
+			const isSupportedBasetenReasoningModel =
+				isKimiK3ModelId(defaults.id) ||
 				defaults.id === "openai/gpt-oss-120b" ||
+				defaults.id === "deepseek-ai/DeepSeek-V4-Pro" ||
 				defaults.id === "zai-org/GLM-5.2" ||
 				defaults.id === "zai-org/GLM-5.2-Fast";
-			const isBasetenNativeReasoning = isEffortReasoning || defaults.id === "deepseek-ai/DeepSeek-V4-Pro";
 			const reasoning =
-				isBasetenNativeReasoning && (features.includes("reasoning") || features.includes("reasoning_effort"));
+				isSupportedBasetenReasoningModel &&
+				(features.includes("reasoning") || features.includes("reasoning_effort"));
 			const supportsTools = features.includes("tools") ? undefined : false;
 			const vision = modalities.includes("image") || (reference?.input.includes("image") ?? false);
 
@@ -3656,14 +3708,7 @@ export function basetenModelManagerOptions(
 
 			const contextWindow = toPositiveNumber(raw.context_length, reference?.contextWindow ?? defaults.contextWindow);
 			const maxTokens = toPositiveNumber(raw.max_completion_tokens, reference?.maxTokens ?? defaults.maxTokens);
-
 			const baseModel = mapWithBundledReference(entry, defaults, reference);
-			const thinking = isEffortReasoning
-				? {
-						mode: "effort" as const,
-						efforts: [Effort.High, Effort.Max],
-					}
-				: undefined;
 
 			return {
 				...baseModel,
@@ -3672,7 +3717,6 @@ export function basetenModelManagerOptions(
 				cost,
 				contextWindow,
 				maxTokens,
-				...(thinking ? { thinking } : {}),
 				...(supportsTools === false ? { supportsTools } : {}),
 			};
 		},
@@ -5851,6 +5895,15 @@ function openAiCompletionsDescriptor(
 	return simpleModelsDevDescriptor(modelsDevKey, providerId, "openai-completions", baseUrl, options);
 }
 
+function openAiResponsesDescriptor(
+	modelsDevKey: string,
+	providerId: string,
+	baseUrl: string,
+	options: Omit<ModelsDevProviderDescriptor, "modelsDevKey" | "providerId" | "api" | "baseUrl"> = {},
+): ModelsDevProviderDescriptor {
+	return simpleModelsDevDescriptor(modelsDevKey, providerId, "openai-responses", baseUrl, options);
+}
+
 function anthropicMessagesDescriptor(
 	modelsDevKey: string,
 	providerId: string,
@@ -5975,7 +6028,9 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor
 		defaultContextWindow: 131072,
 	}),
 	// --- xAI ---
-	openAiCompletionsDescriptor("xai", "xai", "https://api.x.ai/v1"),
+	openAiResponsesDescriptor("xai", "xai", "https://api.x.ai/v1", {
+		transformModel: model => applyXaiResponsesThinkingPolicy(model as ModelSpec<"openai-responses">),
+	}),
 	// --- DeepSeek ---
 	openAiCompletionsDescriptor("deepseek", "deepseek", "https://api.deepseek.com", {
 		// Only ship the v4 family as built-ins; older deepseek-chat / deepseek-reasoner

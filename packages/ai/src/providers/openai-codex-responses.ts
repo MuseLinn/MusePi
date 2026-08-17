@@ -3627,7 +3627,7 @@ class CodexWebSocketConnection {
 		};
 		socket.onmessage = (event: unknown) => {
 			// bun-types 1.3.14 resolves its MessageEvent to the CONSTRUCTOR type
-			// under a DOM lib compile (collab-web type-checks ../ai), so the
+			// under a DOM lib compile (desktop-web type-checks ../ai), so the
 			// handler param is unusable — read the frame shape structurally.
 			const frame = event as { data?: unknown };
 			// Stamp inbound activity before parsing so even malformed frames refresh

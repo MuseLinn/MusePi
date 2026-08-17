@@ -1,6 +1,6 @@
-import { CodeHighlightProvider, relTime, Transcript, t } from "@musepi/collab-web";
+import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t } from "@musepi/desktop-web";
 import type { SessionEntry } from "@musepi/pi-wire";
-import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
@@ -8,14 +8,16 @@ import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
+import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
-import { AskCard, type AskAnswer, type AskRequest } from "./AskCard";
+import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
+import { PunkAvatar } from "./avatar-presets";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
@@ -65,16 +67,49 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	useEffect(() => {
 		setAvatarFailed(false);
 	}, []);
+	// Avatar source mode (设置 → 通用 → 用户头像来源): auto = GitHub →
+	// pixel face → initial; punk = always the deterministic pixel face;
+	// initial = letter chip only (no network, no pixel). Listens to
+	// omp-avatar-changed so a settings change applies immediately.
+	const readMode = (): string => {
+		try {
+			return localStorage.getItem("omp-gui-user-avatar-mode") ?? "auto";
+		} catch {
+			return "auto";
+		}
+	};
+	const [avatarMode, setAvatarMode] = useState<string>(readMode);
+	useEffect(() => {
+		const on = (): void => setAvatarMode(readMode());
+		window.addEventListener("omp-avatar-changed", on);
+		window.addEventListener("storage", on);
+		return () => {
+			window.removeEventListener("omp-avatar-changed", on);
+			window.removeEventListener("storage", on);
+		};
+	}, []);
 	const initial = user?.name?.trim().charAt(0)?.toLocaleUpperCase() ?? "";
 	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("you");
+	const punkFace = user?.name?.trim() ? (
+		<img src={punkAvatarUri(user.name.trim())} alt="" className="gui-user-avatar-img gui-avatar-punk" />
+	) : null;
+	const letterFace = initial ? <span className="gui-user-avatar-letter">{initial}</span> : null;
 	return (
 		<span className="gui-user-avatar" title={title}>
-			{avatarUrl && !avatarFailed ? (
+			{avatarMode === "initial" ? (
+				(letterFace ?? <Icon name="user" className="h-3.5 w-3.5" />)
+			) : avatarMode === "punk" ? (
+				/* Explicit pixel-face mode: the user-chosen seed (设置 → 常规
+				 * 换一个 / seed 输入, PUNK_SEED_KEY) — NOT the git-identity
+				 * face, so the chat bubble follows the settings control and
+				 * never degrades to a blank icon when git identity is absent.
+				 * PunkAvatar listens for omp-avatar-changed, so 换一个/apply
+				 * re-renders every mounted bubble live. */
+				<PunkAvatar size={20} />
+			) : avatarUrl && !avatarFailed ? (
 				<img src={avatarUrl} alt="" className="gui-user-avatar-img" onError={() => setAvatarFailed(true)} />
-			) : initial ? (
-				<span className="gui-user-avatar-letter">{initial}</span>
 			) : (
-				<Icon name="user" className="h-3.5 w-3.5" />
+				(punkFace ?? letterFace ?? <Icon name="user" className="h-3.5 w-3.5" />)
 			)}
 		</span>
 	);
@@ -163,6 +198,9 @@ export function ChatView({
 	onReloadSession,
 	onForkSession,
 	presetModelId,
+	modes,
+	modeId,
+	onModeChange,
 	defaultModelId,
 	presetThinkingLevel,
 	busy,
@@ -202,6 +240,10 @@ export function ChatView({
 	/** Model chosen in the welcome composer before the session existed —
 	 *  carried into the session composer as its initial seed. */
 	presetModelId?: string | null;
+	/** Welcome 预设(mode)chip(welcome 场景;modes 未传则不渲染,见 Composer)。 */
+	modes?: { id: string; label: string }[] | null;
+	modeId?: string | null;
+	onModeChange?(id: string | null): void;
 	/** The DEFAULT-role model (modelRoles.default): the welcome composer's
 	 *  resting preselect for NEW sessions. Separate from presetModelId so
 	 *  opening/switching sessions never changes what the welcome shows. */
@@ -263,6 +305,9 @@ export function ChatView({
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);
+	/** TTS read-aloud 播放状态:行级指示 + 停止句柄。 */
+	const [speakingId, setSpeakingId] = useState<string | null>(null);
+	const stopSpeakRef = useRef<(() => void) | null>(null);
 	useEffect(() => {
 		if (paused !== true) return;
 		const timer = setInterval(() => setPauseTick(t => t + 1), 1_000);
@@ -296,6 +341,7 @@ export function ChatView({
 						"display.showTokenUsage",
 						"display.collapseCompacted",
 						"display.taskCardStyle",
+						"tts.autoRead",
 					],
 				})
 				.then(v => {
@@ -322,6 +368,37 @@ export function ChatView({
 			cls.remove("gui-chat-no-smooth");
 		}
 	}, [displaySettings["display.smoothStreaming"]]);
+	// TTS 自动朗读(tts.autoRead):空闲时检测新的 settled assistant 消息并朗读。
+	const lastAutoReadIdRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (displaySettings["tts.autoRead"] !== true) return;
+		if (!snap || snap.working || snap.streaming) return;
+		let lastId: string | null = null;
+		let lastText = "";
+		for (let i = snap.entries.length - 1; i >= 0; i--) {
+			const e = snap.entries[i];
+			if (e.type === "message" && e.message.role === "assistant" && !e.message.duration) continue;
+			if (e.type === "message" && e.message.role === "assistant") {
+				lastId = e.id;
+				lastText = (e.message.content as { type?: string; text?: string }[])
+					.filter(block => block.type === "text")
+					.map(block => block.text ?? "")
+					.join(" ");
+				break;
+			}
+		}
+		if (!lastId || lastId === lastAutoReadIdRef.current) return;
+		lastAutoReadIdRef.current = lastId;
+		if (!lastText.trim()) return;
+		stopSpeakRef.current = speak(lastText, rpc, activity => {
+			if (activity.phase === "speaking") setSpeakingId(lastId);
+			else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
+				stopSpeakRef.current = null;
+				setSpeakingId(prev => (prev === lastId ? null : prev));
+			}
+		});
+		setSpeakingId(lastId);
+	}, [snap, displaySettings["tts.autoRead"], rpc]);
 	// One container, two scenes, BIDIRECTIONAL transition: the incoming
 	// scene mounts (fade/zoom in) while the outgoing one lingers 420ms
 	// with a fade-out before unmounting.
@@ -428,25 +505,26 @@ export function ChatView({
 	const showAvatars = localStorage.getItem("omp-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
-	const terminalDockRef = useRef<HTMLDivElement | null>(null);
-	const dockResize = (e: ReactPointerEvent): void => {
-		// While dragging, suppress the open/close height transition so the
-		// handle stays 1:1 with the pointer.
-		terminalDockRef.current?.classList.add("gui-terminal-dock--resizing");
-		const startY = e.clientY;
-		const startH = dockHeight;
-		const onMove = (ev: PointerEvent): void => {
-			const h = Math.min(480, Math.max(96, startH + (startY - ev.clientY)));
+	// Terminal dock resize — unified usePointerDrag primitive (pointer
+	// capture + cancel; the old window-listener version leaked listeners
+	// when the pointer left the window and stuck mid-drag on cancel).
+	const dockStartRef = useRef(dockHeight);
+	const dockResizeDrag = usePointerDrag({
+		onDragStart: () => {
+			// While dragging, suppress the open/close height transition so
+			// the handle stays 1:1 with the pointer.
+			terminalDockRef.current?.classList.add("gui-terminal-dock--resizing");
+			dockStartRef.current = dockHeight;
+		},
+		onDragMove: ({ dy }) => {
+			const h = Math.min(480, Math.max(96, dockStartRef.current - dy));
 			setDockHeight(h);
-		};
-		const onUp = (): void => {
+		},
+		onDragEnd: () => {
 			terminalDockRef.current?.classList.remove("gui-terminal-dock--resizing");
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-		};
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-	};
+		},
+	});
+	const terminalDockRef = useRef<HTMLDivElement | null>(null);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	// Session-switch reveal: when the active session changes, the transcript
 	// rows play a staggered fade-in (逐字错峰) so the context swap reads as a
@@ -718,6 +796,18 @@ export function ChatView({
 		}
 		return thinkingInfoAuto ? "auto" : (level ?? thinkingInfoLevel ?? null);
 	})();
+	// The work-timer badge wants the ACTUAL effort this round used — the
+	// last thinking_level_change entry carries the auto-classified resolved
+	// level (the composer chip above intentionally shows "auto", the
+	// configured state; the badge must not).
+	const resolvedThinkingLevel: string | null = (() => {
+		if (!snap) return null;
+		let level: string | null = null;
+		for (const entry of snap.entries) {
+			if (entry.type === "thinking_level_change") level = entry.thinkingLevel ?? null;
+		}
+		return level ?? snap.state?.thinkingLevel ?? null;
+	})();
 	// Subagent trajectory panel (kimiwork parity): opening an agent from a
 	// swarm-card member row or the right rail slides the panel out over the
 	// chat column; the selected agent resolves against the live snapshot.
@@ -867,6 +957,9 @@ export function ChatView({
 								reminders={reminders}
 								onSelectReminder={onSelectReminder}
 								onMarkAllRead={onMarkAllRead}
+								modes={modes}
+								modeId={modeId}
+								onModeChange={onModeChange}
 							/>
 						</div>
 					)}
@@ -952,6 +1045,7 @@ export function ChatView({
 														activeTools={snap?.activeTools ?? new Map()}
 														working={snap?.working ?? false}
 														roundDurations={snap?.roundDurations}
+														thinkingLevel={resolvedThinkingLevel ?? undefined}
 														host={host}
 														/* Chat settings (openchamber parity): user message
 														 * markdown/plain + long-message collapse. */
@@ -977,7 +1071,9 @@ export function ChatView({
 														showTokenUsage={displaySettings["display.showTokenUsage"] === true}
 														collapseCompacted={displaySettings["display.collapseCompacted"] !== false}
 														taskCardStyle={
-															displaySettings["display.taskCardStyle"] === "classic" ? "classic" : "swarm"
+															displaySettings["display.taskCardStyle"] === "classic"
+																? "classic"
+																: "swarm"
 														}
 														colorBlind={displaySettings.colorBlindMode === true}
 														onQuote={text => appendQuote(text)}
@@ -988,9 +1084,33 @@ export function ChatView({
 														onLoadOlder={onLoadOlderStable}
 														loadingOlder={loadingOlder}
 														onRetry={(id, text) => void retryFromUserMessage(id, text)}
-														onSpeak={text => {
-															// TTS read-aloud via the daemon's local Kokoro worker.
-															speak(text, rpc);
+														onSpeak={(text, id) => {
+															// TTS read-aloud via the daemon's local Kokoro worker;
+															// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。
+															if (stopSpeakRef.current) {
+																stopSpeakRef.current();
+																setSpeakingId(null);
+																return;
+															}
+															const entryId = id ?? null;
+															stopSpeakRef.current = speak(text, rpc, activity => {
+																if (activity.phase === "speaking") setSpeakingId(entryId);
+																else if (
+																	activity.phase === "done" ||
+																	activity.phase === "stopped" ||
+																	activity.phase === "error"
+																) {
+																	stopSpeakRef.current = null;
+																	setSpeakingId(prev => (prev === entryId ? null : prev));
+																}
+															});
+															setSpeakingId(entryId);
+														}}
+														speakingId={speakingId}
+														onStopSpeak={() => {
+															stopSpeakRef.current?.();
+															stopSpeakRef.current = null;
+															setSpeakingId(null);
 														}}
 														onSaveImage={text => setSaveImageText(text)}
 														/* ZCode: avatars replace the 宿主/代理 gutter labels. */
@@ -1193,9 +1313,7 @@ export function ChatView({
 												onDecide={onDecideApproval}
 											/>
 										))}
-										{ask && onAskAnswer && (
-											<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
-										)}
+										{ask && onAskAnswer && <AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />}
 										<Composer
 											working={snap?.working ?? false}
 											petMood={moodFromState({
@@ -1214,6 +1332,15 @@ export function ChatView({
 											thinkingCeiling={thinkingCeiling}
 											thinkingEfforts={thinkingEfforts}
 											presetModelId={presetModelId}
+											modes={modes}
+											modeId={modeId}
+											welcome={showWelcome}
+											sessionModeLabel={(() => {
+												const id = (snap?.state as { modeId?: string } | undefined)?.modeId;
+												if (!id) return null;
+												return modes?.find(m => m.id === id)?.label ?? id;
+											})()}
+											onModeChange={onModeChange}
 											quotes={quotes}
 											onQuotesChange={setQuotes}
 											pendingEdit={pendingEdit}
@@ -1267,7 +1394,7 @@ export function ChatView({
 				>
 					{/* Drag handle: the dock pushes the composer up and its
 					 * height is user-adjustable (openchamber bottom dock). */}
-					<div className="gui-dock-handle" onPointerDown={dockResize} aria-hidden />
+					<div className="gui-dock-handle" {...dockResizeDrag} style={{ touchAction: "none" }} aria-hidden />
 					<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
 				</div>
 			</div>

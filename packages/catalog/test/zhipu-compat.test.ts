@@ -63,7 +63,7 @@ function zhipuGlm52ByOfficialBaseUrl(): ModelSpec<"openai-completions"> {
 describe("zhipu-coding-plan descriptor", () => {
 	it("defaults to the same Zhipu-hosted model used by login validation", () => {
 		expect(DEFAULT_MODEL_PER_PROVIDER["zhipu-coding-plan"]).toBe("glm-5.1");
-		expect(DEFAULT_MODEL_PER_PROVIDER.zai).toBe("glm-5.2");
+		expect(DEFAULT_MODEL_PER_PROVIDER.zai).toBe("glm-5.3");
 	});
 });
 

@@ -1,4 +1,4 @@
-import { AgentsPanel, t } from "@musepi/collab-web";
+import { AgentsPanel, t } from "@musepi/desktop-web";
 import type { AgentSnapshot, SessionState, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 

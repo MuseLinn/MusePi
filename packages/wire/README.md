@@ -2,7 +2,7 @@
 
 Shared TypeScript wire contracts for omp collab live sessions.
 
-The package contains only JSON-safe protocol shapes and constants. It has no runtime dependencies and is consumed by both the host CLI (`@musepi/pi-coding-agent`) and browser guest (`@musepi/collab-web`).
+The package contains only JSON-safe protocol shapes and constants. It has no runtime dependencies and is consumed by both the host CLI (`@musepi/pi-coding-agent`) and browser guest (`@musepi/desktop-web`).
 
 ## Exports
 

@@ -1,5 +1,6 @@
 import { type } from "@musepi/omptype";
 import { parseKnownModel, semverEqual } from "../identity/classify";
+import { resolveOpenAIDaybreakStandardCost } from "../openai-pricing";
 import type { FetchImpl, ModelSpec } from "../types";
 import { discoveryFetch } from "../utils";
 import { CODEX_BASE_URL, CODEX_CLIENT_VERSION, OPENAI_HEADER_VALUES, OPENAI_HEADERS } from "../wire/codex";
@@ -237,6 +238,7 @@ function normalizeCodexModelEntry(entry: unknown, baseUrl: string): NormalizedCo
 	const preferWebsockets = toBoolean(payload.prefer_websockets) === true;
 	const useResponsesLite = toBoolean(payload.use_responses_lite) === true;
 	const priority = toFiniteNumber(payload.priority) ?? Number.MAX_SAFE_INTEGER;
+	const daybreakCost = resolveOpenAIDaybreakStandardCost(slug);
 
 	return {
 		priority,
@@ -248,7 +250,7 @@ function normalizeCodexModelEntry(entry: unknown, baseUrl: string): NormalizedCo
 			baseUrl,
 			reasoning,
 			input,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			cost: daybreakCost ? { ...daybreakCost } : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			remoteCompaction: CODEX_REMOTE_COMPACTION,
 			contextWindow,
 			maxTokens,

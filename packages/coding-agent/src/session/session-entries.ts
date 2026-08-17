@@ -43,6 +43,8 @@ export interface SessionHeader {
 	previousSessionFiles?: string[];
 	/** Provider prompt-cache identity inherited by exact-route full forks. */
 	providerPromptCacheKey?: string;
+	/** 会话预设(mode)id(Modes v1;docs/modes-plan.md §6.1)。 */
+	modeId?: string;
 }
 
 export interface NewSessionOptions {
@@ -53,6 +55,8 @@ export interface NewSessionOptions {
 	drop?: boolean;
 	/** Additional workspace directories to seed on the new session. */
 	additionalDirectories?: string[];
+	/** 会话预设(mode)id(Modes v1)。 */
+	modeId?: string;
 }
 
 export interface SessionEntryBase {

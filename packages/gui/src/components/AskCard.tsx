@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/collab-web";
+import { Markdown, t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";

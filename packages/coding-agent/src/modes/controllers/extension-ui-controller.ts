@@ -1053,53 +1053,73 @@ export class ExtensionUiController {
 		const savedText = this.ctx.editor.getText();
 		const keybindings = KeybindingsManager.inMemory();
 
-		const { promise, resolve } = Promise.withResolvers<T>();
+		const { promise, resolve, reject } = Promise.withResolvers<T>();
 		let component: (Component & { dispose?(): void }) | undefined;
 		let overlayHandle: OverlayHandle | undefined;
 		let closed = false;
+		let editorReplaced = false;
 
-		const close = (result: T) => {
-			if (closed) return;
-			closed = true;
+		const cleanup = () => {
 			component?.dispose?.();
 			overlayHandle?.hide();
 			overlayHandle = undefined;
-			if (!options?.overlay) {
+			if (editorReplaced) {
 				this.ctx.editorContainer.clear();
 				this.ctx.editorContainer.addChild(this.ctx.editor);
 				this.ctx.editor.setText(savedText);
 			}
 			this.ctx.ui.setFocus(this.ctx.editor);
 			this.ctx.ui.requestRender();
-			resolve(result);
 		};
+		const finish = (settle: () => void) => {
+			if (closed) return;
+			closed = true;
+			options?.signal?.removeEventListener("abort", onAbort);
+			try {
+				cleanup();
+			} finally {
+				settle();
+			}
+		};
+		const fail = (error: unknown) => finish(() => reject(error));
+		const onAbort = () => fail(options?.signal?.reason ?? new DOMException("Dialog aborted", "AbortError"));
+		const close = (result: T) => finish(() => resolve(result));
 
-		Promise.try(() => factory(this.ctx.ui, theme, keybindings, close)).then(c => {
-			if (closed) {
-				c.dispose?.();
-				return;
-			}
-			component = c;
-			if (options?.overlay) {
-				const overlayOptions =
-					typeof options.overlayOptions === "function" ? options.overlayOptions() : options.overlayOptions;
-				overlayHandle = this.ctx.ui.showOverlay(
-					component,
-					overlayOptions ?? {
-						anchor: "bottom-center",
-						width: "100%",
-						maxHeight: "100%",
-						margin: 0,
-					},
-				);
-				options.onHandle?.(overlayHandle);
-				return;
-			}
-			this.ctx.editorContainer.clear();
-			this.ctx.editorContainer.addChild(component);
-			this.ctx.ui.setFocus(component);
-			this.ctx.ui.requestRender();
-		});
+		if (options?.signal?.aborted) {
+			fail(options.signal.reason ?? new DOMException("Dialog aborted", "AbortError"));
+			return promise;
+		}
+		options?.signal?.addEventListener("abort", onAbort, { once: true });
+
+		Promise.try(() => factory(this.ctx.ui, theme, keybindings, close))
+			.then(c => {
+				if (closed) {
+					c.dispose?.();
+					return;
+				}
+				component = c;
+				if (options?.overlay) {
+					const overlayOptions =
+						typeof options.overlayOptions === "function" ? options.overlayOptions() : options.overlayOptions;
+					overlayHandle = this.ctx.ui.showOverlay(
+						component,
+						overlayOptions ?? {
+							anchor: "bottom-center",
+							width: "100%",
+							maxHeight: "100%",
+							margin: 0,
+						},
+					);
+					options.onHandle?.(overlayHandle);
+					return;
+				}
+				editorReplaced = true;
+				this.ctx.editorContainer.clear();
+				this.ctx.editorContainer.addChild(component);
+				this.ctx.ui.setFocus(component);
+				this.ctx.ui.requestRender();
+			})
+			.catch(fail);
 		return promise;
 	}
 

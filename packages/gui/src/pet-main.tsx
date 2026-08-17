@@ -25,7 +25,7 @@
  * mood/scale/unread/theme from pet:activity.
  */
 
-import { setLocale, t } from "@musepi/collab-web";
+import { setLocale, t } from "@musepi/desktop-web";
 import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { initTooltips } from "./lib/tooltips";
@@ -355,7 +355,11 @@ function PetApp(): ReactNode {
 		}
 	};
 
-	const onPointerUp = (_e: ReactPointerEvent): void => {
+	const onPointerUp = (e: ReactPointerEvent): void => {
+		// Right button is the context menu gesture, never a click — without
+		// this gate the pointerup falls through to the click/double-click
+		// path and pops the bubble panel alongside the native menu.
+		if (e.button !== 0) return;
 		const s = dragRef.current;
 		s.pressed = false;
 		s.dragging = false;

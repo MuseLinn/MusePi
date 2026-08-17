@@ -1,5 +1,6 @@
-import { t } from "@musepi/collab-web/src/i18n/index.js";
-import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/collab-web/src/widgets/registry";
+import { t } from "@musepi/desktop-web/src/i18n/index.js";
+import { GuiSelect } from "./GuiSelect";
+import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Icon } from "../vendor/oc-icons";
@@ -136,17 +137,12 @@ function FieldInput({
 		return (
 			<div className="gui-widget-editor-field">
 				<span className="gui-widget-editor-label">{label}</span>
-				<select
+				<GuiSelect
 					className="gui-settings-select"
 					value={typeof value === "string" ? value : ""}
-					onChange={e => onChange(e.target.value)}
-				>
-					{(field.options ?? []).map(o => (
-						<option key={o} value={o}>
-							{o}
-						</option>
-					))}
-				</select>
+					onChange={v => onChange(v)}
+					options={(field.options ?? []).map(o => ({ value: o, label: o }))}
+				/>
 			</div>
 		);
 	}

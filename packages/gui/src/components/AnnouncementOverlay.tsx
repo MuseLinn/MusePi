@@ -1,10 +1,10 @@
+import { Markdown, t } from "@musepi/desktop-web";
 import { Sparkles, X } from "lucide-react";
-import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Markdown, t } from "@musepi/collab-web";
-import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
-import type { RpcClient } from "../lib/rpc";
+import { useEffect, useState } from "react";
 import { onboardingPending } from "../lib/onboarding";
+import type { RpcClient } from "../lib/rpc";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 
 /**
  * Release-notes announcement panel (what's-new push for future features).
@@ -41,7 +41,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				setMarkdown(md);
 				setLatest(updates?.latest ?? null);
 				// The primer owns the first-run experience — defer to it.
-				if (md && !onboardingPending) {
+				if (md && !onboardingPending()) {
 					openRef.current = true;
 					setOpen(true);
 				}
@@ -129,11 +129,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					<Markdown text={markdown} />
 				</div>
 				<div className="gui-onboarding-actions">
-					<button
-						className="gui-btn gui-btn-primary"
-						type="button"
-						onClick={() => setOpen(false)}
-					>
+					<button className="gui-btn gui-btn-primary" type="button" onClick={() => setOpen(false)}>
 						{t("got it")}
 					</button>
 				</div>

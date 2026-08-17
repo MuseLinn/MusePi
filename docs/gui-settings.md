@@ -1,6 +1,6 @@
 # MusePi GUI 设置面板与主题设计(现状参考)
 
-> 状态:与 `packages/gui` / `packages/collab-web` 当前实现同步(2026-08-04)。
+> 状态:与 `packages/gui` / `packages/desktop-web` 当前实现同步(2026-08-04)。
 > 早期规划稿(gui-architecture / gui-migration / gui-prototype)已删除——实现已交付,本文档与 **`docs/gui-design.md`**(设计规范)和 **`docs/gui-implementation.md`**(实现笔记)是唯一现行参考(2026-08-06 拆分为两份)。
 
 ## 1. 桌面壳与入口
@@ -32,7 +32,7 @@ gui-settings-view          ← flex:1 铺满 shell(flex ROW),尺寸不随 tab �
 
 ## 3. 主题体系(三个正交轴)
 
-`packages/collab-web/src/lib/theme.ts` + `packages/collab-web/src/styles/tokens.css`:
+`packages/desktop-web/src/lib/theme.ts` + `packages/desktop-web/src/styles/tokens.css`:
 
 | 轴 | DOM 属性 | 取值 | 存储 key |
 |---|---|---|---|
@@ -65,7 +65,7 @@ gui-settings-view          ← flex:1 铺满 shell(flex ROW),尺寸不随 tab �
 
 - 桌面端聊天代码块与设置预览高亮,复用 **TUI 同款 Rust tree-sitter**(`@musepi/pi-natives` `highlightCode` → ANSI 行)。
 - 渲染进程被 sandbox 隔离,原生模块在主进程加载:`main.cjs` `gui-highlight` IPC handler → `preload.cjs` 暴露 `electronAPI.highlightCode` → `packages/gui/src/lib/highlight.ts`(`nativeHighlight`/`useChatHighlight`,按深浅方案给 GitHub 风 token 色板)。
-- 转换纯函数在 collab-web `transcript/highlight.ts`(`ansiLineToHtml`/`highlightToCodeHtml`),`Markdown` 经 `CodeHighlightProvider` 上下文注入;浏览器访客无桥接 → 纯文本降级。
+- 转换纯函数在 desktop-web `transcript/highlight.ts`(`ansiLineToHtml`/`highlightToCodeHtml`),`Markdown` 经 `CodeHighlightProvider` 上下文注入;浏览器访客无桥接 → 纯文本降级。
 - Markdown 代码块带 `data-hl-hash`(FNV-1a),effect 按 hash 缓存异步高亮,流式重渲染不重复调用桥接。
 - 已知坑:Electron 37 / Node 26 无 `import.meta.dir`,natives loader 需 `?? import.meta.dirname` 回退(已修,2026-08-04)。
 

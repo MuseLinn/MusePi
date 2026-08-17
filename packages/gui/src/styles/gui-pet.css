@@ -1,0 +1,736 @@
+/* ── Agent companion pet (伙伴, BitFun parity) ──────────────────────────
+ * Builtin SVG note-bot: accent-tinted silhouette + mood decals. The SVG
+ * scales with font-size (em-based container); mood animations below.
+ * Petdex spritesheets animate via background-position steps (frame cycle
+ * keyframes defined here too — the pet window shares this stylesheet). */
+.gui-pet {
+	position: relative;
+	flex-shrink: 0;
+}
+
+.gui-pet svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+/* Color-block palette for the builtin note-bot (no accent purple —
+ * mint/teal head, teal band, amber→rose cups, gold→orange note body).
+ * Overridable via --gui-pet-* for theme/custom skins. */
+.gui-pet-svg__band {
+	fill: url(#gui-pet-grad-band);
+}
+.gui-pet-svg__cup {
+	fill: url(#gui-pet-grad-cup);
+}
+.gui-pet-svg__head {
+	fill: url(#gui-pet-grad-head);
+}
+.gui-pet-svg__blush {
+	fill: var(--gui-pet-blush, #fb7185);
+	opacity: 0.45;
+}
+.gui-pet-svg__body {
+	fill: url(#gui-pet-grad-body);
+}
+.gui-pet-svg__stem {
+	fill: var(--gui-pet-stem, #b45309);
+}
+
+.gui-pet-svg__face {
+	stroke: var(--color-text);
+	stroke-width: 4;
+	stroke-linecap: round;
+	fill: none;
+}
+
+.gui-pet-svg__pupil {
+	fill: var(--color-text);
+	stroke: none;
+}
+
+.gui-pet-svg__pip,
+.gui-pet-svg__dot {
+	fill: var(--color-text);
+	stroke: none;
+	opacity: 0.55;
+}
+
+.gui-pet-svg__zzz {
+	fill: var(--color-text);
+	stroke: none;
+	font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+	font-size: 18px;
+	font-weight: 700;
+	opacity: 0.5;
+}
+
+.gui-pet-svg__sweat {
+	fill: color-mix(in oklab, var(--color-text) 45%, transparent);
+	stroke: none;
+}
+
+.gui-pet-svg__xeye {
+	stroke: var(--color-danger);
+	stroke-width: 5;
+}
+
+/* Rest: gentle breathing */
+.gui-pet-svg--rest .gui-pet-svg__silhouette {
+	animation: gui-pet-breathe 3.2s ease-in-out infinite;
+	transform-origin: 160px 150px;
+}
+
+@keyframes gui-pet-breathe {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.025);
+	}
+}
+
+/* Rest ZZZ float */
+.gui-pet-svg__zzz--a {
+	animation: gui-pet-zzz 3.2s ease-in-out infinite;
+}
+
+.gui-pet-svg__zzz--b {
+	animation: gui-pet-zzz 3.2s ease-in-out 0.5s infinite;
+}
+
+@keyframes gui-pet-zzz {
+	0% {
+		transform: translate(0, 0);
+		opacity: 0;
+	}
+	25% {
+		opacity: 0.5;
+	}
+	100% {
+		transform: translate(10px, -16px);
+		opacity: 0;
+	}
+}
+
+/* Analyzing: think pips ladder up */
+.gui-pet-svg--analyzing .gui-pet-svg__pip--a {
+	animation: gui-pet-pip 1.4s ease-in-out infinite;
+}
+
+.gui-pet-svg--analyzing .gui-pet-svg__pip--b {
+	animation: gui-pet-pip 1.4s ease-in-out 0.25s infinite;
+}
+
+.gui-pet-svg--analyzing .gui-pet-svg__pip--c {
+	animation: gui-pet-pip 1.4s ease-in-out 0.5s infinite;
+}
+
+@keyframes gui-pet-pip {
+	0%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.55;
+	}
+	50% {
+		transform: translateY(-5px);
+		opacity: 1;
+	}
+}
+
+/* Waiting: dots bob + head sways */
+.gui-pet-svg--waiting .gui-pet-svg__dot--a {
+	animation: gui-pet-dot 1s ease-in-out infinite;
+}
+
+.gui-pet-svg--waiting .gui-pet-svg__dot--b {
+	animation: gui-pet-dot 1s ease-in-out 0.2s infinite;
+}
+
+.gui-pet-svg--waiting .gui-pet-svg__dot--c {
+	animation: gui-pet-dot 1s ease-in-out 0.4s infinite;
+}
+
+.gui-pet-svg--waiting .gui-pet-svg__silhouette {
+	animation: gui-pet-sway 2.6s ease-in-out infinite;
+	transform-origin: 160px 150px;
+}
+
+@keyframes gui-pet-dot {
+	0%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.55;
+	}
+	50% {
+		transform: translateY(-4px);
+		opacity: 1;
+	}
+}
+
+@keyframes gui-pet-sway {
+	0%,
+	100% {
+		transform: rotate(0deg);
+	}
+	50% {
+		transform: rotate(3deg);
+	}
+}
+
+/* Working: micro-shake + sweat trickle */
+.gui-pet-svg--working .gui-pet-svg__silhouette {
+	animation: gui-pet-shake 0.5s linear infinite;
+	transform-origin: 160px 150px;
+}
+
+.gui-pet-svg--working .gui-pet-svg__sweat {
+	animation: gui-pet-sweat 1.2s ease-in infinite;
+}
+
+@keyframes gui-pet-shake {
+	0%,
+	100% {
+		transform: translate(0, 0);
+	}
+	25% {
+		transform: translate(1px, 0);
+	}
+	75% {
+		transform: translate(-1px, 0);
+	}
+}
+
+@keyframes gui-pet-sweat {
+	0% {
+		transform: translate(0, 0);
+		opacity: 0;
+	}
+	30% {
+		opacity: 0.9;
+	}
+	100% {
+		transform: translate(3px, 10px);
+		opacity: 0;
+	}
+}
+
+/* Petdex spritesheet frame cycle (columns 0..7, row stays fixed).
+ * The animation END is a per-instance CSS variable set by PetSprite
+ * (−(frameW × 7)px) because frame width varies per spritesheet.
+ * Pixel-art atlases must stay crisp at any CSS scale (BitFun parity). */
+.gui-petdex-sprite {
+	background-repeat: no-repeat;
+	image-rendering: pixelated;
+}
+
+@keyframes gui-petdex-cycle {
+	from {
+		background-position-x: 0;
+	}
+	to {
+		background-position-x: var(--gui-petdex-cycle-end, -700px);
+	}
+}
+
+/* Paired transform animations (BitFun parity): the frame cycle always runs,
+ * plus ONE per-mood transform — breathe for calm states, a work bob, a hover
+ * lift, or a drag wiggle. Durations are set inline by PetdexSprite. */
+@keyframes gui-petdex-breathe {
+	0%,
+	100% {
+		transform: translateY(0) scale(1);
+	}
+	50% {
+		transform: translateY(-2px) scale(1.03, 0.97);
+	}
+}
+
+@keyframes gui-petdex-work {
+	0%,
+	100% {
+		transform: translate(0, 0);
+	}
+	50% {
+		transform: translate(0, -2px);
+	}
+}
+
+@keyframes gui-petdex-hover {
+	0%,
+	100% {
+		transform: translateY(0) scale(1);
+	}
+	50% {
+		transform: translateY(-5px) scale(1.04, 0.96);
+	}
+}
+
+@keyframes gui-petdex-dragging {
+	0%,
+	100% {
+		transform: rotate(0deg) translateY(0);
+	}
+	25% {
+		transform: rotate(-2.5deg) translateY(-1px);
+	}
+	75% {
+		transform: rotate(2.5deg) translateY(1px);
+	}
+}
+
+/* Mood transition micro-bump — replayed on every mood change by keying the
+ * pet element in pet-main.tsx (BitFun's stage-bump). Centering now lives on
+ * .pet-window__stage — the pet itself carries no base transform, so the
+ * keyframes are scale-only (a translateX here would shove the pet sideways
+ * on every mood change). */
+.gui-pet-bump {
+	animation: gui-pet-stage-bump 0.64s cubic-bezier(0.2, 1.4, 0.5, 1);
+}
+
+@keyframes gui-pet-stage-bump {
+	0%,
+	100% {
+		transform: scale(1, 1);
+	}
+	35% {
+		transform: scale(1.08, 0.92);
+	}
+	70% {
+		transform: scale(0.96, 1.04);
+	}
+}
+
+/* ── WIP 恢复(2026-08-06 gui.css 误截断后从 dist 构建产物恢复)──────────
+ * 这些规则在 18:41 提交之后、误截断之前新增;内容来自 dist CSS(压缩),
+ * 选择器与声明与构建时完全一致,仅重排为多行格式。 */
+
+.gui-agent-avatar-cycle>.gui-agent-avatar-frame:first-child
+{
+	position:relative;
+}
+.gui-border-beam.gui-border-beam--pet
+{
+	overflow:visible;
+}
+.gui-btn--small
+{
+	border-radius:8px;
+	height:24px;
+	padding:0 10px;
+	font-size: var(--ui-font-size-xs);
+	white-space:nowrap;
+	flex-shrink:0;
+}
+.gui-scenes>.gui-scene-welcome,
+.gui-scenes>.gui-scene-chat
+{
+	position:absolute;
+	overflow:hidden;
+	inset:0;
+}
+.gui-code-lines .tr-md pre code .tr-code-line:before
+{
+	content:counter(tr-code-line);
+	color:var(--color-text-faint);
+	text-align:right;
+	user-select:none;
+	padding-right:12px;
+}
+.gui-code-preview-head>span:nth-child(2)
+{
+	margin-right:auto;
+}
+.gui-composer-frame[data-enhancing]:after
+{
+	content:"";
+	position:absolute;
+	background:conic-gradient(from var(--pi-angle),var(--color-accent),#8b5cf6,#d946ef,#22d3ee,var(--color-accent))border-box;
+	-webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
+	-webkit-mask-composite:xor;
+	mask-composite:exclude;
+	animation:pi-border-spin 1.1s linear infinite;
+	pointer-events:none;
+	border:1px solid #0000;
+	border-radius:14.5px;
+	inset:-.5px;
+}
+.gui-composer-ico:before
+{
+	content:"";
+	position:absolute;
+	background:color-mix(in oklab,var(--color-text)6%,transparent);
+	border-radius:999px;
+	transition:background .15s cubic-bezier(.22,1,.36,1);
+	inset:0;
+}
+.gui-composer-ico:hover:before
+{
+	background:color-mix(in oklab,var(--color-text)10%,transparent);
+}
+.gui-composer-ico>*
+{
+	position:relative;
+}
+.gui-composer-pet
+{
+	position:absolute;
+	z-index:1;
+	pointer-events:none;
+	display:flex;
+	filter:drop-shadow(0 2px 6px #00000047);
+	align-items: flex-end;
+	bottom:calc(100% + 4px);
+	right:10px;
+}
+.gui-composer-pill:before
+{
+	content:"";
+	position:absolute;
+	background:color-mix(in oklab,var(--color-text)6%,transparent);
+	border-radius:999px;
+	transition:background .15s cubic-bezier(.22,1,.36,1);
+	inset:0;
+}
+.gui-composer-pill:hover:before
+{
+	background:color-mix(in oklab,var(--color-text)10%,transparent);
+}
+.gui-composer-pill>*
+{
+	position:relative;
+}
+.gui-group-edit
+{
+	background:color-mix(in oklab,var(--color-surface-sunken)60%,transparent);
+	color:inherit;
+	font:inherit;
+	outline:none;
+	border:1px solid #0000;
+	border-radius:6px;
+	padding:1px 4px;
+	font-size: var(--ui-font-size-sm);
+	font-weight:500;
+	line-height:20px;
+}
+.gui-group-edit:focus
+{
+	border-color:color-mix(in oklab,var(--color-accent)55%,transparent);
+	background:var(--color-surface-sunken);
+}
+.gui-header-title-row>span:first-child
+{
+	min-width:0;
+}
+.gui-pane-side,
+.gui-pane-side--immersive,
+.gui-pane-right--inner,
+.gui-header:before
+{
+	box-shadow:none;
+	background:0 0;
+}
+.gui-pane-side--collapsed>*,
+.gui-pane-right--collapsed>*
+{
+	opacity:0;
+	transition:opacity .12s ease-out;
+}
+.gui-pet-market
+{
+	border-top:1px solid var(--border);
+	margin-top:14px;
+	padding-top:12px;
+}
+.gui-pet-market-card
+{
+	display:flex;
+	border:1px solid var(--border);
+	background:var(--color-surface-sunken);
+	border-radius:12px;
+	flex-direction:column;
+	align-items: center;
+	gap:6px;
+	min-width:0;
+	padding:8px 6px 10px;
+}
+.gui-pet-market-card__installed
+{
+	display:inline-flex;
+	color:var(--color-accent);
+	align-items: center;
+	gap:3px;
+	font-size:11px;
+}
+.gui-pet-market-card__loading
+{
+	border:2px solid color-mix(in oklab,var(--color-text)15%,transparent);
+	border-top-color:var(--color-accent);
+	animation:gui-flow-spin .8s linear infinite;
+	border-radius:50%;
+	align-self: center;
+	width:18px;
+	height:18px;
+	margin:auto;
+}
+.gui-pet-market-card__name
+{
+	overflow:hidden;
+	text-overflow:ellipsis;
+	white-space:nowrap;
+	max-width:100%;
+	font-size: var(--ui-font-size-xs);
+	font-weight:500;
+}
+.gui-pet-market-card__thumb
+{
+	display:flex;
+	background:var(--color-surface-raised);
+	overflow:hidden;
+	border-radius:10px;
+	justify-content:center;
+	align-items: flex-end;
+	width:64px;
+	height:64px;
+}
+.gui-pet-market__status,
+.gui-pet-market__error
+{
+	color:var(--color-text-muted);
+	margin-top:8px;
+	font-size: var(--ui-font-size-xs);
+}
+.gui-pet-market__grid
+{
+	display:grid;
+	grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+	overflow-y:auto;
+	gap:10px;
+	max-height:340px;
+	margin-top:10px;
+	padding-right:2px;
+}
+.gui-pet-market__head
+{
+	display:flex;
+	align-items: center;
+	gap:10px;
+}
+.gui-pet-market__search
+{
+	border-radius:8px;
+	flex:1;
+	min-width:0;
+	height:30px;
+	padding:0 10px;
+	font-size:12.5px;
+}
+.gui-resize-x:after
+{
+	content:"";
+	position:absolute;
+	background:0 0;
+	width:1px;
+	transition:background .12s ease-out;
+	top:0;
+	bottom:0;
+	left:2px;
+}
+.gui-resize-x:hover:after
+{
+	background:var(--color-accent-bd);
+}
+.gui-role-row>.gui-btn,
+.gui-role-row>.gui-model,
+.gui-role-row>select
+{
+	flex-shrink:0;
+}
+.gui-session-row--unread .gui-session-title:after
+{
+	content:"";
+	display:inline-block;
+	background:var(--color-accent);
+	vertical-align:2px;
+	border-radius:50%;
+	width:6px;
+	height:6px;
+	margin-left:6px;
+}
+.gui-session-row-active:before
+{
+	transform:translateY(-50%)scaleY(1);
+}
+.gui-session-row:before
+{
+	content:"";
+	position:absolute;
+	background:var(--color-accent);
+	border-radius:2px;
+	width:2px;
+	height:60%;
+	transition:transform .16s ease-out;
+	top:50%;
+	left:4px;
+	transform:translateY(-50%)scaleY(0);
+}
+.gui-settings-field>.gui-settings-select
+{
+	justify-self:end;
+}
+.gui-terminal-tab--active:after
+{
+	content:"";
+	position:absolute;
+	background:var(--color-accent);
+	border-radius:1px;
+	height:2px;
+	bottom:-4px;
+	left:12px;
+	right:12px;
+}
+.gui-transcript[data-bottom-scroll=true]:not([data-top-scroll=true])
+{
+	mask-image:linear-gradient(0deg,#0000 0,#000 32px);
+}
+.gui-transcript[data-switched="1"] .tr-row,
+.gui-transcript[data-switched="1"] .tr-divider,
+.gui-transcript[data-switched="1"] .tr-marker
+{
+	animation:tr-switch-in .3s cubic-bezier(.22,1,.36,1)both;
+}
+.gui-transcript[data-switched="1"] .tr-row:first-child
+{
+	animation-delay:0s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(10)
+{
+	animation-delay:.126s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(11)
+{
+	animation-delay:.14s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(12)
+{
+	animation-delay:.154s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(13)
+{
+	animation-delay:.168s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(14)
+{
+	animation-delay:.182s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(15)
+{
+	animation-delay:.196s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(2)
+{
+	animation-delay:14ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(3)
+{
+	animation-delay:28ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(4)
+{
+	animation-delay:42ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(5)
+{
+	animation-delay:56ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(6)
+{
+	animation-delay:70ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(7)
+{
+	animation-delay:84ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(8)
+{
+	animation-delay:98ms;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(9)
+{
+	animation-delay:.112s;
+}
+.gui-transcript[data-switched="1"] .tr-row:nth-child(n+16)
+{
+	animation-delay:.21s;
+}
+.gui-transcript[data-top-scroll=true]:not([data-bottom-scroll=true])
+{
+	mask-image:linear-gradient(#0000 0,#000 24px);
+}
+.gui-transcript[data-top-scroll=true][data-bottom-scroll=true]
+{
+	mask-image:linear-gradient(#0000 0,#000 24px calc(100% - 32px),#0000 100%);
+}
+.gui-turn-rail--pacman[data-side=left] .gui-turn-tick--active .gui-turn-tick-bar
+{
+	background:var(--color-accent);
+}
+.gui-turn-rail--pacman[data-side=left] .gui-turn-tick--hover .gui-turn-tick-bar
+{
+	background:conic-gradient(from 0deg,transparent 0 100deg,var(--color-accent)100deg 360deg);
+}
+.gui-turn-rail--pacman[data-side=left] .gui-turn-tick-bar
+{
+	background:conic-gradient(from 0deg,transparent 0 45deg,color-mix(in oklab,var(--color-text)42%,transparent)45deg 360deg);
+}
+.gui-turn-rail[data-side=left]
+{
+	left:4px;
+}
+.gui-turn-rail[data-side=left] .gui-turn-panel
+{
+	left:30px;
+}
+.gui-turn-rail[data-side=left] .gui-turn-tick
+{
+	justify-content:flex-start;
+}
+.gui-turn-rail[data-side=right]
+{
+	right:4px;
+}
+.gui-turn-rail[data-side=right] .gui-turn-panel
+{
+	right:30px;
+}
+.gui-turn-rail[data-side=right] .gui-turn-tick
+{
+	justify-content:flex-end;
+}
+.gui-welcome[data-focused] form>.gui-border-beam
+{
+	display:flex;
+	flex-direction:column;
+	flex:1;
+	min-height:0;
+}
+[data-theme=dark] .gui-border-beam
+{
+	--beam-stroke-opacity:1;
+}
+[data-theme=dark] .gui-main,
+[data-theme=dark] .gui-settings-view
+{
+	--gui-glass-overlay:clamp(28%,calc(88%*(1 - var(--gui-glass-alpha,.55))),88%);
+	background:color-mix(in oklab,var(--bg-overlay)var(--gui-glass-overlay,calc(88%*var(--gui-glass-alpha,1))),transparent);
+}
+[data-theme=light].gui-glass-adaptive
+{
+	--color-text:color-mix(in oklab,var(--fg)calc(100% - var(--gui-glass-blend)),#000);
+	--color-text-muted:color-mix(in oklab,var(--fg-muted)calc(100% - var(--gui-glass-blend)*.65),#000);
+	--color-text-faint:color-mix(in oklab,var(--fg-faint)calc(100% - var(--gui-glass-blend)*.45),#000);
+}
+
+/* ── BlurText (reactbits parity, zero-dep): char-by-char blur-in ──────── */

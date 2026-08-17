@@ -9,7 +9,7 @@
  * `t()` must only be called at render time, never at module load time.
  */
 
-import { zhCN } from "./zh-CN.ts";
+import { zhCN } from "./zh-CN/index.ts";
 
 export type TranslationMap = Record<string, string>;
 
@@ -52,6 +52,18 @@ export function setLocale(locale: string): void {
 /** Get the effective locale. Falls back to env/system if `setLocale()` was never called. */
 export function getLocale(settingsLocale?: string | undefined): string {
 	return currentLocale ?? detectLocale(settingsLocale);
+}
+
+/**
+ * Register (or override) translations for a locale at runtime — the seam
+ * for extensions / plugins contributing UI strings. Overlays the base
+ * map: existing keys are replaced, new keys are added. `t()` reads the
+ * registry at call time, so registered keys are live immediately (no
+ * emit needed). Not persisted — a restart restores the core map.
+ */
+export function registerTranslations(locale: string, map: TranslationMap): void {
+	const base = locales[locale] ?? {};
+	locales[locale] = { ...base, ...map };
 }
 
 // ── Core API ─────────────────────────────────────────────────────────────────

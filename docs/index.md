@@ -5,12 +5,13 @@ title: Documentation
 
 # MusePi Documentation
 
-> 88 documents. Living docs are marked **活文档** — keep them in sync with code changes.
+> 89 documents. Living docs are marked **活文档** — keep them in sync with code changes.
 
 ## GUI & Desktop
 
 - [gui-design.md](gui-design.html) — **活文档** GUI design spec: layout / tokens / motion / component patterns / pet visual style
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI implementation notes: daemon RPC contracts, IPC shapes, pitfalls, verification workflows
+- [i18n.md](i18n.html) — **活文档** i18n architecture: per-domain locale maps, compile-time en parity, plugin translation registration
 - [widget-design-system.md](widget-design-system.html) — widget system design
 - [gui-settings.md](gui-settings.html) — settings panel notes
 

@@ -154,6 +154,38 @@ describe("parseRateLimitReason", () => {
 		expect(parseRateLimitReason("API 使用频率已达上限")).toBe("UNKNOWN");
 	});
 
+	it("keeps DashScope/Bailian TPM throttle in the transient lane", () => {
+		// Bailian reports its per-minute token throttle (429
+		// Throttling.AllocationQuota) with OpenAI-compatible billing wording,
+		// but links the error-code doc's #token-limit anchor, which documents
+		// the error as a transient TPM/TPS cap (clears within the minute
+		// window). Must retry on the same credential with a short backoff —
+		// previously classified QUOTA_EXHAUSTED, blocking the credential for
+		// 30 minutes and stalling the session.
+		const throttle =
+			"429 You exceeded your current quota, please check your plan and billing details. For details, see: https://help.aliyun.com/zh/model-studio/error-code#token-limit\nYou exceeded your current quota, please check your plan and billing details. For details, see: https://help.aliyun.com/zh/model-studio/error-code#token-limit (type=insufficient_quota param=insufficient_quota)";
+		expect(parseRateLimitReason(throttle)).toBe("RATE_LIMIT_EXCEEDED");
+		expect(isUsageLimit(throttle)).toBe(false);
+		expect(isUsageLimit(Object.assign(new Error(throttle), { status: 429 }))).toBe(false);
+		expect(isUsageLimit(new ProviderHttpError(throttle, 429, { code: "insufficient_quota" }))).toBe(false);
+		expect(isUsageLimitOutcome(429, throttle)).toBe(false);
+
+		// The identical wording WITHOUT the doc anchor is OpenAI's real
+		// account-quota error and stays quota-exhausted.
+		const openaiQuota =
+			"429 You exceeded your current quota, please check your plan and billing details. For details, see: https://platform.openai.com/account/usage (type=insufficient_quota)";
+		expect(parseRateLimitReason(openaiQuota)).toBe("QUOTA_EXHAUSTED");
+		expect(isUsageLimitOutcome(429, openaiQuota)).toBe(true);
+
+		// The same DashScope doc anchor also covers permanent free-quota
+		// exhaustion. The anchor alone must not turn that into a retry loop.
+		const freeQuota =
+			"429 Free allocated quota exceeded. For details, see: https://help.aliyun.com/zh/model-studio/error-code#token-limit (type=insufficient_quota)";
+		expect(parseRateLimitReason(freeQuota)).toBe("QUOTA_EXHAUSTED");
+		expect(isUsageLimit(new ProviderHttpError(freeQuota, 429, { code: "insufficient_quota" }))).toBe(true);
+		expect(isUsageLimitOutcome(429, freeQuota)).toBe(true);
+	});
+
 	it("classifies Codex usage limit error as QUOTA_EXHAUSTED", () => {
 		expect(
 			parseRateLimitReason("Codex error event: The usage limit has been reached (code=usage_limit_reached)"),

@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { AgentSnapshot } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useState } from "react";

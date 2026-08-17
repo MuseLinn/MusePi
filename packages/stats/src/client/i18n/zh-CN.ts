@@ -33,7 +33,7 @@ export const zhCN: TranslationMap = {
 	// ── Language toggle ───────────────────────────────────────────────────────
 	"Switch language": "切换语言",
 
-	// ── Theme toggle (shared terms with collab-web) ───────────────────────────
+	// ── Theme toggle (shared terms with desktop-web) ───────────────────────────
 	"System theme": "跟随系统",
 	"Light theme": "浅色主题",
 	"Dark theme": "深色主题",

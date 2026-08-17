@@ -129,4 +129,26 @@ describe("marked compatibility", () => {
 		]);
 		expect(marked.parse("before $x_i$\n\n$$\ny^2\n$$\n")).toBe("<p>before <i>x_i</i></p>\n<math>y^2</math>\n");
 	});
+
+	test("4-space indent directly after paragraph text stays in the paragraph", () => {
+		// CommonMark lazy continuation: a line indented by at least 4 spaces
+		// directly attached to paragraph text is paragraph content, not the
+		// start of an indented code block (#8582 family regression).
+		const src = "para\n    indented";
+		const [token] = [...Lexer.lex(src)];
+		expect(token.type).toBe("paragraph");
+		expect(token.raw).toBe("para\n    indented");
+		expect(new Marked().parse(src)).toBe("<p>para\n    indented</p>\n");
+	});
+
+	test("4-space indent after a blank line still opens an indented code block", () => {
+		// After whitespace-padded blank lines the indent is detached from the
+		// paragraph, so the block-start probe still fires.
+		const src = "para\n\n    indented";
+		expect([...Lexer.lex(src)].map(t => t.type)).toEqual(["paragraph", "space", "code"]);
+		const [p, , code] = [...Lexer.lex(src)];
+		expect(p.raw).toBe("para");
+		expect(code.raw).toBe("    indented");
+		expect(new Marked().parse(src)).toBe("<p>para</p>\n<pre><code>indented\n</code></pre>\n");
+	});
 });

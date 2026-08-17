@@ -334,12 +334,18 @@ export async function generateBranchSummary(
 	];
 
 	// Call LLM for summarization
-	const response = await instrumentedCompleteSimple(
-		model,
-		{ systemPrompt: [SUMMARIZATION_SYSTEM_PROMPT], messages: summarizationMessages },
-		{ apiKey, signal, maxTokens: 2048, metadata },
-		{ telemetry: options.telemetry, oneshotKind: "branch_summary", completeImpl: options.completeImpl },
-	);
+	let response: AssistantMessage;
+	try {
+		response = await instrumentedCompleteSimple(
+			model,
+			{ systemPrompt: [SUMMARIZATION_SYSTEM_PROMPT], messages: summarizationMessages },
+			{ apiKey, signal, maxTokens: 2048, metadata },
+			{ telemetry: options.telemetry, oneshotKind: "branch_summary", completeImpl: options.completeImpl, retry: {} },
+		);
+	} catch (error) {
+		if (signal.aborted) return { aborted: true };
+		throw error;
+	}
 
 	// Check if aborted or errored
 	if (response.stopReason === "aborted") {

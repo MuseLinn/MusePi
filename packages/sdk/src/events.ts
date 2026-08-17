@@ -37,6 +37,23 @@ export interface AskDialogQuestionWire {
 	recommended?: number;
 }
 
+/**
+ * Session-scoped extension hot-reload notification (P5 HMR v2): the daemon
+ * pushes this to a session's subscribers after a loaded extension entry was
+ * hot-reloaded in that session. Not part of the pi-wire AgentEvent union — a
+ * reload is daemon/session state, not agent-loop state — so it rides the wire
+ * envelope under its own discriminator.
+ */
+export interface ExtensionReloadedEvent {
+	type: "extensions.reloaded";
+	extensionPath: string;
+	removedTools: string[];
+	errors: string[];
+	/** True when the reload was parked (session was streaming) and performed at agent_end. */
+	deferred: boolean;
+	at: number;
+}
+
 /** Runtime-validated envelope (kind + seq); payload is pinned by the type layer. */
 export const sessionStreamEnvelope = Type.Object({
 	kind: Type.Union([
@@ -60,7 +77,7 @@ export const sessionStreamEnvelope = Type.Object({
 /** The typed event union — payloads reference pi-wire types directly. */
 export type SessionStreamEvent =
 	| { kind: "entry"; seq: number; payload: SessionEntry }
-	| { kind: "event"; seq: number; payload: AgentEvent }
+	| { kind: "event"; seq: number; payload: AgentEvent | ExtensionReloadedEvent }
 	| { kind: "state"; seq: number; payload: SessionState }
 	| {
 			kind: "approval-request";

@@ -1,0 +1,2600 @@
+.gui-blur-char {
+	display: inline-block;
+	filter: blur(8px);
+	opacity: 0;
+	transform: translateY(10px);
+	transition:
+		filter var(--gui-motion-blur) ease,
+		opacity var(--gui-motion-blur) ease,
+		transform var(--gui-motion-blur) var(--spring);
+	will-change: filter, opacity, transform;
+}
+
+.gui-blur-char--in {
+	filter: blur(0);
+	opacity: 1;
+	transform: none;
+}
+
+.gui-motion-off .gui-blur-char {
+	filter: none;
+	opacity: 1;
+	transform: none;
+	transition: none;
+}
+
+/* ── TextMorph (motion-primitives parity, zero-dep): text swap rolls the
+ * old layer out while the new layer rolls in, char-by-char. Both layers
+ * render so identical chars keep their grid slot (continuation, not a
+ * hard swap); the outgoing layer sits absolute on top. */
+.gui-text-morph {
+	position: relative;
+	display: inline-block;
+	white-space: nowrap;
+	vertical-align: baseline;
+}
+
+.gui-text-morph__layer {
+	display: inline-block;
+}
+
+.gui-text-morph__layer--out {
+	position: absolute;
+	inset-inline-start: 0;
+	top: 0;
+}
+
+.gui-text-morph__char {
+	display: inline-block;
+	white-space: pre;
+	/* Never inherit a parent's -webkit-text-fill-color: transparent (e.g.
+	 * a shiny-text sweep) — the clip doesn't survive the char's own
+	 * composited layer and the text would vanish. */
+	-webkit-text-fill-color: currentColor;
+}
+
+.gui-text-morph__layer--out .gui-text-morph__char {
+	opacity: 1;
+	animation-name: gui-textmorph-out;
+	animation-timing-function: var(--spring);
+	animation-fill-mode: forwards;
+}
+
+.gui-text-morph__layer--in .gui-text-morph__char {
+	opacity: 0;
+	animation-name: gui-textmorph-in;
+	animation-timing-function: var(--spring);
+	animation-fill-mode: forwards;
+}
+
+@keyframes gui-textmorph-out {
+	from {
+		opacity: 1;
+		transform: none;
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-0.35em);
+	}
+}
+
+@keyframes gui-textmorph-in {
+	from {
+		opacity: 0;
+		transform: translateY(0.35em);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-text-morph__layer--out {
+	display: none;
+}
+
+.gui-motion-off .gui-text-morph__char {
+	opacity: 1;
+	transform: none;
+	animation: none;
+}
+
+
+/* ── SelectionToolbar (openchamber parity): floating actions above an
+ * in-message text selection — glass chip row, mirrors gui-menu glass. */
+.gui-select-pop {
+	position: fixed;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow:
+		0 6px 20px rgba(0, 0, 0, 0.18),
+		0 0 0 1px rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(18px) saturate(160%);
+	pointer-events: auto;
+	/* Two-phase enter (useTwoPhaseEnter): pending at opacity 0 so the
+	 * frosted chip composites before the fade-in; --closing plays the
+	 * exit while the host keeps it mounted (Pop parity). */
+	opacity: 0;
+}
+
+.gui-select-pop--entered {
+	opacity: 1;
+	animation: gui-select-pop-in 130ms var(--spring);
+}
+
+.gui-select-pop--closing {
+	animation: gui-select-pop-out 130ms ease-in forwards;
+}
+
+/* The chip is anchored with an inline translateX(-50%) — the keyframes
+ * must bake it in (transform keyframes replace the static transform). */
+@keyframes gui-select-pop-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%) scale(1);
+	}
+}
+
+@keyframes gui-select-pop-out {
+	from {
+		opacity: 1;
+		transform: translateX(-50%) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateX(-50%) scale(0.97);
+	}
+}
+
+.gui-select-pop-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 26px;
+	height: 26px;
+	padding: 0 2px;
+	border: none;
+	border-radius: 7px;	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	overflow: hidden;
+	white-space: nowrap;
+	transition:
+		background 120ms ease,
+		color 120ms ease,
+		width 160ms var(--spring),
+		padding 160ms var(--spring);
+}
+
+.gui-select-pop-btn:hover {
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+/* Group expansion: hovering the toolbar expands every button together
+ * (container-level class), so cursor travel between buttons never sees
+ * the icons move under it. */
+.gui-select-pop--expanded .gui-select-pop-btn {
+	width: auto;
+	padding: 0 10px;
+}
+
+/* The label morphs in on hover: collapsed via max-width so it takes NO
+ * layout space when hidden (opacity alone would push the icon off-centre
+ * inside the fixed 26px button), then unfolds with the button. */
+.gui-select-pop-label {
+	display: inline-block;
+	max-width: 0;
+	overflow: hidden;
+	opacity: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1;
+	white-space: nowrap;
+	transition:
+		max-width 160ms var(--spring),
+		opacity 120ms ease 70ms;
+}
+
+.gui-select-pop--expanded .gui-select-pop-label {
+	max-width: 160px;
+	opacity: 1;
+}
+
+/* ── AskPopover (openchamber side-chat parity, minimal form): floating
+ * selection→ask card — snippet preview, question box, throwaway reply.
+ * Same glass language as gui-select-pop/gui-menu. */
+.gui-ask-pop {
+	position: fixed;
+	z-index: 61;
+	width: 360px;
+	max-width: calc(100vw - 24px);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow:
+		0 10px 32px rgba(0, 0, 0, 0.22),
+		0 0 0 1px rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(18px) saturate(160%);
+	pointer-events: auto;
+	opacity: 0;
+}
+
+.gui-ask-pop--entered {
+	opacity: 1;
+	animation: gui-ask-pop-in 140ms var(--spring);
+}
+
+@keyframes gui-ask-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.gui-ask-pop-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--color-text);
+}
+
+.gui-ask-pop-title {
+	flex: 1;
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.gui-ask-pop-x {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.gui-ask-pop-x:hover {
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+/* Snippet: single faded block, ellipsized, hover reveals the full text. */
+.gui-ask-pop-snippet {
+	max-height: 72px;
+	overflow: hidden;
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	word-break: break-word;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+}
+
+.gui-ask-pop-context {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-ask-pop-input-row {
+	display: flex;
+	align-items: flex-end;
+	gap: 6px;
+}
+
+.gui-ask-pop-input {
+	flex: 1;
+	min-width: 0;
+	resize: none;
+	padding: 7px 9px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-size: 12.5px;
+	line-height: 1.45;
+	outline: none;
+}
+
+.gui-ask-pop-input:focus {
+	border-color: var(--color-accent);
+}
+
+.gui-ask-pop-send {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	border: none;
+	border-radius: 9px;
+	background: var(--color-accent);
+	color: var(--color-on-accent, #fff);
+	cursor: pointer;
+}
+
+.gui-ask-pop-send:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-ask-pop-dots {
+	width: 12px;
+	height: 4px;
+	border-radius: 2px;
+	background: currentColor;
+	animation: gui-ask-pop-blink 900ms ease-in-out infinite;
+}
+
+@keyframes gui-ask-pop-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.3;
+	}
+}
+
+.gui-ask-pop-reply {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-ask-pop-reply pre {
+	margin: 0;
+	max-height: 220px;
+	overflow: auto;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.gui-ask-pop-error {
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
+	color: var(--color-danger, #e5484d);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-ask-pop-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-ask-pop-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-ask-pop-btn:hover {
+	color: var(--color-accent);
+	border-color: var(--color-accent-bd, var(--border));
+}
+
+
+/* ── ShinyText (reactbits parity, zero-dep): gradient text + sweeping
+ * highlight band (background-position keyframes, no JS). */
+.gui-shiny-text {
+	background-image: linear-gradient(
+		var(--shiny-spread, 110deg),
+		var(--shiny-color, currentColor) 0%,
+		var(--shiny-color, currentColor) 35%,
+		var(--shiny-shine, rgba(255, 255, 255, 0.8)) 50%,
+		var(--shiny-color, currentColor) 65%,
+		var(--shiny-color, currentColor) 100%
+	);
+	background-size: 200% auto;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: gui-shiny-sweep var(--shiny-speed, 2.8s) linear infinite;
+}
+
+@keyframes gui-shiny-sweep {
+	0% {
+		background-position: 200% center;
+	}
+	100% {
+		background-position: -200% center;
+	}
+}
+
+.gui-motion-off .gui-shiny-text {
+	background-image: none;
+	-webkit-text-fill-color: initial;
+	animation: none;
+}
+
+/* ── SpotlightCard (reactbits parity, zero-dep): pointer-follow glow.
+ * Behavior-only — the caller's class carries the card chrome. */
+.gui-spotlight {
+	position: relative;
+	overflow: hidden;
+}
+
+.gui-spotlight-glow {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	transition: opacity 280ms ease;
+	will-change: opacity;
+}
+
+.gui-motion-off .gui-spotlight-glow {
+	display: none;
+}
+
+/* ── Board page (kimi-work parity, M1) ─────────────────────────────────── */
+.gui-board {
+	display: flex;
+	flex-direction: column;
+	/* 100% of the chat surface (which is already sized below the app
+	 * topbar) — 100vh leaked past the window and clipped the bottom of
+	 * the collection view's create bar. */
+	height: 100%;
+	min-height: 0;
+	padding: 14px 18px 18px;
+	gap: 12px;
+	box-sizing: border-box;
+}
+
+.gui-board-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.gui-board-title-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-board-title {
+	flex: 1;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	outline: none;
+	color: var(--color-text);
+	font-size: 17px;
+	font-weight: 500;
+	padding: 4px 8px;
+	border-radius: 8px;
+}
+
+.gui-board-title:hover,
+.gui-board-title:focus {
+	background: var(--color-surface-raised);
+}
+
+.gui-board-saved {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-ok);
+	flex-shrink: 0;
+}
+
+.gui-board-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+.gui-board-templates {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-board-canvas {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	/* Chroma-grid pointer coordinate (board view writes --cg-x/--cg-y). */
+	--cg-x: 50%;
+	--cg-y: 50%;
+	/* Vertical scrolling only. The surface's LAYOUT width is the fixed
+	 * BASE_W (transform: scale shrinks only the painting, not layout), so
+	 * when the window is narrower than 1092px the layout overflow would
+	 * surface a spurious horizontal scrollbar — while the scaled visual
+	 * already fills the container exactly. Horizontal panning is pointless
+	 * (the canvas is always fitted to the width), so clip it. */
+	overflow-x: hidden;
+	overflow-y: auto;
+	/* Dot-matrix backdrop (coarser than the old 8px grid — cards read
+	 * larger; kimi uses dots, not fine gridlines) with feathered edges. */
+	background-image: radial-gradient(color-mix(in oklab, var(--color-text) 7%, transparent) 1px, transparent 1.6px);
+	background-size: 22px 22px;
+	-webkit-mask-image: radial-gradient(120% 90% at 50% 40%, #000 62%, transparent 100%);
+	mask-image: radial-gradient(120% 90% at 50% 40%, #000 62%, transparent 100%);
+	--board-ghost-bd: color-mix(in oklab, var(--color-accent) 65%, transparent);
+}
+
+/* Group-level chroma glow (reactbits ChromaGrid parity) — shared by the
+ * board canvas, provider grid, pet market and pet preset grid: ONE
+ * chromatic light over the whole group, driven by the shared pointer, so
+ * every card lights up together (vs each card's own SpotlightCard).
+ * Three offset RGB gradients read as chromatic dispersion; screen
+ * blending keeps it additive over dark cards. The pointer writes
+ * --cg-x/--cg-y straight to the container (no re-render); the glow is
+ * pure CSS, fades in on group hover, hides under gui-motion-off. */
+.gui-chroma {
+	position: relative;
+	--cg-x: 50%;
+	--cg-y: 50%;
+}
+
+.gui-chroma-glow {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+	mix-blend-mode: screen;
+	opacity: 0;
+	transition: opacity 320ms ease;
+	background:
+		radial-gradient(620px circle at var(--cg-x, 50%) var(--cg-y, 50%), rgba(255, 70, 130, 0.10), transparent 58%),
+		radial-gradient(500px circle at calc(var(--cg-x, 50%) - 7px) calc(var(--cg-y, 50%) - 7px), rgba(70, 255, 140, 0.07), transparent 58%),
+		radial-gradient(500px circle at calc(var(--cg-x, 50%) + 7px) calc(var(--cg-y, 50%) + 7px), rgba(80, 150, 255, 0.08), transparent 58%);
+}
+
+.gui-chroma:hover .gui-chroma-glow,
+.gui-board-canvas:hover .gui-chroma-glow {
+	opacity: 1;
+}
+
+.gui-motion-off .gui-chroma-glow {
+	display: none;
+}
+
+/* The scaled surface: base-width coordinate space, transform-scaled to
+ * the window so cards reflow proportionally (kimi dynamic scaling). */
+.gui-board-surface {
+	position: relative;
+	transform-origin: top left;
+	transition: transform 120ms ease-out;
+}
+
+.gui-board-card {
+	position: absolute;
+	display: flex;
+	box-sizing: border-box;
+	transition: opacity 140ms ease, left 120ms ease-out, top 120ms ease-out, width 120ms ease-out, height 120ms ease-out;
+}
+
+.gui-board-card--dimmed {
+	opacity: 0.35;
+}
+
+
+.gui-board-card-inner {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	/* Immersive kimi-style card: no outline — the widget surface IS the
+	 * card (dark widgets carry their own gradient shell; light ones sit
+	 * on the tone background). */
+	border: none;
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+	overflow: hidden;
+	transition: box-shadow 200ms ease;
+}
+
+/* Card tones (kimi hello-world boards mix dark/light/blue cards — not
+ * one uniform theme surface). The shell overrides the surface + text
+ * tokens so every widget inside adapts automatically. */
+.gui-board-card[data-tone="dark"] .gui-board-card-inner,
+.gui-board-focus-card[data-tone="dark"],
+.gui-pin[data-tone="dark"] {
+	background: #1b1b20;
+	border-color: #2c2c34;
+	--color-text: #e8e8ea;
+	--color-text-secondary: #9c9ca4;
+	--color-surface-sunken: #232329;
+	--color-surface-hover: #2a2a31;
+	--border: #2c2c34;
+}
+
+.gui-board-card[data-tone="blue"] .gui-board-card-inner,
+.gui-board-focus-card[data-tone="blue"],
+.gui-pin[data-tone="blue"] {
+	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
+	--color-text: #1c2b3a;
+	--color-text-secondary: #40566c;
+	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
+	--color-surface-hover: color-mix(in oklab, #b8d8f5 60%, #fff 40%);
+	--border: color-mix(in oklab, #8fb8e0 55%, transparent);
+}
+
+.gui-board-card[data-tone="light"] .gui-board-card-inner,
+.gui-board-focus-card[data-tone="light"],
+.gui-pin[data-tone="light"] {
+	background: color-mix(in oklab, #f5f5f2 90%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #d8d8d2 70%, var(--border));
+	--color-text: #1f1f24;
+	--color-text-secondary: #6b6b74;
+	--color-surface-sunken: color-mix(in oklab, #ecece8 80%, transparent);
+	--color-surface-hover: #e2e2de;
+	--border: color-mix(in oklab, #d8d8d2 60%, transparent);
+}
+
+.gui-board-card-inner:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+}
+
+/* Card head = drag handle (except the title input). */
+.gui-board-card-head {
+	/* Floating overlay strip: the widget bleeds to the full card (kimi
+	 * desktop parity) and the head hovers above its top edge — draggable
+	 * (move) and revealing the actions on card hover. */
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	padding: 6px 8px;
+	cursor: grab;
+	user-select: none;
+}
+
+.gui-board-card-head:active {
+	cursor: grabbing;
+}
+
+.gui-board-card-title {
+	display: none;
+	flex: 1;
+	min-width: 0;
+	background: transparent;
+	border: none;
+	outline: none;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	padding: 2px 6px;
+	border-radius: 6px;
+}
+
+.gui-board-card-title:hover,
+.gui-board-card-title:focus {
+	background: var(--color-surface-sunken);
+}
+
+.gui-board-card-actions {
+	display: flex;
+	gap: 2px;
+	opacity: 0;
+	transition: opacity 120ms ease;
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	border-radius: 9px;
+	padding: 2px;
+}
+
+.gui-board-card-inner:hover .gui-board-card-actions,
+.gui-board-card-actions:focus-within {
+	opacity: 1;
+}
+
+.gui-board-card-act {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+
+.gui-board-card-act:hover {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+.gui-board-card-act:last-child:hover {
+	background: var(--color-danger-soft);
+	color: var(--color-danger);
+}
+
+/* Resize corner: hover reveals a wireframe hint (dashed corner bracket),
+ * drag resizes; the ghost overlay previews the predicted footprint. */
+.gui-board-card-resize {
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	width: 26px;
+	height: 26px;
+	cursor: nwse-resize;
+	/* Invisible until hovered — each handle reveals itself only when the
+	 * pointer is over ITS OWN zone (right edge / bottom edge / corner),
+	 * never on general card hover. */
+	opacity: 0;
+	transition: opacity 120ms ease;
+	border-right: 2px solid var(--color-text-faint);
+	border-bottom: 2px solid var(--color-text-faint);
+	border-bottom-right-radius: 6px;
+	z-index: 5;
+	pointer-events: auto;
+}
+
+.gui-board-card-resize:hover {
+	opacity: 1;
+	border-color: var(--color-accent);
+}
+
+.gui-board-card-inner {
+	position: relative;
+}
+
+/* Ghost frame: predicted footprint + grid wireframe while interacting. */
+.gui-board-ghost {
+	position: absolute;
+	border: 2px dashed var(--board-ghost-bd);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+	pointer-events: none;
+	z-index: 3;
+	transition: left 40ms linear, top 40ms linear, width 40ms linear, height 40ms linear;
+}
+
+/* Focus modal (放大). */
+.gui-board-focus {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(10px);
+	/* Two-phase enter (useTwoPhaseEnter): the mount frame stays at opacity
+	 * 0 so the frosted scrim composites before gui-fade-in — animating a
+	 * freshly-mounted backdrop-filter element makes Chromium skip its
+	 * backdrop sampling (gui-implementation.md §6.5). */
+	opacity: 0;
+}
+
+.gui-board-focus--entered {
+	opacity: 1;
+	animation: gui-fade-in 160ms ease;
+}
+
+.gui-board-focus-card {
+	/* Width/height come from the card's board aspect ratio (focusCardStyle)
+	 * — never stretch one axis alone. */
+	width: min(760px, 88vw);
+	max-height: 86vh;
+	overflow-y: auto;
+	/* Flex column so the body's flex:1 fills below the head — the widget
+	 * then spans the whole modal instead of its natural height. */
+	display: flex;
+	flex-direction: column;
+	/* Visible rounded frame (kimi maximized container). */
+	border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent);
+	border-radius: var(--radius-2xl);
+	background: var(--color-surface-raised);
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	padding: 16px;
+	box-sizing: border-box;
+}
+
+.gui-board-focus-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
+.gui-board-focus-title {
+	font-size: 15px;
+	font-weight: 500;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	padding: 2px 6px;
+	color: var(--color-text);
+	min-width: 0;
+	flex: 0 1 auto;
+}
+
+.gui-board-focus-title:focus {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	outline: none;
+}
+
+.gui-board-focus-body {
+	display: flex;
+	flex-direction: column;
+	/* Fill the modal below the head — without a definite height the
+	 * WidgetFit height:100% chain collapses and the widget renders at
+	 * its natural height, overflowing the framed container. */
+	flex: 1;
+	min-height: 0;
+}
+
+@keyframes gui-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+
+.gui-board-card-body {
+	/* The widget bleeds to ALL card edges (kimi immersive) — the resize
+	 * handle floats over the corner instead of reserving space. flex:1
+	 * is load-bearing: it gives this box a definite height, which the
+	 * WidgetFit height:100% chain (fit-inner → widget) resolves against;
+	 * without it every height:100% falls back to content height and the
+	 * card shell shows around the widget like an outer frame. */
+	flex: 1;
+	min-height: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* WidgetFit: shrink natural widget content into a too-short card so
+ * nothing is ever clipped (top-anchored, never enlarged). */
+.gui-widget-video {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-widget-video-el {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	background: #000;
+	border-radius: 10px;
+}
+
+.gui-widget-video-empty {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	color: var(--color-text-secondary);
+	min-height: 120px;
+}
+
+.gui-widget-video-empty-icon {
+	font-size: 26px;
+	opacity: 0.7;
+}
+
+.gui-widget-video-empty-text {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+}
+
+.gui-widget-video-hint {
+	font-size: 11px;
+	opacity: 0.6;
+}
+
+.gui-widget-gauge {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 6px;
+}
+
+.gui-widget-gauge-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.gui-widget-gauge-title {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+}
+
+.gui-widget-gauge-sub {
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+.gui-widget-gauge-body {
+	flex: 1;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 0;
+}
+
+.gui-widget-gauge-svg {
+	width: 100%;
+	max-height: 130px;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-widget-gauge-track {
+	stroke: var(--color-surface-hover);
+	stroke-width: 5;
+}
+
+.gui-widget-gauge-arc {
+	stroke: var(--color-accent);
+	stroke-width: 5;
+	stroke-linecap: round;
+}
+
+.gui-widget-gauge-needle {
+	stroke: var(--color-text);
+	stroke-width: 1.4;
+}
+
+.gui-widget-gauge-pivot {
+	fill: var(--color-text);
+}
+
+.gui-widget-gauge-scale {
+	font-size: 6px;
+	fill: var(--color-text-secondary);
+}
+
+.gui-widget-gauge-value {
+	font-size: 30px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+}
+
+.gui-widget-gauge-status {
+	font-size: 11px;
+	color: var(--color-text-secondary);
+}
+
+/* ── Kline ── */
+.gui-widget-kline {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 4px;
+}
+
+.gui-widget-kline-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-secondary);
+	font-size: var(--ui-font-size-xs);
+	height: 100%;
+}
+
+.gui-widget-kline-tabs {
+	display: flex;
+	gap: 10px;
+	align-items: baseline;
+	flex-wrap: wrap;
+}
+
+.gui-widget-kline-tab {
+	background: none;
+	border: none;
+	color: var(--color-text-secondary);
+	font-size: 11px;
+	padding: 2px 0;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+}
+
+.gui-widget-kline-tab--active {
+	color: var(--color-text);
+	border-bottom-color: var(--color-accent);
+}
+
+.gui-widget-kline-pricedelta {
+	margin-left: auto;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text);
+}
+
+.gui-widget-kline-data {
+	display: flex;
+	justify-content: space-between;
+	font-size: 10px;
+	color: var(--color-text-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-kline-svg {
+	width: 100%;
+	flex: 1;
+	min-height: 60px;
+}
+
+.gui-widget-kline-ma5 {
+	stroke: #ffb224;
+	stroke-width: 0.6;
+	fill: none;
+}
+
+.gui-widget-kline-ma20 {
+	stroke: var(--color-accent);
+	stroke-width: 0.6;
+	fill: none;
+	stroke-dasharray: 1.4 1;
+}
+
+.gui-widget-kline-foot {
+	display: flex;
+	justify-content: space-between;
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+/* ── Heatwall ── */
+.gui-widget-heatwall {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 6px;
+}
+
+.gui-widget-heatwall-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.gui-widget-heatwall-title {
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.gui-widget-heatwall-count {
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+.gui-widget-heatwall-grid {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+	grid-auto-rows: 1fr;
+	gap: 4px;
+}
+
+.gui-widget-heatwall-tile {
+	border-radius: 6px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1px;
+	min-height: 34px;
+	overflow: hidden;
+}
+
+.gui-widget-heatwall-name {
+	font-size: 10px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 92%;
+}
+
+.gui-widget-heatwall-delta {
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-heatwall-tile--up-0 { background: color-mix(in oklab, #e5484d 14%, transparent); }
+.gui-widget-heatwall-tile--up-1 { background: color-mix(in oklab, #e5484d 26%, transparent); }
+.gui-widget-heatwall-tile--up-2 { background: color-mix(in oklab, #e5484d 40%, transparent); }
+.gui-widget-heatwall-tile--up-3 { background: color-mix(in oklab, #e5484d 58%, transparent); }
+.gui-widget-heatwall-tile--down-0 { background: color-mix(in oklab, #30a46c 16%, transparent); }
+.gui-widget-heatwall-tile--down-1 { background: color-mix(in oklab, #30a46c 28%, transparent); }
+.gui-widget-heatwall-tile--down-2 { background: color-mix(in oklab, #30a46c 42%, transparent); }
+.gui-widget-heatwall-tile--down-3 { background: color-mix(in oklab, #30a46c 60%, transparent); }
+.gui-widget-heatwall-tile--flat { background: var(--color-surface-sunken); }
+
+.gui-widget-heatwall-foot {
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+/* ── Indextape ── */
+.gui-widget-indextape {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 4px;
+}
+
+.gui-widget-indextape-tabs {
+	display: flex;
+	gap: 10px;
+}
+
+.gui-widget-indextape-tab {
+	background: none;
+	border: none;
+	color: var(--color-text-secondary);
+	font-size: 11px;
+	padding: 2px 0;
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+}
+
+.gui-widget-indextape-tab--active {
+	color: var(--color-text);
+	border-bottom-color: var(--color-accent);
+}
+
+.gui-widget-indextape-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+
+.gui-widget-indextape-title {
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.gui-widget-indextape-value {
+	font-size: var(--ui-font-size);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-indextape-down {
+	color: var(--color-success, #30a46c);
+}
+
+.gui-widget-indextape-svg {
+	width: 100%;
+	flex: 1;
+	min-height: 40px;
+}
+
+.gui-widget-indextape-line {
+	stroke: var(--color-accent);
+	stroke-width: 1.2;
+	fill: none;
+}
+
+.gui-widget-indextape-foot {
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+.gui-widget-gallery {
+	display: flex;
+	flex-direction: row;
+	gap: 6px;
+	width: 100%;
+	height: 100%;
+	min-height: 140px;
+	align-items: stretch;
+}
+
+.gui-widget-gallery-item {
+	flex: 1 1 0;
+	min-width: 0;
+	border: none;
+	border-radius: 10px;
+	background-size: cover;
+	background-position: center;
+	position: relative;
+	overflow: hidden;
+	cursor: pointer;
+	transition: flex-grow 380ms var(--spring), filter 200ms ease;
+	/* Gradient placeholder palette (kimi 画览-style) when no image. */
+	background-image:
+		linear-gradient(160deg, color-mix(in oklab, var(--color-accent) 45%, #1c1c22), #26262e),
+		linear-gradient(160deg, #3a3a46, #1c1c22);
+}
+
+.gui-widget-gallery-item:nth-child(3n + 2) {
+	background-image: linear-gradient(160deg, #4a3f6b, #26262e);
+}
+
+.gui-widget-gallery-item:nth-child(3n) {
+	background-image: linear-gradient(160deg, #2f5d6b, #1c1c22);
+}
+
+.gui-widget-gallery-item--active {
+	flex-grow: 3.2;
+}
+
+.gui-widget-gallery-item:not(.gui-widget-gallery-item--active) {
+	filter: brightness(0.72);
+}
+
+.gui-widget-gallery-title {
+	position: absolute;
+	left: 8px;
+	bottom: 8px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: #fff;
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: calc(100% - 16px);
+	pointer-events: none;
+	transition: font-size 200ms ease;
+}
+
+.gui-widget-gallery-item--active .gui-widget-gallery-title {
+	font-size: var(--ui-font-size);
+}
+
+.gui-widget-gallery-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-secondary);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-widget-fit {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+	/* Scaled-down widget content stays CENTERED (kimi cards center their
+	 * content when the card is bigger than the content). */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.gui-widget-fit-inner {
+	width: 100%;
+	/* Definite height: without it a widget's height:100% resolves
+	 * against the inner's CONTENT height (cyclic → auto) and the widget
+	 * only spans its natural size, leaving the card shell visible around
+	 * it like an outer frame. With height:100% the widget bleeds
+	 * edge-to-edge (kimi: the widget surface IS the card); widgets are
+	 * fluid (internal flex/scroll) so nothing clips. */
+	height: 100%;
+	transform-origin: center;
+}
+
+.gui-board-empty {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 80px 20px;
+	color: var(--color-text-muted);
+}
+
+.gui-board-empty-title {
+	font-size: 20px;
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.gui-board-empty-desc {
+	font-size: var(--ui-font-size-sm);
+}
+
+/* Widget internals (shared by board cards and future inline widgets). */
+.gui-widget-clock {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 2px;
+}
+
+.gui-widget-clock-time {
+	font-size: 34px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.01em;
+	color: var(--color-text);
+}
+
+.gui-widget-clock-colon {
+	color: var(--color-text-faint);
+	animation: gui-widget-blink 1s steps(1) infinite;
+}
+
+@keyframes gui-widget-blink {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.gui-widget-clock-row {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-widget-clock-market {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-widget-clock-market--active {
+	border-color: var(--color-accent-bd);
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+.gui-widget-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+}
+
+.gui-widget-dot--open {
+	background: var(--color-ok);
+	box-shadow: 0 0 6px color-mix(in oklab, var(--color-ok) 60%, transparent);
+}
+
+.gui-widget-clock-state {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-widget-slider {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-widget-slider-params {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.gui-widget-slider-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-widget-slider-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	min-width: 52px;
+}
+
+.gui-widget-slider-row input[type="range"] {
+	flex: 1;
+	min-width: 0;
+	accent-color: var(--color-text);
+	height: 16px;
+}
+
+.gui-widget-slider-val {
+	font-size: var(--ui-font-size-xs);
+	font-variant-numeric: tabular-nums;
+	color: var(--color-accent);
+	min-width: 38px;
+	text-align: right;
+}
+
+.gui-widget-slider-plot {
+	width: 100%;
+	height: 90px;
+	border-radius: 8px;
+	background: var(--color-surface-sunken);
+}
+
+.gui-widget-slider-line {
+	stroke: var(--color-accent);
+	stroke-width: 1.4;
+	vector-effect: non-scaling-stroke;
+}
+
+.gui-widget-calc {
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	padding: 2px;
+}
+
+.gui-widget-calc-toggles {
+	display: flex;
+	gap: 4px;
+}
+
+.gui-widget-calc-toggle {
+	flex: 1;
+	padding: 5px 0;
+	border-radius: 7px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+.gui-widget-calc-toggle--active {
+	border-color: var(--color-accent-bd);
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+.gui-widget-calc-input {
+	height: 30px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-size: var(--ui-font-size);
+	font-variant-numeric: tabular-nums;
+	padding: 0 10px;
+	outline: none;
+}
+
+.gui-widget-calc-input:focus {
+	border-color: var(--color-accent-bd);
+}
+
+.gui-widget-calc-bar {
+	position: relative;
+	height: 22px;
+	border-radius: 6px;
+	background: var(--color-surface-sunken);
+	overflow: hidden;
+}
+
+.gui-widget-calc-bar-fill {
+	height: 100%;
+	background: var(--color-accent);
+	opacity: 0.85;
+	transition: width 200ms var(--spring);
+}
+
+.gui-widget-calc-bar-label {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11.5px;
+	color: var(--color-accent-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-calc-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 6px;
+}
+
+.gui-widget-calc-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 7px 9px;
+	border-radius: 8px;
+	background: var(--color-surface-sunken);
+}
+
+.gui-widget-calc-cell--tax {
+	background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+.gui-widget-calc-cell--tax .gui-widget-calc-cell-val {
+	color: var(--color-danger);
+}
+
+.gui-widget-calc-cell--net {
+	background: color-mix(in srgb, var(--color-ok) 12%, transparent);
+}
+
+.gui-widget-calc-cell--net .gui-widget-calc-cell-val {
+	color: var(--color-ok);
+}
+
+.gui-widget-calc-cell-label {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-widget-calc-cell-val {
+	font-size: var(--ui-font-size);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-calc-rules {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	border-top: 1px solid var(--border);
+	padding-top: 7px;
+}
+
+.gui-widget-calc-rules-title {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--color-text-faint);
+}
+
+.gui-widget-calc-rule {
+	display: flex;
+	justify-content: space-between;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-widget-calc-rule-val {
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-ticker {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 2px;
+}
+
+.gui-widget-ticker-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.gui-widget-ticker-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-widget-ticker-delta {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-ok);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-ticker-delta--down {
+	color: var(--color-danger);
+}
+
+.gui-widget-ticker-value {
+	font-size: 26px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-ticker-spark {
+	width: 100%;
+	/* Fill the card: the curve grows with the card height instead of a
+	 * fixed 44px strip (kimi sparkline fills its panel). */
+	flex: 1;
+	min-height: 36px;
+	align-self: stretch;
+}
+
+.gui-widget-ticker-spark-line {
+	stroke: var(--color-accent);
+	stroke-width: 1.5;
+	vector-effect: non-scaling-stroke;
+	fill: none;
+}
+
+.gui-widget-ticker-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-widget-ticker-btn {
+	padding: 3px 10px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.gui-widget-ticker-btn:hover {
+	border-color: var(--color-accent-bd);
+	color: var(--color-text);
+}
+
+.gui-widget-metric {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 2px;
+}
+
+.gui-widget-metric-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.gui-widget-metric-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-widget-metric-tick {
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	font-size: var(--ui-font-size);
+}
+
+.gui-widget-metric-tick:hover {
+	color: var(--color-text);
+}
+
+.gui-widget-metric-value {
+	font-size: 30px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-metric-foot {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.gui-widget-metric-delta {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-ok);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-metric-delta--down {
+	color: var(--color-danger);
+}
+
+.gui-widget-metric-spark {
+	width: 90px;
+	height: 30px;
+}
+
+.gui-widget-metric-spark-line {
+	stroke: var(--color-accent);
+	stroke-width: 1.4;
+	vector-effect: non-scaling-stroke;
+	fill: none;
+}
+
+.gui-widget-todo {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-widget-todo-list {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	/* Fill the card's remaining height (the widget now spans the full
+	 * card — kimi immersive) and scroll internally when it overflows. */
+	flex: 1;
+	min-height: 0;
+	max-height: none;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-widget-todo-empty {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	padding: 8px 2px;
+}
+
+.gui-widget-todo-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 2px;
+	border-radius: 6px;
+}
+
+.gui-widget-todo-item:hover {
+	background: var(--color-surface-sunken);
+}
+
+.gui-widget-todo-check {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	border-radius: 5px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-ok);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.gui-widget-todo-check--done {
+	background: var(--color-ok);
+	color: var(--color-accent-fg);
+	border-color: var(--color-ok);
+}
+
+.gui-widget-todo-text {
+	flex: 1;
+	min-width: 0;
+	font-size: 12.5px;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-widget-todo-text--done {
+	text-decoration: line-through;
+	color: var(--color-text-faint);
+}
+
+.gui-widget-todo-del {
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.gui-widget-todo-item:hover .gui-widget-todo-del {
+	opacity: 1;
+}
+
+.gui-widget-todo-add {
+	display: flex;
+	gap: 6px;
+}
+
+/* ── send-to-conversation chip (kimi sendPrompt parity) ──────────────── */
+.gui-widget-send {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 8px;
+	align-self: flex-end;
+	border: 0;
+	cursor: pointer;
+	font-size: 11px;
+	font-weight: 600;
+	color: #4da3ff;
+	background: rgba(77, 163, 255, 0.1);
+	border-radius: 999px;
+	padding: 4px 10px;
+	transition: background 0.15s;
+}
+.gui-widget-send:hover {
+	background: rgba(77, 163, 255, 0.2);
+}
+.gui-widget-send-arrow {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1;
+}
+
+.gui-widget-todo-input {
+	flex: 1;
+	min-width: 0;
+	height: 28px;
+	border-radius: 7px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-size: 12.5px;
+	padding: 0 9px;
+	outline: none;
+}
+
+.gui-widget-todo-input:focus {
+	border-color: var(--color-accent-bd);
+}
+
+.gui-widget-todo-btn {
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	border-radius: 7px;
+	border: none;
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+	font-size: 15px;
+	cursor: pointer;
+}
+
+.gui-widget-todo-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* ── Icon-button hover tooltips (universal) ─────────────────────────────
+ * Native title tooltips do not render in this Electron build, so ANY
+ * icon-only button (contains an svg, no visible text span) with a title
+ * gets a CSS-drawn bubble below (title attr -> ::after, arrow -> ::before).
+ * The pseudo-elements are ALWAYS present, toggled by opacity/visibility —
+ * a :hover-only rule would snap in/out with no transition possible. 140ms
+ * fade + 2px slide toward the button play on BOTH appear and disappear;
+ * gui-motion-off and prefers-reduced-motion degrade to an instant snap.
+ * Excluded: .gui-composer-ico/.gui-composer-send (above-anchored override
+ * below; the former owns a ::before ripple) and .gui-context-ring-btn (its
+ * click popover already carries the same numbers). Buttons with a visible
+ * label (icon + span, e.g. menu items, mode chips) fall out via
+ * :not(:has(span)) — their own text is the hint. The position: relative
+ * anchor is :where()-zeroed so an explicit position class on some future
+ * icon button still wins (its bubble just anchors to the nearest
+ * positioned ancestor — cosmetic, never layout-breaking). */
+button:where([title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-send):not(.gui-context-ring-btn)) {
+	position: relative;
+}
+
+button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-send):not(.gui-context-ring-btn)::after {
+	content: attr(title);
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 50%;
+	z-index: 200;
+	white-space: nowrap;
+	padding: 4px 8px;
+	border-radius: 6px;
+	background: var(--color-surface-raised);
+	border: 1px solid var(--border);
+	color: var(--color-text);
+	font-size: 11.5px;
+	font-weight: 400;
+	letter-spacing: 0;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateX(-50%) translateY(2px);
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease,
+		visibility 0s linear 140ms;
+}
+
+button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-send):not(.gui-context-ring-btn):hover::after {
+	opacity: 1;
+	visibility: visible;
+	transform: translateX(-50%) translateY(0);
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease;
+}
+
+button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-send):not(.gui-context-ring-btn)::before {
+	content: "";
+	position: absolute;
+	top: calc(100% + 2px);
+	left: 50%;
+	z-index: 200;
+	width: 6px;
+	height: 6px;
+	background: var(--color-surface-raised);
+	border-left: 1px solid var(--border);
+	border-top: 1px solid var(--border);
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateX(-50%) rotate(45deg);
+	transition:
+		opacity 140ms ease,
+		visibility 0s linear 140ms;
+}
+
+button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-send):not(.gui-context-ring-btn):hover::before {
+	opacity: 1;
+	visibility: visible;
+	transition: opacity 140ms ease;
+}
+
+/* Composer icon buttons (mic / stop / retry / focus / attach / …) + the
+ * send button: the universal bubble, but anchored ABOVE — the footer sits
+ * at the composer's bottom edge, where a below-anchored bubble would clip.
+ * .gui-composer-ico's ::before is the hover ripple, so no arrow here. */
+.gui-composer-ico[title]::after,
+.gui-composer-send[title]::after {
+	content: attr(title);
+	position: absolute;
+	bottom: calc(100% + 6px);
+	left: 50%;
+	z-index: 200;
+	white-space: nowrap;
+	padding: 4px 8px;
+	border-radius: 6px;
+	background: var(--color-surface-raised);
+	border: 1px solid var(--border);
+	color: var(--color-text);
+	font-size: 11.5px;
+	font-weight: 400;
+	letter-spacing: 0;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateX(-50%) translateY(-2px);
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease,
+		visibility 0s linear 140ms;
+}
+
+.gui-composer-ico[title]:hover::after,
+.gui-composer-send[title]:hover::after {
+	opacity: 1;
+	visibility: visible;
+	transform: translateX(-50%) translateY(0);
+	transition:
+		opacity 140ms ease,
+		transform 140ms ease;
+}
+
+/* Motion off / system reduced motion: tooltips snap instead of fading. */
+.gui-motion-off button[title]::after,
+.gui-motion-off button[title]::before {
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	button[title]::after,
+	button[title]::before {
+		transition: none !important;
+	}
+}
+
+/* Board home (collection list, kimi kanban-home parity). */
+.gui-board-home {
+	/* Block flow: sticky children (the create bar) behave reliably here —
+	 * flex containers constrain sticky offsets. */
+	display: block;
+	padding: 20px 24px;
+	overflow-y: auto;
+	/* Fill the board view so the create bar can stick to the bottom. */
+	flex: 1;
+	min-height: 0;
+}
+.gui-board-home-head {
+	margin-bottom: 14px;
+}
+.gui-board-home-grid {
+	margin-bottom: 14px;
+}
+
+.gui-board-home-head {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	position: relative;
+}
+
+.gui-board-home-chat {
+	position: absolute;
+	top: 0;
+	right: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.gui-board-home-tag--mine {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-board-home-title {
+	font-size: 22px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-board-home-desc {
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+.gui-board-home-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+	gap: 14px;
+}
+
+.gui-board-home-card {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+	min-height: 300px;
+	position: relative;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	cursor: pointer;
+	text-align: left;
+	transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.gui-board-home-card:hover {
+	border-color: var(--color-accent-bd);
+	transform: translateY(-1px);
+}
+
+.gui-board-home-card--new {
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 120px;
+	border-style: dashed;
+	color: var(--color-text-muted);
+}
+
+.gui-board-home-card--new:hover {
+	color: var(--color-text);
+}
+
+.gui-board-home-card-x {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-secondary);
+	opacity: 0;
+	transition: opacity 120ms ease, background 120ms ease;
+}
+
+.gui-board-home-card:hover .gui-board-home-card-x,
+.gui-board-home-card-x:focus-visible {
+	opacity: 1;
+}
+
+.gui-board-home-card-x:hover {
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 20%, transparent);
+	color: var(--color-danger, #e5484d);
+}
+
+.gui-board-home-card-title {
+	font-size: 15px;
+	font-weight: 500;
+}
+
+.gui-board-home-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-board-home-tag {
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+	font-size: 11px;
+}
+
+.gui-board-home-count {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-board-home-create {
+	/* Floating frosted-glass bar (sticky at the bottom of the collection
+	 * view, kimi's chat-to-create affordance): translucent surface +
+	 * backdrop blur, feathered edge via a wide soft glow. */
+	position: sticky;
+	bottom: 14px;
+	display: flex;
+	gap: 8px;
+	width: min(760px, 100%);
+	margin: 6px auto 0;
+	padding: 8px;
+	border-radius: 18px;
+	background: color-mix(in oklab, var(--color-surface-raised) 62%, transparent);
+	backdrop-filter: blur(20px) saturate(170%);
+	-webkit-backdrop-filter: blur(20px) saturate(170%);
+	box-shadow:
+		0 10px 36px -6px rgba(0, 0, 0, 0.22),
+		0 2px 8px -2px rgba(0, 0, 0, 0.14),
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		inset 0 0 0 1px color-mix(in oklab, var(--border) 70%, transparent);
+	z-index: 2;
+	/* gui-spotlight's overflow:hidden would clip the ::before feathered
+	 * halo (inset -22px -34px) — the bar must keep its soft edge. */
+	overflow: visible;
+}
+/* Feathered halo behind the bar (accent-tinted glow, masked to a soft
+ * oval so the edges melt into the surface instead of a hard box). */
+.gui-board-home-create::before {
+	content: "";
+	position: absolute;
+	inset: -22px -34px;
+	z-index: -1;
+	pointer-events: none;
+	border-radius: 40px;
+	background:
+		radial-gradient(60% 80% at 50% 50%, color-mix(in oklab, var(--color-accent) 9%, transparent), transparent 72%),
+		radial-gradient(90% 100% at 50% 50%, rgba(0, 0, 0, 0.1), transparent 75%);
+	filter: blur(14px);
+}
+
+.gui-board-home-input {
+	flex: 1;
+	min-width: 0;
+	height: 40px;
+	border-radius: 12px;
+	border: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	padding: 0 14px;
+	outline: none;
+}
+.gui-board-home-input::placeholder {
+	color: var(--color-text-muted);
+}
+
+.gui-board-home-send {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	flex-shrink: 0;
+	border-radius: 12px;
+	border: none;
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+	cursor: pointer;
+	box-shadow: 0 4px 14px -4px color-mix(in oklab, var(--color-accent) 55%, transparent);
+	transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.gui-board-home-send:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 18px -4px color-mix(in oklab, var(--color-accent) 65%, transparent);
+}
+
+.gui-board-home-send:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Pixel-matrix view transition (dot-matrix reveal, DotMatrixMark parity):
+ * the incoming surface appears through a radial-dot mask that coarsens
+ * from fine pixels to large blocks — the "pixelating in" feel on board
+ * ↔ workspace switches. */
+.gui-pixel-reveal {
+	/* No fill retention: the dot-mask is a transition artifact — after the
+	 * animation the surface must return to a plain unmasked element, or a
+	 * 68px dot lattice stays punched through the board permanently. */
+	animation: gui-pixel-reveal 460ms var(--spring);
+}
+
+@keyframes gui-pixel-reveal {
+	0% {
+		mask-image: radial-gradient(circle, #000 32%, transparent 33%);
+		mask-size: 5px 5px;
+		opacity: 0;
+	}
+	45% {
+		opacity: 1;
+	}
+	100% {
+		mask-size: 68px 68px;
+		opacity: 1;
+	}
+}
+
+.gui-motion-off .gui-pixel-reveal {
+	animation: none;
+}
+
+/* Live pixel-size readout (kimi RESIZE parity: 356 × 252). */
+.gui-board-card-size {
+	position: absolute;
+	right: 22px;
+	bottom: 6px;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 120ms ease;
+	pointer-events: none;
+	user-select: none;
+}
+
+.gui-board-card-inner:hover .gui-board-card-size,
+.gui-board-card-inner:active .gui-board-card-size {
+	opacity: 1;
+}
+
+/* Edge resize handles (right / bottom edges + corner): hover reveals a
+ * wireframe hint; drag adjusts that dimension in 8px steps. */
+.gui-board-card-resize-e {
+	position: absolute;
+	right: 0;
+	top: 8px;
+	bottom: 24px;
+	width: 5px;
+	cursor: ew-resize;
+	opacity: 0;
+	transition: opacity 120ms ease;
+	border-right: 2px solid transparent;
+	z-index: 5;
+	pointer-events: auto;
+}
+
+/* Right-edge line: visible only while the pointer is over the edge
+ * zone (and while dragging), not on general card hover. */
+.gui-board-card-resize-e:hover {
+	opacity: 1;
+	border-right-color: var(--color-accent);
+}
+
+.gui-board-card-resize-s {
+	position: absolute;
+	left: 8px;
+	right: 24px;
+	bottom: 0;
+	height: 5px;
+	cursor: ns-resize;
+	opacity: 0;
+	transition: opacity 120ms ease;
+	border-bottom: 2px solid transparent;
+	z-index: 5;
+	pointer-events: auto;
+}
+
+
+
+.gui-board-card-resize-s:hover {
+	opacity: 1;
+	border-bottom-color: var(--color-accent);
+}
+
+/* Collection-card live preview: the first four widgets rendered mini,
+ * refreshed on every visit with a staggered pixel-fade entry. */
+.gui-board-home-preview {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-auto-rows: 1fr;
+	gap: 5px;
+	height: 196px;
+	min-height: 196px;
+	align-content: stretch;
+}
+
+.gui-board-home-preview-cell {
+	position: relative;
+	overflow: hidden;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	/* Same shell as the board cards (surface-raised) so the collection
+	 * previews match the board view — previously forced to sunken, which
+	 * recolored every preview regardless of its tone. */
+	background: var(--color-surface-raised);
+	padding: 5px;
+	pointer-events: none;
+	/* Staggered fade-in only — the old dot-matrix mask (6px dots, then a
+	 * 60px fill that still left holes) made the previews look like a peg
+	 * board; the cards themselves are the rounded bordered cells now. */
+	animation: gui-home-preview-in 300ms ease both;
+	animation-name: gui-home-preview-in;
+}
+
+@keyframes gui-home-preview-in {
+	0% {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.gui-board-home-preview-cell > * {
+	/* Slightly smaller than the board card so the four previews read as
+	 * refined miniatures (kimi collection-card previews). */
+	transform: scale(0.78);
+	transform-origin: top left;
+	width: 128%;
+}
+
+.gui-motion-off .gui-board-home-preview-cell {
+	animation: none;
+}
+
+/* Focus modal actions (kimi parity: 固定至桌面 + menu + close). */
+.gui-board-focus-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* View swap home ↔ board: blur-out 150ms, then the target mounts with
+ * a blur-in 300ms — approximates the dot-matrix reassembly between the
+ * conversation container and the board container. */
+.gui-view-leave {
+	animation: gui-view-blur-out 150ms ease-in forwards;
+	/* The outgoing frame must never intercept input while it fades. */
+	pointer-events: none;
+	/* Keep the leaving frame's surface at full view size — without flex
+	 * constraints a short page (e.g. scheduled tasks) collapsed to its
+	 * content height mid-screen during the fade-out. */
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.gui-view-enter {
+	/* NO fill-mode: the animation ends back at the static style, so the
+	 * element carries NO filter afterwards (fill:forwards would keep a
+	 * blur(0px) filter layer alive — on the real compositor that can
+	 * leave the surface looking frosted even though CDP screenshots are
+	 * clean). Height keeps the inner flex-1 surface chain intact. */
+	animation: gui-view-blur-in 300ms var(--spring);
+	/* Flex-1 inside the chat column (below the header) — height:100%
+	 * overflowed the window by the header height, clipping the bottom
+	 * of every view's rounded surface (board create bar was cut off). */
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.gui-board-card-act--running,
+.gui-tool-btn--running {
+	animation: gui-spin 900ms linear infinite;
+}
+
+@keyframes gui-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ── Board edit panel (kimi 修改 parity) ────────────────────────── */
+.gui-widget-editor {
+	position: fixed;
+	top: 72px;
+	right: 14px;
+	z-index: 70;
+	width: 268px;
+	max-height: calc(100vh - 100px);
+	overflow-y: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+	padding: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	animation: gui-focus-zoom 220ms var(--spring);
+}
+
+.gui-widget-editor-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.gui-widget-editor-title {
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+}
+
+.gui-widget-editor-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+/* Live card-face preview: real widget component at the card's aspect
+ * ratio; the tone tokens re-apply the board card surface so the preview
+ * reads exactly like the rendered card. */
+.gui-widget-editor-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.gui-widget-editor-preview-stage {
+	width: 100%;
+	max-height: 240px;
+	overflow: hidden;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	padding: 8px;
+}
+
+.gui-widget-editor-preview-stage[data-tone="dark"] {
+	background: #1b1b20;
+	border-color: #2c2c34;
+	--color-text: #e8e8ea;
+	--color-text-secondary: #9c9ca4;
+	--color-surface-sunken: #232329;
+	--color-surface-hover: #2a2a31;
+	--border: #2c2c34;
+}
+
+.gui-widget-editor-preview-stage[data-tone="blue"] {
+	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
+	--color-text: #1c2b3a;
+	--color-text-secondary: #40566c;
+	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
+}
+
+.gui-widget-editor-label {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-text-secondary);
+}
+
+.gui-widget-editor-meta {
+	display: flex;
+	gap: 10px;
+	font-size: 11px;
+	color: var(--color-text-secondary);
+}
+
+.gui-widget-editor-danger {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid color-mix(in oklab, var(--color-danger, #e5484d) 45%, transparent);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
+	color: var(--color-danger, #e5484d);
+	padding: 7px 10px;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	justify-content: center;
+}
+
+.gui-widget-editor-hint {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-secondary);
+	padding: 8px 0;
+	text-align: center;
+}
+
+.gui-widget-editor-add {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-top: 1px solid var(--border);
+	padding-top: 10px;
+}
+
+.gui-widget-editor-add-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-widget-editor-add-btn {
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	padding: 4px 9px;
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-widget-editor-add-btn:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 50%, var(--border));
+	background: var(--color-surface-hover);
+}
+
+/* Selected card (edit mode). */
+.gui-board-card--selected .gui-board-card-inner {
+	/* No border to tint anymore — the selection ring is the accent halo. */
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.gui-tool-btn--active {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+/* ── Widget task modal (小组件任务) ─────────────────────────────── */

@@ -218,7 +218,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			if (runtime.ctx.goalModeEnabled) return statusLine("Plan", t("blocked by goal mode"));
 			return statusLine("Plan", t("off"));
 		},
-		
+
 		handleTui: async (command, runtime) => {
 			await runWithDetachedModeDraft(command, runtime, () =>
 				runtime.ctx.handlePlanModeCommand(command.args || undefined, runtime.input),
@@ -232,7 +232,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			runtime.ctx.planModeEnabled
 				? statusLine("Plan review", t("available"))
 				: statusLine("Plan review", t("plan mode inactive")),
-		
+
 		handleTui: async (_command, runtime) => {
 			await runtime.ctx.openPlanReview();
 			runtime.ctx.editor.setText("");
@@ -249,7 +249,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			if (runtime.ctx.goalModeEnabled) return statusLine("Vibe", t("blocked by goal mode"));
 			return statusLine("Vibe", t("off"));
 		},
-		
+
 		handleTui: async (command, runtime) => {
 			await runWithDetachedModeDraft(command, runtime, () =>
 				runtime.ctx.handleVibeModeCommand(command.args || undefined, runtime.input),
@@ -278,7 +278,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				? statusLine("Goal", `${t(state.goal.status)} (${shortDetail(state.goal.objective)})`)
 				: statusLine("Goal", t("off"));
 		},
-		
+
 		handleTui: async (command, runtime) => {
 			await runWithDetachedModeDraft(command, runtime, () =>
 				runtime.ctx.handleGoalModeCommand(command.args || undefined, runtime.input),
@@ -310,7 +310,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			if (runtime.ctx.loopPrompt) return statusLine("Loop", `${t("on")} (${t("repeating prompt")})`);
 			return statusLine("Loop", `${t("on")} (${t("waiting for next prompt")})`);
 		},
-		
+
 		handleTui: async (command, runtime) => {
 			const prompt = await runtime.ctx.handleLoopCommand(command.args);
 			runtime.ctx.editor.setText("");
@@ -337,7 +337,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			const model = runtime.ctx.session.model;
 			return model ? statusLine("Model", `${model.provider}/${model.id}`) : statusLine("Model", t("none selected"));
 		},
-		
+
 		handle: async (command, runtime) => {
 			if (command.args) {
 				const modelId = command.args.trim();
@@ -380,7 +380,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			const model = runtime.ctx.session.model;
 			return model ? statusLine("Model", `${model.provider}/${model.id}`) : statusLine("Model", t("none selected"));
 		},
-		
+
 		handleTui: (_command, runtime) => {
 			runtime.ctx.showModelSelector({ temporaryOnly: true });
 			runtime.ctx.editor.setText("");
@@ -398,7 +398,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		],
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => statusLine("Fast", t(formatFastModeStatus(runtime.ctx.session))),
-		
+
 		handle: async (command, runtime) => {
 			const arg = command.args.toLowerCase();
 			if (!arg || arg === "toggle") {
@@ -469,7 +469,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime =>
 			statusLine("Computer", t(runtime.ctx.session.settings.get("computer.enabled") ? "on" : "off")),
-		
+
 		handle: async (command, runtime) => {
 			const arg = command.args.trim().toLowerCase();
 			if (arg === "status") {
@@ -514,7 +514,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		],
 		allowArgs: true,
 		getTuiAutocompleteDescription: runtime => statusLine("Vision", t(runtime.ctx.session.inspectImageState().mode)),
-		
+
 		handle: async (command, runtime) => {
 			const arg = command.args.trim().toLowerCase();
 			if (arg === "status") {
@@ -565,6 +565,19 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				await runtime.output(
 					`Prewalk on: switching to ${resolved.model.provider}/${resolved.model.id} at the next edit/write (todo-gated).`,
 				);
+			}
+			return commandConsumed();
+		},
+	},
+	{
+		name: "preset",
+		description: "Show the session preset (mode); applied at startup via --preset <id>",
+		handle: async (command, runtime) => {
+			const modeId = runtime.sessionManager.getHeader()?.modeId;
+			if (!modeId) {
+				await runtime.output(t("preset slash none"));
+			} else {
+				await runtime.output(t("preset slash current", modeId));
 			}
 			return commandConsumed();
 		},

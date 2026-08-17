@@ -8,7 +8,7 @@
 import { format } from "@musepi/pi-utils/dates";
 import { t } from "../i18n";
 
-// OMP brand palette (packages/collab-web/src/styles/tokens.css): pink/purple/cyan.
+// OMP brand palette (packages/desktop-web/src/styles/tokens.css): pink/purple/cyan.
 // Categorical series lead with the brand gradient hues (pink -> purple -> cyan).
 export const MODEL_COLORS = [
 	"#ed4abf", // brand pink (accent)

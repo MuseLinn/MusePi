@@ -1,5 +1,6 @@
+import { Container, Text } from "@musepi/pi-tui";
 import { t } from "../../i18n/index.js";
-import { Container, Text } from "@musepi/pi-tui";import { formatDiagnostics } from "../../tools/render-utils";
+import { formatDiagnostics } from "../../tools/render-utils";
 import { getLanguageFromPath, theme } from "../theme/theme";
 
 /** One file's worth of late LSP diagnostics, as carried on the transcript message. */

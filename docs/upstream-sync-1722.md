@@ -45,7 +45,7 @@ musepi-omp 为独立 git 仓库(3 commits,与 oh-my-pi 无共享历史),**不能
 | **agnes provider**(MusePi 私有) | `packages/ai/src/registry/agnes.ts` | 保留,registry.ts 合并时重放 |
 | **stepplan provider**(MusePi 私有) | `packages/ai/src/registry/stepplan.ts` | 同上 |
 | **视频 WIP**(`"video"` input capability) | `packages/catalog/src/provider-models/openai-compat.ts` | 上游 17.2.2 已吸收 video 支持(4 处),无需再打补丁 |
-| collab-web i18n(用户可见文本 t()) | `packages/collab-web/src/**` | 三方合并时保留 |
+| desktop-web i18n(用户可见文本 t()) | `packages/desktop-web/src/**` | 三方合并时保留 |
 | package-lock.json 删除 | 根目录 | musepi 用 bun.lock,保留删除 |
 
 ## 4. THREE_WAY(228)处理子分类

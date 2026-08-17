@@ -24,6 +24,8 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 - 配置：`~/.musepi/agent/config.yml`；设置：`~/.musepi/agent/settings.json`
 - 技能：`~/.musepi/agent/skills/<name>/SKILL.md`（用户级，设置里可开关）
 - 扩展：`~/.musepi/agent/extensions/<name>/index.ts`（用户级）；MCP：`.mcp.json`
+- **预设（modes）**：`~/.musepi/modes/<id>.json` —— 命名预设 = 扩展工具集白名单
+  + 提示词区块 + settings 覆盖（内置 standard / minimal 模板首次访问自动生成）
 - 上下文：从 cwd 向上找 `AGENTS.md`（项目约定）
 - 看板数据：`~/.musepi/boards/boards.json`（daemon 共享看板存储，GUI 同源）
 
@@ -31,6 +33,19 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 
 - **给 MusePi 加功能/工具/命令/hook/插件（开发扩展）**：读 `musepi-extension-dev`
   skill（`skill://musepi-extension-dev`）——六种扩展形态 + 快速路径 + 文档路由表。
+- **预设/模式（Work/Design/Minimal）是什么**：命名预设 = 扩展白名单 + 提示词区块
+  + settings 覆盖的组合（`~/.musepi/modes/<id>.json`）。GUI 欢迎页（输入框上方
+  项目选择旁）chip 选择，创建会话时应用；TUI/CLI 用 `--preset <id>` 启动，
+  会话内 `/preset` 查看当前预设；设置 → 智能体 → 预设 管理（卡片面板，
+  校验/删除；`modes.validate` 供 agent 自检）。极简模板 = `extensions: []` +
+  promptComplete（固定提示词）+ 关压缩。
+- **扩展中心两个分类**：OMP Extension Packages（OMP 生态扩展包，`extensions:`
+  设置/`--extension`）+ MusePi Extensions（自有扩展系统：TS 模块 + manifest，
+  `~/.musepi/agent/extensions`）—— 两者独立 tab、并存。
+- **怎么查用量/配额**：TUI 斜杠 `/usage`（每供应商凭证并排 + 最右合计列，供应商按
+  用量最低优先）；桌面 GUI 输入 `/usage` 弹用量面板（同款并排视图）、会话输入框旁
+  的上下文圆环悬浮显示供应商配额块、托盘菜单底部用量区（Token 合计 + 每供应商
+  窗口条）。用量数据磁盘缓存 5 分钟，刷新失败时显示上次快照——重复查看不重复请求。
 - **看板卡片出不来了/空白**：确认 daemon 在跑（GUI 会自启）；检查卡片
   `widget` 类型是否在注册表（设置→技能/看板 tab）；历史数据卡（fx/stocks/
   history）需要网络，离线时显示兜底。

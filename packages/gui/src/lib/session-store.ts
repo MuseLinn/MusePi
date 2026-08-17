@@ -35,7 +35,7 @@ export function dispatchPetActivity(kind: PetBubbleKind, text: string, requestId
 	window.dispatchEvent(new CustomEvent("omp-pet-activity", { detail: { kind, text, requestId, sessionId } }));
 }
 
-/** Matches collab-web's ActiveTool shape (the Transcript consumes it). */
+/** Matches desktop-web's ActiveTool shape (the Transcript consumes it). */
 export interface ActiveTool {
 	toolCallId: string;
 	toolName: string;
@@ -448,6 +448,12 @@ export class GuiSessionStore {
 				// row rendered beside the entry duplicated the message while
 				// streaming (user: two identical rows, both with orb + 思考).
 				if (ev.message.role === "assistant") this.#streaming = true;
+				// The user's own message (optimistic emit — arrives ~30ms after
+				// send) marks the turn as working immediately, so the indicator
+				// never lags the bubble: agent_start / turn_start can be seconds
+				// away (auto-thinking classification + provider prep). turn_end /
+				// agent-end state frames reset it.
+				else if (ev.message.role === "user") this.#working = true;
 				break;
 			}
 			case "message_update": {

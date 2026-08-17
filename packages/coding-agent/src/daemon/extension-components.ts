@@ -1,0 +1,130 @@
+import * as path from "node:path";
+import { loadExtensions } from "../extensibility/extensions/loader";
+import type { Extension } from "../extensibility/extensions/types";
+
+/**
+ * Renderer-side slot components (DSH ui-slots analogue): the daemon
+ * compiles each extension-contributed component module to self-contained
+ * ESM JavaScript (react bundled in) and serves the code through
+ * `extensions.list`. The GUI dynamically imports it (blob: URL) and mounts
+ * the default export into the named slot — enable/disable of the extension
+ * takes effect on the next slot refresh.
+ *
+ * Trust model: an enabled extension already executes arbitrary code in the
+ * daemon process; rendering its component in the GUI is the same trust
+ * domain, not a new escalation.
+ */
+
+/** One compiled slot component served to the renderer. */
+export interface SlotComponent {
+	slot: string;
+	extensionId: string;
+	label?: string;
+	/** Self-contained ESM JavaScript (react bundled in). Empty on compile failure. */
+	code: string;
+	/** Compile error message (debug only — the renderer renders empty on failure). */
+	error?: string;
+}
+
+/** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
+const extensionLoadCache = new Map<string, { at: number; extension: Extension }>();
+
+/** Compile cache: abs path + mtime → compiled code. */
+const compileCache = new Map<string, { mtimeMs: number; code: string }>();
+
+async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extension | null> {
+	const cached = extensionLoadCache.get(entryPath);
+	if (cached && Date.now() - cached.at < 10_000) return cached.extension;
+	const result = await loadExtensions([entryPath], cwd);
+	const extension = result.extensions[0] ?? null;
+	extensionLoadCache.set(entryPath, { at: Date.now(), extension });
+	return extension;
+}
+
+async function compileComponentModule(componentPath: string): Promise<string> {
+	let mtimeMs: number | undefined;
+	try {
+		mtimeMs = (await Bun.file(componentPath).stat()).mtimeMs;
+	} catch {
+		// Path vanished — fall through to a fresh compile attempt.
+	}
+	const cached = compileCache.get(componentPath);
+	if (cached && mtimeMs !== undefined && cached.mtimeMs === mtimeMs) return cached.code;
+
+	const result = await Bun.build({
+		entrypoints: [componentPath],
+		format: "esm",
+		target: "browser",
+		minify: true,
+		sourcemap: "none",
+		// Components reference React through the `React` identifier (never
+		// bare-import it): the renderer injects window.MusePiReact before
+		// mounting, so the compiled module uses the HOST's react instance —
+		// a bundled copy would double-react and null the hooks dispatcher.
+		jsx: {
+			runtime: "classic",
+			factory: "window.MusePiReact.createElement",
+			fragment: "window.MusePiReact.Fragment",
+		},
+		define: {
+			React: "window.MusePiReact",
+			"process.env.NODE_ENV": '"production"',
+		},
+	});
+	const output = result.outputs[0];
+	if (!output) {
+		throw new Error(result.logs.map(l => l.message).join("; ") || "no output");
+	}
+	const code = await output.text();
+	if (mtimeMs !== undefined) compileCache.set(componentPath, { mtimeMs, code });
+	return code;
+}
+
+/**
+ * Collect compiled slot components from the unified extension list
+ * (extensions.list shape): only active extension-module entries contribute,
+ * matched by entry path. The raw factory runs once per 10s window, so a
+ * repeated list call never double-registers tools/handlers.
+ */
+export async function collectSlotComponents(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<SlotComponent[]> {
+	const out: SlotComponent[] = [];
+	for (const entry of extensions) {
+		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const component of extension.components ?? []) {
+			const absPath = path.resolve(extension.resolvedPath, "..", component.moduleUrl);
+			try {
+				const code = await compileComponentModule(absPath);
+				out.push({
+					slot: component.slot,
+					extensionId: extension.path,
+					label: component.label,
+					code,
+				});
+			} catch (error) {
+				// A broken component must not fail the whole extensions.list —
+				// the renderer shows the slot as empty until fixed.
+				out.push({
+					slot: component.slot,
+					extensionId: extension.path,
+					label: component.label ?? component.moduleUrl,
+					code: "",
+					error: String(error),
+				});
+			}
+		}
+	}
+	return out;
+}
+
+/** Drop the load-once + compile caches — called by the daemon's extension
+ *  watcher (HMR) when extension source/config files change, so the next
+ *  extensions.list serves freshly compiled components. */
+export function invalidateExtensionCaches(): void {
+	extensionLoadCache.clear();
+	compileCache.clear();
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Modal dialog shell with the same two-phase enter / closing exit the
@@ -105,7 +106,11 @@ export function DialogFrame({
 		phase === "enter" ? " gui-dialog--pending" : phase === "closing" ? " gui-dialog--closing" : " gui-dialog--entered"
 	}`;
 
-	return (
+	// Portal to document.body: a backdrop-filter ancestor (e.g. the
+	// settings view) creates a containing block that hijacks position:fixed
+	// — the dialog would be clipped/misplaced inside the panel instead of
+	// covering the viewport (observed: API-key import dialog cut off).
+	return createPortal(
 		<div className={backdropCls} onClick={onClose}>
 			<div
 				ref={dialogRef}
@@ -117,6 +122,7 @@ export function DialogFrame({
 			>
 				{children}
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }

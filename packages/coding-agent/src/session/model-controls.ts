@@ -71,6 +71,9 @@ export class ModelControls {
 	readonly #thinkingLevelCeiling: Effort | undefined;
 	#autoThinking = false;
 	#autoResolvedLevel: Effort | undefined;
+	/** Model id the cached auto-classification was computed for — a model
+	 *  switch invalidates the session-level classification cache. */
+	#autoResolvedForModel: string | undefined;
 	#serviceTierByFamily: ServiceTierByFamily;
 
 	constructor(
@@ -147,6 +150,7 @@ export class ModelControls {
 	restoreThinkingLevel(level: ConfiguredThinkingLevel | undefined): void {
 		this.#autoThinking = level === AUTO_THINKING;
 		this.#autoResolvedLevel = undefined;
+		this.#autoResolvedForModel = undefined;
 		this.#thinkingLevel =
 			level === AUTO_THINKING
 				? clampThinkingLevelToCeiling(
@@ -166,6 +170,7 @@ export class ModelControls {
 		this.#thinkingLevel = level;
 		this.#autoThinking = auto;
 		this.#autoResolvedLevel = resolved;
+		this.#autoResolvedForModel = undefined;
 		this.#applyThinkingLevelToAgent(level);
 	}
 
@@ -503,6 +508,7 @@ export class ModelControls {
 			const previousLevel = this.#thinkingLevel;
 			this.#autoThinking = true;
 			this.#autoResolvedLevel = undefined;
+		this.#autoResolvedForModel = undefined;
 			this.#thinkingLevel = provisional;
 			if (!wasAuto) {
 				this.#host.clearInheritedProviderPromptCacheKey();
@@ -522,6 +528,7 @@ export class ModelControls {
 		const wasAuto = this.#autoThinking;
 		this.#autoThinking = false;
 		this.#autoResolvedLevel = undefined;
+		this.#autoResolvedForModel = undefined;
 		const effectiveLevel = resolveThinkingLevelForModel(
 			this.#model,
 			clampThinkingLevelToCeiling(this.#model, level, this.#thinkingLevelCeiling),
@@ -594,11 +601,32 @@ export class ModelControls {
 		if (getSupportedEfforts(model).length === 0) return;
 
 		let resolved: Effort | undefined;
+		// Only a real classifier run seeds the session cache — the ultrathink
+		// shortcut (and classification failures) must not pin the session.
+		let classified = false;
 		if (this.#host.magicKeywordEnabled("ultrathink") && containsUltrathink(promptText)) {
 			// The user explicitly asked for maximum thinking; bypass the classifier
 			// (and the `providers.autoThinkingMaxEffort` ceiling) and jump straight
 			// to the highest supported level for this model.
 			resolved = clampAutoThinkingEffort(model, Effort.Max);
+			// A one-off max-thinking request invalidates the session-level
+			// classification cache: without this, a prior classified session
+			// would have #autoResolvedLevel + #autoResolvedForModel set, and the
+			// tail's #autoResolvedLevel = Max update would pin every following
+			// message at Max (all three cache checks pass).
+			this.#autoResolvedForModel = undefined;
+		} else if (
+			// Session-level classification cache (user: "分类后就确认，除非再次点击"):
+			// a fresh auto session classifies ONCE, then reuses that effort for
+			// subsequent messages instead of paying a classifier model call
+			// (~850ms) every turn. Invalidated by a manual thinking switch
+			// (setThinkingLevel resets #autoResolvedLevel) or a model change
+			// (per-model key).
+			this.#autoResolvedLevel !== undefined &&
+			this.#autoResolvedForModel === model.id &&
+			this.#thinkingLevel === this.#autoResolvedLevel
+		) {
+			return;
 		} else {
 			const controller = new AbortController();
 			const timer = setTimeout(() => controller.abort(), ModelControls.#AUTO_THINKING_TIMEOUT_MS);
@@ -611,6 +639,7 @@ export class ModelControls {
 					signal: controller.signal,
 					metadataResolver: provider => this.#host.agent.metadataForProvider(provider),
 				});
+				classified = resolved !== undefined;
 			} catch (error) {
 				logger.debug("auto-thinking: classification failed; using fallback level", {
 					error: error instanceof Error ? error.message : String(error),
@@ -631,6 +660,7 @@ export class ModelControls {
 		if (effort === undefined) return;
 		const shouldPersistResolution = this.#thinkingLevel !== effort;
 		this.#autoResolvedLevel = effort;
+		if (classified) this.#autoResolvedForModel = model.id;
 		this.#thinkingLevel = effort;
 		this.#applyThinkingLevelToAgent(effort);
 		if (shouldPersistResolution) {

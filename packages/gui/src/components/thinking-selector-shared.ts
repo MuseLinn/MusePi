@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 
 /** Thinking effort ladder (mirrors pi-catalog Effort) + auto (per-model
  * default, TUI /settings defaultThinkingLevel parity). */

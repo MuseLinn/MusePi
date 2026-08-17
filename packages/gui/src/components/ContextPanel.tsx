@@ -1,4 +1,4 @@
-import { AgentsPanel, latestWidgetFromEntries, t, WidgetCard } from "@musepi/collab-web";
+import { AgentsPanel, latestWidgetFromEntries, t, WidgetCard } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
@@ -40,6 +40,13 @@ const TOOLS: { id: string; icon: string; label: string }[] = [
 	{ id: "browser", icon: "global", label: t("browser") },
 ];
 
+function fmtTokens(n: number): string {
+	if (!Number.isFinite(n)) return "0";
+	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+	if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+	return String(n);
+}
+
 /**
  * Right pane — ZCode-style session tools: 上下文 / 文件 tabs plus a tool
  * rail (git graph, PRs, diff, notes, browser). The file tree and context
@@ -77,6 +84,39 @@ export function ContextPanel({
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
 	const [tab, setTab] = useState<"context" | "files" | "widget">("files");
 	const [tool, setTool] = useState<string | null>(null);
+	// Context-window usage (session.contextUsage, same RPC as the header
+	// ring): tokens / capacity / percent, polled while the panel lives.
+	const [ctxUsage, setCtxUsage] = useState<{
+		tokens: number;
+		contextWindow: number;
+		percent: number;
+		model?: string | null;
+	} | null>(null);
+	useEffect(() => {
+		if (!rpc || !snap?.sessionId) return;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<{ tokens: number; contextWindow: number; percent: number; model?: string | null } | null>(
+					"session.contextUsage",
+					{ sessionId: snap.sessionId },
+				)
+				.then(u => {
+					if (alive && u) setCtxUsage(u);
+				})
+				.catch(() => {});
+		};
+		poll();
+		// Event-driven freshness: poll only while the agent WORKS — the
+		// `snap.working` flip re-runs this effect, so context usage lands
+		// on the transition instead of a timer (idle = zero polling).
+		if (!snap?.working) return;
+		const t = setInterval(poll, 5000);
+		return () => {
+			alive = false;
+			clearInterval(t);
+		};
+	}, [rpc, snap?.sessionId, snap?.working]);
 	// Selected subagent (TUI Agent Hub parity): click a roster row to open
 	// its kill/revive/chat controls beneath the panel.
 	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -181,6 +221,7 @@ export function ContextPanel({
 								onClick={() => setTool(prev => (prev === toolDef.id ? null : toolDef.id))}
 							>
 								<Icon name={toolDef.icon as never} className="h-3.5 w-3.5" />
+								{tool === toolDef.id && <span className="gui-pane-tool-label">{toolDef.label}</span>}
 							</button>
 						))}
 					</div>
@@ -248,6 +289,30 @@ export function ContextPanel({
 									<div className="gui-ctx-stat-l">{t("minutes")}</div>
 								</div>
 							</div>
+							{/* Context-window usage: live tokens/capacity bar (product
+							 * parity with the header ring — same RPC). */}
+							{ctxUsage && (
+								<>
+									<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
+									<div className="px-2">
+										<div className="gui-ctx-usage-row">
+											<span className="text-[12px] tabular-nums opacity-80">
+												{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
+												{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
+											</span>
+											<span className="text-[12px] tabular-nums opacity-70">
+												{Math.round(ctxUsage.percent)}%
+											</span>
+										</div>
+										<div className="gui-ctx-usage-track">
+											<div
+												className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+												style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+											/>
+										</div>
+									</div>
+								</>
+							)}
 							{/* Reusable context quick actions: copy the workspace path. */}
 							<div className="mt-2 flex flex-col gap-0.5 px-2">
 								<button

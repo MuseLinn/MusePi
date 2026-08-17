@@ -106,7 +106,7 @@ export function runningAgentsOutsideJobs(session: ToolSession): AgentActivitySna
 	const now = Date.now();
 	const out: AgentActivitySnapshot[] = [];
 	for (const ref of registry.list()) {
-		if (ref.kind !== "sub" || ref.status !== "running") continue;
+		if (ref.kind !== "sub" || !registry.isRunning(ref)) continue;
 		if (ref.id === selfId || covered.has(ref.id)) continue;
 		out.push({
 			id: ref.id,

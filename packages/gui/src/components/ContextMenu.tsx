@@ -122,7 +122,12 @@ export function ContextMenu({
 				</div>
 			))}
 		</div>,
-		/* Inside the React root (not body) so delegated listeners fire. */
-		document.getElementById("root") ?? document.body,
+		/* Portal to BODY (was #root): the React root lives inside the
+		 * workspace glass layer (.gui-main carries backdrop-filter), and a
+		 * backdrop-filter ancestor creates a containing block that kills
+		 * the menu's own backdrop blur — the menu rendered as plain
+		 * translucency with no frost (user report). Document-level close
+		 * listeners are unaffected; the menu's own React events work. */
+		document.body,
 	);
 }

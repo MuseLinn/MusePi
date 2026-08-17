@@ -1299,6 +1299,16 @@ const streamOpenAICompletionsOnce = (
 				flushDeepseekStripBuffer(true);
 			}
 
+			// Detect premature stream closure before the normal block-finalization
+			// sweep. Throwing after that sweep would make the error handler emit a
+			// second text_end/thinking_end for the same partial block.
+			if (streamFinishedAt === undefined && output.content.length > 0) {
+				throw new AIError.ProviderResponseError(
+					"OpenAI completions stream closed before a finish_reason was received",
+					{ provider: model.provider, kind: "incomplete-stream" },
+				);
+			}
+
 			if (currentBlock?.type === "toolCall") {
 				finishPendingToolCallBlocks();
 			} else {
@@ -2380,6 +2390,16 @@ function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | str
 			// the message to match the session retry classifier's transient-transport
 			// pattern (`provider.?returned.?error`) and get the turn auto-retried.
 			return { stopReason: "error", errorMessage: "Provider returned error finish_reason" };
+		case "insufficient_system_resource":
+			// DeepSeek kills the generation mid-stream when its inference system runs
+			// out of resources (docs: "the request is interrupted due to insufficient
+			// resource of the inference system"). Server-side capacity failure — like
+			// the bare `error` case, word the message to match the transient-transport
+			// retry pattern so the turn is auto-retried instead of pinned as an error.
+			return {
+				stopReason: "error",
+				errorMessage: "Provider returned error finish_reason: insufficient_system_resource",
+			};
 		default:
 			return {
 				stopReason: "error",

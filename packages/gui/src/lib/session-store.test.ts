@@ -71,4 +71,25 @@ describe("GuiSessionStore frame coalescing", () => {
 		expect(emits).toBeGreaterThanOrEqual(1);
 		expect(store.getSnapshot().approvals.length).toBe(1);
 	});
+
+	test("user message_start flips working on immediately (bubble == indicator frame)", async () => {
+		// DSH/craft/proma parity: the working indicator must start the moment
+		// the user's own message is visible (optimistic emit), not when
+		// agent_start / turn_start finally lands after auto-thinking + provider
+		// prep (measured ~3.2s gap). turn_end resets it.
+		const store = new GuiSessionStore("s4", emptySnapshot(), "/work");
+		store.apply({
+			kind: "event",
+			payload: {
+				type: "message_start",
+				message: { role: "user", timestamp: 1000, content: [{ type: "text", text: "hi" }] },
+			},
+		} as never);
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.getSnapshot().working).toBe(true);
+
+		store.apply({ kind: "event", payload: { type: "turn_end", message: {}, toolResults: [] } } as never);
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.getSnapshot().working).toBe(false);
+	});
 });

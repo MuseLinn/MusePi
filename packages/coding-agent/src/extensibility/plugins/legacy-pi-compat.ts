@@ -2548,13 +2548,15 @@ export async function loadLegacyPiModule(resolvedPath: string): Promise<unknown>
 	const pendingSources = await ensureExtensionGraphHook(entryRealPath);
 	try {
 		// Dynamic import is required: legacy extension entry paths are user/plugin supplied at runtime.
-		// On POSIX, use the raw filesystem path so Bun keys the `?mtime`
-		// suffix as part of the module identity; Bun ignores query strings on
-		// `file://` specifiers, which would serve stale edited source.
-		const entrySpecifier =
-			process.platform === "win32" || isBundledVirtualSpecifier(entryRealPath)
-				? toImportSpecifier(entryRealPath)
-				: entryRealPath;
+		// Use the raw filesystem path so Bun keys the `?mtime` suffix as part of
+		// the module identity on every platform. `file://` specifiers ignore
+		// query strings (Bun serves the cached module), which would defeat the
+		// cache-bust — critical for session-level hot reload (P5 HMR) — so the
+		// win32 branch MUST NOT fall back to `toImportSpecifier` here. Raw
+		// Windows paths (spaces, `#`, long-path prefix stripped) import fine.
+		const entrySpecifier = isBundledVirtualSpecifier(entryRealPath)
+			? toImportSpecifier(entryRealPath)
+			: stripWindowsExtendedLengthPathPrefix(entryRealPath);
 		return await import(`${entrySpecifier}?mtime=${nextLegacyPiLoadTag()}`);
 	} finally {
 		// Drop whatever the initial import didn't consume: graph modules only

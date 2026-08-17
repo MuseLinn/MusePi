@@ -134,6 +134,10 @@ export const STRING_SETTERS: Record<string, StringSetter> = {
 	"--model": (result, value) => {
 		result.model = value;
 	},
+	// Modes v1:会话预设(工具白名单/提示词/settings 组合),与运行模式 Args.mode 区分。
+	"--preset": (result, value) => {
+		result.preset = value;
+	},
 	"--smol": (result, value) => {
 		result.smol = value;
 	},

@@ -1,4 +1,4 @@
-import { setLocale, type TranslationKey, t } from "@musepi/collab-web";
+import { setLocale, type TranslationKey, t } from "@musepi/desktop-web";
 import { type ReactNode, useState } from "react";
 import { Reveal } from "./Reveal";
 

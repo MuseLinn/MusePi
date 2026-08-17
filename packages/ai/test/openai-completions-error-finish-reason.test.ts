@@ -107,3 +107,93 @@ describe("finish_reason: error", () => {
 		expect(result.errorMessage).toMatch(RETRYABLE_PATTERN);
 	}, 10_000);
 });
+
+describe("finish_reason: insufficient_system_resource", () => {
+	// DeepSeek interrupts the generation mid-stream when its inference system
+	// runs out of resources; the terminal chunk carries
+	// `finish_reason: "insufficient_system_resource"`. It must surface as a
+	// retryable provider error — never as a clean `stop`.
+	it("maps to a retryable error message", async () => {
+		const fetchMock = createSseFetch([
+			completionChunk({ choices: [{ index: 0, delta: { role: "assistant", content: "Hel" } }] }),
+			completionChunk({ choices: [{ index: 0, delta: {}, finish_reason: "insufficient_system_resource" }] }),
+			"[DONE]",
+		]);
+
+		const result = await streamOpenAICompletions(completionsModel, baseContext(), {
+			apiKey: "test-key",
+			fetch: fetchMock,
+		}).result();
+
+		expect(result.stopReason).toBe("error");
+		expect(result.errorMessage).toMatch(RETRYABLE_PATTERN);
+	}, 10_000);
+});
+
+describe("premature stream closure", () => {
+	// The connection dies mid-generation without any `finish_reason` chunk
+	// (DeepSeek insufficient-system-resource interruption, flaky gateway).
+	// Before the guard, the partial message finalized as a clean `stop` and
+	// the agent loop treated the truncated turn as complete — the silent
+	// mid-sentence halt. Now it must surface as an error turn.
+	it("fails the turn instead of silently stopping", async () => {
+		const fetchMock = createSseFetch([
+			completionChunk({ choices: [{ index: 0, delta: { role: "assistant", content: "Hel" } }] }),
+			completionChunk({ choices: [{ index: 0, delta: { content: "lo" } }] }),
+		]);
+
+		const eventTypes: string[] = [];
+		let errorMessage: string | undefined;
+		for await (const event of streamOpenAICompletions(completionsModel, baseContext(), {
+			apiKey: "test-key",
+			fetch: fetchMock,
+		})) {
+			eventTypes.push(event.type);
+			if (event.type === "error") errorMessage = event.error.errorMessage;
+		}
+
+		expect(eventTypes).toEqual(["start", "text_start", "text_delta", "text_delta", "text_end", "error"]);
+		expect(errorMessage).toContain("finish_reason");
+	}, 10_000);
+
+	it("still retries a genuinely empty close via the empty-completion path", async () => {
+		// Zero content + no finish_reason is the flaky-gateway empty completion:
+		// it stays a clean `stop` so withEmptyCompletionRetry can re-sample
+		// instead of failing outright.
+		let attempts = 0;
+		async function fetchMock(_input: string | URL | Request, _init?: RequestInit): Promise<Response> {
+			attempts++;
+			const events =
+				attempts === 1
+					? []
+					: [
+							completionChunk({ choices: [{ index: 0, delta: { role: "assistant", content: "Hi" } }] }),
+							completionChunk({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }),
+							"[DONE]",
+						];
+			const encoder = new TextEncoder();
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					for (const event of events) {
+						const data = typeof event === "string" ? event : JSON.stringify(event);
+						controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+					}
+					controller.close();
+				},
+			});
+			return new Response(stream, {
+				status: 200,
+				headers: { "content-type": "text/event-stream" },
+			});
+		}
+
+		const result = await streamOpenAICompletions(completionsModel, baseContext(), {
+			apiKey: "test-key",
+			fetch: fetchMock as typeof fetch,
+		}).result();
+
+		expect(attempts).toBeGreaterThan(1);
+		expect(result.stopReason).toBe("stop");
+		expect(result.content).toEqual([{ type: "text", text: "Hi" }]);
+	}, 10_000);
+});

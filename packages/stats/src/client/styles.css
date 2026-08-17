@@ -5,7 +5,7 @@
    ========================================================================== */
 :root {
   color-scheme: dark;
-  /* OMP brand palette — packages/collab-web/src/styles/tokens.css:
+  /* OMP brand palette — packages/desktop-web/src/styles/tokens.css:
      deep-purple surfaces (hue 307), emerald accent #34d399, cyan focus ring #5ad8e6. *
   --page: oklch(0.16 0.02 307);
   --surface: oklch(0.19 0.022 307);

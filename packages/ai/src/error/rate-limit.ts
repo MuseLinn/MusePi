@@ -69,6 +69,26 @@ const CN_TRANSIENT_CAP_PATTERN =
 // isOpaqueStatusBody so CN transients stay in the provider backoff lane instead
 // of rotating through the opaque-429 fallback.
 const CN_THROTTLE_PATTERN = /速率(?:限制|过快)|频率(?:过高|过快)|过于频繁|稍后[重再]试/;
+// DashScope / Bailian (Alibaba Model Studio) reports its per-minute token
+// throttle (429 Throttling.AllocationQuota, type `insufficient_quota`) with
+// OpenAI-compatible billing wording — "You exceeded your current quota,
+// please check your plan and billing details. … (type=insufficient_quota
+// param=insufficient_quota)" — and links the error-code doc's `token-limit`
+// anchor. Per that doc section the error is a transient TPM/TPS cap that
+// clears within the minute window, not an account-local quota exhaustion.
+// The same doc anchor also covers permanent errors such as "Free allocated
+// quota exceeded", so require both the anchor and the exact throttle wording.
+// The identical wording WITHOUT the anchor stays quota-exhausted (OpenAI's
+// real account-quota error uses the same sentence).
+const DASHSCOPE_TOKEN_LIMIT_DOC_PATTERN = /error-code[^()\s]*#token-limit/i;
+const DASHSCOPE_TOKEN_LIMIT_MESSAGE_PATTERN =
+	/\byou exceeded your current quota, please check your plan and billing details\b/i;
+/** True for DashScope/Bailian's documented OpenAI-compatible TPM/TPS throttle. */
+export function isDashScopeTokenLimitText(errorMessage: string): boolean {
+	return (
+		DASHSCOPE_TOKEN_LIMIT_DOC_PATTERN.test(errorMessage) && DASHSCOPE_TOKEN_LIMIT_MESSAGE_PATTERN.test(errorMessage)
+	);
+}
 
 const GOOGLE_RPC_ERROR_INFO_TYPE = "type.googleapis.com/google.rpc.ErrorInfo";
 const LONG_RATE_LIMIT_DELAY_MS = 5 * 60 * 1000;
@@ -133,8 +153,9 @@ function isQuotaExhaustedReason(reason: RateLimitReason): boolean {
 /**
  * Classify a rate-limit error message into a reason category.
  * Priority order: explicit details in a resource-exhausted error > QUOTA
- * (Antigravity "quota will reset") > CONCURRENT_LIMIT > MODEL_CAPACITY >
- * QUOTA (account) > RATE_LIMIT > QUOTA (generic) > SERVER_ERROR > bare resource-exhausted > UNKNOWN.
+ * (Antigravity "quota will reset") > CN quota > DASHSCOPE_TOKEN_LIMIT (TPM/TPS
+ * throttle) > CONCURRENT_LIMIT > MODEL_CAPACITY > QUOTA (account) > RATE_LIMIT >
+ * QUOTA (generic) > SERVER_ERROR > bare resource-exhausted > UNKNOWN.
  *
  * Bare "resource exhausted" / "resource_exhausted" maps to MODEL_CAPACITY (transient, short wait).
  * Explicit details such as "quota exceeded" retain their normal classification.
@@ -160,6 +181,13 @@ export function parseRateLimitReason(errorMessage: string): RateLimitReason {
 	// account-local cap rotates instead of backing off as a transient.
 	if (CN_QUOTA_EXHAUSTED_PATTERN.test(errorMessage) && !CN_TRANSIENT_CAP_PATTERN.test(errorMessage)) {
 		return "QUOTA_EXHAUSTED";
+	}
+
+	// DashScope/Bailian TPM/TPS throttle: billing-worded like OpenAI's account
+	// quota, but the doc anchor marks it a per-minute token cap that clears on
+	// its own — short backoff on the same credential, never rotation/block.
+	if (isDashScopeTokenLimitText(errorMessage)) {
+		return "RATE_LIMIT_EXCEEDED";
 	}
 
 	if (CONCURRENT_LIMIT_PATTERN.test(errorMessage)) {
@@ -342,6 +370,7 @@ export function isOpaqueStatusBody(message: string): boolean {
 export function matchesUsageLimitText(errorMessage: string): boolean {
 	const structuredReason = parseGoogleRpcRateLimitReason(errorMessage);
 	if (structuredReason !== undefined) return isQuotaExhaustedReason(structuredReason);
+	if (isDashScopeTokenLimitText(errorMessage)) return false;
 	return (
 		USAGE_LIMIT_PATTERN.test(errorMessage) ||
 		(CN_QUOTA_EXHAUSTED_PATTERN.test(errorMessage) && !CN_TRANSIENT_CAP_PATTERN.test(errorMessage)) ||

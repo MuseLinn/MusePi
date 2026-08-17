@@ -24,6 +24,14 @@ export interface CronSchedule {
 	dayOfMonth?: number;
 	/** cron expression (5 fields) — kind=cron */
 	cron?: string;
+	/**
+	 * Idle-run window (proma activeWindow parity): HH:mm–HH:mm. A due run
+	 * outside the window is deferred to the window's start (today if it
+	 * hasn't opened yet, else tomorrow) — the "闲时任务" pattern where
+	 * heavy jobs only run while the machine is quiet. Crosses midnight
+	 * (22:00–08:00) supported.
+	 */
+	idleWindow?: { start: string; end: string };
 	timezone?: string;
 }
 
@@ -181,6 +189,14 @@ function atLocal(date: Date, h: number, m: number): number {
 
 /** Next run (epoch ms) after `from`; null when the schedule never fires again. */
 export function computeNextRun(task: CronTask, from: number): number | null {
+	// Defer a raw due run into the task's idle window (闲时任务) — the
+	// constraint applies to every schedule kind uniformly.
+	const raw = computeNextRunRaw(task, from);
+	if (raw === null) return null;
+	return constrainToIdleWindow(raw, task.schedule.idleWindow, from);
+}
+
+function computeNextRunRaw(task: CronTask, from: number): number | null {
 	const s = task.schedule;
 	const t = s.time ? parseTime(s.time) : null;
 	if (s.kind === "once") {
@@ -282,4 +298,43 @@ export function computeNextRun(task: CronTask, from: number): number | null {
 		return null;
 	}
 	return null;
+}
+
+/**
+ * Defer a due run into the task's idle window (闲时任务, proma
+ * activeWindow parity): runs outside the window move to the window's
+ * start — today if it hasn't opened yet, otherwise the next occurrence.
+ * A window crossing midnight (22:00–08:00) is two intervals (start→24:00
+ * and 00:00→end). No window → unchanged.
+ */
+export function constrainToIdleWindow(
+	at: number,
+	window: CronSchedule["idleWindow"] | undefined,
+	from: number,
+): number {
+	if (!window) return at;
+	const start = parseTime(window.start);
+	const end = parseTime(window.end);
+	if (!start || !end) return at;
+	const atDate = new Date(at);
+	const dayStart = new Date(atDate.getFullYear(), atDate.getMonth(), atDate.getDate());
+	const startMs = dayStart.getTime() + (start.h * 60 + start.m) * 60_000;
+	const endMs = dayStart.getTime() + (end.h * 60 + end.m) * 60_000;
+	const day = 24 * 60 * 60_000;
+	if (startMs <= endMs) {
+		// Same-day window (09:00–18:00).
+		if (at < startMs) return startMs;
+		if (at <= endMs) return at;
+		return startMs + day; // window closed → next occurrence's start
+	}
+	// Crosses midnight (22:00–08:00).
+	if (at >= startMs) return at; // 22:00–24:00 leg
+	if (at <= endMs) return at; // 00:00–08:00 leg
+	// In the daytime gap: the nearest window start measured from `from`
+	// (today's opening if still ahead, else tomorrow's) — anchoring on
+	// `at`'s date would skip a same-day opening that is closer.
+	const fromDate = new Date(from);
+	const fromDayStart = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime();
+	const fromStartMs = fromDayStart + (start.h * 60 + start.m) * 60_000;
+	return fromStartMs > from ? fromStartMs : fromStartMs + day;
 }

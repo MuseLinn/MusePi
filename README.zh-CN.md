@@ -89,7 +89,7 @@ bun --cwd=packages/gui run desktop
 ┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
 │  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
 │  packages/gui │   WS 事件流（journal/view）    │  packages/coding-agent│
-│  + collab-web │                               │  AgentSession 宿主    │
+│  + desktop-web │                               │  AgentSession 宿主    │
 └──────┬───────┘                               └──────────┬───────────┘
        │                                                    │
        │  pet.html / bubble.html / pin.html                 │ agent 引擎
@@ -97,13 +97,13 @@ bun --cwd=packages/gui run desktop
        │                                         packages/agent · ai · tui
        │                                         natives（Rust N-API）
        ▼
-  collab-web：transcript / tool-render / widget / i18n（zh-CN 单源）
+  desktop-web：transcript / tool-render / widget / i18n（zh-CN/en-US 域化词表）
 ```
 
 | 包 | 说明 |
 |---|---|
 | `gui` | Electron 桌面应用（主界面 + 桌宠/气泡/置顶多窗口、xterm、pdf.js、受管浏览器桥） |
-| `collab-web` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
+| `desktop-web` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
 | `coding-agent` | CLI 入口（`musepi`）、daemon 服务端、slash/bash 命令、工具实现 |
 | `collab-proto` | GUI ↔ daemon 传输协议（WS 帧、加密、链接） |
 | `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | 上游派生的 agent 引擎 / provider 注册表 / TUI / 模型目录 / wire 类型 / 工具库 |
@@ -133,7 +133,7 @@ bun run lint / fmt       # biome + rustfmt
 
 - 全量测试建议 `OMP_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
 - Rust bucket 需要 `cargo-nextest`，且在 `~/.cargo/bin` 前置的 PATH 下跑。
-- 改 `collab-web` 后必须重建 GUI（`bun --cwd=packages/gui run build`）再验证——浏览器会缓存旧 bundle。
+- 改 `desktop-web` 后必须重建 GUI（`bun --cwd=packages/gui run build`）再验证——浏览器会缓存旧 bundle。
 - GUI/daemon E2E 隔离：`PI_CONFIG_DIR=musepi-test` 起测试 daemon（:8310）；测试 GUI 用 `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`，puppeteer 只连 **9223**（CDP 端点）。
 
 提交习惯：`git commit --no-verify`（husky/biome 基线问题）；natives 变更后需重建（`bun run build:native`，macOS LINKEDIT 对齐自动）。

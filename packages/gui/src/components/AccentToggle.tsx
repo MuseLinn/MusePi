@@ -1,4 +1,4 @@
-import { ACCENT_PRESETS, type AccentPreference, useAccentPreference } from "@musepi/collab-web";
+import { ACCENT_PRESETS, type AccentPreference, useAccentPreference } from "@musepi/desktop-web";
 import { CircleDot, Moon, Palette, Waves } from "lucide-react";
 
 const PRESET_ICON: Partial<Record<AccentPreference, typeof Palette>> = {

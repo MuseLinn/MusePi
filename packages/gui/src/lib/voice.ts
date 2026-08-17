@@ -25,7 +25,10 @@ function recognitionCtor(): SRCtor | null {
 }
 
 /** Record ~N seconds of 16 kHz mono float PCM via getUserMedia. */
-async function recordPcm(maxSeconds = 15): Promise<{ pcm: Float32Array; stop(): void } | null> {
+async function recordPcm(
+	maxSeconds = 15,
+	onLevel?: (rms: number) => void,
+): Promise<{ pcm: Float32Array; stop(): void } | null> {
 	try {
 		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 		const ctx = new AudioContext();
@@ -45,7 +48,14 @@ async function recordPcm(maxSeconds = 15): Promise<{ pcm: Float32Array; stop(): 
 		};
 		node.onaudioprocess = e => {
 			if (stopped) return;
-			chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+			const data = e.inputBuffer.getChannelData(0);
+			chunks.push(new Float32Array(data));
+			// 实时音量(RMS,0..1)供录音视觉反馈
+			if (onLevel) {
+				let sum = 0;
+				for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+				onLevel(Math.min(1, Math.sqrt(sum / data.length) * 4));
+			}
 		};
 		source.connect(node);
 		node.connect(ctx.destination);
@@ -98,20 +108,41 @@ function webSpeechFallback(onFinal: (text: string) => void, onError: (m: string)
 	};
 }
 
+/** 语音 I/O 状态(UI 视觉反馈;openchamber Voice Mode parity)。 */
+export type VoiceActivity =
+	| { phase: "recording"; seconds: number; level: number }
+	| { phase: "transcribing" }
+	| { phase: "speaking" }
+	| { phase: "done" }
+	| { phase: "stopped" }
+	| { phase: "error"; message: string };
+
 /** Dictate: records then transcribes via the daemon (TUI-parity local
- *  worker); falls back to Web Speech when the daemon/RPC is unavailable. */
+ *  worker); falls back to Web Speech when the daemon/RPC is unavailable.
+ *  onState 每 ~100ms 推送录音活动(秒数 + 音量),UI 据此渲染录音反馈。 */
 export function startDictation(
 	onFinal: (text: string) => void,
 	onError: (message: string) => void,
 	rpc: RpcClient | null,
+	onState?: (activity: VoiceActivity) => void,
 ): (() => void) | null {
 	if (!rpc) return webSpeechFallback(onFinal, onError);
 	let cancelled = false;
 	let rec: { stop(): void } | null = null;
+	const startedAt = Date.now();
+	let lastTick = 0;
 	void (async () => {
-		const recorded = await recordPcm();
+		const recorded = await recordPcm(15, level => {
+			if (cancelled) return;
+			// 节流到 ~100ms,报秒数 + 音量
+			const now = Date.now();
+			if (now - lastTick < 100) return;
+			lastTick = now;
+			onState?.({ phase: "recording", seconds: Math.round((now - startedAt) / 1000), level });
+		});
 		if (!recorded) {
 			// Mic blocked — try Web Speech as a last resort.
+			onState?.({ phase: "error", message: "microphone unavailable" });
 			const stop = webSpeechFallback(onFinal, onError);
 			if (stop) rec = { stop };
 			return;
@@ -121,6 +152,7 @@ export function startDictation(
 			recorded.stop();
 			return;
 		}
+		onState?.({ phase: "transcribing" });
 		try {
 			const res = await rpc.request<{ text: string }>("stt.transcribe", {
 				audio: Array.from(recorded.pcm),
@@ -141,29 +173,45 @@ export function startDictation(
 	};
 }
 
-/** Speak via the daemon's Kokoro TTS; falls back to speechSynthesis. */
-export function speak(text: string, rpc: RpcClient | null): () => void {
+/** Speak via the daemon's Kokoro TTS; falls back to speechSynthesis.
+ *  onState 报告 speaking/done/stopped/error,供 read-aloud 播放状态反馈。 */
+export function speak(text: string, rpc: RpcClient | null, onState?: (activity: VoiceActivity) => void): () => void {
 	const clean = text.replace(/```[\s\S]*?```/g, " code block ").slice(0, 600);
 	if (rpc) {
 		let audio: HTMLAudioElement | null = null;
+		let stopped = false;
 		void rpc
 			.request<{ audio: number[] | null; sampleRate: number }>("tts.synthesize", { text: clean })
 			.then(res => {
-				if (!res?.audio || res.audio.length === 0) return;
+				if (stopped || !res?.audio || res.audio.length === 0) return;
 				const wav = pcmToWav(res.audio, res.sampleRate || 24000);
 				audio = new Audio(URL.createObjectURL(new Blob([wav.buffer as ArrayBuffer], { type: "audio/wav" })));
-				audio.play().catch(() => {});
+				audio.onended = () => onState?.({ phase: "done" });
+				audio.onerror = () => onState?.({ phase: "error", message: "tts playback failed" });
+				onState?.({ phase: "speaking" });
+				audio.play().catch(() => onState?.({ phase: "error", message: "tts playback failed" }));
 			})
-			.catch(() => {});
-		return () => audio?.pause();
+			.catch(err => onState?.({ phase: "error", message: err instanceof Error ? err.message : String(err) }));
+		return () => {
+			stopped = true;
+			audio?.pause();
+			onState?.({ phase: "stopped" });
+		};
 	}
 	try {
 		const u = new SpeechSynthesisUtterance(clean);
 		u.lang = navigator.language.startsWith("zh") ? "zh-CN" : "en-US";
+		u.onend = () => onState?.({ phase: "done" });
+		u.onerror = () => onState?.({ phase: "error", message: "speech synthesis failed" });
 		speechSynthesis.cancel();
+		onState?.({ phase: "speaking" });
 		speechSynthesis.speak(u);
-		return () => speechSynthesis.cancel();
-	} catch {
+		return () => {
+			speechSynthesis.cancel();
+			onState?.({ phase: "stopped" });
+		};
+	} catch (err) {
+		onState?.({ phase: "error", message: String(err) });
 		return () => {};
 	}
 }

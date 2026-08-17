@@ -1,0 +1,275 @@
+/* Image preview lightbox (composer attachment / inline transcript image
+ * click). Dark frosted overlay, image centered at max viewport size;
+ * gallery nav buttons + position counter when multiple images. */
+.tr-img-lb {
+	position: fixed;
+	inset: 0;
+	z-index: 3000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px;
+	background: color-mix(in oklab, #000 62%, transparent);
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	animation: tr-img-lb-in 140ms ease-out;
+}
+
+.tr-img-lb-stage {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	max-width: 100%;
+	max-height: 100%;
+	/* Pointer-drag panning must own the gesture (no touch scrolling). */
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+/* Gallery nav slide-in: the frame is keyed by index, so it remounts per
+ * image and plays a directional slide. Zoom transform lives on the img
+ * inside, so the two never fight. */
+.tr-img-lb-frame {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+.tr-img-lb-frame--next {
+	animation: tr-img-lb-in-right 180ms var(--spring);
+}
+
+.tr-img-lb-frame--prev {
+	animation: tr-img-lb-in-left 180ms var(--spring);
+}
+
+/* Exit: fade the overlay, shrink the frame slightly (must match EXIT_MS). */
+.tr-img-lb--closing {
+	animation: tr-img-lb-out 150ms ease forwards;
+}
+
+.tr-img-lb--closing .tr-img-lb-frame {
+	animation: tr-img-lb-frame-out 150ms ease forwards;
+}
+
+.tr-img-lb-img {
+	max-width: min(90vw, calc(100vw - 160px)); /* leave room for the nav buttons */
+	max-height: calc(100vh - 120px);
+	object-fit: contain;
+	transform-origin: center center;
+	border-radius: 8px;
+	box-shadow: 0 24px 64px oklch(0 0 0 / 50%);
+}
+
+.tr-img-lb-x {
+	position: absolute;
+	/* Below the window header row (48px) + breathing room: keeps the
+	 * close button clear of the Windows titleBarOverlay buttons (which
+	 * occupy the top-right 48px) and reads better on macOS too. */
+	top: 64px;
+	right: 14px;
+	z-index: 10;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 999px;
+	border: 1px solid var(--border-strong);
+	background: var(--bg-overlay);
+	color: var(--fg);
+	cursor: pointer;
+	transition: background 120ms ease-out;
+}
+
+.tr-img-lb-x:hover {
+	background: var(--bg-inset);
+}
+
+.tr-img-lb-nav {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 10;
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--border-strong) 60%, transparent);
+	background: rgba(0, 0, 0, 0.45);
+	color: var(--fg);
+	cursor: pointer;
+	transition: background 120ms ease-out;
+}
+
+.tr-img-lb-nav:hover {
+	background: rgba(0, 0, 0, 0.6);
+}
+
+.tr-img-lb-nav--prev {
+	left: 14px;
+}
+
+.tr-img-lb-nav--next {
+	right: 14px;
+}
+
+.tr-img-lb-count {
+	position: absolute;
+	bottom: 14px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 3px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--border-strong);
+	background: var(--bg-overlay);
+	color: var(--fg-muted);
+	font-family: var(--font-ui);
+	font-size: var(--ui-font-size-xs);
+	line-height: 20px;
+}
+
+@keyframes tr-img-lb-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes tr-img-lb-in-right {
+	from {
+		opacity: 0;
+		transform: translateX(28px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes tr-img-lb-in-left {
+	from {
+		opacity: 0;
+		transform: translateX(-28px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes tr-img-lb-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes tr-img-lb-frame-out {
+	to {
+		opacity: 0;
+		transform: scale(0.98);
+	}
+}
+
+/* ── Annotation tools (open-science FigureBlock absorption) ──────────── */
+.tr-img-lb-tools {
+	position: fixed;
+	top: 14px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.tr-img-lb-tool {
+	padding: 5px 12px;
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 8px;
+	background: rgba(24, 24, 28, 0.85);
+	backdrop-filter: blur(10px);
+	color: #fff;
+	font-size: 12.5px;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.tr-img-lb-tool:hover {
+	background: rgba(40, 40, 48, 0.9);
+}
+
+.tr-img-lb-tool--primary {
+	background: #34d399;
+	border-color: transparent;
+	color: #06281c;
+	font-weight: 600;
+}
+
+.tr-img-lb-tool:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.tr-img-lb-annotate-hint {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 12px;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.tr-img-lb-imgwrap {
+	position: relative;
+	display: inline-block;
+	line-height: 0;
+}
+
+.tr-img-lb-img {
+	display: block;
+}
+
+.tr-img-lb-pin {
+	position: absolute;
+	width: 22px;
+	height: 22px;
+	transform: translate(-50%, -50%);
+	border-radius: 999px;
+	border: 2px solid #fff;
+	background: #34d399;
+	color: #06281c;
+	font-size: 11px;
+	font-weight: 700;
+	font-family: inherit;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+	cursor: pointer;
+	z-index: 2;
+}
+
+.tr-img-lb-note {
+	position: absolute;
+	left: 50%;
+	bottom: -52px;
+	transform: translateX(-50%);
+	z-index: 3;
+}
+
+.tr-img-lb-note-input {
+	width: 220px;
+	padding: 6px 10px;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 8px;
+	background: rgba(24, 24, 28, 0.92);
+	color: #fff;
+	font-size: 12.5px;
+	font-family: inherit;
+	outline: none;
+}
+
+.tr-img-lb-note-input:focus {
+	border-color: #34d399;
+}

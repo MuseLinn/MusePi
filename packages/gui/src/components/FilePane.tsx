@@ -1,10 +1,11 @@
-import { highlightToCodeHtml, Markdown, t } from "@musepi/collab-web";
+import { highlightToCodeHtml, Markdown, t } from "@musepi/desktop-web";
 import { File as FileIcon, FileCode, FileImage, FileJson, FileText, FileType, Folder, RefreshCw, Search } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
+import { usePointerDrag } from "../lib/use-pointer-drag";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /**
@@ -258,6 +259,27 @@ export function FilePane({
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
 	const highlight = useChatHighlight();
+	// Vertical splitter (openchamber parity): unified usePointerDrag
+	// primitive — pointer capture + cancel; the old window-listener version
+	// leaked listeners when the pointer left the window.
+	const splitStartRef = useRef(treeW);
+	const splitterDrag = usePointerDrag({
+		onDragStart: () => {
+			splitStartRef.current = treeW;
+		},
+		onDragMove: ({ dx }) => {
+			const w = bodyRef.current?.clientWidth ?? 400;
+			const next = Math.min(0.6, Math.max(0.28, splitStartRef.current + dx / w));
+			setTreeW(next);
+		},
+		onDragEnd: () => {
+			try {
+				localStorage.setItem("omp-gui-filepane-tree", String(treeW));
+			} catch {
+				// storage unavailable
+			}
+		},
+	});
 
 	// pdf.js worker: copied next to index.html by the build script
 	// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
@@ -703,27 +725,8 @@ export function FilePane({
 						 * the tree column; persisted per run. */}
 						<div
 							className="gui-filepane-splitter"
-							onPointerDown={e => {
-								e.preventDefault();
-								const startX = e.clientX;
-								const startW = treeW;
-								const move = (ev: PointerEvent): void => {
-									const w = bodyRef.current?.clientWidth ?? 400;
-									const next = Math.min(0.6, Math.max(0.28, startW + (ev.clientX - startX) / w));
-									setTreeW(next);
-								};
-								const up = (): void => {
-									window.removeEventListener("pointermove", move);
-									window.removeEventListener("pointerup", up);
-									try {
-										localStorage.setItem("omp-gui-filepane-tree", String(treeW));
-									} catch {
-										// storage unavailable
-									}
-								};
-								window.addEventListener("pointermove", move);
-								window.addEventListener("pointerup", up);
-							}}
+							{...splitterDrag}
+							style={{ touchAction: "none" }}
 							aria-hidden
 						/>
 						<div className="gui-filepane-preview">

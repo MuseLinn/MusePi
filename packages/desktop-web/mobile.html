@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+		/>
+		<meta name="color-scheme" content="light dark" />
+		<meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf7fc" />
+		<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0b14" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<title>musepi collab</title>
+		<link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
+		<link rel="apple-touch-icon" sizes="180x180" href="./public/favicon-180x180.png" />
+	</head>
+	<body>
+		<div id="root"></div>
+		<script>(function(){try{var s=localStorage.getItem("omp-collab-theme");var sys=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var t=(s==="light"||s==="dark")?s:sys;document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})();</script>
+		<script type="module" src="./src/mobile.tsx"></script>
+	</body>
+</html>

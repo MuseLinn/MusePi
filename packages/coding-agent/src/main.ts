@@ -350,7 +350,7 @@ export interface AcpSessionFactoryOptions {
 	sessionDir?: string;
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
-	parsedArgs: Pick<Args, "apiKey" | "trustedExtensions" | "tools">;
+	parsedArgs: Pick<Args, "apiKey" | "trustedExtensions" | "tools" | "preset">;
 	rawArgs: string[];
 	createSession: (options: CreateAgentSessionOptions) => Promise<CreateAgentSessionResult>;
 }
@@ -418,6 +418,8 @@ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSess
 			// Preserve reserve-policy confirmation until ACP capabilities are known
 			// without enabling AskTool or other UI-only session behavior.
 			deferUsageReserveConfirmation: true,
+			// Modes v1:`--preset <id>` 应用会话预设(白名单/提示词/settings)。
+			...(args.parsedArgs.preset ? { modeId: args.parsedArgs.preset } : {}),
 			enableMCP: false,
 			titleSystemPrompt,
 			eventBus,
@@ -731,7 +733,7 @@ async function getChangelogForDisplay(
 
 	return resolveStartupChangelogForDisplay({
 		mode,
-		currentVersion: VERSION,
+		currentVersion: process.env.MUSEPI_VERSION ?? VERSION,
 		changelogPath: getChangelogPath(),
 	});
 }
@@ -1711,6 +1713,8 @@ export async function runRootCommand(
 			...sessionOptions,
 			eventBus,
 			preloadedExtensions: extensionsResult,
+			// Modes v1:`--preset <id>` 应用会话预设。
+			...(parsedArgs.preset ? { modeId: parsedArgs.preset } : {}),
 		});
 
 		try {

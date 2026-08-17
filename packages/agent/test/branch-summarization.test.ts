@@ -230,4 +230,59 @@ describe("branch summarization", () => {
 
 		expect(messages.some(m => m.role === "toolResult")).toBe(true);
 	});
+
+	test("returns an aborted result when cancelled during transient retry backoff", async () => {
+		const reason = new Error("user cancelled branch summary");
+		let aborted = false;
+		const signal = {
+			get aborted() {
+				return aborted;
+			},
+			get reason() {
+				return aborted ? reason : undefined;
+			},
+			addEventListener(type: string, listener: ((event: Event) => void) | { handleEvent(event: Event): void }) {
+				if (type !== "abort") return;
+				aborted = true;
+				const event = new Event("abort");
+				if (typeof listener === "function") listener(event);
+				else listener.handleEvent(event);
+			},
+			removeEventListener() {},
+		} as unknown as AbortSignal;
+		const entries: SessionEntry[] = [
+			{
+				type: "message",
+				id: "user-1",
+				parentId: null,
+				timestamp: new Date(0).toISOString(),
+				message: { role: "user", content: "Summarize this branch.", timestamp: 0 },
+			},
+		];
+		let calls = 0;
+
+		const result = await generateBranchSummary(entries, {
+			model: MODEL,
+			apiKey: "test-api-key",
+			signal,
+			completeImpl: async () => {
+				calls += 1;
+				return {
+					role: "assistant",
+					content: [],
+					api: "mock",
+					provider: "mock",
+					model: "mock-model",
+					usage: ZERO_USAGE,
+					stopReason: "error",
+					errorStatus: 529,
+					errorMessage: "overloaded_error: Overloaded",
+					timestamp: 1,
+				};
+			},
+		});
+
+		expect(calls).toBe(1);
+		expect(result).toEqual({ aborted: true });
+	});
 });

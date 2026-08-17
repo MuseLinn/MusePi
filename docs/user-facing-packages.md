@@ -11,18 +11,6 @@ This page indexes README-only user-facing package CLIs and features that need ro
 
 ## Package CLIs and features
 
-### `packages/swarm-extension` — swarm orchestration
-
-Sources: [`packages/swarm-extension/README.md`](../packages/swarm-extension/README.html), [`packages/swarm-extension/package.json`](../packages/swarm-extension/package.json), [`packages/swarm-extension/src/cli.ts`](../packages/swarm-extension/src/cli.ts), [`packages/swarm-extension/src/extension.ts`](../packages/swarm-extension/src/extension.ts).
-
-- Package: `@musepi/swarm-extension`; bin: `omp-swarm`.
-- Feature: multi-agent DAG orchestration from YAML swarms, supporting `pipeline`, `parallel`, and `sequential` modes.
-- Standalone CLI: `omp-swarm path/to/swarm.yaml` runs until completion or process termination.
-- TUI extension mode: add the package path to `extensions`, then use `/swarm run <file.yaml>`, `/swarm status <name>`, or `/swarm help`.
-- Inputs: YAML under top-level `swarm` with `name`, `workspace`, `mode`, optional `target_count`/`model`, and `agents` with `role`, `task`, optional `model`, `waits_for`, and `reports_to`.
-- Side effects/output: creates the workspace if needed and persists state/logs under `<workspace>/.swarm_<name>/`.
-- Limits/errors: validates the YAML definition, dependency graph, and cycles before execution; standalone runs have no built-in timeout.
-
 ### `packages/stats` — local usage dashboard
 
 Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages/stats/package.json`](../packages/stats/package.json), [`packages/coding-agent/src/cli/stats-cli.ts`](../packages/coding-agent/src/cli/stats-cli.ts).

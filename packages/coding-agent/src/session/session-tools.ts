@@ -538,6 +538,26 @@ export class SessionTools {
 		});
 	}
 
+	/**
+	 * Drops extension-owned tools (P5 HMR): after an extension entry is
+	 * hot-reloaded, names the replacement did NOT re-register are removed
+	 * from the registry and the active set. Re-registered names are already
+	 * replaced in place by the registration listener and must not be touched.
+	 * Mirrors the vibe-tool removal precedent (`#uninstallVibeTools`).
+	 */
+	removeExtensionTools(names: string[]): Promise<void> {
+		if (names.length === 0) return Promise.resolve();
+		const removed = new Set(names);
+		return this.runToolRegistryMutation(async () => {
+			for (const name of removed) {
+				this.#toolRegistry.delete(name);
+				this.#extensionMcpTools.delete(name);
+			}
+			const nextActive = this.getActiveToolNames().filter(name => !removed.has(name));
+			await this.#applyActiveToolsByName(nextActive);
+		});
+	}
+
 	#uninstallVibeTools(): void {
 		for (const name of this.#installedVibeToolNames) {
 			this.#toolRegistry.delete(name);

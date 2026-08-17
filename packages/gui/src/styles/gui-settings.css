@@ -1,0 +1,3353 @@
+
+.gui-dialog--settings {
+	width: min(640px, 92vw);
+	height: min(440px, 84vh);
+}
+
+.gui-settings-nav {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	/* openchamber SettingsSidebarItem: compact rounded row, subtle hover. */
+	padding: 5px 8px;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-settings-nav:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-settings-nav--active {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+/* ── Model selector (live, daemon-backed) ────────────────────────────── */
+
+.gui-model {
+	position: relative;
+}
+
+.gui-model-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 9px;
+	border-radius: 999px;
+	border: 0;
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 150ms var(--spring), color 150ms var(--spring);
+}
+
+.gui-model-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-model-menu {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	min-width: 260px;
+	max-width: 344px;
+	/* Fixed height, not max-height: with max-height the flex content (search
+	 * + list) re-measures on scrollbar state and list-loading, and because
+	 * the popup is bottom-anchored the search box visibly jumps when the
+	 * menu shrinks/grows. A constant height keeps the search pinned. */
+	height: 320px;
+	overflow: hidden;
+	padding: 4px;
+	border-radius: 12px;
+	/* Frosted glass (user): translucent surface + backdrop blur — the menus
+	 * are portaled to body so the blur samples real content underneath. The
+	 * blur replaces the old near-opaque overlay that hurt legibility.
+	 * `--gui-glass-overlay` (set to 100% by the window-transparency toggle
+	 * in settings) overrides the per-rule translucency for an opaque pane. */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Thinking-effort selector (ThinkingSelector): content-sized. The fixed
+ * 320px shell above exists to pin the model selector's search box above a
+ * long scrollable list; a 2-8 row ladder must hug its rows instead —
+ * constant height left a mostly-empty glass box at any item count. */
+.gui-model-menu--compact {
+	height: auto;
+	max-height: 320px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* The search box is pinned above the list — only the model rows scroll. */
+.gui-model-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	/* Rows are truncate-designed; a stray horizontal scrollbar must never
+	 * appear (provider chips / long ids overflow otherwise). */
+	overflow-x: hidden;
+}
+
+/* Content-boundary feather (sessions-list parity): fades the top/bottom
+ * row edges while the list actually overflows and is scrolled away. */
+.gui-model-list[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 12px,
+		#000 calc(100% - 12px),
+		transparent 100%
+	);
+}
+
+.gui-model-list[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+
+.gui-model-list[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 12px);
+}
+
+/* Portal wrapper (useFloatingMenu): fixed, out of the clipped component
+ * tree, above everything. Enter/exit animate (gui-menu-in / -out). */
+.gui-menu-popup {
+	position: fixed;
+	z-index: 1000;
+	/* Two-phase enter: the popup paints transparent first (useFloatingMenu
+	 * adds --entered on the next frame), so Chromium composites the frosted
+	 * backdrop before the fade starts — no transparent→glassy flash. */
+	opacity: 0;
+	pointer-events: none;
+}
+
+.gui-menu-popup--entered {
+	opacity: 1;
+	pointer-events: auto;
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+/* Pop.tsx two-phase enter: first frame after mount is painted at opacity 0
+ * (no animation class yet) so the frosted backdrop composites before the
+ * gui-menu-in fade starts. */
+.gui-menu-popup--pending {
+	opacity: 0;
+}
+
+.gui-menu-popup--closing {
+	opacity: 1;
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+@keyframes gui-menu-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+
+/* ── Pinned widget window (pin.html) ───────────────────────────────
+ * The widget IS the window: whole surface rounded (transparent window
+ * corners), no chrome. Slim drag strip on top; pin-top/close buttons
+ * are larger and appear on hover (kimi desktop-card language). */
+.gui-pin {
+	width: 100vw;
+	height: 100vh;
+	border-radius: 18px;
+	overflow: hidden;
+	background: var(--color-surface-raised);
+	/* Desktop-card entrance: resolves from a soft blur (kimi 固定至桌面). */
+	animation: gui-pin-in 320ms var(--spring);
+	box-shadow:
+		0 2px 2px -1px rgba(0, 0, 0, 0.3),
+		0 6px 12px -4px rgba(0, 0, 0, 0.35),
+		0 18px 48px rgba(0, 0, 0, 0.45);
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-pin-drag {
+	-webkit-app-region: drag;
+	app-region: drag;
+	/* Immersive: the strip is an invisible overlay (still draggable) that
+	 * only surfaces on hover — the widget bleeds edge-to-edge otherwise. */
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 30px;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 0 10px;
+	cursor: grab;
+	background: transparent;
+	border-bottom: none;
+	opacity: 0;
+	transition: opacity 140ms ease, background 140ms ease;
+}
+.gui-pin:hover .gui-pin-drag,
+.gui-pin-drag:focus-within {
+	opacity: 1;
+	/* Immersive hover: no background band — only the icon buttons
+	 * surface, styled like the app's other icon buttons. */
+	background: transparent;
+	border-bottom: none;
+}
+
+.gui-pin-title {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	color: var(--color-text-secondary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 55%;
+	pointer-events: none;
+}
+
+.gui-pin-actions {
+	display: flex;
+	gap: 6px;
+	-webkit-app-region: no-drag;
+	app-region: no-drag;
+	opacity: 0;
+	transform: translateY(2px);
+	transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.gui-pin-drag:hover .gui-pin-actions,
+.gui-pin-actions:focus-within {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.gui-pin-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-secondary);
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+
+.gui-pin-btn:hover {
+	background: rgba(255, 255, 255, 0.12);
+	color: var(--color-text);
+}
+
+.gui-pin-btn--close:hover {
+	background: rgba(229, 72, 77, 0.2);
+	color: #e5484d;
+}
+
+.gui-pin-card {
+	flex: 1;
+	min-height: 0;
+	/* No padding — the widget surface bleeds to the window edge. */
+	padding: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-pin-card--empty {
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-secondary);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-motion-off .gui-pin-actions {
+	transition: none;
+}
+
+@keyframes gui-pin-in {
+	from {
+		opacity: 0;
+		transform: scale(0.9);
+		filter: blur(12px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+		filter: blur(0);
+	}
+}
+
+@keyframes gui-menu-out {
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+}
+
+.gui-model-opt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+}
+
+.gui-model-opt:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-model-opt--active {
+	color: var(--color-accent);
+}
+
+/* Favorite star on each model row: filled/accent when pinned. The star is
+ * a nested <button> (row is role=button) and stops propagation, so pinning
+ * never selects the model. */
+.gui-model-fav {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	padding: 2px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: color 120ms ease, background 120ms ease;
+}
+
+.gui-model-fav:hover {
+	color: var(--color-text);
+	background: var(--color-surface-raised);
+}
+
+.gui-model-fav--on,
+.gui-model-fav--on:hover {
+	color: var(--color-accent);
+}
+
+.gui-model-empty {
+	padding: 8px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+/* Connect-add button in the projects tab. */
+.gui-connect-add {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin-bottom: 6px;
+	padding: 7px 10px;
+	border-radius: 8px;
+	border: 1px dashed var(--border-strong);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: border-color 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-connect-add:hover {
+	border-color: var(--color-accent-bd);
+	color: var(--color-accent);
+}
+
+/* ── Custom groups (ZCode groups tab) ───────────────────────────────── */
+
+.gui-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 2px;
+}
+
+.gui-group-add {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px dashed var(--border-strong);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: border-color 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-group-add:hover {
+	border-color: var(--color-accent-bd);
+	color: var(--color-accent);
+}
+
+.gui-group {
+	border-radius: 10px;
+	/* No card fill: groups float directly on the sidebar glass like the
+	 * date-grouped sections (a raised card read as a bright patch in
+	 * light mode). Hover feedback lives on the head row. */
+	border: none;
+	background: transparent;
+	overflow: hidden;
+}
+/* Whole-block drop highlight: dragging a session anywhere onto the group
+ * (not just the head) tints the block — clear landing feedback. */
+.gui-group--dragover {
+	background: color-mix(in oklab, var(--color-accent-bd) 7%, transparent);
+	box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-accent-bd) 45%, transparent);
+}
+
+.gui-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	color: var(--color-text-muted);
+	transition: background 120ms ease-out;
+}
+
+.gui-group-head:hover {
+	background: var(--color-surface-sunken);
+}
+
+.gui-group-act {
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	padding: 2px;
+	border-radius: 4px;
+}
+
+.gui-group-act:hover {
+	color: var(--color-text);
+	background: var(--color-surface-sunken);
+}
+
+.gui-group-empty {
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-top: 1px dashed var(--border);
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-group-empty:hover {
+	color: var(--color-text-muted);
+	background: var(--color-surface-sunken);
+}
+
+/* ── View/sort menu (projects tab) ──────────────────────────────────── */
+
+.gui-tab-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-tab-action:hover {
+	color: var(--color-text);
+	background: var(--color-surface-raised);
+}
+
+.gui-view-opt {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 5px 8px;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+}
+
+.gui-view-opt:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-view-opt--active {
+	color: var(--color-accent);
+}
+
+.gui-view-opt--danger {
+	color: var(--color-danger);
+}
+
+.gui-view-opt--danger:hover {
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+	color: var(--color-danger);
+}
+
+/* ── Settings: model / provider management ─────────────────────────────── */
+
+.gui-settings-reset {
+	display: inline-flex;
+	height: 26px;
+	width: 26px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-settings-reset:hover:not(:disabled) {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-settings-reset:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-login-panel {
+	margin-bottom: 16px;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid var(--color-accent-bd);
+	background: var(--color-surface-raised);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-login-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-accent);
+}
+
+.gui-login-url {
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-accent);
+	word-break: break-all;
+	line-height: 1.4;
+}
+
+.gui-login-msg {
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+/* ── Collapsed-pane edge tabs (ZCode reopen affordance) ───────────────── */
+
+.gui-pane-edge {
+	position: absolute;
+	top: 50%;
+	z-index: 30;
+	transform: translateY(-50%);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-surface-raised) 80%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	color: var(--color-text-faint);
+	cursor: pointer;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gui-pane-edge:hover {
+	color: var(--color-accent);
+	border-color: var(--color-accent-bd);
+}
+
+.gui-pane-edge--left {
+	left: 6px;
+}
+
+.gui-pane-edge--right {
+	right: 6px;
+}
+
+/* ── Window-level toolbar (opencode layout, rides the immersive edge) ── */
+
+/* macOS traffic-light safe area: 88px (openchamber --oc-titlebar-left-inset
+ * 5.5rem) so the left cluster never collides with the OS window controls. */
+.gui-toolbar {
+	position: relative;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 56px;
+	padding: 0 12px;
+	flex-shrink: 0;
+	-webkit-app-region: drag;
+	/* Center-column header: macOS traffic lights sit over the left pane's
+	 * drag strip; the button cluster stays at a fixed position, never
+	 * shifting with pane state. */
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(18px);
+	-webkit-backdrop-filter: blur(18px);
+}
+
+/* Sidebar's top clearance row: macOS traffic lights float over it (overlay
+ * title bar) and the empty area drags the window (openchamber-style). */
+.gui-pane-drag {
+	-webkit-app-region: drag;
+}
+
+/* Spans the toolbar's blank area so the whole top edge drags. */
+.gui-toolbar-drag {
+	-webkit-app-region: drag;
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	pointer-events: auto;
+	z-index: -1;
+}
+
+.gui-toolbar .gui-tool-btn {
+	-webkit-app-region: no-drag;
+	position: relative;
+	z-index: 2;
+	/* openchamber header icon button: 32px hit area, rounded-md */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	color: var(--color-text-muted);
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-toolbar .gui-tool-btn:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-toolbar-title {
+	position: relative;
+	z-index: 2;
+	min-width: 0;
+	margin-left: 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	/* mac title-bar text: 14px / weight 500 / secondary (openchamber header) */
+	font-size: var(--ui-font-size);
+	font-weight: 500;
+	color: var(--color-text-muted);
+	pointer-events: none;
+}
+
+/* ── Context menu (ZCode task/group right-click) ─────────────────────── */
+
+.gui-context-menu {
+	position: fixed;
+	z-index: 1000;
+	min-width: 190px;
+	max-height: 380px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 4px;
+	border-radius: 12px;
+	/* Frosted glass (user): translucent surface + backdrop blur. */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 36px rgba(0, 0, 0, 0.45);
+	/* Two-phase enter (ContextMenu.tsx parity with useFloatingMenu): mount
+	 * opaque at opacity 0, then add --entered next frame so the frosted
+	 * backdrop composites BEFORE the fade starts. Animating a freshly
+	 * mounted backdrop-filter element makes Chromium skip its backdrop
+	 * sampling on the real compositor (menu renders as plain translucency
+	 * — content shows straight through, no frost). */
+	opacity: 0;
+	transform-origin: top left;
+}
+
+.gui-context-menu--entered {
+	opacity: 1;
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+/* Context menu nested inside a useFloatingMenu popup (CardMenuButton):
+ * the popup container owns positioning + the two-phase fade, so the inner
+ * menu must be in-flow (not fixed — a nested fixed element empties the
+ * popup's content box, shrinking it to 0x0) and always opaque (the
+ * popup's --entered drives visibility). */
+.gui-menu-popup > .gui-context-menu {
+	position: static;
+	width: 100%;
+	opacity: 1;
+	transform: none;
+	animation: none;
+}
+
+.gui-context-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+
+.gui-context-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+}
+
+.gui-context-item:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-context-item--danger {
+	color: var(--color-error);
+}
+
+.gui-context-hint {
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+.gui-context-divider {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--border);
+}
+
+/* ── Archive view rows (ZCode archive) ────────────────────────────────── */
+
+.gui-archive-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border-radius: 8px;
+}
+
+.gui-archive-row:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-archive-act {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-archive-act:hover {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+.gui-archive-act--danger:hover {
+	color: var(--color-error);
+}
+
+/* Group header becomes a clickable collapse toggle (ZCode). */
+.gui-group-head {
+	cursor: pointer;
+}
+
+.gui-group-head .gui-group-act {
+	cursor: pointer;
+}
+
+/* ── Full-window settings view (ZCode-style, replaces the modal) ──────── */
+
+.gui-settings-view {
+	/* The shell lays panes out as a flex ROW; without flex:1 the view
+	 * collapses to its content width, which varies per tab (the "panel
+	 * size changes between tabs" bug). Fill the shell edge-to-edge. */
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	/* Same translucent surface the nav uses — the gap between the nav and
+	 * the floating config surface reads as one continuous panel (no line). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Dark scheme: the 55% base can't cover light wallpaper patches behind the
+ * translucent window — muted text becomes unreadable. Heavier overlay keeps
+ * the single-layer glass look while restoring contrast (slider still
+ * scales it via the derived --gui-glass-overlay; the window-transparency
+ * toggle still overrides via an inline 100%). */
+[data-theme="dark"] .gui-main,
+[data-theme="dark"] .gui-settings-view {
+	--gui-glass-overlay: clamp(28%, calc(88% * (1 - var(--gui-glass-alpha, 0.55))), 88%);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(88% * var(--gui-glass-alpha, 1))), transparent);
+}
+
+.gui-settings-nav-group {
+	padding: 10px 8px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+
+.gui-settings-nav--disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-settings-nav--disabled:hover {
+	background: transparent;
+	color: var(--color-text-muted);
+}
+
+/* Narrow windows: sidebar collapses to an icon rail (tooltips carry the
+ * labels — ZCode's compact settings sidebar); the nav header keeps only
+ * the back arrow (narrow overrides for the new header classes live in the
+ * EOF media query, after their base definitions). */
+@media (max-width: 900px) {
+	.gui-settings-nav-col {
+		width: 64px !important;
+	}
+
+	.gui-settings-nav {
+		justify-content: center;
+		padding: 8px;
+	}
+
+	.gui-settings-nav-label,
+	.gui-settings-nav-group,
+	.gui-settings-back-label {
+		display: none;
+	}
+}
+
+/* ZCode message gutter avatars: user chip + agent orb (replaces 宿主/代理). */
+.gui-user-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+	flex-shrink: 0;
+}
+
+.gui-user-avatar-img {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+/* Provider chip in the model menu: separates name from vendor, capsule. */
+.gui-provider-chip {
+	flex-shrink: 0;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 16px;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	white-space: nowrap;
+}
+
+/* Shared input-surface shadow (user: welcome had none, in-session was too
+ * heavy — one recipe for both). .gui-border-beam is included because the
+ * beam wrapper carries the shadow (its overflow:hidden clips the frame's). */
+.gui-input-shadow,
+.gui-welcome-input,
+.gui-composer-frame,
+.gui-border-beam {
+	--gui-input-shadow:
+		0 0 0 0.5px rgba(255, 255, 255, 0.08),
+		0 1px 2px rgba(0, 0, 0, 0.16),
+		0 8px 24px rgba(0, 0, 0, 0.22),
+		inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.gui-welcome-input {
+	box-shadow: var(--gui-input-shadow);
+	transition: box-shadow 160ms ease-out;
+}
+
+.gui-welcome-input textarea {
+	/* Kill the UA :focus outline (specificity (0,1,1) beats the
+	 * tailwind .outline-none class (0,1,0), which loses to Chromium's
+	 * `textarea:focus` and paints a system-blue box on focus). */
+	outline: none;
+	transition: height 160ms ease;
+}
+
+/* Brand watermark — centered on the MusePi title line (the input card
+ * overlaps the surface's true center, so a dead-center glyph reads
+ * "covered"; the 33% line aligns with the brand/greeting column. The
+ * translate(-50%,-50%) transform (also in the float keyframes) does the
+ * centering, so top must NOT pre-subtract half the glyph height). */
+.gui-welcome-mark {
+	/* 17%: the 140px-raster dot field (~460×100px) must stay above the
+	 * foreground brand row (π badge + MusePi at ~33%) — 18% cleared it by
+	 * only ~6px at the previous 120px raster; the taller field needs the
+	 * extra percent. */
+	top: 17%;
+	bottom: auto;
+	left: 50%;
+	right: auto;
+	transform: translate(-50%, -50%);
+}
+/* The border beam's md-light preset is tuned very faint (strokeOpacity 0.12)
+ * for decorative use; on the welcome composer it must be a legible focus
+ * indicator, so boost the stroke (dark keeps the preset). The beam itself is
+ * focus-driven: it fades in while the composer has focus and fades out on
+ * blur, so it is never a static border box. */
+.gui-border-beam {
+	--beam-stroke-opacity: 1.9;
+	/* The beam element clips its children (overflow: hidden + border-radius),
+	 * which would crop the frame's own box-shadow — carry the shared input
+	 * shadow on the wrapper so both composers (welcome + session) keep their
+	 * outer lift. */
+	box-shadow: var(--gui-input-shadow);
+}
+[data-theme="dark"] .gui-border-beam {
+	--beam-stroke-opacity: 1;
+}
+
+/* Notes editor: same UA :focus-outline override as the composers. */
+.gui-notes-editor {
+	outline: none;
+}
+
+/* Todo list (项目笔记 待办, openchamber parity). */
+.gui-notes-todo-list,
+.gui-notes-plan-list {
+	list-style: none;
+	margin: 4px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	max-height: 220px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-notes-todo-row,
+.gui-notes-plan-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 6px;
+	border-radius: var(--radius-xs);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-notes-todo-row:hover,
+.gui-notes-plan-row:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-notes-todo-check {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	border: 1px solid var(--color-border);
+	border-radius: 4px;
+	background: none;
+	padding: 0;
+	color: var(--color-accent);
+	cursor: pointer;
+}
+
+.gui-notes-todo-check--done {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+	color: var(--color-bg);
+}
+
+.gui-notes-todo-text {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-notes-todo-text--done {
+	text-decoration: line-through;
+	color: var(--color-text-faint);
+}
+
+.gui-notes-todo-remove {
+	border: none;
+	background: none;
+	padding: 0 2px;
+	font-size: 11px;
+	line-height: 1;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	opacity: 0;
+}
+
+.gui-notes-todo-row:hover .gui-notes-todo-remove,
+.gui-notes-plan-row:hover .gui-notes-todo-remove {
+	opacity: 1;
+}
+
+.gui-notes-todo-remove:hover {
+	color: var(--color-danger);
+}
+
+/* Saved plans (项目笔记 计划, openchamber parity). */
+.gui-notes-plan-open {
+	margin-top: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	overflow: hidden;
+}
+
+.gui-notes-plan-open-title {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	padding: 4px 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-notes-plan-open-body {
+	margin: 0;
+	padding: 8px;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 200px;
+	overflow: auto;
+	border-top: 1px solid var(--border);
+	background: var(--color-bg);
+}
+
+.gui-notes-plan-open-btn {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	flex: 1;
+	min-width: 0;
+	border: none;
+	background: none;
+	padding: 0;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-notes-plan-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-notes-plan-title:hover {
+	color: var(--color-accent);
+}
+
+.gui-notes-plan-date {
+	flex-shrink: 0;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+
+/* Focus mode (⌘⇧E, openchamber parity): the welcome composer expands to
+ * fill the surface — watermark/greeting/tips hide, the form grows to the
+ * full height and the input morphs from its hero size into a full-height
+ * pane (min-height interpolation drives the shape change; the textarea
+ * transition rides along). */
+.gui-welcome {
+	/* Content taller than the viewport must NOT clip the top (brand /
+	 * greeting / composer): `safe center` falls back to flex-start when
+	 * the content overflows, so unread-growth in the reminders card never
+	 * pushes the composer off-screen. (Unlayered rule beats the Tailwind
+	 * justify-center utility.) Vertical overflow scrolls instead of
+	 * clipping the reminders card at the window bottom. */
+	justify-content: safe center;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.gui-welcome[data-focused] {
+	justify-content: flex-start;
+	padding-top: 28px;
+}
+
+.gui-welcome[data-focused] .gui-welcome-mark,
+.gui-welcome[data-focused] .gui-welcome-greet,
+.gui-welcome[data-focused] .gui-brand,
+.gui-welcome[data-focused] .gui-project-row,
+.gui-welcome[data-focused] .gui-tip {
+	display: none;
+}
+
+.gui-welcome[data-focused] .gui-welcome-inner {
+	max-width: none;
+	height: 100%;
+	/* Match the session composer's bottom gutter (pb-3 = 12px) so the
+	 * focused input card doesn't sit flush against the surface edge. */
+	padding-bottom: 12px;
+}
+
+.gui-welcome-form {
+	/* Focus-mode height morph: the JS animates height px↔target. display
+	 * must stay flex in BOTH states — Chromium drops the transition's
+	 * starting value when display changes, so the morph would snap. */
+	display: flex;
+	flex-direction: column;
+	transition: height 280ms var(--spring);
+}
+
+.gui-welcome[data-focused] form {
+	min-height: 0;
+}
+
+.gui-welcome-input {
+	transition:
+		min-height 280ms var(--spring),
+		box-shadow 160ms ease-out;
+}
+
+.gui-welcome-input textarea {
+	/* Height must keep the autosize transition from the base rule above —
+	 * a lone min-height shorthand here would REPLACE it and make autosize
+	 * growth snap. */
+	transition:
+		min-height 280ms var(--spring),
+		height 160ms ease;
+}
+
+/* During the focus-mode morph, the form's height animation drives the
+ * layout every frame; letting the textarea's own min-height/height
+ * transition chase it doubles the layout work and reads as stutter. The
+ * JS marks the form .gui-morphing for the animation window and the
+ * textarea rides the morph synchronously instead. */
+.gui-welcome-form.gui-morphing textarea,
+.gui-welcome-form.gui-morphing .gui-welcome-input {
+	transition: none !important;
+}
+
+.gui-welcome[data-focused] form > .gui-border-beam {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-welcome[data-focused] .gui-welcome-input {
+	flex: 1;
+	min-height: 100%;
+}
+
+.gui-welcome[data-focused] .gui-welcome-ta-wrap {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-welcome[data-focused] .gui-welcome-input textarea {
+	flex: 1;
+	min-height: 100%;
+}
+
+/* ZCode welcome project chip (workspace picker). */
+.gui-project-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gui-project-chip:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	border-color: var(--color-accent-bd);
+}
+
+/* Add-project menu (projects tab): floating card under the connect button. */
+.gui-add-project-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 1000;
+	min-width: 190px;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+}
+
+/* Image attachments (paste/drag, openchamber parity). */
+.gui-attach-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.gui-attach-chip {
+	position: relative;
+	width: 56px;
+	height: 56px;
+	border-radius: 10px;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+}
+
+.gui-attach-thumb {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+	cursor: zoom-in;
+}
+
+.gui-attach-thumb:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.gui-attach-x {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: none;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	cursor: pointer;
+}
+
+/* ZCode-style switch (avatar toggle etc). */
+.gui-toggle {
+	position: relative;
+	width: 36px;
+	height: 20px;
+	border-radius: 999px;
+	border: none;
+	background: color-mix(in oklab, var(--color-text) 18%, transparent);
+	cursor: pointer;
+	transition: background 140ms ease-out;
+	flex-shrink: 0;
+}
+
+.gui-toggle--on {
+	background: var(--color-accent);
+}
+
+.gui-toggle-knob {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #fff;
+	transition: transform 140ms ease-out;
+}
+
+.gui-toggle--on .gui-toggle-knob {
+	transform: translateX(16px);
+}
+
+/* Settings select (default thinking etc) — openchamber control height. */
+.gui-settings-select {
+	height: 34px;
+	padding: 0 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-family: inherit;
+	cursor: pointer;
+	min-width: 180px;
+}
+
+.gui-settings-select:focus {
+	outline: none;
+	border-color: var(--color-accent-bd);
+}
+
+
+/* ── Collab remote-control dialog (ZCode 移动端远程控制) ────────────────── */
+
+.gui-collab-dialog {
+	display: flex;
+	flex-direction: column;
+	width: min(760px, 92vw);
+	height: auto;
+	max-height: 84vh;
+	border-radius: 16px;
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 20px 60px rgba(0, 0, 0, 0.5);
+	overflow: hidden;
+}
+
+.gui-collab-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 0;
+	min-height: 0;
+}
+
+.gui-collab-col {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 18px 20px;
+	min-width: 0;
+}
+
+.gui-collab-col:first-child {
+	border-right: 1px solid var(--border);
+}
+
+.gui-collab-col-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+}
+
+.gui-collab-desc {
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+.gui-collab-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--color-ok);
+	box-shadow: 0 0 8px color-mix(in oklab, var(--color-ok) 60%, transparent);
+}
+
+.gui-collab-qr {
+	display: flex;
+	justify-content: center;
+	padding: 8px 0;
+}
+
+.gui-collab-qr canvas {
+	width: 200px;
+	height: 200px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: #fff;
+}
+
+.gui-collab-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+}
+
+.gui-collab-error {
+	padding: 6px 10px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-error) 12%, transparent);
+	color: var(--color-error);
+	font-size: 12.5px;
+}
+
+.gui-collab-idle {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 40px 0;
+}
+
+.gui-collab-hint {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-collab-bots {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-collab-bot {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+}
+
+.gui-collab-bot--disabled {
+	opacity: 0.55;
+}
+
+.gui-collab-bot-ico {
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	flex-shrink: 0;
+}
+
+.gui-collab-bot-ico--wechat { background: #07c160; }
+.gui-collab-bot-ico--feishu { background: #3370ff; }
+.gui-collab-bot-ico--lark { background: #00d6b9; }
+.gui-collab-bot-ico--telegram { background: #2aabee; }
+
+.gui-collab-bot-mgmt {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin-top: auto;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+}
+
+.gui-collab-bot-mgmt:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* ZCode container treatment: panes are color fields, not hairline boxes —
+ * the chat surface floats as a rounded card on the sunken shell. The shell
+ * is now the unified glass layer (.gui-main), so the panes stay clear. */
+.gui-pane-side {
+	background: transparent;
+}
+
+.gui-pane-right {
+	background: transparent;
+}
+
+/* Capped thinking rungs (per-model ceiling). */
+.gui-model-opt--capped {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-model-opt--capped:hover {
+	background: transparent;
+	color: var(--color-text-muted);
+}
+
+/* Slash/at/hash completion menus (TUI parity). Rendered through the
+ * useFloatingMenu portal, so .gui-menu-popup owns positioning + enter/exit;
+ * this card only carries the frosted-glass surface — portaled, the blur
+ * samples real content behind the menu instead of the composer frame's own
+ * backdrop. */
+.gui-slash-menu {
+	min-width: 240px;
+	max-width: 320px;
+	max-height: 300px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Openchamber-style rich slash completion: two-line rows with category
+ * badges and a sticky navigation-hints footer. */
+.gui-slash-menu--rich {
+	min-width: 300px;
+	max-width: 400px;
+	padding: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-slash-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-slash-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--color-text);
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background 110ms ease-out;
+}
+
+.gui-slash-row:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-slash-row--active {
+	background: color-mix(in oklab, var(--color-text) 9%, transparent);
+	box-shadow:
+		inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 38%, transparent),
+		inset 2px 0 0 0 var(--color-accent);
+}
+
+.gui-slash-row-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+	margin-top: 1px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-slash-row-icon--skill {
+	background: color-mix(in oklab, #34d399 14%, transparent);
+	color: #34d399;
+}
+
+.gui-slash-row-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-slash-row-line1 {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-slash-row-name {
+	flex-shrink: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 650;
+	letter-spacing: 0.01em;
+	color: var(--color-accent);
+}
+
+.gui-slash-row--active .gui-slash-row-name {
+	color: var(--color-text);
+}
+
+.gui-slash-row-sub {
+	flex-shrink: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-slash-row-tags {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+.gui-tag {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.gui-tag--cmd {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-tag--skill {
+	background: color-mix(in oklab, #34d399 16%, transparent);
+	color: #34d399;
+}
+
+.gui-tag--cat {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text-muted);
+}
+
+/* Pending-message queue chip (TUI /queue parity): shown while the agent
+ * works and messages are queued behind the current turn. */
+.gui-queue-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-accent);
+	font-family: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
+}
+
+.gui-queue-chip--open {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+/* Editable pending-queue panel (kimi-code parity): sits above the input
+ * in the status row; each queued message can be taken back into the
+ * editor (pop) or the whole queue cleared. */
+.gui-queue-panel {
+	min-width: min(360px, calc(100vw - 24px));
+	max-width: min(440px, calc(100vw - 24px));
+	max-height: 220px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(88% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 8px 24px rgba(0, 0, 0, 0.4);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+.gui-queue-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-queue-group {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--color-accent);
+	padding: 6px 10px 2px;
+}
+
+.gui-queue-item-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+/* Per-item "send now" (立即发出): icon button that turns accent on hover,
+ * visible only on row hover so the list stays scannable. */
+.gui-queue-send {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex: none;
+	padding: 0;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 120ms ease,
+		color 120ms ease,
+		background 120ms ease;
+}
+.gui-queue-item:hover .gui-queue-send,
+.gui-queue-send:focus-visible {
+	opacity: 1;
+}
+.gui-queue-send:hover {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-queue-panel-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 2px;
+	padding-top: 4px;
+	border-top: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
+}
+
+/* Agent status line — hangs ABOVE the input card (outside the frame;
+ * user: the thinking state belongs here, not inside the input box,
+ * not duplicated in the transcript). Single row: braille spinner or
+ * pulsing orb (settings → indicator) + label. The label defaults to the
+ * shimmer sweep; the KITT scanner bar (Knight Rider) replaces it in kitt
+ * mode; 'plain' disables both. */
+.gui-agent-status {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 14px;
+	margin-bottom: 8px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--color-surface-sunken);
+	width: fit-content;
+}
+
+/* Braille spinner: JS cycles the 10 frames; monospace + fixed cell keep
+ * the glyph from jittering between frames (braille chars vary in width
+ * in proportional fonts). Color: the TUI-style per-session accent
+ * (--gui-status-accent set by the component), theme accent as fallback
+ * (settings preview has no session). */
+.gui-agent-status-braille {
+	flex-shrink: 0;
+	min-width: 13px;
+	text-align: center;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1;
+	color: var(--gui-status-accent, var(--color-accent));
+	font-family: ui-monospace, "SF Mono", "Maple Mono NF CN", monospace;
+}
+
+/* Pulsing orb — the alternative indicator (settings → agent 状态行). */
+.gui-agent-status-orb {
+	width: 10px;
+	height: 10px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background: var(--gui-status-accent, var(--color-accent));
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--gui-status-accent, var(--color-accent)) 18%, transparent);
+	animation: gui-orb-pulse 1.6s ease-in-out infinite;
+}
+
+/* aicss-style indicators (settings → agent 状态行): a 3×3 lattice whose
+ * cells pulse on a radial wavefront (aicss S1: hypot delay from centre),
+ * and an 8-dot ring sweeping a comet around the circle (C-series). */
+.gui-agent-status-lattice {
+	display: grid;
+	grid-template-columns: repeat(3, 3.5px);
+	grid-template-rows: repeat(3, 3.5px);
+	gap: 2px;
+	flex-shrink: 0;
+	color: var(--gui-status-accent, var(--color-accent));
+}
+.gui-agent-status-lattice i {
+	width: 3.5px;
+	height: 3.5px;
+	border-radius: 999px;
+	background: currentColor;
+	animation: gui-lattice-wave 1300ms ease-in-out infinite;
+}
+/* S1 delays (ms): hypot(dx,dy)*700, centre −180. Negative delays seed the
+ * cells mid-cycle so the whole wave starts lit. */
+.gui-agent-status-lattice i:nth-child(1) { animation-delay: -990ms; }
+.gui-agent-status-lattice i:nth-child(2) { animation-delay: -700ms; }
+.gui-agent-status-lattice i:nth-child(3) { animation-delay: -990ms; }
+.gui-agent-status-lattice i:nth-child(4) { animation-delay: -700ms; }
+.gui-agent-status-lattice i:nth-child(5) { animation-delay: -180ms; }
+.gui-agent-status-lattice i:nth-child(6) { animation-delay: -700ms; }
+.gui-agent-status-lattice i:nth-child(7) { animation-delay: -990ms; }
+.gui-agent-status-lattice i:nth-child(8) { animation-delay: -700ms; }
+.gui-agent-status-lattice i:nth-child(9) { animation-delay: -990ms; }
+@keyframes gui-lattice-wave {
+	0%, 100% { opacity: 0.25; transform: scale(0.7); }
+	50% { opacity: 1; transform: scale(1); }
+}
+.gui-agent-status-ring {
+	position: relative;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	color: var(--gui-status-accent, var(--color-accent));
+}
+.gui-agent-status-ring i {
+	position: absolute;
+	width: 3px;
+	height: 3px;
+	border-radius: 999px;
+	background: currentColor;
+	animation: gui-ring-sweep 1100ms linear infinite;
+}
+/* 8 dots, r=5.5 on a 16px stage centred at (8,8): angle k*45°, delay
+ * −k/8×1100ms — one comet chasing itself around the ring. */
+.gui-agent-status-ring i:nth-child(1) { left: 12px; top: 6.5px; animation-delay: 0ms; }
+.gui-agent-status-ring i:nth-child(2) { left: 10.4px; top: 2.6px; animation-delay: -137ms; }
+.gui-agent-status-ring i:nth-child(3) { left: 6.5px; top: 1px; animation-delay: -275ms; }
+.gui-agent-status-ring i:nth-child(4) { left: 2.6px; top: 2.6px; animation-delay: -412ms; }
+.gui-agent-status-ring i:nth-child(5) { left: 1px; top: 6.5px; animation-delay: -550ms; }
+.gui-agent-status-ring i:nth-child(6) { left: 2.6px; top: 10.4px; animation-delay: -687ms; }
+.gui-agent-status-ring i:nth-child(7) { left: 6.5px; top: 12px; animation-delay: -825ms; }
+.gui-agent-status-ring i:nth-child(8) { left: 10.4px; top: 10.4px; animation-delay: -962ms; }
+@keyframes gui-ring-sweep {
+	0% { opacity: 1; transform: scale(1.3); }
+	100% { opacity: 0.15; transform: scale(0.6); }
+}
+
+/* Label effect variants (settings → agent 状态行): the pill carries
+ * gui-agent-status--shimmer | --kitt | --plain. The shimmer gradient is
+ * the default; --kitt swaps the gradient for a KITT eye — an accent band
+ * bouncing left↔right with the KITT easing (text-clipped, no separate
+ * bar); --plain is a plain label with neither. */
+.gui-agent-status--plain .gui-agent-status-text {
+	background: none;
+	-webkit-background-clip: initial;
+	background-clip: initial;
+	color: var(--color-text-muted);
+	animation: none;
+}
+
+/* KITT label effect: background-size 200% maps element x to image x/2 +
+ * position/200, so the accent band crosses the full text width as the
+ * position goes 0%→100% and stays in frame for the whole bounce. The eye
+ * uses the same --gui-sweep-bright stop as the shimmer (default tone =
+ * text-colored band; gui-agent-status--sweep-accent = accent). */
+.gui-agent-status--kitt .gui-agent-status-text {
+	background-image: linear-gradient(
+		90deg,
+		var(--color-text-muted) 0%,
+		var(--color-text-muted) 40%,
+		var(--gui-sweep-bright) 50%,
+		var(--color-text-muted) 60%,
+		var(--color-text-muted) 100%
+	);
+	animation: gui-status-kitt 1.7s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+
+.gui-agent-status--sweep-accent .gui-agent-status-text {
+	--gui-sweep-bright: var(--color-accent);
+}
+
+@keyframes gui-status-kitt {
+	0% { background-position: 0% 0; }
+	100% { background-position: 100% 0; }
+}
+
+.gui-agent-status-text {
+	/* Bright sweep stop: default tone = text color (shimmer-like); the
+	 * pill's gui-agent-status--sweep-accent modifier swaps it to accent —
+	 * applies to both the shimmer and KITT gradients below. */
+	--gui-sweep-bright: var(--color-text);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	background: linear-gradient(
+		90deg,
+		var(--color-text-muted) 0%,
+		var(--gui-sweep-bright) 25%,
+		var(--color-text-muted) 50%,
+		var(--gui-sweep-bright) 75%,
+		var(--color-text-muted) 100%
+	);
+	background-size: 200% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+	animation: gui-status-shimmer 2.4s linear infinite;
+}
+
+.gui-agent-status--plain .gui-agent-status-text {
+	background: none;
+	-webkit-background-clip: initial;
+	background-clip: initial;
+	color: var(--color-text-muted);
+	animation: none;
+}
+
+@keyframes gui-status-shimmer {
+	0% { background-position: 200% 0; }
+	100% { background-position: -200% 0; }
+}
+
+/* ── Compaction status line ────────────────────────────────────────────
+ * Replaces the agent status line while the session context is being
+ * compacted (manual ring action / daemon auto): same floating chip,
+ * warning-tinted border so the in-flight state reads at a glance, plus
+ * a small stop button (session.abort → abortCompaction, TUI Esc path). */
+.gui-compact-line {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 10px;
+	margin-bottom: 8px;
+	border: 1px solid color-mix(in oklab, var(--color-warning) 45%, var(--border));
+	border-radius: 10px;
+	background: var(--color-surface-sunken);
+	width: fit-content;
+}
+
+.gui-compact-line-text {
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-compact-line-stop {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	margin-left: 2px;
+	border: none;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+	color: var(--color-danger);
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.gui-compact-line-stop:hover {
+	background: color-mix(in oklab, var(--color-danger) 26%, transparent);
+}
+
+@keyframes gui-orb-pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+/* Status-row variant of the mode row: sits above the input (kimi-code
+ * parity) instead of inside the button row next to attach. */
+.gui-mode-row--status {
+	position: relative;
+	padding: 0 14px;
+	padding-bottom: 6px;
+}
+
+.gui-slash-row-desc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-slash-footer {
+	padding: 5px 8px 3px;
+	border-top: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
+	font-size: 10.5px;
+	letter-spacing: 0.03em;
+	color: var(--color-text-faint);
+	text-align: center;
+}
+
+.gui-context-item--disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-context-item--disabled:hover {
+	background: transparent;
+	color: var(--color-text-muted);
+}
+
+/* Group color dots (accent palette). */
+.gui-dot-accent { background: var(--color-accent); }
+.gui-dot-green { background: #34d399; }
+.gui-dot-orange { background: #fb923c; }
+.gui-dot-blue { background: #60a5fa; }
+.gui-dot-purple { background: #a78bfa; }
+.gui-dot-pink { background: #f472b6; }
+/* Status tokens for the session 手动上色 menu dots (same palette as the
+ * row's status square). */
+.gui-dot-ok { background: var(--color-ok); }
+.gui-dot-warning { background: var(--color-warning); }
+.gui-dot-danger { background: var(--color-danger); }
+.gui-dot-muted { background: var(--color-text-faint); }
+
+/* Unread session marker (ZCode 标记为未读). */
+.gui-session-row--unread .gui-session-title::after {
+	content: "";
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-left: 6px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	vertical-align: 2px;
+}
+
+.gui-group-head--dragover {
+	box-shadow: inset 0 0 0 1.5px var(--color-accent-bd);
+	border-radius: 8px;
+}
+
+/* Segmented option selectors (ZCode appearance settings). */
+.gui-segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-seg-btn {
+	padding: 4px 12px;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-seg-btn--active {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.gui-accent-swatch {
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	border: 2px solid transparent;
+	cursor: pointer;
+	transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.gui-accent-swatch:hover {
+	transform: scale(1.12);
+}
+
+.gui-accent-swatch--active {
+	box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+}
+
+/* Custom-accent swatch: a plain button whose fill shows the current color;
+ * clicking opens the app-styled picker popover (.gui-color-picker). */
+.gui-accent-swatch--custom {
+	position: relative;
+}
+
+/* ── Accent color picker (replaces the native <input type="color">) ──────
+ * Panel content portaled via useFloatingMenu — .gui-menu-popup owns the
+ * fixed positioning + two-phase enter/exit; this card carries the same
+ * frosted-glass surface as every other popup menu. */
+.gui-color-picker {
+	width: 240px;
+	padding: 12px;
+	border-radius: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Saturation/value field. */
+.gui-cp-field {
+	position: relative;
+	width: 100%;
+	height: 130px;
+	border-radius: 10px;
+	overflow: hidden;
+	cursor: crosshair;
+	touch-action: none;
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-strong) 60%, transparent);
+}
+.gui-cp-field-hue {
+	position: absolute;
+	inset: 0;
+}
+.gui-cp-field-s {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, #fff, transparent);
+}
+.gui-cp-field-v {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(0deg, #000, transparent);
+}
+.gui-cp-field-handle {
+	position: absolute;
+	width: 16px;
+	height: 16px;
+	margin: -8px 0 0 -8px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.45),
+		0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+/* Hue slider. */
+.gui-cp-hue {
+	position: relative;
+	height: 14px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+	cursor: pointer;
+	touch-action: none;
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--border-strong) 60%, transparent);
+}
+.gui-cp-hue-handle {
+	position: absolute;
+	top: 50%;
+	width: 18px;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	border-radius: 50%;
+	border: 2px solid #fff;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.45),
+		0 1px 4px rgba(0, 0, 0, 0.35);
+	pointer-events: none;
+}
+
+/* HEX + RGB inputs. */
+.gui-cp-inputs {
+	display: grid;
+	grid-template-columns: 1.5fr 1fr 1fr 1fr;
+	gap: 6px;
+}
+.gui-cp-input {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+.gui-cp-input > span {
+	font: 600 10px/1 var(--font-mono);
+	letter-spacing: 0.06em;
+	color: var(--color-text-faint);
+}
+.gui-cp-input input {
+	width: 100%;
+	min-width: 0;
+	padding: 4px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--border);
+	background: var(--bg-inset);
+	color: var(--color-text);
+	font: 12px/1.4 var(--font-mono);
+}
+.gui-cp-input input:focus {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 1px var(--accent-bd);
+}
+/* Number spinners off — the app style never shows them. */
+.gui-cp-input input[type="number"]::-webkit-inner-spin-button,
+.gui-cp-input input[type="number"]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* Quick-pick preset dots (the four preset accent colors). */
+.gui-cp-presets {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.gui-cp-label {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-cp-preset {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 1px solid color-mix(in oklab, #fff 18%, transparent);
+	cursor: pointer;
+	transition: transform 120ms ease-out;
+}
+.gui-cp-preset:hover {
+	transform: scale(1.15);
+}
+.gui-cp-preset--active {
+	box-shadow:
+		0 0 0 2px var(--color-bg),
+		0 0 0 4px var(--accent);
+}
+
+/* Contrast against the app background (WCAG grade). */
+.gui-cp-contrast {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+.gui-cp-contrast-grade {
+	font-weight: 650;
+	white-space: nowrap;
+}
+.gui-cp-contrast-grade--ok {
+	color: var(--ok);
+}
+.gui-cp-contrast-grade--bad {
+	color: var(--err);
+}
+
+/* Footer actions: 「应用」(primary, accent). */
+.gui-cp-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.gui-cp-btn {
+	padding: 5px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border-strong);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		border-color 120ms ease-out;
+}
+.gui-cp-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	border-color: var(--accent-bd);
+}
+.gui-cp-btn--primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-fg);
+}
+.gui-cp-btn--primary:hover {
+	background: var(--accent-hover);
+	border-color: var(--accent-hover);
+}
+
+.gui-range {
+	width: 160px;
+	accent-color: var(--color-accent);
+}
+
+.gui-color {
+	width: 40px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: transparent;
+	cursor: pointer;
+}
+
+/* Workspace picker dropdown (openchamber parity). Portaled through
+ * useFloatingMenu (.gui-menu-popup owns positioning + enter/exit; Pop
+ * supplies the closing class), so this card only carries the glass. */
+.gui-proj-menu {
+	min-width: 220px;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+}
+
+/* Saved-workspaces section in the picker: a small label + hairline above
+ * the 打开文件夹 / 远程连接 rows. */
+.gui-proj-menu-label {
+	padding: 6px 8px 3px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	color: var(--color-text-faint);
+}
+
+.gui-proj-menu-sep {
+	height: 1px;
+	margin: 3px 4px;
+	background: var(--border);
+	opacity: 0.6;
+}
+
+/* Unified frosted-glass menu (same recipe as the model/thinking menus).
+ * Used by the sidebar view/sort and add-project popups. */
+.gui-view-menu {
+	position: absolute;
+	z-index: 60;
+	min-width: 190px;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+	transform-origin: top left;
+}
+
+.gui-view-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+.gui-add-project-menu.gui-menu-popup--closing,
+.gui-proj-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+/* ── Command palette (ZCode/openchamber parity, ⌘K) ──────────────────── */
+.gui-palette-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 4000;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 12vh;
+	background: rgba(0, 0, 0, 0.35);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.gui-palette-backdrop--closing {
+	animation: gui-palette-backdrop-out 130ms ease-in forwards;
+}
+
+@keyframes gui-palette-backdrop-out {
+	to {
+		opacity: 0;
+	}
+}
+
+.gui-palette {
+	width: min(620px, calc(100vw - 48px));
+	max-height: min(70vh, 560px);
+	display: flex;
+	flex-direction: column;
+	border-radius: 16px;
+	background: var(--color-surface-raised);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 24px 64px rgba(0, 0, 0, 0.45);
+	overflow: hidden;
+	/* Two-phase enter (useTwoPhaseEnter): pending at opacity 0, --entered
+	 * plays gui-menu-in next frame; --closing plays the exit while the
+	 * host keeps the palette mounted (Pop/DialogFrame parity). */
+	opacity: 0;
+	transform-origin: top center;
+}
+
+.gui-palette--entered {
+	opacity: 1;
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+.gui-palette--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+.gui-palette-search {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-palette-search input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size);
+}
+
+.gui-palette-search input::placeholder {
+	color: var(--color-text-faint);
+}
+
+.gui-palette-tabs {
+	display: flex;
+	gap: 2px;
+	padding: 8px 12px 0;
+}
+
+.gui-palette-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+}
+
+.gui-palette-tab--active {
+	color: var(--color-text);
+	border-bottom-color: var(--color-accent);
+}
+
+.gui-palette-body {
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 8px 12px 12px;
+}
+
+.gui-palette-section {
+	margin-bottom: 6px;
+}
+
+.gui-palette-section-title {
+	padding: 8px 8px 4px;
+	font-size: 11.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--color-text-faint);
+}
+
+.gui-palette-row {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 10px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 13.5px;
+	cursor: pointer;
+	text-align: left;
+}
+
+.gui-palette-row--active {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+.gui-palette-kbd {
+	flex-shrink: 0;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-palette-empty {
+	padding: 10px 8px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+.gui-palette-footer {
+	padding: 8px 12px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-palette-config {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+.gui-palette-config:hover {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+/* Draggable pane resize handles (ZCode splitters). */
+.gui-resize-x {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 5px;
+	z-index: 30;
+	cursor: col-resize;
+}
+
+
+
+.gui-resize-x::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 2px;
+	width: 1px;
+	background: transparent;
+	transition: background 120ms ease-out;
+}
+
+.gui-resize-x:hover::after {
+	background: var(--color-accent-bd);
+}
+
+body.gui-resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+/* ZCode right-pane tabs + tool rail. */
+.gui-pane-tab {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-pane-tab--active {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+/* Widget persistent preview tab: the latest visualization, full-height. */
+.gui-widget-tab {
+	padding: 10px 2px 4px;
+}
+
+.gui-widget-tab-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 28px 12px;
+	text-align: center;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.6;
+	color: var(--color-text-faint);
+}
+
+.gui-widget-tab-empty p {
+	margin: 0;
+}
+
+.gui-pane-tool {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-pane-tool:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text-muted);
+}
+
+.gui-pane-tool--active {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+.gui-tool-placeholder {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 36px 16px;
+	text-align: center;
+	color: var(--color-text-muted);
+}
+
+/* Hero greeting (openchamber/ZCode scale) + roomier tip. */
+.gui-welcome-greet {
+	font-size: 26px;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: var(--color-text);
+}
+
+.gui-tip {
+	line-height: 1.5;
+}
+
+/* Motion off: kill the decorative animations (menus/orbs/splash pulse). */
+.gui-motion-off .gui-menu-popup,
+.gui-motion-off .gui-model-menu,
+.gui-motion-off .gui-context-menu,
+.gui-motion-off .gui-proj-menu,
+.gui-motion-off .gui-slash-menu,
+.gui-motion-off .gui-openin-menu,
+.gui-motion-off .gui-instance-menu,
+.gui-motion-off .gui-overlay-menu {
+	animation: none !important;
+}
+
+.gui-motion-off .gui-splash-logo {
+	animation: none !important;
+	opacity: 1;
+}
+
+.gui-motion-off .gui-agent-avatar {
+	animation: none !important;
+}
+
+.gui-avatar-opt {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+.gui-avatar-opt:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-avatar-opt--active {
+	border-color: color-mix(in oklab, var(--color-accent-bd) 55%, transparent);
+	background: color-mix(in oklab, var(--color-accent-bd) 12%, transparent);
+	color: var(--color-text);
+}
+
+.gui-obo-personalize {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.gui-obo-pers-section {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.gui-obo-pers-label {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+	color: var(--fg);
+	flex: none;
+}
+.gui-obo-pet-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+	gap: 6px;
+	flex: 1;
+}
+.gui-obo-pet-chip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 9px;
+	border-radius: 9px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--fg) 3%, transparent);
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+	min-width: 0;
+}
+/* Pet names wrap instead of ellipsis-ing — "Noir Webling" must stay fully
+ * readable; chips in the same grid row share the tallest height. */
+.gui-obo-pet-name {
+	min-width: 0;
+	white-space: normal;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+.gui-obo-pet-chip:hover {
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+}
+.gui-obo-pet-chip--active {
+	border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+	color: var(--fg);
+}
+
+.gui-session-search,
+.gui-settings-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	margin: 0 10px 4px;
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--fg) 3%, transparent);
+	color: var(--fg-faint);
+}
+.gui-session-search .gui-input,
+.gui-settings-search .gui-input {
+	border: none;
+	background: transparent;
+	padding: 4px 2px;
+	font-size: 12.5px;
+}
+.gui-session-search .gui-input:focus,
+.gui-settings-search .gui-input:focus {
+	outline: none;
+	box-shadow: none;
+}
+.gui-settings-search {
+	margin: 4px 10px 6px;
+}
+
+/* Alternate avatar presets (设置 → 常规 → Agent 头像): the hex glyph
+ * spins its ring while working, breathes while listening; the spark
+ * pulses on active states. Color follows --accent so both themes work. */
+.gui-avatar-hex--spin {
+	animation: gui-avatar-hex-spin 2.4s linear infinite;
+	transform-origin: 50% 50%;
+}
+.gui-avatar-hex--breathe {
+	animation: gui-avatar-breathe 2.6s ease-in-out infinite;
+}
+.gui-avatar-spark--pulse {
+	animation: gui-avatar-pulse 1.6s ease-in-out infinite;
+	transform-origin: 50% 50%;
+}
+@keyframes gui-avatar-hex-spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+@keyframes gui-avatar-breathe {
+	0%,
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(0.9);
+		opacity: 0.7;
+	}
+}
+@keyframes gui-avatar-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.18);
+	}
+}
+
+/* Inline images off (transcript). */
+.gui-no-images .tr-msg-img {
+	display: none;
+}
+
+.gui-composer-ico--dictating {
+	color: var(--color-danger);
+	animation: gui-mic-pulse 1s ease-in-out infinite;
+}
+
+.gui-voice-seconds {
+	position: absolute;
+	inset: auto 0 -14px 0;
+	text-align: center;
+	font-size: 9px;
+	color: var(--color-danger);
+}
+
+.gui-voice-level {
+	position: absolute;
+	inset: auto 0 -2px 0;
+	height: 2px;
+	background: var(--color-danger);
+	border-radius: 1px;
+	transition: width 100ms linear;
+}
+
+.gui-voice-spinner {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--color-text-muted);
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: gui-voice-spin 0.8s linear infinite;
+}
+
+@keyframes gui-voice-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes gui-mic-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.4;
+	}
+}
+
+/* ── Chat display prefs (settings → 聊天) ───────────────────────────── */
+/* Root classes applied from localStorage; transcript.css stays shared. */
+.gui-chat-hide-time .tr-action-time {
+	display: none;
+}
+
+.gui-chat-hide-row-actions .tr-row .tr-actions {
+	display: none;
+}
+
+.gui-chat-no-smooth .tr-md p,
+.gui-chat-no-smooth .tr-md li {
+	animation: none !important;
+}
+
+.gui-chat-plain-code .tr-md pre,
+.gui-chat-plain-code .tr-md code {
+	background: color-mix(in oklab, var(--color-surface-sunken) 60%, transparent);
+	box-shadow: none;
+}
+
+/* 显示推理轨迹 OFF: hide thinking blocks (settled + pending dots). */
+.gui-chat-hide-thinking .tr-think {
+	display: none;
+}
+
+/* ── Code appearance prefs (settings → 外观 → 代码设置) ─────────────── */
+/* Code themes: JS writes the selected pairs into the --code-bg-light,
+ * --code-fg-light, --code-bg-dark, --code-fg-dark variables; the scheme
+ * selector picks which pair the transcript uses, so switching the app
+ * theme recolors code blocks without a re-render. */
+.tr-md pre {
+	background: var(--code-bg-dark, var(--bg-inset));
+	color: var(--code-fg-dark, var(--fg));
+}
+
+[data-theme="light"] .tr-md pre,
+[data-color-scheme="light"] .tr-md pre {
+	background: var(--code-bg-light, var(--bg-inset));
+	color: var(--code-fg-light, var(--fg));
+}
+
+/* Transcript code blocks follow 消息字号 (--tr-font-size via desktop-web's
+ * --tr-code-size ladder), NOT --gui-code-size — the message font setting
+ * owns everything inside a message (正文/标题/代码). --gui-code-size
+ * still drives file previews, diff views and the code-preview card. */
+
+/* Line numbers (CSS counters; the ::before gutter is not copied). */
+.gui-code-lines .tr-md pre code {
+	display: grid;
+	counter-reset: tr-code-line;
+}
+
+.gui-code-lines .tr-md pre code .tr-code-line {
+	display: grid;
+	/* minmax(0, 1fr): the line track must shrink below its content's
+	 * intrinsic width (openchamber parity) or a long unbreakable line
+	 * forces the grid (and the pre behind it) wider than the block. */
+	grid-template-columns: 2.2em minmax(0, 1fr);
+	counter-increment: tr-code-line;
+}
+
+.gui-code-lines .tr-md pre code .tr-code-line::before {
+	content: counter(tr-code-line);
+	color: var(--color-text-faint);
+	text-align: right;
+	padding-right: 12px;
+	user-select: none;
+}
+
+/* Wrap long lines instead of horizontal scrolling. */
+.gui-code-wrap .tr-md pre {
+	white-space: pre-wrap;
+	overflow-x: hidden;
+	overflow-wrap: anywhere;
+}
+
+/* ZCode code-preview cards (light/dark side by side, active tag). */
+.gui-code-preview-card {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	background: var(--color-surface-raised);
+}
+
+.gui-code-preview-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-code-preview-head > span:nth-child(2) {
+	margin-right: auto;
+}
+
+.gui-code-preview-tag {
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	border: 1px solid var(--color-accent-bd, var(--border));
+	color: var(--color-accent);
+	background: var(--color-accent-soft);
+}
+
+.gui-code-preview-body {
+	margin: 0;
+	padding: 10px 12px;
+	font-family: var(--font-mono);
+	font-size: var(--gui-code-size, 13.5px);
+	line-height: 1.5;
+	overflow-x: auto;
+}
+
+/* ── Settings: shortcuts reference table ────────────────────────────── */
+.gui-kbd-table {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+
+.gui-kbd-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 9px 14px;
+	border-bottom: 1px solid var(--border);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-kbd-row:last-child {
+	border-bottom: none;
+}
+
+.gui-kbd-row--head {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+}
+
+.gui-kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 44px;
+	padding: 3px 9px;
+	border-radius: 7px;
+	border: 1px solid var(--border);
+	border-bottom-width: 2px;
+	background: var(--color-surface-raised);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+}
+
+/* ── Settings: agent roster cards (agents.list) ─────────────────────── */
+.gui-agent-card {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+	margin-bottom: 8px;
+}
+
+/* Usage-statistics summary card (ZCode parity): vertical layout — the
+ * value sits on top in a large mono face, the label (icon + caption) and
+ * optional sub-metric (e.g. 占比) bottom row. Fixed min-height keeps all
+ * six cards the same size regardless of label length or sub presence. */
+.gui-stats-card {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 84px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+}
+
+/* Range-switch blur morph (trend chart): when the 7d↔30d toggle swaps
+ * bar sets, newly appearing/disappearing bars would pop — the chart
+ * container instead blurs in (6px → 0) while the FLIP transform stretches
+ * shared bars to their new geometry. */
+@keyframes gui-blur-morph-in {
+	from {
+		filter: blur(6px);
+		opacity: 0.55;
+	}
+	to {
+		filter: blur(0);
+		opacity: 1;
+	}
+}
+
+.gui-blur-morph {
+	animation: gui-blur-morph-in 220ms var(--spring);
+}
+
+.gui-agent-status {
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	border: 1px solid var(--border);
+	color: var(--color-text-muted);
+}
+
+.gui-agent-status--working {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+/* ── openchamber-style toolbar: model chip + centered title ─────────── */
+.gui-toolbar-title {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	max-width: 40%;
+	-webkit-app-region: no-drag;
+}
+
+.gui-tool-model {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 8px;
+	width: auto;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+}
+
+.gui-model-chip {
+	max-width: 140px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+/* ── Model picker popover (openchamber: searchable list) ────────────── */
+.gui-modal-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	display: grid;
+	place-items: center;
+	background: color-mix(in oklab, var(--color-bg) 45%, transparent);
+	backdrop-filter: blur(3px);
+	-webkit-backdrop-filter: blur(3px);
+}
+
+.gui-model-picker {
+	width: min(420px, calc(100vw - 48px));
+	max-height: min(560px, calc(100vh - 96px));
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--color-surface-raised);
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+	overflow: hidden;
+}
+
+.gui-model-picker-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px 8px;
+}
+
+.gui-model-picker-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 14px 10px;
+	padding: 7px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+}
+
+.gui-model-picker-input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-model-picker-list {
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 0 8px 8px;
+}
+
+.gui-model-picker-empty {
+	padding: 18px 10px;
+	text-align: center;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+.gui-model-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.gui-model-row:hover {
+	background: color-mix(in oklab, var(--color-surface-sunken) 60%, transparent);
+}
+
+.gui-model-row--active {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-model-provider {
+	flex-shrink: 0;
+	padding: 1px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+/* ── Terminal pane (xterm.js host) ──────────────────────────────────── */

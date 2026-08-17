@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode, RefObject } from "react";
 import { useState } from "react";
 import { tapFeedback } from "../lib/haptic";

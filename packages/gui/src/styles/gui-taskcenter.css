@@ -1,0 +1,714 @@
+/* ── GuiSelect — frosted dropdown (replaces the native <select> whose
+ * option list is system chrome). Trigger keeps the settings-select look
+ * with a chevron; the list is a portal-rendered frosted menu at the
+ * gui-context-menu glass tier (blur + layered shadow, body portal so no
+ * ancestor backdrop-filter can kill the frost). */
+.gui-select-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	padding: 0 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-family: inherit;
+	cursor: pointer;
+	min-width: 180px;
+}
+
+.gui-select-trigger:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+
+.gui-select-trigger:focus-visible {
+	outline: none;
+	border-color: var(--color-accent-bd);
+}
+
+.gui-select-chev {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	opacity: 0.6;
+}
+
+.gui-select-pop {
+	position: fixed;
+	z-index: 1000;
+	/* Explicit column: .gui-select-pop is ALSO used by the SelectionToolbar
+	 * (gui-board.css) as a horizontal chip row — rule-level property merge
+	 * would otherwise inherit that display:flex/align-items:center and lay
+	 * the options out sideways. */
+	display: flex;
+	flex-direction: column;
+	max-height: 320px;
+	overflow-y: auto;
+	padding: 4px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 12px 36px rgba(0, 0, 0, 0.45);
+	opacity: 0;
+}
+
+.gui-select-pop--entered {
+	opacity: 1;
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+.gui-select-opt {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-select-opt--hl {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+}
+
+.gui-select-opt--sel {
+	color: var(--color-accent);
+}
+
+.gui-select-check {
+	width: 14px;
+	height: 14px;
+	flex: none;
+}
+
+/* ── Tray menu (self-drawn frosted tray menu, Windows acrylic window) ──
+ * The window carries DWM Acrylic; this is the content chrome only.
+ * FIXED window size (main.cjs TRAY_MENU_HEIGHT): the root fills the window,
+ * the header/footer stay pinned and the middle scrolls internally. */
+.gui-tray-menu {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	gap: 2px;
+	width: 300px;
+	padding: 8px;
+	overflow: hidden;
+	color: var(--color-text);
+	font-size: 12.5px;
+	line-height: 1.45;
+}
+
+.gui-tray-menu__scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-right: 2px;
+}
+
+.gui-tray-menu__head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	padding: 6px 10px 4px;
+}
+
+.gui-tray-menu__brand {
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.gui-tray-menu__live {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-tray-menu__section {
+	padding: 6px 4px;
+	border-radius: 10px;
+}
+
+.gui-tray-menu__sec-title {
+	padding: 2px 8px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--color-text-faint);
+}
+
+.gui-tray-menu__empty {
+	padding: 4px 10px 6px;
+	color: var(--color-text-faint);
+}
+
+.gui-tray-menu__session {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 10px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-tray-menu__session:hover {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-tray-menu__session-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-tray-menu__session-meta {
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-tray-menu__approval {
+	padding: 6px 10px;
+	border-radius: 8px;
+}
+
+.gui-tray-menu__approval:hover {
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.gui-tray-menu__approval-text {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-tray-menu__approval-tool {
+	flex-shrink: 0;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.gui-tray-menu__approval-prompt {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.85;
+}
+
+.gui-tray-menu__approval-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 5px;
+}
+
+.gui-tray-menu__approval-actions button {
+	padding: 2px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 35%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.gui-tray-menu__approval-actions button:hover {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+.gui-tray-menu__approval-actions .gui-tray-menu__deny:hover {
+	border-color: #f87171;
+	color: #f87171;
+}
+
+.gui-tray-menu__totals {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 10px 4px;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.85;
+}
+
+.gui-tray-menu__totals-sep {
+	opacity: 0.5;
+}
+
+/* ── Usage: provider groups with side-by-side credential columns ────────
+ * Same provider, several credentials → one column per credential (progress
+ * bar + numbers), aggregate column pinned at the far right. */
+.gui-tray-menu__provider {
+	padding: 4px 10px 6px;
+}
+
+.gui-tray-menu__provider-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 2px 0 4px;
+}
+
+.gui-tray-menu__provider-name {
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.gui-tray-menu__account-plan {
+	padding: 0 6px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	font-size: 10.5px;
+	opacity: 0.9;
+}
+
+.gui-tray-menu__win-label {
+	padding: 3px 0 2px;
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	opacity: 0.7;
+}
+
+.gui-tray-menu__win-cols {
+	display: grid;
+	gap: 6px 10px;
+	padding: 2px 0;
+}
+
+.gui-tray-menu__cell {
+	min-width: 0;
+	padding: 2px 0;
+}
+
+.gui-tray-menu__cell--total {
+	padding-left: 10px;
+	border-left: 1px solid color-mix(in oklab, var(--color-text-faint) 25%, transparent);
+}
+
+.gui-tray-menu__cell-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	opacity: 0.8;
+}
+
+.gui-tray-menu__cell-num {
+	margin-top: 2px;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.65;
+}
+
+.gui-tray-menu__limit-track {
+	height: 3px;
+	margin-top: 3px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 14%, transparent);
+	overflow: hidden;
+}
+
+.gui-tray-menu__limit-bar {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--color-accent);
+	opacity: 0.85;
+}
+
+.gui-tray-menu__limit-bar--warn {
+	background: #fbbf24;
+	opacity: 0.95;
+}
+
+.gui-tray-menu__limit-bar--hot {
+	background: #f87171;
+	opacity: 0.95;
+}
+
+.gui-tray-menu__foot {
+	display: flex;
+	gap: 6px;
+	padding: 10px 10px 14px;
+	border-top: 1px solid color-mix(in oklab, var(--color-text-faint) 25%, transparent);
+}
+
+.gui-tray-menu__foot button {
+	flex: 1;
+	padding: 6px 0;
+	border: none;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.gui-tray-menu__foot button:hover {
+	background: color-mix(in oklab, var(--color-accent) 26%, transparent);
+}
+
+/* ── Task center (proma automation-calendar absorption) ──────────────── */
+.gui-taskcenter-tabs {
+	display: flex;
+	gap: 6px;
+	margin: 2px 0 8px;
+}
+
+.gui-taskcenter-tab {
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.gui-taskcenter-tab--active {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-taskcenter-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.gui-taskcal {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	padding: 4px 2px;
+}
+
+.gui-taskcal-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.gui-taskcal-nav {
+	width: 28px;
+	height: 28px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 16px;
+	cursor: pointer;
+}
+
+.gui-taskcal-nav:hover {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-taskcal-title {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.gui-taskcal-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	grid-template-rows: repeat(6, minmax(0, 1fr));
+	gap: 4px;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-taskcal-weekday {
+	text-align: center;
+	font-size: 11px;
+	opacity: 0.5;
+	padding: 4px 0;
+}
+
+.gui-taskcal-cell {
+	position: relative;
+	min-height: 56px;
+	padding: 4px 6px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 45%, transparent);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-surface) 45%, transparent);
+	color: var(--color-text);
+	font-family: inherit;
+	cursor: default;
+	text-align: left;
+}
+
+.gui-taskcal-cell--today {
+	border-color: var(--color-accent);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+.gui-taskcal-cell--pad {
+	border-color: transparent;
+	background: transparent;
+}
+
+.gui-taskcal-day {
+	font-size: 12px;
+	opacity: 0.85;
+}
+
+.gui-taskcal-dots {
+	position: absolute;
+	bottom: 4px;
+	left: 6px;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.gui-taskcal-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 999px;
+	background: var(--color-accent);
+	opacity: 0.75;
+}
+
+.gui-taskcal-dots--done .gui-taskcal-dot {
+	background: #34d399;
+}
+
+.gui-taskcal-dots--fail .gui-taskcal-dot {
+	background: #f87171;
+}
+
+.gui-taskcal-more {
+	font-size: 10px;
+	opacity: 0.6;
+}
+
+.gui-taskboard {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 12px;
+	width: 100%;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-taskboard-col {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--color-surface) 35%, transparent);
+	overflow: hidden;
+}
+
+.gui-taskboard-col--fail .gui-taskboard-col-head {
+	color: #f87171;
+}
+
+.gui-taskboard-col-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	font-size: 12px;
+	font-weight: 600;
+	opacity: 0.9;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-border) 40%, transparent);
+}
+
+.gui-taskboard-count {
+	padding: 0 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	font-size: 11px;
+	opacity: 0.8;
+}
+
+.gui-taskboard-col-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-taskboard-empty {
+	font-size: 12px;
+	opacity: 0.5;
+	text-align: center;
+	padding: 16px 0;
+}
+
+.gui-taskboard-card {
+	border: 1px solid color-mix(in oklab, var(--color-border) 55%, transparent);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+	overflow: hidden;
+}
+
+.gui-taskboard-card-main {
+	display: block;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-taskboard-card-main:hover {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+.gui-taskboard-card-name {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-taskboard-card-sched {
+	display: block;
+	font-size: 11.5px;
+	opacity: 0.7;
+	margin-top: 2px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-taskboard-card-next {
+	display: block;
+	font-size: 11px;
+	opacity: 0.55;
+	margin-top: 2px;
+}
+
+.gui-taskboard-card-err {
+	display: block;
+	font-size: 11px;
+	color: #f87171;
+	margin-top: 3px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-taskboard-card-actions {
+	display: flex;
+	gap: 4px;
+	padding: 0 8px 6px;
+}
+
+.gui-taskboard-card-actions button {
+	width: 26px;
+	height: 24px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	font-size: 11px;
+	cursor: pointer;
+	opacity: 0.8;
+}
+
+.gui-taskboard-card-actions button:hover {
+	opacity: 1;
+	border-color: var(--color-accent);
+}
+
+/* Context-panel usage bar (right pane context tab). */
+.gui-ctx-usage-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-ctx-usage-track {
+	height: 4px;
+	margin-top: 4px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 14%, transparent);
+	overflow: hidden;
+}
+
+.gui-ctx-usage-bar {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--color-accent);
+	opacity: 0.85;
+}
+
+.gui-ctx-usage-bar--hot {
+	background: #f87171;
+	opacity: 0.95;
+}
+
+.gui-pane-tool {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 6px;
+}
+
+.gui-pane-tool-label {
+	font-size: 11.5px;
+	opacity: 0.85;
+	white-space: nowrap;
+}
+
+.gui-cron-idle-sep {
+	opacity: 0.6;
+	font-size: 13px;
+}
+
+.gui-cron-idle-hint {
+	font-size: 11px;
+	opacity: 0.55;
+	margin-top: 2px;
+	line-height: 1.4;
+}

@@ -1,4 +1,4 @@
-import { isAnthropicWebSearchHistoryBlock } from "@musepi/pi-ai/providers/anthropic-wire";
+import { isAnthropicServerToolHistoryBlock } from "@musepi/pi-ai/providers/anthropic-wire";
 import {
 	type BlobStore,
 	externalizeImageDataSync,
@@ -112,7 +112,7 @@ function truncateForPersistence(obj: unknown, blobStore: BlobStore, key?: string
 				...("tool_use_id" in block ? { tool_use_id: block.tool_use_id } : {}),
 				...("content" in block ? { content: block.content } : {}),
 			};
-			if (isAnthropicWebSearchHistoryBlock(validationView)) return obj;
+			if (isAnthropicServerToolHistoryBlock(validationView)) return obj;
 		}
 	}
 	if (typeof obj === "object" && "type" in obj) {

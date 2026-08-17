@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -18,6 +18,7 @@ export function AttachMenu({
 	goalDisabled = false,
 	onToggleGoal,
 	onTogglePlan,
+	onGuidedGoal,
 	onPickImages,
 	onInsert,
 }: {
@@ -29,6 +30,9 @@ export function AttachMenu({
 	goalDisabled?: boolean;
 	onToggleGoal(): void;
 	onTogglePlan(): void;
+	/** TUI /guided-goal parity: the agent interviews the user in chat,
+	 *  then creates the goal via its `goal` tool. */
+	onGuidedGoal(): void;
 	/** Opens the image file picker (attachment entry). */
 	onPickImages(files: File[]): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
@@ -103,6 +107,33 @@ export function AttachMenu({
 					<div className="gui-creds-menu-sep" />
 					<button
 						type="button"
+						className="gui-attach-opt"
+						role="menuitem"
+						title={t("insert magic keyword hint")}
+						onClick={() => {
+							onInsert(" ultrathink ");
+							setOpen(false);
+						}}
+					>
+						<Icon name="brain-ai-3" className="h-4 w-4" />
+						<span className="min-w-0 flex-1 truncate">{t("insert ultrathink")}</span>
+					</button>
+					<button
+						type="button"
+						className="gui-attach-opt"
+						role="menuitem"
+						title={t("insert magic keyword hint")}
+						onClick={() => {
+							onInsert(" workflowz ");
+							setOpen(false);
+						}}
+					>
+						<Icon name="git-branch" className="h-4 w-4" />
+						<span className="min-w-0 flex-1 truncate">{t("insert workflowz")}</span>
+					</button>
+					<div className="gui-creds-menu-sep" />
+					<button
+						type="button"
 						className={`gui-attach-opt${planMode ? " gui-attach-opt--on" : ""}${planDisabled ? " gui-attach-opt--disabled" : ""}`}
 						role="menuitemcheckbox"
 						aria-checked={planMode}
@@ -143,6 +174,27 @@ export function AttachMenu({
 						</span>
 						<span className={`gui-attach-switch${goalMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
 							<span className="gui-attach-switch-knob" />
+						</span>
+					</button>
+					<button
+						type="button"
+						className={`gui-attach-opt${goalDisabled ? " gui-attach-opt--disabled" : ""}`}
+						role="menuitem"
+						disabled={goalDisabled}
+						title={goalDisabled ? t("start a session to use goal mode") : undefined}
+						onClick={() => {
+							onGuidedGoal();
+							setOpen(false);
+						}}
+					>
+						<Icon name="chat-1" className="h-4 w-4" />
+						<span className="min-w-0 flex-1">
+							<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
+								{t("guided goal mode")}
+							</span>
+							<span className="block truncate text-[12px] leading-tight text-[var(--color-text-faint)]">
+								{t("guided goal mode hint")}
+							</span>
 						</span>
 					</button>
 					<input

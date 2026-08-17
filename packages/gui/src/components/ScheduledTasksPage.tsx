@@ -1,9 +1,11 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
+import { GuiSelect } from "./GuiSelect";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { WEEK_START_KEY } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { Pop } from "./Pop";
+import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
 
 /**
  * Scheduled tasks (定时任务) — openchamber scheduled-task parity.
@@ -30,6 +32,8 @@ interface CronSchedule {
 	dayOfMonth?: number;
 	/** cron expression (5 fields) — kind=cron */
 	cron?: string;
+	/** Idle-run window (闲时任务): HH:mm–HH:mm; due runs outside defer. */
+	idleWindow?: { start: string; end: string };
 	timezone?: string;
 }
 
@@ -174,6 +178,7 @@ export function ScheduledTasksPage({
 	 *  page jumps to the latest run's session). */
 	onOpenSession?(id: string): void;
 }): ReactNode {
+	const [view, setView] = useState<"calendar" | "board" | "tasks">("tasks");
 	const [tasks, setTasks] = useState<CronTask[]>([]);
 	const [runs, setRuns] = useState<CronRun[]>([]);
 	const [draft, setDraft] = useState<CronTask | null>(null);
@@ -323,6 +328,21 @@ export function ScheduledTasksPage({
 		<div className="gui-scheduled">
 			<div className="gui-scheduled-head">
 				<h2 className="gui-scheduled-title">{t("scheduled tasks")}</h2>
+				<div className="gui-taskcenter-tabs" role="tablist">
+					{(["calendar", "board", "tasks"] as const).map(v => (
+						<button
+							type="button"
+							key={v}
+							role="tab"
+							aria-selected={view === v}
+							className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
+							onClick={() => setView(v)}
+						>
+							<Icon name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"} className="h-4 w-4" />
+							<span>{v === "calendar" ? t("task center calendar") : v === "board" ? t("task center board") : t("scheduled tasks")}</span>
+						</button>
+					))}
+				</div>
 				<p className="gui-scheduled-desc">{t("scheduled tasks desc")}</p>
 				<div className="gui-scheduled-actions">
 					<button
@@ -359,7 +379,34 @@ export function ScheduledTasksPage({
 				</div>
 			</div>
 
-			{tasks.length === 0 ? (
+						{view === "calendar" ? (
+				<div className="gui-taskcenter-body">
+					<TaskCalendarView
+						tasks={tasks}
+						runs={runs.map(r => ({ taskId: r.taskId, status: r.status, startedAt: r.startedAt }))}
+						onSelectTask={id => setSelectedId(id)}
+					/>
+				</div>
+			) : view === "board" ? (
+				<div className="gui-taskcenter-body">
+					<TaskBoardView
+						tasks={tasks}
+						onSelectTask={id => setSelectedId(id)}
+						onToggle={id => {
+							const task = tasks.find(x => x.id === id);
+							if (!task || !rpc) return;
+							void rpc
+								.request("cron.update", { task: { ...task, enabled: !task.enabled } })
+								.then(() => refresh())
+								.catch(() => {});
+						}}
+						onDelete={id => {
+							const task = tasks.find(x => x.id === id);
+							if (task) setDeleteTarget(task);
+						}}
+					/>
+				</div>
+			) : tasks.length === 0 ? (
 				<div className="gui-scheduled-empty">
 					<div className="gui-scheduled-empty-icon">⏰</div>
 					<div className="gui-scheduled-empty-title">{t("scheduled empty title")}</div>
@@ -846,18 +893,12 @@ function CronEditor({
 							)}
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled model")}</span>
-								<select
-									className="gui-settings-select"
-									value={draft.model ?? ""}
-									onChange={e => patch({ model: e.target.value || undefined })}
-								>
-									<option value="">{t("scheduled model default")}</option>
-									{models.map(m => (
-										<option key={`${m.provider}/${m.id}`} value={m.id}>
-											{m.name ?? m.id}
-										</option>
-									))}
-								</select>
+								<GuiSelect
+					className="gui-settings-select"
+					value={draft.model ?? ""}
+					onChange={v => patch({ model: v || undefined })}
+					options={[{ value: "", label: t("scheduled model default") }, ...models.map(m => ({ value: m.id, label: m.name ?? m.id }))]}
+				/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled prompt")} *</span>
@@ -873,17 +914,12 @@ function CronEditor({
 						<div className="gui-cron-form-col">
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled type")}</span>
-								<select
-									className="gui-settings-select"
-									value={kind}
-									onChange={e => patchSchedule({ kind: e.target.value as CronSchedule["kind"] })}
-								>
-									<option value="once">{t("scheduled type once")}</option>
-									<option value="daily">{t("scheduled type daily")}</option>
-									<option value="weekly">{t("scheduled type weekly")}</option>
-									<option value="monthly">{t("scheduled type monthly")}</option>
-									<option value="cron">{t("scheduled type cron")}</option>
-								</select>
+								<GuiSelect
+					className="gui-settings-select"
+					value={kind}
+					onChange={v => patchSchedule({ kind: v as CronSchedule["kind"] })}
+					options={[{ value: "once", label: t("scheduled type once") }, { value: "daily", label: t("scheduled type daily") }, { value: "weekly", label: t("scheduled type weekly") }, { value: "monthly", label: t("scheduled type monthly") }, { value: "cron", label: t("scheduled type cron") }]}
+				/>
 							</div>
 							{kind === "once" && (
 								<div className="gui-widget-editor-field">
@@ -929,6 +965,41 @@ function CronEditor({
 									/>
 								</div>
 							)}
+							{/* Idle-run window (闲时任务, proma activeWindow parity): the
+							 * task only executes inside HH:mm–HH:mm (crosses midnight
+							 * allowed) — heavy jobs wait for a quiet machine. */}
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("idle window")}</span>
+								<div className="gui-cron-time-row">
+									<input
+										className="gui-task-input"
+										type="time"
+										value={draft.schedule.idleWindow?.start ?? ""}
+										onChange={e => patchSchedule({ idleWindow: { start: e.target.value, end: draft.schedule.idleWindow?.end ?? "08:00" } })}
+										aria-label={t("idle window start")}
+									/>
+									<span className="gui-cron-idle-sep">–</span>
+									<input
+										className="gui-task-input"
+										type="time"
+										value={draft.schedule.idleWindow?.end ?? ""}
+										onChange={e => patchSchedule({ idleWindow: { start: draft.schedule.idleWindow?.start ?? "22:00", end: e.target.value } })}
+										aria-label={t("idle window end")}
+									/>
+									{draft.schedule.idleWindow && (
+										<button
+											type="button"
+											className="gui-tool-btn"
+											onClick={() => patchSchedule({ idleWindow: undefined })}
+											title={t("idle window clear")}
+											aria-label={t("idle window clear")}
+										>
+											<Icon name="delete-bin" className="h-3.5 w-3.5" />
+										</button>
+									)}
+								</div>
+								<div className="gui-cron-idle-hint">{t("idle window hint")}</div>
+							</div>
 							{kind === "cron" && (
 								<>
 									<div className="gui-widget-editor-field">
@@ -970,30 +1041,21 @@ function CronEditor({
 							)}
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
-								<select
-									className="gui-settings-select"
-									value={draft.schedule.timezone ?? "Asia/Shanghai"}
-									onChange={e => patchSchedule({ timezone: e.target.value })}
-								>
-									{TIMEZONES.map(tz => (
-										<option key={tz} value={tz}>
-											{tz}
-										</option>
-									))}
-								</select>
+								<GuiSelect
+					className="gui-settings-select"
+					value={draft.schedule.timezone ?? "Asia/Shanghai"}
+					onChange={v => patchSchedule({ timezone: v })}
+					options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
+				/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled thinking")}</span>
-								<select
-									className="gui-settings-select"
-									value={draft.thinkingLevel ?? "default"}
-									onChange={e => patch({ thinkingLevel: e.target.value as CronTask["thinkingLevel"] })}
-								>
-									<option value="default">{t("scheduled thinking default")}</option>
-									<option value="low">{t("scheduled thinking low")}</option>
-									<option value="medium">{t("scheduled thinking medium")}</option>
-									<option value="high">{t("scheduled thinking high")}</option>
-								</select>
+								<GuiSelect
+					className="gui-settings-select"
+					value={draft.thinkingLevel ?? "default"}
+					onChange={v => patch({ thinkingLevel: v as CronTask["thinkingLevel"] })}
+					options={[{ value: "default", label: t("scheduled thinking default") }, { value: "low", label: t("scheduled thinking low") }, { value: "medium", label: t("scheduled thinking medium") }, { value: "high", label: t("scheduled thinking high") }]}
+				/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled cwd")}</span>
@@ -1018,7 +1080,14 @@ function CronEditor({
 						disabled={
 							busy || !draft.name.trim() || !draft.prompt.trim() || (kind === "once" && !draft.schedule.date)
 						}
-						onClick={() => onSave(draft)}
+						onClick={() => {
+							const iw = draft.schedule.idleWindow;
+							const clean =
+								iw && iw.start.trim() && iw.end.trim()
+									? { start: iw.start.trim(), end: iw.end.trim() }
+									: undefined;
+							onSave({ ...draft, schedule: { ...draft.schedule, idleWindow: clean } });
+						}}
 					>
 						{t("save")}
 					</button>

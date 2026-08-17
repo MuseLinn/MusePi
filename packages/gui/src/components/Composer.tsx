@@ -1,31 +1,74 @@
-import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
-import { SendHorizontal, Square, WandSparkles, X } from "lucide-react";
-import { MorphIcon } from "morphicons/react";
-import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import { resolveToolRenderer, type ToolRenderHost } from "@musepi/desktop-web";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
-import { resolveToolRenderer, type ToolRenderHost } from "@musepi/collab-web";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
-import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
-import { sessionAccentHex } from "../lib/session-accent";
 import { sfxFor } from "../lib/sfx";
-import { isUsageCommand } from "../lib/usage-command";
+import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { startDictation } from "../lib/voice";
-import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
+import { AutoresearchPanel } from "./AutoresearchPanel";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView } from "./ContextRing";
+import {
+	EnhanceButton,
+	type EnhanceState,
+	FocusButton,
+	QueueChip,
+	RetryButton,
+	SendButton,
+	StopButton,
+	VoiceButton,
+} from "./composer/action-buttons";
+import { AgentStatusLine, CompactionStatusLine, readStatusPrefs } from "./composer/agent-status-line";
+import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
+import { ContextUsageCard } from "./composer/context-dialog";
+import { GoalDetailCard } from "./composer/goal-detail-card";
+import { MagicKeywordTip } from "./composer/magic-keyword-tip";
+import { GoalChip, PlanChip } from "./composer/mode-chips";
+import { PlanPanel } from "./composer/plan-panel";
+import { QueuePanel } from "./composer/queue-panel";
+import { QuoteCards } from "./composer/quote-cards";
+import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
+import { TodoPanel } from "./composer/todo-panel";
+import type {
+	UsageActiveAccountView,
+	UsageDisabledCredentialView,
+	UsageReloginDeadlineView,
+	UsageReportsData,
+	UsageReportView,
+	UsageUnreportedAccountView,
+} from "./composer/usage-panel";
+import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
+import { useAttachments } from "./composer/use-attachments";
+import { useCompletion } from "./composer/use-completion";
+import { useDraftPersistence } from "./composer/use-draft-persistence";
+import { useModes } from "./composer/use-modes";
 import { autosize, MIN_ROWS } from "./composer-autosize";
+import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
-import { Reveal } from "./Reveal";
-import type { GuiTreeNode } from "./SessionTree";
-import { type SlashEntry, SlashRow } from "./SlashRow";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
+
+export type { AgentStatusEffect, AgentStatusIndicator, SweepColor } from "./composer/agent-status-line";
+// Public surface — re-exported for existing importers (ChatView,
+// WelcomeComposer, SettingsView, settings-sections).
+export { AgentStatusLine, readStatusPrefs } from "./composer/agent-status-line";
+export type {
+	UsageActiveAccountView,
+	UsageAmountView,
+	UsageDisabledCredentialView,
+	UsageLimitView,
+	UsageReloginDeadlineView,
+	UsageReportsData,
+	UsageReportView,
+	UsageUnreportedAccountView,
+} from "./composer/usage-panel";
+export { fmtQuotaDuration, UsageGapLines, UsageProviderSection } from "./composer/usage-panel";
 
 export interface ComposerProps {
 	working: boolean;
@@ -65,6 +108,14 @@ export interface ComposerProps {
 	onModelChange?(modelId: string): void;
 	/** Model preselect carried from the welcome composer. */
 	presetModelId?: string | null;
+	/** Welcome 预设(mode)chip:仅 welcome 场景传入(modes 列表);会话态不传 → 不渲染。 */
+	modes?: { id: string; label: string }[] | null;
+	modeId?: string | null;
+	onModeChange?(id: string | null): void;
+	/** welcome 空态(true 时 modes/modeId/onModeChange 生效;会话态只读 label)。 */
+	welcome?: boolean;
+	/** 会话态只读预设标签(DSH AgentPresetLabel 对齐;welcome 时不显示)。 */
+	sessionModeLabel?: string | null;
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
@@ -74,34 +125,19 @@ export interface ComposerProps {
 	 *  member grid (avatar + progress), kimiwork parity. null → no chip. */
 	activeTask?: { partialResult?: unknown } | null;
 	/** Host for the floating member grid (agent trajectory drill-down). */
-	swarmHost?: import("@musepi/collab-web").ToolRenderHost;
+	swarmHost?: import("@musepi/desktop-web").ToolRenderHost;
 }
 
-type EnhanceState = "idle" | "enhancing" | "enhanced";
-
 /**
- * Floating member grid (kimiwork parity): renders the collab-web task
+ * Floating member grid (kimiwork parity): renders the desktop-web task
  * renderer's SwarmCard against the live task tool's partialResult details
  * (progress/results) — the frosted card opened from the composer's
  * temporary swarm status chip. Host wires agent-trajectory drill-down.
  */
-function SwarmCardPreview({
-	details,
-	host,
-}: {
-	details?: unknown;
-	host?: ToolRenderHost;
-}): ReactNode {
+function SwarmCardPreview({ details, host }: { details?: unknown; host?: ToolRenderHost }): ReactNode {
 	const SwarmCard = resolveToolRenderer("task").SwarmCard;
 	if (!SwarmCard) return null;
-	return (
-		<SwarmCard
-			name="task"
-			args={{}}
-			result={{ content: [], details }}
-			host={host}
-		/>
-	);
+	return <SwarmCard name="task" args={{}} result={{ content: [], details }} host={host} />;
 }
 
 function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
@@ -136,179 +172,6 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 	}
 }
 
-/** Per-status glyphs for the todo panel rows (TUI todo board parity). */
-const TODO_STATUS_ICONS: Record<string, string> = {
-	pending: "○",
-	in_progress: "◐",
-	completed: "●",
-	abandoned: "✕",
-	blocked: "⊘",
-};
-
-/** Braille spinner frames (cli-spinners "dots" parity): 10 frames at 80ms
- * reads as a rotating 2×4 dot matrix while the agent works. */
-const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-
-/** Agent status line prefs (settings → agent 状态行): the indicator is
- * either the braille spinner, the pulsing orb, the aicss-style 3×3
- * lattice wave, or the 8-dot orbit ring; the label effect is the
- * shimmer sweep, the KITT eye sweep, or plain. The sweep color picks the
- * default tone (text-colored bright stop, shimmer-like) or the accent
- * color — applies to both the shimmer and KITT sweeps. */
-export type AgentStatusEffect = "shimmer" | "kitt" | "plain";
-export type AgentStatusIndicator = "braille" | "orb" | "lattice" | "ring";
-export type SweepColor = "default" | "accent";
-
-export function readStatusPrefs(): {
-	effect: AgentStatusEffect;
-	indicator: AgentStatusIndicator;
-	sweepColor: SweepColor;
-} {
-	let effect: AgentStatusEffect = "shimmer";
-	let indicator: AgentStatusIndicator = "braille";
-	let sweepColor: SweepColor = "default";
-	try {
-		const e = localStorage.getItem("omp-gui-statusbar");
-		if (e === "kitt" || e === "plain" || e === "shimmer") effect = e;
-		const i = localStorage.getItem("omp-gui-statusbar-indicator");
-		if (i === "orb" || i === "braille" || i === "lattice" || i === "ring") indicator = i;
-		const k = localStorage.getItem("omp-gui-statusbar-kitt-color");
-		if (k === "accent" || k === "default") sweepColor = k;
-	} catch {
-		// localStorage unavailable — defaults stand
-	}
-	return { effect, indicator, sweepColor };
-}
-
-/**
- * Agent status line hanging above the input card: small braille spinner
- * (or the pulsing orb, per prefs) + label while the agent works, then a
- * brief "思考完毕" acknowledgement when the turn ends (user: the thinking
- * state lives here — outside the input card and not duplicated in the
- * transcript — and flips to complete once finished). The label defaults to
- * the shimmer sweep; in kitt mode the label carries the KITT eye instead
- * (a text-clipped accent band bouncing left↔right, same idea, no bar).
- */
-function AgentStatusLine({
-	working,
-	effect,
-	indicator,
-	sweepColor = "default",
-	sessionKey,
-}: {
-	working: boolean;
-	effect: AgentStatusEffect;
-	indicator: AgentStatusIndicator;
-	sweepColor?: SweepColor;
-	/** Session id/name — derives the TUI-style per-session accent that
-	 * colors the spinner/orb; absent (settings preview) → theme accent. */
-	sessionKey?: string;
-}): ReactNode {
-	const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
-	const [braille, setBraille] = useState(0);
-	// Phase transitions are pure state changes; the idle-revert timer lives
-	// in its OWN effect so the re-render triggered by thinking→done (which
-	// re-runs this effect and its cleanup) cannot clear the timer it just
-	// set — the old shape left "思考完毕" pinned forever after a stop.
-	useEffect(() => {
-		if (working) {
-			setPhase("thinking");
-		} else if (phase === "thinking") {
-			setPhase("done");
-		}
-	}, [working, phase]);
-	// "done" reverts to idle after a beat (keeps the static ⠿ ack visible).
-	useEffect(() => {
-		if (phase !== "done") return;
-		const id = window.setTimeout(() => setPhase("idle"), 1500);
-		return () => clearTimeout(id);
-	}, [phase]);
-	// Braille frame clock — only while thinking; "done" holds a static ⠿.
-	useEffect(() => {
-		if (phase !== "thinking") return;
-		const id = window.setInterval(() => setBraille(i => (i + 1) % BRAILLE_FRAMES.length), 80);
-		return () => clearInterval(id);
-	}, [phase]);
-	if (phase === "idle") return null;
-	const accent = sessionKey ? sessionAccentHex(sessionKey) : null;
-	return (
-		<div
-			className={`gui-agent-status gui-agent-status--${effect}${
-				sweepColor === "accent" ? " gui-agent-status--sweep-accent" : ""
-			}`}
-			style={accent ? ({ "--gui-status-accent": accent } as CSSProperties) : undefined}
-		>
-			{indicator === "orb" ? (
-				<span className="gui-agent-status-orb" aria-hidden />
-			) : indicator === "lattice" ? (
-				<span className="gui-agent-status-lattice" aria-hidden>
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-				</span>
-			) : indicator === "ring" ? (
-				<span className="gui-agent-status-ring" aria-hidden>
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-					<i />
-				</span>
-			) : (
-				<span className="gui-agent-status-braille" aria-hidden>
-					{phase === "thinking" ? BRAILLE_FRAMES[braille] : "⠿"}
-				</span>
-			)}
-			<span className="gui-agent-status-text">
-				{phase === "thinking" ? t("agent is thinking…") : t("thinking complete")}
-			</span>
-		</div>
-	);
-}
-
-export { AgentStatusLine };
-
-/**
- * Compaction status line — replaces the agent status line while the
- * session context is being compacted (manual ring action or daemon auto
- * compaction). Same floating chip above the input card, plus a stop
- * button: the TUI's Esc path (session.abort → AgentSession.abort →
- * abortCompaction) without a confirm — compaction is cheap to re-run.
- */
-function CompactionStatusLine({ onCancel }: { onCancel(): void }): ReactNode {
-	const [braille, setBraille] = useState(0);
-	useEffect(() => {
-		const id = window.setInterval(() => setBraille(i => (i + 1) % BRAILLE_FRAMES.length), 80);
-		return () => clearInterval(id);
-	}, []);
-	return (
-		<div className="gui-compact-line" role="status" aria-live="polite">
-			<span className="gui-agent-status-braille" aria-hidden>
-				{BRAILLE_FRAMES[braille]}
-			</span>
-			<span className="gui-compact-line-text">{t("compacting…")}</span>
-			<button
-				type="button"
-				className="gui-compact-line-stop"
-				onClick={onCancel}
-				title={t("stop compaction")}
-				aria-label={t("stop compaction")}
-			>
-				<Square size={11} fill="currentColor" />
-			</button>
-		</div>
-	);
-}
-
 export function Composer({
 	working,
 	petMood,
@@ -331,6 +194,11 @@ export function Composer({
 	onToggleFocus,
 	activeTask,
 	swarmHost,
+	modes: modeOptions,
+	modeId,
+	onModeChange,
+	welcome,
+	sessionModeLabel,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
@@ -346,51 +214,43 @@ export function Composer({
 		return () => window.removeEventListener("omp-gui-insert-text", onInsert);
 	}, []);
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
-	const [attachments, setAttachments] = useState<{ id: number; dataUrl: string; mimeType: string; name: string }[]>(
-		[],
-	);
-	const attachId = useRef(0);
-	// Slash-command completion (TUI parity): typing "/" lists the daemon's
-	// builtin registry; Enter/click inserts the command token.
-	const [slashOpen, setSlashOpen] = useState(false);
-	const [slashQuery, setSlashQuery] = useState("");
-	const [slashCmds, setSlashCmds] = useState<SlashEntry[] | null>(null);
-	// Selection index must be STATE: arrow keys set it inside onKeyDown and
-	// the active-row highlight depends on it — a ref never re-renders, so
-	// the highlight only moved on unrelated renders (typing/streaming).
-	const [slashIdx, setSlashIdx] = useState(0);
-	// "@" completion (TUI/ZCode parity): @ = files & folders from the
-	// workspace tree scan (workspace.tree), NOT agents.
-	const [atOpen, setAtOpen] = useState(false);
-	const [atQuery, setAtQuery] = useState("");
-	const [atEntries, setAtEntries] = useState<{ name: string; path: string; isDir: boolean; depth: number }[] | null>(
-		null,
-	);
-	const [atIdx, setAtIdx] = useState(0);
-	// "#" completion (insert a session reference): lists session.list, with
-	// titles resolved from session.tree labels (fallback: cwd basename).
-	const [hashOpen, setHashOpen] = useState(false);
-	const [hashQuery, setHashQuery] = useState("");
-	const [hashSessions, setHashSessions] = useState<
-		{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[] | null
-	>(null);
-	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
-	const [hashIdx, setHashIdx] = useState(0);
+	// Image paste/drop attachments (extracted: composer/use-attachments).
+	const { attachments, setAttachments, addImageFiles, onPaste, onDrop } = useAttachments(rpc);
 	const [dictating, setDictating] = useState(false);
+	const [transcribing, setTranscribing] = useState(false);
+	const [voiceSeconds, setVoiceSeconds] = useState(0);
+	const [voiceLevel, setVoiceLevel] = useState(0);
 
-	// ── Chat prefs (openchamber parity, shared with the chat settings) ──
-	// Stable identity: the draft RESTORE effect keys on draftEnabled, so a
-	// fresh closure per render would re-run the restore on EVERY render —
-	// deleting the last character (text → "") then resurrects the stale
-	// localStorage draft ("最后一个字删不掉"). useCallback keeps the
-	// restore scoped to sessionId changes.
-	const draftEnabled = useCallback((): boolean => {
-		try {
-			return localStorage.getItem("omp-gui-chat-draft") !== "0";
-		} catch {
-			return true;
-		}
-	}, []);
+	// ── Completion machinery + draft persistence (extracted to
+	// composer/use-completion + composer/use-draft-persistence): the
+	// destructured names below match the inlined originals exactly, so
+	// the rest of the body is untouched. ─────────────────────────────────
+	const {
+		taRef,
+		slashOpen,
+		setSlashOpen,
+		slashIdx,
+		setSlashIdx,
+		slashFilter,
+		onSlashInput,
+		insertSlash,
+		atOpen,
+		setAtOpen,
+		atIdx,
+		setAtIdx,
+		atFilter,
+		onAtInput,
+		insertAt,
+		hashOpen,
+		setHashOpen,
+		hashIdx,
+		setHashIdx,
+		hashFilter,
+		hashLabel,
+		onHashInput,
+		insertHash,
+	} = useCompletion({ rpc, cwd, setText });
+	useDraftPersistence({ sessionId, rpc, text, setText });
 	const spellcheckEnabled = (): boolean => {
 		try {
 			return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
@@ -398,178 +258,27 @@ export function Composer({
 			return false;
 		}
 	};
-	// Draft persistence (persistDraft parity): restore the per-session
-	// draft when the composer mounts or the session switches, and save
-	// every change; submitting clears the box, which empties the draft
-	// through the same effect. The composer stays mounted across session
-	// switches (ChatView swaps the store in place), so the box must be
-	// RESET to the incoming session's draft — the old restore only FILLED
-	// empty boxes and never cleared, so text recalled in one session
-	// ("撤回还原") stayed in the box for every later session and the save
-	// effect then wrote it under the new session's draft key.
-	const sessionResetRef = useRef(true);
-	useEffect(() => {
-		// Keyed on sessionId only: re-running on draftEnabled toggles would
-		// clobber in-progress text when the pref flips.
-		sessionResetRef.current = true;
-		let next = "";
-		if (draftEnabled()) {
-			try {
-				next = localStorage.getItem(`omp-gui-draft:${sessionId}`) ?? "";
-			} catch {
-				// localStorage unavailable — start empty
-			}
-		}
-		setText(next);
-	}, [sessionId, draftEnabled]);
-	// Idle-recap editor-draft guard (TUI parity): report the un-sent draft
-	// to the daemon (session.setDraft) so a scheduled idle recap is
-	// suppressed while the user is composing. `true` is debounced (typing
-	// bursts), `false` goes out immediately — a cleared box must not miss
-	// the next agent_end's recap scheduling window.
-	const lastSentDraftRef = useRef<boolean | null>(null);
-	const draftReportTimerRef = useRef<Timer | null>(null);
-	useEffect(() => {
-		const hasDraft = text.trim().length > 0;
-		if (hasDraft === lastSentDraftRef.current) return;
-		if (!hasDraft) {
-			if (draftReportTimerRef.current) {
-				clearTimeout(draftReportTimerRef.current);
-				draftReportTimerRef.current = null;
-			}
-			lastSentDraftRef.current = false;
-			if (rpc && sessionId) {
-				void rpc.request("session.setDraft", { sessionId, draft: false }).catch(() => {});
-			}
-			return;
-		}
-		if (draftReportTimerRef.current) return;
-		draftReportTimerRef.current = setTimeout(() => {
-			draftReportTimerRef.current = null;
-			lastSentDraftRef.current = true;
-			if (rpc && sessionId) {
-				void rpc.request("session.setDraft", { sessionId, draft: true }).catch(() => {});
-			}
-		}, 300);
-	}, [text, sessionId, rpc]);
-	useEffect(() => {
-		return () => {
-			if (draftReportTimerRef.current) {
-				clearTimeout(draftReportTimerRef.current);
-				draftReportTimerRef.current = null;
-			}
-			if (lastSentDraftRef.current === true && rpc && sessionId) {
-				void rpc.request("session.setDraft", { sessionId, draft: false }).catch(() => {});
-			}
-		};
-	}, [rpc, sessionId]);
-	useEffect(() => {
-		if (sessionResetRef.current) {
-			// The text in this commit is either stale (belongs to the
-			// previous session) or was just restored by the reset effect —
-			// skip writing so old-session text can't leak into the new
-			// session's draft key.
-			sessionResetRef.current = false;
-			return;
-		}
-		if (!draftEnabled()) return;
-		try {
-			if (text.length > 0) localStorage.setItem(`omp-gui-draft:${sessionId}`, text);
-			else localStorage.removeItem(`omp-gui-draft:${sessionId}`);
-		} catch {
-			// ignore
-		}
-	}, [text, sessionId, draftEnabled]);
 
 	// ── Goal / plan mode + todo progress (TUI /goal /plan parity) ─────────
-	const [modes, setModes] = useState<{
-		goalMode: { enabled: boolean; objective?: string; status?: string } | null;
-		planMode: boolean;
-		isCompacting: boolean;
-		todo: {
-			name: string;
-			done: number;
-			total: number;
-			tasks: { content: string; status: string; blocker?: string }[];
-		}[];
-	} | null>(null);
-	const [todoOpen, setTodoOpen] = useState(false);
-	const [appendText, setAppendText] = useState("");
-	const refreshModes = useCallback((): void => {
-		if (!rpc || !sessionId) return;
-		void rpc
-			.request<typeof modes>("session.modes", { sessionId })
-			.then(res => {
-				// Value-compare: keep the previous reference when nothing
-				// changed so the tick never re-renders the composer.
-				if (res) setModes(prev => (JSON.stringify(prev) === JSON.stringify(res) ? prev : res));
-			})
-			.catch(() => {});
-	}, [rpc, sessionId]);
-	useEffect(() => {
-		refreshModes();
-		let id = setInterval(refreshModes, 3000);
-		// The poll is pure UI freshness — never run it while the tab is
-		// hidden (background CPU + daemon RPCs for nothing).
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				refreshModes();
-				id = setInterval(refreshModes, 3000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
-	}, [refreshModes]);
-	// Armed goal (openchamber parity): one tap with no live goal arms goal
-	// mode — the NEXT SENT MESSAGE becomes the objective (no popup dialog,
-	// same one-tap shape as the plan-mode toggle). A second tap disarms.
-	const [goalArmed, setGoalArmed] = useState(false);
-	// A goal arriving from the daemon (poll/own send) clears the armed state.
-	useEffect(() => {
-		if (modes?.goalMode?.enabled === true) setGoalArmed(false);
-	}, [modes?.goalMode?.enabled]);
-	const toggleGoalMode = (): void => {
-		if (!rpc || !sessionId) return;
-		// End an active goal without prompting (TUI /goal off parity).
-		if (modes?.goalMode?.enabled === true) {
-			void rpc
-				.request("session.setGoal", { sessionId })
-				.then(res => setModes(res as typeof modes))
-				.catch(() => {});
-			return;
-		}
-		setGoalArmed(v => !v);
-	};
-	const togglePlanMode = (): void => {
-		if (!rpc || !sessionId) return;
-		void rpc
-			.request("session.setPlan", { sessionId })
-			.then(res => setModes(res as typeof modes))
-			.catch(() => {});
-	};
-	const todo = modes?.todo ?? [];
-	const todoTotal = todo.reduce((n, p) => n + p.total, 0);
-	const todoDone = todo.reduce((n, p) => n + p.done, 0);
-	// ── Todo mutations (TUI /todo parity) ─────────────────────────────────
-	// The panel is read-only without these; each op round-trips through the
-	// daemon (setTodoPhases + user_todo_edit entry) and swaps the fresh
-	// snapshot into the polled `modes` so the chips/bar update in place.
-	const todoOp = useCallback(
-		(op: "append" | "start" | "done" | "drop" | "rm", content?: string, phase?: string): void => {
-			if (!rpc || !sessionId) return;
-			void rpc
-				.request<{ todo: typeof todo }>("session.todo", { sessionId, op, content, phase })
-				.then(res => {
-					if (res?.todo) setModes(prev => (prev ? { ...prev, todo: res.todo } : prev));
-				})
-				.catch(() => {});
-		},
-		[rpc, sessionId],
-	);
+	// Extracted to composer/use-modes; destructured names match the
+	// inlined originals exactly.
+	const {
+		modes,
+		setModes,
+		todo,
+		todoTotal,
+		todoDone,
+		goalArmed,
+		setGoalArmed,
+		toggleGoalMode,
+		togglePlanMode,
+		todoOp,
+		refreshModes,
+		todoOpen,
+		setTodoOpen,
+		appendText,
+		setAppendText,
+	} = useModes(rpc, sessionId);
 	const stopDict = useRef<(() => void) | null>(null);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
@@ -630,6 +339,9 @@ export function Composer({
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
 		refreshUsage();
+		// Event-driven freshness: poll only while the agent WORKS; the
+		// `working` flip re-runs this effect (idle = zero polling).
+		if (!working) return;
 		// Same 3s cadence + visibility pause as the modes poll above.
 		let id = setInterval(refreshUsage, 3000);
 		const onVis = (): void => {
@@ -644,7 +356,7 @@ export function Composer({
 			clearInterval(id);
 			document.removeEventListener("visibilitychange", onVis);
 		};
-	}, [rpc, sessionId, refreshUsage]);
+	}, [rpc, sessionId, refreshUsage, working]);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
 	// The ring shows usage; this is the escape hatch when it fills up. The
@@ -714,33 +426,61 @@ export function Composer({
 			const res = await rpc.request<{
 				reports: Array<{
 					provider: string;
+					metadata?: Record<string, unknown>;
 					limits: Array<{
 						label: string;
+						scope?: { accountId?: string; windowId?: string };
 						amount?: { usedFraction?: number; remainingFraction?: number };
-						window?: { resetsAt?: number; resetLabel?: string };
+						window?: { id?: string; label?: string; resetsAt?: number; resetLabel?: string };
 					}>;
 				}>;
 			}>("usage.reports", { sessionId });
 			const reports = res?.reports ?? [];
 			if (reports.length === 0) return null;
-			const limits: UsageQuotaView["limits"] = [];
+			// Same-provider credentials merge into window rows with one
+			// side-by-side column each (tray / TUI /usage treatment) instead
+			// of the old flattened limit list.
+			const providers: Array<{
+				provider: string;
+				windows: Array<{
+					key: string;
+					label: string;
+					cells: Array<{ cred: string; usedPercent: number; resetsIn?: string }>;
+				}>;
+			}> = [];
 			for (const report of reports) {
+				let providerEntry = providers.find(p => p.provider === report.provider);
+				if (!providerEntry) {
+					providerEntry = { provider: report.provider, windows: [] };
+					providers.push(providerEntry);
+				}
+				const meta = report.metadata ?? {};
+				const cred =
+					(typeof meta.email === "string" && meta.email ? meta.email : undefined) ??
+					(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : undefined) ??
+					report.provider;
 				for (const limit of report.limits ?? []) {
 					const usedFraction = limit.amount?.usedFraction;
 					if (usedFraction === undefined) continue;
-					const usedPercent = usedFraction * 100;
-					const leftPercent = (limit.amount?.remainingFraction ?? Math.max(0, 1 - usedFraction)) * 100;
+					const windowId = limit.window?.id ?? limit.scope?.windowId ?? "default";
+					const winKey = `${limit.label}|${windowId}`;
+					let win = providerEntry.windows.find(w => w.key === winKey);
+					if (!win) {
+						win = { key: winKey, label: limit.label, cells: [] };
+						providerEntry.windows.push(win);
+					}
 					const resetsAt = limit.window?.resetsAt;
-					limits.push({
-						label: limit.label,
-						usedPercent,
-						leftPercent,
+					win.cells.push({
+						cred,
+						usedPercent: usedFraction * 100,
 						...(resetsAt && resetsAt > Date.now() ? { resetsIn: fmtQuotaDuration(resetsAt - Date.now()) } : {}),
 					});
 				}
 			}
-			if (limits.length === 0) return null;
-			return { provider: reports[0]!.provider, limits };
+			const cleaned = providers
+				.map(p => ({ provider: p.provider, windows: p.windows.filter(w => w.cells.length > 0) }))
+				.filter(p => p.windows.length > 0);
+			return cleaned.length > 0 ? { providers: cleaned } : null;
 		} catch {
 			return null;
 		}
@@ -753,11 +493,7 @@ export function Composer({
 	const [usagePanel, setUsagePanel] = useState<{
 		open: boolean;
 		loading: boolean;
-		data: {
-			reports: UsageReportView[];
-			activeAccount: UsageActiveAccountView | null;
-			fetchedAt: number;
-		} | null;
+		data: UsageReportsData | null;
 	}>({
 		open: false,
 		loading: false,
@@ -766,29 +502,49 @@ export function Composer({
 	// Full report shape from usage.reports (daemon passes the raw
 	// @musepi/pi-ai UsageReport[] through) — the panel renders TUI /usage
 	// parity, while the ContextRing popover keeps its compact fetchUsageQuota.
-	const fetchUsageReports = useCallback(async (): Promise<{
-		reports: UsageReportView[];
-		activeAccount: UsageActiveAccountView | null;
-	} | null> => {
+	const fetchUsageReports = useCallback(async (): Promise<UsageReportsData | null> => {
 		if (!rpc || !sessionId) return null;
 		try {
 			const res = await rpc.request<{
 				reports: UsageReportView[];
 				activeAccount?: UsageActiveAccountView | null;
+				unreportedAccounts?: UsageUnreportedAccountView[];
+				disabledCredentials?: UsageDisabledCredentialView[];
+				reloginDeadlines?: UsageReloginDeadlineView[];
 			}>("usage.reports", { sessionId });
 			if (!res || !Array.isArray(res.reports)) return null;
-			return { reports: res.reports, activeAccount: res.activeAccount ?? null };
+			return {
+				reports: res.reports,
+				activeAccount: res.activeAccount ?? null,
+				unreportedAccounts: res.unreportedAccounts ?? [],
+				disabledCredentials: res.disabledCredentials ?? [],
+				reloginDeadlines: res.reloginDeadlines ?? [],
+				fetchedAt: Date.now(),
+			};
 		} catch {
 			return null;
 		}
 	}, [rpc, sessionId]);
+	const [arPanel, setArPanel] = useState(false);
+	const openArPanel = useCallback((): void => {
+		setContextPanel(null);
+		setArPanel(true);
+	}, []);
+	const closeArPanel = useCallback((): void => setArPanel(false), []);
+	// GUI-native /debug: TUI /debug is a TUI-only interactive menu
+	// (session.slashCommand reports it "tui-only") — the GUI intercepts it
+	// and shows the same diagnostics actions as a panel (TUI selector parity).
+	const [debugPanel, setDebugPanel] = useState(false);
+	const openDebugPanel = useCallback((): void => {
+		setContextPanel(null);
+		setDebugPanel(true);
+	}, []);
+	const closeDebugPanel = useCallback((): void => setDebugPanel(false), []);
 	const openUsagePanel = useCallback((): void => {
 		setContextPanel(null);
 		setUsagePanel({ open: true, loading: true, data: null });
 		void fetchUsageReports().then(data => {
-			setUsagePanel(s =>
-				s.open ? { open: true, loading: false, data: data ? { ...data, fetchedAt: Date.now() } : null } : s,
-			);
+			setUsagePanel(s => (s.open ? { open: true, loading: false, data } : s));
 		});
 	}, [fetchUsageReports]);
 	// Quota panel: a floating card above the composer (user direction —
@@ -861,17 +617,31 @@ export function Composer({
 		{ align: "right" },
 	);
 
+	// Goal detail card (TUI /goal menu + show parity): an anchored floating
+	// panel under the goal chip — lifecycle actions + budget live here, not
+	// on a binary toggle. Declared before the Escape handler so it can close.
+	const [goalOpen, setGoalOpen] = useState(false);
+	const goalAnchorRef = useRef<HTMLDivElement | null>(null);
+	const { renderMenu: renderGoalMenu } = useFloatingMenu(goalOpen, v => setGoalOpen(v), { align: "right" });
+	// Plan review panel (TUI plan-approval overlay parity): anchored under
+	// the plan chip — approve/refine/exit, plan file read-only.
+	const [planOpen, setPlanOpen] = useState(false);
+	const planAnchorRef = useRef<HTMLDivElement | null>(null);
+	const { renderMenu: renderPlanMenu } = useFloatingMenu(planOpen, v => setPlanOpen(v), { align: "right" });
+
 	useEffect(() => {
-		if (!usagePanel.open && !contextPanel?.open) return;
+		if (!usagePanel.open && !contextPanel?.open && !goalOpen && !planOpen) return;
 		const onKey = (e: globalThis.KeyboardEvent): void => {
 			if (e.key === "Escape") {
 				setUsagePanel(s => ({ ...s, open: false }));
 				setContextPanel(s => (s ? { ...s, open: false } : s));
+				setGoalOpen(false);
+				setPlanOpen(false);
 			}
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [usagePanel.open, contextPanel?.open]);
+	}, [usagePanel.open, contextPanel?.open, goalOpen, planOpen]);
 
 	// ── Retry last failed turn (TUI /retry parity) ─────────────────────────
 	// The engine decides whether there is anything to retry (no failed turn
@@ -902,6 +672,14 @@ export function Composer({
 	// "steer" (TUI default — insert into the running turn now) or "queue"
 	// (follow-up, delivered after the turn yields). Cmd/Ctrl+Enter flips it.
 	const [busyEnter, setBusyEnter] = useState<"steer" | "queue">("steer");
+	// Magic-keyword enable flags (settings.magicKeywords.*) — the composer
+	// tip only advertises keywords the user has turned on.
+	const [magicKeywords, setMagicKeywords] = useState<{
+		enabled: boolean;
+		ultrathink: boolean;
+		orchestrate: boolean;
+		workflow: boolean;
+	}>({ enabled: true, ultrathink: true, orchestrate: true, workflow: true });
 	useEffect(() => {
 		if (!rpc) return;
 		const load = (): void => {
@@ -916,6 +694,32 @@ export function Composer({
 		load();
 		// Re-read when 设置 writes it, so an open composer follows the new
 		// behavior without remounting.
+		window.addEventListener("omp-settings-changed", load);
+		return () => window.removeEventListener("omp-settings-changed", load);
+	}, [rpc]);
+	useEffect(() => {
+		if (!rpc) return;
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown> | null>("settings.get", {
+					keys: [
+						"magicKeywords.enabled",
+						"magicKeywords.ultrathink",
+						"magicKeywords.orchestrate",
+						"magicKeywords.workflow",
+					],
+				})
+				.then(v => {
+					setMagicKeywords(prev => ({
+						enabled: v?.["magicKeywords.enabled"] !== false,
+						ultrathink: (v?.["magicKeywords.ultrathink"] ?? prev.ultrathink) !== false,
+						orchestrate: (v?.["magicKeywords.orchestrate"] ?? prev.orchestrate) !== false,
+						workflow: (v?.["magicKeywords.workflow"] ?? prev.workflow) !== false,
+					}));
+				})
+				.catch(() => {});
+		};
+		load();
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
@@ -997,6 +801,9 @@ export function Composer({
 				.catch(() => {});
 		};
 		tick();
+		// Event-driven freshness: poll only while the agent WORKS; the
+		// `working` flip re-runs this effect (idle = zero polling).
+		if (!working) return;
 		let id = setInterval(tick, 3000);
 		const onVis = (): void => {
 			clearInterval(id);
@@ -1014,230 +821,6 @@ export function Composer({
 		};
 	}, [rpc, sessionId, working]);
 
-	// Image paste/drop (openchamber parity): read files as data URLs for
-	// preview; the base64 payload rides along in session.send.images.
-	// Front-resize large images (TUI parity, images.autoResize-governed)
-	// so multi-MB screenshots don't ship full-size over the socket.
-	const addImageFiles = async (files: File[]): Promise<void> => {
-		const imgs = files.filter(f => f.type.startsWith("image/"));
-		if (imgs.length === 0) return;
-		const autoResize = await readAutoResizeImages(rpc);
-		const entries = await Promise.all(
-			imgs.map(async f => {
-				const dataUrl = await readFileAsDataURL(f);
-				const resized = autoResize ? await resizeImageDataUrl(dataUrl, f.type) : null;
-				return {
-					id: attachId.current++,
-					dataUrl: resized?.dataUrl ?? dataUrl,
-					mimeType: resized?.mimeType ?? f.type,
-					name: f.name,
-				};
-			}),
-		);
-		setAttachments(prev => [...prev, ...entries]);
-	};
-
-	const slashFilter = (() => {
-		const q = slashQuery.toLowerCase();
-		// /skill, /skills, /skill: — the user's intent is the skill list:
-		// surface every skill command (kind: skill) instead of matching
-		// against literal "skills" text (skill:foo doesn't contain it).
-		const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
-		// GUI-native /usage + /context: the daemon's catalog already carries
-		// the TUI's commands (with show/reset subcommands) — sending either
-		// to the agent returns ANSI panel text, and the composer intercepts
-		// the bare commands anyway, so keep ONE GUI entry per command (with
-		// the friendly description + GUI category) and drop the daemon's.
-		const guiUsageCmd: SlashEntry = {
-			name: "usage",
-			description: t("show subscription usage"),
-			kind: "command",
-			category: "GUI",
-		};
-		const guiContextCmd: SlashEntry = {
-			name: "context",
-			description: t("show context usage"),
-			kind: "command",
-			category: "GUI",
-		};
-		const list = [
-			...(slashCmds ?? []).filter(c => c.name !== "usage" && c.name !== "context"),
-			guiUsageCmd,
-			guiContextCmd,
-		];
-		return list.filter(c =>
-			isSkillQuery && c.kind === "skill"
-				? true
-				: c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
-		);
-	})();
-
-	const onSlashInput = (value: string): void => {
-		// Trigger when the current line starts with "/".
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("/") && line.length >= 1) {
-			setSlashQuery(line.length > 1 ? line.slice(1) : "");
-			setSlashOpen(true);
-			setSlashIdx(0);
-			if (!slashCmds && rpc) {
-				void rpc
-					.request<SlashEntry[]>("commands.list", {})
-					.then(list => setSlashCmds(list ?? []))
-					.catch(() => {});
-			}
-		} else {
-			setSlashOpen(false);
-		}
-	};
-
-	const insertSlash = (name: string): void => {
-		const ta = taRef.current;
-		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		// Replace the "/query" token with "/name ".
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + slashQuery.length + 1);
-		const next = `${prefix}/${name} ${rest}`;
-		setText(next);
-		setSlashOpen(false);
-		requestAnimationFrame(() => autosize(taRef.current));
-	};
-
-	const onAtInput = (value: string): void => {
-		// Trigger when the current line starts with "@" (TUI file mention).
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("@") && line.length >= 1) {
-			setAtQuery(line.length > 1 ? line.slice(1) : "");
-			setAtOpen(true);
-			setAtIdx(0);
-			if (!atEntries && rpc) {
-				void rpc
-					.request<{
-						entries: { name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }[];
-					}>("workspace.tree", { cwd: cwd ?? "", maxDepth: 3, perDirLimit: 100 })
-					.then(res =>
-						setAtEntries(
-							(res.entries ?? []).map(e => ({
-								name: e.name,
-								path: e.path,
-								isDir: e.isDir,
-								depth: e.depth,
-							})),
-						),
-					)
-					.catch(() => setAtEntries([]));
-			}
-		} else {
-			setAtOpen(false);
-		}
-	};
-
-	const atFilter =
-		atEntries?.filter(
-			e =>
-				e.name.toLowerCase().includes(atQuery.toLowerCase()) ||
-				e.path.toLowerCase().includes(atQuery.toLowerCase()),
-		) ?? [];
-
-	const insertAt = (path: string): void => {
-		const ta = taRef.current;
-		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + atQuery.length + 1);
-		setText(`${prefix}@${path} ${rest}`);
-		setAtOpen(false);
-		requestAnimationFrame(() => autosize(taRef.current));
-	};
-
-	const onHashInput = (value: string): void => {
-		// Trigger when the current line starts with "#" (insert a session).
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("#") && line.length >= 1) {
-			setHashQuery(line.length > 1 ? line.slice(1) : "");
-			setHashOpen(true);
-			setHashIdx(0);
-			if (!hashSessions && rpc) {
-				void rpc
-					.request<{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[]>("session.list", {})
-					.then(list => setHashSessions(list ?? []))
-					.catch(() => setHashSessions([]));
-				// Titles come from the session tree (renames/首条消息 labels);
-				// fetch alongside the list so rows show names, not raw ids.
-				void rpc
-					.request<GuiTreeNode[]>("session.tree", {})
-					.then(nodes => {
-						const labels = new Map<string, string>();
-						const walk = (ns: GuiTreeNode[]): void => {
-							for (const n of ns) {
-								const label = n.entry.label ?? n.label;
-								if (label) labels.set(n.entry.id, label);
-								walk(n.children);
-							}
-						};
-						walk(nodes ?? []);
-						setHashLabels(labels);
-					})
-					.catch(() => {});
-			}
-		} else {
-			setHashOpen(false);
-		}
-	};
-
-	const hashFilter =
-		hashSessions?.filter(
-			e =>
-				(e.id ?? "").toLowerCase().includes(hashQuery.toLowerCase()) ||
-				(e.cwd ?? "").toLowerCase().includes(hashQuery.toLowerCase()),
-		) ?? [];
-
-	// Display title for a # row: session.tree label, else cwd basename,
-	// else a short id slice (the inserted token always keeps the full id).
-	const hashLabel = (e: { id: string; cwd?: string }): string => {
-		const tree = hashLabels.get(e.id);
-		if (tree) return tree;
-		const base = e.cwd?.split("/").filter(Boolean).at(-1);
-		if (base) return base;
-		return e.id.slice(0, 8);
-	};
-
-	const insertHash = (id: string): void => {
-		const ta = taRef.current;
-		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + hashQuery.length + 1);
-		// Insert a read-tool-resolvable internal URL (TUI parity: the "#"
-		// GitHub-ref completion rewrites to issue://pr:// URLs). The model
-		// can `read history://<id>` to inspect the referenced session.
-		setText(`${prefix}history://${id} ${rest}`);
-		setHashOpen(false);
-		requestAnimationFrame(() => autosize(taRef.current));
-	};
-
-	const onPaste = (e: React.ClipboardEvent): void => {
-		const files = [...e.clipboardData.items]
-			.filter(i => i.type.startsWith("image/"))
-			.map(i => i.getAsFile())
-			.filter((f): f is File => f !== null);
-		if (files.length > 0) {
-			e.preventDefault();
-			void addImageFiles(files);
-		}
-	};
-
-	const onDrop = (e: React.DragEvent): void => {
-		const files = [...e.dataTransfer.files];
-		if (files.some(f => f.type.startsWith("image/"))) {
-			e.preventDefault();
-			void addImageFiles(files);
-		}
-	};
-	const taRef = useRef<HTMLTextAreaElement | null>(null);
 	const composingRef = useRef(false);
 	// Select-all + delete clears text AND attachments together (the flag
 	// is consumed by onChange once the textarea reports the emptied value).
@@ -1254,9 +837,6 @@ export function Composer({
 			setHashOpen(false);
 		},
 	);
-	// Only one completion menu is mounted at a time (conditional render), so
-	// a single ref tracks whichever is open.
-	const completionMenuRef = useRef<HTMLDivElement | null>(null);
 	// Todo panel: portaled the same way (gui-todo-panel used to be an
 	// absolute child of the composer frame — it popped up past the chat
 	// surface's overflow:hidden and got clipped, the panel's lower half
@@ -1276,15 +856,6 @@ export function Composer({
 	const { anchorRef: queueAnchorRef, renderMenu: renderQueueMenu } = useFloatingMenu(queueOpen, setQueueOpen, {
 		className: "gui-queue-popup",
 	});
-	// Keep the active row in view while arrow-navigating: the menu scrolls
-	// internally (max-height 300px, overflow-y auto), so the highlight can
-	// run out of the visible area without a scroll.
-	useEffect(() => {
-		const menu = completionMenuRef.current;
-		if (!menu) return;
-		const active = menu.querySelector(".gui-slash-row--active, .gui-model-opt--active");
-		active?.scrollIntoView({ block: "nearest" });
-	}, [slashIdx, atIdx, hashIdx, slashOpen, atOpen, hashOpen]);
 
 	// ── Slash commands (TUI parity) ──────────────────────────────────────
 	// "/xxx" executes the daemon's builtin registry headlessly; "//xxx"
@@ -1376,6 +947,21 @@ export function Composer({
 			// ANSI text that never parses cleanly).
 			if (isUsageCommand(trimmed)) {
 				openUsagePanel();
+				setText("");
+				sfxFor("send");
+				return;
+			}
+			// GUI-native /autoresearch: experiment dashboard panel.
+			if (isAutoresearchCommand(trimmed)) {
+				openArPanel();
+				setText("");
+				sfxFor("send");
+				return;
+			}
+			// GUI-native /debug: diagnostics panel (TUI /debug selector
+			// parity — the TUI command is TUI-only, so intercept like /usage).
+			if (isDebugCommand(trimmed)) {
+				openDebugPanel();
 				setText("");
 				sfxFor("send");
 				return;
@@ -1672,148 +1258,47 @@ export function Composer({
 			 * (user direction: query results belong near the input, not a
 			 * modal dialog). Portaled + fixed so the surface can't clip it. */}
 			{renderQuotaMenu(
-				<div className="gui-quota-panel" role="dialog" aria-label={t("subscription usage")}>
-					<button type="button" className="gui-quota-close" onClick={closeUsagePanel} aria-label={t("close")}>
-						<Icon name="close" className="h-3.5 w-3.5" />
-					</button>
-					<div className="gui-quota-title">
-						{t("subscription usage")}
-						{usagePanel.data?.fetchedAt
-							? ` · ${t("usage {time} ago", { time: fmtQuotaDuration(Date.now() - usagePanel.data.fetchedAt) })}`
-							: null}
-					</div>
-					{usagePanel.loading ? (
-						<div className="gui-quota-note">…</div>
-					) : usagePanel.data && usagePanel.data.reports.length > 0 ? (
-						<div className="gui-usage-reports">
-							{usagePanel.data.reports.map(report => (
-								<UsageProviderSection
-									key={report.provider}
-									report={report}
-									activeAccount={usagePanel.data!.activeAccount}
-								/>
-							))}
-						</div>
-					) : (
-						<div className="gui-quota-note">{t("no subscription usage reported")}</div>
-					)}
-				</div>,
+				<UsagePanelCard data={usagePanel.data} loading={usagePanel.loading} onClose={closeUsagePanel} />,
 			)}
 			{/* GUI-native /context — categorized context-window card above
 			 * the composer (TUI /context panel parity), floating like /usage. */}
 			{contextPanel
 				? renderContextMenu(
-						<div className="gui-quota-panel" role="dialog" aria-label={t("context usage")}>
-							<button
-								type="button"
-								className="gui-quota-close"
-								onClick={() => setContextPanel(s => (s ? { ...s, open: false } : s))}
-								aria-label={t("close")}
-							>
-								<Icon name="close" className="h-3.5 w-3.5" />
-							</button>
-							<div className="gui-quota-title">{t("context usage")}</div>
-							{contextPanel!.loading ? (
-								<div className="gui-quota-note">…</div>
-							) : contextPanel!.data ? (
-								<>
-									{contextPanel!.data.model && (
-										<div className="gui-context-model">{contextPanel!.data.model}</div>
-									)}
-									<div className="gui-context-summary">
-										<span className="gui-context-summary-tokens">
-											{t("context window {tokens} ({percent} used)", {
-												tokens: fmtTokens(contextPanel!.data.contextWindow),
-												percent: `${Math.round(contextPanel!.data.percent)}%`,
-											})}
-										</span>
-									</div>
-									{contextPanel!.data.breakdown &&
-										renderContextGrid(
-											contextPanel!.data.breakdown,
-											contextPanel!.data.autoCompactBufferTokens ?? 0,
-										)}
-									{contextPanel!.data.snapcompact && (
-										<div className="gui-context-snap">
-											<div className="gui-context-snap-title">
-												{contextPanel!.data.snapcompact.visionCapable
-													? t("snapcompact savings")
-													: `Snapcompact: ${t("model does not support images")}`}
-											</div>
-											{contextPanel!.data.snapcompact.visionCapable &&
-												renderSnapcompactLines(
-													contextPanel!.data.snapcompact,
-													contextPanel!.data.tokens ?? contextPanel!.data.breakdown?.usedTokens ?? 0,
-												)}
-										</div>
-									)}
-									{contextPanel!.data.breakdown ? (
-										<div className="gui-context-cats">
-											{renderContextCat(
-												"context system prompt",
-												contextPanel!.data.breakdown.systemPromptTokens,
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_FILLED,
-												"gui-context-glyph--system",
-											)}
-											{renderContextCat(
-												"context system tools",
-												contextPanel!.data.breakdown.systemToolsTokens,
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_FILLED,
-												"gui-context-glyph--tools",
-											)}
-											{renderContextCat(
-												"context system context",
-												contextPanel!.data.breakdown.systemContextTokens,
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_FILLED,
-												"gui-context-glyph--context",
-											)}
-											{renderContextCat(
-												"context skills",
-												contextPanel!.data.breakdown.skillsTokens,
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_FILLED,
-												"gui-context-glyph--skills",
-											)}
-											{renderContextCat(
-												"context messages",
-												contextPanel!.data.breakdown.messagesTokens,
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_MESSAGES,
-												"gui-context-glyph--messages",
-											)}
-											{renderContextCat(
-												"context free",
-												contextPanel!.data.freeTokens ??
-													Math.max(
-														0,
-														contextPanel!.data.contextWindow -
-															contextPanel!.data.breakdown.usedTokens -
-															(contextPanel!.data.autoCompactBufferTokens ?? 0),
-													),
-												contextPanel!.data.contextWindow,
-												CONTEXT_CELL_FREE,
-												"gui-context-glyph--free",
-											)}
-											{(contextPanel!.data.autoCompactBufferTokens ?? 0) > 0 &&
-												renderContextCat(
-													"context autocompact buffer",
-													contextPanel!.data.autoCompactBufferTokens ?? 0,
-													contextPanel!.data.contextWindow,
-													CONTEXT_CELL_BUFFER,
-													"gui-context-glyph--buffer",
-												)}
-										</div>
-									) : (
-										<div className="gui-quota-note">{t("context usage unavailable")}</div>
-									)}
-								</>
-							) : (
-								<div className="gui-quota-note">{t("context usage unavailable")}</div>
-							)}
-						</div>,
+						<ContextUsageCard
+							data={contextPanel.data}
+							loading={contextPanel.loading}
+							onClose={() => setContextPanel(s => (s ? { ...s, open: false } : s))}
+						/>,
+					)
+				: null}
+			{/* TUI widget/selector parity panels (DialogFrame portals to
+			 * document.body; mounted here, not conditionally, so the exit
+			 * animation plays — open flags drive them). */}
+			<AutoresearchPanel open={arPanel} onClose={closeArPanel} rpc={rpc} cwd={cwd} />
+			<DebugToolsPanel open={debugPanel} onClose={closeDebugPanel} rpc={rpc} sessionId={sessionId} />
+			{/* Goal detail card — anchored floating panel under the goal chip
+			 * (same shape as the quota/context cards): full objective, usage/
+			 * budget, and lifecycle actions, opened from the chip. */}
+			{goalOpen
+				? renderGoalMenu(
+						<GoalDetailCard
+							rpc={rpc}
+							sessionId={sessionId}
+							onClose={() => setGoalOpen(false)}
+							onChanged={refreshModes}
+						/>,
+					)
+				: null}
+			{/* Plan review panel (TUI plan-approval overlay parity): plan file +
+			 * approve/refine/exit, anchored under the plan chip. */}
+			{planOpen
+				? renderPlanMenu(
+						<PlanPanel
+							rpc={rpc}
+							sessionId={sessionId}
+							onClose={() => setPlanOpen(false)}
+							onChanged={refreshModes}
+						/>,
 					)
 				: null}
 			{/* Agent status line — hangs ABOVE the input card, outside the
@@ -1831,6 +1316,10 @@ export function Composer({
 			)}
 			<ComposerFrame
 				flipAnchor="session"
+				onAnnotated={text => {
+					setText(prev => (prev ? `${prev}\n${text}` : text));
+					requestAnimationFrame(() => autosize(taRef.current));
+				}}
 				// openchamber parity: the selection-capture module excludes
 				// selections inside the composer (Cmd/Ctrl+L must not re-quote
 				// what is being typed).
@@ -1852,22 +1341,14 @@ export function Composer({
 				// chips sit in the button row next to the thinking selector.
 				// Renders whenever ANY of them is present.
 				statusRow={
-					modes && (todoTotal > 0 || (working && queued != null && queued.count > 0)) || activeTask ? (
+					(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask ? (
 						<div className="gui-mode-row gui-mode-row--status">
 							{activeTask && (
-								<>
-									<button
-										type="button"
-										ref={swarmAnchorRef}
-										className={`gui-swarm-chip${swarmOpen ? " gui-swarm-chip--open" : ""}`}
-										title={t("swarm members")}
-										aria-expanded={swarmOpen}
-										onClick={() => setSwarmOpen(v => !v)}
-									>
-										<span className="gui-swarm-chip-dot" aria-hidden="true" />
-										<span className="gui-swarm-chip-label">{t("swarm members")}</span>
-									</button>
-									{renderSwarmMenu(
+								<SwarmChip
+									open={swarmOpen}
+									onToggle={() => setSwarmOpen(v => !v)}
+									anchorRef={swarmAnchorRef}
+									menu={renderSwarmMenu(
 										<div className="gui-swarm-popup-card" role="region" aria-label={t("swarm members")}>
 											<SwarmCardPreview
 												details={
@@ -1877,221 +1358,44 @@ export function Composer({
 											/>
 										</div>,
 									)}
-								</>
+								/>
 							)}
 							{todoTotal > 0 && (
-								<button
-									type="button"
-									ref={todoAnchorRef}
-									className={`gui-todo-chip${todoOpen ? " gui-todo-chip--open" : ""}`}
+								<TodoChip
+									open={todoOpen}
+									onToggle={() => setTodoOpen(v => !v)}
+									anchorRef={todoAnchorRef}
+									done={todoDone}
+									total={todoTotal}
 									title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
-									aria-expanded={todoOpen}
-									onClick={() => setTodoOpen(v => !v)}
-								>
-									<div className="gui-todo-bar">
-										<div className="gui-todo-fill" style={{ width: `${(todoDone / todoTotal) * 100}%` }} />
-									</div>
-									<span className="gui-todo-label">
-										{todoDone}/{todoTotal}
-									</span>
-								</button>
+								/>
 							)}
 							{renderTodoMenu(
-								<div className="gui-todo-panel" role="region" aria-label={t("todo list")}>
-									{todo.map(phase => (
-										<div key={phase.name} className="gui-todo-phase">
-											<div className="gui-todo-phase-head">
-												<span className="gui-todo-phase-name">{phase.name}</span>
-												<span className="gui-todo-phase-count">
-													{phase.done}/{phase.total}
-												</span>
-											</div>
-											<div className="gui-todo-bar">
-												<div
-													className="gui-todo-fill"
-													style={{ width: `${(phase.done / phase.total) * 100}%` }}
-												/>
-											</div>
-											{phase.tasks.map((task, i) => (
-												<div key={i} className={`gui-todo-task gui-todo-task--${task.status}`}>
-													<span className="gui-todo-task-icon">
-														{TODO_STATUS_ICONS[task.status] ?? "·"}
-													</span>
-													<span className="min-w-0 flex-1 truncate" title={task.content}>
-														{task.content}
-													</span>
-													{task.blocker && (
-														<span className="gui-todo-task-blocker" title={task.blocker}>
-															{task.blocker}
-														</span>
-													)}
-													<span className="gui-todo-task-actions">
-														{task.status === "pending" && (
-															<button
-																type="button"
-																className="gui-todo-act"
-																title={t("mark in progress")}
-																aria-label={t("mark in progress")}
-																onClick={() => todoOp("start", task.content)}
-															>
-																<Icon name="play" className="h-3 w-3" />
-															</button>
-														)}
-														{task.status !== "completed" && (
-															<button
-																type="button"
-																className="gui-todo-act"
-																title={t("mark done")}
-																aria-label={t("mark done")}
-																onClick={() => todoOp("done", task.content)}
-															>
-																<Icon name="check" className="h-3 w-3" />
-															</button>
-														)}
-														{task.status !== "abandoned" && task.status !== "completed" && (
-															<button
-																type="button"
-																className="gui-todo-act"
-																title={t("abandon task")}
-																aria-label={t("abandon task")}
-																onClick={() => todoOp("drop", task.content)}
-															>
-																<Icon name="close" className="h-3 w-3" />
-															</button>
-														)}
-														<button
-															type="button"
-															className="gui-todo-act"
-															title={t("remove task")}
-															aria-label={t("remove task")}
-															onClick={() => todoOp("rm", task.content)}
-														>
-															<Icon name="delete-bin" className="h-3 w-3" />
-														</button>
-													</span>
-												</div>
-											))}
-											<div className="gui-todo-append">
-												<input
-													className="gui-todo-append-input"
-													value={appendText}
-													onChange={e => setAppendText(e.target.value)}
-													onKeyDown={e => {
-														if (e.key === "Enter") {
-															e.preventDefault();
-															if (appendText.trim()) {
-																todoOp("append", appendText.trim(), phase.name);
-																setAppendText("");
-															}
-														}
-													}}
-													placeholder={t("add a task…")}
-													aria-label={t("add a task…")}
-												/>
-												<button
-													type="button"
-													className="gui-todo-act gui-todo-act--add"
-													title={t("add task")}
-													aria-label={t("add task")}
-													disabled={!appendText.trim()}
-													onClick={() => {
-														if (appendText.trim()) {
-															todoOp("append", appendText.trim(), phase.name);
-															setAppendText("");
-														}
-													}}
-												>
-													<Icon name="add" className="h-3 w-3" />
-												</button>
-											</div>
-										</div>
-									))}
-								</div>,
+								<TodoPanel
+									phases={todo}
+									onOp={todoOp}
+									appendText={appendText}
+									onAppendChange={setAppendText}
+								/>,
 							)}
 							{/* Pending-message queue (TUI /queue parity): editable list
 							 * above the input — 取回 pops the newest queued message
 							 * back into the editor. */}
 							{working && queued && queued.count > 0 && (
 								<>
-									<button
-										type="button"
-										ref={queueAnchorRef}
-										className={`gui-queue-chip${queueOpen ? " gui-queue-chip--open" : ""}`}
-										aria-expanded={queueOpen}
-										onClick={() => setQueueOpen(v => !v)}
-									>
-										<Icon name="list-unordered" className="h-3 w-3" />
-										<span>{t("queued {count}", { count: String(queued.count) })}</span>
-									</button>
+									<QueueToggleChip
+										open={queueOpen}
+										onToggle={() => setQueueOpen(v => !v)}
+										anchorRef={queueAnchorRef}
+										count={queued.count}
+									/>
 									{renderQueueMenu(
-										<div className="gui-queue-panel" role="region" aria-label={t("queued messages")}>
-											{/* Grouped like the TUI pending display: steering
-											 * (immediate) vs after yield (next-turn). */}
-											{queued.steering.length > 0 && (
-												<>
-													<div className="gui-queue-group">
-														{t("Steering")} · {queued.steering.length}
-													</div>
-													{queued.steering.map((msg, i) => (
-														<div key={`s-${i}-${msg.slice(0, 12)}`} className="gui-queue-item">
-															<span className="gui-queue-item-text" title={msg}>
-																{msg}
-															</span>
-															<button
-																type="button"
-																className="gui-queue-send"
-																title={t("send now")}
-																aria-label={t("send now")}
-																onClick={() => void sendQueued("steering", msg, i)}
-															>
-																<Icon name="arrow-up" className="h-3 w-3" />
-															</button>
-														</div>
-													))}
-												</>
-											)}
-											{queued.followUp.length > 0 && (
-												<>
-													<div className="gui-queue-group">
-														{t("After yield")} · {queued.followUp.length}
-													</div>
-													{queued.followUp.map((msg, i) => (
-														<div key={`f-${i}-${msg.slice(0, 12)}`} className="gui-queue-item">
-															<span className="gui-queue-item-text" title={msg}>
-																{msg}
-															</span>
-															<button
-																type="button"
-																className="gui-queue-send"
-																title={t("send now")}
-																aria-label={t("send now")}
-																onClick={() => void sendQueued("followUp", msg, i)}
-															>
-																<Icon name="arrow-up" className="h-3 w-3" />
-															</button>
-														</div>
-													))}
-												</>
-											)}
-											<div className="gui-queue-panel-actions">
-												<button
-													type="button"
-													className="gui-pane-action !w-auto px-2"
-													onClick={() => void popQueued()}
-												>
-													<Icon name="arrow-go-back" className="h-3 w-3" />
-													<span>{t("take back newest")}</span>
-												</button>
-												<button
-													type="button"
-													className="gui-pane-action !w-auto px-2"
-													onClick={() => void clearQueued()}
-												>
-													<Icon name="delete-bin" className="h-3 w-3" />
-													<span>{t("clear queue")}</span>
-												</button>
-											</div>
-										</div>,
+										<QueuePanel
+											queued={queued}
+											onSend={sendQueued}
+											onPop={popQueued}
+											onClear={clearQueued}
+										/>,
 									)}
 								</>
 							)}
@@ -2105,6 +1409,15 @@ export function Composer({
 							planMode={modes?.planMode === true}
 							onToggleGoal={toggleGoalMode}
 							onTogglePlan={togglePlanMode}
+							onGuidedGoal={() => {
+								// TUI /guided-goal parity: the agent interviews
+								// the user in chat, then creates the goal. The
+								// current draft rides along as the rough
+								// objective when present.
+								if (!rpc || !sessionId) return;
+								const objective = text.trim() || undefined;
+								void rpc.request("session.goal", { sessionId, op: "guided", objective }).catch(() => {});
+							}}
 							onPickImages={files => void addImageFiles(files)}
 							onInsert={token => {
 								const ta = taRef.current;
@@ -2121,29 +1434,15 @@ export function Composer({
 						 * while the agent works and messages are queued behind
 						 * the current turn; hover shows the queued texts. */}
 						{working && queued && queued.count > 0 && (
-							<button
-								type="button"
-								className="gui-queue-chip"
-								title={[...queued.steering, ...queued.followUp].join("\n")}
-								aria-label={t("queued messages")}
-							>
-								<Icon name="list-unordered" className="h-3 w-3" />
-								<span>{t("queued {count}", { count: String(queued.count) })}</span>
-							</button>
+							<QueueChip count={queued.count} title={[...queued.steering, ...queued.followUp].join("\n")} />
 						)}
 						{/* Focus mode sits between the attach menu and the model
 						 * selector (openchamber ComposerFooter order). */}
-						{onToggleFocus && (
-							<button
-								type="button"
-								className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
-								onClick={onToggleFocus}
-								title={t("focus mode")}
-								aria-label={t("focus mode")}
-								aria-pressed={focused}
-							>
-								<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-							</button>
+						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
+						{!welcome && sessionModeLabel && (
+							<span className="gui-mode-label" title={t("modes title")}>
+								{sessionModeLabel}
+							</span>
 						)}
 						<ModelSelector
 							rpc={rpc}
@@ -2171,41 +1470,26 @@ export function Composer({
 						{/* Mode chips sit IN the button row, right of the thinking
 						 * selector (not above the input): plan/goal state is one
 						 * of the composer's toggles. */}
-						{(modes?.goalMode?.enabled === true || goalArmed) && (
-							<button
-								type="button"
-								className={`gui-mode-chip${goalArmed ? " gui-mode-chip--armed" : " gui-mode-chip--goal"}`}
-								title={
-									goalArmed
-										? t("next message becomes the goal objective")
-										: `${t("goal mode")} · ${modes?.goalMode?.objective ?? ""} · ${t("click to end")}`
-								}
-								onClick={toggleGoalMode}
-							>
-								<Icon name="target" className="h-3 w-3" />
-								<span className="max-w-[200px] truncate">
-									{goalArmed ? t("goal") : modes?.goalMode?.objective || t("goal")}
-								</span>
-								{!goalArmed && <Icon name="close" className="h-2.5 w-2.5 opacity-60" />}
-							</button>
-						)}
+						<div ref={goalAnchorRef}>
+							{(modes?.goalMode?.enabled === true || modes?.goalMode?.status === "paused" || goalArmed) && (
+								<GoalChip
+									armed={goalArmed}
+									paused={modes?.goalMode?.enabled === false}
+									objective={modes?.goalMode?.objective ?? ""}
+									onToggle={toggleGoalMode}
+									onOpen={() => setGoalOpen(true)}
+								/>
+							)}
+						</div>
 						{modes?.planMode === true && (
-							<button
-								type="button"
-								className="gui-mode-chip"
-								title={`${t("plan mode")} · ${t("click to end")}`}
-								onClick={togglePlanMode}
-							>
-								<Icon name="compass-3" className="h-3 w-3" />
-								<span>{t("plan")}</span>
-								<Icon name="close" className="h-2.5 w-2.5 opacity-60" />
-							</button>
+							<div ref={planAnchorRef}>
+								<PlanChip onOpen={() => setPlanOpen(true)} />
+							</div>
 						)}
 						{canSend && (
-							<button
-								type="button"
-								className={`gui-composer-pill${enhance === "enhanced" ? " gui-composer-pill--done" : ""}`}
-								onClick={() => {
+							<EnhanceButton
+								state={enhance}
+								onToggle={() => {
 									if (enhance === "enhancing") return;
 									if (enhance === "enhanced") {
 										setEnhance("idle");
@@ -2213,25 +1497,7 @@ export function Composer({
 									}
 									runEnhance();
 								}}
-							>
-								{enhance === "enhancing" ? (
-									<WandSparkles size={11} className="gui-spin" />
-								) : (
-									<MorphIcon
-										icon={enhance === "enhanced" ? CheckIconData : WandSparklesIconData}
-										size={11}
-										spring="snappy"
-										className="gui-composer-morph"
-									/>
-								)}
-								<span>
-									{enhance === "enhancing"
-										? t("enhancing…")
-										: enhance === "enhanced"
-											? t("enhanced")
-											: t("enhance")}
-								</span>
-							</button>
+							/>
 						)}
 					</>
 				}
@@ -2249,13 +1515,15 @@ export function Composer({
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}
-						<button
-							type="button"
-							className={`gui-composer-ico${dictating ? " gui-composer-ico--dictating" : ""}`}
-							onClick={() => {
+						<VoiceButton
+							state={dictating ? (transcribing ? "transcribing" : "recording") : "idle"}
+							seconds={voiceSeconds}
+							level={voiceLevel}
+							onToggle={() => {
 								if (dictating) {
 									stopDict.current?.();
 									setDictating(false);
+									setTranscribing(false);
 									return;
 								}
 								const stop = startDictation(
@@ -2263,87 +1531,69 @@ export function Composer({
 										setText(prev => (prev ? `${prev} ${transcript}` : transcript));
 										requestAnimationFrame(() => autosize(taRef.current));
 										setDictating(false);
+										setTranscribing(false);
 									},
-									() => setDictating(false),
+									() => {
+										setDictating(false);
+										setTranscribing(false);
+									},
 									rpc,
+									activity => {
+										if (activity.phase === "recording") {
+											setVoiceSeconds(activity.seconds);
+											setVoiceLevel(activity.level);
+											setTranscribing(false);
+										} else if (activity.phase === "transcribing") {
+											setTranscribing(true);
+										}
+									},
 								);
 								stopDict.current = stop;
-								if (stop) setDictating(true);
+								if (stop) {
+									setDictating(true);
+									setVoiceSeconds(0);
+									setVoiceLevel(0);
+								}
 							}}
-							title={t("voice input")}
-							aria-label={t("voice input")}
-						>
-							<Icon name="mic" className="h-3.5 w-3.5" />
-						</button>
+						/>
 						{working && (
-							<button
-								type="button"
-								className="gui-composer-ico"
-								onClick={() => {
+							<StopButton
+								onPress={() => {
 									tapFeedback(2);
 									onStop();
 								}}
-								title={t("stop the current turn")}
-								aria-label={t("stop the current turn")}
-							>
-								<Square size={11} />
-							</button>
+							/>
 						)}
-						{!working && (
-							<button
-								type="button"
-								className={`gui-composer-ico${retryNone ? " gui-composer-ico--danger" : ""}`}
-								onClick={retryLastTurn}
-								disabled={retryBusy}
-								title={retryNone ? t("nothing to retry") : t("retry last turn")}
-								aria-label={t("retry last turn")}
-							>
-								<Icon name="arrow-go-back" className="h-3.5 w-3.5" />
-							</button>
-						)}
-						<button
-							type="button"
-							className="gui-composer-send"
-							onClick={canSend && enhance !== "enhancing" ? () => send() : undefined}
-							disabled={!canSend || enhance === "enhancing"}
-							title={working ? t("steer message") : t("send message")}
-							aria-label={working ? t("steer message") : t("send message")}
-						>
-							<SendHorizontal size={14} />
-						</button>
+						{!working && <RetryButton busy={retryBusy} none={retryNone} onPress={retryLastTurn} />}
+						<SendButton
+							canSend={canSend}
+							busy={enhance === "enhancing"}
+							working={working}
+							onPress={() => send()}
+						/>
 					</>
 				}
 			>
-				{slashNotice && (
-					<div
-						className={`gui-composer-slash-note gui-composer-slash-note--${slashNotice.level}`}
-						role="status"
-						aria-live="polite"
-					>
-						<Icon
-							name={slashNotice.level === "error" ? "close-circle" : "information"}
-							className="h-3.5 w-3.5 shrink-0"
-						/>
-						<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{slashNotice.text}</span>
-					</div>
+				{slashNotice && <SlashNotice level={slashNotice.level} text={slashNotice.text} />}
+				{magicKeywords.enabled && (
+					<MagicKeywordTip
+						text={text}
+						enabled={{
+							ultrathink: magicKeywords.ultrathink,
+							orchestrate: magicKeywords.orchestrate,
+							workflow: magicKeywords.workflow,
+						}}
+					/>
 				)}
-				{quotes.map((q, i) => (
-					<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
-						<div className="gui-quote-text">{q}</div>
-						<button
-							type="button"
-							className="gui-quote-close"
-							onClick={() => {
-								handledQuoteCountRef.current = 0;
-								onQuotesChange(quotes.filter((_, j) => j !== i));
-							}}
-							title={t("remove quote")}
-							aria-label={t("remove quote")}
-						>
-							<X size={12} />
-						</button>
-					</div>
-				))}
+				{quotes.length > 0 && (
+					<QuoteCards
+						quotes={quotes}
+						onRemove={i => {
+							handledQuoteCountRef.current = 0;
+							onQuotesChange(quotes.filter((_, j) => j !== i));
+						}}
+					/>
+				)}
 				<textarea
 					ref={el => {
 						taRef.current = el;
@@ -2384,571 +1634,23 @@ export function Composer({
 					autoComplete="off"
 				/>
 				{renderFloatMenu(
-					<>
-						{hashOpen && hashFilter.length > 0 && (
-							<div className="gui-slash-menu" ref={completionMenuRef}>
-								{hashFilter.map((e, i) => (
-									<button
-										key={e.id}
-										type="button"
-										className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
-										onMouseDown={ev => ev.preventDefault()}
-										onClick={() => insertHash(e.id)}
-									>
-										<Icon name="chat-1" className="h-4 w-4 shrink-0 text-[var(--color-text-faint)]" />
-										<span className="min-w-0 flex-1 truncate font-medium">#{hashLabel(e)}</span>
-										{e.cwd && (
-											<span className="max-w-[180px] truncate text-[12px] text-[var(--color-text-faint)]">
-												{e.cwd}
-											</span>
-										)}
-									</button>
-								))}
-							</div>
-						)}
-						{slashOpen && slashFilter.length > 0 && (
-							<div className="gui-slash-menu gui-slash-menu--rich" ref={completionMenuRef}>
-								<div className="gui-slash-rows">
-									{slashFilter.map((c, i) => (
-										<SlashRow
-											key={c.name}
-											item={c}
-											active={i === slashIdx}
-											onClick={() => insertSlash(c.name)}
-										/>
-									))}
-								</div>
-								<div className="gui-slash-footer">{t("slash completion hints")}</div>
-							</div>
-						)}
-						{atOpen && atFilter.length > 0 && (
-							<div className="gui-slash-menu" ref={completionMenuRef}>
-								{atFilter.map((e, i) => (
-									<button
-										key={e.path}
-										type="button"
-										className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-										onMouseDown={ev => ev.preventDefault()}
-										onClick={() => insertAt(e.path)}
-									>
-										<Icon
-											name={e.isDir ? "folder" : "file"}
-											className={`h-4 w-4 shrink-0 ${e.isDir ? "text-[var(--color-accent)]" : "text-[var(--color-text-faint)]"}`}
-										/>
-										<span className="min-w-0 flex-1 truncate">
-											<span className="font-medium">{e.name}</span>
-											{e.isDir && <span className="ml-1 text-[12px] text-[var(--color-text-faint)]">/</span>}
-										</span>
-										<span className="max-w-[200px] truncate text-[12px] text-[var(--color-text-faint)]">
-											{e.path}
-										</span>
-									</button>
-								))}
-							</div>
-						)}
-					</>,
+					<CompletionMenus
+						slashOpen={slashOpen}
+						slashItems={slashFilter}
+						slashIdx={slashIdx}
+						onPickSlash={insertSlash}
+						atOpen={atOpen}
+						atEntries={atFilter}
+						atIdx={atIdx}
+						onPickAt={insertAt}
+						hashOpen={hashOpen}
+						hashSessions={hashFilter}
+						hashIdx={hashIdx}
+						hashLabel={hashLabel}
+						onPickHash={insertHash}
+					/>,
 				)}
 			</ComposerFrame>
-		</div>
-	);
-}
-
-/** Compact "resets in …" label from a duration in ms (TUI formatDuration
- *  parity): 2h, 3d5h, 12m — coarse but stable for popover width. */
-export function fmtQuotaDuration(ms: number): string {
-	const mins = Math.max(0, Math.round(ms / 60000));
-	if (mins < 60) return `${mins}m`;
-	const hours = Math.floor(mins / 60);
-	if (hours < 24) return `${hours}h${mins % 60 ? `${mins % 60}m` : ""}`;
-	const days = Math.floor(hours / 24);
-	return `${days}d${hours % 24 ? `${hours % 24}h` : ""}`;
-}
-
-/** Compact token count (K/M) for the context dialog. */
-function fmtTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1000) return `${Math.round(n / 1000)}K`;
-	return String(n);
-}
-
-/** Snapcompact wire-savings detail lines (TUI /context legend parity):
- *  per-source savings when the model is vision-capable. `usedTokens` feeds
- *  the "next request" projection, mirroring the TUI's
- *  `Math.max(0, usedTokens - savedTokens)`. */
-function renderSnapcompactLines(snap: SnapcompactSavingsView, usedTokens: number): ReactNode {
-	const lines: ReactNode[] = [];
-	if (snap.systemPrompt) {
-		const sp = snap.systemPrompt;
-		lines.push(
-			<div className="gui-context-snap-line" key="sp">
-				{sp.applied
-					? t("system prompt imaged: {text} text → {frames} frames (saves ~{saved})", {
-							text: fmtTokens(sp.textTokens),
-							frames: String(sp.frames),
-							saved: fmtTokens(sp.savedTokens),
-						})
-					: t("system prompt stays text ({reason})", {
-							reason: t(
-								sp.reason === "empty"
-									? "reason: empty"
-									: sp.reason === "margin"
-										? "reason: insufficient savings"
-										: "reason: image budget",
-							),
-						})}
-			</div>,
-		);
-	}
-	if (snap.toolResults) {
-		const tr = snap.toolResults;
-		lines.push(
-			<div className="gui-context-snap-line" key="tr">
-				{tr.swapped > 0
-					? t("tool results: {imaged} imaged (saves ~{saved})", {
-							imaged: String(tr.swapped),
-							saved: fmtTokens(tr.savedTokens),
-						})
-					: t("tool results: none imaged ({total} in history)", { total: String(tr.total) })}
-			</div>,
-		);
-	}
-	if (snap.savedTokens > 0) {
-		lines.push(
-			<div className="gui-context-snap-line" key="next">
-				{t("next request: ~{tokens} tokens on the wire", {
-					tokens: fmtTokens(Math.max(0, usedTokens - snap.savedTokens)),
-				})}
-			</div>,
-		);
-	}
-	return lines;
-}
-
-/** /usage wire shape — mirror of @musepi/pi-ai UsageReport served by the
- *  daemon's usage.reports RPC (TUI /usage parity). Shared with the
- *  empty-state composer, which fetches the same global view session-less. */
-export interface UsageAmountView {
-	used?: number;
-	limit?: number;
-	unit?: string;
-	usedFraction?: number;
-	remainingFraction?: number;
-}
-export interface UsageLimitView {
-	id: string;
-	label: string;
-	scope?: { accountId?: string; projectId?: string; tier?: string; windowId?: string };
-	window?: { id?: string; label?: string; resetsAt?: number; resetLabel?: string };
-	amount: UsageAmountView;
-	status?: string;
-	notes?: string[];
-}
-export interface UsageReportView {
-	provider: string;
-	fetchedAt?: number;
-	limits: UsageLimitView[];
-	resetCredits?: { availableCount: number; credits?: Array<{ expiresAt?: string; status?: string }> };
-	notes?: string[];
-	metadata?: Record<string, unknown>;
-}
-/** The credential the live session is actually using (daemon resolves it). */
-export interface UsageActiveAccountView {
-	provider: string;
-	accountId?: string;
-	email?: string;
-}
-
-/** Title-case a provider id ("openai-codex" → "Openai Codex", TUI parity). */
-function usageProviderTitle(provider: string): string {
-	return provider
-		.split(/[-_]/g)
-		.map(part => (part ? part[0]!.toUpperCase() + part.slice(1) : ""))
-		.join(" ");
-}
-
-/** Account label for one limit row: email → accountId → projectId → "account N". */
-function usageAccountLabel(limit: UsageLimitView, report: UsageReportView, index: number): string {
-	const meta = report.metadata ?? {};
-	const email = typeof meta.email === "string" && meta.email ? meta.email : undefined;
-	if (email) return email;
-	const accountId =
-		(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : limit.scope?.accountId) ?? undefined;
-	if (accountId) return accountId;
-	const projectId =
-		(typeof meta.projectId === "string" && meta.projectId ? meta.projectId : limit.scope?.projectId) ?? undefined;
-	if (projectId) return projectId;
-	return t("account {count}", { count: String(index + 1) });
-}
-
-/** Used fraction 0..1 — mirrors @musepi/pi-ai resolveUsedFraction. */
-function usageResolveUsedFraction(limit: UsageLimitView): number | undefined {
-	const amount = limit.amount;
-	if (amount.usedFraction !== undefined) return amount.usedFraction;
-	if (amount.used !== undefined && amount.limit !== undefined && amount.limit > 0) {
-		return amount.used / amount.limit;
-	}
-	if (amount.unit === "percent" && amount.used !== undefined) return amount.used / 100;
-	if (amount.remainingFraction !== undefined) return Math.max(0, 1 - amount.remainingFraction);
-	return undefined;
-}
-
-/** Whether a limit row belongs to the session's active credential (TUI ●). */
-function usageLimitIsActive(
-	limit: UsageLimitView,
-	report: UsageReportView,
-	activeAccount: UsageActiveAccountView | null,
-): boolean {
-	if (!activeAccount || activeAccount.provider !== report.provider) return false;
-	const meta = report.metadata ?? {};
-	return (
-		(activeAccount.accountId !== undefined &&
-			(meta.accountId === activeAccount.accountId || limit.scope?.accountId === activeAccount.accountId)) ||
-		(activeAccount.email !== undefined && meta.email === activeAccount.email)
-	);
-}
-
-/** Trailing amount for a limit group ("N% free" / "N accts", TUI parity). */
-function usageAggregateAmount(limits: UsageLimitView[]): string {
-	const fractions = limits.map(usageResolveUsedFraction).filter((value): value is number => value !== undefined);
-	if (fractions.length === limits.length && fractions.length > 0) {
-		const sum = fractions.reduce((total, value) => total + value, 0);
-		const avgRemaining = Math.max(0, ((limits.length - sum) / limits.length) * 100);
-		return t("{percent}% free", { percent: String(Math.round(avgRemaining)) });
-	}
-	const amounts = limits
-		.map(limit => limit.amount)
-		.filter(amount => amount.used !== undefined && amount.limit !== undefined && amount.limit > 0);
-	if (amounts.length === limits.length && amounts.length > 0) {
-		const totalUsed = amounts.reduce((sum, amount) => sum + (amount.used ?? 0), 0);
-		const totalLimit = amounts.reduce((sum, amount) => sum + (amount.limit ?? 0), 0);
-		const remainingPct = totalLimit > 0 ? Math.max(0, 100 - (totalUsed / totalLimit) * 100) : 0;
-		return t("{percent}% free", { percent: String(Math.round(remainingPct)) });
-	}
-	if (limits.length > 0) {
-		const uniqueAccounts = new Set(
-			limits
-				.map(limit => limit.scope?.accountId)
-				.filter((id): id is string => typeof id === "string" && id.length > 0),
-		);
-		const count = uniqueAccounts.size > 0 ? uniqueAccounts.size : limits.length;
-		return t("{count} accts", { count: String(count) });
-	}
-	return "";
-}
-
-/** "resets in 2h" / "resets in 2h–3h" for a limit group (TUI parity). */
-function usageResetRange(limits: UsageLimitView[], nowMs: number): string | null {
-	const windows = limits
-		.map(limit => limit.window)
-		.filter(
-			(window): window is NonNullable<UsageLimitView["window"]> =>
-				window?.resetsAt !== undefined && window.resetsAt > nowMs,
-		);
-	if (windows.length === 0) return null;
-	const offsets = windows.map(window => window.resetsAt!).sort((a, b) => a - b);
-	const minReset = offsets[0]!;
-	const maxReset = offsets[offsets.length - 1]!;
-	if (maxReset - minReset > 60_000) {
-		return t("resets in {min}–{max}", {
-			min: fmtQuotaDuration(minReset - nowMs),
-			max: fmtQuotaDuration(maxReset - nowMs),
-		});
-	}
-	return t("resets in {time}", { time: fmtQuotaDuration(minReset - nowMs) });
-}
-
-/** Status tone for a limit's bar + dot ("ok" | "warn" | "err"). */
-function usageTone(status: string | undefined): "ok" | "warn" | "err" {
-	if (status === "exhausted") return "err";
-	if (status === "warning") return "warn";
-	return "ok";
-}
-
-/** Status tone class for a limit's bar (exhausted/warning → ok). */
-function usageStatusTone(status: string | undefined): string {
-	return `gui-usage-bar--${usageTone(status)}`;
-}
-
-/** One provider section of the /usage card (TUI /usage panel parity).
- *  Collapsible per provider (desktop Reveal standard): the header shows
- *  the aggregate status dot + window count, the detail folds underneath —
- *  a multi-provider /usage card stays scannable without dumping every
- *  window group at once. */
-export function UsageProviderSection({
-	report,
-	activeAccount,
-}: {
-	report: UsageReportView;
-	activeAccount: UsageActiveAccountView | null;
-}): ReactNode {
-	const [expanded, setExpanded] = useState(false);
-	const nowMs = Date.now();
-	const limits = report.limits ?? [];
-	// Group limits by window (label + window id, TUI parity) so 5h and 7d
-	// windows (and any per-tier buckets) render as separate sections.
-	const groups = new Map<string, { label: string; windowLabel: string; limits: UsageLimitView[] }>();
-	for (const limit of limits) {
-		const tier = limit.scope?.tier;
-		const label =
-			tier && !limit.label.toLowerCase().includes(tier.toLowerCase()) ? `${limit.label} (${tier})` : limit.label;
-		const windowId = limit.window?.id ?? limit.scope?.windowId ?? "default";
-		const windowLabel = limit.window?.label ?? windowId;
-		const key = `${label}|${windowId}`;
-		const group = groups.get(key) ?? { label, windowLabel, limits: [] };
-		group.limits.push(limit);
-		groups.set(key, group);
-	}
-	const groupList = [...groups.values()].filter(group => group.limits.length > 0);
-	const unlimitedReports = limits.length === 0;
-	const resets = report.resetCredits;
-	const activeHere =
-		activeAccount?.provider === report.provider
-			? (activeAccount.email ?? activeAccount.accountId ?? undefined)
-			: undefined;
-	// Aggregate tone across all of the provider's limits → the header dot.
-	const allStatuses = limits.map(limit => limit.status).filter(Boolean);
-	const aggregateTone = usageTone(
-		allStatuses.includes("exhausted") ? "exhausted" : allStatuses.includes("warning") ? "warning" : "ok",
-	);
-
-	return (
-		<div className="gui-usage-section" key={report.provider}>
-			<button
-				type="button"
-				className="gui-usage-provider-head"
-				onClick={() => setExpanded(v => !v)}
-				aria-expanded={expanded}
-			>
-				<span className={`gui-usage-dot gui-usage-dot--${aggregateTone}`} />
-				<span className="gui-usage-provider">{usageProviderTitle(report.provider)}</span>
-				{groupList.length > 0 && (
-					<span className="gui-usage-provider-summary">
-						{t("{count} windows", { count: String(groupList.length) })}
-					</span>
-				)}
-				<Icon name="arrow-down" className={`gui-usage-chevron${expanded ? " gui-usage-chevron--open" : ""}`} />
-			</button>
-			<Reveal open={expanded}>
-				<div className="gui-usage-provider-body">
-					{activeHere && (
-						<div className="gui-usage-note">
-							{t("in use by this session: {account}", { account: activeHere })}
-						</div>
-					)}
-					{Array.isArray(report.notes) && report.notes.length > 0 && (
-						<div className="gui-usage-note">{report.notes.join(" • ")}</div>
-					)}
-					{resets && resets.availableCount > 0 && (
-						<div className="gui-usage-resets">
-							<span className="gui-usage-resets-title">{t("saved rate-limit resets")}</span>
-							{(() => {
-								const meta = report.metadata ?? {};
-								const label =
-									(typeof meta.email === "string" && meta.email ? meta.email : undefined) ??
-									(typeof meta.accountId === "string" && meta.accountId ? meta.accountId : undefined) ??
-									t("account {count}", { count: "1" });
-								const isActive =
-									activeAccount?.provider === report.provider &&
-									((activeAccount.email !== undefined && meta.email === activeAccount.email) ||
-										(activeAccount.accountId !== undefined && meta.accountId === activeAccount.accountId));
-								const rows: ReactNode[] = [
-									<span key="row">
-										• {label}: {resets.availableCount}{" "}
-										{resets.availableCount === 1 ? t("saved reset") : t("saved resets")}
-										{isActive ? ` (${t("active")})` : ""}
-									</span>,
-								];
-								for (const credit of resets.credits ?? []) {
-									if (!credit.expiresAt) continue;
-									const expiryMs = Date.parse(credit.expiresAt);
-									if (Number.isNaN(expiryMs)) continue;
-									const remaining = expiryMs - nowMs;
-									const date = credit.expiresAt.slice(0, 10);
-									rows.push(
-										<span key={`${credit.expiresAt}-${date}`}>
-											{remaining > 0
-												? t("expires in {time}", { time: fmtQuotaDuration(remaining) })
-												: t("expired ({date})", { date })}
-										</span>,
-									);
-								}
-								return rows;
-							})()}
-						</div>
-					)}
-					{groupList.map(group => {
-						const statuses = group.limits.map(limit => limit.status).filter(Boolean);
-						const aggregate = statuses.includes("exhausted")
-							? "exhausted"
-							: statuses.includes("warning")
-								? "warning"
-								: "ok";
-						const amount = usageAggregateAmount(group.limits);
-						const resetRange = usageResetRange(group.limits, nowMs);
-						const windowSuffix =
-							group.windowLabel.toLowerCase() === "quota window" ||
-							group.label.toLowerCase().includes(group.windowLabel.toLowerCase())
-								? ""
-								: group.windowLabel;
-						return (
-							<div className="gui-usage-group" key={group.label + group.windowLabel}>
-								<div className="gui-usage-group-head">
-									<span className={`gui-usage-dot gui-usage-dot--${usageTone(aggregate)}`} />
-									<span className="gui-usage-group-name">{group.label}</span>
-									{windowSuffix && <span className="gui-usage-group-window">({windowSuffix})</span>}
-									{amount && <span className="gui-usage-amount">{amount}</span>}
-								</div>
-								{group.limits.map((limit, i) => {
-									const fraction = usageResolveUsedFraction(limit);
-									const percent = fraction !== undefined ? Math.min(100, Math.max(0, fraction * 100)) : 0;
-									const active = usageLimitIsActive(limit, report, activeAccount);
-									const resetShort =
-										limit.window?.resetsAt !== undefined && limit.window.resetsAt > nowMs
-											? t("resets in {time}", { time: fmtQuotaDuration(limit.window.resetsAt - nowMs) })
-											: undefined;
-									return (
-										<div className="gui-quota-row" key={limit.id || `${limit.label}-${i}`}>
-											<div className="gui-quota-label">
-												<span
-													className={`gui-usage-acct-name${active ? " gui-usage-acct-name--active" : ""}`}
-												>
-													{active ? "● " : ""}
-													{usageAccountLabel(limit, report, i)}
-												</span>
-												{resetShort && <span className="gui-usage-acct-reset">({resetShort})</span>}
-											</div>
-											<div className="gui-quota-bar">
-												<div className="gui-usage-bar-track">
-													<div
-														className={`gui-usage-bar ${usageStatusTone(limit.status)}`}
-														style={{ width: `${percent}%` }}
-													/>
-												</div>
-												<span className="gui-quota-pct">
-													{fraction !== undefined ? `${Math.round(fraction * 100)}% used` : "—"}
-												</span>
-											</div>
-										</div>
-									);
-								})}
-								{resetRange && <div className="gui-usage-resetline">{resetRange}</div>}
-								{(() => {
-									const notes = [...new Set(group.limits.flatMap(limit => limit.notes ?? []))];
-									return notes.length > 0 ? <div className="gui-usage-note">{notes.join(" • ")}</div> : null;
-								})()}
-							</div>
-						);
-					})}
-					{unlimitedReports && (
-						<div className="gui-usage-unlimited">
-							• {usageAccountLabel({ id: "", label: "", amount: {} }, report, 0)}
-							{typeof report.metadata?.planType === "string" && report.metadata.planType
-								? ` (${report.metadata.planType})`
-								: ""}{" "}
-							<span className="gui-usage-note">— {t("no limits")}</span>
-						</div>
-					)}
-				</div>
-			</Reveal>
-		</div>
-	);
-}
-
-/** One category row of the /context dialog: glyph + name, tokens, percent
- *  bar. The glyph and color match the board cells (TUI /context legend
- *  parity) so the grid reads without hunting. */
-function renderContextCat(label: string, tokens: number, window: number, glyph: string, colorClass: string): ReactNode {
-	const percent = window > 0 ? (tokens / window) * 100 : 0;
-	const isFree = label === "context free";
-	return (
-		<div className="gui-context-cat" key={label}>
-			<div className="gui-context-cat-label">
-				<span className="gui-context-cat-name">
-					<span className={`gui-context-cat-glyph ${colorClass}`}>{glyph}</span>
-					{t(label as never)}
-				</span>
-				<span className="gui-context-cat-pct">
-					{fmtTokens(tokens)} tokens · {percent.toFixed(1)}%
-				</span>
-			</div>
-			<div className="gui-usage-bar-track">
-				<div
-					className={`gui-usage-bar ${isFree ? "gui-usage-bar--ok" : "gui-usage-bar--accent"}`}
-					style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-				/>
-			</div>
-		</div>
-	);
-}
-
-/** TUI /context panel parity (modes/utils/context-usage.ts): the board is a
- *  20×10 = 200 cell grid. Categories render as filled ⛁ glyphs (messages as
- *  ⛃), free space as empty ⛶, the autocompact reserve as ⛝. Cells flow
- *  categories → free → buffer, same as the TUI. */
-const CONTEXT_GRID_COLS = 20;
-const CONTEXT_GRID_ROWS = 10;
-const CONTEXT_GRID_CELLS = CONTEXT_GRID_COLS * CONTEXT_GRID_ROWS;
-const CONTEXT_CELL_FILLED = "⛁";
-const CONTEXT_CELL_MESSAGES = "⛃";
-const CONTEXT_CELL_FREE = "⛶";
-const CONTEXT_CELL_BUFFER = "⛝";
-
-function renderContextGrid(breakdown: ContextBreakdownView, autoCompactBufferTokens = 0): ReactNode {
-	const total = Math.max(1, breakdown.contextWindow);
-	const cells = CONTEXT_GRID_CELLS;
-	const cats: Array<{ n: number; cls: string; glyph: string }> = [
-		{ n: breakdown.systemPromptTokens, cls: "gui-context-cell--system", glyph: CONTEXT_CELL_FILLED },
-		{ n: breakdown.systemToolsTokens, cls: "gui-context-cell--tools", glyph: CONTEXT_CELL_FILLED },
-		{ n: breakdown.systemContextTokens, cls: "gui-context-cell--context", glyph: CONTEXT_CELL_FILLED },
-		{ n: breakdown.skillsTokens, cls: "gui-context-cell--skills", glyph: CONTEXT_CELL_FILLED },
-		{ n: breakdown.messagesTokens, cls: "gui-context-cell--messages", glyph: CONTEXT_CELL_MESSAGES },
-	];
-	// TUI /context parity: every non-zero category occupies AT LEAST one
-	// cell (Math.max(1, …)) — plain rounding drops small-but-present
-	// categories (system prompt / skills / messages) to zero.
-	const tokensPerCell = total / cells;
-	const ratioCells = (tokens: number): number => (tokens <= 0 ? 0 : Math.max(1, Math.round(tokens / tokensPerCell)));
-	const counts = cats.map(c => ratioCells(c.n));
-	// Autocompact reserve cells come AFTER free space (TUI order); free fills
-	// the remainder so the board sums to exactly 200.
-	const bufferCount =
-		autoCompactBufferTokens > 0 ? Math.max(1, Math.round(autoCompactBufferTokens / tokensPerCell)) : 0;
-	let used = counts.reduce((a, b) => a + b, 0) + bufferCount;
-	// Over-allocation (small windows where the at-least-one rule overruns):
-	// trim from the LARGEST categories first so the board never overflows.
-	if (used > cells) {
-		const idx = counts.map((_, i) => i).sort((a, b) => counts[b]! - counts[a]!);
-		for (const i of idx) {
-			if (used <= cells) break;
-			if (counts[i]! > 1) {
-				counts[i] = counts[i]! - 1;
-				used--;
-			}
-		}
-	}
-	const free = Math.max(0, cells - used);
-	const cellList: Array<{ glyph: string; cls: string }> = [];
-	for (let i = 0; i < cats.length; i++) {
-		for (let j = 0; j < (counts[i] ?? 0); j++) cellList.push({ glyph: cats[i]!.glyph, cls: cats[i]!.cls });
-	}
-	for (let j = 0; j < free; j++) cellList.push({ glyph: CONTEXT_CELL_FREE, cls: "gui-context-cell--free" });
-	for (let j = 0; j < bufferCount; j++) cellList.push({ glyph: CONTEXT_CELL_BUFFER, cls: "gui-context-cell--buffer" });
-	return (
-		<div className="gui-context-grid" role="img" aria-label="Context window visualization">
-			{Array.from({ length: CONTEXT_GRID_ROWS }, (_, r) => (
-				<div className="gui-context-grid-row" key={r}>
-					{Array.from({ length: CONTEXT_GRID_COLS }, (_, c) => {
-						const cell = cellList[r * CONTEXT_GRID_COLS + c];
-						return cell ? (
-							// Anonymous visual cells — index is identity.
-							// biome-ignore lint/suspicious/noArrayIndexKey: grid cells
-							<span key={c} className={`gui-context-cell ${cell.cls}`}>
-								{cell.glyph}
-							</span>
-						) : null;
-					})}
-				</div>
-			))}
 		</div>
 	);
 }

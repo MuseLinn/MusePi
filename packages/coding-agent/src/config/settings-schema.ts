@@ -153,6 +153,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Output Limits",
 		"Execution",
 		"Discovery & MCP",
+		"Extensions",
 		"Developer",
 	],
 	tasks: ["Modes", "Subagents", "Isolation", "Commands & Skills"],
@@ -1308,6 +1309,20 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// 用户全局提示词区块(Modes §5.4/决策 #7):注入 composer,优先级高于一切预设(同名覆盖)。
+	// 键名 prompt.sections 与 mode 文件的 prompt 字段同构(区块数组),位置在 settings 标识
+	// 用户级、mode 文件标识预设级 —— 与 DSH 用户 patch 层 > bundle 层语义一致。
+	"prompt.sections": {
+		type: "array",
+		default: [],
+		ui: {
+			tab: "model",
+			group: "Prompt",
+			label: "Custom prompt sections",
+			description:
+				"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections",
+		},
+	},
 	personality: {
 		type: "enum",
 		values: ["default", "friendly", "pragmatic", "none"] as const,
@@ -5207,6 +5222,16 @@ export const SETTINGS_SCHEMA = {
 			options: TTS_LOCAL_VOICE_OPTIONS,
 		},
 	},
+	"tts.autoRead": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Auto-read new replies",
+			description: "Automatically read aloud new assistant replies via the local TTS engine",
+		},
+	},
 	"speech.enabled": {
 		type: "boolean",
 		default: false,
@@ -5642,6 +5667,18 @@ export const SETTINGS_SCHEMA = {
 	"commit.mapReduceMaxConcurrency": { type: "number", default: 5 },
 
 	"commit.changelogMaxDiffChars": { type: "number", default: 120000 },
+
+	"extensionHandlers.toolCallTimeoutMs": {
+		type: "number",
+		default: 30_000,
+		ui: {
+			tab: "tools",
+			group: "Extensions",
+			label: "Tool Call Handler Timeout (ms)",
+			description:
+				"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count",
+		},
+	},
 
 	"dev.autoqa": {
 		type: "boolean",

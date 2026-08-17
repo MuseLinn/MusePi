@@ -19,8 +19,8 @@
 			"react-dom"
 		],
 		"paths": {
-			"@musepi/collab-web/src/*": [
-				"./../collab-web/src/*"
+			"@musepi/desktop-web/src/*": [
+				"./../desktop-web/src/*"
 			]
 		}
 	}

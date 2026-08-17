@@ -1,4 +1,4 @@
-import { type CodeHighlightFn, useThemePreference } from "@musepi/collab-web";
+import { type CodeHighlightFn, useThemePreference } from "@musepi/desktop-web";
 import { useCallback } from "react";
 
 /**
@@ -6,7 +6,7 @@ import { useCallback } from "react";
  * the main process, which runs the same Rust tree-sitter `highlightCode` the
  * TUI uses. The renderer is sandboxed and cannot load native modules, so the
  * ANSI-colored output comes back over IPC and is converted to DOM spans by
- * collab-web's `highlightToCodeHtml`.
+ * desktop-web's `highlightToCodeHtml`.
  */
 
 /** Preload bridge surface used by the renderer (`window.electronAPI`). */

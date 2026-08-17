@@ -1,5 +1,5 @@
 /**
- * Lightweight i18n for the OMP stats dashboard (mirrors collab-web).
+ * Lightweight i18n for the OMP stats dashboard (mirrors desktop-web).
  *
  * Translation keys ARE the English strings (pass-through for en-US).
  * `t()` must only be called at render time, never at module load time.
@@ -28,7 +28,7 @@ function detectLocale(): string {
 }
 
 // React re-render trigger: a simple version counter that increments on locale change.
-// biome-ignore lint/correctness/noUnusedVariables: version counter kept for collab-web parity; listeners drive the re-render
+// biome-ignore lint/correctness/noUnusedVariables: version counter kept for desktop-web parity; listeners drive the re-render
 let localeVersion = 0;
 const listeners = new Set<() => void>();
 
@@ -85,7 +85,7 @@ export function t(key: string, ...args: string[]): string {
 // ── Initialization ───────────────────────────────────────────────────────────
 
 // Restore a persisted locale before the first render. Runs at module import,
-// which precedes React's first paint (mirrors collab-web's root init).
+// which precedes React's first paint (mirrors desktop-web's root init).
 try {
 	const stored = globalThis.localStorage.getItem("omp.stats.locale");
 	if (stored === "zh-CN" || stored === "en-US") {

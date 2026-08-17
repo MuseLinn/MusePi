@@ -17,7 +17,7 @@ const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification,
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
-const { probe, restart, start, kill } = require("./daemon.cjs");
+const { probe, restart, start, kill, portOpen } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
 const { checkForUpdates } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
@@ -57,12 +57,13 @@ function daemonEnv() {
 // heavy frosted-glass compositing — 24px backdrop blurs, menu overlays —
 // stays GPU-backed). OMP_SOFTWARE_GL=1 opts out for remote/virtualized
 // displays where the GPU compositor misbehaves.
-// Windows: GPU compositing of transparent windows misbehaves there — every
-// translucent surface redraws independently, so the whole app (main window,
-// pet, overlays) flickers per-element at different rates. The GUI is
-// lightweight (chat + settings + pet), so software rendering costs nothing;
-// keep GPU on macOS where the frosted-glass blurs need the compositor.
-if (process.platform === "win32" || process.env.OMP_SOFTWARE_GL === "1") {
+// NOTE: Windows used to disable GPU compositing here because transparent
+// windows flicker per-element there. That is fixed by the PLATFORM-NATIVE
+// window material instead (Windows 11 backgroundMaterial via the DWM
+// compositor, opaque window — see createWindow): software rendering made
+// the 119 CSS backdrop-filter surfaces CPU-composited every frame, which
+// is the visible lag vs macOS. GPU stays on everywhere now.
+if (process.env.OMP_SOFTWARE_GL === "1") {
 	app.disableHardwareAcceleration();
 } else {
 	app.commandLine.appendSwitch("enable-gpu");
@@ -72,6 +73,23 @@ if (process.platform === "win32" || process.env.OMP_SOFTWARE_GL === "1") {
 const DEV = !app.isPackaged;
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
 const ICON_PATH = path.resolve(__dirname, "..", "build", "icon.png");
+
+/**
+ * Windows 11 (build 10.0.22000+): native Mica/Acrylic window materials are
+ * available via backgroundMaterial (DWM compositor). Windows 10 falls back
+ * to an opaque frame with a painted background.
+ */
+const IS_WIN11 =
+	process.platform === "win32" &&
+	(() => {
+		try {
+			const v = process.getSystemVersion?.() ?? "";
+			const m = /10\.0\.(\d+)/.exec(v);
+			return m ? Number(m[1]) >= 22000 : false;
+		} catch {
+			return false;
+		}
+	})();
 
 // Single instance: a second `electron .` (dev:hot relaunch race, double
 // launch) focuses the running window instead of stacking another. The
@@ -568,6 +586,133 @@ function focusMainFromPet() {
 // The bubble window is sized to EXACTLY its content (the renderer reports
 // the content box; see bubble-set-size) and parked above the pet window,
 // following it on every move/snap/settle.
+// Tray diag — file log (stdout is buffered/unreliable under start /b).
+const TRAY_DIAG = path.join(os.tmpdir(), "musepi-tray-diag.log");
+function trayLog(msg) {
+	try { fs.appendFileSync(TRAY_DIAG, `${new Date().toISOString()} ${msg}\n`); } catch {}
+}
+
+// ── Self-drawn frosted tray menu (win32) ─────────────────────────────────
+// The native Electron Menu renders as a classic Win32 menu on Windows —
+// no acrylic. Windows 11 gets a real BrowserWindow with DWM Acrylic that
+// pops above the tray icon (the same material the main window uses);
+// macOS/Linux keep the native Menu (system vibrancy / theme glass).
+let trayMenuWindow = null;
+// Fixed-size tray menu: the renderer lays out internally and scrolls when
+// content overflows (sessions + provider usage can outgrow the window), so
+// the main process never resizes it dynamically.
+const TRAY_MENU_HEIGHT = 440;
+let trayMenuLastShow = 0;
+
+function createTrayMenuWindow() {
+	if (trayMenuWindow && !trayMenuWindow.isDestroyed()) return trayMenuWindow;
+	trayMenuWindow = new BrowserWindow({
+		width: 316,
+		height: TRAY_MENU_HEIGHT,
+		title: "MusePi",
+		frame: false,
+		transparent: !(process.platform === "win32" && IS_WIN11),
+		...(process.platform === "win32" && IS_WIN11 ? { backgroundMaterial: "acrylic" } : {}),
+		backgroundColor: "#00000000",
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		resizable: false,
+		fullscreenable: false,
+		show: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.cjs"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: true,
+			backgroundThrottling: false,
+		},
+	});
+	trayMenuWindow.setAlwaysOnTop(true, "pop-up-menu");
+	trayMenuWindow.loadFile(path.join(DIST_DIR, "tray-menu.html"));
+	// Diag: is the preload bridge actually exposed to this window?
+	trayMenuWindow.webContents.on("did-finish-load", () => {
+		trayMenuWindow?.webContents
+			.executeJavaScript("JSON.stringify({ api: typeof window.electronAPI, tray: typeof window.electronAPI?.trayMenu })")
+			.then(t => trayLog(`bridges ${t}`))
+			.catch(err => trayLog(`bridge check err: ${err?.message}`));
+	});
+	trayMenuWindow.webContents.on("preload-error", (_e, preloadPath, error) => {
+		trayLog(`preload-error ${preloadPath}: ${error?.message}`);
+	});
+	trayMenuWindow.webContents.on("console-message", (event) => {
+		trayLog(`renderer: ${event.message}`);
+	});
+	// Click-away closes the menu — but DEBOUNCED: a blur can fire while
+	// the click that should activate a menu button is in flight (window
+	// activation races the pointer-down), and hiding immediately would
+	// eat the click. Only hide if still unfocused 150ms later.
+	let blurTimer = null;
+	trayMenuWindow.on("blur", () => {
+		if (Date.now() - trayMenuLastShow < 200) return; // focus race after show
+		if (blurTimer) clearTimeout(blurTimer);
+		blurTimer = setTimeout(() => {
+			if (trayMenuWindow && !trayMenuWindow.isDestroyed() && !trayMenuWindow.isFocused()) {
+				trayLog("menu hide (blur, still unfocused)");
+				trayMenuWindow.hide();
+			}
+		}, 150);
+	});
+	trayMenuWindow.on("focus", () => {
+		if (blurTimer) {
+			clearTimeout(blurTimer);
+			blurTimer = null;
+		}
+	});
+	return trayMenuWindow;
+}
+
+function positionTrayMenu(win, bounds) {
+	const [width, height] = win.getSize();
+	if (!bounds) {
+		const work = screen.getPrimaryDisplay().workArea;
+		win.setPosition(work.x + work.width - width - 12, work.y + work.height - height - 12);
+		return;
+	}
+	const display = screen.getDisplayNearestPoint({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 });
+	const work = display.workArea;
+	// Windows taskbar sits at the bottom by default: pop the menu ABOVE
+	// the icon, right-aligned with the tray column. Taskbar on top/side:
+	// clamp inside the work area.
+	const right = work.x + work.width - 12;
+	const x = Math.max(work.x + 12, right - width);
+	const y = bounds.y - height - 10;
+	win.setPosition(Math.round(x), Math.round(y < work.y ? work.y + 12 : y));
+}
+
+function toggleTrayMenu(bounds) {
+	const win = createTrayMenuWindow();
+	if (win.isVisible()) {
+		trayLog("menu hide (was visible)");
+		win.hide();
+		return;
+	}
+	positionTrayMenu(win, bounds);
+	trayMenuLastShow = Date.now();
+	win.show();
+	win.focus();
+	// Windows focus races the pointer click that opened the menu — the
+	// window can blur immediately after show() even though it is about to
+	// receive the click. Ignore blurs in the 200ms after showing.
+	trayLog(`menu show at ${JSON.stringify(win.getBounds())} focused=${win.isFocused()}`);
+}
+
+function hideTrayMenu() {
+	if (trayMenuWindow && !trayMenuWindow.isDestroyed()) trayMenuWindow.hide();
+}
+
+// Tray menu window IPC — actions reuse the shared tray action router.
+ipcMain.on("tray-menu:action", (_event, payload) => {
+	trayLog(`ipc action ${JSON.stringify(payload)}`);
+	const { type, ...params } = payload ?? {};
+	handleTrayAction({ type, ...params });
+	if (type !== "quit") hideTrayMenu();
+});
+
 let bubbleWindow = null;
 let bubbleSize = null;
 /** Last pet:activity payload — replayed to the bubble window when it
@@ -582,12 +727,18 @@ function createBubbleWindow() {
 		height: 120,
 		title: "MusePi Bubbles",
 		frame: false,
-		// macOS: REAL frosted glass — under-window vibrancy + transparent
-		// background, the main window's recipe (transparent:true + vibrancy
-		// renders the whole window as an opaque panel instead). The cards
-		// blur the vibrancy layer via CSS backdrop-filter (.pet-glass-native
-		// in pet-window.css). Win/Linux: vibrancy is unavailable, so stay on
-		// the transparent per-pixel window with the self-drawn fake glass.
+		// Platform-native frosted glass for the bubble/panel surface:
+		// - macOS: under-window vibrancy + transparent background, the main
+		//   window's recipe (transparent + vibrancy would render the whole
+		//   window as an opaque panel instead).
+		// - Windows/Linux: TRANSPARENT per-pixel window — the panel/bubbles
+		//   are rounded shapes, and DWM Acrylic (backgroundMaterial) only
+		//   works on opaque windows, which would paint a full RECTANGLE of
+		//   frosted glass around the rounded cards (observed: visible glass
+		//   band outside the panel corners). The cards self-draw their glass
+		//   (.pet-glass-native: translucent surface + highlight edge, the
+		//   clawd-on-desk double-layer pattern) so the window shape hugs the
+		//   content exactly and everything outside stays transparent.
 		transparent: process.platform !== "darwin",
 		...(process.platform === "darwin" ? { vibrancy: "under-window" } : {}),
 		backgroundColor: "#00000000",
@@ -692,51 +843,77 @@ function trayFetchState() {
 	traySend("tray.state", {});
 }
 
+// Shared action router for tray + self-drawn tray menu (win32): the
+// tray click, the native menu (mac/linux) and the frosted menu window
+// all land here so the two surfaces cannot drift apart.
+function handleTrayAction(action) {
+	trayLog(`action ${JSON.stringify(action)}`);
+	switch (action.type) {
+		case "toggle-tray-menu":
+			toggleTrayMenu(action.bounds);
+			break;
+		case "focus-session":
+			if (typeof action.sessionId === "string" && mainWindow && !mainWindow.isDestroyed()) {
+				focusMainFromPet();
+				mainWindow.webContents.send("tray:open-session", action.sessionId);
+			}
+			break;
+		case "respond-approval":
+			// Inline Allow/Deny from the tray menu → the same RPCs the
+			// renderer's approval card uses.
+			if (typeof action.id === "string" && typeof action.sessionId === "string") {
+				traySend(action.approved === true ? "tool.approve" : "tool.deny", {
+					sessionId: action.sessionId,
+					requestId: action.id,
+				});
+			}
+			break;
+		case "new-session":
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				focusMainFromPet();
+				mainWindow.webContents.send("tray:new-session");
+			}
+			break;
+		case "mini-chat":
+			openMiniChatWindow();
+			break;
+		case "show-main-window":
+			if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+			focusMainFromPet();
+			break;
+		case "quit":
+			app.quit();
+			break;
+		default:
+			break;
+	}
+}
+
 function ensureTray() {
 	if (trayController) return;
+	try {
 	trayController = createTrayController({
-		onAction: (action) => {
-			switch (action.type) {
-				case "focus-session":
-					if (typeof action.sessionId === "string" && mainWindow && !mainWindow.isDestroyed()) {
-						focusMainFromPet();
-						mainWindow.webContents.send("tray:open-session", action.sessionId);
-					}
-					break;
-				case "respond-approval":
-					// Inline Allow/Deny from the tray menu → the same RPCs the
-					// renderer's approval card uses.
-					if (typeof action.id === "string" && typeof action.sessionId === "string") {
-						traySend(action.approved === true ? "tool.approve" : "tool.deny", {
-							sessionId: action.sessionId,
-							requestId: action.id,
-						});
-					}
-					break;
-				case "new-session":
-					if (mainWindow && !mainWindow.isDestroyed()) {
-						focusMainFromPet();
-						mainWindow.webContents.send("tray:new-session");
-					}
-					break;
-				case "mini-chat":
-					openMiniChatWindow();
-					break;
-				case "show-main-window":
-					if (!mainWindow || mainWindow.isDestroyed()) createWindow();
-					focusMainFromPet();
-					break;
-				case "quit":
-					app.quit();
-					break;
-				default:
-					break;
+		onAction: (action) => handleTrayAction(action),
+		onSnapshot: (snapshot) => {
+			// win32 self-drawn tray menu: forward the polled snapshot so
+			// the frosted window renders live sessions/approvals/usage.
+			if (trayMenuWindow && !trayMenuWindow.isDestroyed()) {
+				trayMenuWindow.webContents.send("tray-menu:snapshot", snapshot);
 			}
 		},
 	});
-	const tick = () => {
+	const tick = async () => {
 		if (trayClosed) return;
-		const port = probe();
+		let port = probe();
+		// ws.port can be STALE — a previous daemon's port that no longer
+		// listens (a daemon that fails its writeFile leaves the old value;
+		// observed: ws.port said 8741 while the daemon bound 8300). A dead
+		// port must count as "no daemon": otherwise the tray WS never opens,
+		// update() never runs, and the tray icon is never created.
+		if (port && !(await portOpen(port))) port = null;
+		// Fall back to the renderer's DEFAULT_URL port (gui/src/app.tsx) —
+		// the daemon binds it and it is the documented default.
+		if (!port && (await portOpen(8300))) port = 8300;
 		if (!port) {
 			trayController.update([]);
 			closeTrayWs();
@@ -769,6 +946,9 @@ function ensureTray() {
 	};
 	tick();
 	trayPollTimer = setInterval(tick, 5000);
+	} catch (err) {
+		console.error("[tray] ensureTray failed:", err?.stack ?? err);
+	}
 }
 
 function closeTrayWs() {
@@ -1576,6 +1756,62 @@ ipcMain.handle("pet-install-url", async (_event, zipUrl) => {
 	}
 });
 
+// ── Scrollbar skin import (zip → scrollbar.json + optional pac.svg) ────
+// Same unpack path as petdex: bsdtar handles zip on every platform. A
+// skin zip carries scrollbar.json (id/displayName/base/colors/size +
+// optional pacGlyphPath) — the renderer validates the shape and persists
+// it to the skin registry (lib/scrollbar-skins.ts). The market slots
+// below are skeletons (interface aligned with petdex) until a skin
+// ecosystem exists.
+async function importScrollbarSkinFromZip(zipPath) {
+	const dest = path.join(app.getPath("userData"), "scrollbar-skins", `skin-${Date.now()}`);
+	fs.mkdirSync(dest, { recursive: true });
+	await new Promise((resolve, reject) => {
+		execFile("tar", ["-xf", zipPath, "-C", dest], (err) => (err ? reject(err) : resolve()));
+	});
+	const jsonPath = path.join(dest, "scrollbar.json");
+	let meta;
+	try {
+		meta = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+	} catch {
+		return { error: "invalid-scrollbar-skin" };
+	}
+	let pacGlyph = null;
+	const glyphRel = typeof meta.pacGlyphPath === "string" ? meta.pacGlyphPath : null;
+	if (glyphRel) {
+		const glyphPath = path.join(dest, glyphRel);
+		if (!fs.existsSync(glyphPath)) return { error: "missing-pac-glyph" };
+		pacGlyph = `data:image/svg+xml;base64,${fs.readFileSync(glyphPath).toString("base64")}`;
+	}
+	return {
+		id: typeof meta.id === "string" && meta.id ? meta.id : `skin-${Date.now()}`,
+		displayName: typeof meta.displayName === "string" && meta.displayName ? meta.displayName : "Custom skin",
+		base: meta.base === "gummy" || meta.base === "pacman" ? meta.base : "pacman",
+		colors: {
+			...(typeof meta.colors?.accent === "string" ? { accent: meta.colors.accent } : {}),
+			...(typeof meta.colors?.track === "string" ? { track: meta.colors.track } : {}),
+			...(typeof meta.colors?.eaten === "string" ? { eaten: meta.colors.eaten } : {}),
+		},
+		...(Number.isFinite(meta.size) ? { size: meta.size } : {}),
+		pacGlyph,
+	};
+}
+
+ipcMain.handle("scrollbar-skin-import", async () => {
+	const picked = await dialog.showOpenDialog(mainWindow ?? undefined, {
+		title: "Import scrollbar skin",
+		filters: [{ name: "Scrollbar skin", extensions: ["zip"] }],
+		properties: ["openFile"],
+	});
+	const zipPath = picked.filePaths?.[0];
+	if (!zipPath) return null;
+	return importScrollbarSkinFromZip(zipPath);
+});
+
+// ── Scrollbar skin market (预留骨架:接口对齐 petdex,生态就绪后接站点) ──
+ipcMain.handle("scrollbar-skin-search", async () => ({ skins: [] }));
+ipcMain.handle("scrollbar-skin-install-url", async () => ({ error: "not-implemented" }));
+
 
 function mainWindowBoundsFile() {
 	return path.join(app.getPath("userData"), "main-window.json");
@@ -1645,12 +1881,22 @@ function createWindow() {
 			// the iframe fallback cannot read external pages.
 			webviewTag: true,
 		},
-		// Native window glass (macOS 26 Tahoe renders this as the current
-		// system material): transparent background + under-window vibrancy so
-		// the desktop shows through the shell; the page paints translucent
-		// scrims over it. The renderer toggles this off via `gui-vibrancy`.
-		backgroundColor: "#00000000",
-		vibrancy: "under-window",
+		// Platform-native window glass (no CSS compositing cost):
+		// - macOS: transparent background + under-window vibrancy — the
+		//   system material paints the shell, the page paints translucent
+		//   scrims over it. The renderer toggles off via `gui-vibrancy`.
+		// - Windows: TRANSPARENT window + CSS glass layer. DWM Acrylic
+		//   (backgroundMaterial) has no per-window tint-opacity API, so the
+		//   磨砂玻璃透明度 slider could only change the page tint's depth,
+		//   never the background see-through (user report). A transparent
+		//   frame lets the CSS --gui-glass-alpha drive real see-through;
+		//   the glass layer self-draws (blur + translucent scrim, same
+		//   recipe as the bubble window). Cost: per-surface redraws on
+		//   transparent frames — the reason acrylic was chosen before —
+		//   mitigated by keeping the main scrim blur-free (alpha only).
+		...(process.platform === "darwin"
+			? { backgroundColor: "#00000000", vibrancy: "under-window" }
+			: { backgroundColor: "#00000000" }),
 	});
 
 	// Dev hot-reload renderer: with MUSEPI_GUI_DEV=1 (bun run desktop:dev)
@@ -1867,6 +2113,18 @@ ipcMain.handle("haptic", (_event, pattern = 0) => {
 });
 ipcMain.handle("gui-vibrancy", (event, enabled, style) => {	const win = BrowserWindow.fromWebContents(event.sender);
 	if (!win) return;
+	if (process.platform === "win32") {
+		// Windows: glass is DWM-provided (backgroundMaterial). Toggle the
+		// material instead of window transparency — transparent:true on
+		// Windows flickers per-surface under GPU and would cover the Mica.
+		try {
+			win.setBackgroundMaterial(enabled ? "acrylic" : "none");
+		} catch {
+			// Windows 10 / unsupported: material API absent — opaque
+			// background stands, nothing to do.
+		}
+		return;
+	}
 	if (enabled) {
 		win.setVibrancy("under-window");
 		win.setBackgroundColor("#00000000");
@@ -2149,10 +2407,21 @@ ipcMain.handle("open-in-apps", async () => {
 			if (appPath) found.push({ id: cand.id, appName: cand.appName, path: appPath });
 		}
 	} else if (process.platform === "win32") {
+		const { execFileSync } = require("node:child_process");
 		for (const cand of OPEN_IN_APP_WINDOWS) {
 			if (!cand.absolute) {
-				// explorer.exe / wt.exe resolve through the system PATH.
-				found.push({ id: cand.id, appName: cand.appName, path: cand.exe });
+				// explorer.exe / wt.exe live on the system PATH — resolve
+				// to a real path so app.getFileIcon() below can extract an
+				// actual icon (a bare exe name makes getFileIcon fail and
+				// the renderer falls back to a letter chip).
+				let resolved = cand.exe;
+				try {
+					const hit = execFileSync("where.exe", [cand.exe], { encoding: "utf8" }).split(/\r?\n/)[0].trim();
+					if (hit) resolved = hit;
+				} catch {
+					// not on PATH — open-with will still fail later; keep bare name
+				}
+				found.push({ id: cand.id, appName: cand.appName, path: resolved });
 				continue;
 			}
 			if (fs.existsSync(cand.exe)) found.push({ id: cand.id, appName: cand.appName, path: cand.exe });

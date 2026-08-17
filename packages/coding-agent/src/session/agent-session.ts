@@ -512,6 +512,7 @@ export class AgentSession {
 	/** Last (enable, providerId) tuple resolved by `#syncAppendOnlyContext` — used to skip no-op invalidations. */
 	#lastAppendOnlyResolution?: { enable: boolean; providerId: string | undefined };
 	#eventListeners: AgentSessionEventListener[] = [];
+	#runStateListeners = new Set<(state: "running" | "idle") => void>();
 	#commandMetadataChangedListeners: CommandMetadataChangedListener[] = [];
 	#sessionChangeCallbacks = new Set<() => void>();
 	#observedSessionId: string | undefined;
@@ -600,6 +601,13 @@ export class AgentSession {
 	#codexResetCoordinator: CodexAutoRedeemCoordinator;
 	// Extension system
 	#extensionRunner: ExtensionRunner | undefined = undefined;
+	/**
+	 * P5 HMR busy gate: when a session-level extension reload is requested
+	 * while the session is streaming, the target entry is parked here (single
+	 * slot, last-wins) and performed at the next idle `agent_end`. Avoids a
+	 * half-replaced tool surface mid-turn without queues or locks.
+	 */
+	#extensionReloadPending: string | undefined = undefined;
 	/**
 	 * Backs `ctx.setInterval`/`setTimeout`/`clearTimer` for the runner-less
 	 * command-context fallback (SDK embeddings with no extension runner). Lazily
@@ -934,6 +942,9 @@ export class AgentSession {
 		if (!pending) return;
 		this.#pendingAgentEndEmit = undefined;
 		this.#emit(pending);
+		// P5 HMR: this is the settle flush for a deferred agent_end (prompt
+		// count just hit 0) — perform a parked extension reload now.
+		this.#drainPendingExtensionReload();
 	}
 
 	/**
@@ -1408,7 +1419,7 @@ export class AgentSession {
 		// Pre-scheduling tool_call wiring: extension handlers run at arg-prep
 		// time so a block/revision lands before concurrency resolution,
 		// tool_execution_start, and the wrapper's approval gate.
-		this.agent.beforeToolCall = ctx => this.#beforeToolCall(ctx);
+		this.agent.beforeToolCall = (ctx, signal) => this.#beforeToolCall(ctx, signal);
 		this.agent.providerSessionState = this.#providerSessionState;
 		this.#syncAgentSessionId();
 		this.#todo.syncFromBranch();
@@ -1993,6 +2004,18 @@ export class AgentSession {
 		}
 	}
 
+	#emitRunState(state: "running" | "idle"): void {
+		for (const listener of this.#runStateListeners) {
+			try {
+				listener(state);
+			} catch (error) {
+				logger.warn("AgentSession run-state listener threw", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+	}
+
 	/**
 	 * Emit a UI-only notice to the session. Surfaces in interactive mode as a
 	 * `showWarning` / `showError` / `showStatus` line; non-interactive modes
@@ -2202,6 +2225,10 @@ export class AgentSession {
 		} finally {
 			resolve();
 		}
+		// P5 HMR: the agent loop is done (agent.state.isStreaming is false);
+		// a parked extension reload performs now unless a prompt is still in
+		// flight — that case drains at #flushPendingAgentEnd once idle.
+		this.#drainPendingExtensionReload();
 	};
 
 	#createMessageEndPersistenceSlot(message: AgentMessage): MessageEndPersistenceSlot | undefined {
@@ -2463,6 +2490,7 @@ export class AgentSession {
 		// turn: state-based lookups take over again.
 		if (event.type === "agent_start") {
 			this.#prunedTerminalRefusal = undefined;
+			this.#emitRunState("running");
 		}
 		// Step the mid-run todo counter synchronously, BEFORE any await in this
 		// handler. The agent loop's next-turn `getAsideMessages` poll can run
@@ -2758,6 +2786,7 @@ export class AgentSession {
 			// maintenance can emit agent_end, so preserve the state at settle entry.
 			const ttsrAbortPendingAtAgentEnd = this.#ttsr.abortPending;
 			const emitAgentEndNotification = async (options?: { willContinue?: boolean }) => {
+				this.#emitRunState("idle");
 				// Public agent_end is held out of the eager display pass and emitted
 				// here after maintenance routing, tagged isTerminal so subscribers can
 				// tell final settles from scheduled continuations.
@@ -3322,7 +3351,7 @@ export class AgentSession {
 	 * emit a second event (nested xd:// device dispatches and direct non-loop
 	 * execution still emit there).
 	 */
-	async #beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> {
+	async #beforeToolCall(ctx: BeforeToolCallContext, signal?: AbortSignal): Promise<BeforeToolCallResult | undefined> {
 		const runner = this.#extensionRunner;
 		if (!runner?.hasHandlers("tool_call")) return undefined;
 		const metadata = ctx.toolCall.providerMetadata;
@@ -3340,12 +3369,15 @@ export class AgentSession {
 			? { actions: computer.actions, pendingSafetyChecks: computer.pendingSafetyChecks }
 			: ctx.args;
 		runner.markToolCallEmitted(ctx.toolCall.id, ctx.tool.name);
-		const callResult = await runner.emitToolCall({
-			type: "tool_call",
-			toolName: ctx.tool.name,
-			toolCallId: ctx.toolCall.id,
-			input: normalizeToolEventInput(ctx.tool.name, resolveToolEventInput(ctx.tool, eventArgs)),
-		});
+		const callResult = await runner.emitToolCall(
+			{
+				type: "tool_call",
+				toolName: ctx.tool.name,
+				toolCallId: ctx.toolCall.id,
+				input: normalizeToolEventInput(ctx.tool.name, resolveToolEventInput(ctx.tool, eventArgs)),
+			},
+			signal,
+		);
 		if (callResult?.block) {
 			return { block: true, reason: callResult.reason || "Tool execution was blocked by an extension" };
 		}
@@ -3631,6 +3663,15 @@ export class AgentSession {
 				this.#eventListeners.splice(index, 1);
 			}
 		};
+	}
+
+	/**
+	 * Observe authoritative run-state transitions before public `agent_end`
+	 * deferral, for lifecycle owners that must not remain stale while prompts unwind.
+	 */
+	subscribeRunState(listener: (state: "running" | "idle") => void): () => void {
+		this.#runStateListeners.add(listener);
+		return () => this.#runStateListeners.delete(listener);
 	}
 
 	/** Register cleanup that runs when this AgentSession adopts a different session ID. */
@@ -3995,6 +4036,7 @@ export class AgentSession {
 			this.#unsubscribeModelRoles = undefined;
 		}
 		this.#eventListeners = [];
+		this.#runStateListeners.clear();
 		this.#sessionChangeCallbacks.clear();
 
 		// A dispose triggered mid-turn (Ctrl-C / timeout / hard-killed subagent)
@@ -4471,6 +4513,76 @@ export class AgentSession {
 	/** Runs a registry/presentation mutation in this session's shared queue. */
 	runToolRegistryMutation<T>(mutation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 		return this.#tools.runToolRegistryMutation(mutation, signal);
+	}
+
+	/**
+	 * Entry mtimes of the session's loaded extensions (P5 HMR). The daemon
+	 * compares fresh stats against these to decide which loaded entries
+	 * changed, without trusting fs.watch filenames (unreliable on Windows).
+	 */
+	getExtensionEntryMtimes(): ReadonlyMap<string, number> {
+		return this.#extensionRunner?.getExtensionEntryMtimes() ?? new Map();
+	}
+
+	/**
+	 * Hot-reload one extension entry in this session (P5 HMR v2).
+	 *
+	 * Busy gate: while the session is streaming the reload is parked in a
+	 * single pending slot and performed at the next idle `agent_end` — the
+	 * caller still gets `{ deferred: true }` immediately so it can decide
+	 * when to surface the change. Idle sessions reload immediately.
+	 *
+	 * On completion, tool names the replacement did NOT re-register are
+	 * dropped from the session tool registry (`removedTools` in the result);
+	 * re-registered names were already replaced in place by the registration
+	 * listener and are excluded. Extensions with no runner return an empty
+	 * result.
+	 */
+	async reloadExtension(
+		entryPath: string,
+	): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { removedTools: [], errors: [], deferred: false };
+		if (this.isStreaming) {
+			this.#extensionReloadPending = entryPath;
+			return { removedTools: [], errors: [], deferred: true };
+		}
+		return this.#performExtensionReload(entryPath);
+	}
+
+	/** Runs a session-level extension reload and its registry cleanup. */
+	async #performExtensionReload(
+		entryPath: string,
+	): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { removedTools: [], errors: [], deferred: false };
+		const { removedTools, errors } = await runner.reloadExtension(entryPath, this.sessionManager.getCwd());
+		// Only names the replacement did not re-register are stale in the
+		// session registry — re-registered names were replaced in place by the
+		// registration listener during the reload.
+		const staleTools = removedTools.filter(name => !runner.getRegisteredTool(name));
+		if (staleTools.length > 0) {
+			await this.#tools.removeExtensionTools(staleTools);
+		}
+		return { removedTools: staleTools, errors, deferred: false };
+	}
+
+	/**
+	 * Drain a parked extension reload at an idle boundary (P5 HMR). Invoked
+	 * from the agent_end event handler and the deferred agent_end flush; both
+	 * are the session's settle signals. Fire-and-forget with error logging —
+	 * the reload result never blocks event delivery.
+	 */
+	#drainPendingExtensionReload(): void {
+		const pending = this.#extensionReloadPending;
+		if (!pending || this.isStreaming || this.#isDisposed) return;
+		this.#extensionReloadPending = undefined;
+		void this.#performExtensionReload(pending).catch(error => {
+			logger.warn("Deferred extension reload failed", {
+				extensionPath: pending,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
 	}
 
 	/** Names of every registered tool. */
@@ -5459,6 +5571,12 @@ export class AgentSession {
 	): Promise<void> {
 		this.#beginInFlight();
 		const generation = this.#promptGeneration;
+		// Optimistic emit: the user's own message must not wait on the
+		// usage-aware preflight, API-key resolution, or auto-thinking
+		// classification (the last one can call the model — hundreds of ms).
+		// The message is handed to agent.prompt with preEmittedMessages so
+		// the run loop skips re-broadcasting it (identity match).
+		const preEmittedMessages = this.agent.emitPromptMessages([message]);
 		try {
 			await this.#recovery.maybeRestoreRetryFallbackPrimary();
 			if (!(await this.#runUsageAwarePreflightForNextModelCall())) return;
@@ -5666,7 +5784,10 @@ export class AgentSession {
 				this.#planReferenceSent = true;
 			}
 			try {
-				await this.#recovery.promptAgentWithIdleRetry(messages, agentPromptOptions);
+				await this.#recovery.promptAgentWithIdleRetry(messages, {
+					...(agentPromptOptions ?? {}),
+					preEmittedMessages,
+				});
 			} finally {
 				this.#stats.setPendingSnapshot(undefined);
 			}

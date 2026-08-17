@@ -1,7 +1,7 @@
 /**
  * Font-scale verification: loads the built gui SPA in headless Chrome,
  * seeds --gui-font-scale through the document root, and asserts that both
- * the gui shell and a collab-web token-sized element follow it.
+ * the gui shell and a desktop-web token-sized element follow it.
  *
  * Usage: bun scripts/verify-font-scale.ts
  */

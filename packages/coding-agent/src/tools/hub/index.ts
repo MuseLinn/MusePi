@@ -377,7 +377,7 @@ export class HubTool implements AgentTool<typeof hubSchema, HubDetails> {
 				// instead of blocking a full message-timeout window.
 				const hasRunningPeer = messaging.registry
 					.listVisibleTo(messaging.senderId)
-					.some(ref => ref.status === "running");
+					.some(ref => messaging.registry.isRunning(ref));
 				if (!hasRunningPeer) return nothingToWaitForResult(this.session);
 			}
 			return executeMessageWait(messaging, { from, timeoutMs: params.timeoutMs }, signal);

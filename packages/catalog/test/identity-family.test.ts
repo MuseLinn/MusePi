@@ -5,7 +5,9 @@ import {
 	isGeminiModelId,
 	isGlmVisionModelId,
 	isGrokModelId,
+	isGrokMultiAgentModelId,
 	isGrokReasoningEffortCapable,
+	isGrokXHighEffortCapable,
 	isKimiK26ModelId,
 	isKimiModelId,
 	isMinimaxM2FamilyModelId,
@@ -339,6 +341,7 @@ describe("isGrokReasoningEffortCapable", () => {
 		expect(isGrokReasoningEffortCapable("grok-4.20-multi-agent")).toBe(true);
 		expect(isGrokReasoningEffortCapable("xai-oauth/grok-4.3")).toBe(true);
 		expect(isGrokReasoningEffortCapable("xai-oauth/grok-4.5")).toBe(true);
+		expect(isGrokReasoningEffortCapable("xai-oauth/grok-4.6")).toBe(true);
 		expect(isGrokReasoningEffortCapable("openrouter/xai/grok-3-mini")).toBe(true);
 	});
 
@@ -347,5 +350,37 @@ describe("isGrokReasoningEffortCapable", () => {
 		expect(isGrokReasoningEffortCapable("grok-4.20-0309-reasoning")).toBe(false);
 		expect(isGrokReasoningEffortCapable("gpt-5")).toBe(false);
 		expect(isGrokReasoningEffortCapable("")).toBe(false);
+	});
+});
+
+describe("isGrokMultiAgentModelId", () => {
+	test("matches grok-4.20-multi-agent SKUs across namespaces", () => {
+		expect(isGrokMultiAgentModelId("grok-4.20-multi-agent")).toBe(true);
+		expect(isGrokMultiAgentModelId("grok-4.20-multi-agent-0309")).toBe(true);
+		expect(isGrokMultiAgentModelId("xai/grok-4.20-multi-agent-beta-latest")).toBe(true);
+	});
+
+	test("rejects other Grok ids", () => {
+		expect(isGrokMultiAgentModelId("grok-4.5")).toBe(false);
+		expect(isGrokMultiAgentModelId("grok-4.6")).toBe(false);
+		expect(isGrokMultiAgentModelId("grok-4.20-0309-reasoning")).toBe(false);
+		expect(isGrokMultiAgentModelId("")).toBe(false);
+	});
+});
+
+describe("isGrokXHighEffortCapable", () => {
+	test("matches grok-4.6 and multi-agent SKUs across namespaces", () => {
+		expect(isGrokXHighEffortCapable("grok-4.6")).toBe(true);
+		expect(isGrokXHighEffortCapable("xai/grok-4.6")).toBe(true);
+		expect(isGrokXHighEffortCapable("xai-oauth/grok-4.6")).toBe(true);
+		expect(isGrokXHighEffortCapable("grok-4.20-multi-agent-0309")).toBe(true);
+	});
+
+	test("rejects Grok SKUs that clamp leftover xhigh to high", () => {
+		expect(isGrokXHighEffortCapable("grok-4.5")).toBe(false);
+		expect(isGrokXHighEffortCapable("grok-4.3")).toBe(false);
+		expect(isGrokXHighEffortCapable("grok-3-mini")).toBe(false);
+		expect(isGrokXHighEffortCapable("grok-build")).toBe(false);
+		expect(isGrokXHighEffortCapable("")).toBe(false);
 	});
 });

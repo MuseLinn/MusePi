@@ -1,6 +1,7 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PacMan } from "../vendor/pac-man";
 
 interface TurnMarker {
 	/** Content-space top of the user row (valid as the transcript scrolls). */
@@ -364,9 +365,13 @@ export function TurnRail({
 			if (hover === null) return base;
 			const dist = Math.abs(index - hover);
 			const factor = FALLOFF[Math.min(dist, FALLOFF.length - 1)] ?? 0;
-			return Math.round(base + (TICK_FOCUS_PX - base) * factor);
+			// Pac-man is a square glyph riding a 12px pitch slot: cap the
+			// proximity-wave magnification so the enlarged disc only
+			// overshoots the slot by ~2px (the tape mask clips the rest).
+			const focus = style === "pacman" ? 16 : TICK_FOCUS_PX;
+			return Math.round(base + (focus - base) * factor);
 		},
-		[active, hover],
+		[active, hover, style],
 	);
 
 	// Panel list geometry: centered on the highlight when the panel opens,
@@ -466,7 +471,16 @@ export function TurnRail({
 									className={`gui-turn-tick${hover === index ? " gui-turn-tick--hover" : ""}${active === index ? " gui-turn-tick--active" : ""}`}
 									style={{ top: `${index * TICK_PITCH_PX}px` }}
 								>
-									<span className="gui-turn-tick-bar" style={{ width: `${resolveWidth(index)}px` }} />
+								<span className="gui-turn-tick-bar" style={{ width: `${resolveWidth(index)}px` }}>
+									{style === "pacman" && (
+										<PacMan
+											size={resolveWidth(index)}
+											side={side === "left" ? "left" : "right"}
+											mouth={active === index ? 0.04 : hover === index ? 0.6 : 0.3}
+											animating={hover === index}
+										/>
+									)}
+								</span>
 								</div>
 							);
 						})}

@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { scheduler } from "node:timers/promises";
-import { clearCustomApis } from "@musepi/pi-ai/api-registry";
+import { clearCustomApis, registerCustomApi } from "@musepi/pi-ai/api-registry";
 import * as AIError from "@musepi/pi-ai/error";
 import { createMockModel, type MockContent, registerMockApi } from "@musepi/pi-ai/providers/mock";
 import { complete, completeSimple, stream, streamSimple } from "@musepi/pi-ai/stream";
@@ -636,12 +636,12 @@ describe("GeminiHeaderRunDetector", () => {
 	});
 });
 
-describe("thinking-loop cook fallback (result path)", () => {
+describe("thinking-loop retry budget (result path)", () => {
 	function loopResponse(): { content: MockContent[] } {
 		return { content: [{ type: "thinking", thinking: nearDuplicateLoop(12) }] };
 	}
 
-	test("completeSimple re-samples a loop then cooks through with the guard disabled", async () => {
+	test("completeSimple fails closed after three guarded attempts", async () => {
 		registerMockApi();
 		const waitSpy = spyOn(scheduler, "wait").mockResolvedValue(undefined);
 		try {
@@ -650,21 +650,18 @@ describe("thinking-loop cook fallback (result path)", () => {
 
 			const result = await completeSimple(mock.model, context());
 
-			// Three guarded attempts raise the stall; the fourth (guard disabled) cooks through.
-			expect(mock.calls).toHaveLength(4);
-			expect(result.stopReason).toBe("stop");
-			expect(result.content.some(block => block.type === "thinking")).toBe(true);
-			expect(result.errorMessage).toBeUndefined();
-			// First three dispatches are guarded; only the final cook pass disables it.
-			expect(mock.calls[0]?.options?.loopGuard?.enabled).toBeUndefined();
-			expect(mock.calls[3]?.options?.loopGuard?.enabled).toBe(false);
+			expect(mock.calls).toHaveLength(3);
+			expect(result.stopReason).toBe("error");
+			expect(result.content).toEqual([]);
+			expect(result.errorMessage).toContain(THINKING_LOOP_ERROR_MARKER);
+			expect(mock.calls.every(call => call.options?.loopGuard?.enabled !== false)).toBe(true);
 		} finally {
 			waitSpy.mockRestore();
 			clearCustomApis();
 		}
 	});
 
-	test("complete (non-simple) also cooks through after the abort budget", async () => {
+	test("complete (non-simple) also fails closed after three guarded attempts", async () => {
 		registerMockApi();
 		const waitSpy = spyOn(scheduler, "wait").mockResolvedValue(undefined);
 		try {
@@ -673,11 +670,11 @@ describe("thinking-loop cook fallback (result path)", () => {
 
 			const result = await complete(mock.model, context());
 
-			expect(mock.calls).toHaveLength(4);
-			expect(result.stopReason).toBe("stop");
-			expect(result.errorMessage).toBeUndefined();
-			expect(mock.calls[0]?.options?.loopGuard?.enabled).toBeUndefined();
-			expect(mock.calls[3]?.options?.loopGuard?.enabled).toBe(false);
+			expect(mock.calls).toHaveLength(3);
+			expect(result.stopReason).toBe("error");
+			expect(result.content).toEqual([]);
+			expect(result.errorMessage).toContain(THINKING_LOOP_ERROR_MARKER);
+			expect(mock.calls.every(call => call.options?.loopGuard?.enabled !== false)).toBe(true);
 		} finally {
 			waitSpy.mockRestore();
 			clearCustomApis();
@@ -706,23 +703,79 @@ describe("thinking-loop cook fallback (result path)", () => {
 		}
 	});
 
-	test("does not retry a contentful marker error (replay-unsafe output)", async () => {
+	test("a caller abort after the third guarded result supersedes the loop error", async () => {
 		registerMockApi();
+		const controller = new AbortController();
 		const waitSpy = spyOn(scheduler, "wait").mockResolvedValue(undefined);
 		try {
-			const mock = createMockModel({ provider: "openrouter", id: "google/gemini-3.5-flash" });
-			mock.push({
-				content: ["Looping visible reasoning garbage."],
-				stopReason: "error",
-				errorMessage: `${THINKING_LOOP_ERROR_MARKER}: already streamed, non-retryable`,
+			let attempts = 0;
+			const mock = createMockModel({
+				provider: "openrouter",
+				id: "google/gemini-3.5-flash",
+				handler: () => {
+					if (++attempts === 3) controller.abort(new Error("cancelled after final result"));
+					return loopResponse();
+				},
 			});
 
-			const result = await completeSimple(mock.model, context());
+			await expect(completeSimple(mock.model, context(), { signal: controller.signal })).rejects.toThrow(
+				"cancelled after final result",
+			);
+			expect(mock.calls).toHaveLength(3);
+		} finally {
+			waitSpy.mockRestore();
+			clearCustomApis();
+		}
+	});
 
-			// Visible content already escaped: the marker error is returned as-is, never re-sampled.
-			expect(mock.calls).toHaveLength(1);
+	test("does not retry a contentful ThinkingLoop error (replay-unsafe output)", async () => {
+		const api = "contentful-loop-test";
+		let calls = 0;
+		const model = {
+			api,
+			provider: "test",
+			id: "test-model",
+			name: "Test model",
+			baseUrl: "test://",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1_000,
+			maxTokens: 100,
+		} as unknown as Model<Api>;
+		registerCustomApi(api, () => {
+			calls++;
+			const inner = new AssistantMessageEventStream();
+			const error: AssistantMessage = {
+				role: "assistant",
+				content: [{ type: "text", text: "Looping visible reasoning garbage." }],
+				api,
+				provider: model.provider,
+				model: model.id,
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "error",
+				errorMessage: `${THINKING_LOOP_ERROR_MARKER}: already streamed, non-retryable`,
+				errorId: AIError.create(AIError.Flag.ThinkingLoop),
+				timestamp: Date.now(),
+			};
+			inner.push({ type: "error", reason: "error", error });
+			return inner;
+		});
+		const waitSpy = spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		try {
+			const result = await completeSimple(model, context());
+
+			expect(calls).toBe(1);
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toContain(THINKING_LOOP_ERROR_MARKER);
+			expect(result.content).toHaveLength(1);
+			expect(AIError.is(result.errorId, AIError.Flag.ThinkingLoop)).toBe(true);
 		} finally {
 			waitSpy.mockRestore();
 			clearCustomApis();

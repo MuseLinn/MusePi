@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/collab-web";
+import { type TranslationKey, t } from "@musepi/desktop-web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -118,9 +118,16 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		};
 		load();
 		const id = setInterval(load, 5000);
+		// HMR: the daemon watcher pushes extensions.changed — refresh the
+		// inventory immediately instead of waiting up to 5s for the poll.
+		const off = rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "extensions.changed") load();
+		});
 		return () => {
 			alive = false;
 			clearInterval(id);
+			off();
 		};
 	}, [rpc]);
 

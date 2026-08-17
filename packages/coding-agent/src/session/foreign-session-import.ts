@@ -1,18 +1,56 @@
 import { directoryExists } from "@musepi/pi-utils";
 import { ClaudeSessionStore } from "./claude-session-store";
 import { CodexSessionStore } from "./codex-session-store";
+import { GenericJsonlSessionStore } from "./generic-jsonl-session-store";
+import { OpencodeSessionStore } from "./opencode-session-store";
+import { SdkCompatSessionStore } from "./sdk-compat-session-store";
 import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
 import type { SessionInfo } from "./session-listing";
 import type { SessionManager } from "./session-manager";
 
 /** Construct the importer for a supported foreign session source. */
 export function createForeignSessionStore(source: ForeignSessionSource): ForeignSessionStore {
-	return source === "claude" ? new ClaudeSessionStore() : new CodexSessionStore();
+	switch (source) {
+		case "claude":
+			return new ClaudeSessionStore();
+		case "codex":
+			return new CodexSessionStore();
+		case "omp":
+			return new SdkCompatSessionStore("omp");
+		case "pi":
+			return new SdkCompatSessionStore("pi");
+		case "opencode":
+			return new OpencodeSessionStore();
+		case "grok":
+			return new GenericJsonlSessionStore("grok");
+		case "kimicode":
+			return new GenericJsonlSessionStore("kimicode");
+	}
 }
 
 /** Display name for a supported foreign session source. */
 export function foreignSessionSourceName(source: ForeignSessionSource): string {
-	return source === "claude" ? "Claude" : "Codex";
+	switch (source) {
+		case "claude":
+			return "Claude";
+		case "codex":
+			return "Codex";
+		case "omp":
+			return "Oh My Pi";
+		case "pi":
+			return "Pi";
+		case "opencode":
+			return "OpenCode";
+		case "grok":
+			return "Grok";
+		case "kimicode":
+			return "Kimi Code";
+	}
+}
+
+/** All importable sources, in display order. */
+export function foreignSessionSources(): ForeignSessionSource[] {
+	return ["omp", "pi", "opencode", "grok", "kimicode", "claude", "codex"];
 }
 
 /** Convert lightweight foreign metadata for the existing session picker. */

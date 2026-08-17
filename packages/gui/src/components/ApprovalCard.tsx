@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import { ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 import { haptic } from "../lib/haptic";

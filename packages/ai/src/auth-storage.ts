@@ -53,7 +53,7 @@ import { cursorUsageProvider } from "./usage/cursor";
 import { googleGeminiCliUsageProvider } from "./usage/gemini";
 import { githubCopilotUsageProvider } from "./usage/github-copilot";
 import { antigravityRankingStrategy, antigravityUsageProvider } from "./usage/google-antigravity";
-import { kimiUsageProvider } from "./usage/kimi";
+import { kimiRankingStrategy, kimiUsageProvider } from "./usage/kimi";
 import { minimaxCodeUsageProvider } from "./usage/minimax-code";
 import { ollamaCloudUsageProvider, ollamaUsageProvider } from "./usage/ollama";
 import { codexRankingStrategy, openaiCodexUsageProvider } from "./usage/openai-codex";
@@ -1086,6 +1086,7 @@ const DEFAULT_RANKING_STRATEGIES = new Map<Provider, CredentialRankingStrategy>(
 	["openai-codex", codexRankingStrategy],
 	["anthropic", claudeRankingStrategy],
 	["google-antigravity", antigravityRankingStrategy],
+	["kimi-code", kimiRankingStrategy],
 	["zai", zaiRankingStrategy],
 	["opencode-go", opencodeGoRankingStrategy],
 ]);
@@ -2643,7 +2644,12 @@ export class AuthStorage {
 	 */
 	async importApiKey(provider: string, apiKey: string): Promise<void> {
 		const credential: AuthCredential = { type: "api_key", key: apiKey };
-		const stored = this.#store.replaceAuthCredentialsForProvider(provider, [credential]);
+		// APPEND, never replace: a second import must not wipe the first
+		// (observed — each import called replaceAuthCredentialsForProvider
+		// with a single-element array, so only the newest key survived and
+		// the credentials dropdown showed one row).
+		const existing = this.listStoredCredentials(provider).map(row => row.credential);
+		const stored = this.#store.replaceAuthCredentialsForProvider(provider, [...existing, credential]);
 		this.#setStoredCredentials(
 			provider,
 			stored.map(entry => ({ id: entry.id, credential: entry.credential })),

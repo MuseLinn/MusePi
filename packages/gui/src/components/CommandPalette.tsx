@@ -1,9 +1,10 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
+import { shortcutLabel } from "../lib/shortcuts";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { MENU_ANIM_MS } from "./Pop";
@@ -36,6 +37,7 @@ export function CommandPalette({
 	onToggleTerminal,
 	onTogglePreview,
 	onSelectSession,
+	onOpenAgents,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -49,6 +51,7 @@ export function CommandPalette({
 	onToggleTerminal(): void;
 	onTogglePreview(): void;
 	onSelectSession(id: string): void;
+	onOpenAgents(): void;
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<PaletteTab>("all");
@@ -162,6 +165,7 @@ export function CommandPalette({
 		{ icon: "layout-left", label: t("toggle sidebar"), hint: "⌘B", fn: onToggleSidebar },
 		{ icon: "terminal-box", label: t("toggle terminal"), hint: "⌘J", fn: onToggleTerminal },
 		{ icon: "equalizer-2", label: t("toggle preview"), hint: "⌘E", fn: onTogglePreview },
+		{ icon: "ai-agent-fill", label: t("agents center"), fn: onOpenAgents },
 	];
 	const taskRows = (rows ?? sessions.slice(0, 8)).map<{
 		icon: string;
@@ -243,7 +247,7 @@ export function CommandPalette({
 								>
 									<Icon name={a.icon as never} className="h-4 w-4" />
 									<span className="min-w-0 flex-1 truncate text-left">{a.label}</span>
-									{a.hint && <span className="gui-palette-kbd">{a.hint}</span>}
+									{a.hint && <span className="gui-palette-kbd">{shortcutLabel(a.hint)}</span>}
 								</button>
 							))}
 						</div>
@@ -264,7 +268,7 @@ export function CommandPalette({
 									>
 										<Icon name={p.icon as never} className="h-4 w-4" />
 										<span className="min-w-0 flex-1 truncate text-left">{p.label}</span>
-										{p.hint && <span className="gui-palette-kbd">{p.hint}</span>}
+										{p.hint && <span className="gui-palette-kbd">{shortcutLabel(p.hint)}</span>}
 									</button>
 								);
 							})}
@@ -298,7 +302,7 @@ export function CommandPalette({
 													</span>
 												)}
 											</span>
-											{r.hint && <span className="gui-palette-kbd">{r.hint}</span>}
+											{r.hint && <span className="gui-palette-kbd">{shortcutLabel(r.hint)}</span>}
 										</button>
 									);
 								})

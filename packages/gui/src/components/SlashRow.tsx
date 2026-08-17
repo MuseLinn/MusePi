@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/collab-web";
+import { type TranslationKey, t } from "@musepi/desktop-web";
 import type { ReactElement } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { slashDisplayName } from "./slash-row-shared";

@@ -2605,7 +2605,7 @@
 ### Breaking Changes
 
 - Renamed the eval `agent()` helper parameters `agent_type` → `agent` and `return_handle` → `handle` across every workflow runtime (Python, JavaScript, Ruby, Julia), so the names are identical in every language (no camelCase/snake_case split) and the agent-selection parameter matches the `task` tool's `agent`. The `__agent__` eval bridge wire protocol was renamed to match.
-- Changed the `eval` tool to take a single cell per call (`{ language, code, title?, timeout?, reset? }`) instead of a `cells` array. State still persists per language across separate eval calls, tool calls, and `task` subagents, so each call is one logical step that reuses everything earlier calls defined — the array only encouraged re-importing/re-declaring the same setup in every batch. The schema, field descriptions, examples, system `eval.md`/`workflowz` helper docs, and the `[i/n]` cell-counter (now hidden for single cells) were updated to match; the renderer, ACP start-text, copy-targets, and collab-web tool view still parse legacy multi-cell transcripts.
+- Changed the `eval` tool to take a single cell per call (`{ language, code, title?, timeout?, reset? }`) instead of a `cells` array. State still persists per language across separate eval calls, tool calls, and `task` subagents, so each call is one logical step that reuses everything earlier calls defined — the array only encouraged re-importing/re-declaring the same setup in every batch. The schema, field descriptions, examples, system `eval.md`/`workflowz` helper docs, and the `[i/n]` cell-counter (now hidden for single cells) were updated to match; the renderer, ACP start-text, copy-targets, and desktop-web tool view still parse legacy multi-cell transcripts.
 
 ### Added
 

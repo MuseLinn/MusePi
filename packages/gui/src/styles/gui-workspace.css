@@ -1,0 +1,1359 @@
+.gui-mode-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	/* Anchor for the absolute todo panel popover. */
+	position: relative;
+}
+
+.gui-mode-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 240px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 16px;
+	cursor: pointer;
+	/* Entrance pop when the mode turns on (composer row). */
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+@keyframes gui-chip-in {
+	from {
+		opacity: 0;
+		transform: scale(0.8) translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-mode-chip:hover {
+	color: var(--color-text);
+	border-color: var(--color-accent-bd);
+}
+
+.gui-mode-chip--goal {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-mode-chip--goal:hover {
+	border-color: var(--color-accent);
+}
+
+/* Paused goal (session.goal pause): the record survives but the agent
+ * isn't tracking it — warning tint instead of the live accent. */
+.gui-mode-chip--paused {
+	border-style: dashed;
+	border-color: color-mix(in oklab, var(--color-warning, #f5a524) 50%, transparent);
+	color: var(--color-warning, #f5a524);
+}
+
+.gui-mode-chip--paused:hover {
+	border-color: var(--color-warning, #f5a524);
+}
+
+/* Armed goal (openchamber parity): the chip is lit but the objective is
+ * still pending — the next sent message becomes it. Dashed accent ring +
+ * soft pulse read as "armed, not yet live". */
+.gui-mode-chip--armed {
+	border-style: dashed;
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+	animation: gui-chip-in 180ms var(--spring), gui-armed-pulse 2s ease-in-out infinite;
+}
+
+.gui-mode-chip--armed:hover {
+	border-color: var(--color-accent);
+}
+
+@keyframes gui-armed-pulse {
+	0%, 100% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent);
+	}
+	50% {
+		box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent);
+	}
+}
+
+.gui-todo-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	cursor: pointer;
+	transition: border-color 140ms ease, background 140ms ease;
+}
+
+.gui-todo-chip:hover,
+.gui-todo-chip--open {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
+}
+
+/* Temporary swarm status chip (kimiwork parity): while a `task` tool runs,
+ * a small frosted chip above the input shows swarm activity; clicking opens
+ * the floating member grid below. */
+.gui-swarm-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	cursor: pointer;
+	transition: border-color 140ms ease, background 140ms ease;
+}
+
+.gui-swarm-chip:hover,
+.gui-swarm-chip--open {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
+}
+
+.gui-swarm-chip-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	animation: gui-swarm-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes gui-swarm-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.gui-swarm-chip-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+/* Frosted floating member grid (the composer swarm chip's popup). The
+ * desktop-web SwarmCard renders inside with its own member chrome. */
+.gui-swarm-popup-card {
+	width: min(400px, calc(100vw - 24px));
+	max-height: 320px;
+	overflow-y: auto;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
+	animation: gui-todo-in 200ms var(--spring);
+}
+
+/* Expanded todo board (TUI todo panel parity): phases with per-phase bars,
+ * status icons, blocked-task notes. */
+.gui-todo-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: min(360px, calc(100vw - 24px));
+	max-width: min(420px, calc(100vw - 24px));
+	max-height: 300px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 12px 14px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
+	animation: gui-todo-in 200ms var(--spring);
+}
+
+@keyframes gui-todo-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.gui-todo-phase {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-todo-phase-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-todo-phase-name {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-todo-phase-count {
+	font-size: 11.5px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-faint);
+}
+
+.gui-todo-task {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 2px 0 2px 2px;
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: var(--color-text-muted);
+}
+
+.gui-todo-task-icon {
+	width: 14px;
+	flex-shrink: 0;
+	text-align: center;
+	color: var(--color-text-faint);
+}
+
+.gui-todo-task--completed {
+	color: var(--color-text-faint);
+	text-decoration: line-through;
+}
+
+.gui-todo-task--in_progress .gui-todo-task-icon {
+	color: var(--color-accent);
+}
+
+.gui-todo-task--blocked .gui-todo-task-icon {
+	color: var(--color-warning);
+}
+
+.gui-todo-task-blocker {
+	max-width: 140px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--color-warning);
+	flex-shrink: 0;
+}
+
+/* Task action buttons — hidden until row hover (compact panel). */
+.gui-todo-task-actions {
+	display: none;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 1px;
+}
+
+.gui-todo-task:hover .gui-todo-task-actions {
+	display: inline-flex;
+}
+
+.gui-todo-act {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-todo-act:hover {
+	color: var(--color-text);
+	background: var(--color-hover, rgba(128, 128, 128, 0.15));
+}
+
+.gui-todo-act:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-todo-act--add {
+	width: 22px;
+	height: 22px;
+}
+
+.gui-todo-append {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 4px;
+	padding: 3px 2px 2px;
+	border-top: 1px dashed var(--color-border, rgba(128, 128, 128, 0.25));
+}
+
+.gui-todo-append-input {
+	flex: 1;
+	min-width: 0;
+	background: transparent;
+	border: 0;
+	outline: none;
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+
+.gui-todo-append-input::placeholder {
+	color: var(--color-text-faint);
+}
+
+/* ── Workspace-changes diff view (right-pane tool) ───────────────────── */
+.gui-diff-status {
+	margin: 0 0 8px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	font-size: 11.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 110px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-diff-file {
+	margin-top: 6px;
+	padding: 2px 6px;
+	font-weight: 600;
+	font-size: 11.5px;
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+	border-radius: 6px;
+}
+
+/* ── Workspace-changes TREE (openchamber ChangesPanel parity) ────────── */
+.gui-changes-row {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 7px;
+	padding: 3px 6px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--color-text);
+	font-family: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: background 110ms ease-out;
+}
+
+.gui-changes-row:hover {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-changes-row--open {
+	background: color-mix(in oklab, var(--color-text) 9%, transparent);
+}
+
+.gui-changes-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	border-radius: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-changes-badge--staged {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-changes-badge--untracked {
+	background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+	color: var(--color-warning);
+}
+
+.gui-changes-badge--ignored {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text-faint);
+	font-style: italic;
+}
+
+/* Stage/unstage action (hover reveal on a row — openchamber parity). */
+.gui-changes-act {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 110ms ease-out, background 110ms ease-out, color 110ms ease-out;
+}
+
+.gui-changes-row-wrap:hover .gui-changes-act,
+.gui-changes-act:hover {
+	opacity: 1;
+}
+
+.gui-changes-act:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+/* Directory node (tree view changes). */
+.gui-changes-row--dir {
+	color: var(--color-text-muted);
+}
+
+.gui-changes-file-diff {
+	margin: 2px 6px 6px 22px;
+}
+
+/* Commit box (right-pane diff tool): subject + gitmoji chips + actions. */
+.gui-commit-box {
+	background: var(--color-surface-raised);
+}
+
+.gui-gitmoji-chip {
+	display: inline-flex;
+	height: 24px;
+	align-items: center;
+	padding: 0 7px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: transparent;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: background 110ms ease-out;
+}
+
+.gui-gitmoji-chip:hover {
+	background: var(--color-hover);
+}
+
+.gui-pr-badge--open {
+	background: color-mix(in oklab, #34d399 20%, transparent);
+	color: #34d399;
+}
+
+.gui-pr-badge--draft {
+	background: color-mix(in oklab, var(--color-text) 14%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-pr-badge--merged {
+	background: color-mix(in oklab, #a78bfa 20%, transparent);
+	color: #a78bfa;
+}
+
+.gui-diff-hunk {
+	padding: 1px 6px;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+}
+
+.gui-diff-line {
+	padding: 0 6px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--color-text-muted);
+}
+
+.gui-diff-line--add {
+	color: var(--color-success, oklch(0.72 0.19 150));
+	background: color-mix(in oklab, oklch(0.72 0.19 150) 10%, transparent);
+}
+
+.gui-diff-line--del {
+	color: var(--color-danger, oklch(0.64 0.2 25));
+	background: color-mix(in oklab, oklch(0.64 0.2 25) 10%, transparent);
+}
+
+.gui-todo-bar {
+	width: 72px;
+	height: 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	overflow: hidden;
+}
+
+.gui-todo-fill {
+	height: 100%;
+	border-radius: 999px;
+	background: var(--color-accent);
+	transition: width 220ms var(--spring);
+}
+
+.gui-todo-label {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+/* ── Transcript turn rail (openchamber PromptNavigatorRail parity) ──
+ * Burger-layer ticks stacked at a fixed 12px pitch. The track hugs its
+ * tick window (height = visible ticks × pitch, set inline) and the rail
+ * centers on the session column, so few turns sit dead-center instead of
+ * clustering at the top of a fixed 360px track. Hovering opens a gliding
+ * multi-row panel (all turns at once, openchamber); the tick for the turn
+ * currently in view (scroll-spy) carries the accent. Side (right/left)
+ * and glyph style (burger/pacman) come from settings via data-side. */
+.gui-turn-rail {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 24px;
+	z-index: 20;
+}
+.gui-turn-rail[data-side="right"] {
+	right: 4px;
+}
+.gui-turn-rail[data-side="left"] {
+	left: 4px;
+}
+
+.gui-turn-track {
+	position: relative;
+	width: 24px;
+	cursor: pointer;
+	outline: none;
+}
+
+.gui-turn-tape-wrap {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.gui-turn-tape {
+	position: absolute;
+	inset-inline: 0;
+	top: 0;
+	transition: transform 300ms ease-out;
+}
+
+/* Ticks are pointer-events-none: the whole gutter is one hover/click
+ * target mapping the cursor's y to the nearest tick (openchamber), so
+ * tick density never demands pointer precision. */
+.gui-turn-tick {
+	position: absolute;
+	inset-inline: 2px;
+	height: 12px; /* pitch slot */
+	display: flex;
+	align-items: center;
+	pointer-events: none;
+	border: none;
+	padding: 0;
+	background: none;
+}
+.gui-turn-rail[data-side="right"] .gui-turn-tick {
+	justify-content: flex-end;
+}
+.gui-turn-rail[data-side="left"] .gui-turn-tick {
+	justify-content: flex-start;
+}
+
+/* The burger layer: a short rounded bar, stretched by the proximity
+ * wave around the hovered turn (width is set inline). Shades of the
+ * foreground like openchamber; the active (currently displayed) turn
+ * carries the accent. */
+.gui-turn-tick-bar {
+	display: block;
+	height: 2px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 30%, transparent);
+	transition: width 120ms ease-out, background 120ms ease-out;
+}
+.gui-turn-tick--hover .gui-turn-tick-bar {
+	background: color-mix(in oklab, var(--color-text) 80%, transparent);
+}
+.gui-turn-tick--active .gui-turn-tick-bar {
+	background: var(--color-accent);
+}
+
+/* Pacman variant: a disc with a wedge mouth, gaping on hover. The mouth
+ * faces the transcript (inward): left side on a right-side rail, right
+ * side on a left-side rail. The active turn is a solid disc. Height is
+ * auto so the square glyph is never squeezed into the 2px burger rail —
+ * the 12px pitch slot clips only the edge ticks' overshoot via the tape
+ * mask (hover width is clamped in TurnRail.tsx). The glyph itself is the
+ * <PacMan> SVG from vendor/pac-man.tsx (direction via the `side` prop),
+ * so no CSS variants are needed. */
+.gui-turn-rail--pacman .gui-turn-tick-bar {
+	display: grid;
+	place-items: center;
+	height: auto;
+	border-radius: 50%;
+	background: transparent;
+}
+
+/* Hover panel: a gliding mini-list of all turns (openchamber parity),
+ * centered on the rail — the list glides internally so the highlighted
+ * row stays in view and the panel itself never moves. Anchored with
+ * translateY(-50%) and faded with an OPACITY-ONLY keyframe: gui-menu-in
+ * scales the transform property, which would drop the centering
+ * translate mid-fade and make the card appear shifted, then snap. */
+.gui-turn-panel {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	width: min(20rem, calc(100vw - 6rem));
+	overflow: hidden;
+	border-radius: 12px;
+	pointer-events: auto;
+	z-index: 30;
+	/* Frosted glass (same recipe as the floating menus). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	animation: gui-turn-panel-in 120ms ease-out;
+}
+.gui-turn-rail[data-side="right"] .gui-turn-panel {
+	right: 30px;
+}
+.gui-turn-rail[data-side="left"] .gui-turn-panel {
+	left: 30px;
+}
+
+@keyframes gui-turn-panel-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.gui-turn-panel-list {
+	position: relative;
+	overflow: hidden;
+}
+
+.gui-turn-panel-glide {
+	position: absolute;
+	inset-inline: 0;
+	top: 0;
+	transition: transform 200ms ease-out;
+}
+
+/* Each row is a bordered card inset within its pitch slot so
+ * neighbouring prompts read as separate items instead of one run. */
+.gui-turn-panel-row {
+	position: absolute;
+	inset-inline: 0;
+	padding: 0 6px;
+	cursor: pointer;
+}
+.gui-turn-panel-card {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	border-radius: 8px;
+	border: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
+	padding: 0 8px;
+	transition: background 100ms ease-out, border-color 100ms ease-out;
+}
+.gui-turn-panel-row--hover .gui-turn-panel-card {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	border-color: color-mix(in oklab, var(--border-strong) 60%, transparent);
+}
+.gui-turn-panel-row--active .gui-turn-panel-card {
+	background: var(--color-accent-soft);
+	border-color: transparent;
+}
+
+.gui-turn-panel-text {
+	min-width: 0;
+	flex: 1;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+	color: var(--color-text-muted);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+.gui-turn-panel-row--active .gui-turn-panel-text {
+	color: var(--color-text);
+}
+
+/* ── Round 6: compact group/project tab strip + project remove ─────── */
+.gui-tabstrip-capsule {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px;
+	border-radius: 999px;
+	/* No scrim of its own: the strip sits directly on the sidebar glass,
+	 * matching the pane background (a separate capsule read as a bright
+	 * patch in light mode). Selected pill carries the only fill. */
+	border: none;
+	background: transparent;
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+.gui-tab-pill--fixed {
+	flex: 0 1 56px;
+	min-width: 0;
+	width: auto;
+	justify-content: center;
+	padding: 4px 6px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 16px;
+	border-radius: 999px;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.gui-tab-pill--fixed .gui-tab-pill-icon {
+	display: none;
+}
+
+.gui-project-remove {
+	/* In-flow slot right of the head (flex row) — no negative margin
+	 * overlap; invisible until the block is hovered. */
+	margin-left: 2px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease-out, color 120ms ease-out, background 120ms ease-out;
+}
+
+.gui-project-block:hover .gui-project-remove {
+	opacity: 1;
+}
+
+.gui-project-remove:hover {
+	color: var(--color-danger);
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+
+/* Agents section group headers (TUI /agents parity: kind + count). */
+.gui-settings-group-h {
+	margin: 14px 0 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+.gui-settings-group-h:first-of-type {
+	margin-top: 0;
+}
+
+/* ── Skill manager (settings 技能 tab + sidebar entry) ─────────────────────
+ * BitFun/ZCode/OpenCode 整合: search + filter chips with counts, sectioned
+ * rows with badges, per-entry toggle/delete, expandable SKILL.md detail. */
+.gui-skill-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+.gui-skill-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+}
+.gui-skill-chips {
+	display: flex;
+	gap: 4px;
+	flex-shrink: 0;
+}
+.gui-skill-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	border: 1px solid var(--border);
+	background: transparent;
+	transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.gui-skill-chip:hover {
+	color: var(--color-text);
+}
+.gui-skill-chip--active {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+.gui-skill-chip-count {
+	padding: 0 5px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	background: color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+}
+.gui-skill-refresh {
+	padding: 5px 8px;
+	flex-shrink: 0;
+}
+.gui-skill-spin {
+	animation: gui-skill-spin 800ms linear infinite;
+}
+@keyframes gui-skill-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.gui-skill-section {
+	margin-bottom: 4px;
+}
+.gui-skill-section-h {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin: 14px 0 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+.gui-skill-section-h:first-of-type {
+	margin-top: 0;
+}
+.gui-skill-section-count {
+	font-size: 11px;
+	font-weight: 400;
+	color: var(--color-text-faint);
+}
+.gui-skill-card {
+	transition: opacity 160ms ease;
+}
+.gui-skill-card--off {
+	opacity: 0.45;
+}
+.gui-skill-icon {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+}
+.gui-skill-badge {
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+	border: 1px solid var(--border);
+}
+.gui-skill-badge--warn {
+	color: var(--color-warning);
+	border-color: color-mix(in oklab, var(--color-warning) 40%, transparent);
+}
+.gui-icon-btn {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-muted);
+	background: transparent;
+	transition: color 160ms ease, background 160ms ease;
+}
+.gui-icon-btn:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
+}
+.gui-skill-detail {
+	margin-top: 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+}
+.gui-skill-detail-path {
+	padding: 5px 10px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text-faint) 6%, transparent);
+}
+.gui-skill-detail-pre {
+	margin: 0;
+	padding: 10px;
+	max-height: 320px;
+	overflow: auto;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 11.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--color-text-muted);
+}
+
+/* ── 扩展控制中心 (CCEC 形态: provider tabs + 分类列表 + 详情面板) ── */
+/* The section wrapper (.gui-skills-section) is height:100% of the settings
+ * viewport; the center flexes to fill it, so the two panes scroll
+ * internally (TUI /extensions panel parity) instead of scrolling the
+ * whole settings page. */
+.gui-skills-section {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+.gui-ext-center {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex: 1;
+	min-height: 0;
+}
+.gui-ext-tabs {
+	display: flex;
+	gap: 4px;
+	overflow-x: auto;
+	padding: 2px 0 4px;
+	flex-shrink: 0;
+}
+.gui-ext-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+	background: transparent;
+	transition: color 160ms ease, background 160ms ease;
+}
+.gui-ext-tab:hover {
+	color: var(--color-text);
+}
+.gui-ext-tab--active {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+}
+.gui-ext-tab-count {
+	padding: 0 5px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	background: color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+}
+.gui-ext-body {
+	display: grid;
+	grid-template-columns: 240px minmax(0, 1fr);
+	gap: 10px;
+	min-height: 0;
+	flex: 1;
+}
+.gui-ext-list {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+.gui-ext-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 10px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+.gui-ext-list-scroll {
+	overflow-y: auto;
+	overflow-x: hidden;
+	min-height: 0;
+	flex: 1;
+	padding: 4px 6px 8px;
+}
+.gui-ext-group-h {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	padding: 8px 6px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+.gui-ext-group-count {
+	font-weight: 400;
+	color: var(--color-text-faint);
+}
+.gui-ext-empty {
+	padding: 8px 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+.gui-ext-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 6px;
+	border-radius: var(--radius-sm);
+	font-size: 12.5px;
+	cursor: pointer;
+	color: var(--color-text-muted);
+	transition: background 160ms ease, color 160ms ease;
+}
+.gui-ext-item:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+	color: var(--color-text);
+}
+.gui-ext-item--selected {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+.gui-ext-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	background: color-mix(in oklab, #34d399 80%, transparent);
+}
+.gui-ext-dot--off {
+	background: var(--color-text-faint);
+}
+.gui-ext-dot--shadowed {
+	background: color-mix(in oklab, #fbbf24 85%, transparent);
+}
+.gui-ext-provider-h {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 6px;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: background 160ms ease;
+}
+.gui-ext-provider-h:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+.gui-ext-provider-children {
+	padding-left: 14px;
+}
+.gui-ext-kind-h {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 6px;
+	border-radius: var(--radius-sm);
+	font-size: 11.5px;
+	cursor: pointer;
+	color: var(--color-text-muted);
+	transition: background 160ms ease, color 160ms ease;
+}
+.gui-ext-kind-h:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+	color: var(--color-text);
+}
+.gui-ext-tab--off {
+	opacity: 0.55;
+}
+.gui-ext-detail-status--shadowed {
+	color: #fbbf24;
+}
+.gui-ext-detail-shadowed {
+	margin-left: 6px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-ext-detail-raw-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+	background: transparent;
+	transition: color 160ms ease;
+}
+.gui-ext-detail-raw-toggle:hover {
+	color: var(--color-text-muted);
+}
+.gui-ext-item-tag {
+	flex-shrink: 0;
+	font-size: 10px;
+	padding: 0 6px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	color: var(--color-text-faint);
+}
+/* GUI-only extension badge (motion packs, builtin style): accent-tinted
+ * so GUI-surface extensions stand out from daemon-side capabilities. */
+.gui-ext-item-tag--gui {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-weight: 600;
+}
+.gui-ext-item-ops {
+	display: none;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+.gui-ext-item:hover .gui-ext-item-ops,
+.gui-ext-item--selected .gui-ext-item-ops {
+	display: inline-flex;
+}
+.gui-toggle--sm {
+	width: 26px;
+	height: 15px;
+}
+.gui-toggle--sm .gui-toggle-knob {
+	width: 11px;
+	height: 11px;
+}
+.gui-ext-detail {
+	min-height: 0;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-ext-detail::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+.gui-ext-detail-empty {
+	display: grid;
+	place-items: center;
+	height: 100%;
+	min-height: 300px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+.gui-ext-detail-name {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-ext-detail-meta {
+	margin-top: 2px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+.gui-ext-detail-desc {
+	margin: 10px 0 0;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--color-text-muted);
+	white-space: pre-wrap;
+}
+.gui-ext-detail-section {
+	margin-top: 14px;
+}
+.gui-ext-detail-label {
+	margin-bottom: 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+.gui-ext-detail-value {
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+}
+.gui-ext-detail-path {
+	margin-top: 3px;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+	word-break: break-all;
+}
+.gui-ext-detail-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+}
+.gui-ext-detail-status--active {
+	color: #34d399;
+}
+.gui-ext-detail-code {
+	margin-top: 4px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text-faint) 6%, transparent);
+}
+.gui-ext-detail-code pre {
+	margin: 0;
+	/* No max-height: the detail pane scrolls as a whole (TUI panel
+	 * parity) — a per-pre scroll nested inside the pane scrolls
+	 * awkwardly for long instructions (AGENTS.md etc.). */
+	overflow-x: auto;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 11.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--color-text-muted);
+}
+.gui-ext-detail-actions {
+	margin-top: 14px;
+}
+.gui-ext-statusbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 4px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	font-size: 11px;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	color: var(--color-text-faint);
+	flex-shrink: 0;
+}
+
+/* Composer frame morph (welcome ⇄ session): the incoming frame is
+ * transformed onto the outgoing rect in the layout phase, then eased back
+ * to identity — one continuous shape/position animation, no cross-fade. */
+.gui-flip-morph {
+	transition: transform 420ms var(--spring);
+	will-change: transform;
+}
+
+/* 条件区块动效规范 (conditional-block animation standard, see
+ * components/Reveal.tsx): height is driven by useCollapse with explicit
+ * px (grid-template-rows 0fr↔1fr only transitions one way in Chromium:
+ * 1fr→0fr snaps instantly), so the container is a plain block that clips
+ * while the inner animates. The outer fades 160ms; the inner height
+ * eases 240ms var(--spring). */
+.gui-collapse {
+	overflow: hidden;
+	opacity: 0;
+	transition: opacity 160ms ease;
+}
+
+.gui-collapse--open {
+	opacity: 1;
+}
+
+.gui-collapse-inner {
+	overflow: hidden;
+}
+
+/* 高度形变动效 (HeightMorph standard): the keyed inner fades in 160ms on
+ * each morphKey change while the container height eases. */
+.gui-morph-fade {
+	animation: gui-morph-fade-in 160ms ease;
+}
+
+@keyframes gui-morph-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* Forked-session marker (OMP /tree parity): a branch glyph on rows whose
+ * entry has a parent — hover shows the parent's label in the row title. */
+.gui-tree-fork {
+	flex-shrink: 0;
+	margin-left: 4px;
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-accent);
+	opacity: 0.9;
+}
+
+/* Context-drawer stats (right panel): two compact stat tiles + action row. */
+.gui-ctx-stat {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+}
+.gui-ctx-stat-v {
+	font-size: 16px;
+	font-weight: 650;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+.gui-ctx-stat-l {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-pane-action {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 6px 8px;
+	border-radius: 8px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+	text-align: left;
+	transition: background 130ms ease, color 130ms ease;
+}
+.gui-pane-action:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+

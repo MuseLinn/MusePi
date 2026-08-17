@@ -16,6 +16,18 @@
 
 > **执行结果（2026-08-15）**：141 files changed, +5117/−1438。PURE 复制 94(src+test,终态+rename)+ OVERLAP 3-way 28(21+7 gap,含冲突手解 9:defs.bzl/alibaba test/config.ts/helpers.ts/agent-session.ts/gemini-cli.ts/models.json 9 块/executor.ts/acp test)+ ABSENT 补 2(claude-paths.ts 无需品牌化,issue-8542-repro.test.ts)+ skip-only src 补 19(ptree.ts 2 参 kill 等)。9 个受影响包 check:types 0 错误;CLI 冒烟 `musepi/17.3.0`。**测试**:移植修复相关 300+ 断言通过;失败均为 Windows 环境性(上游 CI=linux):terminal-appearance kitty push(win32 ConPTY)、foreign-session-stores(盘符冒号路径 ENOTDIR)、sdk-tool-activation(EBUSY 句柄)、read-multi-range/read-edit-out-of-cwd/browser-launch(path.join 反斜杠)、remote-compaction(既有挂起,基线确认)、status-line-vcs-refresh(有界轮询 >300s,单测全过)。claude-plugins 测试夹具 `.omp`→`getPluginsDir()` 品牌化修复(38/38 过)。**musepi 定制适配**:job-manager register/AsyncJob.type 联合补 `agnes-video`;gemini-cli 删除上游已移除的 ANTIGRAVITY_SYSTEM_INSTRUCTION 注入与 re-export。
 
+### mupdf-native/pdf 移植(2026-08-15,04fab5ecb4 + a3c15d2dec)
+
+- 新增 crates/pi-natives/src/pdf.rs(**pdf-inspector 1.14.2 / lopdf 纯 Rust,无 C 依赖**,pdfToMarkdown N-API)+ read-pdf.ts(Chromium PDF 插件页截图)
+- 删除 mupdf-wasm 管线:embed-mupdf-wasm.ts、mupdf-wasm-embed.ts、6 个 markit pdf 转换器(columns/extract/grid/headers/render/types)、read-pdf-images.ts(+test)——净 −3.6k 行 TS
+- 3-way 合并(全部自动无冲突):read.ts/markit.ts/bundle-dist.ts/build-binary.ts/lib.rs/index.d.ts/markit pdf index.ts——musepi 定制全部保留
+- Cargo:workspace 依赖 pdf-inspector = "1" + pi-natives 引用;Cargo.lock 更新(cargo metadata 自动)
+- natives 包装:index.js 加 pdfToMarkdown(rebuild 时 build-bindings 自动重生 75 exports)
+- 重建:win32-x64-modern 563s 增量(冷编 pdf-inspector 链)/ darwin-arm64 ~8min 增量 / **linux-x64-modern 13m41s 全量冷构建(WSL Ubuntu,689+ crates)**——三平台哨兵均 17_3_4,linux 上 native 加载 + pdfToMarkdown function 验证通过,62/62 测试绿
+- WSL 构建路径(musepi-linux,WSL Ubuntu 18 核):gh cli 2.97 device flow 认证成功,但 **WSL→GitHub 对该仓库 git 长连接静默丢包**(ls-remote/clone 全卡,小仓库 cli/cli 秒通;fake-ip 198.18.x + TUN 代理链路掐大请求),走 Windows 代理也卡 → 用 **git bundle**(Windows 生成 107MB 全历史,WSL clone)→ remote 指 https;后续 WSL pull 若仍卡可复用 bundle
+- 验证:Windows pdf 相关 61+7 测试绿;macOS 62/62 绿;**win32 守卫 1 个**:read-pdf-rendering 的冒号字面路径测试(NTFS 保留冒号,posix-only)
+- ⚠️ 教训:git add -A 会把工作区里**另一会话遗留的未提交删除**(packages/swarm-extension 整目录,用户有意删)一并提交;误恢复后已按用户要求重删(533426222)。提交前先核对 git status 的删除清单
+
 ### 版本涟漪 v17.3.4 + MusePi 0.4.1(2026-08-15)
 
 - 14 个 workspace 包 version 17.3.0→**17.3.4**(agent/ai/catalog/coding-agent/hashline/mnemopi/natives/omptype/snapcompact/stats/swarm-extension/tui/utils/wire);root catalog 13 条同步;sdk 的 @musepi/pi-wire 依赖同步
@@ -34,6 +46,17 @@
   - sdk-tool-activation:afterAll 先 `modelRegistry.authStorage.close()` 再删目录(Windows 不能删打开中的 SQLite);temp.ts 清理重试窗口 2s→5s
   - foreign-session-stores:`.projects/<encoded-cwd>` 布局 win32 盘符冒号不可建目录(生产代码 posix-only),4 个布局依赖测试 `describe.skipIf(process.platform==="win32")`
 - 汇总:25 个移植+适配测试文件 684 pass / 7 skip / 0 fail(mcp-http-transport 偶发并发抖动,隔离 10/10);CLI 冒烟 `musepi/0.4.1 (OMP 17.3.4)`
+
+### 三平台验证(2026-08-15)
+
+| 平台 | 适配测试(6 文件) | remote-compaction | status-line-vcs-refresh | natives |
+|---|---|---|---|---|
+| Windows x64(本机) | 78 pass / 6 skip | 挂起(Windows 特有,pre-port 亦挂) | >300s(NTFS 轮询慢,单测全过) | win32-x64-modern 17_3_4 重建,51/51 |
+| WSL Ubuntu(linux x64) | 131 pass / 0 fail | 47/47(4s) | 14/14(3s) | — |
+| ARM macOS(muselinn@100.73.130.97) | 129 pass / 2 skip | 47/47(3s) | 14/14(2s) | darwin-arm64 重建中(17_3_0→17_3_4) |
+
+- mac 环境事实:gh cli 已装但 token 失效(device flow 重登:`gh auth login -h github.com --web`);git remote 曾切 ssh 但 key 未授权 GitHub → 改回 https + `gh auth setup-git`;mac 无 timeout 命令;磁盘 21Gi 剩余
+- 版本推送:commit f968ac4ba 已推 origin/master,三端 checkout 一致
 
 ### 跳过项分析与后续方案(2026-08-15 记录)
 

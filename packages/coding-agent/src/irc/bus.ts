@@ -276,7 +276,7 @@ export class IrcBus {
 		if (liveness) {
 			const { registry, senderId } = liveness;
 			const hasRunningSender = (from?: string): boolean =>
-				registry.listVisibleTo(senderId).some(ref => ref.status === "running" && (!from || ref.id === from));
+				registry.listVisibleTo(senderId).some(ref => registry.isRunning(ref) && (!from || ref.id === from));
 			const check = filter.from ? () => hasRunningSender(filter.from) : () => hasRunningSender();
 			unsubscribeLiveness = registry.onChange(() => {
 				if (!check()) {

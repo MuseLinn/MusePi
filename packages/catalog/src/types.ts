@@ -363,6 +363,13 @@ export interface OpenAICompat {
 	 * model id. Default: true. Issue #5606.
 	 */
 	supportsSamplingParams?: boolean;
+	/**
+	 * Whether presence/frequency penalties and stop sequences may be sent.
+	 * First-party xAI `/v1/responses` rejects penalty fields for every model.
+	 * xAI reasoning models also reject them (and `stop`) on chat completions.
+	 * When unset, auto-detected. Default: true.
+	 */
+	supportsPenaltyAndStopParams?: boolean;
 	/** Always send a max-token field when the caller did not provide one. Default: auto-detected (Kimi-family models derive TPM limits from max_tokens). */
 	alwaysSendMaxTokens?: boolean;
 	/** Whether Responses-API tool-call/result history must be strictly paired. Default: auto-detected (Azure OpenAI, GitHub Copilot). */
@@ -578,6 +585,7 @@ export interface ResolvedOpenAISharedCompat {
 	reasoningEffortMap: Partial<Record<Effort, string>>;
 	supportsReasoningParams: boolean;
 	supportsSamplingParams: boolean;
+	supportsPenaltyAndStopParams: boolean;
 	thinkingFormat: OpenAIReasoningFormat;
 	/** Kimi Code transport selected by live per-model protocol metadata. */
 	kimiApiFormat?: OpenAICompat["kimiApiFormat"];
@@ -643,6 +651,7 @@ export type ResolvedOpenAICompat = ResolvedOpenAISharedCompat &
 			| "reasoningEffortMap"
 			| "supportsReasoningParams"
 			| "supportsSamplingParams"
+			| "supportsPenaltyAndStopParams"
 			| "thinkingFormat"
 			| "kimiApiFormat"
 			| "reasoningDisableMode"
@@ -711,6 +720,12 @@ export interface ResolvedOpenAIResponsesCompat extends ResolvedOpenAISharedCompa
 	strictResponsesPairing: boolean;
 	supportsImageDetailOriginal: boolean;
 	supportsObfuscationOptOut: boolean;
+	/**
+	 * Whether `reasoning.summary` may be sent. First-party xAI `/v1/responses`
+	 * rejects the field; handlers pass `null` so the wire omits it instead of
+	 * filling `"auto"`.
+	 */
+	supportsReasoningSummary: boolean;
 	streamIdleTimeoutMs?: number;
 	vercelGatewayRouting?: OpenAICompat["vercelGatewayRouting"];
 	/** The model sits behind Vercel AI Gateway's Responses endpoint. */

@@ -2,6 +2,8 @@
  * Extension runner - executes extensions and manages their lifecycle.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type {
 	AgentMessage,
 	AgentTool,
@@ -22,6 +24,7 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { ManagedTimers } from "./managed-timers";
+import { loadExtensions } from "./loader";
 import { createExtensionModelQuery } from "./model-api";
 import type {
 	AfterProviderResponseEvent,
@@ -93,6 +96,10 @@ export function testSetExtensionHandlerTimeoutMs(timeoutMs: number): void {
 	extensionHandlerTimeoutMs = timeoutMs;
 }
 
+function normalizeHandlerTimeout(timeoutMs: number): number {
+	return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : EXTENSION_HANDLER_TIMEOUT_MS;
+}
+
 /**
  * Dedicated cap for `session_shutdown` handlers. The generic 30s budget is
  * appropriate for events extensions can observe (e.g. `session_start`,
@@ -118,6 +125,11 @@ function handlerTimeoutForEvent(eventType: string): number {
 const EXTENSION_HANDLER_TIMEOUT = Symbol("extensionHandlerTimeout");
 const EXTENSION_HANDLER_ABORTED = Symbol("extensionHandlerAborted");
 
+interface HandlerTimeoutBudget {
+	pause(): void;
+	resume(): void;
+}
+
 function attachHandlerSignal(
 	dialogOptions: ExtensionUIDialogOptions | undefined,
 	handlerSignal: AbortSignal,
@@ -128,22 +140,57 @@ function attachHandlerSignal(
 	return { ...dialogOptions, signal: AbortSignal.any([dialogOptions.signal, handlerSignal]) };
 }
 
-function createHandlerUIContext(ui: ExtensionUIContext, handlerSignal: AbortSignal): ExtensionUIContext {
+function createHandlerUIContext(
+	ui: ExtensionUIContext,
+	handlerSignal: AbortSignal,
+	timeoutBudget?: HandlerTimeoutBudget,
+): ExtensionUIContext {
 	const askDialog = ui.askDialog;
+	const runDialog = async <T>(dialog: () => Promise<T>): Promise<T> => {
+		timeoutBudget?.pause();
+		try {
+			return await dialog();
+		} finally {
+			timeoutBudget?.resume();
+		}
+	};
 	const dialogMethods = {
 		select: (title, options, dialogOptions) =>
-			ui.select(title, options, attachHandlerSignal(dialogOptions, handlerSignal)),
+			runDialog(() => ui.select(title, options, attachHandlerSignal(dialogOptions, handlerSignal))),
 		confirm: (title, message, dialogOptions) =>
-			ui.confirm(title, message, attachHandlerSignal(dialogOptions, handlerSignal)),
+			runDialog(() => ui.confirm(title, message, attachHandlerSignal(dialogOptions, handlerSignal))),
 		input: (title, placeholder, dialogOptions) =>
-			ui.input(title, placeholder, attachHandlerSignal(dialogOptions, handlerSignal)),
+			runDialog(() => ui.input(title, placeholder, attachHandlerSignal(dialogOptions, handlerSignal))),
 		askDialog: askDialog
 			? (questions, dialogOptions) =>
-					askDialog.call(ui, questions, attachHandlerSignal(dialogOptions, handlerSignal))
+					runDialog(() => askDialog.call(ui, questions, attachHandlerSignal(dialogOptions, handlerSignal)))
 			: undefined,
+		custom: async (factory, options) => {
+			let customSettled = false;
+			let componentReady = false;
+			try {
+				return await ui.custom(
+					async (...args) => {
+						const component = await factory(...args);
+						if (!customSettled) {
+							timeoutBudget?.pause();
+							componentReady = true;
+						}
+						return component;
+					},
+					{
+						...options,
+						signal: options?.signal ? AbortSignal.any([options.signal, handlerSignal]) : handlerSignal,
+					},
+				);
+			} finally {
+				customSettled = true;
+				if (componentReady) timeoutBudget?.resume();
+			}
+		},
 		editor: (title, prefill, dialogOptions, editorOptions) =>
-			ui.editor(title, prefill, attachHandlerSignal(dialogOptions, handlerSignal), editorOptions),
-	} satisfies Pick<ExtensionUIContext, "select" | "confirm" | "input" | "askDialog" | "editor">;
+			runDialog(() => ui.editor(title, prefill, attachHandlerSignal(dialogOptions, handlerSignal), editorOptions)),
+	} satisfies Pick<ExtensionUIContext, "select" | "confirm" | "input" | "askDialog" | "custom" | "editor">;
 	const delegatedMethods = new Map<PropertyKey, unknown>();
 
 	return new Proxy(ui, {
@@ -168,10 +215,14 @@ function createHandlerUIContext(ui: ExtensionUIContext, handlerSignal: AbortSign
  * `pi.setModel()` and then reading `ctx.model` would see a stale model.
  * Prototype delegation keeps every getter live while overriding `ui`.
  */
-function createHandlerContext(ctx: ExtensionContext, handlerSignal: AbortSignal): ExtensionContext {
+function createHandlerContext(
+	ctx: ExtensionContext,
+	handlerSignal: AbortSignal,
+	timeoutBudget?: HandlerTimeoutBudget,
+): ExtensionContext {
 	const scoped: ExtensionContext = Object.create(ctx);
 	Object.defineProperty(scoped, "ui", {
-		value: createHandlerUIContext(ctx.ui, handlerSignal),
+		value: createHandlerUIContext(ctx.ui, handlerSignal, timeoutBudget),
 		enumerable: true,
 		configurable: true,
 	});
@@ -191,7 +242,7 @@ function createHandlerContext(ctx: ExtensionContext, handlerSignal: AbortSignal)
  * can `clearTimeout` on the winning branch.
  */
 async function raceHandlerWithTimeout<T>(
-	work: (handlerSignal: AbortSignal) => Promise<T> | T,
+	work: (handlerSignal: AbortSignal, timeoutBudget: HandlerTimeoutBudget) => Promise<T> | T,
 	timeoutMs: number,
 	signal?: AbortSignal,
 ): Promise<T | typeof EXTENSION_HANDLER_TIMEOUT | typeof EXTENSION_HANDLER_ABORTED> {
@@ -204,13 +255,52 @@ async function raceHandlerWithTimeout<T>(
 	>();
 	const onAbort = () => resolveInterrupt(EXTENSION_HANDLER_ABORTED);
 	signal?.addEventListener("abort", onAbort, { once: true });
-	const timer = setTimeout(() => {
+	let timer: Timer | undefined;
+	let remainingMs = timeoutMs;
+	let activeSince = performance.now();
+	let pauseDepth = 0;
+	let settled = false;
+	const clearTimer = () => {
+		if (timer === undefined) return;
+		clearTimeout(timer);
+		timer = undefined;
+	};
+	const expire = () => {
+		if (settled) return;
+		settled = true;
+		clearTimer();
 		timeoutController.abort(new DOMException(`Handler timed out after ${timeoutMs}ms`, "TimeoutError"));
 		resolveInterrupt(EXTENSION_HANDLER_TIMEOUT);
-	}, timeoutMs);
+	};
+	const armTimer = () => {
+		if (settled || pauseDepth > 0) return;
+		activeSince = performance.now();
+		timer = setTimeout(expire, Math.max(0, remainingMs));
+	};
+	const settle = () => {
+		if (settled) return;
+		settled = true;
+		clearTimer();
+	};
+	const timeoutBudget: HandlerTimeoutBudget = {
+		pause: () => {
+			if (settled) return;
+			pauseDepth++;
+			if (pauseDepth !== 1) return;
+			remainingMs = Math.max(0, remainingMs - (performance.now() - activeSince));
+			clearTimer();
+			if (remainingMs <= 0) expire();
+		},
+		resume: () => {
+			if (settled || pauseDepth === 0) return;
+			pauseDepth--;
+			if (pauseDepth === 0) armTimer();
+		},
+	};
+	armTimer();
 	try {
 		if (signal?.aborted) return EXTENSION_HANDLER_ABORTED;
-		const workPromise = Promise.resolve(work(handlerSignal));
+		const workPromise = Promise.resolve(work(handlerSignal, timeoutBudget));
 		const result = await Promise.race([workPromise, interruptPromise]);
 		if (result === EXTENSION_HANDLER_TIMEOUT) {
 			await Promise.race([
@@ -223,7 +313,7 @@ async function raceHandlerWithTimeout<T>(
 		}
 		return result;
 	} finally {
-		clearTimeout(timer);
+		settle();
 		signal?.removeEventListener("abort", onAbort);
 	}
 }
@@ -368,6 +458,14 @@ export class ExtensionRunner {
 	#commandDiagnostics: Array<{ type: string; message: string; path: string }> = [];
 	#toolRegistrationScope = new AsyncLocalStorage<ToolRegistrationScope>();
 	#toolRegistrationBarrier: Promise<void> | undefined;
+	/**
+	 * Entry-file mtimes recorded when each extension instance was loaded,
+	 * keyed by resolved entry path (P5 HMR). The daemon's watcher compares
+	 * fresh stats against these to decide which loaded extensions changed
+	 * without trusting fs.watch filenames (unreliable on Windows). Refreshed
+	 * on {@link reloadExtension} so a reloaded instance is the new baseline.
+	 */
+	#extensionEntryMtimes = new Map<string, number>();
 	#initialized = false;
 	/**
 	 * Buffer for `credential_disabled` events received via {@link emitCredentialDisabled}
@@ -509,6 +607,29 @@ export class ExtensionRunner {
 		this.#getAsyncJobSnapshotFn = getAsyncJobSnapshot ?? (() => null);
 		this.#getAsyncJobManagerFn = getAsyncJobManager ?? (() => undefined);
 		this.#getAgentIdFn = getAgentId ?? (() => undefined);
+		for (const extension of extensions) {
+			this.#recordExtensionEntryMtime(extension.resolvedPath);
+		}
+	}
+
+	/** Snapshot the entry mtime of a loaded extension (best-effort; missing
+	 *  files keep the entry absent so a later watcher tick sees a change). */
+	#recordExtensionEntryMtime(resolvedPath: string): void {
+		const key = path.resolve(resolvedPath);
+		try {
+			this.#extensionEntryMtimes.set(key, fs.statSync(key).mtimeMs);
+		} catch {
+			this.#extensionEntryMtimes.delete(key);
+		}
+	}
+
+	/**
+	 * Entry mtimes of currently loaded extensions, keyed by resolved path
+	 * (P5 HMR). The daemon compares fresh stats against this map to decide
+	 * which loaded sessions' extensions need a hot reload.
+	 */
+	getExtensionEntryMtimes(): ReadonlyMap<string, number> {
+		return this.#extensionEntryMtimes;
 	}
 
 	/**
@@ -728,6 +849,65 @@ export class ExtensionRunner {
 			if (tool) return tool;
 		}
 		return undefined;
+	}
+
+	/**
+	 * Hot-reload one extension entry (P5 session-level HMR v2).
+	 *
+	 * Locates the loaded {@link Extension} whose `resolvedPath` matches
+	 * `entryPath`, loads the entry again via {@link loadExtensions} (the
+	 * loader's `?mtime=` cache-bust yields a fresh module instance), and
+	 * swaps it into `extensions[]` in place. Only on success: a failed load
+	 * leaves the old instance untouched and reports the errors, so a broken
+	 * edit never takes the extension down.
+	 *
+	 * Contract (see docs/extensions-dev.md §6):
+	 * - Tools are name-keyed and pushed to listeners live: names the new
+	 *   module re-registers replace the old definitions at dispatch; the
+	 *   returned `removedTools` are the old names the caller should drop from
+	 *   its own registry when the replacement did NOT re-register them.
+	 * - Handlers of the old instance are removed from the event arrays before
+	 *   the new module's factory runs, so a re-registered handler cannot
+	 *   double-fire for a single event.
+	 * - `toolRegistrationListeners` wired by the owning session are carried
+	 *   onto the replacement so new registrations keep reaching the session
+	 *   tool registry (tools by name overwrite in place).
+	 * - In-memory state of the old instance is not migrated; submodule edits
+	 *   do not hot-reload (Bun module cache: only the entry specifier is
+	 *   re-keyed) — touch the entry to pick up submodule changes.
+	 */
+	async reloadExtension(
+		entryPath: string,
+		cwd?: string,
+	): Promise<{ removedTools: string[]; errors: string[] }> {
+		const resolvedTarget = path.resolve(entryPath);
+		const index = this.extensions.findIndex(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+		if (index === -1) {
+			return { removedTools: [], errors: [] };
+		}
+		const oldExt = this.extensions[index]!;
+		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd);
+		const replacement = loadResult.extensions[0];
+		if (!replacement) {
+			// Failed load: keep the old instance untouched (no rollback needed —
+			// nothing was mutated yet) and surface the errors to the caller.
+			return { removedTools: [], errors: loadResult.errors.map(e => e.error) };
+		}
+		const removedTools = [...oldExt.tools.keys()];
+		// Drop the old instance's handlers before the replacement is live so a
+		// re-registered handler cannot run twice for one event.
+		for (const handlers of oldExt.handlers.values()) {
+			handlers.length = 0;
+		}
+		// Carry the session's registration listeners onto the replacement so
+		// newly registered tools keep reaching the session tool registry.
+		if (oldExt.toolRegistrationListeners) {
+			replacement.toolRegistrationListeners = oldExt.toolRegistrationListeners;
+		}
+		this.extensions[index] = replacement;
+		this.#recordExtensionEntryMtime(replacement.resolvedPath);
+		logger.info("Extension hot-reloaded", { extensionPath: oldExt.path, removedTools: removedTools.length });
+		return { removedTools, errors: loadResult.errors.map(e => e.error) };
 	}
 
 	/**
@@ -1061,23 +1241,33 @@ export class ExtensionRunner {
 		ext: Extension,
 		timeoutMs: number,
 		onFailure?: (kind: "timeout" | "error", message: string) => TResult,
+		outerSignal?: AbortSignal,
 	): Promise<TResult | undefined> {
-		const signal =
+		// `session_stop` carries its own signal on the event; `tool_call` receives
+		// the outer dispatch signal (loop request or wrapper execute) so an abort
+		// while a handler awaits a human dialog cancels the dialog and settles the
+		// gate without executing the underlying tool. Compose whichever apply.
+		const sessionStopSignal =
 			event.type === "session_stop" && "signal" in event && event.signal instanceof AbortSignal
 				? event.signal
 				: undefined;
+		const signals = [outerSignal, sessionStopSignal].filter((s): s is AbortSignal => s !== undefined);
+		const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
 		if (signal?.aborted) return undefined;
 		const registrationScope: ToolRegistrationScope = { pending: new Set(), closed: false };
 		let handlerResult: TResult | typeof EXTENSION_HANDLER_TIMEOUT | typeof EXTENSION_HANDLER_ABORTED | undefined;
 		let handlerFailure: { error: unknown } | undefined;
 		try {
 			handlerResult = await raceHandlerWithTimeout(
-				async handlerSignal => {
+				async (handlerSignal, budget) => {
 					registrationScope.signal = handlerSignal;
 					let result: TResult | undefined;
 					try {
 						result = await this.#toolRegistrationScope.run(registrationScope, () =>
-							handler(event, createHandlerContext(ctx, handlerSignal)),
+							handler(
+								event,
+								createHandlerContext(ctx, handlerSignal, event.type === "tool_call" ? budget : undefined),
+							),
 						);
 					} catch (error) {
 						handlerFailure = { error };
@@ -1238,8 +1428,8 @@ export class ExtensionRunner {
 	/**
 	 * Emit a `tool_call` event to every subscribed extension before the tool executes.
 	 *
-	 * Each handler is bounded by `extensionHandlerTimeoutMs` (default 30s). This
-	 * matches the timeout policy already applied to `emitToolResult` and every
+	 * Each handler is bounded by `extensionHandlers.toolCallTimeoutMs` (default
+	 * 30s). This matches the timeout policy already applied to `emitToolResult` and every
 	 * other handler routed through `#runHandlerWithTimeout`; without it a single
 	 * hung extension (unresolved `await`, network call with no timeout) would
 	 * park `ExtensionToolWrapper.execute` indefinitely and freeze tool
@@ -1250,9 +1440,11 @@ export class ExtensionRunner {
 	 * pre-execution gate — an unresponsive extension MUST NOT be treated as
 	 * silent consent to run the tool.
 	 */
-	async emitToolCall(event: ToolCallEvent): Promise<ToolCallEventResult | undefined> {
+	async emitToolCall(event: ToolCallEvent, signal?: AbortSignal): Promise<ToolCallEventResult | undefined> {
 		const ctx = this.createContext();
-		const timeoutMs = extensionHandlerTimeoutMs;
+		const timeoutMs = normalizeHandlerTimeout(
+			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? extensionHandlerTimeoutMs,
+		);
 		let result: ToolCallEventResult | undefined;
 
 		for (const ext of this.extensions) {
@@ -1273,6 +1465,7 @@ export class ExtensionRunner {
 								? `Extension ${ext.path} timed out after ${timeoutMs}ms`
 								: `Extension ${ext.path} failed: ${message}`,
 					}),
+					signal,
 				);
 
 				if (handlerResult) {
@@ -1284,6 +1477,9 @@ export class ExtensionRunner {
 			}
 		}
 
+		if (signal?.aborted) {
+			return { block: true, reason: `Tool execution was cancelled while an extension handler was pending` };
+		}
 		return result;
 	}
 

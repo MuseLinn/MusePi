@@ -16,6 +16,7 @@ import {
 	isDeepseekModelIdOrName,
 	isGlm52ReasoningEffortModelId,
 	isGrokReasoningEffortCapable,
+	isGrokXHighEffortCapable,
 	isKimiK3ModelId,
 	isKimiK26ModelId,
 	isKimiModelId,
@@ -176,6 +177,22 @@ const MIMO_REASONING_EFFORT_MAP: NonNullable<OpenAICompat["reasoningEffortMap"]>
 	minimal: "low",
 	xhigh: "high",
 };
+
+/** Shared `minimal → low` clamp. xhigh-capable Grok keeps `xhigh` unmapped. */
+const XAI_RESPONSES_MINIMAL_EFFORT_MAP: NonNullable<OpenAICompat["reasoningEffortMap"]> = {
+	minimal: "low",
+};
+/** Grok 4.5 / 4.3 / 3-mini: leftover `xhigh`/`max` clamp to `high`. */
+const XAI_RESPONSES_CLAMPED_EFFORT_MAP: NonNullable<OpenAICompat["reasoningEffortMap"]> = {
+	minimal: "low",
+	xhigh: "high",
+	max: "high",
+};
+
+/** Wire effort remap for first-party xAI Responses. */
+export function xaiResponsesReasoningEffortMap(modelId: string): NonNullable<OpenAICompat["reasoningEffortMap"]> {
+	return isGrokXHighEffortCapable(modelId) ? XAI_RESPONSES_MINIMAL_EFFORT_MAP : XAI_RESPONSES_CLAMPED_EFFORT_MAP;
+}
 
 function mergeModelReasoningEffortMap(
 	compat: ResolvedOpenAISharedCompat,
@@ -471,6 +488,8 @@ export function buildOpenAICompat(spec: ModelSpec<"openai-completions">): Resolv
 		// OpenAI proprietary reasoning models (o-series, gpt-5+) reject explicit
 		// temperature/top_p/… with a 400 on every serving host (#5606).
 		supportsSamplingParams: !isOpenAISamplingRestrictedModelId(spec.id),
+		// xAI reasoning models 400 on presence/frequency penalties and stop.
+		supportsPenaltyAndStopParams: !(isGrok && Boolean(spec.reasoning)),
 		reasoningEffortMap: {},
 		supportsUsageInStreaming: !isCerebras,
 		// Kimi (including via OpenRouter and Fireworks router-form IDs such as
@@ -684,34 +703,46 @@ export function buildOpenAIResponsesCompat(spec: OpenAIResponsesSpecLike): Resol
 	const isLocalServingBackend =
 		(!PROXY_OPENAI_COMPAT_PROVIDERS.has(spec.provider) && LOCAL_OPENAI_COMPAT_PROVIDERS.has(spec.provider)) ||
 		hasLocalLoopbackBaseUrl(baseUrl);
+	const isXaiHost = modelMatchesHost({ provider: spec.provider, baseUrl }, "xai");
 
 	const compat: ResolvedOpenAIResponsesCompat = {
 		supportsDeveloperRole: isAzure || isOpenAIUrl || hostMatchesUrl(baseUrl, "githubCopilot"),
 		supportsStrictMode: isAzure || detectStrictModeSupport(spec.provider, baseUrl),
-		supportsReasoningEffort: spec.provider !== "xai-oauth" || isGrokReasoningEffortCapable(id),
+		// Paid `xai` and SuperGrok `xai-oauth` share api.x.ai `/v1/responses`.
+		// Only the Grok effort-capable allowlist accepts `reasoning.effort`;
+		// other reasoners (grok-build, grok-code-fast-1, …) 400 if it is sent.
+		supportsReasoningEffort: !isXaiHost || isGrokReasoningEffortCapable(id),
 		supportsLongPromptCacheRetention: isOpenAIUrl,
 		supportsPromptCacheBreakpoints,
 		promptCacheBreakpointTtl: supportsPromptCacheBreakpoints ? "30m" : undefined,
 		// Azure OpenAI and GitHub Copilot Responses paths require tool results
 		// to strictly match prior tool calls when building Responses inputs.
 		strictResponsesPairing: isAzure || spec.provider === "github-copilot",
-		// GitHub Copilot and xAI OAuth reject `detail: "original"` (400 / 422).
-		// Every other host preserves native-resolution frames (snapcompact relies
-		// on `original`). Detect Copilot by provider id or base-URL host so a
-		// model pointed at the Copilot host under a different provider id still
-		// clamps; xai-oauth is provider-id only (same host family as paid `xai`).
+		// GitHub Copilot and first-party xAI `/v1/responses` reject
+		// `detail: "original"` (400 / 422). Every other host preserves
+		// native-resolution frames (snapcompact relies on `original`). Detect
+		// Copilot by provider id or base-URL host so a model pointed at the
+		// Copilot host under a different provider id still clamps.
 		supportsImageDetailOriginal:
-			spec.provider !== "xai-oauth" && !modelMatchesHost({ provider: spec.provider, baseUrl }, "githubCopilot"),
-		reasoningEffortMap: {},
+			!isXaiHost && !modelMatchesHost({ provider: spec.provider, baseUrl }, "githubCopilot"),
+		// api.x.ai rejects `reasoning.summary` (SuperGrok and paid key alike).
+		supportsReasoningSummary: !isXaiHost,
+		reasoningEffortMap: isXaiHost ? { ...xaiResponsesReasoningEffortMap(id) } : {},
 		supportsReasoningParams: true,
 		// OpenAI proprietary reasoning models (o-series, gpt-5+) reject explicit
 		// temperature/top_p/… with a 400 on every serving host (#5606).
 		supportsSamplingParams: !isOpenAISamplingRestrictedModelId(id),
+		// xAI `/v1/responses` rejects presence/frequency penalties for every
+		// model, not only reasoners (https://docs.x.ai/developers/rest-api-reference/inference/chat).
+		supportsPenaltyAndStopParams: !isXaiHost,
 		thinkingFormat,
 		reasoningDisableMode: resolveReasoningDisableMode(thinkingFormat),
 		omitReasoningEffort: false,
-		includeEncryptedReasoning: spec.provider !== "xai-oauth",
-		filterReasoningHistory: spec.provider === "xai-oauth" || (isOpenRouter && isAnthropicModel),
+		// Ask xAI `/v1/responses` for `reasoning.encrypted_content` and replay
+		// those items on later turns. OpenRouter Anthropic still filters
+		// reasoning wrappers independently.
+		includeEncryptedReasoning: true,
+		filterReasoningHistory: isOpenRouter && isAnthropicModel,
 		disableReasoningOnForcedToolChoice: isKimiModel,
 		disableReasoningOnToolChoice: isDeepseekFamily && reasoningCapable && !isOpenRouter,
 		supportsToolChoice: true,
@@ -752,13 +783,24 @@ export function buildOpenAIResponsesCompat(spec: OpenAIResponsesSpecLike): Resol
 			MINIMAX_PROVIDER_OR_ID_PATTERN.test(spec.provider) || (id ? MINIMAX_PROVIDER_OR_ID_PATTERN.test(id) : false),
 		emptyLengthFinishIsContextError: spec.provider === "ollama",
 		usesOpenAIToolCallIdLimit: spec.provider === "openai",
-		promptCacheSessionHeader: spec.provider === "xai-oauth" ? "x-grok-conv-id" : undefined,
+		promptCacheSessionHeader: isXaiHost ? "x-grok-conv-id" : undefined,
 		streamFirstEventTimeoutMs: isLocalServingBackend ? 0 : spec.compat?.streamFirstEventTimeoutMs,
 		streamIdleTimeoutMs: isLocalServingBackend
 			? LOCAL_OPENAI_COMPAT_STREAM_IDLE_TIMEOUT_MS
 			: spec.compat?.streamIdleTimeoutMs,
 	};
 	applyCompatOverrides(compat, spec.compat);
+	if (isXaiHost) {
+		const canonical = xaiResponsesReasoningEffortMap(id);
+		compat.reasoningEffortMap = { ...compat.reasoningEffortMap, ...canonical };
+		// xhigh-capable Grok advertises unmapped `xhigh`; drop a stale clamp
+		// from previous snapshots so 4.6 / 16-agent mode is not rewritten to `high`.
+		for (const key of ["xhigh", "max"] as const) {
+			if (!(key in canonical)) {
+				delete compat.reasoningEffortMap[key];
+			}
+		}
+	}
 	if (spec.compat?.reasoningDisableMode === undefined) {
 		compat.reasoningDisableMode = resolveReasoningDisableMode(compat.thinkingFormat);
 	}
@@ -776,6 +818,7 @@ function pickResponsesOnly(compat: ResolvedOpenAIResponsesCompat): ResponsesOnly
 		strictResponsesPairing: compat.strictResponsesPairing,
 		supportsImageDetailOriginal: compat.supportsImageDetailOriginal,
 		supportsObfuscationOptOut: compat.supportsObfuscationOptOut,
+		supportsReasoningSummary: compat.supportsReasoningSummary,
 		isVercelGatewayHost: compat.isVercelGatewayHost,
 	} satisfies ResponsesOnlyCompat;
 }

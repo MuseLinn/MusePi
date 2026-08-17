@@ -41,7 +41,7 @@ import { listOmpExtensionRoots, type OmpExtensionRoot } from "./omp-extension-ro
 import { resolvePluginStdioPaths } from "./substitute-plugin-root";
 
 const PROVIDER_ID = "omp-plugins";
-const DISPLAY_NAME = "MusePi Extension Packages";
+const DISPLAY_NAME = "OMP Extension Packages";
 const DESCRIPTION =
 	"Sub-discovery (skills, hooks, tools, commands, rules, prompts, .mcp.json, motion) inside extension packages";
 const PRIORITY = 90;

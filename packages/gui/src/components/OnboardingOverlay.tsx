@@ -22,14 +22,18 @@ import {
 	type TranslationKey,
 	useAccentPreference,
 	useThemePreference,
-} from "@musepi/collab-web";
-import { KeyRound, Languages, MessagesSquare, Palette, Settings2, Sparkles, SquareTerminal } from "lucide";
+} from "@musepi/desktop-web";
+import { Download, KeyRound, Languages, MessagesSquare, Palette, Settings2, Sparkles, SquareTerminal } from "lucide";
+import { GuiSelect } from "./GuiSelect";
 import { MorphIcon } from "morphicons/react";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
+import { usePrompt } from "../lib/prompt-dialog";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
+import { ImportSessionsSetup } from "./ImportSessionsSetup";
+import { Pop } from "./Pop";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 200;
@@ -48,8 +52,21 @@ const STEPS = [
 	{ icon: SquareTerminal, key: "onboarding step4" },
 	{ icon: Settings2, key: "onboarding step5" },
 	{ icon: KeyRound, key: "onboarding step6" },
+	{ icon: Download, key: "onboarding step8" },
 	{ icon: Sparkles, key: "onboarding step7" },
 ] as const;
+
+/** Per-step title — each page carries its own heading, not "Welcome". */
+const STEP_TITLES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
+	"onboarding step1": "onboarding title1",
+	"onboarding step2": "onboarding title2",
+	"onboarding step3": "onboarding title3",
+	"onboarding step4": "onboarding title4",
+	"onboarding step5": "onboarding title5",
+	"onboarding step6": "onboarding title6",
+	"onboarding step7": "onboarding title7",
+	"onboarding step8": "onboarding title8",
+};
 
 /** Feature bullets per promo step (steps 3–5) — each page carries real
  *  product facts, not a single sentence. */
@@ -91,6 +108,14 @@ interface ApiProviderInfo {
 	id: string;
 	name: string;
 	configured: boolean;
+}
+
+/** One stored credential row (providers.credentials — settings provider-card
+ *  parity for multi-account logout). */
+interface CredentialInfo {
+	id: number;
+	accountLabel: string;
+	note?: string | null;
 }
 
 /** Animated feature previews — pure CSS loops, no live data. The window
@@ -344,6 +369,28 @@ function ProviderSetup({
 	const [importTarget, setImportTarget] = useState<ApiProviderInfo | null>(null);
 	const [importValue, setImportValue] = useState("");
 	const [importBusy, setImportBusy] = useState(false);
+	// Multi-account credential menus (settings provider-card parity): per-
+	// provider account list + single-open dropdown + portal-rendered anchors.
+	const [credsByProvider, setCredsByProvider] = useState<Record<string, CredentialInfo[]>>({});
+	const [credsMenu, setCredsMenu] = useState<string | null>(null);
+	const credsAnchors = useRef(new Map<string, HTMLElement>());
+	const { prompt } = usePrompt();
+	// Close the credential menus on outside click / Escape (settings parity).
+	useEffect(() => {
+		if (!credsMenu) return;
+		const onDown = (e: MouseEvent | KeyboardEvent): void => {
+			if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
+			const target = e.target as Node | null;
+			if (target instanceof Node && (target as Element | null)?.closest?.("[data-header-menu]")) return;
+			setCredsMenu(null);
+		};
+		document.addEventListener("mousedown", onDown);
+		document.addEventListener("keydown", onDown);
+		return () => {
+			document.removeEventListener("mousedown", onDown);
+			document.removeEventListener("keydown", onDown);
+		};
+	}, [credsMenu]);
 
 	const loadProviders = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -352,13 +399,35 @@ function ProviderSetup({
 				| BuiltinProviderInfo[]
 				| { oauth?: BuiltinProviderInfo[]; api?: ApiProviderInfo[] }
 				| null;
+			let oauth: BuiltinProviderInfo[] = [];
+			let api: ApiProviderInfo[] = [];
 			if (Array.isArray(raw)) {
-				setBuiltins(raw);
-				setApiProviders([]);
+				oauth = raw;
 			} else {
-				setBuiltins(Array.isArray(raw?.oauth) ? raw.oauth : []);
-				setApiProviders(Array.isArray(raw?.api) ? raw.api : []);
+				oauth = Array.isArray(raw?.oauth) ? raw.oauth : [];
+				api = Array.isArray(raw?.api) ? raw.api : [];
 			}
+			setBuiltins(oauth);
+			setApiProviders(api);
+			// Multi-account menus: fetch per-provider credentials for
+			// everything logged-in / configured.
+			const ids = [
+				...oauth.filter(p => p.loggedIn).map(p => p.id),
+				...api.filter(p => p.configured).map(p => p.id),
+			];
+			const entries = await Promise.all(
+				ids.map(async id => {
+					try {
+						const creds = await rpc.request<CredentialInfo[]>("providers.credentials", { providerId: id });
+						return [id, creds ?? []] as [string, CredentialInfo[]];
+					} catch {
+						return [id, []] as [string, CredentialInfo[]];
+					}
+				}),
+			);
+			const next: Record<string, CredentialInfo[]> = {};
+			for (const [id, list] of entries) next[id] = list;
+			setCredsByProvider(next);
 		} catch {
 			setBuiltins([]);
 		}
@@ -443,6 +512,48 @@ function ProviderSetup({
 			// ignore
 		}
 		setLoginState(null);
+	};
+
+	// Remove exactly one stored credential (providers.logout with
+	// credentialId) — the provider stays logged in until the last one goes.
+	const logoutCredential = async (providerId: string, credentialId: number): Promise<void> => {
+		if (!rpc) return;
+		setCredsMenu(null);
+		try {
+			await rpc.request("providers.logout", { providerId, credentialId });
+			await loadProviders();
+		} catch {
+			// keep the row; the daemon error is non-fatal for the list
+		}
+	};
+
+	// Remove every stored credential for the provider.
+	const logoutAll = async (providerId: string): Promise<void> => {
+		if (!rpc) return;
+		setCredsMenu(null);
+		try {
+			await rpc.request("providers.logout", { providerId });
+			await loadProviders();
+		} catch {
+			// keep the row
+		}
+	};
+
+	// Credential note editing (multi-account labeling, settings parity).
+	const editCredentialNote = async (
+		providerId: string,
+		credentialId: number,
+		current: string | null,
+	): Promise<void> => {
+		if (!rpc) return;
+		const note = await prompt({ title: t("credential note"), defaultValue: current ?? "" });
+		if (note === null) return; // cancelled
+		try {
+			await rpc.request("providers.setCredentialNote", { providerId, credentialId, note });
+			await loadProviders();
+		} catch {
+			// keep the row
+		}
 	};
 
 	const importKey = async (): Promise<void> => {
@@ -538,6 +649,84 @@ function ProviderSetup({
 	}
 
 	const importable = apiProviders.filter(p => !p.configured);
+	const configuredApi = apiProviders.filter(p => p.configured);
+
+	// Multi-account logout menu (settings provider-card parity): account
+	// list with per-credential note/remove, add-another-credential, logout
+	// all. `onAddAnother` differs per provider kind (OAuth → login flow,
+	// API-key → inline import editor).
+	const renderCredsMenu = (id: string, onAddAnother: () => void): ReactNode => (
+		<div className="relative shrink-0">
+			<button
+				type="button"
+				className="gui-btn gui-btn-stop"
+				ref={el => {
+					if (el) credsAnchors.current.set(id, el);
+					else credsAnchors.current.delete(id);
+				}}
+				aria-expanded={credsMenu === id}
+				onClick={() => setCredsMenu(menu => (menu === id ? null : id))}
+			>
+				{t("logout")}
+				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+			</button>
+			<Pop
+				open={credsMenu === id}
+				className="gui-creds-menu"
+				anchor={credsAnchors.current.get(id) ?? null}
+				portal
+				align="right"
+				onOpenChange={open => {
+					if (!open && credsMenu === id) setCredsMenu(null);
+				}}
+			>
+				<div className="gui-creds-menu-label">{t("accounts")}</div>
+				{(credsByProvider[id] ?? []).map(c => (
+					<div key={c.id} className="gui-creds-row">
+						<div className="min-w-0 flex-1">
+							<div className="truncate text-[13px] text-[var(--color-text)]">{c.accountLabel}</div>
+							{c.note && (
+								<div className="truncate text-[12px] text-[var(--color-text-faint)]">{c.note}</div>
+							)}
+						</div>
+						<button
+							type="button"
+							className="gui-btn gui-btn--icon"
+							title={t("edit credential note")}
+							aria-label={t("edit credential note")}
+							onClick={() => void editCredentialNote(id, c.id, c.note ?? null)}
+						>
+							<Icon name="pencil" className="h-3 w-3" />
+						</button>
+						<button
+							type="button"
+							className="gui-btn gui-btn--icon"
+							title={t("remove credential")}
+							aria-label={t("remove credential")}
+							onClick={() => void logoutCredential(id, c.id)}
+						>
+							<Icon name="delete-bin" className="h-3 w-3" />
+						</button>
+					</div>
+				))}
+				<div className="gui-creds-menu-sep" />
+				<button
+					type="button"
+					className="gui-view-opt"
+					onClick={() => {
+						setCredsMenu(null);
+						onAddAnother();
+					}}
+				>
+					<Icon name="add-circle" className="h-3.5 w-3.5" />
+					<span className="min-w-0 flex-1">{t("add another credential")}</span>
+				</button>
+				<button type="button" className="gui-view-opt gui-view-opt--danger" onClick={() => void logoutAll(id)}>
+					<span className="min-w-0 flex-1">{t("logout all")}</span>
+				</button>
+			</Pop>
+		</div>
+	);
 
 	// Builtin list: all providers (no cap), logged-in first, local search —
 	// the API-key import rows join the same scrolled list and filter.
@@ -594,10 +783,13 @@ function ProviderSetup({
 							<div key={p.id} className="gui-obo-provider-row">
 								<span className="gui-obo-provider-name">{p.name}</span>
 								{p.loggedIn ? (
-									<span className="gui-obo-provider-status">
-										<Icon name="check" className="h-3.5 w-3.5" />
-										{t("logged in")}
-									</span>
+									<div className="flex shrink-0 items-center gap-2">
+										<span className="gui-obo-provider-status">
+											<Icon name="check" className="h-3.5 w-3.5" />
+											{t("logged in")}
+										</span>
+										{renderCredsMenu(p.id, () => void login(p.id))}
+									</div>
 								) : (
 									<button
 										type="button"
@@ -610,6 +802,26 @@ function ProviderSetup({
 								)}
 							</div>
 						))}
+						{/* Configured API-key providers — settings parity: shown with
+						 * the credential menu so they can be managed (previously
+						 * they vanished from the list entirely). */}
+						{configuredApi.length > 0 && (
+							<>
+								<div className="gui-obo-quick-label gui-obo-import-label">{t("configured")}</div>
+								{configuredApi.map(p => (
+									<div key={p.id} className="gui-obo-provider-row">
+										<span className="gui-obo-provider-name">{p.name}</span>
+										<div className="flex shrink-0 items-center gap-2">
+											<span className="gui-obo-provider-status">
+												<Icon name="check" className="h-3.5 w-3.5" />
+												{t("configured")}
+											</span>
+											{renderCredsMenu(p.id, () => setImportTarget(p))}
+										</div>
+									</div>
+								))}
+							</>
+						)}
 						{visibleImportable.length > 0 && (
 							<div className="gui-obo-quick-label gui-obo-import-label">{t("api key import")}</div>
 						)}
@@ -628,7 +840,7 @@ function ProviderSetup({
 								</button>
 							</div>
 						))}
-						{visibleBuiltins.length === 0 && visibleImportable.length === 0 && (
+						{visibleBuiltins.length === 0 && visibleImportable.length === 0 && configuredApi.length === 0 && (
 							<div className="gui-obo-provider-empty">
 								{q ? t("no matching providers") : t("no models available")}
 							</div>
@@ -716,16 +928,12 @@ function ProviderSetup({
 							onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
 						/>
 					</div>
-					<select
-						className="gui-input"
-						value={form.api}
-						onChange={e => setForm(v => ({ ...v, api: e.target.value }))}
-					>
-						<option value="openai-completions">openai</option>
-						<option value="openai-responses">openai responses</option>
-						<option value="anthropic-messages">anthropic</option>
-						<option value="google-generative-ai">google</option>
-					</select>
+					<GuiSelect
+					className="gui-input"
+					value={form.api}
+					onChange={nv => setForm(v => ({ ...v, api: nv }))}
+					options={[{ value: "openai-completions", label: "openai" }, { value: "openai-responses", label: "openai responses" }, { value: "anthropic-messages", label: "anthropic" }, { value: "google-generative-ai", label: "google" }]}
+				/>
 					{error && <div className="gui-obo-provider-error">{error}</div>}
 					<div className="flex gap-2">
 						<button
@@ -894,7 +1102,7 @@ const ACCENT_OPTIONS = [
 ] as const;
 
 /** Step 2 — appearance: theme (dark/light/system) + accent (brand/mono/
- *  ocean/jade + custom), applied live through collab-web's theme module so
+ *  ocean/jade + custom), applied live through desktop-web's theme module so
  *  the data-theme × data-color-scheme × data-ui-theme × data-accent axes all
  *  stay in sync (same path as the settings toggle). The right-pane window
  *  preview recolors through the same CSS vars. */
@@ -1042,7 +1250,11 @@ export function OnboardingOverlay({
 			const t = e.target as HTMLElement | null;
 			const typing =
 				t &&
-				(t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+				(t.tagName === "INPUT" ||
+					t.tagName === "TEXTAREA" ||
+					t.tagName === "SELECT" ||
+					t.tagName === "BUTTON" ||
+					t.isContentEditable);
 			if (e.key === "Enter" && !typing) {
 				e.preventDefault();
 				e.stopPropagation();
@@ -1100,7 +1312,7 @@ export function OnboardingOverlay({
 							<MorphIcon icon={current.icon} size={30} spring="snappy" />
 						</div>
 						<div className="gui-onboarding-title" key={`title-${step}`}>
-							{t("onboarding title")}
+							{t(STEP_TITLES[current.key])}
 						</div>
 						<div className="gui-onboarding-body" key={`body-${step}`}>
 							{t(current.key)}
@@ -1117,7 +1329,8 @@ export function OnboardingOverlay({
 							{step === 0 && <LanguageSetup />}
 							{step === 1 && <AppearanceSetup />}
 							{step === 5 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
-							{step === 6 && <PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />}
+							{step === 6 && <ImportSessionsSetup rpc={rpc} />}
+							{step === 7 && <PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />}
 						</div>
 						<div className="gui-onboarding-dots">
 							{STEPS.map((s, i) => (

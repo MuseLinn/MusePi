@@ -22,7 +22,7 @@
  * card, never a glass rectangle).
  */
 
-import { setLocale, t } from "@musepi/collab-web";
+import { setLocale, t } from "@musepi/desktop-web";
 import { type ReactNode, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PetActivity } from "./lib/pet";

@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/collab-web";
+import { type TranslationKey, t } from "@musepi/desktop-web";
 import { useEffect, useState, type ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { BUILTIN_PETDEX, loadPetdex, petId, type PetdexPackage } from "../lib/pet";

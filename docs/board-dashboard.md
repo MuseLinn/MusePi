@@ -59,7 +59,7 @@
 
 | 决策点 | 选择 | 理由 |
 |---|---|---|
-| 组件运行环境 | **白名单组件 registry（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 collab-web tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联 widget** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
+| 组件运行环境 | **白名单组件 registry（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 desktop-web tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联 widget** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
 | 组件格式 | **registry 条目**：`{ type, schema, component }`——组件是 TSX（reactbits 源码式），agent 交互的是 **widget schema**（type + data 字段） | 比单 HTML 文件更易维护；reactbits 组件零改动直接入 registry；`widget.render` 工具按 schema 校验 |
 | 组件 SDK | `widget.render { type, data }` 工具 + daemon `widget.schema` RPC（暴露可用类型/字段给 agent） | agent 通过 schema 发现能力，**自动补全组件参数**——"封装好搭好底座暴露给 agent"正是此意 |
 | 持久化 | daemon `board.*` RPC → 会话目录 JSON（`~/.musepi/boards/`） | 跨重启、可备份；与 notes/plans 同级 |
@@ -129,7 +129,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 ```
 
 - **reactbits 角色**：**视觉组件库**（白名单来源）——每个组件是一个 registry 条目，与自研功能件并列；不做沙箱运行时（它不是为数据绑定/交互逻辑设计的——数据与状态机自研）。
-- **现有基础**：CountUp/BlurText/ShinyText/SpotlightCard 已落地 GUI（2026-08-07）；collab-web `tool-render/registry.ts`（30+ 工具渲染器）就是消息内联 widget 的雏形——扩展它加通用 `widget.*` 渲染器即达 kimi 式内联。
+- **现有基础**：CountUp/BlurText/ShinyText/SpotlightCard 已落地 GUI（2026-08-07）；desktop-web `tool-render/registry.ts`（30+ 工具渲染器）就是消息内联 widget 的雏形——扩展它加通用 `widget.*` 渲染器即达 kimi 式内联。
 - **agent 利用路径**：`widget.schema` 列出可用类型 → 工具填数据 → registry 渲染——agent 无需懂 React/动画，只需选类型填字段（schema 驱动自动补全）。
 
 ### iframe 沙箱（备选，M4 后评估）
@@ -156,7 +156,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 - **数据源范围**：行情接口（免费源选型：腾讯/新浪/雅虎）合规性待确认——MVP 可先
   静态示例数据 + 1 个真实源。
 - **AI 生成的组件安全**：生成后强制沙箱预览 + 人工确认（bitfun 的 permission review 流程）。
-- **与 collab-web 关系**：看板放 GUI（desktop）——guest 只读分享暂不排期。
+- **与 desktop-web 关系**：看板放 GUI（desktop）——guest 只读分享暂不排期。
 
 ## 5b. 渲染规范
 
@@ -175,7 +175,7 @@ widget 组件的视觉/排版/交互约束见 **`docs/widget-design-system.md`**
 
 **是——看板系统就是 desktop 的内置组件 bundle**，与桌宠（pet bundle）、mini 聊天窗同级：
 
-- **白名单 WidgetRegistry** 编译进 GUI（collab-web 共享：看板卡 + 消息内联 + pin 窗三处渲染）——类型级隔离，非任意代码
+- **白名单 WidgetRegistry** 编译进 GUI（desktop-web 共享：看板卡 + 消息内联 + pin 窗三处渲染）——类型级隔离，非任意代码
 - **daemon 持久化**：`board.list` / `board.save` RPC → `~/.musepi/boards/boards.json`（GUI/agent/多窗口共享一份；localStorage 为离线回退）
 - **agent 规范化调用**：
   - `widget` 工具（agent 消息内联渲染，WIDGET_TYPES 表）

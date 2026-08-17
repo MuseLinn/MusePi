@@ -1,4 +1,4 @@
-import { ImageLightbox, t } from "@musepi/collab-web";
+import { ImageLightbox, t } from "@musepi/desktop-web";
 import { type ReactNode, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon } from "../vendor/oc-icons";
@@ -17,6 +17,7 @@ export function ComposerFrame({
 	children,
 	attachments,
 	onRemoveAttachment,
+	onAnnotated,
 	statusRow,
 	footerLeft,
 	footerRight,
@@ -32,6 +33,9 @@ export function ComposerFrame({
 	children: ReactNode;
 	attachments: { id: number; dataUrl: string; mimeType: string; name: string }[];
 	onRemoveAttachment(id: number): void;
+	/** Annotation text from the attachment lightbox (open-science parity):
+	 *  pins + notes formatted for the composer/agent. */
+	onAnnotated?(text: string): void;
 	/** Chips row above the footer (goal/plan modes) — session only. */
 	statusRow?: ReactNode;
 	footerLeft: ReactNode;
@@ -121,6 +125,12 @@ export function ComposerFrame({
 			index={preview?.index ?? null}
 			onClose={() => setPreview(null)}
 			onIndexChange={i => setPreview(prev => (prev ? { ...prev, index: i } : prev))}
+			onAnnotate={notes => {
+				const text = notes
+					.map(n => `标注 #${n.index}(${n.x.toFixed(1)}%, ${n.y.toFixed(1)}%): ${n.note || "（无说明）"}`)
+					.join("\n");
+				onAnnotated?.(text);
+			}}
 		/>
 	);
 	if (hero)

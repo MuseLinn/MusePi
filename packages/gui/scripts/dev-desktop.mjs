@@ -26,6 +26,15 @@ async function waitPort(port, timeoutMs) {
 	return false;
 }
 
+// `electron .` (directory app path) fails on this Windows setup
+// ("Unable to find Electron app") — pass the main entry file directly;
+// main.cjs resolves its own __dirname for relative requires either way.
+const ELECTRON_MAIN = "electron/main.cjs";
+const electronBin =
+	process.platform === "win32"
+		? "node_modules/electron/dist/electron.exe"
+		: "node_modules/.bin/electron";
+
 const vite = spawn("node_modules/.bin/vite", ["--port", String(VITE_PORT), "--strictPort"], { stdio: "inherit" });
 const ok = await waitPort(VITE_PORT, 15000);
 if (!ok) {
@@ -34,7 +43,7 @@ if (!ok) {
 	process.exit(1);
 }
 
-const electron = spawn("node_modules/.bin/electron", [".", ...argv], {
+const electron = spawn(electronBin, [ELECTRON_MAIN, ...argv], {
 	stdio: "inherit",
 	env: { ...process.env, MUSEPI_GUI_DEV: "1" },
 });

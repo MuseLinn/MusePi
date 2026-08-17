@@ -1,0 +1,97 @@
+/**
+ * Tool renderer contract.
+ *
+ * Every tool gets a renderer with two React components:
+ * - `Summary` — one-line inline header content (dense, truncated by the chrome).
+ * - `Body` — expanded detail view (args, outputs, diffs, images).
+ *
+ * Renderers are host-agnostic: they run inside the desktop-web React app and
+ * inside the `<omp-tool-view>` web component bundled into HTML session exports.
+ * They must never import host-specific modules (wire types, coding-agent
+ * runtime, node builtins) and must tolerate partial/malformed `args` and
+ * `details` — these arrive as plain JSON over the wire.
+ */
+import type { ComponentType } from "react";
+
+export interface ToolResultText {
+	type: "text";
+	text: string;
+}
+
+export interface ToolResultImage {
+	type: "image";
+	/** Base64-encoded image data. */
+	data: string;
+	/** e.g. "image/png". */
+	mimeType: string;
+}
+
+export type ToolResultBlock = ToolResultText | ToolResultImage | { type: string };
+
+export interface ToolResultLike {
+	content: readonly ToolResultBlock[];
+	details?: unknown;
+	isError?: boolean;
+}
+
+/**
+ * Capabilities the embedding host exposes to renderers. Functions are live
+ * objects (passed via property assignment or the payload store) — they cannot
+ * ride the JSON `payload` attribute.
+ */
+export interface ToolRenderHost {
+	/** True when the host can show a transcript for this agent id. */
+	hasAgent?(id: string): boolean;
+	/** Open the sub-session/transcript view for an agent id. */
+	openAgent?(id: string): void;
+	/** Submit a message to the conversation as if the user typed it
+	 *  (kimi sendPrompt parity — inline widgets hand results back to the
+	 *  agent). Absent in board-only hosts. */
+	sendPrompt?(text: string): void;
+}
+
+/**
+ * aicss-style rendering kind derived from the tool name/intent by the
+ * transcript's ToolCard. Dedicated renderers may branch on it; the generic
+ * fallback uses it to pick a treatment instead of the raw JSON dump. Absent
+ * for plain unknown tools (tolerant fallback) and HTML-export hosts.
+ */
+export type ToolKind = "diff" | "search" | "image";
+
+export interface ToolRenderProps {
+	/** Wire tool name (may be an alias of the registry key, e.g. `grep` → search). */
+	name: string;
+	/** Parsed tool-call arguments with the internal `i` intent already stripped. */
+	args: Record<string, unknown>;
+	result?: ToolResultLike;
+	/** Tool is still executing (live collab view). */
+	running?: boolean;
+	/** Host capabilities (sub-session drill-down, …). */
+	host?: ToolRenderHost;
+	/** Transcript-derived rendering kind (see {@link ToolKind}). */
+	kind?: ToolKind;
+	/** Model-provided intent (`i` field) — already stripped from `args`. */
+	intent?: string;
+}
+
+export interface ToolRenderer {
+	/** Inline single-line header summary. Must not render block elements. */
+	Summary: ComponentType<ToolRenderProps>;
+	/** Expanded body. Omit when the summary already says everything. */
+	Body?: ComponentType<ToolRenderProps>;
+	/**
+	 * Optional full-card chrome (e.g. the task swarm card). When present the
+	 * generic tool-call card (`tv-head` with tool name + summary + intent
+	 * line) is bypassed and this renderer owns the entire card — including
+	 * its own open/collapse state. Summary/Body remain available for
+	 * hosts that render the two-part contract directly.
+	 */
+	Card?: ComponentType<ToolRenderProps>;
+	/**
+	 * Optional ADDITIVE card rendered BESIDE the native tool-call card
+	 * (the swarm style extension): the tool's own Summary/Body chrome stays,
+	 * and this component renders alongside it (e.g. the kimiwork-style
+	 * member grid). Gated by the host's taskCardStyle setting.
+	 */
+	SwarmCard?: ComponentType<ToolRenderProps>;
+}

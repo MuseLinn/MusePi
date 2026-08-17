@@ -2807,19 +2807,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	const progress = monitor.progress;
 	let unsubscribe: (() => void) | null = null;
 	let reviveSession: AgentReviver | null = null;
-	// Adopted (kept-alive) subagents flip registry status from session events on
-	// later turns: revive/wake → running, turn drained → idle. The subscription
-	// intentionally survives this run; a disposed session emits nothing, so it
-	// needs no teardown.
-	const installRegistryStatusSync = (target: AgentSession): void => {
-		target.subscribe(event => {
-			if (event.type === "agent_start") {
-				AgentRegistry.global().setStatus(id, "running", target);
-			} else if (event.type === "agent_end") {
-				AgentRegistry.global().setStatus(id, "idle", target);
-			}
-		});
-	};
 	const installIrcWakeTurnMonitor = (target: AgentSession): void => {
 		attachIrcWakeTurnMonitor(target, {
 			id,
@@ -3167,7 +3154,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			sessionCreatedAt = performance.now();
 
 			monitor.setActiveSession(session);
-			installRegistryStatusSync(session);
+			// Run-state notifications precede deferrable wire-level `agent_end`,
+			// so adopted keep-alive lifecycle cannot get stuck during prompt unwind.
+			AgentRegistry.global().syncSessionStatus(id, session);
 			if (sessionFile !== null && worktree === undefined) {
 				// Lifecycle reviver: park closed the JSONL writer, so reopening takes
 				// the single-writer lock cleanly and restores the full message history
@@ -3183,7 +3172,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 					const { session: revived } = await createAgentSession(
 						buildSubagentSessionOptions(reopened, expectedAgentRef),
 					);
-					installRegistryStatusSync(revived);
+					AgentRegistry.global().syncSessionStatus(id, revived);
 					installIrcWakeTurnMonitor(revived);
 					return revived;
 				};

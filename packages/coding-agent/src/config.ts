@@ -72,6 +72,17 @@ export function getChangelogPath(): string | undefined {
 	return packageDir ? path.resolve(packageDir, "CHANGELOG.md") : undefined;
 }
 
+/**
+ * Path to MusePi's own `CHANGELOG.musepi.md` release notes, or `undefined`
+ * when the package directory cannot be resolved. When this file exists the
+ * changelog machinery prefers it over the upstream OMP `CHANGELOG.md` — the
+ * what's-new panel must show MusePi's changes, not upstream's.
+ */
+export function getMusepiChangelogPath(): string | undefined {
+	const packageDir = getPackageDir();
+	return packageDir ? path.resolve(packageDir, "CHANGELOG.musepi.md") : undefined;
+}
+
 // =============================================================================
 // Multi-Config Directory Helpers
 // =============================================================================

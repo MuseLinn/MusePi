@@ -1,5 +1,6 @@
-import { t } from "@musepi/collab-web/src/i18n/index.js";
-import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
+import { t } from "@musepi/desktop-web/src/i18n/index.js";
+import { GuiSelect } from "./GuiSelect";
+import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
@@ -58,15 +59,12 @@ export function TaskModal({
 					</div>
 					<div className="gui-task-row">
 						<span className="gui-task-label">{t("widget task schedule")}</span>
-						<select
-							className="gui-settings-select"
-							value={task.schedule ?? "manual"}
-							onChange={e => update({ task: { ...task, schedule: e.target.value as WidgetTask["schedule"] } })}
-						>
-							<option value="manual">{t("widget task manual")}</option>
-							<option value="hourly">{t("widget task hourly")}</option>
-							<option value="daily">{t("widget task daily")}</option>
-						</select>
+						<GuiSelect
+					className="gui-settings-select"
+					value={task.schedule ?? "manual"}
+					onChange={v => update({ task: { ...task, schedule: v as WidgetTask["schedule"] } })}
+					options={[{ value: "manual", label: t("widget task manual") }, { value: "hourly", label: t("widget task hourly") }, { value: "daily", label: t("widget task daily") }]}
+				/>
 					</div>
 					<div className="gui-task-field">
 						<span className="gui-task-label">{t("widget task name")}</span>

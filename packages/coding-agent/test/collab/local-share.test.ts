@@ -70,7 +70,7 @@ describe("LocalShareManager", () => {
 		expect(manager.tunnel).toBeNull();
 	});
 
-	it("reports whether the collab-web dist is available for static serving", () => {
+	it("reports whether the desktop-web dist is available for static serving", () => {
 		const manager = new LocalShareManager();
 		expect(typeof manager.webDistAvailable).toBe("boolean");
 	});

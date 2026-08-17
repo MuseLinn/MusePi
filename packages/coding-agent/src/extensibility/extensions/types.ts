@@ -235,6 +235,8 @@ export interface ExtensionCustomOptions {
 	overlayOptions?: OverlayOptions | (() => OverlayOptions);
 	/** Invoked with the overlay handle once the overlay is created (overlay mode only). */
 	onHandle?: (handle: OverlayHandle) => void;
+	/** Abort the custom UI and reject its promise. */
+	signal?: AbortSignal;
 }
 
 /** Wrap the current autocomplete provider with additional behavior (pi-compatible). */
@@ -1283,6 +1285,12 @@ export interface ExtensionAPI {
 	 *  stored value lives under `key` like any static setting. */
 	registerSetting(setting: ExtensionSetting): void;
 
+	/** Contribute a renderer-side component to a GUI slot (e.g.
+	 *  "settings.extensions"). The daemon compiles `moduleUrl` to ESM and
+	 *  serves the code via extensions.list; the GUI dynamically imports and
+	 *  mounts it. Enable/disable takes effect on the next slot refresh. */
+	registerComponent(component: ExtensionComponent): void;
+
 	/** Register a keyboard shortcut. */
 	registerShortcut(
 		shortcut: KeyId,
@@ -1653,6 +1661,9 @@ export interface Extension {
 	 *  the settings.schema surface so the GUI/TUI settings panel shows them
 	 *  only while the extension is enabled (swarm style extension). */
 	settings: Map<string, ExtensionSetting>;
+	/** Renderer-side components contributed by the extension
+	 *  (registerComponent), in registration order. */
+	components: ExtensionComponent[];
 }
 
 /** One setting contributed by an extension via registerSetting. Mirrors the
@@ -1668,6 +1679,22 @@ export interface ExtensionSetting {
 		description?: string;
 		options?: { value: string; label: string; description?: string }[];
 	};
+}
+
+/**
+ * A renderer-side component contributed by an extension (DSH ui-slots
+ * analogue): the GUI mounts it into a named slot by dynamically importing
+ * the compiled module. The daemon compiles `moduleUrl` to ESM JavaScript
+ * (bun.build) and serves the code through `extensions.list`, so the
+ * renderer never touches the extension's source tree.
+ */
+export interface ExtensionComponent {
+	/** Slot id the renderer exposes (e.g. "settings.extensions"). */
+	slot: string;
+	/** Extension-relative module path (e.g. "./ui/greeting.tsx"). */
+	moduleUrl: string;
+	/** Display label (settings list, load errors). */
+	label?: string;
 }
 
 /** Result of loading extensions. */

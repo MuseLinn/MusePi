@@ -1,8 +1,8 @@
-import { t } from "@musepi/collab-web";
-import { WidgetErrorBoundary } from "@musepi/collab-web/src/widgets/error-boundary";
-import { WidgetFit } from "@musepi/collab-web/src/widgets/fit";
-import { type BoardWidget, widgetDef } from "@musepi/collab-web/src/widgets/registry";
-import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
+import { t } from "@musepi/desktop-web";
+import { WidgetErrorBoundary } from "@musepi/desktop-web/src/widgets/error-boundary";
+import { WidgetFit } from "@musepi/desktop-web/src/widgets/fit";
+import { type BoardWidget, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
+import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";

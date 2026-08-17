@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { type OrbState } from "../vendor/thinking-orbs";
+import type { OrbState } from "../vendor/thinking-orbs";
 import { AVATAR_STORAGE_KEY, avatarPreset } from "./avatar-presets";
 
 /**
@@ -18,7 +18,17 @@ import { AVATAR_STORAGE_KEY, avatarPreset } from "./avatar-presets";
 const IDLE_CYCLE: OrbState[] = ["listening", "searching", "shaping"];
 const CYCLE_MS = 4000;
 
-export function AgentAvatar({ state = "working", size = 20 }: { state?: OrbState; size?: 20 | 32 | 64 }): ReactNode {
+export function AgentAvatar({
+	state = "working",
+	size = 20,
+	seed,
+}: {
+	state?: OrbState;
+	size?: 20 | 32 | 64;
+	/** Identity-bound avatar seed (session id, agent id, model…) — punk
+	 *  preset renders a deterministic face per seed. */
+	seed?: string;
+}): ReactNode {
 	const [presetId, setPresetId] = useState(() => {
 		try {
 			return localStorage.getItem(AVATAR_STORAGE_KEY) ?? "orbs";
@@ -76,12 +86,12 @@ export function AgentAvatar({ state = "working", size = 20 }: { state?: OrbState
 							key={s}
 							className={`gui-agent-avatar-frame${s === active ? " gui-agent-avatar-frame--active" : ""}`}
 						>
-							{preset.render(s, size)}
+							{preset.render(s, size, seed)}
 						</span>
 					))}
 				</span>
 			) : (
-				preset.render(active, size)
+				preset.render(active, size, seed)
 			)}
 		</span>
 	);

@@ -1,0 +1,58 @@
+/* Mobile entry overrides (mobile.html / Capacitor shell only).
+ * Narrow-screen tuning on top of the shared shell styles: tighter card
+ * padding, full-bleed connect card on phones, and a touch-friendly tap
+ * target floor. Desktop web never loads this file.
+ */
+
+/* Connect card: full-width on phones, tighter padding. */
+@media (max-width: 420px) {
+	.sh-connect {
+		padding: 12px;
+		padding-top: calc(12px + var(--safe-top, 0px));
+		padding-bottom: calc(12px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+	}
+
+	.sh-connect-card {
+		max-width: 100%;
+		padding: 20px 16px;
+		border-radius: 12px;
+	}
+
+	.sh-connect-method {
+		padding: 12px;
+	}
+
+	.sh-connect-pair-row {
+		flex-wrap: wrap;
+	}
+
+	.sh-connect-pair-row .sh-input:first-child {
+		width: 100%;
+		flex: none;
+		text-align: center;
+	}
+
+	.sh-connect-pair-row .sh-input:nth-child(2) {
+		flex: 1 1 100%;
+	}
+
+	.sh-connect-pair-row .sh-btn {
+		flex: 1 1 100%;
+	}
+}
+
+/* Tablets / book foldables (short side ≥ 600px): roomier card. */
+@media (min-width: 600px) and (max-width: 1024px) {
+	.sh-connect-card {
+		max-width: 480px;
+	}
+}
+
+/* Tap targets: 44px floor for the method cards. */
+.sh-connect-method {
+	min-height: 44px;
+}
+
+/* Main session view: the composer strip's own padding-bottom already adds
+ * the gesture-bar inset + IME inset (shell.css .sh-composer) — the inner
+ * floating card must not double-count it. */

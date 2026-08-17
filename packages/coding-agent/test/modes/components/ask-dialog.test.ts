@@ -187,7 +187,7 @@ describe("AskDialogComponent", () => {
 		]);
 	});
 
-	it("multi-select: Space and Enter both toggle without advancing; Submit tab confirms", () => {
+	it("multi-select: Space toggles; Enter submits the current selection without toggling", () => {
 		const onSubmit = vi.fn();
 		const onCancel = vi.fn();
 		const onPrompt = vi.fn();
@@ -211,18 +211,35 @@ describe("AskDialogComponent", () => {
 		component.handleInput(SPACE);
 		expect(onSubmit).not.toHaveBeenCalled();
 
-		// Down to Option B, Enter - toggles B, still no submit and no movement
+		// Down to Option B, Enter - confirms the current selection WITHOUT
+		// toggling the focused option, and submits (single-question dialog).
 		component.handleInput(DOWN);
-		component.handleInput(ENTER);
-		expect(onSubmit).not.toHaveBeenCalled();
-
-		// Tab to the Submit tab (present even for a single multi question),
-		// Enter confirms the selection.
-		component.handleInput(TAB);
 		component.handleInput(ENTER);
 
 		expect(onSubmit).toHaveBeenCalledTimes(1);
-		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual(["Option A", "Option B"]);
+		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual(["Option A"]);
+	});
+
+	it("multi-select: Enter on an untouched question submits an empty selection", () => {
+		// Enter-submit must be able to answer "select none" — the deadlock
+		// fix (#8252) that made Enter confirm instead of toggle-only.
+		const onSubmit = vi.fn();
+		const component = new AskDialogComponent(
+			[
+				{
+					id: "q1",
+					question: "Choose multiple?",
+					options: [{ label: "Option A" }, { label: "Option B" }],
+					multi: true,
+				},
+			],
+			{ onSubmit, onCancel: vi.fn(), onPrompt: vi.fn() },
+		);
+
+		component.handleInput(ENTER);
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual([]);
 	});
 
 	it("tab-state persistence: answer question 0, Tab forward, Tab back, answer still present", () => {
@@ -933,7 +950,7 @@ describe("AskDialogComponent", () => {
 		}
 	});
 
-	it("single-question multi-select: Enter toggles instead of submitting", () => {
+	it("single-question multi-select: Enter submits the current selection without toggling", () => {
 		const onSubmit = vi.fn();
 		const questions: ExtensionAskDialogQuestion[] = [
 			{
@@ -950,19 +967,16 @@ describe("AskDialogComponent", () => {
 			onPrompt: vi.fn(),
 		});
 
-		// Enter on Option B toggles it — no submit, no tab movement.
+		// Enter on Option B confirms the current selection — Option B is NOT
+		// toggled on, and the single-question dialog submits right away with
+		// the (empty) selection.
 		component.handleInput(DOWN);
 		component.handleInput(ENTER);
-		expect(onSubmit).not.toHaveBeenCalled();
-
-		// The toggle registered: Submit tab confirms only Option B.
-		component.handleInput(TAB);
-		component.handleInput(ENTER);
 		expect(onSubmit).toHaveBeenCalledTimes(1);
-		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual(["Option B"]);
+		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual([]);
 	});
 
-	it("multi-select: Enter on a checked option toggles it off; empty answer submits from Submit tab", () => {
+	it("multi-select: Enter on a checked option submits without unchecking it", () => {
 		const onSubmit = vi.fn();
 		const questions: ExtensionAskDialogQuestion[] = [
 			{
@@ -979,17 +993,13 @@ describe("AskDialogComponent", () => {
 			onPrompt: vi.fn(),
 		});
 
-		// Space checks Option A, Enter on the same row unchecks it.
+		// Space checks Option A; Enter on the same row confirms — the checked
+		// option stays selected (Enter no longer toggles it off).
 		component.handleInput(SPACE);
 		component.handleInput(ENTER);
 
-		// Submit tab warns about the unanswered question but still submits.
-		component.handleInput(TAB);
-		expect(render(component).toLowerCase()).toContain("unanswered");
-		component.handleInput(ENTER);
-
 		expect(onSubmit).toHaveBeenCalledTimes(1);
-		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual([]);
+		expect(onSubmit.mock.calls[0][0].results[0].selectedOptions).toEqual(["Option A"]);
 	});
 
 	it("renders every option's preview inline, not only the highlighted one", () => {

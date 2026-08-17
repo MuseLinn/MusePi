@@ -1,6 +1,7 @@
-import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/collab-web";
+import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { AgentsCenterPage } from "./components/AgentsCenterPage";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BlurText } from "./components/BlurText";
@@ -10,8 +11,10 @@ import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { DialogFrame } from "./components/DialogFrame";
+import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
+import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
@@ -22,7 +25,7 @@ import { ShinyText } from "./components/ShinyText";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { applyAppearancePrefs } from "./lib/appearance";
-import { pickDirectory, restartDaemon } from "./lib/electron";
+import { pickDirectory } from "./lib/electron";
 import { applyGlassLevel, applyGlassMaterial, readGlassLevel } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
@@ -36,6 +39,7 @@ import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
+import "./styles/gui-taskcenter.css";
 
 const DEFAULT_URL = "ws://127.0.0.1:8300";
 
@@ -367,6 +371,7 @@ function AppInner(): ReactNode {
 	});
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
+	const [importOpen, setImportOpen] = useState(false);
 	// kimiwork parity: 新建空白项目 dialog (name + parent path → daemon
 	// fs.mkdir → open the folder). Kept always-mounted so the DialogFrame
 	// plays its enter/exit animation.
@@ -419,6 +424,7 @@ function AppInner(): ReactNode {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
+	const [agentsOpen, setAgentsOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
 	// and the sidebar 定时任务 button glows for a while (visible without any
@@ -470,11 +476,31 @@ function AppInner(): ReactNode {
 			if (cronGlowTimerRef.current) clearTimeout(cronGlowTimerRef.current);
 		};
 	}, [rpc]);
+	// Welcome 预设 chip 选项:modes.list 一次拉取 + modes.changed 即时刷新。
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		const load = (): void => {
+			void rpc
+				.request<{ modes: { id: string; label: string }[] } | null>("modes.list", {})
+				.then(res => alive && setWelcomeModes(res?.modes ?? null))
+				.catch(() => alive && setWelcomeModes(null));
+		};
+		load();
+		const off = rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "modes.changed") load();
+		});
+		return () => {
+			alive = false;
+			off();
+		};
+	}, [rpc]);
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
-	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "chat" | null>(null);
+	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "agents" | "chat" | null>(null);
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const viewSwapRef = useRef((_to: "board" | "scheduled" | "chat"): void => {});
+	const viewSwapRef = useRef((_to: "board" | "scheduled" | "agents" | "chat"): void => {});
 	useEffect(() => {
 		const onOpenBoard = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -485,8 +511,8 @@ function AppInner(): ReactNode {
 		window.addEventListener("omp-open-board", onOpenBoard);
 		return () => window.removeEventListener("omp-open-board", onOpenBoard);
 	}, []);
-	viewSwapRef.current = (to: "board" | "scheduled" | "chat"): void => {
-		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : "chat";
+	viewSwapRef.current = (to: "board" | "scheduled" | "agents" | "chat"): void => {
+		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat";
 		// A same-target call must still clear any stale leave state — a
 		// leftover leavingView keeps the leave frame mounted at opacity 0
 		// (forwards fill) and the surface appears blank.
@@ -505,10 +531,12 @@ function AppInner(): ReactNode {
 			setLeavingView(null);
 			setBoardOpen(to === "board");
 			setScheduledOpen(to === "scheduled");
+			setAgentsOpen(to === "agents");
 		}, 150);
 	};
-	// Section the settings pane lands on (sidebar 技能 entry preselects).
-	const [settingsSection, setSettingsSection] = useState<"skills" | undefined>(undefined);
+	// Section the settings pane lands on (sidebar 技能 entry + welcome
+	// composer 自定义补充 preselect).
+	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | undefined>(undefined);
 	// Settings open/close rides the same blur transition as the board /
 	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
 	// the settings view (or the workspace) enters with its 300ms blur-in.
@@ -517,7 +545,7 @@ function AppInner(): ReactNode {
 	const openSettings = useCallback((): void => {
 		if (settingsOpen) return;
 		// Blur the current surface out first (leavingView keeps it mounted).
-		setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : "chat");
+		setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat");
 		clearTimeout(settingsTimerRef.current ?? undefined);
 		settingsTimerRef.current = setTimeout(() => {
 			settingsTimerRef.current = null;
@@ -535,6 +563,19 @@ function AppInner(): ReactNode {
 			setSettingsOpen(false);
 		}, 150);
 	}, [settingsOpen, leavingSettings]);
+	// Cross-component navigation into a settings section (welcome composer
+	// 自定义补充 chip): open the pane on the requested section.
+	useEffect(() => {
+		const onOpenSection = (e: Event): void => {
+			const section = (e as CustomEvent<string>).detail;
+			if (section === "skills" || section === "suggestions") {
+				setSettingsSection(section);
+				openSettings();
+			}
+		};
+		window.addEventListener("omp-gui-open-settings-section", onOpenSection);
+		return () => window.removeEventListener("omp-gui-open-settings-section", onOpenSection);
+	}, [openSettings]);
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	// Bottom integrated terminal drawer (ZCode style) — independent of the
@@ -551,6 +592,12 @@ function AppInner(): ReactNode {
 	/** Model chosen in the welcome composer — applied to the new session and
 	 *  reflected in the in-chat selector (preset). */
 	const [presetModelId, setPresetModelId] = useState<string | null>(null);
+	/** 预设(mode)选择(欢迎页 chip):welcome 创建会话时随 create RPC 传入。
+	 *  默认 Work(全量,= 未启用预设时的行为);与 presetModelId 同语义:
+	 *  一次选择应用到下一次新建,不随会话回写。 */
+	const [welcomeModeId, setWelcomeModeId] = useState<string | null>("work");
+	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
+	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
 	 *  resting preselect for new sessions. Kept SEPARATE from presetModelId:
 	 *  opening a session must not clobber the welcome default with that
@@ -814,6 +861,13 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// B1: envelopes carry the subscribing sessionId. The daemon
+				// allows multi-subscription per connection now, so switching
+				// sessions leaves the old subscription attached — drop events
+				// from sessions this store isn't displaying (cross-session
+				// 窜台 guard; UI-command/global envelopes have no sessionId
+				// and pass through).
+				if (event.sessionId !== undefined && event.sessionId !== storeRef.current?.sessionId) return;
 				if (event.kind === "global-pause-state") {
 					const payload = event.payload as { paused?: boolean; pausedAt?: number | null };
 					setGlobalPause({ paused: payload.paused === true, pausedAt: payload.pausedAt ?? null });
@@ -1285,6 +1339,12 @@ function AppInner(): ReactNode {
 		}): Promise<string | null> => {
 			const client = rpcRef.current;
 			if (!client) return null;
+			// Swap to the chat surface up front: the create RPC can take
+			// seconds, so the user must not sit on the welcome/board view
+			// while it runs. Idempotent when already on chat (clears any
+			// stale leave state); openSession re-swaps after the store
+			// mounts, and the sessionLoading skeleton still arms there.
+			viewSwapRef.current("chat");
 			setError(null);
 			try {
 				// The ZCode project picker chooses the workspace folder — it
@@ -1294,28 +1354,25 @@ function AppInner(): ReactNode {
 					// Settings → 会话 → 自动生成会话标题: off keeps the session
 					// title generic instead of falling back to the first message.
 					autoTitle: localStorage.getItem("omp-gui-autotitle") !== "0",
+					// Welcome-composer choices ride INSIDE the create RPC: the
+					// daemon resolves modelPattern + thinkingLevel during initial
+					// session setup, collapsing the old create → setThinkingLevel
+					// → setModel serial chain (1–7s) into a single awaited RPC.
+					// modelId is already the model selector parseModelPattern
+					// accepts (bare id or provider/id composite — both exact-match
+					// the registry); an unresolvable id falls back to the DEFAULT
+					// role exactly like the old swallowed setModel error.
+					...(opts?.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
+					...(opts?.modelId ? { modelPattern: opts.modelId } : {}),
+					// Welcome 预设 chip 选择:modeId 随 create 一次应用(daemon 侧
+					// 白名单/提示词/settings 覆盖);无选择 = 默认(Standard)。
+					...(welcomeModeId ? { modeId: welcomeModeId } : {}),
 				});
-				// Carry the welcome-composer choices onto the new session.
-				if (opts?.thinkingLevel) {
-					await client
-						.request("session.setThinkingLevel", {
-							sessionId: res.sessionId,
-							thinkingLevel: opts.thinkingLevel,
-						})
-						.catch(() => {});
-				}
-				if (opts?.modelId) {
-					setPresetModelId(opts.modelId);
-					await client
-						.request("session.setModel", { sessionId: res.sessionId, model: { id: opts.modelId } })
-						.catch(() => {});
-				} else {
-					// No explicit model → the daemon resolves the DEFAULT role.
-					// Seed the carry-in with it so the composer never flashes a
-					// stale model from a previous session while contextUsage
-					// (the authoritative live model) loads.
-					setPresetModelId(defaultModelId);
-				}
+				// Carry the welcome-composer model seed so the composer never
+				// flashes a stale model from a previous session while
+				// contextUsage (the authoritative live model) loads. No explicit
+				// model → the daemon resolves the DEFAULT role; seed with it.
+				setPresetModelId(opts?.modelId ?? defaultModelId);
 				// Welcome plan/goal: apply the mode right after creation so
 				// the new session opens in that mode (chip in the status row).
 				if (opts?.planMode === true) {
@@ -1326,7 +1383,11 @@ function AppInner(): ReactNode {
 						.request("session.setGoal", { sessionId: res.sessionId, objective: opts.goalMode })
 						.catch(() => {});
 				}
-				await refreshSessions(client);
+				// Sidebar tree/metadata refresh for the new session — fire and
+				// forget: openSession and sendPrompt don't depend on it (the
+				// ack-hooked refresh in sendPrompt plus the 5s poll cover a
+				// drop), and awaiting it here only delayed the first send.
+				void refreshSessions(client);
 				await openSession(res.sessionId);
 				return res.sessionId;
 			} catch (err) {
@@ -1424,6 +1485,13 @@ function AppInner(): ReactNode {
 			const bangBody = text.startsWith("!") ? (text.startsWith("!!") ? text.slice(2) : text.slice(1)).trim() : "";
 			const isBang = text.startsWith("!") && bangBody.length > 0;
 			const client = rpcRef.current;
+			// The prompt is committed the moment the user hits send — leave
+			// the welcome surface before the create RPC (1–7s) instead of
+			// after openSession resolves, so the session UI is what the
+			// user sees while the daemon spins up. Same-target call is a
+			// no-op that clears stale leave state; the sessionLoading
+			// skeleton still arms inside openSession.
+			viewSwapRef.current("chat");
 			const id = await createSession({
 				thinkingLevel: opts?.thinkingLevel ?? undefined,
 				modelId: opts?.modelId ?? undefined,
@@ -2216,6 +2284,9 @@ function AppInner(): ReactNode {
 							await openSession(forkId);
 						}}
 						presetModelId={presetModelId}
+						modes={welcomeModes}
+						modeId={welcomeModeId}
+						onModeChange={setWelcomeModeId}
 						defaultModelId={defaultModelId}
 						presetThinkingLevel={presetThinkingLevel}
 						busy={status === "connecting"}
@@ -2332,6 +2403,8 @@ function AppInner(): ReactNode {
 						onOpenScheduled={() => viewSwapRef.current("scheduled")}
 						scheduledActive={scheduledOpen}
 						cronGlow={cronGlow}
+						onOpenAgents={() => viewSwapRef.current("agents")}
+						agentsActive={agentsOpen}
 						onOpenSettings={openSettings}
 						onOpenCollab={() => setCollabOpen(true)}
 						onRenameSession={renameSession}
@@ -2353,6 +2426,7 @@ function AppInner(): ReactNode {
 							});
 						}}
 						onCreateProject={() => setNewProjectOpen(true)}
+						onImportSessions={() => setImportOpen(true)}
 						collapsed={sideCollapsed}
 						width={sideWidth}
 						onDeleteArchived={deleteSession}
@@ -2420,6 +2494,9 @@ function AppInner(): ReactNode {
 										await openSession(forkId);
 									}}
 									presetModelId={presetModelId}
+									modes={welcomeModes}
+									modeId={welcomeModeId}
+									onModeChange={setWelcomeModeId}
 									defaultModelId={defaultModelId}
 									presetThinkingLevel={presetThinkingLevel}
 									busy={status === "connecting"}
@@ -2556,6 +2633,24 @@ function AppInner(): ReactNode {
 										</div>
 									</div>
 								</div>
+							) : leavingView === "agents" ? (
+								/* Leaving agents → chat/board: agents blurs out first. */
+								<div className="gui-view-leave">
+									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+											<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
+										</div>
+									</div>
+								</div>
+							) : agentsOpen ? (
+								/* Agents center view (live subagent roster). */
+								<div className="gui-view-enter">
+									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+											<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
+										</div>
+									</div>
+								</div>
 							) : leavingView === "chat" ? (
 								/* Leaving chat → board: chat blurs out first. */
 								<div className="gui-view-leave">{chatSurface}</div>
@@ -2579,6 +2674,16 @@ function AppInner(): ReactNode {
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
 			/>
+			{/* Session import (sidebar projects tab entry) — import sessions
+			 * from other agents into MusePi. */}
+			<DialogFrame
+				open={importOpen}
+				onClose={() => setImportOpen(false)}
+				label={t("import sessions")}
+				className="gui-import-dialog"
+			>
+				<ImportSessionsSetup rpc={rpc} />
+			</DialogFrame>
 			{/* kimiwork parity: 新建空白项目 — name + parent path, mkdir via the
 			 * daemon (works outside any session cwd), then open + surface it. */}
 			<DialogFrame
@@ -2677,6 +2782,7 @@ function AppInner(): ReactNode {
 					});
 				}}
 				onSelectSession={id => void openSession(id)}
+				onOpenAgents={() => viewSwapRef.current("agents")}
 			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}
@@ -2690,6 +2796,9 @@ function AppInner(): ReactNode {
 			{/* What's-new release notes (daemon changelog.startup; settings
 			 * footer 新功能 reopens via omp-open-announcement). */}
 			<AnnouncementOverlay rpc={rpc} />
+			{/* Floating pac-man scroll indicator (fixed overlay — system
+			 * scrollbars are hidden; see FloatingScrollbar.tsx). */}
+			<FloatingScrollbar />
 		</div>
 	);
 }

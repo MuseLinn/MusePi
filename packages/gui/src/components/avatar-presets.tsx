@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { punkAvatarUri } from "@musepi/desktop-web";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 
 /**
@@ -21,7 +22,7 @@ export function avatarPresetId(): string {
 export interface AvatarPresetDef {
 	id: string;
 	labelKey: string;
-	render(state: OrbState, size: number): ReactNode;
+	render(state: OrbState, size: number, seed?: string): ReactNode;
 }
 
 /** Hexagon glyph: slow ring rotation while working, gentle breathing
@@ -69,9 +70,83 @@ function SparkAvatar({ state, size }: { state: OrbState; size: number }): ReactN
 				fill="var(--accent, currentColor)"
 				opacity="0.9"
 			/>
-			<circle cx="32" cy="32" r="14" fill="none" stroke="var(--accent, currentColor)" strokeWidth="2" opacity="0.5" />
+			<circle
+				cx="32"
+				cy="32"
+				r="14"
+				fill="none"
+				stroke="var(--accent, currentColor)"
+				strokeWidth="2"
+				opacity="0.5"
+			/>
 		</svg>
 	);
+}
+
+/** Pixel-punk face (sweeterio/pixelpunks port): deterministic per seed.
+ *  Seed resolution order: explicit `seed` prop (identity-bound: swarm
+ *  member, git user) → user-chosen face (设置 → 常规, persisted) → a
+ *  per-install random face. So the main agent avatar shows the face the
+ *  user picked, while identity-bound faces stay stable regardless. State
+ *  is ignored (static face; the surrounding state chrome stays on the
+ *  host). */
+export const PUNK_SEED_KEY = "omp-gui-avatar-punk-seed";
+
+/** The user-chosen face seed (null when never customized — falls back to a
+ *  stable per-install random face). */
+export function userPunkSeed(): string | null {
+	try {
+		return localStorage.getItem(PUNK_SEED_KEY);
+	} catch {
+		return null;
+	}
+}
+
+/** Persist a chosen face seed and broadcast so mounted avatars re-render. */
+export function setPunkSeed(seed: string): void {
+	try {
+		localStorage.setItem(PUNK_SEED_KEY, seed);
+	} catch {
+		// storage unavailable — face stays random this session
+	}
+	if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+}
+
+export function randomPunkSeed(): string {
+	return `punk-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function PunkAvatar({ size, seed }: { size: number; seed?: string }): ReactNode {
+	// Re-resolve the seed when the user shuffles/edits the face in settings
+	// (设置 → 常规 broadcasts omp-avatar-changed; storage covers cross-tab).
+	// Without this, useMemo([seed]) keeps the old face after 换一个/Apply —
+	// the preview and chat avatar would visibly ignore the control.
+	const [bump, setBump] = useState(0);
+	useEffect(() => {
+		const on = (): void => setBump(b => b + 1);
+		window.addEventListener("omp-avatar-changed", on);
+		window.addEventListener("storage", on);
+		return () => {
+			window.removeEventListener("omp-avatar-changed", on);
+			window.removeEventListener("storage", on);
+		};
+	}, []);
+	const stableSeed = useMemo(() => {
+		void bump; // dependency: force re-resolution on broadcast
+		if (seed) return seed;
+		const chosen = userPunkSeed();
+		if (chosen) return chosen;
+		// Persist the first random face WITHOUT broadcasting (would loop the
+		// listener); the bump re-resolves it on the next event anyway.
+		const fresh = randomPunkSeed();
+		try {
+			localStorage.setItem(PUNK_SEED_KEY, fresh);
+		} catch {
+			// storage unavailable — face falls back to the fixed default
+		}
+		return userPunkSeed() ?? "punk";
+	}, [seed, bump]);
+	return <img src={punkAvatarUri(stableSeed)} width={size} height={size} alt="" className="gui-avatar-punk" />;
 }
 
 export const AVATAR_PRESETS: readonly AvatarPresetDef[] = [
@@ -82,6 +157,7 @@ export const AVATAR_PRESETS: readonly AvatarPresetDef[] = [
 	},
 	{ id: "hex", labelKey: "avatar hex", render: (state, size) => <HexAvatar state={state} size={size} /> },
 	{ id: "spark", labelKey: "avatar spark", render: (state, size) => <SparkAvatar state={state} size={size} /> },
+	{ id: "punk", labelKey: "avatar punk", render: (_state, size, seed) => <PunkAvatar size={size} seed={seed} /> },
 ];
 
 export function avatarPreset(id: string): AvatarPresetDef {

@@ -20,8 +20,10 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getDashboardStats } from "@musepi/omp-stats";
-import { AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
+import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
+import type { AuthStorage, DisabledCredentialSummary, UsageReport } from "@musepi/pi-ai";
+import { resolveUsedFraction } from "@musepi/pi-ai";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { PROVIDER_REGISTRY } from "@musepi/pi-ai/registry";
 import {
@@ -30,13 +32,24 @@ import {
 } from "@musepi/pi-ai/registry/api-key-validation";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
-import { FileType, type GlobMatch, listWorkspace } from "@musepi/pi-natives";
-import { getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
+import { FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
+import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
 import type { AgentEvent, SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
 import { reset as resetCapabilities } from "../capability";
+import {
+	ChannelCommandHandler,
+	type ChannelKind,
+	ChannelRegistry,
+	DiscordChannel,
+	FeishuChannel,
+	HuaweiTodayChannel,
+	TelegramChannel,
+	WechatChannel,
+} from "../channels";
+import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -44,15 +57,38 @@ import { isWireAgentEvent, toWireAgentEvent } from "../collab/wire-guard";
 import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveProviderModelReference } from "../config/model-resolver";
+import type { PromptTemplate } from "../config/prompt-templates";
 import type { Settings } from "../config/settings";
 import type { SettingPath } from "../config/settings-schema";
+// TUI /debug selector parity (desktop adaptation): the same pure helpers the
+// TUI debug menu uses, exposed as debug.* RPCs so the GUI can render its own
+// diagnostics panel. Only TUI-free modules are imported here (report-bundle,
+// system-info, profiler, remote-debugger, raw-sse-buffer — no pi-tui).
+import { type CpuProfile, generateHeapSnapshotData, type ProfilerSession, startCpuProfile } from "../debug/profiler";
+import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-debugger";
+import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
+import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
-import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
-import { loadSlashCommands } from "../extensibility/slash-commands";
+import type { CustomTool } from "../extensibility/custom-tools/types";
+import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
+import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
+import type { MCPManager } from "../mcp";
+import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
+import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
+import { listPlanFiles, readPlanFile } from "../plan-mode/plan-files";
+import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
+import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { CompactMode } from "../session/compact-modes";
+import {
+	createForeignSessionStore,
+	foreignSessionSourceName,
+	foreignSessionSources,
+	persistForeignSession,
+} from "../session/foreign-session-import";
+import type { ForeignSessionInfo, ForeignSessionSource } from "../session/foreign-session-store";
 import { SKILL_PROMPT_MESSAGE_TYPE } from "../session/messages";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
@@ -64,6 +100,7 @@ import { refreshAgentDiscovery } from "../task";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
+import { ToolError } from "../tools/tool-errors";
 import {
 	type CronRun,
 	type CronStatus,
@@ -77,6 +114,13 @@ import {
 } from "./crons";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
+import {
+	collectStoredAccounts,
+	collectUnreportedAccounts,
+	computeReloginDeadlines,
+	isActionableDisable,
+	selectReportableAccounts,
+} from "./usage-shared";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -379,6 +423,7 @@ import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from 
 import { EventBus } from "../utils/event-bus";
 import { openPath } from "../utils/open";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval } from "./approval-bridge";
+import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal } from "./journal";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -436,10 +481,9 @@ function modesOf(session: unknown): {
 	const goal = s.getGoalModeState?.();
 	const phases = s.getTodoPhases?.() ?? [];
 	return {
-		goalMode:
-			goal?.enabled && goal.goal?.objective
-				? { enabled: true, objective: goal.goal.objective, status: goal.goal.status }
-				: null,
+		goalMode: goal?.goal?.objective
+			? { enabled: goal.enabled === true, objective: goal.goal.objective, status: goal.goal.status }
+			: null,
 		planMode: s.getPlanModeState?.()?.enabled === true,
 		isCompacting: s.isCompacting === true,
 		todo: phases
@@ -503,6 +547,10 @@ function estimateSnapcompactSavings(session: AgentSession): SnapcompactSavingsEs
 
 /** Live sessions with no activity (send or event) for this long are auto-closed. */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/** Mobile pair-code lifetime (10 min). */
+const PAIR_CODE_TTL_MS = 10 * 60 * 1000;
+/** Mobile pair endpoint port — resolves pair codes only (LAN). */
+const PAIR_PORT = 8301;
 /**
  * Live-session LRU cap: the GUI switch keeps every visited session live
  * (idle-close only after IDLE_TIMEOUT_MS), so a long session-switching
@@ -540,7 +588,10 @@ function tailSnapshot<T extends { entries?: readonly unknown[] }>(snap: T): T & 
 	};
 }
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
-const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+/** Journal catch-up pages: flush + yield every N records so a huge replay
+ *  (long idle gap) interleaves with other traffic instead of flooding. */
+const CATCHUP_PAGE_SIZE = 500;
 /** Idle-recap delay bounds (TUI event-controller parity). */
 const IDLE_RECAP_MIN_SECONDS = 1;
 const IDLE_RECAP_MAX_SECONDS = 3600;
@@ -559,12 +610,17 @@ interface RpcRequest {
 interface LiveSession {
 	sessionId: string;
 	agentSession: AgentSession;
+	/** Session workspace root — also the key for this session's cwd-scoped
+	 *  MCP manager (project MCP config discovery). */
+	cwd: string;
 	/** Settings contributed by loaded extensions (registerSetting), keyed by
 	 *  setting key — merged into settings.schema for the GUI/TUI panels. */
 	extensionSettings: Map<string, ExtensionSetting>;
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
+	/** 会话预设(mode)id,取自 SDK 会话 header(Modes v1;create 写入,activate 读回)。 */
+	modeId?: string;
 	/** Incrementing event sequence for the stream contract. */
 	seq: number;
 	journal: AppendJournal | null;
@@ -602,6 +658,8 @@ interface LiveSession {
 export interface DaemonConnection {
 	readonly id: string;
 	send(message: unknown): void;
+	/** Bytes buffered on the transport's write side (backpressure probe). */
+	writableLength?: () => number;
 }
 
 /** Backed-up tail of one session.revertTo — restorable by
@@ -615,6 +673,113 @@ export interface RevertBackup {
 	text: string;
 	/** View entry id of the target user message (per-item restore/fork). */
 	messageId: string;
+}
+
+/**
+ * Read-only session-create discoveries shared across daemon sessions so
+ * every session.create after the first skips the re-scan. Only file scans
+ * and singleton constructions live here — per-session state (SessionManager,
+ * extension LOADING, MCP discovery, watchdog/advisor/repo-context reads) is
+ * deliberately NOT cached (extensionRunner and MCP servers are per-session /
+ * per-host by design with effects).
+ */
+interface CachedSessionDiscovery {
+	/** Resolved cwd the discovery ran against. */
+	cwd: string;
+	/** Resolved agentDir. */
+	agentDir: string;
+	settings: Settings;
+	modelRegistry: ModelRegistry;
+	contextFiles: Array<{ path: string; content: string; depth?: number }>;
+	promptTemplates: PromptTemplate[];
+	slashCommands: FileSlashCommand[];
+	skills: Skill[];
+	/** Extension SOURCE PATHS only — loading still happens per session so
+	 *  each Extension binds to its own session's ExtensionAPI. */
+	extensionPaths: string[];
+}
+
+/**
+ * Directory-mtime fingerprint of the roots the cached discoveries scan
+ * (agentDir + cwd + their well-known capability/config subdirs and flat
+ * files). Directory mtimes bump when entries are added/removed, so new
+ * skills/prompts/commands/extensions/AGENTS.md appear without a daemon
+ * restart; file mtimes catch content edits of the flat config files.
+ * Existence-tolerant: a missing root hashes as "0".
+ */
+async function discoveryMtimeKey(cwd: string, agentDir: string): Promise<string> {
+	const roots = [
+		agentDir,
+		path.join(agentDir, "config.yml"),
+		path.join(agentDir, "config.yaml"),
+		path.join(agentDir, "models.yml"),
+		path.join(agentDir, "skills"),
+		path.join(agentDir, "prompts"),
+		path.join(agentDir, "commands"),
+		path.join(agentDir, "extensions"),
+		path.join(agentDir, "context"),
+		path.join(agentDir, "AGENTS.md"),
+		path.join(agentDir, "WATCHDOG.md"),
+		path.join(agentDir, "WATCHDOG.yml"),
+		path.join(agentDir, "WATCHDOG.yaml"),
+		path.join(agentDir, "SYSTEM.md"),
+		path.join(agentDir, "APPEND_SYSTEM.md"),
+		cwd,
+		path.join(cwd, ".omp"),
+		path.join(cwd, ".claude"),
+		path.join(cwd, ".musepi"),
+		path.join(cwd, "AGENTS.md"),
+		path.join(cwd, ".omp", "AGENTS.md"),
+		path.join(cwd, ".claude", "AGENTS.md"),
+		path.join(cwd, ".musepi", "AGENTS.md"),
+		path.join(cwd, ".omp", "prompts"),
+		path.join(cwd, ".claude", "prompts"),
+		path.join(cwd, ".musepi", "prompts"),
+		path.join(cwd, ".omp", "commands"),
+		path.join(cwd, ".claude", "commands"),
+		path.join(cwd, ".musepi", "commands"),
+		path.join(cwd, ".omp", "extensions"),
+		path.join(cwd, ".claude", "extensions"),
+		path.join(cwd, ".musepi", "extensions"),
+		path.join(cwd, ".omp", "skills"),
+		path.join(cwd, ".claude", "skills"),
+		path.join(cwd, ".musepi", "skills"),
+		path.join(cwd, ".omp", "context"),
+		path.join(cwd, ".claude", "context"),
+		path.join(cwd, ".musepi", "context"),
+		path.join(cwd, "WATCHDOG.md"),
+		path.join(cwd, "WATCHDOG.yml"),
+		path.join(cwd, "WATCHDOG.yaml"),
+		path.join(cwd, ".musepi", "WATCHDOG.md"),
+		path.join(cwd, ".musepi", "WATCHDOG.yml"),
+		path.join(cwd, ".musepi", "WATCHDOG.yaml"),
+	];
+	const stats = await Promise.all(
+		roots.map(async root => {
+			try {
+				const st = await fs.promises.stat(root);
+				return `${root}:${st.mtimeMs}`;
+			} catch {
+				// absent root — part of the key so creating it invalidates
+				return `${root}:0`;
+			}
+		}),
+	);
+	return stats.join("|");
+}
+
+/**
+ * Settings-driven inputs the cached discoveries depend on (skills toggles,
+ * extension enable/disable). Part of the cache validity check so settings.*
+ * RPC changes (Settings → 技能/extensions) invalidate without a filesystem
+ * bump.
+ */
+function discoverySettingsFingerprint(settings: Settings): string {
+	return JSON.stringify([
+		settings.get("extensions") ?? [],
+		settings.get("disabledExtensions") ?? [],
+		settings.getGroup("skills"),
+	]);
 }
 
 /**
@@ -636,6 +801,25 @@ export class DaemonSessionHost {
 	/** Global settings instance (first live session's, reused for the
 	 *  session-less settings.* RPCs — one config, one writer). */
 	#settings: Settings | null = null;
+	/** Read-only session-create discoveries (settings, model registry, context
+	 *  files, prompt templates, slash commands, skills, extension paths),
+	 *  cached per (cwd, agentDir) so every session.create after the first
+	 *  skips the re-scan. Invalidated by mtime changes of the scanned roots
+	 *  plus a settings-input fingerprint (skills/extensions toggles). */
+	readonly #discoveryCache = new Map<
+		string,
+		{ mtimeKey: string; fingerprint: string; value: CachedSessionDiscovery }
+	>();
+	/** Process-level MCP managers, one per session cwd — project MCP config
+	 *  (.mcp.json / mcp.json discovery) is cwd-scoped, so sessions rooted at
+	 *  different directories must not share a manager (a manager discovered
+	 *  against the first cwd would silently drop the others' servers). Each
+	 *  manager runs exactly one discovery + one set of server subprocesses.
+	 *  Owned by the host: created lazily on the first session.create /
+	 *  session.resume for a cwd, disconnected on host.dispose — never
+	 *  per-session (sessions pass it via options.mcpManager, so the sdk's
+	 *  owned-manager disconnect is skipped). */
+	readonly #mcpManagers = new Map<string, MCPManager>();
 	/** Extension-contributed settings (registerSetting), cached at the host
 	 *  level so the settings panel shows them even without a live session
 	 *  (the owning extension registers at session creation; the cache
@@ -663,6 +847,13 @@ export class DaemonSessionHost {
 	 *  AgentSession.restoreRevert). In-memory: matches the GUI's revert-dock
 	 *  lifetime (both reset on restart). */
 	readonly #revertBackups = new Map<string, RevertBackup[]>();
+	/** Per-connection event coalescers (transport backpressure + batch
+	 *  frames). Created lazily on first envelope, drained and dropped on
+	 *  disconnect. */
+	readonly #batchers = new Map<string, EventBatcher>();
+	/** Agent turn finished (agent_end) — DaemonServer wires task-completion
+	 *  channel pushes here. */
+	onAgentEnd: ((live: LiveSession) => void) | null = null;
 
 	/** Per-session revert backups (LIFO — the latest revert is popped first
 	 *  by session.restoreRevert). */
@@ -687,6 +878,226 @@ export class DaemonSessionHost {
 		this.#idleScanner.unref?.();
 	}
 
+	/**
+	 * Read-only session-create discoveries for (cwd, agentDir), recomputed
+	 * when the scanned roots' mtimes or the settings-driven inputs change.
+	 * The FIRST session per key computes everything; subsequent creates reuse
+	 * the cached values and pass them via createAgentSession options (the
+	 * sdk short-circuits each discovery when the option is present).
+	 */
+	async #discoveryFor(cwd: string, agentDir: string): Promise<CachedSessionDiscovery> {
+		const key = `${cwd}\u0000${agentDir}`;
+		const [mtimeKey, cached] = [await discoveryMtimeKey(cwd, agentDir), this.#discoveryCache.get(key)];
+		if (cached && cached.mtimeKey === mtimeKey) {
+			if (discoverySettingsFingerprint(cached.value.settings) === cached.fingerprint) {
+				return cached.value;
+			}
+		}
+		const value = await this.#runDiscovery(cwd, agentDir);
+		this.#discoveryCache.set(key, {
+			mtimeKey,
+			fingerprint: discoverySettingsFingerprint(value.settings),
+			value,
+		});
+		return value;
+	}
+
+	/**
+	 * Compute every read-only session-create discovery from scratch (first
+	 * session per (cwd, agentDir), or a cache miss). Mirrors
+	 * createAgentSessionScoped's construction so the cached values are
+	 * identical to what a fresh session would have discovered — same
+	 * parallelization and the authStorage pinned to the model registry.
+	 * Lazy imports keep the daemon startup cheap (startDaemon prewarms the
+	 * sdk module graph in the background, so this resolves instantly).
+	 */
+	async #runDiscovery(cwd: string, agentDir: string): Promise<CachedSessionDiscovery> {
+		const { Settings } = await import("../config/settings");
+		const settings = await logger.time("settings", Settings.init, { cwd, agentDir });
+		const {
+			discoverAuthStorage,
+			discoverContextFiles,
+			discoverPromptTemplates,
+			discoverSessionExtensionPaths,
+			discoverSkills,
+			discoverSlashCommands,
+		} = await import("../sdk");
+		const { ModelRegistry } = await import("../config/model-registry");
+		// Pin authStorage to modelRegistry.authStorage exactly like the sdk.
+		const authStorage = await logger.time("discoverModels", discoverAuthStorage, agentDir);
+		const modelRegistry = new ModelRegistry(authStorage);
+		// The sdk kicks a background refresh when IT owns the registry; with a
+		// shared registry the host owns that duty (idempotent per instance).
+		modelRegistry.refreshInBackground();
+		const skillsSettings = settings.getGroup("skills");
+		const disabledExtensionIds = settings.get("disabledExtensions") ?? [];
+		const [contextFiles, promptTemplates, slashCommands, discoveredSkills, extensionPaths] = await Promise.all([
+			logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir),
+			logger.time("discoverPromptTemplates", discoverPromptTemplates, cwd, agentDir),
+			logger.time("discoverSlashCommands", discoverSlashCommands, cwd),
+			logger.time("discoverSkills", () =>
+				discoverSkills(cwd, agentDir, {
+					...skillsSettings,
+					disabledExtensions: disabledExtensionIds,
+				}),
+			),
+			logger.time("discoverSessionExtensionPaths", () =>
+				discoverSessionExtensionPaths(
+					{ disableExtensionDiscovery: false, additionalExtensionPaths: [] },
+					cwd,
+					settings,
+				),
+			),
+		]);
+		return {
+			cwd,
+			agentDir,
+			settings,
+			modelRegistry,
+			contextFiles,
+			promptTemplates,
+			slashCommands,
+			skills: discoveredSkills.skills,
+			extensionPaths,
+		};
+	}
+
+	/**
+	 * Build a process-level MCP manager for one session cwd (one discovery +
+	 * one set of server subprocesses instead of one per session). Mirrors the
+	 * sdk's deferred-UI construction (createAgentSessionScoped): MCPToolCache
+	 * over the shared settings storage, auth storage pinning, notifications,
+	 * and the single-slot tools-changed callback — the sdk skips its own
+	 * setOnToolsChanged wiring when options.mcpManager is provided, so the
+	 * host owns that slot and refreshes every live session.
+	 */
+	async #createSharedMCPManager(cwd: string, discovery: CachedSessionDiscovery): Promise<MCPManager> {
+		// Lazy value import: the daemon keeps heavy module graphs out of
+		// startup (MCP transports/subprocess plumbing pulled on first need).
+		const { MCPManager, MCPToolCache } = await import("../mcp");
+		const settings = discovery.settings;
+		const cacheStorage = settings.getStorage();
+		const manager = new MCPManager(cwd, cacheStorage ? new MCPToolCache(cacheStorage) : null);
+		manager.setAuthStorage(discovery.modelRegistry.authStorage);
+		if (settings.get("mcp.notifications")) {
+			manager.setNotificationsEnabled(true);
+		}
+		manager.setOnToolsChanged(tools => this.#refreshMcpToolsOnSessions(tools));
+		return manager;
+	}
+
+	/**
+	 * Resolve (and lazily build) the MCP manager for a session cwd. The
+	 * manager is created exactly once per cwd and its discovery+connect is
+	 * started immediately so session.create never waits on MCP servers; tools
+	 * arrive on live sessions through the tools-changed callback as servers
+	 * connect. (Sessions are created serially by the GUI, so a concurrent
+	 * duplicate build is not a real path.)
+	 */
+	async #ensureMcpManager(cwd: string, discovery: CachedSessionDiscovery): Promise<MCPManager> {
+		const existing = this.#mcpManagers.get(cwd);
+		if (existing) return existing;
+		const manager = await this.#createSharedMCPManager(cwd, discovery);
+		this.#mcpManagers.set(cwd, manager);
+		this.#startSharedMCPDiscovery(manager, discovery);
+		return manager;
+	}
+
+	/**
+	 * Kick off MCP discovery + connect exactly once per manager, fire-and-
+	 * forget, so session.create never waits on MCP servers. Tools arrive on
+	 * live sessions through the manager's tools-changed callback as servers
+	 * connect (mirrors the sdk's startDeferredMCPDiscovery async body,
+	 * including the EXA_API_KEY env application and error logging).
+	 */
+	#startSharedMCPDiscovery(manager: MCPManager, discovery: CachedSessionDiscovery): void {
+		const settings = discovery.settings;
+		const startupQuiet = settings.get("startup.quiet");
+		const onStatus = (event: McpConnectionStatusEvent): void => {
+			if (startupQuiet) return;
+			if (event.type === "connecting" && event.serverNames.length === 0) return;
+			this.#eventBus.emit(MCP_CONNECTION_STATUS_EVENT_CHANNEL, event);
+		};
+		void (async () => {
+			try {
+				const mcpResult = await logger.time("discoverAndLoadMCPTools", () =>
+					manager.discoverAndConnect({
+						onStatus,
+						enableProjectConfig: settings.get("mcp.enableProjectConfig") ?? true,
+						// Always filter Exa - we have native integration
+						filterExa: true,
+						// Filter browser MCP servers when builtin browser tool is active
+						filterBrowser: settings.get("browser.enabled") ?? false,
+					}),
+				);
+				// Exa keys ride the process env (applyMCPEnvironment parity).
+				if (mcpResult.exaApiKeys.length > 0 && !Bun.env.EXA_API_KEY) {
+					Bun.env.EXA_API_KEY = mcpResult.exaApiKeys[0];
+				}
+				for (const [serverName, error] of mcpResult.errors) {
+					logger.error("MCP tool load failed", { path: `mcp:${serverName}`, error });
+				}
+				// Final push (sdk parity): servers that connected while no
+				// live session existed would otherwise sit unrefreshed until
+				// the next tools-changed event.
+				await this.#refreshMcpToolsOnSessions(manager.getTools());
+			} catch (error) {
+				logger.error("MCP tool load failed", {
+					path: ".mcp.json",
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		})();
+	}
+
+	/** Refresh the given MCP tool set on every live session (shared by the
+	 *  manager's tools-changed callback and the post-discovery final push). */
+	async #refreshMcpToolsOnSessions(tools: CustomTool[]): Promise<void> {
+		for (const live of this.#sessions.values()) {
+			if (live.agentSession.isDisposed) continue;
+			try {
+				await live.agentSession.refreshMCPTools(tools);
+			} catch (error) {
+				logger.warn("MCP tool refresh failed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+	}
+
+	/** Push the cwd-scoped MCP manager's already-connected tools into a
+	 *  freshly adopted session (create during discovery, or resume after it). */
+	#pushMcpToolsToSession(live: LiveSession): void {
+		const manager = this.#mcpManagers.get(live.cwd);
+		if (!manager || live.agentSession.isDisposed) return;
+		const tools = manager.getTools();
+		if (tools.length === 0) return;
+		void live.agentSession.refreshMCPTools(tools).catch(error => {
+			logger.warn("MCP tool refresh failed on session adopt", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+
+	/** Disconnect every cwd-scoped MCP manager (daemon shutdown). Idempotent:
+	 *  the maps are cleared before the async disconnects so a second dispose
+	 *  is a no-op. */
+	async #disposeSharedMCPManagers(): Promise<void> {
+		const managers = [...this.#mcpManagers.values()];
+		this.#mcpManagers.clear();
+		await Promise.all(
+			managers.map(async manager => {
+				try {
+					await manager.disconnectAll();
+				} catch (error) {
+					logger.error("MCP manager disconnect failed on daemon shutdown", {
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}),
+		);
+	}
+
 	async createSession(params: {
 		cwd?: string;
 		title?: string;
@@ -694,6 +1105,8 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
+		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings;docs/modes-plan.md)。 */
+		modeId?: string;
 	}): Promise<{ sessionId: string }> {
 		const cwd = path.resolve(params.cwd ?? this.#options.cwd ?? process.cwd());
 		const parentId = params.forkOf && this.#sessions.has(params.forkOf) ? params.forkOf : null;
@@ -701,15 +1114,32 @@ export class DaemonSessionHost {
 		// full agent runtime bootstrap (settings, extensions, storage).
 		const { createAgentSession } = await import("../sdk");
 		const pauseGate = new AgentPauseGate();
+		// Reuse the per-(cwd, agentDir) discovery cache so every session after
+		// the first skips the read-only scans (settings, model registry,
+		// context files, prompt templates, slash commands, skills, extension
+		// paths). The cwd-scoped MCP manager is built lazily here too so each
+		// daemon session gets one discovery + one set of server subprocesses
+		// for its project's MCP config.
+		const discovery = await this.#discoveryFor(cwd, getAgentDir());
+		const mcpManager = await this.#ensureMcpManager(cwd, discovery);
 		const result = await createAgentSession({
 			cwd,
 			hasUI: true,
 			interfaceLabel: "desktop (GUI)",
 			eventBus: this.#eventBus,
 			pauseGate,
+			settings: discovery.settings,
+			modelRegistry: discovery.modelRegistry,
+			contextFiles: discovery.contextFiles,
+			promptTemplates: discovery.promptTemplates,
+			slashCommands: discovery.slashCommands,
+			skills: discovery.skills,
+			preloadedExtensionPaths: discovery.extensionPaths,
+			mcpManager,
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
+			...(params.modeId ? { modeId: params.modeId } : {}),
 		});
 		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
 		// Extension-contributed settings (registerSetting): merge every loaded
@@ -758,6 +1188,11 @@ export class DaemonSessionHost {
 		const { createAgentSession } = await import("../sdk");
 		const pauseGate = new AgentPauseGate();
 		const resumeCwd = match.session.cwd || cwd;
+		// Same per-(cwd, agentDir) discovery cache as createSession; the
+		// cwd-scoped MCP manager may already exist (or is built here on first
+		// need) so resumed sessions reuse the same server subprocesses.
+		const discovery = await this.#discoveryFor(resumeCwd, getAgentDir());
+		const mcpManager = await this.#ensureMcpManager(resumeCwd, discovery);
 		const result = await createAgentSession({
 			cwd: resumeCwd,
 			sessionManager: manager,
@@ -765,6 +1200,14 @@ export class DaemonSessionHost {
 			interfaceLabel: "desktop (GUI)",
 			eventBus: this.#eventBus,
 			pauseGate,
+			settings: discovery.settings,
+			modelRegistry: discovery.modelRegistry,
+			contextFiles: discovery.contextFiles,
+			promptTemplates: discovery.promptTemplates,
+			slashCommands: discovery.slashCommands,
+			skills: discovery.skills,
+			preloadedExtensionPaths: discovery.extensionPaths,
+			mcpManager,
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -773,7 +1216,7 @@ export class DaemonSessionHost {
 			await result.session.dispose?.();
 			throw new Error(`Unknown session: ${sessionId}`);
 		}
-		return this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, null, pauseGate);
+		return this.#adoptAgentSession(result.session, resumeCwd, result.setToolUIContext, null, pauseGate);
 	}
 
 	/**
@@ -915,9 +1358,11 @@ export class DaemonSessionHost {
 		};
 		const live: LiveSession = {
 			sessionId,
+			cwd,
 			agentSession,
 			extensionSettings: new Map(),
 			autoTitle: true,
+			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? undefined,
 			seq: viewFinal.cursor,
 			journal,
 			view: viewFinal,
@@ -1052,7 +1497,10 @@ export class DaemonSessionHost {
 				this.#cancelIdleRecap(live);
 			}
 			// A finished turn re-arms it for the next idle window.
-			if (event.type === "agent_end") this.#scheduleIdleRecap(live);
+			if (event.type === "agent_end") {
+				this.#scheduleIdleRecap(live);
+				this.onAgentEnd?.(live);
+			}
 			const seq = ++live.seq;
 			const wireEvent = toWireAgentEvent(event);
 			if (!wireEvent) return;
@@ -1089,6 +1537,10 @@ export class DaemonSessionHost {
 			}
 		});
 		this.#sessions.set(sessionId, live);
+		// This session's cwd-scoped MCP manager: tools connected before the
+		// session existed (or while discovery was in flight) must land on it
+		// now — the tools-changed callback only fires on FUTURE changes.
+		this.#pushMcpToolsToSession(live);
 		return live;
 	}
 
@@ -1469,6 +1921,7 @@ export class DaemonSessionHost {
 					todo?: unknown;
 					isStreaming?: boolean;
 					isCompacting?: boolean;
+					modeId?: string;
 				};
 			};
 			// Live mode state rides along on the snapshot so the GUI badges
@@ -1477,6 +1930,7 @@ export class DaemonSessionHost {
 			snap.state.goalMode = modes.goalMode;
 			snap.state.planMode = modes.planMode;
 			snap.state.todo = modes.todo;
+			snap.state.modeId = live.modeId;
 			// Compaction state rides along too: the GUI's compaction status
 			// line keys off the live getter (the view has no compaction event).
 			snap.state.isCompacting = modes.isCompacting;
@@ -1544,14 +1998,30 @@ export class DaemonSessionHost {
 	 * Catch-up deltas for a resume cursor: journal records with seq > cursor.
 	 * Sends each as an event envelope on the connection (caller orders this
 	 * after the resume response so the snapshot lands first).
+	 *
+	 * Pages the replay through the connection's event batcher (one frame per
+	 * page) and yields between pages so a huge catch-up (long idle gap) never
+	 * starves other connections' events or interactive RPC responses.
 	 */
 	async catchup(sessionId: string, cursor: number, conn: DaemonConnection): Promise<void> {
 		const journal = new AppendJournal(JOURNAL_DIR, sessionId);
 		await journal.open();
 		try {
+			const batcher = this.batcherFor(conn);
+			let page = 0;
 			for (const record of await journal.readAll()) {
-				if (record.seq > cursor) conn.send({ kind: "event", seq: record.seq, payload: record.event });
+				if (record.seq > cursor) batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });
+				page += 1;
+				if (page % CATCHUP_PAGE_SIZE === 0) {
+					batcher.flushNow();
+					// Yield to the event loop: pending RPC responses and other
+					// connections' envelopes interleave between pages.
+					const { promise, resolve } = Promise.withResolvers<void>();
+					setImmediate(resolve);
+					await promise;
+				}
 			}
+			batcher.flushNow();
 		} finally {
 			void journal.close();
 		}
@@ -1787,14 +2257,11 @@ export class DaemonSessionHost {
 		// opening them in the GUI yields a live stream, not a dead snapshot.
 		let live = this.#sessions.get(sessionId);
 		if (!live) live = await this.activate(sessionId);
-		// Single active subscription per connection: the GUI keeps exactly one
-		// current session store and routes every envelope to it (StreamEvent
-		// carries no sessionId), trusting the daemon to push only the selected
-		// session. Without this, switching sessions leaves this conn subscribed
-		// to every session it ever opened — a background session's events then
-		// bleed into the currently displayed session (cross-session 窜台).
-		this.unsubscribeAll(conn.id);
-		live.subscribers.set(conn.id, event => conn.send(event));
+		// Multi-subscription per connection: envelopes carry `sessionId`, so
+		// the GUI routes each to its own store — the old single-active
+		// subscription contract (one current store, daemon pushes only the
+		// selected session) is replaced by per-session routing on the client.
+		live.subscribers.set(conn.id, event => this.emitEvent(conn, { ...event, sessionId }));
 		return { seq: live.seq };
 	}
 
@@ -1802,8 +2269,37 @@ export class DaemonSessionHost {
 		for (const live of this.#sessions.values()) live.subscribers.delete(connectionId);
 	}
 
+	/**
+	 * Per-connection event coalescer. Pushes ride an 8ms window; a burst
+	 * lands as ONE `{ kind: "batch", events }` frame instead of one frame
+	 * per envelope, and flushes defer while the socket write buffer is
+	 * backed up (bounded by maxDeferMs). RPC responses bypass this entirely
+	 * (callers use conn.send directly), so interactive requests stay ahead
+	 * of the event flood.
+	 */
+	batcherFor(conn: DaemonConnection): EventBatcher {
+		let batcher = this.#batchers.get(conn.id);
+		if (!batcher) {
+			batcher = new EventBatcher(message => conn.send(message), {
+				buffered: conn.writableLength ?? (() => 0),
+			});
+			this.#batchers.set(conn.id, batcher);
+		}
+		return batcher;
+	}
+
+	/** Push one subscription envelope through the connection's coalescer. */
+	emitEvent(conn: DaemonConnection, event: BatchedEvent): void {
+		this.batcherFor(conn).push(event);
+	}
+
 	disconnect(connectionId: string): void {
 		this.unsubscribeAll(connectionId);
+		const batcher = this.#batchers.get(connectionId);
+		if (batcher) {
+			batcher.flushNow();
+			this.#batchers.delete(connectionId);
+		}
 	}
 
 	dispose(): void {
@@ -1814,19 +2310,88 @@ export class DaemonSessionHost {
 		for (const live of this.#sessions.values()) live.dispose();
 		this.#sessions.clear();
 		this.#store.close();
+		// Host-owned MCP managers: one disconnect per cwd for the whole daemon
+		// (sessions never disconnect them — they pass them via
+		// options.mcpManager). Guarded against double-dispose by clearing the
+		// maps first; the daemon process exits soon after, so fire-and-forget
+		// is safe even if a server resists the disconnect.
+		void this.#disposeSharedMCPManagers();
 	}
+}
+
+/** Render materialized session entries to plain text (debug.transcript —
+ *  TUI /debug "export transcript" parity: the TUI dumps its visible chat;
+ *  the daemon dumps the persisted conversation). Text blocks only; tool and
+ *  image blocks are skipped with a marker so the dump stays readable. */
+function renderDebugTranscript(entries: unknown[]): string {
+	const lines: string[] = [];
+	for (const raw of entries) {
+		if (typeof raw !== "object" || raw === null) continue;
+		const entry = raw as { type?: unknown; role?: unknown; content?: unknown; text?: unknown };
+		const type = typeof entry.type === "string" ? entry.type : "";
+		if (type !== "user" && type !== "assistant") continue;
+		const role = typeof entry.role === "string" ? entry.role : type;
+		lines.push(`[${role}]`);
+		const text = extractEntryText(entry);
+		if (text) lines.push(text);
+	}
+	return lines.join("\n").trimEnd();
+}
+
+/** Best-effort text extraction from a wire entry's content (blocks array,
+ *  string, or plain text field). */
+function extractEntryText(entry: { content?: unknown; text?: unknown }): string {
+	const content = entry.content;
+	if (typeof content === "string") return content.trimEnd();
+	if (!Array.isArray(content)) return typeof entry.text === "string" ? entry.text.trimEnd() : "";
+	const parts: string[] = [];
+	for (const block of content) {
+		if (typeof block === "string") {
+			parts.push(block);
+			continue;
+		}
+		if (typeof block !== "object" || block === null) continue;
+		const b = block as { type?: unknown; text?: unknown };
+		if (b.type === "text" && typeof b.text === "string") {
+			parts.push(b.text);
+		} else if (typeof b.type === "string") {
+			parts.push(`[${b.type}]`);
+		}
+	}
+	return parts.join("\n").trimEnd();
 }
 
 // ── Method dispatch ─────────────────────────────────────────────────────────
 
-class DaemonServer {
+export class DaemonServer {
 	readonly #host: DaemonSessionHost;
+	/** Connections registered via events.subscribe — receive global (non-
+	 *  session) daemon events such as extensions.changed (HMR). */
+	readonly #globalEventTargets = new Set<DaemonConnection>();
+	#globalEventSeq = 0;
+
+	/** Drop a connection from the global-event targets (called on close —
+	 *  the host's disconnect handles the session subscription side). */
+	dropGlobalEventTarget(connectionId: string): void {
+		for (const conn of this.#globalEventTargets) {
+			if (conn.id === connectionId) {
+				this.#globalEventTargets.delete(conn);
+				break;
+			}
+		}
+	}
 	/** Scheduled tasks (cron): loaded from ~/.musepi/crons.json; a 30s
 	 *  scanner runs due tasks in fresh sessions (kimi cron parity). */
 	#cronTasks: CronTask[] = [];
 	#cronRuns: CronRun[] = [];
 	#cronTimer: ReturnType<typeof setInterval> | null = null;
 	#cronStarting = new Set<string>();
+
+	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
+	 *  performance-report parity: profile spans two RPC calls so the GUI can
+	 *  hold "reproduce, then stop" between them). */
+	#debugProfilers = new Map<number, ProfilerSession>();
+	#nextDebugProfilerId = 1;
 
 	/** Session ids owned by scheduled tasks (run history + last run per
 	 *  task) — the GUI groups them apart from regular sessions. */
@@ -1848,10 +2413,86 @@ class DaemonServer {
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
 		this.#cronTimer.unref?.();
+		this.#startExtensionWatcher();
+		// Bot/notification channels (CollabDialog "use bot channel" + task
+		// completion pushes). Persisted config lives in the daemon dir.
+		const handler = new ChannelCommandHandler(
+			{
+				listSessions: async () => {
+					const rows: { id: string; title: string }[] = [];
+					for (const id of this.#host.sessions()) {
+						const live = this.#host.get(id);
+						const snap = live?.view.snapshot();
+						rows.push({
+							id,
+							title: snap?.header?.title ?? snap?.state.sessionName ?? "",
+						});
+					}
+					return rows;
+				},
+				startSession: async prompt => {
+					const { sessionId } = await this.#host.createSession({});
+					if (prompt) await this.#sendToSession(sessionId, prompt);
+					return sessionId;
+				},
+				stopSession: id => Promise.resolve(this.#host.close(id)),
+				currentSessionId: () => {
+					const it = this.#host.sessions();
+					const first = it.next();
+					return first.done ? null : first.value;
+				},
+				sendPrompt: (sessionId, text, images) => this.#sendToSession(sessionId, text, images),
+			},
+			(kind, from, text) => this.#channels.send(kind as ChannelKind, { to: from, text }),
+		);
+		this.#channels = new ChannelRegistry({
+			configPath: path.join(SOCKET_DIR, "channels.json"),
+			host: handler,
+			factories: {
+				"huawei-today": () => new HuaweiTodayChannel(),
+				discord: () => new DiscordChannel(),
+				wechat: () => new WechatChannel(),
+				telegram: () => new TelegramChannel(),
+				feishu: () => new FeishuChannel("feishu"),
+				lark: () => new FeishuChannel("lark"),
+			},
+		});
+		// agent_end → task-completion pushes (huawei today-screen).
+		host.onAgentEnd = live => void this.#pushTaskCompletion(live).catch(() => {});
+		void this.#channels.startAll().catch(() => {});
+		// Hot-pluggable channel plugins: scan ~/.musepi/agent/channels/*.ts
+		// and register any discovered channel modules (game-mod style).
+		this.#channelPluginDir = path.join(getAgentDir(), "channels");
+		void this.#loadChannelPlugins().catch(() => {});
 	}
 
 	/** Active GUI collab share (ZCode remote-control dialog). */
 	#collab: { host: CollabHost; transport: LocalShareManager } | null = null;
+
+	/** Mobile pair codes: 6-digit code → the shared webLink + expiry. The
+	 *  GUI displays the code; the mobile app resolves it against the LAN
+	 *  pair endpoint (pair.resolve) to obtain the full collab link without
+	 *  typing it. Pruned lazily on generate/resolve. */
+	#pairCodes = new Map<string, { webLink: string; expiresAt: number }>();
+	/** LAN pair endpoint (ws://0.0.0.0:8301) — resolves pair codes only. */
+	#pairWs: DaemonWsHandle | null = null;
+
+	/** Bot/notification channels (wechat/discord/huawei-today…). */
+	#channels: ChannelRegistry;
+	/** Directory for hot-pluggable channel plugins (game-mod style). */
+	#channelPluginDir = "";
+
+	/** Load directory plugins and register them (hot-plug on reload). */
+	async #loadChannelPlugins(): Promise<void> {
+		if (!this.#channelPluginDir) return;
+		const found = await loadChannelPlugins(this.#channelPluginDir);
+		const known = new Set(this.#channels.kinds());
+		for (const { plugin, origin } of found) {
+			if (known.has(plugin.kind)) continue; // builtin wins
+			this.#channels.register(plugin.kind, () => plugin.create({ host: this.#channels.host }));
+			logger.info(`channel plugin registered: ${plugin.kind} (${origin})`);
+		}
+	}
 
 	#resumeLive: LiveSession | null = null;
 
@@ -1867,6 +2508,93 @@ class DaemonServer {
 			if (task.state.nextRunAt === undefined || task.state.nextRunAt <= now) {
 				void this.#cronRun(task);
 			}
+		}
+	}
+
+	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
+	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
+	 *  6-digit code; it carries no other RPC surface. */
+	async #ensurePairServer(): Promise<void> {
+		if (this.#pairWs) return;
+		try {
+			this.#pairWs = await startDaemonWs({
+				port: PAIR_PORT,
+				host: "0.0.0.0",
+				onMessage: (conn, text) => {
+					let req: { method?: unknown; params?: { code?: unknown } };
+					try {
+						req = JSON.parse(text) as { method?: unknown; params?: { code?: unknown } };
+					} catch {
+						conn.send({ error: { message: "invalid json" } });
+						return;
+					}
+					if (req.method !== "pair.resolve") {
+						conn.send({ error: { message: "unsupported method" } });
+						return;
+					}
+					const code = typeof req.params?.code === "string" ? req.params.code : "";
+					const entry = this.#pairCodes.get(code);
+					if (!entry || entry.expiresAt < Date.now()) {
+						this.#pairCodes.delete(code);
+						conn.send({ error: { message: "invalid or expired pair code" } });
+						return;
+					}
+					conn.send({ result: { webLink: entry.webLink } });
+				},
+				onClose: () => {},
+			});
+		} catch (err) {
+			logger.warn("pair endpoint unavailable", {
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
+	#prunePairCodes(): void {
+		const now = Date.now();
+		for (const [code, entry] of this.#pairCodes) {
+			if (entry.expiresAt < now) this.#pairCodes.delete(code);
+		}
+	}
+
+	/** Send a user message to a session (reactivating history sessions),
+	 *  mirroring the session.send RPC path. `images` are base64 attachments
+	 *  forwarded from IM channels (wechat/discord). */
+	async #sendToSession(sessionId: string, text: string, images?: { data: string; mimeType: string }[]): Promise<void> {
+		const live = this.#host.get(sessionId) ?? (await this.#host.activate(sessionId));
+		const content =
+			images && images.length > 0
+				? [
+						...(text ? [{ type: "text" as const, text }] : []),
+						...images.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType })),
+					]
+				: text;
+		if (live.autoTitle) {
+			const textPart = typeof content === "string" ? content : (content.find(c => c.type === "text")?.text ?? "");
+			if (textPart) live.agentSession.maybeStartTitleGeneration(textPart);
+		}
+		await live.agentSession.sendUserMessage(content);
+	}
+
+	/** Push a task-completion summary to connected push channels (huawei
+	 *  today-screen). Fire-and-forget; failures only log. */
+	async #pushTaskCompletion(live: LiveSession): Promise<void> {
+		const snap = live.view.snapshot();
+		const title = snap.header?.title ?? snap.state.sessionName ?? "MusePi task";
+		const text = snap.header?.model ? `Model: ${snap.header.model}` : "";
+		for (const kind of ["huawei-today"] as const) {
+			await this.#channels
+				.send(kind, {
+					taskName: title,
+					text,
+					markdown: `**${title}** completed`,
+					taskResult: "completed",
+				})
+				.catch(err => {
+					logger.warn(`channel push failed (${kind})`, {
+						error: err instanceof Error ? err.message : String(err),
+					});
+				});
 		}
 	}
 
@@ -1970,6 +2698,118 @@ class DaemonServer {
 	 *  Invalidated by the mutation RPCs below. */
 	#extensionsCache: { at: number; extensions: Extension[] } | null = null;
 
+	#extensionWatcherStarted = false;
+	#extensionWatcherTimer: Timer | null = null;
+
+	/** HMR: watch extension source/config directories; on change invalidate
+	 *  the extension scan + component compile/load caches and broadcast
+	 *  `extensions.changed` to events.subscribe clients so the GUI refreshes
+	 *  slots/panels immediately instead of waiting for the next poll.
+	 *  Session-scoped tools/handlers of already-loaded extensions pick up
+	 *  the change on the next load (v1 scope). */
+	#startExtensionWatcher(): void {
+		if (this.#extensionWatcherStarted) return;
+		this.#extensionWatcherStarted = true;
+		const roots = [path.join(getAgentDir(), "extensions"), path.join(this.#host.cwd(), ".musepi", "extensions")];
+		for (const root of roots) {
+			try {
+				fs.watch(root, { recursive: true }, () => this.#scheduleExtensionReload());
+			} catch {
+				// Root absent/unwatchable — the discovery scan still picks up
+				// changes when its TTL expires.
+			}
+		}
+	}
+
+	#scheduleExtensionReload(): void {
+		if (this.#extensionWatcherTimer) return;
+		this.#extensionWatcherTimer = setTimeout(() => {
+			this.#extensionWatcherTimer = null;
+			this.#extensionsCache = null;
+			this.#pluginsCache = null;
+			void import("./extension-components").then(m => m.invalidateExtensionCaches());
+			const seq = ++this.#globalEventSeq;
+			for (const conn of this.#globalEventTargets) {
+				this.#host.emitEvent(conn, {
+					kind: "event",
+					seq,
+					payload: { type: "extensions.changed", at: Date.now() },
+				});
+			}
+			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
+			// entry changed on disk. The watcher callback filename is
+			// unreliable (empty/short names on Windows recursive watch), so
+			// the per-entry mtime comparison decides what changed.
+			this.#reloadChangedSessionExtensions();
+		}, 500);
+	}
+
+	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */
+	#modesDir(): string {
+		return $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+	}
+
+	/** 广播 modes.changed(设置页/输入框 chip 即时刷新;与 extensions.changed 同 seq 机制)。 */
+	#broadcastModesChanged(): void {
+		const seq = ++this.#globalEventSeq;
+		for (const conn of this.#globalEventTargets) {
+			this.#host.emitEvent(conn, {
+				kind: "event",
+				seq,
+				payload: { type: "modes.changed", at: Date.now() },
+			});
+		}
+	}
+
+	/**
+	 * P5 HMR v2: for every live session, compare the entry mtimes recorded at
+	 * load time against the filesystem and hot-reload entries that changed;
+	 * notify the session's subscribers afterwards (`extensions.reloaded`).
+	 * Busy sessions park the reload and perform it at their next idle
+	 * `agent_end` (AgentSession busy gate); idle sessions reload immediately.
+	 */
+	#reloadChangedSessionExtensions(): void {
+		for (const live of this.#host.allSessions()) {
+			const session = live.agentSession;
+			const entryMtimes = session.getExtensionEntryMtimes();
+			if (entryMtimes.size === 0) continue;
+			const changed: string[] = [];
+			for (const [resolvedPath, recordedMtime] of entryMtimes) {
+				try {
+					if (fs.statSync(resolvedPath).mtimeMs > recordedMtime) changed.push(resolvedPath);
+				} catch {
+					// Entry deleted/renamed — leave the loaded instance as-is.
+				}
+			}
+			if (changed.length === 0) continue;
+			void this.#reloadSessionExtensions(live, changed);
+		}
+	}
+
+	async #reloadSessionExtensions(live: LiveSession, entryPaths: string[]): Promise<void> {
+		for (const entryPath of entryPaths) {
+			const result = await live.agentSession.reloadExtension(entryPath);
+			for (const send of live.subscribers.values()) {
+				try {
+					send({
+						kind: "event",
+						seq: ++live.seq,
+						payload: {
+							type: "extensions.reloaded",
+							extensionPath: entryPath,
+							removedTools: result.removedTools,
+							errors: result.errors,
+							deferred: result.deferred,
+							at: Date.now(),
+						},
+					});
+				} catch {
+					// subscriber socket died; removed on close
+				}
+			}
+		}
+	}
+
 	/** Unified extension inventory (10 kinds, three states) with the same
 	 *  normalization the TUI /extensions dashboard uses. */
 	/** Settings with lazy bootstrap (settings.get/set RPC pattern). */
@@ -2027,7 +2867,7 @@ class DaemonServer {
 		const seq = ++this.#eventSeq;
 		for (const conn of this.#pauseConns) {
 			try {
-				conn.send({ kind: "global-pause-state", seq, payload: { paused, pausedAt } });
+				this.#host.emitEvent(conn, { kind: "global-pause-state", seq, payload: { paused, pausedAt } });
 			} catch {
 				this.#pauseConns.delete(conn);
 			}
@@ -2125,10 +2965,16 @@ class DaemonServer {
 				};
 			};
 			const proc = bunSpawn(shell, args, { cols, rows, cwd: realCwd, env });
-			proc.onData(d => conn.send({ kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }));
+			proc.onData(d =>
+				this.#host.emitEvent(conn, { kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }),
+			);
 			proc.onExit(({ exitCode }) => {
 				this.#terminals.delete(id);
-				conn.send({ kind: "terminal-exit", seq: ++this.#eventSeq, payload: { id, code: exitCode } });
+				this.#host.emitEvent(conn, {
+					kind: "terminal-exit",
+					seq: ++this.#eventSeq,
+					payload: { id, code: exitCode },
+				});
 			});
 			this.#terminals.set(id, {
 				async write(msg: { method: string; params?: Record<string, unknown> }): Promise<void> {
@@ -2178,20 +3024,32 @@ class DaemonServer {
 				return;
 			}
 			if (msg.kind === "data" && open) {
-				conn.send({ kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: msg.data ?? "" } });
+				this.#host.emitEvent(conn, {
+					kind: "terminal-output",
+					seq: ++this.#eventSeq,
+					payload: { id, data: msg.data ?? "" },
+				});
 			} else if (msg.kind === "open") {
 				open = true;
 			} else if (msg.kind === "exit" && !exitSent) {
 				exitSent = true;
-				conn.send({ kind: "terminal-exit", seq: ++this.#eventSeq, payload: { id, code: msg.code ?? 0 } });
+				this.#host.emitEvent(conn, {
+					kind: "terminal-exit",
+					seq: ++this.#eventSeq,
+					payload: { id, code: msg.code ?? 0 },
+				});
 			} else if (msg.kind === "error") {
-				conn.send({ kind: "terminal-error", seq: ++this.#eventSeq, payload: { id, message: msg.message ?? "" } });
+				this.#host.emitEvent(conn, {
+					kind: "terminal-error",
+					seq: ++this.#eventSeq,
+					payload: { id, message: msg.message ?? "" },
+				});
 			}
 		});
 		child.on("exit", () => {
 			if (!exitSent) {
 				exitSent = true;
-				conn.send({ kind: "terminal-exit", seq: ++this.#eventSeq, payload: { id, code: -1 } });
+				this.#host.emitEvent(conn, { kind: "terminal-exit", seq: ++this.#eventSeq, payload: { id, code: -1 } });
 			}
 			this.#terminals.delete(id);
 		});
@@ -2247,6 +3105,25 @@ class DaemonServer {
 			}
 		}
 		return "node";
+	}
+
+	/** Resolved settings for debug report bundles (TUI #getResolvedSettings
+	 *  parity — the daemon has no TUI context, so the AgentSession carries
+	 *  the same fields). */
+	#debugSessionSettings(live: LiveSession): Record<string, unknown> {
+		const session = live.agentSession;
+		return {
+			model: session.model?.id,
+			thinkingLevel: session.thinkingLevel,
+			planModeEnabled: session.getPlanModeState?.()?.enabled === true,
+		};
+	}
+
+	/** Raw provider SSE diagnostics for a live session (empty → omitted from
+	 *  report bundles, matching the TUI's conditional rawSseText). */
+	#debugRawSseText(live: LiveSession): string | undefined {
+		const text = live.agentSession.rawSseDebugBuffer?.toRawText() ?? "";
+		return text.trim().length > 0 ? text : undefined;
 	}
 
 	async handle(method: string, params: unknown, conn: DaemonConnection): Promise<unknown> {
@@ -2419,8 +3296,21 @@ class DaemonServer {
 						});
 					}
 				}
-				let usage: { totalTokens: number; totalCost: number; topModels: { name: string; cost: number }[] } | null =
-					null;
+				let usage: {
+					totalTokens: number;
+					totalCost: number;
+					topModels: { name: string; cost: number }[];
+					plans?: { provider: string; label: string }[];
+					accounts?: {
+						provider: string;
+						plan?: string;
+						windows: {
+							label: string;
+							windowLabel?: string;
+							accounts: { label: string; used: number; limit?: number; fraction: number; resetsIn?: number }[];
+						}[];
+					}[];
+				} | null = null;
 				try {
 					const stats = await getDashboardStats(null);
 					const o = stats.overall;
@@ -2433,6 +3323,71 @@ class DaemonServer {
 						totalCost: o.totalCost ?? 0,
 						topModels: (stats.byModel ?? []).slice(0, 3).map(m => ({ name: m.model, cost: m.totalCost })),
 					};
+					// /usage-aligned subscription summary: per provider, per
+					// limit-window (5h/7d/...), per CREDENTIAL (scope.accountId)
+					// — same bucketing the TUI/GUI /usage render. Each account
+					// contributes its most-burned fraction per window (the
+					// binding meter). Needs a live session's report pool.
+					const liveIds = Array.from(this.#host.sessions());
+					if (liveIds.length > 0) {
+						const live = this.#host.get(liveIds[0]);
+						const reports = live?.agentSession ? ((await live.agentSession.fetchUsageReports()) ?? []) : [];
+						const plans = reports
+							.filter(r => typeof r.metadata?.planType === "string")
+							.map(r => ({ provider: r.provider, label: String(r.metadata!.planType) }));
+						if (plans.length > 0) usage.plans = plans;
+						const accounts = reports.map((r, ri) => {
+							const windows = new Map<
+								string,
+								{
+									label: string;
+									windowLabel?: string;
+									accounts: Map<
+										string,
+										{ label: string; used: number; limit?: number; fraction: number; resetsIn?: number }
+									>;
+								}
+							>();
+							for (const limit of r.limits ?? []) {
+								const windowId = limit.window?.id ?? limit.scope?.windowId ?? "default";
+								const windowLabel = limit.window?.label ?? windowId;
+								const key = `${limit.label}|${windowId}`;
+								const win = windows.get(key) ?? { label: limit.label, windowLabel, accounts: new Map() };
+								const acctId = limit.scope?.accountId ?? `acct-${ri}`;
+								const acct = win.accounts.get(acctId) ?? {
+									label:
+										typeof r.metadata?.email === "string" && r.metadata.email
+											? r.metadata.email
+											: typeof acctId === "string" && acctId.startsWith("acct-")
+												? `account ${ri + 1}`
+												: acctId,
+									used: 0,
+									fraction: 0,
+								};
+								const fraction = resolveUsedFraction(limit) ?? 0;
+								if (fraction > acct.fraction) {
+									acct.fraction = fraction;
+									acct.used = limit.amount?.used ?? acct.used;
+									acct.limit = limit.amount?.limit ?? acct.limit;
+									if (limit.window?.resetsAt !== undefined && limit.window.resetsAt > Date.now()) {
+										acct.resetsIn = limit.window.resetsAt - Date.now();
+									}
+								}
+								win.accounts.set(acctId, acct);
+								windows.set(key, win);
+							}
+							return {
+								provider: r.provider,
+								...(typeof r.metadata?.planType === "string" ? { plan: String(r.metadata.planType) } : {}),
+								windows: [...windows.values()].map(w => ({
+									label: w.label,
+									...(w.windowLabel ? { windowLabel: w.windowLabel } : {}),
+									accounts: [...w.accounts.values()].slice(0, 4),
+								})),
+							};
+						});
+						if (accounts.some(a => a.windows.some(w => w.accounts.length > 0))) usage.accounts = accounts;
+					}
 				} catch {
 					// stats unavailable (no session files yet) — tray omits Usage
 				}
@@ -2548,6 +3503,13 @@ class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string };
 				await this.#host.subscribe(p.sessionId, conn);
 				return { stream: conn.id, initial: tailSnapshot(await this.#host.snapshot(p.sessionId)) };
+			}
+			case "session.getSystemPrompt": {
+				// Modes v1 E2E/诊断:读会话当前 systemPrompt(composer 注入后)。只读,不激活。
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				return { systemPrompt: live.agentSession.systemPrompt };
 			}
 			case "session.snapshot": {
 				// Read-only snapshot of any session WITHOUT subscribing or
@@ -2753,10 +3715,19 @@ class DaemonServer {
 					displayName: p.displayName,
 					enabled: p.enabled,
 				}));
+				// Renderer-side slot components (ui-slots analogue): compiled
+				// from active extension-module entries, cached 10s with the
+				// extension scan. The GUI mounts them by slot id.
+				const { collectSlotComponents } = await import("./extension-components");
+				const components = await collectSlotComponents(
+					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+					this.#host.cwd(),
+				);
 				return {
 					extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
 					tabs,
 					providers,
+					components,
 				};
 			}
 			case "extensions.raw": {
@@ -2825,6 +3796,14 @@ class DaemonServer {
 				this.#extensionsCache = null;
 				return { ok: true };
 			}
+			case "events.subscribe": {
+				// Global (non-session) daemon events: extensions.changed
+				// (HMR — extension source/config edits invalidate caches and
+				// the renderer refreshes slots/panels immediately instead of
+				// waiting for the next poll).
+				this.#globalEventTargets.add(conn);
+				return { ok: true };
+			}
 			case "extensions.setProviderEnabled": {
 				// Provider-level toggle (TUI parity): enableProvider /
 				// disableProvider persist to settings.disabledProviders;
@@ -2842,6 +3821,119 @@ class DaemonServer {
 				if (settings) await settings.flush();
 				this.#extensionsCache = null;
 				return { ok: true };
+			}
+			case "modes.list": {
+				// 预设中心数据源(docs/modes-plan.md §7):摘要列表,含继承链与
+				// 结构信息;扩展 id 存在性校验在 save/validate 层做。
+				const { listModeIds, loadModeFile, ensureModeTemplates, BUILTIN_MODE_TEMPLATES } = await import(
+					"../presets/resolve"
+				);
+				const { t } = await import("../i18n/index.js");
+				const dir = this.#modesDir();
+				ensureModeTemplates(dir);
+				const ids = listModeIds(dir);
+				return {
+					modes: ids.map(id => {
+						const def = loadModeFile(dir, id);
+						// 内置模板(work/chat/design/creator)显示名走 i18n(DSH
+						// BUILT_IN_PRESET_KEYS 对齐);用户自定义用文件 label。
+						const builtinName = t(`preset ${id} name` as never);
+						const builtinDesc = t(`preset ${id} description` as never);
+						const isBuiltinLabel = !builtinName.startsWith("preset ");
+						return {
+							id,
+							builtin: id in BUILTIN_MODE_TEMPLATES,
+							label: isBuiltinLabel ? builtinName : (def?.label ?? id),
+							description: isBuiltinLabel ? builtinDesc : def?.description,
+							extends: def?.extends ?? [],
+							extensions: def?.extensions,
+							hasPrompt: (def?.prompt?.length ?? 0) > 0,
+							promptComplete: def?.promptComplete === true,
+							settingsKeys: Object.keys(def?.settings ?? {}),
+						};
+					}),
+				};
+			}
+			case "modes.save": {
+				// 保存 = 校验(结构 + 环/悬空 + 扩展存在性)→ 写文件 → 广播。
+				const { loadModeFile, resolveMode, validateMode, MODE_ID_PATTERN, modeFilePath, ensureModeTemplates } =
+					await import("../presets/resolve");
+				const p = (params ?? {}) as {
+					id: string;
+					label?: string;
+					description?: string;
+					extends?: string[];
+					extensions?: string[];
+					prompt?: unknown[];
+					promptComplete?: boolean;
+					runtimeContext?: boolean;
+					settings?: Record<string, unknown>;
+				};
+				if (!MODE_ID_PATTERN.test(p.id)) throw new Error(`invalid mode id: ${p.id}`);
+				const dir = this.#modesDir();
+				ensureModeTemplates(dir);
+				const knownExtensions = (await this.#getExtensions()).map(e => e.id);
+				const def = {
+					id: p.id,
+					label: p.label,
+					description: p.description,
+					extends: p.extends,
+					extensions: p.extensions,
+					prompt: p.prompt as never,
+					promptComplete: p.promptComplete,
+					runtimeContext: p.runtimeContext,
+					settings: p.settings,
+				};
+				const errors = validateMode(def as never, { knownExtensions });
+				if (errors.length > 0) throw new Error(`mode validation failed:\n${errors.join("\n")}`);
+				// 环/悬空引用经 resolveMode 验证(knownExtensions 同样参与)
+				resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
+				const file = modeFilePath(dir, p.id);
+				fs.writeFileSync(file, `${JSON.stringify(def, null, 2)}\n`, "utf8");
+				this.#broadcastModesChanged();
+				return { ok: true };
+			}
+			case "modes.delete": {
+				const { listModeIds, loadModeFile, modeFilePath, MODE_ID_PATTERN, BUILTIN_MODE_TEMPLATES } = await import(
+					"../presets/resolve"
+				);
+				const p = (params ?? {}) as { id: string };
+				if (!MODE_ID_PATTERN.test(p.id)) throw new Error(`invalid mode id: ${p.id}`);
+				// 内置预设(work/chat/design/creator)不可删(DSH built-in roster 对齐)。
+				if (p.id in BUILTIN_MODE_TEMPLATES) throw new Error(`built-in preset "${p.id}" cannot be deleted`);
+				const dir = this.#modesDir();
+				const referencing = listModeIds(dir).filter(
+					other => other !== p.id && (loadModeFile(dir, other)?.extends ?? []).includes(p.id),
+				);
+				if (referencing.length > 0) {
+					throw new Error(`mode "${p.id}" is referenced by: ${referencing.join(", ")}`);
+				}
+				try {
+					fs.rmSync(modeFilePath(dir, p.id));
+				} catch (error) {
+					if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+				}
+				this.#broadcastModesChanged();
+				return { ok: true };
+			}
+			case "modes.validate": {
+				const { loadModeFile, resolveMode, validateMode, MODE_ID_PATTERN } = await import("../presets/resolve");
+				const p = (params ?? {}) as { id: string };
+				if (!MODE_ID_PATTERN.test(p.id)) return { valid: false, errors: [`invalid mode id: ${p.id}`] };
+				const dir = this.#modesDir();
+				const knownExtensions = (await this.#getExtensions()).map(e => e.id);
+				const errors: string[] = [];
+				try {
+					const def = loadModeFile(dir, p.id);
+					if (!def) errors.push(`mode "${p.id}" not found`);
+					else {
+						errors.push(...validateMode(def as never, { knownExtensions }));
+						resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
+					}
+				} catch (error) {
+					errors.push(String((error as Error).message));
+				}
+				return errors.length > 0 ? { valid: false, errors } : { valid: true };
 			}
 			case "board.list": {
 				// Boards persist on the daemon (~/.musepi/boards/boards.json)
@@ -4281,6 +5373,11 @@ class DaemonServer {
 				await this.#collab.host.stop("stopped from gui").catch(() => {});
 				await this.#collab.transport.stop().catch(() => {});
 				this.#collab = null;
+				this.#pairCodes.clear();
+				if (this.#pairWs) {
+					await this.#pairWs.close().catch(() => {});
+					this.#pairWs = null;
+				}
 				return { ok: true };
 			}
 			case "collab.status": {
@@ -4291,6 +5388,126 @@ class DaemonServer {
 					webLink: this.#collab.host.webLink,
 					viewLink: this.#collab.host.viewLink,
 				};
+			}
+			case "collab.pair.generate": {
+				// 6-digit pair code for the mobile app. The GUI shows it next
+				// to the QR; the app resolves it against the LAN pair endpoint
+				// (pair.resolve) to fetch the full collab link.
+				if (!this.#collab) throw new Error("start sharing first (collab.start)");
+				const webLink = this.#collab.host.webLink;
+				if (!webLink) throw new Error("no collab link yet — refresh the share");
+				this.#prunePairCodes();
+				let code = "";
+				do {
+					code = String(Math.floor(100000 + Math.random() * 900000));
+				} while (this.#pairCodes.has(code));
+				const expiresAt = Date.now() + PAIR_CODE_TTL_MS;
+				this.#pairCodes.set(code, { webLink, expiresAt });
+				await this.#ensurePairServer();
+				return { code, expiresInSeconds: PAIR_CODE_TTL_MS / 1000, lanPort: PAIR_PORT };
+			}
+			case "channels.list": {
+				return this.#channels.list();
+			}
+			case "channels.configure": {
+				const p = (params ?? {}) as { kind: string; config?: Record<string, unknown> };
+				this.#channels.configure(p.kind as ChannelKind, p.config ?? {});
+				return { ok: true };
+			}
+			case "channels.start": {
+				const p = (params ?? {}) as { kind: string };
+				return this.#channels.start(p.kind as ChannelKind);
+			}
+			case "channels.stop": {
+				const p = (params ?? {}) as { kind: string };
+				return this.#channels.stop(p.kind as ChannelKind);
+			}
+			case "channels.plugins": {
+				return BUILTIN_PLUGINS.map(p => ({ ...p, registered: true })).concat(
+					(await loadChannelPlugins(this.#channelPluginDir)).map(({ plugin, origin }) => ({
+						kind: plugin.kind,
+						label: plugin.label,
+						description: plugin.description,
+						origin,
+						registered: this.#channels.kinds().includes(plugin.kind),
+					})),
+				);
+			}
+			case "channels.reloadPlugins": {
+				// Hot-plug: rescan the plugin directory; new files register,
+				// removed files unregister (running adapters stop first).
+				await this.#loadChannelPlugins();
+				return { ok: true };
+			}
+			case "import.agents": {
+				// List importable agent sources without touching their session
+				// stores (import.agents → pick agent → import.sources scan →
+				// import.session). The picker must be able to render the agent
+				// list without scanning anything on entry.
+				return foreignSessionSources().map(source => ({
+					source,
+					name: foreignSessionSourceName(source),
+				}));
+			}
+			case "import.sources": {
+				// Enumerate foreign agent sessions with a bounded listing
+				// (import.agents → pick agent → import.sources scan →
+				// import.session). Only the requested sources are scanned —
+				// the UI scans on explicit button click, not on entry.
+				const p = (params ?? {}) as { sources?: string[] };
+				const all = foreignSessionSources();
+				const want: ForeignSessionSource[] =
+					Array.isArray(p.sources) && p.sources.length > 0 ? (p.sources as ForeignSessionSource[]) : all;
+				for (const source of want) {
+					if (!all.includes(source)) throw new Error(`unknown import source: ${source}`);
+				}
+				const sources = await Promise.all(
+					want.map(async source => {
+						let sessions: ForeignSessionInfo[] = [];
+						try {
+							const store = createForeignSessionStore(source);
+							sessions = (await store.list()).slice(0, 100);
+						} catch {
+							sessions = [];
+						}
+						return {
+							source,
+							name: foreignSessionSourceName(source),
+							count: sessions.length,
+							sessions: sessions.map(s => ({
+								id: s.id,
+								title: s.title ?? "",
+								cwd: s.cwd,
+								created: s.created.toISOString(),
+								modified: s.modified.toISOString(),
+								messageCount: s.messageCount ?? 0,
+								firstMessage: s.firstMessage ?? "",
+							})),
+						};
+					}),
+				);
+				return sources.filter(s => s.count > 0);
+			}
+			case "import.session": {
+				const p = (params ?? {}) as { source: string; id: string; cwd?: string };
+				const source = p.source as ForeignSessionSource;
+				if (!foreignSessionSources().includes(source)) throw new Error(`unknown import source: ${source}`);
+				const store = createForeignSessionStore(source);
+				const sessions = await store.list();
+				const match = sessions.find(s => s.id === p.id) ?? sessions.find(s => s.path === p.id);
+				if (!match) throw new Error(`session not found in ${source}: ${p.id}`);
+				const imported = await persistForeignSession(store, match, {
+					fallbackCwd: p.cwd ?? this.#host.cwd() ?? undefined,
+					suppressBreadcrumb: true,
+				});
+				const sessionFile = imported.getSessionFile();
+				await imported.close();
+				if (!sessionFile) throw new Error("failed to persist imported session");
+				return { ok: true, sessionFile, source, sourceId: match.id };
+			}
+			case "migrate.dirs": {
+				// Data-migration tab: surface the directories a backup must cover.
+				return { agentDir: getAgentDir(), daemonDir: SOCKET_DIR };
 			}
 			case "session.delete": {
 				// Permanently remove a session (journal + materialized tables).
@@ -4829,6 +6046,192 @@ class DaemonServer {
 					model: model ? { id: model.id, name: model.name, provider: model.provider } : null,
 				};
 			}
+			case "autoresearch.status": {
+				// Desktop adaptation of the TUI autoresearch extension: the
+				// experiment dashboard is a TUI widget + overlay — the GUI
+				// gets the same data (active session + run history) as an
+				// RPC so it can render its own panel. Reads the same SQLite
+				// storage the extension writes (per-cwd,
+				// ~/.musepi/autoresearch — the storage module is authoritative;
+				// OMP_AUTORESEARCH_DB_DIR overrides the base).
+				const p = (params ?? {}) as { cwd?: string };
+				const arCwd = p.cwd ?? this.#host.cwd();
+				try {
+					const { openAutoresearchStorageIfExists } = await import("../autoresearch/storage");
+					const storage = await openAutoresearchStorageIfExists(arCwd);
+					if (!storage) return { active: null, runs: [] };
+					// Branch is intentionally null here: matching any active
+					// session is the desktop-parity behavior (the TUI resolves
+					// the branch from git; the GUI panel shows the branch the
+					// storage recorded on the session row).
+					const session = storage.getActiveSessionForBranch(null);
+					if (!session) return { active: null, runs: [] };
+					const runs = storage.listRuns(session.id);
+					return {
+						active: {
+							branch: session.branch,
+							goal: session.goal,
+							primaryMetric: session.primaryMetric,
+							metricUnit: session.metricUnit,
+							direction: session.direction,
+							preferredCommand: session.preferredCommand,
+							currentSegment: session.currentSegment,
+							maxIterations: session.maxIterations,
+							notes: session.notes,
+							createdAt: session.createdAt,
+						},
+						runs: runs.map(r => ({
+							segment: r.segment,
+							command: r.command,
+							status: r.status ?? null,
+							startedAt: r.startedAt,
+							durationMs: r.durationMs,
+							exitCode: r.exitCode,
+							timedOut: r.timedOut,
+							metric: r.parsedPrimary,
+							metrics: r.parsedMetrics,
+						})),
+					};
+				} catch {
+					return { active: null, runs: [] };
+				}
+			}
+			// ── debug.* — TUI /debug selector parity (desktop adaptation) ──
+			// The TUI's /debug opens an interactive diagnostics menu (report
+			// bundles, logs, system info, profilers, remote inspector, …).
+			// The GUI gets the same actions as RPCs and renders its own
+			// DebugToolsPanel. Terminal-bound entries (terminal state, protocol
+			// probe) have no daemon equivalent and stay GUI-side disabled.
+			case "debug.systemInfo": {
+				const info = await collectSystemInfo();
+				return { text: formatSystemInfo(info) };
+			}
+			case "debug.logs": {
+				return { text: await getLogText() };
+			}
+			case "debug.workProfile": {
+				// Work-scheduling flamegraph (getWorkProfile) — the SVG is
+				// returned for inline rendering (TUI writes it to /tmp + opens
+				// the browser; the GUI renders the same SVG in the panel).
+				const profile = getWorkProfile(30);
+				return { svg: profile.svg ?? null, sampleCount: profile.sampleCount };
+			}
+			case "debug.remoteDebugger": {
+				// JavaScriptCore remote inspector — one-way, no stop (TUI parity).
+				const existing = getRemoteDebugger();
+				const info = existing ?? (await startRemoteDebuggerServer());
+				return { host: info.host, port: info.port, alreadyRunning: existing !== null };
+			}
+			case "debug.cacheStats": {
+				const stats = await getArtifactCacheStats(getSessionsDir());
+				return {
+					count: stats.count,
+					totalSize: stats.totalSize,
+					oldestDate: stats.oldestDate ? stats.oldestDate.getTime() : null,
+				};
+			}
+			case "debug.clearCache": {
+				// Destructive (removes artifacts older than 30 days) — the GUI
+				// confirms before calling, mirroring the TUI's hook confirm.
+				const result = await clearArtifactCache(getSessionsDir(), 30);
+				return { removed: result.removed };
+			}
+			case "debug.openArtifacts": {
+				const p = (params ?? {}) as { sessionId: string; open?: boolean };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const sessionFile = live.agentSession.sessionFile;
+				if (!sessionFile) return { path: null, reason: "no-session-file" };
+				// Session file ends in ".jsonl"; the artifacts dir is its stem.
+				const artifactsDir = sessionFile.slice(0, -".jsonl".length);
+				try {
+					const st = await fs.promises.stat(artifactsDir);
+					if (!st.isDirectory()) return { path: null, reason: "no-artifacts" };
+				} catch {
+					return { path: null, reason: "no-artifacts" };
+				}
+				if (p.open !== false) openPath(artifactsDir);
+				return { path: artifactsDir };
+			}
+			case "debug.dumpReport": {
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const sessionFile = live.agentSession.sessionFile;
+				if (!sessionFile) throw new Error("Session is not persisted");
+				const result = await createReportBundle({
+					sessionFile,
+					settings: this.#debugSessionSettings(live),
+					rawSseText: this.#debugRawSseText(live),
+				});
+				return { path: result.path, files: result.files };
+			}
+			case "debug.memoryReport": {
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const sessionFile = live.agentSession.sessionFile;
+				if (!sessionFile) throw new Error("Session is not persisted");
+				const result = await createReportBundle({
+					sessionFile,
+					settings: this.#debugSessionSettings(live),
+					rawSseText: this.#debugRawSseText(live),
+					heapSnapshot: generateHeapSnapshotData(),
+				});
+				return { path: result.path, files: result.files };
+			}
+			case "debug.profileStart": {
+				const session = await startCpuProfile();
+				const id = this.#nextDebugProfilerId++;
+				this.#debugProfilers.set(id, session);
+				return { profilerId: id };
+			}
+			case "debug.profileStop": {
+				const p = (params ?? {}) as { profilerId: number; sessionId: string };
+				const profiler = this.#debugProfilers.get(p.profilerId);
+				if (!profiler) throw new Error(`Unknown profiler: ${p.profilerId}`);
+				this.#debugProfilers.delete(p.profilerId);
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const sessionFile = live.agentSession.sessionFile;
+				if (!sessionFile) throw new Error("Session is not persisted");
+				const cpuProfile: CpuProfile = await profiler.stop();
+				const result = await createReportBundle({
+					sessionFile,
+					settings: this.#debugSessionSettings(live),
+					rawSseText: this.#debugRawSseText(live),
+					cpuProfile,
+					workProfile: getWorkProfile(30),
+				});
+				return { path: result.path, files: result.files, summary: cpuProfile.markdown };
+			}
+			case "debug.rawSse": {
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const buffer = live.agentSession.rawSseDebugBuffer;
+				const snapshot = buffer?.snapshot();
+				return {
+					text: buffer?.toRawText() ?? "",
+					totalEvents: snapshot?.totalEvents ?? 0,
+					droppedChars: snapshot?.droppedChars ?? 0,
+				};
+			}
+			case "debug.transcript": {
+				const p = (params ?? {}) as { sessionId: string; open?: boolean };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const snap = (await this.#host.snapshot(p.sessionId)) as { entries?: unknown[] } | null;
+				const rendered = renderDebugTranscript(snap?.entries ?? []);
+				if (!rendered) throw new Error("No messages to dump yet");
+				const tmpPath = path.join(
+					os.tmpdir(),
+					`musepi-debug-transcript-${Date.now()}-${randomUUID().slice(0, 8)}.txt`,
+				);
+				await fs.promises.writeFile(tmpPath, `${rendered}\n`);
+				if (p.open !== false) openPath(tmpPath);
+				return { path: tmpPath, chars: rendered.length };
+			}
 			case "session.contextUsage": {
 				// Live context-window usage (TUI status-line parity): the
 				// stats tracker's estimate feeds the composer's usage ring.
@@ -4891,7 +6294,11 @@ class DaemonServer {
 				return modesOf(live.agentSession);
 			}
 			case "session.setGoal": {
-				// Toggle goal mode; with an objective, set/replace the goal.
+				// Set or replace the goal with an objective; without one, close
+				// an active goal. Opening goal mode without an objective is not
+				// supported here — a goal needs a target (the GUI's one-tap
+				// "armed" path sends the next message's text as the objective
+				// instead of toggling an empty goal).
 				const p = (params ?? {}) as { sessionId: string; objective?: string | null };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -4912,19 +6319,230 @@ class DaemonServer {
 							updatedAt: now,
 						},
 					});
-				} else {
-					live.agentSession.setGoalModeState?.(current?.enabled ? undefined : (current ?? undefined));
+				} else if (current?.enabled) {
+					live.agentSession.setGoalModeState?.(undefined);
 				}
 				return modesOf(live.agentSession);
+			}
+			case "session.goal": {
+				// Full goal lifecycle (TUI /goal parity): show details,
+				// pause/resume/drop, budget mutation, and the guided-goal
+				// interview (/guided-goal). The GUI exposes these from the
+				// goal chip / attach menu instead of the terminal's
+				// subcommand + selector menus.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					op: "show" | "pause" | "resume" | "drop" | "budget" | "guided";
+					objective?: string | null;
+					budget?: string | null;
+				};
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const g = live.agentSession;
+				// The goal tool is only active while goal mode is: entering
+				// (incl. the guided interview) adds it to the toolset, leaving
+				// (pause/drop) restores the pre-goal set.
+				const setGoalTools = async (enabled: boolean): Promise<void> => {
+					const previous = g.getEnabledToolNames().filter(name => name !== "goal");
+					await g.setActiveToolsByName(enabled ? [...new Set([...previous, "goal"])] : previous);
+				};
+				switch (p.op) {
+					case "show": {
+						const state = g.getGoalModeState();
+						return state?.goal ? { enabled: state.enabled === true, ...state.goal } : null;
+					}
+					case "pause": {
+						if (!g.getGoalModeState()?.enabled) throw new Error("No active goal to pause.");
+						await g.goalRuntime.pauseGoal();
+						await setGoalTools(false);
+						return modesOf(g);
+					}
+					case "resume": {
+						const state = await g.goalRuntime.resumeGoal();
+						await setGoalTools(true);
+						g.setGoalModeState(state);
+						return modesOf(g);
+					}
+					case "drop": {
+						await g.goalRuntime.dropGoal();
+						await setGoalTools(false);
+						g.setGoalModeState(undefined);
+						return modesOf(g);
+					}
+					case "budget": {
+						if (!g.getGoalModeState()?.enabled) throw new Error("No active goal.");
+						const trimmed = (p.budget ?? "").trim().toLowerCase();
+						let next: number | undefined;
+						if (trimmed !== "off") {
+							const parsed = Number.parseInt(trimmed, 10);
+							if (!Number.isInteger(parsed) || parsed <= 0) {
+								throw new Error("Goal budget must be a positive integer or `off`.");
+							}
+							next = parsed;
+						}
+						await g.goalRuntime.onBudgetMutated(next);
+						return modesOf(g);
+					}
+					case "guided": {
+						// TUI /guided-goal parity: a hidden kickoff starts a
+						// normal conversation in which the agent interviews the
+						// user, then calls the `goal create` tool to finish.
+						if (g.getGoalModeState()?.enabled) {
+							throw new Error("Goal mode is already active.");
+						}
+						const paused = g.getGoalModeState();
+						if (paused?.goal?.status === "paused") {
+							throw new Error("Resume the current goal first, or drop it before starting a new one.");
+						}
+						await setGoalTools(true);
+						const kickoff = prompt.render(guidedGoalInterviewPrompt, {
+							initial: p.objective?.trim() || undefined,
+						});
+						try {
+							if (g.isStreaming) {
+								await g.followUp(kickoff, undefined, { synthetic: true });
+							} else {
+								await g.prompt(kickoff, { synthetic: true });
+							}
+						} catch (error) {
+							// AgentBusyError during the race between the streaming
+							// check and prompt(): queue instead of failing.
+							if (!(error instanceof AgentBusyError)) throw error;
+							await g.followUp(kickoff, undefined, { synthetic: true });
+						}
+						return { ok: true };
+					}
+				}
+				break;
 			}
 			case "session.setPlan": {
 				// Toggle plan mode (read-only proposal flow, TUI /plan parity).
 				const p = (params ?? {}) as { sessionId: string; enabled?: boolean };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const on = p.enabled ?? !(live.agentSession.getPlanModeState?.()?.enabled === true);
-				live.agentSession.setPlanModeState?.(on ? { enabled: true, planFilePath: "" } : undefined);
+				const g = live.agentSession;
+				const on = p.enabled ?? !(g.getPlanModeState?.()?.enabled === true);
+				if (on) {
+					g.setPlanModeState?.({ enabled: true, planFilePath: "" });
+					// Install the plan-proposal handler (xd://propose parity):
+					// the agent writes the plan file, then submits its title;
+					// the handler validates the plan and waits for the GUI's
+					// approve/refine (session.plan) — without it the proposal
+					// device reports "No plan is awaiting approval" and plan
+					// mode strands. Mirrors InteractiveMode/ACP for the parts
+					// the agent sees (same PlanApprovalDetails shape).
+					const sessionManager = g.sessionManager;
+					const cwd = sessionManager.getCwd();
+					const localProtocolOptions = {
+						artifactsDir: sessionManager.getArtifactsDir(),
+						getSessionId: () => sessionManager.getSessionId(),
+					};
+					g.setPlanProposalHandler(async (title: string) => {
+						const state = g.getPlanModeState();
+						if (!state?.enabled) throw new ToolError("Plan mode is not active.");
+						const { planFilePath, title: resolvedTitle } = await resolveApprovedPlan({
+							suppliedTitle: title,
+							statePlanFilePath: state.planFilePath,
+							readPlan: url => readPlanFile(url, { localProtocolOptions, cwd }),
+							listPlanFiles: () => listPlanFiles({ localProtocolOptions }),
+						});
+						// Promote the reviewed path into plan-mode state so a
+						// later approve/refine targets the plan just proposed.
+						if (state.planFilePath !== planFilePath) {
+							g.setPlanModeState({ ...state, planFilePath });
+						}
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Plan submitted for approval: ${resolvedTitle}. Waiting for the operator to approve or refine it.`,
+								},
+							],
+							details: { planFilePath, title: resolvedTitle, planExists: true },
+						};
+					});
+				} else {
+					g.setPlanProposalHandler(null);
+					g.setPlanModeState?.(undefined);
+				}
 				return modesOf(live.agentSession);
+			}
+			case "session.plan": {
+				// Plan review lifecycle (TUI plan-approval overlay parity): show
+				// the plan file + title, approve (exit plan mode + dispatch the
+				// approved-plan directive), or refine (feed feedback back into
+				// the planning conversation). The terminal's in-overlay section
+				// edits/annotations are chat-side in the GUI — the plan file is
+				// read-only here, and Refine re-prompts the model with the
+				// feedback text.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					op: "show" | "approve" | "refine";
+					feedback?: string | null;
+				};
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const g = live.agentSession;
+				const sessionManager = g.sessionManager;
+				const cwd = sessionManager.getCwd();
+				const localProtocolOptions = {
+					artifactsDir: sessionManager.getArtifactsDir(),
+					getSessionId: () => sessionManager.getSessionId(),
+				};
+				const currentPlanPath = async (): Promise<string | undefined> => {
+					const state = g.getPlanModeState();
+					if (state?.planFilePath) return state.planFilePath;
+					return (await listPlanFiles({ localProtocolOptions }))[0];
+				};
+				switch (p.op) {
+					case "show": {
+						const enabled = g.getPlanModeState()?.enabled === true;
+						const planFilePath = enabled ? await currentPlanPath() : undefined;
+						if (!enabled || !planFilePath) {
+							return { enabled, planFilePath: null, content: null, title: null };
+						}
+						const content = await readPlanFile(planFilePath, { localProtocolOptions, cwd });
+						const { title } = resolvePlanTitle({ planContent: content ?? "", planFilePath });
+						return { enabled, planFilePath, content, title };
+					}
+					case "approve": {
+						if (!g.getPlanModeState()?.enabled) throw new Error("Plan mode is not active.");
+						const planFilePath = await currentPlanPath();
+						if (!planFilePath) throw new Error("No plan file to approve.");
+						const content = await readPlanFile(planFilePath, { localProtocolOptions, cwd });
+						if (content === null) throw new Error(`Plan file not found at ${planFilePath}`);
+						const { title } = resolvePlanTitle({ planContent: content, planFilePath });
+						g.setPlanProposalHandler(null);
+						g.setPlanModeState?.(undefined);
+						g.markPlanReferenceSent();
+						// Context preserved (the TUI's default is a fresh session;
+						// the daemon keeps the planning conversation so the agent
+						// still sees its own discussion — the approved prompt
+						// declares the plan file authoritative either way).
+						const approvePrompt = prompt.render(planModeApprovedPrompt, {
+							planFilePath,
+							contextPreserved: true,
+						});
+						if (g.isStreaming) {
+							await g.followUp(approvePrompt, undefined, { synthetic: true });
+						} else {
+							try {
+								await g.prompt(approvePrompt, { synthetic: true });
+							} catch (error) {
+								if (!(error instanceof AgentBusyError)) throw error;
+								await g.followUp(approvePrompt, undefined, { synthetic: true });
+							}
+						}
+						return { ok: true, title };
+					}
+					case "refine": {
+						const feedback = p.feedback?.trim();
+						if (!feedback) throw new Error("Refine feedback is empty.");
+						await g.followUp(feedback, undefined, { synthetic: true });
+						return { ok: true };
+					}
+				}
+				break;
 			}
 			case "session.roles": {
 				// Per-role model presets (TUI /model parity): the modelRoles
@@ -5059,7 +6677,7 @@ class DaemonServer {
 						signal: abort.signal,
 						onAuth: info => {
 							try {
-								conn.send({
+								this.#host.emitEvent(conn, {
 									kind: "provider-auth",
 									seq: ++this.#eventSeq,
 									payload: {
@@ -5088,7 +6706,7 @@ class DaemonServer {
 									},
 									abort,
 								});
-								conn.send({
+								this.#host.emitEvent(conn, {
 									kind: "provider-prompt",
 									seq: ++this.#eventSeq,
 									payload: {
@@ -5100,7 +6718,7 @@ class DaemonServer {
 							}),
 						onProgress: message => {
 							try {
-								conn.send({
+								this.#host.emitEvent(conn, {
 									kind: "provider-progress",
 									seq: ++this.#eventSeq,
 									payload: { providerId: p.providerId, message },
@@ -5625,6 +7243,38 @@ class DaemonServer {
 				if (!registry) return [];
 				return registry.getAvailable().map(modelDetailRow).slice(0, 200);
 			}
+			case "models.catalog": {
+				// Full bundled catalog grouped by provider (TUI model-hub
+				// sidebar parity): every known provider plus its static models,
+				// with per-provider availability (auth configured or keyless).
+				// The GUI role-config rail renders registered vs unregistered
+				// providers from this one call — no per-session scan involved.
+				const registry = await this.#host.ensureRegistry();
+				if (!registry) return [];
+				const all = registry.getAll();
+				const available = new Set(registry.getAvailable().map(model => model.provider));
+				const registryNames = new Map(PROVIDER_REGISTRY.map(def => [def.id, def.name]));
+				const byProvider = new Map<
+					string,
+					{ provider: string; name: string; available: boolean; models: { id: string; name: string }[] }
+				>();
+				for (const model of all) {
+					let group = byProvider.get(model.provider);
+					if (!group) {
+						group = {
+							provider: model.provider,
+							name: registryNames.get(model.provider) ?? model.provider,
+							available: available.has(model.provider),
+							models: [],
+						};
+						byProvider.set(model.provider, group);
+					}
+					group.models.push({ id: model.id, name: model.name ?? model.id });
+				}
+				return [...byProvider.values()]
+					.sort((a, b) => a.name.localeCompare(b.name))
+					.map(group => ({ ...group, modelCount: group.models.length }));
+			}
 			case "models.detail": {
 				// One model's detail row (cost/context/efforts) by id, without a
 				// live session — the welcome composer's thinking selector reads
@@ -5769,6 +7419,38 @@ class DaemonServer {
 				const p = (params ?? {}) as { sessionId?: string };
 				const live = p.sessionId ? this.#host.get(p.sessionId) : undefined;
 				if (p.sessionId && !live) throw new Error("No active session");
+				// TUI /usage parity coverage: the report pool plus every gap the
+				// text panel shows — ○ accounts with no usage data, ✗ disabled
+				// credential tombstones, ⚠ OAuth re-login deadlines. Attribution
+				// and selection are shared with the TUI (daemon/usage-shared.ts)
+				// so the two surfaces can't drift apart.
+				const gapContext = async (storage: AuthStorage, reports: UsageReport[]) => {
+					const accounts = selectReportableAccounts(
+						collectStoredAccounts(storage),
+						provider => storage.usageProviderFor(provider) !== undefined,
+					);
+					// Best-effort revalidate (TUI runUsageCommand parity): a
+					// just-logged-in credential must not render as a stale
+					// duplicate from the disk cache.
+					try {
+						await storage.revalidateCredentials();
+					} catch {
+						// Stale identities beat no output.
+					}
+					let disabledCredentials: DisabledCredentialSummary[] = [];
+					try {
+						disabledCredentials = (await storage.listDisabledCredentials()).filter(summary =>
+							isActionableDisable(summary, accounts),
+						);
+					} catch {
+						// Usage output must not fail because tombstone listing did.
+					}
+					return {
+						unreportedAccounts: collectUnreportedAccounts(reports, accounts),
+						disabledCredentials,
+						reloginDeadlines: computeReloginDeadlines(accounts, Date.now()),
+					};
+				};
 				if (!live) {
 					// Session-less path (empty-state composer): bootstrap the
 					// daemon-level registry like models.list / auth.list do and
@@ -5777,12 +7459,15 @@ class DaemonServer {
 					// the session path.
 					const registry = await this.#host.ensureRegistry();
 					if (!registry) throw new Error("No model registry yet");
-					const reports = await registry.authStorage.fetchUsageReports({
-						baseUrlResolver: provider => registry.getProviderBaseUrl?.(provider),
-					});
-					return { reports: reports ?? [] };
+					const reports =
+						(await registry.authStorage.fetchUsageReports({
+							baseUrlResolver: provider => registry.getProviderBaseUrl?.(provider),
+						})) ?? [];
+					const gaps = await gapContext(registry.authStorage, reports);
+					return { reports, ...gaps };
 				}
-				const reports = await live.agentSession.fetchUsageReports();
+				const reports = (await live.agentSession.fetchUsageReports()) ?? [];
+				const gaps = await gapContext(live.agentSession.modelRegistry.authStorage, reports);
 				// TUI /usage parity: resolve the credential this session is
 				// actually using so the GUI can mark the active account (●)
 				// the way the TUI panel does.
@@ -5801,7 +7486,7 @@ class DaemonServer {
 						};
 					}
 				}
-				return { reports: reports ?? [], ...(activeAccount ? { activeAccount } : {}) };
+				return { reports, ...gaps, ...(activeAccount ? { activeAccount } : {}) };
 			}
 			case "fs.read": {
 				// Minimal safe file read (dev-server detection): text files
@@ -6095,7 +7780,10 @@ export async function startDaemon(
 			wsHandle = await startDaemonWs({
 				port: options.wsPort,
 				onMessage: (conn, text) => void handleRpcLine(server, text, conn),
-				onClose: connId => host.disconnect(connId),
+				onClose: connId => {
+					host.disconnect(connId);
+					server.dropGlobalEventTarget(connId);
+				},
 			});
 		} catch (err) {
 			host.dispose();
@@ -6109,6 +7797,7 @@ export async function startDaemon(
 			send: message => {
 				if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`);
 			},
+			writableLength: () => socket.writableLength,
 		};
 		sockets.add(socket);
 		let buffer = "";
@@ -6136,6 +7825,7 @@ export async function startDaemon(
 		socket.on("close", () => {
 			sockets.delete(socket);
 			host.disconnect(conn.id);
+			server.dropGlobalEventTarget(conn.id);
 		});
 	});
 

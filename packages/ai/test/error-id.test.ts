@@ -130,6 +130,24 @@ describe("error-id classification", () => {
 		expect(assistant.errorId).toBe(id);
 	});
 
+	it("classifies Cursor NGHTTP2 stream resets as transient", () => {
+		for (const errorMessage of [
+			"Stream closed with error code NGHTTP2_INTERNAL_ERROR",
+			"Stream closed with error code NGHTTP2_REFUSED_STREAM",
+			"Connect error failed_precondition: Error: Stream closed with error code NGHTTP2_REFUSED_STREAM",
+		]) {
+			const assistant = message({
+				api: "cursor-agent",
+				provider: "cursor",
+				model: "composer-2.5",
+				errorMessage,
+			});
+			const id = AIError.classifyMessage(assistant);
+			expect(AIError.is(id, AIError.Flag.Transient)).toBe(true);
+			expect(AIError.retriable(id)).toBe(true);
+		}
+	});
+
 	it("merges existing cause-chain kinds with finalized error text kinds", () => {
 		const assistant = message({
 			errorId: AIError.create(AIError.Flag.ThinkingLoop),

@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { getLastChangelogVersionPath, isEnoent, logger } from "@musepi/pi-utils";
 import bundledChangelogPath from "../../CHANGELOG.md" with { type: "file" };
+import { getMusepiChangelogPath } from "../config";
 import type { SettingValue } from "../config/settings";
 
 export interface ChangelogEntry {
@@ -140,7 +141,18 @@ export function resolveBundledChangelogPath(assetPath: string, moduleUrl: string
 
 export async function parseChangelog(changelogPath: string | undefined): Promise<ChangelogEntry[]> {
 	let content: string | undefined;
-	if (changelogPath) {
+	// MusePi's own release notes win when present — the what's-new panel
+	// must show MusePi changes, not upstream OMP's (which still parse as
+	// the fallback for `/changelog full` parity on stock builds).
+	const musepiPath = getMusepiChangelogPath();
+	if (musepiPath) {
+		try {
+			content = await Bun.file(musepiPath).text();
+		} catch {
+			// absent in stock/build contexts — fall through to the fallbacks
+		}
+	}
+	if (content === undefined && changelogPath) {
 		try {
 			content = await Bun.file(changelogPath).text();
 		} catch (error) {
@@ -279,6 +291,16 @@ export function selectStartupChangelog(
 	const markerVersion = lastVersion ?? "";
 	if (markerVersion === currentVersion) {
 		return emptyStartupSelection(false);
+	}
+	// Version-system switch or downgrade: a marker NEWER than the current
+	// version would filter out every entry below it (MusePi 0.4.x notes
+	// vs an upstream 17.x marker from the pre-split era) and the what's-new
+	// panel would go silent forever. Treat the marker as first-seen on the
+	// current series so the MusePi notes surface; the marker re-persists to
+	// the current version via persistCurrentVersion below.
+	const parsedCurrentVersion = parseChangelogVersion(currentVersion);
+	if (parsedCurrentVersion && compareChangelogEntries(parsedCurrentVersion, parsedLastVersion) < 0) {
+		return selectStartupChangelog(entries, "0.0.0", currentVersion);
 	}
 
 	const allNewEntries = getNewEntries(entries, markerVersion);

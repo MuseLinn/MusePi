@@ -5,7 +5,7 @@
 // appears in the settings panel ONLY while this extension is loaded
 // (extension center: style:task-card-swarm). The setting gates:
 //   - GUI: the additive swarm member-grid card beside the native task card
-//     (collab-web ToolView SwarmCard).
+//     (desktop-web ToolView SwarmCard).
 //   - TUI: a braille member grid painted above the editor while a `task`
 //     call runs (the native framed task card stays in the transcript).
 //

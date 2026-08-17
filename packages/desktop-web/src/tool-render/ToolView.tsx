@@ -1,0 +1,219 @@
+/**
+ * Tool card chrome + per-tool dispatch. Works in the desktop-web app and inside
+ * the `<omp-tool-view>` web component embedded in HTML session exports.
+ */
+import { INTENT_FIELD } from "@musepi/pi-wire";
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n/index.js";
+import { collapseStyle, useCollapseHeight } from "../lib/use-collapse.js";
+import { resolveToolRenderer } from "./registry";
+import type { ToolKind, ToolRenderHost, ToolRenderProps, ToolResultLike } from "./types";
+import { isRecord, replaceTabs, stripAnsi } from "./util";
+import "./tool-render.css";
+
+/**
+ * Grace period before a completed tool card auto-folds: the user just
+ * watched it run — collapsing the instant it finishes yanks the result
+ * away mid-glance. Delaying (and honouring a manual expand during the
+ * wait) keeps the reveal readable without piling up open cards.
+ */
+const COLLAPSE_DELAY_MS = 1800;
+
+export interface ToolViewProps {
+	name: string;
+	args?: unknown;
+	result?: ToolResultLike;
+	/** Tool is still executing (live collab view). */
+	running?: boolean;
+	/** Model-provided intent (`i`), shown atop the body. */
+	intent?: string;
+	/** Streaming partial output tail while running. */
+	partial?: string;
+	/** aicss-style treatment hint (transcript ToolCard sets it). */
+	kind?: ToolKind;
+	/** display.taskCardStyle parity: "classic" bypasses dedicated Card
+	 *  chrome (e.g. the task swarm card) and uses the plain tool card. */
+	taskCardStyle?: "swarm" | "classic";
+	defaultOpen?: boolean;
+	/** ZCode parity: collapse the card when the tool finishes running (the
+	 *  process trace folds away once the turn completes). Manual expand
+	 *  after the first auto-collapse is respected (one-shot guard). */
+	collapseWhenDone?: boolean;
+	/** Host capabilities (sub-session drill-down, …). */
+	host?: ToolRenderHost;
+}
+
+function normalizeArgs(raw: unknown): { args: Record<string, unknown>; intent: string | undefined } {
+	if (!isRecord(raw)) return { args: {}, intent: undefined };
+	const intent = typeof raw[INTENT_FIELD] === "string" ? (raw[INTENT_FIELD] as string).trim() : undefined;
+	if (!(INTENT_FIELD in raw)) return { args: raw, intent };
+	const args: Record<string, unknown> = {};
+	for (const k in raw) {
+		if (k !== INTENT_FIELD) args[k] = raw[k];
+	}
+	return { args, intent };
+}
+
+interface XdevDispatch {
+	tool: string;
+	args: Record<string, unknown>;
+	inner: unknown;
+}
+
+function executeXdevDispatch(props: ToolViewProps): XdevDispatch | null {
+	if (props.name !== "write" || props.result?.isError === true || !isRecord(props.result?.details)) return null;
+	const xdev = props.result.details.xdev;
+	if (!isRecord(xdev) || xdev.mode !== "execute" || typeof xdev.tool !== "string") return null;
+	return { tool: xdev.tool, args: isRecord(xdev.args) ? xdev.args : {}, inner: xdev.inner };
+}
+
+export function ToolView(props: ToolViewProps): ReactNode {
+	const [open, setOpen] = useState(props.defaultOpen ?? false);
+	// Collapse/expand height animation: the body stays mounted at height 0
+	// when closed so both directions animate (WAAPI-on-mount only covered
+	// expand; unmount collapse snapped). See useCollapseHeight.
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	useCollapseHeight(open, bodyRef);
+	// One-shot fold on the running→done transition (ZCode "process trace
+	// folds when the turn completes"). The reverse transition (pending →
+	// running, e.g. the active-tool map arrives after the message row)
+	// opens the card so a live trace is visible while it runs. Manual
+	// expand after the first auto-collapse is respected (doneRef guard).
+	// The fold itself is DELAYED (COLLAPSE_DELAY_MS) so a freshly
+	// completed card is readable for a moment — collapsing instantly
+	// yanks content away the second it finishes, which reads as churn.
+	const collapseDoneRef = useRef(false);
+	const wasRunningRef = useRef(false);
+	const collapseTimerRef = useRef<Timer | null>(null);
+	useEffect(() => {
+		if (props.collapseWhenDone !== true) return;
+		if (props.running === true) {
+			collapseDoneRef.current = false;
+			// Any pending delayed fold is cancelled — the tool is running
+			// again, the card must stay open for the live trace.
+			if (collapseTimerRef.current !== null) {
+				clearTimeout(collapseTimerRef.current);
+				collapseTimerRef.current = null;
+			}
+			if (!wasRunningRef.current) setOpen(true);
+			wasRunningRef.current = true;
+			return;
+		}
+		wasRunningRef.current = false;
+		if (props.result !== undefined && collapseDoneRef.current === false) {
+			collapseTimerRef.current = setTimeout(() => {
+				collapseTimerRef.current = null;
+				// Manual interaction since scheduling (collapsed-then-
+				// re-expanded, or auto-folded-then-expanded) sets the guard
+				// — never auto-fold a card the user has handled.
+				if (collapseDoneRef.current) return;
+				collapseDoneRef.current = true;
+				setOpen(false);
+			}, COLLAPSE_DELAY_MS);
+		}
+	}, [props.collapseWhenDone, props.running, props.result]);
+	useEffect(
+		() => () => {
+			if (collapseTimerRef.current !== null) clearTimeout(collapseTimerRef.current);
+		},
+		[],
+	);
+	const xdev = executeXdevDispatch(props);
+	const { args, intent: argIntent } = normalizeArgs(props.args);
+	const intent = props.intent?.trim() || argIntent;
+	const name = xdev?.tool ?? props.name;
+	const result = xdev
+		? { content: props.result!.content, details: xdev.inner, isError: props.result!.isError }
+		: props.result;
+	const renderer = resolveToolRenderer(name);
+	const renderProps: ToolRenderProps = {
+		name,
+		args: xdev?.args ?? args,
+		result,
+		running: props.running,
+		host: props.host,
+		kind: props.kind,
+		intent,
+	};
+
+	const isError = props.result?.isError === true;
+	const status = props.running ? "run" : isError ? "err" : props.result ? "ok" : "pending";
+	const partial = props.running && !props.result && props.partial ? stripAnsi(replaceTabs(props.partial)) : "";
+	// Progressive per-line reveal (aicss streaming-text): each line fades in
+	// with a stagger, plus a steady caret while the tool keeps streaming.
+	const partialLines = useMemo(() => partial.split("\n"), [partial]);
+
+	// The dedicated full-card chrome (`Card`) is legacy and bypasses the
+	// generic head entirely.
+	if (renderer.Card && props.taskCardStyle !== "classic") {
+		return <renderer.Card {...renderProps} />;
+	}
+
+	const nativeCard = (
+		<div className={`tv-card${isError ? " tv-card--error" : ""}${props.kind ? ` tr-card--${props.kind}` : ""}`}>
+			<button
+				type="button"
+				className="tv-head"
+				aria-expanded={open}
+				onClick={() => {
+					// Any manual click cancels the pending delayed fold. The
+					// card is OPEN during the grace period, so the first
+					// click there is a collapse (the timer would have done
+					// the same — no point waiting it out); re-expanding
+					// afterwards means the user drives the state, and the
+					// one-shot guard keeps it from auto-folding again.
+					if (collapseTimerRef.current !== null) {
+						clearTimeout(collapseTimerRef.current);
+						collapseTimerRef.current = null;
+					}
+					setOpen(v => {
+						const next = !v;
+						if (next) collapseDoneRef.current = true;
+						return next;
+					});
+				}}
+				title={intent || undefined}
+			>
+				{status === "run" ? (
+					<span className="tv-spin" aria-label={t("running")} />
+				) : (
+					<span className={`tv-status tv-status--${status}`} aria-hidden="true" />
+				)}
+				<span className="tv-name">{xdev ? `xd://${name}` : name}</span>
+				<span className="tv-sum">
+					<renderer.Summary {...renderProps} />
+				</span>
+				<span className="tv-chev" aria-hidden="true" />
+			</button>
+			<div ref={bodyRef} className={`tv-body${open ? "" : " tv-body--closed"}`} style={collapseStyle(open)}>
+				{intent && <div className="tv-intent">{intent}</div>}
+				{renderer.Body ? <renderer.Body {...renderProps} /> : null}
+			</div>
+			{partial && (
+				<div className="tr-stream" aria-live="polite">
+					{partialLines.map((line, i) => (
+						<div
+							// Streamed lines have no stable id — the append-only index is their identity.
+							// biome-ignore lint/suspicious/noArrayIndexKey: streamed lines have no stable id
+							key={i}
+							className="tr-stream-line"
+							// Tight cascade: 16ms steps, capped at 5 lines (~80ms) so a
+							// multi-line tool burst lands together instead of trailing
+							// line-by-line (the old 36ms × 10 = 620ms tail).
+							style={{ "--tr-i": String(Math.min(i, 5)) } as CSSProperties}
+						>
+							{line.length > 0 ? line : "\u00A0"}
+						</div>
+					))}
+					<span className="tr-stream-caret" aria-hidden="true" />
+				</div>
+			)}
+		</div>
+	);
+	// The additive swarm member grid is NOT rendered in the transcript: the
+	// native tool-call card lists one collapsible line per subagent (TUI
+	// parity), and the floating avatar grid is hosted by the GUI composer's
+	// temporary status chip when taskCardStyle=swarm.
+	return nativeCard;
+}

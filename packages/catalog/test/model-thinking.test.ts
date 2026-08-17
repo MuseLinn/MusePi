@@ -884,6 +884,65 @@ describe("model thinking runtime helpers", () => {
 		expect(() => requireSupportedEffort(opus46, Effort.XHigh)).toThrow(/not supported/);
 	});
 
+	it("does not expose xhigh on first-party Grok 4.5 Responses models", () => {
+		const paid = createModel({
+			id: "grok-4.5",
+			api: "openai-responses",
+			provider: "xai",
+			baseUrl: "https://api.x.ai/v1",
+		});
+		const oauth = createModel({
+			id: "grok-4.5",
+			api: "openai-responses",
+			provider: "xai-oauth",
+			baseUrl: "https://api.x.ai/v1",
+		});
+
+		expect(paid.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High]);
+		expect(oauth.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High]);
+		expect(() => requireSupportedEffort(paid, Effort.XHigh)).toThrow(/not supported/);
+	});
+
+	it("exposes xhigh on first-party Grok 4.6 Responses models", () => {
+		const paid = createModel({
+			id: "grok-4.6",
+			api: "openai-responses",
+			provider: "xai",
+			baseUrl: "https://api.x.ai/v1",
+		});
+		const oauth = createModel({
+			id: "grok-4.6",
+			api: "openai-responses",
+			provider: "xai-oauth",
+			baseUrl: "https://api.x.ai/v1",
+		});
+
+		expect(paid.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh]);
+		expect(oauth.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh]);
+		expect(requireSupportedEffort(paid, Effort.XHigh)).toBe(Effort.XHigh);
+		expect(paid.compat.reasoningEffortMap?.xhigh).toBeUndefined();
+	});
+
+	it("exposes xhigh on first-party Grok multi-agent Responses models", () => {
+		const paid = createModel({
+			id: "grok-4.20-multi-agent-beta-latest",
+			api: "openai-responses",
+			provider: "xai",
+			baseUrl: "https://api.x.ai/v1",
+		});
+		const oauth = createModel({
+			id: "grok-4.20-multi-agent-0309",
+			api: "openai-responses",
+			provider: "xai-oauth",
+			baseUrl: "https://api.x.ai/v1",
+		});
+
+		expect(paid.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh]);
+		expect(oauth.thinking?.efforts).toEqual([Effort.Minimal, Effort.Low, Effort.Medium, Effort.High, Effort.XHigh]);
+		expect(requireSupportedEffort(paid, Effort.XHigh)).toBe(Effort.XHigh);
+		expect(paid.compat.reasoningEffortMap?.xhigh).toBeUndefined();
+	});
+
 	it("rejects effort requests against un-built reasoning specs", () => {
 		const spec = {
 			id: "broken-reasoner",

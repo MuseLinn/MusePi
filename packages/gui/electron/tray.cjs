@@ -65,18 +65,38 @@ const PI_SCALE_FACTOR = 2;
  * render as 36pt (the unseen frame used to return it directly, doubling
  * the tray button width and shoving every status item when an approval
  * arrived: 52px vs 34px measured). */
-function piImage(fillOpacity) {
+function piImage(fillOpacity, color = [0, 0, 0]) {
 	const base = nativeImage.createFromDataURL(`data:image/png;base64,${PI_PNG_BASE64}`);
-	const raw = base.toBitmap();
-	const size = base.getSize();
+	// Windows tray draws nativeImage at PHYSICAL pixels — the 36×36 @2x
+	// bitmap (18pt DIP, right for the macOS menu bar) is oversized for the
+	// tray cell. 20×20 reads clearly at 1.75× DPI while staying inside the
+	// 24px tray cell; macOS keeps the @2x path.
+	let img = base;
+	if (process.platform === "win32") {
+		img = base.resize({ width: 20, height: 20 });
+	}
+	const size = img.getSize();
+	const raw = img.toBitmap();
 	const buf = Buffer.from(raw);
-	// Fade by premultiplied alpha: black glyph, so RGB is untouched.
-	if (fillOpacity < 0.999) {
-		for (let i = 3; i < buf.length; i += 4) {
-			buf[i] = Math.min(255, Math.round(buf[i] * fillOpacity));
+	// macOS template images tint with the menu bar, so the glyph must stay
+	// black. Windows/Linux do NOT tint — a black glyph is invisible on the
+	// dark tray, so paint white there (visible on dark AND light taskbars).
+	for (let i = 0; i < buf.length; i += 4) {
+		buf[i] = color[0];
+		buf[i + 1] = color[1];
+		buf[i + 2] = color[2];
+		if (fillOpacity < 0.999 && process.platform !== "win32") {
+			// Windows: the dark taskbar swallows faint glyphs AND partial
+			// alpha is unreliable in Shell_NotifyIcon rendering (the old
+			// 0.35→0.84 white π never appeared while a fully-opaque test
+			// block did). Paint Windows frames fully opaque — the breath
+			// animation stays a macOS menu-bar nicety; Windows gets a
+			// static, clearly visible π.
+			buf[i + 3] = Math.min(255, Math.round(buf[i + 3] * fillOpacity));
 		}
 	}
-	return withTemplate(nativeImage.createFromBitmap(buf, { ...size, scaleFactor: PI_SCALE_FACTOR }));
+	const created = nativeImage.createFromBitmap(buf, size);
+	return process.platform === "win32" ? created : withTemplate(created);
 }
 
 function withTemplate(img) {
@@ -97,7 +117,7 @@ const BREATH_OPACITIES = [0.35, 0.5, 0.72, 0.9, 1.0, 0.9, 0.72, 0.5];
  * (sessionId set), "respond-approval" (id + approved), "new-session",
  * "show-main-window", "quit".
  */
-function createTrayController({ onAction }) {
+function createTrayController({ onAction, onSnapshot }) {
 	let tray = null;
 	let lastKey = null;
 	let iconState = null;
@@ -105,9 +125,12 @@ function createTrayController({ onAction }) {
 	let animIndex = 0;
 	let animDir = 1;
 
-	const idleFrame = piImage(IDLE_OPACITY);
-	const unseenFrame = piImage(UNSEEN_OPACITY);
-	const breathFrames = BREATH_OPACITIES.map(piImage);
+	// Windows/Linux tray has no template tinting: white glyph is visible on
+	// both dark and light taskbars (black would vanish on the dark tray).
+	const TRAY_RGB = process.platform === "win32" ? [255, 255, 255] : [0, 0, 0];
+	const idleFrame = piImage(IDLE_OPACITY, TRAY_RGB);
+	const unseenFrame = piImage(UNSEEN_OPACITY, TRAY_RGB);
+	const breathFrames = BREATH_OPACITIES.map(o => piImage(o, TRAY_RGB));
 
 	const stopAnim = () => {
 		if (animTimer) {
@@ -156,10 +179,34 @@ function createTrayController({ onAction }) {
 		if (tray && !tray.isDestroyed?.()) return tray;
 		tray = new Tray(idleFrame);
 		tray.setIgnoreDoubleClickEvents(true);
-		// macOS: click opens the menu (default); Windows/Linux: left-click
-		// shows the main window so the panel icon stays useful.
-		if (process.platform !== "darwin") {
+		tray.setToolTip("MusePi");
+		// macOS: click opens the menu (default); Linux: left-click shows the
+		// main window; Windows: the native Menu is a classic Win32 menu (no
+		// acrylic) so the click toggles the self-drawn frosted menu window
+		// (main.cjs) instead — the native menu is never set there.
+		if (process.platform === "darwin") {
+			// default: click opens the native menu
+		} else if (process.platform === "win32") {
+			tray.on("click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
+			tray.on("right-click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
+		} else {
 			tray.on("click", () => onAction({ type: "show-main-window" }));
+		}
+		// Windows: blink the π 3× at startup (proma setTrayFlash parity) so
+		// the tray entry is discoverable next to the network/volume icons —
+		// and as a self-test: blinking proves the icon is rendering, silence
+		// means the Tray never reached the shell.
+		if (process.platform === "win32") {
+			let n = 0;
+			const blink = setInterval(() => {
+				n += 1;
+				if (n >= 6) {
+					clearInterval(blink);
+					if (tray && !tray.isDestroyed?.()) tray.setImage(idleFrame);
+					return;
+				}
+				tray?.setImage(n % 2 === 0 ? idleFrame : nativeImage.createEmpty());
+			}, 400);
 		}
 		return tray;
 	};
@@ -243,6 +290,18 @@ function createTrayController({ onAction }) {
 				{ label: `Token 总量: ${formatTokens(tokens)}`, enabled: false },
 				{ label: `费用: $${cost.toFixed(4)}`, enabled: false },
 			];
+			// /usage-style subscription summary (planType per reporting
+			// account) — only when the daemon could fetch report metadata.
+			const plans = Array.isArray(usage.plans) ? usage.plans : [];
+			if (plans.length > 0) {
+				usageSubmenu.push({ type: "separator" });
+				for (const p of plans) {
+					usageSubmenu.push({
+						label: `    ${truncate(p.provider, 16)} — ${truncate(p.label, 24)}`,
+						enabled: false,
+					});
+				}
+			}
 			const models = Array.isArray(usage.topModels) ? usage.topModels : [];
 			if (models.length > 0) {
 				usageSubmenu.push({ type: "separator" });
@@ -290,6 +349,12 @@ function createTrayController({ onAction }) {
 		// status-item button and shoves every icon left of it. The unseen
 		// state (filled π) + the menu's approval section carry the signal.
 		applyIconState(counts.busy > 0 ? "busy" : counts.approvals > 0 ? "unseen" : "idle");
+		if (process.platform === "win32") {
+			// Self-drawn frosted menu window renders the snapshot (the
+			// native Menu would be a classic Win32 menu — no acrylic).
+			onSnapshot?.(snapshot);
+			return;
+		}
 		const key = menuKey(snapshot);
 		if (key !== lastKey) {
 			widget.setContextMenu(buildMenu(snapshot));

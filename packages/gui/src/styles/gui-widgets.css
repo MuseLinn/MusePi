@@ -1,0 +1,3916 @@
+.gui-task-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 120;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(8px);
+	/* Two-phase enter (useTwoPhaseEnter) — see .gui-board-focus. */
+	opacity: 0;
+}
+
+.gui-task-modal--entered {
+	opacity: 1;
+	animation: gui-fade-in 160ms ease;
+}
+
+.gui-task-modal--closing {
+	animation: gui-focus-out 150ms ease-in forwards;
+}
+
+.gui-task-modal-card {
+	width: min(380px, 86vw);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-2xl);
+	background: var(--color-surface-raised);
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	animation: gui-focus-zoom 260ms var(--spring);
+}
+
+.gui-task-modal-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.gui-task-modal-title {
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.gui-task-modal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.gui-task-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.gui-task-label {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	color: var(--color-text-secondary);
+}
+
+.gui-task-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-task-input {
+	background: var(--color-surface-sunken);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 7px 10px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text);
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.gui-task-textarea {
+	resize: none;
+	line-height: 1.5;
+}
+
+.gui-task-runs {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-task-runs-empty {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-secondary);
+	opacity: 0.7;
+}
+
+.gui-task-run {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-task-run-time {
+	color: var(--color-text-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-task-run-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-accent);
+}
+
+.gui-task-run-dot--fail {
+	background: var(--color-danger, #e5484d);
+}
+
+.gui-task-run-status {
+	color: var(--color-text);
+}
+
+/* Toggle switch (task status). */
+.gui-toggle {
+	position: relative;
+	width: 38px;
+	height: 22px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+	cursor: pointer;
+	transition: background 160ms ease, border-color 160ms ease;
+	padding: 0;
+}
+
+.gui-toggle--on {
+	background: var(--color-accent);
+	border-color: var(--color-accent);
+}
+
+.gui-toggle-thumb {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #fff;
+	transition: transform 160ms ease;
+}
+
+.gui-toggle--on .gui-toggle-thumb {
+	transform: translateX(16px);
+}
+
+/* ── Widget container queries: adaptive density tiers ─────────────
+ * Widget roots become inline-size containers; cards sized by kimi's
+ * grid (92px columns) trigger compact/regular/wide tiers so the maximized
+ * (520px) or wide (≥8-col) card reflows its content instead of sitting
+ * as a fixed-size miniature with empty space. */
+.gui-widget-clock,
+.gui-widget-ticker,
+.gui-widget-metric,
+.gui-widget-gauge,
+.gui-widget-kline,
+.gui-widget-heatwall,
+.gui-widget-indextape,
+.gui-widget-slider,
+.gui-widget-calc,
+.gui-widget-todo,
+.gui-widget-pomodoro,
+.gui-widget-gallery,
+.gui-widget-video {
+	container-type: inline-size;
+}
+
+/* Wide tier (≥ 480px — full-width cards, maximized modal content is
+ * 520−32 padding): hero values scale up, secondary rows spread out. */
+@container (min-width: 480px) {
+	.gui-widget-clock-time {
+		font-size: 56px;
+	}
+	.gui-widget-ticker-value {
+		font-size: 44px;
+	}
+	.gui-widget-metric-value {
+		font-size: 52px;
+	}
+	.gui-widget-gauge-value {
+		font-size: 46px;
+	}
+	.gui-widget-kline-tab,
+	.gui-widget-indextape-tab {
+		font-size: var(--ui-font-size-sm);
+	}
+	.gui-widget-heatwall-tile {
+		min-height: 42px;
+	}
+	.gui-widget-ticker-spark {
+		min-height: 60px;
+	}
+	.gui-widget-gauge-status {
+		font-size: var(--ui-font-size-sm);
+	}
+	.gui-widget-clock-market {
+		font-size: var(--ui-font-size-sm);
+	}
+}
+
+/* Compact tier (< 240px): drop secondary chrome so nothing clips. */
+@container (max-width: 239px) {
+	.gui-widget-clock-row,
+	.gui-widget-ticker-actions,
+	.gui-widget-metric-delta,
+	.gui-widget-heatwall-foot,
+	.gui-widget-kline-data,
+	.gui-widget-kline-foot {
+		display: none;
+	}
+	.gui-widget-clock-time {
+		font-size: 26px;
+	}
+	.gui-widget-ticker-value {
+		font-size: 22px;
+	}
+}
+
+@keyframes gui-view-blur-in {
+	from {
+		opacity: 0;
+		filter: blur(10px);
+		transform: scale(0.985);
+	}
+	to {
+		opacity: 1;
+		filter: blur(0);
+		transform: scale(1);
+	}
+}
+
+@keyframes gui-view-blur-out {
+	from {
+		opacity: 1;
+		filter: blur(0);
+	}
+	to {
+		opacity: 0;
+		filter: blur(8px);
+	}
+}
+
+/* Natural autosize zoom-in: the focused card scales from its board size
+ * into the centered container (kimi "autosize 动效自然放大"). */
+.gui-board-focus-card {
+	animation: gui-focus-zoom 300ms var(--spring);
+}
+
+/* Maximized-card exit: brief blur-out before unmounting. */
+.gui-board-focus--closing {
+	animation: gui-focus-out 150ms ease-in forwards;
+}
+
+@keyframes gui-focus-out {
+	to {
+		opacity: 0;
+		transform: scale(0.97);
+		filter: blur(6px);
+	}
+}
+
+@keyframes gui-focus-zoom {
+	0% {
+		transform: scale(0.92);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+.gui-motion-off .gui-board-focus-card {
+	animation: none;
+}
+
+/* Custom HTML widget face — opaque-origin sandbox iframe */
+.gui-widget-html {
+	width: 100%;
+	height: 100%;
+	border: none;
+	background: transparent;
+	display: block;
+}
+.gui-widget-html-empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	font-size: 11px;
+	opacity: 0.45;
+}
+
+.gui-widget-editor-textarea {
+	min-height: 120px;
+	resize: vertical;
+	font-family: var(--gui-font-mono, ui-monospace, monospace);
+	font-size: 11px;
+	line-height: 1.45;
+}
+
+/* ── Scheduled tasks (定时任务) — kimi cron parity ─────────────── */
+.gui-scheduled {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	padding: 18px 20px;
+	gap: 14px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-scheduled-head {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	position: relative;
+}
+.gui-scheduled-title {
+	font-size: 20px;
+	font-weight: 700;
+	margin: 0;
+}
+.gui-scheduled-desc {
+	font-size: var(--ui-font-size-xs);
+	opacity: 0.55;
+	margin: 0;
+}
+.gui-scheduled-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+.gui-scheduled-new {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	background: var(--color-accent, #7aa2ff);
+	color: #0b0d12;
+	font-weight: 600;
+	border: none;
+	border-radius: 8px;
+	padding: 6px 12px;
+	cursor: pointer;
+	/* Same hover family as the other accent buttons: the generic
+	 * .gui-btn:hover would otherwise snap this button to surface-raised
+	 * (gray) — losing the accent on hover. */
+	transition: background 140ms ease-out;
+}
+.gui-scheduled-new:hover:not(:disabled) {
+	background: var(--color-accent-hover, #8bb3ff);
+}
+.gui-scheduled-new:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.gui-scheduled-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	flex: 1;
+	min-height: 260px;
+	text-align: center;
+}
+.gui-scheduled-empty-icon {
+	font-size: 34px;
+	opacity: 0.5;
+}
+.gui-scheduled-empty-title {
+	font-size: 15px;
+	font-weight: 600;
+}
+.gui-scheduled-empty-desc {
+	font-size: var(--ui-font-size-xs);
+	opacity: 0.55;
+	max-width: 340px;
+	line-height: 1.6;
+}
+.gui-scheduled-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.gui-scheduled-item {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 12px 14px;
+	border: 1px solid rgba(128, 128, 128, 0.22);
+	border-radius: 12px;
+	background: rgba(128, 128, 128, 0.05);
+}
+.gui-scheduled-item--off {
+	opacity: 0.55;
+}
+.gui-scheduled-item-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.gui-scheduled-item-name {
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+}
+.gui-scheduled-item-schedule {
+	font-size: var(--ui-font-size-xs);
+	opacity: 0.7;
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.gui-scheduled-item-next {
+	opacity: 0.8;
+}
+.gui-scheduled-item-prompt {
+	font-size: 11px;
+	opacity: 0.5;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 560px;
+}
+.gui-scheduled-item-state {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 3px;
+	min-width: 110px;
+}
+.gui-cron-status {
+	font-size: 11px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(128, 128, 128, 0.18);
+}
+.gui-cron-status--ok {
+	background: rgba(76, 190, 120, 0.18);
+	color: #4cbe78;
+}
+.gui-cron-status--err {
+	background: rgba(232, 90, 90, 0.18);
+	color: #e85a5a;
+}
+.gui-cron-status--run {
+	background: rgba(122, 162, 255, 0.18);
+	color: #7aa2ff;
+}
+.gui-scheduled-item-last {
+	font-size: 11px;
+	opacity: 0.55;
+}
+.gui-scheduled-item-err {
+	font-size: 11px;
+	color: #e85a5a;
+	max-width: 200px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-scheduled-item-ops {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.gui-cron-toggle {
+	position: relative;
+	display: inline-flex;
+	cursor: pointer;
+}
+.gui-cron-toggle input {
+	position: absolute;
+	opacity: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	cursor: pointer;
+}
+.gui-cron-toggle-track {
+	width: 34px;
+	height: 19px;
+	border-radius: 999px;
+	background: rgba(128, 128, 128, 0.3);
+	transition: background 0.15s ease;
+	position: relative;
+}
+.gui-cron-toggle-track::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 15px;
+	height: 15px;
+	border-radius: 50%;
+	background: #fff;
+	transition: transform 0.15s ease;
+}
+.gui-cron-toggle input:checked + .gui-cron-toggle-track {
+	background: var(--color-accent, #7aa2ff);
+}
+.gui-cron-toggle input:checked + .gui-cron-toggle-track::after {
+	transform: translateX(15px);
+}
+.gui-cron-dialog {
+	width: min(520px, calc(100vw - 80px));
+}
+.gui-cron-form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+}
+.gui-cron-weekdays {
+	display: flex;
+	gap: 6px;
+}
+.gui-cron-weekday {
+	flex: 1;
+	padding: 5px 0;
+	border: 1px solid rgba(128, 128, 128, 0.3);
+	border-radius: 7px;
+	background: transparent;
+	color: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+.gui-cron-weekday--on {
+	border-color: var(--color-accent, #7aa2ff);
+	background: rgba(122, 162, 255, 0.16);
+	color: #7aa2ff;
+}
+.gui-cron-expr {
+	font-family: var(--gui-font-mono, ui-monospace, monospace);
+}
+.gui-cron-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+/* ── Scheduled tasks v2 (openchamber parity: workspaces + detail) ── */
+.gui-scheduled-body {
+	display: grid;
+	grid-template-columns: 260px minmax(0, 1fr);
+	gap: 12px;
+	flex: 1;
+	min-height: 0;
+}
+.gui-scheduled-ws {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-right: 4px;
+}
+.gui-scheduled-ws-block {
+	border: 1px solid rgba(128, 128, 128, 0.18);
+	border-radius: 10px;
+	overflow: hidden;
+	background: rgba(128, 128, 128, 0.04);
+}
+.gui-scheduled-ws-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: calc(7px * var(--gui-density, 1)) calc(10px * var(--gui-density, 1));
+	font-weight: 600;
+	background: rgba(128, 128, 128, 0.08);
+}
+.gui-scheduled-ws-count {
+	font-size: 11px;
+	font-weight: 500;
+	opacity: 0.6;
+	background: rgba(128, 128, 128, 0.15);
+	border-radius: 999px;
+	padding: 0 7px;
+}
+.gui-scheduled-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: calc(8px * var(--gui-density, 1)) calc(10px * var(--gui-density, 1));
+	border: none;
+	border-top: 1px solid rgba(128, 128, 128, 0.1);
+	background: transparent;
+	color: inherit;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+}
+.gui-scheduled-row:hover {
+	background: rgba(128, 128, 128, 0.09);
+}
+.gui-scheduled-row--active {
+	background: rgba(122, 162, 255, 0.14);
+	color: #7aa2ff;
+}
+.gui-scheduled-row-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: rgba(128, 128, 128, 0.5);
+	flex-shrink: 0;
+}
+.gui-scheduled-row--active .gui-scheduled-row-dot {
+	background: #7aa2ff;
+}
+.gui-scheduled-detail {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px 20px;
+	border: 1px solid rgba(128, 128, 128, 0.18);
+	border-radius: 12px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-scheduled-detail-title {
+	font-size: 22px;
+	font-weight: 700;
+	margin: 0;
+}
+.gui-scheduled-detail-sched {
+	font-size: var(--ui-font-size-sm);
+	opacity: 0.7;
+}
+.gui-scheduled-detail-status {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.gui-scheduled-detail-status-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: var(--ui-font-size-sm);
+}
+.gui-scheduled-detail-status-key {
+	opacity: 0.55;
+	font-size: 12.5px;
+	white-space: nowrap;
+}
+.gui-scheduled-detail-status-val {
+	font-variant-numeric: tabular-nums;
+}
+.gui-scheduled-detail-enabled {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size-sm);
+}
+.gui-scheduled-detail-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.gui-scheduled-detail-prompt-text {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.6;
+	opacity: 0.9;
+	white-space: pre-wrap;
+}
+.gui-scheduled-detail-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: auto;
+}
+.gui-scheduled-run-now {
+	background: rgba(122, 162, 255, 0.18);
+	color: #7aa2ff;
+	border: 1px solid rgba(122, 162, 255, 0.35);
+	/* Accent-tinted hover (brighten the tint) — .gui-btn:hover would
+	 * override these overrides with surface-raised gray. */
+	transition: background 140ms ease-out, border-color 140ms ease-out;
+}
+.gui-scheduled-run-now:hover:not(:disabled) {
+	background: rgba(122, 162, 255, 0.3);
+	border-color: rgba(122, 162, 255, 0.55);
+}
+.gui-scheduled-del {
+	background: rgba(232, 90, 90, 0.12);
+	color: #e85a5a;
+	border: 1px solid rgba(232, 90, 90, 0.3);
+	transition: background 140ms ease-out, border-color 140ms ease-out;
+}
+.gui-scheduled-del:hover:not(:disabled) {
+	background: rgba(232, 90, 90, 0.22);
+	border-color: rgba(232, 90, 90, 0.5);
+}
+.gui-scheduled-detail-empty {
+	min-height: 100%;
+}
+.gui-cron-dialog {
+	width: min(720px, calc(100vw - 80px));
+	max-height: min(680px, calc(100vh - 80px));
+	display: flex;
+	flex-direction: column;
+}
+.gui-cron-form-scroll {
+	overflow-y: auto;
+	overflow-x: hidden;
+	min-height: 0;
+}
+.gui-cron-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px 18px 4px;
+}
+.gui-cron-form-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px 20px;
+	align-items: start;
+}
+.gui-cron-form-col {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+}
+.gui-cron-form-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 12px 18px;
+	border-top: 1px solid rgba(128, 128, 128, 0.15);
+	flex-shrink: 0;
+}
+.gui-cron-enabled {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+}
+.gui-cron-enabled input {
+	accent-color: var(--color-accent, #7aa2ff);
+	width: 15px;
+	height: 15px;
+}
+.gui-cron-time-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+
+.gui-cron-add-time {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: none;
+	border: 1px dashed rgba(128, 128, 128, 0.4);
+	border-radius: 7px;
+	padding: 4px 9px;
+	font-size: 12.5px;
+	color: var(--color-accent, #7aa2ff);
+	cursor: pointer;
+}
+.gui-cron-preview-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 4px;
+	font-size: 12.5px;
+	font-variant-numeric: tabular-nums;
+}
+.gui-cron-examples {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 4px;
+}
+.gui-cron-example {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: none;
+	border: 1px solid rgba(128, 128, 128, 0.2);
+	border-radius: 7px;
+	padding: 4px 8px;
+	font-size: var(--ui-font-size-xs);
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-cron-example:hover {
+	border-color: rgba(122, 162, 255, 0.5);
+	background: rgba(122, 162, 255, 0.08);
+}
+.gui-cron-example code {
+	font-family: var(--gui-font-mono, ui-monospace, monospace);
+	color: var(--color-accent, #7aa2ff);
+	flex-shrink: 0;
+}
+.gui-cron-example span {
+	opacity: 0.65;
+}
+/* Calendar (openchamber one-off parity) */
+.gui-calendar {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid rgba(128, 128, 128, 0.2);
+	border-radius: 10px;
+	padding: 8px;
+	background: rgba(128, 128, 128, 0.03);
+}
+.gui-calendar-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.gui-calendar-month {
+	font-size: 13.5px;
+	font-weight: 600;
+}
+.gui-calendar-nav {
+	background: none;
+	border: none;
+	color: inherit;
+	opacity: 0.6;
+	cursor: pointer;
+	padding: 3px;
+	border-radius: 6px;
+	display: inline-flex;
+}
+.gui-calendar-nav:hover {
+	opacity: 1;
+	background: rgba(128, 128, 128, 0.12);
+}
+.gui-calendar-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+.gui-calendar-dow {
+	font-size: 11px;
+	opacity: 0.5;
+	text-align: center;
+	padding: 3px 0;
+}
+.gui-calendar-day {
+	aspect-ratio: 1;
+	border: none;
+	background: none;
+	color: inherit;
+	font-size: 12.5px;
+	border-radius: 50%;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.gui-calendar-day:hover {
+	background: rgba(128, 128, 128, 0.14);
+}
+.gui-calendar-day--out {
+	opacity: 0.3;
+}
+.gui-calendar-day--today {
+	border: 1px solid rgba(122, 162, 255, 0.5);
+}
+.gui-calendar-day--sel {
+	background: var(--color-accent, #7aa2ff);
+	color: #0b0d12;
+	font-weight: 700;
+}
+.gui-calendar-foot {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+.gui-calendar-foot .gui-btn {
+	font-size: var(--ui-font-size-xs);
+	padding: 3px 9px;
+}
+@media (max-width: 1100px) {
+	.gui-cron-form-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Floating calendar field + popup (openchamber date-picker parity) */
+.gui-calendar-wrap {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+.gui-calendar-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: calc(7px * var(--gui-density, 1)) calc(10px * var(--gui-density, 1));
+	background: var(--color-surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-calendar-field:hover {
+	border-color: var(--color-accent);
+}
+.gui-calendar-field-text {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-variant-numeric: tabular-nums;
+}
+.gui-calendar-pop,
+.gui-cwd-pop {
+	width: min(300px, calc(100vw - 40px));
+	padding: 8px;
+}
+.gui-calendar-pop .gui-calendar {
+	border: none;
+	background: none;
+	padding: 0;
+}
+/* cwd picker popup */
+.gui-cwd-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 6px;
+	max-height: 220px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-cwd-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 6px 8px;
+	background: none;
+	border: none;
+	border-radius: 7px;
+	color: inherit;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+}
+.gui-cwd-item:hover {
+	background: var(--color-surface-raised);
+}
+.gui-cwd-item--active {
+	background: rgba(122, 162, 255, 0.14);
+	color: var(--color-accent);
+}
+.gui-cwd-empty {
+	padding: 8px;
+	font-size: 12.5px;
+	opacity: 0.55;
+}
+/* Morphicon-style icon motion (openchamber parity): refresh spins on
+ * hover, play nudges, delete leans — subtle, one-off, no layout shift. */
+.gui-tool-btn .oc-icon-spin,
+.gui-btn .oc-icon-spin {
+	transition: transform 0.35s var(--spring);
+}
+.gui-tool-btn:hover .oc-icon-spin,
+.gui-btn:hover .oc-icon-spin {
+	transform: rotate(180deg);
+}
+.gui-tool-btn:hover .oc-icon-nudge,
+.gui-btn:hover .oc-icon-nudge {
+	transform: translateX(1px);
+}
+
+/* Task-delete confirm (session disposition) */
+.gui-cron-delete-dialog {
+	width: min(440px, calc(100vw - 80px));
+	/* The base .gui-dialog fixes height:min(420px,80vh) — a small confirm
+	 * box must size to its content instead of leaving dead space. */
+	height: auto;
+}
+.gui-cron-delete {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px 18px;
+}
+.gui-cron-delete-desc {
+	margin: 0;
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+}
+.gui-cron-delete-sessions {
+	margin: 0;
+	font-size: 12.5px;
+	opacity: 0.6;
+}
+.gui-cron-delete-opts {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.gui-cron-delete-opt {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	padding: 8px 10px;
+	border: 1px solid rgba(128, 128, 128, 0.22);
+	border-radius: 9px;
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+}
+.gui-cron-delete-opt:hover {
+	border-color: var(--color-accent);
+	background: rgba(122, 162, 255, 0.06);
+}
+.gui-cron-delete-opt input {
+	margin-top: 3px;
+	accent-color: var(--color-accent, #7aa2ff);
+}
+.gui-cron-delete-opt span {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.gui-cron-delete-opt small {
+	opacity: 0.55;
+	font-size: var(--ui-font-size-xs);
+}
+
+/* Collection previews honor the widget tone (dark/blue/light) exactly
+ * like the board cards — no forced recolor. */
+.gui-board-home-preview-cell[data-tone="dark"] {
+	background: #1b1b20;
+	border-color: #2c2c34;
+	--color-text: #e8e8ea;
+	--color-text-secondary: #9c9ca4;
+	--color-text-muted: #9c9ca4;
+	--color-surface-sunken: #232329;
+	--color-surface-hover: #2a2a31;
+	--border: #2c2c34;
+}
+.gui-board-home-preview-cell[data-tone="blue"] {
+	background: color-mix(in oklab, #b8d8f5 88%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #8fb8e0 60%, var(--border));
+	--color-text: #1c2b3a;
+	--color-text-secondary: #40566c;
+	--color-text-muted: #40566c;
+	--color-surface-sunken: color-mix(in oklab, #cfe4f7 70%, transparent);
+	--color-surface-hover: color-mix(in oklab, #b8d8f5 60%, #fff 40%);
+	--border: color-mix(in oklab, #8fb8e0 55%, transparent);
+}
+.gui-board-home-preview-cell[data-tone="light"] {
+	background: color-mix(in oklab, #f5f5f2 90%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, #d8d8d2 70%, var(--border));
+	--color-text: #1f1f24;
+	--color-text-secondary: #6b6b74;
+	--color-text-muted: #6b6b74;
+	--color-surface-sunken: color-mix(in oklab, #ecece8 80%, transparent);
+	--color-surface-hover: #e2e2de;
+	--border: color-mix(in oklab, #d8d8d2 60%, transparent);
+}
+
+/* ── widget card faces (kimi immersive parity) ──────────────────────────
+ * Every widget carries its own card surface — dark widgets get the deep
+ * gradient shell (like the vinyl player), light ones a soft frosted
+ * panel, blue ones the accent tint. No outer border anywhere: the
+ * widget surface IS the card. */
+.gui-widget-clock,
+.gui-widget-ticker {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border-radius: 12px;
+	padding: 14px;
+	overflow: hidden;
+	background:
+		radial-gradient(120% 90% at 18% 0%, rgba(145, 212, 255, 0.08), rgba(145, 212, 255, 0) 46%),
+		linear-gradient(158deg, #1e2026 0%, #16171c 45%, #101114 100%);
+	color: #f4f4f5;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.gui-widget-metric,
+.gui-widget-todo,
+.gui-widget-slider,
+.gui-widget-calc,
+.gui-widget-gallery {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border-radius: 12px;
+	padding: 14px;
+	overflow: hidden;
+	background: linear-gradient(160deg, #fbfbf9 0%, #f3f3f0 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		inset 0 0 0 1px rgba(0, 0, 0, 0.05),
+		0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.gui-widget-pomodoro {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border-radius: 12px;
+	padding: 14px;
+	overflow: hidden;
+	background:
+		radial-gradient(120% 90% at 82% 0%, rgba(77, 163, 255, 0.18), rgba(77, 163, 255, 0) 50%),
+		linear-gradient(160deg, #eaf3fc 0%, #dcebf8 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		inset 0 0 0 1px rgba(77, 163, 255, 0.14);
+}
+/* Dark card faces must not collide with the light theme tokens. */
+.gui-widget-clock,
+.gui-widget-ticker {
+	--color-text: #eef0f3;
+	--color-text-secondary: #9ca2ad;
+	--color-text-muted: #8a919e;
+	--color-text-faint: #6e7480;
+}
+
+/* ── music player widget (kimi 黑胶唱片机 port — real archive.org audio) ── */
+.gui-widget-music {
+	position: relative;
+	display: grid;
+	grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+	gap: clamp(10px, 1.4vw, 20px);
+	width: 100%;
+	height: 100%;
+	padding: clamp(10px, 1.4vw, 16px);
+	border-radius: 18px;
+	background:
+		radial-gradient(120% 90% at 18% 0%, rgba(145, 212, 255, 0.1), rgba(145, 212, 255, 0) 46%),
+		linear-gradient(158deg, #1c1e23 0%, #141519 40%, #0e0f12 100%);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+	color: #f4f4f5;
+	font-size: var(--ui-font-size-sm);
+	overflow: hidden;
+}
+.gui-widget-music::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	border-radius: inherit;
+	z-index: 0;
+	background:
+		url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>") repeat,
+		radial-gradient(140% 60% at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%);
+}
+.gui-widget-music > * { position: relative; z-index: 1; }
+
+.gui-widget-music-left {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: clamp(8px, 1.2vh, 14px);
+}
+.gui-widget-music-screen {
+	flex: 1;
+	min-height: 0;
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	padding: clamp(10px, 1.4vw, 18px);
+	border-radius: 14px;
+	background:
+		radial-gradient(90% 70% at 50% 34%, rgba(145, 212, 255, 0.1), rgba(145, 212, 255, 0) 60%),
+		radial-gradient(120% 120% at 50% 120%, #16171b 0%, #050506 60%),
+		#000;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.gui-widget-music-screen::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 3;
+	border-radius: inherit;
+	background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.024) 0 1px, transparent 1px 3px);
+}
+.gui-widget-music-screen > * { position: relative; z-index: 1; }
+.gui-widget-music-scrtop {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11px;
+	letter-spacing: 0.14em;
+	color: rgba(255, 255, 255, 0.34);
+	text-transform: uppercase;
+}
+.gui-widget-music-dots { display: flex; gap: 7px; }
+.gui-widget-music-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, 0.18); }
+.gui-widget-music-dots i.gui-widget-music-live { background: #91d4ff; box-shadow: 0 0 8px #91d4ff; }
+.gui-widget-music-viz {
+	flex: 1;
+	width: 100%;
+	min-height: 36px;
+	display: block;
+	margin: 10px 0 8px;
+}
+.gui-widget-music-seekrow {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+.gui-widget-music-t {
+	flex: none;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.34);
+	font-variant-numeric: tabular-nums;
+	min-width: 30px;
+}
+.gui-widget-music-t--dur { text-align: right; }
+.gui-widget-music-seek {
+	flex: 1;
+	height: 4px;
+	border-radius: 99px;
+	background: rgba(255, 255, 255, 0.1);
+	position: relative;
+	cursor: pointer;
+}
+.gui-widget-music-seek::before { content: ""; position: absolute; inset: -8px 0; }
+.gui-widget-music-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 0%;
+	border-radius: 99px;
+	background: linear-gradient(90deg, rgba(145, 212, 255, 0.55), #91d4ff);
+}
+.gui-widget-music-fill::after {
+	content: "";
+	position: absolute;
+	right: -4px;
+	top: 50%;
+	width: 9px;
+	height: 9px;
+	margin-top: -4.5px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 6px rgba(145, 212, 255, 0.5);
+}
+.gui-widget-music-scrfoot {
+	flex: none;
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px;
+}
+.gui-widget-music-np { min-width: 0; }
+.gui-widget-music-eyebrow {
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: #91d4ff;
+	opacity: 0.75;
+	margin-bottom: 6px;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+}
+.gui-widget-music-eyebrow::before {
+	content: "";
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: #91d4ff;
+	box-shadow: 0 0 6px #91d4ff;
+}
+.gui-widget-music-title {
+	margin: 0;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: #fff;
+	font-size: 22px;
+	line-height: 1.08;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-widget-music-by {
+	margin-top: 6px;
+	color: rgba(255, 255, 255, 0.55);
+	font-size: var(--ui-font-size-xs);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-widget-music-badges { flex: none; display: flex; gap: 8px; padding-bottom: 2px; }
+.gui-widget-music-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 9px;
+	border-radius: 8px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
+	color: rgba(255, 255, 255, 0.55);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.gui-widget-music-badge svg { width: 13px; height: 13px; }
+.gui-widget-music-badge--acc {
+	color: #91d4ff;
+	box-shadow: inset 0 1px 0 rgba(145, 212, 255, 0.3), inset 0 0 0 1px rgba(145, 212, 255, 0.45);
+	background: linear-gradient(160deg, rgba(145, 212, 255, 0.22), rgba(145, 212, 255, 0.08));
+}
+.gui-widget-music-transport {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: clamp(8px, 1.2vw, 14px);
+	padding: 2px 4px;
+}
+.gui-widget-music-tbtn {
+	flex: none;
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	background: linear-gradient(160deg, #2a2c32, #17181c);
+	color: #f4f4f5;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 14px -6px rgba(0, 0, 0, 0.8);
+	transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.gui-widget-music-tbtn:hover { background: linear-gradient(160deg, #34363d, #202127); }
+.gui-widget-music-tbtn:active { transform: scale(0.94); }
+.gui-widget-music-tbtn--side { width: 38px; height: 38px; }
+.gui-widget-music-tbtn--play {
+	width: 52px;
+	height: 52px;
+	color: #0d0e11;
+	background: radial-gradient(circle at 40% 30%, #ffffff, #d3d6db 78%);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+.gui-widget-music-tbtn--play:hover { background: radial-gradient(circle at 40% 30%, #ffffff, #e6e8eb 80%); }
+.gui-widget-music-tbtn svg { width: 18px; height: 18px; }
+.gui-widget-music-tbtn--play svg { width: 22px; height: 22px; }
+.gui-widget-music-volwrap {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	justify-content: flex-end;
+}
+.gui-widget-music-vbtn {
+	flex: none;
+	width: 28px;
+	height: 28px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.55);
+	cursor: pointer;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	transition: background 0.15s, color 0.15s;
+}
+.gui-widget-music-vbtn:hover { background: rgba(255, 255, 255, 0.07); color: #f4f4f5; }
+.gui-widget-music-vbtn svg { width: 17px; height: 17px; }
+.gui-widget-music-vbtn--muted { color: rgba(255, 255, 255, 0.34); }
+.gui-widget-music-vol {
+	-webkit-appearance: none;
+	appearance: none;
+	width: min(140px, 44%);
+	height: 5px;
+	border-radius: 99px;
+	background: linear-gradient(90deg, #f4f4f5 0 var(--vp, 80%), rgba(255, 255, 255, 0.14) var(--vp, 80%));
+	cursor: pointer;
+	outline: none;
+}
+.gui-widget-music-vol::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.gui-widget-music-vol::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border: 0;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.gui-widget-music-right {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: clamp(8px, 1.2vh, 12px);
+}
+.gui-widget-music-qhead {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.gui-widget-music-qhead h2 {
+	margin: 0;
+	font-size: 19px;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: #fff;
+}
+.gui-widget-music-menu {
+	flex: none;
+	width: 34px;
+	height: 34px;
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+	background: linear-gradient(160deg, #2a2c32, #17181c);
+	color: rgba(255, 255, 255, 0.55);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+	display: grid;
+	place-items: center;
+	transition: background 0.15s;
+}
+.gui-widget-music-menu:hover { background: linear-gradient(160deg, #34363d, #202127); }
+.gui-widget-music-menu svg { width: 15px; height: 15px; }
+.gui-widget-music-qload {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 11px;
+	border-radius: 12px;
+	cursor: pointer;
+	font: inherit;
+	font-weight: 600;
+	color: #f4f4f5;
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+	border: 0;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+	transition: background 0.15s;
+}
+.gui-widget-music-qload:hover { background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)); }
+.gui-widget-music-qload svg { width: 14px; height: 14px; }
+.gui-widget-music-qlist {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	padding-right: 4px;
+}
+.gui-widget-music-qlist::-webkit-scrollbar { width: 4px; }
+.gui-widget-music-qlist::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 99px; }
+.gui-widget-music-qlist::-webkit-scrollbar-track { background: transparent; }
+.gui-widget-music-qitem {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	width: 100%;
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+	padding: 10px;
+	border-radius: 14px;
+	border: 0;
+	color: inherit;
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+	transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.gui-widget-music-qitem:hover { background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)); transform: translateY(-1px); }
+.gui-widget-music-qitem--on {
+	background: linear-gradient(160deg, rgba(145, 212, 255, 0.16), rgba(145, 212, 255, 0.04));
+	box-shadow: inset 0 1px 0 rgba(145, 212, 255, 0.2), inset 0 0 0 1px rgba(145, 212, 255, 0.45);
+}
+.gui-widget-music-qidx {
+	flex: none;
+	width: 18px;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.34);
+	font-variant-numeric: tabular-nums;
+}
+.gui-widget-music-qitem--on .gui-widget-music-qidx { color: #91d4ff; }
+.gui-widget-music-qthumb {
+	flex: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
+	object-fit: cover;
+	background: linear-gradient(135deg, #2a2c30, #404247);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.6);
+}
+.gui-widget-music-qmeta { flex: 1; min-width: 0; }
+.gui-widget-music-qmeta b {
+	display: block;
+	font-size: var(--ui-font-size);
+	font-weight: 650;
+	color: #fff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-widget-music-qmeta span {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 3px;
+	font-size: var(--ui-font-size-xs);
+	color: rgba(255, 255, 255, 0.55);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-widget-music-qmeta span svg { flex: none; width: 11px; height: 11px; opacity: 0.7; }
+.gui-widget-music-qtag {
+	flex: none;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.34);
+}
+.gui-widget-music-qitem--on .gui-widget-music-qtag { color: #91d4ff; }
+.gui-widget-music-qitem--on .gui-widget-music-eq { display: inline-flex; }
+.gui-widget-music-eq {
+	display: none;
+	align-items: flex-end;
+	gap: 2px;
+	height: 12px;
+	margin-right: 5px;
+	vertical-align: -1px;
+}
+.gui-widget-music-eq i {
+	width: 2.5px;
+	background: #91d4ff;
+	border-radius: 1px;
+	animation: gui-music-eq 0.9s ease-in-out infinite;
+}
+.gui-widget-music-eq i:nth-child(2) { animation-delay: 0.2s; }
+.gui-widget-music-eq i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes gui-music-eq {
+	0%, 100% { height: 3px; }
+	50% { height: 12px; }
+}
+
+/* ── char texture (shared FX/stocks background) ──────────────────────── */
+.gui-char-tex {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	overflow: hidden;
+}
+.gui-char-tex-row {
+	white-space: nowrap;
+	line-height: 1;
+	height: 13px;
+}
+.gui-char-tex {
+	display: block;
+}
+.gui-char-tex i {
+	display: inline-block;
+	width: 8px;
+	height: 13px;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11px;
+	line-height: 13px;
+	text-align: center;
+	font-style: normal;
+}
+.gui-char-tex-1 { color: rgba(0, 0, 0, 0.09); }
+.gui-char-tex-2 { color: rgba(0, 0, 0, 0.15); }
+.gui-char-tex-3 { color: rgba(0, 0, 0, 0.22); }
+.gui-char-tex-4 { color: rgba(0, 0, 0, 0.32); }
+.gui-char-tex-k { color: rgba(255, 255, 255, 0.78); font-weight: 600; }
+
+/* ── fx live rates (kimi 实时汇率 port) ───────────────────────────────── */
+.gui-fx,
+.gui-stocks {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	padding: clamp(10px, 1.8vw, 16px);
+	/* Footer hugs the card bottom (kimi parity — no dead band). */
+	padding-bottom: 8px;
+	border-radius: 12px;
+	overflow: hidden;
+	background:
+		radial-gradient(90% 85% at 6% 0%, rgba(255, 255, 255, 0.07), transparent 54%),
+		radial-gradient(130% 120% at 82% 0%, #17242f 0%, #070a0e 62%, #000000 100%);
+	color: #ffffff;
+}
+.gui-fx::after,
+.gui-stocks::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	opacity: 0.45;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.04'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.gui-fx > *,
+.gui-stocks > * {
+	position: relative;
+	z-index: 1;
+}
+.gui-fx-tex,
+.gui-stocks-tex {
+	position: absolute !important;
+	inset: 0;
+	z-index: 0 !important;
+}
+.gui-fx-head,
+.gui-stocks-head {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 5px;
+}
+.gui-fx-chip,
+.gui-stocks-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	width: max-content;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.55);
+	line-height: 1;
+	white-space: nowrap;
+}
+.gui-fx-chip::before,
+.gui-stocks-chip::before {
+	content: "";
+	width: 14px;
+	height: 8px;
+	background: #007cff;
+	border-radius: 2px;
+}
+.gui-fx-title,
+.gui-stocks-title {
+	font-size: 22px;
+	font-weight: 800;
+	line-height: 1.08;
+	letter-spacing: -0.02em;
+	color: #ffffff;
+}
+.gui-fx-rows,
+.gui-stocks-rows {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	margin-top: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	font-variant-numeric: tabular-nums;
+}
+.gui-fx-row,
+.gui-stocks-row {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	grid-template-areas: "ident spark rate";
+	align-items: center;
+	column-gap: 12px;
+	padding: 6px 2px;
+}
+.gui-fx-row + .gui-fx-row,
+.gui-stocks-row + .gui-stocks-row {
+	border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.gui-fx-row > *,
+.gui-stocks-row > * {
+	position: relative;
+	z-index: 1;
+}
+.gui-fx-ident,
+.gui-stocks-ident {
+	grid-area: ident;
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+.gui-fx-pair {
+	font-size: 13.5px;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+.gui-fx-unit {
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.34);
+	white-space: nowrap;
+	flex: none;
+}
+.gui-fx-spark {
+	grid-area: spark;
+	width: clamp(60px, 12vw, 110px);
+	height: 20px;
+	opacity: 0.9;
+}
+.gui-fx-spark svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+.gui-fx-spark polyline {
+	stroke: var(--gui-fx-dir, #91d4ff);
+	fill: none;
+}
+.gui-fx-spark-fill {
+	fill: var(--gui-fx-dir, #91d4ff);
+	opacity: 0.09;
+}
+.gui-fx-row--up {
+	--gui-fx-dir: #00a1ff;
+}
+.gui-fx-row--down {
+	--gui-fx-dir: #9ba1a6;
+}
+.gui-fx-ratebox {
+	grid-area: rate;
+	text-align: right;
+	white-space: nowrap;
+}
+.gui-fx-rate {
+	font-size: 18px;
+	font-weight: 800;
+	line-height: 1.15;
+	letter-spacing: -0.01em;
+}
+.gui-fx-delta {
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	font-weight: 600;
+}
+.gui-fx-delta--up {
+	color: #00a1ff;
+}
+.gui-fx-delta--down {
+	color: #9ba1a6;
+}
+.gui-fx-delta--flat {
+	color: rgba(255, 255, 255, 0.34);
+}
+.gui-fx-foot,
+.gui-stocks-foot {
+	flex: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 6px;
+}
+.gui-fx-status,
+.gui-stocks-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.55);
+}
+.gui-fx-status span:last-child,
+.gui-stocks-status span:last-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-fx-dot,
+.gui-stocks-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #91d4ff;
+	flex: none;
+}
+.gui-fx-dot--err,
+.gui-stocks-dot--err {
+	background: rgba(255, 255, 255, 0.35);
+}
+.gui-fx-dot--loading,
+.gui-stocks-dot--loading {
+	background: #91d4ff;
+	animation: gui-fx-blink 1s infinite;
+}
+@keyframes gui-fx-blink {
+	50% { opacity: 0.3; }
+}
+.gui-fx-signoff,
+.gui-stocks-signoff {
+	flex: none;
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	letter-spacing: 0.14em;
+	color: rgba(0, 46, 88, 0.5);
+	white-space: nowrap;
+}
+
+/* ── stocks (kimi A股盯盘 port) ──────────────────────────────────────── */
+.gui-stocks-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+.gui-stocks-name {
+	font-size: 13.5px;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-stocks-code {
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.34);
+}
+.gui-stocks-spark {
+	grid-area: spark;
+	width: clamp(60px, 12vw, 110px);
+	height: 24px;
+}
+.gui-stocks-spark svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+.gui-stocks-spark polyline {
+	stroke: var(--gui-stocks-dir, #91d4ff);
+	fill: none;
+}
+.gui-stocks-spark-fill {
+	fill: var(--gui-stocks-dir, #91d4ff);
+	opacity: 0.09;
+}
+.gui-stocks-spark--empty {
+	display: inline-flex;
+	align-items: center;
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.34);
+	white-space: nowrap;
+}
+.gui-stocks-row--up {
+	--gui-stocks-dir: #00a1ff;
+}
+.gui-stocks-row--down {
+	--gui-stocks-dir: #9ba1a6;
+}
+.gui-stocks-pricebox {
+	grid-area: rate;
+	text-align: right;
+	white-space: nowrap;
+}
+.gui-stocks-price {
+	font-size: 18px;
+	font-weight: 800;
+	line-height: 1.15;
+	letter-spacing: -0.01em;
+}
+.gui-stocks-delta {
+	font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 10px;
+	font-weight: 600;
+}
+.gui-stocks-row--up .gui-stocks-delta {
+	color: #00a1ff;
+}
+.gui-stocks-row--down .gui-stocks-delta {
+	color: #9ba1a6;
+}
+
+/* ── history widget (kimi 历史上的今天 port — real 60s API data) ──────── */
+.gui-widget-history {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	min-height: 180px;
+	overflow: hidden;
+	background: #121212;
+	color: #ffffff;
+	font-family: Menlo, "SF Mono", "DejaVu Sans Mono", "PingFang SC", monospace;
+}
+.gui-widget-history-tex {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+.gui-widget-history-head {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 14px;
+	white-space: nowrap;
+	margin: 0;
+	font-size: 22px;
+	font-weight: 700;
+	left: 24px;
+	top: 24px;
+}
+.gui-widget-history-logo {
+	image-rendering: pixelated;
+	display: block;
+	flex: none;
+	height: 20px;
+	width: auto;
+}
+.gui-widget-history-headline {
+	display: grid;
+	grid-template-columns: clamp(72px, 20%, 88px) minmax(0, 1fr);
+	column-gap: 12px;
+	align-items: stretch;
+	width: 100%;
+	white-space: nowrap;
+}
+.gui-widget-history-sub {
+	grid-column: 2;
+	align-self: center;
+	font-weight: 700;
+	line-height: 1.2;
+	letter-spacing: 0.06em;
+}
+.gui-widget-history-date {
+	grid-column: 1;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.5em;
+	padding-right: 12px;
+	border-right: 1px solid rgba(255, 255, 255, 0.14);
+	color: #00a1ff;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.gui-widget-history-date::before {
+	content: "";
+	width: 0.55em;
+	height: 0.55em;
+	background: #00a1ff;
+	flex: none;
+	animation: gui-history-pulse 1.2s steps(2, end) infinite;
+}
+@keyframes gui-history-pulse {
+	50% { opacity: 0.15; }
+}
+.gui-widget-history-panel {
+	position: absolute;
+	z-index: 2;
+	left: 24px;
+	right: 24px;
+	/* Static zone between the header (24 + ~66 + 16) and the footer
+	 * (24 + ~34): the event list scrolls inside the card. */
+	top: 106px;
+	bottom: 58px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-widget-history-ev {
+	display: grid;
+	grid-template-columns: clamp(72px, 20%, 88px) minmax(0, 1fr);
+	column-gap: 12px;
+	align-items: stretch;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.7;
+	color: rgba(255, 255, 255, 0.88);
+	margin-bottom: 1em;
+}
+.gui-widget-history-ev:last-child { margin-bottom: 0; }
+.gui-widget-history-yr {
+	display: block;
+	align-self: stretch;
+	padding-right: 12px;
+	border-right: 1px solid rgba(255, 255, 255, 0.14);
+	color: #00a1ff;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.08em;
+	text-align: right;
+}
+.gui-widget-history-copy { min-width: 0; }
+.gui-widget-history-copy a {
+	color: #91d4ff;
+	font-weight: 700;
+	text-decoration: none;
+}
+.gui-widget-history-copy a:hover { text-decoration: underline; }
+.gui-widget-history-state {
+	text-align: center;
+	padding: 1.5em 0;
+	font-size: var(--ui-font-size-xs);
+	color: #8e9390;
+}
+.gui-widget-history-foot {
+	position: absolute;
+	z-index: 2;
+	left: 24px;
+	right: 24px;
+	bottom: 24px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.gui-widget-history-src {
+	flex: 1;
+	min-width: 0;
+	color: #8e9390;
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-widget-history-go {
+	flex: none;
+	border: 0;
+	border-radius: 0;
+	background: #002e58;
+	color: #ffffff;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	letter-spacing: 0.18em;
+	padding: 8px 14px;
+	cursor: pointer;
+}
+.gui-widget-history-go:hover { background: #002e58; filter: brightness(1.4); }
+.gui-widget-history-go[disabled] { color: #8e9390; cursor: wait; }
+
+/* ── video card (kimi PROMO REEL parity: dot-matrix cover, corner
+ * brackets, REC HUD, big play, custom transport bar, Bilibili embed) ─── */
+.gui-widget-video {
+	position: relative;
+	background: #000;
+	border-radius: 10px;
+	overflow: hidden;
+	box-shadow: inset 0 0 0 1px rgba(145, 212, 255, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.gui-widget-video::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	opacity: 0.2;
+	pointer-events: none;
+	background-image: radial-gradient(rgba(255, 255, 255, 0.85) 1px, transparent 1.5px);
+	background-size: 12px 12px;
+	-webkit-mask: radial-gradient(circle at 50% 46%, #000 0 34%, transparent 62%);
+	mask: radial-gradient(circle at 50% 46%, #000 0 34%, transparent 62%);
+}
+.gui-widget-video--cover {
+	cursor: pointer;
+}
+.gui-widget-video-el {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	object-fit: cover;
+	background: #000;
+	z-index: 1;
+}
+.gui-widget-video-corner {
+	position: absolute;
+	width: 16px;
+	height: 16px;
+	z-index: 3;
+	pointer-events: none;
+	opacity: 0.9;
+}
+.gui-widget-video-corner.c-tl { left: 10px; top: 10px; border-left: 2px solid #91d4ff; border-top: 2px solid #91d4ff; }
+.gui-widget-video-corner.c-tr { right: 10px; top: 10px; border-right: 2px solid #91d4ff; border-top: 2px solid #91d4ff; }
+.gui-widget-video-corner.c-bl { left: 10px; bottom: 10px; border-left: 2px solid #91d4ff; border-bottom: 2px solid #91d4ff; }
+.gui-widget-video-corner.c-br { right: 10px; bottom: 10px; border-right: 2px solid #91d4ff; border-bottom: 2px solid #91d4ff; }
+.gui-widget-video-hud {
+	position: absolute;
+	left: 16px;
+	top: 14px;
+	z-index: 3;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-family: var(--gui-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 10px;
+	letter-spacing: 0.14em;
+	color: rgba(255, 255, 255, 0.78);
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+	pointer-events: none;
+}
+.gui-widget-video-hud i {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+	background: #91d4ff;
+}
+.gui-widget-video-hud.on i {
+	background: #ff5257;
+	animation: gui-video-rec 1.4s ease-in-out infinite;
+}
+@keyframes gui-video-rec {
+	50% { opacity: 0.25; }
+}
+.gui-widget-video-dur {
+	position: absolute;
+	right: 16px;
+	top: 13px;
+	z-index: 3;
+	font-family: var(--gui-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 10px;
+	letter-spacing: 0.1em;
+	color: rgba(255, 255, 255, 0.6);
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+	font-variant-numeric: tabular-nums;
+	pointer-events: none;
+}
+.gui-widget-video-bigplay {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 4;
+	width: 62px;
+	height: 62px;
+	border-radius: 999px;
+	border: 0;
+	cursor: pointer;
+	background: linear-gradient(172deg, #ffffff 0%, #eff8ff 100%);
+	color: #0066d6;
+	font-size: 20px;
+	line-height: 1;
+	display: grid;
+	place-items: center;
+	padding-left: 4px;
+	box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5), 0 0 0 8px rgba(145, 212, 255, 0.16);
+	transition: transform 0.18s cubic-bezier(0.3, 1.5, 0.5, 1), opacity 0.2s;
+}
+.gui-widget-video-bigplay:hover {
+	transform: translate(-50%, -50%) scale(1.07);
+}
+.gui-widget-video-cover-mid {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+.gui-widget-video-cover-bottom {
+	position: absolute;
+	left: 20px;
+	right: 20px;
+	bottom: 18px;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	pointer-events: none;
+}
+.gui-widget-video-cover-title {
+	font-size: 16px;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+	color: #ffffff;
+	text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.gui-widget-video-cover-sub {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--gui-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	color: rgba(255, 255, 255, 0.62);
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.gui-widget-video-bar {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 4;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 24px 14px 10px;
+	background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.74) 74%);
+	opacity: 0;
+	transition: opacity 0.22s;
+}
+.gui-widget-video:hover .gui-widget-video-bar,
+.gui-widget-video:not(.playing) .gui-widget-video-bar {
+	opacity: 1;
+}
+.gui-widget-video-bar-btn {
+	flex: none;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	border: 0;
+	cursor: pointer;
+	background: rgba(255, 255, 255, 0.14);
+	color: #fff;
+	font-size: var(--ui-font-size-xs);
+	display: grid;
+	place-items: center;
+	transition: background 0.15s;
+}
+.gui-widget-video-bar-btn:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+.gui-widget-video-seek {
+	flex: 1;
+	min-width: 0;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	cursor: pointer;
+}
+.gui-widget-video-track {
+	position: relative;
+	width: 100%;
+	height: 4px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.22);
+}
+.gui-widget-video-fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #91d4ff 0%, #007cff 100%);
+	width: 0;
+}
+.gui-widget-video-knob {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	width: 10px;
+	height: 10px;
+	border-radius: 999px;
+	background: #fff;
+	transform: translate(-50%, -50%);
+	box-shadow: 0 0 0 4px rgba(145, 212, 255, 0.22);
+}
+.gui-widget-video-tc {
+	flex: none;
+	font-family: var(--gui-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 10.5px;
+	color: rgba(255, 255, 255, 0.82);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+
+/* Collection-card removal: fade + sink before the board leaves the list
+ * (grid item height collapse is not animatable — scale/opacity read as
+ * a clean dismissal). */
+.gui-board-home-card--removing {
+	animation: gui-board-home-out 360ms ease forwards;
+	pointer-events: none;
+}
+@keyframes gui-board-home-out {
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.94) translateY(-8px);
+	}
+}
+.gui-board-remove-desc {
+	margin: 0 0 6px;
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-board-remove-hint {
+	margin: 0 0 16px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+/* ---- In-board AI generation dialog ---- */
+.gui-board-gen-dialog {
+	width: 460px;
+	max-width: 90vw;
+}
+.gui-board-gen {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.gui-board-gen-desc {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+.gui-board-gen-input {
+	width: 100%;
+	resize: vertical;
+	min-height: 84px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 80%, var(--color-text) 4%);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	font-family: inherit;
+	outline: none;
+}
+.gui-board-gen-input:focus {
+	border-color: var(--color-accent);
+}
+.gui-board-gen-input::placeholder {
+	color: var(--color-text-muted);
+}
+.gui-board-gen-error {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-danger, #e5484d);
+}
+.gui-btn--busy {
+	opacity: 0.75;
+	pointer-events: none;
+}
+
+/* ---- Onboarding primer (first-launch overlay, ZCode-style two-pane) ---- */
+.gui-onboarding-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 200;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--bg) 55%, transparent);
+	backdrop-filter: blur(24px) saturate(150%);
+	-webkit-backdrop-filter: blur(24px) saturate(150%);
+	/* Two-phase enter (useTwoPhaseEnter): the heaviest glass in the app —
+	 * the mount frame must stay at opacity 0 so the backdrop composites
+	 * before gui-fade-in (gui-implementation.md §6.5). */
+	opacity: 0;
+}
+
+.gui-onboarding-backdrop--entered {
+	opacity: 1;
+	animation: gui-fade-in 160ms ease;
+}
+/* Exit: fade the frost out (closing state, kept mounted for the duration). */
+.gui-onboarding-backdrop--closing {
+	animation: gui-onboarding-backdrop-out 200ms ease-in forwards;
+}
+@keyframes gui-onboarding-backdrop-out {
+	to {
+		opacity: 0;
+	}
+}
+.gui-onboarding-card.gui-onboarding-card--closing {
+	animation: gui-obo-card-out 200ms var(--spring) forwards;
+}
+@keyframes gui-obo-card-out {
+	to {
+		opacity: 0;
+		transform: translateY(10px) scale(0.98);
+	}
+}
+/* Motion-off / reduced-motion: exit snaps instead of animating (the
+ * mount timer in OnboardingOverlay still un-mounts after the duration). */
+.gui-motion-off .gui-onboarding-backdrop--closing,
+.gui-motion-off .gui-onboarding-card.gui-onboarding-card--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-onboarding-backdrop--closing,
+	.gui-onboarding-card.gui-onboarding-card--closing {
+		animation: none;
+	}
+}
+.gui-onboarding-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	/* Centered floating (2026-08-11): never full-window — the frosted
+	 * backdrop must stay clearly visible on all four sides (羽化弥散磨砂).
+	 * ~100px min margin each side; capped so large displays don't blow up. */
+	width: min(1000px, calc(100vw - 160px));
+	height: min(620px, calc(100vh - 160px));
+	border: 1px solid var(--border);
+	border-radius: 20px;
+	background: var(--bg-raised);
+	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+	overflow: hidden;
+	animation: gui-obo-card-in 240ms var(--spring) both;
+}
+.gui-onboarding-topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px 0;
+}
+.gui-onboarding-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	color: var(--fg-muted);
+}
+.gui-onboarding-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 9px;
+	color: var(--fg-faint);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-onboarding-close:hover {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+.gui-onboarding-grid {
+	flex: 1;
+	min-height: 0;
+	/* NOT scrollable: the pane must keep dots + actions pinned. Step
+	 * content scrolls inside gui-obo-step-body instead. */
+	overflow: hidden;
+	display: grid;
+	grid-template-columns: 1.25fr 1fr;
+	grid-template-rows: minmax(0, 1fr);
+	gap: 20px;
+	padding: 22px 24px 24px;
+}
+.gui-onboarding-pane {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	min-height: 0;
+	overflow: hidden;
+	animation: gui-obo-pane-in 200ms var(--spring) both;
+}
+/* Step content (provider config, personalization, feature lists) scrolls
+ * here; dots and the back/next actions stay pinned to the card bottom. */
+.gui-obo-step-body {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+	margin-top: 12px;
+	padding-right: 4px;
+	/* Flex column so step components that opt in (provider form) can fill
+	 * the available height instead of overflowing the scroll container. */
+	display: flex;
+	flex-direction: column;
+}
+.gui-onboarding-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 60px;
+	height: 60px;
+	border-radius: 18px;
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+	color: var(--accent);
+}
+.gui-onboarding-title {
+	margin-top: 16px;
+	font-size: 20px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	color: var(--fg);
+	/* Element-level morph (spring): heading + body translate/scale in on
+	 * step change, matching the right preview's content language. */
+	animation: gui-obo-content-in 420ms var(--spring) 60ms both;
+}
+.gui-onboarding-body {
+	margin-top: 8px;
+	font-size: 13.5px;
+	line-height: 1.7;
+	color: var(--fg-muted);
+	max-width: 34em;
+	animation: gui-obo-content-in 420ms var(--spring) 150ms both;
+}
+.gui-onboarding-dots {
+	display: flex;
+	gap: 5px;
+	margin-top: auto;
+	padding-top: 22px;
+}
+.gui-onboarding-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 20%, transparent);
+	transition: background 160ms ease, width 160ms ease;
+}
+.gui-onboarding-dot--active {
+	width: 16px;
+	background: var(--accent);
+	/* Soft breathing pulse on the current-step dot (right-pane parity). */
+	animation: gui-obo-active-pulse 2.6s ease-in-out infinite;
+}
+.gui-onboarding-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	margin-top: 14px;
+}
+.gui-onboarding-next {
+	flex: 1;
+	justify-content: space-between;
+	padding: 8px 16px;
+}
+
+/* Announcement (what's-new) panel — same frosted shell as the primer,
+ * but a narrower reading column with release-note typography: version
+ * entries separated by hairlines, category headings as chips. */
+.gui-announcement-card {
+	/* Reading column: narrower than the two-pane primer, tall enough for
+	 * a release entry + the new-version badge. */
+	width: min(680px, calc(100vw - 160px));
+	height: min(560px, calc(100vh - 160px));
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--accent) 5%, transparent), transparent 180px),
+		var(--bg-raised);
+}
+.gui-announcement-title {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 24px 10px;
+	font-size: 18px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+	color: var(--fg);
+	border-bottom: 1px solid var(--border);
+	animation: gui-obo-item-in 320ms var(--spring) 60ms both;
+}
+.gui-announcement-latest {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-weight: 550;
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+	animation: gui-obo-active-pulse 2.6s ease-in-out 1.6s infinite;
+}
+.gui-announcement-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	margin-top: 4px;
+	padding: 12px 24px 4px;
+	font-size: 13.5px;
+	line-height: 1.7;
+	color: var(--fg-muted);
+	animation: gui-obo-item-in 320ms var(--spring) 140ms both;
+}
+.gui-announcement-body :is(h1, h2, h3) {
+	margin: 14px 0 6px;
+	color: var(--fg);
+}
+/* Version entry headers (## [0.4.1] - date): accent-tinted, hairline
+ * separator above every entry after the first. */
+.gui-announcement-body h2 {
+	margin-top: 20px;
+	padding-top: 14px;
+	border-top: 1px solid var(--border);
+	font-size: 15px;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: var(--accent);
+}
+.gui-announcement-body h2:first-child {
+	margin-top: 4px;
+	padding-top: 0;
+	border-top: none;
+}
+/* Category headings (### Added / Changed / Fixed): small chip labels. */
+.gui-announcement-body h3 {
+	display: inline-block;
+	margin: 14px 0 6px;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--fg-muted);
+}
+.gui-announcement-body ul {
+	margin: 4px 0 10px;
+	padding-left: 0;
+	list-style: none;
+}
+.gui-announcement-body li {
+	position: relative;
+	margin: 5px 0;
+	padding-left: 18px;
+}
+.gui-announcement-body li::before {
+	content: "";
+	position: absolute;
+	left: 2px;
+	top: 0.68em;
+	width: 5px;
+	height: 5px;
+	border-radius: 999px;
+	background: var(--accent);
+	opacity: 0.65;
+}
+.gui-announcement-body code {
+	padding: 1px 5px;
+	border-radius: 4px;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+}
+.gui-announcement-body a {
+	color: var(--accent);
+}
+.gui-btn-ghost {
+	background: transparent;
+}
+.gui-onboarding-visual {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 296px;
+	border-radius: 16px;
+	border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+	background:
+		radial-gradient(120% 100% at 85% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 62%),
+		linear-gradient(165deg, color-mix(in oklab, var(--color-surface) 60%, transparent), color-mix(in oklab, var(--bg) 55%, transparent));
+	overflow: hidden;
+}
+
+/* Cross-fading demo slots: all step demos stay mounted and stack on the
+ * same point; the active one fades/scales in, the rest sit hidden — the
+ * container keeps its radius while the content morphs in place. */
+.gui-obo-demo {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	min-height: 296px;
+}
+
+/* The morph window: one frame for every step — traffic-light title bar
+ * and sidebar persist; the content pane remounts per step so its
+ * entrance animations replay. Sidebar active row transfers with a
+ * background transition. */
+.gui-obo-morph-window {
+	display: flex;
+	flex-direction: column;
+	width: 280px;
+	height: 190px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+	overflow: hidden;
+}
+
+.gui-obo-window-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--border);
+	flex: none;
+}
+
+.gui-obo-window-light {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+.gui-obo-window-light--close {
+	background: #ff5f57;
+}
+
+.gui-obo-window-light--min {
+	background: #febc2e;
+}
+
+.gui-obo-window-light--max {
+	background: #28c840;
+}
+
+.gui-obo-morph-body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-obo-morph-side {
+	width: 66px;
+	flex: none;
+	padding: 12px 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	border-right: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+
+.gui-obo-morph-side-item {
+	height: 16px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+	transition: background 260ms var(--spring);
+}
+
+.gui-obo-morph-side-item--active {
+	background: color-mix(in oklab, var(--accent) 72%, transparent);
+	animation: gui-obo-active-pulse 2.6s ease-in-out 1.6s infinite;
+}
+
+.gui-obo-morph-content {
+	flex: 1;
+	min-width: 0;
+	padding: 12px 14px;
+	display: flex;
+	animation: gui-obo-content-in 420ms var(--spring) both;
+}
+
+@keyframes gui-obo-content-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.gui-obo-morph-fill {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	justify-content: center;
+}
+
+.gui-obo-morph-fill--chat {
+	justify-content: center;
+}
+
+.gui-obo-morph-fill .gui-obo-bubble--assistant {
+	width: 62%;
+}
+
+/* ---- Onboarding demos: purely visual CSS loops ---- */
+.gui-obo-window {
+	display: flex;
+	width: 280px;
+	height: 190px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+	overflow: hidden;
+}
+.gui-obo-sidebar {
+	width: 66px;
+	padding: 12px 9px;
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	border-right: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+.gui-obo-sidebar-item {
+	height: 16px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-sidebar-item:nth-child(1) {
+	animation-delay: 260ms;
+}
+.gui-obo-sidebar-item:nth-child(2) {
+	animation-delay: 520ms;
+}
+.gui-obo-sidebar-item:nth-child(3) {
+	animation-delay: 780ms;
+}
+.gui-obo-sidebar-item--active {
+	background: color-mix(in oklab, var(--accent) 72%, transparent);
+	animation:
+		gui-obo-item-in 380ms var(--spring) 520ms both,
+		gui-obo-active-pulse 2.6s ease-in-out 1.6s infinite;
+}
+.gui-obo-main {
+	flex: 1;
+	padding: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.gui-obo-main-bar {
+	height: 10px;
+	width: 68%;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+	animation: gui-obo-item-in 380ms var(--spring) 380ms both;
+}
+.gui-obo-main-lines {
+	flex: 1;
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	animation: gui-obo-item-in 380ms var(--spring) 640ms both;
+}
+.gui-obo-chat {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 11px;
+	/* Same box as the step-0 window mock — all three demo panes render at
+	 * an identical size so switching steps never resizes the visual. */
+	width: 280px;
+	height: 190px;
+	padding: 16px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+.gui-obo-bubble {
+	height: 34px;
+	border-radius: 11px;
+	animation: gui-obo-bubble-in 360ms var(--spring) both;
+}
+.gui-obo-bubble--user {
+	width: 62%;
+	align-self: flex-end;
+	background: color-mix(in oklab, var(--accent) 78%, transparent);
+	animation-delay: 320ms;
+}
+.gui-obo-bubble--assistant {
+	width: 78%;
+	align-self: flex-start;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+	animation-delay: 600ms;
+}
+.gui-obo-typing {
+	display: flex;
+	gap: 4px;
+	align-self: flex-start;
+	padding: 7px 11px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	animation: gui-obo-bubble-in 360ms var(--spring) 880ms both;
+}
+.gui-obo-typing span {
+	width: 5px;
+	height: 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 45%, transparent);
+	animation: gui-obo-typing-dot 1.2s ease-in-out infinite;
+}
+.gui-obo-typing span:nth-child(2) {
+	animation-delay: 180ms;
+}
+.gui-obo-typing span:nth-child(3) {
+	animation-delay: 360ms;
+}
+.gui-obo-settings {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 12px;
+	/* Same box as the step-0 window mock (see .gui-obo-chat). */
+	width: 280px;
+	height: 190px;
+	padding: 16px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+.gui-obo-setting-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-setting-row:nth-child(1) {
+	animation-delay: 260ms;
+}
+.gui-obo-setting-row:nth-child(2) {
+	animation-delay: 520ms;
+}
+.gui-obo-setting-row:nth-child(3) {
+	animation-delay: 780ms;
+}
+.gui-obo-setting-label {
+	width: 58%;
+	height: 12px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 16%, transparent);
+}
+.gui-obo-toggle {
+	position: relative;
+	flex: none;
+	width: 34px;
+	height: 18px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 22%, transparent);
+}
+.gui-obo-toggle::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+	transition: transform 180ms ease;
+}
+.gui-obo-toggle--on {
+	background: color-mix(in oklab, var(--accent) 80%, transparent);
+}
+.gui-obo-toggle--on::after {
+	transform: translateX(16px);
+}
+.gui-obo-setting-row:nth-child(2) .gui-obo-toggle {
+	animation: gui-obo-toggle-bg 2.8s ease-in-out 1.4s infinite;
+}
+.gui-obo-setting-row:nth-child(2) .gui-obo-toggle::after {
+	animation: gui-obo-toggle-cycle 2.8s ease-in-out 1.4s infinite;
+}
+.gui-obo-setting-expand {
+	height: 42px;
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	animation: gui-obo-expand-in 520ms var(--spring) 960ms both;
+}
+
+@keyframes gui-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+@keyframes gui-obo-card-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96) translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+@keyframes gui-obo-pane-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@keyframes gui-obo-item-in {
+	from {
+		opacity: 0;
+		transform: translateX(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+@keyframes gui-obo-active-pulse {
+	0%,
+	100% {
+		background: color-mix(in oklab, var(--accent) 72%, transparent);
+	}
+	50% {
+		background: color-mix(in oklab, var(--accent) 45%, transparent);
+	}
+}
+@keyframes gui-obo-bubble-in {
+	from {
+		opacity: 0;
+		transform: scale(0.88) translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+@keyframes gui-obo-typing-dot {
+	0%,
+	100% {
+		opacity: 0.25;
+		transform: translateY(0);
+	}
+	50% {
+		opacity: 1;
+		transform: translateY(-2px);
+	}
+}
+@keyframes gui-obo-toggle-bg {
+	0%,
+	30% {
+		background: color-mix(in oklab, var(--fg) 22%, transparent);
+	}
+	45%,
+	100% {
+		background: color-mix(in oklab, var(--accent) 80%, transparent);
+	}
+}
+@keyframes gui-obo-toggle-cycle {
+	0%,
+	30% {
+		transform: translateX(0);
+	}
+	45%,
+	100% {
+		transform: translateX(16px);
+	}
+}
+@keyframes gui-obo-expand-in {
+	from {
+		opacity: 0;
+		transform: scaleY(0.4);
+		transform-origin: top;
+	}
+	to {
+		opacity: 1;
+		transform: scaleY(1);
+		transform-origin: top;
+	}
+}
+
+/* ---- Onboarding step 4: provider setup (interactive) ---- */
+.gui-obo-provider-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	margin-top: 14px;
+	/* Fill the step body so the tab row stays pinned and only the provider
+	 * list scrolls — previously the fixed 248px list + fixed floors made the
+	 * whole step scroll, pushing the builtin/custom tabs out of view. */
+	flex: 1;
+	min-height: 0;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-tabs {
+	display: flex;
+	gap: 4px;
+	padding: 3px;
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+}
+.gui-obo-tab {
+	flex: 1;
+	padding: 5px 10px;
+	border-radius: 8px;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--fg-muted);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-obo-tab--active {
+	background: color-mix(in oklab, var(--accent) 16%, transparent);
+	color: var(--accent);
+}
+.gui-obo-builtin {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	/* Fills the form; the list below absorbs all remaining height (no fixed
+	 * floor — a taller step body shows more providers, a shorter one keeps
+	 * the list scrollable with the tabs pinned above). */
+	flex: 1;
+	min-height: 0;
+}
+.gui-obo-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--fg) 3%, transparent);
+	color: var(--fg-faint);
+}
+.gui-obo-search .gui-input {
+	border: none;
+	background: transparent;
+	padding: 4px 2px;
+	font-size: 12.5px;
+}
+.gui-obo-search .gui-input:focus {
+	outline: none;
+	box-shadow: none;
+}
+/* Builtin provider list: embedded scroll with top/bottom fade (羽化) —
+ * never pushes the step content past the card bounds. */
+.gui-obo-provider-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	/* No top fade mask: the -webkit-mask-image on a scrolling container
+	 * made every row's text unreadable on some builds (names read as
+	 * empty progress bars). */
+	padding: 2px 2px 4px;
+}
+.gui-obo-provider-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 2px;
+}
+.gui-obo-provider-name {
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-obo-provider-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-success);
+}
+.gui-obo-provider-login {
+	flex: none;
+	padding: 3px 12px;
+	font-size: var(--ui-font-size-xs);
+}
+.gui-obo-provider-empty {
+	padding: 10px 2px;
+	font-size: 12.5px;
+	color: var(--fg-faint);
+}
+.gui-obo-import-label {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+.gui-obo-inline-edit {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+	background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+.gui-obo-custom {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	/* Same adaptive height as the builtin tab; content taller than the
+	 * step body scrolls inside instead of pushing the tabs away. */
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-right: 2px;
+}
+.gui-obo-quick {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.gui-obo-quick-label {
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}
+.gui-obo-quick-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.gui-obo-quick-chip {
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+	transition:
+		border-color 120ms ease,
+		color 120ms ease,
+		background 120ms ease;
+}
+.gui-obo-quick-chip:hover {
+	border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.gui-obo-provider-form .gui-input {
+	font-size: var(--ui-font-size-sm);
+	padding: 6px 10px;
+}
+.gui-obo-provider-error {
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-error);
+}
+.gui-obo-provider-submit {
+	align-self: flex-start;
+	margin-top: 2px;
+	padding: 7px 18px;
+}
+.gui-obo-test {
+	padding: 7px 14px;
+	font-size: 12.5px;
+}
+.gui-obo-test-ok {
+	display: inline-flex;
+	align-items: center;
+	align-self: center;
+	gap: 4px;
+	font-size: 12.5px;
+	color: var(--color-success);
+}
+.gui-obo-provider-added {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin-top: 16px;
+	padding: 18px 14px;
+	border-radius: 14px;
+	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
+	background: color-mix(in oklab, var(--color-success) 8%, transparent);
+	text-align: center;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-provider-added-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-success) 16%, transparent);
+	color: var(--color-success);
+}
+.gui-obo-provider-added-title {
+	font-size: 15px;
+	font-weight: 650;
+	color: var(--fg);
+}
+.gui-obo-provider-added-body {
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--fg-muted);
+}
+.gui-obo-login {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	border-radius: 12px;
+	border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+	background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+.gui-obo-login-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+	color: var(--fg);
+}
+.gui-obo-login-url {
+	font-size: var(--ui-font-size-xs);
+	color: var(--accent);
+	word-break: break-all;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	flex: 1;
+	min-width: 0;
+}
+.gui-obo-login-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.gui-obo-login-copy {
+	flex: none;
+	font-size: 11.5px;
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+	border-radius: 7px;
+	padding: 3px 9px;
+}
+.gui-obo-login-copy:hover {
+	background: color-mix(in oklab, var(--accent) 20%, transparent);
+}
+.gui-obo-login-msg {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--fg-muted);
+}
+.gui-obo-quick {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.gui-obo-quick-label {
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}
+.gui-obo-quick-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.gui-obo-quick-chip {
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+	transition:
+		border-color 120ms ease,
+		color 120ms ease,
+		background 120ms ease;
+}
+.gui-obo-quick-chip:hover {
+	border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.gui-obo-provider-form .gui-input {
+	font-size: var(--ui-font-size-sm);
+	padding: 6px 10px;
+}
+.gui-obo-provider-error {
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-error);
+}
+.gui-obo-provider-submit {
+	align-self: flex-start;
+	margin-top: 2px;
+	padding: 7px 18px;
+}
+.gui-obo-provider-added {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin-top: 16px;
+	padding: 18px 14px;
+	border-radius: 14px;
+	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
+	background: color-mix(in oklab, var(--color-success) 8%, transparent);
+	text-align: center;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-provider-added-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-success) 16%, transparent);
+	color: var(--color-success);
+}
+.gui-obo-provider-added-title {
+	font-size: 15px;
+	font-weight: 650;
+	color: var(--fg);
+}
+.gui-obo-provider-added-body {
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--fg-muted);
+}
+/* Right-pane demo: app ↔ model connection (step 4). */
+.gui-obo-connect {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-connect-node {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 58px;
+	height: 58px;
+	border-radius: 18px;
+}
+.gui-obo-connect-node--app {
+	background: color-mix(in oklab, var(--accent) 82%, transparent);
+	color: #fff;
+	box-shadow: 0 10px 26px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.gui-obo-connect-node--model {
+	border: 1px dashed color-mix(in oklab, var(--accent) 55%, transparent);
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+	color: var(--accent);
+}
+.gui-obo-connect-line {
+	position: relative;
+	width: 96px;
+	height: 3px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+	overflow: hidden;
+}
+.gui-obo-connect-pulse {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, var(--accent), transparent);
+	animation: gui-obo-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes gui-obo-pulse {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(100%);
+	}
+}
+
+/* ---- Settings inputs: shared search/text style (FilePane parity:
+ * bordered, rounded, accent focus ring). ---- */
+.gui-settings-input {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--bg) 60%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	transition: border-color 120ms ease;
+}
+.gui-settings-input::placeholder {
+	color: var(--color-text-faint);
+}
+.gui-settings-input:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+/* ---- History viewer (settings → 数据与统计 → 历史会话) ---- */
+.gui-history-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 7px 9px;
+	border-radius: var(--radius-sm);
+	transition: background 120ms ease;
+}
+.gui-history-item:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+.gui-history-item--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+.gui-history-msg {
+	padding: 8px 10px;
+	border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+.gui-history-msg:last-child {
+	border-bottom: none;
+}
+.gui-history-role {
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.gui-history-role--user {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+}
+.gui-history-role--assistant {
+	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
+	color: var(--color-text-muted);
+}
+
+/* Right-pane session swap (reactbits AnimatedContent concept, project
+ * motion language): keyed on the selected session id, so switching
+ * sessions remounts the content and replays a quick fade + 4px rise
+ * (160ms fade standard + shared ease-out curve; no static transform is
+ * animated so nothing can jump). */
+.gui-history-swap {
+	animation: gui-history-swap-in 180ms var(--spring);
+}
+@keyframes gui-history-swap-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* Destructive button (browser data clear-all, zcode 警示按钮 parity). */
+.gui-btn--danger {
+	border-color: color-mix(in oklab, #e5484d 55%, transparent);
+	background: color-mix(in oklab, #e5484d 18%, transparent);
+	color: #ff6b70;
+}
+
+.gui-btn--danger:hover {
+	background: color-mix(in oklab, #e5484d 30%, transparent);
+	color: #ff8a8e;
+}
+
+/* ── Instant CSS tooltip ([data-tip="…"]) ──────────────────────────────
+ * Replaces the ~1s-delayed native title on icon buttons: fades in on
+ * hover with no delay, never intercepts clicks. Background inverts the
+ * theme (text color as bg, bg color as fg) so it works in both schemes.
+ * Opt-in: add data-tip to a button; keep aria-label for screen readers. */
+[data-tip] {
+	position: relative;
+}
+[data-tip]::after {
+	content: attr(data-tip);
+	position: absolute;
+	bottom: calc(100% + 7px);
+	left: 50%;
+	transform: translateX(-50%) translateY(2px);
+	padding: 4px 8px;
+	border-radius: 7px;
+	background: var(--color-text);
+	color: var(--color-bg);
+	font-size: 11.5px;
+	font-weight: 500;
+	line-height: 1.3;
+	white-space: nowrap;
+	pointer-events: none;
+	opacity: 0;
+	transition:
+		opacity 100ms ease-out,
+		transform 160ms var(--spring);
+	z-index: 60;
+}
+[data-tip]:hover::after {
+	opacity: 1;
+	transform: translateX(-50%) translateY(0);
+}
+
+/* Output-style preview (settings → 聊天 → 聊天预览): the container is
+ * scoped to [data-output-style] so the --tr-* variable overrides show
+ * the exact transcript typography for the selected preset. */
+.gui-chat-preview-style {
+	margin-top: 6px;
+	padding: 12px 16px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface-raised);
+	overflow: hidden;
+	/* Body text mirrors the transcript: --tr-font-size (消息字号), not the
+	 * shell font — the preview has no .tr-root ancestor to inherit it. */
+	font-size: var(--tr-font-size, 14px);
+}
+.gui-chat-preview-style .tr-md {
+	max-height: 260px;
+	overflow-y: auto;
+}
+.gui-chat-preview-desc {
+	margin-top: 1px;
+	margin-bottom: 6px;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}
+
+/* Inline preview blocks (settings → 聊天): each preview sits directly
+ * under the option it illustrates instead of a bottom-of-tab dump. */
+.gui-chat-preview-inline {
+	margin: 6px 0 4px 24px;
+}
+.gui-chat-preview-inline .gui-chat-preview-mermaid {
+	margin-top: 2px;
+}
+
+/* Typewriter demo (settings → 聊天 → 输出风格预览): looping reveal of
+ * the sample paragraph under the selected preset's typography. The caret
+ * is solid while typing (live) and blinks once idle — mirroring the
+ * transcript's streaming caret (tr-caret-blink is inlined with
+ * desktop-web's transcript.css). */
+.gui-typewriter {
+	min-height: 2.2em;
+}
+.gui-typewriter p {
+	margin: 0;
+}
+.gui-typewriter-caret {
+	display: inline-block;
+	width: 7px;
+	height: 1.05em;
+	margin-left: 2px;
+	vertical-align: text-bottom;
+	border-radius: 1px;
+	background: var(--color-text, #c9d1d9);
+	animation: tr-caret-blink 1s step-end infinite;
+}
+.gui-typewriter--live .gui-typewriter-caret {
+	animation: none;
+}
+.gui-chat-preview-static {
+	margin-top: 10px;
+	border-top: 1px dashed var(--border);
+	padding-top: 10px;
+}
+
+/* ── 逐字输出动效 (typing effect presets, settings → 聊天) ──
+ * typewriter (default) — char reveal + streaming caret (transcript hook)
+ * rainbow — whole-paragraph red→violet gradient (鸿蒙 shaderStyle style)
+ * dazzle — each revealed grapheme gets its own hue (golden-angle walk)
+ * shimmer — revealed text sweeps a shine band (reactbits shiny-text)
+ * glitch — RGB-split text-shadow + stepped jitter
+ * flip — 3D card-scan wave (clip-path + rotateX, perspective)
+ * ink — ink-wash: blur + opacity breathing like ink bleeding on paper
+ *
+ * ANIMATION HOST RULE (critical): the transcript re-renders the block's
+ * innerHTML every reveal frame (~33ms), replacing every <p> element —
+ * any CSS animation attached to <p> restarts each frame and freezes at
+ * ~0% progress (measured: background-position stuck at 200%, currentTime
+ * 0.0). So all *continuous* animations run on the .tr-md root (a stable
+ * element React holds across re-renders) and drive registered custom
+ * properties (@property, inherits:true) that the <p>s read via var().
+ * Effect classes sit on the STREAMING block's .tr-md root only
+ * (Markdown.tsx); finished/historic messages always render plain text. */
+
+/* Registered animation drivers — animated on the stable .tr-md root,
+ * inherited by the rebuilt <p> elements. */
+@property --gui-shimmer-pos {
+	syntax: "<percentage>";
+	inherits: true;
+	initial-value: 200%;
+}
+
+/* shimmer (流光): shine band sweeps revealed prose. The animation drives
+ * --gui-shimmer-pos on the stable root; each rebuilt <p> picks up the
+ * current position via var(). */
+.tr-md.gui-chat-effect-shimmer {
+	animation: gui-shimmer-drive 2.6s linear infinite;
+}
+.tr-md.gui-chat-effect-shimmer p {
+	background-image: linear-gradient(
+		110deg,
+		var(--color-text) 0%,
+		var(--color-text) 35%,
+		color-mix(in oklab, var(--color-accent) 85%, white) 50%,
+		var(--color-text) 65%,
+		var(--color-text) 100%
+	);
+	background-size: 200% auto;
+	background-position: var(--gui-shimmer-pos) 0;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+@keyframes gui-shimmer-drive {
+	from {
+		--gui-shimmer-pos: 200%;
+	}
+	to {
+		--gui-shimmer-pos: -200%;
+	}
+}
+
+/* burst (烟花) / glitch (故障) / flip (3D 翻牌) / ink (水墨) &
+ * typewriter fade: PER-GRAPHEME, implemented by the transcript's
+ * tail-window DOM pass (reveal.ts TAIL_RENDERERS) — newest graphemes
+ * carry a position-computed style that settles to plain text as they
+ * leave the window. No CSS here (per-frame rebuilt spans would freeze
+ * any animation anyway); the effect class on the root is a marker
+ * (typewriter's class scopes the streaming caret, see transcript.css). */
+
+/* Motion off: kill the decorative animations, restore plain text. */
+.gui-motion-off .tr-md.gui-chat-effect-shimmer {
+	animation: none;
+}
+.gui-motion-off .tr-md.gui-chat-effect-shimmer p {
+	background-image: none;
+	-webkit-text-fill-color: initial;
+}
+
+/* ── AgentControls: selected-subagent kill/revive/chat (TUI Agent Hub parity) ── */
+
+.gui-agent-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 6px 2px 2px;
+	padding: 8px;
+	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.2));
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--color-bg-inset, rgba(128, 128, 128, 0.12)) 60%, transparent);
+}
+
+.gui-agent-controls-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-agent-controls-close {
+	flex: none;
+	margin-left: auto;
+	width: 18px;
+	height: 18px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-text-faint, inherit);
+	font-size: var(--ui-font-size);
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-agent-controls-close:hover {
+	background: rgba(128, 128, 128, 0.18);
+	color: var(--color-text, inherit);
+}
+
+.gui-agent-controls-row {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-agent-controls-btn {
+	padding: 3px 10px;
+	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.3));
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text, inherit);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.gui-agent-controls-btn:hover:not(:disabled) {
+	background: rgba(128, 128, 128, 0.14);
+}
+
+.gui-agent-controls-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gui-agent-controls-btn--danger {
+	border-color: color-mix(in srgb, var(--color-danger, #e05d5d) 45%, transparent);
+	color: var(--color-danger, #e05d5d);
+}
+
+.gui-agent-controls-btn--danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--color-danger, #e05d5d) 12%, transparent);
+}
+
+.gui-agent-controls-chat {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.gui-agent-controls-input {
+	flex: 1;
+	min-width: 0;
+	padding: 4px 8px;
+	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.3));
+	border-radius: 6px;
+	background: var(--color-bg-input, rgba(128, 128, 128, 0.1));
+	color: var(--color-text, inherit);
+	font-size: var(--ui-font-size-xs);
+	outline: none;
+}
+
+.gui-agent-controls-input:focus {
+	border-color: var(--color-accent, rgba(120, 160, 255, 0.7));
+}
+
+.gui-agent-controls-send {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--color-accent, rgba(120, 160, 255, 0.85));
+	color: #fff;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-agent-controls-send:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-agent-controls-error {
+	color: var(--color-danger, #e05d5d);
+	font-size: 11px;
+	overflow-wrap: anywhere;
+}
+

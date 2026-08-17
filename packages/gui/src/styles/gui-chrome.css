@@ -1,0 +1,873 @@
+/* ── Top bar ─────────────────────────────────────────────────────────── */
+
+.gui-topbar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 14px;
+	border-bottom: 1px solid var(--border);
+	background: var(--color-surface);
+}
+
+.gui-topbar-brand {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.gui-brand-mark {
+	display: inline-grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: var(--radius-md);
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+	font-weight: 700;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-topbar-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+}
+
+.gui-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 10px;
+	border-radius: var(--radius-full);
+	border: 1px solid var(--border);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+.gui-dot-open {
+	background: var(--color-ok);
+}
+
+.gui-dot-closed {
+	background: var(--color-danger);
+}
+
+.gui-work-orb {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 2px;
+}
+
+/* ── Error bar ────────────────────────────────────────────────────────
+ * Transient failure banner (session.open/send, stale sessions): a toast
+ * pinned over the shell top. The shell is a ROW flex, so an in-flow child
+ * would collapse into a vertical red strip on the LEFT edge — absolute
+ * keeps it a full-width bar above the panes. Auto-dismisses (app.tsx
+ * ERROR_BANNER_MS) and offers a manual × so a stale failure never sticks. */
+
+.gui-error-bar {
+	position: absolute;
+	top: 8px;
+	left: 14px;
+	right: 14px;
+	z-index: 150; /* above the header/pane popups, below modal backdrops */
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 6px 10px;
+	border-radius: var(--radius-md);
+	background: var(--color-danger-soft);
+	border: 1px solid var(--color-danger-bd);
+	font-size: var(--ui-font-size-xs);
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+	-webkit-app-region: no-drag;
+}
+
+.gui-error-bar-text {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.gui-error-bar-x {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	color: var(--color-danger);
+	opacity: 0.75;
+	cursor: pointer;
+}
+
+.gui-error-bar-x:hover {
+	opacity: 1;
+	background: color-mix(in oklab, var(--color-danger) 15%, transparent);
+}
+
+/* ── Nav rail (OpenChamber-style: icon+label items, content below) ──── */
+
+.gui-navrail {
+	width: 240px;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	border-right: 1px solid var(--border);
+	/* Transparent over the workspace glass layer (.gui-main). */
+	background: transparent;
+	min-height: 0;
+}
+
+.gui-navrail-top {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px;
+	flex-shrink: 0;
+}
+
+.gui-navrail-content {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.gui-navrail-bottom {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px;
+	flex-shrink: 0;
+	border-top: 1px solid var(--border);
+}
+
+.gui-navitem {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: var(--radius-md);
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	width: 100%;
+	text-align: left;
+}
+
+.gui-navitem:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-navitem--active {
+	background: var(--color-accent-soft);
+	border-color: var(--color-accent-bd);
+	color: var(--color-accent);
+}
+
+.gui-navitem-icon {
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+}
+
+.gui-navitem-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+
+/* ── Layout chrome (side/top switch) ────────────────────────────────── */
+
+.gui-layout-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-body--top {
+	flex-direction: column;
+}
+
+.gui-tabstrip {
+	/* Group/project tab row: transparent over the sidebar glass — no
+	 * container fill or hairline (the old --color-surface + bottom border
+	 * read as a bright band in light mode). The capsule flexes when the
+	 * pane narrows; the action cluster never shrinks. */
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* ── Main layout: sidebar + chat ─────────────────────────────────────── */
+
+.gui-main {
+	min-width: 0;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	position: relative;
+	/* One continuous glass layer for the whole workspace — same recipe as
+	 * .gui-settings-view: the sidebar, header, nav rail and details pane are
+	 * all transparent over it, so the chat card floats on a single material
+	 * (settings-parity; previously each pane carried its own scrim and the
+	 * corners around the rounded card showed raw vibrancy). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Performance: on the Windows/Linux TRANSPARENT frame this backdrop has
+ * nothing beneath it to blur (behind the scrim is the desktop, which
+ * Chromium does not sample) — the blur re-composites the whole workspace
+ * every frame for zero visual gain (GPU process burn on Windows). macOS
+ * keeps it: the vibrancy window's page blur layers over the system
+ * material. */
+[data-platform="win32"] .gui-main,
+[data-platform="linux"] .gui-main {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+.gui-sidebar {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	/* Transparent: the workspace glass layer (.gui-main) provides the
+	 * scrim, so the sidebar blends with the header and card surrounds. */
+	background: transparent;
+}
+
+.gui-sidebar-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 12px;
+}
+
+.gui-sidebar-title {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+}
+
+.gui-session-list {
+	list-style: none;
+	margin: 0;
+	padding: 0 8px 8px;
+	/* Scroll lives on the outer .flex-1 overflow-y-auto container (the
+	 * list's own overflow/flex here were dead — its parent is not a flex
+	 * container, so flex:1 never applied and the list never overflowed). */
+}
+
+.gui-session-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	text-align: left;
+	padding: 5px 10px 5px 14px;
+	/* ZCode row: ~36px tall (2×5 padding + 26 content) */
+	border-radius: var(--radius-md);
+	border: 1px solid transparent;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	position: relative;
+	transition: background 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gui-session-row::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 50%;
+	transform: translateY(-50%) scaleY(0);
+	width: 2px;
+	height: 60%;
+	border-radius: 2px;
+	background: var(--color-accent);
+	transition: transform 160ms ease-out;
+}
+
+/* Lifecycle status square (TUI session-list parity): a small color chip at
+ * the row's left edge — interrupted (warning) / complete (ok) / error /
+ * aborted / pending, or the user's manual color. Hidden when the status is
+ * unknown/unset (no fill), so only meaningful state reads as color. */
+.gui-session-status {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+	background: transparent;
+	margin-left: 2px;
+}
+
+.gui-session-row:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-session-row-active {
+	/* Stronger selected state than hover (openchamber: bg-primary/10 + accent). */
+	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised));
+	border-color: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.gui-session-row-active::before {
+	transform: translateY(-50%) scaleY(1);
+}
+
+.gui-session-row-active .gui-session-title {
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-session-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-session-time {
+	flex-shrink: 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+.gui-session-meta {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ZCode group section header: sentence-case pill badge, low contrast. */
+.gui-group-label {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 1px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	line-height: 1.6;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-accent) 13%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
+	/* openchamber-style sticky zone header: keeps the date group badge
+	 * visible while scrolling a long session list. The accent-tinted pill
+	 * is translucent on purpose — a solid fill would read as a wrong
+	 * patch over the frosted sidebar, and the blur lets rows pass through
+	 * exactly like the pane itself (zero color delta). */
+	position: sticky;
+	top: 4px;
+	z-index: 5;
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* Settings search match (SettingsView): active query marks the matching
+ * setting rows in the content area — accent wash + hairline, same palette
+ * language as the grouped-label badge above. */
+.gui-settings-match {
+	background: color-mix(in oklab, var(--color-accent) 13%, transparent) !important;
+	outline: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
+	outline-offset: 2px;
+	border-radius: 10px;
+}
+
+/* ── Details pane (right column, 300px) ────────────────────────────── */
+
+.gui-details {
+	width: 300px;
+	min-width: 240px;
+	border-left: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 10px 12px;
+	/* Transparent over the workspace glass layer (.gui-main). */
+	background: transparent;
+}
+
+.gui-details-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-details-title {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+	margin: 0;
+}
+
+.gui-details-meta {
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-details-meta-row {
+	display: flex;
+	gap: 8px;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-details-meta-row dt {
+	color: var(--color-text-faint);
+	min-width: 64px;
+}
+
+.gui-details-meta-row dd {
+	margin: 0;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Tree prefixes in the sidebar */
+.gui-tree-prefix {
+	color: var(--color-text-faint);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	white-space: pre;
+}
+
+/* ── File pane (workspace browser) ──────────────────────────────────── */
+
+.gui-filepane {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border-top: 1px solid var(--border);
+	padding-top: 8px;
+	height: 100%;
+	min-height: 0;
+}
+
+.gui-filepane-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.gui-filepane-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.gui-filepane-search {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xs);
+	color: var(--color-text-faint);
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-filepane-search:focus-within {
+	border-color: var(--color-accent);
+}
+
+.gui-filepane-search-icon {
+	flex-shrink: 0;
+}
+
+.gui-filepane-search input {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	width: 100%;
+	min-width: 0;
+	outline: none;
+}
+
+.gui-filepane-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	position: relative;
+}
+
+/* Left/right split (openchamber parity): tree on the left, preview on
+ * the right with a draggable vertical splitter. */
+.gui-filepane-body {
+	display: flex;
+	flex-direction: row;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	gap: 0;
+}
+
+.gui-filepane-splitter {
+	flex: none;
+	width: 5px;
+	margin: 0 -2px;
+	cursor: col-resize;
+	z-index: 1;
+	background: transparent;
+	border-radius: 3px;
+}
+
+.gui-filepane-splitter:hover {
+	background: var(--color-accent);
+	opacity: 0.5;
+}
+
+/* Virtual rows: fixed height (ROW_H=26 in FilePane.tsx) so the spacer
+ * math stays exact; indentation moves with per-row paddingLeft. */
+.gui-filepane-vrow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	padding: 4px 4px;
+	height: 26px;
+	box-sizing: border-box;
+	border-radius: var(--radius-xs);
+}
+
+.gui-filepane-vrow:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-filepane-selected {
+	background: var(--color-surface-raised);
+	outline: 1px solid var(--color-accent);
+}
+
+.gui-filepane-dir {
+	color: var(--color-accent);
+	font-weight: 500;
+}
+
+.gui-filepane-icon {
+	color: var(--color-text-faint);
+	flex-shrink: 0;
+}
+
+.gui-filepane-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-filepane-agents {
+	color: var(--color-warning);
+}
+
+.gui-filepane-empty {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	margin: 0;
+}
+
+.gui-filepane-dir-btn,
+.gui-filepane-file-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	height: 100%;
+	padding: 0 4px;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--radius-xs);
+}
+
+.gui-filepane-dir-btn:hover,
+.gui-filepane-file-btn:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-filepane-caret {
+	font-size: 9px;
+	line-height: 1;
+	width: 10px;
+	flex-shrink: 0;
+	transition: transform 0.12s ease;
+	color: var(--color-text-faint);
+}
+
+.gui-filepane-caret--closed {
+	transform: rotate(-90deg);
+}
+
+/* Working-dir breadcrumb (proma/openchamber toolbar parity). */
+.gui-filepane-path {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: none;
+	padding: 2px 10px 6px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	min-width: 0;
+}
+.gui-filepane-path-root {
+	flex: none;
+	color: var(--color-text-muted);
+	opacity: 0.8;
+}
+
+/* Recently modified (≤60s, proma recentlyModifiedPaths parity): a soft
+ * accent tint fades out over a minute so the user sees what just changed. */
+.gui-filepane-recent .gui-filepane-name {
+	color: var(--color-accent);
+	animation: gui-filepane-recent-fade 60s ease-in-out forwards;
+}
+@keyframes gui-filepane-recent-fade {
+	0% {
+		color: var(--color-accent);
+	}
+	100% {
+		color: var(--color-text);
+	}
+}
+
+/* Expand/collapse spring: rows animate in with a subtle rise+unfold so
+ * opening a folder reads as an accordion, not an instant list swap.
+ * Short enough that virtualized re-renders on scroll stay unobtrusive. */
+.gui-filepane-vrow {
+	animation: gui-filepane-in 140ms var(--spring) both;
+}
+@keyframes gui-filepane-in {
+	from {
+		opacity: 0;
+		transform: translateY(-3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-filepane-vrow {
+		animation: none;
+	}
+}
+
+.gui-filepane-editing {
+	padding-right: 8px;
+}
+
+.gui-filepane-edit-input {
+	flex: 1;
+	min-width: 0;
+	border: 1px solid var(--color-accent);
+	border-radius: var(--radius-xs);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	padding: 2px 6px;
+	outline: none;
+}
+
+.gui-filepane-preview {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	border-left: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.gui-filepane-preview-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	flex-shrink: 0;
+}
+
+.gui-filepane-preview-body {
+	overflow-y: auto;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-filepane-preview-name {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-filepane-preview-text {
+	margin: 0;
+	padding: 8px;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	overflow: auto;
+	max-height: 320px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	background: var(--color-bg);
+}
+
+.gui-filepane-preview-md {
+	padding: 6px 10px;
+	overflow: auto;
+	max-height: 360px;
+	background: var(--color-bg);
+	font-size: var(--ui-font-size-sm);
+}
+
+/* HTML live preview (openchamber parity): sandboxed page + toggle bar. */
+.gui-filepane-preview-html {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-filepane-preview-html-bar {
+	display: flex;
+	gap: 4px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	flex-shrink: 0;
+}
+
+.gui-filepane-preview-html-frame {
+	width: 100%;
+	min-height: 380px;
+	flex: 1;
+	border: none;
+	background: var(--color-bg);
+}
+
+.gui-filepane-preview-md .tr-md table {
+	width: 100%;
+}
+
+.gui-filepane-preview-img-wrap {
+	padding: 8px;
+	background: var(--color-bg);
+	overflow: auto;
+	max-height: 320px;
+}
+
+.gui-filepane-preview-img {
+	max-width: 100%;
+	display: block;
+	border-radius: var(--radius-xs);
+}
+
+.gui-filepane-preview-note {
+	margin: 0;
+	padding: 8px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+/* ── Responsive: collapse details below 1100px, sidebar below 720px ──── */
+
+@media (max-width: 1100px) {
+	.gui-details {
+		display: none;
+	}
+}
+
+@media (max-width: 720px) {
+	.gui-sidebar {
+		display: none;
+	}
+}
+.gui-chat-col {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	/* Allow shrinking below content height — without it a tall child
+	 * (board's height:100% surface) overflows the view wrapper. */
+	min-height: 0;
+}
+
+.gui-chat-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-chat-empty {
+	display: grid;
+	place-items: center;
+	flex: 1;
+	color: var(--color-text-muted);
+}
+
+/* ── Composer ───────────────────────────────────────────────────────── */

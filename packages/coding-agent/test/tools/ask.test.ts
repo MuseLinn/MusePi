@@ -1678,4 +1678,107 @@ describe("AskTool rich ask dialog", () => {
 		});
 		expect(reservedNext instanceof type.errors).toBe(true);
 	});
+
+	it("treats an empty single-question multi-select submission as a valid select-none answer", async () => {
+		// Enter-submit on an untouched multi-select must not read as a
+		// cancellation: the agent asked "pick any", the user picked none.
+		const tool = new AskTool(createSession());
+		const abort = vi.fn();
+		const askDialog = vi.fn().mockResolvedValue({
+			kind: "submit",
+			results: [
+				{
+					id: "pick",
+					question: "Pick any",
+					options: ["alpha", "beta"],
+					multi: true,
+					selectedOptions: [],
+					note: undefined,
+					timedOut: false,
+				},
+			],
+		});
+		const context = createContext({ askDialog, abort });
+
+		const result = await tool.execute(
+			"call-empty-multi",
+			{
+				questions: [
+					{
+						id: "pick",
+						question: "Pick any",
+						options: [{ label: "alpha" }, { label: "beta" }],
+						multi: true,
+					},
+				],
+			},
+			undefined,
+			undefined,
+			context,
+		);
+
+		expect(abort).not.toHaveBeenCalled();
+		expect(result.details?.selectedOptions).toEqual([]);
+		const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+		expect(text).toBe("User did not select any options");
+	});
+
+	it("still aborts on an empty single-select submission and formats multi-question empties as []", async () => {
+		const tool = new AskTool(createSession());
+
+		const abortSingle = vi.fn();
+		const askDialogSingle = vi.fn().mockResolvedValue({
+			kind: "submit",
+			results: [
+				{
+					id: "pick",
+					question: "Pick one",
+					options: ["alpha", "beta"],
+					multi: false,
+					selectedOptions: [],
+					note: undefined,
+					timedOut: false,
+				},
+			],
+		});
+		await expect(
+			tool.execute(
+				"call-empty-single",
+				{
+					questions: [{ id: "pick", question: "Pick one", options: [{ label: "alpha" }, { label: "beta" }] }],
+				},
+				undefined,
+				undefined,
+				createContext({ askDialog: askDialogSingle, abort: abortSingle }),
+			),
+		).rejects.toBeInstanceOf(ToolAbortError);
+		expect(abortSingle).toHaveBeenCalledTimes(1);
+
+		// Multi-question result rendering: an empty multi answer renders as
+		// `id: []` instead of `(cancelled)`.
+		const askDialogMulti = vi.fn().mockResolvedValue({
+			kind: "submit",
+			results: [
+				{ id: "q1", question: "A?", options: ["x"], multi: false, selectedOptions: ["x"] },
+				{ id: "q2", question: "B?", options: ["y", "z"], multi: true, selectedOptions: [], timedOut: false },
+			],
+		});
+		const multiResult = await tool.execute(
+			"call-empty-multi-format",
+			{
+				questions: [
+					{ id: "q1", question: "A?", options: [{ label: "x" }] },
+					{ id: "q2", question: "B?", options: [{ label: "y" }, { label: "z" }], multi: true },
+				],
+			},
+			undefined,
+			undefined,
+			createContext({ askDialog: askDialogMulti }),
+		);
+
+		const text = multiResult.content[0]?.type === "text" ? multiResult.content[0].text : "";
+		expect(text).toContain("q1: x");
+		expect(text).toContain("q2: []");
+		expect(text).not.toContain("(cancelled)");
+	});
 });

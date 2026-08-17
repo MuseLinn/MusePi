@@ -1,6 +1,6 @@
 # MusePi GUI 实现笔记(契约与坑)
 
-> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/gui` / `packages/collab-web` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/gui` / `packages/desktop-web` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
 >
 > 设计风格规范(布局/token/动效/组件模式)见 **`docs/gui-design.md`**。
 
@@ -90,8 +90,8 @@ daemon RPC:
 6. **popup/浮层被祖先 overflow/transform 裁剪** → portal 到 body。
 7. **rAF 节流闩锁未在帧回调内释放** → 后续事件被吞。
 8. **SVG stroke 渐变必须 `gradientUnits="userSpaceOnUse"`**(2026-08-06 图标渲染实测):`stroke="url(#g)"` 配默认 objectBoundingBox 单位在 Chromium 渲染器(Chrome/Electron headless)整条 stroke **渲染为空白**,同渐变 fill 正常;显式坐标 + userSpaceOnUse 即恢复。涉及 app 图标 SVG 渲染(build/icon.svg)时必踩。
-9. **无层(unlayered)规则压制所有 @layer 规则**(2026-08-06 侧栏 tabstrip 贴边根因):collab-web base.css 的 `*{margin:0}` 是 unlayered,Tailwind v4 utility 全部在 `@layer utilities`——cascade 里 **unlayered 恒胜所有 layer**,于是侧栏 `mx-2.5/mt-3/ml-auto` 等全部 margin utility 静默算成 0px(胶囊贴左边缘、右侧按钮簇紧跟胶囊、`mt-3` 间距消失),而 padding utility 正常(没有 universal padding reset),症状极具迷惑性。修复:reset 移入 `@layer base`,前置空 `@layer theme/base/components/utilities {}` 块钉死顺序(tailwind CLI 会把 `@layer a,b,c;` 语句规范成这种空块形式,构建幂等)。教训:**GUI 里 Tailwind margin utility 不生效先查 unlayered universal margin reset**。
-10. **误截断源文件的恢复路径**(2026-08-06 事故记录):`head -c <N>` 按**字节**截断大 CSS(8251 行 ≈ 370KB),git 无 WIP 提交、无 sourcemap、无 TM 快照时,唯一完整恢复源是**上次 `bun run build` 的 dist 压缩 CSS**(含全部规则):①选择器集合 diff(HEAD vs dist)枚举 WIP 规则;②从 dist 提取每条规则(压缩单行,按 `{` 平衡扫描 + 向前回溯选择器列表起点,合并逗号组合块);③`@media` 内规则记录上下文;④@keyframes 逐一比对(注意 `ag-*/tr-*/tv-*/spin` 等属 collab-web,勿混入 gui.css);⑤格式化重排后追加,带恢复注释。恢复后功能等价,格式/注释丢失。**教训:大文件截断前先 `wc -c`;**给重要 CSS 定期 `git add`(index blob 可救)。
+9. **无层(unlayered)规则压制所有 @layer 规则**(2026-08-06 侧栏 tabstrip 贴边根因):desktop-web base.css 的 `*{margin:0}` 是 unlayered,Tailwind v4 utility 全部在 `@layer utilities`——cascade 里 **unlayered 恒胜所有 layer**,于是侧栏 `mx-2.5/mt-3/ml-auto` 等全部 margin utility 静默算成 0px(胶囊贴左边缘、右侧按钮簇紧跟胶囊、`mt-3` 间距消失),而 padding utility 正常(没有 universal padding reset),症状极具迷惑性。修复:reset 移入 `@layer base`,前置空 `@layer theme/base/components/utilities {}` 块钉死顺序(tailwind CLI 会把 `@layer a,b,c;` 语句规范成这种空块形式,构建幂等)。教训:**GUI 里 Tailwind margin utility 不生效先查 unlayered universal margin reset**。
+10. **误截断源文件的恢复路径**(2026-08-06 事故记录):`head -c <N>` 按**字节**截断大 CSS(8251 行 ≈ 370KB),git 无 WIP 提交、无 sourcemap、无 TM 快照时,唯一完整恢复源是**上次 `bun run build` 的 dist 压缩 CSS**(含全部规则):①选择器集合 diff(HEAD vs dist)枚举 WIP 规则;②从 dist 提取每条规则(压缩单行,按 `{` 平衡扫描 + 向前回溯选择器列表起点,合并逗号组合块);③`@media` 内规则记录上下文;④@keyframes 逐一比对(注意 `ag-*/tr-*/tv-*/spin` 等属 desktop-web,勿混入 gui.css);⑤格式化重排后追加,带恢复注释。恢复后功能等价,格式/注释丢失。**教训:大文件截断前先 `wc -c`;**给重要 CSS 定期 `git add`(index blob 可救)。
 11. **legacy keyframes 烤静态 transform 在 flow 布局下错位**(2026-08-11):面板 keyframes 烤 `translateX(-50%)`(旧 absolute 居中残留),新布局已 `transform: none`(flow + margin 居中)——动画播放时把元素左移半宽,"先露右半再突现左半"。**教训:改布局定位方式时必须同步审计 keyframes 里的静态 transform;动画与静态布局解耦用 flat keyframes(只动位移/缩放/模糊的相对量)**。
 12. **动画中 `getBoundingClientRect` 含 transform**(2026-08-11):scale(0.98) 入场动画中 rect 是缩小值——内容驱动窗口按它报告会把窗口定小,animationend 后跳变。**内容尺寸报告对动画中元素用 `offsetWidth/offsetHeight`(布局盒)**;检测 `el.getAnimations().some(a => a.playState === "running")`。
 13. **锁宽测量 `width:"auto"` 覆盖 CSS `max-content`**(2026-08-11):morph 测量目标宽度时 `style.width = "auto"` 对块级元素=撑满包含块(覆盖 CSS `width:max-content`),toW 退化为容器宽 → 宽度过渡静默跳过(高度正常,视觉"只缩高不缩宽"再跳变)。**必须 `style.width = ""`(删 inline 声明回 CSS 值)**。
@@ -170,4 +170,31 @@ daemon RPC:
 - 状态单一权威在主进程：renderer 只投影/读；layout 用单调 revision 丢晚到；URL/账本脱敏只在 main。
 - 新设置：settings-schema（ui 组 "Grep & Browser"）+ GUI 设置页 + 优先级链注释 + kind 解析测试（`browser-gui-kind.test.ts` 模式）。
 - 验证：单测（policy/kind）→ 隔离实例 E2E（open → puppeteer connect → 驱动 → 投影 → `fromSurface:false` 像素采样：投影区=页面底色、区外=GUI 主题）。
-- i18n：键先进 `zh-CN.ts`（英文 pass-through），`t()` 只在 render 时，状态文案复用已有键。
+- i18n：键先进对应域文件 `desktop-web/src/i18n/zh-CN/<domain>.ts`（英文 pass-through，en 域须同步，详见 `docs/i18n.md`），`t()` 只在 render 时，状态文案复用已有键。
+
+## 12. 用量视图(usage.reports / 托盘 / ContextRing,2026-08-16)
+
+**daemon RPC** `usage.reports`(server.ts,`session.askAnswer` 之后):会话态(`params.sessionId` → live session 的 `fetchUsageReports`)+ 全局态(无 sessionId,空态 composer 用 `ensureRegistry()` 起 registry)。返回 `{ reports, unreportedAccounts, disabledCredentials, reloginDeadlines, activeAccount? }` —— 与 TUI `/usage` 同源(`usage-shared.ts` 共享聚合),`activeAccount` 仅会话态有(● 标记)。
+
+**数据形状**:每**凭据**一个 `UsageReport`(`provider` + `limits[]` + `metadata`);同 provider 多凭据 → GUI 端必须合并,否则:
+- 渲染 key 用 `provider` → React 重复 key 警告(托盘历史 bug);
+- 每凭据一个折叠区块 → 视觉上堆叠重复块(/usage 面板历史 bug)。
+
+**合并算法**(`gui/src/components/composer/usage-panel.tsx` `UsageProviderSection`,托盘 `tray-menu-main.tsx` `buildUsageRows` 同款):
+- 按 `provider` 分组 → 一个折叠区;按 `label|windowId` 分窗口 → 每个窗口一行;
+- **列序是 provider 级固定序**:跨窗口平均用量降序、同分按标签 —— **禁止每窗口独立 worst-first 排序**(凭证会"左右乱窜",用户感知为错位)。列上限 4(`.slice(0, 4)`);
+- 最右侧 `合计` 列:该窗口各凭据分数的**均值**(TUI 聚合语义),带分隔线;provider 排序 least-pressure 升序(TUI parity);
+- 合计列 pct 只显示数字(`55%`,不带 "used")——52px 列宽放不下 "55% used"(截断过)。
+
+**托盘菜单**(`gui-tray-menu`):固定窗口高 `TRAY_MENU_HEIGHT = 440`(main.cjs)——**不要动态 resize**(`tray-menu:set-size` IPC 已删);内容内部滚动(`__scroll` flex:1 + overflow-y:auto);footer padding `10px 10px 14px`(按钮距窗底有呼吸感)。窗口自身 acrylic(DWM),页面内容 chrome 即可。
+
+**用量缓存**(`packages/ai` `AuthStorage.fetchUsageReports`,GUI/TUI/托盘共用):SQLite `cache` 表磁盘持久化 + 5min TTL(`USAGE_REPORT_TTL_MS`,±25% 抖动防 per-IP 429 fan-out)+ 上游失败 last-good 兜底(24h)+ in-flight 合并(多界面并发请求只打一次上游)。daemon 重启后缓存仍在;冷缓存首次查看会阻塞上游一轮(合并保证只一轮)。
+
+**验证套路**:组件级 headless(bun build 临时 entry + 桩 `electronAPI.trayMenu`/props)→ 断言 DOM 列序/合计/无 key 警告;真实托盘需重启 Electron(主进程改动不热重载)。
+
+## 13. slash 补全排序(2026-08-16)
+
+`gui/src/lib/slash-rank.ts` `rankSlashEntries(entries, query, guiNative)`(会话 Composer `use-completion.ts` + WelcomeComposer 共用):
+- 排序 tier:name 全等 > 名前缀 > 名子串 > 描述子串;层内 **GUI 原生命令优先**(usage/context —— composer 拦截开面板的命令,同层压过 `clear`/`compaction` 等 daemon 命令);
+- 空 query 保持目录序(裸 `/` 列表不重排);非匹配项沉底保序(skill: 查询的幸存者不被丢弃);
+- 纯函数 + 单测 `lib/slash-rank.test.ts`(tier/GUI 决胜/稳定序/沉底)。

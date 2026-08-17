@@ -6,7 +6,7 @@
  * public relay. A tunnel share adds a cloudflared quick tunnel in front of a
  * loopback-bound relay, yielding a public `wss://<id>.trycloudflare.com` link.
  *
- * Both modes serve the collab-web `dist/` on the same port so the browser
+ * Both modes serve the desktop-web `dist/` on the same port so the browser
  * deep link resolves to a real UI (when the build exists).
  */
 import * as fs from "node:fs";
@@ -19,7 +19,7 @@ import { startTailscaleServe, type TailscaleServeHandle } from "./tailscale-serv
 import { startCloudflaredTunnel, type TunnelHandle } from "./tunnel";
 
 const DEFAULT_PORT = 7654;
-const COLLAB_WEB_DIST = path.resolve(import.meta.dir, "../../../collab-web/dist");
+const COLLAB_WEB_DIST = path.resolve(import.meta.dir, "../../../desktop-web/dist");
 
 export interface LocalShareOptions {
 	port?: number;
@@ -153,7 +153,7 @@ export class LocalShareManager {
 			onStatus: this.#onStatus,
 		});
 		if (!this.webDistAvailable) {
-			this.#onStatus?.("collab-web dist not built — browser UI unavailable, terminal join still works");
+			this.#onStatus?.("desktop-web dist not built — browser UI unavailable, terminal join still works");
 		}
 		const urlsFor = (ip: string): LanShareUrls => ({
 			joinUrl: `ws://${ip}:${this.relay!.port}`,

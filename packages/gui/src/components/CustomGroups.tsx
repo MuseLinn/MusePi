@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";

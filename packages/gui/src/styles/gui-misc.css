@@ -1,0 +1,2633 @@
+/* ── Session "in progress" indicator (kimi 进行中 parity) ───────────── */
+/* Pulsing accent dot on sidebar rows + reminder rows for live sessions
+ * with a running agent turn. */
+.gui-tree-working {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+.gui-tree-working-dot,
+.gui-reminder-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 9999px;
+	background: var(--color-accent);
+	animation: gui-working-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gui-working-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 45%, transparent);
+		opacity: 1;
+	}
+	50% {
+		box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 0%, transparent);
+		opacity: 0.55;
+	}
+}
+
+.gui-motion-off .gui-tree-working-dot,
+.gui-motion-off .gui-reminder-dot {
+	animation: none;
+}
+
+/* ── Welcome-scene real-time reminders (kimi 实时提醒 parity) ─────────── */
+.gui-reminders {
+	width: 100%;
+	max-width: 560px;
+	margin-top: 20px;
+	text-align: left;
+	/* Card container: rounded surface so the list scrolls INSIDE the card —
+	 * unread growth never pushes the composer input off-screen. */
+	border-radius: 14px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+	box-shadow:
+		0 1px 0 color-mix(in oklab, var(--color-text) 3%, transparent) inset,
+		0 8px 24px color-mix(in oklab, #000 12%, transparent);
+	overflow: hidden;
+}
+
+.gui-welcome[data-focused] .gui-reminders {
+	display: none;
+}
+
+.gui-reminders-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-reminders-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 2px 4px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+	transition: background 140ms ease;
+}
+
+.gui-reminders-toggle:hover {
+	background: var(--color-hover);
+}
+
+.gui-reminders-chevron {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	transition: transform 180ms ease;
+}
+
+.gui-reminders-chevron.is-collapsed {
+	transform: rotate(-90deg);
+}
+
+.gui-reminders-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-reminders-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 22%, transparent);
+	flex-shrink: 0;
+}
+
+.gui-reminders-readall {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	border: none;
+	background: none;
+	padding: 2px 6px;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: color 140ms ease, background 140ms ease;
+	flex-shrink: 0;
+}
+
+.gui-reminders-readall:hover {
+	color: var(--color-text);
+	background: var(--color-hover);
+}
+
+.gui-reminders-list {
+	display: flex;
+	flex-direction: column;
+	/* Dynamic height: the row-count-derived --list-h (set inline) grows
+	 * with unread growth up to MAX_LIST_H, then the list scrolls INSIDE
+	 * the card — the welcome composer never shifts. Collapsed = 0. */
+	height: var(--list-h, 0px);
+	padding: 2px 6px 4px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	transition: height 240ms var(--spring), padding 240ms var(--spring);
+}
+
+.gui-reminders-list[data-collapsed] {
+	height: 0px;
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+.gui-reminders-list::-webkit-scrollbar {
+	width: 8px;
+}
+
+.gui-reminders-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.gui-reminders-list::-webkit-scrollbar-thumb {
+	background: color-mix(in oklab, var(--color-text-faint) 30%, transparent);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+.gui-reminders-list::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+.gui-reminder-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 7px 8px;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	/* <button> UA styles text center — the title/badge children inherit
+	 * it unless reset here. */
+	text-align: left;
+	transition: background 140ms ease;
+}
+
+.gui-reminder-row:hover {
+	background: var(--color-hover);
+}
+
+.gui-reminder-bullet {
+	width: 5px;
+	height: 5px;
+	border-radius: 9999px;
+	flex-shrink: 0;
+	background: var(--color-text-faint);
+}
+
+.gui-reminder-row--working .gui-reminder-bullet {
+	background: var(--color-accent);
+}
+
+.gui-reminder-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Project badge: session workspace (cwd basename) chip. */
+.gui-reminder-project {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	max-width: 132px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-reminder-project svg {
+	flex-shrink: 0;
+}
+
+.gui-reminder-row--working .gui-reminder-project {
+	color: color-mix(in oklab, var(--color-accent) 78%, var(--color-text));
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 16%, transparent);
+}
+
+.gui-reminder-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-accent);
+}
+
+.gui-reminder-time {
+	/* Fixed-width right-aligned column: relative-time strings vary in
+	 * width ("刚刚" vs "11 秒前") — a min-width keeps every row's time
+	 * left edge on the same column after the project badge. */
+	flex-shrink: 0;
+	min-width: 7ch;
+	text-align: right;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+/* ---- Onboarding step 1/2: language + appearance (interactive) ---- */
+.gui-obo-appearance {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	width: 100%;
+	margin-top: 14px;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-appearance-group {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+.gui-obo-appearance-options {
+	display: flex;
+	gap: 8px;
+}
+.gui-obo-appearance-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 9px 8px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--fg) 3%, transparent);
+	font-size: 12.5px;
+	color: var(--fg-muted);
+	transition:
+		border-color 240ms var(--spring),
+		background 240ms var(--spring),
+		color 240ms var(--spring),
+		transform 300ms var(--spring);
+}
+.gui-obo-appearance-card:hover {
+	border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+	color: var(--fg);
+	transform: translateY(-1px);
+}
+.gui-obo-appearance-card--active {
+	border-color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+	color: var(--accent);
+}
+.gui-obo-appearance-lang {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+}
+/* Accent preset swatch — the accent colors of each preset, theme-agnostic. */
+.gui-obo-accent-swatch {
+	width: 100%;
+	max-width: 46px;
+	height: 14px;
+	border-radius: 999px;
+	background: var(--accent);
+}
+.gui-obo-accent-swatch[data-accent="mono"] {
+	background: oklch(0.62 0.01 307);
+}
+.gui-obo-accent-swatch[data-accent="ocean"] {
+	background: oklch(0.62 0.16 255);
+}
+.gui-obo-accent-swatch[data-accent="jade"] {
+	background: oklch(0.66 0.13 160);
+}
+.gui-obo-accent-swatch[data-accent="brand"] {
+	background: oklch(0.72 0.16 162);
+}
+/* Feature bullets under promo-step bodies. */
+.gui-obo-features {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	margin-top: 12px;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-feature {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 12.5px;
+	line-height: 1.55;
+	color: var(--fg-muted);
+}
+.gui-obo-feature-check {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	margin-top: 1px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-success) 14%, transparent);
+	color: var(--color-success);
+}
+/* Language bubbles (step 1 demo) — bilingual greeting in the window mock. */
+.gui-obo-lang-row {
+	display: flex;
+	padding: 2px 0;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+.gui-obo-lang-row--alt {
+	justify-content: flex-end;
+	animation-delay: 300ms;
+}
+.gui-obo-lang-bubble {
+	padding: 5px 10px;
+	border-radius: 10px;
+	font-size: 11px;
+	color: var(--fg);
+	background: color-mix(in oklab, var(--accent) 16%, transparent);
+}
+.gui-obo-demo {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	animation: gui-obo-item-in 380ms var(--spring) both;
+}
+/* Accent strip inside the window mock (step 2 demo) — recolors live. */
+.gui-obo-theme-accent {
+	height: 12px;
+	width: 40%;
+	margin-top: 10px;
+	border-radius: 6px;
+	background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 40%, transparent));
+	animation: gui-obo-accent-in 520ms var(--spring) 620ms both;
+}
+@keyframes gui-obo-accent-in {
+	from {
+		opacity: 0;
+		transform: scaleX(0.4);
+		transform-origin: left;
+	}
+	to {
+		opacity: 1;
+		transform: scaleX(1);
+		transform-origin: left;
+	}
+}
+
+/* New blank project dialog (kimiwork parity): the path picker renders as
+ * a folder button; the label's red asterisk keeps the required mark. */
+.gui-new-project-dialog {
+	min-width: 360px;
+}
+
+.gui-new-project-path {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-new-project-path:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+/* New blank project dialog fields (kimiwork parity): label above control
+ * (the settings-pane .gui-settings-field two-column grid is too wide for
+ * a compact dialog). Required asterisk in the accent-danger tone. */
+.gui-new-project-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-new-project-label {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-new-project-req {
+	color: var(--color-danger);
+}
+
+/* Ask card (TUI ask parity): question + option rows or free-text input.
+ * Floating card ABOVE the composer (openchamber QuestionCard / proma
+ * AskUserBanner parity) — full composer width so long titles wrap instead
+ * of clipping, glass surface like gui-ask-pop, enter animation only (the
+ * answer resolves the daemon promise and unmounts immediately). */
+.gui-ask-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: calc(100% - 16px);
+	max-width: 400px;
+	/* Left-aligned with the message rows + composer frame: the wrap adds
+	 * px-5 (20px) and the composer frame carries its own 16px padding, so
+	 * a 16px margin puts the card's left edge on the same 300px column the
+	 * messages and input share. Centering reads as detached from the
+	 * message flow (2026-08-15). */
+	align-self: flex-start;
+	margin-left: 16px;
+	padding: 10px;
+	margin-bottom: 8px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow:
+		0 10px 32px rgba(0, 0, 0, 0.22),
+		0 0 0 1px rgba(0, 0, 0, 0.04);
+	backdrop-filter: blur(18px) saturate(160%);
+	opacity: 0;
+}
+
+.gui-ask-card--entered {
+	opacity: 1;
+	animation: gui-ask-pop-in 140ms var(--spring);
+}
+
+/* Exit: answering/cancelling plays the reverse before the parent unmounts
+ * (the card stays mounted through the animation, then onAnswer resolves). */
+.gui-ask-card--closing {
+	animation: gui-ask-pop-out 140ms var(--spring) forwards;
+	pointer-events: none;
+}
+
+@keyframes gui-ask-pop-out {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(4px) scale(0.97);
+	}
+}
+
+/* Tab-switch body transition: re-mounting with a new key plays the slide-in. */
+.gui-ask-body {
+	min-width: 0;
+	animation: gui-ask-body-in 160ms var(--spring);
+}
+
+@keyframes gui-ask-body-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* Reveal for the note / Other inputs: mount plays a small slide + fade. */
+.gui-ask-reveal {
+	animation: gui-ask-reveal-in 160ms var(--spring);
+}
+
+@keyframes gui-ask-reveal-in {
+	from {
+		opacity: 0;
+		transform: translateY(-3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.gui-ask-card-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	color: var(--color-text);
+}
+
+.gui-ask-card-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.gui-ask-card-x {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.gui-ask-card-x:hover {
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+}
+
+.gui-ask-opts {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 300px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-ask-opt {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	position: relative;
+	flex-wrap: wrap;
+	width: 100%;
+	padding: 8px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	color: var(--color-text);
+	font-size: 13px;
+	/* Buttons default to text-align: center — the label has an explicit
+	 * left alignment but the description inherits and would center. */
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.gui-ask-opt:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+/* Recommended option: a corner triangle in the top-right with a star
+ * badge — never collides with the option label text at narrow widths
+ * (the old inline pill reflowed into the label row). */
+/* Recommended option: a corner triangle in the top-right with a star
+ * badge — never collides with the option label text at narrow widths
+ * (the old inline pill reflowed into the label row). The triangle is a
+ * full half-corner (clip-path), and the star sits on an opaque accent
+ * disc so it never hangs into the transparent part of the fold. */
+.gui-ask-opt--rec {
+	border-color: color-mix(in oklab, var(--color-accent) 30%, var(--border));
+}
+
+/* Corner badge never covers the label: reserve the top-right corner. */
+.gui-ask-opt--rec .gui-ask-opt-label {
+	padding-right: 20px;
+}
+
+.gui-ask-opt-rec {
+	position: absolute;
+	top: -1px;
+	right: -1px;
+	width: 24px;
+	height: 24px;
+	color: var(--color-surface-raised);
+	pointer-events: none;
+}
+
+.gui-ask-opt-rec::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	/* Half-corner triangle: the accent-tinted top-right fold. */
+	background: color-mix(in oklab, var(--color-accent) 62%, transparent);
+	clip-path: polygon(100% 0, 0 0, 100% 100%);
+	border-top-right-radius: 10px;
+	pointer-events: none;
+}
+
+.gui-ask-opt-rec svg {
+	position: absolute;
+	top: 3px;
+	right: 3px;
+	width: 10px;
+	height: 10px;
+	padding: 1px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	color: var(--color-surface-raised);
+}
+
+/* Multi-question dialog: tab bar, selected option rows, summary review. */
+.gui-ask-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.gui-ask-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.gui-ask-tab:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-tab--active {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-tab--done {
+	color: var(--color-text);
+}
+
+.gui-ask-tab--submit {
+	opacity: 0.85;
+}
+
+.gui-ask-progress {
+	margin-left: auto;
+	align-self: center;
+	font-size: 11px;
+	font-weight: 550;
+	color: var(--color-text-faint);
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	white-space: nowrap;
+}
+
+.gui-ask-kbd-hint {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	margin-top: -2px;
+}
+
+.gui-ask-kbd-hint span {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 4px;
+	height: 16px;
+	border-radius: 4px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+	color: var(--color-text-muted);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10px;
+	line-height: 1;
+}
+
+/* Side-by-side option + markdown preview pane (harness ask parity): the
+ * card widens for the two-column layout; options keep the left column and
+ * the selected/recommended option's preview renders on the right. */
+.gui-ask-card--preview {
+	max-width: 760px;
+}
+
+.gui-ask-dialog-preview {
+	display: flex;
+	gap: 10px;
+	min-height: 120px;
+}
+
+.gui-ask-dialog-preview-empty {
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+
+.gui-ask-opt--previewed {
+	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--border));
+}
+
+.gui-ask-opt-preview-tag {
+	display: inline-flex;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+
+/* Per-question note + chat row (harness ask parity): note toggles an
+ * inline editor (`n` key or the button), chat hands the question off to
+ * the conversation instead of answering. */
+.gui-ask-opt-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+.gui-ask-note-btn,
+.gui-ask-chat-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 11.5px;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.gui-ask-note-btn:hover,
+.gui-ask-chat-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-ask-note-btn--open {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ask-note-btn--filled {
+	color: var(--color-accent);
+}
+
+/* Preview pane column budget: options keep ~half, preview gets the rest —
+ * markdown needs width for code/table readability, so never squeeze the
+ * right pane below ~300px. */
+.gui-ask-dialog-preview-left {
+	flex: 0 0 46%;
+	min-width: 0;
+}
+
+.gui-ask-dialog-preview-pane {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-width: 280px;
+	max-height: 300px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 3%, transparent);
+}
+
+.gui-ask-multi-hint {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	margin-bottom: -2px;
+}
+
+.gui-ask-opt--selected {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.gui-ask-opt-check {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--color-accent);
+}
+
+.gui-ask-opt-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	flex: 1;
+}
+
+/* Full option label rendering — never ellipsize: a truncated option name
+ * hides what the user is choosing. Long labels wrap within the row. */
+.gui-ask-opt-label > span:first-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	text-align: left;
+}
+
+.gui-ask-opt-desc {
+	display: block;
+	flex-basis: 100%;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+	margin-top: 2px;
+	/* Justified multi-line description (user: 两端对齐比居中好). */
+	text-align: justify;
+}
+
+.gui-ask-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-ask-summary-row {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	width: 100%;
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.gui-ask-summary-row:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-ask-summary-row--empty {
+	opacity: 0.75;
+}
+
+.gui-ask-summary-q {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+}
+
+.gui-ask-summary-a {
+	font-size: 12.5px;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-ask-summary-row--empty .gui-ask-summary-a {
+	color: var(--color-text-faint);
+	font-style: italic;
+}
+
+.gui-ask-summary-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 6px;
+}
+
+/* Computer-use glow preview (settings 桌面操作提示): a miniature desktop
+ * mock reproducing the full-screen glow window — four breathing accent
+ * edge rings, the top status badge, the target frame + click pulse. */
+.gui-computer-glow-preview {
+	position: relative;
+	margin-top: 14px;
+	width: 100%;
+	height: 170px;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 6%, transparent), transparent 40%),
+		repeating-linear-gradient(0deg, transparent, transparent 23px, color-mix(in oklab, var(--color-text) 5%, transparent) 23px, color-mix(in oklab, var(--color-text) 5%, transparent) 24px);
+	overflow: hidden;
+}
+
+.gui-cgp-edge {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background:
+		radial-gradient(130% 22% at 50% 0%, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent 72%),
+		radial-gradient(130% 22% at 50% 100%, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent 72%),
+		radial-gradient(22% 130% at 0% 50%, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent 72%),
+		radial-gradient(22% 130% at 100% 50%, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent 72%);
+	animation: gui-glow-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes gui-glow-breathe {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+.gui-cgp-badge {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	white-space: nowrap;
+	font-size: 11px;
+	font-weight: 500;
+	color: #fff;
+	background: color-mix(in oklab, var(--color-accent) 26%, #1b191f);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 65%, transparent);
+	box-shadow: 0 4px 16px color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+.gui-cgp-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	box-shadow: 0 0 8px var(--color-accent);
+	animation: gui-glow-breathe 1.6s ease-in-out infinite;
+}
+
+
+.gui-cgp-ring {
+	position: absolute;
+	top: 116px;
+	left: calc(26% + 210px - 12px);
+	width: 20px;
+	height: 20px;
+	border: 2px solid color-mix(in oklab, var(--color-accent) 90%, transparent);
+	border-radius: 50%;
+	animation: gui-cgp-pulse 1.2s ease-out infinite;
+}
+
+@keyframes gui-cgp-target-pop {
+	from {
+		transform: scale(0.96);
+		opacity: 0;
+	}
+	to {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+@keyframes gui-cgp-pulse {
+	0% {
+		transform: scale(0.5);
+		opacity: 0.9;
+	}
+	100% {
+		transform: scale(2.2);
+		opacity: 0;
+	}
+}
+
+/* Preview title bar with macOS traffic lights (matches the host platform
+ * the glow window overlays). */
+.gui-cgp-finder {
+	position: absolute;
+	top: 44px;
+	left: 26%;
+	width: 210px;
+	height: 96px;
+	border-radius: 9px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 88%, var(--color-surface-raised));
+	box-shadow: 0 6px 20px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
+	overflow: hidden;
+	animation: gui-cgp-target-pop 220ms ease-out both;
+}
+
+.gui-cgp-finder-bar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 9px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-cgp-finder-title {
+	margin-left: 4px;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+	letter-spacing: 0.01em;
+}
+
+.gui-cgp-finder-body {
+	display: flex;
+	gap: 8px;
+	padding: 7px 9px;
+}
+
+.gui-cgp-finder-side {
+	width: 44px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-cgp-finder-files {
+	flex: 1;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 5px;
+}
+
+.gui-cgp-finder-files i {
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.gui-cgp-light {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+}
+
+.gui-cgp-light--close {
+	background: #ff5f57;
+}
+
+.gui-cgp-light--min {
+	background: #febc2e;
+}
+
+.gui-cgp-light--max {
+	background: #28c840;
+}
+
+/* Personalization demo (onboarding step 6): mini chat window — traffic
+ * lights, user bubble, assistant rows with the live AgentAvatar, typing
+ * dots, and the composer mock with the desktop pet. */
+
+
+
+
+
+
+.gui-obo-pers-light--close {
+	background: #ff5f57;
+}
+
+.gui-obo-pers-light--min {
+	background: #febc2e;
+}
+
+.gui-obo-pers-light--max {
+	background: #28c840;
+}
+
+.gui-obo-pers-chat {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 9px;
+	padding: 10px 14px;
+}
+
+.gui-obo-pers-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-obo-pers-row--user {
+	justify-content: flex-end;
+}
+
+.gui-obo-pers-row .gui-obo-bubble--assistant {
+	width: 58%;
+}
+
+.gui-obo-pers-row--user .gui-obo-bubble--user {
+	margin-left: auto;
+}
+
+.gui-obo-pers-typing {
+	display: inline-flex;
+	gap: 4px;
+	padding: 9px 12px;
+	border-radius: 11px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+}
+
+.gui-obo-pers-typing span {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--fg) 45%, transparent);
+	animation: gui-obo-typing-bounce 1.1s ease-in-out infinite;
+}
+
+.gui-obo-pers-typing span:nth-child(2) {
+	animation-delay: 140ms;
+}
+
+.gui-obo-pers-typing span:nth-child(3) {
+	animation-delay: 280ms;
+}
+
+@keyframes gui-obo-typing-bounce {
+	0%,
+	60%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.5;
+	}
+	30% {
+		transform: translateY(-4px);
+		opacity: 1;
+	}
+}
+
+.gui-obo-pers-composer {
+	position: relative;
+	display: flex;
+	align-items: center;
+	padding: 6px 12px 9px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-obo-pers-input {
+	flex: 1;
+	height: 20px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 12%, transparent);
+}
+
+/* Pet docked at the input's top-right — mirrors the real composer
+ * (.gui-composer-pet: absolute above the input, right-aligned). */
+.gui-obo-pers-pet {
+	position: absolute;
+	right: 10px;
+	bottom: calc(100% + 2px);
+	display: flex;
+	align-items: flex-end;
+	pointer-events: none;
+	filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
+}
+
+/* Provider step demo: rows mirroring the real ProviderSetup list; the
+ * middle row's login button cycles to "✓ 已登录" (in-place morph). */
+.gui-obo-providers {
+	gap: 8px;
+	justify-content: center;
+}
+
+.gui-obo-provider-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-obo-provider-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+}
+
+.gui-obo-provider-skel {
+	flex: 1;
+	height: 8px;
+	border-radius: 4px;
+	background: color-mix(in oklab, var(--fg) 16%, transparent);
+}
+
+.gui-obo-provider-ok {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.gui-obo-provider-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 52px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+}
+
+.gui-obo-provider-btn .gui-obo-login-ok {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	color: #fff;
+	background: color-mix(in oklab, var(--accent) 82%, transparent);
+	animation: gui-obo-login-morph 3.4s var(--spring) infinite;
+}
+
+@keyframes gui-obo-login-morph {
+	0%,
+	42% {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+	52%,
+	84% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	96%,
+	100% {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+}
+
+/* Personalize segmented control (pet display mode + language pills):
+ * pill pair with a spring background transfer. */
+.gui-obo-seg {
+	padding: 5px 13px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	cursor: pointer;
+	transition:
+		background 260ms var(--spring),
+		color 260ms var(--spring),
+		border-color 260ms var(--spring);
+}
+
+.gui-obo-seg--active {
+	color: #fff;
+	background: color-mix(in oklab, var(--color-accent) 82%, transparent);
+}
+
+/* ── ContextRing popover: provider subscription quota (TUI /usage) ── */
+.gui-context-pop-quota {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-context-pop-quota-title {
+	font-size: 11px;
+	font-weight: 650;
+	color: var(--fg-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.gui-context-pop-provider {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-context-pop-provider-name {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-context-pop-window-label {
+	font-size: 11px;
+	font-weight: 550;
+	color: var(--fg-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-context-pop-cols {
+	display: grid;
+	gap: 6px 10px;
+}
+
+.gui-context-pop-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.gui-context-pop-cell--total {
+	padding-left: 8px;
+	border-left: 1px solid var(--border);
+}
+
+.gui-context-pop-cell-label {
+	font-size: 10.5px;
+	color: var(--fg-muted);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-context-pop-cell-pct {
+	font-size: 10.5px;
+	color: var(--fg-faint);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.gui-usage-bar-track {
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 9%, transparent);
+	overflow: hidden;
+}
+
+.gui-usage-bar {
+	height: 100%;
+	border-radius: 999px;
+	transition: width 340ms var(--spring);
+}
+
+.gui-usage-bar--ok {
+	background: var(--ok);
+}
+
+.gui-usage-bar--warn {
+	background: var(--warn);
+}
+
+.gui-usage-bar--err {
+	background: var(--err);
+}
+
+/* ── Plan review panel (composer, TUI plan-approval overlay parity) ──
+ * Same glass card tokens as the goal panel; the plan body renders as
+ * read-only preformatted text with refine/approve/exit actions. */
+.gui-plan-panel {
+	width: min(440px, calc(100vw - 64px));
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--bg-overlay);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
+}
+
+.gui-plan-title {
+	margin-left: auto;
+	padding: 1px 7px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text-muted);
+	max-width: 200px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-plan-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-plan-path {
+	font-size: var(--ui-font-size-xs);
+	font-family: var(--font-mono);
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-plan-content {
+	margin: 0;
+	max-height: 260px;
+	overflow-y: auto;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
+	font-size: var(--ui-font-size-xs);
+	font-family: var(--font-mono);
+	line-height: 1.55;
+	color: var(--color-text);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.gui-plan-refine {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: flex-end;
+}
+
+.gui-plan-refine textarea {
+	width: 100%;
+	padding: 6px 9px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	resize: vertical;
+	min-height: 44px;
+	font-family: inherit;
+}
+
+.gui-plan-refine textarea:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.gui-goal-btn:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* ── Goal detail card (composer dialog, TUI /goal menu parity) ──
+ * Shares the quota panel's floating-card look (same overlay/glass
+ * tokens); floats under the goal chip like the quota/context cards. */
+.gui-goal-panel {
+	width: min(380px, calc(100vw - 64px));
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--bg-overlay);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
+}
+
+.gui-goal-status {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	border: 1px solid var(--border);
+	color: var(--color-text-muted);
+}
+
+.gui-goal-status--active {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.gui-goal-status--paused,
+.gui-goal-status--budget-limited {
+	color: var(--color-warning, #f5a524);
+	border-color: color-mix(in oklab, var(--color-warning, #f5a524) 45%, transparent);
+}
+
+.gui-goal-status--complete {
+	color: var(--ok);
+	border-color: color-mix(in oklab, var(--ok) 45%, transparent);
+}
+
+.gui-goal-status--dropped {
+	color: var(--color-text-faint);
+}
+
+.gui-goal-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-goal-objective {
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	color: var(--color-text);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 200px;
+	overflow-y: auto;
+	padding-right: 4px;
+}
+
+.gui-goal-meta {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-goal-error {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-danger, #e5484d);
+}
+
+.gui-goal-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-goal-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gui-goal-btn:hover {
+	color: var(--color-text);
+	border-color: var(--color-accent-bd);
+}
+
+.gui-goal-btn--primary {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-goal-btn--danger:hover {
+	color: var(--color-danger, #e5484d);
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, transparent);
+}
+
+.gui-goal-budget {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.gui-goal-budget input {
+	flex: 1;
+	min-width: 0;
+	padding: 4px 8px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-goal-budget input:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+/* ── GUI-native /usage result panel (composer, structured quota) ── */
+.gui-quota-panel {
+	width: min(520px, calc(100vw - 64px));
+	/* Clearance above the composer card so the panel floats over the chat
+	 * area, clearly separated from the card below (14px read as a nested
+	 * card; 28px reads as a floating panel). */
+	margin-bottom: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid var(--border-strong);
+	border-radius: 12px;
+	background: var(--bg-overlay);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
+	pointer-events: auto;
+}
+
+.gui-quota-close {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-faint);
+	cursor: pointer;
+}
+
+.gui-quota-close:hover {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+
+.gui-quota-title {
+	font-size: 12.5px;
+	font-weight: 650;
+	color: var(--fg);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding-right: 24px;
+}
+
+.gui-quota-provider {
+	font-weight: 550;
+	color: var(--fg-muted);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.gui-quota-limits {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-usage-cols {
+	display: grid;
+	gap: 4px 12px;
+}
+
+.gui-usage-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.gui-usage-cell--total {
+	padding-left: 10px;
+	border-left: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.gui-usage-cell-label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-quota-pct {
+	font-size: 11px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+
+.gui-quota-note {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+/* /usage card — TUI /usage panel parity: per-provider sections with window
+ * groups, per-account bars, saved resets and notes. */
+.gui-usage-reports {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.gui-usage-section {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-usage-provider-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 2px 0;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	cursor: pointer;
+	color: var(--fg);
+	text-align: left;
+}
+
+.gui-usage-provider-head:hover .gui-usage-provider {
+	color: var(--color-accent);
+}
+
+.gui-usage-provider-summary {
+	font-size: 11px;
+	color: var(--fg-faint);
+	margin-left: 2px;
+}
+
+.gui-usage-chevron {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	margin-left: auto;
+	color: var(--color-text-faint);
+	transition: transform 200ms ease;
+}
+
+.gui-usage-chevron--open {
+	transform: rotate(180deg);
+}
+
+.gui-usage-provider-body {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding-left: 13px;
+	margin-top: 2px;
+}
+
+.gui-usage-provider {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-usage-note {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-resets {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-resets-title {
+	font-weight: 600;
+	color: var(--fg-muted);
+}
+
+.gui-usage-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-usage-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-usage-group-window {
+	font-size: 11px;
+	font-weight: 400;
+	color: var(--fg-faint);
+}
+
+.gui-usage-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.gui-usage-dot--ok {
+	background: var(--color-ok);
+}
+
+.gui-usage-dot--warn {
+	background: var(--color-warning);
+}
+
+.gui-usage-dot--err {
+	background: var(--color-danger);
+}
+
+.gui-usage-acct-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-usage-acct-name--active {
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-usage-acct-reset {
+	flex-shrink: 0;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-quota-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-quota-bar .gui-usage-bar-track {
+	flex: 1;
+}
+
+.gui-usage-resetline {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.gui-usage-unlimited {
+	font-size: 11.5px;
+	color: var(--color-ok);
+}
+
+/* /context dialog — category rows (inside the shared quota dialog shell). */
+.gui-context-summary {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.gui-context-cats {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-context-cat {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-context-cat-label {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-context-cat-name {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.gui-context-cat-pct {
+	font-size: 11px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+
+.gui-usage-bar--accent {
+	background: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+
+/* /context grid — miniature category visualization (TUI /context panel
+ * parity): a 20×10 glyph board — ⛁ filled categories (⛃ messages), ⛶ free
+ * space, ⛝ autocompact reserve — colored per category. The legend rows
+ * below carry the same glyph + color so the board reads without hunting. */
+.gui-context-model {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--fg);
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.gui-context-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--fg) 2.5%, transparent);
+}
+
+.gui-context-grid-row {
+	display: grid;
+	grid-template-columns: repeat(20, 1fr);
+	gap: 2px;
+}
+
+.gui-context-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-mono), "Apple Symbols", Menlo, monospace;
+	font-size: 11px;
+	line-height: 1.3;
+	user-select: none;
+}
+
+/* TUI theme-color parity (modes/theme dark.json): system prompt = accent,
+ * system tools = warning, system context = customMessageLabel (purple),
+ * skills = success, messages = userMessageText, free = dim, buffer = warning. */
+.gui-context-cell--system,
+.gui-context-glyph--system {
+	color: var(--accent);
+}
+
+.gui-context-cell--tools,
+.gui-context-glyph--tools {
+	color: var(--warn);
+}
+
+.gui-context-cell--context,
+.gui-context-glyph--context {
+	color: var(--chart-4);
+}
+
+.gui-context-cell--skills,
+.gui-context-glyph--skills {
+	color: var(--ok);
+}
+
+.gui-context-cell--messages,
+.gui-context-glyph--messages {
+	color: var(--fg);
+}
+
+.gui-context-cell--free,
+.gui-context-glyph--free {
+	color: var(--fg-faint);
+}
+
+.gui-context-cell--buffer,
+.gui-context-glyph--buffer {
+	color: var(--warn);
+}
+
+.gui-context-cat-glyph {
+	font-family: var(--font-mono), "Apple Symbols", Menlo, monospace;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-context-cat-name {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.gui-context-snap {
+	font-size: 11px;
+	color: var(--fg-faint);
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.gui-context-snap-title {
+	font-weight: 600;
+}
+
+.gui-context-snap-line {
+	padding-left: 12px;
+}
+
+/* ── Task card style preview (display.taskCardStyle settings row) ────── */
+.gui-taskstyle-preview {
+	display: flex;
+	gap: 10px;
+	margin-top: 8px;
+	width: 100%;
+}
+
+.gui-taskstyle-preview-option {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 8px;
+	border: 1.5px solid var(--border);
+	border-radius: 10px;
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-align: inherit;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.gui-taskstyle-preview-option:hover {
+	border-color: color-mix(in oklab, var(--accent) 60%, var(--border));
+}
+
+.gui-taskstyle-preview-option--active {
+	border-color: var(--accent);
+}
+
+.gui-taskstyle-preview-label {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--fg-muted);
+	text-align: center;
+}
+
+/* Stacked mock: the classic chat-message card above, the floating member
+ * grid card below it (Swarm style = native card + floating card). */
+.gui-taskstyle-preview-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-chat {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 7px;
+	background: var(--surface);
+}
+
+/* Frosted floating card mock (composer chip → member grid): subtle blur +
+ * shadow to read as a card floating over the transcript. */
+.gui-taskstyle-preview-float {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 7px;
+	background: color-mix(in oklab, var(--surface) 82%, transparent);
+	backdrop-filter: blur(6px);
+	box-shadow: 0 6px 18px oklch(0 0 0 / 0.25);
+}
+
+.gui-taskstyle-preview-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-taskstyle-preview-tool {
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	color: var(--fg-muted);
+}
+
+.gui-taskstyle-preview-chip {
+	flex: none;
+	font-size: 10px;
+	padding: 0 5px;
+	border-radius: 6px;
+	background: var(--accent-muted);
+	color: var(--accent);
+	font-family: var(--font-mono);
+}
+
+.gui-taskstyle-preview-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 5px;
+}
+
+.gui-taskstyle-preview-member {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+}
+
+.gui-taskstyle-preview-avatar {
+	flex: none;
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--font-mono);
+	font-size: 8.5px;
+	font-weight: 700;
+}
+
+.gui-taskstyle-preview-avatar--ok {
+	background: color-mix(in oklab, #4caf7d 18%, transparent);
+	color: #4caf7d;
+}
+
+.gui-taskstyle-preview-avatar--err {
+	background: color-mix(in oklab, #e5484d 18%, transparent);
+	color: #e5484d;
+}
+
+.gui-taskstyle-preview-bar {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+	overflow: hidden;
+}
+
+.gui-taskstyle-preview-fill {
+	display: block;
+	height: 100%;
+	border-radius: 2px;
+}
+
+.gui-taskstyle-preview-fill--ok {
+	width: 100%;
+	background: #4caf7d;
+}
+
+.gui-taskstyle-preview-fill--err {
+	width: 60%;
+	background: #e5484d;
+}
+
+/* ── Autoresearch panel (desktop adaptation of the TUI widget) ───────── */
+.gui-ar-panel {
+	padding: 4px 2px;
+	max-height: 60vh;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-ar-title {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 2px 4px 8px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+	margin-bottom: 8px;
+}
+
+.gui-ar-title-name {
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.gui-ar-title-branch {
+	font-size: 11px;
+	opacity: 0.6;
+	font-family: ui-monospace, monospace;
+}
+
+.gui-ar-goal {
+	padding: 6px 4px;
+	font-size: 13px;
+	line-height: 1.5;
+	opacity: 0.9;
+}
+
+.gui-ar-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 4px 8px;
+}
+
+.gui-ar-meta-chip {
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	font-size: 11.5px;
+	opacity: 0.85;
+}
+
+.gui-ar-notes {
+	padding: 0 4px 8px;
+	font-size: 12px;
+	opacity: 0.7;
+	line-height: 1.5;
+}
+
+.gui-ar-empty {
+	padding: 18px 8px;
+	font-size: 13px;
+	opacity: 0.65;
+	text-align: center;
+}
+
+.gui-ar-empty-hint {
+	margin-top: 6px;
+	font-size: 11.5px;
+	opacity: 0.5;
+}
+
+.gui-ar-runs-title {
+	padding: 2px 4px 6px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	opacity: 0.6;
+}
+
+.gui-ar-run {
+	padding: 6px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 45%, transparent);
+	border-radius: 8px;
+	margin-bottom: 6px;
+}
+
+.gui-ar-run-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-ar-run-seg {
+	flex-shrink: 0;
+	padding: 0 6px;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.gui-ar-run-cmd {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	font-family: ui-monospace, monospace;
+}
+
+.gui-ar-run-status {
+	flex-shrink: 0;
+	font-size: 11px;
+	opacity: 0.8;
+}
+
+.gui-ar-run-status--keep {
+	color: #34d399;
+}
+
+.gui-ar-run-status--discard,
+.gui-ar-run-status--crash {
+	color: #f87171;
+}
+
+.gui-ar-run-status--checks_failed {
+	color: #fbbf24;
+}
+
+.gui-ar-run-status--running {
+	color: var(--color-accent);
+}
+
+.gui-ar-run-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	padding-top: 3px;
+	font-size: 11px;
+	opacity: 0.6;
+}
+
+.gui-ar-run-metric {
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-ar-run-err {
+	color: #f87171;
+}
+
+/* ── Debug Tools panel (desktop adaptation of the TUI /debug selector) ── */
+.gui-dbg-panel {
+	padding: 4px 2px;
+	max-height: 60vh;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.gui-dbg-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 4px 8px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+	margin-bottom: 8px;
+}
+
+.gui-dbg-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.gui-dbg-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	color: var(--fg);
+	opacity: 0.7;
+}
+
+.gui-dbg-close:hover {
+	opacity: 1;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+}
+
+.gui-dbg-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-dbg-row {
+	padding: 6px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 45%, transparent);
+	border-radius: 8px;
+}
+
+.gui-dbg-row-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	text-align: left;
+}
+
+.gui-dbg-row-main:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.gui-dbg-row-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.gui-dbg-tag {
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	opacity: 0.8;
+}
+
+.gui-dbg-busy {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
+	border-top-color: var(--color-accent);
+	animation: gui-dbg-spin 0.7s linear infinite;
+}
+
+@keyframes gui-dbg-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.gui-dbg-row-desc {
+	font-size: 11.5px;
+	opacity: 0.6;
+}
+
+.gui-dbg-row-action {
+	margin-top: 6px;
+	padding: 3px 10px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--color-accent);
+}
+
+.gui-dbg-row-action--danger {
+	background: color-mix(in oklab, #e5484d 14%, transparent);
+	color: #f87171;
+}
+
+.gui-dbg-pre {
+	margin-top: 6px;
+	padding: 8px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	font-family: ui-monospace, monospace;
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.gui-dbg-path {
+	margin-top: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-dbg-path-line {
+	font-family: ui-monospace, monospace;
+	font-size: 11.5px;
+	word-break: break-all;
+	opacity: 0.9;
+}
+
+.gui-dbg-path-meta {
+	font-size: 11px;
+	opacity: 0.55;
+}
+
+.gui-dbg-svg {
+	margin-top: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.gui-dbg-svg img {
+	width: 100%;
+	max-height: 240px;
+	object-fit: contain;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+}
+
+.gui-dbg-error {
+	margin-top: 6px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: color-mix(in oklab, #e5484d 12%, transparent);
+	color: #f87171;
+	font-size: 11.5px;
+	word-break: break-word;
+}
+
+
+/* ── Floating scroll indicator (FloatingScrollbar.tsx) ──────────────────
+ * A fixed overlay rail drawn next to the scrolled container — system
+ * scrollbars are hidden globally (gui-base.css), so this is the only
+ * progress affordance. Skin-driven via --skin-* custom properties:
+ *   gummy  — jelly capsule thumb (data-base="gummy"), height = visible
+ *            ratio, stretches while scrolling and springs back.
+ *   pacman — hairline thread + a string of beads at 7px pitch; a pac-man
+ *            rides the thread, beads above it are "eaten" (dimmed).
+ * Bead colors come from the active skin (--skin-accent / --skin-track /
+ * --skin-eaten) injected inline by the component. */
+.gui-float-scrollbar {
+	position: fixed;
+	width: 12px;
+	z-index: 100000;
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 240ms ease, visibility 240ms ease;
+}
+.gfs-track {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	margin-left: -0.5px;
+	background: var(--skin-track, color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent));
+}
+.gfs-beads,
+.gfs-beads-eaten {
+	position: absolute;
+	inset-inline: 0;
+	top: 0;
+	background-image: radial-gradient(circle 2px at 50% 3.5px, var(--skin-accent, #ffd94d) 99%, transparent);
+	background-size: 100% 7px;
+	background-repeat: repeat-y;
+}
+.gfs-beads {
+	height: 100%;
+}
+.gfs-beads-eaten {
+	height: 0;
+	background-image: radial-gradient(circle 2px at 50% 3.5px, var(--skin-eaten, #7a7462) 99%, transparent);
+}
+.gfs-pac {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: calc(var(--skin-size, 12px));
+	height: calc(var(--skin-size, 12px));
+}
+.gfs-pac svg {
+	display: block;
+}
+/* Gummy base: a jelly capsule thumb — height = the visible ratio,
+ * stretched while scrolling (JS scaleY) and springing back on the
+ * release transition. Accent-tinted glass: a top highlight and a soft
+ * accent drop shadow carry the candy gloss; the capsule is narrower
+ * than the rail (0.55×) and centered on it. */
+.gui-float-scrollbar[data-base="gummy"] .gfs-gummy {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	width: calc(var(--skin-size, 12px) * 0.55);
+	min-height: 24px;
+	border-radius: 999px;
+	background: linear-gradient(
+		160deg,
+		color-mix(in oklab, var(--skin-accent, var(--color-accent)) 88%, white 12%),
+		color-mix(in oklab, var(--skin-accent, var(--color-accent)) 78%, black 6%)
+	);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.42),
+		inset 0 -1.5px 0 rgba(0, 0, 0, 0.28),
+		0 2px 10px color-mix(in oklab, var(--skin-accent, var(--color-accent)) 45%, transparent);
+}
+.gfs-gummy-shine {
+	position: absolute;
+	inset: 2px 3px auto;
+	height: 38%;
+	border-radius: 999px;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-float-scrollbar {
+		animation: none;
+	}
+}

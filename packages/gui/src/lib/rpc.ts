@@ -23,6 +23,9 @@ export interface StreamEvent {
 	kind: string;
 	seq: number;
 	payload: unknown;
+	/** Subscribing session (B1: multi-session routing). Absent for
+	 *  UI-command/global envelopes (terminal, pause, provider). */
+	sessionId?: string;
 }
 
 /** Timer handle as typed by bun-types (browser bundle overrides). */
@@ -193,6 +196,19 @@ export class RpcClient {
 				const event = m as unknown as StreamEvent;
 				this.#onEvent?.(event);
 				for (const handler of this.#extraEvents) handler(event);
+				return;
+			}
+			// Coalesced frame (daemon EventBatcher): { kind: "batch", events }.
+			// Inner envelopes keep their own seq — fan out exactly like
+			// individually-framed envelopes so consumers see no difference.
+			if (m.kind === "batch" && Array.isArray(m.events)) {
+				for (const inner of m.events as unknown[]) {
+					if (typeof inner !== "object" || inner === null) continue;
+					const event = inner as StreamEvent;
+					this.#onEvent?.(event);
+					for (const handler of this.#extraEvents) handler(event);
+				}
+				return;
 			}
 		});
 		ws.addEventListener("close", (ev: CloseEvent) => {

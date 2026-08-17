@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/collab-web";
+import { Markdown, t } from "@musepi/desktop-web";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
 import { Loader } from "lucide-react";
 import { MorphIcon } from "morphicons/react";

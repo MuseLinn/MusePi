@@ -8,7 +8,7 @@
 - Key collaborators:
   - `packages/coding-agent/src/daemon/boards.ts` — board persistence (`readBoards`/`writeBoards`) and validation (known widget types, integer positions, id/title strings).
   - `packages/coding-agent/src/tools/widget.ts` — the widget schema (`WIDGET_TYPES`/`WIDGET_TONES`) this tool exposes via the `schema` action.
-  - `packages/collab-web/src/widgets/registry.ts` — the GUI-side widget registry the daemon table mirrors.
+  - `packages/desktop-web/src/widgets/registry.ts` — the GUI-side widget registry the daemon table mirrors.
 
 ## Inputs
 

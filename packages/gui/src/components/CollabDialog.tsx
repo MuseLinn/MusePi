@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
@@ -58,6 +58,77 @@ export function CollabDialog({
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
 	const [mode, setMode] = useState<"session" | "workspace">("session");
+	const [pairCode, setPairCode] = useState<string | null>(null);
+	const [channels, setChannels] = useState<
+		{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[] | null
+	>(null);
+	const [expandedKind, setExpandedKind] = useState<string | null>(null);
+	const [configDraft, setConfigDraft] = useState<Record<string, string>>({});
+	const [plugins, setPlugins] = useState<{ kind: string; label: string; origin: string; registered: boolean }[] | null>(null);
+
+	const refreshPlugins = async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const list = await rpc.request<{ kind: string; label: string; origin: string; registered: boolean }[]>(
+				"channels.plugins",
+				{},
+			);
+			setPlugins(list);
+		} catch {
+			setPlugins([]);
+		}
+	};
+
+	const reloadPlugins = async (): Promise<void> => {
+		if (!rpc) return;
+		await rpc
+			.request("channels.reloadPlugins", {})
+			.then(() => Promise.all([refreshChannels(), refreshPlugins()]))
+			.catch(() => {});
+	};
+
+	const saveConfig = async (kind: string): Promise<void> => {
+		if (!rpc) return;
+		await rpc
+			.request("channels.configure", { kind, config: configDraft })
+			.then(() => rpc.request("channels.start", { kind }))
+			.then(() => refreshChannels())
+			.catch(() => refreshChannels());
+		setExpandedKind(null);
+		setConfigDraft({});
+	};
+
+	const channelFields: Record<string, { key: string; label: string; secret: boolean }[]> = {
+		discord: [{ key: "token", label: "Bot token", secret: true }],
+		wechat: [{ key: "token", label: "Token (optional — QR login if empty)", secret: true }],
+		"huawei-today": [
+			{ key: "apiKey", label: "PERSONAL-API-KEY", secret: true },
+			{ key: "uid", label: "PERSONAL-UID", secret: false },
+		],
+	};
+
+	const refreshChannels = async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const list = await rpc.request<{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[]>(
+				"channels.list",
+				{},
+			);
+			setChannels(list);
+		} catch {
+			setChannels([]);
+		}
+	};
+
+	const genPairCode = async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("collab.pair.generate", {});
+			setPairCode(res.code);
+		} catch {
+			setPairCode(null);
+		}
+	};
 
 	const refresh = async (): Promise<void> => {
 		if (!rpc) return;
@@ -74,6 +145,8 @@ export function CollabDialog({
 
 	useEffect(() => {
 		void refresh();
+		void refreshChannels();
+		void refreshPlugins();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [refresh]);
 
@@ -170,6 +243,24 @@ export function CollabDialog({
 									<span>{copied ? t("copied") : t("copy link")}</span>
 								</button>
 							</div>
+							{/* MusePi Mobile pair code: no-camera fallback to the QR. */}
+							<div className="gui-collab-pair">
+								<span className="text-[12px] text-[var(--color-text-faint)]">
+									{t("or use MusePi Mobile pair code")}
+								</span>
+								<div className="gui-collab-pair-row">
+									<span className="gui-collab-pair-code">
+										{pairCode ?? "——————"}
+									</span>
+									<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
+										<Icon name="refresh" className="h-3.5 w-3.5" />
+										<span>{t("get code")}</span>
+									</button>
+								</div>
+								<span className="text-[11px] text-[var(--color-text-faint)]">
+									{t("enter the 6-digit code in MusePi Mobile (same network)")}
+								</span>
+							</div>
 						</>
 					) : (
 						<div className="gui-collab-idle">
@@ -208,7 +299,7 @@ export function CollabDialog({
 						</div>
 					)}
 				</section>
-				{/* Right: bot channels (placeholder — no bot backend). */}
+				{/* Right: bot channels (live status from daemon). */}
 				<section className="gui-collab-col">
 					<div className="gui-collab-col-head">
 						<Icon name="robot" className="h-4 w-4" />
@@ -216,22 +307,104 @@ export function CollabDialog({
 					</div>
 					<p className="gui-collab-desc">{t("connect a chat bot for longer mobile access")}</p>
 					<div className="gui-collab-bots">
-						{(["wechat", "feishu", "lark", "telegram"] as const).map(b => (
-							<div key={b} className="gui-collab-bot gui-collab-bot--disabled" title={t("not configured")}>
-								<span className={`gui-collab-bot-ico gui-collab-bot-ico--${b}`} />
-								<div className="min-w-0 flex-1">
-									<div className="text-[13px] font-medium capitalize">{b}</div>
-									<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-										{t("open this workspace from {name}", { name: b })}
+						{(channels ?? []).map(c => {
+							const label = c.kind;
+							const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
+							const fields = channelFields[c.kind];
+							return (
+								<div key={c.kind} className="gui-collab-bot-wrap">
+									<div className={`gui-collab-bot${on ? "" : " gui-collab-bot--off"}`}>
+										<span className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`} />
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-2">
+												<span className="text-[13px] font-medium capitalize">{label}</span>
+												<span className={`gui-collab-dot${on ? "" : " gui-collab-dot--off"}`} />
+											</div>
+											<div className="truncate text-[12px] text-[var(--color-text-faint)]">
+												{c.detail ?? (c.state === "off" ? t("off") : c.state)}
+											</div>
+										</div>
+										<button
+											type="button"
+											className="gui-btn gui-btn-sm"
+											disabled={c.state === "connecting"}
+											onClick={() => {
+												if (on) {
+													void rpc
+														?.request("channels.stop", { kind: c.kind })
+														.then(() => refreshChannels())
+														.catch(() => refreshChannels());
+												} else {
+													setExpandedKind(expandedKind === c.kind ? null : c.kind);
+												}
+											}}
+										>
+											{on ? t("stop") : t("start")}
+										</button>
 									</div>
+									{expandedKind === c.kind && fields && (
+										<div className="gui-collab-channel-config">
+											{fields.map(f => (
+												<input
+													key={f.key}
+													className="gui-collab-channel-input"
+													type={f.secret ? "password" : "text"}
+													placeholder={f.label}
+													value={configDraft[f.key] ?? ""}
+													onChange={e =>
+														setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))
+													}
+													autoComplete="off"
+												/>
+											))}
+											<button
+												type="button"
+												className="gui-btn gui-btn-primary gui-btn-sm"
+												disabled={!fields.every(f => (configDraft[f.key] ?? "").trim())}
+												onClick={() => void saveConfig(c.kind)}
+											>
+												{t("save and start")}
+											</button>
+										</div>
+									)}
 								</div>
-							</div>
-						))}
+							);
+						})}
+						{(channels ?? []).length === 0 && (
+							<div className="text-[12px] text-[var(--color-text-faint)]">{t("no channels configured")}</div>
+						)}
 					</div>
-					<button type="button" className="gui-collab-bot-mgmt" disabled title={t("not configured")}>
-						<Icon name="settings-3" className="h-3.5 w-3.5" />
-						<span>{t("bot management")}</span>
-					</button>
+					{/* Plugin inventory (game-mod style): builtin + hot-plugged
+					 * channel modules; reload rescans the plugin directory. */}
+					<div className="mt-2 border-t border-[var(--border)] pt-2">
+						<div className="flex items-center justify-between">
+							<span className="text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
+								{t("channel plugins")}
+							</span>
+							<button
+								type="button"
+								className="gui-btn gui-btn-sm"
+								title={t("reload plugins")}
+								onClick={() => void reloadPlugins()}
+							>
+								<Icon name="refresh" className="h-3 w-3" />
+							</button>
+						</div>
+						<div className="mt-1 flex flex-wrap gap-1">
+							{(plugins ?? []).map(p => (
+								<span
+									key={p.kind}
+									className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]"
+									title={p.origin}
+								>
+									{p.label}
+								</span>
+							))}
+							{(plugins ?? []).length === 0 && (
+								<span className="text-[11px] text-[var(--color-text-faint)]">{t("no plugins")}</span>
+							)}
+						</div>
+					</div>
 				</section>
 			</div>
 		</DialogFrame>

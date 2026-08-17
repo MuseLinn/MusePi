@@ -43,6 +43,7 @@ zune-jpeg.workspace = true
 inferno.workspace = true
 napi.workspace = true
 napi-derive.workspace = true
+pdf-inspector.workspace = true
 parking_lot.workspace = true
 phf.workspace = true
 flume.workspace = true

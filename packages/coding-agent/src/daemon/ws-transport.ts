@@ -19,7 +19,7 @@ import {
 	RelayProtocolError,
 	type WsFrame,
 } from "../collab/relay-server";
-import type { DaemonConnection } from "./server";
+import { type DaemonConnection, MAX_REQUEST_BYTES } from "./server";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 /** Cap on the raw HTTP upgrade header (before the blank line). */
@@ -33,6 +33,8 @@ const OP_PONG = 0xa;
 
 export interface DaemonWsOptions {
 	port: number;
+	/** Bind host. Defaults to loopback; the mobile pair endpoint passes "0.0.0.0". */
+	host?: string;
 	/** One complete text message from a client (a JSON-RPC request line). */
 	onMessage(conn: DaemonConnection, text: string): void;
 	/** Connection closed — drop subscriptions held by this client. */
@@ -122,6 +124,7 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 					socket.write(encodeFrame(OP_TEXT, new TextEncoder().encode(JSON.stringify(message))));
 				}
 			},
+			writableLength: () => socket.writableLength,
 		};
 		logger.debug("ws connection open", { connId: conn.id, remote: socket.remoteAddress ?? null });
 		const frameDecoder = new FrameDecoder();
@@ -158,6 +161,14 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 		onCloseFrame?: (code: number) => void,
 	): void {
 		if (frame.opcode === OP_TEXT) {
+			// Frame-size fence (unix-socket parity): the decoder buffers the
+			// whole frame, so an oversized payload would pin memory until
+			// delivered — reject it with the JSON-RPC too-large code and
+			// keep the connection usable (the frame is already complete).
+			if (frame.payload.byteLength > MAX_REQUEST_BYTES) {
+				conn.send({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Request too large" } });
+				return;
+			}
 			options.onMessage(conn, decoder.decode(frame.payload));
 			return;
 		}
@@ -185,7 +196,7 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 
 	const { promise, resolve, reject } = Promise.withResolvers<DaemonWsHandle>();
 	server.once("error", reject);
-	server.listen(options.port, "127.0.0.1", () => {
+	server.listen(options.port, options.host ?? "127.0.0.1", () => {
 		server.off("error", reject);
 		const port = (server.address() as net.AddressInfo).port;
 		resolve({

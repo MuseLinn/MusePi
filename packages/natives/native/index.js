@@ -69,6 +69,7 @@ export const matchesLegacySequence = nativeBindings.matchesLegacySequence;
 export const mmrRerankIndices = nativeBindings.mmrRerankIndices;
 export const parseKey = nativeBindings.parseKey;
 export const parseKittySequence = nativeBindings.parseKittySequence;
+export const pdfToMarkdown = nativeBindings.pdfToMarkdown;
 export const readImageFromClipboard = nativeBindings.readImageFromClipboard;
 export const renderSnapcompactPng = nativeBindings.renderSnapcompactPng;
 export const search = nativeBindings.search;

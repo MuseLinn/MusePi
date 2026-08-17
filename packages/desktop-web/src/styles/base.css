@@ -1,0 +1,154 @@
+/* Base reset + globals. Token vars only. */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+/* The universal margin reset must live in @layer base, never unlayered:
+ * Tailwind v4 utilities are emitted into @layer utilities, and unlayered
+ * rules outrank EVERY layer in the cascade — an unlayered `* { margin: 0 }`
+ * silently zeroes every margin utility it touches (mx-*, mt-*, ml-auto).
+ * The empty @layer blocks below pin the layer order (theme < base <
+ * components < utilities) ahead of the reset block — the tailwind CLI
+ * rewrites an `@layer a, b, c;` statement into exactly this form, so it
+ * also survives the GUI build's tailwind.out.css pass. */
+@layer theme {
+}
+@layer base {
+}
+@layer components {
+}
+@layer utilities {
+}
+@layer base {
+	* {
+		margin: 0;
+	}
+}
+
+html {
+	height: 100%;
+	/* Paint under the system bars when edge-to-edge: without a root bg the
+	 * strip below the status bar flashes the default white until the app
+	 * layer mounts. */
+	background: var(--bg);
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+	overscroll-behavior-y: none;
+}
+
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	overscroll-behavior-y: none;
+	background: var(--bg);
+}
+
+body {
+	font: 400 var(--ui-font-size) / 1.5 var(--font-ui);
+	background: var(--bg);
+	color: var(--fg);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select,
+a {
+	font: inherit;
+	color: inherit;
+	-webkit-tap-highlight-color: transparent;
+	touch-action: manipulation;
+}
+
+button {
+	cursor: pointer;
+}
+
+a {
+	color: var(--accent);
+}
+
+code,
+pre,
+kbd {
+	font-family: var(--font-mono);
+}
+
+:focus-visible {
+	/* No focus box at all: the previous 2px ring (solid outline, then a
+	 * soft glow) still read as a frame around inputs, collection cards,
+	 * settings and the session composer. Focus state is conveyed by the
+	 * controls themselves (accent borders, raised backgrounds, caret). */
+	outline: none;
+	box-shadow: none;
+}
+
+input,
+textarea {
+	caret-color: var(--accent);
+}
+
+::selection {
+	background: var(--accent-muted);
+}
+
+/* subtle scrollbars — canonical spec (matches gui.css): 8px rail, rounded
+ * thumb floating on a transparent track via a 2px inset border. */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--fg-faint) 30%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: color-mix(in oklab, var(--fg-faint) 30%, transparent);
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--fg-faint) 50%, transparent);
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* shared animations */
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+@keyframes shimmer {
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
+}

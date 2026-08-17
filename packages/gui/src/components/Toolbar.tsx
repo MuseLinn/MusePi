@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";

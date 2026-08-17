@@ -41,6 +41,13 @@ const DISPLAY_NAME = "MusePi";
 const DESCRIPTION = "Native MusePi configuration from ~/.musepi/agent and .musepi/";
 const PRIORITY = 100;
 
+// Modes/插件化(DSH 对齐):MusePi 自有扩展系统(TS 扩展模块 + manifest)独立
+// provider —— 与 OMP Extension Packages(omp-plugins)并存,扩展中心独立 tab。
+const MUSEPI_EXTENSIONS_PROVIDER_ID = "musepi-extensions";
+const MUSEPI_EXTENSIONS_DISPLAY_NAME = "MusePi Extensions";
+const MUSEPI_EXTENSIONS_DESCRIPTION =
+	"MusePi 自有扩展(TS 模块 + manifest):~/.musepi/agent/extensions 与 <cwd>/.musepi/extensions";
+
 const PATHS = SOURCE_PATHS.native;
 
 async function ifNonEmptyDir(...seg: string[]): Promise<string | null> {
@@ -194,7 +201,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 					  }
 					| undefined,
 				transport: serverConfig.type as "stdio" | "sse" | "http" | undefined,
-				_source: createSourceMeta(PROVIDER_ID, path, level),
+				_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, path, level),
 			});
 		}
 		return result;
@@ -474,7 +481,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		name: getExtensionNameFromPath(extPath),
 		path: extPath,
 		level,
-		_source: createSourceMeta(PROVIDER_ID, extPath, level),
+		_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, extPath, level),
 	});
 
 	const configDirs = await getConfigDirs(ctx);
@@ -559,9 +566,9 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 }
 
 registerProvider<ExtensionModule>(extensionModuleCapability.id, {
-	id: PROVIDER_ID,
-	displayName: DISPLAY_NAME,
-	description: DESCRIPTION,
+	id: MUSEPI_EXTENSIONS_PROVIDER_ID,
+	displayName: MUSEPI_EXTENSIONS_DISPLAY_NAME,
+	description: MUSEPI_EXTENSIONS_DESCRIPTION,
 	priority: PRIORITY,
 	load: loadExtensionModules,
 });
@@ -618,7 +625,7 @@ async function loadExtensions(ctx: LoadContext): Promise<LoadResult<Extension>> 
 			path: extDir,
 			manifest,
 			level,
-			_source: createSourceMeta(PROVIDER_ID, manifestPath, level),
+			_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, manifestPath, level),
 		});
 	}
 
@@ -626,9 +633,9 @@ async function loadExtensions(ctx: LoadContext): Promise<LoadResult<Extension>> 
 }
 
 registerProvider<Extension>(extensionCapability.id, {
-	id: PROVIDER_ID,
-	displayName: DISPLAY_NAME,
-	description: DESCRIPTION,
+	id: MUSEPI_EXTENSIONS_PROVIDER_ID,
+	displayName: MUSEPI_EXTENSIONS_DISPLAY_NAME,
+	description: MUSEPI_EXTENSIONS_DESCRIPTION,
 	priority: PRIORITY,
 	load: loadExtensions,
 });

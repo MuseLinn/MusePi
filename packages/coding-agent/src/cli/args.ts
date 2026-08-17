@@ -28,6 +28,8 @@ export interface Args {
 	addDir?: string[];
 	profile?: string;
 	alias?: string;
+	/** 会话预设(mode)id:`--preset <id>`(Modes v1;与运行模式 Args.mode 区分)。 */
+	preset?: string;
 	allowHome?: boolean;
 	provider?: string;
 	model?: string;

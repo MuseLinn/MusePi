@@ -18,7 +18,9 @@ for (const file of htmlFiles) {
 			? "bubble.html"
 			: content.includes("<title>MusePi Pin</title>")
 				? "pin.html"
-				: "index.html";
+				: content.includes("<title>MusePi Tray</title>")
+					? "tray-menu.html"
+					: "index.html";
 	renameSync(`${dir}${file}`, `${dir}${name}`);
 	console.log(`dist/${file} -> dist/${name}`);
 	// Electron loads dist via file:// — bun 1.3.14 emits module scripts and

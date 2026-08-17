@@ -131,6 +131,8 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import { createModeResolver, ensureModeTemplates, type ResolvedMode } from "./presets/resolve";
+import { PromptComposer } from "./prompts/composer";
 import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
@@ -572,6 +574,12 @@ export interface CreateAgentSessionOptions {
 
 	/** Settings instance. Default: Settings.init({ cwd, agentDir }) */
 	settings?: Settings;
+
+	/** 会话预设(mode)id:v1 会话创建时应用(扩展白名单/提示词注入/settings 覆盖;docs/modes-plan.md §6.1)。 */
+	modeId?: string;
+
+	/** 预设目录(测试/嵌入可覆盖;默认 <home>/.musepi/modes,决策 #5)。 */
+	modeDir?: string;
 	/**
 	 * Legacy alias for `settings`. Older Pi extensions pass SettingsManager.create(...)
 	 * through this field; accept it so their SDK calls keep the configured settings.
@@ -1460,10 +1468,43 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			startupCredentialDisabledEvents.push(event);
 		}
 	});
-	const settings = await (options.settings ??
+	let settings = await (options.settings ??
 		options.settingsManager ??
 		logger.time("settings", Settings.init, { cwd, agentDir }));
 	logger.time("initializeWithSettings", initializeWithSettings, settings);
+	// Modes v1(§5.4/§6.1):解析会话预设 + 用户全局提示词区块。
+	// composer 统一承载:mode 区块(source=mode:<id>)+ 用户区块(source=user,
+	// 后 add 同名胜 → 用户覆盖预设,§4.3);modeId 只由顶层会话传入。
+	const modeState = (() => {
+		const composer = new PromptComposer();
+		let resolved: ResolvedMode | undefined;
+		if (options.modeId) {
+			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			ensureModeTemplates(modeDir);
+			resolved = createModeResolver(modeDir).resolve(options.modeId);
+			for (const section of resolved.prompt) composer.add({ ...section, source: `mode:${resolved.id}` });
+		}
+		const rawSections = settings.get("prompt.sections");
+		const userSections =
+			Array.isArray(rawSections) && rawSections.length > 0
+				? (rawSections as { name: string; order: number; text: string }[])
+				: undefined;
+		if (userSections && userSections.length > 0) {
+			for (const section of userSections) composer.add({ ...section, source: "user" });
+		}
+		return resolved || composer.size > 0 ? { resolved, composer } : undefined;
+	})();
+	// settings 覆盖(§4.3):mode 键合并进 per-session 克隆实例,不污染共享
+	// discovery.settings(daemon 多会话隔离);用户全局显式值已在克隆快照,
+	// cloneForCwd 的 #global/#project 独立,set 只写本会话视图。
+	if (modeState?.resolved && Object.keys(modeState.resolved.settings).length > 0) {
+		const sessionSettings = await settings.cloneForCwd(cwd);
+		for (const [key, value] of Object.entries(modeState.resolved.settings)) {
+			// mode.settings 键是运行时字符串,Settings.set 要求字面量键 —— cast 到联合键。
+			(sessionSettings as Settings).set(key as Parameters<Settings["set"]>[0], value as never);
+		}
+		settings = sessionSettings;
+	}
 	if (!options.modelRegistry) {
 		modelRegistry.refreshInBackground();
 	}
@@ -1526,7 +1567,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	const sessionManager =
 		options.sessionManager ??
 		logger.time("sessionManager", () =>
-			SessionManager.create(cwd, SessionManager.getDefaultSessionDir(cwd, agentDir)),
+			SessionManager.create(
+				cwd,
+				SessionManager.getDefaultSessionDir(cwd, agentDir),
+				undefined,
+				modeState?.resolved?.id,
+			),
 		);
 	const configuredDirs = options.additionalDirectories
 		? options.additionalDirectories
@@ -1607,6 +1653,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			matchPreferences: modelMatchPreferences,
 		}),
 	);
+	// Modes v1(§6.1):mode.modelRole 覆盖默认档位 —— 仅当调用方未显式指定 model。
+	// 解析 settings.modelRoles[role] 或内置角色(fast/small/slow 等);解析失败回退默认。
+	if (modeState?.resolved?.modelRole && !options.model && !options.modelPattern) {
+		const modeRoleSpec = logger.time("resolveModeModelRole", () =>
+			resolveModelRoleValue(settings.getModelRole(modeState.resolved!.modelRole!), allowedModels, {
+				settings,
+				matchPreferences: modelMatchPreferences,
+			}),
+		);
+		if (modeRoleSpec.model) defaultRoleSpec = modeRoleSpec;
+	}
 	let model = options.model;
 	let modelFallbackMessage: string | undefined;
 	let initialRetryFallback: InitialRetryFallbackState | undefined;
@@ -2220,6 +2277,26 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Forward the source-path list (NOT the loaded instances) so subagents
 		// rebuild their own session-scoped extensions.
 		toolSession.extensionPaths = extensionPaths;
+
+		// Modes v1(§4.3/决策 #10):预设扩展白名单过滤 —— 三态:
+		// extensions undefined = 全部启用;[] = 仅内置核心;数组 = 白名单。
+		// 扩展 id = 发现路径 basename(loader.createExtension 无独立 id 字段)。
+		// 用户全局 disabledExtensions 在 discoverSessionExtensionPaths/settings 层最后生效。
+		if (modeState?.resolved) {
+			const whitelist = modeState.resolved.extensions;
+			if (whitelist !== undefined) {
+				const before = extensionsResult.extensions.length;
+				extensionsResult.extensions = extensionsResult.extensions.filter(ext => {
+					const id = path.basename(ext.path);
+					return whitelist.includes(id);
+				});
+				logger.debug("modes: extension whitelist filtered", {
+					mode: modeState.resolved.id,
+					before,
+					after: extensionsResult.extensions.length,
+				});
+			}
+		}
 
 		// Load inline extensions from factories
 		if (inlineExtensions.length > 0) {
@@ -3014,9 +3091,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			tools: Map<string, AgentTool>,
 		): Promise<BuildSystemPromptResult> => {
 			const promptCwd = sessionManager.getCwd();
-			const activeRepoContext = hasSession
-				? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
-				: initialActiveRepoContext;
+			const activeRepoContext =
+				modeState?.resolved?.runtimeContext === false
+					? null // Modes v1(决策 #16):极简预设关闭 activeRepoContext 区块
+					: hasSession
+						? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
+						: initialActiveRepoContext;
 			if (hasSession && options.contextFiles === undefined) {
 				contextFiles = await logger.time("discoverContextFiles", discoverContextFiles, promptCwd, agentDir, [
 					...(settings.get("disabledExtensions") ?? []),
@@ -3135,6 +3215,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			});
 
 			if (options.systemPrompt === undefined) {
+				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
+				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
+				if (modeState && modeState.composer.size > 0) {
+					if (modeState.resolved?.promptComplete) {
+						return {
+							...defaultPrompt,
+							systemPrompt: modeState.composer.composeComplete(),
+						};
+					}
+					return {
+						...defaultPrompt,
+						systemPrompt: modeState.composer.compose(defaultPrompt.systemPrompt),
+					};
+				}
 				return defaultPrompt;
 			}
 			const customPrompt =

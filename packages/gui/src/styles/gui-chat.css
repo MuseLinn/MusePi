@@ -1,0 +1,3592 @@
+.gui-terminal-host {
+	height: 100%;
+	min-height: 0;
+	padding: 8px 6px;
+}
+
+.gui-terminal-host .xterm {
+	height: 100%;
+	/* xterm core writes an inline width from cols × cellWidth; a transient
+	 * huge host width (layout not settled) compounds into a multi-megapixel
+	 * element that blows the chat surface past the window edge. Force the
+	 * element to fill the host instead. */
+	width: 100% !important;
+}
+
+.gui-terminal-host .xterm-viewport {
+	background: transparent !important;
+}
+
+/* ── Model selector search (composer-integrated, openchamber parity) ── */
+.gui-model-menu-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 6px 8px;
+	padding: 5px 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+}
+
+.gui-model-menu-input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: 12.5px;
+}
+
+/* ── Bottom integrated terminal drawer (ZCode style) ────────────────── */
+.gui-terminal-dock {
+	min-width: 0;
+	width: 100%;
+	background: color-mix(in oklab, var(--color-surface-sunken) 96%, transparent);
+	/* Open/close animation: height animates 0 ↔ dockHeight; the border
+	 * fades in with it so a closed dock leaves no hairline. */
+	transition:
+		height 220ms var(--spring),
+		border-color 220ms ease-out;
+}
+
+/* While dragging the handle, the height must track the pointer 1:1. */
+.gui-terminal-dock--resizing {
+	transition: none !important;
+}
+
+.gui-terminal-dock:not(.gui-terminal-dock--open) {
+	border-top-color: transparent;
+}
+
+.gui-terminal-dock .gui-terminal-host {
+	padding: 4px 10px;
+}
+
+.gui-tool-btn--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+/* ── Terminal tabs ──────────────────────────────────────────────────── */
+.gui-terminal-host {
+	background: transparent;
+}
+
+.gui-terminal-tab {
+	color: var(--color-text-faint);
+	border: 1px solid transparent;
+}
+
+.gui-terminal-tab:hover {
+	background: color-mix(in oklab, var(--color-hover) 60%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-terminal-tab--active {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 24%, transparent);
+	color: var(--color-text);
+}
+
+.gui-terminal-tab--active .oc-icon {
+	color: var(--color-accent);
+}
+
+/* ── Unified chat surface scenes (welcome ↔ session transition) ─────── */
+/* Both scenes mount during the 420ms overlap window (the incoming FLIPs
+ * from the outgoing frame); absolutely positioning them keeps each scene
+ * full-surface instead of splitting the column in half (flex-1 would
+ * squeeze each to 50% — the "welcome shows the top half, chat the bottom
+ * half" glitch). */
+.gui-scenes > .gui-scene-welcome,
+.gui-scenes > .gui-scene-chat {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.gui-scene-welcome {
+	display: flex;
+	flex-direction: column;
+	/* Paired entrance with the chat scene: 160ms rise on both legs of
+	 * welcome<->session (the chat side uses gui-scene-chat--direct for
+	 * the same duration during the morph overlap). */
+	animation: gui-scene-in 160ms ease;
+}
+
+.gui-scene--leaving {
+	opacity: 0;
+	transform: scale(0.97);
+	/* Quick cross: both directions fade the outgoing scene out at the
+	 * same pace, so welcome↔session read as one paired transition. */
+	transition: opacity 200ms ease, transform 200ms ease;
+	pointer-events: none;
+}
+
+.gui-scene-chat {
+	animation: gui-scene-in 360ms ease;
+}
+/* During the welcome→session composer morph the incoming scene must not
+ * fade in slowly on top of the flight (opacity 0→1 over 360ms reads as
+ * a cross-fade instead of the morph move). A SHORT 160ms rise pairs
+ * with the welcome side's own content transitions (brand width,
+ * shimmer) on the reverse leg — both directions then have an incoming
+ * fade, none of them a hard pop-in. */
+.gui-scene-chat--direct {
+	animation: gui-scene-in 160ms ease;
+}
+
+@keyframes gui-scene-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* ── Session-bound right panel nested under the transcript ──────────── */
+.gui-pane-right--inner {
+	width: 288px;
+	flex-shrink: 0;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+	overflow: hidden;
+	border-left: 1px solid var(--border);
+	/* Transparent over the workspace glass layer (.gui-main). */
+	background: transparent;
+}
+
+/* Right-pane width drag handle (left edge). */
+.gui-pane-resize-x {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 4px;
+	z-index: 30;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.gui-pane-resize-x:hover {
+	background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+/* Notes pane height drag handle (bottom edge of the note editor). */
+.gui-notes-resize-y {
+	height: 5px;
+	margin: 0 2px 1px;
+	border-radius: 3px;
+	cursor: row-resize;
+	touch-action: none;
+}
+
+.gui-notes-resize-y:hover {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+/* ── Floating sidebar toggle on the pane boundary (ZCode immersive) ─── */
+/* Session composer column — focus mode animates height px↔100% (JS pins
+ * the current height, then transitions to the target; flex:1 would snap). */
+.gui-composer-wrap {
+	transition: height 280ms var(--spring);
+}
+
+/* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
+.gui-composer--focused {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Hero mode wraps the frame in a BorderBeam — the beam must flex too, or
+ * the frame's flex:1 hangs off a non-flex parent and the composer stays
+ * at its content height instead of filling the surface. */
+.gui-composer--focused .gui-border-beam {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-composer--focused .gui-composer-frame {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-composer--focused .gui-composer-frame textarea {
+	flex: 1;
+	min-height: 0;
+	/* The compact composer caps autosized height at 176px; focus mode
+	 * overrides that so the input fills the expanded frame. */
+	max-height: none;
+}
+
+.gui-composer-ico--active {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+/* ── Sound palette cards (Settings → 通知与音效) ────────────────────────
+ * Every cuelume recipe gets a card with a preview button; unwired sounds
+ * are dimmed so coverage gaps are visible at a glance. */
+.gui-sound-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.gui-sfx-event-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.gui-sfx-event-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--color-surface-raised);
+}
+
+.gui-sfx-event-row .gui-settings-select {
+	min-width: 130px;
+	flex-shrink: 0;
+}
+
+.gui-sfx-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	color: var(--color-accent-fg);
+	background: var(--color-accent);
+	transition:
+		transform 120ms ease,
+		opacity 120ms ease;
+}
+
+.gui-sfx-preview:hover {
+	transform: scale(1.08);
+	opacity: 0.9;
+}
+
+.gui-sound-card {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--color-surface-sunken);
+}
+
+.gui-sound-card--idle {
+	opacity: 0.55;
+}
+
+.gui-sound-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	color: var(--color-accent-fg);
+	background: var(--color-accent);
+	transition:
+		transform 120ms ease,
+		opacity 120ms ease;
+}
+
+.gui-sound-preview:hover {
+	transform: scale(1.08);
+	opacity: 0.9;
+}
+
+/* ── Notification templates (Settings → 通知与音效, openchamber parity) ──
+ * Two-column grid of event groups; each group has 标题 + 消息 inputs whose
+ * placeholder shows the default template. Variable chips match the
+ * openchamber orange-code hint line. */
+.gui-tpl-var {
+	display: inline-block;
+	margin: 0 1px;
+	padding: 1px 5px;
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-accent);
+	font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 11.5px;
+	line-height: 1.5;
+}
+
+.gui-notify-tpl-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px 28px;
+	margin-top: 10px;
+}
+
+.gui-notify-tpl-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px 0;
+}
+
+.gui-notify-tpl-name {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+	margin-bottom: 4px;
+}
+
+.gui-notify-tpl-label {
+	display: block;
+	margin: 8px 0 3px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+.gui-notify-tpl-group .gui-input {
+	width: 100%;
+	height: 30px;
+	font-size: 12.5px;
+}
+
+.gui-sound-name {
+	font-family: ui-monospace, "SF Mono", "Maple Mono NF CN", monospace;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
+.gui-sound-usage {
+	font-size: 11px;
+	line-height: 1.3;
+	color: var(--color-text-muted);
+}
+
+/* ── Effects preview (Settings → 外观 → 效果预览) ────────────────────────
+ * One mock scene for the whole effects block (code-preview parity): the
+ * transcript rows reuse the REAL tr-* classes so bubbles and avatars
+ * match the chat surface, then the live status line hangs above a mock
+ * input card — exactly like the real composer column. */
+.gui-effect-preview {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	background: var(--color-surface-raised);
+	padding: 10px 14px;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-effect-preview .tr-gutter {
+	pointer-events: none;
+}
+
+.gui-effect-preview-composer {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	/* Match the real composer card (gui-composer-frame): frosted glass,
+	 * hairline ring + shadow — the preview should show what the chat
+	 * actually renders, not a simplified solid card. */
+	padding: 8px 10px;
+	border: 0.5px solid transparent;
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
+	backdrop-filter: blur(24px) saturate(150%);
+	-webkit-backdrop-filter: blur(24px) saturate(150%);
+	box-shadow: var(--gui-input-shadow);
+}
+
+.gui-effect-preview-input {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+.gui-effect-preview-send {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+}
+
+/* Conditional settings fields (Reveal): see the gui-collapse standard
+ * block — height via useCollapse px, outer fade. (Formerly a
+ * grid-template-rows 0fr↔1fr transition; superseded by the shared
+ * components/Reveal.tsx for consistency with the sidebar groups.) */
+
+/* ── Chat preview (Settings → 聊天 → 聊天预览) ─────────────────────────
+ * Live mermaid + diff renderers (the same code the transcript uses) over
+ * sample content; the segments switch them in place. */
+.gui-chat-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+/* The preview hosts tool-render blocks (DiffBlock) outside a `.tv-card`,
+ * so bridge the tv-* tokens here — otherwise --tv-ok/--tv-err resolve to
+ * guaranteed-invalid and the diff tints silently vanish. */
+.gui-chat-preview,
+.gui-chat-preview-inline {
+	--tv-fg: var(--color-text);
+	--tv-muted: var(--color-text-muted);
+	--tv-faint: var(--color-text-faint);
+	--tv-ok: var(--color-ok, oklch(0.76 0.14 150));
+	--tv-err: var(--color-danger, oklch(0.66 0.19 25));
+	--tv-inset: var(--color-surface-sunken, oklch(0 0 0 / 22%));
+	--tv-border: var(--border);
+}
+
+.gui-chat-preview-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+
+.gui-chat-preview-mermaid {
+	width: fit-content;
+	max-width: 100%;
+	margin-inline: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	background: var(--color-surface-raised);
+}
+
+.gui-chat-preview-mermaid .tr-mermaid {
+	margin: 0;
+	border-radius: 0;
+}
+
+.gui-chat-preview .tv-out {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+
+/* ── Window drag regions (openchamber app-region parity) ─────────────── */
+.gui-drag-strip {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 8px;
+	z-index: 40;
+	-webkit-app-region: drag;
+}
+
+.gui-header {
+	-webkit-app-region: drag;
+}
+
+.gui-header button,
+.gui-header .gui-float-controls {
+	-webkit-app-region: no-drag;
+}
+
+/* Window header container (openchamber Header parity): a separate layer
+ * above the chat surface — full-width drag, seamless with the background. */
+.gui-header {
+	background: transparent;
+	/* Above the chat surface (z 5): icon-button tooltips and header popups
+	 * must stay visible when the board view is open (the board replaces the
+	 * surface but not the header). */
+	z-index: 6;
+}
+
+/* Session header floats seamlessly above the rounded chat surface — no
+ * bottom hairline, so the line never cuts across the surface's rounded
+ * shadow edge. */
+.gui-header--session {
+	border-bottom: none;
+}
+
+/* ── Floating controls (openchamber TitlebarLeftControls parity) ─────── */
+.gui-float-controls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+/* Overlay: FIXED to the window and a CHILD of the drag header, so
+ * Electron's no-drag handling is guaranteed (drag regions only honor
+ * no-drag on descendants). Horizontal, openchamber TitlebarLeftControls
+ * parity (flex items-center gap-2). */
+.gui-float-controls--overlay {
+	position: fixed;
+	left: 84px;
+	top: 11px;
+	z-index: 50;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	-webkit-app-region: no-drag;
+	/* Electron: drag regions swallow pointer events — this overlay floats
+	 * over the sidebar/header drag strips, so mark it no-drag explicitly. */
+	-webkit-app-region: no-drag;
+}
+
+/* Windows/Linux have no macOS traffic lights — reclaim the 84px clearance
+ * (the float controls sit at the window edge, level with the header row). */
+:root[data-platform="win32"] .gui-float-controls--overlay,
+:root[data-platform="linux"] .gui-float-controls--overlay {
+	left: 16px;
+}
+
+.gui-sidebar-toggle {
+	display: flex;
+	height: 26px;
+	width: 26px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-sidebar-toggle:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+/* ── Per-session pause/resume (TUI /pause parity) ────────────────────── */
+/* Pause chip on paused session rows in the sidebar. */
+.gui-tree-pause {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	color: var(--color-warning, var(--color-accent));
+	opacity: 0.85;
+}
+
+.gui-pause-btn {
+	display: inline-flex;
+	height: 28px;
+	width: 28px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-pause-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+/* Global-pause button (daemon-wide freeze) sits beside the session one. */
+.gui-global-pause-btn {
+	margin-left: 2px;
+}
+
+.gui-pause-btn:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-pause-btn--active {
+	color: var(--color-accent, var(--color-warning));
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 12%, transparent);
+	border-color: color-mix(in oklab, var(--color-warning, var(--color-accent)) 35%, transparent);
+}
+
+.gui-pause-btn--active:hover {
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 20%, transparent);
+}
+
+/* Paused banner over the transcript: amber glass strip with hold timer. */
+.gui-pause-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	margin: 8px 12px 0;
+	border-radius: 10px;
+	border: 1px solid color-mix(in oklab, var(--color-warning, var(--color-accent)) 35%, transparent);
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 10%, var(--color-surface));
+	color: var(--color-text);
+	font-size: 12.5px;
+	-webkit-app-region: no-drag;
+	animation: gui-pause-in 220ms var(--spring);
+}
+
+@keyframes gui-pause-in {
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.gui-pause-banner-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	color: var(--color-warning, var(--color-accent));
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 15%, transparent);
+}
+
+.gui-pause-banner-timer {
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+}
+
+.gui-pause-banner-resume {
+	margin-left: auto;
+	padding: 3px 10px;
+	border-radius: 7px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	transition: background 140ms ease;
+}
+
+.gui-pause-banner-resume:hover {
+	background: var(--color-hover);
+}
+
+/* ── Global pause overlay (TUI /pause parity): fullscreen frosted glass ──
+ * Always mounted; the `--active` class animates the backdrop blur in/out
+ * (dynamic blur over whatever the window shows underneath — transcript,
+ * settings dialog, sidebar). */
+.gui-global-pause {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	visibility: hidden;
+	opacity: 0;
+	-webkit-backdrop-filter: blur(0px) saturate(100%);
+	backdrop-filter: blur(0px) saturate(100%);
+	background: color-mix(in oklab, var(--color-bg) 0%, transparent);
+	transition:
+		opacity 320ms var(--spring),
+		visibility 0s linear 320ms,
+		backdrop-filter 320ms var(--spring),
+		-webkit-backdrop-filter 320ms var(--spring);
+	-webkit-app-region: no-drag;
+}
+
+.gui-global-pause--active {
+	visibility: visible;
+	opacity: 1;
+	transition:
+		opacity 240ms var(--spring),
+		visibility 0s linear 0s,
+		backdrop-filter 240ms var(--spring),
+		-webkit-backdrop-filter 240ms var(--spring);
+	/* Frosted glass: heavy dynamic blur over the live window content. */
+	-webkit-backdrop-filter: blur(24px) saturate(150%);
+	backdrop-filter: blur(24px) saturate(150%);
+	background: color-mix(in oklab, var(--color-bg) 42%, transparent);
+}
+
+.gui-global-pause-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 34px 48px;
+	border-radius: 20px;
+	border: 1px solid color-mix(in oklab, var(--color-warning, var(--color-accent)) 30%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
+	box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+	transform: translateY(10px) scale(0.97);
+	opacity: 0;
+	transition:
+		transform 320ms var(--spring),
+		opacity 320ms var(--spring);
+}
+
+.gui-global-pause--active .gui-global-pause-card {
+	transform: translateY(0) scale(1);
+	opacity: 1;
+	transition-delay: 80ms;
+}
+
+.gui-global-pause-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 64px;
+	height: 64px;
+	border-radius: 18px;
+	color: var(--color-warning, var(--color-accent));
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 14%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-warning, var(--color-accent)) 30%, transparent);
+}
+
+.gui-global-pause-title {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 650;
+	letter-spacing: 0.04em;
+	color: var(--color-text);
+}
+
+.gui-global-pause-timer {
+	margin: 0;
+	font-size: 15px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+}
+
+.gui-global-pause-hint {
+	margin: 0;
+	max-width: 320px;
+	text-align: center;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.gui-global-pause-resume {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 6px;
+	padding: 8px 22px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: 13.5px;
+	font-weight: 550;
+	transition: background 140ms ease;
+}
+
+.gui-global-pause-resume:hover {
+	background: var(--color-hover);
+}
+
+/* ── Open-in / copy-path capsule (openchamber OpenInAppButton) ───────── */
+.gui-openin-capsule {
+	position: relative;
+	display: inline-flex;
+	height: 28px;
+	align-items: center;
+	overflow: visible;
+	border-radius: 9px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+}
+
+.gui-openin-main {
+	display: inline-flex;
+	height: 100%;
+	align-items: center;
+	justify-content: center;
+	padding: 0 8px;
+	color: var(--color-text-muted);
+	border-radius: 8px 0 0 8px;
+}
+
+.gui-openin-main:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-openin-more {
+	display: inline-flex;
+	height: 100%;
+	width: 22px;
+	align-items: center;
+	justify-content: center;
+	border-left: 1px solid var(--border);
+	color: var(--color-text-faint);
+	border-radius: 0 8px 8px 0;
+}
+
+.gui-openin-more:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-openin-menu,
+.gui-instance-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 50;
+	min-width: 160px;
+	padding: 4px;
+	border-radius: 12px;
+	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* openchamber dropdown parity: fade + scale in/out. */
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+	transform-origin: top right;
+}
+
+.gui-openin-menu.gui-menu-popup--closing,
+.gui-instance-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+/* ── Instance info pill (openchamber DesktopServicesMenu) ────────────── */
+.gui-instance-btn {
+	display: inline-flex;
+	height: 28px;
+	align-items: center;
+	gap: 5px;
+	border-radius: 8px;
+	padding: 0 8px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-instance-btn:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+/* ── Header session title: switcher trigger (openchamber
+ *    SessionSwitcherDropdown parity) + its ⋯ menu. ─────────────────── */
+.gui-header-title {
+	position: relative;
+	min-width: 0;
+}
+
+.gui-header-title-btn {
+	display: flex;
+	min-width: 0;
+	max-width: min(46vw, 420px);
+	flex-direction: column;
+	align-items: flex-start;
+	border-radius: 8px;
+	padding: 1px 6px;
+	margin-left: -6px;
+	text-align: left;
+	transition: background 120ms ease-out;
+}
+
+.gui-header-title-btn:hover {
+	background: var(--color-hover);
+}
+
+.gui-header-title-row {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: center;
+	gap: 5px;
+}
+
+.gui-remote-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-accent-fg);
+	background: var(--color-accent);
+}
+
+.gui-header-title-row > span:first-child {
+	min-width: 0;
+}
+
+.gui-header-title-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 60;
+	width: 280px;
+	max-height: min(60vh, 420px);
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 4px;
+	border-radius: 12px;
+	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+	transform-origin: top left;
+}
+
+.gui-header-title-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+.gui-header-session-row {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 8px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-header-session-row:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-header-session-row--active {
+	color: var(--color-accent);
+}
+
+/* ── Open-in app icon (openchamber OpenInAppButton parity): real .icns
+ *    image, or a first-letter chip when the icon is unavailable. ───── */
+.gui-openin-app-icon {
+	display: inline-flex;
+	height: 16px;
+	width: 16px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	overflow: hidden;
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 1;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-openin-app-icon img {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+/* Dev-server capsule running state (openchamber project-actions stop). */
+.gui-openin-main--running {
+	color: var(--color-warning, #e2b93d);
+}
+
+/* App scan in flight (openchamber openInAppsStore isScanning pulse) —
+ * own keyframes: the splash blink now carries scale+glow, wrong for a
+ * menu label. */
+.gui-openin-main--scanning {
+	opacity: 0.6;
+	animation: gui-openin-scan 900ms ease-in-out infinite;
+}
+
+@keyframes gui-openin-scan {
+	0%,
+	100% {
+		opacity: 0.35;
+	}
+	50% {
+		opacity: 0.75;
+	}
+}
+
+/* Transient "no dev script" hint under the project-actions capsule. */
+.gui-header-no-dev {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 50;
+	min-width: 0;
+	width: max-content;
+	max-width: 220px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+	font-size: 11px;
+	color: var(--color-text-muted);
+	pointer-events: none;
+	white-space: nowrap;
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+	transform-origin: top right;
+}
+
+/* ── Resizable terminal dock handle ──────────────────────────────────── */
+.gui-dock-handle {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 8px;
+	cursor: row-resize;
+	z-index: 5;
+}
+
+.gui-dock-handle:hover {
+	background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+}
+
+/* ── TitlebarLeftControls cluster menus (collapsed sidebar) ──────────── */
+.gui-overlay-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 60;
+	min-width: 180px;
+	max-width: 260px;
+	padding: 4px;
+	border-radius: 12px;
+	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* openchamber dropdown parity: fade + scale in/out. */
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+	transform-origin: top left;
+}
+
+.gui-overlay-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+.gui-pane-side,
+.gui-pane-right {
+	transition: var(--gui-pane-transition);
+}
+
+body.gui-resizing .gui-pane-side,
+body.gui-resizing .gui-pane-right {
+	transition: none;
+}
+
+/* ── Session cold-open loading (React-Bits-style skeleton) ────────────── */
+.gui-session-loading {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 22px;
+	padding: 0 28px;
+	background: color-mix(in oklab, var(--color-surface) 86%, transparent);
+	backdrop-filter: blur(5px);
+	animation: gui-loading-fadein var(--gui-motion-fade-in) ease-out;
+}
+
+.gui-loading-skeleton {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	width: min(420px, 78%);
+}
+
+.gui-loading-bar {
+	display: block;
+	width: 100%;
+	height: 13px;
+	border-radius: 7px;
+	background: linear-gradient(
+		90deg,
+		color-mix(in oklab, var(--color-text) 5%, transparent) 25%,
+		color-mix(in oklab, var(--color-text) 12%, transparent) 50%,
+		color-mix(in oklab, var(--color-text) 5%, transparent) 75%
+	);
+	background-size: 200% 100%;
+	animation: gui-loading-shimmer 1.4s ease-in-out infinite;
+}
+
+.gui-loading-note {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	font-size: 12.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-loading-orb {
+	width: 7px;
+	height: 7px;
+	border-radius: 9999px;
+	background: var(--color-accent);
+	animation: gui-loading-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes gui-loading-fadein {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes gui-loading-shimmer {
+	0% {
+		background-position: 100% 0;
+	}
+	100% {
+		background-position: -100% 0;
+	}
+}
+
+@keyframes gui-loading-pulse {
+	0%,
+	100% {
+		opacity: 0.35;
+		transform: scale(0.85);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.05);
+	}
+}
+
+/* Transcript fade-in once the loading overlay leaves. */
+.gui-transcript--fadein {
+	animation: gui-loading-fadein 200ms ease-out;
+}
+
+.gui-motion-off .gui-loading-bar,
+.gui-motion-off .gui-loading-orb {
+	animation: none;
+}
+
+/* ── Transcript scroll progress rail (openchamber overlay scrollbar) ─── */
+/* ── Instance/more menus anchor (relative wrappers) ──────────────────── */
+.gui-instance-btn {
+	position: relative;
+}
+
+/* ── Round 4: projects tab collapsible project blocks ───────────────── */
+/* One block per persisted project (full cwd path); header toggles the
+ * SessionTree body, chevron rotates when collapsed. */
+.gui-project-block {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.gui-project-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	/* Fill the block row so the remove button sits AFTER the chevron
+	 * instead of overlapping it (the old width:100% + margin-left:-22px
+	 * stacked the hover-visible delete on top of the chevron). */
+	flex: 1;
+	min-width: 0;
+	width: auto;
+	padding: 5px 8px;
+	border-radius: 8px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition: background 130ms ease, color 130ms ease;
+}
+
+.gui-project-head:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-project-head .oc-icon {
+	flex-shrink: 0;
+}
+
+.gui-project-count {
+	flex-shrink: 0;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 400;
+	color: var(--color-text-faint);
+}
+
+.gui-project-chevron {
+	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+	color: var(--color-text-faint);
+	transition: transform 130ms ease;
+}
+
+.gui-project-chevron--closed {
+	transform: rotate(-90deg);
+}
+
+.gui-project-empty {
+	padding: 4px 8px 10px 24px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+}
+
+/* ── Round 4: terminal tab strip + host chrome (openchamber parity) ─── */
+/* Overrides land at EOF so they beat the mid-file base rules. Only things
+ * the Tailwind utilities don't already set (sizing/padding live in the
+ * JSX classes; these fix appearance/geometry). */
+.gui-terminal-tabs {
+	border-bottom: none;
+}
+
+.gui-terminal-tab {
+	position: relative;
+	border: none;
+	transition: background 130ms ease, color 130ms ease;
+}
+
+.gui-terminal-tab:hover {
+	background: color-mix(in oklab, var(--color-hover) 55%, transparent);
+	color: var(--color-text);
+}
+
+.gui-terminal-tab--active {
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	color: var(--color-accent);
+}
+
+/* Active accent underline — sits just under the pill, like a tab strip
+ * indicator sliding between tabs. */
+.gui-terminal-tab--active::after {
+	content: "";
+	position: absolute;
+	left: 12px;
+	right: 12px;
+	bottom: -4px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--color-accent);
+}
+
+.gui-terminal-tab--active .oc-icon {
+	color: var(--color-accent);
+}
+
+/* xterm host chrome: rounded container, subtle border, dark scrollbar. */
+.gui-terminal-host {
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+	overflow: hidden;
+}
+
+.gui-terminal-dock .gui-terminal-host {
+	margin: 0 10px 10px;
+	padding: 6px 10px;
+}
+
+.gui-terminal-host .xterm-viewport {
+	background: transparent !important;
+}
+
+.gui-terminal-host .xterm-viewport::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+/* ── Round 4: settings shell v2 (nav-header back + floating surface) ── */
+/* Mirrors the main UI: back button in a header row at the top of the nav
+ * column, section content in ONE rounded floating container below. */
+
+.gui-settings-nav-head {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	/* The 28px drag strip above eats into the offset: 12 + 28 = 40, so the
+	 * back button stays level with the main sidebar's 新建任务 row. */
+	padding: 12px 10px 8px;
+}
+
+.gui-settings-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-settings-back:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-settings-nav-scroll {
+	min-height: 0;
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 0 8px 8px;
+}
+
+.gui-settings-main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+	min-height: 0;
+}
+
+
+/* Settings content floats in the same rounded card as the chat surface
+ * (chat-surface parity: m-2, rounded-2xl, surface bg, same shadow) — the
+ * card is what visually separates the panel from the side nav. The shell
+ * flex fix (.gui-settings-view flex:1) keeps it full-width on every tab. */
+.gui-settings-surface {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	margin: 8px;
+	border-radius: 16px;
+	overflow: hidden;
+	background: var(--color-surface);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.gui-settings-drag {
+	/* Header-row height (h-12 = 48px): keeps the settings surface's top
+	 * edge aligned with the chat surface's (header 48px + chat margin 8px),
+	 * and clears the Windows titleBarOverlay buttons that occupy the
+	 * top-right 48px of the window. */
+	height: 48px;
+	flex-shrink: 0;
+	-webkit-app-region: drag;
+}
+
+
+/* Spacing density (50-200%) scales the content paddings via --gui-density
+ * (a unitless factor, 1 = 100% — a percentage operand would invalidate the
+ * calc() and zero the padding). openchamber 1.18 parity: centered 840px
+ * column (SettingsPageLayout `mx-auto max-w-[840px]`), px-12/py-8 at 3xl —
+ * generous side margins so text never touches or truncates at the edges. */
+.gui-settings-content {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	/* width:100% + max-width:840px + margin auto = openchamber's
+	 * `mx-auto max-w-[840px]`: fill the pane, clamp at 840, center.
+	 * (Auto margins alone defeat flex stretch and size to content.) */
+	width: 100%;
+	margin-inline: auto;
+	padding: calc(32px * var(--gui-density, 1)) calc(48px * var(--gui-density, 1));
+	max-width: 840px;
+}
+
+/* History viewer fill mode (设置 → 数据与统计 → 历史会话): the page-level
+ * scroll is disabled so .gui-ext-body's flex:1/min-height:0 gets a bounded
+ * height — each pane's .gui-ext-list-scroll then scrolls internally and
+ * both pane bottoms align with the tab bottom instead of scrolling away
+ * with the whole page. */
+.gui-settings-content--fill {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.gui-settings-content--fill .gui-settings-page-title,
+.gui-settings-content--fill .gui-settings-page-desc {
+	flex-shrink: 0;
+}
+
+.gui-settings-content--fill .gui-ext-body {
+	grid-template-rows: minmax(0, 1fr);
+}
+
+/* Dot-matrix brand backdrop preview (设置 → 常规): a small live DotMatrixMark
+ * inside a framed card — same component, bounded container. The 88px raster
+ * (~300×70px text + feather margins) fits fully in this height. */
+.gui-dotmatrix-preview {
+	position: relative;
+	margin-top: 10px;
+	width: 100%;
+	height: 170px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-sunken) 60%, transparent);
+	overflow: hidden;
+}
+/* The component sets the pixel buffer but never the CSS size — without
+ * these the canvas displays at buffer size (300×150 × dpr), doubling the
+ * field and clipping it against the box (welcome backdrop is fine: it has
+ * .gui-welcome-mark inset:0). */
+.gui-dotmatrix-preview canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+/* openchamber settings page header: L1 page title (18px/600, muted) with a
+ * supporting description below (SettingsPageLayout parity). */
+.gui-settings-page-title {
+	font-size: 18px;
+	font-weight: 600;
+	line-height: 1.25;
+	letter-spacing: -0.01em;
+	color: var(--color-text);
+	margin: 0;
+}
+
+.gui-settings-page-desc {
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	margin: 4px 0 0;
+}
+
+/* openchamber SettingsSection chrome: one style of section header (L2 title
+ * + description) and a divider above every section except the first. */
+.gui-settings-section {
+	padding: 26px 0;
+	border-top: 1px solid var(--border);
+}
+
+.gui-settings-section:first-of-type {
+	border-top: none;
+	padding-top: 0;
+}
+
+.gui-settings-section-title {
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1.2;
+	color: var(--color-text);
+}
+
+.gui-settings-section-desc {
+	margin: 3px 0 0;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+/* openchamber SettingsFieldRow: fixed 224px label column (description under
+ * the label) with the control cluster right-aligned — grid areas keep the
+ * label+hint stacked without extra wrapper markup. */
+.gui-settings-field {
+	display: grid;
+	grid-template-columns: 224px minmax(0, 1fr);
+	grid-template-areas: "label control" "hint control";
+	column-gap: 32px;
+	row-gap: 2px;
+	align-items: center;
+	padding: 7px 0;
+}
+
+.gui-settings-field-label {
+	grid-area: label;
+	font-size: var(--ui-font-size);
+	line-height: 1.3;
+	color: var(--color-text);
+	margin: 0;
+}
+
+.gui-settings-field-hint {
+	grid-area: hint;
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+	margin: 0;
+}
+
+.gui-settings-field-control {
+	grid-area: control;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* Fields whose control is a bare select (no .gui-settings-field-control
+ * wrapper) still right-align like openchamber field rows. */
+.gui-settings-field > .gui-settings-select {
+	justify-self: end;
+}
+
+/* openchamber SettingsCheckboxRow / row chrome: borderless rows, label +
+ * description left, switch right. */
+.gui-settings-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 32px;
+	padding: 7px 0;
+	/* Rows whose renderExtra is a full-width block (task card style preview)
+	 * must wrap: the label column keeps its width and the extra lands on its
+	 * own line below — without wrap, basis-full squeezes the label column to
+	 * near-zero and CJK descriptions wrap into a vertical strip. */
+	flex-wrap: wrap;
+}
+
+/* Full-width extra (custom control previews): force it to its own line
+ * below the label + standard control. */
+.gui-settings-row > .gui-settings-row-extra {
+	flex: 0 0 100%;
+}
+
+.gui-settings-row--disabled {
+	opacity: 0.45;
+}
+
+.gui-settings-row--disabled .gui-toggle {
+	cursor: not-allowed;
+}
+
+/* Schema rows inside a rounded card (model/providers tab bottoms): the
+ * page-bottom flat blocks were visually inconsistent with the provider
+ * cards above — this container gives schema groups the same card shell. */
+.gui-schema-card {
+	margin-top: 20px;
+	padding: 14px 16px 10px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
+}
+
+.gui-schema-card .gui-settings-group-h {
+	margin-top: 14px;
+}
+
+.gui-schema-card .gui-settings-group-h:first-child {
+	margin-top: 0;
+}
+
+.gui-schema-card .gui-settings-tui-block {
+	margin-top: 18px;
+}
+
+/* Terminal-only schema rows (settings-schema UiBase.tuiOnly): muted so the
+ * desktop user sees they don't affect the GUI — still editable, they
+ * configure the TUI. The whole block is a dashed card with a note. */
+.gui-settings-tui-block {
+	margin-top: 24px;
+	padding: 12px 16px 6px;
+	border: 1px dashed color-mix(in oklab, var(--color-text-muted) 32%, transparent);
+	border-radius: 12px;
+}
+.gui-settings-tui-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 2px 0;
+	background: none;
+	border: none;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-settings-tui-header:hover .gui-settings-tui-heading {
+	color: var(--color-text);
+}
+.gui-settings-tui-heading {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text-muted);
+	transition: color 160ms ease;
+}
+.gui-settings-tui-count {
+	flex-shrink: 0;
+	padding: 0 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 600;
+	line-height: 17px;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text-muted) 14%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 24%, transparent);
+}
+.gui-settings-tui-chevron {
+	margin-left: auto;
+	font-size: 10px;
+	color: var(--color-text-faint);
+	transform: rotate(0deg);
+	transition: transform 200ms var(--spring);
+}
+.gui-settings-tui-chevron--open {
+	transform: rotate(90deg);
+}
+.gui-settings-tui-note {
+	margin-top: 4px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.55;
+	color: var(--color-text-faint);
+}
+.gui-settings-tui-rows {
+	padding-top: 4px;
+}
+.gui-settings-row--tui {
+	opacity: 0.72;
+}
+.gui-settings-row--tui .gui-settings-select,
+.gui-settings-row--tui .gui-toggle {
+	filter: saturate(0.65);
+}
+.gui-settings-tui-badge {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 8px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	vertical-align: 1px;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text-muted) 12%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 22%, transparent);
+}
+
+/* Model settings pane: a rounded container holding a top pill-tab row
+ * (extensions-center parity) and the active tab's content below. The pane's
+ * original left nav moved to the top — the roles tab now carries its own
+ * TUI-style vertical rail. */
+.gui-model-pane {
+	display: block;
+	margin-top: 14px;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--color-surface);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.gui-model-tabs {
+	display: flex;
+	gap: 4px;
+	overflow-x: auto;
+	padding: 2px 0 10px;
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 12px;
+}
+
+.gui-model-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+	background: transparent;
+	transition:
+		color 160ms ease,
+		background 160ms ease;
+}
+
+.gui-model-tab:hover {
+	color: var(--color-text);
+}
+
+.gui-model-tab--active {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+}
+
+.gui-model-pane-body {
+	min-width: 0;
+}
+
+.gui-model-pane-body .gui-settings-section:first-child {
+	padding-top: 0;
+}
+
+/* TUI /model parity rail: Roles / All models / registered providers /
+ * unregistered providers on the left, the selected view on the right. */
+.gui-model-rail-wrap {
+	display: grid;
+	grid-template-columns: 180px minmax(0, 1fr);
+	gap: 14px;
+}
+
+.gui-model-rail {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-height: 0;
+	max-height: 480px;
+	overflow-y: auto;
+	padding-right: 10px;
+	border-right: 1px solid var(--border);
+}
+
+.gui-model-rail-entry {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 6px 9px;
+	border-radius: 8px;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.2;
+	text-align: left;
+	color: var(--color-text-muted);
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
+}
+
+.gui-model-rail-entry:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-model-rail-entry--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+
+.gui-model-rail-label {
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-model-rail-count {
+	flex: none;
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	background: color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-model-rail-group {
+	margin: 8px 9px 3px;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-faint);
+}
+
+.gui-model-rail-body {
+	min-width: 0;
+}
+
+/* "All models" / provider-detail views. */
+.gui-model-all {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.gui-model-provider-block {
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-text-faint) 4%, transparent);
+	padding: 8px 10px;
+}
+
+.gui-model-provider-block-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-bottom: 6px;
+}
+
+.gui-model-provider-name {
+	min-width: 0;
+	flex: 1;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-model-provider-models {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-model-model-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 4px;
+	border-radius: 6px;
+	font-size: 12.5px;
+}
+
+.gui-model-model-row:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-model-model-name {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text);
+}
+
+.gui-model-model-id {
+	flex: none;
+	font-family: var(--ui-font-mono, ui-monospace, monospace);
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-model-model-more {
+	padding: 2px 4px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-model-provider-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+/* Provider cards (bitfun preset-card parity) — see .gui-provider-* below. */
+
+.gui-btn--icon {
+	padding: 4px;
+	line-height: 1;
+}
+
+/* ── Provider cards (bitfun preset-card parity) ── */
+.gui-provider-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 10px;
+}
+
+.gui-provider-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+	padding: 6px 10px;
+	border-radius: 8px;
+	border: 1px solid var(--color-bd);
+	background: var(--color-surface);
+}
+
+.gui-provider-search:focus-within {
+	border-color: var(--color-accent-bd);
+}
+
+.gui-provider-search .gui-input {
+	border: none;
+	background: transparent;
+	padding: 2px 0;
+}
+
+.gui-provider-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface);
+	transition:
+		border-color 120ms ease,
+		background-color 120ms ease;
+}
+
+.gui-provider-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	background: color-mix(in oklab, var(--color-surface) 96%, var(--color-accent));
+}
+
+.gui-provider-card-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.gui-provider-card-name {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-provider-card-status {
+	margin-top: 2px;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.3;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-provider-status-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+}
+
+.gui-provider-status-dot--on {
+	background: var(--color-ok);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-ok) 22%, transparent);
+}
+
+.gui-provider-card-status--ok {
+	color: var(--color-ok);
+}
+
+.gui-provider-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.gui-provider-tag {
+	max-width: 100%;
+	padding: 1px 7px;
+	border-radius: 6px;
+	font-size: 11px;
+	line-height: 1.6;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-provider-tag--more {
+	color: var(--color-text-faint);
+}
+
+/* Section expand/collapse strip (bitfun provider-more parity). */
+.gui-provider-more {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	height: 32px;
+	margin-top: 8px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease,
+		border-color 120ms ease;
+}
+
+.gui-provider-more:hover {
+	background: color-mix(in oklab, var(--color-bg) 30%, transparent);
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+
+/* ── Model roles (TUI /model roles-panel parity) ── */
+.gui-role-row {
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.gui-role-row > .gui-btn,
+.gui-role-row > .gui-model,
+.gui-role-row > select {
+	flex-shrink: 0;
+}
+
+.gui-role-tag {
+	font-weight: 600;
+}
+
+.gui-role-cycle-badge {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 6px;
+	padding: 0 5px;
+	border-radius: 5px;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	vertical-align: 1px;
+}
+
+.gui-role-thinking {
+	width: auto;
+	min-width: 96px;
+	padding: 4px 6px;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-role-fallbacks {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 2px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-bg) 45%, transparent);
+}
+
+.gui-role-fallbacks-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-role-fallbacks-title .gui-btn {
+	margin-left: auto;
+}
+
+.gui-role-fallback-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-role-fallback-arrow {
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-role-fallback-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 15px;
+	height: 15px;
+	padding: 0 4px;
+	border-radius: 999px;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-role-fallback-add {
+	padding-top: 2px;
+}
+
+.gui-role-cycle-track {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-role-cycle-chip {
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-settings-row-label {
+	font-size: var(--ui-font-size);
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
+.gui-settings-row-desc {
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+/* ── Agent companion appearance (BitFun parity): selected-pet trigger +
+ * expandable preset grid with thumbnails, names and descriptions. ────── */
+.gui-pet-trigger {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	margin-top: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	cursor: pointer;
+	text-align: left;
+	transition: border-color 160ms ease;
+}
+
+.gui-pet-trigger:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+
+.gui-pet-trigger__thumb {
+	width: 58px;
+	height: 64px;
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	border-radius: 8px;
+	overflow: hidden;
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-pet-trigger__thumb .gui-petdex-sprite {
+	zoom: 0.55;
+}
+
+.gui-pet-trigger__thumb svg {
+	width: 100%;
+	height: 100%;
+}
+
+.gui-pet-trigger__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 13.5px;
+	font-weight: 600;
+}
+
+.gui-pet-trigger__chevron {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	transition: transform 200ms ease;
+}
+
+.gui-pet-trigger__chevron--open {
+	transform: rotate(180deg);
+}
+
+.gui-pet-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+	gap: 10px;
+	margin-top: 10px;
+	padding-top: 12px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-pet-group-label {
+	grid-column: 1 / -1;
+	margin: 6px 0 0;
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.gui-pet-group-label:first-child {
+	margin-top: 0;
+}
+
+.gui-pet-import-error {
+	margin: 6px 0 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--danger, #e5484d);
+}
+
+.gui-pet-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface-sunken);
+	cursor: pointer;
+	transition:
+		border-color 160ms ease,
+		background 160ms ease;
+}
+
+.gui-pet-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+
+.gui-pet-card--selected {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+
+.gui-pet-card__thumb {
+	display: grid;
+	place-items: center;
+	height: 76px;
+	overflow: hidden;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-pet-card__thumb .gui-petdex-sprite {
+	zoom: 0.66;
+}
+
+.gui-pet-card__body {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+
+.gui-pet-card__name {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-pet-card__check {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-accent);
+}
+
+.gui-pet-card__desc {
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.gui-pet-card__delete {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	opacity: 0;
+	transition:
+		opacity 160ms ease,
+		color 160ms ease;
+	cursor: pointer;
+}
+
+.gui-pet-card:hover .gui-pet-card__delete {
+	opacity: 1;
+}
+
+.gui-pet-card__delete:hover {
+	color: var(--color-danger);
+}
+
+/* openchamber L3 control-group heading (inside sections). */
+.gui-settings-group {
+	padding: 6px 0 10px;
+	font-size: 13.5px;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-transform: none;
+	color: var(--color-text);
+}
+
+/* ── Round 4: appearance steppers (openchamber parity) ─────────────── */
+/* [−] input [+] cluster with unit + reset; spinners hidden so the
+ * buttons are the only +/- affordance. */
+.gui-settings-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--color-surface-sunken);
+}
+
+.gui-stepper-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-stepper-btn:hover:not(:disabled) {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-stepper-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-stepper-input {
+	width: 44px;
+	padding: 4px 2px;
+	border: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-family: var(--font-mono);
+	text-align: center;
+	appearance: textfield;
+	-moz-appearance: textfield;
+}
+
+.gui-stepper-input::-webkit-outer-spin-button,
+.gui-stepper-input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+.gui-stepper-input:focus {
+	outline: none;
+}
+
+.gui-settings-stepper-unit {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+/* Retention stepper value (session settings): read-only display span —
+ * the +/- buttons are the only affordance (openchamber parity). */
+.gui-stepper-value {
+	min-width: 36px;
+	padding: 4px 2px;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-family: var(--font-mono);
+	text-align: center;
+}
+
+/* Right-side control column for settings rows (keeps ModelSelector /
+ * steppers from stretching; openchamber field-control parity). */
+.gui-settings-control {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* Disabled settings row (openchamber parity: auto-cleanup off dims the
+ * retention controls but keeps them readable). */
+.gui-settings-row--disabled {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+/* ── Git settings (openchamber GitPage parity) ──────────────────────── */
+.gui-github-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface-raised);
+}
+
+.gui-github-avatar {
+	display: flex;
+	width: 34px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.gui-github-avatar-img {
+	width: 34px;
+	height: 34px;
+	border-radius: 999px;
+	object-fit: cover;
+	flex: none;
+}
+
+.gui-github-flow {
+	margin-top: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--color-border);
+	border-radius: 10px;
+	background: var(--color-surface);
+}
+.gui-github-flow-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+.gui-github-flow-hint {
+	margin-top: 2px;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+}
+.gui-github-flow-code-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
+.gui-github-flow-code {
+	padding: 8px 14px;
+	font-family: var(--font-mono);
+	font-size: 24px;
+	font-weight: 800;
+	letter-spacing: 3px;
+	color: var(--color-accent);
+	background: var(--color-bg);
+	border: 1px solid var(--color-border);
+	border-radius: 8px;
+}
+.gui-github-flow-copy {
+	padding: 4px 10px;
+	font-size: 12.5px;
+}
+.gui-github-flow-actions {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	margin-top: 10px;
+}
+.gui-github-flow-waiting {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+}
+.gui-flow-spinner {
+	width: 12px;
+	height: 12px;
+	border: 1.5px solid var(--color-border);
+	border-top-color: var(--color-accent);
+	border-radius: 50%;
+	animation: gui-flow-spin 0.8s linear infinite;
+}
+@keyframes gui-flow-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.gui-link {
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--color-accent);
+	font: inherit;
+	font-size: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+.gui-identity-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 2px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-identity-row:last-child {
+	border-bottom: none;
+}
+
+.gui-identity-default {
+	margin-left: 6px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 600;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+/* Narrow windows: the new nav header collapses to an icon-only back
+ * button. At EOF so it beats the base definitions above. */
+@media (max-width: 900px) {
+	.gui-settings-nav-head {
+		justify-content: center;
+		/* Same top offset as the wide layout (12 + 28px drag strip) — the
+		 * back button stays level with the main sidebar's 新建任务 row. */
+		padding: 12px 4px 8px;
+	}
+
+	.gui-settings-back {
+		justify-content: center;
+		padding: 8px;
+	}
+
+	.gui-settings-nav-scroll {
+		padding: 0 4px 8px;
+	}
+}
+
+/* ── Round 4: frosted panes (glass recipe), collapsible right panel, ──
+ * ── mini chat window, transcript avatars. EOF so these beat the ──────
+ * ── mid-file base rules (same recipe as the frosted menus). ───────── */
+/** Pane surfaces ride the single workspace glass layer (.gui-main): the
+ * panes themselves stay transparent so the rounded chat card floats on ONE
+ * continuous material (settings parity). Previously each pane carried its
+ * own 55% glass + inset rings — the stacked overlay darkened the pane
+ * regions against the card gaps, and the inset hairlines drew a visible
+ * line between the sidebar and the header. */
+.gui-pane-side,
+.gui-pane-side--immersive,
+.gui-pane-right--inner,
+.gui-header::before {
+	background: transparent;
+	box-shadow: none;
+}
+
+/* Header glass rides a ::before so the header itself never becomes a
+ * containing block — .gui-float-controls--overlay is position:fixed and
+ * must keep anchoring to the viewport, not to the header box. z-index:1
+ * lifts the header (and its pseudo, painted at the bottom of the header's
+ * own stacking context) above the shell's opaque --color-bg. */
+.gui-header {
+	position: relative;
+	/* Above the chat surface (z 5): icon-button tooltips and header popups
+	 * stay visible when the board view is open (the board replaces the
+	 * surface, not the header). */
+	z-index: 6;
+	background: transparent;
+}
+
+.gui-header::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+}
+
+/* Right panel width collapse: stays mounted, animates 288px → 0px. */
+.gui-pane-right--inner {
+	transition: width 220ms var(--spring), opacity 160ms ease;
+}
+
+.gui-pane-right--inner--closed {
+	width: 0 !important;
+	border-left-width: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* ── Mini chat window (?mini=1): chat-only shell ─────────────────────── */
+.gui-shell--mini {
+	flex-direction: column;
+}
+
+.gui-mini-drag {
+	-webkit-app-region: drag;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	height: 28px;
+	padding: 0 12px 0 76px; /* clear the traffic lights (x16 y17) */
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+/* Windows/Linux: no traffic lights — the drag strip content starts at the edge. */
+:root[data-platform="win32"] .gui-mini-drag,
+:root[data-platform="linux"] .gui-mini-drag {
+	padding-left: 16px;
+}
+
+.gui-mini-title {
+	min-width: 0;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-mini-chat {
+	min-height: 0;
+}
+
+.gui-quote-card {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0 14px 6px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+	border-left: 3px solid var(--color-accent);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	max-height: 96px;
+	overflow: hidden;
+}
+
+.gui-quote-text {
+	flex: 1;
+	min-width: 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	white-space: pre-wrap;
+	word-break: break-word;
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	-webkit-box-orient: vertical;
+}
+
+.gui-quote-close {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	margin-top: 1px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-quote-close:hover {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+
+/* Welcome-scene quote cards: stack above the input, same card style. */
+.gui-welcome-quotes {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 12px 0;
+}
+
+/* Welcome suggestion chips (openchamber new-session parity). */
+.gui-suggest {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	max-width: 560px;
+}
+
+.gui-suggest-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--color-border);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		border-color 120ms ease-out,
+		color 120ms ease-out,
+		transform 120ms ease-out;
+}
+
+.gui-suggest-chip:hover {
+	background: var(--color-surface-raised);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
+	color: var(--color-text);
+	transform: translateY(-1px);
+}
+
+.gui-suggest-chip--more {
+	min-width: 34px;
+	justify-content: center;
+	padding: 6px 10px;
+	color: var(--color-text-faint);
+}
+
+/* Expanded suggestions blur-reveal: staggered per-chip delay set inline
+ * (style animationDelay); collapse removes the class so chips vanish. */
+.gui-suggest-chip--expand {
+	animation: gui-suggest-blur-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes gui-suggest-blur-in {
+	from {
+		opacity: 0;
+		filter: blur(6px);
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		filter: blur(0);
+		transform: translateY(0);
+	}
+}
+
+/* 自定义补充 chip: accent-tinted management entry (jumps to settings). */
+.gui-suggest-chip--manage {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--color-border));
+}
+
+.gui-suggest-chip--manage:hover {
+	border-color: var(--color-accent);
+}
+
+/* Collapse: extra chips fade/blur out before unmounting. */
+.gui-suggest-chip--leaving {
+	animation: gui-suggest-fade-out 150ms ease both;
+}
+
+@keyframes gui-suggest-fade-out {
+	to {
+		opacity: 0;
+		filter: blur(4px);
+		transform: translateY(-3px);
+	}
+}
+
+/* Settings 预设提示词: builtin tag + drag-reorder rows (usePointerDrag). */
+.gui-suggest-badge {
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	font-size: 10px;
+	vertical-align: 1px;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
+}
+
+.gui-suggest-manage-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.gui-suggest-drag-row {
+	cursor: grab;
+}
+
+.gui-suggest-drag-row--active {
+	cursor: grabbing;
+	opacity: 0.55;
+	transform: scale(0.99);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
+}
+
+.gui-suggest-drag-grip {
+	display: inline-flex;
+	flex: none;
+	color: var(--color-text-faint);
+	cursor: grab;
+}
+
+/* Reverted-message dock (openchamber RevertedMessageDock parity): a floating
+ * card above the composer — NOT inline in the transcript, so it never scrolls
+ * away. Collapsed to a header row by default; expand shows 恢复/重发/丢弃. */
+.gui-revert-dock {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	margin-bottom: 8px;
+	border-radius: 12px;
+	border: 1px solid color-mix(in oklab, var(--color-warning) 30%, transparent);
+	background: color-mix(in oklab, var(--color-warning) 8%, var(--color-surface));
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gui-revert-dock-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 12px;
+	text-align: left;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text);
+	cursor: pointer;
+	user-select: none;
+}
+
+.gui-revert-dock-head:hover {
+	background: color-mix(in oklab, var(--color-warning) 14%, transparent);
+}
+
+.gui-revert-dock-title {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-revert-dock-chevron {
+	/* Explicit size: the oc-icons sprite SVG has no intrinsic dimensions and
+	 * an unsized width:auto SVG stretches to fill its flex line — the header
+	 * button is width:100%, so the arrow rendered as a giant glyph that
+	 * blew up the whole dock and pushed the composer off-screen. */
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	margin-left: auto;
+	color: var(--color-text-faint);
+	transition: transform 0.15s ease;
+}
+
+.gui-revert-dock-chevron--open {
+	transform: rotate(180deg);
+}
+
+.gui-revert-dock-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0 8px 8px;
+	max-height: 168px;
+	overflow-y: auto;
+}
+
+.gui-revert-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-surface-sunken) 70%, transparent);
+}
+
+.gui-revert-item-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+/* ── Message-tree navigation (TUI tree-selector parity) ───────────────────
+ * Floating button at the transcript's top-right opens a searchable turn
+ * tree; clicking a row jumps the transcript to that entry. */
+.gui-mtree-toggle {
+	position: absolute;
+	top: 8px;
+	right: 36px; /* clear of the turn rail (right: 4px, width 24px) */
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 85%, transparent);
+	color: var(--color-text-muted);
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+.gui-mtree-toggle:hover {
+	color: var(--color-text);
+	background: var(--color-surface);
+}
+
+.gui-mtree-panel {
+	position: absolute;
+	top: 42px;
+	right: 36px;
+	z-index: 40;
+	display: flex;
+	flex-direction: column;
+	width: min(360px, calc(100% - 48px));
+	max-height: 60%;
+	border-radius: 12px;
+	border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(12px);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+	overflow: hidden;
+	/* Enter/exit (pin-widget "resolves from a soft blur" language):
+	 * shrink + content-blur + fade, anchored to the toggle (top-right).
+	 * The panel stays mounted; the --open class drives both directions.
+	 * visibility delays on close so the fade-out is visible. */
+	transform-origin: top right;
+	opacity: 0;
+	transform: translateY(-6px) scale(0.96);
+	filter: blur(8px);
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		opacity 200ms var(--spring),
+		transform 200ms var(--spring),
+		filter 200ms var(--spring),
+		visibility 0s linear 200ms;
+}
+
+.gui-mtree-panel--open {
+	opacity: 1;
+	transform: none;
+	filter: blur(0);
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		opacity 200ms var(--spring),
+		transform 200ms var(--spring),
+		filter 200ms var(--spring),
+		visibility 0s linear 0s;
+}
+
+.gui-motion-off .gui-mtree-panel {
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-mtree-panel {
+		transition: none !important;
+	}
+}
+
+.gui-mtree-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 10px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+	color: var(--color-text-faint);
+}
+
+.gui-mtree-search input {
+	min-width: 0;
+	flex: 1;
+	border: none;
+	outline: none;
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+}
+
+.gui-mtree-search input::placeholder {
+	color: var(--color-text-faint);
+}
+
+.gui-mtree-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+}
+
+.gui-mtree-close:hover {
+	color: var(--color-text);
+	background: var(--color-hover);
+}
+
+.gui-mtree-scroll {
+	overflow-y: auto;
+	overflow-x: hidden;
+	max-height: 100%;
+	padding: 4px;
+}
+
+.gui-mtree-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.gui-mtree-row-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 3px 6px;
+	border-radius: 6px;
+	text-align: left;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+}
+
+.gui-mtree-row-btn:hover {
+	background: var(--color-hover);
+}
+
+/* Fork-into-new-session action (TUI navigateTree parity: start a
+ * conversation from any node). Icon-only, revealed on row hover so the
+ * tree stays scannable. */
+.gui-mtree-fork {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease-out, background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-mtree-row:hover .gui-mtree-fork,
+.gui-mtree-fork:focus-visible {
+	opacity: 1;
+}
+
+.gui-mtree-fork:hover {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-mtree-icon {
+	flex-shrink: 0;
+}
+
+.gui-mtree-icon--user {
+	color: var(--color-accent);
+}
+
+.gui-mtree-icon--agent {
+	color: var(--color-ok);
+}
+
+.gui-mtree-icon--tool {
+	color: var(--color-text-faint);
+}
+
+.gui-mtree-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-mtree-text--tool {
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+.gui-mtree-empty {
+	padding: 16px;
+	text-align: center;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+/* ── Transcript scroll shadow + jump-to-bottom (openchamber parity) ──
+ * Mask-image content fades engage only while the transcript overflows
+ * (data-top-scroll / data-bottom-scroll set by JumpToBottomButton). */
+.gui-transcript-wrap {
+	container-type: size;
+}
+
+/* Scroll ownership: the OUTER .gui-transcript is the scroller here
+ * (jump-to-bottom, scroll-shadow and TurnRail all read its scroll
+ * state). The shared .tr-root ships height:100% + overflow-y:auto —
+ * nested inside a fixed-height scroller that made the INNER div the
+ * real scroller and silently deadened every outer listener. Expand the
+ * inner root so the outer one actually scrolls. */
+.gui-transcript .tr-root {
+	height: auto;
+	overflow: visible;
+}
+
+.gui-transcript[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 24px,
+		#000 calc(100% - 32px),
+		transparent 100%
+	);
+}
+
+.gui-transcript[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+}
+
+.gui-transcript[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 32px);
+}
+
+/* ── Content-boundary feather for the sidebar session list + settings ──
+ * Same recipe as the transcript: data attrs are maintained by the shared
+ * useScrollShadow hook; the mask engages only while the content actually
+ * overflows and is scrolled away from the edge. Softer bands than the
+ * transcript (denser rows / nav items). */
+.gui-sessions-list[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 14px,
+		#000 calc(100% - 16px),
+		transparent 100%
+	);
+}
+
+.gui-sessions-list[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+}
+
+.gui-sessions-list[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 16px);
+}
+
+.gui-settings-nav-scroll[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 12px,
+		#000 calc(100% - 12px),
+		transparent 100%
+	);
+}
+
+.gui-settings-nav-scroll[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+
+.gui-settings-nav-scroll[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 12px);
+}
+
+.gui-settings-content[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 20px,
+		#000 calc(100% - 24px),
+		transparent 100%
+	);
+}
+
+.gui-settings-content[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 20px);
+}
+
+.gui-settings-content[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 24px);
+}
+
+.gui-jump-bottom.gui-jump-bottom {
+	position: absolute;
+	left: 50%;
+	bottom: 20px;
+	transform: translate(-50%, 8px);
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-surface) 95%, transparent);
+	color: var(--color-text-muted);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+		0 0 0 1px rgba(0, 0, 0, 0.3),
+		0 4px 16px rgba(0, 0, 0, 0.35);
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transition:
+		opacity 150ms ease-out,
+		transform 150ms ease-out;
+	z-index: 15;
+}
+
+.gui-jump-bottom.gui-jump-bottom:hover {
+	color: var(--color-text);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+		0 0 0 1px rgba(0, 0, 0, 0.3),
+		0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.gui-jump-bottom.gui-jump-bottom--visible {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translate(-50%, 0);
+}
+
+/* ── Idle recap row (TUI `※ recap:` status-line parity) ───────────────
+ * Fixed below the transcript (does not scroll with it), dim/italic like
+ * the terminal status line; cleared by the next wire activity or the
+ * dismiss button. The timestamp + dismiss fade in on row hover. */
+.gui-recap-row {
+	position: absolute;
+	/* Sits above the jump-to-bottom button (bottom 20px, 32px round) so the
+	 * two floating controls never overlap — even when the recap expands. */
+	bottom: 56px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: min(560px, calc(100% - 48px));
+	padding: 7px 12px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--color-surface-raised) 84%, transparent);
+	border: 1px solid var(--border);
+	box-shadow: var(--gui-input-shadow);
+	font-size: 12.5px;
+	line-height: 17px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	z-index: 2;
+	/* Fold animation: collapsed = one 17px line; expanding animates the
+	 * card height via max-height (fixed cap, no auto) up to the recap
+	 * truncation bound. */
+	max-height: 25px;
+	overflow: hidden;
+	transition:
+		bottom 180ms var(--spring),
+		max-height var(--gui-motion-height) var(--spring),
+		box-shadow 160ms ease-out;
+}
+
+/* At the bottom the jump button hides — the recap drops into its slot
+ * (bottom 20px) hugging the message flow; scrolled away the button fades
+ * in and the recap rises to 56px so the two never overlap. Driven purely
+ * by the transcript's data-bottom-scroll attribute (useScrollShadow). */
+.gui-transcript-wrap [data-bottom-scroll="false"] ~ .gui-recap-row {
+	bottom: 20px;
+}
+
+.gui-recap-row--expanded {
+	max-height: 320px;
+}
+
+.gui-recap-prefix {
+	font-style: italic;
+	opacity: 0.85;
+	flex-shrink: 0;
+}
+
+.gui-recap-text {
+	font-style: italic;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-recap-row--expanded .gui-recap-text {
+	white-space: normal;
+	overflow: visible;
+}
+
+.gui-recap-time {
+	flex-shrink: 0;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 120ms ease-out;
+}
+
+.gui-recap-row:hover .gui-recap-time {
+	opacity: 0.75;
+}
+
+/* Fold chevron: points down when collapsed, rotates up when expanded. */
+.gui-recap-chevron {
+	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+	opacity: 0.55;
+	transition: transform 160ms var(--spring);
+}
+
+.gui-recap-chevron--open {
+	transform: rotate(180deg);
+}
+
+.gui-recap-dismiss {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease-out, background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-recap-row:hover .gui-recap-dismiss {
+	opacity: 0.85;
+}
+
+.gui-recap-dismiss:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	opacity: 1;
+}
+
+/* ── Transcript avatars: 64px agent orb + 28px user letter chip ───────
+ * Scoped under .gui-transcript so the shared desktop-web grid rules stay
+ * untouched for other consumers; specificity (0,2,0) beats the base. */
+.gui-transcript .tr-row {
+	grid-template-columns: 64px minmax(0, 1fr);
+	gap: 0 12px;
+}
+
+.gui-transcript .tr-row--user {
+	grid-template-columns: minmax(0, 1fr) 28px;
+}
+
+/* Agent rows mirror the user row's right rail (28px avatar column) so
+ * message content's right edge aligns with the USER BUBBLE's right edge
+ * — not the row edge, which would run 40px wider (avatar + gap) and read
+ * as an offset against right-aligned user bubbles. Same specificity as
+ * the base .gui-transcript .tr-row rule so the rail survives. */
+.gui-transcript .tr-row--assistant {
+	grid-template-columns: 64px minmax(0, 1fr) 28px;
+}
+
+/* Keep the side-by-side avatar layout in narrow windows (mini chat),
+ * where the shared transcript collapses rows to a vertical stack. */
+@media (max-width: 640px) {
+	.gui-transcript .tr-row,
+	.gui-transcript .tr-row--user {
+		display: grid;
+	}
+}
+
+.gui-user-avatar {
+	width: 28px;
+	height: 28px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-user-avatar-letter {
+	line-height: 1;
+}
+
+/* Idle orb cycling (AgentAvatar): stacked frames crossfade 500ms. */
+.gui-agent-avatar-cycle {
+	position: relative;
+	display: inline-block;
+}
+
+.gui-agent-avatar-cycle > .gui-agent-avatar-frame:first-child {
+	position: relative;
+}
+
+.gui-agent-avatar-frame {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 500ms ease;
+}
+
+.gui-agent-avatar-frame--active {
+	opacity: 1;
+}
+
+/* ── Round 4: provider multi-credential logout dropdown ────────────── */
+.gui-creds-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	/* Popup tier: portal-rendered above every card (user report: the logout
+	 * menu was covered by neighbouring provider cards). In portal mode the
+	 * inline style overrides position/insets; this keeps the stacking tier. */
+	z-index: 1000;
+	min-width: 250px;
+	max-width: 320px;
+	padding: 4px;
+	border-radius: 12px;
+	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* openchamber dropdown parity: fade + scale in/out. */
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+	transform-origin: top right;
+}
+
+.gui-creds-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+}
+
+.gui-creds-menu-label {
+	padding: 5px 8px 4px;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.gui-creds-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 6px;
+	border-radius: 8px;
+}
+
+.gui-creds-row:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-creds-remove {
+	flex-shrink: 0;
+	border-radius: 5px;
+	padding: 1px 6px;
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+	color: var(--color-danger);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-creds-menu-sep {
+	margin: 3px 4px;
+	border-top: 1px solid var(--border);
+}
+
+/* ── Goal / plan mode badges + todo progress (TUI /goal /plan parity) ── */

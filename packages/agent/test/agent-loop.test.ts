@@ -3334,7 +3334,10 @@ describe("agentLoop pre-model-call gate", () => {
 		expect(events.filter(event => event.type === "turn_end")).toHaveLength(1);
 		const turnStartIndex = events.findIndex(event => event.type === "turn_start");
 		const userStartIndex = events.findIndex(event => event.type === "message_start" && event.message.role === "user");
-		expect(turnStartIndex).toBeLessThan(userStartIndex);
+		// The user's own message is broadcast optimistically at prompt() time
+		// (before provider preparation), so it precedes the turn open.
+		expect(userStartIndex).toBeGreaterThan(-1);
+		expect(userStartIndex).toBeLessThan(turnStartIndex);
 	});
 
 	it("stops before the provider call and closes the open turn", async () => {
@@ -3577,6 +3580,8 @@ describe("agentLoop pre-model-call gate", () => {
 		expect(events.some(event => event.type === "message_end" && event.message.role === "user")).toBe(true);
 		const turnStartIndex = events.findIndex(event => event.type === "turn_start");
 		const userStartIndex = events.findIndex(event => event.type === "message_start" && event.message.role === "user");
+		// Direct agentLoop usage (no optimistic pre-emit): the loop still opens
+		// the error turn before emitting the accepted inputs.
 		expect(turnStartIndex).toBeLessThan(userStartIndex);
 		expect(softState.id).toBeUndefined();
 		expect(softState.forcedToolChoice).toBeUndefined();

@@ -1,18 +1,21 @@
 # MusePi GUI 设计规范
 
-> 状态:**活文档**(2026-08-06 建立)——规定 `packages/gui` / `packages/collab-web` 的**设计风格与交互标准**(长什么样、怎么动、怎么组织)。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立)——规定 `packages/gui` / `packages/desktop-web` 的**设计风格与交互标准**(长什么样、怎么动、怎么组织)。与实现同步,实现文件为准。
 >
 > 实现契约、daemon RPC 形状、踩坑记录与验证方法见 **`docs/gui-implementation.md`**(2026-08-06 从本文件拆出)。早期线稿/架构稿(gui-prototype / gui-architecture / gui-migration)已删除——实现早已交付,以本文档与 gui-implementation 为准。
 >
 > 修改约定:改实现时同步本文件;发现本文档与代码不一致时,以代码为准并更新本文档。
 
-## i18n 契约(collab-web/src/i18n)
+## i18n 契约(desktop-web/src/i18n)
 
 - **命名参数**:`t("… {count} …", { count: n })`——不用 `{0}` 位置参数(openchamber/opencode/bitfun/kimi-code 全部命名参数,翻译可读性好;位置参数是 musepi 旧做法,2026-08-06 全量迁移)。
-- **类型化 key**:`TranslationKey = keyof typeof zhCN`(zh-CN.ts `as const`)——`t()` 的 key 与 params 都编译期检查:key 拼错、占位符名写错、漏传参数 → tsgo 报错。动态 key(schema 驱动 label、运行时错误串、`tag.${…}` 拼接)显式 `as TranslationKey` 断言——运行时仍走 `?? key` 原文回退。
+- **词表按域拆分**(2026-08-16):`zh-CN/` + `en-US/` 各 12 个域模块(shell/composer/sessions/context/collab/transcript/settings/agents/tools/pet/guest),barrel 合并为扁平 map——改文案按功能找对应域文件;域间重复 key 在 barrel 模块加载时抛错(替代 spread 静默覆盖)。TUI 词表(`coding-agent/src/i18n/zh-CN/`,13 域)同款拆分与守卫,但用 `{0}` 位置参数。架构总览见 `docs/i18n.md`。
+- **类型化 key**:`TranslationKey = keyof typeof zhCN`(zh-CN barrel 合并后 `as const`)——`t()` 的 key 与 params 都编译期检查:key 拼错、占位符名写错、漏传参数 → tsgo 报错。动态 key(schema 驱动 label、运行时错误串、`tag.${…}` 拼接)显式 `as TranslationKey` 断言——运行时仍走 `?? key` 原文回退。
 - **占位符类型**:`ParamsOf<K>` 用模板字面量类型从 zh-CN 值提取 `{name}` 并映射为 `{ [name]: string | number }`——参数名与翻译模板强绑定。
+- **en 编译级 parity**(2026-08-16):每个 en 域文件 `as const satisfies Record<ZhKey, string>`——en 缺/多 key 是编译错误(负向验证 TS2353),新增 zh key 必须同步加 en。
+- **插件 seam**(2026-08-16):`registerTranslations(locale, map)` 运行时注册/覆盖文案并 `emit()` 即时重渲染(支持全新 locale);插件自有 key 用 `tLoose(key, params)`(核心 `t` 只收 `TranslationKey`)。均不持久化。
 - **en passthrough**:key 即英文原文;替换作用于最终字符串(dict 命中或 key 回退都替换)——英文 UI 显示 `context · 42%` 而非 `context · {pct}`。
-- **测试**:packages/collab-web/test/i18n.test.ts(查找/替换/回退/英文 passthrough/无位置参数残留断言);测试内 setLocale 必须 afterAll 恢复初始值(bun test 同进程顺序执行,泄漏会污染其他断言英文文案的测试)。
+- **测试**:packages/desktop-web/src/i18n/i18n.test.ts(key 集 parity、跨域重复守卫、注册覆盖/隔离)+ test/i18n.test.ts(查找/替换/回退/英文 passthrough/无位置参数残留断言);测试内 setLocale 必须 afterAll 恢复初始值(bun test 同进程顺序执行,泄漏会污染其他断言英文文案的测试)。
 - **类型化副作用**:类型化强制所有 UI 文案有 zh 翻译——迁移时补了此前 passthrough 的键(open sidebar/connected/unknown/jump to bottom 等);`as const` 场景(PREFERENCE_LABEL、KIND_TRANSITION、SCALAR_ARGS、TIP_KEYS、SOUND_USAGE_KEYS)用 `as const satisfies Record<…, TranslationKey>` 或显式 `Partial<Record<…, TranslationKey>>` 让动态索引保持字面量类型。
 - **渲染时调用**:`t()` 只在渲染期调用(模块加载期调用会拿到旧 locale——已有注释约束)。
 
@@ -22,7 +25,7 @@
 - **设置面板**:全窗口替换工作区,左导航 + 右内容(`gui-settings-content` 固定高度滚动容器,`width:100% + max-width:840 + margin-inline:auto` 居中列)。
 - **扩展控制中心**(设置「扩展」tab):section 占满设置视口(`gui-skills-section` = `height:100%` flex column,`gui-ext-center` `flex:1; min-height:0`)——左列表(`gui-ext-list-scroll`)与右详情(`gui-ext-detail`)在各自圆角容器内**独立滚动**,设置页整体不滚(TUI /extensions 面板 parity);两栏统一细滚动条(8px、thumb `text-faint 30%`、hover 50%,与 xterm 同配方);指令内容不限高(pre 无 max-height),随详情区整体滚动,避免嵌套滚动。
 - **空态**:WelcomeComposer 大输入框(品牌/问候/提示 + composer),输入即建会话;专注模式(⌘⇧E)输入框铺满。
-- **消息流**:复用 collab-web `tr-*` 类;用户消息右对齐圆角气泡,助手消息全宽无气泡;40px gutter 放头像。
+- **消息流**:复用 desktop-web `tr-*` 类;用户消息右对齐圆角气泡,助手消息全宽无气泡;40px gutter 放头像。
 
 ## 2. 设计 token 与主题
 
@@ -48,7 +51,7 @@
 ## 4. 组件与设置模式
 
 - **设置行**:`gui-settings-row` = label+desc 左、控件右;`PrefToggle`(开关,`storageKey` + 可选 `onClass` 反相挂 documentElement)/`PrefSegmented`(分段选择)是两个标准控件,新设置优先复用。
-- **TUI 设置同步(2026-08-11,合并进既有 tab)**:TUI 设置面板 10 个 tab 的 **336 项配置全部并入桌面设置**,不设独立"TUI 设置"页——**有对应 tab 就合并,没有就新增 tab,需要更名的更名**:外观(并入,原生主题卡 + schema 30 项)/模型设置(并入,角色模型 + schema 44 项)/任务与子智能体(原"子智能体"更名,并入 tasks 28 项)/新增 交互(41)·上下文(27)·Shell(16)·工具(60)·供应商(36);文件与 LSP、记忆 保持独立 schema section。全部 **schema 驱动**(daemon `settings.schema` RPC,与 TUI 同源)。控件:boolean→toggle / enum→select(无 options 的 enum 由 daemon 合成)/ string→input(凭据掩码保留)/ number→input / **array→逗号分隔输入(blur 提交)** / **record→紧凑 JSON 输入(非法 JSON 内联报错,不提交)**;改动 `settings.set` 乐观写入、失败回滚。条件门控 CONDITIONS 与 TUI settings-defs 对齐(11 个;`hasImageProtocol` 在桌面恒真)。**i18n 全量中文**:从 coding-agent i18n 移植 966 条翻译进 collab-web zh-CN(标签/描述/选项/分组;模型/供应商/音色等专有名词保持原文,与 TUI 一致);未覆盖项回退英文。行为抽查:textVerbosity low≈150 字 vs high≈250 字(GUI→daemon→会话行为链路生效)。**重复定义审计修复(2026-08-11)**:①语言单源——`settings.locale`(config.yml)为唯一源:boot 经 `settings.get` 同步渲染器 locale(daemon 对未配置的 `settings.locale`/`defaultThinkingLevel` 不回填 schema 默认值,防止未配置时把中文 UI 强制切英文),常规语言 select 与交互 tab「界面语言」行均双写 RPC + localStorage 镜像;NAV_GROUPS 改渲染期求值(原模块级常量冻结首语言);②思考层级——删除 `omp-gui-default-thinking` localStorage 镜像,WelcomeComposer 预选改为 boot 快照:`modelRoles.default` 的 `:level` 后缀优先(off→关闭思考),否则回退已配置的 `defaultThinkingLevel`(auto 允许),未配置保持 medium;boot 同时剥离后缀给模型预选;③`options:"runtime"` 的 schema 行(theme.light/dark)GUI 渲染为只读输入(防键入非法主题 id 写坏 config.yml),提示「选项由 TUI 运行时提供」。**导航去重合**:「智能体」更名「运行中智能体」(实时 roster,agents.list 2s 轮询)与「任务与子智能体」(tasks schema 配置)明确区分——两者内容本不重叠,命名消除混淆。**设置页 roster 全面移除(2026-08-11)**:「运行中智能体」设置 tab 与「任务与子智能体」内嵌 roster 均删除——live roster 由会话右栏 ContextPanel 的 AgentsPanel 承载(session stream 驱动的实时 HUD:主/子行、状态、活动、相对时间、进度/生命周期,比 agents.list 轮询更丰富);设置页回归纯配置语义。swarm GUI 盘点(对比 kimi-code apps/kimi-web):kimi 有转录内联 SwarmTool 卡片(成员手风琴+阶段点+概览条+done/total)、AgentDetailPanel 详情面板(暂停原因/流式输出/进度组)、ChatDock+TasksPane 底部 dock;我们现有右栏 AgentsPanel HUD + task/yield 工具卡片渲染 agent results,无转录内联 swarm 卡片、无详情面板。**task 工具卡升级为 SwarmTool 级(2026-08-11)**:头部 done/total chip(聚合失败红显)、body 顶部阶段概览(分段条 done/merge-failed/running/failed/aborted 五段 + legend)、成员行首阶段色点(running 脉冲)、每成员手风琴(点击 chevron 展开完整输出/错误/patch;已结束成员默认折叠,有详情才渲染 chevron);数据全部来自既有 TaskToolDetails.results/progress,无新数据管道。SSR 6 测试 + CDP 实测(2/2、3/3 chip、ok/run dots、chevron 展开 alpha 输出)。后续打磨:无内容的任务清单行(只有 #N 无 description)不再渲染空行;live/settle 时 AgentProgress 高级字段(retryState/extractedToolData/inflightTaskDetails)尚未消费。
+- **TUI 设置同步(2026-08-11,合并进既有 tab)**:TUI 设置面板 10 个 tab 的 **336 项配置全部并入桌面设置**,不设独立"TUI 设置"页——**有对应 tab 就合并,没有就新增 tab,需要更名的更名**:外观(并入,原生主题卡 + schema 30 项)/模型设置(并入,角色模型 + schema 44 项)/任务与子智能体(原"子智能体"更名,并入 tasks 28 项)/新增 交互(41)·上下文(27)·Shell(16)·工具(60)·供应商(36);文件与 LSP、记忆 保持独立 schema section。全部 **schema 驱动**(daemon `settings.schema` RPC,与 TUI 同源)。控件:boolean→toggle / enum→select(无 options 的 enum 由 daemon 合成)/ string→input(凭据掩码保留)/ number→input / **array→逗号分隔输入(blur 提交)** / **record→紧凑 JSON 输入(非法 JSON 内联报错,不提交)**;改动 `settings.set` 乐观写入、失败回滚。条件门控 CONDITIONS 与 TUI settings-defs 对齐(11 个;`hasImageProtocol` 在桌面恒真)。**i18n 全量中文**:从 coding-agent i18n 移植 966 条翻译进 desktop-web zh-CN(标签/描述/选项/分组;模型/供应商/音色等专有名词保持原文,与 TUI 一致);未覆盖项回退英文。行为抽查:textVerbosity low≈150 字 vs high≈250 字(GUI→daemon→会话行为链路生效)。**重复定义审计修复(2026-08-11)**:①语言单源——`settings.locale`(config.yml)为唯一源:boot 经 `settings.get` 同步渲染器 locale(daemon 对未配置的 `settings.locale`/`defaultThinkingLevel` 不回填 schema 默认值,防止未配置时把中文 UI 强制切英文),常规语言 select 与交互 tab「界面语言」行均双写 RPC + localStorage 镜像;NAV_GROUPS 改渲染期求值(原模块级常量冻结首语言);②思考层级——删除 `omp-gui-default-thinking` localStorage 镜像,WelcomeComposer 预选改为 boot 快照:`modelRoles.default` 的 `:level` 后缀优先(off→关闭思考),否则回退已配置的 `defaultThinkingLevel`(auto 允许),未配置保持 medium;boot 同时剥离后缀给模型预选;③`options:"runtime"` 的 schema 行(theme.light/dark)GUI 渲染为只读输入(防键入非法主题 id 写坏 config.yml),提示「选项由 TUI 运行时提供」。**导航去重合**:「智能体」更名「运行中智能体」(实时 roster,agents.list 2s 轮询)与「任务与子智能体」(tasks schema 配置)明确区分——两者内容本不重叠,命名消除混淆。**设置页 roster 全面移除(2026-08-11)**:「运行中智能体」设置 tab 与「任务与子智能体」内嵌 roster 均删除——live roster 由会话右栏 ContextPanel 的 AgentsPanel 承载(session stream 驱动的实时 HUD:主/子行、状态、活动、相对时间、进度/生命周期,比 agents.list 轮询更丰富);设置页回归纯配置语义。swarm GUI 盘点(对比 kimi-code apps/kimi-web):kimi 有转录内联 SwarmTool 卡片(成员手风琴+阶段点+概览条+done/total)、AgentDetailPanel 详情面板(暂停原因/流式输出/进度组)、ChatDock+TasksPane 底部 dock;我们现有右栏 AgentsPanel HUD + task/yield 工具卡片渲染 agent results,无转录内联 swarm 卡片、无详情面板。**task 工具卡升级为 SwarmTool 级(2026-08-11)**:头部 done/total chip(聚合失败红显)、body 顶部阶段概览(分段条 done/merge-failed/running/failed/aborted 五段 + legend)、成员行首阶段色点(running 脉冲)、每成员手风琴(点击 chevron 展开完整输出/错误/patch;已结束成员默认折叠,有详情才渲染 chevron);数据全部来自既有 TaskToolDetails.results/progress,无新数据管道。SSR 6 测试 + CDP 实测(2/2、3/3 chip、ok/run dots、chevron 展开 alpha 输出)。后续打磨:无内容的任务清单行(只有 #N 无 description)不再渲染空行;live/settle 时 AgentProgress 高级字段(retryState/extractedToolData/inflightTaskDetails)尚未消费。
 
 **桌面子代理操作(2026-08-11, TUI Agent Hub 对等)**:daemon 新增 RPC `agents.kill`(abort + release tombstone→aborted)/`agents.revive`(ensureLive)/`agents.chat`(ensureLive + prompt steer,与 collab host 的 agent-cmd 同构,server.ts agents.list 旁)。GUI 右栏 ContextPanel 的 AgentsPanel 选中行后渲染 AgentControls 操作条(gui/src/components/AgentControls.tsx):running→停止、parked/aborted→复活、chat 输入框(Enter 发送),错误小字展示。collab guest 走 agent-cmd 帧,桌面走 RPC——两条路语义一致。SDK events.ts 的 agent-progress payload 注释修正为 SubagentProgressPayload 包装(daemon 实际发送形状)。RPC 实测:kill idle→{ok}+ref aborted、kill/revive 错误路径、chat→ensureLive+steer 生效;running 态 kill 时序窗口未抓到(step-3.7-flash 子代理完成过快),abort 路径与 collab host 同构。**i18n 补全**:schema 全部 UI 字符串覆盖 100% 可译项——标签/描述/选项标签/选项描述全量中文(新增 ~240 条手译,复用 coding-agent zh 78 条),仅剩专有名词(模型/供应商/音色/硬件/API key 名/数值)保持英文与 TUI 一致;zh-CN.ts 经 biome --write 全量格式化。
 - **设置键名**:一律 `omp-gui-*`(如 `omp-gui-chat-usermsg`、`omp-gui-statusbar-indicator`);类开关类偏好(如 `gui-chat-hide-time`)在 documentElement 上切换,样式写在 gui.css 的偏好区。
@@ -75,7 +78,7 @@
 
 ## 5. i18n 与音效
 
-- **i18n**:文案 key 即英文回退,zh 翻译在 `collab-web/src/i18n/zh-CN.ts`;`t()` 调用点渲染(模块级 const 不随语言切换)。数字/时间格式化显式传 locale,禁依赖浏览器默认。
+- **i18n**:文案 key 即英文回退,zh 翻译按域拆在 `desktop-web/src/i18n/zh-CN/<domain>.ts`(en 侧 `en-US/` 编译级 parity,详见 §i18n 契约与 `docs/i18n.md`);`t()` 调用点渲染(模块级 const 不随语言切换)。数字/时间格式化显式传 locale,禁依赖浏览器默认。
 - **音效(2026-08-07 活动化改造)**:cuelume(Web Audio 合成,14 个 recipe);统一经 `gui/src/lib/sfx.ts`:
   - **活动分类配置**(opencode per-category sounds parity):10 个活动(`SFX_EVENTS`)——发送消息/首次消息/消息完成(agent_end,stopReason 非 aborted/error 才响)/审批请求/审批通过/审批拒绝/切换会话/停止回合/工具结果/错误;每类可换音色(`soundFor`/`setSoundFor`,持久化 `omp-gui-sfx:<event>`,无效值回退 `DEFAULT_SFX`)。
   - **调用点用 `sfxFor(event)`**(app/Composer/WelcomeComposer/ApprovalCard/session-store),不再直接 `sfx(name)`(保留给一次性/预览);总开关 `omp-gui-sound` gating 全部。
@@ -86,7 +89,7 @@
 ## 5b. 动画与库选型(2026-08-07 评估)
 
 - **原则:CSS 优先 + 自研 hook**。现有动效体系全部手写 CSS/JS(Reveal/HeightMorph/useCollapse、BorderBeam、DotMatrixMark、ThinkingOrbs、KITT 扫光、两阶段浮层、宠伴帧动画)——桌面 GUI 的动效需求是"精致克制的 UI 反馈",CSS transition/keyframes 足够且零运行时开销、天然尊重 `prefers-reduced-motion`(`gui-motion-off` 偏好)。
-- **已用第三方**:`cuelume`(音效)、`lucide-react`/`lucide`(图标)、`morphicons`(Composer 发送/停止图标 morph)、`beautiful-mermaid`(collab-web Mermaid 渲染)、`@xterm/xterm`(终端)、`pdfjs-dist`(PDF)。**motion(原 Framer Motion)曾依赖但零引用——已移除**(2026-08-07)。
+- **已用第三方**:`cuelume`(音效)、`lucide-react`/`lucide`(图标)、`morphicons`(Composer 发送/停止图标 morph)、`beautiful-mermaid`(desktop-web Mermaid 渲染)、`@xterm/xterm`(终端)、`pdfjs-dist`(PDF)。**motion(原 Framer Motion)曾依赖但零引用——已移除**(2026-08-07)。
 - **GSAP 评估(不引入)**:GSAP 3(现完全免费,含全部插件)是命令式时间轴/ScrollTrigger/SplitText/MotionPath 的行业标准——但其强项场景(营销页滚动、文字逐字特效、复杂多步编排)不在桌面 GUI 核心路径;引入需建立新动画规范(时间轴/插值)且与现有 CSS 动效双轨并存。**保留为候选**:若后续做欢迎页品牌文字逐字动画(SplitText 类)、复杂转场编排,再评估。
 - **图标切换 = morphicons,禁自绘交叉(2026-08-14 教训)**:任何"图标 A → 图标 B"的过渡(主题/强调色全屏遮罩、按钮态切换、状态卡)一律用 **`morphicons`**(`morphicons/react` 的 `MorphIcon`,或纯 DOM 场景 `morphicons/element` 的 `<morph-icon>` + `set()`/`morphTo(target, "snappy")`)——**Procrustes 最优旋转 + 极坐标插值 + spring 物理的形状变形**。**禁止**用两个 SVG 叠放 + opacity/rotate 交叉淡入淡出伪装 morph(2026-08-14 主题遮罩曾误用,用户明确要求 morphicons 效果;Composer/Transcript/引导步骤已全部是 morphicons,遮罩必须同款)。
 - **store 变更通知必须在 swap 回调内 emit(2026-08-14 教训)**:`setThemePreference`/`setAccentPreference` 经 `withColorTransition` 延时(340ms)执行切换——**`emit()`/`emitAccent()` 必须放在 `withColorTransition(fn)` 的 `fn` 内部**(preference/accent 已更新后),不能放在调用之后:在外部同步 emit 会广播**旧值**,`useSyncExternalStore` 订阅者(设置页 segmented/色板按钮)读到旧 preference——按钮状态**滞后一次点击**(点了浅色、主题已切、按钮还在"跟随系统";下次点击显示的是上一次的选择)。
@@ -114,6 +117,39 @@
 | **基于回答开始新会话模态** | 已有 fork(`session.forkAt`,非破坏性分叉);openchamber 是配置模态(模型/思考级别/智能体/说明/工作树/目标运行) | 复用 ModelSelector/ThinkingSelector 组件做轻量模态,默认值=当前会话 | 登记待排期(可选) |
 | **Aurora/Particles 欢迎页背景** | 未采用(WebGL/常驻 rAF 违反 CSS 优先;DotMatrixMark 已是品牌视觉) | 若用户想要"换氛围",用 CSS 渐变动画替代或做切换开关 | 备选,不做 |
 
+
+## 5f. 设计资产扩展点(插件化,2026-08-16 定稿)
+
+内置设计资产以 **token + 覆盖机制** 组织,第三方/主题/动效包通过覆盖 token 扩展,不 fork 组件。
+
+### 动效参数全表(gui.css `:root`)
+
+| Token | 默认 | 用途 | 覆盖方式 |
+|---|---|---|---|
+| `--spring` / `--spring-snappy` / `--spring-bouncy` | spring(300,30)/(400,34)/(320,16) linear() | 全部 UI morph 缓动 | 注入 CSS 覆盖 `:root` 变量 |
+| `--gui-motion-menu-in/out` | 130ms | 浮层菜单进出 | 同上 |
+| `--gui-motion-chip` | 180ms | 芯片/小元素 | 同上 |
+| `--gui-motion-fade-in/out` | 160ms | 淡入淡出 | 同上 |
+| `--gui-motion-height` / `-max` | 240ms / 480ms | 高度形变(HeightMorph delta/6 封顶) | 同上 |
+| `--gui-motion-blur` | 280ms | blur 类动效(BlurText) | 同上 |
+| `--gui-motion-roll` | 240ms | 滚动/翻页类 | 同上 |
+| `--gui-motion-slide-y` / `-lg` | 6px / 10px | 位移距离 | 同上 |
+| `--gui-motion-blur-amt` / `-lg` | 8px / 24px | 模糊量 | 同上 |
+| `--gui-ease-out` | cubic-bezier(0.22,1,0.36,1) | 高度/形变缓动别名 | 同上 |
+
+**覆盖机制**:keyframes 与 transition 一律读 token(`var(--gui-motion-*)`);动效包/主题注入样式表(加载在后 wins)覆盖变量即可整体换肤,无需改 keyframes。`gui-motion-off`(prefers-reduced-motion)全局禁用。
+
+### 组件参数化(不 fork 即可定制)
+
+- `BlurText`(`stepMs`/className)、`ShinyText`(`speed`/`spread`/`shineColor`)、`CountUp`(`duration`/`format`)、`SlidingNumber`(`padStart`/`decimals`)、`TextMorph`(`stepMs`/`durationMs`)、`GuiSelect`(options/className)、`SpotlightCard`(`spotlightColor`)
+- 玻璃层:`--gui-glass-alpha`(透明度滑杆)+ `--gui-glass-overlay` 派生;`.gui-main`/悬浮卡 blur 读平台类(`[data-platform="win32"]` 关底层 blur,见性能节)
+
+### 新动效组件的接入契约
+
+1. 时值/位移/模糊 **必须读 token**,禁止裸值(裸值 = 无法被主题/动效包覆盖)。
+2. 进场动画走两阶段(`useTwoPhaseEnter` 或 `opacity:0` + 下一帧 `--entered`),防 Chromium 跳过 backdrop 采样。
+3. 尊重 `gui-motion-off`(禁用态直显,不播动画)。
+4. 复用 `gui-menu-in/out` / `gui-fade-in/out` keyframes 或同参数自建(命名 `gui-<name>-in/out`)。
 ## 5e. 弹窗、键盘与选择器(2026-08-14 定稿)
 
 ### 弹窗动画与键盘优先级

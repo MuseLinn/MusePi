@@ -343,6 +343,13 @@ export interface AgentOptions {
 
 export interface AgentPromptOptions {
 	toolChoice?: ToolChoice;
+	/**
+	 * Message objects already broadcast by the caller (via
+	 * {@link Agent.emitPromptMessages} — an optimistic emit before expensive
+	 * preflights). When present, prompt() skips its own optimistic emit and
+	 * the run loop suppresses re-broadcasting exactly these objects.
+	 */
+	preEmittedMessages?: ReadonlySet<AgentMessage>;
 }
 
 /** Buffered Cursor exec-channel tool result waiting to be emitted after the assistant message. */
@@ -1186,7 +1193,18 @@ export class Agent {
 			promptOptions = imagesOrOptions as AgentPromptOptions | undefined;
 		}
 
-		await this.#runLoop(msgs, promptOptions);
+		// Optimistic emit: the user's own message becomes visible to every
+		// subscriber (GUI bubble, TUI transcript, daemon journal) the moment
+		// the prompt is accepted, instead of waiting for provider preparation
+		// (context build + before-model hooks) inside the run loop. The loop
+		// still carries the messages for state/context — #runLoop skips
+		// re-emitting exactly these objects (identity match). A caller that
+		// already emitted them (AgentSession emits before its usage-aware
+		// preflights and auto-thinking classification) passes
+		// options.preEmittedMessages to opt out of the second broadcast.
+		const preEmittedMessages = promptOptions?.preEmittedMessages ?? this.emitPromptMessages(msgs);
+
+		await this.#runLoop(msgs, promptOptions, undefined, false, preEmittedMessages);
 	}
 
 	/**
@@ -1288,6 +1306,7 @@ export class Agent {
 		options?: AgentPromptOptions & { skipInitialSteeringPoll?: boolean },
 		continuationSignal?: AbortSignal,
 		runStateClaimed = false,
+		preEmittedMessages?: ReadonlySet<AgentMessage>,
 	) {
 		const model = this.#state.model;
 		if (!model) throw new Error("No model configured");
@@ -1568,7 +1587,16 @@ export class Agent {
 						break;
 				}
 
-				// Emit to listeners
+				// Emit to listeners. Messages pre-emitted optimistically at
+				// prompt() time are already broadcast — re-emitting would
+				// duplicate them in every consumer (daemon journal, GUI, TUI).
+				if (
+					preEmittedMessages !== undefined &&
+					(event.type === "message_start" || event.type === "message_end") &&
+					preEmittedMessages.has(event.message)
+				) {
+					continue;
+				}
 				this.#emit(event);
 			}
 
@@ -1722,6 +1750,23 @@ export class Agent {
 				});
 			}
 		}
+	}
+
+	/**
+	 * Broadcast message_start/message_end for the given messages immediately
+	 * (optimistic emit) and return their object set, so the caller can pass it
+	 * back via {@link AgentPromptOptions.preEmittedMessages} and the run loop
+	 * suppresses the duplicate broadcast. AgentSession uses this to surface the
+	 * user's own message before usage-aware preflights and auto-thinking
+	 * classification, both of which can take hundreds of milliseconds.
+	 */
+	emitPromptMessages(messages: readonly AgentMessage[]): ReadonlySet<AgentMessage> {
+		const emitted = new Set<AgentMessage>(messages);
+		for (const message of messages) {
+			this.#emit({ type: "message_start", message });
+			this.#emit({ type: "message_end", message });
+		}
+		return emitted;
 	}
 
 	/**

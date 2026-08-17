@@ -1,0 +1,31 @@
+{
+	"name": "@musepi/mobile",
+	"private": true,
+	"version": "0.4.1",
+	"description": "MusePi mobile companion — Capacitor shell around desktop-web (join a desktop daemon from a phone/tablet)",
+	"type": "module",
+	"scripts": {
+		"build": "bun run --cwd ../desktop-web build && bun run build:assets",
+		"build:assets": "node scripts/prepare-web-assets.mjs",
+		"sync": "bun run build:assets && cap sync",
+		"add:android": "cap add android",
+		"build:android:debug": "bun run sync && ./android/gradlew -p android assembleDebug",
+		"android:devices": "adb devices",
+		"android:install": "adb install -r android/app/build/outputs/apk/debug/app-debug.apk",
+		"android:launch": "adb shell am start -n com.musepi.mobile/.MainActivity",
+		"android:run": "bun run build:android:debug && bun run android:install && bun run android:launch",
+		"check:types": "tsgo -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@aparajita/capacitor-secure-storage": "^8.0.0",
+		"@capacitor-mlkit/barcode-scanning": "^8.1.0",
+		"@capacitor/core": "^8.4.1",
+		"@capacitor/keyboard": "^8.0.0",
+		"@capacitor/local-notifications": "^8.1.1",
+		"@capacitor/status-bar": "^8.0.0"
+	},
+	"devDependencies": {
+		"@capacitor/android": "^8.4.1",
+		"@capacitor/cli": "^8.4.1"
+	}
+}

@@ -716,8 +716,9 @@ export interface AnthropicFallbackContent {
 }
 
 /**
- * Verbatim Anthropic web-search call/result retained for same-provider
- * history replay. Other providers discard it in `transformMessages`.
+ * Verbatim Anthropic web-search or tool-search call/result retained for
+ * same-provider history replay. Other providers discard it in
+ * `transformMessages`.
  */
 export interface AnthropicServerToolContent {
 	type: "anthropicServerTool";
@@ -725,12 +726,12 @@ export interface AnthropicServerToolContent {
 		| {
 				type: "server_tool_use";
 				id: string;
-				name: "web_search";
+				name: "web_search" | "tool_search_tool_regex" | "tool_search_tool_bm25";
 				input?: Record<string, unknown> | null;
 				[key: string]: unknown;
 		  }
 		| {
-				type: "web_search_tool_result";
+				type: "web_search_tool_result" | "tool_search_tool_result";
 				tool_use_id: string;
 				content: unknown;
 				[key: string]: unknown;

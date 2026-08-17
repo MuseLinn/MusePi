@@ -482,7 +482,10 @@ export class TurnRecovery {
 	}
 
 	/** Prompts after transient overlap with a prior agent run. */
-	promptAgentWithIdleRetry(messages: AgentMessage[], options?: { toolChoice?: ToolChoice }): Promise<void> {
+	promptAgentWithIdleRetry(
+		messages: AgentMessage[],
+		options?: { toolChoice?: ToolChoice; preEmittedMessages?: ReadonlySet<AgentMessage> },
+	): Promise<void> {
 		return this.#promptAgentWithIdleRetry(messages, options);
 	}
 
@@ -2163,7 +2166,10 @@ export class TurnRecovery {
 		this.resolveRetry();
 	}
 
-	async #promptAgentWithIdleRetry(messages: AgentMessage[], options?: { toolChoice?: ToolChoice }): Promise<void> {
+	async #promptAgentWithIdleRetry(
+		messages: AgentMessage[],
+		options?: { toolChoice?: ToolChoice; preEmittedMessages?: ReadonlySet<AgentMessage> },
+	): Promise<void> {
 		const deadline = Date.now() + 30_000;
 		for (;;) {
 			try {

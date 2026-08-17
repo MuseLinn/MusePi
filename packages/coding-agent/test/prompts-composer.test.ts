@@ -1,0 +1,76 @@
+import { describe, expect, it } from "bun:test";
+import { PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
+
+// PromptComposer(§5):插槽排序、同名覆盖、removeBySource、promptComplete、无注入回归锚。
+
+const BASE_FULL = ["core", "safety", "project", "repo"];
+const BASE_SHORT = ["core", "safety"]; // 条件 push 缺失的场景
+
+describe("prompts/composer compose", () => {
+	it("无注入时 compose(base) 原样返回(回归锚)", () => {
+		const composer = new PromptComposer();
+		expect(composer.compose(BASE_FULL)).toBe(BASE_FULL);
+		expect(composer.compose(BASE_SHORT)).toBe(BASE_SHORT);
+		expect(composer.compose([])).toEqual([]);
+	});
+
+	it("order 插槽分组:10→core 后,150→safety 后,250→project 后,350→repo 后", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "m:a", order: 10, text: "INJ-10" }, "mode:test");
+		composer.add({ name: "m:b", order: 150, text: "INJ-150" }, "mode:test");
+		composer.add({ name: "m:c", order: 250, text: "INJ-250" }, "mode:test");
+		composer.add({ name: "m:d", order: 350, text: "INJ-350" }, "mode:test");
+		const out = composer.compose(BASE_FULL);
+		expect(out).toEqual(["core", "INJ-10", "safety", "INJ-150", "project", "INJ-250", "repo", "INJ-350"]);
+	});
+
+	it("base tail 缺失时区块顺延追加", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "m:a", order: 150, text: "INJ-150" }, "mode:test");
+		composer.add({ name: "m:b", order: 350, text: "INJ-350" }, "mode:test");
+		const out = composer.compose(BASE_SHORT); // [core, safety],无 project/repo
+		expect(out).toEqual(["core", "safety", "INJ-150", "INJ-350"]);
+	});
+
+	it("同 order 稳定排序(name 字典序)", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "z", order: 10, text: "z" }, "mode:test");
+		composer.add({ name: "a", order: 10, text: "a" }, "mode:test");
+		expect(composer.compose(["core"])).toEqual(["core", "a", "z"]);
+	});
+
+	it("同名替换(后 add 胜),异名共存", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "p:role", order: 10, text: "first" }, "mode:a");
+		composer.add({ name: "p:role", order: 20, text: "second" }, "mode:b");
+		composer.add({ name: "p:other", order: 15, text: "other" }, "mode:b");
+		expect(composer.compose(["core"])).toEqual(["core", "other", "second"]); // other(15) 在 second(20) 前
+	});
+
+	it("removeBySource 按贡献方整体卸载", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "a", order: 10, text: "A" }, "mode:design");
+		composer.add({ name: "b", order: 11, text: "B" }, "mode:design");
+		composer.add({ name: "c", order: 12, text: "C" }, "ext:ui");
+		composer.removeBySource("mode:design");
+		expect(composer.compose(["core"])).toEqual(["core", "C"]);
+	});
+
+	it("add 未传 source 回退参数/默认", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "a", order: 10, text: "A" });
+		composer.add({ name: "b", order: 11, text: "B" }, "ext:x");
+		composer.removeBySource("anonymous");
+		expect(composer.compose(["core"])).toEqual(["core", "B"]);
+	});
+});
+
+describe("prompts/composer composeComplete", () => {
+	it("promptComplete:仅注入层按 order 输出,忽略 base(DSH complete:true)", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "p:role", order: 30, text: "role" }, "mode:minimal");
+		composer.add({ name: "p:style", order: 10, text: "style" }, "mode:minimal");
+		expect(composer.composeComplete()).toEqual(["style", "role"]);
+		expect(composer.composeComplete()).not.toEqual(expect.arrayContaining(["core"]));
+	});
+});

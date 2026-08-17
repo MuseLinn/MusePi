@@ -1,12 +1,12 @@
-import { WidgetErrorBoundary } from "@musepi/collab-web/src/widgets/error-boundary";
-import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/collab-web/src/widgets/registry";
+import { WidgetErrorBoundary } from "@musepi/desktop-web/src/widgets/error-boundary";
+import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { initTooltips } from "./lib/tooltips";
 import { Icon, type IconName } from "./vendor/oc-icons";
-import "@musepi/collab-web/src/styles/tokens.css";
-import "@musepi/collab-web/src/styles/base.css";
+import "@musepi/desktop-web/src/styles/tokens.css";
+import "@musepi/desktop-web/src/styles/base.css";
 import "./styles/fonts.css";
 import "./styles/gui.css";
 

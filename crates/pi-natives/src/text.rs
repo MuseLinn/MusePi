@@ -1000,7 +1000,19 @@ fn split_into_tokens_with_ansi(line: &[u16]) -> SmallVec<[Vec<u16>; 4]> {
 		if line[i] == ESC
 			&& let Some(seq_len) = ansi_seq_len_u16(line, i)
 		{
-			pending_ansi.extend_from_slice(&line[i..i + seq_len]);
+			let seq = &line[i..i + seq_len];
+			// A sequence that follows visible content closes it (color reset,
+			// underline off) and must ride along with that token so the closer
+			// cannot migrate into whitespace discarded at a soft wrap (#8582).
+			// A sequence after whitespace opens the *next* token's style, so it
+			// waits for it: gluing it to the whitespace token would keep that
+			// space alive past the wrap point and open the style on the line
+			// being broken instead of the one carrying the styled word.
+			if current.is_empty() || in_whitespace {
+				pending_ansi.extend_from_slice(seq);
+			} else {
+				current.extend_from_slice(seq);
+			}
 			i += seq_len;
 			continue;
 		}
@@ -2001,6 +2013,34 @@ mod tests {
 		assert!(first.starts_with("\x1b[38;2;156;163;176m"));
 		assert!(second.starts_with("\x1b[38;2;156;163;176m"));
 		assert!(second.contains("world"));
+	}
+
+	#[test]
+	fn test_wrap_text_with_ansi_keeps_trailing_color_reset_before_soft_wrap() {
+		let data = to_u16("plain \x1b[33mcode\x1b[39m next");
+		let lines = wrap_text_with_ansi_impl(&data, 10, DEFAULT_TAB_WIDTH);
+		let actual: Vec<String> = lines
+			.iter()
+			.map(|line| String::from_utf16_lossy(line))
+			.collect();
+
+		assert_eq!(actual, ["plain \x1b[33mcode\x1b[39m", "next"]);
+	}
+
+	#[test]
+	fn test_wrap_text_with_ansi_defers_style_open_after_trailing_space() {
+		let data = to_u16("read this thread \x1b[4mhttps://example.com/very/long/path\x1b[24m");
+		let lines = wrap_text_with_ansi_impl(&data, 40, DEFAULT_TAB_WIDTH);
+		let actual: Vec<String> = lines
+			.iter()
+			.map(|line| String::from_utf16_lossy(line))
+			.collect();
+
+		// The underline opens on the wrapped line that carries the URL: neither
+		// the discarded space nor a stray `4m`/`24m` pair stays on the head line.
+		assert_eq!(actual[0], "read this thread");
+		assert!(actual[1].starts_with("\x1b[4m"));
+		assert!(actual[1].contains("https://"));
 	}
 
 	#[test]

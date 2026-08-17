@@ -23,6 +23,7 @@ import {
 	matchesKey,
 	PtySession,
 	parseKey,
+	pdfToMarkdown,
 	summarizeCode,
 	supportsLanguage,
 	truncateToWidth,
@@ -85,6 +86,30 @@ async function createFifo(fifoPath: string) {
 	}
 
 	throw new Error(await new Response(process.stderr).text());
+}
+
+function textPdf(text: string): Uint8Array {
+	const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
+	const objects = [
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+		`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+	];
+	let document = "%PDF-1.4\n";
+	const offsets: number[] = [];
+	for (const [index, object] of objects.entries()) {
+		offsets.push(document.length);
+		document += `${index + 1} 0 obj\n${object}\nendobj\n`;
+	}
+	const xrefOffset = document.length;
+	document += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const offset of offsets) {
+		document += `${offset.toString().padStart(10, "0")} 00000 n \n`;
+	}
+	document += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+	return Buffer.from(document);
 }
 
 describe("pi-natives", () => {
@@ -761,6 +786,19 @@ describe("pi-natives", () => {
 
 			await Bun.sleep(600);
 			expect(await Bun.file(markerPath).exists()).toBe(false);
+		});
+	});
+
+	describe("pdfToMarkdown", () => {
+		it("isolates blocking conversion from later JavaScript buffer mutation", async () => {
+			const input = textPdf("Copied PDF bytes");
+			const conversion = pdfToMarkdown(input);
+			input.fill(0);
+
+			const result = await conversion;
+
+			expect(result.pageCount).toBe(1);
+			expect(result.markdown).toContain("Copied PDF bytes");
 		});
 	});
 	describe("htmlToMarkdown", () => {

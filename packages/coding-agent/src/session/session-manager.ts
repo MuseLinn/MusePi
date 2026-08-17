@@ -1,13 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type {
-	ImageContent,
-	Message,
-	MessageAttribution,
-	ServiceTierByFamily,
-	TextContent,
-	Usage,
-} from "@musepi/pi-ai";import {
+import type { ImageContent, Message, MessageAttribution, ServiceTierByFamily, TextContent, Usage } from "@musepi/pi-ai";
+import {
 	directoryExists,
 	getBlobsDir,
 	getProjectDir,
@@ -1041,6 +1035,7 @@ export class SessionManager {
 			cwd: this.#cwd,
 			parentSession: options?.parentSession,
 			providerPromptCacheKey: options?.providerPromptCacheKey,
+			modeId: options?.modeId,
 		};
 		const workspace = normalizeSessionWorkspace({
 			cwd: this.#cwd,
@@ -2517,10 +2512,15 @@ export class SessionManager {
 	 * @param cwd Working directory (stored in the session header)
 	 * @param sessionDir Optional session directory; defaults to the cwd-derived dir.
 	 */
-	static create(cwd: string, sessionDir?: string, storage: SessionStorage = new FileSessionStorage()): SessionManager {
+	static create(
+		cwd: string,
+		sessionDir?: string,
+		storage: SessionStorage = new FileSessionStorage(),
+		modeId?: string,
+	): SessionManager {
 		const dir = sessionDir ?? SessionManager.getDefaultSessionDir(cwd, undefined, storage);
 		const manager = new SessionManager(cwd, dir, true, storage);
-		manager.#resetToNewSession();
+		manager.#resetToNewSession({ modeId });
 		return manager;
 	}
 

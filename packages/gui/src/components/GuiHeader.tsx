@@ -1,4 +1,4 @@
-import { t } from "@musepi/collab-web";
+import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -17,6 +17,41 @@ import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
+/** Known open-in app ids → built-in oc-icon fallback (shown when the
+ *  shell couldn't extract a real icon, e.g. WindowsApps aliases like
+ *  wt.exe whose icon the shell won't resolve). */
+const OPENIN_FALLBACK_ICON: Record<string, string> = {
+	explorer: "folder",
+	nautilus: "folder",
+	dolphin: "folder",
+	terminal: "terminal",
+	"gnome-terminal": "terminal",
+	konsole: "terminal",
+	notepad: "file-text",
+	vscode: "code",
+	cursor: "code",
+	zed: "code",
+	intellij: "code",
+	pycharm: "code",
+	goland: "code",
+	rider: "code",
+	clion: "code",
+	sublime: "code",
+	kate: "code",
+	bbedit: "code",
+	gedit: "code",
+	ghostty: "terminal",
+	iterm: "terminal",
+	warp: "terminal",
+};
+
+/** Localized open-in app label (fallback to the shell-provided English
+ *  name when the key is missing — e.g. custom app ids). */
+function openInLabel(app: { id: string; label: string }): string {
+	const key = `open in ${app.id}` as unknown as Parameters<typeof t>[0];
+	return t(key) === key ? app.label : t(key);
+}
+
 import { AgentAvatar } from "./AgentAvatar";
 import { Pop } from "./Pop";
 
@@ -570,7 +605,14 @@ export function GuiHeader({
 							{t("no dev script")}
 						</div>
 					)}
-					<Pop open={projOpen} className="gui-openin-menu" portal anchor={projBtnRef.current} align="right" onOpenChange={setProjOpen}>
+					<Pop
+						open={projOpen}
+						className="gui-openin-menu"
+						portal
+						anchor={projBtnRef.current}
+						align="right"
+						onOpenChange={setProjOpen}
+					>
 						<button
 							type="button"
 							className="gui-view-opt"
@@ -648,7 +690,13 @@ export function GuiHeader({
 							{store ? projectLabel : project ? projectName(project) : t("local")}
 						</span>
 					</button>
-					<Pop open={switcherOpen} className="gui-header-title-menu" portal anchor={switcherBtnRef.current} onOpenChange={setSwitcherOpen}>
+					<Pop
+						open={switcherOpen}
+						className="gui-header-title-menu"
+						portal
+						anchor={switcherBtnRef.current}
+						onOpenChange={setSwitcherOpen}
+					>
 						<button
 							type="button"
 							className="gui-header-session-row"
@@ -707,7 +755,13 @@ export function GuiHeader({
 						>
 							<Icon name="more" className="h-3.5 w-3.5" />
 						</button>
-						<Pop open={titleMenuOpen} className="gui-overlay-menu" portal anchor={titleMenuBtnRef.current} onOpenChange={setTitleMenuOpen}>
+						<Pop
+							open={titleMenuOpen}
+							className="gui-overlay-menu"
+							portal
+							anchor={titleMenuBtnRef.current}
+							onOpenChange={setTitleMenuOpen}
+						>
 							<button
 								type="button"
 								className="gui-view-opt"
@@ -877,8 +931,8 @@ export function GuiHeader({
 							type="button"
 							data-header-trigger="openIn-main"
 							className={`gui-openin-main${openInScanning ? " gui-openin-main--scanning" : ""}`}
-							title={t("open actions")}
-							aria-label={t("open actions")}
+							title={selectedOpenInApp ? t("open with {app}", { app: openInLabel(selectedOpenInApp) }) : t("open actions")}
+							aria-label={selectedOpenInApp ? t("open with {app}", { app: openInLabel(selectedOpenInApp) }) : t("open actions")}
 							onClick={() => {
 								if (selectedOpenInApp) void openWith(selectedOpenInApp.appName, openInDir);
 							}}
@@ -886,6 +940,8 @@ export function GuiHeader({
 							<span className="gui-openin-app-icon">
 								{selectedOpenInApp?.iconDataUrl ? (
 									<img src={selectedOpenInApp.iconDataUrl} alt="" draggable={false} />
+								) : selectedOpenInApp && OPENIN_FALLBACK_ICON[selectedOpenInApp.id] ? (
+									<Icon name={OPENIN_FALLBACK_ICON[selectedOpenInApp.id] as never} className="h-4 w-4" />
 								) : (
 									(selectedOpenInApp?.label.trim().slice(0, 1).toUpperCase() ?? "?")
 								)}
@@ -896,13 +952,20 @@ export function GuiHeader({
 							ref={openInBtnRef}
 							data-header-trigger="openIn"
 							className="gui-openin-more"
-							title={t("open actions")}
-							aria-label={t("open actions")}
+							title={t("choose open app")}
+							aria-label={t("choose open app")}
 							onClick={() => setOpenInOpen(v => !v)}
 						>
 							<Icon name="arrow-down-s" className="h-3 w-3" />
 						</button>
-						<Pop open={openInOpen} className="gui-openin-menu" portal anchor={openInBtnRef.current} align="right" onOpenChange={setOpenInOpen}>
+						<Pop
+							open={openInOpen}
+							className="gui-openin-menu"
+							portal
+							anchor={openInBtnRef.current}
+							align="right"
+							onOpenChange={setOpenInOpen}
+						>
 							<button
 								type="button"
 								className="gui-view-opt"
@@ -927,11 +990,13 @@ export function GuiHeader({
 										<span className="gui-openin-app-icon">
 											{app.iconDataUrl ? (
 												<img src={app.iconDataUrl} alt="" draggable={false} />
+											) : OPENIN_FALLBACK_ICON[app.id] ? (
+												<Icon name={OPENIN_FALLBACK_ICON[app.id] as never} className="h-4 w-4" />
 											) : (
 												(app.label.trim().slice(0, 1).toUpperCase() ?? "?")
 											)}
 										</span>
-										<span>{app.label}</span>
+										<span>{openInLabel(app)}</span>
 										{active && <Icon name="check" className="ml-auto h-3 w-3" />}
 									</button>
 								);
@@ -980,7 +1045,14 @@ export function GuiHeader({
 					<span>{t("local")}</span>
 					<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 				</button>
-				<Pop open={instanceOpen} className="gui-instance-menu" portal anchor={instanceBtnRef.current} align="right" onOpenChange={setInstanceOpen}>
+				<Pop
+					open={instanceOpen}
+					className="gui-instance-menu"
+					portal
+					anchor={instanceBtnRef.current}
+					align="right"
+					onOpenChange={setInstanceOpen}
+				>
 					{/* Current-instance header row (openchamber DesktopHostSwitcher):
 					 * local daemon + manual re-probe. */}
 					<div className="flex items-center gap-2 px-2 py-1.5">
