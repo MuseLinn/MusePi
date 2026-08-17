@@ -1,5 +1,5 @@
 /**
- * Standalone TUI model picker used by `omp setup speech`.
+ * Standalone TUI model picker used by `musepi setup speech`.
  *
  * Mirrors {@link ./session-picker.ts} for the standalone-TUI lifecycle: spin up
  * a one-shot {@link TUI} over a {@link SelectList}, resolve on select/cancel, and

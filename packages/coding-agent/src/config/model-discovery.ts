@@ -566,7 +566,7 @@ function isBonsaiQwenGguf(id: string): boolean {
  * turned off. Qwen ids and the Qwen3.6-based PrismLM Ternary Bonsai GGUFs are
  * routed through chat-completions (the implicit llama.cpp provider defaults to
  * `openai-responses`, whose disable path has no Qwen encoding) with the
- * `qwen-template-false` dialect; omp emits `preserve_thinking` inside
+ * `qwen-template-false` dialect; musepi emits `preserve_thinking` inside
  * `chat_template_kwargs` for Qwen, so the toggle rides there too and history
  * `<think>` blocks survive (`qwenPreserveThinking`). The runtime base URL gets a
  * `/v1` suffix because the chat-completions request would otherwise POST to the

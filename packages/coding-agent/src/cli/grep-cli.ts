@@ -1,7 +1,7 @@
 /**
  * Grep CLI command handlers.
  *
- * Handles `omp grep` subcommand for testing grep tool on Windows.
+ * Handles `musepi grep` subcommand for testing grep tool on Windows.
  */
 import * as path from "node:path";
 import { GrepOutputMode, grep } from "@musepi/pi-natives";

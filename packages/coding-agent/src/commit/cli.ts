@@ -70,7 +70,7 @@ export function parseCommitArgs(args: string[]): CommitCommandArgs | undefined {
 export function printCommitHelp(): void {
 	const lines = [
 		"Usage:",
-		"  omp commit [options]",
+		"  musepi commit [options]",
 		"",
 		"Options:",
 		"  --push           Push after committing",

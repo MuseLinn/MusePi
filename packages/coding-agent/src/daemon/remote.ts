@@ -1,7 +1,7 @@
 /**
  * Daemon remote-workspace RPC handlers.
  *
- * Turns an `omp ssh` host into a session workspace by mounting the remote
+ * Turns an `musepi ssh` host into a session workspace by mounting the remote
  * filesystem via sshfs (`~/.musepi/remote/<name>/`). Once mounted, the mount
  * path is an ordinary local path, so every existing tool (read/bash/glob/
  * write) works on the remote directory unchanged — the session simply gets
@@ -9,7 +9,7 @@
  *
  * Conditions surfaced to the GUI:
  * - sshfs availability (hasSshfs) — missing binary gets a platform hint
- * - host existence (omp ssh add) — connect fails with a clear message
+ * - host existence (musepi ssh add) — connect fails with a clear message
  * - key-based auth only for now (daemon has no TTY for interactive prompts)
  * - mount idempotency (already-mounted returns the same mount path)
  * - browse is jailed to the mount path (no path traversal)
@@ -75,7 +75,7 @@ export const _remoteForTests = {
 	},
 };
 
-/** List saved hosts from the user ssh.json (what `omp ssh list` shows). */
+/** List saved hosts from the user ssh.json (what `musepi ssh list` shows). */
 export async function listRemoteHosts(): Promise<RemoteHostList> {
 	const config = await readSSHConfigFile(helpers.sshConfigPath());
 	const hosts: RemoteHostEntry[] = Object.entries(config.hosts ?? {}).map(([name, cfg]) => ({ name, ...cfg }));
@@ -85,7 +85,7 @@ export async function listRemoteHosts(): Promise<RemoteHostList> {
 async function getHostConfig(name: string): Promise<RemoteHostEntry> {
 	const config = await readSSHConfigFile(helpers.sshConfigPath());
 	const cfg = config.hosts?.[name];
-	if (!cfg) throw new Error(`Host "${name}" not found — add it first (omp ssh add <name> --host <addr>)`);
+	if (!cfg) throw new Error(`Host "${name}" not found — add it first (musepi ssh add <name> --host <addr>)`);
 	return { name, ...cfg };
 }
 

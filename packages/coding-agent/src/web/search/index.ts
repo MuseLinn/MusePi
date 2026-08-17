@@ -154,7 +154,7 @@ async function executeSearch(
 	const parsedQuery = parseSearchQuery(params.query);
 
 	// Invariant across providers; read once and tolerate an uninitialized
-	// Settings singleton (e.g. `omp q ...` CLI path, unit tests) so the
+	// Settings singleton (e.g. `musepi q ...` CLI path, unit tests) so the
 	// provider-fallback loop never aborts before any provider runs.
 	let antigravityEndpointMode: "auto" | "production" | "sandbox" | undefined;
 	try {

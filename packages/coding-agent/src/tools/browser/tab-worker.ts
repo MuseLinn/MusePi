@@ -935,7 +935,7 @@ export class WorkerCore {
 			const raw = session as unknown as { send(method: string): Promise<unknown> };
 			await raw.send("MusePi.claimTarget");
 		} catch {
-			// Not the omp relay; nothing to claim.
+			// Not the musepi relay; nothing to claim.
 		} finally {
 			await session?.detach().catch(() => undefined);
 		}

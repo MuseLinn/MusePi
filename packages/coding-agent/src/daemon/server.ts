@@ -3639,7 +3639,7 @@ export class DaemonServer {
 				return this.#host.ensureFileIndex().search(p.query ?? "", p.limit ?? 30);
 			}
 			case "stats.sync": {
-				// Usage-stats sync (CLI `omp stats` parity): incrementally
+				// Usage-stats sync (CLI `musepi stats` parity): incrementally
 				// scan every session file (mtime/offset skip) into the shared
 				// SQLite stats db. GUI settings → 数据与统计 → 使用统计.
 				const { syncAllSessions } = await import("@musepi/omp-stats");

@@ -291,7 +291,7 @@ export const settings = {
 	"Cache Miss Marker": "缓存未命中标记",
 	"Catalog Only": "仅目录",
 	"Check for Updates": "检查更新",
-	"Check for omp updates on startup": "启动时检查 omp 更新",
+	"Check for musepi updates on startup": "启动时检查 omp 更新",
 	"Check for plugin updates on startup": "启动时检查插件更新",
 	"Check on startup and auto-install updates": "启动时检查并自动安装更新",
 
@@ -1876,10 +1876,10 @@ export const settings = {
 	"Provider unavailable in this environment.": "该提供商在此环境中不可用。",
 	"  Plugins": "  插件",
 	"  No plugins installed": "  未安装插件",
-	"  Install npm plugins:        omp plugin install <package>":
-		"  安装 npm 插件：        omp plugin install <package>",
-	"  Install marketplace plugins: omp plugin install <name>@<marketplace>":
-		"  安装 marketplace 插件：        omp plugin install <name>@<marketplace>",
+	"  Install npm plugins:        musepi plugin install <package>":
+		"  安装 npm 插件：        musepi plugin install <package>",
+	"  Install marketplace plugins: musepi plugin install <name>@<marketplace>":
+		"  安装 marketplace 插件：        musepi plugin install <name>@<marketplace>",
 	"Session-only switch — role models stay unchanged": "仅会话切换 — 角色模型保持不变",
 	"Quick role switch — applies its model and thinking for this session": "快速角色切换 — 为本会话应用其模型与思维模式",
 	"↑/↓ models · Enter use for this session · type to search · @ quick roles · Esc close":

@@ -958,7 +958,7 @@ export class PluginManager {
 				status: hasManifest ? "ok" : "warning",
 				message: hasManifest
 					? `v${pluginPkg.version}${pluginPkg.description ? ` - ${pluginPkg.description}` : ""}`
-					: `v${pluginPkg.version} - No omp/pi manifest (not an omp plugin)`,
+					: `v${pluginPkg.version} - No omp/pi manifest (not an musepi plugin)`,
 			});
 
 			// Check tools path exists if specified

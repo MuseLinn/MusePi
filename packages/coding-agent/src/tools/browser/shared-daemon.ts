@@ -1,10 +1,10 @@
 /**
  * Shared automation Chromium owned by the per-project daemon broker.
  *
- * Instead of every omp process launching (and sometimes orphaning) a private
+ * Instead of every musepi process launching (and sometimes orphaning) a private
  * Chromium, the headless browser kind attaches to one broker-supervised Chrome
  * per project directory — sessions and subagents each open their own tabs in
- * it. The broker stops the daemon when the last omp client in the project
+ * it. The broker stops the daemon when the last musepi client in the project
  * exits, so Chrome can never outlive omp, and concurrent acquisitions across
  * processes converge on a single launch instead of a launch storm.
  */
@@ -25,7 +25,7 @@ const PROBE_TIMEOUT_MS = 1_500;
 /** describe→start rounds before giving up; bounds cross-process start races and wedged-Chrome replacement. */
 const ENSURE_ATTEMPTS = 3;
 
-/** Broker-owned browser endpoint one omp process can attach to. */
+/** Broker-owned browser endpoint one musepi process can attach to. */
 export interface SharedBrowserEndpoint {
 	wsEndpoint: string;
 	daemonName: string;

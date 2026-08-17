@@ -11,7 +11,7 @@ export const serveHelp = {
 } satisfies CommandMetadata;
 
 export const authBrokerHelp = {
-	description: "Manage the omp auth-broker (credential vault)",
+	description: "Manage the musepi auth-broker (credential vault)",
 } satisfies CommandMetadata;
 
 export const authGatewayHelp = {

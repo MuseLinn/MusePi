@@ -1,7 +1,7 @@
 /**
  * Usage CLI command handler.
  *
- * Handles `omp usage` — fetches provider usage reports for every
+ * Handles `musepi usage` — fetches provider usage reports for every
  * authenticated account and prints a detailed per-account breakdown
  * (limits, windows, reset times, plan metadata). Accounts whose
  * credentials produced no usage report are listed too, so the output
@@ -786,7 +786,7 @@ export async function runUsageCommand(cmd: UsageCommandArgs): Promise<void> {
 				const scope = cmd.provider ? ` for provider "${cmd.provider}"` : "";
 				process.stderr.write(
 					chalk.yellow(
-						`No usage history recorded${scope} yet. Snapshots accumulate whenever usage is fetched (TUI footer, /usage, omp usage).\n`,
+						`No usage history recorded${scope} yet. Snapshots accumulate whenever usage is fetched (TUI footer, /usage, musepi usage).\n`,
 					),
 				);
 				process.exitCode = 1;

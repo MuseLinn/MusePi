@@ -1,7 +1,7 @@
 /**
  * Share a saved session as an encrypted link without launching the agent.
  *
- * `omp share <session>` accepts a session id (prefix) or a path to a session
+ * `musepi share <session>` accepts a session id (prefix) or a path to a session
  * `.jsonl` and uploads the sealed snapshot exactly like the `/share` slash
  * command, honoring `share.serverUrl`, `share.store`, and
  * `share.redactSecrets`.

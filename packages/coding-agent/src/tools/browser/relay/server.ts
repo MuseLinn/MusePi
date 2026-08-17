@@ -41,7 +41,7 @@ type RelayWebSocket = Bun.ServerWebSocket<SocketData>;
 const WS_KEEPALIVE_MS = 30_000;
 /** Screenshots travel base64-encoded through both websocket legs. */
 const MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
-/** Default appearance of the omp tab group. */
+/** Default appearance of the musepi tab group. */
 const DEFAULT_GROUP = { title: "omp", color: "cyan" } as const;
 
 /** Start the relay server on 127.0.0.1. Throws if the port is taken. */

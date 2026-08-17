@@ -1449,7 +1449,7 @@ export function getPackageDir(): string {
 
 // Legacy pi's `@earendil-works/pi-coding-agent` re-exported `estimateTokens`,
 // `compact`, and `serializeConversation` from its package root (via
-// `./core/compaction/index.ts`). In omp they live in
+// `./core/compaction/index.ts`). In musepi they live in
 // `@musepi/pi-agent-core/compaction`, and the coding-agent barrel below does
 // not forward them, so legacy extensions importing them fail Bun's static
 // export check during validation (issues #6583, #7174, #7403).
@@ -1470,7 +1470,7 @@ export { Type } from "./legacy-typebox";
 
 // Legacy pi's `@earendil-works/pi-coding-agent` root exported an `is<Tool>ToolResult`
 // family of type guards that narrow a `tool_result` event (`ToolResultEvent`) by
-// tool name. omp removed them from the public API in 10.2.3, and the barrel above
+// tool name. musepi removed them from the public API in 10.2.3, and the barrel above
 // does not forward them, so legacy extensions importing them (e.g.
 // `pi-lean-ctx@3.9.18`, which uses `isEditToolResult`/`isWriteToolResult` to
 // invalidate its read cache after a native edit/write) fail Bun's static export

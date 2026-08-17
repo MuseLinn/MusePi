@@ -1,7 +1,7 @@
 /**
  * Config CLI command handlers.
  *
- * Handles `omp config <command>` subcommands for managing settings.
+ * Handles `musepi config <command>` subcommands for managing settings.
  * Uses the settings schema as the source of truth for available settings.
  */
 

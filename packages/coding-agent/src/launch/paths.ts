@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { getDaemonRuntimeDir } from "@musepi/pi-utils";
 
-/** Resolve the private runtime directory shared by omp processes in one project directory. */
+/** Resolve the private runtime directory shared by musepi processes in one project directory. */
 export { getDaemonRuntimeDir as daemonRuntimeDir };
 
 /** Resolve the Unix socket or Windows named pipe used by one daemon broker scope. */

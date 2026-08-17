@@ -9,7 +9,7 @@
  *   - **Task-isolation dirs** (`task/worktree.ts`): a wrapper dir with a
  *     compact `m` subdir mounted/cloned by `natives.isoStart`. Legacy `merged`
  *     subdirs are still recognized. `ensureIsolation` writes an ownership
- *     marker naming the live omp process; a
+ *     marker naming the live musepi process; a
  *     sandbox whose owner is still running is reported `live` and never
  *     removed without `--all`, so `clear` reclaims only crashed leftovers.
  *

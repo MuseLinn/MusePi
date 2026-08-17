@@ -22,7 +22,7 @@ export interface PluginFeature {
 }
 
 /**
- * Plugin manifest from package.json omp or pi field.
+ * Plugin manifest from package.json musepi or pi field.
  */
 export interface PluginManifest {
 	/** Plugin display name (defaults to package name) */

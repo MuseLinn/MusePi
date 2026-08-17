@@ -1,5 +1,5 @@
 /**
- * Resolve auth-broker connection configuration for the local omp client.
+ * Resolve auth-broker connection configuration for the local musepi client.
  *
  * This is a thin coding-agent wrapper around the shared resolver in
  * `@musepi/pi-ai/auth-broker/discover` that preserves the process-lifetime
@@ -123,8 +123,8 @@ export async function describeAuthBrokerStartupError(error: unknown): Promise<st
 	return (
 		`Auth broker${target} is unreachable (${error.message}). ` +
 		"musepi is configured to use this broker for credentials and will not fall back to local credentials automatically.\n" +
-		"Start the broker with `omp auth-broker serve`, or disable it with " +
-		"`omp config reset auth.broker.url` and `omp config reset auth.broker.token` " +
+		"Start the broker with `musepi auth-broker serve`, or disable it with " +
+		"`musepi config reset auth.broker.url` and `musepi config reset auth.broker.token` " +
 		"(or unset OMP_AUTH_BROKER_URL / OMP_AUTH_BROKER_TOKEN)."
 	);
 }

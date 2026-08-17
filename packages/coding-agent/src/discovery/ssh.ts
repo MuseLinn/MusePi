@@ -1,7 +1,7 @@
 /**
  * SSH JSON Provider
  *
- * Discovers SSH hosts from managed omp config paths and legacy root ssh.json files.
+ * Discovers SSH hosts from managed musepi config paths and legacy root ssh.json files.
  * Priority: 5 (low, project/user config discovery)
  */
 import * as path from "node:path";
@@ -147,7 +147,7 @@ async function load(ctx: LoadContext): Promise<LoadResult<SSHHost>> {
 registerProvider(sshCapability.id, {
 	id: PROVIDER_ID,
 	displayName: DISPLAY_NAME,
-	description: "Load SSH hosts from managed omp paths and legacy ssh.json/.ssh.json files",
+	description: "Load SSH hosts from managed musepi paths and legacy ssh.json/.ssh.json files",
 	priority: 5,
 	load,
 });

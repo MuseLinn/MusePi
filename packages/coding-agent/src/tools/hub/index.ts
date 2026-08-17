@@ -95,9 +95,9 @@ const hubSchema = type({
 		"timeout?": type("number > 0").describe("seconds to wait; default 30"),
 	}).describe("start: readiness conditions; all supplied conditions must pass"),
 	"restart?": type("'no' | 'on-failure' | 'always'").describe("start: restart policy; default no"),
-	"persist?": type("boolean").describe("start: survive the last omp client exiting; default false"),
+	"persist?": type("boolean").describe("start: survive the last musepi client exiting; default false"),
 	"detached?": type("boolean").describe(
-		"start: survive every omp and broker exit; implies persist and disables PTY input",
+		"start: survive every musepi and broker exit; implies persist and disables PTY input",
 	),
 	"lines?": type("number > 0").describe("logs: output lines; default 100, max 1000"),
 	"head?": type("boolean").describe("logs: read from the beginning instead of the tail"),

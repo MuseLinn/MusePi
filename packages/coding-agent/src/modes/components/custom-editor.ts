@@ -399,7 +399,7 @@ export class CustomEditor extends Editor {
 	tui?: TUI;
 
 	/**
-	 * Accept both the omp constructor convention — `new CustomEditor(theme)` —
+	 * Accept both the musepi constructor convention — `new CustomEditor(theme)` —
 	 * and the upstream-pi `Editor` convention — `new Editor(tui, theme, keybindings)`
 	 * — that {@link ExtensionUIContext.setEditorComponent}'s factory contract
 	 * advertises `(tui, theme, keybindings)`. Plugins written against upstream pi

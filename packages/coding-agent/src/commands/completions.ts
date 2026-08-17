@@ -1,5 +1,5 @@
 /**
- * `omp completions <bash|zsh|fish>` — print a shell completion script.
+ * `musepi completions <bash|zsh|fish>` — print a shell completion script.
  *
  * The script is derived entirely from the declarative command/flag metadata
  * (see `cli/completion-gen.ts`), so it never drifts from the actual CLI surface.

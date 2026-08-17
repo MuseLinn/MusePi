@@ -224,7 +224,7 @@ function truncateOutput(session: DapSession, output: string): void {
  *
  * `ptree.spawn` always pipes stdout and only eagerly drains stderr; the exposed
  * stdout stream must be consumed or Bun buffers it unboundedly in this process
- * (a chatty debuggee grows omp toward OOM). The reverse-request path has no
+ * (a chatty debuggee grows musepi toward OOM). The reverse-request path has no
  * terminal surface here, so route the child's stdout through {@link
  * truncateOutput}: this bounds memory at `MAX_OUTPUT_BYTES` and surfaces the
  * program's output to the agent, mirroring the adapter's own `output` events.

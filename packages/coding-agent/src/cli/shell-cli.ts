@@ -1,7 +1,7 @@
 /**
  * Shell CLI command handlers.
  *
- * Handles `omp shell` subcommand for testing the native brush-core shell.
+ * Handles `musepi shell` subcommand for testing the native brush-core shell.
  */
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";

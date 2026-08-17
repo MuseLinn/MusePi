@@ -120,11 +120,11 @@ export class PluginListComponent extends Container {
 			this.addChild(new Text(theme.fg("muted", t("  No plugins installed")), 0, 0));
 			this.addChild(new Spacer(1));
 			this.addChild(
-				new Text(theme.fg("dim", t("  Install npm plugins:        omp plugin install <package>")), 0, 0),
+				new Text(theme.fg("dim", t("  Install npm plugins:        musepi plugin install <package>")), 0, 0),
 			);
 			this.addChild(
 				new Text(
-					theme.fg("dim", t("  Install marketplace plugins: omp plugin install <name>@<marketplace>")),
+					theme.fg("dim", t("  Install marketplace plugins: musepi plugin install <name>@<marketplace>")),
 					0,
 					0,
 				),

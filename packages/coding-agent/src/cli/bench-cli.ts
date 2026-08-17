@@ -794,7 +794,7 @@ export async function runBenchCommand(command: BenchCommandArgs, deps: BenchDepe
 	const now = deps.now ?? (() => performance.now());
 	const interactive = deps.stdoutIsTTY ?? process.stdout.isTTY === true;
 	if (command.models.length === 0) {
-		throw new Error("Pass at least one model selector, e.g. `omp bench opus gpt-5.2`");
+		throw new Error("Pass at least one model selector, e.g. `musepi bench opus gpt-5.2`");
 	}
 
 	const runtime = await (deps.createRuntime ?? createDefaultRuntime)();

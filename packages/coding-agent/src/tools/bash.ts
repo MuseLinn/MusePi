@@ -137,7 +137,7 @@ const BASH_PATTERN_APPROVAL_VALUES = new Set(["allow", "deny", "prompt"]);
  * preserves `bash` tool semantics (`$VAR`, `$(...)`, `source`, POSIX quoting,
  * `-l`) wherever a POSIX shell is available. The agent host's shell path is
  * used as a proxy for the client's, matching the near-universal ACP
- * deployment shape of an editor spawning omp as a co-hosted subprocess.
+ * deployment shape of an editor spawning musepi as a co-hosted subprocess.
  */
 export function wrapShellLineForClientTerminal(
 	line: string,

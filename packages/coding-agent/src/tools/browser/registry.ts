@@ -173,7 +173,7 @@ async function openBrowserHandle(kind: BrowserKind, opts: AcquireBrowserOptions)
 		};
 	}
 	if (kind.kind === "headless") {
-		// Every real omp process (session, subagent, worker — anything with a CLI
+		// Every real musepi process (session, subagent, worker — anything with a CLI
 		// worker host) MUST go through the project-shared broker-owned Chromium:
 		// per-process launches are what produced launch storms and orphaned
 		// process trees. The process-local launch survives only for hosts that
@@ -339,7 +339,7 @@ async function disposeBrowserHandle(handle: BrowserHandle, opts: ReleaseBrowserO
 			// The broker owns the Chromium; this process only drops its CDP
 			// connection. `kill` is scoped to spawned-app browsers — stopping the
 			// shared daemon here would tear down every other session's tabs. The
-			// daemon dies with the last omp client in the project (broker idle
+			// daemon dies with the last musepi client in the project (broker idle
 			// teardown), or via an explicit hub stop.
 			if (handle.browser.connected) {
 				try {

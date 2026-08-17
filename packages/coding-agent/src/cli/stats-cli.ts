@@ -1,7 +1,7 @@
 /**
  * Stats CLI command handlers.
  *
- * Handles `omp stats` subcommand for viewing AI usage statistics.
+ * Handles `musepi stats` subcommand for viewing AI usage statistics.
  */
 
 import { truncateToWidth } from "@musepi/pi-tui/utils";

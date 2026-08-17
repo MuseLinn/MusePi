@@ -2,8 +2,8 @@
  * Print mode (single-shot): Send prompts, output result, exit.
  *
  * Used for:
- * - `omp -p "prompt"` - text output
- * - `omp --mode json "prompt"` - JSON event stream
+ * - `musepi -p "prompt"` - text output
+ * - `musepi --mode json "prompt"` - JSON event stream
  */
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { ImageContent } from "@musepi/pi-ai";

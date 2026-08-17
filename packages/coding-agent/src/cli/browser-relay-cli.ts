@@ -55,7 +55,7 @@ async function runInstall(dirOverride: string | undefined): Promise<void> {
 	console.log("Finish setup in Chrome:");
 	console.log("  1. Open chrome://extensions and enable Developer mode.");
 	console.log(`  2. Click "Load unpacked" and select: ${dir}`);
-	console.log("  3. Enable the mode:  omp config set browser.relay true");
+	console.log("  3. Enable the mode:  musepi config set browser.relay true");
 	console.log("");
 	console.log("musepi starts the relay automatically when the browser tool needs it;");
 	console.log("run `musepi browser-relay` yourself only for --token or --no-group.");
@@ -88,10 +88,10 @@ async function runServe(args: BrowserRelayCommandArgs): Promise<void> {
 	console.log(`musepi browser relay listening on http://127.0.0.1:${args.port}`);
 	console.log(`  extension endpoint  ws://127.0.0.1:${args.port}/ext${args.token ? "?token=***" : ""}`);
 	if (args.port === DEFAULT_RELAY_PORT) {
-		console.log("  enable with         omp config set browser.relay true");
+		console.log("  enable with         musepi config set browser.relay true");
 	} else {
 		console.log(
-			`  enable with         omp config set browser.relay true && omp config set browser.relayUrl http://127.0.0.1:${args.port}`,
+			`  enable with         musepi config set browser.relay true && musepi config set browser.relayUrl http://127.0.0.1:${args.port}`,
 		);
 	}
 	console.log("Waiting for the MusePi Browser Relay extension to connect (musepi browser-relay install)...");

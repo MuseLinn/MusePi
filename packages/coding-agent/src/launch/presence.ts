@@ -5,7 +5,7 @@ import { daemonRuntimeDir } from "./paths";
 
 const CLIENTS_DIR = "clients";
 
-/** Handle keeping one omp process registered in a project daemon scope. */
+/** Handle keeping one musepi process registered in a project daemon scope. */
 export interface DaemonProjectPresence {
 	close(): Promise<void>;
 }
@@ -20,7 +20,7 @@ async function canonicalProjectDir(projectDir: string): Promise<string> {
 	}
 }
 
-/** Register this omp process so project daemons survive while it remains alive. */
+/** Register this musepi process so project daemons survive while it remains alive. */
 export async function registerDaemonProjectPresence(
 	projectDir: string,
 	runtimeOverride?: string,
@@ -44,7 +44,7 @@ export async function registerDaemonProjectPresence(
 	return { close };
 }
 
-/** Return whether a registered omp process in this runtime directory is still alive. */
+/** Return whether a registered musepi process in this runtime directory is still alive. */
 export async function hasLiveDaemonProjectPresence(runtimeDir: string): Promise<boolean> {
 	const clientsDir = path.join(runtimeDir, CLIENTS_DIR);
 	let entries: string[];

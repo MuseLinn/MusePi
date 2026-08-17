@@ -2,7 +2,7 @@
  * Update CLI command handler.
  *
  * Handles `musepi update` to check for and install updates.
- * Uses the installer that owns the active omp executable when it can be detected.
+ * Uses the installer that owns the active musepi executable when it can be detected.
  */
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
@@ -452,10 +452,10 @@ function isPathInDirectory(filePath: string, directoryPath: string): boolean {
 	if (isPathInDirectoryLexical(filePath, directoryPath)) return true;
 	// Layer realpath resolution on top of the lexical guard. On Windows, ~/.bun
 	// is a junction when Bun is installed via Scoop, so `bun pm bin -g` and the
-	// PATH-resolved omp path can refer to the same directory through different
+	// PATH-resolved musepi path can refer to the same directory through different
 	// strings. path.resolve does not traverse junctions/symlinks; realpath does.
 	// Resolve both the file and its parent directory: the file catches manager
-	// links like Homebrew's `bin/omp -> Cellar/.../bin/omp`; the parent fallback
+	// links like Homebrew's `bin/musepi -> Cellar/.../bin/musepi`; the parent fallback
 	// still tolerates fresh install paths where the file does not exist yet.
 	const dirReal = tryRealpath(path.resolve(directoryPath));
 	if (!dirReal) return false;
@@ -498,7 +498,7 @@ interface UpdateMethodResolutionOptions {
 	/** Bun's configured global package directory, independent of its bin directory. */
 	bunGlobalDir?: string;
 	/**
-	 * Whether the resolved omp path is a plain file (the standalone binary)
+	 * Whether the resolved musepi path is a plain file (the standalone binary)
 	 * rather than a package-manager symlink. Stops a binary install from being
 	 * misrouted to npm/bun when the global bin dir overlaps the installer's
 	 * target directory.
@@ -1037,7 +1037,7 @@ async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): 
 }
 
 /**
- * Run the PATH-resolved omp binary and check if it reports the expected version.
+ * Run the PATH-resolved musepi binary and check if it reports the expected version.
  */
 async function verifyInstalledVersion(expectedVersion: string): Promise<InstalledVersionVerification> {
 	const ompPath = resolveOmpPath();
@@ -1195,7 +1195,7 @@ function buildVersionedPackageInstallArgs(
 }
 
 /**
- * Build the bun argv used to globally install a specific omp version.
+ * Build the bun argv used to globally install a specific musepi version.
  *
  * The version is selected by hitting {@link NPM_REGISTRY} directly in
  * {@link getLatestRelease}, so the install MUST observe the same catalog:
@@ -1693,7 +1693,7 @@ export async function runUpdateCommand(opts: { force: boolean; check: boolean })
 		return;
 	}
 
-	// Choose update method based on the prioritized omp binary in PATH. For
+	// Choose update method based on the prioritized musepi binary in PATH. For
 	// binary-only releases the package managers are never consulted: a bun/npm
 	// symlink resolves to method "binary" and is replaced in place, keeping the
 	// same PATH entry live.

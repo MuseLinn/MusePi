@@ -788,7 +788,7 @@ export async function loadSessionExtensions(
 /**
  * Load discovered/configured extensions and register their providers into
  * `modelRegistry`, then discover the dynamic provider catalogs. One-shot CLIs
- * (`omp bench`, dry-balance) build a bare {@link ModelRegistry} that only knows
+ * (`musepi bench`, dry-balance) build a bare {@link ModelRegistry} that only knows
  * built-in catalog providers; without this, providers contributed by an
  * extension (e.g. a custom OpenAI-compatible provider under
  * `~/.musepi/agent/extensions/`) never reach model resolution. Mirrors the
@@ -4181,7 +4181,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 
 		// Broker-shared language servers: one server per project, multiplexed
-		// across omp instances by the LSP mux daemon. Session-level because the
+		// across musepi instances by the LSP mux daemon. Session-level because the
 		// flag lives in module state consulted on every client cold-start.
 		setSharedLspEnabled(enableLsp && settings.get("lsp.shared"));
 

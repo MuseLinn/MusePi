@@ -1,7 +1,7 @@
 /**
  * Setup CLI command handler.
  *
- * Handles `omp setup` for onboarding and `omp setup <component>` for optional dependencies.
+ * Handles `musepi setup` for onboarding and `musepi setup <component>` for optional dependencies.
  */
 import * as path from "node:path";
 import { APP_NAME, getProjectDir, getPythonEnvDir } from "@musepi/pi-utils";
@@ -96,7 +96,7 @@ export async function checkPythonSetup(cwd: string, interpreter?: string): Promi
  * Install Python packages using uv (preferred) or pip.
  */
 // Python installation helper removed: the subprocess runner has no Python
-// package dependencies beyond a working interpreter. `omp setup python --check`
+// package dependencies beyond a working interpreter. `musepi setup python --check`
 // remains as a probe; users install optional libs (pandas, matplotlib, ...)
 // directly via pip or the in-process `%pip` magic.
 
@@ -217,7 +217,7 @@ function buildSpeechComponents(): SpeechComponent[] {
 }
 
 /**
- * Unified `omp setup speech` flow. Drives every {@link SpeechComponent} through
+ * Unified `musepi setup speech` flow. Drives every {@link SpeechComponent} through
  * one path: report (`--json`/`--check`) or install (interactive pick + ensure
  * with single-line progress; non-TTY skips pickers and installs configured
  * values).

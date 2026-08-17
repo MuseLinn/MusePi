@@ -82,7 +82,7 @@ export function collectStoredAccounts(authStorage: AuthStorage): UsageAccountIde
  * `hasUsageProvider` is injected (in practice {@link AuthStorage.usageProviderFor})
  * so custom/broker resolvers stay authoritative — no provider list is duplicated
  * here. An explicit `--provider` request bypasses the cull, so
- * `omp usage --provider xai` can still confirm the stored credential has no
+ * `musepi usage --provider xai` can still confirm the stored credential has no
  * usage endpoint.
  */
 export function selectReportableAccounts(
@@ -188,7 +188,7 @@ export function collectUnreportedAccounts(
 }
 
 /**
- * Tombstones worth a row in `omp usage`: OAuth credentials torn down
+ * Tombstones worth a row in `musepi usage`: OAuth credentials torn down
  * automatically (refresh failure, upstream invalidation). Rows the user
  * replaced or deleted deliberately are lifecycle noise, not lost capacity.
  */

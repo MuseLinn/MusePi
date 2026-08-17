@@ -1,5 +1,5 @@
 /**
- * Entry points for the omp commit command.
+ * Entry points for the musepi commit command.
  */
 
 export * from "./execute";

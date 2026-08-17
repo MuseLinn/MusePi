@@ -2,7 +2,7 @@
  * Ownership marker for task-isolation sandboxes under `~/.musepi/wt/`.
  *
  * Each isolation base dir (`ensureIsolation` in {@link ./worktree}) holds a
- * compact `m` mount plus this marker file naming the omp process that created
+ * compact `m` mount plus this marker file naming the musepi process that created
  * it. `musepi worktree clear` consults the marker so it can distinguish a live
  * subagent's sandbox from a crashed run's leftover instead of deleting both.
  */
@@ -14,7 +14,7 @@ export const ISOLATION_OWNER_FILE = ".omp-isolation-owner.json";
 
 /** Recorded owner of a task-isolation sandbox. */
 export interface IsolationOwner {
-	/** PID of the omp process that created and owns the sandbox. */
+	/** PID of the musepi process that created and owns the sandbox. */
 	pid: number;
 	/** Task id the sandbox was materialised for. */
 	id: string;
@@ -70,7 +70,7 @@ export async function writeIsolationOwner(baseDir: string, id: string): Promise<
 }
 
 /**
- * Whether a live omp process still owns the sandbox at `baseDir`.
+ * Whether a live musepi process still owns the sandbox at `baseDir`.
  *
  * A missing or malformed marker means no verifiable owner — a crashed run or a
  * sandbox from before markers existed, both safe to reclaim. `process.kill(pid,

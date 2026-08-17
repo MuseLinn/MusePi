@@ -384,7 +384,7 @@ export const DEFAULT_BASH_INTERCEPTOR_RULES: BashInterceptorRule[] = [
 			"^\\s*(?:(?:bun|npm|pnpm|yarn)\\s+(?:run\\s+)?(?:dev|start)(?:\\s|$)|(?:vite|next\\s+dev|nuxt\\s+dev|nodemon|lldb|gdb|tail\\s+-f)(?:\\s|$)|docker\\s+compose\\s+up(?!.*(?:\\s-d(?:\\s|$)|--detach))(?:\\s|$))",
 		tool: "hub",
 		message:
-			'Use the `hub` tool (`op:"start"`) for services, watchers, and debuggers so other omp instances can observe and control them.',
+			'Use the `hub` tool (`op:"start"`) for services, watchers, and debuggers so other musepi instances can observe and control them.',
 	},
 	{
 		pattern:
@@ -402,7 +402,7 @@ export const SETTINGS_SCHEMA = {
 	// ────────────────────────────────────────────────────────────────────────
 	setupVersion: { type: "number", default: 0 },
 
-	// Auth broker — credentials proxied through a remote `omp auth-broker serve`
+	// Auth broker — credentials proxied through a remote `musepi auth-broker serve`
 	// host. Hidden from the UI; populate via env vars or hand-edited config.yml.
 	// Env (`OMP_AUTH_BROKER_URL` / `OMP_AUTH_BROKER_TOKEN`) takes precedence so
 	// per-machine overrides remain trivial.
@@ -1885,7 +1885,7 @@ export const SETTINGS_SCHEMA = {
 			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Check for Updates",
-			description: "Check for omp updates on startup",
+			description: "Check for musepi updates on startup",
 		},
 	},
 
@@ -3484,7 +3484,7 @@ export const SETTINGS_SCHEMA = {
 			group: "LSP",
 			label: "Shared Language Servers",
 			description:
-				"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
+				"Share one language server per project across musepi instances via the daemon broker (falls back to private servers when unavailable)",
 			condition: "lspActive",
 		},
 	},

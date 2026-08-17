@@ -1,5 +1,5 @@
 /**
- * Types for the omp commit pipeline.
+ * Types for the musepi commit pipeline.
  */
 export type CommitType =
 	| "feat"
