@@ -107,7 +107,7 @@ import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerComponent({
-		slot: "settings.extensions", // 当前唯一插槽:设置 → 插件页
+		slot: "panel.tab.greeting", // 右面板动态 tab(panel.tab.<任意 id>)
 		moduleUrl: "./ui/greeting.tsx", // 扩展目录内相对路径
 		label: "Greeting card",
 	});
@@ -117,7 +117,17 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**(编译时强制):
 - 默认导出 React 组件;
 - 通过 `React` 标识符引用 React(daemon 编译时改写为 `window.MusePiReact`)——**禁止 `import ... from "react"`**,否则绑定第二份 react 副本,hooks dispatcher 变 null(实测坑);
-- type-only import 可(编译擦除);组件仅使用 props/内部 state,不假设注入 props。
+- type-only import 可(编译擦除);
+- **注入 props(全部可选,宿主传哪项哪项有值)**:`{ rpc, sessionId, cwd, slot, extensionId }` —— `rpc` 是 daemon RPC 桥(models.list/session.setModel 等),`sessionId`/`cwd` 是宿主当前会话上下文,`slot`/`extensionId` 是身份。组件不依赖任何一项仍可工作;
+- **样式**:组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`(组件卸载即移除)——不要依赖全局样式文件;
+- **失败可见**:编译失败/加载失败在宿主处以红色错误块显示(不再静默消失);运行时错误有 `gui-slot-error` 样式。
+
+**槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错):
+- `panel.tab.<id>` — 右面板动态 tab(图标 + 内容区)
+- `settings.tab.<id>` — 设置页动态分区
+- `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
+- `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
+- `panel.right` / `settings.extensions` — 旧保留槽(仍可用)
 
 **数据流**:daemon `bun.build` 把模块编译为自包含 ESM(react 绑定宿主实例)→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob: 动态 import 挂载。**信任模型**:扩展本就在 daemon 进程执行任意代码,渲染其组件不构成新提权。
 

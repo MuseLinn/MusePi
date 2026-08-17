@@ -1169,7 +1169,9 @@ export function ChatView({
 												containerRef={transcriptRef}
 												onQuote={text => appendQuote(text)}
 												onAsk={(text, x, y) =>
-													window.dispatchEvent(new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }))
+													window.dispatchEvent(
+														new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
+													)
 												}
 												onCopy={text => void navigator.clipboard.writeText(text)}
 												onNewSession={text => onSubmitNewSession(text)}
@@ -1396,6 +1398,8 @@ export function ChatView({
 								 * rail.right slot. Sibling of the panel at the surface's
 								 * right edge. */}
 								<RightRail
+									sessionId={store?.sessionId ?? null}
+									cwd={store?.cwd ?? ""}
 									rpc={rpc}
 									tool={contextTool}
 									rightPanelOpen={rightPanelOpen && !focusMode}

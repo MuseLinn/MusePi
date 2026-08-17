@@ -951,6 +951,12 @@ function AppInner(): ReactNode {
 			}
 			client.run();
 			setRpc(client);
+			// Subscribe to daemon global events (extensions.changed /
+			// modes.changed …). Without this the daemon never broadcasts
+			// HMR invalidation — slot hosts fall back to 10s polling and
+			// "instant refresh" is dead code. Fire-and-forget: a missing
+			// RPC on older daemons is non-fatal (polling still works).
+			client.request("events.subscribe", {}).catch(() => {});
 			localStorage.setItem("musepi-gui-url", targetUrl);
 			// Fetch the session list; errors (unknown method) are non-fatal on
 			// older daemons — surface but keep the connection.

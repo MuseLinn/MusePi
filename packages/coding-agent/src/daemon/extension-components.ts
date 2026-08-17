@@ -24,13 +24,16 @@ export interface SlotComponent {
 	code: string;
 	/** Compile error message (debug only — the renderer renders empty on failure). */
 	error?: string;
+	/** Component-scoped CSS (extracted from the component's own `import
+	 *  "./x.css"` chains; rendered via a <style> tag by the host). */
+	css?: string;
 }
 
 /** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
 const extensionLoadCache = new Map<string, { at: number; extension: Extension }>();
 
-/** Compile cache: abs path + mtime → compiled code. */
-const compileCache = new Map<string, { mtimeMs: number; code: string }>();
+/** Compile cache: abs path + mtime → compiled code + extracted css. */
+const compileCache = new Map<string, { mtimeMs: number; code: string; css?: string }>();
 
 async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extension | null> {
 	const cached = extensionLoadCache.get(entryPath);
@@ -41,7 +44,7 @@ async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extens
 	return extension;
 }
 
-async function compileComponentModule(componentPath: string): Promise<string> {
+async function compileComponentModule(componentPath: string): Promise<{ code: string; css?: string }> {
 	let mtimeMs: number | undefined;
 	try {
 		mtimeMs = (await Bun.file(componentPath).stat()).mtimeMs;
@@ -49,7 +52,9 @@ async function compileComponentModule(componentPath: string): Promise<string> {
 		// Path vanished — fall through to a fresh compile attempt.
 	}
 	const cached = compileCache.get(componentPath);
-	if (cached && mtimeMs !== undefined && cached.mtimeMs === mtimeMs) return cached.code;
+	if (cached && mtimeMs !== undefined && cached.mtimeMs === mtimeMs) {
+		return { code: cached.code, css: cached.css };
+	}
 
 	const result = await Bun.build({
 		entrypoints: [componentPath],
@@ -76,8 +81,18 @@ async function compileComponentModule(componentPath: string): Promise<string> {
 		throw new Error(result.logs.map(l => l.message).join("; ") || "no output");
 	}
 	const code = await output.text();
-	if (mtimeMs !== undefined) compileCache.set(componentPath, { mtimeMs, code });
-	return code;
+	// Component-scoped CSS: the component's `import "./x.css"` chains are
+	// extracted by bun.build into a separate css output — carry it alongside
+	// the code so the host can inject a <style> (previously dropped, so
+	// component styling was silently lost).
+	let css: string | undefined;
+	const cssOutput = result.outputs.find(o => o.path.endsWith(".css"));
+	if (cssOutput) {
+		const text = await cssOutput.text();
+		if (text.trim().length > 0) css = text;
+	}
+	if (mtimeMs !== undefined) compileCache.set(componentPath, { mtimeMs, code, css });
+	return { code, css };
 }
 
 /**
@@ -98,12 +113,13 @@ export async function collectSlotComponents(
 		for (const component of extension.components ?? []) {
 			const absPath = path.resolve(extension.resolvedPath, "..", component.moduleUrl);
 			try {
-				const code = await compileComponentModule(absPath);
+				const compiled = await compileComponentModule(absPath);
 				out.push({
 					slot: component.slot,
 					extensionId: extension.path,
 					label: component.label,
-					code,
+					code: compiled.code,
+					...(compiled.css ? { css: compiled.css } : {}),
 				});
 			} catch (error) {
 				// A broken component must not fail the whole extensions.list —

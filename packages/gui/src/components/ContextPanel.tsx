@@ -237,18 +237,20 @@ export function ContextPanel({
 					>
 						<Icon name="list-unordered" className="h-4 w-4" />
 					</button>
-					{extTabs.map(item => (
-						<button
-							key={item.extensionId}
-							type="button"
-							title={item.label ?? item.slot}
-							aria-label={item.label ?? item.slot}
-							className={`gui-pane-tab${tab === `ext:${item.slot}` ? " gui-pane-tab--active" : ""}`}
-							onClick={() => setTab(`ext:${item.slot}`)}
-						>
-							<Icon name="plug" className="h-4 w-4" />
-						</button>
-					))}
+					<div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar">
+						{extTabs.map(item => (
+							<button
+								key={`${item.extensionId}:${item.slot}`}
+								type="button"
+								title={item.label ?? item.slot}
+								aria-label={item.label ?? item.slot}
+								className={`gui-pane-tab${tab === `ext:${item.slot}` ? " gui-pane-tab--active" : ""}`}
+								onClick={() => setTab(`ext:${item.slot}`)}
+							>
+								<Icon name="plug" className="h-4 w-4" />
+							</button>
+						))}
+					</div>
 					<div className="ml-auto flex items-center gap-0.5">
 						{TOOLS.map(toolDef => (
 							<button
@@ -295,7 +297,7 @@ export function ContextPanel({
 							const item = extTabs.find(x => `ext:${x.slot}` === tab);
 							return item ? (
 								<div className="h-full overflow-y-auto">
-									<SlotComponentMount item={item} />
+									<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
 								</div>
 							) : null;
 						})()
@@ -402,7 +404,7 @@ export function ContextPanel({
 					{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
 					 * 挂内容区末尾,随面板滚动。 */}
 					<div className="gui-pane-extension px-2 pt-3">
-						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} />
+						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
 					</div>
 				</div>
 			</div>

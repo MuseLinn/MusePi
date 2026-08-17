@@ -16,6 +16,25 @@
 	padding: 4px 14px 0;
 }
 
+/* 扩展槽位组件错误(fail-loud):编译失败/加载失败在宿主处可见 ——
+ * 此前无样式 + 被过滤,静默消失。 */
+.gui-slot-error {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 5px 9px;
+	border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+	border-radius: 8px;
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--color-danger);
+	background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+.gui-slot-error strong {
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
 .gui-mode-chip {
 	display: inline-flex;
 	align-items: center;

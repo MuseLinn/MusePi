@@ -42,6 +42,24 @@ export interface SlotComponent {
 	/** Self-contained ESM JavaScript (react bundled in). */
 	code: string;
 	error?: string;
+	/** Component-scoped CSS extracted at compile time (rendered via <style>). */
+	css?: string;
+}
+
+/** Props every extension component receives when mounted. Hosts pass what
+ *  they have; a component must treat every field as optional — the same
+ *  component may be mounted in different hosts (panel tab vs composer). */
+export interface SlotComponentProps {
+	/** Daemon RPC bridge (models.list / session.setModel / …). */
+	rpc?: RpcClient | null;
+	/** Active session id, when the host has one. */
+	sessionId?: string | null;
+	/** Session working directory, when the host has one. */
+	cwd?: string;
+	/** The slot id this component was registered into. */
+	slot?: string;
+	/** Extension path that contributed this component. */
+	extensionId?: string;
 }
 
 /** Poll extensions.list (daemon caches 10s) and pick compiled components for one slot.
@@ -58,7 +76,7 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 				.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
 				.then(res => {
 					if (!alive) return;
-					setItems((res?.components ?? []).filter(c => c.slot === slot && c.code.length > 0));
+					setItems((res?.components ?? []).filter(c => c.slot === slot && (c.code.length > 0 || c.error)));
 				})
 				.catch(() => alive && setItems([]));
 		};
@@ -90,7 +108,9 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 				.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
 				.then(res => {
 					if (!alive) return;
-					setItems((res?.components ?? []).filter(c => c.slot.startsWith(prefix) && c.code.length > 0));
+					setItems(
+						(res?.components ?? []).filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error)),
+					);
 				})
 				.catch(() => alive && setItems([]));
 		};
@@ -110,21 +130,59 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 }
 
 /** Mount every extension-contributed component registered for a slot. */
-export function SlotComponentHost({ rpc, slot }: { rpc: RpcClient | null; slot: string }): ReactNode {
+export function SlotComponentHost({
+	rpc,
+	slot,
+	sessionId,
+	cwd,
+}: {
+	rpc: RpcClient | null;
+	slot: string;
+	sessionId?: string | null;
+	cwd?: string;
+}): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	return (
 		<>
 			{items.map(item => (
-				<SlotComponentMount key={item.extensionId} item={item} />
+				<SlotComponentMount
+					key={`${item.extensionId}:${item.slot}`}
+					item={item}
+					rpc={rpc}
+					sessionId={sessionId}
+					cwd={cwd}
+				/>
 			))}
 		</>
 	);
 }
 
-/** 单个槽位组件挂载(动态 tab/rail 注入用——内核级 slot 的宿主侧接收端)。 */
-export function SlotComponentMount({ item }: { item: SlotComponent }): ReactNode {
+/** 单个槽位组件挂载(动态 tab/rail 注入用——内核级 slot 的宿主侧接收端)。
+ *  扩展组件收到 SlotComponentProps(rpc/sessionId/cwd/slot/extensionId),
+ *  全部可选 —— 宿主持有哪项传哪项。 */
+export function SlotComponentMount({
+	item,
+	rpc,
+	sessionId,
+	cwd,
+}: {
+	item: SlotComponent;
+	rpc?: RpcClient | null;
+	sessionId?: string | null;
+	cwd?: string;
+}): ReactNode {
 	const [error, setError] = useState<string | null>(null);
-	const [Comp, setComp] = useState<ComponentType | null>(null);
+	const [Comp, setComp] = useState<ComponentType<SlotComponentProps> | null>(null);
+	// Component-scoped CSS (daemon extracts it at compile time): inject a
+	// <style> beside the component and drop it on unmount.
+	useEffect(() => {
+		if (!item.css) return;
+		const style = document.createElement("style");
+		style.setAttribute("data-slot-css", `${item.extensionId}:${item.slot}`);
+		style.textContent = item.css;
+		document.head.appendChild(style);
+		return () => style.remove();
+	}, [item.css, item.extensionId, item.slot]);
 	useEffect(() => {
 		let alive = true;
 		let url: string | null = null;
@@ -158,11 +216,21 @@ export function SlotComponentMount({ item }: { item: SlotComponent }): ReactNode
 	}, [item]);
 	if (error) {
 		return (
-			<div className="gui-slot-error">
-				{item.label ?? item.extensionId}: 组件加载失败 — {error}
+			<div className="gui-slot-error" role="alert">
+				<strong>{item.label ?? item.slot}</strong> 组件加载失败 — {error}
 			</div>
 		);
 	}
 	if (!Comp) return null;
-	return <Comp />;
+	// Extension components receive the host's live context as optional props
+	// (RPC bridge, session id, cwd, slot identity) — a component may ignore
+	// them entirely; hosts pass what they have.
+	const hostProps: SlotComponentProps = {
+		rpc,
+		sessionId,
+		cwd,
+		slot: item.slot,
+		extensionId: item.extensionId,
+	};
+	return <Comp {...hostProps} />;
 }

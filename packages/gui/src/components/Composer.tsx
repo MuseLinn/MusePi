@@ -3,6 +3,11 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
+import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
+import { tapFeedback } from "../lib/haptic";
+import type { PetMood } from "../lib/pet";
+import type { RpcClient } from "../lib/rpc";
+import { sfxFor } from "../lib/sfx";
 import {
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,
@@ -10,11 +15,6 @@ import {
 	SlotComponentHost,
 	useSlotComponents,
 } from "../lib/slot-components";
-import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
-import { tapFeedback } from "../lib/haptic";
-import type { PetMood } from "../lib/pet";
-import type { RpcClient } from "../lib/rpc";
-import { sfxFor } from "../lib/sfx";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { startDictation } from "../lib/voice";
@@ -1421,75 +1421,78 @@ export function Composer({
 					(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
 					activeTask ? (
 						<div className="gui-composer-dock">
-							{composerDockItems.length > 0 && <SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} />}
-						{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask) && (
-						<div className="gui-mode-row gui-mode-row--status">
-							{activeTask && (
-								<SwarmChip
-									open={swarmOpen}
-									onToggle={() => setSwarmOpen(v => !v)}
-									anchorRef={swarmAnchorRef}
-									menu={renderSwarmMenu(
-										<div className="gui-swarm-popup-card" role="region" aria-label={t("swarm members")}>
-											<SwarmCardPreview
-												details={
-													(activeTask.partialResult as { details?: unknown } | null | undefined)?.details
-												}
-												host={swarmHost}
-											/>
-										</div>,
+							{composerDockItems.length > 0 && (
+								<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
+							)}
+							{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask) && (
+								<div className="gui-mode-row gui-mode-row--status">
+									{activeTask && (
+										<SwarmChip
+											open={swarmOpen}
+											onToggle={() => setSwarmOpen(v => !v)}
+											anchorRef={swarmAnchorRef}
+											menu={renderSwarmMenu(
+												<div className="gui-swarm-popup-card" role="region" aria-label={t("swarm members")}>
+													<SwarmCardPreview
+														details={
+															(activeTask.partialResult as { details?: unknown } | null | undefined)
+																?.details
+														}
+														host={swarmHost}
+													/>
+												</div>,
+											)}
+										/>
 									)}
-								/>
-							)}
-							{todoTotal > 0 && (
-								<TodoChip
-									open={todoOpen}
-									onToggle={() => setTodoOpen(v => !v)}
-									anchorRef={todoAnchorRef}
-									done={todoDone}
-									total={todoTotal}
-									title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
-								/>
-							)}
-							{renderTodoMenu(
-								<TodoPanel
-									phases={todo}
-									onOp={todoOp}
-									appendText={appendText}
-									onAppendChange={setAppendText}
-								/>,
-							)}
-							{/* Pending-message queue (TUI /queue parity): editable list
-							 * above the input — 取回 pops the newest queued message
-							 * back into the editor. */}
-							{working && queued && queued.count > 0 && (
-								<>
-									<QueueToggleChip
-										open={queueOpen}
-										onToggle={() => setQueueOpen(v => !v)}
-										anchorRef={queueAnchorRef}
-										count={queued.count}
-									/>
-									{renderQueueMenu(
-										<QueuePanel
-											queued={queued}
-											onSend={sendQueued}
-											onPop={popQueued}
-											onClear={clearQueued}
+									{todoTotal > 0 && (
+										<TodoChip
+											open={todoOpen}
+											onToggle={() => setTodoOpen(v => !v)}
+											anchorRef={todoAnchorRef}
+											done={todoDone}
+											total={todoTotal}
+											title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
+										/>
+									)}
+									{renderTodoMenu(
+										<TodoPanel
+											phases={todo}
+											onOp={todoOp}
+											appendText={appendText}
+											onAppendChange={setAppendText}
 										/>,
 									)}
-								</>
+									{/* Pending-message queue (TUI /queue parity): editable list
+									 * above the input — 取回 pops the newest queued message
+									 * back into the editor. */}
+									{working && queued && queued.count > 0 && (
+										<>
+											<QueueToggleChip
+												open={queueOpen}
+												onToggle={() => setQueueOpen(v => !v)}
+												anchorRef={queueAnchorRef}
+												count={queued.count}
+											/>
+											{renderQueueMenu(
+												<QueuePanel
+													queued={queued}
+													onSend={sendQueued}
+													onPop={popQueued}
+													onClear={clearQueued}
+												/>,
+											)}
+										</>
+									)}
+								</div>
 							)}
 						</div>
-						)}
-					</div>
 					) : null
 				}
 				footerLeft={
 					<>
 						{/* composer.left 座位槽(DSH conversation.input.left 对齐):
 						 * 扩展声明 composer.left 槽位即注入工具栏左端。 */}
-						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} />
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_LEFT_SLOT} sessionId={sessionId} cwd={cwd} />
 						<AttachMenu
 							goalMode={modes?.goalMode?.enabled === true || goalArmed}
 							planMode={modes?.planMode === true}
@@ -1603,7 +1606,7 @@ export function Composer({
 					<>
 						{/* composer.right 座位槽(DSH conversation.input.right 对齐):
 						 * 扩展声明 composer.right 槽位即注入工具栏右端。 */}
-						<SlotComponentHost rpc={rpc} slot={COMPOSER_RIGHT_SLOT} />
+						<SlotComponentHost rpc={rpc} slot={COMPOSER_RIGHT_SLOT} sessionId={sessionId} cwd={cwd} />
 						{contextUsage != null && (
 							<ContextRing
 								percent={contextUsage.percent}

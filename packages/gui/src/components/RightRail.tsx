@@ -15,12 +15,18 @@ import { TOOLS } from "./ContextPanel";
  */
 export function RightRail({
 	rpc,
+	sessionId,
+	cwd,
 	tool,
 	rightPanelOpen,
 	onSelect,
 	onToggleRightPanel,
 }: {
 	rpc: RpcClient | null;
+	/** Active session id (passed through to extension rail components). */
+	sessionId?: string | null;
+	/** Session working directory (passed through to extension components). */
+	cwd?: string;
 	/** Currently active ContextPanel tool (shared selection). */
 	tool: string | null;
 	rightPanelOpen: boolean;
@@ -57,7 +63,7 @@ export function RightRail({
 					<Icon name={rightPanelOpen ? "arrow-right" : "arrow-left"} className="h-4 w-4" />
 				</button>
 				{/* Extension-contributed rail icons (modes v2 右面板 Phase 0-2). */}
-				<SlotComponentHost rpc={rpc} slot={RIGHT_RAIL_SLOT} />
+				<SlotComponentHost rpc={rpc} slot={RIGHT_RAIL_SLOT} sessionId={sessionId} cwd={cwd} />
 			</div>
 		</aside>
 	);

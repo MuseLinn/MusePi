@@ -652,7 +652,7 @@ export function SettingsView({
 										const item = extSettingsTabs.find(x => `ext:${x.slot}` === section);
 										return item ? (
 											<div className="px-3 py-2">
-												<SlotComponentMount item={item} />
+												<SlotComponentMount item={item} rpc={rpc} />
 											</div>
 										) : null;
 									})()
