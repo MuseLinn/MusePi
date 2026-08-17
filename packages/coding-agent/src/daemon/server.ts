@@ -69,6 +69,7 @@ import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-de
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
+import { createExtensionManagerTools } from "./extension-manager-tools";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
@@ -1098,6 +1099,19 @@ export class DaemonSessionHost {
 		);
 	}
 
+	/** P0 自举:agent 扩展管理工具(extension_* 工具集)——实现见
+	 *  extension-manager-tools.ts(server.ts 不再承载,DSH 模块化惯例)。
+	 *  注入 createSession/activate 的 customTools,使 agent 能在会话内
+	 *  自举扩展:写文件 → extension_load → 出错 → extension_status 自查 →
+	 *  extension_reload 自修。 */
+	#extensionManagerTools(): CustomTool[] {
+		return createExtensionManagerTools(ctx => {
+			const id = ctx.sessionManager.getSessionId();
+			if (!id) return null;
+			return this.get(id)?.agentSession ?? null;
+		});
+	}
+
 	async createSession(params: {
 		cwd?: string;
 		title?: string;
@@ -1136,6 +1150,8 @@ export class DaemonSessionHost {
 			skills: discovery.skills,
 			preloadedExtensionPaths: discovery.extensionPaths,
 			mcpManager,
+			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
+			customTools: this.#extensionManagerTools(),
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
@@ -1208,6 +1224,8 @@ export class DaemonSessionHost {
 			skills: discovery.skills,
 			preloadedExtensionPaths: discovery.extensionPaths,
 			mcpManager,
+			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
+			customTools: this.#extensionManagerTools(),
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch

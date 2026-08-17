@@ -129,6 +129,26 @@ export function invalidateExtensionCaches(): void {
 	compileCache.clear();
 }
 
+/**
+ * 校验扩展的槽位组件能否编译(extension_validate 工具 /modes validate
+ * 挂载校验用):不注册、不改缓存,只试编译每个组件模块。
+ * 返回 { moduleUrl, error }[];空数组 = 全部可编译。
+ */
+export async function validateExtensionComponents(
+	extension: Pick<Extension, "resolvedPath" | "components">,
+): Promise<Array<{ moduleUrl: string; error: string }>> {
+	const out: Array<{ moduleUrl: string; error: string }> = [];
+	for (const component of extension.components ?? []) {
+		const absPath = path.resolve(extension.resolvedPath, "..", component.moduleUrl);
+		try {
+			await compileComponentModule(absPath);
+		} catch (error) {
+			out.push({ moduleUrl: component.moduleUrl, error: String(error) });
+		}
+	}
+	return out;
+}
+
 /** A preset declared by an extension (registerMode, modes v2 §5.5) in the
  *  modes.list wire shape; `source: "extension"` distinguishes it from
  *  file-based presets so the GUI can show the provider. */

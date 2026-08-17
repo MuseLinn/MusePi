@@ -609,6 +609,12 @@ export class AgentSession {
 	 */
 	#extensionReloadPending: string | undefined = undefined;
 	/**
+	 * P0 自举:session-level extension load(extension_load 工具)busy gate —
+	 * same single-slot park as {@link #extensionReloadPending}, drained at the
+	 * next idle `agent_end`.
+	 */
+	#extensionLoadPending: string | undefined = undefined;
+	/**
 	 * Modes v2: session-level mode hot-switch, wired by the SDK session
 	 * factory (docs/modes-plan.md §6.2). Undefined for sessions without a
 	 * mode-capable factory (embedded SDK consumers, subagents).
@@ -962,6 +968,8 @@ export class AgentSession {
 		// P5 HMR: this is the settle flush for a deferred agent_end (prompt
 		// count just hit 0) — perform a parked extension reload now.
 		this.#drainPendingExtensionReload();
+		// P0 自举: same settle boundary performs a parked extension load.
+		this.#drainPendingExtensionLoad();
 		// Modes v2: same settle boundary applies a parked mode switch.
 		this.#drainPendingModeSwitch();
 	}
@@ -4593,6 +4601,70 @@ export class AgentSession {
 	}
 
 	/**
+	 * Load one extension entry into this session at runtime (P0 自举 —
+	 * extension_load 工具后端). Same busy gate as {@link reloadExtension}:
+	 * streaming sessions park the load (single slot, last-wins) and perform
+	 * it at the next idle `agent_end`; the caller gets `{ deferred: true }`.
+	 * Already-loaded entries are a no-op. Tools/modes/prompt sections register
+	 * through the runner's registration listener (no manual re-fire needed).
+	 */
+	async loadExtension(entryPath: string): Promise<{ addedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { addedTools: [], errors: [], deferred: false };
+		const resolvedTarget = path.resolve(entryPath);
+		if (runner.isExtensionLoaded(resolvedTarget)) return { addedTools: [], errors: [], deferred: false };
+		if (this.isStreaming) {
+			this.#extensionLoadPending = resolvedTarget;
+			return { addedTools: [], errors: [], deferred: true };
+		}
+		return this.#performExtensionLoad(resolvedTarget);
+	}
+
+	/** Runs a session-level extension load and prompt-section re-sync. */
+	async #performExtensionLoad(
+		entryPath: string,
+	): Promise<{ addedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { addedTools: [], errors: [], deferred: false };
+		if (runner.isExtensionLoaded(entryPath)) return { addedTools: [], errors: [], deferred: false };
+		const { addedTools, errors } = await runner.loadExtension(entryPath, this.sessionManager.getCwd());
+		this.#onExtensionPromptSectionsChanged?.([entryPath]);
+		return { addedTools, errors, deferred: false };
+	}
+
+	/**
+	 * 会话扩展清单(extension_* 工具用):每扩展的路径/加载态/工具名/预设/
+	 * 提示词区块/槽位组件 —— runner 只读投影,不暴露 runner 本体。
+	 */
+	listLoadedExtensions(): Array<{
+		path: string;
+		tools: string[];
+		modes: Array<{ id: string; label?: string }>;
+		promptSections: string[];
+		components: Array<{ slot: string; label?: string }>;
+	}> {
+		const runner = this.#extensionRunner;
+		if (!runner) return [];
+		return runner.getExtensionPaths().map(p => {
+			const ext = runner.getExtensionByPath(p);
+			return {
+				path: ext?.resolvedPath ?? p,
+				tools: runner.getExtensionToolNames(p),
+				modes: (ext?.modes ?? []).map(m => ({ id: m.id, label: m.label })),
+				promptSections: (ext?.promptSections ?? []).map(s => s.name),
+				components: (ext?.components ?? []).map(c => ({ slot: c.slot, label: c.label })),
+			};
+		});
+	}
+
+	/** 会话级扩展工具全集(extension_status 用,跨扩展去重后的名称列表)。 */
+	listAllExtensionTools(): string[] {
+		const runner = this.#extensionRunner;
+		if (!runner) return [];
+		return runner.getAllRegisteredTools().map(t => t.definition.name);
+	}
+
+	/**
 	 * Drain a parked extension reload at an idle boundary (P5 HMR). Invoked
 	 * from the agent_end event handler and the deferred agent_end flush; both
 	 * are the session's settle signals. Fire-and-forget with error logging —
@@ -4604,6 +4676,19 @@ export class AgentSession {
 		this.#extensionReloadPending = undefined;
 		void this.#performExtensionReload(pending).catch(error => {
 			logger.warn("Deferred extension reload failed", {
+				extensionPath: pending,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+
+	/** Drain a parked extension load at an idle boundary (P0 自举 busy gate). */
+	#drainPendingExtensionLoad(): void {
+		const pending = this.#extensionLoadPending;
+		if (!pending || this.isStreaming || this.#isDisposed) return;
+		this.#extensionLoadPending = undefined;
+		void this.#performExtensionLoad(pending).catch(error => {
+			logger.warn("Deferred extension load failed", {
 				extensionPath: pending,
 				error: error instanceof Error ? error.message : String(error),
 			});
