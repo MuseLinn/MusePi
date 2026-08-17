@@ -27,6 +27,8 @@ export interface ExtensionItem {
 	state: "active" | "disabled" | "shadowed";
 	disabledReason?: "provider-disabled" | "item-disabled" | "shadowed";
 	shadowedBy?: string;
+	/** 加载失败原因 —— 存在 = 扩展不可用(fail-loud,不静默消失)。 */
+	loadError?: string;
 }
 
 export interface ExtensionTab {
@@ -555,6 +557,12 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 										</span>
 									)}
 								</div>
+								{selected.loadError && (
+									<div className="gui-ext-detail-loaderror" title={selected.loadError}>
+										<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+										<span className="min-w-0 truncate">{selected.loadError}</span>
+									</div>
+								)}
 							</div>
 							{selected.state === "shadowed" && (
 								<div className="gui-ext-detail-actions">

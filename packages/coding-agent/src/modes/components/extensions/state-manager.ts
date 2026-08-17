@@ -163,6 +163,25 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });
 	}
 
+	// 真实加载校验(fail-loud):active 的扩展模块逐个执行 factory,
+	// 失败(语法/registerComponent 槽位校验/顶层抛错)写入 loadError ——
+	// dashboard 与 agent 感知层可见,不再静默消失。禁用项跳过(未启用不加载)。
+	if (cwd) {
+		const { loadExtensions } = await import("../../../extensibility/extensions/loader");
+		await Promise.all(
+			extensions
+				.filter(e => e.kind === "extension-module" && e.state === "active")
+				.map(async ext => {
+					try {
+						const result = await loadExtensions([ext.path], cwd);
+						if (result.errors.length > 0) ext.loadError = result.errors[0]!.error;
+					} catch (error) {
+						ext.loadError = String(error);
+					}
+				}),
+		);
+	}
+
 	// Load MCP servers. The dashboard mirrors `/mcp list` (issue #3827) by
 	// honoring the same disable signals: the dashboard-private settings list,
 	// the per-server `enabled: false` flag, and the user-level `disabledServers`

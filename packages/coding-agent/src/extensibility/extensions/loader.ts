@@ -203,6 +203,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	registerComponent(component: ExtensionComponent): void {
+		// 槽位声明校验(DSH 实测约束:注册进未声明 slot 抛错进 load 报告):
+		// 未知槽名 → 抛错,扩展整体加载失败且 extension_status 可见 ——
+		// 而不是静默注册、GUI 永不挂载。前缀命名空间保持开放
+		// (panel.tab.<任意 id> 等永远合法),仅兜住拼写错误/未支持槽位。
+		assertKnownComponentSlot(component.slot);
 		this.extension.components.push(component);
 	}
 
@@ -439,6 +444,31 @@ export async function loadExtensionFromFactory(
 	const api = new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
 	await runExtensionFactory(factory, api, runtime);
 	return extension;
+}
+
+/** 已知组件槽位前缀(开放命名空间:前缀后任意 id 合法)。与 GUI 侧
+ *  slot-components.tsx 的挂载规则一一对应 —— daemon 是校验权威,
+ *  GUI 按同样规则挂载。 */
+const KNOWN_SLOT_PREFIXES = ["panel.tab.", "settings.tab.", "rail."] as const;
+/** 已知精确组件槽位(与 GUI 侧常量对应)。 */
+const KNOWN_SLOTS = new Set([
+	"panel.right",
+	"rail.right",
+	"settings.extensions",
+	"composer.dock",
+	"composer.left",
+	"composer.right",
+]);
+
+/** 校验组件槽位是否在已知命名空间内;未知槽名抛错(fail-loud)。
+ *  抛错在 factory 执行路径 → bindExtension 捕获 → 进 load errors,
+ *  extension_status 可见,与未声明 slot 静默丢失形成对比。 */
+export function assertKnownComponentSlot(slot: string): void {
+	if (KNOWN_SLOTS.has(slot)) return;
+	if (KNOWN_SLOT_PREFIXES.some(prefix => slot.startsWith(prefix))) return;
+	throw new Error(
+		`unknown component slot "${slot}": known slots are ${[...KNOWN_SLOTS].sort().join(", ")} and the namespaces ${KNOWN_SLOT_PREFIXES.join(", ")}`,
+	);
 }
 
 /**

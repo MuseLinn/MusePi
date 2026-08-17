@@ -1122,6 +1122,19 @@
 	font-size: 11px;
 	color: var(--color-text-faint);
 }
+.gui-ext-detail-loaderror {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	padding: 6px 9px;
+	border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+	border-radius: 8px;
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--color-danger);
+	background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
 .gui-ext-detail-raw-toggle {
 	display: inline-flex;
 	align-items: center;

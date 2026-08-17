@@ -61,6 +61,9 @@ export interface Extension {
 	disabledReason?: DisabledReason;
 	/** If shadowed, what shadows it */
 	shadowedBy?: string;
+	/** 加载失败原因(registerComponent 校验/语法等)。存在 = 扩展不可用,
+	 *  dashboard 与 agent 感知层可见 —— fail-loud,不静默消失。 */
+	loadError?: string;
 	/** Raw item data for inspector */
 	raw: unknown;
 }
