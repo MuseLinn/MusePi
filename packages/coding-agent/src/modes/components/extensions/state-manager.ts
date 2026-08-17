@@ -24,6 +24,7 @@ import {
 	loadCapability,
 } from "../../../discovery";
 import { readDisabledServers, readEnabledServers } from "../../../mcp/config-writer";
+import { builtinExtensionEntries } from "./builtin-registry";
 import type {
 	DashboardState,
 	Extension,
@@ -349,25 +350,9 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load gui-motion capability", { error: String(error) });
 	}
 
-	// Builtin UI style extension: the task/swarm card render style. Not a
-	// file-backed capability — its state mirrors display.taskCardStyle via
-	// the daemon's extensions.list/setEnabled mapping (the daemon rewrites
-	// this entry's state from the setting; setEnabled writes the setting).
-	const styleId = makeExtensionId("style", "task-card-swarm");
-	extensions.push({
-		id: styleId,
-		kind: "style",
-		name: "task-card-swarm",
-		displayName: "Swarm Task Card",
-		description:
-			"Kimi-parity task/swarm card style: member grid with per-agent avatars, progress bars and accordion outputs",
-		trigger: undefined,
-		path: "",
-		source: { provider: "native", providerName: "Builtin", level: "native" },
-		state: disabledExtensions.has(styleId) ? "disabled" : "active",
-		disabledReason: disabledExtensions.has(styleId) ? "item-disabled" : undefined,
-		raw: { name: "task-card-swarm", style: "swarm" },
-	});
+	// 内置扩展注册表(DSH builtins 对齐):inline 部署物,只读不可改删,可禁用。
+	// 新增内置扩展 = builtin-registry.ts 的 BUILTIN_EXTENSIONS 加一行。
+	extensions.push(...builtinExtensionEntries(disabledExtensions));
 
 	return extensions;
 }
