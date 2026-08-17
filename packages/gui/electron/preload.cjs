@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	platform: process.platform,
 	/** Port of a running daemon (ws.port file), or null. */
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
+	/** GUI package version (OTA/发布一致性比对,见 app.tsx boot)。 */
+	getAppVersion: () => ipcRenderer.invoke("app-version"),
 	/** Spawn `musepi serve --port` and resolve once the listener is up. */
 	startDaemon: (port) => ipcRenderer.invoke("daemon-start", port),
 	/** Restart the daemon: kill the current listener, spawn fresh code,

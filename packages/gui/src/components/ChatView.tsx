@@ -23,6 +23,7 @@ import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
+import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SubagentPanel } from "./SubagentPanel";
@@ -209,6 +210,8 @@ export function ChatView({
 	onSubmitNewSession,
 	rightPanelOpen,
 	onOpenFileInPanel,
+	onToggleRightPanel,
+	onExpandRightPanel,
 	terminalOpen,
 	onCloseTerminal,
 	focusMode,
@@ -277,6 +280,12 @@ export function ChatView({
 	/** Reveal a file in the right panel: the caller (App) opens the panel;
 	 *  ChatView relays the path into the ContextPanel/FilePane preview. */
 	onOpenFileInPanel?(path: string): void;
+	/** Right-edge rail (RightRail) fold toggle — expands/collapses the
+	 *  ContextPanel (app owns the persisted state). */
+	onToggleRightPanel?(): void;
+	/** Right-edge rail: expand the panel without toggling when a tool icon
+	 *  is picked while the panel is collapsed. */
+	onExpandRightPanel?(): void;
 	terminalOpen: boolean;
 	/** Last terminal tab closed → fold the dock (TerminalPanel onAllClosed). */
 	onCloseTerminal?(): void;
@@ -570,6 +579,9 @@ export function ChatView({
 	// into the ContextPanel → FilePane preview. nonce re-triggers the same
 	// path (re-click while already open).
 	const [openFileReq, setOpenFileReq] = useState<{ path: string; nonce: number } | null>(null);
+	// Shared ContextPanel tool selection — controlled here so the right-edge
+	// rail (RightRail) and the panel toggle the same view (modes v2 右面板).
+	const [contextTool, setContextTool] = useState<string | null>(null);
 	useEffect(() => {
 		const onOpenFile = (ev: Event): void => {
 			const detail = (ev as CustomEvent<{ path?: string }>).detail;
@@ -588,6 +600,19 @@ export function ChatView({
 			.request("session.setThinkingLevel", { sessionId: store.sessionId, thinkingLevel: level ?? null })
 			.catch(() => {});
 	};
+	// Modes v2(§8):会话态预设热切换 —— chip 下拉选中后走 session.setMode RPC
+	// (忙会话 daemon 侧 pending,agent_end 补做);null = 清除预设。
+	const handleSessionModeChange = (id: string | null): void => {
+		if (!store) return;
+		void rpc.request("session.setMode", { sessionId: store.sessionId, modeId: id }).catch(() => {});
+	};
+	// 会话态当前预设(来自 daemon 会话快照 modeId;历史会话重开 label 正确显示)。
+	const sessionModeId = (snap?.state as { modeId?: string } | undefined)?.modeId ?? null;
+	// 无预设时显示默认预设 work 的 label(plan 决策 #12:work = 默认全量,
+	// 无 mode 时行为,对应 DSH standard)—— 不是"无预设"。
+	const sessionModeLabel = sessionModeId
+		? (modes?.find(m => m.id === sessionModeId)?.label ?? sessionModeId)
+		: (modes?.find(m => m.id === "work")?.label ?? "work");
 	// Revert history (openchamber RevertedMessageDock parity): the daemon
 	// is the single source of truth — session.revertList returns the
 	// backed-up reverts (one entry per session.revertTo), so the dock can
@@ -1335,12 +1360,10 @@ export function ChatView({
 											modes={modes}
 											modeId={modeId}
 											welcome={showWelcome}
-											sessionModeLabel={(() => {
-												const id = (snap?.state as { modeId?: string } | undefined)?.modeId;
-												if (!id) return null;
-												return modes?.find(m => m.id === id)?.label ?? id;
-											})()}
+											sessionModeId={sessionModeId}
+											sessionModeLabel={sessionModeLabel}
 											onModeChange={onModeChange}
+											onSessionModeChange={handleSessionModeChange}
 											quotes={quotes}
 											onQuotesChange={setQuotes}
 											pendingEdit={pendingEdit}
@@ -1365,6 +1388,22 @@ export function ChatView({
 									rpc={rpc}
 									open={rightPanelOpen && !focusMode}
 									openRequest={openFileReq}
+									tool={contextTool}
+									onToolChange={setContextTool}
+								/>
+								{/* Right-edge 44px icon rail (openchamber ContextPanelRail
+								 * parity): tool icons + panel fold toggle + extension
+								 * rail.right slot. Sibling of the panel at the surface's
+								 * right edge. */}
+								<RightRail
+									rpc={rpc}
+									tool={contextTool}
+									rightPanelOpen={rightPanelOpen && !focusMode}
+									onSelect={tool => {
+										setContextTool(prev => (prev === tool ? null : tool));
+										if (!rightPanelOpen) onExpandRightPanel?.();
+									}}
+									onToggleRightPanel={onToggleRightPanel}
 								/>
 							</div>
 						</div>

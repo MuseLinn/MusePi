@@ -1291,6 +1291,18 @@ export interface ExtensionAPI {
 	 *  mounts it. Enable/disable takes effect on the next slot refresh. */
 	registerComponent(component: ExtensionComponent): void;
 
+	/** Contribute a named, ordered prompt section (DSH `systemPrompt.section()`
+	 *  analogue). Sections compose into every session prompt the extension
+	 *  participates in, ordered by `order` against the core template, mode and
+	 *  user sections. Dropped and re-added on extension reload (modes v2 §5.5). */
+	registerPrompt(section: ExtensionPromptSection): void;
+
+	/** Declare a preset (mode) contributed by this extension (modes v2 §5.5).
+	 *  The mode appears in modes.list and can be selected like a file-based
+	 *  preset; the extension's own `registerPrompt` sections carry
+	 *  source `mode:<id>` when the mode id matches. */
+	registerMode(mode: ExtensionModeDefinition): void;
+
 	/** Register a keyboard shortcut. */
 	registerShortcut(
 		shortcut: KeyId,
@@ -1644,6 +1656,32 @@ export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionAction
 	setServiceTier: SetServiceTierHandler;
 }
 
+/** One prompt section contributed by an extension (registerPrompt — DSH
+ *  `systemPrompt.section()` analogue; docs/modes-plan.md §5.5). Composed into
+ *  the session prompt alongside mode + user sections by source. */
+export interface ExtensionPromptSection {
+	name: string;
+	order: number;
+	text: string;
+}
+
+/** A preset declared by an extension (registerMode — v2 candidate §5.5).
+ *  Merged into modes.list alongside file-based presets; the extension's own
+ *  prompt sections use source `mode:<id>` so a mode switch swaps them atomically. */
+export interface ExtensionModeDefinition {
+	id: string;
+	label?: string;
+	description?: string;
+	extends?: string[];
+	/** 创建会话时的默认模型档位(settings.modelRoles 键或内置角色;§6.1)。 */
+	modelRole?: string;
+	extensions?: string[];
+	prompt?: ExtensionPromptSection[];
+	promptComplete?: boolean;
+	runtimeContext?: boolean;
+	settings?: Record<string, unknown>;
+}
+
 /** Loaded extension with all registered items. */
 export interface Extension {
 	path: string;
@@ -1664,6 +1702,12 @@ export interface Extension {
 	/** Renderer-side components contributed by the extension
 	 *  (registerComponent), in registration order. */
 	components: ExtensionComponent[];
+	/** Prompt sections contributed by the extension (registerPrompt), in
+	 *  registration order. Composed with source `ext:<path>` at session
+	 *  build and dropped on extension reload (modes v2 §5.5). */
+	promptSections: ExtensionPromptSection[];
+	/** Presets declared by the extension (registerMode), in registration order. */
+	modes: ExtensionModeDefinition[];
 }
 
 /** One setting contributed by an extension via registerSetting. Mirrors the

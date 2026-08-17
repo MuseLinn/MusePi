@@ -13,6 +13,13 @@ import type { RpcClient } from "./rpc";
 
 /** First slot id — the settings page's extension-contributed section. */
 export const SETTINGS_EXTENSION_SLOT = "settings.extensions";
+/** Right-side workspace panel slot (modes v2 右面板 Phase 0-2): extensions
+ *  contribute tabs/sections to the right pane via
+ *  `pi.registerComponent({ slot: "panel.right", moduleUrl })`. */
+export const RIGHT_PANEL_SLOT = "panel.right";
+/** Right-edge 44px icon rail slot (openchamber ContextPanelRail parity):
+ *  extension icons mount at the rail's bottom section. */
+export const RIGHT_RAIL_SLOT = "rail.right";
 
 export interface SlotComponent {
 	slot: string;
@@ -89,7 +96,10 @@ function DynamicComponent({ item }: { item: SlotComponent }): ReactNode {
 				if (typeof Component !== "function") {
 					throw new Error("component module must export a default React component");
 				}
-				setComp(Component);
+				// React 19:setState(函数) 会被当作 updater 执行 —— 直接传
+				// Component 会把它调用一次,state 变成执行结果(JSX 元素),
+				// 渲染时 "<Comp />" 报 "got: <div />"。包一层返回组件本身。
+				setComp(() => Component);
 			} catch (e) {
 				if (alive) setError(String(e));
 			}

@@ -1198,6 +1198,21 @@ describe("ExtensionRunner", () => {
 			expect(res.details).toEqual({ enriched: true });
 		});
 
+		it("normalizes a bare string return instead of crashing on result.content (modes v2 E2E 发现)", async () => {
+			const runner = await runnerFor("export default function() {}");
+			const stringTool: AgentTool = {
+				name: "stringy",
+				label: "Stringy",
+				description: "returns a bare string (violates the AgentToolResult contract)",
+				parameters: {} as never,
+				execute: async () => "runtime tool works" as never,
+			};
+			const wrapper = new ExtensionToolWrapper(stringTool, runner);
+			const res = await wrapper.execute("call-stringy", {} as never, undefined, undefined, undefined);
+			expect(res.isError).not.toBe(true);
+			expect(firstText(res)).toBe("runtime tool works");
+		});
+
 		it("preserves the original exception when no handler modifies the result", async () => {
 			const runner = await runnerFor(`
 				export default function(pi) {
@@ -3745,6 +3760,8 @@ describe("ExtensionRunner", () => {
 				shortcuts: new Map(),
 				settings: new Map(),
 				components: [],
+				promptSections: [],
+				modes: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);
 		};
@@ -3861,6 +3878,82 @@ describe("ExtensionRunner", () => {
 			expect(removedTools).toEqual([]);
 			// Failed load must not take the working extension down.
 			expect(runner.getAllRegisteredTools().map(t => t.definition.name)).toEqual(["hmr_tool_keep"]);
+		});
+	});
+	describe("loadExtension (modes v2 启用方向)", () => {
+		it("loads a not-loaded extension: tools added, listeners fired; idempotent on repeat", async () => {
+			const extPath = path.join(extensionsDir, "runtime-load-ext.ts");
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			// Write the entry AFTER discovery so the runner starts without it.
+			fs.writeFileSync(
+				extPath,
+				`
+					export default function (pi: any) {
+						pi.registerTool({
+							name: "runtime_tool",
+							description: "runtime",
+							parameters: {},
+							async execute() { return "rt"; },
+						});
+						pi.registerPrompt({ name: "p", order: 10, text: "RT" });
+					}
+				`,
+			);
+			expect(runner.isExtensionLoaded(extPath)).toBe(false);
+
+			// A session-like registration listener observes the new tools.
+			const seen: string[] = [];
+			runner.onToolRegistered(tool => {
+				seen.push(tool.definition.name);
+			});
+
+			const loaded = await runner.loadExtension(extPath);
+			expect(loaded.errors).toEqual([]);
+			expect(loaded.addedTools).toEqual(["runtime_tool"]);
+			expect(runner.isExtensionLoaded(extPath)).toBe(true);
+			expect(runner.getRegisteredTool("runtime_tool")).toBeDefined();
+			// The live listener saw the tool (attached + re-fired after load).
+			expect(seen).toEqual(["runtime_tool"]);
+			// registerPrompt sections are recorded on the loaded instance.
+			expect(runner.getExtensionByPath(extPath)?.promptSections.map(s => s.text)).toEqual(["RT"]);
+
+			// Idempotent: a second load is a no-op.
+			const again = await runner.loadExtension(extPath);
+			expect(again.addedTools).toEqual([]);
+			expect(again.errors).toEqual([]);
+			expect(runner.getAllRegisteredTools().map(t => t.definition.name)).toEqual(["runtime_tool"]);
+
+			// activateExtensionTools re-fires registration for an already-loaded
+			// extension (re-enable after a mode switch removed its tools).
+			seen.length = 0;
+			const refired = await runner.activateExtensionTools(extPath);
+			expect(refired).toEqual(["runtime_tool"]);
+			expect(seen).toEqual(["runtime_tool"]);
+		});
+
+		it("reports errors and leaves extensions[] untouched on failed load", async () => {
+			const extPath = path.join(extensionsDir, "runtime-load-broken.ts");
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			fs.writeFileSync(extPath, `export default function (pi: any) { throw new Error("boom"); }\n`);
+			const loaded = await runner.loadExtension(extPath);
+			expect(loaded.errors.length).toBeGreaterThan(0);
+			expect(loaded.addedTools).toEqual([]);
+			expect(runner.isExtensionLoaded(extPath)).toBe(false);
+			expect(runner.getAllRegisteredTools().map(t => t.definition.name)).not.toContain("runtime_tool");
 		});
 	});
 });

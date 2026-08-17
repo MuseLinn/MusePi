@@ -137,7 +137,13 @@ export async function loadAllExtensions(cwd?: string, disabledIds?: string[]): P
 	// Load extension modules
 	try {
 		const modules = await loadCapability<ExtensionModule>("extension-modules", loadOpts);
-		const nativeModules = modules.all.filter(module => module._source.provider === "native");
+		// MusePi 自有扩展 provider 是 "musepi-extensions"(discovery/builtin),
+		// gemini 等外部工具用 "native" —— 两者都必须进扩展中心与
+		// modes.list 的 extension-module 收集;其余 provider(gemini/
+		// opencode/claude/codex 的外部扩展)仍按各自 tab 呈现。
+		const nativeModules = modules.all.filter(
+			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
+		);
 		addItems(nativeModules, "extension-module");
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });

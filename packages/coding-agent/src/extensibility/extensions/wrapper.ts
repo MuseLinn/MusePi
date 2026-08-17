@@ -349,7 +349,22 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 		let executionError: Error | undefined;
 
 		try {
-			result = await this.tool.execute(toolCallId, effectiveParams, signal, onUpdate, context);
+			const raw = await this.tool.execute(toolCallId, effectiveParams, signal, onUpdate, context);
+			// Normalize bare returns (a string / null / non-content object) to
+			// the standard shape instead of crashing on `result.content` below.
+			// The agent-loop's coerceToolResult would report "invalid result"
+			// — this runs before it, so mirror the coercion here so extension
+			// tool errors stay actionable.
+			if (typeof raw === "string") {
+				result = { content: [{ type: "text", text: raw }], details: undefined as TDetails };
+			} else if (raw === null || typeof raw !== "object" || !Array.isArray((raw as { content?: unknown }).content)) {
+				result = {
+					content: [{ type: "text", text: raw == null ? "" : String(raw) }],
+					details: undefined as TDetails,
+				};
+			} else {
+				result = raw;
+			}
 		} catch (err) {
 			executionError = err instanceof Error ? err : new Error(String(err));
 			result = {

@@ -678,6 +678,14 @@ function positionTrayMenu(win, bounds) {
 	// Windows taskbar sits at the bottom by default: pop the menu ABOVE
 	// the icon, right-aligned with the tray column. Taskbar on top/side:
 	// clamp inside the work area.
+	// macOS: the menu-bar icon sits at the very top — drop the menu just
+	// BELOW the icon (bounds.y + height), right-aligned to the tray area.
+	if (process.platform === "darwin") {
+		const x = Math.max(work.x + 12, work.x + work.width - width - 12);
+		const y = bounds.y + bounds.height + 4;
+		win.setPosition(Math.round(x), Math.round(Math.max(work.y, Math.min(y, work.y + work.height - height - 12))));
+		return;
+	}
 	const right = work.x + work.width - 12;
 	const x = Math.max(work.x + 12, right - width);
 	const y = bounds.y - height - 10;
@@ -2030,6 +2038,10 @@ ipcMain.handle("notification-show", (_event, { title, body }) => {
 // ── IPC: OTA update check (manifest-driven) ───────────────────────────────
 
 ipcMain.handle("updater-check", () => checkForUpdates());
+// OTA/发布一致性:renderer 拿 GUI 版本,与 daemon 的 system.meta
+// musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
+// daemon-restart 刷新(见 app.tsx boot)。
+ipcMain.handle("app-version", () => app.getVersion());
 
 // ── IPC: window glass (window-transparency toggle in settings) ────────────
 // OFF restores an opaque base (theme-matched) so the desktop never shows

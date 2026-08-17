@@ -1046,6 +1046,30 @@ function AppInner(): ReactNode {
 			try {
 				await connect(u);
 				await waitForPrewarm();
+				// OTA/发布一致性:daemon 是 detached 进程(daemon.cjs spawn
+				// detached:true),GUI 重启从不刷新它 —— 新版本 GUI 连旧
+				// daemon 会看不到新功能(2026-08-17 实测)。daemon.cjs
+				// spawn 时注入 MUSEPI_VERSION=GUI 版本,这里与当前 GUI
+				// 版本比对:不一致 → daemon-restart(kill+spawn 新代码)
+				// 后重连。dev 迭代(版本号不变)不触发,发布/OTA 必触发。
+				if (isElectron()) {
+					const rpc = rpcRef.current;
+					const api = (
+						window as unknown as {
+							electronAPI?: { getAppVersion?(): Promise<string>; restartDaemon?(port: number): Promise<number> };
+						}
+					).electronAPI;
+					if (rpc && api?.getAppVersion && api.restartDaemon) {
+						const meta = await rpc.request<{ musepiVersion?: string | null }>("system.meta").catch(() => null);
+						const appVersion = await api.getAppVersion().catch(() => null);
+						if (meta?.musepiVersion && appVersion && meta.musepiVersion !== appVersion) {
+							const port = Number.parseInt(new URL(u).port, 10) || 8300;
+							await api.restartDaemon(port);
+							await connect(u);
+							await waitForPrewarm();
+						}
+					}
+				}
 				return true;
 			} catch {
 				return false;
@@ -2532,6 +2556,16 @@ function AppInner(): ReactNode {
 									rightPanelOpen={!rightCollapsed}
 									onOpenFileInPanel={() => {
 										setRightCollapsed(false);
+									}}
+									onToggleRightPanel={() => {
+										setRightCollapsed(v => {
+											localStorage.setItem("omp-gui-right", v ? "1" : "0");
+											return !v;
+										});
+									}}
+									onExpandRightPanel={() => {
+										setRightCollapsed(false);
+										localStorage.setItem("omp-gui-right", "0");
 									}}
 									terminalOpen={bottomTerminal}
 									onCloseTerminal={() => setBottomTerminal(false)}

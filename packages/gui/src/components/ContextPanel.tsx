@@ -5,6 +5,7 @@ import { isElectron, openExternalUrl } from "../lib/electron";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
+import { RIGHT_PANEL_SLOT, SlotComponentHost } from "../lib/slot-components";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FilePane } from "./FilePane";
@@ -31,8 +32,9 @@ declare global {
 
 /** ZCode right-pane tool views. Backends land behind daemon RPCs; until
  *  then each shows an honest placeholder with its future scope. (The
- *  terminal lives in the bottom dock now, not here.) */
-const TOOLS: { id: string; icon: string; label: string }[] = [
+ *  terminal lives in the bottom dock now, not here.) Exported so the
+ *  right-edge rail (RightRail) renders the same icon set. */
+export const TOOLS: { id: string; icon: string; label: string }[] = [
 	{ id: "git", icon: "git-branch", label: t("git graph") },
 	{ id: "pr", icon: "git-pull-request", label: t("pull requests") },
 	{ id: "diff", icon: "file", label: t("workspace changes") },
@@ -59,6 +61,8 @@ export function ContextPanel({
 	className,
 	open = true,
 	openRequest = null,
+	tool,
+	onToolChange,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
@@ -73,6 +77,10 @@ export function ContextPanel({
 	/** External reveal request (artifact cards / transcript paths):
 	 *  switches to the files tab and previews the path. */
 	openRequest?: { path: string; nonce: number } | null;
+	/** Active tool view — controlled from ChatView so the right-edge rail
+	 *  (RightRail) and the panel share one selection. */
+	tool: string | null;
+	onToolChange(tool: string | null): void;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
@@ -83,7 +91,7 @@ export function ContextPanel({
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
 	const [tab, setTab] = useState<"context" | "files" | "widget">("files");
-	const [tool, setTool] = useState<string | null>(null);
+	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
 	// ring): tokens / capacity / percent, polled while the panel lives.
 	const [ctxUsage, setCtxUsage] = useState<{
@@ -125,7 +133,7 @@ export function ContextPanel({
 	// Relay external reveal requests into the FilePane preview.
 	useEffect(() => {
 		if (!openRequest) return;
-		setTool(null);
+		onToolChange(null);
 		setTab("files");
 	}, [openRequest]);
 	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
@@ -138,7 +146,7 @@ export function ContextPanel({
 		return api.onManagedBrowserState(next => {
 			if (next.agentActivity === true && next.activeTabId && agentBrowserTabRef.current !== next.activeTabId) {
 				agentBrowserTabRef.current = next.activeTabId;
-				setTool("browser");
+				onToolChange("browser");
 			}
 		});
 	}, []);
@@ -218,7 +226,7 @@ export function ContextPanel({
 								className={`gui-pane-tool${tool === toolDef.id ? " gui-pane-tool--active" : ""}`}
 								title={toolDef.label}
 								aria-label={toolDef.label}
-								onClick={() => setTool(prev => (prev === toolDef.id ? null : toolDef.id))}
+								onClick={() => onToolChange(tool === toolDef.id ? null : toolDef.id)}
 							>
 								<Icon name={toolDef.icon as never} className="h-3.5 w-3.5" />
 								{tool === toolDef.id && <span className="gui-pane-tool-label">{toolDef.label}</span>}
@@ -349,6 +357,11 @@ export function ContextPanel({
 							{t("select a session")}
 						</p>
 					)}
+					{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
+					 * 挂内容区末尾,随面板滚动。 */}
+					<div className="gui-pane-extension px-2 pt-3">
+						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} />
+					</div>
 				</div>
 			</div>
 		</aside>
@@ -691,26 +704,26 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				{plans !== null && plans.length > 0 && (
 					<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
 						<ul className="gui-notes-plan-list">
-						{plans.map(plan => (
-							<li key={plan.id} className="gui-notes-plan-row">
-								<button
-									type="button"
-									className="gui-notes-plan-open-btn"
-									onClick={() => void openPlan(plan.id)}
-								>
-									<span className="gui-notes-plan-title">{plan.title}</span>
-									<span className="gui-notes-plan-date">{plan.createdAt}</span>
-								</button>
-								<button
-									type="button"
-									className="gui-notes-todo-remove"
-									onClick={() => void deletePlan(plan.id)}
-									title={t("delete plan")}
-								>
-									✕
-								</button>
-							</li>
-						))}
+							{plans.map(plan => (
+								<li key={plan.id} className="gui-notes-plan-row">
+									<button
+										type="button"
+										className="gui-notes-plan-open-btn"
+										onClick={() => void openPlan(plan.id)}
+									>
+										<span className="gui-notes-plan-title">{plan.title}</span>
+										<span className="gui-notes-plan-date">{plan.createdAt}</span>
+									</button>
+									<button
+										type="button"
+										className="gui-notes-todo-remove"
+										onClick={() => void deletePlan(plan.id)}
+										title={t("delete plan")}
+									>
+										✕
+									</button>
+								</li>
+							))}
 						</ul>
 					</div>
 				)}
@@ -1704,12 +1717,12 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("inserted element selector")}: ${picked.selector}`;
 				window.dispatchEvent(new CustomEvent("omp-gui-insert-text", { detail: { text: insertion } }));
 			}
-	} catch {
-		// page not scriptable (about:blank / crashed) — ignore
-	} finally {
-		setPicking(false);
-	}
-};
+		} catch {
+			// page not scriptable (about:blank / crashed) — ignore
+		} finally {
+			setPicking(false);
+		}
+	};
 	const askSelection = async (): Promise<void> => {
 		if (!electron) return;
 		const wv = webviewRef.current as unknown as {

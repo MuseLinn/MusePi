@@ -63,6 +63,26 @@ describe("prompts/composer compose", () => {
 		composer.removeBySource("anonymous");
 		expect(composer.compose(["core"])).toEqual(["core", "B"]);
 	});
+
+	// Modes v2(§5.6/§10):热切换增量 —— removeBySource(mode:<old>) → add 新
+	// mode 区块 → compose 重算,base 沿用初始、其余贡献方(用户/ext)不动。
+	it("热切换增量:换 mode 只动注入层,用户/ext 区块保留", () => {
+		const composer = new PromptComposer();
+		composer.add({ name: "u:rule", order: 20, text: "USER" }, "user");
+		composer.add({ name: "x:note", order: 15, text: "EXT" }, "ext:ui");
+		composer.add({ name: "m:role", order: 10, text: "OLD-ROLE" }, "mode:work");
+		expect(composer.compose(["core"])).toEqual(["core", "OLD-ROLE", "EXT", "USER"]);
+
+		// 热切到 design:旧 mode 区块整源卸载,新 mode 区块按 order 插入
+		composer.removeBySource("mode:work");
+		composer.add({ name: "m:role", order: 10, text: "NEW-ROLE" }, "mode:design");
+		composer.add({ name: "m:palette", order: 12, text: "PALETTE" }, "mode:design");
+		expect(composer.compose(["core"])).toEqual(["core", "NEW-ROLE", "PALETTE", "EXT", "USER"]);
+
+		// 切回/再切:旧 design 区块卸载后只剩 user/ext(回归锚:无残留)
+		composer.removeBySource("mode:design");
+		expect(composer.compose(["core"])).toEqual(["core", "EXT", "USER"]);
+	});
 });
 
 describe("prompts/composer composeComplete", () => {

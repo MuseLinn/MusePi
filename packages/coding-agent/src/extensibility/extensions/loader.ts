@@ -41,6 +41,8 @@ import type {
 	ExtensionComponent,
 	ExtensionContext,
 	ExtensionFactory,
+	ExtensionModeDefinition,
+	ExtensionPromptSection,
 	ExtensionSetting,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
@@ -204,6 +206,14 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.extension.components.push(component);
 	}
 
+	registerPrompt(section: ExtensionPromptSection): void {
+		this.extension.promptSections.push(section);
+	}
+
+	registerMode(mode: ExtensionModeDefinition): void {
+		this.extension.modes.push(mode);
+	}
+
 	setLabel(label: string): void {
 		this.extension.label = label;
 	}
@@ -336,6 +346,8 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		shortcuts: new Map(),
 		settings: new Map(),
 		components: [],
+		promptSections: [],
+		modes: [],
 	};
 }
 
@@ -659,15 +671,16 @@ export async function discoverExtensionPaths(
 
 	const ambient = options.ambient !== false;
 	if (ambient) {
-		// 1. Discover extension modules via capability API (native .omp/.pi only).
-		// Scope the load to the native provider — the extension-module capability
-		// also has claude/codex/gemini/opencode providers, and their items were
-		// discarded here anyway (see #4198). The provider filter skips the walk
-		// entirely instead of running four foreign directory scans and dropping
-		// the results.
+		// 1. Discover extension modules via capability API (native .omp/.pi
+		// + musepi 自有扩展). Scope the load to the two providers whose
+		// entries sessions actually consume: the native provider
+		// (.omp/.pi extension-module items) and the musepi-extensions
+		// provider (~/.musepi/agent/extensions — MusePi 自有扩展,modes v2
+		// 白名单/扩展中心的同一数据源)。claude/codex/gemini/opencode 的
+		// 外部扩展目录仍被跳过(见 #4198)。
 		const discovered = await loadCapability<ExtensionModule>(extensionModuleCapability.id, {
 			...loadOptions,
-			providers: ["native"],
+			providers: ["native", "musepi-extensions"],
 		});
 		for (const ext of discovered.items) {
 			addPath(ext.path);

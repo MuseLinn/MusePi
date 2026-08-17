@@ -163,6 +163,52 @@
 	background: transparent;
 }
 
+/* ── Right-edge 44px icon rail (openchamber ContextPanelRail parity) ── */
+.gui-right-rail {
+	width: 44px;
+	flex-shrink: 0;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	border-left: 1px solid var(--border);
+	background: transparent;
+}
+
+.gui-right-rail-group {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 6px 0;
+}
+
+.gui-right-rail-spacer {
+	flex: 1;
+	min-height: 4px;
+}
+
+.gui-right-rail-btn {
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	color: var(--color-text-muted);
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-right-rail-btn:hover {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+
+.gui-right-rail-btn--active {
+	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+	color: var(--color-accent);
+}
+
 /* Right-pane width drag handle (left edge). */
 .gui-pane-resize-x {
 	position: absolute;

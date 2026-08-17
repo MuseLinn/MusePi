@@ -22,9 +22,9 @@
 
 ---
 
-MusePi is a **desktop-first fork of [oh-my-pi](https://github.com/can1357/oh-my-pi)** (OMP; itself a fork of [Pi](https://github.com/badlogic/pi-mono)). It keeps the upstream agent engine intact — 40+ LLM providers, 32 built-in tools, LSP/DAP wiring, subagents, hashline, hindsight, ACP, collab — and builds an **Electron desktop GUI, a daemon service, and an always-on desktop pet** on top. The full TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) is wired into the GUI.
+MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It grew out of the [oh-my-pi](https://github.com/can1357/oh-my-pi) codebase (OMP; itself a fork of [Pi](https://github.com/badlogic/pi-mono)) — the inherited agent engine (40+ LLM providers, 32 built-in tools, LSP/DAP wiring, subagents, hashline, hindsight, ACP, collab) plus its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) are all wired into the GUI. **MusePi is its own upstream**: oh-my-pi / Pi / DSH / opencode / etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-App version `0.4.0` (independent of upstream versioning; see [UPSTREAM.md](UPSTREAM.md)).
+App version `0.4.2` (independent of upstream versioning; see [UPSTREAM.md](UPSTREAM.md)).
 
 ## Features
 
@@ -43,7 +43,7 @@ App version `0.4.0` (independent of upstream versioning; see [UPSTREAM.md](UPSTR
 - **Context management**: context donut (`session.contextUsage` live usage), `/compact`-parity manual compaction, snapcompact savings estimate (same planner as TUI `/context`).
 - **Settings panel**: all 336 TUI settings merged into the desktop settings (schema-driven via the `settings.schema` RPC, same source of truth as the TUI), 10+ tabs; shared controls (toggle / segmented / select / masked credential inputs). The sidebar search matches actual setting rows (keyword-indexed, bilingual), highlights the matching rows in the content area and scrolls to the first one; role-model rows show each model's real thinking ladder (per-model `getSupportedEfforts`, not a fixed seven-rung list) and re-resolve auto-selection live when the DEFAULT role changes.
 - **Rich interactions**: image attachments pre-scaled client-side (`images.autoResize` honored on both ends), image lightbox preview (multi-image stacks, zoom/pan), attachment keyboard deletion, voice input (dictation with live level/seconds feedback, read-aloud with per-message playing state, `tts.autoRead` auto-reading new replies), per-session draft persistence, idle recap (`recap.enabled`), reminders panel (live `working`/`live` session states), ⌘K command palette, Board kanban (canvas auto-scales to the window, no horizontal scrollbar, ChromaGrid-style group glow over the cards), widget system (custom HTML widgets with theme hot-swap).
-- **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`, built-in standard/minimal templates). The welcome composer's project row carries a preset chip (DSH hero parity); sessions show a read-only preset label. CLI/TUI: `--preset <id>` at startup, `/preset` to inspect. Managed in Settings → 智能体 → 预设 (card panel with validate/delete; `modes.validate` for agent self-checks). Extension center splits **OMP Extension Packages** (upstream ecosystem) and **MusePi Extensions** (own extension system) into separate tabs.
+- **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`, built-in standard/minimal templates). The welcome composer's project row carries a preset chip (DSH 参考吸收); sessions show a read-only preset label. CLI/TUI: `--preset <id>` at startup, `/preset` to inspect. Managed in Settings → 智能体 → 预设 (card panel with validate/delete; `modes.validate` for agent self-checks). Extension center splits **OMP Extension Packages** (upstream ecosystem) and **MusePi Extensions** (own extension system) into separate tabs.
 - **Session lifecycle status** (TUI session-list parity): every sidebar row carries a colored status square (complete / interrupted / aborted / error / pending, from the session-file tail) with a manual tag override via the row context menu (`#完成`/`#中断`/…); group member rows pin working/unread sessions first. Archived snapshots are normalized to idle, so a daemon shut down mid-stream never leaves a phantom "working" turn with an unstoppable stop button.
 - **Swarm task visualizer** (kimiwork parity): while a `task` tool runs, a frosted member chip hovers above the composer (`display.taskCardStyle=swarm`) — click opens the floating avatar/progress grid (agent trajectory drill-down); the transcript keeps compact one-line-per-subagent rows.
 - **Compaction status line**: the agent status line swaps to a braille spinner + stop button while the context compacts (daemon `isCompacting`), cancel via `session.abort` (TUI Esc parity).
@@ -53,7 +53,7 @@ App version `0.4.0` (independent of upstream versioning; see [UPSTREAM.md](UPSTR
 - **Right context panel**: file tree (PDF/image/text previews, open-in-system), Git changes & commits (gitmoji, identity injection, GitHub device-flow auth), PR list, embedded browser (viewport presets, element picking), project notes + todos + plan files.
 - **Subagent operations** (Agent Hub parity): stop / revive / chat from the AgentsPanel (`agents.kill` / `agents.revive` / `agents.chat` RPC).
 
-### Inherited from upstream OMP
+### Inherited from the OMP lineage (oh-my-pi / Pi)
 
 - **40+ LLM providers**, 32 built-in tools, `xd://` device extensions, continuously tuned prompts.
 - **LSP** wired into every write (renames, references, code actions); **DAP** debugger driving.
@@ -459,18 +459,17 @@ Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bund
 
 ### CLI
 
-The npm/GitHub release pipeline is inherited from upstream (`ci:release:*` scripts); `musepi update` self-updates the installed CLI.
+The npm/GitHub release pipeline originated in the OMP lineage (`ci:release:*` scripts); `musepi update` self-updates the installed CLI.
 
 ## Documentation
 
 - `docs/`: 95+ documents (GUI, providers, tools, hooks/extensions/skills, LSP/DAP, collab, compaction, ACP, settings, i18n, …)
 - `docs/gui-design.md` / `docs/gui-implementation.md`: GUI living docs (keep in sync with code changes)
-- `UPSTREAM.md`: upstream sync notes (version ripple, manual resolutions, pitfalls)
+- `UPSTREAM.md`: archived oh-my-pi sync notes (reference-absorption history, pitfalls)
 
-## Upstream sync
+## Lineage & references
 
-- [omp.sh](https://omp.sh)
-- [GitHub](https://github.com/can1357/oh-my-pi)
+- [oh-my-pi](https://github.com/can1357/oh-my-pi) — historical code base (reference-absorption source)
 - [Changelog](https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.md)
 - [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent)
 - [Discord](https://discord.gg/4NMW9cdXZa)

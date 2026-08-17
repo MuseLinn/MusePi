@@ -96,6 +96,7 @@ import {
 	EXTENSION_HANDLER_TIMEOUT_MS,
 	type ExtensionContext,
 	type ExtensionFactory,
+	type ExtensionModeDefinition,
 	ExtensionRunner,
 	ExtensionToolWrapper,
 	type ExtensionUIContext,
@@ -131,7 +132,13 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
-import { createModeResolver, ensureModeTemplates, type ResolvedMode } from "./presets/resolve";
+import {
+	createModeResolver,
+	type ExtraModeLookup,
+	ensureModeTemplates,
+	type ModeDefinition,
+	type ResolvedMode,
+} from "./presets/resolve";
 import { PromptComposer } from "./prompts/composer";
 import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
@@ -247,6 +254,20 @@ type McpNotificationEntry = {
 type LateDiagnosticsDetails = {
 	files: Array<{ path: string; summary: string; errored: boolean; messages: string[] }>;
 };
+
+/** 扩展 id = 发现路径的稳定名(目录 index 入口 → 目录名;直接文件 → 去扩展名)。
+ *  与 discovery/helpers getExtensionNameFromPath 同规则 —— mode 白名单、
+ *  composer source(ext:<id>)、热切 entryPath 查找必须一致,否则白名单
+ *  永不匹配(<dir>/index.ts 的 basename 是 index.ts 而非目录名)。 */
+function extensionIdOf(extensionPath: string): string {
+	const base = extensionPath.replace(/\\/g, "/").split("/").pop() ?? extensionPath;
+	if (base === "index.ts" || base === "index.js") {
+		const parts = extensionPath.replace(/\\/g, "/").split("/");
+		return parts[parts.length - 2] ?? base;
+	}
+	const dot = base.lastIndexOf(".");
+	return dot > 0 ? base.slice(0, dot) : base;
+}
 
 function buildLateDiagnosticsBatchMessage(
 	entries: DeferredDiagnosticsEntry[],
@@ -1475,15 +1496,29 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// Modes v1(§5.4/§6.1):解析会话预设 + 用户全局提示词区块。
 	// composer 统一承载:mode 区块(source=mode:<id>)+ 用户区块(source=user,
 	// 后 add 同名胜 → 用户覆盖预设,§4.3);modeId 只由顶层会话传入。
-	const modeState = (() => {
+	// Modes v2 §5.5:扩展声明预设(registerMode)的查找 —— 文件层未命中时
+	// 兜底。初始集在扩展加载完成后填充(见下方 resolve 注入点);runner
+	// 建好后切换为 runner.getExtensionModes()(含热启用/禁用的扩展,§6.2)。
+	let extensionRunnerRef: ExtensionRunner | undefined;
+	let initialExtensionModes: Array<{ extensionId: string; mode: ExtensionModeDefinition }> = [];
+	const extensionModeLookup: ExtraModeLookup = modeId => {
+		const current = extensionRunnerRef ? extensionRunnerRef.getExtensionModes() : initialExtensionModes;
+		const match = current.find(s => s.mode.id === modeId);
+		return match ? ({ ...match.mode } as ModeDefinition) : undefined;
+	};
+
+	// Modes v2:modeRuntime 是可变的 —— session.setMode 热切换原地更新
+	// resolved/composer/activeExtensionIds(§6.2),rebuildSystemPrompt 闭包
+	// 每次重建都经 composer 重组。
+	// 初始 resolve 延后到扩展加载完成后(白名单过滤前)—— 扩展声明的 mode
+	// 在创建会话时即可解析(extensionsResult 就绪,runner 未建走初始集)。
+	const modeRuntime: {
+		resolved: ResolvedMode | undefined;
+		composer: PromptComposer;
+		/** 当前生效的 mode 扩展白名单(热切换启用/禁用方向追踪,§6.2)。 */
+		activeExtensionIds: Set<string>;
+	} = (() => {
 		const composer = new PromptComposer();
-		let resolved: ResolvedMode | undefined;
-		if (options.modeId) {
-			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
-			ensureModeTemplates(modeDir);
-			resolved = createModeResolver(modeDir).resolve(options.modeId);
-			for (const section of resolved.prompt) composer.add({ ...section, source: `mode:${resolved.id}` });
-		}
 		const rawSections = settings.get("prompt.sections");
 		const userSections =
 			Array.isArray(rawSections) && rawSections.length > 0
@@ -1492,19 +1527,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		if (userSections && userSections.length > 0) {
 			for (const section of userSections) composer.add({ ...section, source: "user" });
 		}
-		return resolved || composer.size > 0 ? { resolved, composer } : undefined;
+		return { resolved: undefined, composer, activeExtensionIds: new Set() };
 	})();
 	// settings 覆盖(§4.3):mode 键合并进 per-session 克隆实例,不污染共享
 	// discovery.settings(daemon 多会话隔离);用户全局显式值已在克隆快照,
 	// cloneForCwd 的 #global/#project 独立,set 只写本会话视图。
-	if (modeState?.resolved && Object.keys(modeState.resolved.settings).length > 0) {
-		const sessionSettings = await settings.cloneForCwd(cwd);
-		for (const [key, value] of Object.entries(modeState.resolved.settings)) {
-			// mode.settings 键是运行时字符串,Settings.set 要求字面量键 —— cast 到联合键。
-			(sessionSettings as Settings).set(key as Parameters<Settings["set"]>[0], value as never);
-		}
-		settings = sessionSettings;
-	}
+	// Modes v2:应用走 override(运行时非持久),键记入 appliedModeSettingsKeys
+	// 供热切换清旧(§6.2)—— v1 的 set() 会经克隆实例持久化进 config.yml,
+	// 与"mode 是会话级角色"语义不符,改为运行时覆盖。
+	// 填充时机:紧随初始 resolve(扩展加载完成后),见下方注入点。
+	const appliedModeSettingsKeys: string[] = [];
 	if (!options.modelRegistry) {
 		modelRegistry.refreshInBackground();
 	}
@@ -1571,7 +1603,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				cwd,
 				SessionManager.getDefaultSessionDir(cwd, agentDir),
 				undefined,
-				modeState?.resolved?.id,
+				modeRuntime.resolved?.id,
 			),
 		);
 	const configuredDirs = options.additionalDirectories
@@ -1655,9 +1687,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	);
 	// Modes v1(§6.1):mode.modelRole 覆盖默认档位 —— 仅当调用方未显式指定 model。
 	// 解析 settings.modelRoles[role] 或内置角色(fast/small/slow 等);解析失败回退默认。
-	if (modeState?.resolved?.modelRole && !options.model && !options.modelPattern) {
+	const modeResolvedRole = modeRuntime.resolved?.modelRole;
+	if (modeResolvedRole && !options.model && !options.modelPattern) {
 		const modeRoleSpec = logger.time("resolveModeModelRole", () =>
-			resolveModelRoleValue(settings.getModelRole(modeState.resolved!.modelRole!), allowedModels, {
+			resolveModelRoleValue(settings.getModelRole(modeResolvedRole), allowedModels, {
 				settings,
 				matchPreferences: modelMatchPreferences,
 			}),
@@ -2278,24 +2311,61 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// rebuild their own session-scoped extensions.
 		toolSession.extensionPaths = extensionPaths;
 
+		// Modes v2 §5.5:初始 resolve 注入点 —— 扩展已加载(extensionsResult
+		// 就绪),runner 尚未构造。扩展声明的 mode 走 initialExtensionModes
+		// 兜底;文件 mode 行为与 v1 完全一致(文件层优先)。
+		initialExtensionModes = extensionsResult.extensions.flatMap(ext =>
+			ext.modes.map(mode => ({ extensionId: ext.resolvedPath, mode })),
+		);
+		if (options.modeId) {
+			const modeDir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			ensureModeTemplates(modeDir);
+			modeRuntime.resolved = createModeResolver(modeDir, { extraModes: extensionModeLookup }).resolve(
+				options.modeId,
+			);
+			for (const section of modeRuntime.resolved.prompt) {
+				modeRuntime.composer.add({ ...section, source: `mode:${modeRuntime.resolved.id}` });
+			}
+			modeRuntime.activeExtensionIds = new Set(modeRuntime.resolved.extensions ?? []);
+			// settings 覆盖(§4.3)紧随 resolve:mode 键合并进 per-session 克隆,
+			// 白名单过滤与后续 settings 消费均看到覆盖后的值。
+			if (Object.keys(modeRuntime.resolved.settings).length > 0) {
+				const sessionSettings = await settings.cloneForCwd(cwd);
+				for (const [key, value] of Object.entries(modeRuntime.resolved.settings)) {
+					(sessionSettings as Settings).override(key as Parameters<Settings["override"]>[0], value as never);
+				}
+				settings = sessionSettings;
+				appliedModeSettingsKeys.push(...Object.keys(modeRuntime.resolved.settings));
+			}
+		}
+
 		// Modes v1(§4.3/决策 #10):预设扩展白名单过滤 —— 三态:
 		// extensions undefined = 全部启用;[] = 仅内置核心;数组 = 白名单。
 		// 扩展 id = 发现路径 basename(loader.createExtension 无独立 id 字段)。
 		// 用户全局 disabledExtensions 在 discoverSessionExtensionPaths/settings 层最后生效。
-		if (modeState?.resolved) {
-			const whitelist = modeState.resolved.extensions;
+		if (modeRuntime.resolved) {
+			const whitelist = modeRuntime.resolved.extensions;
 			if (whitelist !== undefined) {
 				const before = extensionsResult.extensions.length;
 				extensionsResult.extensions = extensionsResult.extensions.filter(ext => {
-					const id = path.basename(ext.path);
+					const id = extensionIdOf(ext.path);
 					return whitelist.includes(id);
 				});
 				logger.debug("modes: extension whitelist filtered", {
-					mode: modeState.resolved.id,
+					mode: modeRuntime.resolved.id,
 					before,
 					after: extensionsResult.extensions.length,
 				});
 			}
+		}
+		// Modes v2(§5.5):扩展 prompt 区块(registerPrompt)以 source=ext:<id>
+		// 注入 composer —— 与 mode/user 区块同槽,按 order 混排;扩展 reload
+		// 时按 source 整源卸载重挂(热切换增量语义)。
+		for (const ext of extensionsResult.extensions) {
+			if (ext.promptSections.length === 0) continue;
+			const source = `ext:${extensionIdOf(ext.path)}`;
+			modeRuntime.composer.removeBySource(source);
+			for (const section of ext.promptSections) modeRuntime.composer.add({ ...section, source });
 		}
 
 		// Load inline extensions from factories
@@ -2841,6 +2911,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			() => (hasSession ? session.getAsyncJobSnapshot() : null),
 		);
 
+		extensionRunnerRef = extensionRunner;
+
 		credentialDisabledTarget = extensionRunner;
 		for (const event of startupCredentialDisabledEvents.splice(0)) {
 			// Discard return: any handler error is routed through runner.onError listeners.
@@ -3092,7 +3164,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		): Promise<BuildSystemPromptResult> => {
 			const promptCwd = sessionManager.getCwd();
 			const activeRepoContext =
-				modeState?.resolved?.runtimeContext === false
+				modeRuntime.resolved?.runtimeContext === false
 					? null // Modes v1(决策 #16):极简预设关闭 activeRepoContext 区块
 					: hasSession
 						? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
@@ -3217,16 +3289,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			if (options.systemPrompt === undefined) {
 				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
 				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
-				if (modeState && modeState.composer.size > 0) {
-					if (modeState.resolved?.promptComplete) {
+				if (modeRuntime.composer.size > 0) {
+					if (modeRuntime.resolved?.promptComplete) {
 						return {
 							...defaultPrompt,
-							systemPrompt: modeState.composer.composeComplete(),
+							systemPrompt: modeRuntime.composer.composeComplete(),
 						};
 					}
 					return {
 						...defaultPrompt,
-						systemPrompt: modeState.composer.compose(defaultPrompt.systemPrompt),
+						systemPrompt: modeRuntime.composer.compose(defaultPrompt.systemPrompt),
 					};
 				}
 				return defaultPrompt;
@@ -3648,6 +3720,112 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Hand the advisor the same project context files (AGENTS.md, etc.) the
 		// primary agent gets in its system prompt, so the read-only reviewer judges
 		// against the user's standing project rules instead of advising blind.
+		// Modes v2(§6.2):会话内热切换 —— 由 AgentSession.setMode 调起,替换
+		// 扩展白名单、composer 区块、settings 覆盖与模型角色,最后重建 system
+		// prompt。忙会话由 AgentSession 侧门控(pending → agent_end 补做)。
+		// 顶层会话注入;子代理无 modeSwitcher(继承父 resolved)。
+		// 边界(照 P5 反模式守卫):不事务回滚 —— 中途失败返回 error,已应用部分
+		// 保留;extensions===undefined(无白名单)的热切换保持当前加载集,不改动。
+		const switchMode = async (
+			modeId: string | null,
+			_opts?: { hot?: boolean },
+		): Promise<{ ok: boolean; error?: string }> => {
+			const prev = modeRuntime.resolved;
+			// null = 清除预设:卸载 mode 区块 + 全部白名单扩展工具 + settings 覆盖。
+			if (modeId === null) {
+				if (prev?.id) modeRuntime.composer.removeBySource(`mode:${prev.id}`);
+				for (const id of modeRuntime.activeExtensionIds) {
+					const entryPath = extensionPaths.find(p => extensionIdOf(p) === id);
+					if (entryPath) {
+						await session.removeExtensionTools(extensionRunner.getExtensionToolNames(entryPath));
+					}
+					modeRuntime.composer.removeBySource(`ext:${id}`);
+				}
+				modeRuntime.activeExtensionIds.clear();
+				for (const key of appliedModeSettingsKeys) {
+					(settings as Settings).clearOverride(key as never);
+				}
+				appliedModeSettingsKeys.length = 0;
+				modeRuntime.resolved = undefined;
+				await session.refreshBaseSystemPrompt();
+				logger.info("Mode cleared", { sessionId: session.sessionId });
+				return { ok: true };
+			}
+			let next: ResolvedMode;
+			try {
+				const dir = options.modeDir ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+				ensureModeTemplates(dir);
+				next = createModeResolver(dir).resolve(modeId);
+			} catch (error) {
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+			// 1) composer:卸载旧 mode 区块 → 挂新 mode 区块(沿用初始 base,§5.6)。
+			if (prev?.id) modeRuntime.composer.removeBySource(`mode:${prev.id}`);
+			for (const section of next.prompt) modeRuntime.composer.add({ ...section, source: `mode:${next.id}` });
+			// 2) settings:清旧 mode 的运行时覆盖 → 应用新 mode 的(用户全局显式值
+			//    最后生效,§4.3;override/clearOverride 非持久,不污染会话配置)。
+			for (const key of appliedModeSettingsKeys) {
+				(settings as Settings).clearOverride(key as never);
+			}
+			const nextSettingsKeys = Object.keys(next.settings ?? {});
+			for (const key of nextSettingsKeys) {
+				(settings as Settings).override(key as never, (next.settings as Record<string, unknown>)[key] as never);
+			}
+			appliedModeSettingsKeys.length = 0;
+			appliedModeSettingsKeys.push(...nextSettingsKeys);
+			// 3) 扩展启用/禁用方向(§6.2):白名单 diff。undefined = 无白名单,
+			//    保持当前加载集不动(边界见上)。
+			if (next.extensions !== undefined) {
+				const prevIds = modeRuntime.activeExtensionIds;
+				const nextIds = new Set(next.extensions);
+				for (const id of nextIds) {
+					if (prevIds.has(id)) continue;
+					const entryPath = extensionPaths.find(p => extensionIdOf(p) === id);
+					if (!entryPath) {
+						return { ok: false, error: `mode "${next.id}" references unknown extension "${id}"` };
+					}
+					if (extensionRunner.isExtensionLoaded(entryPath)) {
+						await extensionRunner.activateExtensionTools(entryPath);
+					} else {
+						const res = await extensionRunner.loadExtension(entryPath);
+						if (res.errors.length > 0) {
+							return { ok: false, error: `failed to load extension "${id}": ${res.errors.join("; ")}` };
+						}
+					}
+					// 新启用扩展的 prompt 区块(ext:<id>)同步进 composer。
+					const loaded = extensionRunner.getExtensionByPath(entryPath);
+					if (loaded && loaded.promptSections.length > 0) {
+						const source = `ext:${id}`;
+						modeRuntime.composer.removeBySource(source);
+						for (const section of loaded.promptSections) modeRuntime.composer.add({ ...section, source });
+					}
+				}
+				for (const id of prevIds) {
+					if (nextIds.has(id)) continue;
+					const entryPath = extensionPaths.find(p => extensionIdOf(p) === id);
+					if (entryPath) {
+						await session.removeExtensionTools(extensionRunner.getExtensionToolNames(entryPath));
+					}
+					modeRuntime.composer.removeBySource(`ext:${id}`);
+				}
+				modeRuntime.activeExtensionIds = nextIds;
+			}
+			// 4) 模型:新旧 mode 的 modelRole 不同 → 会话级切模型(§6.2)。
+			if (next.modelRole && next.modelRole !== prev?.modelRole) {
+				const roleSpec = resolveModelRoleValue(settings.getModelRole(next.modelRole), allowedModels, {
+					settings,
+					matchPreferences: modelMatchPreferences,
+				});
+				if (roleSpec.model && roleSpec.model.id !== session.model?.id) {
+					await session.setModelTemporary(roleSpec.model);
+				}
+			}
+			modeRuntime.resolved = next;
+			// 5) 重建 system prompt(经 composer 重组,§5.6)。
+			await session.refreshBaseSystemPrompt();
+			logger.info("Mode hot-switched", { modeId, sessionId: session.sessionId });
+			return { ok: true };
+		};
 		const advisorContextPrompt = formatAdvisorContextPrompt(contextFiles);
 		// Owned only when this session created the manager; subagents receive a
 		// parent's manager via `options.mcpManager` and MUST NOT disconnect it.
@@ -3685,6 +3863,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			promptTemplates,
 			slashCommands,
 			extensionRunner,
+			// Modes v2:顶层会话才有热切换;子代理(restrictToolNames)继承父 resolved。
+			modeSwitcher: restrictToolNames ? undefined : switchMode,
+			// Modes v2 (§5.5):扩展 reload 后按源重挂 prompt 区块。
+			onExtensionPromptSectionsChanged: entryPaths => {
+				for (const entryPath of entryPaths) {
+					const id = extensionIdOf(entryPath);
+					const source = `ext:${id}`;
+					modeRuntime.composer.removeBySource(source);
+					const loaded = extensionRunner.getExtensionByPath(entryPath);
+					if (loaded) {
+						for (const section of loaded.promptSections) modeRuntime.composer.add({ ...section, source });
+					}
+				}
+			},
 			customCommands: customCommandsResult.commands,
 			skills,
 			skillWarnings,

@@ -37,8 +37,8 @@ import {
 	type AsideMessage,
 	type BeforeToolCallContext,
 	type BeforeToolCallResult,
-	type PauseGate,
 	EventLoopKeepalive,
+	type PauseGate,
 	resolveTelemetry,
 	type StreamFn,
 	TERMINAL_TOOL_RESULT_ABORT_REASON,
@@ -609,6 +609,23 @@ export class AgentSession {
 	 */
 	#extensionReloadPending: string | undefined = undefined;
 	/**
+	 * Modes v2: session-level mode hot-switch, wired by the SDK session
+	 * factory (docs/modes-plan.md §6.2). Undefined for sessions without a
+	 * mode-capable factory (embedded SDK consumers, subagents).
+	 */
+	#modeSwitcher:
+		| ((modeId: string | null, opts?: { hot?: boolean }) => Promise<{ ok: boolean; error?: string }>)
+		| undefined;
+	/** Modes v2 (§5.5): extension-reload → composer re-sync callback (SDK-wired). */
+	#onExtensionPromptSectionsChanged: ((entryPaths: string[]) => void) | undefined;
+	/**
+	 * Modes v2 busy gate: when a mode switch is requested while the session
+	 * is streaming, the target is parked here (single slot, last-wins) and
+	 * applied at the next idle `agent_end` — mirrors the P5 extension-reload
+	 * gate so a hot switch never lands mid-turn.
+	 */
+	#pendingModeSwitch: { modeId: string | null; hot?: boolean } | undefined = undefined;
+	/**
 	 * Backs `ctx.setInterval`/`setTimeout`/`clearTimer` for the runner-less
 	 * command-context fallback (SDK embeddings with no extension runner). Lazily
 	 * created; cleared on dispose alongside the runner's own timers (#5664).
@@ -945,6 +962,8 @@ export class AgentSession {
 		// P5 HMR: this is the settle flush for a deferred agent_end (prompt
 		// count just hit 0) — perform a parked extension reload now.
 		this.#drainPendingExtensionReload();
+		// Modes v2: same settle boundary applies a parked mode switch.
+		this.#drainPendingModeSwitch();
 	}
 
 	/**
@@ -1096,6 +1115,8 @@ export class AgentSession {
 		this.#promptTemplates = config.promptTemplates ?? [];
 		this.#slashCommands = config.slashCommands ?? [];
 		this.#extensionRunner = config.extensionRunner;
+		this.#modeSwitcher = config.modeSwitcher;
+		this.#onExtensionPromptSectionsChanged = config.onExtensionPromptSectionsChanged;
 		this.#customCommands = config.customCommands ?? [];
 		const recoveryHost: TurnRecoveryHost = {
 			agent: this.agent,
@@ -2147,8 +2168,8 @@ export class AgentSession {
 	// Track last assistant message for auto-compaction check
 	#lastAssistantMessage: AssistantMessage | undefined = undefined;
 	/**
- * Classifier-refusal turn pruned from active context at settle (#3591).
- * Retained until the next run starts so post-settle readers
+	 * Classifier-refusal turn pruned from active context at settle (#3591).
+	 * Retained until the next run starts so post-settle readers
 	 * ({@link getLastAssistantMessage}: print mode, task executor) still see
 	 * the terminal error instead of a silently successful-looking state.
 	 */
@@ -2229,6 +2250,8 @@ export class AgentSession {
 		// a parked extension reload performs now unless a prompt is still in
 		// flight — that case drains at #flushPendingAgentEnd once idle.
 		this.#drainPendingExtensionReload();
+		// Modes v2: same idle boundary applies a parked mode switch.
+		this.#drainPendingModeSwitch();
 	};
 
 	#createMessageEndPersistenceSlot(message: AgentMessage): MessageEndPersistenceSlot | undefined {
@@ -4538,9 +4561,7 @@ export class AgentSession {
 	 * listener and are excluded. Extensions with no runner return an empty
 	 * result.
 	 */
-	async reloadExtension(
-		entryPath: string,
-	): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
+	async reloadExtension(entryPath: string): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
 		const runner = this.#extensionRunner;
 		if (!runner) return { removedTools: [], errors: [], deferred: false };
 		if (this.isStreaming) {
@@ -4557,6 +4578,10 @@ export class AgentSession {
 		const runner = this.#extensionRunner;
 		if (!runner) return { removedTools: [], errors: [], deferred: false };
 		const { removedTools, errors } = await runner.reloadExtension(entryPath, this.sessionManager.getCwd());
+		// Modes v2 (§5.5): the replacement instance carries fresh prompt
+		// sections — drop the old source and re-add so the composed prompt
+		// never mixes generations.
+		this.#onExtensionPromptSectionsChanged?.([entryPath]);
 		// Only names the replacement did not re-register are stale in the
 		// session registry — re-registered names were replaced in place by the
 		// registration listener during the reload.
@@ -4583,6 +4608,49 @@ export class AgentSession {
 				error: error instanceof Error ? error.message : String(error),
 			});
 		});
+	}
+
+	/**
+	 * Hot-switch this session's mode (Modes v2, docs/modes-plan.md §6.2).
+	 *
+	 * Busy gate: while the session is streaming the switch is parked in a
+	 * single pending slot (last-wins) and applied at the next idle `agent_end`
+	 * — the caller still gets `{ deferred: true }` immediately. Idle sessions
+	 * switch immediately. Sessions without a mode-capable factory return
+	 * `{ ok: false, error }`.
+	 */
+	async setMode(
+		modeId: string | null,
+		opts: { hot?: boolean } = {},
+	): Promise<{ ok: boolean; error?: string; deferred?: boolean }> {
+		if (!this.#modeSwitcher) {
+			return { ok: false, error: "mode switching is unavailable for this session" };
+		}
+		if (this.isStreaming) {
+			this.#pendingModeSwitch = { modeId, hot: opts.hot };
+			return { ok: true, deferred: true };
+		}
+		return this.#modeSwitcher(modeId, opts);
+	}
+
+	/** Apply a parked mode switch at an idle boundary (agent_end flush). */
+	#drainPendingModeSwitch(): void {
+		const pending = this.#pendingModeSwitch;
+		if (!pending || this.isStreaming || this.#isDisposed || !this.#modeSwitcher) return;
+		this.#pendingModeSwitch = undefined;
+		void this.#modeSwitcher(pending.modeId, { hot: pending.hot }).catch(error => {
+			logger.warn("Deferred mode switch failed", {
+				modeId: pending.modeId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+
+	/** Drop extension-owned tools from the session registry and active set
+	 *  (Modes v2 disable direction — mirrors the P5 HMR cleanup in
+	 *  {@link #performExtensionReload}). */
+	removeExtensionTools(names: string[]): Promise<void> {
+		return this.#tools.removeExtensionTools(names);
 	}
 
 	/** Names of every registered tool. */

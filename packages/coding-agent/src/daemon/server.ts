@@ -1623,7 +1623,10 @@ export class DaemonSessionHost {
 	 * the materialized snapshot. Used by setModel / setThinkingLevel so a
 	 * resumed session picks up the user's choice next time it runs.
 	 */
-	persistHeaderPatch(sessionId: string, patch: { model?: string; thinkingLevel?: string }): boolean {
+	persistHeaderPatch(
+		sessionId: string,
+		patch: { model?: string; thinkingLevel?: string; modeId?: string | null },
+	): boolean {
 		const persisted = this.#store.load(sessionId);
 		if (!persisted) return false;
 		persisted.header = { ...persisted.header, ...patch };
@@ -3205,8 +3208,19 @@ export class DaemonServer {
 				return { ready: sdkPrewarmed };
 			case "system.features":
 				return {};
-			case "session.create":
-				return this.#host.createSession((params ?? {}) as { cwd?: string; title?: string; forkOf?: string });
+			case "session.create": {
+				// modeId(modelPattern/thinkingLevel)透传 host.createSession ——
+				// GUI welcome 预设 chip 的选择在创建时一次应用(modes v1/v2)。
+				const p = (params ?? {}) as {
+					cwd?: string;
+					title?: string;
+					forkOf?: string;
+					modeId?: string;
+					modelPattern?: string;
+					thinkingLevel?: ConfiguredThinkingLevel;
+				};
+				return this.#host.createSession(p);
+			}
 			case "session.list": {
 				const cronIds = this.#cronSessionIds();
 				return (await this.#host.knownSessions()).map(r => {
@@ -3832,27 +3846,58 @@ export class DaemonServer {
 				const dir = this.#modesDir();
 				ensureModeTemplates(dir);
 				const ids = listModeIds(dir);
-				return {
-					modes: ids.map(id => {
-						const def = loadModeFile(dir, id);
-						// 内置模板(work/chat/design/creator)显示名走 i18n(DSH
-						// BUILT_IN_PRESET_KEYS 对齐);用户自定义用文件 label。
-						const builtinName = t(`preset ${id} name` as never);
-						const builtinDesc = t(`preset ${id} description` as never);
-						const isBuiltinLabel = !builtinName.startsWith("preset ");
-						return {
-							id,
-							builtin: id in BUILTIN_MODE_TEMPLATES,
-							label: isBuiltinLabel ? builtinName : (def?.label ?? id),
-							description: isBuiltinLabel ? builtinDesc : def?.description,
-							extends: def?.extends ?? [],
-							extensions: def?.extensions,
-							hasPrompt: (def?.prompt?.length ?? 0) > 0,
-							promptComplete: def?.promptComplete === true,
-							settingsKeys: Object.keys(def?.settings ?? {}),
-						};
-					}),
-				};
+				const modes: Array<{
+					id: string;
+					builtin: boolean;
+					label?: string;
+					description?: string;
+					extends: string[];
+					extensions?: string[];
+					hasPrompt: boolean;
+					promptComplete: boolean;
+					settingsKeys: string[];
+					source?: "extension";
+				}> = ids.map(id => {
+					const def = loadModeFile(dir, id);
+					// 内置模板(work/chat/design/creator)显示名走 i18n(DSH
+					// BUILT_IN_PRESET_KEYS 对齐);用户自定义用文件 label。
+					const builtinName = t(`preset ${id} name` as never);
+					const builtinDesc = t(`preset ${id} description` as never);
+					const isBuiltinLabel = !builtinName.startsWith("preset ");
+					return {
+						id,
+						builtin: id in BUILTIN_MODE_TEMPLATES,
+						label: isBuiltinLabel ? builtinName : (def?.label ?? id),
+						description: isBuiltinLabel ? builtinDesc : def?.description,
+						extends: def?.extends ?? [],
+						extensions: def?.extensions,
+						hasPrompt: (def?.prompt?.length ?? 0) > 0,
+						promptComplete: def?.promptComplete === true,
+						settingsKeys: Object.keys(def?.settings ?? {}),
+					};
+				});
+				// Modes v2 §5.5:扩展声明预设(registerMode)合并进列表 ——
+				// 文件 id 冲突时文件优先(用户数据层压扩展代码层),与
+				// resolve 的 extraModes 兜底同一优先级规则。
+				const { collectExtensionModes } = await import("./extension-components");
+				const fileIds = new Set(ids);
+				for (const em of await collectExtensionModes(await this.#getExtensions(), this.#host.cwd())) {
+					if (fileIds.has(em.id)) continue;
+					fileIds.add(em.id);
+					modes.push(em);
+				}
+				return { modes };
+			}
+			case "modes.get": {
+				// 单预设完整定义(设置页编辑器用):modes.list 是摘要,编辑页
+				// 按需拉完整(含 prompt 区块数组/settings 覆盖)。
+				const { loadModeFile, ensureModeTemplates } = await import("../presets/resolve");
+				const p = (params ?? {}) as { id: string };
+				const dir = this.#modesDir();
+				ensureModeTemplates(dir);
+				const def = loadModeFile(dir, p.id);
+				if (!def) throw new Error(`Unknown mode: ${p.id}`);
+				return def;
 			}
 			case "modes.save": {
 				// 保存 = 校验(结构 + 环/悬空 + 扩展存在性)→ 写文件 → 广播。
@@ -5585,6 +5630,29 @@ export class DaemonServer {
 				}
 				// History session: persist alongside the model choice.
 				if (!this.#host.persistHeaderPatch(p.sessionId, { thinkingLevel: level })) {
+					throw new Error(`Unknown session: ${p.sessionId}`);
+				}
+				return { ok: true, persisted: true };
+			}
+			case "session.setMode": {
+				// Modes v2(§6.2/§7):会话中热切换预设。live 会话走
+				// AgentSession.setMode(忙会话 → deferred,pending 在 agent_end
+				// 补做);成功后把 modeId 写进会话头,历史会话直接持久化。
+				// modeId: null = 清除预设。
+				const p = (params ?? {}) as { sessionId: string; modeId?: string | null };
+				const live = this.#host.get(p.sessionId);
+				if (live) {
+					const result = await live.agentSession.setMode(p.modeId ?? null, { hot: true });
+					if (!result.ok) throw new Error(result.error ?? "mode switch failed");
+					if (!result.deferred && !this.#host.persistHeaderPatch(p.sessionId, { modeId: p.modeId ?? null })) {
+						logger.warn("session.setMode: failed to persist modeId to session header", {
+							sessionId: p.sessionId,
+						});
+					}
+					return { ok: true, deferred: result.deferred === true };
+				}
+				// History session: persist — applies when the session is next continued.
+				if (!this.#host.persistHeaderPatch(p.sessionId, { modeId: p.modeId ?? null })) {
 					throw new Error(`Unknown session: ${p.sessionId}`);
 				}
 				return { ok: true, persisted: true };

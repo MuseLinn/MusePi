@@ -173,8 +173,16 @@ export interface AgentSessionConfig {
 	modelRegistry: ModelRegistry;
 	/** Tool registry for LSP and settings. */
 	toolRegistry?: Map<string, AgentTool>;
-	/** Creates tools registered only while vibe mode is active. */
+	/** Creates built-in tools registered only while vibe mode is active. */
 	createVibeTools?: () => AgentTool[];
+	/** Modes v2: hot-switch the session's mode (extensions + prompt + model +
+	 *  settings). Wired by the SDK session factory; the daemon's
+	 *  `session.setMode` routes here. Returns `{ ok, error? }`. */
+	modeSwitcher?: (modeId: string | null, opts?: { hot?: boolean }) => Promise<{ ok: boolean; error?: string }>;
+	/** Modes v2 (§5.5): invoked after a session-level extension reload so the
+	 *  SDK can drop the old instance's prompt sections (`ext:<id>`) from the
+	 *  composer and re-add the replacement's. Receives the reloaded entry paths. */
+	onExtensionPromptSectionsChanged?: (entryPaths: string[]) => void;
 	/** Names whose current registry entry is the built-in implementation. */
 	builtInToolNames?: Iterable<string>;
 	/** MCP names whose initial registry entries came from the manager snapshot. */

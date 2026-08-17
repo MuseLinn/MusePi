@@ -110,7 +110,7 @@ musepi 形式更安全:改动先落盘 → 可 diff、可回滚、可审计;无�
 }
 ```
 
-轻量模式示例(内容层极简,对齐 DSH minimal / Cheap & Fast):
+轻量模式示例(内容层极简,参考 DSH minimal / Cheap & Fast):
 
 ```jsonc
 {
@@ -123,7 +123,7 @@ musepi 形式更安全:改动先落盘 → 可 diff、可回滚、可审计;无�
     { "name": "mode:chat:persona", "order": 0, "text": "你是一名简洁的对话助手。只回答结论,不做多余分析;优先给出最小可行的方案。" }
   ],
   "promptComplete": true,                // = DSH persona complete:true —— 该 prompt 集是完整 system prompt(§5.2)
-  "runtimeContext": false,               // 缺省 true;false = 关闭 activeRepoContext 区块(对齐 DSH includeRuntimeContext:false)
+  "runtimeContext": false,               // 缺省 true;false = 关闭 activeRepoContext 区块(参考 DSH includeRuntimeContext:false)
   "settings": { "compaction.enabled": false, "composer.showTokens": false }
 }
 ```
@@ -132,8 +132,8 @@ musepi 形式更安全:改动先落盘 → 可 diff、可回滚、可审计;无�
 
 - `extensions` **三态语义**:键缺省 = 全部启用;`[]` = 显式空(不加载任何扩展,仅内置核心工具 —— 极简模式的实现路径);显式数组 = 启用白名单。展开后 = 该 mode 的扩展集合。
 - `modelRole` 可选:会话创建时的**默认模型档位**(§6.1)。引用 `settings.modelRoles` 键或内置角色(fast/small/slow 等 `model-resolver.ts` 既有机制),**不复制模型列表** —— 模型档位是现成能力,mode 只绑默认值。
-- `promptComplete` 可选(缺省 false):对齐 DSH persona `complete: true` —— 该 mode 的 prompt 集成为**完整 system prompt**,composer 忽略内置区块(core/safety/project/repo-context)与全部继承链 prompt(§5.2)。
-- `runtimeContext` 可选(缺省 true):`false` = 会话创建时向 `buildSystemPrompt` 传 `activeRepoContext: null`(关闭该区块;对齐 DSH minimal 的 `includeRuntimeContext: false`)。继承:链上任一显式 `false` → false(极简意图优先,安全方向)。
+- `promptComplete` 可选(缺省 false):参考 DSH persona `complete: true` —— 该 mode 的 prompt 集成为**完整 system prompt**,composer 忽略内置区块(core/safety/project/repo-context)与全部继承链 prompt(§5.2)。
+- `runtimeContext` 可选(缺省 true):`false` = 会话创建时向 `buildSystemPrompt` 传 `activeRepoContext: null`(关闭该区块;参考 DSH minimal 的 `includeRuntimeContext: false`)。继承:链上任一显式 `false` → false(极简意图优先,安全方向)。
 - `prompt` 为 **PromptSection 数组**(§5.1);**string 快捷语法**合法:`"你是一名资深设计师"` ≡ `{ name: "mode:<id>:<n>", order: <默认>, text: "…" }`(设置页保存时展开为对象,便于编辑页展示)。
 - `settings` 为覆盖片段,展开合并进会话有效 settings;缺省 = 无覆盖。
 
@@ -198,8 +198,8 @@ interface PromptSection {
 
 - **共存(默认)**:extends 链上各预设的 sections 按 order **混排**,互不覆盖 —— DSH section 语义。`design-research extends design` 时 design 的 persona 保留,衍生预设**不能静默抹掉**父预设 persona。
 - **同名覆盖**:继承链中后声明预设的同 `name` section 覆盖先声明者(子胜父);用户区块同名 > mode(§4.3)。
-- **完整替换** = `promptComplete: true`(对齐 DSH persona `complete: true`,§2.5):该 mode 的 prompt 集成为**唯一** system prompt —— composer 忽略内置区块(core/safety/project/repo-context)与全部继承链 prompt,只输出本预设 sections。极简/固定 persona 的逃生门,比"替换继承链"更强(连内置区块一起排除,否则不算 complete)。设置页该开关 + 提示文案("该预设的提示词将成为完整系统提示词,覆盖内置区块与继承内容")。
-- **替换 vs 追加的取舍**:默认追加对齐 DSH 共存(组合预设 = 多个角色区块并存);要"Design 完全换掉基础 persona"→ 不 extends 自写全量 + `promptComplete: true`。
+- **完整替换** = `promptComplete: true`(参考 DSH persona `complete: true`,§2.5):该 mode 的 prompt 集成为**唯一** system prompt —— composer 忽略内置区块(core/safety/project/repo-context)与全部继承链 prompt,只输出本预设 sections。极简/固定 persona 的逃生门,比"替换继承链"更强(连内置区块一起排除,否则不算 complete)。设置页该开关 + 提示文案("该预设的提示词将成为完整系统提示词,覆盖内置区块与继承内容")。
+- **替换 vs 追加的取舍**:默认追加参考 DSH 共存(组合预设 = 多个角色区块并存);要"Design 完全换掉基础 persona"→ 不 extends 自写全量 + `promptComplete: true`。
 
 ### 5.3 composer 核心(纯逻辑,可单测)
 
@@ -296,8 +296,8 @@ daemon 级(设置页用):
 | # | 决策 | 理由 |
 |---|---|---|
 | 1 | `extends` 独立字段,不混入 `extensions` | 预设名 vs 扩展 id 无命名空间,数组内字符串不可区分 |
-| 2 | **prompt 默认追加(共存)语义,`promptComplete: true` 提供完整替换** | 追加与 DSH section 共存对齐(组合预设 = 多角色区块并存,衍生预设保留父 persona);完整替换对齐 DSH persona `complete: true`(§2.5)—— 极简/固定 persona 的逃生门,composer 忽略内置区块与继承链 |
-| 3 | 用户全局显式值最后生效 | 与 DSH profile 层 > bundle 层对齐;防预设复活被禁扩展 |
+| 2 | **prompt 默认追加(共存)语义,`promptComplete: true` 提供完整替换** | 追加参考 DSH section 共存(组合预设 = 多角色区块并存,衍生预设保留父 persona);完整替换参考 DSH persona `complete: true`(§2.5)—— 极简/固定 persona 的逃生门,composer 忽略内置区块与继承链 |
+| 3 | 用户全局显式值最后生效 | 参考 DSH profile 层 > bundle 层;防预设复活被禁扩展 |
 | 4 | v1 不引入 registerMode/registerPrompt | 范围控制;mode 是数据抽象,扩展 API 是 v2 增强 |
 | 5 | modes 全局存放(`~/.musepi/modes/`) | Work/Design 是跨项目角色预设,非目录级 profile |
 | 6 | **v1 即落地 PromptComposer(section 模型),但只做数组级注入,不重构 handlebars 模板** | 模板内拆分(personality/contextFiles 区块化)改动大、风险高;数组级注入覆盖 mode/用户/扩展三类贡献方,模板重构留 v2 后 |
@@ -306,11 +306,11 @@ daemon 级(设置页用):
 | 9 | **mode 带可选 `modelRole`,只做创建时默认档位,不复制模型列表** | musepi 已有完整档位机制(settings.modelRoles + model-resolver 内置角色 fast/small/slow);"Cheap & Fast / Creative" 就是两个 modelRole + 提示词/工具组合,模型解析零新增 |
 | 10 | **extensions 三态:缺省=全部 / `[]`=仅内置核心 / 显式数组=白名单** | 轻量模式的精简工具集必须有"显式空"表达;编辑页三态开关(全部/仅核心/自定义)防误设 |
 | 11 | **mode 是内容层预设,不承载形态层(执行形态)** | DSH 的"极简"实为 headless profile(一次性任务、无 Web/Host/浏览器、禁用 HMR)—— 形态层;musepi 已有对应物(headless modes:print/RPC/ACP/subagents + `$env.NULL_PROMPT` 极简提示词)。headless 是 CLI 启动形态,与 GUI 会话预设(mode)正交,塞进 mode 数据会造成两个维度纠缠 |
-| 12 | **内置模板 work + chat + design + creator(DSH 四预设对齐:work≈standard、chat≈minimal、creator≈cordis、design 为 musepi 独有)** | DSH 四预设中 code(Code Mode SDK)在 musepi 无对应能力,不内置;work(= 默认全量,无 mode 时行为)与 chat(= `[]` 扩展 + promptComplete + 关压缩)真实可用;design(设计 persona)与 creator(创作 persona,引导 musepi-extension-dev)为提示词预设。Creator 创作入口 = 设置页预设编辑器,不引入 cordis 工具集 |
+| 12 | **内置模板 work + chat + design + creator(DSH 四预设参考:work≈standard、chat≈minimal、creator≈cordis、design 为 musepi 独有)** | DSH 四预设中 code(Code Mode SDK)在 musepi 无对应能力,不内置;work(= 默认全量,无 mode 时行为)与 chat(= `[]` 扩展 + promptComplete + 关压缩)真实可用;design(设计 persona)与 creator(创作 persona,引导 musepi-extension-dev)为提示词预设。Creator 创作入口 = 设置页预设编辑器,不引入 cordis 工具集 |
 | 13 | **运行时态以文件+reload 等价覆盖;不引入 cordis_mount;dryRun 不做除非隔离评估;inspect 为 v2 候选** | §2.6:musepi 扩展态 = 文件态,试验/挂载/评估 = write→reload→执行,零额外特权且可审计。dryRun 的"临时 registry"仍会在进程内 import,顶层副作用照常执行,预览语义击穿;务实安全网 = 错误隔离 + 文件回滚。inspect 低成本(信息已在 runner),补创作反馈环 |
 | 14 | **`modes.validate` 复用校验纯函数,先 RPC 后 agent 工具** | agent 改预设后自检闭环:model 用现有 write 工具改 JSON → `modes.validate` → 修错。不造新写路径,校验逻辑单源(resolve.ts 导出) |
 | 15 | **extensions 并集 = 共存语义;`extensionsComplete` 逃生门当前不做** | 与 prompt 追加语义对齐;组合预设保留父扩展集。要"清空"→ 不 extends 自写;将来需要再仿 promptComplete 加键,避免现在造未用机制 |
-| 16 | **`runtimeContext: false`(缺省 true)关闭 activeRepoContext 区块,继承链任一声明 false 即生效** | 对齐 DSH minimal `includeRuntimeContext: false`;activeRepoContext 是 buildSystemPrompt 选项非 settings 键,故独立字段。极简意图优先(安全方向):关闭不被后声明覆盖 |
+| 16 | **`runtimeContext: false`(缺省 true)关闭 activeRepoContext 区块,继承链任一声明 false 即生效** | 参考 DSH minimal `includeRuntimeContext: false`;activeRepoContext 是 buildSystemPrompt 选项非 settings 键,故独立字段。极简意图优先(安全方向):关闭不被后声明覆盖 |
 
 ## 12. 实施拆分(若开工)
 

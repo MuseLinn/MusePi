@@ -79,6 +79,15 @@ export interface ValidateOptions {
 	knownExtensions?: readonly string[];
 }
 
+/** 扩展声明预设的查找入口(modes v2 §5.5):文件层未命中时兜底查扩展。 */
+export type ExtraModeLookup = (modeId: string) => ModeDefinition | undefined;
+
+export interface ResolveOptions extends ValidateOptions {
+	/** 文件层 load 未命中时的兜底查找(扩展 registerMode 声明)。文件优先:
+	 *  用户数据层(mode 文件)压过扩展代码层,对齐 DSH patch 分层语义。 */
+	extraModes?: ExtraModeLookup;
+}
+
 /** 结构校验(单个预设);返回错误列表,空 = 合法。 */
 export function validateMode(def: ModeDefinition, opts: ValidateOptions = {}): string[] {
 	const errors: string[] = [];
@@ -336,7 +345,7 @@ export function createModeResolver(dir: string, opts: ResolveOptions = {}): Mode
 			const touched = new Set<string>();
 			const load = (mid: string): ModeDefinition | undefined => {
 				touched.add(mid);
-				return loadModeFile(dir, mid);
+				return loadModeFile(dir, mid) ?? opts.extraModes?.(mid);
 			};
 			const def = load(modeId);
 			if (!def) {
@@ -345,7 +354,14 @@ export function createModeResolver(dir: string, opts: ResolveOptions = {}): Mode
 			}
 			const out = resolveMode(modeId, load, opts);
 			for (const mid of touched) {
-				mtimes.set(mid, statSync(modeFilePath(dir, mid)).mtimeMs);
+				// 纯扩展 mode(无文件)不参与 mtime 失效;扩展集变化由
+				// runner 侧主动 invalidate(热启用/禁用扩展后调用)。
+				const filePath = modeFilePath(dir, mid);
+				try {
+					mtimes.set(mid, statSync(filePath).mtimeMs);
+				} catch {
+					/* ENOENT:扩展声明 mode,无文件层时间戳 */
+				}
 			}
 			resolved.set(modeId, out);
 			return out;

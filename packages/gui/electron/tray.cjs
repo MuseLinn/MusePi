@@ -184,9 +184,7 @@ function createTrayController({ onAction, onSnapshot }) {
 		// main window; Windows: the native Menu is a classic Win32 menu (no
 		// acrylic) so the click toggles the self-drawn frosted menu window
 		// (main.cjs) instead — the native menu is never set there.
-		if (process.platform === "darwin") {
-			// default: click opens the native menu
-		} else if (process.platform === "win32") {
+		if (process.platform === "darwin" || process.platform === "win32") {
 			tray.on("click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
 			tray.on("right-click", (event) => onAction({ type: "toggle-tray-menu", bounds: event.bounds }));
 		} else {
@@ -349,9 +347,11 @@ function createTrayController({ onAction, onSnapshot }) {
 		// status-item button and shoves every icon left of it. The unseen
 		// state (filled π) + the menu's approval section carry the signal.
 		applyIconState(counts.busy > 0 ? "busy" : counts.approvals > 0 ? "unseen" : "idle");
-		if (process.platform === "win32") {
+		if (process.platform === "win32" || process.platform === "darwin") {
 			// Self-drawn frosted menu window renders the snapshot (the
 			// native Menu would be a classic Win32 menu — no acrylic).
+			// macOS: 统一用自绘 frosted 菜单(2026-08-17,用户要求与
+			// Windows 新写菜单一致),native Menu 不再构建。
 			onSnapshot?.(snapshot);
 			return;
 		}

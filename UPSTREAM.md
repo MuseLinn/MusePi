@@ -1,8 +1,11 @@
-# 上游同步备忘（UPSTREAM）
+# 上游同步备忘（UPSTREAM）— 已归档
 
-> 记录 musepi-omp 与上游 oh-my-pi 的同步状态。每次同步后更新「同步状态」。
+> **归档声明（2026-08-17）**：MusePi 自此为**独立上游**，oh-my-pi 不再作为同步上游。
+> 本文件保留为历史同步记录（2026-08-13 v17.3.0 起至 2026-08-15 选择性移植为止）。
+> 此后 oh-my-pi / Pi / DSH / opencode 等一律视为**参考吸收来源**（按需吸收 bugfix
+> 与 feature，无版本对齐义务）；MusePi 自己的版本、行为与文档即权威。
 
-## 同步状态
+## 同步状态（历史记录，截至归档）
 
 - 数据源：本地 oh-my-pi 仓库（`/Users/muselinn/harness-engineering/oh-my-pi`），已 fetch 全部 tags
 - 当前同步基线：**v17.3.0**（2026-08-13 完成，502 commits / 828 files / +46,389 / −10,977 原始 diff；**/agents 全屏 hub 重设计**（agents-hub.ts 1453 行替换 agent-dashboard.ts 1254 行）、**per-agent advisor**（移除全局 advisor.subagents → frontmatter `advisor` / `task.agentAdvisor`）、**/usage 官方配额**（OpenCode Go 真实用量替代估算）、**/compress 语义压缩命令**、**omp.rename 指针**（npm 包改名准备）、**session-title 生成回归修复**、**LSP 多项修复**（overlay 隔离/rename 回滚/diagnostics 语义）、**/shake 保留工具结果尾巴**、Grok 4.6 thinking-loop guard、Nix 构建支持（musepi 不采用）；见下方「验证记录（v17.3.0 移植）」

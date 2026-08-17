@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as path from "node:path";
 import {
 	expandRoleAlias,
@@ -9,6 +10,7 @@ import type { SettingPath } from "../config/settings";
 import { t } from "../i18n/index.js";
 import { describeLoopLimitRuntime } from "../modes/loop-limit";
 import type { InteractiveModeContext } from "../modes/types";
+import { loadModeFile, MODE_ID_PATTERN, resolveMode, validateMode } from "../presets/resolve";
 import type { AgentSession } from "../session/agent-session";
 import type { ComputerTool } from "../tools/computer";
 import { computerExposureMode } from "../tools/computer/exposure";
@@ -572,13 +574,52 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "preset",
 		description: "Show the session preset (mode); applied at startup via --preset <id>",
-		handle: async (command, runtime) => {
+		handle: async (_command, runtime) => {
 			const modeId = runtime.sessionManager.getHeader()?.modeId;
 			if (!modeId) {
 				await runtime.output(t("preset slash none"));
 			} else {
 				await runtime.output(t("preset slash current", modeId));
 			}
+			return commandConsumed();
+		},
+	},
+	{
+		name: "modes",
+		aliases: ["mode"],
+		description: "Validate a preset (mode) file without saving",
+		allowArgs: true,
+		inlineHint: "validate <id>",
+		subcommands: [{ name: "validate", description: "Validate one preset; no file writes" }],
+		handle: async (command, runtime) => {
+			const args = command.args.trim().split(/\s+/).filter(Boolean);
+			if (args[0] !== "validate" || !args[1]) {
+				return usage(t("modes validate usage"), runtime);
+			}
+			const modeId = args[1]!;
+			// Modes v2(§7):agent/用户自检形态 —— 纯校验不落盘。CLI 上下文没有
+			// daemon 全量扩展列表,knownExtensions 传 undefined(跳过扩展存在性
+			// 检查);结构/环/悬空引用始终校验,扩展存在性以 daemon modes.validate
+			// RPC 为准。
+			if (!MODE_ID_PATTERN.test(modeId)) {
+				await runtime.output(t("modes validate fail", modeId, `invalid mode id: ${modeId}`));
+				return commandConsumed();
+			}
+			const dir = process.env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			const errors: string[] = [];
+			try {
+				const def = loadModeFile(dir, modeId);
+				if (!def) errors.push(`mode "${modeId}" not found`);
+				else {
+					errors.push(...validateMode(def, { knownExtensions: undefined }));
+					resolveMode(modeId, mid => loadModeFile(dir, mid), { knownExtensions: undefined });
+				}
+			} catch (error) {
+				errors.push(String((error as Error).message));
+			}
+			await runtime.output(
+				errors.length > 0 ? t("modes validate fail", modeId, errors.join("; ")) : t("modes validate ok", modeId),
+			);
 			return commandConsumed();
 		},
 	},

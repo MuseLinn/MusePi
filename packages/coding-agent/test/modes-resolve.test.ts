@@ -185,3 +185,57 @@ describe("presets/resolve 文件缓存", () => {
 		expect(() => resolver.resolve("a")).toThrow(/环/);
 	});
 });
+
+describe("presets/resolve 扩展声明预设(extraModes, modes v2 §5.5)", () => {
+	it("文件层未命中时兜底查扩展 mode", () => {
+		const resolver = createModeResolver("/nonexistent/dir", {
+			extraModes: id => (id === "ext-mode" ? { id, label: "Ext Mode", modelRole: "fast" } : undefined),
+		});
+		const out = resolver.resolve("ext-mode");
+		expect(out.label).toBe("Ext Mode");
+		expect(out.modelRole).toBe("fast");
+		expect(out.extensions).toBeUndefined(); // 无显式声明 → 全部启用
+		expect(out.sources).toEqual(["ext-mode"]);
+	});
+
+	it("文件 mode 优先于扩展 mode(用户数据层压扩展代码层)", () => {
+		const dir = mkdtempSync();
+		writeFileSync(join(dir, "dup.json"), JSON.stringify({ label: "File Wins" }));
+		const resolver = createModeResolver(dir, {
+			extraModes: () => ({ id: "dup", label: "Extension Loses" }),
+		});
+		expect(resolver.resolve("dup").label).toBe("File Wins");
+	});
+
+	it("extends 链可混用文件与扩展 mode", () => {
+		const dir = mkdtempSync();
+		writeFileSync(join(dir, "base.json"), JSON.stringify({ extensions: ["file-ext"] }));
+		const resolver = createModeResolver(dir, {
+			extraModes: id => (id === "child" ? { id, extends: ["base"], extensions: ["ext-ext"] } : undefined),
+		});
+		const out = resolver.resolve("child");
+		expect(out.sources).toEqual(["base", "child"]);
+		expect(out.extensions).toEqual(["file-ext", "ext-ext"]); // 并集,拓扑序
+	});
+
+	it("纯扩展 mode 不因缺文件 mtime 而反复重建", () => {
+		let calls = 0;
+		const resolver = createModeResolver("/nonexistent/dir", {
+			extraModes: id => {
+				calls++;
+				return id === "ext" ? { id } : undefined;
+			},
+		});
+		resolver.resolve("ext");
+		const afterFirst = calls; // 存在性检查 + dfs 各一次
+		resolver.resolve("ext"); // 命中缓存,不重复调用 load
+		expect(calls).toBe(afterFirst);
+	});
+});
+
+function mkdtempSync(): string {
+	const dir = join(import.meta.dir, `.tmp-modes-${Math.random().toString(36).slice(2)}`);
+	mkdirSync(dir, { recursive: true });
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+	return dir;
+}

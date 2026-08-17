@@ -128,3 +128,53 @@ export function invalidateExtensionCaches(): void {
 	extensionLoadCache.clear();
 	compileCache.clear();
 }
+
+/** A preset declared by an extension (registerMode, modes v2 §5.5) in the
+ *  modes.list wire shape; `source: "extension"` distinguishes it from
+ *  file-based presets so the GUI can show the provider. */
+export interface ExtensionModeItem {
+	id: string;
+	builtin: false;
+	label?: string;
+	description?: string;
+	extends: [];
+	extensions?: string[];
+	hasPrompt: boolean;
+	promptComplete: boolean;
+	settingsKeys: string[];
+	source: "extension";
+}
+
+/**
+ * Collect presets declared by active extension-module entries (registerMode),
+ * for modes.list merging. Id collisions with file-based presets are resolved
+ * by the caller (file wins — user data layer beats extension code layer).
+ * Shares the 10s load-once cache with collectSlotComponents, so a repeated
+ * list call never re-runs extension factories.
+ */
+export async function collectExtensionModes(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<ExtensionModeItem[]> {
+	const out: ExtensionModeItem[] = [];
+	for (const entry of extensions) {
+		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const mode of extension.modes ?? []) {
+			out.push({
+				id: mode.id,
+				builtin: false,
+				label: mode.label,
+				description: mode.description,
+				extends: [],
+				extensions: mode.extensions,
+				hasPrompt: (mode.prompt?.length ?? 0) > 0,
+				promptComplete: mode.promptComplete === true,
+				settingsKeys: Object.keys(mode.settings ?? {}),
+				source: "extension",
+			});
+		}
+	}
+	return out;
+}

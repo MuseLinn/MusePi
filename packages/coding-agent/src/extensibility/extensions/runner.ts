@@ -23,8 +23,8 @@ import { type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { ManagedTimers } from "./managed-timers";
 import { loadExtensions } from "./loader";
+import { ManagedTimers } from "./managed-timers";
 import { createExtensionModelQuery } from "./model-api";
 import type {
 	AfterProviderResponseEvent,
@@ -75,6 +75,7 @@ import type {
 	UserBashEventResult,
 	UserPythonEvent,
 	UserPythonEventResult,
+	ExtensionModeDefinition,
 } from "./types";
 
 /** Combined result from all before_agent_start handlers */
@@ -459,6 +460,17 @@ export class ExtensionRunner {
 	#toolRegistrationScope = new AsyncLocalStorage<ToolRegistrationScope>();
 	#toolRegistrationBarrier: Promise<void> | undefined;
 	/**
+	 * Live `onToolRegistered` subscriptions, keyed by the raw listener so a
+	 * newly loaded extension (modes v2 `loadExtension` 启用方向) can have the
+	 * owning session's registration wiring attached after its factory already
+	 * ran (the factory executes inside {@link loadExtensions}, so the wrapped
+	 * listeners must be attached and re-fired manually for the new tools).
+	 */
+	#toolRegistrationSubscriptions = new Map<
+		(tool: RegisteredTool, signal?: AbortSignal) => void | Promise<void>,
+		Array<{ extension: Extension; listener: ToolRegistrationListener }>
+	>();
+	/**
 	 * Entry-file mtimes recorded when each extension instance was loaded,
 	 * keyed by resolved entry path (P5 HMR). The daemon's watcher compares
 	 * fresh stats against these to decide which loaded extensions changed
@@ -831,6 +843,18 @@ export class ExtensionRunner {
 		return this.extensions.map(e => e.path);
 	}
 
+	/** Presets declared by loaded extensions (registerMode, modes v2 §5.5),
+	 *  in load order. Consumed by the mode resolver's extraModes lookup so
+	 *  an extension-declared mode resolves like a file-based one (file wins
+	 *  on id collision — user data layer beats extension code layer). */
+	getExtensionModes(): Array<{ extensionId: string; mode: ExtensionModeDefinition }> {
+		const out: Array<{ extensionId: string; mode: ExtensionModeDefinition }> = [];
+		for (const extension of this.extensions) {
+			for (const mode of extension.modes) out.push({ extensionId: extension.resolvedPath, mode });
+		}
+		return out;
+	}
+
 	/** Get all registered tools from all extensions. */
 	getAllRegisteredTools(): RegisteredTool[] {
 		const tools: RegisteredTool[] = [];
@@ -849,6 +873,41 @@ export class ExtensionRunner {
 			if (tool) return tool;
 		}
 		return undefined;
+	}
+
+	/** Whether an extension with the given resolved path is currently loaded. */
+	isExtensionLoaded(entryPath: string): boolean {
+		const resolvedTarget = path.resolve(entryPath);
+		return this.extensions.some(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+	}
+
+	/** The loaded extension with the given resolved path, or undefined. */
+	getExtensionByPath(entryPath: string): Extension | undefined {
+		const resolvedTarget = path.resolve(entryPath);
+		return this.extensions.find(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+	}
+
+	/** Tool names registered by one loaded extension (modes v2 disable
+	 *  direction: the caller drops them from the session registry). */
+	getExtensionToolNames(entryPath: string): string[] {
+		const resolvedTarget = path.resolve(entryPath);
+		const extension = this.extensions.find(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+		return extension ? [...extension.tools.keys()] : [];
+	}
+
+	/** Re-fire registration listeners for one already-loaded extension (modes
+	 *  v2 re-enable direction: tools were dropped from the session registry
+	 *  by an earlier mode switch while the extension stayed loaded). Returns
+	 *  the tool names re-fired; a not-loaded path is a no-op. */
+	async activateExtensionTools(entryPath: string): Promise<string[]> {
+		const resolvedTarget = path.resolve(entryPath);
+		const extension = this.extensions.find(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
+		if (!extension) return [];
+		const names = [...extension.tools.keys()];
+		for (const name of names) {
+			for (const wrapped of extension.toolRegistrationListeners ?? []) wrapped(name);
+		}
+		return names;
 	}
 
 	/**
@@ -876,10 +935,7 @@ export class ExtensionRunner {
 	 *   do not hot-reload (Bun module cache: only the entry specifier is
 	 *   re-keyed) — touch the entry to pick up submodule changes.
 	 */
-	async reloadExtension(
-		entryPath: string,
-		cwd?: string,
-	): Promise<{ removedTools: string[]; errors: string[] }> {
+	async reloadExtension(entryPath: string, cwd?: string): Promise<{ removedTools: string[]; errors: string[] }> {
 		const resolvedTarget = path.resolve(entryPath);
 		const index = this.extensions.findIndex(ext => path.resolve(ext.resolvedPath) === resolvedTarget);
 		if (index === -1) {
@@ -914,59 +970,118 @@ export class ExtensionRunner {
 	 * Observe tools registered after extension factories have loaded. Listener
 	 * promises are drained before the lifecycle handler that registered them
 	 * completes, keeping the model tool snapshot and system prompt coherent.
+	 *
+	 * The raw listener is retained in {@link #toolRegistrationSubscriptions}
+	 * so extensions loaded later at runtime (modes v2 `loadExtension`) get the
+	 * same registration wiring attached after their factory has run.
 	 */
 	onToolRegistered(listener: (tool: RegisteredTool, signal?: AbortSignal) => void | Promise<void>): () => void {
-		const subscriptions: Array<{ extension: Extension; listener: ToolRegistrationListener }> = [];
+		// Record the subscription even when no extensions are loaded yet, so a
+		// later modes-v2 loadExtension can attach + re-fire for new entries.
+		if (!this.#toolRegistrationSubscriptions.has(listener)) {
+			this.#toolRegistrationSubscriptions.set(listener, []);
+		}
 		for (const extension of this.extensions) {
-			const trackRegistration = (pending: Promise<void>): void => {
-				const registrationBarrier = pending.then(
-					() => undefined,
-					() => undefined,
-				);
-				this.#toolRegistrationBarrier = registrationBarrier;
-				void registrationBarrier.then(() => {
-					if (this.#toolRegistrationBarrier === registrationBarrier) this.#toolRegistrationBarrier = undefined;
-				});
-				const scope = this.#toolRegistrationScope.getStore();
-				if (scope && !scope.closed) {
-					scope.pending.add(pending);
-					void pending.then(
-						() => scope.pending.delete(pending),
-						() => {},
-					);
-					return;
-				}
-				void pending.catch(error => {
-					this.emitError({
-						extensionPath: extension.path,
-						event: "tool_registration",
-						error: error instanceof Error ? error.message : String(error),
-						stack: error instanceof Error ? error.stack : undefined,
-					});
-				});
-			};
-			const wrapped: ToolRegistrationListener = toolName => {
-				const tool = extension.tools.get(toolName);
-				if (!tool) return;
-				try {
-					const scope = this.#toolRegistrationScope.getStore();
-					const registrationSignal =
-						scope && !scope.closed ? scope.signal : AbortSignal.timeout(extensionHandlerTimeoutMs);
-					const pending = listener(tool, registrationSignal);
-					if (pending) trackRegistration(pending);
-				} catch (error) {
-					trackRegistration(Promise.reject(error));
-				}
-			};
-			extension.toolRegistrationListeners ??= new Set();
-			extension.toolRegistrationListeners.add(wrapped);
-			subscriptions.push({ extension, listener: wrapped });
+			this.#attachToolRegistrationListener(extension, listener);
 		}
 		return () => {
+			const subscriptions = this.#toolRegistrationSubscriptions.get(listener) ?? [];
 			for (const subscription of subscriptions) {
 				subscription.extension.toolRegistrationListeners?.delete(subscription.listener);
 			}
+			this.#toolRegistrationSubscriptions.delete(listener);
 		};
+	}
+
+	/** Wrap one raw registration listener for one extension and attach it
+	 *  (P5/modes-v2 shared path). */
+	#attachToolRegistrationListener(
+		extension: Extension,
+		listener: (tool: RegisteredTool, signal?: AbortSignal) => void | Promise<void>,
+	): void {
+		const trackRegistration = (pending: Promise<void>): void => {
+			const registrationBarrier = pending.then(
+				() => undefined,
+				() => undefined,
+			);
+			this.#toolRegistrationBarrier = registrationBarrier;
+			void registrationBarrier.then(() => {
+				if (this.#toolRegistrationBarrier === registrationBarrier) this.#toolRegistrationBarrier = undefined;
+			});
+			const scope = this.#toolRegistrationScope.getStore();
+			if (scope && !scope.closed) {
+				scope.pending.add(pending);
+				void pending.then(
+					() => scope.pending.delete(pending),
+					() => {},
+				);
+				return;
+			}
+			void pending.catch(error => {
+				this.emitError({
+					extensionPath: extension.path,
+					event: "tool_registration",
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
+				});
+			});
+		};
+		const wrapped: ToolRegistrationListener = toolName => {
+			const tool = extension.tools.get(toolName);
+			if (!tool) return;
+			try {
+				const scope = this.#toolRegistrationScope.getStore();
+				const registrationSignal =
+					scope && !scope.closed ? scope.signal : AbortSignal.timeout(extensionHandlerTimeoutMs);
+				const pending = listener(tool, registrationSignal);
+				if (pending) trackRegistration(pending);
+			} catch (error) {
+				trackRegistration(Promise.reject(error));
+			}
+		};
+		extension.toolRegistrationListeners ??= new Set();
+		extension.toolRegistrationListeners.add(wrapped);
+		const subscriptions = this.#toolRegistrationSubscriptions.get(listener) ?? [];
+		subscriptions.push({ extension, listener: wrapped });
+		this.#toolRegistrationSubscriptions.set(listener, subscriptions);
+	}
+
+	/**
+	 * Load one not-yet-loaded extension at runtime (modes v2 启用方向).
+	 *
+	 * Idempotent: an entry whose resolved path is already in `extensions[]`
+	 * is a no-op (`addedTools: []`). The factory executes inside
+	 * {@link loadExtensions}, so after the load the extension is pushed with
+	 * every live `onToolRegistered` subscription attached and each registered
+	 * tool name is re-fired through them — the owning session's tool registry
+	 * picks the new tools up the same way an initial load does.
+	 *
+	 * Contract (docs/modes-plan.md §1.2 / §6.2):
+	 * - `addedTools` are the tool names the new module registered; the caller
+	 *   does not need to activate them (the re-fired listeners already do).
+	 * - A failed load returns `errors` and leaves `extensions[]` untouched.
+	 */
+	async loadExtension(entryPath: string, cwd?: string): Promise<{ addedTools: string[]; errors: string[] }> {
+		const resolvedTarget = path.resolve(entryPath);
+		if (this.extensions.some(ext => path.resolve(ext.resolvedPath) === resolvedTarget)) {
+			return { addedTools: [], errors: [] };
+		}
+		const loadResult = await loadExtensions([resolvedTarget], cwd ?? this.cwd);
+		const extension = loadResult.extensions[0];
+		if (!extension) {
+			return { addedTools: [], errors: loadResult.errors.map(e => e.error) };
+		}
+		for (const listener of this.#toolRegistrationSubscriptions.keys()) {
+			this.#attachToolRegistrationListener(extension, listener);
+		}
+		this.extensions.push(extension);
+		this.#recordExtensionEntryMtime(extension.resolvedPath);
+		const addedTools = [...extension.tools.keys()];
+		for (const name of addedTools) {
+			for (const wrapped of extension.toolRegistrationListeners ?? []) wrapped(name);
+		}
+		logger.info("Extension loaded at runtime", { extensionPath: extension.path, addedTools: addedTools.length });
+		return { addedTools, errors: loadResult.errors.map(e => e.error) };
 	}
 
 	async #flushToolRegistrations(pendingRegistrations: Set<Promise<void>>): Promise<void> {
