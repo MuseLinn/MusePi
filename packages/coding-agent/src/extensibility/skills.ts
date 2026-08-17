@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
-import { getProjectDir, prompt } from "@oh-my-pi/pi-utils";
+import { getProjectDir, prompt } from "@musepi/pi-utils";
 import {
 	isValidManagedSkillName,
 	MANAGED_SKILLS_PROVIDER_ID,
@@ -27,6 +27,11 @@ export interface Skill {
 	 * prompt's `<skills>` listing.
 	 */
 	hide?: boolean;
+	/**
+	 * Filesystem-resolved plugin root for Agent Plugin skills (spec §4.1):
+	 * every `skill://` resource access must realpath-resolve within it.
+	 */
+	containRoot?: string;
 	/** Source metadata for display */
 	_source?: SourceMeta;
 }
@@ -104,6 +109,7 @@ export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Prom
 			filePath: capSkill.path,
 			baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 			source: options.source,
+			...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 			hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 			_source: capSkill._source,
 		})),
@@ -239,6 +245,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 				filePath: capSkill.path,
 				baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 				source: `${capSkill._source.provider}:${capSkill.level}`,
+				...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 				hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 				_source: capSkill._source,
 			});
@@ -276,6 +283,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 					filePath: capSkill.path,
 					baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 					source: "custom:user",
+					...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 					hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 					_source: { ...capSkill._source, providerName: "Custom" },
 				},
@@ -302,6 +310,17 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 
 		const existing = skillMap.get(skill.name);
 		if (existing) {
+			// A skill name claimed by a DEFAULT-path provider (e.g.
+			// ~/.claude/skills/<name>) yields to the explicitly configured
+			// skills.customDirectories entry — the user's custom dir is the
+			// higher-priority source (issue #7190). Only same-source custom
+			// duplicates keep first-wins.
+			const isCustomExisting = existing.source.startsWith("custom:");
+			if (!isCustomExisting) {
+				skillMap.set(skill.name, skill);
+				realPathSet.add(resolvedPath);
+				continue;
+			}
 			collisionWarnings.push({
 				skillPath: skill.filePath,
 				message: `name collision: "${skill.name}" already loaded from ${existing.filePath}, skipping this one`,
@@ -365,6 +384,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 			filePath: capSkill.path,
 			baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 			source: `${capSkill._source.provider}:${capSkill.level}`,
+			...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 			hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 			_source: capSkill._source,
 		});

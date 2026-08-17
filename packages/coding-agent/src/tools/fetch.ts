@@ -2,11 +2,11 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import type { FetchImpl, ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { htmlToMarkdown } from "@oh-my-pi/pi-natives";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
-import { $which, ptree, truncate } from "@oh-my-pi/pi-utils";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
+import type { FetchImpl, ImageContent, TextContent } from "@musepi/pi-ai";
+import { htmlToMarkdown } from "@musepi/pi-natives";
+import { type Component, Text } from "@musepi/pi-tui";
+import { $which, ptree, truncate } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
 import { readEditableNotebookText } from "../edit/notebook";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -516,7 +516,7 @@ function cleanFeedText(text: string): string {
  * Parse RSS/Atom feed to markdown
  */
 async function parseFeedToMarkdown(content: string, maxItems = 10): Promise<string> {
-	const { parseHTML } = await import("linkedom");
+	const { parseHTML } = await import("@musepi/pi-utils/dom");
 	try {
 		const doc = parseHTML(content).document;
 

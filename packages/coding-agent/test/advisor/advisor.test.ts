@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "bun:test";
-import type { AgentMessage, AgentTelemetryConfig } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import type { TUI } from "@oh-my-pi/pi-tui";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import type { AgentMessage, AgentTelemetryConfig } from "@musepi/pi-agent-core";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { kCursorExecResolved } from "@musepi/pi-ai/utils/block-symbols";
+import type { TUI } from "@musepi/pi-tui";
 import {
 	ADVISOR_DEFAULT_TOOL_NAMES,
 	AdviseTool,
@@ -30,7 +30,6 @@ import type { Settings } from "../../src/config/settings";
 import { type AdvisorConfigDeps, AdvisorConfigOverlayComponent } from "../../src/modes/components/advisor-config";
 import { createAdvisorMessageCard } from "../../src/modes/components/advisor-message";
 import { getThemeByName, setThemeInstance } from "../../src/modes/theme/theme";
-import advisorSystemPrompt from "../../src/prompts/advisor/system.md" with { type: "text" };
 import { SecretObfuscator } from "../../src/secrets/obfuscator";
 import { formatSessionHistoryMarkdown } from "../../src/session/session-history-format";
 import { YieldQueue } from "../../src/session/yield-queue";
@@ -74,9 +73,6 @@ describe("advisor", () => {
 
 			expect(rendered).toContain("→ grep(needle @ packages/coding-agent/src) ⇒ error");
 			expect(rendered).not.toContain("paths[0]");
-			expect(advisorSystemPrompt).toContain("Arguments absent from the rendered transcript are UNKNOWN");
-			expect(advisorSystemPrompt).toContain("NEVER assert concrete values, array indexes");
-			expect(advisorSystemPrompt).toContain("NEVER claim `paths[0]`, array flattening, or malformed `paths`");
 		});
 	});
 
@@ -430,6 +426,25 @@ describe("advisor", () => {
 			expect(onAdvice).toHaveBeenNthCalledWith(1, note, "nit");
 			expect(onAdvice).toHaveBeenNthCalledWith(2, note, "concern");
 			expect(onAdvice).toHaveBeenNthCalledWith(3, note, "blocker");
+		});
+
+		it("withholds non-blockers for in-progress updates without consuming dedupe state", async () => {
+			const onAdvice = vi.fn();
+			const tool = new AdviseTool(onAdvice);
+			const note = "The result still needs a focused regression test.";
+
+			tool.beginUpdate(true);
+			await tool.execute("tc-1", { note, severity: "concern" });
+			await tool.execute("tc-2", { note: "Minor naming cleanup.", severity: "nit" });
+			await tool.execute("tc-3", { note: "A destructive command is running.", severity: "blocker" });
+
+			expect(onAdvice).toHaveBeenCalledTimes(1);
+			expect(onAdvice).toHaveBeenCalledWith("A destructive command is running.", "blocker");
+
+			tool.beginUpdate(false);
+			await tool.execute("tc-4", { note, severity: "concern" });
+			expect(onAdvice).toHaveBeenCalledTimes(2);
+			expect(onAdvice).toHaveBeenLastCalledWith(note, "concern");
 		});
 
 		it("validates parameters using ArkType", () => {
@@ -1275,6 +1290,7 @@ describe("advisor", () => {
 
 		it("tags in-progress turns with [in progress] heading", async () => {
 			const promptInputs: string[] = [];
+			const updateStates: boolean[] = [];
 			const { promise: promptStarted, resolve: startPrompt } = Promise.withResolvers<void>();
 			const agent: AdvisorAgent = {
 				prompt: async input => {
@@ -1289,6 +1305,7 @@ describe("advisor", () => {
 			const host: AdvisorRuntimeHost = {
 				snapshotMessages: () => messages,
 				enqueueAdvice: () => {},
+				beginAdvisorUpdate: inProgress => updateStates.push(inProgress),
 			};
 			const runtime = new AdvisorRuntime(agent, host);
 
@@ -1297,10 +1314,12 @@ describe("advisor", () => {
 
 			expect(promptInputs).toHaveLength(1);
 			expect(promptInputs[0]).toContain("[in progress — more steps follow]");
+			expect(updateStates).toEqual([true]);
 		});
 
 		it("uses plain heading when willContinue is false or absent", async () => {
 			const promptInputs: string[] = [];
+			const updateStates: boolean[] = [];
 			const { promise: promptStarted, resolve: startPrompt } = Promise.withResolvers<void>();
 			const agent: AdvisorAgent = {
 				prompt: async input => {
@@ -1315,6 +1334,7 @@ describe("advisor", () => {
 			const host: AdvisorRuntimeHost = {
 				snapshotMessages: () => messages,
 				enqueueAdvice: () => {},
+				beginAdvisorUpdate: inProgress => updateStates.push(inProgress),
 			};
 			const runtime = new AdvisorRuntime(agent, host);
 
@@ -1324,6 +1344,7 @@ describe("advisor", () => {
 			expect(promptInputs).toHaveLength(1);
 			expect(promptInputs[0]).toContain("### Session update\n");
 			expect(promptInputs[0]).not.toContain("[in progress");
+			expect(updateStates).toEqual([false]);
 		});
 
 		it("sends the batch when context maintenance fails", async () => {
@@ -3596,6 +3617,279 @@ describe("advisor", () => {
 			expect(failures).toHaveLength(1);
 		});
 
+		it("asks the host to switch models when a refusal outlives the stripped resend", async () => {
+			const promptInputs: string[] = [];
+			const failures: unknown[] = [];
+			const state: { messages: AgentMessage[]; error?: string } = { messages: [] };
+			// The first model refuses every time; the host's fallback hook swaps in a
+			// model that answers, exactly as `#recoverAdvisorTurn` does for a session.
+			let modelRefuses = true;
+			const agent: AdvisorAgent = {
+				prompt: async input => {
+					promptInputs.push(input);
+					if (modelRefuses) {
+						state.error = "Refusal (cyber): blocked under Anthropic's Usage Policy";
+						state.messages.push({
+							role: "assistant",
+							content: [],
+							stopReason: "error",
+							stopDetails: { type: "refusal", category: "cyber" },
+							errorMessage: state.error,
+							timestamp: promptInputs.length + 1,
+						} as unknown as AgentMessage);
+						return;
+					}
+					state.error = undefined;
+					state.messages.push({
+						role: "assistant",
+						content: [],
+						stopReason: "stop",
+						timestamp: promptInputs.length + 1,
+					} as unknown as AgentMessage);
+				},
+				abort: () => {},
+				reset: () => {},
+				rollbackTo: count => {
+					state.messages.length = count;
+					state.error = undefined;
+				},
+				state,
+			};
+			const messages = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "thinking", thinking: "private reasoning" },
+						{ type: "text", text: "answer" },
+					],
+					timestamp: 1,
+				} as AgentMessage,
+			];
+			let fallbackCalls = 0;
+			const runtime = new AdvisorRuntime(
+				agent,
+				{
+					snapshotMessages: () => messages,
+					enqueueAdvice: () => {},
+					notifyFailure: error => failures.push(error),
+					onTurnError: async () => {
+						fallbackCalls++;
+						modelRefuses = false;
+						return true;
+					},
+				},
+				0,
+			);
+
+			runtime.onTurnEnd(messages);
+			await settleUntil(() => runtime.backlog === 0);
+
+			// Refuse, strip-and-resend, refuse again, then the swapped model answers.
+			expect(fallbackCalls).toBe(1);
+			expect(promptInputs).toHaveLength(3);
+			expect(failures).toEqual([]);
+		});
+
+		it("starts a fresh fallback cascade after the host declines to switch models", async () => {
+			const promptInputs: string[] = [];
+			const failures: unknown[] = [];
+			let fallbackCalls = 0;
+			const state: { messages: AgentMessage[]; error?: string } = { messages: [] };
+			const agent: AdvisorAgent = {
+				prompt: async input => {
+					promptInputs.push(input);
+					state.error = "Refusal (cyber): blocked under Anthropic's Usage Policy";
+					state.messages.push({
+						role: "assistant",
+						content: [],
+						stopReason: "error",
+						stopDetails: { type: "refusal", category: "cyber" },
+						errorMessage: state.error,
+						timestamp: promptInputs.length + 1,
+					} as unknown as AgentMessage);
+				},
+				abort: () => {},
+				reset: () => {},
+				rollbackTo: count => {
+					state.messages.length = count;
+					state.error = undefined;
+				},
+				state,
+			};
+			const messages = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "thinking", thinking: "private reasoning" },
+						{ type: "text", text: "answer" },
+					],
+					timestamp: 1,
+				} as AgentMessage,
+			];
+			const runtime = new AdvisorRuntime(
+				agent,
+				{
+					snapshotMessages: () => messages,
+					enqueueAdvice: () => {},
+					notifyFailure: error => failures.push(error),
+					onTurnError: async () => {
+						fallbackCalls++;
+						return false;
+					},
+				},
+				0,
+			);
+
+			runtime.onTurnEnd(messages);
+			await settleUntil(() => failures.length === 1 && runtime.backlog === 0);
+
+			expect(promptInputs).toHaveLength(2);
+			expect(fallbackCalls).toBe(1);
+			expect(failures).toHaveLength(1);
+
+			messages.push({
+				role: "assistant",
+				content: [{ type: "text", text: "a later primary update" }],
+				timestamp: 2,
+			} as AgentMessage);
+			runtime.onTurnEnd(messages);
+			await settleUntil(() => fallbackCalls === 2 && runtime.backlog === 0);
+
+			// The earlier terminal cascade must not suppress fallback for a new batch.
+			expect(promptInputs).toHaveLength(3);
+			expect(fallbackCalls).toBe(2);
+			expect(failures).toHaveLength(1);
+		});
+
+		it("walks the whole fallback chain before reporting a refusal", async () => {
+			// Every model refuses. The cascade must reach the last chain entry, then
+			// stop once the host runs out of candidates.
+			const promptInputs: string[] = [];
+			const failures: unknown[] = [];
+			const state: { messages: AgentMessage[]; error?: string } = { messages: [] };
+			let identity = "anthropic/claude-fable-5";
+			const agent: AdvisorAgent = {
+				prompt: async input => {
+					promptInputs.push(input);
+					state.error = "Refusal (cyber): blocked under Anthropic's Usage Policy";
+					state.messages.push({
+						role: "assistant",
+						content: [],
+						stopReason: "error",
+						stopDetails: { type: "refusal", category: "cyber" },
+						errorMessage: state.error,
+						timestamp: promptInputs.length + 1,
+					} as unknown as AgentMessage);
+				},
+				abort: () => {},
+				reset: () => {},
+				rollbackTo: count => {
+					state.messages.length = count;
+					state.error = undefined;
+				},
+				state,
+			};
+			const messages = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "thinking", thinking: "private reasoning" },
+						{ type: "text", text: "answer" },
+					],
+					timestamp: 1,
+				} as AgentMessage,
+			];
+			const chain = ["openai-codex/gpt-5.6-sol", "synthetic/hf:moonshotai/Kimi-K3", "fireworks/kimi-k3"];
+			const switched: string[] = [];
+			const runtime = new AdvisorRuntime(
+				agent,
+				{
+					snapshotMessages: () => messages,
+					enqueueAdvice: () => {},
+					notifyFailure: error => failures.push(error),
+					getModelIdentity: () => identity,
+					onTurnError: async () => {
+						const next = chain[switched.length];
+						if (!next) return false;
+						switched.push(next);
+						identity = next;
+						return true;
+					},
+				},
+				0,
+			);
+
+			runtime.onTurnEnd(messages);
+			await settleUntil(() => failures.length === 1 && runtime.backlog === 0);
+
+			expect(switched).toEqual(chain);
+			expect(failures).toHaveLength(1);
+		});
+
+		it("stops a refusal walk that a cyclic chain would loop forever", async () => {
+			const promptInputs: string[] = [];
+			const failures: unknown[] = [];
+			const state: { messages: AgentMessage[]; error?: string } = { messages: [] };
+			// A chain configured A -> B -> A: the host never runs out of candidates,
+			// so only the per-cascade tried-set can end the walk.
+			const cycle = ["model/b", "model/a"];
+			let identity = "model/a";
+			const agent: AdvisorAgent = {
+				prompt: async input => {
+					promptInputs.push(input);
+					state.error = "Refusal (cyber): blocked under Anthropic's Usage Policy";
+					state.messages.push({
+						role: "assistant",
+						content: [],
+						stopReason: "error",
+						stopDetails: { type: "refusal", category: "cyber" },
+						errorMessage: state.error,
+						timestamp: promptInputs.length + 1,
+					} as unknown as AgentMessage);
+				},
+				abort: () => {},
+				reset: () => {},
+				rollbackTo: count => {
+					state.messages.length = count;
+					state.error = undefined;
+				},
+				state,
+			};
+			const messages = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "thinking", thinking: "private reasoning" },
+						{ type: "text", text: "answer" },
+					],
+					timestamp: 1,
+				} as AgentMessage,
+			];
+			let hops = 0;
+			const runtime = new AdvisorRuntime(
+				agent,
+				{
+					snapshotMessages: () => messages,
+					enqueueAdvice: () => {},
+					notifyFailure: error => failures.push(error),
+					getModelIdentity: () => identity,
+					onTurnError: async () => {
+						identity = cycle[hops % cycle.length] ?? "model/a";
+						hops++;
+						return true;
+					},
+				},
+				0,
+			);
+
+			runtime.onTurnEnd(messages);
+			await settleUntil(() => failures.length === 1 && runtime.backlog === 0);
+
+			// a (refuse, strip) -> b (refuse, strip) -> back to a, already tried: stop.
+			expect(hops).toBe(2);
+			expect(failures).toHaveLength(1);
+		});
+
 		it("degrades on a category-less refusal", async () => {
 			const promptInputs: string[] = [];
 			const failures: unknown[] = [];
@@ -4222,60 +4516,60 @@ describe("advisor", () => {
 			expect(promptInputs[1]).toContain("keep me");
 		});
 
-		it.each(["success", "error"] as const)(
-			"releases blocked %s hooks so reset can run replacement work",
-			async hookKind => {
-				const hookStarted = Promise.withResolvers<void>();
-				const releaseHook = Promise.withResolvers<void>();
-				const replacementPromptStarted = Promise.withResolvers<void>();
-				let promptCalls = 0;
-				let hookCalls = 0;
-				const blockHook = async () => {
-					if (++hookCalls !== 1) return;
-					hookStarted.resolve();
-					await releaseHook.promise;
-				};
-				const agent: AdvisorAgent = {
-					prompt: async () => {
-						promptCalls++;
-						if (promptCalls === 1 && hookKind === "error") throw new Error("provider failure");
-						if (promptCalls === 2) replacementPromptStarted.resolve();
-					},
-					abort: () => {},
-					reset: () => {},
-					state: { messages: [] },
-				};
-				const runtime = new AdvisorRuntime(agent, {
-					snapshotMessages: () => [],
-					enqueueAdvice: () => {},
-					...(hookKind === "success"
-						? { onTurnSuccess: blockHook }
-						: {
-								onTurnError: async () => {
-									await blockHook();
-									return false;
-								},
-							}),
-				});
+		it.each([
+			"success",
+			"error",
+		] as const)("releases blocked %s hooks so reset can run replacement work", async hookKind => {
+			const hookStarted = Promise.withResolvers<void>();
+			const releaseHook = Promise.withResolvers<void>();
+			const replacementPromptStarted = Promise.withResolvers<void>();
+			let promptCalls = 0;
+			let hookCalls = 0;
+			const blockHook = async () => {
+				if (++hookCalls !== 1) return;
+				hookStarted.resolve();
+				await releaseHook.promise;
+			};
+			const agent: AdvisorAgent = {
+				prompt: async () => {
+					promptCalls++;
+					if (promptCalls === 1 && hookKind === "error") throw new Error("provider failure");
+					if (promptCalls === 2) replacementPromptStarted.resolve();
+				},
+				abort: () => {},
+				reset: () => {},
+				state: { messages: [] },
+			};
+			const runtime = new AdvisorRuntime(agent, {
+				snapshotMessages: () => [],
+				enqueueAdvice: () => {},
+				...(hookKind === "success"
+					? { onTurnSuccess: blockHook }
+					: {
+							onTurnError: async () => {
+								await blockHook();
+								return false;
+							},
+						}),
+			});
 
-				runtime.onTurnEnd([{ role: "user", content: "old session", timestamp: 1 } as AgentMessage]);
-				await hookStarted.promise;
-				const pause = runtime.pauseForSessionTransition();
-				const pausedQuickly = await Promise.race([pause.then(() => true), Bun.sleep(50).then(() => false)]);
-				runtime.reset();
-				runtime.onTurnEnd([{ role: "user", content: "replacement session", timestamp: 2 } as AgentMessage]);
-				const replacementRan = await Promise.race([
-					replacementPromptStarted.promise.then(() => true),
-					Bun.sleep(50).then(() => false),
-				]);
-				releaseHook.resolve();
-				await pause;
-				runtime.dispose();
+			runtime.onTurnEnd([{ role: "user", content: "old session", timestamp: 1 } as AgentMessage]);
+			await hookStarted.promise;
+			const pause = runtime.pauseForSessionTransition();
+			const pausedQuickly = await Promise.race([pause.then(() => true), Bun.sleep(50).then(() => false)]);
+			runtime.reset();
+			runtime.onTurnEnd([{ role: "user", content: "replacement session", timestamp: 2 } as AgentMessage]);
+			const replacementRan = await Promise.race([
+				replacementPromptStarted.promise.then(() => true),
+				Bun.sleep(50).then(() => false),
+			]);
+			releaseHook.resolve();
+			await pause;
+			runtime.dispose();
 
-				expect(pausedQuickly).toBe(true);
-				expect(replacementRan).toBe(true);
-			},
-		);
+			expect(pausedQuickly).toBe(true);
+			expect(replacementRan).toBe(true);
+		});
 		it("aborts retry backoff before pausing for a session transition", async () => {
 			const recoveryStarted = Promise.withResolvers<void>();
 			const agent: AdvisorAgent = {

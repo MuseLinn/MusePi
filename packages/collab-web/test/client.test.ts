@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
+import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 import type {
 	AgentSnapshot,
 	AssistantMessage,
@@ -9,9 +10,8 @@ import type {
 	SessionState,
 	SubagentProgressPayload,
 	WireMessage,
-} from "@oh-my-pi/pi-wire";
+} from "@musepi/pi-wire";
 import { GuestClient } from "../src/lib/client";
-import { COLLAB_PROTO, encodeBase64Url } from "../src/lib/link";
 import { CollabSocket } from "../src/lib/socket";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
@@ -191,6 +191,34 @@ describe("GuestClient frame apply", () => {
 		expect(client.getSnapshot().working).toBe(true);
 		client.applyFrameForTest({ t: "state", state: { ...STATE, isStreaming: false } });
 		expect(client.getSnapshot().working).toBe(false);
+	});
+	it("a state frame recovers a stuck-idle guest when agent_start was dropped", () => {
+		// The host begins streaming mid-turn, but the matching `agent_start`
+		// never arrived (e.g. dropped on a reconnect). Before the fix nothing
+		// set `working` true except `agent_start`, so the guest stayed idle.
+		const client = liveClient();
+		expect(client.getSnapshot().working).toBe(false);
+		client.applyFrameForTest({ t: "state", state: { ...STATE, isStreaming: true } });
+		expect(client.getSnapshot().working).toBe(true);
+	});
+
+	it("an idle state frame clears a pinned tool card when tool_execution_end was dropped", () => {
+		// Host reports idle, but the matching `tool_execution_end` was dropped,
+		// leaving a stuck tool card. The authoritative idle signal must clear it.
+		const client = liveClient();
+		client.applyFrameForTest({
+			t: "event",
+			event: {
+				type: "tool_execution_start",
+				toolCallId: "tc1",
+				toolName: "bash",
+				args: { command: "ls" },
+				intent: "Listing",
+			},
+		});
+		expect(client.getSnapshot().activeTools.size).toBe(1);
+		client.applyFrameForTest({ t: "state", state: { ...STATE, isStreaming: false } });
+		expect(client.getSnapshot().activeTools.size).toBe(0);
 	});
 
 	it("bus progress frames update the progress map", () => {

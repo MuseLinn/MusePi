@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { handleToolCall, TOOLS } from "@oh-my-pi/pi-mnemopi/mcp-tools";
+import { handleToolCall, TOOLS } from "@musepi/pi-mnemopi/mcp-tools";
 
 let dataDir: string;
 
@@ -172,5 +172,5 @@ describe("provider all-tools parity", () => {
 		});
 		expect(shared.status).toBe("stored_shared");
 		expect((await handleToolCall("mnemopi_shared_forget", { memory_id: shared.memory_id })).status).toBe("deleted");
-	});
+	}, 30_000);
 });

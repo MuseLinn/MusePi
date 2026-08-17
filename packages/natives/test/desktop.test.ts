@@ -1,67 +1,100 @@
 import { describe, expect, it } from "bun:test";
+import { createDesktopSession } from "../native/desktop.js";
 import { DesktopSession } from "../native/index.js";
 
-const optInCaptureTest = Bun.env.OMP_NATIVE_DESKTOP_CAPTURE_TEST === "1" ? it : it.skip;
+const ERROR_CODE_PREFIX = /^([A-Z][A-Za-z]+): /;
+const PERMISSION_STATES = ["granted", "denied", "unknown", "unavailable"];
+const BACKENDS = ["quartz", "x11", "wayland", "win32", "unavailable"];
+
+async function expectRejectionCode(operation: () => Promise<unknown>, acceptedCodes: readonly string[]): Promise<void> {
+	const fulfilled = Symbol("fulfilled");
+	let rejection: unknown = fulfilled;
+
+	try {
+		await operation();
+	} catch (error) {
+		rejection = error;
+	}
+
+	if (rejection === fulfilled) {
+		throw new Error(`expected rejection with one of: ${acceptedCodes.join(", ")}`);
+	}
+	if (!(rejection instanceof Error)) {
+		throw new Error("expected native rejection to be an Error");
+	}
+
+	expect(rejection.message).toMatch(ERROR_CODE_PREFIX);
+	const match = ERROR_CODE_PREFIX.exec(rejection.message);
+	if (match === null) {
+		throw new Error(`native rejection lacks a CODE prefix: ${rejection.message}`);
+	}
+	expect(acceptedCodes).toContain(match[1]);
+}
 
 describe("DesktopSession", () => {
-	it("exports DesktopSession from the packaged native addon", () => {
-		expect(typeof DesktopSession).toBe("function");
-	});
-
-	it("reports native capability state and closes idempotently without input", async () => {
-		const session = new DesktopSession({
-			backend: "native",
-			display: "all",
-			maxWidth: 1920,
-			maxHeight: 1200,
-		});
-		const capabilities = session.capabilities;
-		expect(["quartz", "x11", "wayland", "win32", "unavailable"]).toContain(capabilities.backend);
-		expect(["granted", "denied", "unknown", "unavailable"]).toContain(capabilities.capturePermission);
-		expect(["granted", "denied", "unknown", "unavailable"]).toContain(capabilities.inputPermission);
-		expect(typeof capabilities.capture).toBe("boolean");
-		expect(typeof capabilities.input).toBe("boolean");
-
-		await session.close();
-		await session.close();
-		await expect(session.capture()).rejects.toThrow("DESKTOP_SESSION_CLOSED");
-	});
-
-	it("rejects malformed GA actions before emitting native input", async () => {
-		const session = new DesktopSession({ backend: "auto" });
+	it("constructs through the factory and reports the complete capability shape", async () => {
+		const session = createDesktopSession({ display: "all" });
 		try {
-			expect(() => session.execute([{ type: "scroll", x: 10, y: 20, scroll_x: 0 }])).toThrow(
-				"DESKTOP_INVALID_ACTION",
+			expect(session).toBeInstanceOf(DesktopSession);
+
+			const capabilities = session.capabilities;
+			expect(BACKENDS).toContain(capabilities.backend);
+			// displayServer is optional (`displayServer?: string`): napi omits the
+			// key entirely when the backend reports None (headless CI).
+			expect(["string", "undefined"]).toContain(typeof capabilities.displayServer);
+			expect(typeof capabilities.capture).toBe("boolean");
+			expect(typeof capabilities.input).toBe("boolean");
+			expect(typeof capabilities.ax).toBe("boolean");
+			expect(typeof capabilities.backgroundWindowInput).toBe("boolean");
+			expect(Array.isArray(capabilities.deliveryModes)).toBe(true);
+			for (const mode of capabilities.deliveryModes) {
+				expect(typeof mode).toBe("string");
+			}
+			expect(PERMISSION_STATES).toContain(capabilities.capturePermission);
+			expect(PERMISSION_STATES).toContain(capabilities.inputPermission);
+			expect(PERMISSION_STATES).toContain(capabilities.axPermission);
+			expect(typeof capabilities.displayCount).toBe("number");
+		} finally {
+			await session.close();
+		}
+	});
+
+	it("rejects a nonexistent capture target with a documented native code", async () => {
+		const session = new DesktopSession({ display: "all" });
+		try {
+			await expectRejectionCode(
+				() => session.capture("no-such-window-id-999999"),
+				["WindowNotFound", "InvalidTarget", "CaptureFailed", "PermissionDenied"],
 			);
-			expect(() => session.execute([{ type: "screenshot", text: "unexpected" }])).toThrow("DESKTOP_INVALID_ACTION");
 		} finally {
 			await session.close();
 		}
 	});
 
-	optInCaptureTest("captures a real PNG with monitor geometry when display access exists", async () => {
-		const session = new DesktopSession({ backend: "native", display: "all", maxWidth: 1920, maxHeight: 1200 });
+	it("rejects coordinate input before capture", async () => {
+		const session = new DesktopSession({ display: "all" });
 		try {
-			const capture = await session.capture();
-			expect(Array.from(capture.data.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-			expect(capture.width).toBeGreaterThan(0);
-			expect(capture.height).toBeGreaterThan(0);
-			if (process.platform === "linux") {
-				expect(session.capabilities.inputPermission).toBe("unknown");
-				const waited = await session.execute([{ type: "wait" }]);
-				expect(waited.width).toBeGreaterThan(0);
-				expect(session.capabilities.inputPermission).toBe("unknown");
-			}
-			expect(capture.displays.length).toBeGreaterThan(0);
-			for (const display of capture.displays) {
-				expect(display.width).toBeGreaterThan(0);
-				expect(display.height).toBeGreaterThan(0);
-				expect(display.scale).toBeGreaterThan(0);
-				expect(display.pixelWidth).toBeGreaterThan(0);
-				expect(display.pixelHeight).toBeGreaterThan(0);
-			}
+			await expectRejectionCode(
+				() => session.click("desktop", 1, 1),
+				["InvalidCoordinateFrame", "PermissionDenied"],
+			);
 		} finally {
 			await session.close();
 		}
+	});
+
+	it("closes idempotently", async () => {
+		const session = new DesktopSession({ display: "all" });
+		await session.close();
+		await session.close();
+	});
+
+	it("rejects calls after close with Closed", async () => {
+		const session = new DesktopSession({ display: "all" });
+		await session.close();
+
+		await expectRejectionCode(() => session.capture("desktop"), ["Closed"]);
+		await expectRejectionCode(() => session.listWindows(), ["Closed"]);
+		await expectRejectionCode(() => session.click("desktop", 1, 1), ["Closed"]);
 	});
 });

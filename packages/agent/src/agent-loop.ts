@@ -22,16 +22,16 @@ import {
 	type TSchema,
 	toolWireSchema,
 	validateToolArguments,
-} from "@oh-my-pi/pi-ai";
+} from "@musepi/pi-ai";
 import {
 	type Dialect,
 	encodeInbandToolHistory,
 	renderInbandToolPrompt,
 	renderToolExamples,
 	wrapInbandToolStream,
-} from "@oh-my-pi/pi-ai/dialect";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
+} from "@musepi/pi-ai/dialect";
+import * as AIError from "@musepi/pi-ai/error";
+import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@musepi/pi-ai/utils/block-symbols";
 import {
 	createHarmonyAuditEvent,
 	detectHarmonyLeakInAssistantMessage,
@@ -41,10 +41,9 @@ import {
 	isHarmonyLeakMitigationTarget,
 	recoverHarmonyToolCall,
 	signalListLabel,
-} from "@oh-my-pi/pi-ai/utils/harmony-leak";
-import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
-import { logger, sanitizeText, structuredCloneJSON } from "@oh-my-pi/pi-utils";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+} from "@musepi/pi-ai/utils/harmony-leak";
+import { logger, sanitizeText, structuredCloneJSON } from "@musepi/pi-utils";
+import { INTENT_FIELD } from "@musepi/pi-wire";
 import { agentPauseGate } from "./pause";
 import { type AgentRunCoverage, type AgentRunSummary, ToolCallBlockedError } from "./run-collector";
 import {
@@ -75,12 +74,13 @@ import type {
 	AgentTurnEndContext,
 	AsideMessage,
 	BeforeToolCallResult,
+	CommittableAsideMessage,
 	SoftToolRequirement,
 	SteeringInterruptSource,
 	SteeringQueueState,
 	StreamFn,
 } from "./types";
-import { isSoftToolRequirement } from "./types";
+import { ASIDE_MESSAGE_COMMIT, ASIDE_MESSAGE_DISCARD, isSoftToolRequirement } from "./types";
 import { yieldIfDue } from "./utils/yield";
 
 /** Stop-details marker for a provider error after assistant content/tool args already streamed. */
@@ -528,6 +528,9 @@ export function agentLoop(
 			...context,
 			messages: [...context.messages, ...prompts],
 		};
+		for (const prompt of prompts) {
+			(prompt as CommittableAsideMessage)[ASIDE_MESSAGE_COMMIT]?.();
+		}
 
 		stream.push({ type: "agent_start" });
 
@@ -829,13 +832,16 @@ function injectIntentIntoSchema(
 	};
 }
 
-export function normalizeTools(
-	tools: AgentContext["tools"],
-	injectIntent: boolean,
-	exampleDialect?: Dialect,
-	pruneDescriptions = false,
-): Context["tools"] {
-	injectIntent = injectIntent && Bun.env.PI_NO_INTENT !== "1";
+export interface NormalizeToolsOptions {
+	/** Inject the `i` intent field into tool schemas (subject to `PI_NO_INTENT`). */
+	injectIntent: boolean;
+	/** Strip descriptions from the wire specs when the catalog rides in the system prompt. */
+	pruneDescriptions?: boolean;
+}
+
+export function normalizeTools(tools: AgentContext["tools"], options: NormalizeToolsOptions): Context["tools"] {
+	const pruneDescriptions = options.pruneDescriptions === true;
+	const injectIntent = options.injectIntent && Bun.env.PI_NO_INTENT !== "1";
 	return tools?.map(t => {
 		const intentMode = resolveIntentMode(t.intent);
 		const doInjectIntent = injectIntent && intentMode !== "omit";
@@ -853,9 +859,7 @@ export function normalizeTools(
 		let parameters = toolWireSchema(t) as TSchema;
 		if (doInjectIntent) parameters = injectIntentIntoSchema(parameters, intentMode) as TSchema;
 		const description = t.description ?? "";
-		const examplesBlock = exampleDialect
-			? renderToolExamples({ ...t, parameters }, exampleDialect, doInjectIntent ? INTENT_FIELD : undefined)
-			: "";
+		const examplesBlock = renderToolExamples({ ...t, parameters }, doInjectIntent ? INTENT_FIELD : undefined);
 		const finalDescription = examplesBlock ? `${description}\n\n${examplesBlock}` : description;
 		return { ...t, parameters, description: finalDescription };
 	});
@@ -952,11 +956,22 @@ function emitInputMessages(stream: EventStream<AgentEvent, AgentMessage[]>, mess
 function resolveAsides(entries: AsideMessage[] | undefined): AgentMessage[] {
 	if (!entries || entries.length === 0) return [];
 	const out: AgentMessage[] = [];
-	for (const entry of entries) {
-		const message = typeof entry === "function" ? entry() : entry;
-		if (message) out.push(message);
+	try {
+		for (const entry of entries) {
+			const message = typeof entry === "function" ? entry() : entry;
+			if (message) out.push(message);
+		}
+	} catch (error) {
+		discardAsides(out, error instanceof Error ? error : new Error(String(error)));
+		throw error;
 	}
 	return out;
+}
+
+function discardAsides(messages: readonly AgentMessage[], error: Error): void {
+	for (const message of messages) {
+		(message as CommittableAsideMessage)[ASIDE_MESSAGE_DISCARD]?.(error);
+	}
 }
 
 async function runLoopBody(
@@ -988,7 +1003,12 @@ async function runLoopBody(
 
 	const softRequirementState = config.softToolRequirementState ?? { escalations: 0 };
 	let preserveSoftRequirementState = false;
+	// Freeze gate for this run: the config's per-scope gate when the host
+	// provides one (GUI daemon sessions), else the process-global TUI /pause
+	// gate. Consulted at both action boundaries below.
+	const pauseGate = config.pauseGate ?? agentPauseGate;
 
+	let pendingMessages: AgentMessage[] = [];
 	try {
 		let messagesToEmit = [...initialMessages];
 		if (isDeadlineExceeded(config.deadline)) {
@@ -999,9 +1019,8 @@ async function runLoopBody(
 		// Check for steering messages at start (user may have typed while waiting).
 		// Skip when the run is already externally aborted — dequeuing would strand
 		// the messages in a run that is about to die.
-		let pendingMessages: AgentMessage[];
 		try {
-			pendingMessages = signal?.aborted ? [] : (await config.getSteeringMessages?.()) || [];
+			pendingMessages = signal?.aborted ? [] : (await config.getSteeringMessages?.(signal)) || [];
 		} catch (error) {
 			stream.push({ type: "turn_start" });
 			emitInputMessages(stream, messagesToEmit);
@@ -1036,10 +1055,15 @@ async function runLoopBody(
 				// Yield at the top of each iteration to prevent busy-wait when
 				// the agent loop is executing tool calls back-to-back.
 				await yieldIfDue();
-				// Park at the turn boundary while the process-wide pause gate is
-				// engaged (host /pause). An external abort releases the park so a
-				// cancelled run still unwinds while everything else stays frozen.
+				// Park at the turn boundary while ANY freeze gate is engaged.
+				// The process-global gate (TUI /pause, GUI global pause) is
+				// checked first, then this run's scope gate (GUI per-session
+				// pause) — the two are orthogonal: releasing the global pause
+				// must not release a session that is itself paused, and vice
+				// versa. An external abort releases the park so a cancelled
+				// run still unwinds while everything else stays frozen.
 				if (agentPauseGate.paused) await agentPauseGate.waitUntilResumed(signal);
+				if (pauseGate.paused) await pauseGate.waitUntilResumed(signal);
 
 				// Build the provider-bound context before opening the turn. Queue
 				// messages are added now but their events remain deferred until
@@ -1051,6 +1075,7 @@ async function runLoopBody(
 						currentContext.messages.push(message);
 						newMessages.push(message);
 						turnMessages.push(message);
+						(message as CommittableAsideMessage)[ASIDE_MESSAGE_COMMIT]?.();
 					}
 					pendingMessages = [];
 				}
@@ -1059,7 +1084,7 @@ async function runLoopBody(
 				let gateResult: AgentPreModelCallResult;
 				try {
 					if (config.syncContextBeforeModelCall) {
-						await config.syncContextBeforeModelCall(currentContext);
+						await config.syncContextBeforeModelCall(currentContext, signal);
 					}
 
 					if (!directiveResolvedForTurn) {
@@ -1405,7 +1430,7 @@ async function runLoopBody(
 				// instantly aborts — message lands in history, agent never responds. The
 				// mid-batch interrupt poll only peeks (hasSteeringMessages), so the queue
 				// still owns every message until this dequeue.
-				const steering = signal?.aborted ? [] : (await config.getSteeringMessages?.()) || [];
+				const steering = signal?.aborted ? [] : (await config.getSteeringMessages?.(signal)) || [];
 				if (hasMoreToolCalls) {
 					// Mid-work: fold any non-interrupting asides into the next turn alongside steering.
 					const asides = signal?.aborted ? [] : resolveAsides(await config.getAsideMessages?.());
@@ -1434,9 +1459,9 @@ async function runLoopBody(
 			// Re-poll steering too: a steer can land between the stop-boundary dequeue
 			// above and this yield point (e.g. queued while onBeforeYield ran). Without
 			// this poll it would strand in the queue until the next manual prompt.
-			const lateSteering = signal?.aborted ? [] : (await config.getSteeringMessages?.()) || [];
+			const lateSteering = signal?.aborted ? [] : (await config.getSteeringMessages?.(signal)) || [];
 			const asideMessages = signal?.aborted ? [] : resolveAsides(await config.getAsideMessages?.());
-			const followUpMessages = signal?.aborted ? [] : (await config.getFollowUpMessages?.()) || [];
+			const followUpMessages = signal?.aborted ? [] : (await config.getFollowUpMessages?.(signal)) || [];
 			if (lateSteering.length > 0 || asideMessages.length > 0 || followUpMessages.length > 0) {
 				// Set as pending so the inner loop processes them before stopping.
 				pendingMessages = [...lateSteering, ...asideMessages, ...followUpMessages];
@@ -1449,6 +1474,7 @@ async function runLoopBody(
 
 		endAgentStream(stream, newMessages, telemetry, stepCounter.count);
 	} finally {
+		discardAsides(pendingMessages, new Error("Aside message was not committed before the agent loop ended"));
 		if (!preserveSoftRequirementState) {
 			softRequirementState.id = undefined;
 			softRequirementState.forcedToolChoice = undefined;
@@ -1498,21 +1524,22 @@ async function prepareProviderCall(
 	const llmMessages = await config.convertToLlm(messages);
 	const normalizedMessages = normalizeMessagesForProvider(llmMessages, model);
 	const ownedDialect: Dialect | undefined = config.dialect ?? resolveOwnedDialectFromEnv(Bun.env.PI_DIALECT);
-	const exampleDialect = ownedDialect ?? preferredDialect(model.id);
 	const pruneToolDescriptions = !!config.pruneToolDescriptions && !ownedDialect;
 	let llmContext: Context;
 	if (config.appendOnlyContext) {
 		config.appendOnlyContext.syncMessages(normalizedMessages);
 		llmContext = config.appendOnlyContext.build(context, {
 			intentTracing: !!config.intentTracing,
-			exampleDialect,
 			pruneToolDescriptions,
 		});
 	} else {
 		llmContext = {
 			systemPrompt: context.systemPrompt,
 			messages: normalizedMessages,
-			tools: normalizeTools(context.tools, !!config.intentTracing, exampleDialect, pruneToolDescriptions),
+			tools: normalizeTools(context.tools, {
+				injectIntent: !!config.intentTracing,
+				pruneDescriptions: pruneToolDescriptions,
+			}),
 		};
 	}
 	if (config.transformProviderContext) {
@@ -1928,8 +1955,10 @@ function recoverTransientErrorToolTurn(
 		if (tool.customWireName !== undefined) availableToolNames.add(tool.customWireName);
 	}
 	if (!toolCalls.every(toolCall => availableToolNames.has(toolCall.name))) return message;
+	const errorText = `${message.errorMessage ?? ""}\n${message.stopDetails?.explanation ?? ""}`;
 	if (
-		!AIError.isStreamReadErrorText(`${message.errorMessage ?? ""}\n${message.stopDetails?.explanation ?? ""}`) &&
+		!AIError.isStreamReadErrorText(errorText) &&
+		!AIError.isStreamEnvelopeErrorText(errorText) &&
 		!AIError.isTransientStreamParseError(message.errorMessage) &&
 		!AIError.isTransientStreamParseError(message.stopDetails?.explanation)
 	)
@@ -2216,6 +2245,8 @@ async function executeToolCalls(
 		resolveFallbackTool,
 		afterToolCall,
 	} = config;
+	// Freeze gate for this run (config's per-scope gate, else the global one).
+	const pauseGate = config.pauseGate ?? agentPauseGate;
 	type ToolCallContent = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 	// Defensive: the outer loop already filters exec-resolved blocks before
 	// deciding to invoke `executeToolCalls`, but skip them here too so the
@@ -2390,7 +2421,16 @@ async function executeToolCalls(
 	};
 
 	const runTool = async (record: (typeof records)[number], index: number): Promise<void> => {
-		if (interruptState.triggered) {
+		// A pending interrupt preempts not-yet-started tools so the message
+		// injects promptly. A peer-IRC interrupt is the exception: it aborts
+		// interruptible waits only and leaves non-interruptible foreground work
+		// untouched (see the emit branch below and the `does not abort a
+		// non-interruptible foreground tool` case). That guarantee must hold for
+		// work still queued behind the aborted wait too — otherwise a batched
+		// `todo`/`write` gets dropped as "Skipped due to pending peer interrupt"
+		// purely for being ordered after the wait (#7493). User/system steering
+		// still preempts everything queued.
+		if (interruptState.triggered && (record.interruptible || interruptState.source !== "irc")) {
 			// Skip both span emission and the collector orphan record here. The
 			// tail sweep below (after `Promise.allSettled`) is the single path
 			// that handles "no result message was produced" — it calls
@@ -2399,10 +2439,13 @@ async function executeToolCalls(
 			record.skipped = true;
 			return;
 		}
-		// Park before starting this tool while the process-wide pause gate is
-		// engaged. Tools already executing are unaffected (pausing never aborts);
-		// a batch interrupted mid-pause unwinds via the signal checks below.
+		// Park before starting this tool while ANY freeze gate is engaged
+		// (process-global first, then this run's scope gate — orthogonal, see
+		// the turn-boundary site). Tools already executing are unaffected
+		// (pausing never aborts); a batch interrupted mid-pause unwinds via
+		// the signal checks below.
 		if (agentPauseGate.paused) await agentPauseGate.waitUntilResumed(record.signal);
+		if (pauseGate.paused) await pauseGate.waitUntilResumed(record.signal);
 
 		const { toolCall, tool } = record;
 		// Validation (and the beforeToolCall hook) ran in the prepare phase; a
@@ -2454,6 +2497,7 @@ async function executeToolCalls(
 		let isError = false;
 		let caughtError: unknown;
 		let completedToolExecution = false;
+		let executionStarted = false;
 
 		await runInActiveSpan(toolSpan, async () => {
 			try {
@@ -2487,6 +2531,7 @@ async function executeToolCalls(
 							providerMetadata: toolCall.providerMetadata,
 						})
 					: undefined;
+				executionStarted = true;
 				const rawResult = await tool.execute(
 					toolCall.id,
 					executionArgs,
@@ -2557,12 +2602,12 @@ async function executeToolCalls(
 		const interrupted = interruptState.triggered;
 		const perToolAborted = record.signal.aborted;
 		const abortedDuringExecution = perToolAborted && isError && !completedToolExecution;
-		if (interrupted && perToolAborted && isError && !completedToolExecution) {
-			// This tool's own signal fired AND it failed to produce a result: `tool.execute()`
-			// never returned (it threw on the abort), so it was genuinely cut off before
-			// producing usable output. Report it as skipped.
+		if (interrupted && abortedDuringExecution) {
+			// This tool's own signal fired AND it failed to produce a result. The
+			// execution may already have performed partial work before throwing on
+			// abort, so preserve that distinction in the placeholder metadata.
 			record.skipped = true;
-			emitToolResult(record, createSkippedToolResult(interruptState.source), true);
+			emitToolResult(record, createSkippedToolResult(interruptState.source, executionStarted), true);
 		} else {
 			// No interrupt on this signal, or the tool finished before the interrupt landed
 			// (`completedToolExecution`) — even if the signal aborted around completion. Keep
@@ -2703,7 +2748,7 @@ async function executeToolCalls(
 				toolName: record.toolCall.name,
 				status: "skipped",
 			});
-			emitToolResult(record, createSkippedToolResult(interruptState.source), true);
+			emitToolResult(record, createSkippedToolResult(interruptState.source, false), true);
 		}
 	}
 
@@ -2723,15 +2768,32 @@ async function executeToolCalls(
  * (#4321): a provider-side stream error after tool-call emission (e.g. Codex
  * websocket close) was surfaced by the CLI as if the local tool had failed.
  *
- * `source` names the assistant-side termination state that prevented
- * execution; `upstreamError` is the provider-reported message when the turn
- * ended with `stopReason === "error"`.
+ * `source` names the state that prevented execution — either an assistant-side
+ * turn termination (`assistant_stop_*`) or a mid-batch interrupt that skipped a
+ * still-pending call to service queued steering/peer input (`interrupt_skipped`).
+ * `upstreamError` is the provider-reported message when the turn ended with
+ * `stopReason === "error"`.
  */
 export interface SyntheticToolResultDetails {
 	__synthetic: true;
-	source: "assistant_stop_aborted" | "assistant_stop_error" | "assistant_stop_skipped" | "assistant_stop_length";
+	source:
+		| "assistant_stop_aborted"
+		| "assistant_stop_error"
+		| "assistant_stop_skipped"
+		| "assistant_stop_length"
+		| "interrupt_skipped";
 	executed: false;
 	upstreamError?: string;
+}
+
+/**
+ * Metadata for an interrupt-aborted call that entered `tool.execute()` but
+ * threw before returning a usable result. It may have performed partial work.
+ */
+interface InterruptedToolResultDetails {
+	__interrupted: true;
+	source: "interrupt_skipped";
+	execution: "started";
 }
 
 /**
@@ -2844,12 +2906,18 @@ function createToolSignalAbortedResult(signal: AbortSignal): AgentToolResult<unk
 	};
 }
 
-function createSkippedToolResult(source: SteeringInterruptSource | "irc" | undefined): AgentToolResult<any> {
+function createSkippedToolResult(
+	source: SteeringInterruptSource | "irc" | undefined,
+	executionStarted: boolean,
+): AgentToolResult<SyntheticToolResultDetails | InterruptedToolResultDetails> {
 	let reason = "pending steering message";
 	let blocker = "queued message";
 	if (source === "user") {
 		reason = "queued user message";
 		blocker = "queued message";
+	} else if (source === "agent") {
+		reason = "pending parent steering message";
+		blocker = "steering message";
 	} else if (source === "system") {
 		reason = "pending system advisory";
 		blocker = "advisory";
@@ -2864,6 +2932,8 @@ function createSkippedToolResult(source: SteeringInterruptSource | "irc" | undef
 				text: `Skipped due to ${reason}. Do not count this skipped result as completed work or verification. After the ${blocker} is handled on the next step, retry the skipped tool if it is still needed.`,
 			},
 		],
-		details: {},
+		details: executionStarted
+			? { __interrupted: true, source: "interrupt_skipped", execution: "started" }
+			: { __synthetic: true, source: "interrupt_skipped", executed: false },
 	};
 }

@@ -1,4 +1,4 @@
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
 import type { CommitAgentState } from "../../../commit/agentic/state";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
 import * as git from "../../../utils/git";

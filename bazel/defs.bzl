@@ -12,15 +12,22 @@ per (platform, source) pair.
 
 _ADDON_RUSTC_FLAGS = [
     "-Ccodegen-units=16",
-    "-Cstrip=symbols",
 ]
 
 def _addon_transition_impl(settings, attr):
+    flags = list(_ADDON_RUSTC_FLAGS)
+    # macOS: rustc's -Cstrip=symbols post-processes the linked dylib with
+    # llvm-strip, which rewrites __LINKEDIT with a 4-byte-aligned symbol
+    # string table. macOS 26+ dyld demands 8-byte alignment and rejects the
+    # addon ("mis-aligned LINKEDIT string pool" — rust-lang/rust#157750), so
+    # darwin addons ship unstripped; every other platform keeps the strip.
+    if "darwin" not in str(attr.platform):
+        flags.append("-Cstrip=symbols")
     return {
         "//command_line_option:platforms": str(attr.platform),
         "//command_line_option:compilation_mode": "opt",
         "@rules_rust//rust/settings:lto": "thin",
-        "@rules_rust//rust/settings:extra_rustc_flags": _ADDON_RUSTC_FLAGS,
+        "@rules_rust//rust/settings:extra_rustc_flags": flags,
     }
 
 _addon_transition = transition(

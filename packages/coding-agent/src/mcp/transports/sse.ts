@@ -1,5 +1,5 @@
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { logger, readSseEvents, Snowflake } from "@oh-my-pi/pi-utils";
+import * as AIError from "@musepi/pi-ai/error";
+import { logger, readSseEvents } from "@musepi/pi-utils";
 import type {
 	JsonRpcError,
 	JsonRpcMessage,
@@ -10,7 +10,9 @@ import type {
 	MCPTransport,
 } from "../../mcp/types";
 import { toJsonRpcError } from "../../mcp/types";
+import { RequestIdAllocator } from "../request-id";
 import { createMCPTimeout, getNeverAbortSignal, resolveMCPTimeoutMs } from "../timeout";
+import { type MCPFetchInit, mcpFetch } from "./header-policy";
 
 interface MCPTimeoutOperation {
 	signal?: AbortSignal;
@@ -32,6 +34,7 @@ export class LegacySseTransport implements MCPTransport {
 	#sseConnection: AbortController | null = null;
 	#pending = new Map<string | number, PendingLegacySseRequest>();
 	#config: MCPSseServerConfig;
+	readonly #requestIds = new RequestIdAllocator();
 
 	onClose?: () => void;
 	onError?: (error: Error) => void;
@@ -42,6 +45,16 @@ export class LegacySseTransport implements MCPTransport {
 
 	constructor(config: MCPSseServerConfig) {
 		this.#config = config;
+	}
+
+	/** Fetch an endpoint with header precedence and origin policy. */
+	#fetch(url: string, init: MCPFetchInit, generated: Record<string, string>): Promise<Response> {
+		return mcpFetch(
+			url,
+			init,
+			{ generated, configured: this.#config.headers },
+			this.#config.headerPolicy === "origin-locked",
+		);
 	}
 
 	get connected(): boolean {
@@ -63,14 +76,11 @@ export class LegacySseTransport implements MCPTransport {
 		this.#sseConnection = connection;
 
 		try {
-			const response = await fetch(this.#config.url, {
-				method: "GET",
-				headers: {
-					Accept: "text/event-stream",
-					...this.#config.headers,
-				},
-				signal: operation.signal,
-			});
+			const response = await this.#fetch(
+				this.#config.url,
+				{ method: "GET", signal: operation.signal },
+				{ Accept: "text/event-stream" },
+			);
 
 			if (!response.ok) {
 				const text = await response.text();
@@ -194,7 +204,7 @@ export class LegacySseTransport implements MCPTransport {
 			throw new Error("Transport not connected");
 		}
 
-		const id = Snowflake.next();
+		const id = this.#requestIds.next(this.#config.requestIdFormat);
 		const body = {
 			jsonrpc: "2.0" as const,
 			id,
@@ -284,17 +294,12 @@ export class LegacySseTransport implements MCPTransport {
 	): Promise<Response> {
 		const endpointUrl = this.#endpointUrl;
 		if (!endpointUrl) throw new Error("Transport not connected");
-		let headers: Record<string, string> = {
+		const generated: Record<string, string> = {
 			"Content-Type": "application/json",
 			Accept: "application/json, text/event-stream",
-			...this.#config.headers,
 		};
-		let response = await fetch(endpointUrl, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(body),
-			signal,
-		});
+		const payload = JSON.stringify(body);
+		let response = await this.#fetch(endpointUrl, { method: "POST", body: payload, signal }, generated);
 		const status = AIError.status(response);
 		if (!this.onAuthError || (status !== 401 && status !== 403)) return response;
 
@@ -302,17 +307,7 @@ export class LegacySseTransport implements MCPTransport {
 		if (!refreshedHeaders) return response;
 		await response.body?.cancel();
 		this.#config.headers = refreshedHeaders;
-		headers = {
-			"Content-Type": "application/json",
-			Accept: "application/json, text/event-stream",
-			...this.#config.headers,
-		};
-		response = await fetch(endpointUrl, {
-			method: "POST",
-			headers,
-			body: JSON.stringify(body),
-			signal,
-		});
+		response = await this.#fetch(endpointUrl, { method: "POST", body: payload, signal }, generated);
 		return response;
 	}
 

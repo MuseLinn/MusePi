@@ -34,8 +34,8 @@ Define custom secret entries in YAML. Two locations are checked:
 
 | Level   | Path                       | Purpose                     |
 | ------- | -------------------------- | --------------------------- |
-| Global  | `~/.omp/agent/secrets.yml` | Secrets across all projects |
-| Project | `<cwd>/.omp/secrets.yml`   | Project-specific secrets    |
+| Global  | `~/.musepi/agent/secrets.yml` | Secrets across all projects |
+| Project | `<cwd>/.musepi/secrets.yml`   | Project-specific secrets    |
 
 Project entries override global entries with matching `content`.
 
@@ -80,7 +80,7 @@ Each entry in the array has these fields:
 
 This produces placeholders shaped like `#GITHUBTOKEN_AB12:L#`. The friendly name is sanitized to uppercase letters and digits, capped at 32 characters, and omitted if it sanitizes to an empty value. Invalid optional `friendlyName` metadata does not disable the secret entry; the secret still obfuscates with an unlabeled placeholder.
 
-The hash base is an HMAC of the secret under a private per-install key (stored at `~/.omp/agent/secret-placeholder.key`, never sent to a model), so a transcript reader cannot dictionary the placeholder back to the secret. The base is keyed on the exact secret value, so two secrets that differ only by case get independent bases and a provider that sees one placeholder cannot synthesize another secret's token by swapping the hint. A case hint suffix labels the casing of the redacted value for the model:
+The hash base is an HMAC of the secret under a private per-install key (stored at `~/.musepi/agent/secret-placeholder.key`, or `$XDG_STATE_HOME/omp/secret-placeholder.key` on XDG-enabled installs, never sent to a model), so a transcript reader cannot dictionary the placeholder back to the secret. The base is keyed on the exact secret value, so two secrets that differ only by case get independent bases and a provider that sees one placeholder cannot synthesize another secret's token by swapping the hint. A case hint suffix labels the casing of the redacted value for the model:
 
 | Hint | Meaning                                      |
 | ---- | -------------------------------------------- |

@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { getLastChangelogVersionPath, isEnoent, logger } from "@oh-my-pi/pi-utils";
+import { getLastChangelogVersionPath, isEnoent, logger } from "@musepi/pi-utils";
 import bundledChangelogPath from "../../CHANGELOG.md" with { type: "file" };
 import type { SettingValue } from "../config/settings";
 
@@ -198,9 +198,10 @@ function parseChangelogContent(content: string): ChangelogEntry[] {
 }
 
 /**
- * Compare versions. Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
+ * Compare changelog entries by their parsed version parts.
+ * Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
  */
-export function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
+function compareChangelogEntries(v1: ChangelogEntry, v2: ChangelogEntry): number {
 	if (v1.major !== v2.major) return v1.major - v2.major;
 	if (v1.minor !== v2.minor) return v1.minor - v2.minor;
 	return v1.patch - v2.patch;
@@ -232,7 +233,7 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
 		return [];
 	}
 
-	return entries.filter(entry => compareVersions(entry, parsedLastVersion) > 0);
+	return entries.filter(entry => compareChangelogEntries(entry, parsedLastVersion) > 0);
 }
 
 /**
@@ -328,7 +329,7 @@ export async function resolveStartupChangelogForDisplay(options: {
 	}
 	if (options.mode === "hidden") {
 		const currentVersion = parseChangelogVersion(options.currentVersion);
-		if (currentVersion && compareVersions(currentVersion, parsedLastVersion) > 0) {
+		if (currentVersion && compareChangelogEntries(currentVersion, parsedLastVersion) > 0) {
 			await writeLastChangelogVersion(options.currentVersion, options.agentDir);
 		}
 		return undefined;

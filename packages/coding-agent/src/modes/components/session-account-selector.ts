@@ -1,4 +1,5 @@
-import { Container, type SelectItem, SelectList, type SgrMouseEvent, Spacer, TruncatedText } from "@oh-my-pi/pi-tui";
+import { Container, type SelectItem, SelectList, type SgrMouseEvent, Spacer, TruncatedText } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { getSelectListTheme, theme } from "../../modes/theme/theme";
 import type { SessionPinAccount } from "../../slash-commands/helpers/session-pin";
 import { DynamicBorder } from "./dynamic-border";
@@ -24,13 +25,13 @@ export class SessionAccountSelectorComponent extends Container {
 			return {
 				value,
 				label: account.label,
-				description: account.active ? "active for this session" : undefined,
+				description: account.active ? t("active for this session") : undefined,
 			};
 		});
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold(`Select a ${providerName} account for this session:`)));
+		this.addChild(new TruncatedText(theme.bold(t("Select a {0} account for this session:", providerName))));
 		this.addChild(new Spacer(1));
 
 		this.#selectList = new SelectList(

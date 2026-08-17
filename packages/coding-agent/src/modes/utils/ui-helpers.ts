@@ -1,11 +1,13 @@
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message, Usage } from "@oh-my-pi/pi-ai";
-import { getStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { type Component, Spacer, Text, TruncatedText } from "@oh-my-pi/pi-tui";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { AssistantMessage, ImageContent, Message, Usage } from "@musepi/pi-ai";
+import { getStreamingPartialJson } from "@musepi/pi-ai/utils/block-symbols";
+import { type Component, Spacer, Text, TruncatedText } from "@musepi/pi-tui";
 import type { AdvisorMessageDetails } from "../../advisor";
 import { COLLAB_PROMPT_MESSAGE_TYPE, type CollabPromptDetails } from "../../collab/protocol";
 import { settings } from "../../config/settings";
+import { getEditClipboard } from "../../edit/edit-clipboard";
 import { getFileSnapshotStore } from "../../edit/file-snapshot-store";
+import { t } from "../../i18n/index.js";
 import { createAdvisorMessageCard } from "../../modes/components/advisor-message";
 import { AssistantMessageComponent } from "../../modes/components/assistant-message";
 import { createBackgroundTanDispatchBlock } from "../../modes/components/background-tan-message";
@@ -30,6 +32,7 @@ import {
 	readArgsCollapseIntoGroup,
 } from "../../modes/components/read-tool-group";
 import { SkillMessageComponent } from "../../modes/components/skill-message";
+import { StrippedToolCallsPlaceholder } from "../../modes/components/stripped-tool-calls-placeholder";
 import { ToolExecutionComponent } from "../../modes/components/tool-execution";
 import { TranscriptBlock } from "../../modes/components/transcript-container";
 import { createUsageRowBlock } from "../../modes/components/usage-row";
@@ -443,6 +446,7 @@ export class UiHelpers {
 									showContentPreview: this.ctx.settings.get("read.toolResultPreview"),
 								});
 								readGroup.setExpanded(this.ctx.toolOutputExpanded);
+								readGroup.setToolActivityVisible(!this.ctx.hideToolActivity);
 								this.ctx.chatContainer.addChild(readGroup);
 							}
 							readGroup.updateArgs(content.arguments, content.id);
@@ -457,6 +461,7 @@ export class UiHelpers {
 									showContentPreview: this.ctx.settings.get("read.toolResultPreview"),
 								});
 								readGroup.setExpanded(this.ctx.toolOutputExpanded);
+								readGroup.setToolActivityVisible(!this.ctx.hideToolActivity);
 								this.ctx.chatContainer.addChild(readGroup);
 							}
 							readGroup.updateArgs(content.arguments, content.id);
@@ -496,7 +501,9 @@ export class UiHelpers {
 						content.name,
 						renderArgs,
 						{
+							useBuiltInRenderer: this.ctx.viewSession.hasBuiltInTool(content.name),
 							snapshots: getFileSnapshotStore(this.ctx.viewSession),
+							clipboard: getEditClipboard(this.ctx.viewSession),
 							showImages: settings.get("terminal.showImages"),
 							editFuzzyThreshold: settings.get("edit.fuzzyThreshold"),
 							editAllowFuzzy: settings.get("edit.fuzzyMatch"),
@@ -508,6 +515,7 @@ export class UiHelpers {
 						content.id,
 					);
 					component.setExpanded(this.ctx.toolOutputExpanded);
+					component.setToolActivityVisible(!this.ctx.hideToolActivity);
 					this.ctx.chatContainer.addChild(component);
 
 					if (hasErrorStop && errorMessage) {
@@ -529,16 +537,7 @@ export class UiHelpers {
 				const strippedToolCalls = (message as AgentMessage & StrippedToolCallsMarker).strippedToolCalls ?? 0;
 				if (strippedToolCalls > 0) {
 					this.ctx.chatContainer.addChild(
-						new Text(
-							theme.fg(
-								"dim",
-								theme.italic(
-									`${strippedToolCalls} tool call${strippedToolCalls === 1 ? "" : "s"} elided — no result on this branch`,
-								),
-							),
-							1,
-							0,
-						),
+						new StrippedToolCallsPlaceholder(strippedToolCalls, !this.ctx.hideToolActivity),
 					);
 				}
 				pendingUsage =
@@ -576,6 +575,7 @@ export class UiHelpers {
 								showContentPreview: this.ctx.settings.get("read.toolResultPreview"),
 							});
 							readGroup.setExpanded(this.ctx.toolOutputExpanded);
+							readGroup.setToolActivityVisible(!this.ctx.hideToolActivity);
 							this.ctx.chatContainer.addChild(readGroup);
 						}
 						const args = readToolCallArgs.get(message.toolCallId);
@@ -772,8 +772,8 @@ export class UiHelpers {
 		}
 
 		const groups = [
-			{ label: "Steering", messages: steeringMessages },
-			{ label: "After yield", messages: followUpMessages },
+			{ label: t("Steering"), messages: steeringMessages },
+			{ label: t("After yield"), messages: followUpMessages },
 		].filter(group => group.messages.length > 0);
 		if (groups.length > 0) {
 			this.ctx.pendingMessagesContainer.addChild(new Spacer(1));

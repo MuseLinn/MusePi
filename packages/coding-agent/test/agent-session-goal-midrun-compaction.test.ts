@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ExtensionRuntime, loadExtensionFromFactory } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
-import { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/runner";
-import type { GoalModeState } from "@oh-my-pi/pi-coding-agent/goals/state";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import * as compactionModule from "@musepi/pi-agent-core/compaction";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
+import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
+import type { GoalModeState } from "@musepi/pi-coding-agent/goals/state";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
+import { TempDir } from "@musepi/pi-utils";
 
 function activeGoalState(): GoalModeState {
 	const now = Date.now();

@@ -1,18 +1,18 @@
-# @oh-my-pi/pi-agent
+# @musepi/pi-agent
 
-Stateful agent with tool execution and event streaming. Built on `@oh-my-pi/pi-ai`.
+Stateful agent with tool execution and event streaming. Built on `@musepi/pi-ai`.
 
 ## Installation
 
 ```bash
-npm install @oh-my-pi/pi-agent
+npm install @musepi/pi-agent
 ```
 
 ## Quick Start
 
 ```typescript
-import { Agent } from "@oh-my-pi/pi-agent";
-import { getModel } from "@oh-my-pi/pi-ai";
+import { Agent } from "@musepi/pi-agent";
+import { getModel } from "@musepi/pi-ai";
 
 const agent = new Agent({
 	initialState: {
@@ -255,7 +255,7 @@ steering until the current turn completes.
 Extend `AgentMessage` via declaration merging:
 
 ```typescript
-declare module "@oh-my-pi/pi-agent" {
+declare module "@musepi/pi-agent" {
 	interface CustomAgentMessages {
 		notification: { role: "notification"; text: string; timestamp: number };
 	}
@@ -279,17 +279,17 @@ const agent = new Agent({
 
 ## Tools
 
-Define tools using `AgentTool` with a Zod parameter schema (via `z` from `@oh-my-pi/pi-ai`).
+Define tools using `AgentTool` with an omptype parameter schema.
 
 ```typescript
-import { z } from "@oh-my-pi/pi-ai";
+import { type } from "@musepi/omptype";
 
 const readFileTool: AgentTool = {
 	name: "read_file",
 	label: "Read File", // For UI display
 	description: "Read a file's contents",
-	parameters: z.object({
-		path: z.string().describe("File path"),
+	parameters: type({
+		path: type("string").describe("File path"),
 	}),
 	execute: async (toolCallId, params, signal, onUpdate, context) => {
 		const content = await fs.readFile(params.path, "utf-8");
@@ -328,7 +328,7 @@ Thrown errors are caught by the agent and reported to the LLM as tool errors wit
 For browser apps that proxy through a backend:
 
 ```typescript
-import { Agent, streamProxy } from "@oh-my-pi/pi-agent";
+import { Agent, streamProxy } from "@musepi/pi-agent";
 
 const agent = new Agent({
 	streamFn: (model, context, options) =>
@@ -345,7 +345,7 @@ const agent = new Agent({
 For direct control without the Agent class:
 
 ```typescript
-import { agentLoop, agentLoopContinue } from "@oh-my-pi/pi-agent";
+import { agentLoop, agentLoopContinue } from "@musepi/pi-agent";
 
 const context: AgentContext = {
 	systemPrompt: ["You are helpful."],
@@ -445,7 +445,7 @@ fold N summaries with `aggregateAgentRunSummaries` / `aggregateAgentRunCoverage`
 import {
 	aggregateAgentRunSummaries,
 	aggregateAgentRunCoverage,
-} from "@oh-my-pi/pi-agent";
+} from "@musepi/pi-agent";
 
 const summaries: AgentRunSummary[] = [];
 const coverages: AgentRunCoverage[] = [];

@@ -1,14 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { refreshAgentDiscovery, TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 
 const TEST_AGENTS = [
 	{
 		name: "task",
 		description: "General-purpose task agent",
 		systemPrompt: "You are a task agent.",
+		source: "bundled" as const,
+	},
+];
+
+const REFRESHED_AGENTS = [
+	{
+		name: "task",
+		description: "Refreshed task agent",
+		systemPrompt: "You are the refreshed task agent.",
 		source: "bundled" as const,
 	},
 ];
@@ -61,6 +70,24 @@ describe("TaskTool.create discovery memo", () => {
 		const tool = await TaskTool.create(createSession("/tmp"));
 
 		expect(tool.description).toContain("task");
+		expect(spy).toHaveBeenCalledTimes(2);
+	});
+
+	it("publishes refreshed definitions to existing and future tools", async () => {
+		const spy = vi
+			.spyOn(discoveryModule, "discoverAgents")
+			.mockResolvedValueOnce({ agents: TEST_AGENTS, projectAgentsDir: null })
+			.mockResolvedValueOnce({ agents: REFRESHED_AGENTS, projectAgentsDir: null });
+		const session = createSession("/tmp/omp-memo-refresh");
+		const existing = await TaskTool.create(session);
+
+		expect(existing.description).toContain("General-purpose task agent");
+		await refreshAgentDiscovery(session.cwd);
+
+		expect(existing.description).toContain("Refreshed task agent");
+		expect(existing.description).not.toContain("General-purpose task agent");
+		const future = await TaskTool.create(session);
+		expect(future.description).toContain("Refreshed task agent");
 		expect(spy).toHaveBeenCalledTimes(2);
 	});
 });

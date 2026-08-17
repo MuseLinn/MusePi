@@ -4,6 +4,7 @@
  * context), so the body merges them into the result before thumbnailing.
  */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Kv, KvGrid, Note, PathText, ResultImages, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps, ToolResultBlock, ToolResultLike } from "../types";
 import { detailsRecord, isRecord, normalizeWs, resultImagesOf, str, truncate } from "../util";
@@ -34,7 +35,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 				args.subject !== undefined && <InvalidArg what="subject" />
 			)}{" "}
 			{aspect && <Badge>{aspect}</Badge>}
-			{changes > 0 && <Badge tone="accent">edit ×{changes}</Badge>}
+			{changes > 0 && <Badge tone="accent">{t("edit ×{count}", { count: String(changes) })}</Badge>}
 		</>
 	);
 }
@@ -66,13 +67,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	}
 	const merged = withDetailImages(result);
 	const hasImages = resultImagesOf(merged).length > 0;
+	// aicss image-generation: the prompt rides as a caption under the preview.
+	const caption = str(args.subject) ?? str(details?.revisedPrompt) ?? null;
 	return (
 		<>
 			<KvGrid>
 				{PROMPT_FIELDS.map(([arg, label]) => {
 					const value = args[arg];
 					return (
-						<Kv key={arg} k={label}>
+						<Kv key={arg} k={t(label)}>
 							{value === undefined ? null : (str(value) ?? <InvalidArg what={label} />)}
 						</Kv>
 					);
@@ -81,7 +84,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			{changes && changes.length > 0 && (
 				<div className="tv-list">
 					{changes.map((change, i) => (
-						<Row key={i} k={i === 0 ? "changes" : undefined}>
+						// Tool-argument rows are static arrays — the index is their identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+						<Row key={i} k={i === 0 ? t("changes") : undefined}>
 							{typeof change === "string" ? change : <InvalidArg what="change" />}
 						</Row>
 					))}
@@ -93,13 +98,17 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						const path = isRecord(input) ? str(input.path) : null;
 						const mime = isRecord(input) ? str(input.mime_type) : null;
 						return (
-							<Row key={i} k={i === 0 ? "input" : undefined}>
+							// Tool-argument rows are static arrays — the index is their identity.
+							// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+							<Row key={i} k={i === 0 ? t("input") : undefined}>
 								{!isRecord(input) ? (
 									<InvalidArg what="input" />
 								) : path ? (
 									<PathText path={path} />
+								) : mime ? (
+									t("base64 image ({mime})", { mime: mime })
 								) : (
-									`base64 image${mime ? ` (${mime})` : ""}`
+									t("base64 image")
 								)}
 							</Row>
 						);
@@ -107,12 +116,19 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{(provider || model) && <Badges items={[provider, model]} />}
-			{revised && <Note>revised: {truncate(revised, 400)}</Note>}
-			<ResultImages result={merged} />
+			{revised && <Note>{t("revised: {value}", { value: truncate(revised, 400) })}</Note>}
+			{hasImages && (
+				<figure className="tr-tool-image">
+					<ResultImages result={merged} />
+					{caption && <figcaption className="tr-tool-image-caption">{caption}</figcaption>}
+				</figure>
+			)}
 			{paths.length > 0 && (
 				<div className="tv-list">
 					{paths.map((p, i) => (
-						<Row key={i} k={i === 0 ? "saved" : undefined}>
+						// Tool-argument rows are static arrays — the index is their identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+						<Row key={i} k={i === 0 ? t("saved") : undefined}>
 							<PathText path={p} />
 						</Row>
 					))}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Generate aggregated release notes from per-package CHANGELOG.md files.
  *
@@ -29,29 +30,14 @@
  */
 
 import { $, Glob } from "bun";
+import { compareVersions } from "../packages/utils/src/version";
 
 const changelogGlob = new Glob("packages/*/CHANGELOG.md");
-const REPO = process.env.OMP_REPO ?? process.env.GITHUB_REPOSITORY ?? "can1357/oh-my-pi";
+const REPO = process.env.OMP_REPO ?? process.env.GITHUB_REPOSITORY ?? "MuseLinn/MusePi";
 
 // Canonical ordering used by `fix-changelogs`; unknown categories sort
 // alphabetically after these.
 const CATEGORY_ORDER = ["Breaking Changes", "Added", "Changed", "Fixed", "Removed"] as const;
-
-/** Compare two `X.Y.Z` (or `vX.Y.Z`) version strings; non-semver returns 0. */
-export function compareVersions(a: string, b: string): number {
-	const am = a
-		.replace(/^v/, "")
-		.trim()
-		.match(/^(\d+)\.(\d+)\.(\d+)$/);
-	const bm = b
-		.replace(/^v/, "")
-		.trim()
-		.match(/^(\d+)\.(\d+)\.(\d+)$/);
-	if (!am || !bm) return 0;
-	if (am[1] !== bm[1]) return Number(am[1]) - Number(bm[1]);
-	if (am[2] !== bm[2]) return Number(am[2]) - Number(bm[2]);
-	return Number(am[3]) - Number(bm[3]);
-}
 
 export interface ChangelogVersionSpan {
 	version: string;

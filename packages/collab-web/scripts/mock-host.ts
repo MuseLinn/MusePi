@@ -9,9 +9,18 @@
  * of the fixture JSONL — exactly the frames a real `omp /collab` host emits.
  */
 
-import type { AgentSnapshot, HostFrame, SessionEntry, SessionState, WireFrame } from "@oh-my-pi/pi-wire";
-import { generateRoomKey, importRoomKey, open, seal } from "../src/lib/codec";
-import { COLLAB_PROTO, formatCollabLink, generateRoomId, packEnvelope, unpackEnvelope } from "../src/lib/link";
+import {
+	COLLAB_PROTO,
+	formatCollabLink,
+	generateRoomId,
+	generateRoomKey,
+	importRoomKey,
+	open,
+	packEnvelope,
+	seal,
+	unpackEnvelope,
+} from "@musepi/collab-proto";
+import type { AgentSnapshot, HostFrame, SessionEntry, SessionState, WireFrame, WorkspaceEntry } from "@musepi/pi-wire";
 import {
 	fixtureAgents,
 	fixtureEntries,
@@ -250,6 +259,190 @@ function handleFetchTranscript(reqId: number, fromByte: number, fromPeer: number
 	sendFrame({ t: "transcript", reqId, text, newSize: total }, fromPeer);
 }
 
+// ── guest RPC (board / cron / workspace / fs) ───────────────────────────────
+
+const mockBoards = [
+	{
+		id: "board-1",
+		title: "仪表盘",
+		widgets: [
+			{ id: "w1", type: "clock", title: "Clock", data: { market: "cn" }, pos: { x: 0, y: 0, w: 2, h: 1 } },
+			{
+				id: "w2",
+				type: "metric",
+				title: "Metric",
+				data: { label: "metric", value: 4200, delta: 0.12 },
+				pos: { x: 2, y: 0, w: 2, h: 1 },
+			},
+		],
+	},
+	{
+		id: "board-2",
+		title: "项目",
+		builtin: true,
+		widgets: [
+			{ id: "w3", type: "todo", title: "Todo", data: { items: [{ done: false, text: "设计评审" }] }, pos: { x: 0, y: 0, w: 2, h: 2 } },
+		],
+	},
+];
+const mockCronTasks = [
+	{
+		id: "cron-1",
+		name: "每日晨报",
+		enabled: true,
+		schedule: { kind: "daily", time: "09:00", timezone: "Asia/Shanghai" },
+		prompt: "生成今日晨报",
+		cwd: "/mock",
+		state: { createdAt: Date.now() - 86400_000, lastRunAt: Date.now() - 3600_000, lastStatus: "success" },
+	},
+	{
+		id: "cron-2",
+		name: "每周回顾",
+		enabled: false,
+		schedule: { kind: "weekly", weekdays: [5], time: "18:00" },
+		prompt: "写本周工作回顾",
+		cwd: "/mock",
+		state: { createdAt: Date.now() - 7 * 86400_000 },
+	},
+];
+const mockCronRuns = [
+	{ id: "run-1", taskId: "cron-1", startedAt: Date.now() - 3600_000, finishedAt: Date.now() - 3599_000, status: "success" },
+	{ id: "run-2", taskId: "cron-1", startedAt: Date.now() - 2 * 3600_000, finishedAt: Date.now() - 2 * 3600_000 + 40_000, status: "success" },
+];
+const mockTreeEntries: WorkspaceEntry[] = [
+	{ name: "src", path: "/mock/src", isDir: true, size: 0, mtime: Date.now(), depth: 0 },
+	{ name: "hello.ts", path: "/mock/src/hello.ts", isDir: false, size: 96, mtime: Date.now(), depth: 1 },
+	{ name: "index.ts", path: "/mock/src/index.ts", isDir: false, size: 210, mtime: Date.now(), depth: 1 },
+	{ name: "README.md", path: "/mock/README.md", isDir: false, size: 480, mtime: Date.now(), depth: 0 },
+];
+
+function rpcOk(reqId: number, data: unknown, fromPeer: number): void {
+	sendFrame({ t: "rpc-result", reqId, ok: true, data }, fromPeer);
+}
+
+function rpcErr(reqId: number, error: string, fromPeer: number): void {
+	sendFrame({ t: "rpc-result", reqId, ok: false, error }, fromPeer);
+}
+
+function handleRpcRequest(reqId: number, method: string, params: unknown, fromPeer: number): void {
+	const p = (params ?? {}) as Record<string, unknown>;
+	try {
+		switch (method) {
+			case "board.list":
+				rpcOk(reqId, { boards: mockBoards }, fromPeer);
+				break;
+			case "board.save": {
+				const boards = (p.boards as typeof mockBoards) ?? [];
+				mockBoards.splice(0, mockBoards.length, ...boards);
+				rpcOk(reqId, { ok: true }, fromPeer);
+				break;
+			}
+			case "cron.list":
+				rpcOk(reqId, { tasks: mockCronTasks, runs: mockCronRuns }, fromPeer);
+				break;
+			case "cron.upsert": {
+				const task = p.task as (typeof mockCronTasks)[number];
+				const idx = mockCronTasks.findIndex(t => t.id === task.id);
+				if (idx >= 0) mockCronTasks[idx] = task;
+				else mockCronTasks.push(task);
+				rpcOk(reqId, { tasks: mockCronTasks, task }, fromPeer);
+				break;
+			}
+			case "cron.delete": {
+				const id = String(p.id);
+				const idx = mockCronTasks.findIndex(t => t.id === id);
+				if (idx >= 0) mockCronTasks.splice(idx, 1);
+				rpcOk(reqId, { tasks: mockCronTasks }, fromPeer);
+				break;
+			}
+			case "cron.toggle": {
+				const id = String(p.id);
+				const task = mockCronTasks.find(t => t.id === id);
+				if (task) task.enabled = !task.enabled;
+				rpcOk(reqId, { tasks: mockCronTasks }, fromPeer);
+				break;
+			}
+			case "workspace.tree":
+				rpcOk(reqId, { rootPath: "/mock", truncated: false, entries: mockTreeEntries }, fromPeer);
+				break;
+			case "fs.read": {
+				const path = String(p.path ?? "");
+				const size = mockFileSizes.get(path);
+				if (size === undefined) {
+					rpcErr(reqId, `ENOENT: no such file ${path}`, fromPeer);
+					break;
+				}
+				const text = mockFileTexts.get(path) ?? "";
+				rpcOk(
+					reqId,
+					{ base64: Buffer.from(text).toString("base64"), size: size, mime: "text/plain", error: undefined },
+					fromPeer,
+				);
+				break;
+			}
+			case "fs.write": {
+				const path = String(p.path ?? "");
+				const content = String(p.content ?? "");
+				mockFileTexts.set(path, content);
+				mockFileSizes.set(path, content.length);
+				const parts = path.split("/").filter(Boolean);
+				const name = parts.at(-1) ?? path;
+				if (!mockTreeEntries.some(e => e.path === path)) {
+					mockTreeEntries.push({ name, path, isDir: false, size: content.length, mtime: Date.now(), depth: parts.length - 1 });
+				}
+				rpcOk(reqId, { ok: true }, fromPeer);
+				break;
+			}
+			case "fs.mkdir":
+				rpcOk(reqId, { ok: true }, fromPeer);
+				break;
+			case "fs.rename": {
+				const from = String(p.from ?? "");
+				const to = String(p.to ?? "");
+				const text = mockFileTexts.get(from);
+				const size = mockFileSizes.get(from);
+				if (text !== undefined) mockFileTexts.set(to, text);
+				if (size !== undefined) mockFileSizes.set(to, size);
+				mockFileTexts.delete(from);
+				mockFileSizes.delete(from);
+				for (const entry of mockTreeEntries) {
+					if (entry.path === from || entry.path.startsWith(`${from}/`)) {
+						entry.path = `${to}${entry.path.slice(from.length)}`;
+						entry.name = entry.path.split("/").filter(Boolean).at(-1) ?? entry.name;
+					}
+				}
+				rpcOk(reqId, { ok: true }, fromPeer);
+				break;
+			}
+			case "fs.delete": {
+				const path = String(p.path ?? "");
+				mockFileTexts.delete(path);
+				mockFileSizes.delete(path);
+				for (let i = mockTreeEntries.length - 1; i >= 0; i--) {
+					if (mockTreeEntries[i]!.path === path || mockTreeEntries[i]!.path.startsWith(`${path}/`)) {
+						mockTreeEntries.splice(i, 1);
+					}
+				}
+				rpcOk(reqId, { ok: true }, fromPeer);
+				break;
+			}
+			default:
+				rpcErr(reqId, `unknown rpc method: ${method}`, fromPeer);
+		}
+	} catch (err) {
+		rpcErr(reqId, err instanceof Error ? err.message : String(err), fromPeer);
+	}
+}
+
+const mockFileTexts = new Map<string, string>([
+	["/mock/src/hello.ts", "export function greet(name: string): string {\n  return `Hello, ${name}!`;\n}\n"],
+	["/mock/src/index.ts", 'import { greet } from "./hello";\nconsole.log(greet("world"));\n'],
+	["/mock/README.md", "# Mock Workspace\n\nDemo files served by the collab mock host.\n"],
+]);
+const mockFileSizes = new Map<string, number>(
+	[...mockFileTexts.entries()].map(([k, v]) => [k, v.length]),
+);
+
 function handleFrame(frame: WireFrame, fromPeer: number): void {
 	switch (frame.t) {
 		case "hello":
@@ -266,6 +459,9 @@ function handleFrame(frame: WireFrame, fromPeer: number): void {
 			break;
 		case "fetch-transcript":
 			handleFetchTranscript(frame.reqId, frame.fromByte, fromPeer);
+			break;
+		case "rpc-request":
+			handleRpcRequest(frame.reqId, frame.method, frame.params, fromPeer);
 			break;
 		default:
 			// Host-frame echoes or unknown types: ignore.
@@ -307,7 +503,7 @@ ws.onmessage = event => {
 	if (!envelope) return;
 	recvChain = recvChain
 		.then(async () => {
-			const frame = await open(key, envelope.payload);
+			const frame = await open<WireFrame>(key, envelope.payload);
 			handleFrame(frame, envelope.peerId);
 		})
 		.catch((err: unknown) => {

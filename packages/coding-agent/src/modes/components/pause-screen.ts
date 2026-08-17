@@ -11,7 +11,7 @@
  * Use case: freeze a busy session, hand-edit the repo, resume, then explain
  * the change via a normal steering message.
  */
-import { agentPauseGate } from "@oh-my-pi/pi-agent-core";
+import { agentPauseGate } from "@musepi/pi-agent-core";
 import {
 	type Component,
 	matchesKey,
@@ -19,7 +19,8 @@ import {
 	type OverlayHandle,
 	type OverlayOptions,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { formatDuration } from "../../slash-commands/helpers/format";
 import { theme } from "../theme/theme";
 import { matchesAppInterrupt } from "../utils/keybinding-matchers";
@@ -51,12 +52,7 @@ const BAR_GAP = 4;
 const MIN_FULL_WIDTH = 64;
 const MIN_FULL_HEIGHT = 18;
 
-const TITLE = "P A U S E D";
-const BODY_LINES = [
-	"Main agent, subagents, and advisor hold at their next step.",
-	"In-flight calls finish; nothing new starts until you resume.",
-] as const;
-const RESUME_HINT = "esc · enter · space — resume";
+// User-facing strings rendered via t() at render time (see i18n/index.ts).
 
 function centerLine(line: string, width: number): string {
 	const pad = Math.max(0, Math.floor((width - visibleWidth(line)) / 2));
@@ -78,6 +74,12 @@ function formatClock(ms: number): string {
  * Exported for tests.
  */
 export function renderPauseScreen(width: number, height: number, elapsedMs: number, sessionName?: string): string[] {
+	const TITLE = t("P A U S E D");
+	const BODY_LINES = [
+		t("Main agent, subagents, and advisor hold at their next step."),
+		t("In-flight calls finish; nothing new starts until you resume."),
+	] as const;
+	const RESUME_HINT = t("esc · enter · space — resume");
 	const compact = width < MIN_FULL_WIDTH || height < MIN_FULL_HEIGHT;
 	const content: string[] = [];
 
@@ -88,8 +90,8 @@ export function renderPauseScreen(width: number, height: number, elapsedMs: numb
 		}
 		content.push(centerLine(theme.bold(theme.fg("accent", `▌▌ ${TITLE}`)), width));
 		content.push("");
-		content.push(centerLine(theme.fg("dim", `paused for ${formatClock(elapsedMs)}`), width));
-		content.push(centerLine(theme.fg("dim", "esc to resume"), width));
+		content.push(centerLine(theme.fg("dim", t("paused for {0}").replace("{0}", formatClock(elapsedMs))), width));
+		content.push(centerLine(theme.fg("dim", t("esc to resume")), width));
 	} else {
 		if (sessionName) {
 			content.push(centerLine(theme.bold(sessionName), width));
@@ -108,7 +110,7 @@ export function renderPauseScreen(width: number, height: number, elapsedMs: numb
 			content.push(centerLine(theme.fg("muted", line), width));
 		}
 		content.push("");
-		content.push(centerLine(theme.fg("dim", `paused for ${formatClock(elapsedMs)}`), width));
+		content.push(centerLine(theme.fg("dim", t("paused for {0}").replace("{0}", formatClock(elapsedMs))), width));
 		content.push("");
 		content.push(centerLine(theme.fg("dim", RESUME_HINT), width));
 	}
@@ -202,7 +204,7 @@ export async function runPauseScreen(host: PauseScreenHost): Promise<void> {
 		overlay.hide();
 		const heldMs = agentPauseGate.resume();
 		if (heldMs !== undefined) {
-			host.showStatus(`Resumed after ${formatDuration(heldMs)} — agents are running again.`);
+			host.showStatus(t("Resumed after {0} — agents are running again.").replace("{0}", formatDuration(heldMs)));
 		}
 	}
 }

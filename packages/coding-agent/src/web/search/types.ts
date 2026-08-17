@@ -30,7 +30,12 @@ export const SEARCH_PROVIDER_OPTIONS = [
 		label: "OpenAI",
 		description: "OpenAI's native web_search (uses ChatGPT OAuth via /login openai-codex)",
 	},
-	{ value: "xai", label: "xAI", description: "Grok web search via xAI Responses API (requires XAI_API_KEY)" },
+	{
+		value: "xai",
+		label: "xAI",
+		description:
+			"Grok web search via xAI Responses API (uses SuperGrok/X Premium+ OAuth via /login xai-oauth, or XAI_API_KEY)",
+	},
 	{ value: "zai", label: "Z.AI", description: "Calls Z.AI webSearchPrime MCP" },
 	{ value: "exa", label: "Exa", description: "API via /login exa or EXA_API_KEY; explicit keyless fallback via MCP" },
 	{ value: "tinyfish", label: "TinyFish", description: "Requires TINYFISH_API_KEY" },
@@ -83,6 +88,12 @@ export const SEARCH_PROVIDER_OPTIONS = [
 		description: "Queries every credential-free engine in parallel and consolidates deduplicated results",
 	},
 ] as const;
+
+/** Default hard timeout for each web-search provider transport. */
+export const DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS = 60;
+
+/** Maximum configurable hard timeout for each web-search provider transport. */
+export const MAX_WEB_SEARCH_TIMEOUT_SECONDS = 300;
 
 /** Supported web search providers (every option except `auto`). */
 export type SearchProviderId = Exclude<(typeof SEARCH_PROVIDER_OPTIONS)[number]["value"], "auto">;

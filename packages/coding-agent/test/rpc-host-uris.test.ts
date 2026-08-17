@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import { parseInternalUrl } from "@oh-my-pi/pi-coding-agent/internal-urls/parse";
-import { RpcHostUriBridge } from "@oh-my-pi/pi-coding-agent/modes/rpc/host-uris";
-import type { RpcHostUriCancelRequest, RpcHostUriRequest } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-types";
+import { InternalUrlRouter } from "@musepi/pi-coding-agent/internal-urls";
+import { parseInternalUrl } from "@musepi/pi-coding-agent/internal-urls/parse";
+import { RpcHostUriBridge } from "@musepi/pi-coding-agent/modes/rpc/host-uris";
+import type { RpcHostUriCancelRequest, RpcHostUriRequest } from "@musepi/pi-coding-agent/modes/rpc/rpc-types";
 
 const router = InternalUrlRouter.instance();
 
@@ -119,6 +119,13 @@ describe("RpcHostUriBridge", () => {
 		const cancel = out.frames[1];
 		expect(cancel?.type).toBe("host_uri_cancel");
 		bridge.clear("test cleanup");
+	});
+
+	it("rejects OMP-reserved schemes", () => {
+		const bridge = new RpcHostUriBridge(() => {});
+		expect(() => bridge.setSchemes([{ scheme: "security" }])).toThrow(
+			"Host URI scheme is reserved by OMP: security://",
+		);
 	});
 
 	it("normalizes scheme casing and rejects invalid characters", () => {

@@ -1,5 +1,6 @@
 /** `debug` — DAP debugger sessions: launch/attach, breakpoints, stepping, evaluate. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, CodeBlock, Kv, KvGrid, PathText, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, display, isRecord, normalizeWs, num, str, truncate } from "../util";
@@ -41,7 +42,7 @@ function snapshotOf(result: ToolRenderProps["result"]): SessionSnapshot | null {
 
 function actionOf(props: ToolRenderProps): string {
 	const action = str(props.args.action) ?? str(detailsRecord(props.result)?.action);
-	return action ? action.replace(/_/g, " ") : "request";
+	return action ? action.replace(/_/g, " ") : t("request");
 }
 
 /** Mirrors the TUI's summarizeDebugCall target priority. */
@@ -78,7 +79,7 @@ function Summary(props: ToolRenderProps): ReactNode {
 }
 
 /** Scalar args worth a KvGrid row, in display order (program/file/expression are special-cased). */
-const SCALAR_ARGS: ReadonlyArray<readonly [key: string, label: string]> = [
+const SCALAR_ARGS = [
 	["adapter", "adapter"],
 	["cwd", "cwd"],
 	["function", "function"],
@@ -108,7 +109,7 @@ const SCALAR_ARGS: ReadonlyArray<readonly [key: string, label: string]> = [
 	["start_module", "start module"],
 	["module_count", "module count"],
 	["timeout", "timeout"],
-];
+] as const;
 
 function Body(props: ToolRenderProps): ReactNode {
 	const { args, result } = props;
@@ -150,7 +151,7 @@ function Body(props: ToolRenderProps): ReactNode {
 		const value = args[key];
 		if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
 		argRows.push(
-			<Kv key={key} k={label}>
+			<Kv key={key} k={t(label)}>
 				{truncate(display(value), 120)}
 			</Kv>,
 		);
@@ -169,35 +170,35 @@ function Body(props: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{argRows.length > 0 && <KvGrid>{argRows}</KvGrid>}
-			{expression !== null && <CodeBlock code={expression} title="expression" maxLines={8} />}
-			{customArgsJson && <CodeBlock code={customArgsJson} lang="json" title="arguments" maxLines={10} />}
+			{expression !== null && <CodeBlock code={expression} title={t("expression")} maxLines={8} />}
+			{customArgsJson && <CodeBlock code={customArgsJson} lang="json" title={t("arguments")} maxLines={10} />}
 			{snapshot && (
 				<KvGrid>
-					{snapshot.id !== null && <Kv k="session">{snapshot.id}</Kv>}
-					{snapshot.adapter !== null && <Kv k="adapter">{snapshot.adapter}</Kv>}
+					{snapshot.id !== null && <Kv k={t("session")}>{snapshot.id}</Kv>}
+					{snapshot.adapter !== null && <Kv k={t("adapter")}>{snapshot.adapter}</Kv>}
 					{snapshot.status !== null && (
-						<Kv k="status">
+						<Kv k={t("status")}>
 							<Badge tone={snapshot.status === "exited" ? "warn" : "ok"}>{snapshot.status}</Badge>
 						</Kv>
 					)}
 					{snapshot.program !== null && (
-						<Kv k="program">
+						<Kv k={t("program")}>
 							<PathText path={snapshot.program} />
 						</Kv>
 					)}
-					{snapshot.stopReason !== null && <Kv k="stop reason">{snapshot.stopReason}</Kv>}
-					{snapshot.frameName !== null && <Kv k="frame">{snapshot.frameName}</Kv>}
+					{snapshot.stopReason !== null && <Kv k={t("stop reason")}>{snapshot.stopReason}</Kv>}
+					{snapshot.frameName !== null && <Kv k={t("frame")}>{snapshot.frameName}</Kv>}
 					{snapshot.sourcePath !== null && snapshot.line !== null && (
-						<Kv k="location">
+						<Kv k={t("location")}>
 							<PathText
 								path={snapshot.sourcePath}
 								sel={snapshot.column !== null ? `${snapshot.line}:${snapshot.column}` : String(snapshot.line)}
 							/>
 						</Kv>
 					)}
-					{snapshot.exitCode !== null && <Kv k="exit code">{snapshot.exitCode}</Kv>}
+					{snapshot.exitCode !== null && <Kv k={t("exit code")}>{snapshot.exitCode}</Kv>}
 					{snapshot.needsConfigurationDone && (
-						<Kv k="configuration">pending configurationDone — set breakpoints, then continue</Kv>
+						<Kv k={t("configuration")}>{t("pending configurationDone — set breakpoints, then continue")}</Kv>
 					)}
 				</KvGrid>
 			)}

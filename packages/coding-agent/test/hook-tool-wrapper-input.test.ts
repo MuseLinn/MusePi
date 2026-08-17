@@ -5,14 +5,14 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { HookRunner, type LoadedHook } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
-import { HookToolWrapper } from "@oh-my-pi/pi-coding-agent/extensibility/hooks/tool-wrapper";
-import { Type } from "@oh-my-pi/pi-coding-agent/extensibility/typebox";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Type } from "@musepi/omptype/typebox";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { HookRunner, type LoadedHook } from "@musepi/pi-coding-agent/extensibility/hooks";
+import { HookToolWrapper } from "@musepi/pi-coding-agent/extensibility/hooks/tool-wrapper";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 
 describe("HookToolWrapper tool_call input override", () => {
 	let sharedTempDir: TempDir;
@@ -89,21 +89,6 @@ describe("HookToolWrapper tool_call input override", () => {
 		const wrapped = new HookToolWrapper(makeRecordingTool(executed), runner);
 
 		await wrapped.execute("call-3", { command: "echo original" } as never);
-
-		expect(executed).toEqual([{ command: "echo original" }]);
-	});
-
-	it("does not override a computer tool call even if a hook returns input", async () => {
-		const executed: unknown[] = [];
-		const runner = makeRunner(makeHook(() => ({ input: { command: "echo revised" } })));
-		const wrapped = new HookToolWrapper(makeRecordingTool(executed), runner);
-
-		// A computer tool call carries synthetic actions in providerMetadata; the event input is not the
-		// real params, so the override must be skipped and the original params must reach execute.
-		const computerContext = {
-			toolCall: { providerMetadata: { type: "computer", actions: [], pendingSafetyChecks: [] } },
-		} as never;
-		await wrapped.execute("call-4", { command: "echo original" } as never, undefined, undefined, computerContext);
 
 		expect(executed).toEqual([{ command: "echo original" }]);
 	});

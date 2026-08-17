@@ -17,7 +17,7 @@ import type {
 	ToolResultMessage,
 	WireModel,
 	WireUsage,
-} from "@oh-my-pi/pi-wire";
+} from "@musepi/pi-wire";
 
 export const HOST_DISPLAY_NAME = "kai";
 
@@ -176,6 +176,51 @@ export const fixtureEntries: SessionEntry[] = [
 			role: "user",
 			content: "what about half-open sockets after a NAT rebind? do we ping at all?",
 			timestamp: NOW - 26 * MIN,
+		},
+	},
+	{
+		id: "e06d",
+		parentId: "e06",
+		timestamp: iso(NOW - 26 * MIN + 2_000),
+		type: "message",
+		message: {
+			role: "assistant",
+			content: [
+				{
+					type: "text",
+					text: "Pings only keep the socket warm; the diff below shows what a same-line replacement looks like.",
+				},
+				{
+					type: "toolCall",
+					id: "call-diff-01",
+					name: "diff",
+					arguments: {},
+					intent: "Diff preview",
+				},
+			],
+			model: fixtureModel.id,
+			usage: mkUsage(3_200, 60, 21_000, 0.0128),
+			stopReason: "toolUse",
+			timestamp: NOW - 26 * MIN + 2_000,
+		},
+	},
+	{
+		id: "e06r",
+		parentId: "e06d",
+		timestamp: iso(NOW - 26 * MIN + 3_000),
+		type: "message",
+		message: {
+			role: "toolResult",
+			toolCallId: "call-diff-01",
+			toolName: "diff",
+			content: [
+				{
+					type: "text",
+					text: "--- a/src/hello.ts\n+++ b/src/hello.ts\n@@ -1,3 +1,4 @@\n export function greet(name: string): string {\n-  return `Hello, ${name}!`;\n+  return `Hi, ${name}!`;\n }\n+export const version = \"1.2.0\";",
+				},
+			],
+			isError: false,
+			timestamp: NOW - 26 * MIN + 3_000,
 		},
 	},
 	{

@@ -20,17 +20,30 @@
  * a superseded revive) can never clobber a newer same-id ref.
  */
 
-import { logger } from "@oh-my-pi/pi-utils";
+import * as fs from "node:fs/promises";
+import { logger, untilAborted } from "@musepi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
+import { trackLateCleanup } from "../utils/late-cleanup";
 import {
 	type AgentRef,
 	type AgentRefExpectation,
 	AgentRegistry,
+	getAgentTombstonePath,
 	MAIN_AGENT_ID,
 	type RegistryEvent,
 } from "./agent-registry";
 
 export type AgentReviver = (expected: AgentRef) => Promise<AgentSession>;
+
+const AGENT_RELEASE_GRACE_MS = 5000;
+
+async function persistAgentTombstone(sessionFile: string): Promise<void> {
+	try {
+		await fs.writeFile(getAgentTombstonePath(sessionFile), "", { encoding: "utf8", flag: "wx", mode: 0o600 });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+	}
+}
 
 /**
  * Builds a reviver for a `parked` ref restored from disk (Agent Hub scan,
@@ -345,12 +358,19 @@ export class AgentLifecycleManager {
 	}
 
 	/**
-	 * Hard removal: dispose if live, unregister from registry, drop timers.
-	 * When `expected` is given, only a ref matching it is released; a stale
-	 * release can never take down a newer same-id ref. Returns true when a
-	 * matching ref was released.
+	 * Dispose if live and drop timers. When `expected` is given, only a ref
+	 * matching it is released; a stale release can never take down a newer
+	 * same-id ref. Returns true when a matching ref was released.
+	 *
+	 * By default the ref is unregistered (teardown / one-shot removal). Pass
+	 * `tombstone: true` for an explicit kill: the ref is kept registered as a
+	 * terminal `aborted` row (session detached) instead of being removed, so a
+	 * later persisted-subagent scan (e.g. Agent Hub reopen) skips it via its
+	 * `if (!registry.get(id))` guard rather than re-adopting the surviving
+	 * on-disk transcript as a fresh `parked` row. Mirrors
+	 * `finalizeSubagentLifecycle`'s genuine-kill path.
 	 */
-	async release(id: string, expected?: AgentRefExpectation): Promise<boolean> {
+	async release(id: string, expected?: AgentRefExpectation, options?: { tombstone?: boolean }): Promise<boolean> {
 		const adopted = this.#adopted.get(id);
 		const current = this.#registry.get(id);
 		const currentMatches =
@@ -371,23 +391,47 @@ export class AgentLifecycleManager {
 			await park.promise;
 		}
 
-		if (this.#registry.get(id) === ref && ref.session) {
+		if (options?.tombstone) {
+			// Persist the terminal decision before detaching the session. The
+			// sidecar prevents a later discovery pass from reviving this transcript
+			// as a fresh parked ref.
+			if (ref.sessionFile) await persistAgentTombstone(ref.sessionFile);
+			this.#registry.setStatus(id, "aborted", ref);
+		}
+		const live = this.#registry.get(id) === ref ? ref.session : null;
+		if (options?.tombstone) this.#registry.detachSession(id, ref);
+		if (live) {
 			try {
-				await ref.session.dispose();
+				await live.dispose();
 			} catch (error) {
 				logger.warn("AgentLifecycleManager.release: session dispose failed", { id, error: String(error) });
 			}
 		}
-		this.#registry.unregister(id, ref);
+		if (!options?.tombstone) this.#registry.unregister(id, ref);
 		return true;
 	}
 
 	/** Teardown everything (process exit / main session dispose). */
-	async dispose(): Promise<void> {
+	async dispose(deadlineAt: number = Date.now() + AGENT_RELEASE_GRACE_MS): Promise<void> {
 		this.#unsubscribe?.();
 		this.#unsubscribe = undefined;
 		const ids = [...new Set([...this.#adopted.keys(), ...this.#parks.keys()])];
-		await Promise.all(ids.map(id => this.release(id)));
+		await Promise.all(
+			ids.map(async id => {
+				const release = this.release(id).then(() => {});
+				try {
+					await untilAborted(AbortSignal.timeout(Math.max(0, deadlineAt - Date.now())), () => release);
+				} catch (error) {
+					if (Date.now() >= deadlineAt) {
+						trackLateCleanup(release, { id, resource: "adopted-agent" });
+					}
+					logger.warn("Agent cleanup exceeded its deadline", {
+						id,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}),
+		);
 		this.#revivals.clear();
 		this.#parks.clear();
 		this.#persistedReviverFactory = undefined;
@@ -396,21 +440,27 @@ export class AgentLifecycleManager {
 	async #revive(id: string, revive: AgentReviver, ref: AgentRef, adopted: AdoptedAgent): Promise<AgentSession> {
 		const session = await revive(ref);
 		let liveRef = this.#registry.get(id);
-		if (liveRef === ref) {
+		if (liveRef === ref && ref.status === "parked" && !ref.session) {
+			// A simple reviver returned a session without claiming the parked ref;
+			// attach it here while the exact ref is still revivable.
 			if (!this.#registry.attachSession(id, session, ref.sessionFile, ref)) {
 				await session.dispose();
 				throw new Error(`Agent "${id}" changed before its persisted session could attach.`);
 			}
 			liveRef = ref;
 		} else if (
-			!liveRef ||
+			liveRef !== ref ||
+			liveRef.status !== "running" ||
 			liveRef.session !== session ||
 			liveRef.kind !== ref.kind ||
 			liveRef.parentId !== ref.parentId ||
 			liveRef.sessionFile !== ref.sessionFile
 		) {
+			// createAgentSession may have already claimed this exact parked ref and
+			// attached the returned session. Any other state — especially an
+			// `aborted` tombstone set while revive() was in flight — is stale.
 			await session.dispose();
-			throw new Error(`Agent "${id}" was replaced while its persisted session was reviving.`);
+			throw new Error(`Agent "${id}" was replaced or became terminal while its persisted session was reviving.`);
 		}
 		adopted.ref = liveRef;
 		// Emits status_changed → "idle", which re-arms the TTL timer below.

@@ -4,10 +4,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as url from "node:url";
 import {
+	__collectLegacyPiExtensionSourcesForTests,
 	__rewriteLegacyExtensionSourceForTests,
 	loadLegacyPiModule,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 // Issue #1674: legacy Pi extensions load browser-UI assets (HTML/CSS) at module
 // init via `readFileSync(join(__dirname, "ui.html"))`. The compat layer must run
@@ -104,7 +105,7 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 			}),
 			"node_modules/direct/index.js": 'module.exports = require("@mariozechner/pi-ai").Type;\n',
 			"index.ts": [
-				'import { Type } from "@oh-my-pi/pi-ai";',
+				'import { Type } from "@musepi/pi-ai";',
 				'import requiredType from "direct";',
 				"export const sharesHostType = requiredType === Type;",
 				"export default function (pi) { void pi; }",
@@ -116,34 +117,34 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		expect(mod.sharesHostType).toBe(true);
 	});
 
-	it("loads a default import from linkedom's CommonJS canvas fallback", async () => {
+	it("loads a default import from an ESM package's CommonJS canvas fallback", async () => {
 		const dir = await writePackage({
-			"package.json": JSON.stringify({ name: "linkedom-consumer", version: "1.0.0", type: "module" }),
-			"index.js": 'export { canvasValue } from "linkedom";\n',
-			"node_modules/linkedom/package.json": JSON.stringify({
-				name: "linkedom",
-				version: "0.18.12",
+			"package.json": JSON.stringify({ name: "esm-canvas-consumer", version: "1.0.0", type: "module" }),
+			"index.js": 'export { canvasValue } from "esm-canvas-package";\n',
+			"node_modules/esm-canvas-package/package.json": JSON.stringify({
+				name: "esm-canvas-package",
+				version: "1.0.0",
 				type: "module",
 				exports: "./index.js",
 			}),
-			"node_modules/linkedom/index.js": [
+			"node_modules/esm-canvas-package/index.js": [
 				'import Canvas from "./commonjs/canvas.cjs";',
 				"export const canvasValue = Canvas.createCanvas();",
 			].join("\n"),
-			"node_modules/linkedom/commonjs/canvas.cjs": [
+			"node_modules/esm-canvas-package/commonjs/canvas.cjs": [
 				"try {",
 				'  module.exports = require("canvas");',
 				"} catch {",
 				'  module.exports = require("./canvas-shim.cjs");',
 				"}",
 			].join("\n"),
-			"node_modules/linkedom/commonjs/canvas-shim.cjs":
-				'module.exports = { createCanvas: () => "linkedom-canvas-shim" };\n',
+			"node_modules/esm-canvas-package/commonjs/canvas-shim.cjs":
+				'module.exports = { createCanvas: () => "canvas-shim" };\n',
 		});
 
 		const mod = await loadLegacyPiModule(path.join(dir, "index.js"));
 
-		expect(Reflect.get(Object(mod), "canvasValue")).toBe("linkedom-canvas-shim");
+		expect(Reflect.get(Object(mod), "canvasValue")).toBe("canvas-shim");
 	});
 
 	it("preserves named ESM imports from CommonJS helpers", async () => {
@@ -780,20 +781,19 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 				// `@earendil-works/*` is a fork alias with no real published package,
 				// so a working import proves the load-time rewrite fired rather than
 				// a coincidental native resolution against a cached package.
-				'import { z } from "@earendil-works/pi-ai";',
+				'import { Effort } from "@earendil-works/pi-ai";',
 				"export const depValue = cjs.value;",
-				'export const hasZod = typeof z?.object === "function";',
+				'export const hasAi = typeof Effort === "object";',
 				"export default function (pi) { void pi; }",
 			].join("\n"),
 		});
 
-		const mod = (await loadLegacyPiModule(path.join(dir, "index.ts"))) as { depValue: string; hasZod: boolean };
+		const mod = (await loadLegacyPiModule(path.join(dir, "index.ts"))) as { depValue: string; hasAi: boolean };
 
 		// CJS dep under node_modules keeps Bun's native resolution (it is excluded
-		// from the rewrite onLoad), and the legacy pi import is remapped to the
-		// bundled Zod-backed shim.
+		// from the rewrite onLoad), and the legacy pi import is remapped.
 		expect(mod.depValue).toBe("cjs-native");
-		expect(mod.hasZod).toBe(true);
+		expect(mod.hasAi).toBe(true);
 	});
 
 	it("exposes legacy root tool factories used by pi-lean-ctx", async () => {
@@ -1003,6 +1003,294 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		expect(expectedEsmDepUrls.some(expected => rewritten.includes(expected))).toBe(true);
 		expect(expectedRootDepUrls.some(expected => rewritten.includes(expected))).toBe(true);
 		expect(rewritten).toContain('from "node:path"');
+	});
+
+	it("pre-rewrites a nested ESM cluster required by CommonJS", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "nested-esm-ext", version: "1.0.0", type: "module" }),
+			"node_modules/cjs-parent/package.json": JSON.stringify({
+				name: "cjs-parent",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/index.js": 'module.exports = require("nested-esm");',
+			"node_modules/cjs-parent/node_modules/nested-esm/package.json": JSON.stringify({
+				name: "nested-esm",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/node_modules/nested-esm/index.js":
+				'import { value } from "nested-leaf"; export default value;',
+			"node_modules/cjs-parent/node_modules/nested-leaf/package.json": JSON.stringify({
+				name: "nested-leaf",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/node_modules/nested-leaf/index.js": 'export const value = "nested-ok";',
+			"index.js": 'import value from "cjs-parent"; export { value };',
+		});
+		const entry = path.join(dir, "index.js");
+		const nestedEntry = await fs.realpath(path.join(dir, "node_modules/cjs-parent/node_modules/nested-esm/index.js"));
+		const nestedLeaf = await fs.realpath(path.join(dir, "node_modules/cjs-parent/node_modules/nested-leaf/index.js"));
+
+		const sources = await __collectLegacyPiExtensionSourcesForTests(entry);
+
+		expect(sources.has(nestedEntry)).toBe(true);
+		expect(sources.get(nestedEntry)).toContain(url.pathToFileURL(nestedLeaf).href);
+	});
+
+	it("loads a nested ESM cluster required after the extension import settles", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "lazy-nested-esm-ext", version: "1.0.0", type: "module" }),
+			"node_modules/cjs-parent/package.json": JSON.stringify({
+				name: "cjs-parent",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/index.js": 'module.exports = { load: () => require("nested-esm").default };',
+			"node_modules/cjs-parent/node_modules/nested-esm/package.json": JSON.stringify({
+				name: "nested-esm",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/node_modules/nested-esm/index.js":
+				'import { value } from "nested-leaf"; export default value;',
+			"node_modules/cjs-parent/node_modules/nested-leaf/package.json": JSON.stringify({
+				name: "nested-leaf",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/node_modules/nested-leaf/index.js": 'export const value = "lazy-nested-ok";',
+			"index.js": [
+				'import parent from "cjs-parent";',
+				"export const loadValue = parent.load;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+		});
+
+		const mod = await loadLegacyPiModule(path.join(dir, "index.js"));
+		const loadValue = Reflect.get(Object(mod), "loadValue");
+		if (typeof loadValue !== "function") {
+			throw new Error("lazy nested ESM fixture did not export loadValue");
+		}
+
+		expect(loadValue()).toBe("lazy-nested-ok");
+	});
+
+	it("rewalks an ESM graph when a later require upgrades it to synchronous loading", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "sync-upgrade-ext", version: "1.0.0", type: "module" }),
+			"node_modules/cjs-parent/package.json": JSON.stringify({
+				name: "cjs-parent",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/index.js": 'module.exports = { load: () => require("shared").default };',
+			"node_modules/shared/package.json": JSON.stringify({
+				name: "shared",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/shared/index.js": 'import { value } from "shared-leaf"; export default value;',
+			"node_modules/shared-leaf/package.json": JSON.stringify({
+				name: "shared-leaf",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/shared-leaf/index.js": 'export const value = "sync-upgrade-ok";',
+			"index.ts": [
+				'import parent from "cjs-parent";',
+				'import type { Marker } from "shared";',
+				"export const loadValue = parent.load;",
+				"export type SharedMarker = Marker;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+		});
+
+		const mod = await loadLegacyPiModule(path.join(dir, "index.ts"));
+		const loadValue = Reflect.get(Object(mod), "loadValue");
+		if (typeof loadValue !== "function") {
+			throw new Error("sync-upgrade fixture did not export loadValue");
+		}
+
+		expect(loadValue()).toBe("sync-upgrade-ok");
+	});
+
+	it("serves an async-hooked module synchronously after a reload adds a require edge", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "reload-upgrade-ext", version: "1.0.0", type: "module" }),
+			"node_modules/cjs-parent/package.json": JSON.stringify({
+				name: "cjs-parent",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/index.js": 'module.exports = { load: () => require("shared").default };',
+			"node_modules/shared/package.json": JSON.stringify({
+				name: "shared",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/shared/index.js": 'import { value } from "shared-leaf"; export default value;',
+			"node_modules/shared-leaf/package.json": JSON.stringify({
+				name: "shared-leaf",
+				version: "1.0.0",
+				type: "module",
+				main: "index.js",
+			}),
+			"node_modules/shared-leaf/index.js": 'export const value = "reload-upgrade-ok";',
+			// v1 reaches `shared` through `import` only, so the first load
+			// registers it with the async rewrite hook.
+			"index.js": [
+				'import shared from "shared";',
+				"export const loadValue = () => shared;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+		});
+		const entry = path.join(dir, "index.js");
+
+		const first = await loadLegacyPiModule(entry);
+		const firstLoad = Reflect.get(Object(first), "loadValue");
+		if (typeof firstLoad !== "function") {
+			throw new Error("reload-upgrade fixture v1 did not export loadValue");
+		}
+		expect(firstLoad()).toBe("reload-upgrade-ok");
+
+		// v2 upgrades `shared` to synchronous loading via a new require() edge.
+		// The async hook from the first load still owns the path, so it must
+		// serve the pre-rewritten synchronous source inline.
+		await fs.writeFile(
+			entry,
+			[
+				'import parent from "cjs-parent";',
+				"export const loadValue = parent.load;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+			"utf8",
+		);
+
+		const second = await loadLegacyPiModule(entry);
+		const secondLoad = Reflect.get(Object(second), "loadValue");
+		if (typeof secondLoad !== "function") {
+			throw new Error("reload-upgrade fixture v2 did not export loadValue");
+		}
+		expect(secondLoad()).toBe("reload-upgrade-ok");
+	});
+
+	it("serves fresh source after a reload drops a module's require edge", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "reload-downgrade-ext", version: "1.0.0", type: "module" }),
+			"node_modules/cjs-parent/package.json": JSON.stringify({
+				name: "cjs-parent",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/cjs-parent/index.js": 'module.exports = { load: () => require("../../lib.js").value };',
+			// v1 reaches `lib.js` through a require() edge, so the first load
+			// flags it synchronous and snapshots its pre-rewritten source.
+			"lib.js": 'export const value = "downgrade-v1";',
+			"index.js": [
+				'import parent from "cjs-parent";',
+				"export const loadValue = parent.load;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+		});
+		const entry = path.join(dir, "index.js");
+
+		const first = await loadLegacyPiModule(entry);
+		const firstLoad = Reflect.get(Object(first), "loadValue");
+		if (typeof firstLoad !== "function") {
+			throw new Error("reload-downgrade fixture v1 did not export loadValue");
+		}
+		expect(firstLoad()).toBe("downgrade-v1");
+
+		// v2 drops the require edge and edits lib.js. The permanent hooks still
+		// serve the path from the synchronous snapshot, so the reload walk must
+		// refresh it instead of replaying the v1 bytes.
+		await fs.writeFile(path.join(dir, "lib.js"), 'export const value = "downgrade-v2";', "utf8");
+		await fs.writeFile(
+			entry,
+			[
+				'import { value } from "./lib.js";',
+				"export const loadValue = () => value;",
+				"export default function (pi) { void pi; }",
+			].join("\n"),
+			"utf8",
+		);
+
+		const second = await loadLegacyPiModule(entry);
+		const secondLoad = Reflect.get(Object(second), "loadValue");
+		if (typeof secondLoad !== "function") {
+			throw new Error("reload-downgrade fixture v2 did not export loadValue");
+		}
+		expect(secondLoad()).toBe("downgrade-v2");
+	});
+
+	it("chooses the ESM branch when dual package graphs converge", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "dual-convergence-ext", version: "1.0.0", type: "module" }),
+			"node_modules/dual/package.json": JSON.stringify({
+				name: "dual",
+				version: "1.0.0",
+				exports: { import: "./esm.js", require: "./cjs.js" },
+			}),
+			"node_modules/dual/esm.js": 'import "./shared.js"; export const mode = "esm";',
+			"node_modules/dual/cjs.js": 'if (false) require("./shared.js"); module.exports = { mode: "cjs" };',
+			"node_modules/dual/shared.js": "globalThis.__ompDualGraphLoaded = true;",
+			"node_modules/dual-consumer/package.json": JSON.stringify({
+				name: "dual-consumer",
+				version: "1.0.0",
+				main: "index.js",
+			}),
+			"node_modules/dual-consumer/index.js": 'module.exports = require("dual");',
+			"index.js": 'import "dual"; import "dual-consumer";',
+		});
+		const shared = await fs.realpath(path.join(dir, "node_modules/dual/shared.js"));
+
+		const sources = await __collectLegacyPiExtensionSourcesForTests(path.join(dir, "index.js"));
+
+		expect(sources.has(shared)).toBe(true);
+	});
+
+	it("rewrites directory and builtin-named package requires through package main", async () => {
+		const dir = await writePackage({
+			"package.json": JSON.stringify({ name: "directory-require-ext", version: "1.0.0" }),
+			"node_modules/directory-package/package.json": JSON.stringify({
+				name: "directory-package",
+				version: "1.0.0",
+				main: "lib/plumbing.js",
+			}),
+			"node_modules/directory-package/lib/plumbing.js": 'module.exports = "directory-ok";',
+			"node_modules/directory-package/configure/request.js": "",
+			"node_modules/punycode/package.json": JSON.stringify({
+				name: "punycode",
+				version: "1.0.0",
+				main: "punycode.js",
+			}),
+			"node_modules/punycode/punycode.js": 'module.exports = "punycode-ok";',
+			"index.js": "",
+		});
+		const importer = path.join(dir, "node_modules/directory-package/configure/request.js");
+		const rewritten = await __rewriteLegacyExtensionSourceForTests(
+			'const directory = require("../"); const punycode = require("punycode/");',
+			importer,
+		);
+		const directoryEntry = (
+			await fs.realpath(path.join(dir, "node_modules/directory-package/lib/plumbing.js"))
+		).replaceAll("\\", "/");
+		const punycodeEntry = (await fs.realpath(path.join(dir, "node_modules/punycode/punycode.js"))).replaceAll(
+			"\\",
+			"/",
+		);
+
+		expect(rewritten).toContain(`require("${directoryEntry}")`);
+		expect(rewritten).toContain(`require("${punycodeEntry}")`);
 	});
 
 	it("honors export pattern specificity and package encapsulation", async () => {
@@ -1240,8 +1528,8 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 			// `@earendil-works/*` only resolves via the rewrite, so an un-rewritten
 			// import fails — proving the hook did not over-reach to this sibling.
 			"unrelated.ts": [
-				'import { z } from "@earendil-works/pi-ai";',
-				'export const hasZod = typeof z?.object === "function";',
+				'import { Effort } from "@earendil-works/pi-ai";',
+				'export const hasAi = typeof Effort === "object";',
 			].join("\n"),
 		});
 

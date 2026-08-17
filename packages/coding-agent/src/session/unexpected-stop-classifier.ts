@@ -1,5 +1,5 @@
-import { type AssistantMessage, completeSimple } from "@oh-my-pi/pi-ai";
-import { logger, prompt } from "@oh-my-pi/pi-utils";
+import { type AssistantMessage, completeSimple } from "@musepi/pi-ai";
+import { logger, prompt } from "@musepi/pi-utils";
 
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveRoleSelection } from "../config/model-resolver";
@@ -34,14 +34,23 @@ export interface ClassifyUnexpectedStopDeps {
 
 export function isUnexpectedStopCandidate(message: AssistantMessage): boolean {
 	if (message.stopReason !== "stop") return false;
-	let hasText = false;
+	let hasContent = false;
 	for (const content of message.content) {
 		if (content.type === "toolCall") return false;
 		if (content.type === "text" && /\S/.test(content.text)) {
-			hasText = true;
+			hasContent = true;
+		}
+		// A signed thinking-only stop is still a candidate: reasoning models can
+		// trap the intended response (or a truncated fragment) in a thinking block
+		// with no text. #isEmptyAssistantStop treats a non-whitespace signature as
+		// terminal (not empty), so such stops bypass the empty-stop path entirely.
+		// Match that predicate here — unsigned thinking-only stops stay with the
+		// empty-stop retry path (and its cap) rather than being re-handled here.
+		if (content.type === "thinking" && /\S/.test(content.thinking) && /\S/.test(content.thinkingSignature ?? "")) {
+			hasContent = true;
 		}
 	}
-	return hasText;
+	return hasContent;
 }
 
 export async function classifyUnexpectedStop(

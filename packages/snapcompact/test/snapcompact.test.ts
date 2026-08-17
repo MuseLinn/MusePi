@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { AssistantMessage, Message, Usage } from "@oh-my-pi/pi-ai";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+import type { AssistantMessage, Message, Usage } from "@musepi/pi-ai";
+import { INTENT_FIELD } from "@musepi/pi-wire";
 import * as snapcompact from "../src";
 
 // Small frames keep render time negligible. Legacy 5x8 shape: 320px → 64 cols
@@ -267,9 +267,11 @@ describe("shape resolution", () => {
 		expect(snapcompact.resolveShape({ api: "openai-responses" })).toBe(snapcompact.SHAPES.openai);
 		expect(snapcompact.resolveShape({ api: "azure-openai-responses" })).toBe(snapcompact.SHAPES.openai);
 		expect(snapcompact.resolveShape({ api: "google-generative-ai" })).toBe(snapcompact.SHAPES.google);
-		// Unknown and absent APIs fall back to the Anthropic family default.
-		expect(snapcompact.resolveShape({ api: "some-future-api" })).toBe(snapcompact.SHAPES.anthropic);
-		expect(snapcompact.resolveShape(undefined)).toBe(snapcompact.SHAPES.anthropic);
+		// Unknown and absent APIs fall back to the unknown family default (8on22-bw with Anthropic token billing).
+		const unknownFallback = snapcompact.resolveShape({ api: "some-future-api" });
+		expect(unknownFallback.cellHeight).toBe(22);
+		expect(unknownFallback.variant).toBe("bw");
+		expect(snapcompact.resolveShape(undefined)).toEqual(unknownFallback);
 	});
 
 	it("detects the ideal shape from the model id across gateways", () => {
@@ -309,11 +311,11 @@ describe("shape resolution", () => {
 		expect(gemini.cellHeight).toBe(22); // extra leading
 		expect(gemini.frameTokenEstimate).toBe(1120);
 
-		// Measured openai-compat readers keep their own validated `8on16-bw`
-		// geometry (not the family's leading default), at the gateway's billing.
-		const kimiShape = snapcompact.resolveShape({ api: "openai-completions" }, "8on16-bw");
+		// Kimi models resolve to 8on22-bw; GLM keeps 8on16-bw.
+		const kimiShape = snapcompact.resolveShape({ api: "openai-completions" }, "8on22-bw");
+		const glmShape = snapcompact.resolveShape({ api: "openai-completions" }, "8on16-bw");
 		expect(snapcompact.resolveShape({ api: "openai-completions", id: "moonshotai/kimi-k2.6" })).toEqual(kimiShape);
-		expect(snapcompact.resolveShape({ api: "openai-completions", id: "z-ai/glm-4.6v" })).toEqual(kimiShape);
+		expect(snapcompact.resolveShape({ api: "openai-completions", id: "z-ai/glm-4.6v" })).toEqual(glmShape);
 
 		// Unmeasured model ids fall back to the API family default object.
 		expect(snapcompact.resolveShape({ api: "openai-completions", id: "qwen/qwen3-vl" })).toBe(
@@ -846,10 +848,9 @@ describe("compact", () => {
 
 		expect(result.firstKeptEntryId).toBe("kept-1");
 		expect(result.tokensBefore).toBe(99000);
-		expect(result.summary).toContain("You are resuming a prior conversation.");
 		expect(result.summary).toContain("HISTORY");
-		expect(result.summary).toContain("`¶user:`, `¶think:`, `¶ai:`, and `¶call:`");
-		expect(result.summary).toContain("Following lines without a `¶…:` prefix remain in the current scope.");
+		expect(result.summary).toContain("`¶user:`");
+		expect(result.summary).toContain("`¶call:`");
 		expect(result.summary).toContain("`¶call:name(args)//intent`");
 		expect(result.summary).toContain("FILES\n===================\n# src/\nauth.ts (Read)\nlogin.ts (Write)");
 
@@ -915,7 +916,7 @@ describe("compact", () => {
 		const hugeText = `HEAD sentinel. ${"Important fact number one. ".repeat(1000)}TAIL sentinel.`;
 		const result = await snapcompact.compact(
 			makePreparation({ messagesToSummarize: [createUserMessage(hugeText)] }),
-			{ frameSize: TEST_FRAME_SIZE, maxFrames: 7 },
+			{ model: { api: "anthropic-messages" }, frameSize: TEST_FRAME_SIZE, maxFrames: 7 },
 		);
 		const archive = snapcompact.getPreservedArchive(result.preserveData);
 		expect(archive?.frames).toHaveLength(7);

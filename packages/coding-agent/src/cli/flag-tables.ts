@@ -20,7 +20,7 @@
  * up automatically, so the two cannot drift out of sync.
  *
  * IMPORT RULE: this module MUST NOT import any runtime value from
- * `@oh-my-pi/pi-utils` (or anything that transitively does). That package's
+ * `@musepi/pi-utils` (or anything that transitively does). That package's
  * `env.ts` eagerly loads `.env` files from `getAgentDir()` during module
  * initialization, which would race the profile bootstrap. Type-only imports
  * are erased at runtime and are therefore safe.
@@ -30,6 +30,7 @@
  * real implementations at the dispatch site.
  */
 
+import { isServiceTierOpenAISettingValue, SERVICE_TIER_OPENAI_VALUES } from "../config/service-tier";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { Args } from "./args";
 import { CliUsageError } from "./usage-error";
@@ -40,7 +41,7 @@ import { CliUsageError } from "./usage-error";
  * passes it to each {@link STRING_SETTERS} call.
  *
  * Keeping these out of the setter closures means this module stays free of
- * runtime imports from `@oh-my-pi/pi-utils`, which is the whole reason it can
+ * runtime imports from `@musepi/pi-utils`, which is the whole reason it can
  * be safely imported by `profile-bootstrap.ts` before `setProfile` runs.
  */
 export interface ParseDeps {
@@ -152,6 +153,14 @@ export const STRING_SETTERS: Record<string, StringSetter> = {
 	"--max-time": (result, value) => {
 		result.maxTime = parseMaxTimeSeconds(value);
 	},
+	"--service-tier": (result, value) => {
+		if (!isServiceTierOpenAISettingValue(value)) {
+			throw new CliUsageError(
+				`Invalid --service-tier value: ${JSON.stringify(value)}. Expected one of: ${SERVICE_TIER_OPENAI_VALUES.join(", ")}.`,
+			);
+		}
+		result.serviceTier = value;
+	},
 	"--api-key": (result, value) => {
 		result.apiKey = value;
 	},
@@ -211,6 +220,10 @@ export const STRING_SETTERS: Record<string, StringSetter> = {
 	},
 	"--extension": setExtension,
 	"-e": setExtension,
+	"--trusted-extension": (result, value) => {
+		result.trustedExtensions = result.trustedExtensions ?? [];
+		result.trustedExtensions.push(value);
+	},
 	"--plugin-dir": (result, value) => {
 		result.pluginDirs = result.pluginDirs ?? [];
 		result.pluginDirs.push(value);

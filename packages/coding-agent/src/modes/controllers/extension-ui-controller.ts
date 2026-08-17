@@ -1,6 +1,6 @@
-import type { Component, OverlayHandle, TUI } from "@oh-my-pi/pi-tui";
-import { Container, Spacer, Text } from "@oh-my-pi/pi-tui";
-import type { CollabUiRequestDraft, CollabUiSelectItem } from "@oh-my-pi/pi-wire";
+import type { Component, OverlayHandle, TUI } from "@musepi/pi-tui";
+import { Container, Spacer, Text } from "@musepi/pi-tui";
+import type { CollabUiRequestDraft, CollabUiSelectItem } from "@musepi/pi-wire";
 import { KeybindingsManager } from "../../config/keybindings";
 import type {
 	CompactOptions,
@@ -128,7 +128,7 @@ export class ExtensionUiController {
 		};
 		this.ctx.setToolUIContext(uiContext, true);
 		this.#toolUIContext = uiContext;
-		this.ctx.session.setUsageFallbackConfirmer?.(confirmation => {
+		this.ctx.session.setUsageFallbackConfirmer?.((confirmation, signal) => {
 			const reserve =
 				confirmation.remainingPercent === undefined
 					? "inside the configured reserve margin"
@@ -136,6 +136,7 @@ export class ExtensionUiController {
 			return this.showHookConfirm(
 				"Coding-plan reserve reached",
 				`${confirmation.from} has ${reserve}. Switch to ${confirmation.to}? Choose No to keep using the current plan.`,
+				{ signal },
 			);
 		});
 
@@ -165,7 +166,7 @@ export class ExtensionUiController {
 				this.ctx.sessionManager.appendLabelChange(targetId, label);
 			},
 			getActiveTools: () => this.ctx.session.getEnabledToolNames(),
-			getAllTools: () => this.ctx.session.getAllToolNames(),
+			getAllTools: () => this.ctx.session.getAllToolInfos(),
 			setActiveTools: toolNames => this.ctx.session.setActiveToolsByName(toolNames),
 			setModel: async model => {
 				const key = await this.ctx.session.modelRegistry.getApiKey(model);
@@ -398,7 +399,7 @@ export class ExtensionUiController {
 				this.ctx.sessionManager.appendLabelChange(targetId, label);
 			},
 			getActiveTools: () => this.ctx.session.getEnabledToolNames(),
-			getAllTools: () => this.ctx.session.getAllToolNames(),
+			getAllTools: () => this.ctx.session.getAllToolInfos(),
 			setActiveTools: toolNames => this.ctx.session.setActiveToolsByName(toolNames),
 			setModel: async model => {
 				const key = await this.ctx.session.modelRegistry.getApiKey(model);

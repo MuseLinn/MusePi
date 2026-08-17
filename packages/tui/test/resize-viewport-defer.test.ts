@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import {
-	type Component,
-	type RenderScheduler,
-	type RenderTimer,
-	TUI,
-	type ViewportTailProvider,
-} from "@oh-my-pi/pi-tui";
+import { type Component, type RenderScheduler, type RenderTimer, TUI, type ViewportTailProvider } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 // Outside a multiplexer a resize used to erase-and-replay the whole transcript
@@ -21,6 +15,7 @@ const NO_MULTIPLEXER_ENV: Record<string, string | undefined> = {
 	TMUX: undefined,
 	STY: undefined,
 	ZELLIJ: undefined,
+	HERDR_ENV: undefined,
 	CMUX_WORKSPACE_ID: undefined,
 	CMUX_SURFACE_ID: undefined,
 	CMUX_REMOTE_TRANSPORT: undefined,

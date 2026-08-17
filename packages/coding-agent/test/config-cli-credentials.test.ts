@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { runConfigCommand } from "@oh-my-pi/pi-coding-agent/cli/config-cli";
-import { resetSettingsForTest } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentStorage } from "@oh-my-pi/pi-coding-agent/session/agent-storage";
-import { getConfigRootDir, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+import { runConfigCommand } from "@musepi/pi-coding-agent/cli/config-cli";
+import { resetSettingsForTest } from "@musepi/pi-coding-agent/config/settings";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { getConfigRootDir, setAgentDir, TempDir } from "@musepi/pi-utils";
 import { isCredential, SETTINGS_SCHEMA, type SettingPath } from "../src/config/settings-schema";
 import { getSettingDef } from "../src/modes/components/settings-defs";
 

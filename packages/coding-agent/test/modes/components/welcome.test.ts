@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { pickWeightedTip, WelcomeComponent } from "@oh-my-pi/pi-coding-agent/modes/components/welcome";
-import { initTheme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { pickWeightedTip, WelcomeComponent } from "@musepi/pi-coding-agent/modes/components/welcome";
+import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 
 describe("WelcomeComponent tips", () => {
 	beforeAll(async () => {

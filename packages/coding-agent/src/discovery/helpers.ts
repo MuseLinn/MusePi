@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { FileType, glob } from "@oh-my-pi/pi-natives";
+import { FileType, glob } from "@musepi/pi-natives";
 import {
 	CONFIG_DIR_NAME,
 	getAgentDir,
@@ -10,15 +10,17 @@ import {
 	getProjectDir,
 	parseFrontmatter,
 	tryParseJson,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
 import type { ExtensionModule } from "../capability/extension-module";
 import { invalidate as invalidateFsCache, readDirEntries, readFile } from "../capability/fs";
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
+import type { MCPRequestIdFormat } from "../mcp/types";
 import { type ConfiguredThinkingLevel, parseConfiguredThinkingLevel } from "../thinking";
 import { normalizeToolNames } from "../tools/builtin-names";
 
+import { realpathIfExists, resolveContainedPath } from "./contained-path";
 import { buildPluginDirRoot } from "./plugin-dir-roots";
 
 /**
@@ -137,6 +139,15 @@ export function parseBoolean(value: unknown): boolean | undefined {
 		if (normalized === "true") return true;
 		if (normalized === "false") return false;
 	}
+	return undefined;
+}
+
+/**
+ * Parse an MCP `requestIdFormat` value. Unrecognized values are dropped so a typo
+ * degrades to the default integer ids rather than reaching a transport.
+ */
+export function parseRequestIdFormat(value: unknown): MCPRequestIdFormat | undefined {
+	if (value === "string" || value === "number") return value;
 	return undefined;
 }
 
@@ -1131,17 +1142,30 @@ export async function injectPluginDirRoots(home: string, dirs: string[], cwd?: s
 	const injected: ClaudePluginRoot[] = [];
 	for (const dir of dirs) {
 		const resolved = path.resolve(dir);
-		// Read plugin name from manifest
+		// Read plugin name from manifest: Claude marketplace layout first, then
+		// the Agent Plugins standard root manifest (agent-plugins.org). Each
+		// manifest is resolved and proven inside the plugin directory BEFORE the
+		// read (Agent Plugins §4.1) — an escaping symlink falls back to the
+		// directory basename without consuming outside content.
 		let pluginName = path.basename(resolved);
-		try {
-			const manifestPath = path.join(resolved, ".claude-plugin", "plugin.json");
-			const content = await Bun.file(manifestPath).text();
-			const manifest = JSON.parse(content);
-			if (typeof manifest.name === "string" && manifest.name) {
-				pluginName = manifest.name;
+		const realRoot = await realpathIfExists(resolved);
+		if (realRoot !== null) {
+			for (const manifestPath of [
+				path.join(realRoot, ".claude-plugin", "plugin.json"),
+				path.join(realRoot, "plugin.json"),
+			]) {
+				const contained = await resolveContainedPath(realRoot, manifestPath);
+				if (contained.status !== "ok") continue;
+				try {
+					const manifest = await Bun.file(contained.realPath).json();
+					if (typeof manifest?.name === "string" && manifest.name) {
+						pluginName = manifest.name;
+						break;
+					}
+				} catch {
+					// Invalid manifest — try next, fall back to directory name
+				}
 			}
-		} catch {
-			// No manifest or invalid — use directory name
 		}
 
 		injected.push(buildPluginDirRoot(resolved, pluginName));

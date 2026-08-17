@@ -1,6 +1,6 @@
 # AI tool-schema normalization
 
-`@oh-my-pi/pi-ai` exposes one unified schema normalizer that providers consume
+`@musepi/pi-ai` exposes one unified schema normalizer that providers consume
 before tools are sent on the wire. All walkers live in
 `packages/ai/src/utils/schema/normalize.ts`; the operational contract is
 `packages/ai/src/utils/schema/CONSTRAINTS.md`.
@@ -12,7 +12,7 @@ share the same option-driven walk.
 
 ## Entry points
 
-All exports live under `@oh-my-pi/pi-ai/utils/schema`:
+All exports live under `@musepi/pi-ai/utils/schema`:
 
 - `normalizeSchema(value, options)` — generic option-driven walker.
 - `normalizeSchemaForGoogle(value)` — Gemini / Vertex / Gemini CLI.
@@ -37,8 +37,8 @@ Removed in the unified-flow refactor:
 - `strict-mode.ts` (merged into `normalize.ts`).
 - `sanitize-google.ts` and `normalize-cca.ts` (replaced by
   `normalizeSchemaFor*` dispatchers).
-- `StringEnum` helper — use `z.enum([...])` directly; Zod's emitted JSON
-  Schema is already wire-compatible with Google and other providers.
+- `StringEnum` helper — use `type.enumerated(...)`; omptype emits
+  provider-compatible JSON Schema.
 - `sanitizeSchemaFor{Google,CCA,MCP}` / `prepareSchemaForCCA` — renamed to
   `normalizeSchemaFor{Google,CCA,MCP}`.
 
@@ -59,9 +59,8 @@ shared Google Claude path.
 
 ## Walk semantics
 
-`normalizeSchema` first detoxifies serialized Zod-instance-shaped inputs, upgrades them to
-JSON Schema 2020-12, dereferences the tree, then walks it with the option set
-pinned by the dispatcher. Each node:
+`normalizeSchema` upgrades inputs to JSON Schema 2020-12, dereferences the tree,
+then walks it with the option set pinned by the dispatcher. Each node:
 
 1. Renames `snake_case` combinator/property keys to camelCase
    (`any_of` → `anyOf`, etc.; collisions follow python-genai

@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { t } from "../../i18n/index.js";
 import type { Notice } from "../../lib/client";
 
 const INFO_TTL_MS = 4000;
@@ -53,7 +54,7 @@ export function Toasts({ notices }: { notices: readonly Notice[] }): ReactNode {
 				<div key={n.id} className={`sh-toast sh-toast-${n.level}`} role="status">
 					<span className="sh-toast-msg">{n.message}</span>
 					{n.level === "error" && (
-						<button type="button" className="sh-toast-close" onClick={() => close(n.id)} title="dismiss">
+						<button type="button" className="sh-toast-close" onClick={() => close(n.id)} title={t("dismiss")}>
 							<X size={12} />
 						</button>
 					)}

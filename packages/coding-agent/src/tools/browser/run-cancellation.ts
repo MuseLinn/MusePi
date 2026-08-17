@@ -1,4 +1,4 @@
-import { untilAborted } from "@oh-my-pi/pi-utils";
+import { untilAborted } from "@musepi/pi-utils";
 import { ToolError, throwIfAborted } from "../tool-errors";
 
 /**

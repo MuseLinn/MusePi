@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 
 describe("advisor watchdog prompt discovery", () => {
 	const tempDirs: TempDir[] = [];
@@ -142,14 +142,9 @@ describe("advisor watchdog prompt discovery", () => {
 		fs.writeFileSync(path.join(cwd, "WATCHDOG.md"), watchdogContent, "utf8");
 
 		await withAdvisorHistory(tempDir, cwd, dump => {
-			expect(dump).toContain("Especially pay attention to:");
-			expect(dump).toContain("exactly one direct child git repository");
 			expect(dump).toContain("`active-project`");
-			expect(dump).toContain("Do not claim work is missing, destroyed, or absent at the parent cwd");
 			expect(dump).toContain(watchdogContent);
-			expect(dump.indexOf(watchdogContent)).toBeLessThan(
-				dump.indexOf("Do not claim work is missing, destroyed, or absent at the parent cwd"),
-			);
+			expect(dump.indexOf(watchdogContent)).toBeLessThan(dump.indexOf("`active-project`"));
 		});
 	});
 

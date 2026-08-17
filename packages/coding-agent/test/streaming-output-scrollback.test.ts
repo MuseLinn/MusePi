@@ -1,14 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { TranscriptContainer } from "@oh-my-pi/pi-coding-agent/modes/components/transcript-container";
-import { theme as activeTheme, initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { AgentProgress, TaskToolDetails } from "@oh-my-pi/pi-coding-agent/task/types";
-import { evalToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/eval-render";
-import { previewWindowRows } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import { type Component, TUI } from "@oh-my-pi/pi-tui";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
+import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { AgentProgress, TaskToolDetails } from "@musepi/pi-coding-agent/task/types";
+import { evalToolRenderer } from "@musepi/pi-coding-agent/tools/eval-render";
+import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
+import { type Component, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
 
 // Long, path-like output that wraps at the box's inner width — the case that

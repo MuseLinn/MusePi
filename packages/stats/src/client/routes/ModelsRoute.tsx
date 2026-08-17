@@ -18,8 +18,11 @@ import {
 	TrendEmpty,
 } from "../components/models-table-shared";
 import { formatRangeTick, rangeMeta } from "../components/range-meta";
+import { formatInteger } from "../data/formatters";
 import { useResource } from "../data/useResource";
 import { buildModelPerformanceLookup } from "../data/view-models";
+import { t } from "../i18n";
+import { useLocale } from "../i18n/use-locale";
 import type { ModelPerformancePoint, ModelStats, ModelTimeSeriesPoint, TimeRange } from "../types";
 import { AsyncBoundary, Panel } from "../ui";
 import { useSystemTheme } from "../useSystemTheme";
@@ -62,8 +65,9 @@ function ModelShareChart({ modelSeries, timeRange }: { modelSeries: ModelTimeSer
 	const theme = useSystemTheme();
 	const chartTheme = CHART_THEMES[theme];
 	const meta = rangeMeta(timeRange);
+	const locale = useLocale();
 
-	const chartData = useMemo(() => buildModelPreferenceSeries(modelSeries), [modelSeries]);
+	const chartData = useMemo(() => buildModelPreferenceSeries(modelSeries), [modelSeries, locale]);
 
 	const data = useMemo(() => {
 		return {
@@ -148,10 +152,12 @@ function ModelShareChart({ modelSeries, timeRange }: { modelSeries: ModelTimeSer
 	}, [chartTheme]);
 
 	return (
-		<Panel title="Model Preference" subtitle={`Share of requests over ${meta.windowLabel}`}>
+		<Panel title={t("Model Preference")} subtitle={t("Share of requests over {0}", t(meta.windowLabel))}>
 			<div className="h-[280px]">
 				{chartData.data.length === 0 ? (
-					<div className="h-full flex items-center justify-center text-stats-muted text-sm">No data available</div>
+					<div className="h-full flex items-center justify-center text-stats-muted text-sm">
+						{t("No data available")}
+					</div>
 				) : (
 					<Line data={data} options={options} />
 				)}
@@ -208,14 +214,14 @@ function buildModelPreferenceSeries(
 			total: 0,
 		};
 		bucket.total += point.requests;
-		const seriesLabel = topKeys.has(key) ? (labelByKey.get(key) ?? point.model) : "Other";
+		const seriesLabel = topKeys.has(key) ? (labelByKey.get(key) ?? point.model) : t("Other");
 		bucket[seriesLabel] = (bucket[seriesLabel] ?? 0) + point.requests;
 		dataMap.set(point.timestamp, bucket);
 	}
 
 	const series = topEntries.map(entry => labelByKey.get(entry.key) ?? entry.model);
 	if ([...dataMap.values()].some(row => (row.Other ?? 0) > 0)) {
-		series.push("Other");
+		series.push(t("Other"));
 	}
 
 	const data = [...dataMap.values()]
@@ -260,17 +266,17 @@ function ModelsTable({
 	}, [models]);
 
 	return (
-		<ModelTableShell title="Model Statistics">
+		<ModelTableShell title={t("Model Statistics")}>
 			<ModelTableHeader
 				gridTemplate={GRID_TEMPLATE}
 				columns={[
-					{ label: "Model" },
-					{ label: "Requests", align: "right" },
-					{ label: "Cost", align: "right" },
-					{ label: "Tokens", align: "right" },
-					{ label: "Tokens/s", align: "right" },
-					{ label: "TTFT", align: "right" },
-					{ label: meta.trendLabel, align: "center" },
+					{ label: t("Model") },
+					{ label: t("Requests"), align: "right" },
+					{ label: t("Cost"), align: "right" },
+					{ label: t("Tokens"), align: "right" },
+					{ label: t("Tokens/s"), align: "right" },
+					{ label: t("TTFT"), align: "right" },
+					{ label: t(meta.trendLabel), align: "center" },
 				]}
 			/>
 
@@ -292,13 +298,13 @@ function ModelsTable({
 							cells={[
 								<ModelNameCell key="name" model={model.model} provider={model.provider} />,
 								<div key="requests" className="text-right text-[var(--text-secondary)] font-mono text-sm">
-									{model.totalRequests.toLocaleString()}
+									{formatInteger(model.totalRequests)}
 								</div>,
 								<div key="cost" className="text-right text-[var(--text-secondary)] font-mono text-sm">
 									${model.totalCost.toFixed(2)}
 								</div>,
 								<div key="tokens" className="text-right text-[var(--text-secondary)] font-mono text-sm">
-									{(model.totalInputTokens + model.totalOutputTokens).toLocaleString()}
+									{formatInteger(model.totalInputTokens + model.totalOutputTokens)}
 								</div>,
 								<div key="tps" className="text-right text-[var(--text-secondary)] font-mono text-sm">
 									{model.avgTokensPerSecond?.toFixed(1) ?? "-"}
@@ -322,10 +328,10 @@ function ModelsTable({
 								<div className="grid gap-4" style={{ gridTemplateColumns: "200px 1fr" }}>
 									<div className="space-y-4 text-sm">
 										<div>
-											<div className="text-[var(--text-primary)] font-medium mb-2">Quality</div>
+											<div className="text-[var(--text-primary)] font-medium mb-2">{t("Quality")}</div>
 											<div className="space-y-1 text-[var(--text-secondary)]">
 												<div className="flex items-center justify-between">
-													<span>Error rate</span>
+													<span>{t("Error rate")}</span>
 													<span
 														className={
 															errorRate > 5 ? "text-[var(--accent-red)]" : "text-[var(--accent-green)]"
@@ -335,7 +341,7 @@ function ModelsTable({
 													</span>
 												</div>
 												<div className="flex items-center justify-between">
-													<span>Cache rate</span>
+													<span>{t("Cache rate")}</span>
 													<span className="text-[var(--accent-cyan)]">
 														{(model.cacheRate * 100).toFixed(1)}%
 													</span>
@@ -343,16 +349,16 @@ function ModelsTable({
 											</div>
 										</div>
 										<div>
-											<div className="text-[var(--text-primary)] font-medium mb-2">Latency</div>
+											<div className="text-[var(--text-primary)] font-medium mb-2">{t("Latency")}</div>
 											<div className="space-y-1 text-[var(--text-secondary)]">
 												<div className="flex items-center justify-between">
-													<span>Avg duration</span>
+													<span>{t("Avg duration")}</span>
 													<span className="font-mono">
 														{model.avgDuration ? `${(model.avgDuration / 1000).toFixed(2)}s` : "-"}
 													</span>
 												</div>
 												<div className="flex items-center justify-between">
-													<span>Avg TTFT</span>
+													<span>{t("Avg TTFT")}</span>
 													<span className="font-mono">
 														{model.avgTtft ? `${(model.avgTtft / 1000).toFixed(2)}s` : "-"}
 													</span>
@@ -397,25 +403,27 @@ function PerformanceChart({
 	chartTheme: TableChartTheme;
 	timeRange: TimeRange;
 }) {
+	const locale = useLocale();
+
 	const chartData = useMemo(() => {
 		return {
 			labels: data.map(d => formatRangeTick(d.timestamp, timeRange)),
 			datasets: [
 				{
-					label: "TTFT",
+					label: t("TTFT"),
 					data: data.map(d => d.avgTtftSeconds ?? null),
 					...lineSeriesStyle("#5ad8e6"),
 					yAxisID: "y" as const,
 				},
 				{
-					label: "Tokens/s",
+					label: t("Tokens/s"),
 					data: data.map(d => d.avgTokensPerSecond ?? null),
 					...lineSeriesStyle(color),
 					yAxisID: "y1" as const,
 				},
 			],
 		};
-	}, [data, color, timeRange]);
+	}, [data, color, timeRange, locale]);
 
 	const options = useMemo(() => {
 		return {

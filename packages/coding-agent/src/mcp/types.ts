@@ -59,12 +59,27 @@ export interface MCPAuthConfig {
 	resource?: string;
 }
 
+/** Encoding used for outgoing JSON-RPC request ids. */
+export type MCPRequestIdFormat = "string" | "number";
+
 /** Base server config with shared options */
 interface MCPServerConfigBase {
 	/** Whether this server is enabled (default: true) */
 	enabled?: boolean;
 	/** MCP request timeout in milliseconds (default: 30000, 0 to disable) */
 	timeout?: number;
+	/**
+	 * Encoding for outgoing JSON-RPC request ids (default: `"number"`).
+	 *
+	 * Set `"string"` for servers that need collision-resistant snowflake string
+	 * ids instead of per-transport integers. See `RequestIdAllocator` in
+	 * `./request-id`.
+	 *
+	 * OMP-specific, so only the OMP-owned discovery providers parse it (native,
+	 * standalone `mcp.json`, OMP plugins). Providers that translate another
+	 * tool's config do not, since the key is not part of those formats.
+	 */
+	requestIdFormat?: MCPRequestIdFormat;
 	/** Authentication configuration (optional) */
 	auth?: MCPAuthConfig;
 	/** OAuth configuration for servers requiring explicit client credentials */
@@ -85,6 +100,13 @@ export interface MCPStdioServerConfig extends MCPServerConfigBase {
 	command: string;
 	args?: string[];
 	env?: Record<string, string>;
+	/**
+	 * `literal`: env values are opaque plugin package data (Agent Plugins
+	 * §§4.1/9.2) — no env-name lookup, no `!command` execution, no dropping of
+	 * empty values. The provider already applied the only permitted expansion
+	 * (`${PLUGIN_ROOT}`/`${PLUGIN_DATA}`).
+	 */
+	envPolicy?: "literal";
 	cwd?: string;
 }
 
@@ -93,6 +115,12 @@ export interface MCPHttpServerConfig extends MCPServerConfigBase {
 	type: "http";
 	url: string;
 	headers?: Record<string, string>;
+	/**
+	 * `origin-locked`: configured headers are literal package data pinned to the
+	 * configured URL's origin (Agent Plugins §7.2.1) — never expanded, never
+	 * forwarded cross-origin, and client-generated headers win case-insensitively.
+	 */
+	headerPolicy?: "origin-locked";
 }
 
 /** SSE server configuration (deprecated, use HTTP) */
@@ -100,12 +128,14 @@ export interface MCPSseServerConfig extends MCPServerConfigBase {
 	type: "sse";
 	url: string;
 	headers?: Record<string, string>;
+	/** See {@link MCPHttpServerConfig.headerPolicy}. */
+	headerPolicy?: "origin-locked";
 }
 
 export type MCPServerConfig = MCPStdioServerConfig | MCPHttpServerConfig | MCPSseServerConfig;
 
 export const MCP_CONFIG_SCHEMA_URL =
-	"https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json";
+	"https://raw.githubusercontent.com/MuseLinn/MusePi/main/packages/coding-agent/src/config/mcp-schema.json";
 
 /** Root mcp.json/.mcp.json file structure */
 export interface MCPConfigFile {

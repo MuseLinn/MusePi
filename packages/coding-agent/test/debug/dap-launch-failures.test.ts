@@ -2,19 +2,19 @@ import { afterEach, describe, expect, it, spyOn, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import * as dapModule from "@oh-my-pi/pi-coding-agent/dap";
-import { connectSocket, DapClient, waitForTcpServerListening } from "@oh-my-pi/pi-coding-agent/dap/client";
-import { DapSessionManager } from "@oh-my-pi/pi-coding-agent/dap/session";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import * as dapModule from "@musepi/pi-coding-agent/dap";
+import { connectSocket, DapClient, waitForTcpServerListening } from "@musepi/pi-coding-agent/dap/client";
+import { DapSessionManager } from "@musepi/pi-coding-agent/dap/session";
 import type {
 	DapCapabilities,
 	DapClientState,
 	DapEventMessage,
 	DapResolvedAdapter,
-} from "@oh-my-pi/pi-coding-agent/dap/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { DebugTool } from "@oh-my-pi/pi-coding-agent/tools/debug";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/dap/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { DebugTool } from "@musepi/pi-coding-agent/tools/debug";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const TEST_ADAPTER: DapResolvedAdapter = {
 	name: "lldb-dap",
@@ -853,6 +853,36 @@ describe("DebugTool launch validation", () => {
 
 				await expect(tool.execute("call", { action: "launch", program: "main.go" })).rejects.toThrow(
 					/go install github\.com\/go-delve\/delve\/cmd\/dlv@latest/,
+				);
+			} finally {
+				await removeWithRetries(cwd);
+			}
+		} finally {
+			launchSpy.mockRestore();
+		}
+	});
+
+	it("shows supported install options when the JavaScript debug adapter is unavailable", async () => {
+		const launchSpy = spyOn(dapModule, "selectLaunchAdapter").mockReturnValue({
+			kind: "unavailable",
+			adapterName: "js-debug-adapter",
+			command: "js-debug-adapter",
+		});
+		try {
+			const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-debug-js-debug-hint-"));
+			try {
+				await fs.writeFile(path.join(cwd, "main.js"), "console.log('hi');\n");
+				const session: ToolSession = {
+					cwd,
+					hasUI: false,
+					getSessionFile: () => null,
+					getSessionSpawns: () => "*",
+					settings: Settings.isolated({ "debug.enabled": true }),
+				};
+				const tool = new DebugTool(session);
+
+				await expect(tool.execute("call", { action: "launch", program: "main.js" })).rejects.toThrow(
+					/download.*github\.com\/microsoft\/vscode-js-debug/,
 				);
 			} finally {
 				await removeWithRetries(cwd);

@@ -1,4 +1,5 @@
-import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent } from "@oh-my-pi/pi-tui";
+import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
+import { t } from "../../../i18n/index.js";
 import { getSelectListTheme, type SymbolPreset, setSymbolPreset, theme } from "../../theme/theme";
 import type { SetupScene, SetupSceneController, SetupSceneHost } from "./types";
 
@@ -17,15 +18,9 @@ const GLYPH_SAMPLES: Readonly<Record<SymbolPreset, string>> = {
 };
 
 /** One picker row per preset; the description column shows live sample glyphs instead of prose. */
-const GLYPH_ITEMS: readonly SelectItem[] = GLYPH_PRESETS.map((preset, index) => ({
-	value: preset,
-	label: `${index + 1}  ${GLYPH_LABELS[preset]}`,
-	description: preset === "nerd" ? `${GLYPH_SAMPLES.nerd}  ╭─╮  ├─  ◆  ✔  ✖` : GLYPH_SAMPLES[preset],
-}));
-
 class GlyphSceneController implements SetupSceneController {
-	title = "Choose glyph mode";
-	subtitle = "Pick the row that renders cleanly in your terminal.";
+	title = t("Choose glyph mode");
+	subtitle = t("Pick the row that renders cleanly in your terminal.");
 	#selectList: SelectList;
 	#previewRequest = 0;
 	#committing = false;
@@ -33,7 +28,13 @@ class GlyphSceneController implements SetupSceneController {
 	#listRowStart = 0;
 
 	constructor(private readonly host: SetupSceneHost) {
-		this.#selectList = new SelectList(GLYPH_ITEMS, GLYPH_ITEMS.length, getSelectListTheme());
+		// Labels evaluated at mount so the locale is resolved when the scene opens.
+		const items: readonly SelectItem[] = GLYPH_PRESETS.map((preset, index) => ({
+			value: preset,
+			label: `${index + 1}  ${t(GLYPH_LABELS[preset])}`,
+			description: preset === "nerd" ? `${GLYPH_SAMPLES.nerd}  ╭─╮  ├─  ◆  ✔  ✖` : GLYPH_SAMPLES[preset],
+		}));
+		this.#selectList = new SelectList(items, items.length, getSelectListTheme());
 		const current = theme.getSymbolPreset();
 		const currentIndex = GLYPH_PRESETS.indexOf(current);
 		this.#selectList.setSelectedIndex(currentIndex >= 0 ? currentIndex : 0);
@@ -69,7 +70,7 @@ class GlyphSceneController implements SetupSceneController {
 	}
 
 	render(width: number): readonly string[] {
-		const lines = [theme.fg("muted", "If a row shows boxes, tofu, or misaligned icons, pick another."), ""];
+		const lines = [theme.fg("muted", t("If a row shows boxes, tofu, or misaligned icons, pick another.")), ""];
 		this.#listRowStart = lines.length;
 		lines.push(...this.#selectList.render(width));
 		return lines;
@@ -97,7 +98,9 @@ class GlyphSceneController implements SetupSceneController {
 
 export const glyphSetupScene: SetupScene = {
 	id: "glyph-mode",
-	title: "Choose glyph mode",
+	get title() {
+		return t("Choose glyph mode");
+	},
 	minVersion: 1,
 	mount: host => new GlyphSceneController(host),
 };

@@ -7,10 +7,10 @@ import {
 	handleServerMessage,
 	processInteractionUpdate,
 	type ToolCallState,
-} from "@oh-my-pi/pi-ai/providers/cursor";
-import type { AssistantMessage, CursorExecHandlers, ToolResultMessage } from "@oh-my-pi/pi-ai/types";
-import { kCursorExecResolved, setStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
+} from "@musepi/pi-ai/providers/cursor";
+import type { AssistantMessage, CursorExecHandlers, ToolResultMessage } from "@musepi/pi-ai/types";
+import { kCursorExecResolved, setStreamingPartialJson } from "@musepi/pi-ai/utils/block-symbols";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import {
 	type AgentClientMessage,
 	AgentClientMessageSchema,
@@ -27,6 +27,8 @@ import {
 	ConnectScmSuccessSchema,
 	ConnectScmToolCallSchema,
 	ConversationSearchArgsSchema,
+	ConversationStateStructureSchema,
+	ConversationTokenDetailsSchema,
 	type ExecServerMessage,
 	ExecServerMessageSchema,
 	ExecuteHookArgsSchema,
@@ -62,7 +64,7 @@ import {
 	SubagentAwaitArgsSchema,
 	ToolCallSchema,
 	WebFetchAllowlistPrecheckArgsSchema,
-} from "@oh-my-pi/pi-catalog/discovery/cursor-gen/agent_pb";
+} from "@musepi/pi-catalog/discovery/cursor-gen/agent_pb";
 
 /**
  * Drive one `ExecServerMessage` through the real dispatcher and decode every
@@ -196,6 +198,39 @@ function soleResult(frames: AgentClientMessage[]) {
 describe("Cursor modern exec protocol activation", () => {
 	it("advertises the client build whose schema includes modern exec frames", () => {
 		expect(CURSOR_CLIENT_VERSION).toBe("cli-2026.07.23-e383d2b");
+	});
+});
+
+describe("Cursor conversation checkpoints", () => {
+	it("records checkpoint-only occupancy without billing it as token usage", async () => {
+		const output = cursorAssistantMessage();
+
+		await handleServerMessage(
+			create(AgentServerMessageSchema, {
+				message: {
+					case: "conversationCheckpointUpdate",
+					value: create(ConversationStateStructureSchema, {
+						tokenDetails: create(ConversationTokenDetailsSchema, { usedTokens: 120_000 }),
+					}),
+				},
+			}),
+			output,
+			new AssistantMessageEventStream(),
+			newBlockState(),
+			new Map(),
+			{ write: () => true } as unknown as Parameters<typeof handleServerMessage>[5],
+			undefined,
+			undefined,
+			{ sawTokenDelta: false },
+			[],
+		);
+
+		expect(output.usage).toMatchObject({
+			contextTokens: 120_000,
+			input: 0,
+			output: 0,
+			totalTokens: 0,
+		});
 	});
 });
 
@@ -1196,11 +1231,11 @@ describe("Cursor modern exec frames: Pi tools", () => {
 		expect(answer.value.result.value.diff).toBe("-before\n+after");
 		expect(answer.value.result.value.patch).toBe("@@");
 
-		// The synthesized display block must use the local edit tool's snake_case
-		// replace schema, or the rebuilt transcript renders empty edits.
+		// The synthesized display block must use the local edit tool's replace
+		// schema, or the rebuilt transcript renders empty edits.
 		const block = output.content.find((b): b is ToolCallState => b.type === "toolCall");
 		expect(block?.name).toBe("edit");
-		expect(block?.arguments).toEqual({ path: "/repo/a.ts", edits: [{ old_text: "before", new_text: "after" }] });
+		expect(block?.arguments).toEqual({ path: "/repo/a.ts", old_string: "before", new_string: "after" });
 	});
 
 	it("answers each remaining Pi frame with a populated success payload", async () => {
@@ -1644,6 +1679,31 @@ describe("Cursor legacy read frame: range reporting", () => {
 		if (wholeAnswer.case !== "readResult") throw new Error(`got ${wholeAnswer.case}`);
 		if (wholeAnswer.value.result.case !== "success") throw new Error(`got ${wholeAnswer.value.result.case}`);
 		expect(wholeAnswer.value.result.value.rangeApplied).toBe(false);
+	});
+	it("treats a path-embedded selector as ranged without reporting the slice as the file total", async () => {
+		const slice = Array.from({ length: 55 }, (_, index) => `line ${index + 301}`).join("\n");
+		const { frames } = await dispatchExec(
+			buildExecMessage({
+				case: "readArgs",
+				value: create(ReadArgsSchema, {
+					path: "/repo/plan.md:raw:301-",
+					toolCallId: "c-inline",
+				}),
+			}),
+			{
+				execHandlers: {
+					async read() {
+						return toolResult(slice, { details: { fileSize: 21_015 } });
+					},
+				},
+			},
+		);
+		const answer = soleResult(frames);
+		if (answer.case !== "readResult") throw new Error(`got ${answer.case}`);
+		if (answer.value.result.case !== "success") throw new Error(`got ${answer.value.result.case}`);
+		expect(answer.value.result.value.totalLines).toBe(0);
+		expect(answer.value.result.value.rangeApplied).toBe(true);
+		expect(answer.value.result.value.fileSize).toBe(21_015n);
 	});
 
 	it("carries the composed selector into the synthesized call", async () => {

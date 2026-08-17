@@ -47,8 +47,8 @@ See [docs/custom-tools.md](../../docs/custom-tools.md) for full documentation.
 **Factory pattern:**
 
 ```typescript
-import { Text } from "@oh-my-pi/pi-tui";
-import type { CustomToolFactory } from "@oh-my-pi/pi-coding-agent";
+import { Text } from "@musepi/pi-tui";
+import type { CustomToolFactory } from "@musepi/pi-coding-agent";
 
 const factory: CustomToolFactory = (pi) => ({
 	name: "my_tool",
@@ -96,7 +96,7 @@ renderResult(result, { expanded, isPartial }, theme) {
 **Use `z.enum` for discriminated string tool args:**
 
 ```typescript
-const { z } = pi.zod;
+const z = pi.zod;
 
 parameters: z.object({
 	action: z.enum(["list", "add"]),

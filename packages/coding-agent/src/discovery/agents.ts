@@ -28,9 +28,79 @@ const DISPLAY_NAME = "Agent Dirs (.agent/.agents)";
 const PRIORITY = 70;
 const AGENT_DIR_CANDIDATES = [".agent", ".agents"] as const;
 
-/** User-level paths: ~/.agent/<segments> and ~/.agents/<segments>. */
-function getUserPathCandidates(ctx: LoadContext, ...segments: string[]): string[] {
-	return AGENT_DIR_CANDIDATES.map(baseDir => path.join(ctx.home, baseDir, ...segments));
+interface UserPathCandidateOptions {
+	platform?: NodeJS.Platform;
+	env?: NodeJS.ProcessEnv;
+	windowsUserProfile?: () => string | undefined;
+	wslPath?: (windowsPath: string) => string | undefined;
+}
+
+const WINDOWS_DRIVE_PROFILE_PATTERN = /^([A-Za-z]):[\\/](.*)$/;
+
+function isWsl(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): boolean {
+	return platform === "linux" && Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP);
+}
+
+function convertWindowsPathToDefaultWslMount(windowsPath: string): string | undefined {
+	const trimmed = windowsPath.trim();
+	if (trimmed.length === 0) return undefined;
+	// The result is always a WSL (POSIX) path, so build it with posix
+	// semantics regardless of the host platform.
+	if (path.posix.isAbsolute(trimmed)) return path.posix.normalize(trimmed);
+	const match = WINDOWS_DRIVE_PROFILE_PATTERN.exec(trimmed);
+	if (!match) return undefined;
+	const [, drive, rest] = match;
+	const segments = rest.replace(/\\/g, "/").split("/").filter(Boolean);
+	return path.posix.join("/mnt", drive.toLowerCase(), ...segments);
+}
+
+function resolveWithWslPath(windowsPath: string): string | undefined {
+	try {
+		const result = Bun.spawnSync(["wslpath", "-u", windowsPath], { stdout: "pipe", stderr: "ignore" });
+		if (result.exitCode !== 0) return undefined;
+		const resolved = result.stdout.toString().trim();
+		return resolved.length > 0 ? resolved : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function resolveWindowsUserProfile(): string | undefined {
+	try {
+		const result = Bun.spawnSync(["cmd.exe", "/d", "/c", "echo", "%USERPROFILE%"], {
+			stdout: "pipe",
+			stderr: "ignore",
+		});
+		if (result.exitCode !== 0) return undefined;
+		const resolved = result.stdout.toString().trim();
+		return resolved.length > 0 && resolved !== "%USERPROFILE%" ? resolved : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Resolve the Windows host profile home exposed to WSL, if available. */
+export function getWslWindowsHomeCandidate(options: UserPathCandidateOptions = {}): string | undefined {
+	const platform = options.platform ?? process.platform;
+	const env = options.env ?? process.env;
+	if (!isWsl(platform, env)) return undefined;
+	const userProfile = env.USERPROFILE ?? (options.windowsUserProfile ?? resolveWindowsUserProfile)();
+	if (!userProfile) return undefined;
+	return (options.wslPath ?? resolveWithWslPath)(userProfile) ?? convertWindowsPathToDefaultWslMount(userProfile);
+}
+
+function getUserHomeCandidates(ctx: LoadContext): string[] {
+	const homes = [ctx.home];
+	const wslHome = getWslWindowsHomeCandidate();
+	if (wslHome && !homes.includes(wslHome)) homes.push(wslHome);
+	return homes;
+}
+
+/** User-level paths: ~/.agent[s]/<segments>, plus the Windows host profile under WSL. */
+export function getUserPathCandidates(ctx: LoadContext, ...segments: string[]): string[] {
+	return getUserHomeCandidates(ctx).flatMap(home =>
+		AGENT_DIR_CANDIDATES.map(baseDir => path.join(home, baseDir, ...segments)),
+	);
 }
 
 /**

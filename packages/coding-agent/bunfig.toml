@@ -1,0 +1,4 @@
+[test]
+# Pin en-US for the whole test run (system locale may be zh-CN; t() falls
+# back to it). Locale-switching tests call setLocale() themselves.
+preload = "./test/preload-locale.ts"

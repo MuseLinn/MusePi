@@ -10,7 +10,7 @@
  * Layering mirrors `pruning.ts`: no I/O here.
  */
 
-import type { TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
+import type { TextContent, ToolResultMessage } from "@musepi/pi-ai";
 import { countTokens } from "../tokenizer";
 import type { AgentMessage } from "../types";
 import { estimateTokens } from "./compaction";
@@ -18,6 +18,7 @@ import type { CustomMessageEntry, SessionEntry, SessionMessageEntry } from "./en
 import { invalidateMessageCache } from "./message-cache";
 import {
 	collectToolCallsById,
+	isArtifactRecoveryToolResult,
 	isProtectedToolResult,
 	isSkillReadToolResult,
 	type ProtectedToolMatcher,
@@ -46,16 +47,25 @@ export interface ShakeConfig {
 export const DEFAULT_SHAKE_CONFIG: ShakeConfig = {
 	protectTokens: 16_000,
 	minSavings: 4_000,
-	protectedTools: ["skill", isSkillReadToolResult],
+	protectedTools: ["skill", isSkillReadToolResult, isArtifactRecoveryToolResult],
 	fenceMinTokens: 400,
 };
 
-/** Manual `/shake`: aggressive — drops every eligible region across history. */
+/**
+ * Manual `/shake`: aggressive — drops every eligible region across history,
+ * artifact recovery reads included (the user's full escape hatch).
+ */
 export const AGGRESSIVE_SHAKE_CONFIG: ShakeConfig = {
 	protectTokens: 0,
 	minSavings: 0,
 	protectedTools: ["skill", isSkillReadToolResult],
 	fenceMinTokens: 400,
+};
+
+/** Compaction dead-end rescue: aggressive reach, but artifact recovery reads stay protected. */
+export const RESCUE_SHAKE_CONFIG: ShakeConfig = {
+	...AGGRESSIVE_SHAKE_CONFIG,
+	protectedTools: [...AGGRESSIVE_SHAKE_CONFIG.protectedTools, isArtifactRecoveryToolResult],
 };
 
 /** Rough token cost of a placeholder line; used only for the savings gate. */
@@ -127,7 +137,7 @@ function entryTokens(entry: SessionEntry): number {
  *
  * Conservative: unterminated fences/tags yield no range, and XML detection is
  * suppressed inside fences. Mirrors the toggling logic in
- * `@oh-my-pi/pi-utils` `format()` so behavior stays aligned with prompt rendering.
+ * `@musepi/pi-utils` `format()` so behavior stays aligned with prompt rendering.
  */
 function scanTextForBlockRanges(text: string): Array<{ start: number; end: number }> {
 	const ranges: Array<{ start: number; end: number }> = [];

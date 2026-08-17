@@ -1,7 +1,8 @@
 /**
  * Simple text input component for hooks.
  */
-import { Container, Input, Markdown, matchesKey, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
+import { Container, Input, Markdown, matchesKey, Spacer, Text, type TUI } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
 import { CountdownTimer } from "./countdown-timer";
@@ -56,7 +57,7 @@ export class HookInputComponent extends Container {
 		this.#input = new Input();
 		this.addChild(this.#input);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "enter submit  esc cancel"), 1, 0));
+		this.addChild(new Text(theme.fg("dim", t("enter submit  esc cancel")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
 	}
@@ -81,7 +82,7 @@ export class HookInputComponent extends Container {
 		this.#input.pasteText(text);
 	}
 
-	dispose(): void {
+	override dispose(): void {
 		this.#countdown?.dispose();
 	}
 }

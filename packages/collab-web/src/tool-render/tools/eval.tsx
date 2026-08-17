@@ -7,6 +7,7 @@
  * carries typed per-cell details, each cell's output is interleaved beneath its code.
  */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badges, CodeBlock, InvalidArg, Note, Output, ResultImages, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { argsDigest, detailsRecord, isRecord, normalizeWs, num, str, truncate } from "../util";
@@ -338,7 +339,7 @@ function Summary({ name, args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			{label && <span>{truncate(label, 72)}</span>}
-			<Badges items={[cells.length > 1 ? `${cells.length} cells` : null, ...langs]} />
+			<Badges items={[cells.length > 1 ? t("{count} cells", { count: String(cells.length) }) : null, ...langs]} />
 		</>
 	);
 }
@@ -386,7 +387,9 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 							titleParts.push(ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`);
 						}
 						if (dc.status === "error")
-							titleParts.push(dc.exitCode !== null ? `error (exit ${dc.exitCode})` : "error");
+							titleParts.push(
+								dc.exitCode !== null ? t("error (exit {code})", { code: String(dc.exitCode) }) : t("error"),
+							);
 					}
 					return (
 						<div className="tv-cell" key={`c${i}`}>
@@ -396,7 +399,7 @@ function Body({ name, args, result }: ToolRenderProps): ReactNode {
 					);
 				})}
 			</div>
-			{jsonText && <Output text={jsonText} lang="json" variant="code" maxLines={12} title="display" />}
+			{jsonText && <Output text={jsonText} lang="json" variant="code" maxLines={12} title={t("display")} />}
 			{notice && <Note>{notice}</Note>}
 			<ResultImages result={result} />
 			{detailCells.length === 0 && <ResultText result={result} maxLines={12} />}

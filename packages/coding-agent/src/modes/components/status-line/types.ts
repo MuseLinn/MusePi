@@ -52,6 +52,8 @@ export interface SegmentContext {
 	session: AgentSession;
 	/** Focused subagent id while the view is proxied at its session, undefined otherwise. */
 	focusedAgentId?: string | undefined;
+	/** Effective `statusLine.sessionAccent`; `false` disables hash-derived accent colors, while `true` or omission enables them. */
+	sessionAccent?: boolean;
 	activeRepo: ActiveRepoContext | null;
 	width: number;
 	options: StatusLineSegmentOptions;
@@ -73,6 +75,9 @@ export interface SegmentContext {
 		paused: boolean;
 	} | null;
 	vibeMode: {
+		enabled: boolean;
+	} | null;
+	swarmMode: {
 		enabled: boolean;
 	} | null;
 	collab: CollabStatus | null;

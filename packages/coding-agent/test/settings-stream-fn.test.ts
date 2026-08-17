@@ -8,11 +8,11 @@
  * (can1357/oh-my-pi#3639).
  */
 import { describe, expect, it } from "bun:test";
-import type { StreamFn } from "@oh-my-pi/pi-agent-core";
-import type { Context, Model, SimpleStreamOptions } from "@oh-my-pi/pi-ai";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createSettingsAwareStreamFn } from "@oh-my-pi/pi-coding-agent/session/settings-stream-fn";
+import type { StreamFn } from "@musepi/pi-agent-core";
+import type { Context, Model, SimpleStreamOptions } from "@musepi/pi-ai";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createSettingsAwareStreamFn } from "@musepi/pi-coding-agent/session/settings-stream-fn";
 
 function captureBase(): { fn: StreamFn; calls: Array<{ options?: SimpleStreamOptions }> } {
 	const calls: Array<{ options?: SimpleStreamOptions }> = [];
@@ -81,7 +81,17 @@ describe("createSettingsAwareStreamFn", () => {
 		expect(calls[0]?.options?.hideThinkingSummary).toBe(true);
 	});
 
-	it("applies Responses-family text verbosity from settings while preserving caller overrides", () => {
+	it("applies Codex text verbosity only when settings or caller options configure it", () => {
+		const unconfiguredSettings = Settings.isolated({});
+		const { fn: unconfiguredBase, calls: unconfiguredCalls } = captureBase();
+		const unconfiguredWrapped = createSettingsAwareStreamFn(unconfiguredSettings, unconfiguredBase);
+
+		unconfiguredWrapped(stubCodexModel, stubContext, undefined);
+		unconfiguredWrapped(stubCodexModel, stubContext, { textVerbosity: "medium" });
+
+		expect(unconfiguredCalls[0]?.options?.textVerbosity).toBeUndefined();
+		expect(unconfiguredCalls[1]?.options?.textVerbosity).toBe("medium");
+
 		const settings = Settings.isolated({ textVerbosity: "low" });
 		const { fn: base, calls } = captureBase();
 		const wrapped = createSettingsAwareStreamFn(settings, base);

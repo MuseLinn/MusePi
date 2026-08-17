@@ -35,6 +35,13 @@ export function registerOAuthProvider(provider: OAuthProviderInterface): void {
 }
 
 /**
+ * Remove a custom OAuth provider by ID.
+ */
+export function unregisterOAuthProvider(id: string): void {
+	customOAuthProviders.delete(id);
+}
+
+/**
  * Get a custom OAuth provider by ID.
  */
 export function getOAuthProvider(id: OAuthProviderId): OAuthProviderInterface | undefined {

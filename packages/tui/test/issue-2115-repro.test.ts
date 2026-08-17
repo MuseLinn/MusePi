@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@oh-my-pi/pi-tui";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 // Regression test for https://github.com/can1357/oh-my-pi/issues/2115
@@ -13,6 +13,7 @@ import { VirtualTerminal } from "./virtual-terminal";
 // replay crossed ~1-2 MiB.
 
 const PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, "platform");
+const ORIGINAL_HERDR_ENV = Bun.env.HERDR_ENV;
 
 class LargeCjkContent implements Component {
 	#lines: string[];
@@ -85,9 +86,15 @@ class ManualRenderScheduler implements RenderScheduler {
 	}
 }
 
+beforeEach(() => {
+	delete Bun.env.HERDR_ENV;
+});
+
 describe("issue #2115: ConPTY large-session resume truncates at logical lines", () => {
 	afterEach(() => {
 		if (PLATFORM_DESCRIPTOR) Object.defineProperty(process, "platform", PLATFORM_DESCRIPTOR);
+		if (ORIGINAL_HERDR_ENV === undefined) delete Bun.env.HERDR_ENV;
+		else Bun.env.HERDR_ENV = ORIGINAL_HERDR_ENV;
 		vi.restoreAllMocks();
 	});
 

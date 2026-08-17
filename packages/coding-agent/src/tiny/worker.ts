@@ -5,7 +5,7 @@ import type {
 	TextGenerationStringOutput,
 	StoppingCriteria as TransformersStoppingCriteria,
 } from "@huggingface/transformers";
-import { getTinyModelsCacheDir, prompt } from "@oh-my-pi/pi-utils";
+import { getTinyModelsCacheDir, prompt } from "@musepi/pi-utils";
 import titleSystemPrompt from "../prompts/system/title-system.md" with { type: "text" };
 import {
 	errorMessage,
@@ -94,7 +94,7 @@ function createStopOnTextCriteria(
 			this.#text = text;
 		}
 
-		_call(inputIds: number[][]): boolean[] {
+		override _call(inputIds: number[][]): boolean[] {
 			return inputIds.map(ids => {
 				const tail = ids.slice(-STOP_DECODE_WINDOW_TOKENS);
 				const decoded = this.#tokenizer.decode(tail, {

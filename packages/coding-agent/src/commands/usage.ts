@@ -1,12 +1,13 @@
 /**
  * Show provider usage limits for every authenticated account.
  */
-import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
+
+import { Args, Command, Flags } from "@musepi/pi-utils/cli";
+import { usageHelp as commandHelp } from "../cli/command-help";
 import { runUsageCommand } from "../cli/usage-cli";
 
 export default class Usage extends Command {
-	static description = "Show provider usage limits for every authenticated account";
-
+	static description = commandHelp.description;
 	static args = {
 		action: Args.string({
 			description: "Optional subcommand to execute",

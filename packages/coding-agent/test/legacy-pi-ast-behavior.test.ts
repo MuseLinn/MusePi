@@ -6,8 +6,8 @@ import * as url from "node:url";
 import {
 	__rewriteLegacyExtensionSourceForTests,
 	loadLegacyPiModule,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 interface RewriteCase {
 	name: string;
@@ -239,6 +239,32 @@ const rewriteCases: RewriteCase[] = [
 				'function outer(require) { function inner() { require("tracked-dep"); } }',
 				'{ const require = () => {}; { require("tracked-dep"); } }',
 				`require(${JSON.stringify(requirePath)});`,
+			].join("\n"),
+	},
+	{
+		name: "createRequire factory invocation pins its bare dependency, leaving relative and non-createRequire calls alone",
+		source: [
+			'import { createRequire as makeNodeRequire } from "node:module";',
+			'import * as nodeModule from "node:module";',
+			'const direct = makeNodeRequire(import.meta.url)("tracked-dep");',
+			'const viaModule = nodeModule.createRequire("./anchor")("tracked-dep");',
+			'const relative = makeNodeRequire(import.meta.url)("./sibling");',
+			"const createRequire = () => makeRequire;",
+			'const shadowed = createRequire(import.meta.url)("tracked-dep");',
+			'const unrelated = other.createRequire(import.meta.url)("tracked-dep");',
+			'const otherFactory = makeRequire(import.meta.url)("tracked-dep");',
+		].join("\n"),
+		expected: (_importPath, requirePath) =>
+			[
+				'import { createRequire as makeNodeRequire } from "node:module";',
+				'import * as nodeModule from "node:module";',
+				`const direct = makeNodeRequire(import.meta.url)(${JSON.stringify(requirePath)});`,
+				`const viaModule = nodeModule.createRequire("./anchor")(${JSON.stringify(requirePath)});`,
+				'const relative = makeNodeRequire(import.meta.url)("./sibling");',
+				"const createRequire = () => makeRequire;",
+				'const shadowed = createRequire(import.meta.url)("tracked-dep");',
+				'const unrelated = other.createRequire(import.meta.url)("tracked-dep");',
+				'const otherFactory = makeRequire(import.meta.url)("tracked-dep");',
 			].join("\n"),
 	},
 ];

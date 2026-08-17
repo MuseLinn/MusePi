@@ -4,7 +4,9 @@
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
+import { type } from "@musepi/omptype";
+import * as zod from "@musepi/omptype/zod";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import type {
 	ImageContent,
 	Model,
@@ -13,11 +15,9 @@ import type {
 	ServiceTierFamily,
 	TextContent,
 	TSchema,
-} from "@oh-my-pi/pi-ai";
-import type { KeyId } from "@oh-my-pi/pi-tui";
-import { hasFsCode, isEacces, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { Type } from "arktype";
-import * as zodModule from "zod/v4";
+} from "@musepi/pi-ai";
+import type { KeyId } from "@musepi/pi-tui";
+import { hasFsCode, isEacces, isEnoent, logger } from "@musepi/pi-utils";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
 import { type Hook, hookCapability } from "../../capability/hook";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
@@ -29,9 +29,9 @@ import { execCommand } from "../../exec/exec";
 import * as PiCodingAgent from "../../index";
 import type { CustomMessagePayload } from "../../session/messages";
 import { EventBus } from "../../utils/event-bus";
+import * as TypeBox from "../legacy-typebox";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/legacy-pi-compat";
 import { getAllPluginExtensionPaths } from "../plugins/loader";
-import * as TypeBox from "../typebox";
 
 import { resolvePath, withHostGuard } from "../utils";
 import type {
@@ -46,6 +46,7 @@ import type {
 	ProviderConfig,
 	RegisteredCommand,
 	ToolDefinition,
+	ToolInfo,
 } from "./types";
 
 installLegacyPiSpecifierShim();
@@ -72,6 +73,15 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
 
+	registerProvider(name: string, config: ProviderConfig, sourceId: string): void {
+		this.pendingProviderRegistrations.push({ name, config, sourceId });
+	}
+
+	unregisterProvider(name: string): void {
+		const remaining = this.pendingProviderRegistrations.filter(registration => registration.name !== name);
+		this.pendingProviderRegistrations.splice(0, this.pendingProviderRegistrations.length, ...remaining);
+	}
+
 	sendMessage(): void {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
@@ -92,7 +102,7 @@ export class ExtensionRuntime implements IExtensionRuntime {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
 
-	getAllTools(): string[] {
+	getAllTools(): ToolInfo[] {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
 
@@ -141,8 +151,8 @@ export class ExtensionRuntime implements IExtensionRuntime {
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
-	readonly arktype = Type;
-	readonly zod = zodModule;
+	readonly arktype = type;
+	readonly zod = zod;
 	readonly flagValues = new Map<string, boolean | string>();
 	readonly pendingProviderRegistrations: Array<{
 		name: string;
@@ -245,7 +255,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		return this.runtime.getActiveTools();
 	}
 
-	getAllTools(): string[] {
+	getAllTools(): ToolInfo[] {
 		return this.runtime.getAllTools();
 	}
 
@@ -289,7 +299,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	registerProvider(name: string, config: ProviderConfig): void {
-		this.runtime.pendingProviderRegistrations.push({ name, config, sourceId: this.extension.path });
+		this.runtime.registerProvider(name, config, this.extension.path);
+	}
+
+	unregisterProvider(name: string): void {
+		this.runtime.unregisterProvider(name, this.extension.path);
 	}
 }
 
@@ -310,12 +324,37 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 	};
 }
 
-async function loadExtension(
-	extensionPath: string,
-	cwd: string,
-	eventBus: EventBus,
+/**
+ * Runs an extension factory with provider registration rollback on failure.
+ * Restores the complete registration queue when the factory throws because an
+ * extension may unregister entries queued by an earlier extension.
+ */
+async function runExtensionFactory(
+	factory: ExtensionFactory,
+	api: ExtensionAPI,
 	runtime: IExtensionRuntime,
-): Promise<{ extension: Extension | null; error: string | null }> {
+): Promise<void> {
+	const providerRegistrationCheckpoint = [...runtime.pendingProviderRegistrations];
+
+	try {
+		await factory(api);
+	} catch (error) {
+		runtime.pendingProviderRegistrations.splice(
+			0,
+			runtime.pendingProviderRegistrations.length,
+			...providerRegistrationCheckpoint,
+		);
+		throw error;
+	}
+}
+
+interface ImportedExtensionModule {
+	factory: ExtensionFactory | null;
+	resolvedPath: string;
+	error: string | null;
+}
+
+async function importExtensionModule(extensionPath: string, cwd: string): Promise<ImportedExtensionModule> {
 	const resolvedPath = resolvePath(extensionPath, cwd);
 	try {
 		const module = (await withHostGuard(() => loadLegacyPiModule(resolvedPath))) as LoadedExtensionModule;
@@ -323,16 +362,34 @@ async function loadExtension(
 
 		if (typeof factory !== "function") {
 			return {
-				extension: null,
+				factory: null,
+				resolvedPath,
 				error: `Extension does not export a valid factory function: ${extensionPath}`,
 			};
 		}
 
-		const extension = createExtension(extensionPath, resolvedPath);
+		return { factory, resolvedPath, error: null };
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		return { factory: null, resolvedPath, error: `Failed to load extension: ${message}` };
+	}
+}
+
+async function bindExtension(
+	extensionPath: string,
+	imported: ImportedExtensionModule,
+	cwd: string,
+	eventBus: EventBus,
+	runtime: IExtensionRuntime,
+): Promise<{ extension: Extension | null; error: string | null }> {
+	const factory = imported.factory;
+	if (imported.error !== null || factory === null) {
+		return { extension: null, error: imported.error };
+	}
+	try {
+		const extension = createExtension(extensionPath, imported.resolvedPath);
 		const api = new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
-		await withHostGuard(async () => {
-			await factory(api);
-		});
+		await withHostGuard(() => runExtensionFactory(factory, api, runtime));
 
 		return { extension, error: null };
 	} catch (err) {
@@ -353,12 +410,17 @@ export async function loadExtensionFromFactory(
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
 	const api = new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
-	await factory(api);
+	await runExtensionFactory(factory, api, runtime);
 	return extension;
 }
 
 /**
  * Load extensions from paths.
+ *
+ * Module import (the dominant cold-start cost — file I/O plus module
+ * evaluation) runs concurrently across extensions; factory binding then runs
+ * sequentially in the original path order, so registration semantics
+ * (last-wins collisions, shared runtime flag defaults) stay deterministic.
  */
 export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
@@ -366,8 +428,11 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 	const resolvedEventBus = eventBus ?? new EventBus();
 	const runtime = new ExtensionRuntime();
 
-	for (const extPath of paths) {
-		const { extension, error } = await loadExtension(extPath, cwd, resolvedEventBus, runtime);
+	const imported = await Promise.all(paths.map(extPath => importExtensionModule(extPath, cwd)));
+
+	for (let i = 0; i < paths.length; i++) {
+		const extPath = paths[i]!;
+		const { extension, error } = await bindExtension(extPath, imported[i]!, cwd, resolvedEventBus, runtime);
 
 		if (error) {
 			errors.push({ path: extPath, error });
@@ -509,6 +574,26 @@ async function discoverExtensionsInDir(dir: string): Promise<string[]> {
 
 	return discovered;
 }
+async function discoverHooksInPackageRoot(root: string): Promise<string[]> {
+	const hooks: string[] = [];
+	for (const hookType of ["pre", "post"]) {
+		const hookDir = path.join(root, "hooks", hookType);
+		let entries: fs1.Dirent[];
+		try {
+			entries = await fs.readdir(hookDir, { withFileTypes: true });
+		} catch (err) {
+			if (isEnoent(err) || isEacces(err) || hasFsCode(err, "ENOTDIR") || hasFsCode(err, "EPERM")) continue;
+			throw err;
+		}
+		for (const entry of entries) {
+			if ((entry.isFile() || entry.isSymbolicLink()) && isExtensionFile(entry.name)) {
+				hooks.push(path.join(hookDir, entry.name));
+			}
+		}
+	}
+	return hooks;
+}
+
 /**
  * Discover absolute paths of extensions to load, without importing or
  * binding factories. Hot path on session startup — the scan walks native
@@ -522,10 +607,16 @@ async function discoverExtensionsInDir(dir: string): Promise<string[]> {
  * `LoadExtensionsResult` directly would reuse handlers/tools/commands that
  * closed over the parent's `cwd` and event bus.
  */
+export interface DiscoverExtensionPathOptions {
+	/** Include ambient native extensions, hooks, and installed plugins. */
+	ambient?: boolean;
+}
+
 export async function discoverExtensionPaths(
 	configuredPaths: string[],
 	cwd: string,
 	disabledExtensionIds?: string[],
+	options: DiscoverExtensionPathOptions = {},
 ): Promise<string[]> {
 	const allPaths: string[] = [];
 	const seen = new Set<string>();
@@ -549,33 +640,44 @@ export async function discoverExtensionPaths(
 		}
 	};
 
-	// 1. Discover extension modules via capability API (native .omp/.pi only).
-	// Scope the load to the native provider — the extension-module capability
-	// also has claude/codex/gemini/opencode providers, and their items were
-	// discarded here anyway (see #4198). The provider filter skips the walk
-	// entirely instead of running four foreign directory scans and dropping
-	// the results.
-	const discovered = await loadCapability<ExtensionModule>(extensionModuleCapability.id, {
-		...loadOptions,
-		providers: ["native"],
-	});
-	for (const ext of discovered.items) {
-		addPath(ext.path);
+	const ambient = options.ambient !== false;
+	if (ambient) {
+		// 1. Discover extension modules via capability API (native .omp/.pi only).
+		// Scope the load to the native provider — the extension-module capability
+		// also has claude/codex/gemini/opencode providers, and their items were
+		// discarded here anyway (see #4198). The provider filter skips the walk
+		// entirely instead of running four foreign directory scans and dropping
+		// the results.
+		const discovered = await loadCapability<ExtensionModule>(extensionModuleCapability.id, {
+			...loadOptions,
+			providers: ["native"],
+		});
+		for (const ext of discovered.items) {
+			addPath(ext.path);
+		}
 	}
 
-	// 2. Discover JS/TS hook factories from hookCapability and bind them through
-	// the extension runner, which owns the current runtime event bus. Hook
-	// capability loading already applies hook-specific disabled ids; do not also
-	// filter them through extension-module names.
-	const hooks = await loadCapability<Hook>(hookCapability.id, loadOptions);
-	for (const hookPath of hooks.items
-		.map(hook => hook.path)
-		.filter(hookPath => isExtensionFile(path.basename(hookPath)))) {
-		addPath(hookPath);
+	// 2. Discover JS/TS hook factories and bind them through the extension
+	// runner, which owns the current runtime event bus. Non-ambient discovery
+	// scans only this invocation's configured package roots; it must not consult
+	// settings, installed packages, or process-global CLI injection state.
+	if (ambient) {
+		const hooks = await loadCapability<Hook>(hookCapability.id, loadOptions);
+		for (const hookPath of hooks.items
+			.map(hook => hook.path)
+			.filter(hookPath => isExtensionFile(path.basename(hookPath)))) {
+			addPath(hookPath);
+		}
+	} else {
+		for (const configuredPath of configuredPaths) {
+			addPaths(await discoverHooksInPackageRoot(resolvePath(configuredPath, cwd)));
+		}
 	}
 
-	// 3. Discover extension entry points from installed plugins
-	addPaths(await getAllPluginExtensionPaths(cwd));
+	// 3. Discover extension entry points from installed plugins.
+	if (ambient) {
+		addPaths(await getAllPluginExtensionPaths(cwd));
+	}
 
 	// 4. Explicitly configured paths
 	for (const configuredPath of configuredPaths) {
@@ -618,7 +720,8 @@ export async function discoverAndLoadExtensions(
 	cwd: string,
 	eventBus?: EventBus,
 	disabledExtensionIds?: string[],
+	options: DiscoverExtensionPathOptions = {},
 ): Promise<LoadExtensionsResult> {
-	const paths = await discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds);
+	const paths = await discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds, options);
 	return loadExtensions(paths, cwd, eventBus);
 }

@@ -9,11 +9,13 @@
  * in-memory transport, so the suite stays fast and time-independent.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
-import { importRoomKey } from "@oh-my-pi/pi-coding-agent/collab/crypto";
-import { CollabHost } from "@oh-my-pi/pi-coding-agent/collab/host";
-import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@oh-my-pi/pi-coding-agent/collab/protocol";
-import { CollabSocket } from "@oh-my-pi/pi-coding-agent/collab/relay-client";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
+import { importRoomKey } from "@musepi/pi-coding-agent/collab/crypto";
+import { CollabHost } from "@musepi/pi-coding-agent/collab/host";
+import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@musepi/pi-coding-agent/collab/protocol";
+import { CollabSocket } from "@musepi/pi-coding-agent/collab/relay-client";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { installInMemoryRelay, uninstallInMemoryRelay } from "./helpers/in-memory-relay";
 
 // In-memory transport: FakeWebSocket + InMemoryRelay (see ./helpers/in-memory-relay)
@@ -210,6 +212,44 @@ describe("collab read-only links", () => {
 		expect(prompts).toHaveLength(1);
 		expect(host.participants.find(p => p.name === "writer")?.readOnly).toBeUndefined();
 	});
+
+	it("keeps a remotely killed subagent tombstoned", async () => {
+		const guest = await joinAsGuest(host.link, "writer-kill");
+		guestCleanups.push(() => guest.socket.close());
+		const welcome = await guest.nextFrame();
+		if (welcome.t !== "welcome") throw new Error(`expected welcome, got ${welcome.t}`);
+
+		const id = "Remote-Killed-Sub";
+		const registry = AgentRegistry.global();
+		let aborts = 0;
+		const session = {
+			abort: async () => {
+				aborts++;
+			},
+			dispose: async () => {},
+		} as unknown as AgentSession;
+		const ref = registry.register({
+			id,
+			displayName: "remote kill",
+			kind: "sub",
+			session,
+			sessionFile: "/tmp/Remote-Killed-Sub.jsonl",
+			status: "running",
+		});
+		const killed = Promise.withResolvers<void>();
+		const unsubscribe = registry.onChange(event => {
+			if (event.ref === ref && event.type === "status_changed" && event.ref.status === "aborted") killed.resolve();
+		});
+		try {
+			guest.socket.send({ t: "agent-cmd", cmd: "kill", agentId: id });
+			await killed.promise;
+			expect(aborts).toBe(1);
+			expect(registry.get(id)).toMatchObject({ status: "aborted", session: null });
+		} finally {
+			unsubscribe();
+			registry.unregister(id, ref);
+		}
+	}, 15_000);
 
 	it("routes host UI requests to write guests and resolves their response", async () => {
 		const guest = await joinAsGuest(host.link, "writer-ui");

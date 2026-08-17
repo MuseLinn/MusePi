@@ -3,6 +3,8 @@ import { getFolderStats } from "../api";
 import { formatCost, formatDurationMs, formatInteger, formatPercent } from "../data/formatters";
 import { useResource } from "../data/useResource";
 import { buildFolderRows, type FolderRowView } from "../data/view-models";
+import { t } from "../i18n";
+import { useLocale } from "../i18n/use-locale";
 import type { TimeRange } from "../types";
 import { AsyncBoundary, DataTable, Panel, StatusPill } from "../ui";
 
@@ -13,6 +15,8 @@ export interface ProjectsRouteProps {
 }
 
 export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRouteProps) {
+	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
+	const locale = useLocale();
 	const {
 		data: foldersData,
 		error,
@@ -27,113 +31,110 @@ export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRoutePr
 		return buildFolderRows(foldersData);
 	}, [foldersData]);
 
-	const columns = useMemo(
-		() => [
-			{
-				key: "folder",
-				header: "Project/Folder",
-				render: (item: FolderRowView) => (
-					<div
-						className="stats-font-medium stats-text-primary truncate max-w-[440px]"
-						title={item.folder || "(root)"}
-					>
-						{item.folder || "(root)"}
+	const columns = [
+		{
+			key: "folder",
+			header: t("Project/Folder"),
+			render: (item: FolderRowView) => (
+				<div
+					className="stats-font-medium stats-text-primary truncate max-w-[440px]"
+					title={item.folder || t("(root)")}
+				>
+					{item.folder || t("(root)")}
+				</div>
+			),
+		},
+		{
+			key: "totalRequests",
+			header: t("Requests"),
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<div className="stats-text-right">
+					<div className="font-mono">{formatInteger(item.totalRequests)}</div>
+					<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
+						<div
+							className="stats-progress-bar-fill"
+							data-variant="link"
+							style={{ width: `${item.requestsPercentage}%` }}
+						/>
 					</div>
-				),
-			},
-			{
-				key: "totalRequests",
-				header: "Requests",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<div className="stats-text-right">
-						<div className="font-mono">{formatInteger(item.totalRequests)}</div>
-						<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
-							<div
-								className="stats-progress-bar-fill"
-								data-variant="link"
-								style={{ width: `${item.requestsPercentage}%` }}
-							/>
-						</div>
+				</div>
+			),
+		},
+		{
+			key: "totalCost",
+			header: t("Cost"),
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<div className="stats-text-right">
+					<div className="font-mono">{formatCost(item.totalCost)}</div>
+					<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
+						<div
+							className="stats-progress-bar-fill"
+							data-variant="success"
+							style={{ width: `${item.costPercentage}%` }}
+						/>
 					</div>
-				),
-			},
-			{
-				key: "totalCost",
-				header: "Cost",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<div className="stats-text-right">
-						<div className="font-mono">{formatCost(item.totalCost)}</div>
-						<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
-							<div
-								className="stats-progress-bar-fill"
-								data-variant="success"
-								style={{ width: `${item.costPercentage}%` }}
-							/>
-						</div>
-					</div>
-				),
-			},
-			{
-				key: "totalTokens",
-				header: "Tokens",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<div className="font-mono">{formatInteger(item.totalInputTokens + item.totalOutputTokens)}</div>
-				),
-			},
-			{
-				key: "cacheRate",
-				header: "Cache Rate",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<span className="stats-text-success font-medium">{formatPercent(item.cacheRate)}</span>
-				),
-			},
-			{
-				key: "errorRate",
-				header: "Error Rate",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<StatusPill variant={item.errorRate > 0.1 ? "danger" : item.errorRate > 0 ? "warning" : "success"}>
-						{formatPercent(item.errorRate)}
-					</StatusPill>
-				),
-			},
-			{
-				key: "avgDuration",
-				header: "Avg Duration",
-				numeric: true,
-				render: (item: FolderRowView) => formatDurationMs(item.avgDuration),
-			},
-		],
-		[],
-	);
+				</div>
+			),
+		},
+		{
+			key: "totalTokens",
+			header: t("Tokens"),
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<div className="font-mono">{formatInteger(item.totalInputTokens + item.totalOutputTokens)}</div>
+			),
+		},
+		{
+			key: "cacheRate",
+			header: t("Cache Rate"),
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<span className="stats-text-success font-medium">{formatPercent(item.cacheRate)}</span>
+			),
+		},
+		{
+			key: "errorRate",
+			header: t("Error Rate"),
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<StatusPill variant={item.errorRate > 0.1 ? "danger" : item.errorRate > 0 ? "warning" : "success"}>
+					{formatPercent(item.errorRate)}
+				</StatusPill>
+			),
+		},
+		{
+			key: "avgDuration",
+			header: t("Avg Duration"),
+			numeric: true,
+			render: (item: FolderRowView) => formatDurationMs(item.avgDuration),
+		},
+	];
 
 	const renderMobileCard = (item: FolderRowView) => (
 		<div className="stats-mobile-card">
 			<div className="stats-mobile-card-header mb-2">
-				<div className="stats-font-semibold stats-text-primary">{item.folder || "(root)"}</div>
+				<div className="stats-font-semibold stats-text-primary">{item.folder || t("(root)")}</div>
 				<StatusPill variant={item.errorRate > 0.1 ? "danger" : item.errorRate > 0 ? "warning" : "success"}>
-					{formatPercent(item.errorRate)} Err
+					{t("{0} Err", formatPercent(item.errorRate))}
 				</StatusPill>
 			</div>
 			<div className="stats-mobile-card-grid">
 				<div>
-					<div className="stats-mobile-card-label">Requests</div>
+					<div className="stats-mobile-card-label">{t("Requests")}</div>
 					<div className="stats-mobile-card-value font-mono">{formatInteger(item.totalRequests)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Cost</div>
+					<div className="stats-mobile-card-label">{t("Cost")}</div>
 					<div className="stats-mobile-card-value font-mono">{formatCost(item.totalCost)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Cache</div>
+					<div className="stats-mobile-card-label">{t("Cache")}</div>
 					<div className="stats-mobile-card-value">{formatPercent(item.cacheRate)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Duration</div>
+					<div className="stats-mobile-card-label">{t("Duration")}</div>
 					<div className="stats-mobile-card-value">{formatDurationMs(item.avgDuration)}</div>
 				</div>
 			</div>
@@ -142,19 +143,19 @@ export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRoutePr
 
 	return (
 		<div className="stats-route-container">
-			<Panel title="Projects & Folders" subtitle="Aggregate proxy metrics grouped by folder path">
+			<Panel title={t("Projects & Folders")} subtitle={t("Aggregate proxy metrics grouped by folder path")}>
 				<AsyncBoundary
 					loading={loading}
 					error={error}
 					data={foldersData}
-					emptyText="No project folders recorded for this range."
+					emptyText={t("No project folders recorded for this range.")}
 				>
 					<DataTable
 						columns={columns}
 						data={folderRows}
 						keyExtractor={item => item.folder}
 						renderMobileCard={renderMobileCard}
-						emptyText="No project folders recorded for this range."
+						emptyText={t("No project folders recorded for this range.")}
 					/>
 				</AsyncBoundary>
 			</Panel>

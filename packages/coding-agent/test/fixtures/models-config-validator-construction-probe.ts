@@ -1,7 +1,7 @@
 import * as path from "node:path";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { ModelsConfigFile } from "@oh-my-pi/pi-coding-agent/config/models-config";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { ModelsConfigFile } from "@musepi/pi-coding-agent/config/models-config";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { YAML } from "bun";
 
 interface HeapSnapshot {

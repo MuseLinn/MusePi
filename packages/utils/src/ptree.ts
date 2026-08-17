@@ -7,7 +7,7 @@
  * - Convenience helpers: captureText / execText, AbortSignal, timeouts.
  */
 
-import { Process } from "@oh-my-pi/pi-natives";
+import { Process } from "@musepi/pi-natives";
 import type { Spawn, Subprocess } from "bun";
 
 type InMask = "pipe" | "ignore" | Buffer | Uint8Array | null;
@@ -254,8 +254,8 @@ export class ChildProcess<In extends InMask = InMask> {
 		// stream emits more than one chunk (subprocess stdout chunks past ~128 KB).
 		// Normalize at the contract boundary so every caller — SSH read,
 		// `decodeUtf8Text`, callers slicing with `.subarray` — sees a `Uint8Array`.
-		const body = (await new Response(this.stdout).bytes()) as Uint8Array | ArrayBuffer;
-		return body instanceof Uint8Array ? body : new Uint8Array(body);
+		const body = new Uint8Array(await new Response(this.stdout).arrayBuffer());
+		return body;
 	}
 
 	// ── Wait ─────────────────────────────────────────────────────────────

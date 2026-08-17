@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import { packEnvelope, unpackEnvelope } from "@musepi/collab-proto";
 import { type LocalRelay, startLocalRelay } from "../scripts/local-relay";
-import { packEnvelope, unpackEnvelope } from "../src/lib/link";
 
 const ROOM = "RelayRoom_12345";
 const REQUEST_TIMEOUT_MS = 1_000;

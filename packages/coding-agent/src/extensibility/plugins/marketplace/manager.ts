@@ -10,7 +10,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { isEnoent, logger, pathIsWithin } from "@oh-my-pi/pi-utils";
+import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
 import { normalizePluginRuntimeConfig } from "../runtime-config";
 import type { PluginRuntimeConfig } from "../types";
 
@@ -408,7 +408,7 @@ export class MarketplaceManager {
 	/**
 	 * Resolve plugin version from multiple sources:
 	 * 1. Catalog entry version (if set)
-	 * 2. Plugin manifest (.claude-plugin/plugin.json or package.json)
+	 * 2. Plugin manifest (.claude-plugin/plugin.json, Agent Plugins root plugin.json, or package.json)
 	 * 3. Git SHA from source (truncated to 7 chars)
 	 * 4. Fallback "0.0.0"
 	 */
@@ -419,6 +419,7 @@ export class MarketplaceManager {
 		// 2. Plugin manifest
 		for (const manifestPath of [
 			path.join(sourcePath, ".claude-plugin", "plugin.json"),
+			path.join(sourcePath, "plugin.json"),
 			path.join(sourcePath, "package.json"),
 		]) {
 			try {

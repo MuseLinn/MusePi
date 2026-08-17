@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
-import { PROVIDER_DESCRIPTORS } from "@oh-my-pi/pi-catalog/provider-models/descriptors";
+import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
+import { PROVIDER_DESCRIPTORS } from "@musepi/pi-catalog/provider-models/descriptors";
 import {
+	MODELS_DEV_PROVIDER_DESCRIPTORS,
 	opencodeGoModelManagerOptions,
 	opencodeZenModelManagerOptions,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
+} from "@musepi/pi-catalog/provider-models/openai-compat";
 
 const LIVE_FREE_MODEL_IDS = [
 	"deepseek-v4-flash-free",
@@ -34,6 +35,23 @@ describe("OpenCode provider discovery", () => {
 		}
 		expect(opencodeGoModelManagerOptions().dynamicModelsAuthoritative).toBe(true);
 		expect(opencodeZenModelManagerOptions().dynamicModelsAuthoritative).toBe(true);
+	});
+
+	test("routes opencode-go deepseek-v4-flash to the responses API", () => {
+		const descriptor = MODELS_DEV_PROVIDER_DESCRIPTORS.find(item => item.providerId === "opencode-go");
+		// stencil.so lists deepseek-v4-flash without provider.npm, so it would
+		// fall through to openai-completions — but the Go gateway does not serve
+		// this model at /zen/go/v1/chat/completions while /zen/go/v1/responses
+		// works (user-verified against the live gateway, 2026-08-08).
+		expect(descriptor?.resolveApi?.("deepseek-v4-flash", { tool_call: true })).toEqual({
+			api: "openai-responses",
+			baseUrl: "https://opencode.ai/zen/go/v1",
+		});
+		// Flash only: deepseek-v4-pro serves fine on chat completions.
+		expect(descriptor?.resolveApi?.("deepseek-v4-pro", { tool_call: true })).toEqual({
+			api: "openai-completions",
+			baseUrl: "https://opencode.ai/zen/go/v1",
+		});
 	});
 
 	test("replaces stale bundled Zen models with each credential's live endpoint list", async () => {

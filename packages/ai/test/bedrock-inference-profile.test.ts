@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { streamBedrock } from "@oh-my-pi/pi-ai/providers/amazon-bedrock";
-import type { Context, FetchImpl, Model } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { streamBedrock } from "@musepi/pi-ai/providers/amazon-bedrock";
+import type { Context, FetchImpl, Model } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { removeWithRetries } from "../../utils/src/temp";
 import { withEnv } from "./helpers";
 
 const profileArn = "arn:aws:bedrock:us-east-2:1234567890:application-inference-profile/company-opus-48";
@@ -85,6 +89,7 @@ describe("Bedrock inference profile ARNs", () => {
 		const { promise, resolve } = Promise.withResolvers<unknown>();
 
 		void streamBedrock(profileModel, context, {
+			bearerToken: "test-token",
 			signal: controller.signal,
 			reasoning: Effort.High,
 			maxTokens: 16,
@@ -137,7 +142,7 @@ function bedrockModel(id: string): Model<"bedrock-converse-stream"> {
 
 async function capturedRequestHost(
 	model: Model<"bedrock-converse-stream">,
-	options: { region?: string } = {},
+	options: { region?: string; profile?: string } = {},
 ): Promise<string> {
 	const calls: string[] = [];
 	const customFetch: FetchImpl = Object.assign(
@@ -210,6 +215,31 @@ describe("Bedrock cross-region inference-profile geo routing", () => {
 				"bedrock-runtime.eu-central-1.amazonaws.com",
 			);
 		});
+	});
+
+	test("uses the selected profile region when environment regions are absent", async () => {
+		const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "bedrock-profile-region-"));
+		try {
+			const configPath = path.join(tmp, "config");
+			await Bun.write(configPath, "[profile regional]\nregion = eu-west-2\n");
+			await withEnv(
+				{
+					AWS_REGION: undefined,
+					AWS_DEFAULT_REGION: undefined,
+					AWS_PROFILE: "regional",
+					AWS_CONFIG_FILE: configPath,
+				},
+				async () => {
+					expect(
+						await capturedRequestHost(bedrockModel("eu.anthropic.claude-opus-4-8"), {
+							profile: "regional",
+						}),
+					).toBe("bedrock-runtime.eu-west-2.amazonaws.com");
+				},
+			);
+		} finally {
+			await removeWithRetries(tmp);
+		}
 	});
 
 	test("explicit per-request region wins over the geo prefix and ambient region", async () => {

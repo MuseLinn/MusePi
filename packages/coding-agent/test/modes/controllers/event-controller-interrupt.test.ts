@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { vocalizer } from "@oh-my-pi/pi-coding-agent/tts/vocalizer";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { vocalizer } from "@musepi/pi-coding-agent/tts/vocalizer";
 
 function createContext() {
 	const setWorkingMessage = vi.fn();

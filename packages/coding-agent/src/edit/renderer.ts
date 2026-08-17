@@ -2,10 +2,10 @@
  * Edit tool renderer and LSP batching helpers.
  */
 
-import { HL_FILE_PREFIX, HL_FILE_SUFFIX, HL_MOVE_KEYWORD, HL_REM_KEYWORD } from "@oh-my-pi/hashline";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { sliceWithWidth, visibleWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import { HL_FILE_PREFIX, HL_FILE_SUFFIX, HL_MOVE_KEYWORD, HL_REM_KEYWORD } from "@musepi/hashline";
+import type { Component } from "@musepi/pi-tui";
+import { sliceWithWidth, visibleWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
+import { sanitizeText } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { FileDiagnosticsResult } from "../lsp";
 import { renderDiff as renderDiffColored } from "../modes/components/diff";
@@ -115,7 +115,7 @@ interface EditRenderArgs {
 	patch?: string;
 	input?: string;
 	_input?: string;
-	all?: boolean;
+	replace_all?: boolean;
 	// Patch mode fields
 	op?: Operation;
 	rename?: unknown;
@@ -140,7 +140,7 @@ interface HashlineInputEntry {
 	path: string;
 	op?: Operation;
 	rename?: string;
-	/** A SWAP/DEL/INS line-editing op precedes the file op — keeps a move framed. */
+	/** A PUT/CUT line edit precedes the file op — keeps a move framed. */
 	hasLineEdits?: boolean;
 }
 
@@ -568,9 +568,9 @@ function parseHashlineInputPreviewHeader(line: string): string | null {
 	return previewPath.length > 0 ? previewPath : null;
 }
 
-// Line-editing op headers (SWAP/DEL/INS family), distinct from the file-level
-// REM/MV ops. Body rows are always `+TEXT`, so this only matches real headers.
-const HL_LINE_OP_HEADER = /^(?:SWAP|DEL|INS)\b/;
+// Line-editing op headers (PUT/CUT family), distinct from file-level
+// REM/MV ops. Body rows are `+TEXT`, so this only matches real headers.
+const HL_LINE_OP_HEADER = /^(?:PUT|CUT)\b/;
 
 /**
  * Walk a (possibly mid-stream) hashline payload into per-section descriptors:

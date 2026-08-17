@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { getAgentDir, isEnoent, logger, prompt } from "@oh-my-pi/pi-utils";
+import { getAgentDir, isEnoent, logger, prompt } from "@musepi/pi-utils";
 import { expandAtImports } from "../discovery/at-imports";
 import activeRepoWatchdogTemplate from "../prompts/advisor/active-repo-watchdog.md" with { type: "text" };
 import contextFilesTemplate from "../prompts/advisor/context-files.md" with { type: "text" };
@@ -121,7 +121,7 @@ export async function collectConfigCandidates(
 }
 
 /**
- * Discover and load WATCHDOG.md files walking up from cwd, project .omp folder, and user agent dir.
+ * Discover and load WATCHDOG.md files walking up from cwd, project .musepi folder, and user agent dir.
  * Returns formatted watchdog file blocks ready to be appended to the advisor system prompt.
  */
 export async function discoverWatchdogFiles(cwd: string, agentDir?: string): Promise<string[]> {

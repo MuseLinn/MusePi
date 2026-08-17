@@ -24,6 +24,7 @@ export const NON_INTERACTIVE_ENV: Readonly<Record<string, string>> = {
 	GIT_TERMINAL_PROMPT: "0",
 	SSH_ASKPASS: "/usr/bin/false",
 	CI: "1",
+	AGENT: "1",
 	// Package manager defaults for unattended execution.
 	npm_config_yes: "true",
 	npm_config_update_notifier: "false",

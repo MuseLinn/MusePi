@@ -8,7 +8,7 @@ import {
 	setTerminalScreenToScrollback,
 	TERMINAL,
 	TUI,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 class MutableLinesComponent implements Component {
@@ -87,7 +87,7 @@ class WrappingLinesComponent implements Component {
 }
 
 class UnknownViewportTerminal extends VirtualTerminal {
-	isNativeViewportAtBottom(): undefined {
+	override isNativeViewportAtBottom(): undefined {
 		return undefined;
 	}
 }
@@ -96,7 +96,7 @@ class StaleBottomViewportTerminal extends VirtualTerminal {
 	#previous: boolean | undefined;
 	#returnStale = false;
 
-	isNativeViewportAtBottom(): boolean | undefined {
+	override isNativeViewportAtBottom(): boolean | undefined {
 		const current = super.isNativeViewportAtBottom();
 		if (this.#returnStale) {
 			this.#returnStale = false;
@@ -113,18 +113,18 @@ class StaleBottomViewportTerminal extends VirtualTerminal {
 class CountingViewportTerminal extends VirtualTerminal {
 	viewportProbeCount = 0;
 
-	isNativeViewportAtBottom(): boolean | undefined {
+	override isNativeViewportAtBottom(): boolean | undefined {
 		this.viewportProbeCount += 1;
 		return super.isNativeViewportAtBottom();
 	}
 }
 
 class LegacyKeyboardVirtualTerminal extends VirtualTerminal {
-	get keyboardEnhancementEnterSequence(): string | null {
+	override get keyboardEnhancementEnterSequence(): string | null {
 		return undefined as unknown as string | null;
 	}
 
-	get keyboardEnhancementExitSequence(): string | null {
+	override get keyboardEnhancementExitSequence(): string | null {
 		return undefined as unknown as string | null;
 	}
 }
@@ -223,7 +223,7 @@ describe("TUI terminal-state regressions", () => {
 		// Resize classification now depends on TERM_PROGRAM (Warp takes the
 		// in-place path), so neutralize the ambient terminal identity to keep
 		// these direct-terminal assertions deterministic on any dev machine.
-		for (const key of ["TERM_PROGRAM", "PI_TUI_RESIZE_IN_PLACE"]) {
+		for (const key of ["TERM_PROGRAM", "PI_TUI_RESIZE_IN_PLACE", "HERDR_ENV"]) {
 			savedTerminalEnv[key] = Bun.env[key];
 			delete Bun.env[key];
 		}
@@ -4215,7 +4215,10 @@ describe("TUI terminal-state regressions", () => {
 });
 
 describe("foreground-tool streaming on ED3-risk terminals", () => {
+	let originalHerdrEnv: string | undefined;
 	beforeEach(() => {
+		originalHerdrEnv = Bun.env.HERDR_ENV;
+		delete Bun.env.HERDR_ENV;
 		let monotonicNow = 0;
 		vi.spyOn(performance, "now").mockImplementation(() => {
 			monotonicNow += 20;
@@ -4224,6 +4227,8 @@ describe("foreground-tool streaming on ED3-risk terminals", () => {
 	});
 
 	afterEach(() => {
+		if (originalHerdrEnv === undefined) delete Bun.env.HERDR_ENV;
+		else Bun.env.HERDR_ENV = originalHerdrEnv;
 		vi.restoreAllMocks();
 	});
 

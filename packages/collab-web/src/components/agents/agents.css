@@ -33,8 +33,12 @@
 }
 
 .ag-row--selected {
-	border-color: var(--border);
-	background: var(--bg-raised);
+	border-color: color-mix(in oklab, var(--accent) 22%, transparent);
+	background: color-mix(in oklab, var(--accent) 12%, var(--bg-raised));
+}
+
+.ag-row--selected .ag-row-name {
+	color: var(--accent);
 }
 
 .ag-row:focus-visible {

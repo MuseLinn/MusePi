@@ -2,17 +2,17 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	type ExecuteHashlineSingleOptions,
 	executeHashlineSingle,
 	formatHashlineHeader,
 	getFileSnapshotStore as getFileReadCache,
-} from "@oh-my-pi/pi-coding-agent/edit";
-import { NOOP_HARD_LIMIT } from "@oh-my-pi/pi-coding-agent/edit/hashline/noop-loop-guard";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/edit";
+import { NOOP_HARD_LIMIT } from "@musepi/pi-coding-agent/edit/hashline/noop-loop-guard";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { ToolError } from "@musepi/pi-coding-agent/tools/tool-errors";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 beforeAll(async () => {
 	resetSettingsForTest();
@@ -55,7 +55,7 @@ async function withTempDir(fn: (tempDir: string) => Promise<void>): Promise<void
 function buildNoopInput(filePath: string, displayPath: string, session: ToolSession): string {
 	const source = "aaa\nbbb\nccc\n";
 	const tag = getFileReadCache(session).record(filePath, source);
-	return `${formatHashlineHeader(displayPath, tag)}\nSWAP 2.=2:\n+bbb\n`;
+	return `${formatHashlineHeader(displayPath, tag)}\nPUT 2-2:\n+bbb\n`;
 }
 
 describe("hashline noop loop guard", () => {
@@ -145,7 +145,7 @@ describe("hashline noop loop guard", () => {
 			// from the model's perspective.
 			const source = "aaa\nbbb\nccc\n";
 			const tag = getFileReadCache(session).record(filePath, source);
-			const realEdit = `${formatHashlineHeader("a.ts", tag)}\nSWAP 2.=2:\n+BBB\n`;
+			const realEdit = `${formatHashlineHeader("a.ts", tag)}\nPUT 2-2:\n+BBB\n`;
 			const editResult = await executeHashlineSingle(execOptions(realEdit, session));
 			expect(editResult.content[0]?.type === "text" ? editResult.content[0].text : "").not.toContain(
 				"byte-identical to the file",
@@ -157,7 +157,7 @@ describe("hashline noop loop guard", () => {
 			// soft-hint regime.
 			const newSource = "aaa\nBBB\nccc\n";
 			const newTag = getFileReadCache(session).record(filePath, newSource);
-			const newNoop = `${formatHashlineHeader("a.ts", newTag)}\nSWAP 2.=2:\n+BBB\n`;
+			const newNoop = `${formatHashlineHeader("a.ts", newTag)}\nPUT 2-2:\n+BBB\n`;
 			const result = await executeHashlineSingle(execOptions(newNoop, session));
 			expect(result.content[0]?.type === "text" ? result.content[0].text : "").toContain(
 				"byte-identical to the file",

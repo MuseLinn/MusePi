@@ -6,23 +6,23 @@
  * target identical to the starting model).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import * as executorModule from "@oh-my-pi/pi-coding-agent/task/executor";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition, SingleResult } from "@oh-my-pi/pi-coding-agent/task/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import type { Model } from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import * as executorModule from "@musepi/pi-coding-agent/task/executor";
+import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition, SingleResult } from "@musepi/pi-coding-agent/task/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 function yieldEmittingSession(
 	initialTools: string[] = ["read", "yield"],
@@ -73,6 +73,7 @@ function yieldEmittingSession(
 		getLastAssistantMessage: () => undefined,
 		abort: async () => {},
 		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
 	};
 	return session as unknown as AgentSession;
 }
@@ -96,6 +97,7 @@ function createModelRegistry(models: Model[]): ModelRegistry {
 	return {
 		authStorage: {},
 		refresh: async () => {},
+		awaitBackgroundRefresh: async () => {},
 		getAvailable: () => models,
 		getApiKey: async () => "test-key",
 		hasConfiguredAuth: () => true,
@@ -147,6 +149,34 @@ describe("runSubprocess per-agent prewalk", () => {
 		const forwarded = spy.mock.calls[0]?.[0];
 		expect(forwarded?.prewalk?.target.id).toBe(target.id);
 		expect(forwarded?.prewalk?.target.provider).toBe(target.provider);
+	});
+
+	it("waits for background discovery before resolving a configured prewalk target", async () => {
+		const models = [primary];
+		const registry = createModelRegistry(models);
+		const refreshGate = Promise.withResolvers<void>();
+		vi.spyOn(registry, "awaitBackgroundRefresh").mockImplementation(async () => {
+			await refreshGate.promise;
+			models.push(target);
+		});
+		const spy = vi
+			.spyOn(sdkModule, "createAgentSession")
+			.mockResolvedValue(createSessionResult(yieldEmittingSession()));
+
+		const run = runSubprocess({
+			...baseOptions("subagent-prewalk-discovery", Settings.isolated()),
+			modelRegistry: registry,
+			agent: {
+				...baseAgent,
+				model: [`${primary.provider}/${primary.id}`],
+				prewalk: `${target.provider}/${target.id}`,
+			},
+		});
+		expect(spy).not.toHaveBeenCalled();
+
+		refreshGate.resolve();
+		expect((await run).exitCode).toBe(0);
+		expect(spy.mock.calls[0]?.[0]?.prewalk?.target.id).toBe(target.id);
 	});
 
 	it("reports the prewalk target as the active model after handoff", async () => {

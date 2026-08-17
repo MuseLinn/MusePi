@@ -8,23 +8,25 @@
  * applied frame, so React change detection is reference equality all the way.
  */
 
+import { COLLAB_PROTO, CollabSocket, encodeBase64Url, importRoomKey, parseCollabLink } from "@musepi/collab-proto";
 import type {
 	AgentSnapshot,
 	AssistantMessage,
 	CollabUiRequest,
 	CollabUiResponseValue,
+	GuestFrame,
 	HostFrame,
 	SessionEntry,
 	SessionHeader,
 	SessionState,
 	SubagentLifecyclePayload,
 	SubagentProgressPayload,
-} from "@oh-my-pi/pi-wire";
-import { importRoomKey } from "./codec";
-import { COLLAB_PROTO, encodeBase64Url, parseCollabLink } from "./link";
-import { CollabSocket } from "./socket";
+	WorkspaceSessionInfo,
+} from "@musepi/pi-wire";
+import type { TranslationKey } from "../i18n/index.js";
+import { t } from "../i18n/index.js";
 
-export type ConnectionPhase = "connecting" | "waiting" | "live" | "reconnecting" | "ended";
+export type ConnectionPhase = "connecting" | "waiting" | "live" | "workspace" | "reconnecting" | "ended";
 
 export interface ActiveTool {
 	toolCallId: string;
@@ -61,6 +63,10 @@ export interface GuestSnapshot {
 	working: boolean;
 	/** True when this guest joined through a read-only (view) link. */
 	readOnly: boolean;
+	/** Multi-session workspace directory (workspace-mode shares). */
+	workspace: readonly WorkspaceSessionInfo[] | null;
+	/** Session currently streamed after a workspace focus; null on the directory. */
+	focusedSessionId: string | null;
 	/** Pending host-side UI request (`ask` select/editor) this guest can answer. */
 	uiRequest: CollabUiRequest | null;
 	/** Capped at 50, newest last. */
@@ -88,14 +94,23 @@ interface PendingTranscript {
 	timer: Timer;
 }
 
+interface PendingRpc {
+	resolve: (data: unknown) => void;
+	reject: (err: Error) => void;
+}
+
 export class GuestClient {
-	readonly #socket: CollabSocket;
+	readonly #socket: CollabSocket<HostFrame, GuestFrame>;
 	readonly #name: string;
+	/** Plaintext (no E2E) guest — browser on insecure http without crypto.subtle. */
+	readonly #plaintext: boolean;
 	/** base64url write token from a full link; absent when joined via a view link. */
 	readonly #writeToken: string | undefined;
 	readonly #listeners = new Set<() => void>();
 	readonly #pendingTranscripts = new Map<number, PendingTranscript>();
+	readonly #pendingRpcs = new Map<number, PendingRpc>();
 	#reqSeq = 0;
+	#rpcSeq = 0;
 	#noticeSeq = 0;
 	#everConnected = false;
 	#welcomed = false;
@@ -115,22 +130,30 @@ export class GuestClient {
 	#activeTools: ReadonlyMap<string, ActiveTool> = new Map();
 	#working = false;
 	#readOnly = false;
+	#workspace: readonly WorkspaceSessionInfo[] | null = null;
+	#focusedSessionId: string | null = null;
 	#uiRequest: CollabUiRequest | null = null;
 	#uiRequestQueue: CollabUiRequest[] = [];
 	#notices: readonly Notice[] = [];
 	#snapshot: GuestSnapshot;
 
 	/** @throws Error when the link does not parse. */
-	constructor(link: string, displayName: string) {
+	constructor(link: string, displayName: string, options: { plaintext?: boolean } = {}) {
 		const parsed = parseCollabLink(link);
 		if ("error" in parsed) throw new Error(parsed.error);
 		this.#name = displayName;
+		this.#plaintext = !!options.plaintext;
 		this.#writeToken = parsed.writeToken ? encodeBase64Url(parsed.writeToken) : undefined;
-		this.#socket = new CollabSocket({ wsUrl: parsed.wsUrl, role: "guest", key: importRoomKey(parsed.key) });
+		this.#socket = new CollabSocket<HostFrame, GuestFrame>({
+			wsUrl: parsed.wsUrl,
+			role: "guest",
+			plaintext: this.#plaintext,
+			key: this.#plaintext ? undefined : importRoomKey(parsed.key),
+		});
 		this.#socket.onOpen = () => this.#handleOpen();
 		this.#socket.onFrame = frame => this.#applyFrameSafe(frame);
 		this.#socket.onControl = msg => {
-			if (msg.t === "room-closed") this.#end("room closed");
+			if (msg.t === "room-closed") this.#end(t("room closed"));
 		};
 		this.#socket.onClose = (reason, willReconnect) => this.#handleClose(reason, willReconnect);
 		this.#snapshot = this.#buildSnapshot();
@@ -146,7 +169,7 @@ export class GuestClient {
 		if (!this.#welcomed && this.#welcomeTimer === null) {
 			this.#welcomeTimer = setTimeout(() => {
 				this.#welcomeTimer = null;
-				if (!this.#welcomed) this.#end("timed out waiting for the host's welcome");
+				if (!this.#welcomed) this.#end(t("timed out waiting for the host's welcome"));
 			}, WELCOME_TIMEOUT_MS);
 		}
 	}
@@ -169,6 +192,11 @@ export class GuestClient {
 		return this.#snapshot;
 	}
 
+	/** True when this guest joined in plaintext mode (no E2E encryption). */
+	get plaintext(): boolean {
+		return this.#plaintext;
+	}
+
 	sendPrompt(text: string): void {
 		this.#socket.send({ t: "prompt", text });
 	}
@@ -183,6 +211,34 @@ export class GuestClient {
 
 	sendAbort(): void {
 		this.#socket.send({ t: "abort" });
+	}
+
+	/** Multi-session workspace directory; null in single-session shares. */
+	get workspace(): readonly WorkspaceSessionInfo[] | null {
+		return this.#workspace;
+	}
+
+	/** Session the guest is currently streaming, or null on the directory. */
+	get focusedSessionId(): string | null {
+		return this.#focusedSessionId;
+	}
+
+	/** Focus a session from the workspace directory (null returns to it). */
+	selectWorkspaceSession(sessionId: string | null): void {
+		this.#focusedSessionId = sessionId;
+		if (sessionId !== null) {
+			// A focus switch streams a fresh welcome; reset the live accumulators.
+			this.#entries = [];
+			this.#stream = null;
+			this.#streamDone = false;
+			this.#activeTools = new Map();
+			this.#progress = new Map();
+			this.#lifecycle = new Map();
+			this.#working = false;
+			this.#phase = "waiting";
+		}
+		this.#socket.send({ t: "workspace-select", sessionId });
+		this.#commit();
 	}
 
 	sendAgentCmd(cmd: "chat" | "kill" | "revive", agentId: string, text?: string): void {
@@ -206,6 +262,23 @@ export class GuestClient {
 		return promise;
 	}
 
+	/**
+	 * Host RPC: board / cron / workspace / fs capabilities. Resolves with the
+	 * method's data payload; rejects with the host's error string when the
+	 * host answers `ok:false`. No timeout — the host always answers (mirrors
+	 * the fetch-transcript pending-map pattern without the polling fallback).
+	 */
+	rpc<T>(method: string, params?: unknown): Promise<T> {
+		const reqId = ++this.#rpcSeq;
+		const { promise, resolve, reject } = Promise.withResolvers<T>();
+		this.#pendingRpcs.set(reqId, {
+			resolve: resolve as PendingRpc["resolve"],
+			reject,
+		});
+		this.#socket.send({ t: "rpc-request", reqId, method, params });
+		return promise;
+	}
+
 	/** Test seam: apply a synthetic host frame through the real apply path. */
 	applyFrameForTest(frame: HostFrame): void {
 		this.#applyFrameSafe(frame);
@@ -226,7 +299,20 @@ export class GuestClient {
 			this.#commit();
 			return;
 		}
-		this.#end(reason);
+		this.#end(this.#translateCloseReason(reason));
+	}
+
+	/**
+	 * CollabSocket emits raw English reasons; translate at the UI layer (the
+	 * socket is a pure transport). "connection lost (code N)" carries a code
+	 * that must be extracted before matching the `{0}`-placeholder key.
+	 */
+	#translateCloseReason(reason: string): string {
+		const codeMatch = /^connection lost \(code (\d+)\)$/.exec(reason);
+		if (codeMatch) {
+			return t("connection lost (code {code})", { code: codeMatch[1]! });
+		}
+		return t(reason as TranslationKey);
 	}
 
 	#end(reason: string): void {
@@ -240,6 +326,10 @@ export class GuestClient {
 			pending.resolve(null);
 		}
 		this.#pendingTranscripts.clear();
+		for (const [, pending] of this.#pendingRpcs) {
+			pending.reject(new Error(reason));
+		}
+		this.#pendingRpcs.clear();
 		this.#clearUiRequests();
 		this.#commit();
 		this.#socket.close();
@@ -256,7 +346,7 @@ export class GuestClient {
 		this.#clearSnapshotProgressTimer();
 		this.#snapshotProgressTimer = setTimeout(() => {
 			this.#snapshotProgressTimer = null;
-			this.#end("timed out waiting for the host's session snapshot");
+			this.#end(t("timed out waiting for the host's session snapshot"));
 		}, SNAPSHOT_PROGRESS_TIMEOUT_MS);
 	}
 
@@ -274,10 +364,14 @@ export class GuestClient {
 		} catch (err) {
 			console.warn("collab: failed to apply frame", frame.t, err);
 			if (frame.t === "welcome" && !this.#welcomed) {
-				this.#end(`failed to apply session snapshot: ${err instanceof Error ? err.message : String(err)}`);
+				this.#end(
+					t("failed to apply session snapshot: {reason}", {
+						reason: err instanceof Error ? err.message : String(err),
+					}),
+				);
 				return;
 			}
-			this.#pushNotice("error", `failed to apply ${frame.t} frame`);
+			this.#pushNotice("error", t("failed to apply {frame} frame", { frame: frame.t }));
 			this.#commit();
 		}
 	}
@@ -334,8 +428,15 @@ export class GuestClient {
 				break;
 			case "state":
 				this.#state = frame.state;
+				// Host state is authoritative for liveness in both directions: the
+				// payload is built at fire time, so `isStreaming` is never stale.
+				// This covers a connected guest that misses the discrete `agent_start`
+				// without receiving a new `welcome` (for example, mid-stream).
+				this.#working = frame.state.isStreaming;
 				if (!frame.state.isStreaming) {
-					this.#working = false;
+					// Host idle implies no tool can be running, so clear any card
+					// pinned by a dropped `tool_execution_end` off this signal.
+					this.#activeTools = new Map();
 					if (this.#streamDone) {
 						this.#stream = null;
 						this.#streamDone = false;
@@ -375,17 +476,46 @@ export class GuestClient {
 				}
 				break;
 			}
+			case "rpc-result": {
+				const pending = this.#pendingRpcs.get(frame.reqId);
+				if (pending) {
+					this.#pendingRpcs.delete(frame.reqId);
+					if (frame.ok) pending.resolve(frame.data);
+					else pending.reject(new Error(frame.error ?? "rpc failed"));
+				}
+				break;
+			}
+			case "workspace":
+				this.#workspace = frame.sessions;
+				this.#focusedSessionId = null;
+				this.#phase = "workspace";
+				// Workspace mode never sends a welcome until a session is
+				// focused — cancel the hello timeout or guests time out on
+				// the directory.
+				this.#clearWelcomeTimer();
+				break;
+			case "workspace-session":
+				if (this.#workspace !== null) {
+					this.#workspace = this.#workspace.map(s => (s.id === frame.session.id ? frame.session : s));
+				}
+				break;
 			case "bye":
 				this.#end(frame.reason);
 				return; // #end already committed
 			case "error":
-				if (!this.#welcomed) {
+				if (!this.#welcomed && this.#workspace === null) {
 					// Pre-welcome errors are the host's targeted reply to our
 					// hello (e.g. protocol mismatch): no welcome will follow.
 					// End with the host's reason instead of waiting out the
-					// welcome timeout.
+					// welcome timeout. (Workspace directory: a failed session
+					// focus must not kill the connection — toast instead.)
 					this.#end(frame.message);
 					return; // #end already committed
+				}
+				// A failed workspace focus returns the guest to the directory.
+				if (this.#workspace !== null && this.#focusedSessionId !== null) {
+					this.#focusedSessionId = null;
+					this.#phase = "workspace";
 				}
 				this.#pushNotice("error", frame.message);
 				break;
@@ -452,23 +582,30 @@ export class GuestClient {
 				this.#pushNotice(event.level, event.message);
 				break;
 			case "auto_retry_start":
-				this.#pushNotice("info", `retry ${event.attempt}/${event.maxAttempts}: ${event.errorMessage}`);
+				this.#pushNotice(
+					"info",
+					t("retry {attempt}/{max}: {reason}", {
+						attempt: String(event.attempt),
+						max: String(event.maxAttempts),
+						reason: event.errorMessage,
+					}),
+				);
 				break;
 			case "auto_retry_end":
-				if (!event.success) this.#pushNotice("error", event.finalError ?? "retry failed");
+				if (!event.success) this.#pushNotice("error", event.finalError ?? t("retry failed"));
 				break;
 			case "auto_compaction_start":
-				this.#pushNotice("info", `compacting context (${event.reason})`);
+				this.#pushNotice("info", t("compacting context ({reason})", { reason: event.reason }));
 				break;
 			case "auto_compaction_end":
 				if (!event.skipped) {
 					this.#pushNotice(
 						"info",
 						event.aborted
-							? "compaction aborted"
+							? t("compaction aborted")
 							: event.errorMessage
-								? `compaction failed: ${event.errorMessage}`
-								: "context compacted",
+								? t("compaction failed: {reason}", { reason: event.errorMessage })
+								: t("context compacted"),
 					);
 				}
 				break;
@@ -511,6 +648,8 @@ export class GuestClient {
 			activeTools: this.#activeTools,
 			working: this.#working,
 			readOnly: this.#readOnly,
+			workspace: this.#workspace,
+			focusedSessionId: this.#focusedSessionId,
 			uiRequest: this.#uiRequest,
 			notices: this.#notices,
 		};

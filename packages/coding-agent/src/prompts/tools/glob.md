@@ -12,5 +12,5 @@ Matches are newest-first and grouped by directory; directories end in `/`.
 </output>
 
 <avoid>
-Open-ended multi-round discovery → Task + scout.
+Open-ended multi-round discovery → {{#if scoutAvailable}}Task + scout.{{else}}Task.{{/if}}
 </avoid>

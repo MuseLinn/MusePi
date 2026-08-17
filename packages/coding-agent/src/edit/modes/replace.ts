@@ -4,8 +4,9 @@
  * Provides both character-level and line-level fuzzy matching with progressive
  * fallback strategies for finding text in files.
  */
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { type } from "arktype";
+
+import { type } from "@musepi/omptype";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
 import type { FileDiagnosticsResult, WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
 import type { ToolSession } from "../../tools";
 import { routeWriteThroughBridge } from "../../tools/acp-bridge";
@@ -258,23 +259,41 @@ function formatPreviewWindow(lines: string[], centerIndex: number, options: Prev
 		.join("\n");
 }
 
-function findExactMatchOutcome(content: string, target: string): MatchOutcome | undefined {
-	const exactIndex = content.indexOf(target);
-	if (exactIndex === -1) {
+function findExactMatchOutcome(
+	content: string,
+	target: string,
+	excludedRanges: readonly { startIndex: number; endIndex: number }[],
+): MatchOutcome | undefined {
+	let firstIndex: number | undefined;
+	let occurrences = 0;
+	const recordedIndices: number[] = [];
+	let searchStart = 0;
+
+	while (searchStart <= content.length - target.length) {
+		const index = content.indexOf(target, searchStart);
+		if (index === -1) break;
+
+		const endIndex = index + target.length;
+		if (!excludedRanges.some(range => index < range.endIndex && endIndex > range.startIndex)) {
+			firstIndex ??= index;
+			occurrences++;
+			if (recordedIndices.length < MAX_RECORDED_MATCHES) {
+				recordedIndices.push(index);
+			}
+		}
+		searchStart = endIndex;
+	}
+
+	if (firstIndex === undefined) {
 		return undefined;
 	}
 
-	const occurrences = content.split(target).length - 1;
 	if (occurrences > 1) {
 		const contentLines = content.split("\n");
 		const occurrenceLines: number[] = [];
 		const occurrencePreviews: string[] = [];
-		let searchStart = 0;
-
-		for (let i = 0; i < MAX_RECORDED_MATCHES; i++) {
-			const idx = content.indexOf(target, searchStart);
-			if (idx === -1) break;
-			const lineNumber = content.slice(0, idx).split("\n").length;
+		for (const index of recordedIndices) {
+			const lineNumber = content.slice(0, index).split("\n").length;
 			occurrenceLines.push(lineNumber);
 			occurrencePreviews.push(
 				formatPreviewWindow(contentLines, lineNumber - 1, {
@@ -282,17 +301,16 @@ function findExactMatchOutcome(content: string, target: string): MatchOutcome | 
 					maxLen: OCCURRENCE_PREVIEW_MAX_LEN,
 				}),
 			);
-			searchStart = idx + 1;
 		}
 
 		return { occurrences, occurrenceLines, occurrencePreviews };
 	}
 
-	const startLine = content.slice(0, exactIndex).split("\n").length;
+	const startLine = content.slice(0, firstIndex).split("\n").length;
 	return {
 		match: {
 			actualText: target,
-			startIndex: exactIndex,
+			startIndex: firstIndex,
 			startLine,
 			confidence: 1,
 		},
@@ -408,6 +426,7 @@ function findBestFuzzyMatchCore(
 	offsets: number[],
 	threshold: number,
 	includeDepth: boolean,
+	excludedRanges: readonly { startIndex: number; endIndex: number }[],
 ): BestFuzzyMatchResult {
 	const targetNormalized = normalizeLines(targetLines, includeDepth);
 
@@ -417,6 +436,12 @@ function findBestFuzzyMatchCore(
 	let aboveThresholdCount = 0;
 
 	for (let start = 0; start <= contentLines.length - targetLines.length; start++) {
+		const startIndex = offsets[start];
+		const endLine = start + targetLines.length - 1;
+		const endIndex = Math.max(startIndex + 1, offsets[endLine] + contentLines[endLine].length);
+		if (excludedRanges.some(range => startIndex < range.endIndex && endIndex > range.startIndex)) {
+			continue;
+		}
 		const windowLines = contentLines.slice(start, start + targetLines.length);
 		const windowNormalized = normalizeLines(windowLines, includeDepth);
 		let score = 0;
@@ -434,7 +459,7 @@ function findBestFuzzyMatchCore(
 			bestScore = score;
 			best = {
 				actualText: windowLines.join("\n"),
-				startIndex: offsets[start],
+				startIndex,
 				startLine: start + 1,
 				confidence: score,
 			};
@@ -446,7 +471,12 @@ function findBestFuzzyMatchCore(
 	return { best, aboveThresholdCount, secondBestScore };
 }
 
-function findBestFuzzyMatch(content: string, target: string, threshold: number): BestFuzzyMatchResult {
+function findBestFuzzyMatch(
+	content: string,
+	target: string,
+	threshold: number,
+	excludedRanges: readonly { startIndex: number; endIndex: number }[],
+): BestFuzzyMatchResult {
 	const contentLines = content.split("\n");
 	const targetLines = target.split("\n");
 
@@ -458,11 +488,18 @@ function findBestFuzzyMatch(content: string, target: string, threshold: number):
 	}
 
 	const offsets = computeLineOffsets(contentLines);
-	let result = findBestFuzzyMatchCore(contentLines, targetLines, offsets, threshold, true);
+	let result = findBestFuzzyMatchCore(contentLines, targetLines, offsets, threshold, true, excludedRanges);
 
 	// Retry without indent depth if match is close but below threshold
 	if (result.best && result.best.confidence < threshold && result.best.confidence >= FALLBACK_THRESHOLD) {
-		const noDepthResult = findBestFuzzyMatchCore(contentLines, targetLines, offsets, threshold, false);
+		const noDepthResult = findBestFuzzyMatchCore(
+			contentLines,
+			targetLines,
+			offsets,
+			threshold,
+			false,
+			excludedRanges,
+		);
 		if (noDepthResult.best && noDepthResult.best.confidence > result.best.confidence) {
 			result = noDepthResult;
 		}
@@ -473,25 +510,35 @@ function findBestFuzzyMatch(content: string, target: string, threshold: number):
 
 /**
  * Find a match for target text within content.
- * Used primarily for replace-mode edits.
+ * Used primarily for replace-mode edits; excluded ranges remain invisible to exact and fuzzy matching.
  */
 export function findMatch(
 	content: string,
 	target: string,
-	options: { allowFuzzy: boolean; threshold?: number },
+	options: {
+		allowFuzzy: boolean;
+		threshold?: number;
+		excludedRanges?: readonly { startIndex: number; endIndex: number }[];
+	},
 ): MatchOutcome {
 	if (target.length === 0) {
 		return {};
 	}
+	const excludedRanges = options.excludedRanges ?? [];
 
-	const exactMatch = findExactMatchOutcome(content, target);
+	const exactMatch = findExactMatchOutcome(content, target, excludedRanges);
 	if (exactMatch) {
 		return exactMatch;
 	}
 
 	// Try fuzzy match
 	const threshold = options.threshold ?? DEFAULT_FUZZY_THRESHOLD;
-	const { best, aboveThresholdCount, secondBestScore } = findBestFuzzyMatch(content, target, threshold);
+	const { best, aboveThresholdCount, secondBestScore } = findBestFuzzyMatch(
+		content,
+		target,
+		threshold,
+		excludedRanges,
+	);
 
 	if (!best) {
 		return {};
@@ -1012,24 +1059,31 @@ export function findContextLine(
 	return { index: undefined, confidence: bestScore };
 }
 
-export const replaceEditEntrySchema = type({
-	old_text: "string",
-	new_text: "string",
-	"all?": "boolean",
-});
-
 export const replaceEditSchema = type({
 	path: "string",
-	edits: replaceEditEntrySchema.array(),
+	old_string: "string",
+	new_string: "string",
+	"replace_all?": "boolean",
 });
 
-export type ReplaceEditEntry = typeof replaceEditEntrySchema.infer;
 export type ReplaceParams = typeof replaceEditSchema.infer;
 
-export interface ExecuteReplaceSingleOptions {
+/**
+ * Internal batch form of {@link ReplaceParams}, produced only by the Cursor
+ * exec bridge: a `pi_edit` frame carries several replacements against one
+ * path but must run as a single tool lifecycle with one aggregate result.
+ * Never advertised to the model — the agent loop validates model calls
+ * against {@link replaceEditSchema}, which has no `edits` field.
+ */
+export interface ReplaceBatchParams {
+	path: string;
+	edits: Omit<ReplaceParams, "path">[];
+}
+
+export interface ExecuteReplaceOptions {
 	session: ToolSession;
 	path: string;
-	params: ReplaceEditEntry;
+	params: Omit<ReplaceParams, "path">;
 	signal?: AbortSignal;
 	batchRequest?: LspBatchRequest;
 	allowFuzzy: boolean;
@@ -1038,9 +1092,9 @@ export interface ExecuteReplaceSingleOptions {
 	beginDeferredDiagnosticsForPath: (path: string) => WritethroughDeferredHandle;
 }
 
-export async function executeReplaceSingle(
-	options: ExecuteReplaceSingleOptions,
-): Promise<AgentToolResult<EditToolDetails, ReplaceEditEntry>> {
+export async function executeReplace(
+	options: ExecuteReplaceOptions,
+): Promise<AgentToolResult<EditToolDetails, ReplaceParams>> {
 	const {
 		session,
 		path,
@@ -1052,12 +1106,12 @@ export async function executeReplaceSingle(
 		writethrough,
 		beginDeferredDiagnosticsForPath,
 	} = options;
-	const { old_text, new_text, all } = params;
+	const { old_string, new_string, replace_all } = params;
 
 	enforcePlanModeWrite(session, path);
 
-	if (old_text.length === 0) {
-		throw new Error("old_text must not be empty.");
+	if (old_string.length === 0) {
+		throw new Error("old_string must not be empty.");
 	}
 
 	const absolutePath = resolvePlanPath(session, path);
@@ -1065,12 +1119,12 @@ export async function executeReplaceSingle(
 	const { bom, text: content } = stripBom(rawContent);
 	const originalEnding = detectLineEnding(content);
 	const normalizedContent = normalizeToLF(content);
-	const normalizedOldText = normalizeToLF(old_text);
-	const normalizedNewText = normalizeToLF(new_text);
+	const normalizedOldText = normalizeToLF(old_string);
+	const normalizedNewText = normalizeToLF(new_string);
 
 	const result = replaceText(normalizedContent, normalizedOldText, normalizedNewText, {
 		fuzzy: allowFuzzy,
-		all: all ?? false,
+		all: replace_all ?? false,
 		threshold: fuzzyThreshold,
 	});
 

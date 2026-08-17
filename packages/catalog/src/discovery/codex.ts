@@ -1,4 +1,4 @@
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
 import { parseKnownModel, semverEqual } from "../identity/classify";
 import type { FetchImpl, ModelSpec } from "../types";
 import { discoveryFetch } from "../utils";

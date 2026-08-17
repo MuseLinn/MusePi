@@ -1,5 +1,3 @@
-/// <reference path="./winston-daily-rotate-file.d.ts" />
-
 /**
  * Centralized logger for omp.
  *
@@ -16,11 +14,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { isPromise } from "node:util/types";
-import type DailyRotateFile from "winston-daily-rotate-file";
-// Import the implementation directly because the package index imports and mutates
-// Winston. The exact workspace catalog pin protects this internal entrypoint.
-import DailyRotateFileImplementation from "winston-daily-rotate-file/daily-rotate-file.js";
 import { getLogsDir } from "./dirs";
+import { RotatingFileSink } from "./logger/rotating-file";
 import { drainModuleLoadEvents } from "./timing-buffer";
 /** Severity names accepted by the centralized logger. */
 export type LogLevel = "error" | "warn" | "info" | "debug";
@@ -200,24 +195,18 @@ function formatLogInfo(info: NormalizedLogInfo): string {
 	return JSON.stringify(entry, jsonReplacer) as string;
 }
 
-type FileTransport = DailyRotateFile & {
-	log(info: Record<symbol, string>, callback: () => void): void;
-	close(): void;
-};
-
-/** Build a rotating file transport with process-local rotation and shared retention. */
-function makeFileTransport(dir?: string): FileTransport {
+/** Build a rotating file sink with process-local rotation and shared retention. */
+function makeFileTransport(dir?: string): RotatingFileSink {
 	const logsDir = ensureDir(dir ?? getLogsDir());
 	pruneStaleProcessLogs(logsDir);
-	return new DailyRotateFileImplementation({
-		dirname: logsDir,
-		filename: `omp.%DATE%.${process.pid}.log`,
-		datePattern: "YYYY-MM-DD",
-		maxSize: "10m",
+	return new RotatingFileSink({
+		directory: logsDir,
+		filenamePrefix: "omp",
+		filenameSuffix: String(process.pid),
+		maxBytes: 10 * 1024 * 1024,
 		maxFiles: 5,
-		zippedArchive: false,
 		auditFile: path.join(logsDir, `.omp.${process.pid}-audit.json`),
-	}) as FileTransport;
+	});
 }
 
 /**
@@ -227,15 +216,12 @@ function makeFileTransport(dir?: string): FileTransport {
 let transportOpts: { console?: boolean; file?: boolean | string } = { file: true };
 
 interface LocalTransports {
-	readonly file: FileTransport | undefined;
+	readonly file: RotatingFileSink | undefined;
 	readonly console: boolean;
 }
 
 /** Local transports, constructed lazily on first log emission. */
 let activeTransports: LocalTransports | undefined;
-
-const TRANSPORT_MESSAGE = Symbol.for("message");
-const onTransportLogged = (): void => {};
 
 function buildTransports(opts: { console?: boolean; file?: boolean | string }): LocalTransports {
 	return {
@@ -254,11 +240,9 @@ function emitLocally(level: LogLevel, message: string, context: Record<string, u
 	const info = normalizeLogInfo(level, message, context);
 	if (!transports.file && !transports.console) return;
 
-	// Winston applied the shared format before dispatch, then the same format a
-	// second time inside Console. Keep those evaluation and timestamp semantics.
 	const line = formatLogInfo(info);
-	if (transports.file) transports.file.log({ [TRANSPORT_MESSAGE]: line }, onTransportLogged);
-	if (transports.console) process.stdout.write(`${formatLogInfo(info)}${os.EOL}`);
+	if (transports.file) transports.file.write(line);
+	if (transports.console) fs.writeSync(1, `${formatLogInfo(info)}${os.EOL}`);
 }
 
 /**

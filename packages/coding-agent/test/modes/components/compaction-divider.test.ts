@@ -7,12 +7,14 @@
  */
 
 import { beforeAll, describe, expect, it } from "bun:test";
-import { createCompactionSummaryMessage } from "@oh-my-pi/pi-agent-core/compaction";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { CompactionSummaryMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/compaction-summary-message";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { createCompactionSummaryMessage } from "@musepi/pi-agent-core/compaction";
+import type { ImageContent } from "@musepi/pi-ai";
+import { CompactionSummaryMessageComponent } from "@musepi/pi-coding-agent/modes/components/compaction-summary-message";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { setLocale } from "../../../src/i18n/index.ts";
 
 beforeAll(() => {
+	setLocale("en-US");
 	initTheme();
 });
 

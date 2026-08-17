@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
-import { type KagiSearchRequest, searchWithKagi } from "@oh-my-pi/pi-coding-agent/web/kagi";
-import { KagiProvider, searchKagi } from "@oh-my-pi/pi-coding-agent/web/search/providers/kagi";
-import { SearchProviderError } from "@oh-my-pi/pi-coding-agent/web/search/types";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
+import { type KagiSearchRequest, searchWithKagi } from "@musepi/pi-coding-agent/web/kagi";
+import { KagiProvider, searchKagi } from "@musepi/pi-coding-agent/web/search/providers/kagi";
+import { SearchProviderError } from "@musepi/pi-coding-agent/web/search/types";
 
 const fakeAuthStorage = {
 	async getApiKey() {
@@ -57,6 +57,29 @@ describe("Kagi web search error handling", () => {
 		await expect(searchWithKagi("empty error", { fetch: fetchMock }, fakeAuthStorage)).rejects.toThrow(
 			"Kagi API error (502)",
 		);
+	});
+	it("applies the configured timeout at the provider fetch boundary", async () => {
+		const timeoutSignal = new AbortController().signal;
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeoutSignal);
+		let fetchSignal: AbortSignal | null | undefined;
+		const fetchMock: FetchImpl = async (_input, init) => {
+			fetchSignal = init?.signal;
+			return new Response(JSON.stringify({ meta: { trace: "req-timeout" }, data: {} }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		};
+
+		await new KagiProvider().search({
+			query: "slow kagi search",
+			systemPrompt: "",
+			authStorage: fakeAuthStorage,
+			timeoutMs: 180_000,
+			fetch: fetchMock,
+		});
+
+		expect(timeoutSpy).toHaveBeenCalledWith(180_000);
+		expect(fetchSignal).toBe(timeoutSignal);
 	});
 });
 

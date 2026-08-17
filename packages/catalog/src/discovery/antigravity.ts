@@ -1,4 +1,4 @@
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
 import type { ModelSpec } from "../types";
 import { discoveryFetch, toPositiveNumber } from "../utils";
 import {

@@ -1,5 +1,6 @@
 /** `todo` — phased task-list ops and the resulting board. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badges, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, normalizeWs, str, truncate } from "../util";
@@ -77,7 +78,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 	const labels = order.map(op => (counts[op] > 1 ? `${op}×${counts[op]}` : op));
 	return (
 		<>
-			<Badges items={labels.length > 0 ? labels : ["update"]} />
+			<Badges items={labels.length > 0 ? labels : [t("update")]} />
 			{firstTask !== null && <span> {truncate(normalizeWs(firstTask), 60)}</span>}
 		</>
 	);
@@ -92,14 +93,14 @@ function opRow(entry: unknown, key: number): ReactNode {
 	if (task !== null) parts.push(task);
 	if (phase !== null) parts.push(phase);
 	if (Array.isArray(entry.items) && entry.items.length > 0) {
-		parts.push(`${entry.items.length} item${entry.items.length === 1 ? "" : "s"}`);
+		parts.push(t("{count} item(s)", { count: String(entry.items.length) }));
 	}
 	if (Array.isArray(entry.list) && entry.list.length > 0) {
 		let tasks = 0;
 		for (const phaseEntry of entry.list) {
 			if (isRecord(phaseEntry) && Array.isArray(phaseEntry.items)) tasks += phaseEntry.items.length;
 		}
-		parts.push(`${entry.list.length} phase${entry.list.length === 1 ? "" : "s"} · ${tasks} tasks`);
+		parts.push(t("{phases} phase(s) · {tasks} tasks", { phases: String(entry.list.length), tasks: String(tasks) }));
 	}
 	return (
 		<Row key={key} k={str(entry.op) ?? "update"}>

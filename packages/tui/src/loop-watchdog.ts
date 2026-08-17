@@ -1,11 +1,13 @@
 import { performance } from "node:perf_hooks";
-import { logger, takeRecentLoopPhase } from "@oh-my-pi/pi-utils";
+import { logger, takeRecentLoopPhase } from "@musepi/pi-utils";
 
 export interface LoopWatchdogOptions {
 	/** How far ahead each probe tick is scheduled, in ms. Default 250. */
 	intervalMs?: number;
 	/** A tick later than this past its deadline counts as a block. Default 250. */
 	thresholdMs?: number;
+	/** Overshoot beyond this likely includes system sleep, so it is suppressed. Default 60_000. */
+	sleepMs?: number;
 	/** Monotonic clock source; injectable for tests. Default `performance.now`. */
 	now?: () => number;
 	/** Timer source; injectable for tests. Default `setTimeout`. */
@@ -33,11 +35,15 @@ interface LoopWatchdogTimer {
  * The handle is `unref`'d so the probe never keeps the process alive, and stop()
  * cancels the armed timer when the handle exposes `cancel` (the default
  * `setTimeout` handle does, via `clearTimeout`). The `#generation` guard remains
- * as a fallback for injected handles that cannot cancel.
+ * as a fallback for injected handles that cannot cancel. An overshoot beyond
+ * `sleepMs` is treated as system sleep rather than a synchronous stall: the
+ * process could not have run JS during the missed interval, and one resume
+ * should not produce a multi-minute `ui.loop-blocked` record.
  */
 export class LoopWatchdog {
 	#intervalMs: number;
 	#thresholdMs: number;
+	#sleepMs: number;
 	#now: () => number;
 	#schedule: (cb: () => void, ms: number) => LoopWatchdogTimer;
 	#expected = 0;
@@ -52,6 +58,7 @@ export class LoopWatchdog {
 	constructor(options: LoopWatchdogOptions = {}) {
 		this.#intervalMs = options.intervalMs ?? 250;
 		this.#thresholdMs = options.thresholdMs ?? 250;
+		this.#sleepMs = options.sleepMs ?? 60_000;
 		this.#now = options.now ?? (() => performance.now());
 		this.#schedule =
 			options.schedule ??
@@ -91,7 +98,9 @@ export class LoopWatchdog {
 		// forward to a later, phase-less block.
 		const phase = takeRecentLoopPhase();
 		if (blockedMs > this.#thresholdMs) {
-			if (!this.#wasBlocked) {
+			if (blockedMs > this.#sleepMs) {
+				this.#wasBlocked = false;
+			} else if (!this.#wasBlocked) {
 				this.#wasBlocked = true;
 				logger.warn("ui.loop-blocked", {
 					blockedMs: Math.round(blockedMs),

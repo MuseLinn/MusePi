@@ -1,4 +1,4 @@
-# @oh-my-pi/pi-coding-agent
+# @musepi/pi-coding-agent
 
 Core implementation package for the `omp` coding agent in the `oh-my-pi` monorepo.
 

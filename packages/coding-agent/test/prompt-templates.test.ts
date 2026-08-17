@@ -11,10 +11,10 @@
 import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { expandPromptTemplate, type PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { expandSlashCommand, type FileSlashCommand } from "@oh-my-pi/pi-coding-agent/extensibility/slash-commands";
-import { parseCommandArgs, substituteArgs } from "@oh-my-pi/pi-coding-agent/utils/command-args";
-import { prompt } from "@oh-my-pi/pi-utils";
+import { expandPromptTemplate, type PromptTemplate } from "@musepi/pi-coding-agent/config/prompt-templates";
+import { expandSlashCommand, type FileSlashCommand } from "@musepi/pi-coding-agent/extensibility/slash-commands";
+import { parseCommandArgs, substituteArgs } from "@musepi/pi-coding-agent/utils/command-args";
+import { prompt } from "@musepi/pi-utils";
 
 // ============================================================================
 // substituteArgs
@@ -229,6 +229,19 @@ describe("parseCommandArgs + substituteArgs integration", () => {
 		const template1 = "Implement: $@";
 		const template2 = "Implement: $ARGUMENTS";
 		expect(substituteArgs(template1, args)).toBe(substituteArgs(template2, args));
+	});
+	test("should not recursively expand $@ or $ARGUMENTS present inside user positional arguments", () => {
+		const args = ["check $@ and $ARGUMENTS", "extra"];
+		const template = "Instruction: $1";
+		const result = substituteArgs(template, args);
+		expect(result).toBe("Instruction: check $@ and $ARGUMENTS");
+	});
+
+	test("should not recursively expand positional placeholders $1, $2 inside positional argument values", () => {
+		const args = ["value with $2", "nested"];
+		const template = "Result: $1";
+		const result = substituteArgs(template, args);
+		expect(result).toBe("Result: value with $2");
 	});
 });
 

@@ -9,15 +9,15 @@ Primary implementation files:
 - `src/config/model-registry.ts` — loads built-in + custom models, provider overrides, runtime discovery, auth integration
 - `src/config/model-resolver.ts` — parses model patterns and selects initial/smol/slow models
 - `src/config/settings-schema.ts` — model-related settings (`modelRoles`, provider transport preferences)
-- `src/session/auth-storage.ts` — re-exports `AuthStorage` from `@oh-my-pi/pi-ai` (`packages/ai/src/auth-storage.ts`); API key + OAuth resolution order
+- `src/session/auth-storage.ts` — re-exports `AuthStorage` from `@musepi/pi-ai` (`packages/ai/src/auth-storage.ts`); API key + OAuth resolution order
 - `packages/catalog/src/models.ts` and `packages/catalog/src/types.ts` — built-in providers/models (`getBundledModels` / `getBundledProviders`) and `Model`/`compat` types
 
 ## Config file location and legacy behavior
 
 Default config paths, in precedence order:
 
-- `~/.omp/agent/models.yml`
-- `~/.omp/agent/models.yaml`
+- `~/.musepi/agent/models.yml`
+- `~/.musepi/agent/models.yaml`
 
 Legacy behavior still present:
 
@@ -106,7 +106,7 @@ providers:
 
 - `auth`: `apiKey` (default), `none`, or `oauth`; for `models.yml` custom models, `oauth` is accepted by schema but does not waive the `apiKey` requirement
 - `discovery.type`: `ollama`, `llama.cpp`, `lm-studio`, `openai-models-list`, `proxy`, or `litellm`
-- `transport`: `pi-native` only. When set, every model under that provider is sent to an `omp auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
+- `transport`: `pi-native` only. When set, every model under that provider is sent to an `musepi auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
 
 ## Validation rules (current)
 
@@ -149,7 +149,7 @@ providers:
   openai:
     apiKey: "!op read op://dev/openai/api-key"
     headers:
-      X-Team-Key: "!bw get password omp-team-key"
+      X-Team-Key: "!bw get password musepi-team-key"
 ```
 
 Successful command outputs are cached for the process lifetime so the command is not re-run for every model.
@@ -158,7 +158,7 @@ Successful command outputs are cached for the process lifetime so the command is
 
 ModelRegistry pipeline (on refresh):
 
-1. Load built-in providers/models from `@oh-my-pi/pi-catalog` (`getBundledProviders` / `getBundledModels`).
+1. Load built-in providers/models from `@musepi/pi-catalog` (`getBundledProviders` / `getBundledModels`).
 2. Load `models.yml` / `models.yaml` custom config.
 3. Apply provider overrides (`baseUrl`, `headers`, `disableStrictTools`) to built-in models.
 4. Apply `modelOverrides` (per provider + model id).
@@ -493,14 +493,14 @@ disabledProviders:
 
 String entries apply everywhere. Scoped entries apply when the current working directory is the configured path or one of its subdirectories. Use `path`, `paths`, `pathPrefix`, or `pathPrefixes`; use `models` for `enabledModels`, `providers` for `disabledProviders`, or `values` for either.
 
-## `/model` and `omp models`
+## `/model` and `musepi models`
 
 Both surfaces keep provider-prefixed models visible and selectable.
 
 They now also expose canonical/coalesced models:
 
 - `/model` includes a canonical view alongside provider tabs
-- `omp models` prints provider-grouped tables of every concrete model, and `omp models canonical` prints the coalesced canonical view
+- `musepi models` prints provider-grouped tables of every concrete model, and `musepi models canonical` prints the coalesced canonical view
 
 Selecting a canonical entry stores the canonical selector. Selecting a provider row stores the explicit `provider/modelId`.
 
@@ -739,7 +739,7 @@ providers:
 
 ## Legacy consumer caveat
 
-Most model configuration now flows through `models.yml` / `models.yaml` via `ModelRegistry`. Explicit `.json` / `.jsonc` paths remain supported only when passed programmatically to `ModelRegistry`; the default user config prefers `~/.omp/agent/models.yml`, then falls back to `~/.omp/agent/models.yaml`.
+Most model configuration now flows through `models.yml` / `models.yaml` via `ModelRegistry`. Explicit `.json` / `.jsonc` paths remain supported only when passed programmatically to `ModelRegistry`; the default user config prefers `~/.musepi/agent/models.yml`, then falls back to `~/.musepi/agent/models.yaml`.
 
 ## Failure mode
 

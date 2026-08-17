@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { buildSpec, type CompletionSpec, generateCompletion } from "@oh-my-pi/pi-coding-agent/cli/completion-gen";
-import type { CliConfig, CommandCtor } from "@oh-my-pi/pi-utils/cli";
+import { buildSpec, type CompletionSpec, generateCompletion } from "@musepi/pi-coding-agent/cli/completion-gen";
+import type { CliConfig, CommandCtor } from "@musepi/pi-utils/cli";
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..", "..");
 const cliEntry = path.join(repoRoot, "packages", "coding-agent", "src", "cli.ts");
@@ -220,9 +220,12 @@ describe("omp completions (integration / drift)", () => {
 		// itself shells out to `omp __complete $kind`.
 		expect(stdout).toContain("_omp_call models");
 		expect(stdout).toContain("_omp_call sessions");
-		expect(stdout).toContain("command omp __complete $kind");
+		expect(stdout).toContain("command musepi __complete $kind");
 		// Hidden/default commands must NOT surface as completable subcommands.
 		expect(stdout).not.toContain("_omp_cmd_launch");
 		expect(stdout).not.toContain("_omp_cmd___complete");
-	});
+		// Spawns the whole CLI entry graph, so the wall time is cold-transpile bound
+		// (~1s warm) rather than an assertion about latency. Bun's 5s default starves
+		// it when CI runs several test chunks in parallel on a shared runner.
+	}, 30_000);
 });

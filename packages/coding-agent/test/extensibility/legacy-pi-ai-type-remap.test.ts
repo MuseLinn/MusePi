@@ -9,16 +9,16 @@ import {
 	getBundledModels,
 	getBundledProviders,
 	modelsAreEqual,
-} from "@oh-my-pi/pi-catalog/models";
+} from "@musepi/pi-catalog/models";
+import { Type as TypeBoxShimType } from "@musepi/pi-coding-agent/extensibility/legacy-typebox";
 import {
 	__resetLegacyPiResolutionCache,
 	installLegacyPiSpecifierShim,
 	loadLegacyPiModule,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
-import { Type as TypeBoxShimType } from "@oh-my-pi/pi-coding-agent/extensibility/typebox";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { removeWithRetries } from "@musepi/pi-utils";
 
-// pi-ai 15.1.0 removed the runtime `Type` export from `@oh-my-pi/pi-ai`'s
+// pi-ai 15.1.0 removed the runtime `Type` export from `@musepi/pi-ai`'s
 // package root. Legacy extensions (and their aliased-scope variants such as
 // `@earendil-works/pi-ai`) still author parameter schemas as
 // `import { Type } from "@earendil-works/pi-ai"` and then `Type.Object(...)`.
@@ -88,42 +88,23 @@ describe("legacy-pi @(scope)/pi-ai root `Type` remap (issue #1437)", () => {
 		expect(loaded.completeType).toBe("function");
 	});
 
-	it('redirects `import { Type } from "@oh-my-pi/pi-ai"` for plugins published against the canonical scope', async () => {
+	it('redirects `import { Type } from "@musepi/pi-ai"` for plugins published against the canonical scope', async () => {
 		const entry = await writeFixtureExtension(
-			['import { Type } from "@oh-my-pi/pi-ai";', "export const probe = Type;"].join("\n"),
+			['import { Type } from "@musepi/pi-ai";', "export const probe = Type;"].join("\n"),
 		);
 
 		const loaded = (await loadLegacyPiModule(entry)) as { probe: typeof TypeBoxShimType };
 		expect(loaded.probe).toBe(TypeBoxShimType);
 	});
 
-	it("preserves canonical pi-ai exports alongside the shimmed Type (z is still re-exported)", async () => {
+	it("does not redirect subpath imports such as @musepi/pi-ai/utils/schema", async () => {
 		const entry = await writeFixtureExtension(
 			[
-				'import { Type, z } from "@earendil-works/pi-ai";',
-				"export const obj = Type.Object({ name: Type.String() });",
-				"export const zodObj = z.object({ name: z.string() });",
-			].join("\n"),
-		);
-
-		const loaded = (await loadLegacyPiModule(entry)) as {
-			obj: { safeParse: (input: unknown) => { success: boolean } };
-			zodObj: { safeParse: (input: unknown) => { success: boolean } };
-		};
-
-		expect(loaded.obj.safeParse({ name: "ok" }).success).toBe(true);
-		expect(loaded.zodObj.safeParse({ name: "ok" }).success).toBe(true);
-		expect(loaded.zodObj.safeParse({}).success).toBe(false);
-	});
-
-	it("does not redirect subpath imports such as @oh-my-pi/pi-ai/utils/schema", async () => {
-		const entry = await writeFixtureExtension(
-			[
-				// `zodToWireSchema` is only exported from the subpath, not the root,
+				// `arkToWireSchema` is only exported from the subpath, not the root,
 				// so a successful import proves the subpath still resolves directly
 				// against the bundled pi-ai package rather than the shim.
-				'import { zodToWireSchema } from "@oh-my-pi/pi-ai/utils/schema";',
-				"export const fn = zodToWireSchema;",
+				'import { arkToWireSchema } from "@musepi/pi-ai/utils/schema";',
+				"export const fn = arkToWireSchema;",
 			].join("\n"),
 		);
 
@@ -133,9 +114,7 @@ describe("legacy-pi @(scope)/pi-ai root `Type` remap (issue #1437)", () => {
 
 	it("exports getModel as getBundledModel", async () => {
 		const loaded = (await loadLegacyPiModule(
-			await writeFixtureExtension(
-				'import { getModel } from "@oh-my-pi/pi-ai"; export const testGetModel = getModel;',
-			),
+			await writeFixtureExtension('import { getModel } from "@musepi/pi-ai"; export const testGetModel = getModel;'),
 		)) as { testGetModel: unknown };
 		expect(loaded.testGetModel).toBe(getBundledModel);
 	});
@@ -143,32 +122,32 @@ describe("legacy-pi @(scope)/pi-ai root `Type` remap (issue #1437)", () => {
 	it("exports getModels as getBundledModels", async () => {
 		const loaded = (await loadLegacyPiModule(
 			await writeFixtureExtension(
-				'import { getModels } from "@oh-my-pi/pi-ai"; export const testGetModels = getModels;',
+				'import { getModels } from "@musepi/pi-ai"; export const testGetModels = getModels;',
 			),
 		)) as { testGetModels: unknown };
 		expect(loaded.testGetModels).toBe(getBundledModels);
 	});
 
-	it("re-exports calculateCost from @oh-my-pi/pi-catalog/models (issue #4584)", async () => {
-		// `calculateCost` was moved from the `@oh-my-pi/pi-ai` barrel to
-		// `@oh-my-pi/pi-catalog/models` in the catalog split. Legacy extensions
+	it("re-exports calculateCost from @musepi/pi-catalog/models (issue #4584)", async () => {
+		// `calculateCost` was moved from the `@musepi/pi-ai` barrel to
+		// `@musepi/pi-catalog/models` in the catalog split. Legacy extensions
 		// still import it from the pi-ai root, so the shim must bridge it back
 		// to the catalog implementation. The historical regression was a plain
 		// `SyntaxError: Export named 'calculateCost' not found in module
 		// '.../legacy-pi-ai-shim.ts'` at extension-validation time.
 		const loaded = (await loadLegacyPiModule(
 			await writeFixtureExtension(
-				'import { calculateCost } from "@oh-my-pi/pi-ai"; export const probe = calculateCost;',
+				'import { calculateCost } from "@musepi/pi-ai"; export const probe = calculateCost;',
 			),
 		)) as { probe: unknown };
 		expect(loaded.probe).toBe(calculateCost);
 	});
 
-	it("re-exports modelsAreEqual and getBundledProviders from @oh-my-pi/pi-catalog/models", async () => {
+	it("re-exports modelsAreEqual and getBundledProviders from @musepi/pi-catalog/models", async () => {
 		const loaded = (await loadLegacyPiModule(
 			await writeFixtureExtension(
 				[
-					'import { modelsAreEqual, getBundledProviders } from "@oh-my-pi/pi-ai";',
+					'import { modelsAreEqual, getBundledProviders } from "@musepi/pi-ai";',
 					"export const eq = modelsAreEqual;",
 					"export const providers = getBundledProviders;",
 				].join("\n"),
@@ -178,11 +157,11 @@ describe("legacy-pi @(scope)/pi-ai root `Type` remap (issue #1437)", () => {
 		expect(loaded.providers).toBe(getBundledProviders);
 	});
 
-	it("re-exports getBundledModel and getBundledModels from @oh-my-pi/pi-catalog/models", async () => {
+	it("re-exports getBundledModel and getBundledModels from @musepi/pi-catalog/models", async () => {
 		const loaded = (await loadLegacyPiModule(
 			await writeFixtureExtension(
 				[
-					'import { getBundledModel, getBundledModels } from "@oh-my-pi/pi-ai";',
+					'import { getBundledModel, getBundledModels } from "@musepi/pi-ai";',
 					"export const model = getBundledModel;",
 					"export const models = getBundledModels;",
 				].join("\n"),
@@ -210,7 +189,7 @@ describe("legacy-pi @(scope)/pi-ai root `Type` remap (issue #1437)", () => {
 		const loaded = (await loadLegacyPiModule(
 			await writeFixtureExtension(
 				[
-					'import { StringEnum } from "@oh-my-pi/pi-ai";',
+					'import { StringEnum } from "@musepi/pi-ai";',
 					'export const schema = StringEnum(["red", "green"] as const, { description: "primary colors" });',
 				].join("\n"),
 			),
@@ -249,7 +228,7 @@ describe("legacy pi package root remaps (issue #1474)", () => {
 	it("loads @earendil-works/pi-coding-agent root imports when host package resolution is unavailable", async () => {
 		const realResolveSync = Bun.resolveSync.bind(Bun);
 		vi.spyOn(Bun, "resolveSync").mockImplementation((specifier: string, from: string) => {
-			if (specifier === "@oh-my-pi/pi-coding-agent" && from.endsWith(path.join("src", "extensibility", "plugins"))) {
+			if (specifier === "@musepi/pi-coding-agent" && from.endsWith(path.join("src", "extensibility", "plugins"))) {
 				throw new Error("compiled binary host package resolution unavailable");
 			}
 			return realResolveSync(specifier, from);
@@ -377,7 +356,7 @@ describe("legacy pi package root remaps (issue #1474)", () => {
 	it("falls back to legacy-scoped subpath peers for direct plugin imports", async () => {
 		const realResolveSync = Bun.resolveSync.bind(Bun);
 		vi.spyOn(Bun, "resolveSync").mockImplementation((specifier: string, from: string) => {
-			if (specifier === "@oh-my-pi/pi-ai/oauth") {
+			if (specifier === "@musepi/pi-ai/oauth") {
 				throw new Error(`canonical peer unavailable from ${from}`);
 			}
 			return realResolveSync(specifier, from);
@@ -409,7 +388,7 @@ describe("legacy pi package root remaps (issue #1474)", () => {
 	it("routes @earendil-works/pi-utils through canonical Bun.resolveSync in non-compiled mode", async () => {
 		// Regression: when omp runs from a node_modules install (not the monorepo
 		// and not a compiled binary), the bundled packages live at
-		// `node_modules/@oh-my-pi/pi-*`, not next to the source tree. Hardcoding
+		// `node_modules/@musepi/pi-*`, not next to the source tree. Hardcoding
 		// a sibling `packages/<pkg>/src/index.ts` path would miss them, so the
 		// non-compiled branch must delegate to `Bun.resolveSync` against the
 		// canonical specifier.
@@ -420,7 +399,7 @@ describe("legacy pi package root remaps (issue #1474)", () => {
 		const realResolveSync = Bun.resolveSync.bind(Bun);
 		let canonicalLookupSeen = false;
 		vi.spyOn(Bun, "resolveSync").mockImplementation((specifier: string, from: string) => {
-			if (specifier === "@oh-my-pi/pi-utils") {
+			if (specifier === "@musepi/pi-utils") {
 				canonicalLookupSeen = true;
 			}
 			return realResolveSync(specifier, from);

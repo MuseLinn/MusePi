@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, type Mock, vi } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import * as skillsModule from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { SKILL_PROMPT_MESSAGE_TYPE } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { Skill } from "@musepi/pi-coding-agent/extensibility/skills";
+import * as skillsModule from "@musepi/pi-coding-agent/extensibility/skills";
+import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import { SKILL_PROMPT_MESSAGE_TYPE } from "@musepi/pi-coding-agent/session/messages";
+import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,7 @@ function createMockSession(
 		getLastAssistantMessage: () => state.messages[state.messages.length - 1],
 		abort: async () => {},
 		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
 	} as unknown as AgentSession;
 }
 
@@ -62,7 +63,7 @@ function createSessionResult(session: AgentSession): CreateAgentSessionResult {
 	return {
 		session,
 		extensionsResult:
-			{} as unknown as import("@oh-my-pi/pi-coding-agent/extensibility/extensions/types").LoadExtensionsResult,
+			{} as unknown as import("@musepi/pi-coding-agent/extensibility/extensions/types").LoadExtensionsResult,
 		setToolUIContext: () => {},
 		eventBus: new EventBus(),
 	};
@@ -91,7 +92,7 @@ describe("autoloadSkills in executor", () => {
 		settings: Settings.isolated(),
 		modelRegistry: {
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry,
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry,
 		enableLsp: false,
 	};
 

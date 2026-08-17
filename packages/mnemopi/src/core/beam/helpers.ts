@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 import { generateId as generateTimedId, sha256Hex16, stableMemoryId } from "../../util/ids";
 import {
 	cjkFtsTerms,
@@ -782,7 +782,7 @@ async function runEmbedding(beam: BeamMemoryState, items: readonly EmbedItem[]):
 		const matrix = await embed(items.map(item => item.content));
 		if (matrix === null) return;
 		const model = currentEmbeddingModel();
-		const insertEmbedding = beam.db.prepare(
+		using insertEmbedding = beam.db.prepare(
 			"INSERT OR REPLACE INTO memory_embeddings(memory_id, embedding_json, model) VALUES (?, ?, ?)",
 		);
 		const insertMany = beam.db.transaction((rows: readonly EmbedItem[]) => {

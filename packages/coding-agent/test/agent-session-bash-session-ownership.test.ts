@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import * as bashExecutor from "@oh-my-pi/pi-coding-agent/exec/bash-executor";
-import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent } from "@musepi/pi-agent-core";
+import { createMockModel } from "@musepi/pi-ai/providers/mock";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import * as bashExecutor from "@musepi/pi-coding-agent/exec/bash-executor";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
 
 const bashResult = {
@@ -203,67 +203,68 @@ describe("AgentSession bash session ownership", () => {
 		).toBe(true);
 	});
 
-	it.each(["new", "switch", "branch"] as const)(
-		"records a late bash result in its original session after %s",
-		async transition => {
-			const sessionDir = path.join(tempDir.path(), "sessions");
-			const { completion, emitUserBash, extensionRunner } = createGatedBashRunner();
-			createSession(SessionManager.create(tempDir.path(), sessionDir), extensionRunner);
-			const oldSessionFile = await seedPersistedSession();
-			const oldSessionId = session.sessionId;
+	it.each([
+		"new",
+		"switch",
+		"branch",
+	] as const)("records a late bash result in its original session after %s", async transition => {
+		const sessionDir = path.join(tempDir.path(), "sessions");
+		const { completion, emitUserBash, extensionRunner } = createGatedBashRunner();
+		createSession(SessionManager.create(tempDir.path(), sessionDir), extensionRunner);
+		const oldSessionFile = await seedPersistedSession();
+		const oldSessionId = session.sessionId;
 
-			const bashPromise = session.executeBash("old-session-command");
-			expect(emitUserBash).toHaveBeenCalledTimes(1);
+		const bashPromise = session.executeBash("old-session-command");
+		expect(emitUserBash).toHaveBeenCalledTimes(1);
 
-			switch (transition) {
-				case "new":
-					await session.newSession();
-					break;
-				case "switch": {
-					const targetManager = SessionManager.create(tempDir.path(), sessionDir);
-					targetManager.appendMessage({ role: "user", content: "target", timestamp: Date.now() });
-					targetManager.appendMessage(createAssistantMessage("target reply"));
-					await targetManager.ensureOnDisk();
-					const targetFile = targetManager.getSessionFile();
-					if (!targetFile) throw new Error("Expected target session file");
-					await targetManager.close();
-					await session.switchSession(targetFile);
-					break;
-				}
-				case "branch": {
-					const userEntry = session.sessionManager
-						.getEntries()
-						.find(entry => entry.type === "message" && entry.message.role === "user");
-					if (!userEntry) throw new Error("Expected user entry for branch");
-					await session.branch(userEntry.id);
-					break;
-				}
+		switch (transition) {
+			case "new":
+				await session.newSession();
+				break;
+			case "switch": {
+				const targetManager = SessionManager.create(tempDir.path(), sessionDir);
+				targetManager.appendMessage({ role: "user", content: "target", timestamp: Date.now() });
+				targetManager.appendMessage(createAssistantMessage("target reply"));
+				await targetManager.ensureOnDisk();
+				const targetFile = targetManager.getSessionFile();
+				if (!targetFile) throw new Error("Expected target session file");
+				await targetManager.close();
+				await session.switchSession(targetFile);
+				break;
 			}
+			case "branch": {
+				const userEntry = session.sessionManager
+					.getEntries()
+					.find(entry => entry.type === "message" && entry.message.role === "user");
+				if (!userEntry) throw new Error("Expected user entry for branch");
+				await session.branch(userEntry.id);
+				break;
+			}
+		}
 
-			expect(session.sessionId).not.toBe(oldSessionId);
-			completion.resolve({ result: bashResult });
-			await bashPromise;
+		expect(session.sessionId).not.toBe(oldSessionId);
+		completion.resolve({ result: bashResult });
+		await bashPromise;
 
-			expect(
-				session.messages.some(
-					message => message.role === "bashExecution" && message.command === "old-session-command",
-				),
-			).toBe(false);
+		expect(
+			session.messages.some(
+				message => message.role === "bashExecution" && message.command === "old-session-command",
+			),
+		).toBe(false);
 
-			const oldSession = await SessionManager.open(oldSessionFile, sessionDir, undefined, {
-				initialCwd: tempDir.path(),
-				suppressBreadcrumb: true,
-			});
-			additionalManagers.push(oldSession);
-			const oldMessages = oldSession.getBranch().flatMap(entry => (entry.type === "message" ? [entry.message] : []));
-			expect(oldMessages.slice(-3).map(message => message.role)).toEqual(["user", "assistant", "bashExecution"]);
-			expect(oldMessages.at(-1)).toMatchObject({
-				role: "bashExecution",
-				command: "old-session-command",
-				output: "old-output",
-			});
-		},
-	);
+		const oldSession = await SessionManager.open(oldSessionFile, sessionDir, undefined, {
+			initialCwd: tempDir.path(),
+			suppressBreadcrumb: true,
+		});
+		additionalManagers.push(oldSession);
+		const oldMessages = oldSession.getBranch().flatMap(entry => (entry.type === "message" ? [entry.message] : []));
+		expect(oldMessages.slice(-3).map(message => message.role)).toEqual(["user", "assistant", "bashExecution"]);
+		expect(oldMessages.at(-1)).toMatchObject({
+			role: "bashExecution",
+			command: "old-session-command",
+			output: "old-output",
+		});
+	});
 
 	it("stores minimized bash output with the originating session", async () => {
 		const sessionDir = path.join(tempDir.path(), "sessions");

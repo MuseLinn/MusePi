@@ -19,13 +19,13 @@ describe("release publish", () => {
 		await fs.mkdir(packageDir);
 		await Bun.write(
 			path.join(packageDir, "package.json"),
-			JSON.stringify({ name: "@oh-my-pi/pi-test", version: "1.2.3" }),
+			JSON.stringify({ name: "@musepi/pi-test", version: "1.2.3" }),
 		);
 		const tarball = path.join(root, "test.tgz");
 		await $`tar -czf ${tarball} -C ${root} package`.quiet();
 
 		await expect(inspectPackedTarball(tarball)).resolves.toEqual({
-			name: "@oh-my-pi/pi-test",
+			name: "@musepi/pi-test",
 			version: "1.2.3",
 			path: tarball,
 		});
@@ -47,7 +47,7 @@ describe("release publish", () => {
 		await Bun.write(
 			path.join(root, "package.json"),
 			JSON.stringify({
-				name: "@oh-my-pi/pi-natives",
+				name: "@musepi/pi-natives",
 				version: "1.2.3",
 				exports: {
 					"./desktop": { types: "./native/desktop.d.ts", import: "./native/desktop.js" },

@@ -1,5 +1,5 @@
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
-import { parseHTML } from "linkedom";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
+import { parseHTML } from "@musepi/pi-utils/dom";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatScraperQuery } from "../query";
@@ -121,10 +121,14 @@ function parseHtmlResults(html: string): ParsedResult[] {
  * any failure (network, non-OK status, challenge shell, markup drift) yields
  * `undefined` and the caller falls back to a direct GET.
  */
-async function fetchFormInputs(fetchImpl: FetchImpl, signal: AbortSignal): Promise<Record<string, string> | undefined> {
+async function fetchFormInputs(
+	fetchImpl: FetchImpl,
+	signal: AbortSignal,
+	timeoutMs?: number,
+): Promise<Record<string, string> | undefined> {
 	let page: LoadedHtmlPage;
 	try {
-		page = await browserFetch(STARTPAGE_HOME_URL, { fetch: fetchImpl, signal });
+		page = await browserFetch(STARTPAGE_HOME_URL, { fetch: fetchImpl, signal, timeoutMs });
 	} catch (error) {
 		if (signal.aborted) throw error;
 		return undefined;
@@ -135,7 +139,7 @@ async function fetchFormInputs(fetchImpl: FetchImpl, signal: AbortSignal): Promi
 
 async function callStartpageHtml(params: SearchParams): Promise<string> {
 	const fetchImpl = params.fetch ?? fetch;
-	const signal = withHardTimeout(params.signal);
+	const signal = withHardTimeout(params.signal, params.timeoutMs);
 	const withDate = params.recency ? RECENCY_TO_STARTPAGE_WITH_DATE[params.recency] : undefined;
 	// Startpage proxies Google, so the operator set works inline; rebuild via
 	// the shared scraper formatter to canonicalize aliases (domain: → site:,
@@ -143,7 +147,7 @@ async function callStartpageHtml(params: SearchParams): Promise<string> {
 	// queries pass through byte-identical.
 	const query = formatScraperQuery(params.query, params.parsedQuery);
 
-	const formInputs = await fetchFormInputs(fetchImpl, signal);
+	const formInputs = await fetchFormInputs(fetchImpl, signal, params.timeoutMs);
 	let page: LoadedHtmlPage;
 	if (formInputs) {
 		const form = new URLSearchParams(formInputs);
@@ -152,6 +156,7 @@ async function callStartpageHtml(params: SearchParams): Promise<string> {
 		page = await browserFetch(STARTPAGE_SEARCH_URL, {
 			fetch: fetchImpl,
 			signal,
+			timeoutMs: params.timeoutMs,
 			referer: STARTPAGE_HOME_URL,
 			init: { method: "POST", body: form.toString() },
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -163,6 +168,7 @@ async function callStartpageHtml(params: SearchParams): Promise<string> {
 		page = await browserFetch(url.href, {
 			fetch: fetchImpl,
 			signal,
+			timeoutMs: params.timeoutMs,
 			referer: STARTPAGE_HOME_URL,
 		});
 	}
@@ -209,7 +215,7 @@ export class StartpageProvider extends SearchProvider {
 		return true;
 	}
 
-	isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
+	override isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
 		return true;
 	}
 

@@ -1,5 +1,12 @@
-import { LRUCache } from "lru-cache/raw";
-import { Lexer, Marked, type Token, Tokenizer, type TokenizerAndRendererExtension, type Tokens } from "marked";
+import { LRUCache } from "@musepi/pi-utils/lru";
+import {
+	Lexer,
+	Marked,
+	type Token,
+	Tokenizer,
+	type TokenizerAndRendererExtension,
+	type Tokens,
+} from "@musepi/pi-utils/marked";
 import { latexToBlock } from "../latex-block";
 import { inlineMathSpanEnd, isBareMathEnvironment, latexToUnicode } from "../latex-to-unicode";
 import type { SymbolTheme } from "../symbols";
@@ -804,11 +811,11 @@ markdownParser.use({
 // (no `m` flag), and stickiness only removes the futile later attempts. The
 // flags/anchor guard below skips any rule a future marked version changes.
 class AnchoredAtZero extends RegExp {
-	exec(str: string): RegExpExecArray | null {
+	override exec(str: string): RegExpExecArray | null {
 		this.lastIndex = 0; // sticky matches set lastIndex; rules are shared
 		return super.exec(str);
 	}
-	test(str: string): boolean {
+	override test(str: string): boolean {
 		this.lastIndex = 0;
 		return super.test(str);
 	}
@@ -836,6 +843,19 @@ const RENDER_CACHE_MAX = 256; // sane cap: ~256 distinct message × width combos
 const RENDER_CACHE_MAX_SIZE = 4 * 1024 * 1024;
 const RENDER_CACHE_MAX_ENTRY_SIZE = 256 * 1024;
 const EMPTY_RENDER_LINES: readonly string[] = [];
+
+interface RenderedLine {
+	text: string;
+	literalCode?: true;
+}
+
+interface RenderedListItemLine extends RenderedLine {
+	nested: boolean;
+}
+
+function renderedLine(text: string, literalCode?: boolean): RenderedLine {
+	return literalCode ? { text, literalCode: true } : { text };
+}
 
 interface RenderCacheEntry {
 	lines: readonly string[];
@@ -1858,7 +1878,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		rowOffset: number,
 		startingSourceOffset: number,
 	): string[] {
-		const wrappedLines: string[] = [];
+		const wrappedLines: RenderedLine[] = [];
 		let sourceOffset = startingSourceOffset;
 		for (let i = start; i < end; i++) {
 			const token = tokens[i];
@@ -1874,14 +1894,21 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				`offset:${sourceOffset}`,
 			);
 			const tokenLineOffsets = [0];
-			for (const line of renderedTokenLines) {
+			for (const renderedRow of renderedTokenLines) {
 				// Lists wrap while their structural prefixes are still available, so
 				// continuation rows retain the correct hanging indent. Re-wrapping the
 				// flattened rows here would discard that structure.
-				if (token.type === "list" || TERMINAL.isImageLine(line) || isOsc66Line(line)) {
-					wrappedLines.push(line);
+				if (token.type === "list" || TERMINAL.isImageLine(renderedRow.text) || isOsc66Line(renderedRow.text)) {
+					wrappedLines.push(renderedRow);
 				} else {
-					wrappedLines.push(...wrapTextWithAnsi(line, contentWidth));
+					const wrappedRows = wrapTextWithAnsi(renderedRow.text, contentWidth);
+					if (wrappedRows.length === 1 && wrappedRows[0] === renderedRow.text) {
+						wrappedLines.push(renderedRow);
+					} else {
+						for (const wrappedLine of wrappedRows) {
+							wrappedLines.push(renderedLine(wrappedLine, renderedRow.literalCode));
+						}
+					}
 				}
 				tokenLineOffsets.push(wrappedLines.length - tokenWrappedRowStart);
 			}
@@ -1914,8 +1941,9 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		const bgFn = this.#defaultTextStyle?.bgColor;
 		const contentLines: string[] = [];
 		let previousLineWasOsc66 = false;
-
-		for (const line of wrappedLines) {
+		for (const renderedLine of wrappedLines) {
+			const literalCodeRow = renderedLine.literalCode === true;
+			const line = renderedLine.text;
 			// The first empty row after a scale>1 OSC 66 heading is structural:
 			// it reserves the lower cells occupied by the multicell glyphs. Do
 			// not pad or background-fill it, because real spaces on that row can
@@ -1935,6 +1963,10 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			}
 
 			previousLineWasOsc66 = false;
+			if (literalCodeRow) {
+				contentLines.push(line);
+				continue;
+			}
 			const lineWithMargins = leftMargin + line + rightMargin;
 
 			if (bgFn) {
@@ -1965,8 +1997,9 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		return layouts;
 	}
 
-	#renderCodeBodyLines(token: Token, codeIndent: string): string[] {
-		const bodyLines: string[] = [];
+	#renderCodeBodyLines(token: Token, codeIndent: string): RenderedLine[] {
+		const literalCode = this.#codeBlockIndent === 0;
+		const bodyLines: RenderedLine[] = [];
 		const tokenText = "text" in token && typeof token.text === "string" ? token.text : "";
 		const lang = "lang" in token && typeof token.lang === "string" ? token.lang : undefined;
 		const normalizedLang = lang?.toLowerCase();
@@ -1975,11 +2008,14 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			!this.#renderingFrozenPrefix &&
 			this.#theme.highlightCode &&
 			(normalizedLang === "diff" || normalizedLang === "patch" || normalizedLang === "udiff");
+		const addBodyLine = (line: string): void => {
+			bodyLines.push(renderedLine(literalCode ? line : codeIndent + line, literalCode));
+		};
 
 		if (this.#theme.highlightCode && (!this.transientRenderCache || this.#renderingFrozenPrefix)) {
 			const highlightedLines = this.#theme.highlightCode(tokenText, lang);
 			for (const hlLine of highlightedLines) {
-				bodyLines.push(`${codeIndent}${hlLine}`);
+				addBodyLine(hlLine);
 			}
 			return bodyLines;
 		}
@@ -1990,11 +2026,11 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			if (closedFence || lineEnd >= 0) {
 				const completedText = closedFence ? tokenText : tokenText.slice(0, lineEnd);
 				for (const hlLine of this.#highlightStreamingDiffLines(completedText, lang)) {
-					bodyLines.push(`${codeIndent}${hlLine}`);
+					addBodyLine(hlLine);
 				}
 				if (!closedFence) {
 					for (const codeLine of tokenText.slice(lineEnd + 1).split("\n")) {
-						bodyLines.push(`${codeIndent}${this.#theme.codeBlock(codeLine)}`);
+						addBodyLine(this.#theme.codeBlock(codeLine));
 					}
 				}
 				return bodyLines;
@@ -2002,7 +2038,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		}
 
 		for (const codeLine of tokenText.split("\n")) {
-			bodyLines.push(`${codeIndent}${this.#theme.codeBlock(codeLine)}`);
+			addBodyLine(this.#theme.codeBlock(codeLine));
 		}
 		return bodyLines;
 	}
@@ -2181,14 +2217,14 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		nextTokenType?: string,
 		styleContext?: InlineStyleContext,
 		tokenKey = "root",
-	): string[] {
-		const lines: string[] = [];
+	): RenderedLine[] {
+		const lines: RenderedLine[] = [];
 
 		// Display math block (own-line `$$…$$` / `\[…\]`): stack `\frac` vertically
 		// and keep `\\` row breaks, so fractions and matrices span multiple lines.
 		if (isMathToken(token)) {
-			for (const mathLine of latexToBlock(token.text)) lines.push(this.#applyDefaultStyle(mathLine));
-			if (nextTokenType && nextTokenType !== "space") lines.push("");
+			for (const mathLine of latexToBlock(token.text)) lines.push(renderedLine(this.#applyDefaultStyle(mathLine)));
+			if (nextTokenType && nextTokenType !== "space") lines.push(renderedLine(""));
 			return lines;
 		}
 
@@ -2203,10 +2239,10 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 					const plainWidth = visibleWidth(headingPlainText);
 					if (plainWidth > 0 && 2 * plainWidth <= width) {
 						const sizedHeading = encodeTextSizedHeading(headingPlainText, 2);
-						lines.push(this.#theme.heading(this.#theme.bold(this.#theme.underline(sizedHeading))));
-						lines.push(""); // reserve the heading's second visual row
+						lines.push(renderedLine(this.#theme.heading(this.#theme.bold(this.#theme.underline(sizedHeading)))));
+						lines.push(renderedLine("")); // reserve the heading's second visual row
 						if (nextTokenType && nextTokenType !== "space") {
-							lines.push(""); // Add spacing after headings (unless space token follows)
+							lines.push(renderedLine("")); // Add spacing after headings (unless space token follows)
 						}
 						break;
 					}
@@ -2218,9 +2254,9 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				} else {
 					styledHeading = this.#theme.heading(this.#theme.bold(headingPrefix + headingText));
 				}
-				lines.push(styledHeading);
+				lines.push(renderedLine(styledHeading));
 				if (nextTokenType && nextTokenType !== "space") {
-					lines.push(""); // Add spacing after headings (unless space token follows)
+					lines.push(renderedLine("")); // Add spacing after headings (unless space token follows)
 				}
 				break;
 			}
@@ -2228,15 +2264,18 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			case "paragraph": {
 				const displayMath = soleDisplayMath(token.tokens);
 				if (displayMath) {
-					for (const mathLine of latexToBlock(displayMath.text)) lines.push(this.#applyDefaultStyle(mathLine));
-					if (nextTokenType && nextTokenType !== "list" && nextTokenType !== "space") lines.push("");
+					for (const mathLine of latexToBlock(displayMath.text))
+						lines.push(renderedLine(this.#applyDefaultStyle(mathLine)));
+					if (nextTokenType && nextTokenType !== "list" && nextTokenType !== "space") lines.push(renderedLine(""));
 					break;
 				}
 				const paragraphText = this.#renderInlineTokens(token.tokens || [], styleContext);
-				lines.push(...(hangWrapTreeGuideLines(paragraphText, width) ?? [paragraphText]));
+				for (const paragraphLine of hangWrapTreeGuideLines(paragraphText, width) ?? [paragraphText]) {
+					lines.push(renderedLine(paragraphLine));
+				}
 				// Don't add spacing if next token is space or list
 				if (nextTokenType && nextTokenType !== "list" && nextTokenType !== "space") {
-					lines.push("");
+					lines.push(renderedLine(""));
 				}
 				break;
 			}
@@ -2252,24 +2291,28 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 					if (ascii) {
 						for (const asciiLine of ascii.split("\n")) {
 							lines.push(
-								visibleWidth(asciiLine) > width ? truncateToWidth(asciiLine, width, Ellipsis.Omit) : asciiLine,
+								renderedLine(
+									visibleWidth(asciiLine) > width
+										? truncateToWidth(asciiLine, width, Ellipsis.Omit)
+										: asciiLine,
+								),
 							);
 						}
 						if (nextTokenType && nextTokenType !== "space") {
-							lines.push("");
+							lines.push(renderedLine(""));
 						}
 						break;
 					}
 				}
 
 				const codeIndent = padding(this.#codeBlockIndent);
-				lines.push(this.#theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
+				lines.push(renderedLine(this.#theme.codeBlockBorder(`\`\`\`${token.lang || ""}`)));
 				for (const bodyLine of this.#renderCodeBodyLines(token, codeIndent)) {
 					lines.push(bodyLine);
 				}
-				lines.push(this.#theme.codeBlockBorder("```"));
+				lines.push(renderedLine(this.#theme.codeBlockBorder("```")));
 				if (nextTokenType && nextTokenType !== "space") {
-					lines.push(""); // Add spacing after code blocks (unless space token follows)
+					lines.push(renderedLine("")); // Add spacing after code blocks (unless space token follows)
 				}
 				break;
 			}
@@ -2284,7 +2327,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 
 			case "table": {
 				const tableLines = this.#renderTable(token as TableToken, width, nextTokenType, styleContext, tokenKey);
-				lines.push(...tableLines);
+				for (const tableLine of tableLines) lines.push(renderedLine(tableLine));
 				break;
 			}
 
@@ -2295,7 +2338,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				};
 				const quoteContentWidth = Math.max(1, width - 2);
 				const quoteTokens = token.tokens || [];
-				const renderedQuoteLines: string[] = [];
+				const renderedQuoteLines: RenderedLine[] = [];
 				const blockquoteSpecStart = this.#activeTableRenderSpecs?.length ?? 0;
 
 				for (let i = 0; i < quoteTokens.length; i++) {
@@ -2331,7 +2374,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 					}
 				}
 
-				while (renderedQuoteLines.length > 0 && renderedQuoteLines[renderedQuoteLines.length - 1] === "") {
+				while (renderedQuoteLines.length > 0 && renderedQuoteLines[renderedQuoteLines.length - 1]!.text === "") {
 					renderedQuoteLines.pop();
 				}
 
@@ -2350,16 +2393,16 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				}
 				lines.push(...borderedQuoteLines);
 				if (nextTokenType && nextTokenType !== "space") {
-					lines.push(""); // Add spacing after blockquotes (unless space token follows)
+					lines.push(renderedLine("")); // Add spacing after blockquotes (unless space token follows)
 				}
 				break;
 			}
 
 			case "hr": {
 				const raw = "raw" in token && typeof token.raw === "string" ? token.raw.trim() : "";
-				lines.push(this.#renderHrLine(width, raw[0] || ""));
+				lines.push(renderedLine(this.#renderHrLine(width, raw[0] || "")));
 				if (nextTokenType && nextTokenType !== "space") {
-					lines.push(""); // Add spacing after horizontal rules (unless space token follows)
+					lines.push(renderedLine("")); // Add spacing after horizontal rules (unless space token follows)
 				}
 				break;
 			}
@@ -2372,13 +2415,13 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 
 			case "space":
 				// Space tokens represent blank lines in markdown
-				lines.push("");
+				lines.push(renderedLine(""));
 				break;
 
 			default:
 				// Handle any other token types as plain text
 				if ("text" in token && typeof token.text === "string") {
-					lines.push(token.text);
+					lines.push(renderedLine(token.text));
 				}
 		}
 
@@ -2395,7 +2438,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	 * Wrap already-rendered lines in the blockquote border and quote styling.
 	 * `width` is the full content width; the border reserves two cells.
 	 */
-	#applyQuoteBorder(renderedLines: string[], width: number, sourceRowOffsets?: number[]): string[] {
+	#applyQuoteBorder(renderedLines: RenderedLine[], width: number, sourceRowOffsets?: number[]): RenderedLine[] {
 		const quoteStyle = (text: string) => this.#theme.quote(this.#theme.italic(text));
 		const quoteStylePrefix = this.#getStylePrefix(quoteStyle);
 		const applyQuoteStyle = (line: string): string => {
@@ -2406,12 +2449,23 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			return quoteStyle(lineWithReappliedStyle);
 		};
 		const quoteContentWidth = Math.max(1, width - 2);
-		const lines: string[] = [];
+		const lines: RenderedLine[] = [];
 		sourceRowOffsets?.push(0);
 		for (const quoteLine of renderedLines) {
-			const styledLine = applyQuoteStyle(quoteLine);
-			for (const wrappedLine of wrapTextWithAnsi(styledLine, quoteContentWidth)) {
-				lines.push(this.#theme.quoteBorder(`${this.#theme.symbols.quoteBorder} `) + wrappedLine);
+			if (quoteLine.literalCode) {
+				const wrappedLiteralRows = wrapTextWithAnsi(quoteLine.text, quoteContentWidth);
+				if (wrappedLiteralRows.length === 0) {
+					lines.push(renderedLine("", true));
+				} else {
+					for (const wrappedLine of wrappedLiteralRows) {
+						lines.push(renderedLine(wrappedLine, true));
+					}
+				}
+			} else {
+				const styledLine = applyQuoteStyle(quoteLine.text);
+				for (const wrappedLine of wrapTextWithAnsi(styledLine, quoteContentWidth)) {
+					lines.push(renderedLine(this.#theme.quoteBorder(`${this.#theme.symbols.quoteBorder} `) + wrappedLine));
+				}
 			}
 			sourceRowOffsets?.push(lines.length);
 		}
@@ -2424,8 +2478,8 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	 * quote styling; the remaining markup is normalized to terminal text (entities
 	 * decoded, `<code>` themed, lists/`<br>`/`<p>` laid out).
 	 */
-	#renderHtmlBlock(raw: string, width: number): string[] {
-		const lines: string[] = [];
+	#renderHtmlBlock(raw: string, width: number): RenderedLine[] {
+		const lines: RenderedLine[] = [];
 		const state = createHtmlNormalizationState();
 		const codeHook = (text: string): string => this.#theme.code(text) + this.#getDefaultStylePrefix();
 		const flushText = (chunk: string): void => {
@@ -2433,7 +2487,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			if (cleaned.trim() === "") return;
 			for (const line of splitTerminalLines(cleaned)) {
 				const trimmed = line.trimEnd();
-				lines.push(trimmed.trim() === "" ? "" : this.#applyDefaultStyle(trimmed));
+				lines.push(renderedLine(trimmed.trim() === "" ? "" : this.#applyDefaultStyle(trimmed)));
 			}
 		};
 		let lastIndex = 0;
@@ -2444,7 +2498,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			if (match[1] !== undefined) {
 				lines.push(...this.#renderHtmlBlockquote(match[1], width));
 			} else {
-				lines.push(this.#renderHrLine(width));
+				lines.push(renderedLine(this.#renderHrLine(width)));
 			}
 		}
 		flushText(raw.slice(lastIndex));
@@ -2452,10 +2506,10 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	}
 
 	/** Render the inner content of an HTML `<blockquote>` with quote styling. */
-	#renderHtmlBlockquote(inner: string, width: number): string[] {
+	#renderHtmlBlockquote(inner: string, width: number): RenderedLine[] {
 		const cleaned = normalizeHtmlForTerminal(inner, createHtmlNormalizationState(), text => this.#theme.code(text));
-		const innerLines = splitTerminalLines(cleaned).map(line => line.trimEnd());
-		while (innerLines.length > 0 && innerLines[innerLines.length - 1] === "") innerLines.pop();
+		const innerLines = splitTerminalLines(cleaned).map(line => renderedLine(line.trimEnd()));
+		while (innerLines.length > 0 && innerLines[innerLines.length - 1].text === "") innerLines.pop();
 		return this.#applyQuoteBorder(innerLines, width);
 	}
 
@@ -2591,27 +2645,41 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 	/**
 	 * Render a list with proper nesting support
 	 */
-	#renderList(token: ListToken, depth: number, width: number, styleContext?: InlineStyleContext): string[] {
-		const lines: string[] = [];
+	#renderList(token: ListToken, depth: number, width: number, styleContext?: InlineStyleContext): RenderedLine[] {
+		const lines: RenderedLine[] = [];
 		const indent = "  ".repeat(depth);
 		// Use the list's start property (defaults to 1 for ordered lists)
 		const startNumber = token.start ?? 1;
-		const pushWrapped = (text: string, firstPrefix: string, continuationPrefix: string): void => {
+		const pushWrapped = (line: RenderedLine, firstPrefix: string, continuationPrefix: string): void => {
+			if (line.literalCode) {
+				const wrappedLiteralRows = wrapTextWithAnsi(line.text, Math.max(1, width));
+				if (wrappedLiteralRows.length === 0) {
+					lines.push(renderedLine("", true));
+				} else {
+					for (const wrappedLine of wrappedLiteralRows) {
+						lines.push(renderedLine(wrappedLine, true));
+					}
+				}
+				return;
+			}
+
 			const prefixWidth = visibleWidth(firstPrefix);
 			if (prefixWidth >= width) {
-				lines.push(truncateToWidth(firstPrefix, width, Ellipsis.Omit));
-				lines.push(...wrapTextWithAnsi(text, Math.max(1, width)));
+				lines.push(renderedLine(truncateToWidth(firstPrefix, width, Ellipsis.Omit)));
+				for (const wrappedLine of wrapTextWithAnsi(line.text, Math.max(1, width))) {
+					lines.push(renderedLine(wrappedLine));
+				}
 				return;
 			}
 			const bodyWidth = width - prefixWidth;
-			const wrapped = wrapTextWithAnsi(text, bodyWidth);
+			const wrapped = wrapTextWithAnsi(line.text, bodyWidth);
 			if (wrapped.length === 0) {
-				lines.push(firstPrefix);
+				lines.push(renderedLine(firstPrefix));
 				return;
 			}
-			lines.push(firstPrefix + wrapped[0]);
+			lines.push(renderedLine(firstPrefix + wrapped[0]));
 			for (let lineIndex = 1; lineIndex < wrapped.length; lineIndex++) {
-				lines.push(continuationPrefix + wrapped[lineIndex]);
+				lines.push(renderedLine(continuationPrefix + wrapped[lineIndex]));
 			}
 		};
 
@@ -2630,21 +2698,21 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 			if (itemLines.length > 0) {
 				const firstLine = itemLines[0]!;
 				if (firstLine.nested) {
-					lines.push(firstLine.text);
+					lines.push(firstLine);
 				} else {
-					pushWrapped(firstLine.text, firstPrefix, continuationIndent);
+					pushWrapped(firstLine, firstPrefix, continuationIndent);
 				}
 
 				for (let j = 1; j < itemLines.length; j++) {
 					const line = itemLines[j]!;
 					if (line.nested) {
-						lines.push(line.text);
+						lines.push(line);
 					} else {
-						pushWrapped(line.text, continuationIndent, continuationIndent);
+						pushWrapped(line, continuationIndent, continuationIndent);
 					}
 				}
 			} else {
-				lines.push(firstPrefix);
+				lines.push(renderedLine(firstPrefix));
 			}
 		}
 
@@ -2662,8 +2730,8 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		parentDepth: number,
 		width: number,
 		styleContext?: InlineStyleContext,
-	): Array<{ text: string; nested: boolean }> {
-		const lines: Array<{ text: string; nested: boolean }> = [];
+	): RenderedListItemLine[] {
+		const lines: RenderedListItemLine[] = [];
 
 		for (const token of tokens) {
 			if (token.type === "list") {
@@ -2671,7 +2739,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				// These lines carry their own indent, so tag them for pass-through
 				const nestedLines = this.#renderList(token as ListToken, parentDepth + 1, width, styleContext);
 				for (const nestedLine of nestedLines) {
-					lines.push({ text: nestedLine, nested: true });
+					lines.push({ ...nestedLine, nested: true });
 				}
 			} else if (token.type === "text") {
 				// Text content (may have inline tokens, or a sole display-math token)
@@ -2702,7 +2770,7 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 				const codeIndent = padding(this.#codeBlockIndent);
 				lines.push({ text: this.#theme.codeBlockBorder(`\`\`\`${token.lang || ""}`), nested: false });
 				for (const bodyLine of this.#renderCodeBodyLines(token, codeIndent)) {
-					lines.push({ text: bodyLine, nested: false });
+					lines.push({ ...bodyLine, nested: false });
 				}
 				lines.push({ text: this.#theme.codeBlockBorder("```"), nested: false });
 			} else if (isMathToken(token)) {
@@ -2755,7 +2823,13 @@ export class Markdown implements Component, NativeScrollbackCommittedRows, Nativ
 		while (wrapped.length > 1 && wrapped[wrapped.length - 1] === "") {
 			wrapped.pop();
 		}
-		return wrapped;
+		// The native wrap deliberately leaves fg color and bold/italic open at
+		// line ends so continuation lines can re-open them. Table rows splice
+		// every cell line between unstyled border glyphs, so an open style
+		// (e.g. mdCode) would bleed into the "│" and the following cells.
+		// Terminate each line at default fg, clearing bold/italic but keeping
+		// any ambient background (message-bg rendering) intact.
+		return wrapped.map(line => `${line}\x1b[22m\x1b[23m\x1b[39m`);
 	}
 
 	/**

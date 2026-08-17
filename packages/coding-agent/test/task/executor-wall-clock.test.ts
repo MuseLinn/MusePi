@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 /**
  * Contract: when `task.maxRuntimeMs` is set, a subagent whose inference call
@@ -31,6 +31,7 @@ function createHangingSession(): HangingSessionHandle {
 	let abortCount = 0;
 	const { promise: hang, resolve: releaseHang } = Promise.withResolvers<void>();
 	const session: Partial<AgentSession> = {
+		setIrcWakeTurnObserver: () => {},
 		state: { messages: [] } as never,
 		agent: { state: { systemPrompt: ["test"] } } as never,
 		extensionRunner: undefined as never,
@@ -121,6 +122,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		// hang; we only need to assert that NO timeout fires when maxRuntimeMs=0.
 		const settings = Settings.isolated({ "task.maxRuntimeMs": 0 });
 		const fastSession: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,
@@ -209,6 +211,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		const lateDisposed = Promise.withResolvers<void>();
 		const lateSession = {
 			dispose: async () => lateDisposed.resolve(),
+			setIrcWakeTurnObserver: () => {},
 		} as unknown as AgentSession;
 		let lateInstall = registry.get("late-generation");
 		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async (options = {}) => {
@@ -245,7 +248,10 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		const cancelled = await run;
 		expect(cancelled.aborted).toBe(true);
 
-		const replacementSession = { dispose: async () => {} } as unknown as AgentSession;
+		const replacementSession = {
+			dispose: async () => {},
+			setIrcWakeTurnObserver: () => {},
+		} as unknown as AgentSession;
 		const replacement = registry.register({
 			id: "late-generation",
 			displayName: "replacement B",
@@ -272,6 +278,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		let listenerRef: ((event: AgentSessionEvent) => void) | undefined;
 		let abortCount = 0;
 		const session: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,
@@ -350,6 +357,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		let abortCount = 0;
 		let abortCountBeforeYieldExecutionEnd: number | undefined;
 		const session: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,
@@ -450,6 +458,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		let abortCountBeforeValidYieldExecutionEnd: number | undefined;
 		const promptCalls: Array<{ text: string; options?: PromptOptions }> = [];
 		const session: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,
@@ -580,6 +589,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		let abortCountBeforeYieldExecutionEnd: number | undefined;
 		let abortCountAfterFollowingTurn: number | undefined;
 		const session: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,
@@ -663,6 +673,7 @@ describe("runSubprocess wall clock (task.maxRuntimeMs)", () => {
 		// executor must surface it on SingleResult.contextTokens.
 		const settings = Settings.isolated({ "task.maxRuntimeMs": 0 });
 		const fastSession: Partial<AgentSession> = {
+			setIrcWakeTurnObserver: () => {},
 			state: { messages: [] } as never,
 			agent: { state: { systemPrompt: ["test"] } } as never,
 			extensionRunner: undefined as never,

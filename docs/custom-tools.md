@@ -45,11 +45,11 @@ CustomTool.execute(toolCallId, params, onUpdate, ctx, signal)
 `discoverAndLoadCustomTools(configuredPaths, cwd, builtInToolNames)` merges:
 
 1. Capability providers (`toolCapability`), including:
-   - Native OMP config (`~/.omp/agent/tools`, `.omp/tools`)
+   - Native OMP config (`~/.musepi/agent/tools`, `.musepi/tools`)
    - Claude config (`~/.claude/tools`, `.claude/tools`)
    - Codex config (`~/.codex/tools`, `.codex/tools`)
    - Claude marketplace plugin cache provider
-2. Installed plugin manifests (`~/.omp/plugins/node_modules/*` via plugin loader)
+2. Installed plugin manifests (`~/.musepi/plugins/node_modules/*` via plugin loader)
 3. Explicit configured paths passed to the loader
 
 ### Important behavior
@@ -64,14 +64,14 @@ CustomTool.execute(toolCallId, params, onUpdate, ctx, signal)
 A custom tool module must export a function (default export preferred):
 
 ```ts
-import type { CustomToolFactory } from "@oh-my-pi/pi-coding-agent";
+import type { CustomToolFactory } from "@musepi/pi-coding-agent";
 
 const factory: CustomToolFactory = (pi) => ({
   name: "repo_stats",
   label: "Repo Stats",
   description: "Counts tracked TypeScript files",
   parameters: pi.zod.object({
-    glob: pi.zod.string().optional().default("**/*.ts"),
+    glob: pi.zod.string().optional(),
   }),
 
   async execute(toolCallId, params, onUpdate, ctx, signal) {
@@ -109,7 +109,7 @@ const factory: CustomToolFactory = (pi) => ({
 export default factory;
 ```
 
-Schemas are authored with Zod (`pi.zod`) and flow through the shared validation/wire pipeline.
+Parameter schemas may use the Zod-compatible omptype builder (`pi.zod`), native omptype builder (`pi.arktype`), or legacy-compatible TypeBox shim (`pi.typebox`) and flow through the shared validation/wire pipeline.
 
 Factory return type:
 
@@ -126,9 +126,9 @@ From `types.ts` and `loader.ts`:
 - `ui`: UI context (can be no-op in headless modes)
 - `hasUI`: `false` in non-interactive flows
 - `logger`: shared file logger
-- `typebox`: zod-backed compatibility shim for legacy TypeBox-style schemas
-- `zod`: injected `zod/v4` module (canonical for new schemas)
-- `pi`: injected `@oh-my-pi/pi-coding-agent` exports
+- `arktype`: injected omptype `type(...)` builder
+- `typebox`: compatibility shim for legacy TypeBox-style schemas
+- `pi`: injected `@musepi/pi-coding-agent` exports
 - `pushPendingAction(action)`: register a preview action finalized via plain-text writes to `/xdev/resolve` or `/xdev/reject` (`docs/resolve-tool-runtime.md`)
   Loader starts with a no-op UI context and requires host code to call `setUIContext(...)` when real UI is ready.
 
@@ -140,7 +140,7 @@ From `types.ts` and `loader.ts`:
 execute(toolCallId, params, onUpdate, ctx, signal);
 ```
 
-- `params` is statically typed from your Zod/TypeBox schema via `Static<TParams>`.
+- `params` is statically typed from its omptype or TypeBox schema via `Static<TParams>`.
 - Runtime argument validation happens before execution in the agent loop.
 - `onUpdate` emits partial results for UI streaming.
 - `ctx` includes `sessionManager`, `modelRegistry`, current `model`, `isIdle()`, `hasQueuedMessages()`, `abort()`, and optional `settings`, `fetch`, and `autoApprove`.

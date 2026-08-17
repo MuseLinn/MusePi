@@ -1,18 +1,19 @@
 /**
  * `omp auth-broker` — manage the omp credential vault.
  */
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+
+import { Args, Command, Flags, renderCommandHelp } from "@musepi/pi-utils/cli";
 import {
 	AUTH_BROKER_ACTIONS,
 	type AuthBrokerAction,
 	type AuthBrokerCommandArgs,
 	runAuthBrokerCommand,
 } from "../cli/auth-broker-cli";
+import { authBrokerHelp as commandHelp } from "../cli/command-help";
 import { initTheme } from "../modes/theme/theme";
 
 export default class AuthBroker extends Command {
-	static description = "Manage the omp auth-broker (credential vault)";
-
+	static description = commandHelp.description;
 	static args = {
 		action: Args.string({
 			description: "Sub-command",
@@ -71,7 +72,7 @@ export default class AuthBroker extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(AuthBroker);
 		if (!args.action) {
-			renderCommandHelp("omp", "auth-broker", AuthBroker);
+			renderCommandHelp("musepi", "auth-broker", AuthBroker);
 			return;
 		}
 		const action = args.action as AuthBrokerAction;

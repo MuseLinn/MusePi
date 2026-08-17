@@ -14,8 +14,7 @@
  *    message delta is a cache miss each turn.
  */
 
-import type { Context, Message, Tool } from "@oh-my-pi/pi-ai";
-import type { Dialect } from "@oh-my-pi/pi-ai/dialect";
+import type { Context, Message, Tool } from "@musepi/pi-ai";
 import { normalizeTools } from "./agent-loop";
 import type { AgentContext } from "./types";
 
@@ -34,7 +33,6 @@ export interface StablePrefixSnapshot {
 export interface BuildOptions {
 	/** Inject the `i` intent field into tool schemas (must match agent-loop's normalizeTools). */
 	intentTracing: boolean;
-	exampleDialect?: Dialect;
 	/** Strip tool descriptions from the provider-bound specs (must match normalizeTools). */
 	pruneToolDescriptions?: boolean;
 }
@@ -317,7 +315,10 @@ export class AppendOnlyContextManager {
 function takeSnapshot(context: AgentContext, options: BuildOptions): StablePrefixSnapshot {
 	const systemPrompt = [...context.systemPrompt];
 	const tools =
-		normalizeTools(context.tools, options.intentTracing, options.exampleDialect, options.pruneToolDescriptions) ?? [];
+		normalizeTools(context.tools, {
+			injectIntent: options.intentTracing,
+			pruneDescriptions: options.pruneToolDescriptions,
+		}) ?? [];
 	return {
 		systemPrompt,
 		tools,
@@ -337,7 +338,6 @@ function computeFingerprint(systemPrompt: string[], tools: Tool[], options: Buil
 			cw: t.customWireName,
 		})),
 		i: options.intentTracing,
-		ex: options.exampleDialect,
 		pd: options.pruneToolDescriptions,
 	});
 	let hash = 0;

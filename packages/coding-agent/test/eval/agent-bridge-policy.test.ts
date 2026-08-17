@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { TempDir } from "@musepi/pi-utils";
 import { Settings } from "../../src/config/settings";
 import { runEvalAgent } from "../../src/eval/agent-bridge";
 import { EVAL_TIMEOUT_PAUSE_OP, EVAL_TIMEOUT_RESUME_OP } from "../../src/eval/bridge-timeout";
@@ -290,10 +290,7 @@ describe("runEvalAgent", () => {
 			}),
 		});
 
-		await runEvalAgent(
-			{ prompt: " hello ", label: "My Agent", model: "p/override", schema },
-			{ session, signal: abortController.signal },
-		);
+		await runEvalAgent({ prompt: " hello ", label: "My Agent", schema }, { session, signal: abortController.signal });
 		await runEvalAgent({ prompt: "plain" }, { session });
 
 		const firstOptions = runSpy.mock.calls[0]?.[0];
@@ -306,9 +303,25 @@ describe("runEvalAgent", () => {
 		expect(firstOptions.outputSchemaOverridesAgent).toBe(true);
 		expect(firstOptions.assignment).toBe("hello");
 		expect(firstOptions.description).toBe("My Agent");
-		expect(firstOptions.modelOverride).toEqual(["p/override"]);
+		// No per-call override: the agent's own frontmatter model applies.
+		expect(firstOptions.modelOverride).toEqual(["p/current"]);
 		expect(secondOptions.outputSchema).toBeUndefined();
 		expect(secondOptions.outputSchemaOverridesAgent).toBeUndefined();
+	});
+
+	it("drops a per-call model argument on agent() (removed, issue #6438)", async () => {
+		mockAgents();
+		const runSpy = vi.spyOn(taskExecutor, "runSubprocess").mockImplementation(async options => singleResult(options));
+
+		// The schema strips unknown keys; a legacy `model` argument is silently
+		// discarded so resolution is identical to omitting it — the agent's own
+		// frontmatter model applies (issue #6438).
+		await runEvalAgent({ prompt: "work", model: "default" }, { session: makeSession() });
+		await runEvalAgent({ prompt: "work" }, { session: makeSession() });
+
+		const withModel = runSpy.mock.calls[0]?.[0];
+		const withoutModel = runSpy.mock.calls[1]?.[0];
+		expect(withModel?.modelOverride).toEqual(withoutModel?.modelOverride);
 	});
 	it("returns host-parsed data for caller, agent, and inherited schemas", async () => {
 		const agentSchema = { type: "object" };
@@ -672,7 +685,7 @@ describe("agent() through eval runtimes", () => {
 		expect(barrier.maxInFlight()).toBeLessThanOrEqual(2);
 	});
 
-	it("interrupting a Python parallel() fan-out settles the kernel cleanly and preserves session state", async () => {
+	it("interrupting a Python parallel() fan-out aborts in-flight subagents and preserves session state", async () => {
 		using tempDir = TempDir.createSync("@omp-eval-agent-py-interrupt-");
 		const settings = Settings.isolated({
 			"async.enabled": false,
@@ -683,20 +696,34 @@ describe("agent() through eval runtimes", () => {
 		const { session, sessionFile, sessionId } = makeEvalSession(tempDir, "py-agent-interrupt", settings);
 		mockAgents();
 		// Each kernel worker thread blocks in a synchronous `urllib` bridge call,
-		// joined by `parallel()`'s ThreadPoolExecutor exit. The host must keep
-		// those already-started calls attached until they settle, then interrupt
-		// the kernel before `parallel()` launches another wave.
+		// joined by `parallel()`'s ThreadPoolExecutor exit. A turn cancel must
+		// reach the subagents those calls started — the bridge is handed the real
+		// signal, not the executor's kernel shield — while the kernel itself is
+		// still interrupted cleanly before `parallel()` launches another wave.
 		let inFlight = 0;
 		let completed = 0;
+		let abortedSubagents = 0;
 		let markSaturated: (() => void) | undefined;
 		const saturated = new Promise<void>(resolve => {
 			markSaturated = resolve;
 		});
-		const releaseAgents = Promise.withResolvers<void>();
+		// Mirrors the real executor: park until the run finishes *or* the caller's
+		// signal aborts. Nothing releases these agents, so the only way the cell
+		// can settle is the abort actually reaching them.
 		const runSpy = vi.spyOn(taskExecutor, "runSubprocess").mockImplementation(async options => {
 			// task.maxConcurrency=6 → six bridge calls block at once; signal then.
 			if (++inFlight >= 6) markSaturated?.();
-			await releaseAgents.promise;
+			const aborted = Promise.withResolvers<never>();
+			const onAbort = () => aborted.reject(new Error("subagent aborted"));
+			options.signal?.addEventListener("abort", onAbort, { once: true });
+			try {
+				await aborted.promise;
+			} catch {
+				abortedSubagents++;
+				return singleResult(options, { output: "", aborted: true, abortReason: "aborted by user" });
+			} finally {
+				options.signal?.removeEventListener("abort", onAbort);
+			}
 			completed++;
 			return singleResult(options, { output: options.assignment ?? "" });
 		});
@@ -735,14 +762,15 @@ describe("agent() through eval runtimes", () => {
 		await saturated;
 		await Promise.resolve();
 		expect(completed).toBe(0);
-		releaseAgents.resolve();
 		const result = await resultPromise;
 
-		// Cancelled, but cleanly: no hard-kill, no orphaned bridge calls, and no
-		// second fan-out wave started after the deferred abort was delivered.
+		// The interrupt reached every in-flight subagent: nothing here released
+		// them, so the cell could only settle because the abort propagated.
+		expect(abortedSubagents).toBe(6);
+		expect(completed).toBe(0);
+		// Cancelled, but cleanly: no hard-kill, and no second fan-out wave started.
 		expect(result.cancelled).toBe(true);
 		expect(result.output).not.toContain("Python kernel shutdown");
-		expect(completed).toBe(6);
 		expect(runSpy).toHaveBeenCalledTimes(6);
 
 		// The persistent kernel survived the interrupt: prior state is intact.
@@ -897,7 +925,9 @@ describe("agent() through eval runtimes", () => {
 
 		// The bridge paused the watchdog; the subprocess is now blocked in flight.
 		await inFlight;
-		expect(observedMaxRuntimeMs).toBe(0);
+		// `agent()` must not pin the wall-clock cap: leaving it unset lets the
+		// executor inherit `task.maxRuntimeMs` exactly like the task tool does.
+		expect(observedMaxRuntimeMs).toBeUndefined();
 		// Burn far more than the 20ms budget while paused: the watchdog stays armed-off.
 		vi.advanceTimersByTime(1_000);
 		expect(idle.signal.aborted).toBe(false);
@@ -991,6 +1021,65 @@ describe("agent() through eval runtimes", () => {
 		expect(ops.at(-1)).toBe(EVAL_TIMEOUT_RESUME_OP);
 		expect(idle.signal.aborted).toBe(false);
 	});
+
+	it("interrupting a JavaScript agent() aborts it at once but waits out its critical phase", async () => {
+		// Regression: `onAbort` used to hard-kill the worker straight away, which
+		// rejected the run while the untracked `handleToolCall` promise carried on
+		// — so an isolation merge could keep cherry-picking after the cell had
+		// already returned. Mirrors the Python bridge's shielded-signal contract.
+		//
+		// Asserted as an ordering, not a duration: the agent call must finish
+		// before the cell settles. Killing early inverts the two.
+		using tempDir = TempDir.createSync("@omp-eval-agent-js-interrupt-");
+		const { session, sessionFile } = makeEvalSession(tempDir, "js-agent-interrupt");
+		mockAgents();
+
+		const order: string[] = [];
+		const inFlight = Promise.withResolvers<void>();
+		const sawAbort = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		// Stands in for the isolation merge: notices the abort, then keeps going.
+		vi.spyOn(taskExecutor, "runSubprocess").mockImplementation(async options => {
+			options.signal?.addEventListener(
+				"abort",
+				() => {
+					order.push("agent-saw-abort");
+					sawAbort.resolve();
+				},
+				{ once: true },
+			);
+			inFlight.resolve();
+			await release.promise;
+			order.push("agent-returned");
+			return singleResult(options, { output: "merged" });
+		});
+
+		const ac = new AbortController();
+		const cell = executeJs('return await agent("merge");', {
+			cwd: tempDir.path(),
+			sessionId: "agent-bridge-js-interrupt",
+			session,
+			sessionFile,
+			signal: ac.signal,
+		}).finally(() => {
+			order.push("cell-settled");
+		});
+
+		await inFlight.promise;
+		ac.abort(new Error("external interrupt"));
+		// Delegated work is notified immediately, before anything is released.
+		await sawAbort.promise;
+		// Drain the microtask queue. An abort that settled the run outright would
+		// have resolved the cell by now; no wall clock is involved.
+		for (let i = 0; i < 200; i++) await Promise.resolve();
+		expect(order).toEqual(["agent-saw-abort"]);
+
+		release.resolve();
+		const result = await cell;
+
+		expect(order).toEqual(["agent-saw-abort", "agent-returned", "cell-settled"]);
+		expect(result.cancelled).toBe(true);
+	}, 30_000);
 });
 
 describe("runEvalAgent isolation", () => {

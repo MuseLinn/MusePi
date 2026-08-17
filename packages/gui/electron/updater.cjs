@@ -1,0 +1,65 @@
+/**
+ * OTA updater — checks a version manifest and hands the renderer the
+ * download URL when a newer release exists.
+ *
+ * The manifest is a tiny JSON at UPDATE_MANIFEST_URL:
+ *   { "version": "0.1.1", "url": "https://…/MusePi-0.1.1.dmg", "notes": "…" }
+ *
+ * Resolution order: OMP_UPDATE_MANIFEST_URL env → package.json
+ * "update" → disabled (null). Auto-check on startup can be silenced with
+ * OMP_NO_AUTO_UPDATE=1.
+ */
+"use strict";
+
+const { app } = require("electron");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const pkgPath = path.resolve(__dirname, "..", "package.json");
+let pkg = {};
+try {
+	pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+} catch {
+	// package.json missing — env-only mode
+}
+
+function manifestUrl() {
+	if (process.env.OMP_UPDATE_MANIFEST_URL) return process.env.OMP_UPDATE_MANIFEST_URL;
+	if (pkg.update?.manifestUrl) return pkg.update.manifestUrl;
+	return null;
+}
+
+/** Fetch + compare the remote version. Returns null when up to date or disabled. */
+async function checkForUpdates(timeoutMs = 8000) {
+	const url = manifestUrl();
+	if (!url) return { enabled: false, reason: "no-update-source" };
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		const res = await fetch(url, { signal: controller.signal, headers: { "Cache-Control": "no-cache" } });
+		if (!res.ok) return { enabled: true, error: `manifest ${res.status}` };
+		const manifest = await res.json();
+		if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
+			return { enabled: true, error: "bad manifest" };
+		}
+		const current = app.getVersion();
+		const newer = compareVersions(manifest.version, current) > 0;
+		return { enabled: true, current, latest: manifest.version, newer, url: manifest.url, notes: manifest.notes };
+	} catch (err) {
+		return { enabled: true, error: err instanceof Error ? err.message : String(err) };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** Semver-ish compare; "0.1.0" < "0.1.1" < "0.2.0". */
+function compareVersions(a, b) {
+	const pa = String(a).split(".").map(n => Number.parseInt(n, 10) || 0);
+	const pb = String(b).split(".").map(n => Number.parseInt(n, 10) || 0);
+	for (let i = 0; i < 3; i++) {
+		if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+	}
+	return 0;
+}
+
+module.exports = { checkForUpdates, manifestUrl };

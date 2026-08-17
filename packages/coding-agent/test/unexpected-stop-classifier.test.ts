@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import * as ai from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import * as ai from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 import {
 	classifyUnexpectedStop,
 	isUnexpectedStopCandidate,
 	parseUnexpectedStopClassification,
-} from "@oh-my-pi/pi-coding-agent/session/unexpected-stop-classifier";
+} from "@musepi/pi-coding-agent/session/unexpected-stop-classifier";
 
 function makeAssistantMessage(options: {
 	stopReason: AssistantMessage["stopReason"];
@@ -73,6 +73,30 @@ describe("isUnexpectedStopCandidate", () => {
 		const message = makeAssistantMessage({
 			stopReason: "stop",
 			content: [],
+		});
+		expect(isUnexpectedStopCandidate(message)).toBe(false);
+	});
+
+	it("returns true for a signed thinking-only stop", () => {
+		const message = makeAssistantMessage({
+			stopReason: "stop",
+			content: [{ type: "thinking", thinking: " 响应", thinkingSignature: "reasoning_content" }],
+		});
+		expect(isUnexpectedStopCandidate(message)).toBe(true);
+	});
+
+	it("returns false for an unsigned thinking-only stop (empty-stop path owns it)", () => {
+		const message = makeAssistantMessage({
+			stopReason: "stop",
+			content: [{ type: "thinking", thinking: "responseAll four reviewers complete." }],
+		});
+		expect(isUnexpectedStopCandidate(message)).toBe(false);
+	});
+
+	it("returns false when the thinking block is only whitespace", () => {
+		const message = makeAssistantMessage({
+			stopReason: "stop",
+			content: [{ type: "thinking", thinking: "   \n\t  ", thinkingSignature: "reasoning_content" }],
 		});
 		expect(isUnexpectedStopCandidate(message)).toBe(false);
 	});

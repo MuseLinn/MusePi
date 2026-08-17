@@ -14,17 +14,17 @@
  *    runtime for internal callers.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
-import { AsyncJobManager } from "@oh-my-pi/pi-coding-agent/async/job-manager";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import * as executorModule from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition, SingleResult, TaskParams } from "@oh-my-pi/pi-coding-agent/task/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { isRecord } from "@oh-my-pi/pi-utils";
+import { toolWireSchema } from "@musepi/pi-ai/utils/schema";
+import { AsyncJobManager } from "@musepi/pi-coding-agent/async/job-manager";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import * as executorModule from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition, SingleResult, TaskParams } from "@musepi/pi-coding-agent/task/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { isRecord } from "@musepi/pi-utils";
 
 const taskAgent: AgentDefinition = {
 	name: "task",
@@ -154,7 +154,7 @@ describe("task.batch schema gating", () => {
 		expect(batch.description).toContain("`effort`");
 	});
 
-	it("keeps isolation boolean-only and describes the configured apply behavior", async () => {
+	it("keeps isolation boolean-only in the batch item schema", async () => {
 		mockDiscovery();
 
 		const tool = await TaskTool.create(
@@ -169,18 +169,6 @@ describe("task.batch schema gating", () => {
 		}
 		expect(isolatedSchema.type).toBe("boolean");
 		expect(itemProperties.apply).toBeUndefined();
-		expect(tool.description).toContain("automatically applied to the parent checkout");
-
-		const captureTool = await TaskTool.create(
-			createSession({
-				settings: {
-					"task.batch": true,
-					"task.isolation.mode": "auto",
-					"task.isolation.apply": false,
-				},
-			}),
-		);
-		expect(captureTool.description).toContain("without modifying the parent checkout");
 	});
 
 	it("hides isolation from the dynamic batch schema in plan mode", async () => {

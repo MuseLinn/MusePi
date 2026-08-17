@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, type Mock, vi } from "bun:test";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { TRUNCATE_LENGTHS } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { TRUNCATE_LENGTHS } from "@musepi/pi-coding-agent/tools/render-utils";
 
 beforeAll(async () => {
 	resetSettingsForTest();
@@ -45,7 +45,7 @@ function createFixture(): Fixture {
 		// (`#handleMessageUpdate`) only runs while one exists.
 		streamingComponent: { setHideThinkingBlock: vi.fn(), markTranscriptBlockFinalized: vi.fn() },
 		streamingMessage: undefined,
-		viewSession: { isStreaming: false, getToolByName: () => undefined },
+		viewSession: { isStreaming: false, getToolByName: () => undefined, hasBuiltInTool: () => true },
 		sessionManager: { getCwd: () => "/tmp" },
 		chatContainer: {
 			addChild: (block: unknown) => blocks.push(block),

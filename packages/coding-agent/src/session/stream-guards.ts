@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import type { Agent, AgentEvent, AgentMessage, AgentTurnEndContext } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, AssistantMessageEvent, Model, ToolCall } from "@oh-my-pi/pi-ai";
-import { GeminiHeaderRunDetector, isGeminiThinkingModel } from "@oh-my-pi/pi-ai/utils/thinking-loop";
-import { type RepeatedToolCallDetection, ToolCallLoopGuard } from "@oh-my-pi/pi-ai/utils/tool-call-loop-guard";
-import { isEnoent, logger, prompt } from "@oh-my-pi/pi-utils";
+import type { Agent, AgentEvent, AgentMessage, AgentTurnEndContext } from "@musepi/pi-agent-core";
+import type { AssistantMessage, AssistantMessageEvent, Model, ToolCall } from "@musepi/pi-ai";
+import { GeminiHeaderRunDetector, isGeminiThinkingModel } from "@musepi/pi-ai/utils/thinking-loop";
+import { type RepeatedToolCallDetection, ToolCallLoopGuard } from "@musepi/pi-ai/utils/tool-call-loop-guard";
+import { isEnoent, logger, prompt } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
 import { normalizeDiff, normalizeToLF, ParseError, previewPatch, stripBom } from "../edit";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
@@ -164,7 +164,7 @@ export class StreamingEditGuard {
 		const toolCall = messageContent[contentIndex] as ToolCall;
 		if (toolCall.name !== "edit") return undefined;
 		const args = toolCall.arguments;
-		if (!args || typeof args !== "object" || Array.isArray(args) || "old_text" in args || "new_text" in args) {
+		if (!args || typeof args !== "object" || Array.isArray(args) || "old_string" in args || "new_string" in args) {
 			return undefined;
 		}
 		const filePath = typeof args.path === "string" ? args.path : undefined;

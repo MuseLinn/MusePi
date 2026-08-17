@@ -2,16 +2,17 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as executorModule from "@oh-my-pi/pi-coding-agent/task/executor";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import * as executorModule from "@musepi/pi-coding-agent/task/executor";
 import {
 	applyEligibleNestedPatches,
 	mergeIsolatedChanges,
 	runIsolatedSubprocess,
-} from "@oh-my-pi/pi-coding-agent/task/isolation-runner";
-import type { SingleResult } from "@oh-my-pi/pi-coding-agent/task/types";
-import * as worktreeModule from "@oh-my-pi/pi-coding-agent/task/worktree";
-import * as gitModule from "@oh-my-pi/pi-coding-agent/utils/git";
-import * as natives from "@oh-my-pi/pi-natives";
+} from "@musepi/pi-coding-agent/task/isolation-runner";
+import type { SingleResult } from "@musepi/pi-coding-agent/task/types";
+import * as worktreeModule from "@musepi/pi-coding-agent/task/worktree";
+import * as gitModule from "@musepi/pi-coding-agent/utils/git";
+import * as natives from "@musepi/pi-natives";
 import { $ } from "bun";
 
 function result(overrides: Partial<SingleResult> = {}): SingleResult {
@@ -73,6 +74,7 @@ async function seedFooRepo(finalContent: string): Promise<{ repoRoot: string; pa
 describe("runIsolatedSubprocess", () => {
 	afterEach(async () => {
 		vi.restoreAllMocks();
+		AgentRegistry.resetGlobalForTests();
 		await Promise.all(tempRoots.splice(0).map(tempRoot => fs.rm(tempRoot, { force: true, recursive: true })));
 	});
 
@@ -107,6 +109,13 @@ describe("runIsolatedSubprocess", () => {
 			nestedPatches: [],
 		});
 		const cleanupSpy = vi.spyOn(worktreeModule, "cleanupIsolation").mockResolvedValue();
+		AgentRegistry.global().register({
+			id: "PreserveBranchFailure",
+			displayName: "PreserveBranchFailure",
+			kind: "sub",
+			session: null,
+			status: "parked",
+		});
 		const deleteSpy = vi.spyOn(gitModule.branch, "tryDelete").mockResolvedValue(true);
 
 		const outcome = await runIsolatedSubprocess({
@@ -137,6 +146,64 @@ describe("runIsolatedSubprocess", () => {
 		expect(outcome.nestedPatches).toEqual([]);
 		expect(captureSpy).toHaveBeenCalledWith(isolationDir, baseline);
 		expect(deleteSpy).toHaveBeenCalledWith(repoRoot, "omp/task/PreserveBranchFailure");
+		expect(cleanupSpy).toHaveBeenCalledTimes(1);
+		expect(AgentRegistry.global().get("PreserveBranchFailure")?.history?.patchPath).toBe(patchPath);
+	});
+
+	it("keeps an isolated worktree until deferred child cleanup settles", async () => {
+		const cleanupGate = Promise.withResolvers<void>();
+		vi.spyOn(worktreeModule, "ensureIsolation").mockResolvedValue({
+			mergedDir: "/repo/isolated",
+			backend: natives.IsoBackendKind.Rcopy,
+			fellBack: false,
+			fallbackReason: null,
+		});
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			options.onCleanupDeferred?.(cleanupGate.promise);
+			return result({ exitCode: 1, aborted: true, error: "cleanup exceeded its deadline" });
+		});
+		const cleanupSpy = vi.spyOn(worktreeModule, "cleanupIsolation").mockResolvedValue();
+
+		const outcome = await runIsolatedSubprocess({
+			baseOptions: {
+				cwd: "/repo",
+				agent: {
+					name: "task",
+					description: "Task agent",
+					systemPrompt: "test",
+					source: "bundled",
+				},
+				task: "Do work",
+				index: 0,
+				id: "DeferredCleanup",
+			},
+			context: {
+				repoRoot: "/repo",
+				baseline: {
+					root: {
+						repoRoot: "/repo",
+						headCommit: "base",
+						staged: "",
+						unstaged: "",
+						untracked: [],
+						untrackedPatch: "",
+					},
+					nested: [],
+				},
+			},
+			preferredBackend: undefined,
+			agentId: "DeferredCleanup",
+			mergeMode: "patch",
+			artifactsDir: "/artifacts",
+			buildFailureResult: error => result({ exitCode: 1, error: String(error) }),
+		});
+
+		expect(outcome.exitCode).toBe(1);
+		expect(cleanupSpy).not.toHaveBeenCalled();
+		cleanupGate.resolve();
+		await cleanupGate.promise;
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(cleanupSpy).toHaveBeenCalledTimes(1);
 	});
 });

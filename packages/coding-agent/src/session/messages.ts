@@ -4,16 +4,16 @@
  * Extends the base AgentMessage type with coding-agent specific message types,
  * and provides a transformer to convert them to LLM-compatible messages.
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage } from "@musepi/pi-agent-core";
 import {
 	invalidateMessageCache,
 	registerMessageCacheInvalidator,
-} from "@oh-my-pi/pi-agent-core/compaction/message-cache";
+} from "@musepi/pi-agent-core/compaction/message-cache";
 import {
 	type BranchSummaryMessage,
 	type CompactionSummaryMessage,
 	convertMessageToLlm,
-} from "@oh-my-pi/pi-agent-core/compaction/messages";
+} from "@musepi/pi-agent-core/compaction/messages";
 import type {
 	AssistantMessage,
 	ImageContent,
@@ -21,9 +21,10 @@ import type {
 	MessageAttribution,
 	TextContent,
 	UserMessage,
-} from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { isRecord, logger, prompt } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { isRecord, logger, prompt } from "@musepi/pi-utils";
+import { COLLAB_PROMPT_MESSAGE_TYPE } from "@musepi/pi-wire";
 import userInterjectionTemplate from "../prompts/steering/user-interjection.md" with { type: "text" };
 import { formatTitleConversationContext, type TitleConversationTurn } from "../tiny/message-preproc";
 
@@ -33,7 +34,7 @@ export {
 	createBranchSummaryMessage,
 	createCompactionSummaryMessage,
 	createCustomMessage,
-} from "@oh-my-pi/pi-agent-core/compaction/messages";
+} from "@musepi/pi-agent-core/compaction/messages";
 
 import type { OutputMeta } from "../tools/output-meta";
 import { formatOutputNotice } from "../tools/output-meta";
@@ -41,6 +42,7 @@ import { formatOutputNotice } from "../tools/output-meta";
 export const SKILL_PROMPT_MESSAGE_TYPE = "skill-prompt";
 export const LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE = "lsp-late-diagnostic";
 export const BACKGROUND_TAN_DISPATCH_MESSAGE_TYPE = "background-tan-dispatch";
+export const PREWALK_PLAN_MESSAGE_TYPE = "prewalk-plan";
 
 /**
  * Logs provider-error turns so their actual cause is available outside the
@@ -614,8 +616,18 @@ export function normalizeCustomMessagePayload<T = unknown>(
 	};
 }
 
-function isSteeringUserMessage(message: AgentMessage | undefined): message is UserMessage & { steering: true } {
-	return message?.role === "user" && message.steering === true;
+type SteeringUserMessage =
+	| (UserMessage & { steering: true })
+	| (CustomMessage & {
+			customType: typeof COLLAB_PROMPT_MESSAGE_TYPE;
+			attribution: "user";
+	  });
+
+function isSteeringUserMessage(message: AgentMessage | undefined): message is SteeringUserMessage {
+	if (message?.role === "user") return message.steering === true;
+	return (
+		message?.role === "custom" && message.customType === COLLAB_PROMPT_MESSAGE_TYPE && message.attribution === "user"
+	);
 }
 
 function userMessageWithoutSteering(message: UserMessage): UserMessage {
@@ -655,17 +667,26 @@ function getArrayContentImages(content: (TextContent | ImageContent)[]): ImageCo
 	return images ?? [];
 }
 
-function wrapSteeringUserMessage(message: UserMessage): UserMessage {
+function wrapSteeringUserMessage(message: SteeringUserMessage): UserMessage {
+	const userMessage: UserMessage =
+		message.role === "user"
+			? userMessageWithoutSteering(message)
+			: {
+					role: "user",
+					content: message.content,
+					attribution: "user",
+					timestamp: message.timestamp,
+				};
 	if (typeof message.content === "string") {
-		if (message.content.length === 0) return message;
-		return { ...userMessageWithoutSteering(message), content: renderSteeringEnvelope(message.content) };
+		if (message.content.length === 0) return message.role === "user" ? message : userMessage;
+		return { ...userMessage, content: renderSteeringEnvelope(message.content) };
 	}
 
 	const text = getArrayContentText(message.content);
-	if (text.length === 0) return message;
+	if (text.length === 0) return message.role === "user" ? message : userMessage;
 	const content: (TextContent | ImageContent)[] = [{ type: "text", text: renderSteeringEnvelope(text) }];
 	content.push(...getArrayContentImages(message.content));
-	return { ...userMessageWithoutSteering(message), content };
+	return { ...userMessage, content };
 }
 
 export function wrapSteeringForModel(messages: AgentMessage[]): AgentMessage[] {
@@ -907,7 +928,7 @@ export interface FileMentionMessage {
 
 // Extend CustomAgentMessages via declaration merging
 // Legacy hookMessage is kept for migration; new code should use custom.
-declare module "@oh-my-pi/pi-agent-core" {
+declare module "@musepi/pi-agent-core" {
 	interface CustomAgentMessages {
 		bashExecution: BashExecutionMessage;
 		pythonExecution: PythonExecutionMessage;
@@ -1146,6 +1167,10 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 		}
 		case "custom": {
 			if (!isCustomMessageContent(m.content)) return [];
+			if (isSteeringUserMessage(m)) {
+				const converted = convertMessageToLlm(wrapSteeringUserMessage(m));
+				return converted ? [converted] : [];
+			}
 			if (isUserInvokedSkillPrompt(m)) {
 				return [
 					{
@@ -1170,7 +1195,7 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 		}
 		case "assistant": {
 			// A user-interrupted turn keeps its trailing thinking run on the
-			// persisted/displayed message so reload and Ctrl+L rebuilds still
+			// persisted/displayed message so reload and display-reset rebuilds still
 			// show it. That run is incomplete/unsigned and gets rejected on
 			// resend, so strip it here — LLM path only — when the hidden
 			// interrupted-thinking continuity message follows.

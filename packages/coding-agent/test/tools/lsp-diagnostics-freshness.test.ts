@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createLspWritethrough, type FileDiagnosticsResult, FileFormatResult } from "@oh-my-pi/pi-coding-agent/lsp";
-import * as lspClient from "@oh-my-pi/pi-coding-agent/lsp/client";
-import * as lspConfig from "@oh-my-pi/pi-coding-agent/lsp/config";
-import type { Diagnostic, LinterClient, LspClient, ServerConfig } from "@oh-my-pi/pi-coding-agent/lsp/types";
-import { fileToUri } from "@oh-my-pi/pi-coding-agent/lsp/utils";
-import type { DeferredDiagnosticsEntry, ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
-import { type ptree, TempDir } from "@oh-my-pi/pi-utils";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createLspWritethrough, type FileDiagnosticsResult, FileFormatResult } from "@musepi/pi-coding-agent/lsp";
+import * as lspClient from "@musepi/pi-coding-agent/lsp/client";
+import * as lspConfig from "@musepi/pi-coding-agent/lsp/config";
+import type { Diagnostic, LinterClient, LspClient, ServerConfig } from "@musepi/pi-coding-agent/lsp/types";
+import { EquivalentUriMap, fileToUri } from "@musepi/pi-coding-agent/lsp/utils";
+import type { DeferredDiagnosticsEntry, ToolSession } from "@musepi/pi-coding-agent/tools";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
+import { type ptree, TempDir } from "@musepi/pi-utils";
 
 const TEST_SERVER: ServerConfig = {
 	command: "test-lsp",
@@ -47,7 +47,7 @@ function createClient(cwd: string, config: ServerConfig): LspClient {
 		config,
 		proc: {} as ptree.ChildProcess<"pipe">,
 		requestId: 0,
-		diagnostics: new Map(),
+		diagnostics: new EquivalentUriMap(),
 		diagnosticsVersion: 0,
 		openFiles: new Map(),
 		pendingRequests: new Map(),
@@ -436,6 +436,51 @@ describe("LSP diagnostics freshness", () => {
 		expect(result?.errored).toBe(true);
 		expect(result?.messages.some(m => m.includes("real error"))).toBe(true);
 		expect(result?.messages.some(m => m.includes("stale error"))).toBe(false);
+	});
+
+	it("matches published diagnostics when the server renormalizes the document URI", async () => {
+		const filePath = path.join(tempDir.path(), "renormalized.ts");
+		const uri = fileToUri(filePath);
+		const serverUri = uri.replace("/renormalized.ts", "/%72enormalized.ts");
+		const client = createClient(tempDir.path(), TEST_SERVER);
+		const clock = new VirtualClock(Date.now());
+		installVirtualTime(clock);
+
+		vi.spyOn(lspConfig, "loadConfig").mockReturnValue({ servers: {}, idleTimeoutMs: undefined });
+		vi.spyOn(lspConfig, "getServersForFile").mockReturnValue([["test-lsp", TEST_SERVER]]);
+		vi.spyOn(lspClient, "getOrCreateClient").mockResolvedValue(client);
+		vi.spyOn(lspClient, "syncContent").mockImplementation(async (mockClient, syncedFilePath) => {
+			const syncedUri = fileToUri(syncedFilePath);
+			mockClient.openFiles.set(syncedUri, { version: 1, languageId: "typescript" });
+		});
+		vi.spyOn(lspClient, "notifySaved").mockImplementation(async mockClient => {
+			clock.in(10, () => {
+				publishDiagnostics(mockClient, serverUri, [createDiagnostic("renormalized URI error")], 1);
+			});
+		});
+
+		const writethrough = createLspWritethrough(tempDir.path(), {
+			enableFormat: false,
+			enableDiagnostics: true,
+		});
+		const result = await writethrough(filePath, "export const value = missing;\n");
+
+		expect(result?.errored).toBe(true);
+		expect(result?.messages.some(message => message.includes("renormalized URI error"))).toBe(true);
+	});
+
+	it("matches Windows drive-letter case and percent-encoding differences", () => {
+		const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		if (!platformDescriptor) throw new Error("process.platform descriptor is unavailable");
+		Object.defineProperty(process, "platform", { ...platformDescriptor, value: "win32" });
+		try {
+			const diagnostics = new EquivalentUriMap<string>();
+			diagnostics.set("file:///c%3A/Users/serge/doc.md", "published");
+
+			expect(diagnostics.get("file:///C:/Users/serge/doc.md")).toBe("published");
+		} finally {
+			Object.defineProperty(process, "platform", platformDescriptor);
+		}
 	});
 
 	it("returns completed pull diagnostics inside the inline write window", async () => {

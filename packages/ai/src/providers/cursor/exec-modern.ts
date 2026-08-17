@@ -64,7 +64,7 @@ import {
 	StopRequestResponseSchema,
 	SubagentStartRequestResponseSchema,
 	SubagentStopRequestResponseSchema,
-} from "@oh-my-pi/pi-catalog/discovery/cursor-gen/agent_pb";
+} from "@musepi/pi-catalog/discovery/cursor-gen/agent_pb";
 import type { ToolResultMessage } from "../../types";
 
 /**
@@ -81,6 +81,7 @@ export {
 	piLsPath,
 	piReadDisplayPath,
 	piReadPath,
+	piReadPathHasRange,
 	piTimeout,
 } from "../cursor-pi-args";
 

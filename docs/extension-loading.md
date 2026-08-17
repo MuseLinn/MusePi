@@ -30,11 +30,11 @@ Extension loading builds a list of module entry files, imports each module with 
 
 Native `extension-module` discovery comes from:
 
-- Project directory: `<cwd>/.omp/extensions`
-- User directory: `~/.omp/agent/extensions`
-- Native legacy/settings JSON entries: `<cwd>/.omp/settings.json#extensions` and `~/.omp/agent/settings.json#extensions`
+- Project directory: `<cwd>/.musepi/extensions`
+- User directory: `~/.musepi/agent/extensions`
+- Native legacy/settings JSON entries: `<cwd>/.musepi/settings.json#extensions` and `~/.musepi/agent/settings.json#extensions`
 
-The project root is the native provider's `.omp` directory (`SOURCE_PATHS.native.projectDir`), cwd-only; it does not walk ancestors. The user root is the active profile's agent directory via `getAgentDir()`, so under `omp --profile <name>` it becomes `~/.omp/profiles/<name>/agent/extensions` (and it honors `PI_CODING_AGENT_DIR`). See [Profiles](./config-usage.md#profiles).
+The project root is the native provider's `.omp` directory (`SOURCE_PATHS.native.projectDir`), cwd-only; it does not walk ancestors. The user root is the active profile's agent directory via `getAgentDir()`, so under `omp --profile <name>` it becomes `~/.musepi/profiles/<name>/agent/extensions` (and it honors `PI_CODING_AGENT_DIR`). See [Profiles](./config-usage.md#profiles).
 
 Notes:
 
@@ -64,18 +64,18 @@ Configured path sources in the main session startup path (`sdk.ts`):
 
 Settings files:
 
-- User: `~/.omp/agent/config.yml` (or custom agent dir via `PI_CODING_AGENT_DIR`)
-- Project/native settings capability: `<cwd>/.omp/config.yml` and `<cwd>/.omp/settings.json`
+- User: `~/.musepi/agent/config.yml` (or custom agent dir via `PI_CODING_AGENT_DIR`)
+- Project/native settings capability: `<cwd>/.musepi/config.yml` and `<cwd>/.musepi/settings.json`
 
 Native extension-module discovery also reads legacy JSON extension lists from:
 
-- `~/.omp/agent/settings.json`
-- `<cwd>/.omp/settings.json`
+- `~/.musepi/agent/settings.json`
+- `<cwd>/.musepi/settings.json`
 
 Examples:
 
 ```yaml
-# ~/.omp/agent/config.yml
+# ~/.musepi/agent/config.yml
 extensions:
   - ~/my-exts/safety.ts
   - ./local/ext-pack
@@ -83,7 +83,7 @@ extensions:
 
 ```json
 {
-  "extensions": ["./.omp/extensions/my-extra"]
+  "extensions": ["./.musepi/extensions/my-extra"]
 }
 ```
 
@@ -98,8 +98,19 @@ extensions:
 
 Behavior split:
 
-- SDK: when `disableExtensionDiscovery=true`, it still loads `additionalExtensionPaths` via `loadExtensions()`.
-- CLI path building (`main.ts`) currently clears CLI extension paths when `--no-extensions` is set, so explicit `-e/--hook` are not forwarded in that mode.
+- SDK: when `disableExtensionDiscovery=true`, ambient extension factories are
+  excluded, while `additionalExtensionPaths` are still resolved normally
+  (including package directories with `package.json#omp.extensions`).
+- CLI: `--no-extensions` follows the same explicit-only contract. Explicit
+  `-e/--extension` and `--hook` paths still load, and only sibling capability
+  roots from explicitly named extension packages remain eligible. Project/user
+  `extensions:` settings and installed OMP extension packages are excluded from
+  that sibling surface.
+
+This flag governs extension factories and OMP extension-package sibling roots;
+it is not a whole-process capability-isolation switch. Skills, MCP servers,
+tools, prompts, and rules owned by other discovery subsystems retain their own
+enable/disable controls.
 
 ### Disable specific extension modules
 
@@ -230,7 +241,7 @@ When events run through `ExtensionRunner`, handler exceptions are caught and emi
 ### User-level
 
 ```text
-~/.omp/agent/
+~/.musepi/agent/
   config.yml
   extensions/
     guardrails.ts
@@ -242,7 +253,7 @@ When events run through `ExtensionRunner`, handler exceptions are caught and emi
 
 ```text
 <repo>/
-  .omp/
+  .musepi/
     settings.json
     extensions/
       checks/

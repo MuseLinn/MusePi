@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
-import { fetchLiteLLMRichModels, litellmModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { FetchImpl } from "@oh-my-pi/pi-catalog/types";
-import * as logger from "@oh-my-pi/pi-utils/logger";
+import { fetchLiteLLMRichModels, litellmModelManagerOptions } from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { FetchImpl } from "@musepi/pi-catalog/types";
+import * as logger from "@musepi/pi-utils/logger";
 
 const ORIGINAL_LITELLM_BASE_URL = Bun.env.LITELLM_BASE_URL;
-const MODELS_DEV_URL = "https://models.dev/api.json";
+const MODELS_DEV_URL = "https://catalog.stencil.so/models.json.zstd";
 function makeLiteLLMSentinelPlaceholder(modelGroup: string) {
 	return {
 		model_group: modelGroup,
@@ -156,7 +156,7 @@ describe("LiteLLM provider discovery", () => {
 		expect(models?.[0]?.baseUrl).toBe("http://litellm-config.example:4200/v1");
 	});
 
-	test("keeps LiteLLM transport when models.dev has a colliding provider model id", async () => {
+	test("keeps LiteLLM transport when stencil.so has a colliding provider model id", async () => {
 		const fetchMock = makeCollisionFetchMock();
 
 		const options = litellmModelManagerOptions({
@@ -306,7 +306,7 @@ describe("LiteLLM provider discovery", () => {
 		expect(warnSpy).not.toHaveBeenCalled();
 	});
 
-	test("maps LiteLLM per-token cost onto cost.input/output for models missing from models.dev", async () => {
+	test("maps LiteLLM per-token cost onto cost.input/output for models missing from stencil.so", async () => {
 		const fetchMock = vi.fn(async (input: string | URL | Request) => {
 			const url = inputUrl(input);
 			if (url === MODELS_DEV_URL) {
@@ -349,7 +349,7 @@ describe("LiteLLM provider discovery", () => {
 		});
 	});
 
-	test("enriches LiteLLM rich models missing from models.dev with bundled reasoning metadata", async () => {
+	test("enriches LiteLLM rich models missing from stencil.so with bundled reasoning metadata", async () => {
 		const fetchMock = vi.fn(async (input: string | URL | Request) => {
 			const url = inputUrl(input);
 			if (url === MODELS_DEV_URL) {
@@ -428,60 +428,61 @@ describe("LiteLLM provider discovery", () => {
 		expect(models?.find(model => model.id === "params-tools")?.supportsTools).toBe(true);
 	});
 
-	test.each([["all-team-models"], ["all-proxy-models"], ["no-default-models"]])(
-		"falls back from %s placeholder to v2 model info",
-		async sentinelModelId => {
-			const calls: string[] = [];
-			const fetchMock = vi.fn(async (input: string | URL | Request) => {
-				const url = inputUrl(input);
-				calls.push(url);
-				if (url === MODELS_DEV_URL) {
-					return Response.json({});
-				}
-				if (url === "http://primary:4000/model_group/info") {
-					return Response.json({ data: [makeLiteLLMSentinelPlaceholder(sentinelModelId)] });
-				}
-				if (url === "http://primary:4000/v2/model/info") {
-					return Response.json({
-						data: [
-							{
-								model_name: "example-real-model",
-								model_info: {
-									max_input_tokens: 200_000,
-									max_output_tokens: 12_000,
-									supports_vision: false,
-									supports_reasoning: true,
-								},
+	test.each([
+		["all-team-models"],
+		["all-proxy-models"],
+		["no-default-models"],
+	])("falls back from %s placeholder to v2 model info", async sentinelModelId => {
+		const calls: string[] = [];
+		const fetchMock = vi.fn(async (input: string | URL | Request) => {
+			const url = inputUrl(input);
+			calls.push(url);
+			if (url === MODELS_DEV_URL) {
+				return Response.json({});
+			}
+			if (url === "http://primary:4000/model_group/info") {
+				return Response.json({ data: [makeLiteLLMSentinelPlaceholder(sentinelModelId)] });
+			}
+			if (url === "http://primary:4000/v2/model/info") {
+				return Response.json({
+					data: [
+						{
+							model_name: "example-real-model",
+							model_info: {
+								max_input_tokens: 200_000,
+								max_output_tokens: 12_000,
+								supports_vision: false,
+								supports_reasoning: true,
 							},
-						],
-					});
-				}
-				if (url === "http://primary:4000/v1/models") {
-					throw new Error("/v1/models should not be called when v2 metadata succeeds");
-				}
-				throw new Error(`Unexpected URL: ${url}`);
-			}) as FetchImpl;
-			const options = litellmModelManagerOptions({
-				apiKey: "sk-rich",
-				baseUrl: "http://primary:4000/v1",
-				fetch: fetchMock,
-			});
+						},
+					],
+				});
+			}
+			if (url === "http://primary:4000/v1/models") {
+				throw new Error("/v1/models should not be called when v2 metadata succeeds");
+			}
+			throw new Error(`Unexpected URL: ${url}`);
+		}) as FetchImpl;
+		const options = litellmModelManagerOptions({
+			apiKey: "sk-rich",
+			baseUrl: "http://primary:4000/v1",
+			fetch: fetchMock,
+		});
 
-			const models = await options.fetchDynamicModels?.();
+		const models = await options.fetchDynamicModels?.();
 
-			expect(calls).toContain("http://primary:4000/model_group/info");
-			expect(calls).toContain("http://primary:4000/v2/model/info");
-			expect(calls).not.toContain("http://primary:4000/v1/models");
-			expect(models?.map(model => model.id)).toEqual(["example-real-model"]);
-			expect(models?.[0]).toMatchObject({
-				id: "example-real-model",
-				contextWindow: 200_000,
-				maxTokens: 12_000,
-				input: ["text"],
-				reasoning: true,
-			});
-		},
-	);
+		expect(calls).toContain("http://primary:4000/model_group/info");
+		expect(calls).toContain("http://primary:4000/v2/model/info");
+		expect(calls).not.toContain("http://primary:4000/v1/models");
+		expect(models?.map(model => model.id)).toEqual(["example-real-model"]);
+		expect(models?.[0]).toMatchObject({
+			id: "example-real-model",
+			contextWindow: 200_000,
+			maxTokens: 12_000,
+			input: ["text"],
+			reasoning: true,
+		});
+	});
 
 	test("filters all-team-models placeholder from mixed model_group info", async () => {
 		const calls: string[] = [];
@@ -778,7 +779,7 @@ describe("LiteLLM provider discovery", () => {
 		});
 	});
 
-	test("enriches LiteLLM /v1/models fallback entries missing from models.dev with bundled reasoning metadata", async () => {
+	test("enriches LiteLLM /v1/models fallback entries missing from stencil.so with bundled reasoning metadata", async () => {
 		const calls: string[] = [];
 		const fetchMock = vi.fn(async (input: string | URL | Request) => {
 			const url = inputUrl(input);

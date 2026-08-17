@@ -204,7 +204,7 @@
           containsActive.set(node, has);
         }
 
-        // Stack: [node, indent, justBranched, showConnector, isLast, gutters, isVirtualRootChild]
+        // Stack: [node, indent, showConnector, isLast, gutters, isVirtualRootChild]
         const stack = [];
 
         // Add roots (prioritize branch containing active leaf)
@@ -213,11 +213,11 @@
         );
         for (let i = orderedRoots.length - 1; i >= 0; i--) {
           const isLast = i === orderedRoots.length - 1;
-          stack.push([orderedRoots[i], multipleRoots ? 1 : 0, multipleRoots, multipleRoots, isLast, [], multipleRoots]);
+          stack.push([orderedRoots[i], multipleRoots ? 1 : 0, multipleRoots, isLast, [], multipleRoots]);
         }
 
         while (stack.length > 0) {
-          const [node, indent, justBranched, showConnector, isLast, gutters, isVirtualRootChild] = stack.pop();
+          const [node, indent, showConnector, isLast, gutters, isVirtualRootChild] = stack.pop();
 
           result.push({ node, indent, showConnector, isLast, gutters, isVirtualRootChild, multipleRoots });
 
@@ -229,18 +229,10 @@
             Number(containsActive.get(b)) - Number(containsActive.get(a))
           );
 
-          // Calculate child indent (matches tree-selector.ts)
-          let childIndent;
-          if (multipleChildren) {
-            // Parent branches: children get +1
-            childIndent = indent + 1;
-          } else if (justBranched && indent > 0) {
-            // First generation after a branch: +1 for visual grouping
-            childIndent = indent + 1;
-          } else {
-            // Single-child chain: stay flat
-            childIndent = indent;
-          }
+          // Real branch points add visual depth, and a virtual root's direct
+          // children (the session roots) nest one level under the shared
+          // column-0 root. Linear continuations otherwise stay aligned.
+          const childIndent = multipleChildren || isVirtualRootChild ? indent + 1 : indent;
 
           // Build gutters for children
           const connectorDisplayed = showConnector && !isVirtualRootChild;
@@ -253,7 +245,7 @@
           // Add children in reverse order for stack
           for (let i = orderedChildren.length - 1; i >= 0; i--) {
             const childIsLast = i === orderedChildren.length - 1;
-            stack.push([orderedChildren[i], childIndent, multipleChildren, multipleChildren, childIsLast, childGutters, false]);
+            stack.push([orderedChildren[i], childIndent, multipleChildren, childIsLast, childGutters, false]);
           }
         }
 
@@ -268,13 +260,6 @@
         const displayIndent = multipleRoots ? Math.max(0, indent - 1) : indent;
         const connector = showConnector && !isVirtualRootChild ? (isLast ? '└─ ' : '├─ ') : '';
         const connectorPosition = connector ? displayIndent - 1 : -1;
-        // Chain rows (no connector of their own) under a last-sibling (`└─`)
-        // branch stay anchored by a vertical drawn one level right of the
-        // suppressed gutter — below the branch head's content — never in the
-        // `└─` corner column itself (#2298, #2325). Chains under `├─` heads
-        // are already anchored by the sibling line (`show: true` gutter).
-        const nearestGutter = !connector ? gutters[gutters.length - 1] : undefined;
-        const chainAnchorLevel = nearestGutter && !nearestGutter.show ? nearestGutter.position + 1 : -1;
 
         const totalChars = displayIndent * 3;
         const prefixChars = [];
@@ -287,9 +272,6 @@
             // Standard tree semantics: `│` only while more siblings continue
             // below (`show`), space below a `└─`.
             prefixChars.push(posInLevel === 0 && gutter.show ? '│' : ' ');
-          } else if (level === chainAnchorLevel) {
-            // Chain anchor for rows under a `└─` branch head.
-            prefixChars.push(posInLevel === 0 ? '│' : ' ');
           } else if (connector && level === connectorPosition) {
             if (posInLevel === 0) {
               prefixChars.push(isLast ? '└' : '├');
@@ -395,7 +377,7 @@
           }
 
           // Apply filter mode
-          const isSettingsEntry = ['label', 'custom', 'model_change', 'thinking_level_change', 'mode_change', 'ttsr_injection', 'session_init'].includes(entry.type);
+          const isSettingsEntry = ['label', 'custom', 'model_change', 'thinking_level_change', 'mode_change', 'ttsr_injection', 'session_init', 'credential_pin'].includes(entry.type);
           let passesFilter = true;
 
           switch (filterMode) {

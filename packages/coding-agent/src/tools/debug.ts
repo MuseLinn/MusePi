@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import { type } from "@musepi/omptype";
 import type {
 	AgentTool,
 	AgentToolContext,
@@ -6,11 +7,10 @@ import type {
 	AgentToolUpdateCallback,
 	RenderResultOptions,
 	ToolApprovalDecision,
-} from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
-import { isEnoent, prompt } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-agent-core";
+import type { ToolExample } from "@musepi/pi-ai";
+import { type Component, Text } from "@musepi/pi-tui";
+import { isEnoent, prompt } from "@musepi/pi-utils";
 import {
 	type DapBreakpointRecord,
 	type DapCapabilities,
@@ -505,7 +505,7 @@ const ADAPTER_UNAVAILABLE_MESSAGES: Readonly<Record<string, string>> = {
 	dlv: "adapter 'dlv' is not available: install with 'go install github.com/go-delve/delve/cmd/dlv@latest'",
 	rdbg: "adapter 'rdbg' is not available: install with 'gem install debug'",
 	"js-debug-adapter":
-		"adapter 'js-debug-adapter' is not available: install vscode-js-debug with Mason or set JS_DEBUG_DAP_SERVER to dapDebugServer.js",
+		"adapter 'js-debug-adapter' is not available: download it from https://github.com/microsoft/vscode-js-debug",
 };
 
 const ADAPTER_CANONICAL_COMMANDS: Readonly<Record<string, string>> = {

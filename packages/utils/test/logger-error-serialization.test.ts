@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 
 /**
  * Regression: Errors logged via `logger.error("msg", { err })` previously
@@ -47,7 +47,13 @@ async function waitForLogEntry(targetMessage: string): Promise<Record<string, un
 			const text = fs.readFileSync(path.join(tempDir, f), "utf8");
 			for (const line of text.split("\n")) {
 				if (line.length === 0) continue;
-				const entry = JSON.parse(line) as Record<string, unknown>;
+				let entry: Record<string, unknown>;
+				try {
+					entry = JSON.parse(line) as Record<string, unknown>;
+				} catch {
+					// Torn tail of an in-flight write; the line completes on a later poll.
+					continue;
+				}
 				if (entry.message === targetMessage) return entry;
 			}
 		}

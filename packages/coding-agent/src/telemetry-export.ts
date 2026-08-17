@@ -1,7 +1,7 @@
 /**
  * OTLP telemetry export bootstrap.
  *
- * oh-my-pi's agent core (`@oh-my-pi/pi-agent-core`) emits OpenTelemetry GenAI
+ * oh-my-pi's agent core (`@musepi/pi-agent-core`) emits OpenTelemetry GenAI
  * spans through the global `@opentelemetry/api` tracer, and exposes run-level
  * callbacks for metrics/log pipelines. This module registers the OTLP/proto
  * trace, log, and metric SDK providers when the standard `OTEL_*` endpoint env
@@ -21,8 +21,8 @@ import type {
 	AgentTelemetryWarning,
 	ChatUsageEvent,
 	ToolStatus,
-} from "@oh-my-pi/pi-agent-core";
-import { logger, postmortem } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-agent-core";
+import { logger, postmortem } from "@musepi/pi-utils";
 import {
 	type Attributes,
 	type AttributeValue,
@@ -37,7 +37,7 @@ import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-ho
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
-import { resourceFromAttributes } from "@opentelemetry/resources";
+import { detectResources, envDetector, resourceFromAttributes } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
@@ -146,9 +146,13 @@ export async function initTelemetryExport(): Promise<void> {
 }
 
 async function registerProviders(signalConfig: SignalConfig): Promise<void> {
-	const resource = resourceFromAttributes({
-		"service.name": process.env.OTEL_SERVICE_NAME ?? SERVICE_NAME,
-	});
+	// `envDetector` parses OTEL_RESOURCE_ATTRIBUTES (percent-decoded, per spec) and
+	// OTEL_SERVICE_NAME; merged last so both take precedence over the fallback
+	// service.name — with OTEL_SERVICE_NAME still winning service.name inside the
+	// detector itself.
+	const resource = resourceFromAttributes({ "service.name": SERVICE_NAME }).merge(
+		detectResources({ detectors: [envDetector] }),
+	);
 
 	if (signalConfig.trace) {
 		const exporter = new OTLPTraceExporter();
@@ -166,7 +170,7 @@ async function registerProviders(signalConfig: SignalConfig): Promise<void> {
 			readers: [new PeriodicExportingMetricReader({ exporter })],
 		});
 		metrics.setGlobalMeterProvider(meterProvider);
-		metricRecorder = new AgentMetricRecorder(metrics.getMeter("@oh-my-pi/pi-coding-agent"));
+		metricRecorder = new AgentMetricRecorder(metrics.getMeter("@musepi/pi-coding-agent"));
 	}
 
 	if (signalConfig.log) {
@@ -176,7 +180,7 @@ async function registerProviders(signalConfig: SignalConfig): Promise<void> {
 			processors: [new BatchLogRecordProcessor({ exporter })],
 		});
 		logs.setGlobalLoggerProvider(logProvider);
-		otelLogger = logProvider.getLogger("@oh-my-pi/pi-coding-agent");
+		otelLogger = logProvider.getLogger("@musepi/pi-coding-agent");
 		unregisterLogSink = logger.registerLogSink(event => {
 			emitOtelLog(
 				event.level,

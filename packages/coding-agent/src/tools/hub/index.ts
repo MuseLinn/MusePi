@@ -15,17 +15,17 @@
  * when the agent has nothing else to do.
  */
 
+import { type } from "@musepi/omptype";
 import type {
 	AgentTool,
 	AgentToolContext,
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ToolApprovalDecision,
-} from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { prompt } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-agent-core";
+import type { ToolExample } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import { prompt } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import { IrcBus } from "../../irc/bus";
 import type { Theme } from "../../modes/theme/theme";

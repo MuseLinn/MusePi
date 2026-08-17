@@ -1,18 +1,18 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/omp-stats",
-  "version": "17.1.8",
+  "name": "@musepi/omp-stats",
+  "version": "17.2.12",
   "description": "Local observability dashboard for pi AI usage statistics",
-  "homepage": "https://omp.sh",
-  "author": "Can Boluk",
+  "homepage": "https://github.com/MuseLinn/MusePi",
+  "author": "MuseLinn",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/can1357/oh-my-pi.git",
+    "url": "git+https://github.com/MuseLinn/MusePi.git",
     "directory": "packages/stats"
   },
   "bugs": {
-    "url": "https://github.com/can1357/oh-my-pi/issues"
+    "url": "https://github.com/MuseLinn/MusePi/issues"
   },
   "keywords": [
     "ai",
@@ -39,9 +39,9 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-ai": "catalog:",
-    "@oh-my-pi/pi-catalog": "catalog:",
-    "@oh-my-pi/pi-utils": "catalog:",
+    "@musepi/pi-ai": "catalog:",
+    "@musepi/pi-catalog": "catalog:",
+    "@musepi/pi-utils": "catalog:",
     "@tailwindcss/node": "catalog:",
     "chart.js": "catalog:",
     "date-fns": "catalog:",
@@ -90,5 +90,6 @@
       "import": "./src/client/components/*.ts"
     },
     "./*.js": "./src/*.ts"
-  }
+  },
+  "optionalDependencies": {}
 }

@@ -1,26 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { ApiKeyResolveContext, AssistantMessage, ToolCall, ToolResultMessage } from "@oh-my-pi/pi-ai";
-import { unregisterCustomApis } from "@oh-my-pi/pi-ai/api-registry";
-import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
-import * as aiStream from "@oh-my-pi/pi-ai/stream";
-import { kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent } from "@musepi/pi-agent-core";
+import type { ApiKeyResolveContext, AssistantMessage, ToolCall, ToolResultMessage } from "@musepi/pi-ai";
+import { unregisterCustomApis } from "@musepi/pi-ai/api-registry";
+import { createMockModel, type MockResponse, registerMockApi } from "@musepi/pi-ai/providers/mock";
+import * as aiStream from "@musepi/pi-ai/stream";
+import { kCursorExecResolved } from "@musepi/pi-ai/utils/block-symbols";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 
 type AutoRetryEndEvent = Extract<AgentSessionEvent, { type: "auto_retry_end" }>;
 type AutoRetryStartEvent = Extract<AgentSessionEvent, { type: "auto_retry_start" }>;
 
 const RETRY_CAP_MOCK_API_SOURCE = "agent-session-retry-cap-test";
+const CYBER_POLICY_ERROR =
+	"Codex error event: This content was flagged for possible cybersecurity risk. Join Trusted Access for Cyber. (code=cyber_policy)";
+const CYBER_POLICY_FAILURE: MockResponse = {
+	content: [{ type: "thinking", thinking: "Checking whether this security request is allowed." }],
+	stopReason: "error",
+	errorMessage: CYBER_POLICY_ERROR,
+};
 
 function lastAssistant(session: AgentSession): AssistantMessage {
 	const message = session.agent.state.messages.at(-1);
@@ -149,6 +156,61 @@ describe("AgentSession retry delay cap", () => {
 		expect(last.stopReason).toBe("error");
 		expect(last.errorMessage).toContain("rate_limit_error");
 		expect(session.isRetrying).toBe(false);
+	});
+
+	it("honors the reason backoff for a transient rate-limit 429 without a provider hint", async () => {
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) {
+			throw new Error("Expected bundled Anthropic test model to exist");
+		}
+
+		const mock = createMockModel({
+			responses: [
+				{ throw: "429 Rate limit exceeded, too many requests" },
+				{ content: ["recovered after rate-limit window"], stopReason: "stop" },
+			],
+		});
+		const agent = new Agent({
+			getApiKey: requestedModel => `${requestedModel.provider}-test-key`,
+			initialState: {
+				model,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [],
+			},
+			streamFn: (requestedModel, context, options) => mock.stream(requestedModel, context, options),
+		});
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"retry.baseDelayMs": 5,
+			"retry.maxDelayMs": 60_000,
+			"retry.maxRetries": 1,
+			"retry.modelFallback": false,
+		});
+		settings.setModelRole("default", `${model.provider}/${model.id}`);
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+		});
+		const waitSpy = vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+		const retryStartEvents: AutoRetryStartEvent[] = [];
+		session.subscribe(event => {
+			if (event.type === "auto_retry_start") retryStartEvents.push(event);
+		});
+
+		await session.prompt("Trigger transient rate limit without retry-after");
+		await session.waitForIdle();
+
+		expect(retryStartEvents).toHaveLength(1);
+		expect(retryStartEvents[0].delayMs).toBe(30_000);
+		expect(waitSpy.mock.calls.some(call => call[0] === 30_000)).toBe(true);
+		expect(lastAssistant(session).content).toContainEqual({
+			type: "text",
+			text: "recovered after rate-limit window",
+		});
 	});
 
 	it("auto-retries OpenAI Responses stream_read_error instead of stopping the conversation", async () => {
@@ -514,6 +576,188 @@ describe("AgentSession retry delay cap", () => {
 		const last = lastAssistant(session);
 		expect(last.stopReason).toBe("stop");
 		expect(last.content).toContainEqual({ type: "text", text: "recovered after sibling account" });
+	});
+
+	it("tries every Codex account before the configured model fallback on cyber-policy denials", async () => {
+		const primaryModel = getBundledModel("openai-codex", "gpt-5.6-sol");
+		const fallbackModel = getBundledModel("openai", "gpt-5.5");
+		if (!primaryModel || !fallbackModel) {
+			throw new Error("Expected bundled primary and fallback test models to exist");
+		}
+		const providerSessionId = "cyber-policy-account-rotation";
+
+		registerMockApi(RETRY_CAP_MOCK_API_SOURCE);
+		authStorage.setRuntimeApiKey("openai", "openai-fallback-key");
+		await authStorage.set("openai-codex", [
+			{ type: "api_key", key: "codex-key-A" },
+			{ type: "api_key", key: "codex-key-B" },
+			{ type: "api_key", key: "codex-key-C" },
+			{ type: "api_key", key: "codex-key-D" },
+		]);
+
+		const requestedKeys: string[] = [];
+		const mock = createMockModel({
+			id: primaryModel.id,
+			provider: primaryModel.provider,
+			handler: (_context, options) => {
+				const apiKey = typeof options?.apiKey === "string" ? options.apiKey : undefined;
+				if (!apiKey) throw new Error("Expected streamSimple to pass a resolved string API key");
+				requestedKeys.push(apiKey);
+				return new Set(requestedKeys).size >= 4
+					? { content: ["recovered on cyber-approved account"], stopReason: "stop" }
+					: CYBER_POLICY_FAILURE;
+			},
+		});
+		const requestedModels: string[] = [];
+		const agent = new Agent({
+			getApiKey: model => modelRegistry.resolver(model, providerSessionId),
+			sessionId: providerSessionId,
+			initialState: {
+				model: primaryModel,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [],
+			},
+			streamFn: (requestedModel, context, options) => {
+				requestedModels.push(`${requestedModel.provider}/${requestedModel.id}`);
+				return aiStream.streamSimple(mock.model, context, options);
+			},
+		});
+
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"retry.maxRetries": 0,
+			"retry.modelFallback": true,
+			"retry.fallbackChains": {
+				default: [`${fallbackModel.provider}/${fallbackModel.id}`],
+			},
+		});
+		settings.setModelRole("default", `${primaryModel.provider}/${primaryModel.id}`);
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+			providerSessionId,
+		});
+
+		const fallbackEvents: Array<Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>> = [];
+		session.subscribe(event => {
+			if (event.type === "retry_fallback_applied") fallbackEvents.push(event);
+		});
+
+		await session.prompt("Continue authorized security work");
+		await session.waitForIdle();
+
+		expect(requestedModels).toEqual([
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+		]);
+		expect(requestedKeys).toHaveLength(4);
+		expect([...requestedKeys].sort()).toEqual(["codex-key-A", "codex-key-B", "codex-key-C", "codex-key-D"]);
+		expect(fallbackEvents).toEqual([]);
+		expect(session.model?.provider).toBe(primaryModel.provider);
+		expect(session.model?.id).toBe(primaryModel.id);
+		expect(lastAssistant(session).content).toContainEqual({
+			type: "text",
+			text: "recovered on cyber-approved account",
+		});
+	});
+
+	it("tries sibling Codex accounts before advisor model fallback on cyber-policy denials", async () => {
+		const mainModel = getBundledModel("anthropic", "claude-sonnet-4-5");
+		const advisorModel = getBundledModel("openai-codex", "gpt-5.6-sol");
+		const fallbackModel = getBundledModel("openai", "gpt-5.5");
+		if (!mainModel || !advisorModel || !fallbackModel) {
+			throw new Error("Expected bundled main, advisor, and fallback test models to exist");
+		}
+
+		registerMockApi(RETRY_CAP_MOCK_API_SOURCE);
+		authStorage.setRuntimeApiKey("openai", "openai-fallback-key");
+		await authStorage.set("openai-codex", [
+			{ type: "api_key", key: "advisor-codex-key-A" },
+			{ type: "api_key", key: "advisor-codex-key-B" },
+			{ type: "api_key", key: "advisor-codex-key-C" },
+		]);
+
+		const mainMock = createMockModel({ responses: [{ content: ["Primary complete"] }] });
+		const requestedAdvisorKeys: string[] = [];
+		const advisorRecovered = Promise.withResolvers<void>();
+		const advisorMock = createMockModel({
+			id: advisorModel.id,
+			provider: advisorModel.provider,
+			handler: (_context, options) => {
+				const apiKey = typeof options?.apiKey === "string" ? options.apiKey : undefined;
+				if (!apiKey) throw new Error("Expected advisor streamSimple to pass a resolved string API key");
+				requestedAdvisorKeys.push(apiKey);
+				if (new Set(requestedAdvisorKeys).size < 3) return CYBER_POLICY_FAILURE;
+				advisorRecovered.resolve();
+				return { content: ["Advisor recovered on cyber-approved account"], stopReason: "stop" };
+			},
+		});
+		const requestedAdvisorModels: string[] = [];
+		const advisorSelector = `${advisorModel.provider}/${advisorModel.id}`;
+		const fallbackSelector = `${fallbackModel.provider}/${fallbackModel.id}`;
+		const agent = new Agent({
+			getApiKey: model => `${model.provider}-test-key`,
+			initialState: {
+				model: mainModel,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [],
+			},
+			streamFn: mainMock.stream,
+		});
+
+		const settings = Settings.isolated({
+			"advisor.syncBacklog": "1",
+			"compaction.enabled": false,
+			"retry.maxRetries": 0,
+			"retry.modelFallback": true,
+			"retry.fallbackChains": {
+				[advisorSelector]: [fallbackSelector],
+			},
+		});
+		settings.setModelRole("default", `${mainModel.provider}/${mainModel.id}`);
+		settings.setModelRole("advisor", advisorSelector);
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+			advisorTools: [],
+			advisorConfigs: [{ name: "cyber-policy", model: advisorSelector }],
+			advisorStreamFn: (requestedModel, context, options) => {
+				requestedAdvisorModels.push(`${requestedModel.provider}/${requestedModel.id}`);
+				return aiStream.streamSimple(advisorMock.model, context, options);
+			},
+		});
+
+		const fallbackEvents: Array<Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>> = [];
+		session.subscribe(event => {
+			if (event.type === "retry_fallback_applied") fallbackEvents.push(event);
+		});
+
+		expect(session.setAdvisorEnabled(true)).toBe(true);
+		await session.prompt("Complete one primary turn");
+		await advisorRecovered.promise;
+		await session.waitForIdle();
+
+		expect(requestedAdvisorModels).toEqual([advisorSelector, advisorSelector, advisorSelector]);
+		expect([...requestedAdvisorKeys].sort()).toEqual([
+			"advisor-codex-key-A",
+			"advisor-codex-key-B",
+			"advisor-codex-key-C",
+		]);
+		expect(fallbackEvents).toEqual([]);
+		expect(session.getAdvisorAgent()?.state.model).toMatchObject({
+			provider: advisorModel.provider,
+			id: advisorModel.id,
+		});
 	});
 
 	it("waits for the earliest sibling unblock instead of failing the delay cap", async () => {
@@ -1164,29 +1408,14 @@ describe("AgentSession retry delay cap", () => {
 
 					if (streamCalls === 1) {
 						const thinking = { type: "thinking" as const, thinking: "partial thought" };
-						// No visible text: a committed text block makes the failed turn
-						// replay-unsafe (turn-recovery #hasReplayUnsafeOutput), which would
-						// correctly suppress this retry. The delay-cap contract under test
-						// needs a replay-safe partial turn, so only thinking plus an
-						// incomplete (never toolcall_end'd) tool call is emitted.
-						const toolCall: ToolCall = {
-							type: "toolCall",
-							id: "tc-incomplete",
-							name: "bash",
-							arguments: { command: "bun probe-archive3.ts" },
-						};
-						partial.content.push(thinking, toolCall);
+						const text = { type: "text" as const, text: "partial buffered answer" };
+						partial.content.push(thinking, text);
 						stream.push({ type: "start", partial });
 						stream.push({ type: "thinking_start", contentIndex: 0, partial });
 						stream.push({ type: "thinking_delta", contentIndex: 0, delta: thinking.thinking, partial });
 						stream.push({ type: "thinking_end", contentIndex: 0, content: thinking.thinking, partial });
-						stream.push({ type: "toolcall_start", contentIndex: 1, partial });
-						stream.push({
-							type: "toolcall_delta",
-							contentIndex: 1,
-							delta: JSON.stringify(toolCall.arguments),
-							partial,
-						});
+						stream.push({ type: "text_start", contentIndex: 1, partial });
+						stream.push({ type: "text_delta", contentIndex: 1, delta: text.text, partial });
 						stream.push({
 							type: "error",
 							reason: "error",
@@ -1243,6 +1472,7 @@ describe("AgentSession retry delay cap", () => {
 			if (event.type === "auto_retry_end") retryEndEvents.push(event);
 		});
 
+		session.setTextOutputCommitted(false);
 		await session.prompt("Trigger partial socket close");
 		await session.waitForIdle();
 
@@ -1660,7 +1890,9 @@ describe("AgentSession retry delay cap", () => {
 		expect(retryStartEvents[0]).toMatchObject({ attempt: 1, maxAttempts: 1 });
 		expect(retryEndEvents).toHaveLength(1);
 		expect(retryEndEvents[0]).toMatchObject({ success: false, attempt: 1 });
-		expect(lastAssistant(session).errorMessage).toBe("server_error: stream closed with reason: error");
+		expect(lastAssistant(session).errorMessage).toBe(
+			"Retry budget exhausted after 1 retry: server_error: stream closed with reason: error",
+		);
 		expect(session.isRetrying).toBe(false);
 	});
 

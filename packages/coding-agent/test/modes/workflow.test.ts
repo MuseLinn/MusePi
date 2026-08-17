@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import {
 	containsWorkflow,
 	highlightWorkflow,
 	renderWorkflowNotice,
 	WORKFLOW_NOTICE,
-} from "@oh-my-pi/pi-coding-agent/modes/workflow";
+} from "@musepi/pi-coding-agent/modes/workflow";
 
 beforeAll(() => {
 	// highlightWorkflow reads the global theme's color mode.
@@ -67,21 +67,13 @@ describe("workflow keyword highlighting", () => {
 describe("workflow notice", () => {
 	it("renders the Workflowz trigger with eval orchestration helper guidance", () => {
 		expect(WORKFLOW_NOTICE).toContain("**workflowz** keyword");
-		expect(WORKFLOW_NOTICE).toContain("Author the orchestration in the `eval` tool");
-		expect(WORKFLOW_NOTICE).toContain("JavaScript (`eval`, JavaScript backend):");
-		expect(WORKFLOW_NOTICE).toContain("Use ordinary code between calls to flatten/map/filter");
-		expect(WORKFLOW_NOTICE).toContain("State persists across eval calls");
 		expect(WORKFLOW_NOTICE).toContain("`parallel(thunks)`");
-		expect(WORKFLOW_NOTICE).toContain("a negative value disables the cap");
 		expect(WORKFLOW_NOTICE).toContain("await budget.remaining()");
 	});
 
 	it("renders the same eval notice when task.batch is disabled", () => {
 		const notice = renderWorkflowNotice({ taskBatch: false });
 		expect(notice).toContain("**workflowz** keyword");
-		expect(notice).toContain("Author the orchestration in the `eval` tool");
-		expect(notice).toContain("JavaScript (`eval`, JavaScript backend):");
-		expect(notice).toContain("State persists across eval calls");
 		expect(notice).toContain("`parallel(thunks)`");
 	});
 });

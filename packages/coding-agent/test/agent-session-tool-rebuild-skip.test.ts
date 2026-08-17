@@ -1,20 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { Message, Model } from "@oh-my-pi/pi-ai";
-import { createMockModel, type MockResponseSource } from "@oh-my-pi/pi-ai/providers/mock";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools/types";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { type CustomMessage, convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import type { Message, Model } from "@musepi/pi-ai";
+import { createMockModel, type MockResponseSource } from "@musepi/pi-ai/providers/mock";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { CustomTool } from "@musepi/pi-coding-agent/extensibility/custom-tools/types";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { type CustomMessage, convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import {
 	collectMountedMCPToolRoutes,
 	projectMountedMCPXdevGuidance,
-} from "@oh-my-pi/pi-coding-agent/session/session-tools";
-import { listXdevTools, XDEV_EXTERNAL_DESCRIPTION_CAP, type XdevState } from "@oh-my-pi/pi-coding-agent/tools/xdev";
-import { logger } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-coding-agent/session/session-tools";
+import { listXdevTools, XDEV_EXTERNAL_DESCRIPTION_CAP, type XdevState } from "@musepi/pi-coding-agent/tools/xdev";
+import { logger } from "@musepi/pi-utils";
 
 // Cache-stability invariant: when MCP servers reconnect with byte-identical tool
 // definitions, `refreshMCPTools` must not rebuild the system prompt. A rebuild
@@ -104,6 +105,14 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 		responses?: MockResponseSource;
 		/** Persisted history seeded into the agent, e.g. to model a resumed session. */
 		initialMessages?: AgentMessage[];
+		/**
+		 * Make the rebuild stub render the mounted xd:// catalog into the prompt and
+		 * report it via `xdevCatalogNames`, modelling the production `xdevDocsAll`
+		 * path. Existing tests leave this off, so their rebuild carries no catalog.
+		 */
+		exposeXdevCatalog?: boolean;
+		/** Optional per-turn system prompt replacement returned by before_agent_start. */
+		beforeAgentStartSystemPrompt?: string[];
 	}
 
 	function newSession(
@@ -113,6 +122,8 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 		session: AgentSession;
 		/** Provider-call message snapshots (LLM-converted), one per model request. */
 		contexts: Message[][];
+		/** Provider-call system prompt snapshots, one per model request. */
+		systemPrompts: string[][];
 		/** Mutable registry shared with the session, for lifecycle-only mount fixtures. */
 		toolRegistry: Map<string, AgentTool>;
 	} {
@@ -125,6 +136,7 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 		if (options.xdev && !options.lazyWrite) toolRegistry.set(writeTool.name, writeTool);
 		const mock = options.responses ? createMockModel({ responses: options.responses }) : undefined;
 		const contexts: Message[][] = [];
+		const systemPrompts: string[][] = [];
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -141,6 +153,7 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 			streamFn: mock
 				? (model, context, streamOptions) => {
 						contexts.push([...context.messages]);
+						systemPrompts.push([...(context.systemPrompt ?? [])]);
 						return mock.stream(model, context, streamOptions);
 					}
 				: undefined,
@@ -157,15 +170,24 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 				if (!toolRegistry.has("write")) toolRegistry.set("write", writeTool);
 				return true;
 			},
-			rebuildSystemPrompt: async (toolNames, _tools) => ({
-				systemPrompt: [await rebuildSystemPrompt(toolNames)],
-			}),
+			extensionRunner: options.beforeAgentStartSystemPrompt
+				? ({
+						emitBeforeAgentStart: async () => ({ systemPrompt: options.beforeAgentStartSystemPrompt }),
+						emit: async () => undefined,
+					} as unknown as ExtensionRunner)
+				: undefined,
+			rebuildSystemPrompt: async (toolNames, _tools) => {
+				const base = await rebuildSystemPrompt(toolNames);
+				if (!options.exposeXdevCatalog) return { systemPrompt: [base] };
+				const catalog = options.xdev ? [...options.xdev.mountedNames] : [];
+				return { systemPrompt: [`${base}\nxd:// catalog: ${catalog.join(",")}`], xdevCatalogNames: catalog };
+			},
 			getMcpServerInstructions: options.getMcpServerInstructions,
 			getLocalCalendarDate: options.getLocalCalendarDate,
 			xdev: options.xdev,
 		});
 		sessions.push(session);
-		return { session, contexts, toolRegistry };
+		return { session, contexts, systemPrompts, toolRegistry };
 	}
 
 	it("skips rebuild when an MCP refresh produces an identical tool set", async () => {
@@ -435,11 +457,14 @@ describe("AgentSession refreshMCPTools rebuild skipping", () => {
 
 		// Ordinary xd:// inventory changes travel through mount notices and do
 		// not affect the global MCP-route guidance or its rebuild signature.
-		await session.setActiveToolPresentation(["read", search.name, catalog.name], [search.name, catalog.name]);
+		await session.setActiveToolPresentation(
+			["read", "write", search.name, catalog.name],
+			[search.name, catalog.name],
+		);
 		expect(session.getMountedXdevToolNames()).toContain(catalog.name);
 		expect(rebuildCount).toBe(1);
 
-		await session.setActiveToolPresentation(["read", search.name], [search.name]);
+		await session.setActiveToolPresentation(["read", "write", search.name], [search.name]);
 		expect(session.getMountedXdevToolNames()).not.toContain(catalog.name);
 		expect(rebuildCount).toBe(1);
 	});
@@ -997,6 +1022,78 @@ These tools became available:
 		expect(fetchText).not.toContain("xd://mcp__nucleus_search");
 	});
 
+	it("does not re-list catalog devices in a mount notice when the rebuild exposes them (#7139)", async () => {
+		const { session, contexts } = newSession(async toolNames => `tools:${toolNames.join(",")}`, {
+			xdev: createTestXdevState(),
+			responses: [{ content: ["ok"] }, { content: ["ok"] }],
+			exposeXdevCatalog: true,
+		});
+		const search = createMcpCustomTool("mcp__nucleus_search", "nucleus", "search", "Search nucleus");
+		const fetch = createMcpCustomTool("mcp__nucleus_fetch", "nucleus", "fetch", "Fetch nucleus");
+
+		// Fresh deferred-discovery session: the post-refresh rebuild renders the
+		// mounted catalog into the base prompt, so a same-turn mount notice would
+		// duplicate the whole catalog verbatim before the first user turn.
+		await session.refreshMCPTools([search]);
+		await session.prompt("hi");
+		expect(session.systemPrompt.join("\n")).toContain("mcp__nucleus_search");
+		expect(
+			session.agent.state.messages.filter(m => m.role === "custom" && m.customType === "xdev-mount-notice"),
+		).toHaveLength(0);
+		expect(mountNoticesIn(contexts[0])).toHaveLength(0);
+
+		// A later device the next rebuild also exposes stays notice-free too.
+		await session.refreshMCPTools([search, fetch]);
+		await session.prompt("again");
+		expect(session.systemPrompt.join("\n")).toContain("mcp__nucleus_fetch");
+		expect(
+			session.agent.state.messages.filter(m => m.role === "custom" && m.customType === "xdev-mount-notice"),
+		).toHaveLength(0);
+	});
+
+	it("keeps the mount notice when before_agent_start replaces the catalog prompt (#7139)", async () => {
+		const replacementPrompt = ["extension replacement"];
+		const { session, contexts, systemPrompts } = newSession(async toolNames => `tools:${toolNames.join(",")}`, {
+			xdev: createTestXdevState(),
+			responses: [{ content: ["ok"] }],
+			exposeXdevCatalog: true,
+			beforeAgentStartSystemPrompt: replacementPrompt,
+		});
+		const search = createMcpCustomTool("mcp__nucleus_search", "nucleus", "search", "Search nucleus");
+
+		// The base prompt rebuild exposes the device, but the per-turn extension
+		// replaces that prompt before the provider call. The mount notice is now
+		// the only channel making the newly mounted device visible on this turn.
+		await session.refreshMCPTools([search]);
+		await session.prompt("hi");
+
+		expect(systemPrompts[0]).toEqual(replacementPrompt);
+		const notices = mountNoticesIn(contexts[0]);
+		expect(notices).toHaveLength(1);
+		expect(notices[0]).toContain("xd://mcp__nucleus_search");
+	});
+
+	it("does not emit an unmount notice for a catalog device unmounted before delivery (#7139)", async () => {
+		const { session } = newSession(async toolNames => `tools:${toolNames.join(",")}`, {
+			xdev: createTestXdevState(),
+			responses: [{ content: ["ok"] }],
+			exposeXdevCatalog: true,
+		});
+		const search = createMcpCustomTool("mcp__nucleus_search", "nucleus", "search", "Search nucleus");
+
+		// Deferred discovery mounts the device, then the server disconnects before
+		// the first user prompt is ever sent. Because the pending add is only marked
+		// announced at delivery, the unmount coalesces it away — the model, which
+		// never saw a request carrying the device, must not receive a "No longer
+		// mounted" notice for it.
+		await session.refreshMCPTools([search]);
+		await session.refreshMCPTools([]);
+		await session.prompt("hi");
+		expect(
+			session.agent.state.messages.filter(m => m.role === "custom" && m.customType === "xdev-mount-notice"),
+		).toHaveLength(0);
+	});
+
 	it("re-announces a device after the transcript is replaced by /new", async () => {
 		const xdev = createTestXdevState();
 		const { session } = newSession(async toolNames => `tools:${toolNames.join(",")}`, {
@@ -1082,7 +1179,7 @@ These tools became available:
 		expect(delivered[0]).toContain("xd://mcp__nucleus_search");
 	});
 
-	it("keeps lazy write registration while rolling back applied state on rebuild failure", async () => {
+	it("does not register write while rolling back a direct-tool rebuild failure", async () => {
 		let failRebuild = true;
 		const xdevState = createTestXdevState();
 		const { session } = newSession(
@@ -1100,13 +1197,14 @@ These tools became available:
 
 		expect(session.getActiveToolNames()).toEqual(activeBefore);
 		expect(session.getMountedXdevToolNames()).toEqual(mountedBefore);
-		expect(session.getToolByName("write")).toBeDefined();
-		expect(session.hasBuiltInTool("write")).toBe(true);
+		expect(session.getToolByName("write")).toBeUndefined();
+		expect(session.hasBuiltInTool("write")).toBe(false);
 
 		failRebuild = false;
 		await session.refreshMCPTools([search]);
-		expect(session.getActiveToolNames()).toContain("write");
-		expect(session.getMountedXdevToolNames()).toContain(search.name);
+		expect(session.getActiveToolNames()).toContain(search.name);
+		expect(session.getActiveToolNames()).not.toContain("write");
+		expect(session.getMountedXdevToolNames()).not.toContain(search.name);
 	});
 
 	it("rolls back MCP catalog replacement when prompt rebuild fails", async () => {

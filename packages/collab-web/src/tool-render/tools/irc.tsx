@@ -1,5 +1,6 @@
 /** `irc` — inter-agent messaging: send/wait/inbox/list ops with delivery receipts. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import type { Tone } from "../parts";
 import { Badge, Badges, Note, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
@@ -132,11 +133,11 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 		const from = str(args.from);
 		return (
 			<>
-				{opBadge} <span className="tv-pattern">← {from ?? "anyone"}</span>
+				{opBadge} <span className="tv-pattern">← {from ?? t("anyone")}</span>
 				{d?.waited === null && (
 					<>
 						{" "}
-						<Badge tone="warn">timed out</Badge>
+						<Badge tone="warn">{t("timed out")}</Badge>
 					</>
 				)}
 			</>
@@ -146,10 +147,10 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 		const inbox = d ? parseInbox(d.inbox) : [];
 		return (
 			<>
-				{opBadge} {args.peek === true && <Badge>peek</Badge>}{" "}
+				{opBadge} {args.peek === true && <Badge>{t("peek")}</Badge>}{" "}
 				{d && (
 					<span className="tv-muted">
-						{inbox.length === 0 ? "empty" : `${inbox.length} ${inbox.length === 1 ? "message" : "messages"}`}
+						{inbox.length === 0 ? t("empty") : t("{count} message(s)", { count: String(inbox.length) })}
 					</span>
 				)}
 			</>
@@ -161,11 +162,11 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 		for (const peer of peers) unread += peer.unread;
 		return (
 			<>
-				{opBadge} {d && <span className="tv-muted">{peers.length === 1 ? "1 peer" : `${peers.length} peers`}</span>}
+				{opBadge} {d && <span className="tv-muted">{t("{count} peer(s)", { count: String(peers.length) })}</span>}
 				{unread > 0 && (
 					<>
 						{" "}
-						<Badge tone="warn">{unread} unread</Badge>
+						<Badge tone="warn">{t("{count} unread", { count: String(unread) })}</Badge>
 					</>
 				)}
 			</>
@@ -191,12 +192,12 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			<Badges
 				items={[
 					op ?? "?",
-					to && `to ${to}`,
-					op === "wait" && from && `from ${from}`,
-					to === "all" && "broadcast",
-					args.await === true && "await reply",
-					str(args.replyTo) && "reply",
-					args.peek === true && "peek",
+					to && t("to {name}", { name: to }),
+					op === "wait" && from && t("from {name}", { name: from }),
+					to === "all" && t("broadcast"),
+					args.await === true && t("await reply"),
+					str(args.replyTo) && t("reply"),
+					args.peek === true && t("peek"),
 				]}
 			/>
 			{message && <Note>{message}</Note>}
@@ -217,13 +218,13 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						{waited.replyTo && (
 							<>
 								{" "}
-								<Badge>reply</Badge>
+								<Badge>{t("reply")}</Badge>
 							</>
 						)}
 					</Row>
 				</div>
 			)}
-			{timedOut && <Note tone="warn">No reply yet — they may answer later; check inbox or wait again.</Note>}
+			{timedOut && <Note tone="warn">{t("No reply yet — they may answer later; check inbox or wait again.")}</Note>}
 			{inbox.length > 0 && (
 				<div className="tv-list">
 					{inbox.map((msg, i) => (
@@ -232,7 +233,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 							{msg.replyTo && (
 								<>
 									{" "}
-									<Badge>reply</Badge>
+									<Badge>{t("reply")}</Badge>
 								</>
 							)}
 						</Row>
@@ -250,7 +251,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 							{peer.unread > 0 && (
 								<>
 									{" "}
-									<Badge tone="warn">{peer.unread} unread</Badge>
+									<Badge tone="warn">{t("{count} unread", { count: String(peer.unread) })}</Badge>
 								</>
 							)}
 						</Row>

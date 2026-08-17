@@ -4,11 +4,11 @@
  *
  * Requires: npm install in this directory
  */
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 import ms from "ms";
 
 export default function (pi: ExtensionAPI) {
-	const { z } = pi.zod;
+	const z = pi.zod;
 
 	// Register a tool that uses ms
 	pi.registerTool({

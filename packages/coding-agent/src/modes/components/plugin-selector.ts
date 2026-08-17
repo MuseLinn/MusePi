@@ -4,7 +4,8 @@
  * Shows available plugins from all configured marketplaces in a SelectList.
  * Selecting a plugin triggers installation. Esc cancels.
  */
-import { Container, type SelectItem, SelectList, type SgrMouseEvent } from "@oh-my-pi/pi-tui";
+import { Container, type SelectItem, SelectList, type SgrMouseEvent } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { getSelectListTheme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
 import { routeSelectListMouseWithTopBorder } from "./select-list-mouse-routing";
@@ -52,11 +53,11 @@ export class PluginSelectorComponent extends Container {
 		if (items.length === 0) {
 			items.push({
 				value: "__empty__",
-				label: "No plugins available",
+				label: t("No plugins available"),
 				description:
 					marketplaceCount === 0
-						? "Add a marketplace first: /marketplace add <source>"
-						: "Configured marketplaces have no plugins",
+						? t("Add a marketplace first: /marketplace add <source>")
+						: t("Configured marketplaces have no plugins"),
 			});
 		}
 

@@ -7,7 +7,15 @@ WORK_DIR="$(mktemp -d)"
 TMP_WORK_DIR="$WORK_DIR/tmp"
 mkdir -p "$TMP_WORK_DIR"
 export TMPDIR="$TMP_WORK_DIR"
-trap 'rm -rf "$WORK_DIR"' EXIT
+
+NATIVES_PACKAGE="$ROOT_DIR/packages/natives/package.json"
+NATIVES_PACKAGE_INITIAL="$WORK_DIR/natives-package.initial.json"
+cp "$NATIVES_PACKAGE" "$NATIVES_PACKAGE_INITIAL"
+restore_workspace() {
+   cp "$NATIVES_PACKAGE_INITIAL" "$NATIVES_PACKAGE"
+   rm -rf "$WORK_DIR"
+}
+trap restore_workspace EXIT
 
 section() {
    echo ""
@@ -42,10 +50,42 @@ find_tarball() {
    echo "${matches[0]}"
 }
 
+align_native_manifest() {
+   local addon_version=""
+   local addon
+   local candidate_version
+   local candidates=()
+   shopt -s nullglob
+   candidates=("$ROOT_DIR"/packages/natives/native/pi_natives.*.node)
+   shopt -u nullglob
+
+   if [ "${#candidates[@]}" -eq 0 ]; then
+      echo "No native addon found for install smoke" >&2
+      exit 1
+   fi
+   for addon in "${candidates[@]}"; do
+      candidate_version="$(bun "$ROOT_DIR/scripts/install-tests/native-version.ts" "$addon")" || exit 1
+      if [ -z "$addon_version" ]; then
+         addon_version="$candidate_version"
+      elif [ "$addon_version" != "$candidate_version" ]; then
+         echo "Native addon version mismatch: $addon_version vs $candidate_version ($addon)" >&2
+         exit 1
+      fi
+   done
+
+   local declared_version
+   declared_version="$(jq -r '.version' "$NATIVES_PACKAGE")"
+   if [ "$declared_version" = "$addon_version" ]; then return; fi
+
+   echo "Aligning install smoke native manifest $declared_version → $addon_version"
+   jq --arg version "$addon_version" '.version = $version' "$NATIVES_PACKAGE" > "$WORK_DIR/natives-package.aligned.json"
+   mv "$WORK_DIR/natives-package.aligned.json" "$NATIVES_PACKAGE"
+}
 section "Binary install smoke"
 if [ "${OMP_INSTALL_TEST_SKIP_NATIVE_BUILD:-0}" != "1" ]; then
    bun --cwd=packages/natives run build
 fi
+align_native_manifest
 bun --cwd=packages/coding-agent run build
 
 BINARY_DIR="$WORK_DIR/binary-bin"
@@ -144,20 +184,20 @@ mkdir -p "$TARBALL_APP_DIR"
    node -e "
 		const pkg = JSON.parse(require('fs').readFileSync('package.json', 'utf8'));
 		pkg.overrides = {
-			'@oh-my-pi/pi-utils': '$utils_tgz',
-			'@oh-my-pi/pi-wire': '$wire_tgz',
-			'@oh-my-pi/pi-natives': '$natives_tgz',
-			'@oh-my-pi/pi-natives-$host_tag': '$natives_leaf_tgz',
-			'@oh-my-pi/hashline': '$hashline_tgz',
-			'@oh-my-pi/pi-ai': '$ai_tgz',
-			'@oh-my-pi/pi-catalog': '$catalog_tgz',
-			'@oh-my-pi/pi-mnemopi': '$mnemopi_tgz',
-			'@oh-my-pi/snapcompact': '$snapcompact_tgz',
-			'@oh-my-pi/pi-agent-core': '$agent_tgz',
-			'@oh-my-pi/pi-tui': '$tui_tgz',
-			'@oh-my-pi/omp-stats': '$stats_tgz',
-			'@oh-my-pi/pi-coding-agent': '$coding_agent_tgz',
-			'@oh-my-pi/collab-web': '$collab_web_tgz'
+			'@musepi/pi-utils': '$utils_tgz',
+			'@musepi/pi-wire': '$wire_tgz',
+			'@musepi/pi-natives': '$natives_tgz',
+			'@musepi/pi-natives-$host_tag': '$natives_leaf_tgz',
+			'@musepi/hashline': '$hashline_tgz',
+			'@musepi/pi-ai': '$ai_tgz',
+			'@musepi/pi-catalog': '$catalog_tgz',
+			'@musepi/pi-mnemopi': '$mnemopi_tgz',
+			'@musepi/snapcompact': '$snapcompact_tgz',
+			'@musepi/pi-agent-core': '$agent_tgz',
+			'@musepi/pi-tui': '$tui_tgz',
+			'@musepi/omp-stats': '$stats_tgz',
+			'@musepi/pi-coding-agent': '$coding_agent_tgz',
+			'@musepi/collab-web': '$collab_web_tgz'
 		};
 		require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
 	"
@@ -166,17 +206,27 @@ mkdir -p "$TARBALL_APP_DIR"
    # The platform leaf must arrive through the core's optionalDependencies +
    # override, not as a direct dependency — assert it landed before smoking so a
    # resolution regression is distinguishable from a runtime loader bug.
-   leaf_dir="node_modules/@oh-my-pi/pi-natives-$host_tag"
+   leaf_dir="node_modules/@musepi/pi-natives-$host_tag"
    [ -d "$leaf_dir" ] || {
       echo "Platform leaf package not installed: $leaf_dir"
       exit 1
    }
-   wire_proto="$(bun -e 'import { COLLAB_PROTO } from "@oh-my-pi/pi-wire"; process.stdout.write(String(COLLAB_PROTO));')"
+   wire_proto="$(bun -e 'import { COLLAB_PROTO } from "@musepi/pi-wire"; process.stdout.write(String(COLLAB_PROTO));')"
    [ "$wire_proto" = "3" ] || {
-      echo "Unexpected @oh-my-pi/pi-wire COLLAB_PROTO: $wire_proto"
+      echo "Unexpected @musepi/pi-wire COLLAB_PROTO: $wire_proto"
       exit 1
    }
-   [ -f "node_modules/@oh-my-pi/collab-web/dist/index.html" ] || {
+   omptype_probe="$(bun -e '
+      import { type } from "@musepi/omptype";
+      import { Type } from "@musepi/omptype/typebox";
+      const root = type({ name: "string", enabled: "boolean = false" }).assert({ name: "omp" });
+      const typebox = Type.Object({ name: Type.String() }).assert({ name: "tb" });
+      process.stdout.write(`${root.name}:${root.enabled}:${typebox.name}`);
+   ')"
+   [ "$omptype_probe" = "omp:false:tb" ] || {
+      echo "Unexpected @musepi/omptype probe result: $omptype_probe"
+      exit 1
+   }   [ -f "node_modules/@musepi/collab-web/dist/index.html" ] || {
       echo "Collab web tarball did not install built dist/index.html"
       exit 1
    }

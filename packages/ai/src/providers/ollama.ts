@@ -1,4 +1,4 @@
-import { fetchWithRetry, parseStreamingJson, readJsonl } from "@oh-my-pi/pi-utils";
+import { fetchWithRetry, parseStreamingJson, readJsonl } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import { getEnvApiKey } from "../stream";
 import type {
@@ -251,7 +251,7 @@ function convertMessages(model: Model<"ollama-chat">, context: Context): OllamaM
 	const messages: Message[] = [...systemMessages, ...context.messages];
 	const isCloud = model.provider === "ollama-cloud";
 	const supportsImages = model.input.includes("image");
-	return transformMessages(messages, model).map((msg, index) => {
+	const converted = transformMessages(messages, model).map((msg, index) => {
 		// Real `systemPrompt` entries (always emitted first) stay on Ollama's
 		// `system` role. After the static prefix, a developer turn keeps `system`
 		// when it's an agent-owned control instruction (empty/unexpected-stop
@@ -272,6 +272,21 @@ function convertMessages(model: Model<"ollama-chat">, context: Context): OllamaM
 		}
 		return converted;
 	});
+	// Ollama returns `done_reason: "load"` and generates nothing when a request
+	// carries no `user`-role message (e.g. a plan-approval handoff into a fresh
+	// session whose only non-system turn is an agent-attributed developer message
+	// mapped to `system`). Demote the last non-prefix system turn to `user` so the
+	// request can actually produce output; the static system-prompt prefix stays
+	// on `system` for prefix caching. (#7465)
+	if (!converted.some(m => m.role === "user")) {
+		for (let i = converted.length - 1; i >= systemPrompts.length; i--) {
+			if (converted[i].role === "system") {
+				converted[i].role = "user";
+				break;
+			}
+		}
+	}
+	return converted;
 }
 
 function convertTools(tools: Tool[] | undefined): OllamaFunctionTool[] | undefined {
@@ -403,6 +418,12 @@ function mapDoneReason(doneReason: string | undefined, output: AssistantMessage)
 	if (doneReason === "tool_calls") {
 		return "toolUse";
 	}
+	if (doneReason === "load") {
+		// Ollama emits done_reason:"load" (model loaded, nothing generated) when a
+		// request has no user-role turn. Surface it as an error rather than a clean
+		// empty stop so it isn't laundered and retried behind a misleading hint. (#7465)
+		return "error";
+	}
 	if (doneReason === undefined && output.content.some(block => block.type === "toolCall")) {
 		return "toolUse";
 	}
@@ -411,6 +432,8 @@ function mapDoneReason(doneReason: string | undefined, output: AssistantMessage)
 
 const EMPTY_OLLAMA_LENGTH_COMPLETION_MESSAGE =
 	"Model returned no content: prompt filled the context window; raise Ollama num_ctx or shorten the prompt.";
+const EMPTY_OLLAMA_LOAD_COMPLETION_MESSAGE =
+	"Ollama loaded the model but generated nothing (done_reason: load): the request contained no user-role message.";
 
 function hasVisibleAssistantContent(output: AssistantMessage): boolean {
 	return output.content.some(block => {
@@ -594,7 +617,7 @@ const streamOllamaOnce = (
 				});
 			}
 			stream.push({ type: "start", partial: output });
-			for await (const chunk of readJsonl<OllamaChatChunk>(response.body)) {
+			for await (const chunk of readJsonl<OllamaChatChunk>(response.body as ReadableStream<Uint8Array>)) {
 				if (chunk.message?.thinking) {
 					suppressHealedThinking = true;
 					endActiveTextBlock();
@@ -696,6 +719,9 @@ const streamOllamaOnce = (
 			if (output.stopReason === "length" && !hasVisibleAssistantContent(output)) {
 				output.stopReason = "error";
 				output.errorMessage = EMPTY_OLLAMA_LENGTH_COMPLETION_MESSAGE;
+			}
+			if (output.stopReason === "error" && !output.errorMessage) {
+				output.errorMessage = EMPTY_OLLAMA_LOAD_COMPLETION_MESSAGE;
 			}
 			// Tool calls always mean "execute and continue" in the OpenAI/Ollama contract.
 			// If the turn produced tool-call blocks but reported a natural `stop`, promote

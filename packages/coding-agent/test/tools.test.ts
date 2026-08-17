@@ -4,19 +4,19 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as url from "node:url";
 import * as zlib from "node:zlib";
-import type { AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import { AsyncJobManager } from "@oh-my-pi/pi-coding-agent/async";
-import { DEFAULT_BASH_INTERCEPTOR_RULES, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EditTool } from "@oh-my-pi/pi-coding-agent/edit";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
-import { wrapToolWithMetaNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
-import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
-import * as toolTimeouts from "@oh-my-pi/pi-coding-agent/tools/tool-timeouts";
-import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
-import { unzip } from "@oh-my-pi/pi-coding-agent/utils/zip";
-import { $which, removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import type { AgentToolContext } from "@musepi/pi-agent-core";
+import { AsyncJobManager } from "@musepi/pi-coding-agent/async";
+import { DEFAULT_BASH_INTERCEPTOR_RULES, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EditTool } from "@musepi/pi-coding-agent/edit";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
+import { wrapToolWithMetaNotice } from "@musepi/pi-coding-agent/tools/output-meta";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
+import * as toolTimeouts from "@musepi/pi-coding-agent/tools/tool-timeouts";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
+import { unzip } from "@musepi/pi-coding-agent/utils/zip";
+import { $which, removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 import { GlobTool } from "../src/tools/glob";
 import { DEFAULT_FILE_LIMIT, GrepTool, MULTI_FILE_PER_FILE_MATCHES } from "../src/tools/grep";
 import { HubTool } from "../src/tools/hub";
@@ -237,7 +237,7 @@ function createTestToolSession(
 		getArtifactsDir: () => sessionDir,
 		allocateOutputArtifact: async (toolType: string) => {
 			fs.mkdirSync(sessionDir, { recursive: true });
-			const id = `artifact-${++artifactCounter}`;
+			const id = String(++artifactCounter);
 			return { id, path: path.join(sessionDir, `${id}.${toolType}.log`) };
 		},
 		settings,
@@ -280,7 +280,7 @@ describe("Coding Agent Tools", () => {
 	});
 
 	beforeEach(() => {
-		// Force replace mode for edit tool tests using old_text/new_text
+		// Force replace mode for edit tool tests using old_string/new_string
 		originalEditVariant = Bun.env.PI_EDIT_VARIANT;
 		Bun.env.PI_EDIT_VARIANT = "replace";
 
@@ -417,7 +417,8 @@ describe("Coding Agent Tools", () => {
 
 			await noLspEditTool.execute("test-edit-ipynb", {
 				path: notebookPath,
-				edits: [{ old_text: "print('old')", new_text: "print('new')" }],
+				old_string: "print('old')",
+				new_string: "print('new')",
 			});
 
 			const updated = JSON.parse(fs.readFileSync(notebookPath, "utf-8"));
@@ -635,6 +636,66 @@ describe("Coding Agent Tools", () => {
 			expect(result.details?.truncation?.truncatedBy).toBe("lines");
 			expect(result.details?.truncation?.totalLines).toBe(3500);
 			expect(result.details?.truncation?.outputLines).toBe(defaultLimit);
+		});
+
+		it("should spill oversized read output to an artifact", async () => {
+			const testFile = path.join(testDir, "oversized-read.txt");
+			const line = "0123456789".repeat(20);
+			fs.writeFileSync(testFile, `${Array.from({ length: 3500 }, () => line).join("\n")}\n`);
+			const spillSettings = Settings.isolated({
+				"tools.artifactSpillThreshold": 20,
+				"tools.artifactTailBytes": 1,
+				"tools.artifactTailLines": 10,
+				"tools.artifactHeadBytes": 1,
+			});
+			const defaultLimit = spillSettings.get("read.defaultLimit");
+			const spillManager = SessionManager.create(testDir, path.join(testDir, "spill-sessions"));
+			await spillManager.ensureOnDisk();
+			const spillSession = createTestToolSession(testDir, spillSettings, {
+				getSessionFile: () => spillManager.getSessionFile() ?? null,
+				getArtifactsDir: () => spillManager.getArtifactsDir(),
+				localProtocolOptions: {
+					getArtifactsDir: () => spillManager.getArtifactsDir(),
+					getSessionId: () => spillManager.getSessionId(),
+				},
+			});
+			const spillReadTool = wrapToolWithMetaNotice(new ReadTool(spillSession));
+			const context = {
+				...createTestToolContext(["read"]),
+				settings: spillSettings,
+				sessionManager: spillManager,
+			};
+
+			try {
+				const result = await spillReadTool.execute(
+					"test-call-read-spill",
+					{ path: testFile },
+					undefined,
+					undefined,
+					context,
+				);
+				const truncation = result.details?.meta?.truncation;
+				const output = getTextOutput(result);
+
+				expect(truncation?.artifactId).toBeDefined();
+				expect(Buffer.byteLength(output, "utf-8")).toBeLessThan(20 * 1024);
+				expect(output).toContain("artifact://");
+				expect(truncation?.nextOffset).toBe(defaultLimit + 1);
+				expect(output).toContain(`Use :${defaultLimit + 1} to continue`);
+
+				const saveArtifact = vi.spyOn(spillManager, "saveArtifact");
+				const artifactResult = await spillReadTool.execute(
+					"test-call-read-spilled-artifact",
+					{ path: `artifact://${truncation?.artifactId}` },
+					undefined,
+					undefined,
+					context,
+				);
+				expect(getTextOutput(artifactResult)).toContain(line);
+				expect(saveArtifact).not.toHaveBeenCalled();
+			} finally {
+				await spillManager.close();
+			}
 		});
 
 		it("should render directories as a two-level tree without capping root entries", async () => {
@@ -1058,7 +1119,8 @@ describe("Coding Agent Tools", () => {
 
 			const result = await editTool.execute("test-call-5", {
 				path: testFile,
-				edits: [{ old_text: "world", new_text: "testing" }],
+				old_string: "world",
+				new_string: "testing",
 			});
 			const details = result.details as { diff?: string } | undefined;
 
@@ -1077,7 +1139,8 @@ describe("Coding Agent Tools", () => {
 			await expect(
 				editTool.execute("test-call-6", {
 					path: testFile,
-					edits: [{ old_text: "nonexistent", new_text: "testing" }],
+					old_string: "nonexistent",
+					new_string: "testing",
 				}),
 			).rejects.toThrow(/Could not find/);
 		});
@@ -1090,18 +1153,21 @@ describe("Coding Agent Tools", () => {
 			await expect(
 				editTool.execute("test-call-7", {
 					path: testFile,
-					edits: [{ old_text: "foo", new_text: "bar" }],
+					old_string: "foo",
+					new_string: "bar",
 				}),
 			).rejects.toThrow(/Found 3 occurrences/);
 		});
 
-		it("should replace all occurrences with all: true", async () => {
+		it("should replace all occurrences with replace_all: true", async () => {
 			const testFile = path.join(testDir, "edit-all-test.txt");
 			fs.writeFileSync(testFile, "foo bar foo baz foo");
 
 			const result = await editTool.execute("test-all-1", {
 				path: testFile,
-				edits: [{ old_text: "foo", new_text: "qux", all: true }],
+				old_string: "foo",
+				new_string: "qux",
+				replace_all: true,
 			});
 
 			expect(getTextOutput(result)).toContain("Successfully replaced 3 occurrences");
@@ -1109,7 +1175,7 @@ describe("Coding Agent Tools", () => {
 			expect(content).toBe("qux bar qux baz qux");
 		});
 
-		it("should reject all: true when multiple fuzzy matches are ambiguous", async () => {
+		it("should reject replace_all: true when multiple fuzzy matches are ambiguous", async () => {
 			const testFile = path.join(testDir, "edit-all-fuzzy.txt");
 			// File has two similar blocks with different indentation
 			fs.writeFileSync(
@@ -1131,36 +1197,36 @@ function b() {
 			await expect(
 				editTool.execute("test-all-fuzzy", {
 					path: testFile,
-					edits: [
-						{
-							old_text: "if (x) {\n  doThing();\n}",
-							new_text: "if (y) {\n  doOther();\n}",
-							all: true,
-						},
-					],
+					old_string: "if (x) {\n  doThing();\n}",
+					new_string: "if (y) {\n  doOther();\n}",
+					replace_all: true,
 				}),
 			).rejects.toThrow(/Found 2 high-confidence matches/);
 		});
 
-		it("should fail with all: true if no matches found", async () => {
+		it("should fail with replace_all: true if no matches found", async () => {
 			const testFile = path.join(testDir, "edit-all-nomatch.txt");
 			fs.writeFileSync(testFile, "hello world");
 
 			await expect(
 				editTool.execute("test-all-nomatch", {
 					path: testFile,
-					edits: [{ old_text: "nonexistent", new_text: "bar", all: true }],
+					old_string: "nonexistent",
+					new_string: "bar",
+					replace_all: true,
 				}),
 			).rejects.toThrow(/Could not find/);
 		});
 
-		it("should replace multiline text with all: true", async () => {
+		it("should replace multiline text with replace_all: true", async () => {
 			const testFile = path.join(testDir, "edit-all-multiline.txt");
 			fs.writeFileSync(testFile, "start\nfoo\nbar\nend\nstart\nfoo\nbar\nend");
 
 			const result = await editTool.execute("test-all-multiline", {
 				path: testFile,
-				edits: [{ old_text: "foo\nbar", new_text: "replaced", all: true }],
+				old_string: "foo\nbar",
+				new_string: "replaced",
+				replace_all: true,
 			});
 
 			expect(getTextOutput(result)).toContain("Successfully replaced 2 occurrences");
@@ -1168,18 +1234,43 @@ function b() {
 			expect(content).toBe("start\nreplaced\nend\nstart\nreplaced\nend");
 		});
 
-		it("should work with all: true when only one occurrence exists", async () => {
+		it("should work with replace_all: true when only one occurrence exists", async () => {
 			const testFile = path.join(testDir, "edit-all-single.txt");
 			fs.writeFileSync(testFile, "hello world");
 
 			const result = await editTool.execute("test-all-single", {
 				path: testFile,
-				edits: [{ old_text: "world", new_text: "universe", all: true }],
+				old_string: "world",
+				new_string: "universe",
+				replace_all: true,
 			});
 
 			expect(getTextOutput(result)).toContain("Successfully replaced text");
 			const content = await Bun.file(testFile).text();
 			expect(content).toBe("hello universe");
+		});
+
+		it("applies the bridge's internal edits batch form as one aggregate result", async () => {
+			// Only the Cursor exec bridge produces this shape (multi-replacement
+			// pi_edit frames); it must apply every replacement in order and
+			// return a single aggregated diff.
+			const testFile = path.join(testDir, "edit-batch.txt");
+			fs.writeFileSync(testFile, "alpha\nbeta\n");
+
+			const result = await editTool.execute("test-batch-1", {
+				path: testFile,
+				edits: [
+					{ old_string: "alpha", new_string: "ALPHA" },
+					{ old_string: "beta", new_string: "BETA" },
+				],
+			});
+
+			expect(result.isError).toBeUndefined();
+			const content = await Bun.file(testFile).text();
+			expect(content).toBe("ALPHA\nBETA\n");
+			const details = result.details as { diff?: string } | undefined;
+			expect(details?.diff).toContain("ALPHA");
+			expect(details?.diff).toContain("BETA");
 		});
 	});
 
@@ -2251,7 +2342,7 @@ describe("edit tool CRLF handling", () => {
 	let originalEditVariant: string | undefined;
 
 	beforeEach(() => {
-		// Force replace mode for edit tool tests using old_text/new_text
+		// Force replace mode for edit tool tests using old_string/new_string
 		originalEditVariant = Bun.env.PI_EDIT_VARIANT;
 		Bun.env.PI_EDIT_VARIANT = "replace";
 
@@ -2271,14 +2362,15 @@ describe("edit tool CRLF handling", () => {
 		}
 	});
 
-	it("should match LF old_text against CRLF file content", async () => {
+	it("should match LF old_string against CRLF file content", async () => {
 		const testFile = path.join(testDir, "crlf-test.txt");
 
 		fs.writeFileSync(testFile, "line one\r\nline two\r\nline three\r\n");
 
 		const result = await editTool.execute("test-crlf-1", {
 			path: testFile,
-			edits: [{ old_text: "line two\n", new_text: "replaced line\n" }],
+			old_string: "line two\n",
+			new_string: "replaced line\n",
 		});
 
 		expect(getTextOutput(result)).toContain("Successfully replaced");
@@ -2290,7 +2382,8 @@ describe("edit tool CRLF handling", () => {
 
 		await editTool.execute("test-crlf-2", {
 			path: testFile,
-			edits: [{ old_text: "second\n", new_text: "REPLACED\n" }],
+			old_string: "second\n",
+			new_string: "REPLACED\n",
 		});
 
 		const content = await Bun.file(testFile).text();
@@ -2303,7 +2396,8 @@ describe("edit tool CRLF handling", () => {
 
 		await editTool.execute("test-lf-1", {
 			path: testFile,
-			edits: [{ old_text: "second\n", new_text: "REPLACED\n" }],
+			old_string: "second\n",
+			new_string: "REPLACED\n",
 		});
 
 		const content = await Bun.file(testFile).text();
@@ -2318,7 +2412,8 @@ describe("edit tool CRLF handling", () => {
 		await expect(
 			editTool.execute("test-crlf-dup", {
 				path: testFile,
-				edits: [{ old_text: "hello\nworld\n", new_text: "replaced\n" }],
+				old_string: "hello\nworld\n",
+				new_string: "replaced\n",
 			}),
 		).rejects.toThrow(/Found 2 occurrences/);
 	});
@@ -2330,7 +2425,8 @@ describe("edit tool CRLF handling", () => {
 
 		await editTool.execute("test-bom", {
 			path: testFile,
-			edits: [{ old_text: "second\n", new_text: "REPLACED\n" }],
+			old_string: "second\n",
+			new_string: "REPLACED\n",
 		});
 
 		const content = await Bun.file(testFile).text();

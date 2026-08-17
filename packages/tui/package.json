@@ -1,21 +1,21 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/pi-tui",
-  "version": "17.1.8",
+  "name": "@musepi/pi-tui",
+  "version": "17.2.12",
   "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
-  "homepage": "https://omp.sh",
-  "author": "Can Boluk",
+  "homepage": "https://github.com/MuseLinn/MusePi",
+  "author": "MuseLinn",
   "contributors": [
     "Mario Zechner"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/can1357/oh-my-pi.git",
+    "url": "git+https://github.com/MuseLinn/MusePi.git",
     "directory": "packages/tui"
   },
   "bugs": {
-    "url": "https://github.com/can1357/oh-my-pi/issues"
+    "url": "https://github.com/MuseLinn/MusePi/issues"
   },
   "keywords": [
     "tui",
@@ -37,10 +37,9 @@
     "fmt": "biome format --write ."
   },
   "dependencies": {
-    "@oh-my-pi/pi-natives": "catalog:",
-    "@oh-my-pi/pi-utils": "catalog:",
-    "lru-cache": "catalog:",
-    "marked": "catalog:"
+    "@musepi/pi-natives": "catalog:",
+    "@musepi/pi-utils": "catalog:",
+    "lru-cache": "catalog:"
   },
   "devDependencies": {
     "chalk": "catalog:",
@@ -68,5 +67,6 @@
       "import": "./src/components/*.ts"
     },
     "./*.js": "./src/*.ts"
-  }
+  },
+  "optionalDependencies": {}
 }

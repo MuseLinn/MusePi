@@ -7,13 +7,25 @@
  * `ToolSession` registered for the current execution and forwards to the same
  * `callSessionTool` implementation the JS bridge uses.
  */
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 import type { ToolSession } from "../../tools";
 import { callSessionTool, type JsStatusEvent } from "../js/tool-bridge";
 
 export interface PyToolBridgeEntry {
 	toolSession: ToolSession;
+	/**
+	 * Turn-cancel handed to the tool implementation. Raw and never deferred, so
+	 * delegated work — above all the subagents `agent()` spawns — stops at once.
+	 */
 	signal?: AbortSignal;
+	/**
+	 * Kernel-side abort, held back while a critical `agent()` phase (isolation
+	 * worktree setup, merge/cherry-pick) is in flight. Decides only when the host
+	 * may stop waiting on a call and let the kernel unwind; it is never given to
+	 * a tool. Keeping these separate is what stops a cancel from settling the
+	 * cell on top of a still-running, abort-insensitive merge.
+	 */
+	shieldedSignal?: AbortSignal;
 	emitStatus?: (event: JsStatusEvent) => void;
 	abortRequested?: () => boolean;
 }
@@ -32,16 +44,24 @@ const registrations = new Map<string, PyToolBridgeEntry>();
 let serverPromise: Promise<BridgeServer> | null = null;
 
 /**
- * Forward a bridge call to {@link callSessionTool} while respecting eval abort
- * shielding.
+ * Forward a bridge call to {@link callSessionTool}, failing fast once the cell
+ * has been interrupted.
  *
  * Python invokes this bridge with blocking `urllib` requests from worker threads
- * (each `agent()` / `tool.*` call). The base executor defers the registered
- * signal while a bridge call is already paused so in-flight subagents can finish
- * and persist output instead of being orphaned. Once an abort has been requested,
- * later bridge calls are rejected before starting; once the shielded signal
- * finally aborts, this handler still resolves the HTTP request promptly so the
- * kernel can unwind without being hard-killed.
+ * (each `agent()` / `tool.*` call). Two different aborts meet here:
+ *
+ * - {@link PyToolBridgeEntry.signal} goes to the tool, so a turn cancel tears
+ *   down delegated work — subagents included — instead of leaving it running
+ *   past the cell.
+ * - {@link PyToolBridgeEntry.shieldedSignal} decides when we may stop waiting.
+ *   It is deferred across a critical `agent()` phase, so a cancel landing
+ *   mid-merge cannot return early and let the cell settle while an
+ *   abort-insensitive cherry-pick is still rewriting the repo.
+ *
+ * Calls arriving after an abort are rejected before starting. Otherwise the
+ * usual path is that the tool observes its own abort and rejects; the race only
+ * matters for tools that ignore the signal, keeping the kernel unwinding
+ * promptly instead of being hard-killed.
  */
 async function callSessionToolPromptOnAbort(name: string, args: unknown, entry: PyToolBridgeEntry): Promise<unknown> {
 	if (entry.abortRequested?.()) {
@@ -52,7 +72,7 @@ async function callSessionToolPromptOnAbort(name: string, args: unknown, entry: 
 		signal: entry.signal,
 		emitStatus: entry.emitStatus,
 	});
-	const signal = entry.signal;
+	const signal = entry.shieldedSignal ?? entry.signal;
 	if (!signal) return await call;
 	if (signal.aborted) {
 		void call.catch(() => {});

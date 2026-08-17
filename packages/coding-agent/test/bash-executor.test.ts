@@ -2,19 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resetSettingsForTest, Settings, type ShellMinimizerSettings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { resetSettingsForTest, Settings, type ShellMinimizerSettings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	applyDirenvPreflight,
 	buildMinimizerOptions,
 	executeBash,
 	isPersistentShellCdCommand,
-} from "@oh-my-pi/pi-coding-agent/exec/bash-executor";
-import * as direnvModule from "@oh-my-pi/pi-coding-agent/exec/direnv";
-import { DEFAULT_MAX_BYTES } from "@oh-my-pi/pi-coding-agent/session/streaming-output";
-import * as shellSnapshot from "@oh-my-pi/pi-coding-agent/utils/shell-snapshot";
-import type { Shell, ShellRunResult } from "@oh-my-pi/pi-natives";
-import * as piNatives from "@oh-my-pi/pi-natives";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/exec/bash-executor";
+import * as direnvModule from "@musepi/pi-coding-agent/exec/direnv";
+import { DEFAULT_MAX_BYTES } from "@musepi/pi-coding-agent/session/streaming-output";
+import * as shellSnapshot from "@musepi/pi-coding-agent/utils/shell-snapshot";
+import type { Shell, ShellRunResult } from "@musepi/pi-natives";
+import * as piNatives from "@musepi/pi-natives";
+import { removeSyncWithRetries } from "@musepi/pi-utils";
 
 // Matches the schema default for `tools.artifactHeadBytes` (20 KB) used by
 // OutputSink when bash-executor pulls settings via resolveOutputSinkHeadBytes.
@@ -231,12 +231,12 @@ describe("executeBash", () => {
 	});
 
 	it("applies non-interactive environment defaults", async () => {
-		const result = await executeBash('echo "$GIT_TERMINAL_PROMPT:$PI_TEST_ENV"', {
+		const result = await executeBash('echo "$AGENT:$GIT_TERMINAL_PROMPT:$PI_TEST_ENV"', {
 			cwd: tempDir,
 			timeout: 5000,
 			env: { PI_TEST_ENV: "hello" },
 		});
-		expect(result.output.trim()).toBe("0:hello");
+		expect(result.output.trim()).toBe("1:0:hello");
 	});
 
 	it("runs non-bash shellPath commands through the configured shell", async () => {

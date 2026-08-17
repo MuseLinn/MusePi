@@ -11,9 +11,9 @@
  * entry count, but it cannot duplicate or misorder rows the way incremental
  * component reuse could.
  */
-import type { AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { Usage } from "@oh-my-pi/pi-ai";
-import type { TUI } from "@oh-my-pi/pi-tui";
+import type { AgentMessage, AgentTool } from "@musepi/pi-agent-core";
+import type { Usage } from "@musepi/pi-ai";
+import type { TUI } from "@musepi/pi-tui";
 import type { AdvisorMessageDetails } from "../../advisor";
 import { COLLAB_PROMPT_MESSAGE_TYPE, type CollabPromptDetails } from "../../collab/protocol";
 import { settings } from "../../config/settings";
@@ -61,6 +61,8 @@ import { CollapsedSyntheticMessageComponent, UserMessageComponent } from "./user
 export interface ChatTranscriptBuilderDeps {
 	ui: TUI;
 	getTool?: (name: string) => AgentTool | undefined;
+	/** Whether the active registry entry came from a built-in factory. */
+	isBuiltInTool?: (name: string) => boolean;
 	getMessageRenderer?: (customType: string) => MessageRenderer | undefined;
 	cwd: string;
 	hideThinkingBlock?: () => boolean;
@@ -190,6 +192,7 @@ export class ChatTranscriptBuilder {
 			this.#readGroup = new ReadToolGroupComponent({
 				showContentPreview: settings.get("read.toolResultPreview"),
 			});
+			this.#readGroup.setToolActivityVisible(!settings.get("display.hideToolActivity"));
 			this.#trackExpandable(this.#readGroup);
 			this.container.addChild(this.#readGroup);
 		}
@@ -321,6 +324,7 @@ export class ChatTranscriptBuilder {
 			proseOnlyThinking,
 		);
 		assistantComponent.setImagesVisible(settings.get("terminal.showImages"));
+		assistantComponent.setToolResultImagesVisible(!settings.get("display.hideToolActivity"));
 		this.#trackExpandable(assistantComponent);
 		this.container.addChild(assistantComponent);
 
@@ -353,6 +357,7 @@ export class ChatTranscriptBuilder {
 				proseOnlyThinking,
 			);
 			component.setImagesVisible(settings.get("terminal.showImages"));
+			component.setToolResultImagesVisible(!settings.get("display.hideToolActivity"));
 			this.#trackExpandable(component);
 			this.container.addChild(component);
 		};
@@ -389,6 +394,7 @@ export class ChatTranscriptBuilder {
 				content.name,
 				content.arguments,
 				{
+					useBuiltInRenderer: this.deps.isBuiltInTool?.(content.name) ?? true,
 					// Stable ids and Kitty placeholder cells keep images anchored
 					// while the transcript viewport scrolls and reflows.
 					showImages: settings.get("terminal.showImages"),
@@ -401,6 +407,7 @@ export class ChatTranscriptBuilder {
 				this.deps.cwd,
 				content.id,
 			);
+			component.setToolActivityVisible(!settings.get("display.hideToolActivity"));
 			this.#trackExpandable(component);
 			this.container.addChild(component);
 

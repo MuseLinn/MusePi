@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as url from "node:url";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { removeWithRetries } from "@musepi/pi-utils";
 import {
 	__resetProfileSnapshotForTests,
 	APP_NAME,
@@ -13,8 +13,8 @@ import {
 	setAgentDir,
 	setProfile,
 	VERSION,
-} from "@oh-my-pi/pi-utils/dirs";
-import { Snowflake } from "@oh-my-pi/pi-utils/snowflake";
+} from "@musepi/pi-utils/dirs";
+import { Snowflake } from "@musepi/pi-utils/snowflake";
 import { runCli } from "../src/cli";
 import * as profileAliasCli from "../src/cli/profile-alias";
 
@@ -270,7 +270,9 @@ describe("global --profile flag", () => {
 		} finally {
 			await removeWithRetries(root);
 		}
-	});
+		// Spawns a probe that imports the command modules, so the cost is cold
+		// transpile of the CLI graph, not latency under test.
+	}, 30_000);
 
 	it("surfaces an invalid OMP_PROFILE env as a clean error, not an import crash", async () => {
 		const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-profile-cli-env-bad-"));
@@ -319,5 +321,7 @@ describe("global --profile flag", () => {
 		} finally {
 			await removeWithRetries(root);
 		}
-	});
+		// Same cold-spawn cost as the sibling above; it only escapes Bun's 5s
+		// default because that test warms the transpile cache first.
+	}, 30_000);
 });

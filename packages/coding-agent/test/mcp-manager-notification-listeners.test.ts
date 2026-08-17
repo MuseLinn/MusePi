@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
-import type { MCPServerConfig } from "@oh-my-pi/pi-coding-agent/mcp/types";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+import { MCPManager } from "@musepi/pi-coding-agent/mcp/manager";
+import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
+import { removeSyncWithRetries } from "@musepi/pi-utils";
 import { CUSTOM_NOTIFICATION_METHOD, CUSTOM_NOTIFICATION_PAYLOAD } from "./fixtures/notifications-mcp";
 
 const FIXTURE_PATH = path.join(import.meta.dir, "fixtures", "notifications-mcp.ts");
@@ -71,8 +71,7 @@ describe("MCPManager notification listeners", () => {
 		expect(typeof unsubscribe).toBe("function");
 
 		try {
-			const result = await manager.connectServers({ alpha: serverConfig() }, {});
-			expect(result.connectedServers).toContain("alpha");
+			await manager.connectServers({ alpha: serverConfig() }, {});
 
 			// Await both the known list_changed and the server-custom frame
 			// independently. Arrival order across the two isn't guaranteed

@@ -1,3 +1,5 @@
+import { t } from "../i18n/index.js";
+
 export type LoopLimitConfig =
 	| {
 			kind: "iterations";
@@ -173,20 +175,22 @@ export function describeLoopLimit(config: LoopLimitConfig): string {
 
 export function describeLoopLimitRuntime(limit: LoopLimitRuntime): string {
 	if (limit.kind === "iterations") {
-		return `${limit.remaining} of ${limit.initial} ${limit.initial === 1 ? "iteration" : "iterations"} remaining`;
+		return limit.initial === 1
+			? t("{0} of {1} iteration remaining", String(limit.remaining), String(limit.initial))
+			: t("{0} of {1} iterations remaining", String(limit.remaining), String(limit.initial));
 	}
-	return `${formatDuration(limit.durationMs)} limit`;
+	return t("{0} limit", formatDuration(limit.durationMs));
 }
 
 function formatDuration(durationMs: number): string {
 	if (durationMs % 3_600_000 === 0) {
 		const hours = durationMs / 3_600_000;
-		return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+		return `${hours} ${hours === 1 ? t("hour") : t("hours")}`;
 	}
 	if (durationMs % 60_000 === 0) {
 		const minutes = durationMs / 60_000;
-		return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+		return `${minutes} ${minutes === 1 ? t("minute") : t("minutes")}`;
 	}
 	const seconds = durationMs / 1_000;
-	return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
+	return `${seconds} ${seconds === 1 ? t("second") : t("seconds")}`;
 }

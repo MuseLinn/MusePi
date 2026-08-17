@@ -4,7 +4,7 @@
  * Uses Tavily's agent-focused search API to return structured results with an
  * optional synthesized answer.
  */
-import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@oh-my-pi/pi-ai";
+import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@musepi/pi-ai";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, parseSearchQuery } from "../query";
@@ -30,6 +30,7 @@ export interface TavilySearchParams {
 	/** `before:` upper bound, ISO `YYYY-MM-DD`, mapped to `end_date`. */
 	end_date?: string;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -120,7 +121,7 @@ async function callTavilySearch(apiKey: string, params: TavilySearchParams): Pro
 			Authorization: `Bearer ${apiKey}`,
 		},
 		body: JSON.stringify(buildRequestBody(params)),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -189,6 +190,7 @@ export async function searchTavily(params: SearchParams): Promise<SearchResponse
 		num_results: params.numSearchResults ?? params.limit,
 		recency: params.recency,
 		signal: params.signal,
+		timeoutMs: params.timeoutMs,
 		fetch: params.fetch,
 	};
 	if (parsed.hasDirectives) {

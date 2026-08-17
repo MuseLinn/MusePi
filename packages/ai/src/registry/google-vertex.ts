@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $env } from "@oh-my-pi/pi-utils";
-import type { ProviderDefinition } from "./types";
+import { $env } from "@musepi/pi-utils";
+import { AUTHENTICATED_SENTINEL, type ProviderDefinition } from "./types";
 
 let cachedVertexAdcCredentialsExists: boolean | null = null;
 
@@ -32,7 +32,7 @@ export const googleVertexProvider = {
 		const hasProject = !!($env.GOOGLE_CLOUD_PROJECT || $env.GCP_PROJECT || $env.GCLOUD_PROJECT);
 		const hasLocation = !!($env.GOOGLE_VERTEX_LOCATION || $env.GOOGLE_CLOUD_LOCATION || $env.VERTEX_LOCATION);
 		if (hasCredentials && hasProject && hasLocation) {
-			return "<authenticated>";
+			return AUTHENTICATED_SENTINEL;
 		}
 	},
 } as const satisfies ProviderDefinition;

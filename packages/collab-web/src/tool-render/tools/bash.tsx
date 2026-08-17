@@ -1,5 +1,6 @@
 /** `bash` — shell command execution: prompt line with env prefix, badges, output tail. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, ResultImages, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, display, isRecord, normalizeWs, num, resultTextOf, shortenPath, str, truncate } from "../util";
@@ -54,13 +55,17 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 
 	const stats: string[] = [];
 	if (wallTimeMs !== null) {
-		stats.push(wallTimeMs < 1000 ? `wall ${Math.round(wallTimeMs)}ms` : `wall ${(wallTimeMs / 1000).toFixed(1)}s`);
+		stats.push(
+			wallTimeMs < 1000
+				? t("wall {ms}ms", { ms: String(Math.round(wallTimeMs)) })
+				: t("wall {secs}s", { secs: (wallTimeMs / 1000).toFixed(1) }),
+		);
 	}
 	if (requestedTimeoutSeconds !== null && requestedTimeoutSeconds !== timeoutSeconds) {
-		stats.push(`requested timeout ${requestedTimeoutSeconds}s clamped`);
+		stats.push(t("requested timeout {secs}s clamped", { secs: String(requestedTimeoutSeconds) }));
 	}
-	if (job?.jobId) stats.push(`job ${job.jobId}`);
-	if (artifactId) stats.push(`artifact ${artifactId}`);
+	if (job?.jobId) stats.push(t("job {id}", { id: job.jobId }));
+	if (artifactId) stats.push(t("artifact {id}", { id: artifactId }));
 
 	return (
 		<>
@@ -73,16 +78,16 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			</div>
 			<Badges
 				items={[
-					cwd && <Badge>cwd={shortenPath(cwd)}</Badge>,
-					timeoutSeconds !== null && <Badge>timeout={timeoutSeconds}s</Badge>,
-					args.pty === true && <Badge tone="accent">pty</Badge>,
-					!job && args.async === true && <Badge tone="accent">async</Badge>,
-					head !== null && <Badge>head={head}</Badge>,
-					tail !== null && <Badge>tail={tail}</Badge>,
-					exitCode !== null && <Badge tone="err">exit {exitCode}</Badge>,
+					cwd && <Badge>{t("cwd={cwd}", { cwd: shortenPath(cwd) })}</Badge>,
+					timeoutSeconds !== null && <Badge>{t("timeout={secs}s", { secs: String(timeoutSeconds) })}</Badge>,
+					args.pty === true && <Badge tone="accent">{t("pty")}</Badge>,
+					!job && args.async === true && <Badge tone="accent">{t("async")}</Badge>,
+					head !== null && <Badge>{t("head={count}", { count: String(head) })}</Badge>,
+					tail !== null && <Badge>{t("tail={count}", { count: String(tail) })}</Badge>,
+					exitCode !== null && <Badge tone="err">{t("exit {code}", { code: String(exitCode) })}</Badge>,
 					job && (
 						<Badge tone={job.state === "failed" ? "err" : job.state === "running" ? "accent" : "ok"}>
-							async {job.state}
+							{t("async")} {job.state}
 						</Badge>
 					),
 				]}

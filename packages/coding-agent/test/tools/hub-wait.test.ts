@@ -5,11 +5,11 @@
  * messaging/job suites.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { AsyncJobManager } from "@oh-my-pi/pi-coding-agent/async/job-manager";
-import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { type CoordinationDetails, HubTool } from "@oh-my-pi/pi-coding-agent/tools/hub";
+import { AsyncJobManager } from "@musepi/pi-coding-agent/async/job-manager";
+import { IrcBus } from "@musepi/pi-coding-agent/irc/bus";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { type CoordinationDetails, HubTool } from "@musepi/pi-coding-agent/tools/hub";
 
 const SELF_ID = "Main";
 

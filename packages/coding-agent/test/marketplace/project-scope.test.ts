@@ -4,7 +4,7 @@
  * resolveActiveProjectRegistryPath: walk-up, .git fallback, null return, canonical path.
  * listClaudePluginRoots: project entries shadow user entries for same plugin ID.
  *
- * Note: helpers.ts imports @oh-my-pi/pi-natives (Rust addon via glob).
+ * Note: helpers.ts imports @musepi/pi-natives (Rust addon via glob).
  * This file imports from helpers.ts directly — the native addon IS present in the
  * test environment (verified: `bun run import-helpers.ts` succeeds).
  */
@@ -16,15 +16,15 @@ import {
 	clearClaudePluginRootsCache,
 	listClaudePluginRoots,
 	resolveActiveProjectRegistryPath,
-} from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import type { InstalledPluginEntry } from "@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace";
+} from "@musepi/pi-coding-agent/discovery/helpers";
+import type { InstalledPluginEntry } from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
 import {
 	addInstalledPlugin,
 	buildPluginId,
 	readInstalledPluginsRegistry,
 	writeInstalledPluginsRegistry,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/plugins/marketplace";
+import { removeSyncWithRetries } from "@musepi/pi-utils";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -52,34 +52,34 @@ describe("resolveActiveProjectRegistryPath", () => {
 		removeSyncWithRetries(tmpDir);
 	});
 
-	it("walk-up finds nearest .omp/ directory", async () => {
-		// Layout: tmpDir/.omp/   +   tmpDir/sub/nested/  (cwd)
-		// Resolver must climb from cwd → sub → tmpDir and find .omp/ there.
-		fs.mkdirSync(path.join(tmpDir, ".omp"), { recursive: true });
+	it("walk-up finds nearest .musepi/ directory", async () => {
+		// Layout: tmpDir/.musepi/   +   tmpDir/sub/nested/  (cwd)
+		// Resolver must climb from cwd → sub → tmpDir and find .musepi/ there.
+		fs.mkdirSync(path.join(tmpDir, ".musepi"), { recursive: true });
 		const cwd = path.join(tmpDir, "sub", "nested");
 		fs.mkdirSync(cwd, { recursive: true });
 
 		const result = await resolveActiveProjectRegistryPath(cwd);
 
-		expect(result).toBe(path.join(tmpDir, ".omp", "plugins", "installed_plugins.json"));
+		expect(result).toBe(path.join(tmpDir, ".musepi", "plugins", "installed_plugins.json"));
 	});
 
-	it("walk-up stops at the nearest .omp/ — does not skip to a more distant one", async () => {
-		// Layout: tmpDir/.omp/   +   tmpDir/sub/.omp/   +   tmpDir/sub/nested/  (cwd)
-		// Resolver must stop at tmpDir/sub/.omp/, not climb further to tmpDir/.omp/.
-		fs.mkdirSync(path.join(tmpDir, ".omp"), { recursive: true });
-		fs.mkdirSync(path.join(tmpDir, "sub", ".omp"), { recursive: true });
+	it("walk-up stops at the nearest .musepi/ — does not skip to a more distant one", async () => {
+		// Layout: tmpDir/.musepi/   +   tmpDir/sub/.musepi/   +   tmpDir/sub/nested/  (cwd)
+		// Resolver must stop at tmpDir/sub/.musepi/, not climb further to tmpDir/.musepi/.
+		fs.mkdirSync(path.join(tmpDir, ".musepi"), { recursive: true });
+		fs.mkdirSync(path.join(tmpDir, "sub", ".musepi"), { recursive: true });
 		const cwd = path.join(tmpDir, "sub", "nested");
 		fs.mkdirSync(cwd, { recursive: true });
 
 		const result = await resolveActiveProjectRegistryPath(cwd);
 
-		expect(result).toBe(path.join(tmpDir, "sub", ".omp", "plugins", "installed_plugins.json"));
+		expect(result).toBe(path.join(tmpDir, "sub", ".musepi", "plugins", "installed_plugins.json"));
 	});
 
-	it("falls back to .git root when no .omp/ exists", async () => {
+	it("falls back to .git root when no .musepi/ exists", async () => {
 		// Layout: tmpDir/.git/   +   tmpDir/sub/  (cwd)
-		// No .omp/ anywhere → second pass finds .git/ at tmpDir.
+		// No .musepi/ anywhere → second pass finds .git/ at tmpDir.
 		// Returned path is relative to the .git root, not .git itself.
 		fs.mkdirSync(path.join(tmpDir, ".git"), { recursive: true });
 		const cwd = path.join(tmpDir, "sub");
@@ -87,11 +87,11 @@ describe("resolveActiveProjectRegistryPath", () => {
 
 		const result = await resolveActiveProjectRegistryPath(cwd);
 
-		expect(result).toBe(path.join(tmpDir, ".omp", "plugins", "installed_plugins.json"));
+		expect(result).toBe(path.join(tmpDir, ".musepi", "plugins", "installed_plugins.json"));
 	});
 
-	it("returns null when neither .omp/ nor .git/ found anywhere in the tree", async () => {
-		// Start at the filesystem root — guaranteed to have no .omp/ or .git/ ancestors.
+	it("returns null when neither .musepi/ nor .git/ found anywhere in the tree", async () => {
+		// Start at the filesystem root — guaranteed to have no .musepi/ or .git/ ancestors.
 		const result = await resolveActiveProjectRegistryPath(path.sep);
 
 		expect(result).toBeNull();
@@ -99,7 +99,7 @@ describe("resolveActiveProjectRegistryPath", () => {
 
 	it("does not treat ~/.git as a project root (pass-2 home-dir guard)", async () => {
 		// Simulate a dotfiles repo managed with a bare-git technique: ~/.git exists.
-		// resolveActiveProjectRegistryPath must NOT return ~/.omp/.../installed_plugins.json.
+		// resolveActiveProjectRegistryPath must NOT return ~/.musepi/.../installed_plugins.json.
 		const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-proj-scope-home-"));
 		vi.spyOn(os, "homedir").mockReturnValue(homeDir);
 		const fakeHomeGit = path.join(homeDir, ".git");
@@ -108,7 +108,7 @@ describe("resolveActiveProjectRegistryPath", () => {
 		await fs.promises.mkdir(cwd, { recursive: true });
 		try {
 			const result = await resolveActiveProjectRegistryPath(cwd);
-			const homeOmpPath = path.join(homeDir, ".omp", "plugins", "installed_plugins.json");
+			const homeOmpPath = path.join(homeDir, ".musepi", "plugins", "installed_plugins.json");
 			expect(result).not.toBe(homeOmpPath);
 			expect(result).toBeNull();
 		} finally {
@@ -118,7 +118,7 @@ describe("resolveActiveProjectRegistryPath", () => {
 
 	it("canonical path — /repo and /repo/src resolve to the same registry file", async () => {
 		// Both sub-directories of the same project must produce identical paths.
-		fs.mkdirSync(path.join(tmpDir, ".omp"), { recursive: true });
+		fs.mkdirSync(path.join(tmpDir, ".musepi"), { recursive: true });
 		const src = path.join(tmpDir, "src");
 		fs.mkdirSync(src, { recursive: true });
 
@@ -144,13 +144,13 @@ describe("listClaudePluginRoots — project shadows user", () => {
 		tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "omp-shadow-home-"));
 		tmpProject = fs.mkdtempSync(path.join(os.tmpdir(), "omp-shadow-proj-"));
 
-		// Create .omp/ in project so resolveActiveProjectRegistryPath finds it.
-		fs.mkdirSync(path.join(tmpProject, ".omp", "plugins"), { recursive: true });
+		// Create .musepi/ in project so resolveActiveProjectRegistryPath finds it.
+		fs.mkdirSync(path.join(tmpProject, ".musepi", "plugins"), { recursive: true });
 
-		userRegPath = path.join(tmpHome, ".omp", "plugins", "installed_plugins.json");
+		userRegPath = path.join(tmpHome, ".musepi", "plugins", "installed_plugins.json");
 		fs.mkdirSync(path.dirname(userRegPath), { recursive: true });
 
-		projectRegPath = path.join(tmpProject, ".omp", "plugins", "installed_plugins.json");
+		projectRegPath = path.join(tmpProject, ".musepi", "plugins", "installed_plugins.json");
 	});
 
 	afterEach(() => {

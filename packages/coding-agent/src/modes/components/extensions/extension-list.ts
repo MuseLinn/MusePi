@@ -5,8 +5,9 @@
  * that toggles the entire provider. All items below are dimmed when the
  * master switch is off.
  */
-import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { isProviderEnabled } from "../../../discovery";
+import { t } from "../../../i18n/index.js";
 import { theme } from "../../../modes/theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../../utils/keybinding-matchers";
 import { clampSelection, contentRowWidth, renderScrollableList, searchableChar } from "../selector-helpers";
@@ -366,25 +367,25 @@ export class ExtensionList implements Component {
 	#getKindLabel(kind: ExtensionKind): string {
 		switch (kind) {
 			case "extension-module":
-				return "Extension Modules";
+				return t("Extension Modules");
 			case "skill":
-				return "Skills";
+				return t("Skills");
 			case "tool":
-				return "Tools";
+				return t("Tools");
 			case "slash-command":
-				return "Commands";
+				return t("Commands");
 			case "rule":
-				return "Rules";
+				return t("Rules");
 			case "mcp":
-				return "MCP Servers";
+				return t("MCP Servers");
 			case "hook":
-				return "Hooks";
+				return t("Hooks");
 			case "prompt":
-				return "Prompts";
+				return t("Prompts");
 			case "context-file":
-				return "Context";
+				return t("Context");
 			case "instruction":
-				return "Instructions";
+				return t("Instructions");
 			default:
 				return kind;
 		}

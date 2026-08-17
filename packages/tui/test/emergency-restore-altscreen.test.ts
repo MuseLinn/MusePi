@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { emergencyTerminalRestore, ProcessTerminal, setAltScreenActive } from "@oh-my-pi/pi-tui/terminal";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+import { emergencyTerminalRestore, ProcessTerminal, setAltScreenActive } from "@musepi/pi-tui/terminal";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 
 // Regression coverage for the Windows shell-handoff corruption on exit:
 // `emergencyTerminalRestore()` used to write DECRST 1049 ("leave alternate
@@ -127,7 +127,7 @@ describe("emergencyTerminalRestore alt-screen gating", () => {
 	it("pops keyboard enhancement frames on both screens when crashing from a fullscreen overlay", () => {
 		const { terminal, writes } = startCapturedTerminal();
 		process.stdin.emit("data", "\x1b[?0u");
-		expect(terminal.kittyEnableSequence).toBe("\x1b[>1u");
+		expect(terminal.kittyEnableSequence).toBe("\x1b[>5u");
 
 		terminal.write(`\x1b[?1049h${terminal.kittyEnableSequence}`);
 		setAltScreenActive(true);

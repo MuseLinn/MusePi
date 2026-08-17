@@ -20,6 +20,7 @@ Drives real Chromium tab; full puppeteer access via JS.
   - Raw request interception is run-scoped: run end removes `request` handlers, disables interception, releases held requests.
 
 - `app.path` → NEVER tamper with a real desktop app (no stealth patches).
+- `app.relay: true` → drive the user's own Chrome tabs via the omp browser relay (auto-started; needs the OMP Browser Relay extension installed). `app.target` picks a tab by URL/title substring; without it the visible tab is adopted without stealing focus.
 - Selectors: CSS + puppeteer `aria/…`, `text/…`, `xpath/…`, `pierce/…`. Playwright-only pseudos (`:has-text()`, `:visible`) are REJECTED.
 </instruction>
 

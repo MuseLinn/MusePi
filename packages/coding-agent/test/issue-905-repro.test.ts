@@ -14,13 +14,15 @@
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
-import { AuthStorage } from "@oh-my-pi/pi-ai";
-import { runModelsListing } from "@oh-my-pi/pi-coding-agent/cli/models-cli";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { AuthStorage } from "@musepi/pi-ai";
+import { runModelsListing } from "@musepi/pi-coding-agent/cli/models-cli";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { TempDir } from "@musepi/pi-utils";
 
 let tmp: TempDir;
 let extPath: string;
+let explicitPackagePath: string;
+let ambientExtPath: string;
 let dbPath: string;
 let shutdownExtPath: string;
 let shutdownPath: string;
@@ -56,6 +58,53 @@ beforeAll(async () => {
 		`export default function (pi) {
 	pi.on("session_shutdown", async () => {
 		await Bun.write(${JSON.stringify(shutdownPath)}, "shutdown");
+	});
+}
+`,
+	);
+	explicitPackagePath = tmp.join("explicit-package");
+	ambientExtPath = tmp.join("ambient.ts");
+	await fs.mkdir(tmp.join("explicit-package", "src"), { recursive: true });
+	await fs.writeFile(
+		tmp.join("explicit-package", "package.json"),
+		JSON.stringify({ name: "explicit-package", omp: { extensions: ["./src/main.ts"] } }),
+	);
+	await fs.writeFile(
+		tmp.join("explicit-package", "src", "main.ts"),
+		`export default function (pi) {
+	pi.registerProvider("explicit-gw", {
+		baseUrl: "https://explicit.example.com/v1",
+		apiKey: "literal-test-key",
+		api: "openai-completions",
+		models: [{
+			id: "explicit-model",
+			name: "Explicit Model",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+		}],
+	});
+}
+`,
+	);
+	await fs.writeFile(
+		ambientExtPath,
+		`export default function (pi) {
+	pi.registerProvider("ambient-gw", {
+		baseUrl: "https://ambient.example.com/v1",
+		apiKey: "literal-test-key",
+		api: "openai-completions",
+		models: [{
+			id: "ambient-model",
+			name: "Ambient Model",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+		}],
 	});
 }
 `,
@@ -113,6 +162,40 @@ test("omp models emits extension shutdown after listing (issue #6297)", async ()
 		});
 
 		expect(await Bun.file(shutdownPath).text()).toBe("shutdown");
+	} finally {
+		authStorage.close();
+	}
+});
+
+test("omp models explicit-only mode resolves a package and excludes settings providers", async () => {
+	const authStorage = await AuthStorage.create(":memory:");
+	try {
+		const modelRegistry = new ModelRegistry(authStorage);
+		const captured: string[] = [];
+		const originalWrite = process.stdout.write.bind(process.stdout);
+		process.stdout.write = ((chunk: string | Uint8Array) => {
+			captured.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+			return true;
+		}) as typeof process.stdout.write;
+
+		try {
+			await runModelsListing({
+				modelRegistry,
+				cwd: tmp.path(),
+				action: "ls",
+				additionalExtensionPaths: [explicitPackagePath],
+				settingsExtensions: [ambientExtPath],
+				disableExtensionDiscovery: true,
+			});
+		} finally {
+			process.stdout.write = originalWrite;
+		}
+
+		const output = captured.join("");
+		expect(output).toContain("explicit-gw");
+		expect(output).toContain("explicit-model");
+		expect(output).not.toContain("ambient-gw");
+		expect(output).not.toContain("ambient-model");
 	} finally {
 		authStorage.close();
 	}

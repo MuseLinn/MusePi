@@ -8,43 +8,186 @@
  * `launch` — see #1496 for the original "args silently leak to the LLM"
  * regression that motivated the split.
  */
-import type { CommandEntry } from "@oh-my-pi/pi-utils/cli";
+import type { CommandEntry } from "@musepi/pi-utils/cli";
+import * as commandHelp from "./cli/command-help";
 import { flagConsumesValue } from "./cli/flag-tables";
+import { launchHelp } from "./commands/launch-help";
 
 export const commands: CommandEntry[] = [
-	{ name: "launch", load: () => import("./commands/launch").then(m => m.default) },
-	{ name: "acp", load: () => import("./commands/acp").then(m => m.default) },
-	{ name: "auth-broker", load: () => import("./commands/auth-broker").then(m => m.default) },
-	{ name: "auth-gateway", load: () => import("./commands/auth-gateway").then(m => m.default) },
-	{ name: "agents", load: () => import("./commands/agents").then(m => m.default) },
-	{ name: "bench", load: () => import("./commands/bench").then(m => m.default) },
-	{ name: "cleanse", load: () => import("./commands/cleanse").then(m => m.default) },
-	{ name: "commit", load: () => import("./commands/commit").then(m => m.default) },
-	{ name: "completions", load: () => import("./commands/completions").then(m => m.default) },
-	{ name: "__complete", load: () => import("./commands/complete").then(m => m.default) },
-	{ name: "config", load: () => import("./commands/config").then(m => m.default) },
-	{ name: "dry-balance", load: () => import("./commands/dry-balance").then(m => m.default) },
-	{ name: "gc", load: () => import("./commands/gc").then(m => m.default) },
-	{ name: "grep", load: () => import("./commands/grep").then(m => m.default) },
-	{ name: "gallery", load: () => import("./commands/gallery").then(m => m.default) },
-	{ name: "grievances", load: () => import("./commands/grievances").then(m => m.default) },
-	{ name: "install", load: () => import("./commands/install").then(m => m.default) },
-	{ name: "join", load: () => import("./commands/join").then(m => m.default) },
-	{ name: "models", load: () => import("./commands/models").then(m => m.default) },
-	{ name: "plugin", load: () => import("./commands/plugin").then(m => m.default) },
-	{ name: "say", load: () => import("./commands/say").then(m => m.default) },
-	{ name: "setup", load: () => import("./commands/setup").then(m => m.default) },
-	{ name: "shell", load: () => import("./commands/shell").then(m => m.default) },
-	{ name: "read", load: () => import("./commands/read").then(m => m.default) },
-	{ name: "ssh", load: () => import("./commands/ssh").then(m => m.default) },
-	{ name: "stats", load: () => import("./commands/stats").then(m => m.default) },
-	{ name: "update", load: () => import("./commands/update").then(m => m.default) },
-	{ name: "usage", load: () => import("./commands/usage").then(m => m.default) },
-	{ name: "tiny-models", load: () => import("./commands/tiny-models").then(m => m.default) },
-	{ name: "token", load: () => import("./commands/token").then(m => m.default) },
-	{ name: "ttsr", load: () => import("./commands/ttsr").then(m => m.default) },
-	{ name: "worktree", load: () => import("./commands/worktree").then(m => m.default), aliases: ["wt"] },
-	{ name: "search", load: () => import("./commands/web-search").then(m => m.default), aliases: ["q"] },
+	{ name: "launch", load: () => import("./commands/launch").then(m => m.default), help: launchHelp },
+	{ name: "serve", load: () => import("./commands/serve").then(m => m.default), help: commandHelp.serveHelp },
+	{
+		name: "acp",
+		load: () => import("./commands/acp").then(m => m.default),
+		help: commandHelp.acpHelp,
+	},
+	{
+		name: "auth-broker",
+		load: () => import("./commands/auth-broker").then(m => m.default),
+		help: commandHelp.authBrokerHelp,
+	},
+	{
+		name: "auth-gateway",
+		load: () => import("./commands/auth-gateway").then(m => m.default),
+		help: commandHelp.authGatewayHelp,
+	},
+	{
+		name: "agents",
+		load: () => import("./commands/agents").then(m => m.default),
+		help: commandHelp.agentsHelp,
+	},
+	{
+		name: "bench",
+		load: () => import("./commands/bench").then(m => m.default),
+		help: commandHelp.benchHelp,
+	},
+	{
+		name: "browser-relay",
+		load: () => import("./commands/browser-relay").then(m => m.default),
+		help: commandHelp.browserRelayHelp,
+	},
+	{
+		name: "cleanse",
+		load: () => import("./commands/cleanse").then(m => m.default),
+		help: commandHelp.cleanseHelp,
+	},
+	{
+		name: "commit",
+		load: () => import("./commands/commit").then(m => m.default),
+		help: commandHelp.commitHelp,
+	},
+	{
+		name: "completions",
+		load: () => import("./commands/completions").then(m => m.default),
+		help: commandHelp.completionsHelp,
+	},
+	{
+		name: "__complete",
+		load: () => import("./commands/complete").then(m => m.default),
+		help: commandHelp.completeHelp,
+	},
+	{
+		name: "config",
+		load: () => import("./commands/config").then(m => m.default),
+		help: commandHelp.configHelp,
+	},
+	{
+		name: "dry-balance",
+		load: () => import("./commands/dry-balance").then(m => m.default),
+		help: commandHelp.dryBalanceHelp,
+	},
+	{
+		name: "gc",
+		load: () => import("./commands/gc").then(m => m.default),
+		help: commandHelp.gcHelp,
+	},
+	{
+		name: "grep",
+		load: () => import("./commands/grep").then(m => m.default),
+		help: commandHelp.grepHelp,
+	},
+	{
+		name: "gallery",
+		load: () => import("./commands/gallery").then(m => m.default),
+		help: commandHelp.galleryHelp,
+	},
+	{
+		name: "grievances",
+		load: () => import("./commands/grievances").then(m => m.default),
+		help: commandHelp.grievancesHelp,
+	},
+	{
+		name: "install",
+		load: () => import("./commands/install").then(m => m.default),
+		help: commandHelp.installHelp,
+	},
+	{
+		name: "join",
+		load: () => import("./commands/join").then(m => m.default),
+		help: commandHelp.joinHelp,
+	},
+	{
+		name: "models",
+		load: () => import("./commands/models").then(m => m.default),
+		help: commandHelp.modelsHelp,
+	},
+	{
+		name: "plugin",
+		load: () => import("./commands/plugin").then(m => m.default),
+		help: commandHelp.pluginHelp,
+	},
+	{
+		name: "say",
+		load: () => import("./commands/say").then(m => m.default),
+		help: commandHelp.sayHelp,
+	},
+	{
+		name: "share",
+		load: () => import("./commands/share").then(m => m.default),
+		help: commandHelp.shareHelp,
+	},
+	{
+		name: "setup",
+		load: () => import("./commands/setup").then(m => m.default),
+		help: commandHelp.setupHelp,
+	},
+	{
+		name: "shell",
+		load: () => import("./commands/shell").then(m => m.default),
+		help: commandHelp.shellHelp,
+	},
+	{
+		name: "read",
+		load: () => import("./commands/read").then(m => m.default),
+		help: commandHelp.readHelp,
+	},
+	{
+		name: "ssh",
+		load: () => import("./commands/ssh").then(m => m.default),
+		help: commandHelp.sshHelp,
+	},
+	{
+		name: "stats",
+		load: () => import("./commands/stats").then(m => m.default),
+		help: commandHelp.statsHelp,
+	},
+	{
+		name: "update",
+		load: () => import("./commands/update").then(m => m.default),
+		help: commandHelp.updateHelp,
+	},
+	{
+		name: "usage",
+		load: () => import("./commands/usage").then(m => m.default),
+		help: commandHelp.usageHelp,
+	},
+	{
+		name: "tiny-models",
+		load: () => import("./commands/tiny-models").then(m => m.default),
+		help: commandHelp.tinyModelsHelp,
+	},
+	{
+		name: "token",
+		load: () => import("./commands/token").then(m => m.default),
+		help: commandHelp.tokenHelp,
+	},
+	{
+		name: "ttsr",
+		load: () => import("./commands/ttsr").then(m => m.default),
+		help: commandHelp.ttsrHelp,
+	},
+	{
+		name: "worktree",
+		load: () => import("./commands/worktree").then(m => m.default),
+		aliases: ["wt"],
+		help: commandHelp.worktreeHelp,
+	},
+	{
+		name: "search",
+		load: () => import("./commands/web-search").then(m => m.default),
+		aliases: ["q"],
+		help: commandHelp.searchHelp,
+	},
 ];
 
 // Documented-looking plugin/marketplace verbs that are NOT registered top-level

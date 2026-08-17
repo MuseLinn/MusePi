@@ -1,4 +1,4 @@
-import { prompt } from "@oh-my-pi/pi-utils";
+import { prompt } from "@musepi/pi-utils";
 import workflowNoticeTemplate from "../prompts/system/workflow-notice.md" with { type: "text" };
 import { createGradientHighlighter, type KeywordHighlighter } from "./gradient-highlight";
 import { magicKeywordRegex } from "./magic-keyword-boundary";
@@ -23,8 +23,14 @@ const WORKFLOW_WORD = magicKeywordRegex("workflowz");
 export const WORKFLOW_NOTICE: string = renderWorkflowNotice({ taskBatch: true });
 
 /** renderWorkflowNotice renders the workflow notice for the active task schema. */
-export function renderWorkflowNotice({ taskBatch }: { taskBatch: boolean }): string {
-	return prompt.render(workflowNoticeTemplate, { taskBatch }).trim();
+export function renderWorkflowNotice({
+	taskBatch,
+	scoutAvailable,
+}: {
+	taskBatch: boolean;
+	scoutAvailable?: boolean;
+}): string {
+	return prompt.render(workflowNoticeTemplate, { taskBatch, scoutAvailable: scoutAvailable ?? true }).trim();
 }
 
 /**

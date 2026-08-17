@@ -1,6 +1,6 @@
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Model } from "@musepi/pi-ai";
+import { logger } from "@musepi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import {
 	formatModelSelectorValue,

@@ -10,10 +10,10 @@ import {
 	type AgentMessage,
 	EventLoopKeepalive,
 	ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
-import type { CompactionOutcome } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@oh-my-pi/pi-ai";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+} from "@musepi/pi-agent-core";
+import type { CompactionOutcome } from "@musepi/pi-agent-core/compaction";
+import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@musepi/pi-ai";
+import { modelsAreEqual } from "@musepi/pi-catalog/models";
 import type {
 	AutocompleteProvider,
 	Component,
@@ -22,7 +22,7 @@ import type {
 	NativeScrollbackLiveRegion,
 	OverlayHandle,
 	SlashCommand,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import {
 	Container,
 	clearRenderCache,
@@ -36,8 +36,9 @@ import {
 	Text,
 	TUI,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { isInsideTerminalMultiplexer } from "@oh-my-pi/pi-tui/terminal-capabilities";
+} from "@musepi/pi-tui";
+import type { TerminalAppearanceRequestToken } from "@musepi/pi-tui/terminal";
+import { isInsideTerminalMultiplexer } from "@musepi/pi-tui/terminal-capabilities";
 import {
 	$env,
 	APP_NAME,
@@ -50,8 +51,8 @@ import {
 	postmortem,
 	prompt,
 	setProjectDir,
-} from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+} from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import { reset as resetCapabilities } from "../capability";
 import type { CollabGuestLink } from "../collab/guest";
 import type { CollabHost } from "../collab/host";
@@ -79,6 +80,7 @@ import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import type { Goal, GoalModeState } from "../goals/state";
+import { t } from "../i18n/index.js";
 import { resolveLocalUrlToPath } from "../internal-urls";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "../lsp/startup-events";
 import type { MCPManager } from "../mcp";
@@ -426,8 +428,10 @@ export function renderSubagentHudLines(sessions: ObservableSession[], columns: n
 	if (hiddenCount > 0) {
 		rows.push(theme.fg("dim", `… ${hiddenCount} more running — open Agent Hub for full list`));
 	}
-	return ["", theme.bold(theme.fg("accent", "Subagents")), ...rows.map(line => ` ${line}`)];
+	return ["", theme.bold(theme.fg("accent", t("Subagents"))), ...rows.map(line => ` ${line}`)];
 }
+
+const CTRL_L_APPEARANCE_RESPONSE_DEADLINE_MS = 2000;
 
 export class InteractiveMode implements InteractiveModeContext {
 	session: AgentSession;
@@ -457,6 +461,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	initialChatRendered = false;
 	isBashMode = false;
 	toolOutputExpanded = false;
+	hideToolActivity = false;
 	todoExpanded = false;
 	planModeEnabled = false;
 	planModePaused = false;
@@ -471,6 +476,8 @@ export class InteractiveMode implements InteractiveModeContext {
 	#loopAutoSubmitTimer: NodeJS.Timeout | undefined;
 	#todoAutoClearTimer: NodeJS.Timeout | undefined;
 	#modelCycleClearTimer: NodeJS.Timeout | undefined;
+	#nextAppearanceRequestToken = 1;
+	#appearanceRefreshRequest: { token: TerminalAppearanceRequestToken; deadline: number } | undefined;
 	todoPhases: TodoPhase[] = [];
 	hideThinkingBlock = false;
 	#sessionsWithDisplayableThinkingContent = new WeakSet<AgentSession>();
@@ -517,7 +524,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	#workingMessageAccentCacheValue?: WorkingMessageAccent;
 	#workingMessageAccentCacheHasValue = false;
 	get #defaultWorkingMessage(): string {
-		return `Working…${interruptHint()}`;
+		return `${t("Working…")}${interruptHint()}`;
 	}
 	unsubscribe?: () => void;
 	onInputCallback?: (input: SubmittedUserInput) => void;
@@ -746,7 +753,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.editor.setHistoryStorage(this.historyStorage);
 			this.historyStorage.setSessionResolver(() => this.sessionManager.getSessionId());
 		} catch (error) {
-			logger.warn("History storage unavailable", { error: String(error) });
+			logger.warn(t("History storage unavailable"), { error: String(error) });
 		}
 		this.hookWidgetContainerAbove = new Container();
 		this.hookWidgetContainerAbove.addChild(new Spacer(1));
@@ -773,6 +780,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// hot path where the render never gets to paint the result.
 		this.editor.setTopBorderProvider(availableWidth => this.statusLine.getTopBorder(availableWidth));
 
+		this.hideToolActivity = settings.get("display.hideToolActivity");
 		this.hideThinkingBlock = settings.get("hideThinkingBlock");
 		this.proseOnlyThinking = settings.get("proseOnlyThinking");
 
@@ -1090,7 +1098,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.ui.requestRender();
 			}
 		} catch (err) {
-			logger.warn("Failed to restore session draft", { error: String(err) });
+			logger.warn(t("Failed to restore session draft"), { error: String(err) });
 		}
 
 		// Subscribe to agent events
@@ -1141,8 +1149,38 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Subscribe to terminal dark/light appearance changes.
 		// The terminal queries background color via OSC 11 at startup and on
 		// Mode 2031 notifications, computing luminance to detect dark/light.
-		this.ui.terminal.onAppearanceChange(mode => {
-			onTerminalAppearanceChange(mode);
+		const unsubscribeAppearanceReport = this.ui.terminal.onAppearanceReport?.((_mode, requestToken) => {
+			const request = this.#appearanceRefreshRequest;
+			if (request === undefined || requestToken !== request.token) return;
+			// ProcessTerminal dispatches report callbacks first, then synchronously
+			// dispatches onAppearanceChange when the reported appearance changed.
+			// That change callback consumes the request below before this microtask
+			// runs; an unchanged matching report has no change callback, so it
+			// consumes the one-shot here. Comparing the captured request prevents a
+			// newer Ctrl+L request from being cleared by this report's microtask.
+			queueMicrotask(() => {
+				if (this.#appearanceRefreshRequest === request) {
+					this.#appearanceRefreshRequest = undefined;
+				}
+			});
+		});
+		if (unsubscribeAppearanceReport) {
+			this.#eventBusUnsubscribers.push(unsubscribeAppearanceReport);
+		}
+		this.ui.terminal.onAppearanceChange((mode, requestToken) => {
+			const request = this.#appearanceRefreshRequest;
+			const appearanceRefreshWasRequested =
+				request !== undefined &&
+				Date.now() <= request.deadline &&
+				(requestToken === request.token || requestToken === undefined);
+			if (request !== undefined && requestToken === request.token) {
+				this.#appearanceRefreshRequest = undefined;
+			}
+			// Ctrl+L already replays immediately below. If either its asynchronous
+			// OSC 11 response or an automatic query ahead of it reveals a theme
+			// change, commit that change so theme loading performs a second full
+			// replay with the newly detected palette.
+			onTerminalAppearanceChange(mode, appearanceRefreshWasRequested ? {} : undefined);
 		});
 
 		// A branch change (checkout, worktree switch, `git switch`) invalidates
@@ -2660,7 +2698,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				try {
 					await this.#restorePlanPreviousModel(planModeModelState);
 				} catch (rollbackError) {
-					logger.warn("Failed to restore plan model after plan exit failure", { error: String(rollbackError) });
+					logger.warn(t("Failed to restore plan model after plan exit failure"), { error: String(rollbackError) });
 				}
 			}
 			const enabledTools = this.session.getEnabledToolNames();
@@ -2674,7 +2712,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				try {
 					await this.session.setActiveToolPresentation(planModeTools, planModeMountedTools);
 				} catch (rollbackError) {
-					logger.warn("Failed to restore plan tools after plan exit failure", { error: String(rollbackError) });
+					logger.warn(t("Failed to restore plan tools after plan exit failure"), { error: String(rollbackError) });
 				}
 			}
 			throw error;
@@ -2915,7 +2953,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	#formatKeepContextLabel(contextUsage: ContextUsage | undefined): string {
 		if (!contextUsage) {
-			return "Approve and keep context";
+			return t("Approve and keep context");
 		}
 		const tokens = formatContextTokenCount(contextUsage.tokens);
 		const contextWindow = formatContextTokenCount(contextUsage.contextWindow);
@@ -3438,7 +3476,7 @@ export class InteractiveMode implements InteractiveModeContext {
 				return;
 			}
 			const objective = (
-				await this.showHookEditor("Goal objective", undefined, undefined, { promptStyle: true })
+				await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true })
 			)?.trim();
 			if (!objective) return;
 			await this.#startGoalFromObjective(objective);
@@ -3539,12 +3577,12 @@ export class InteractiveMode implements InteractiveModeContext {
 		const title = state === "active" ? `Goal: ${summary} (${goal.status})` : `Goal paused: ${summary}`;
 		const items =
 			state === "active"
-				? ["Show details", "Adjust budget…", "Pause", "Drop"]
-				: ["Resume", "Show details", "Adjust budget…", "Drop"];
+				? [t("Show details"), "Adjust budget…", "Pause", "Drop"]
+				: ["Resume", t("Show details"), "Adjust budget…", "Drop"];
 		const choice = await this.showHookSelector(title, items);
 		if (!choice) return;
 		switch (choice) {
-			case "Show details":
+			case t("Show details"):
 				this.#showGoalDetails();
 				return;
 			case "Adjust budget…":
@@ -3658,7 +3696,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		const objective = rest.trim()
 			? rest.trim()
-			: (await this.showHookEditor("Goal objective", undefined, undefined, { promptStyle: true }))?.trim();
+			: (await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true }))?.trim();
 		if (!objective) return;
 		if (this.goalModeEnabled) {
 			await this.#replaceGoalFromObjective(objective);
@@ -3767,7 +3805,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const choice = await this.showPlanReview(
 			planContent,
 			"Plan mode - next step",
-			["Approve and execute", "Approve and compact context", keepContextLabel, "Refine plan"],
+			[t("Approve and execute"), t("Approve and compact context"), keepContextLabel, t("Refine plan")],
 			{
 				helpText,
 				onExternalEditor: () => void this.#openPlanInExternalEditor(planFilePath),
@@ -3792,7 +3830,11 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.ui.requestRender();
 		};
 
-		if (choice === "Approve and execute" || choice === "Approve and compact context" || choice === keepContextLabel) {
+		if (
+			choice === t("Approve and execute") ||
+			choice === t("Approve and compact context") ||
+			choice === keepContextLabel
+		) {
 			try {
 				// Prefer in-overlay edits (already in memory) over a disk re-read. The
 				// overlay mirrors edits as they happen, and approval awaits one final
@@ -3837,8 +3879,8 @@ export class InteractiveMode implements InteractiveModeContext {
 				const executionDispatched = await this.#approvePlan(latestPlanContent, {
 					planFilePath,
 					title: details.title,
-					preserveContext: choice !== "Approve and execute",
-					compactBeforeExecute: choice === "Approve and compact context",
+					preserveContext: choice !== t("Approve and execute"),
+					compactBeforeExecute: choice === t("Approve and compact context"),
 					executionModel,
 				});
 				if (executionDispatched) this.#planReviewAnnotationState.delete(annotationStateKey);
@@ -3851,7 +3893,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 
-		if (choice === "Refine plan") {
+		if (choice === t("Refine plan")) {
 			const refinement = feedback.trim();
 			try {
 				if (refinement) {
@@ -3932,6 +3974,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 
 	stop(): void {
+		this.#appearanceRefreshRequest = undefined;
 		if (this.loadingAnimation) {
 			this.#stopLoadingAnimation(false);
 		}
@@ -4086,7 +4129,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#inputController.setupEditorSubmitHandler();
 
 		void this.refreshSlashCommandState().catch(error => {
-			logger.warn("Failed to refresh slash command state for custom editor", { error: String(error) });
+			logger.warn(t("Failed to refresh slash command state for custom editor"), { error: String(error) });
 		});
 
 		this.updateEditorBorderColor();
@@ -4103,7 +4146,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.ui.requestRender();
 	}
 
-	/** Defer transcript command panels until the active turn can no longer grow above them. */
+	/**
+	 * Defer transcript command panels while the agent is streaming, then mount
+	 * them at the next settle, terminal or not. A non-terminal settle is only a
+	 * scheduling pause, so resumed streaming can still land below a panel
+	 * flushed there. That is preferred over leaving it queued behind a command
+	 * the user runs during the pause, which mounts immediately and would put the
+	 * older panel out of order.
+	 */
 	presentCommandOutput(content: Component | readonly Component[]): void {
 		if (!this.session.isStreaming) {
 			this.present(content);
@@ -4116,6 +4166,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#pendingCommandOutputSessionId = sessionId;
 		const items = Array.isArray(content) ? content : [content as Component];
 		this.#pendingCommandOutput.push(...items);
+		// No feedback here on purpose: mounting anything into the transcript
+		// mid-turn (even a status line) re-renders rows below the growing live
+		// block and duplicates them in native scrollback — the exact regression
+		// issues #4806/#6767 pin. The queue flushes at the next settle.
 	}
 
 	/** Mount every command panel queued for the current session while the agent was streaming. */
@@ -4475,6 +4529,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#commandController.handleFreshCommand();
 	}
 
+	handleResetContextCommand(): Promise<void> {
+		return this.#commandController.handleResetContextCommand();
+	}
+
 	async handleDropCommand(): Promise<void> {
 		if (this.#vibeSessionTransitionBlocked()) return;
 		this.#prepareSessionSwitch();
@@ -4752,6 +4810,27 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#inputController.handleCtrlZ();
 	}
 
+	resetDisplayAfterAppearanceRefresh(): void {
+		const refreshAppearance = this.ui.terminal.refreshAppearance;
+		if (refreshAppearance) {
+			const token = this.#nextAppearanceRequestToken++;
+			const request = {
+				token,
+				deadline: Date.now() + CTRL_L_APPEARANCE_RESPONSE_DEADLINE_MS,
+			};
+			this.#appearanceRefreshRequest = request;
+			const acceptedToken = refreshAppearance.call(this.ui.terminal, token);
+			if (acceptedToken !== token && this.#appearanceRefreshRequest === request) {
+				this.#appearanceRefreshRequest = undefined;
+			}
+		} else {
+			this.#appearanceRefreshRequest = undefined;
+		}
+		// Preserve Ctrl+L's immediate full replay when the probe is unsupported,
+		// receives no response, or reports an unchanged appearance.
+		this.ui.resetDisplay();
+	}
+
 	handleDequeue(): void {
 		this.#inputController.handleDequeue();
 	}
@@ -4785,6 +4864,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#btwController.canBranch();
 	}
 
+	/** Reserves plain `b` only after /btw has a completed branch action to handle. */
+	handlesBtwBranchKey(): boolean {
+		return this.#btwController.handlesBranchKey();
+	}
+
 	handleBtwBranchKey(): Promise<boolean> {
 		return this.#btwController.handleBranch();
 	}
@@ -4797,9 +4881,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		return this.#btwController.handleCopy();
 	}
 
-	async handleBtwBranch(question: string, assistantMessage: AssistantMessage): Promise<void> {
+	async handleBtwBranch(
+		question: string,
+		assistantMessage: AssistantMessage,
+		leafId: string,
+		sessionId: string,
+	): Promise<void> {
 		try {
-			const result = await this.session.branchFromBtw(question, assistantMessage);
+			const result = await this.session.branchFromBtw(question, assistantMessage, leafId, sessionId);
 			if (result.cancelled) {
 				this.showStatus("/btw branch cancelled", { dim: true });
 				return;

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { compareVersions, enumerateChangelogVersions, mergePackageSection } from "./ci-release-notes";
+// `compareVersions` moved into pi-utils at the v17.2.9 sync (the script now
+// imports it rather than defining its own).
+import { compareVersions } from "../packages/utils/src/version";
+import { enumerateChangelogVersions, mergePackageSection } from "./ci-release-notes";
 
 const FIXTURE = [
 	"# Changelog",

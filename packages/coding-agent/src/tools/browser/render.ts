@@ -5,8 +5,8 @@
  * cell with status icon, optional output, and expand/collapse handling. `open`
  * and `close` actions render as compact status lines.
  */
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import type { Theme } from "../../modes/theme/theme";
 import { Hasher, isFramedBlockComponent, markFramedBlockComponent, renderCodeCell, renderStatusLine } from "../../tui";
@@ -24,7 +24,7 @@ interface BrowserRenderArgs {
 	code?: string;
 	all?: boolean;
 	kill?: boolean;
-	app?: { path?: string; cdp_url?: string; target?: string; cmux?: boolean; surface?: string };
+	app?: { path?: string; cdp_url?: string; relay?: boolean; target?: string; cmux?: boolean; surface?: string };
 	viewport?: { width: number; height: number; scale?: number };
 	timeout?: number;
 }
@@ -39,6 +39,7 @@ function describeBrowser(args: BrowserRenderArgs, details: BrowserToolDetails | 
 	if (cdpUrl) return `connected ${cdpUrl}`;
 	const appPath = typeof args.app?.path === "string" ? args.app.path : "";
 	if (appPath) return `spawned ${shortenPath(appPath)}`;
+	if (args.app?.relay) return "relay";
 	if (args.app?.cmux !== false && (args.app?.cmux === true || args.app?.surface)) {
 		return args.app.surface ? `cmux ${args.app.surface}` : "cmux";
 	}
@@ -49,6 +50,8 @@ function describeBrowser(args: BrowserRenderArgs, details: BrowserToolDetails | 
 			return "spawned";
 		case "connected":
 			return "connected";
+		case "relay":
+			return "relay";
 		case "cmux":
 			return "cmux";
 		default:

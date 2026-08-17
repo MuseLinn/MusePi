@@ -1,4 +1,5 @@
-import { type Component, matchesKey, padding, Text, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import { type Component, matchesKey, padding, Text, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { replaceTabs } from "../../tools/render-utils";
 import { highlightCode, theme } from "../theme/theme";
 import type { CopyTarget } from "../utils/copy-targets";
@@ -206,7 +207,7 @@ export class CopySelectorComponent implements Component {
 		].join(theme.fg("dim", " · "));
 
 		return [
-			topBorder(width, "Copy to clipboard"),
+			topBorder(width, t("Copy to clipboard")),
 			...this.#renderTree(width, flat, cursorIdx, treeRows),
 			divider(width),
 			...this.#renderPreview(width, selected, previewRows),

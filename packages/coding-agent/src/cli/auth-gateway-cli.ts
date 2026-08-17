@@ -23,17 +23,17 @@ import {
 	type CredentialCompletionResult,
 	completeSimple,
 	type Model,
-} from "@oh-my-pi/pi-ai";
+} from "@musepi/pi-ai";
 import {
 	AuthBrokerClient,
 	loadAuthBrokerAccountPool,
 	RemoteAuthCredentialStore,
 	type SnapshotResponse,
-} from "@oh-my-pi/pi-ai/auth-broker";
-import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@oh-my-pi/pi-ai/auth-gateway";
-import { type GeneratedProvider, getBundledModels } from "@oh-my-pi/pi-catalog/models";
-import { getConfigRootDir, isEnoent, logger, VERSION } from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+} from "@musepi/pi-ai/auth-broker";
+import { DEFAULT_AUTH_GATEWAY_BIND, startAuthGateway } from "@musepi/pi-ai/auth-gateway";
+import { type GeneratedProvider, getBundledModels } from "@musepi/pi-catalog/models";
+import { getConfigRootDir, isEnoent, logger, VERSION } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import { ModelRegistry } from "../config/model-registry";
 import { type AuthBrokerClientConfig, resolveAuthBrokerConfig } from "../session/auth-broker-config";
 

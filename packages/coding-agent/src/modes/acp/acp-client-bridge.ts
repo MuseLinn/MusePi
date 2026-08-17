@@ -11,7 +11,7 @@ import type {
 	ClientCapabilities,
 	RequestPermissionRequest,
 	ToolCallUpdate,
-} from "@agentclientprotocol/sdk";
+} from "@musepi/pi-utils/acp";
 import type {
 	ClientBridge,
 	ClientBridgeCapabilities,

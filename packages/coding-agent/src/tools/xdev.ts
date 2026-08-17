@@ -28,14 +28,15 @@
  * known and provably does not target `xd://`; device writes then delegate to
  * the wrapped tool's own renderer with the decoded inner args.
  */
-import type { AgentToolContext, AgentToolResult, AgentToolUpdateCallback, ToolLoadMode } from "@oh-my-pi/pi-agent-core";
-import { type Tool as AiTool, jsonSchemaToTypeScript, toolWireSchema, validateToolArguments } from "@oh-my-pi/pi-ai";
-import { type Component, Container, Text } from "@oh-my-pi/pi-tui";
-import { parseStreamingJson } from "@oh-my-pi/pi-utils";
+import type { AgentToolContext, AgentToolResult, AgentToolUpdateCallback, ToolLoadMode } from "@musepi/pi-agent-core";
+import { type Tool as AiTool, jsonSchemaToTypeScript, toolWireSchema, validateToolArguments } from "@musepi/pi-ai";
+import { type Component, Container, Text } from "@musepi/pi-tui";
+import { parseStreamingJson } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { XD_URL_PREFIX } from "../internal-urls/xd-protocol";
 import type { Theme } from "../modes/theme/theme";
 import { truncateHeadBytes } from "../session/streaming-output";
+import { resolveToolTier, type ToolTier } from "./approval";
 import { renderDefaultToolExecution } from "./default-renderer";
 import type { Tool } from "./index";
 import { replaceTabs } from "./render-utils";
@@ -88,6 +89,13 @@ export interface XdevDispatch {
 	mode: "help" | "execute";
 	/** Validated inner args, kept for renderer delegation on result rebuilds. */
 	args?: Record<string, unknown>;
+	/**
+	 * Approval tier of the wrapped tool for {@link args} (`read` = no workspace
+	 * mutation). Absent for `help` dispatches and calls whose tier could not be
+	 * resolved. Consumed by the prewalk coordinator to skip read-only device
+	 * calls when deciding the model hand-off (issue #7312).
+	 */
+	tier?: ToolTier;
 	/** Details object returned by the wrapped tool, when executed. */
 	inner?: unknown;
 }
@@ -415,7 +423,18 @@ export async function dispatchXdevTool(
 		}
 
 		const validated = parseDeviceArgs(canonical as AiTool, content, toolCallId, () => renderDocs(canonical));
-		xdev = { ...xdev, args: validated };
+		// Record the wrapped tool's approval tier so the prewalk coordinator can
+		// tell a read-only device call (e.g. `lsp` navigation) from a real
+		// workspace mutation without re-decoding the payload. Best-effort: a
+		// throwing approval leaves the tier absent (prewalk then declines to
+		// switch), unlike the write gate which fails closed to `exec`.
+		let tier: ToolTier | undefined;
+		try {
+			tier = resolveToolTier(canonical, validated);
+		} catch {
+			tier = undefined;
+		}
+		xdev = { ...xdev, args: validated, tier };
 		const innerOnUpdate: AgentToolUpdateCallback | undefined = onUpdate
 			? partial =>
 					onUpdate({
@@ -425,7 +444,15 @@ export async function dispatchXdevTool(
 					})
 			: undefined;
 		const executable = state.decorateExecution?.(canonical) ?? canonical;
-		const result = await executable.execute(toolCallId, validated as never, signal, innerOnUpdate, context);
+		const executionContext = context
+			? {
+					...context,
+					xdevTierResolved: (effectiveTier: ToolTier) => {
+						xdev = { ...xdev, tier: effectiveTier };
+					},
+				}
+			: undefined;
+		const result = await executable.execute(toolCallId, validated as never, signal, innerOnUpdate, executionContext);
 		return { result, xdev: { ...xdev, inner: result.details } };
 	} catch (error) {
 		if (

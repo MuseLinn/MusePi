@@ -6,8 +6,8 @@
 	overflow-x: hidden;
 	padding: 12px 16px 24px;
 	font-family: var(--font-ui);
-	font-size: 13px;
-	line-height: 1.5;
+	font-size: var(--tr-font-size, 14px);
+	line-height: var(--tr-line-height, 1.5);
 	color: var(--fg);
 }
 
@@ -16,23 +16,54 @@
 	text-align: center;
 	color: var(--fg-faint);
 	font-family: var(--font-mono);
+	font-size: 13.5px;
+}
+
+/* Collapsed-history spacer (windowed long sessions): fills the space the
+ * unrendered rows would occupy and carries the reveal control. The
+ * height is an estimate (set inline from measured avg row height), so
+ * the scrollbar is approximate across the collapsed band — it converges
+ * on real content once the window extends. */
+.tr-window-more {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	overflow: hidden;
+}
+.tr-window-more-btn {
+	margin-top: 10px;
+	padding: 3px 10px;
+	border: 0.5px solid color-mix(in oklab, var(--fg-faint) 30%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+	color: var(--fg-faint);
+	font-family: var(--font-ui);
 	font-size: 12px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 120ms ease, color 120ms ease;
+}
+.tr-window-more-btn:hover {
+	background: color-mix(in oklab, var(--fg) 9%, transparent);
+	color: var(--fg);
 }
 
 /* ---- rows ---- */
 
 .tr-row {
 	display: grid;
-	grid-template-columns: 72px minmax(0, 1fr);
-	gap: 0 12px;
-	padding: 5px 0;
+	/* 40px gutter fits the 32px agent orb with room for the timestamp; the
+	 * old 72px+12px left margin pushed messages far from the avatar. */
+	grid-template-columns: 40px minmax(0, 1fr);
+	gap: 0 10px;
+	padding: var(--tr-row-pad, 6px) 0;
 }
 
 .tr-gutter {
 	padding-top: 3px;
 	text-align: right;
 	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 13.5px;
 	font-weight: 500;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -60,9 +91,76 @@
 	align-self: stretch;
 }
 
+/* Flex items of the column body default to fit-content on the cross axis
+ * (align-items: flex-start), so an unbreakable long line with wrap OFF
+ * sized .tr-think to the code's intrinsic width and stretched the whole
+ * row. Clamp every direct child to the body width (openchamber parity:
+ * message-body blocks are w-full); the pre inside scrolls instead. */
+.tr-body > * {
+	max-width: 100%;
+}
+
 
 .tr-row--custom .tr-body {
 	color: var(--fg-muted);
+}
+
+/* User messages: right-aligned rounded bubble (ZCode-style). */
+.tr-row--user .tr-body {
+	align-items: flex-end;
+}
+
+.tr-row--user .tr-body > .tr-md {
+	align-self: auto;
+	max-width: min(70%, 620px);
+	padding: 9px 14px;
+	border-radius: 16px 16px 4px 16px;
+	background: color-mix(in oklab, var(--accent) 13%, var(--bg-raised));
+	border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+	line-height: 1.55;
+}
+
+/* User messages as plain text (chat settings → 用户消息渲染): keep the
+ * bubble, drop markdown typography, preserve line breaks. */
+.tr-user-plain {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 13.5px;
+}
+
+/* Long user messages (chat settings → 折叠较长的用户消息): clamp the body
+ * to two lines with a gradient fade + expand toggle. The bubble stays on
+ * the outer .tr-md so the direct-child selector keeps its styling. */
+.tr-user-collapse-body {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	mask-image: linear-gradient(to bottom, black 72%, transparent);
+	-webkit-mask-image: linear-gradient(to bottom, black 72%, transparent);
+}
+
+.tr-user-collapse--open .tr-user-collapse-body {
+	display: block;
+	overflow: visible;
+	mask-image: none;
+	-webkit-mask-image: none;
+}
+
+.tr-user-collapse-toggle {
+	margin-top: 5px;
+	padding: 0;
+	border: none;
+	background: none;
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--accent);
+	cursor: pointer;
+}
+
+.tr-user-collapse-toggle:hover {
+	text-decoration: underline;
 }
 
 .tr-custom {
@@ -88,7 +186,7 @@
 	background: var(--accent-muted);
 	color: var(--accent);
 	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 13.5px;
 	line-height: 16px;
 	text-transform: none;
 	letter-spacing: 0;
@@ -104,7 +202,7 @@
 	background: var(--bg-inset);
 	color: var(--fg-muted);
 	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 13.5px;
 	white-space: nowrap;
 }
 
@@ -130,7 +228,7 @@
 .tr-stop-msg {
 	color: var(--err);
 	font-family: var(--font-mono);
-	font-size: 11.5px;
+	font-size: 13px;
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -147,12 +245,37 @@
 	cursor: pointer;
 	color: var(--fg-faint);
 	font-family: var(--font-ui);
-	font-size: 12px;
+	font-size: 13.5px;
 	font-style: italic;
 }
 
 .tr-think-head:hover {
 	color: var(--fg-muted);
+}
+
+/* aicss thinking-state shimmer — agent actively thinking (not redacted). */
+.tr-think-label {
+	font-size: 13.5px;
+	font-weight: 500;
+	font-style: italic;
+	color: transparent;
+	-webkit-text-fill-color: transparent;
+	background: linear-gradient(90deg, var(--fg-muted) 0%, var(--fg-muted) 30%, var(--fg-faint) 45%, var(--fg-faint) 55%, var(--fg-muted) 70%, var(--fg-muted) 100%);
+	background-size: 300% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	animation: tr-label-shine 2.25s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+}
+
+@keyframes tr-label-shine {
+	0%,
+	18% {
+		background-position: 100% 0;
+	}
+	82%,
+	100% {
+		background-position: 0% 0;
+	}
 }
 
 .tr-think-body {
@@ -162,9 +285,86 @@
 	border-left: 2px solid var(--border);
 	color: var(--fg-muted);
 	font-style: italic;
-	font-size: 12px;
+	font-size: 13.5px;
+	/* Denser than the pre-markdown baseline (1.5 + 6px sentence gap):
+	 * 1.45 line-height and flush sentences keep the block tight while
+	 * giving the serif italic a touch of reading air. */
+	line-height: 1.45;
 	white-space: pre-wrap;
 	word-break: break-word;
+	box-sizing: content-box;
+	height: var(--h, 0px);
+	overflow: hidden;
+	transition:
+		height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+		padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tr-think-body--closed {
+	padding: 0;
+}
+
+/* Thinking text renders markdown (TUI parity) inside the italic body —
+ * keep the block's own compact rhythm: the .tr-md 1.55 line-height,
+ * paragraph/heading/list/code margins all inflate the reveal; spacing comes
+ * from the sentence wrapper. Headings keep their weight but the body's
+ * size/line-height (a `##` inside reasoning must not balloon). Code
+ * spans/fences stay upright. */
+.tr-think-body .tr-md {
+	line-height: inherit;
+	/* marked output ends with a trailing newline; pre-wrap would render a
+	 * ghost line box after every sentence (the real "loose line spacing" —
+	 * 18.9px per sentence). Collapse the text node; the inner p keeps its
+	 * own pre-wrap for multi-line content. */
+	white-space: normal;
+}
+
+.tr-think-body .tr-md p,
+.tr-think-body .tr-md ul,
+.tr-think-body .tr-md ol,
+.tr-think-body .tr-md blockquote,
+.tr-think-body .tr-md .tr-code {
+	margin: 0;
+}
+
+.tr-think-body .tr-md li {
+	margin: 0;
+}
+
+.tr-think-body .tr-md ul,
+.tr-think-body .tr-md ol {
+	padding-left: 20px;
+}
+
+.tr-think-body .tr-md h1,
+.tr-think-body .tr-md h2,
+.tr-think-body .tr-md h3,
+.tr-think-body .tr-md h4,
+.tr-think-body .tr-md h5,
+.tr-think-body .tr-md h6 {
+	margin: 0 0 2px;
+	font-size: inherit;
+	line-height: inherit;
+	font-weight: 600;
+}
+
+.tr-think-body .tr-md blockquote {
+	padding-left: 0.8em;
+	border-left: 2px solid var(--border);
+}
+
+.tr-think-body .tr-md code,
+.tr-think-body .tr-md pre {
+	font-style: normal;
+}
+
+/* Transcript UI chrome is not selectable text: the thinking toggle head,
+ * the collapsed (blurred shimmer) body, code-block chrome, tool heads. */
+.tr-think-head,
+.tr-think-body--closed,
+.tr-code-head,
+.tv-head {
+	user-select: none;
 }
 
 .tr-chev {
@@ -186,7 +386,7 @@
 	margin: 10px 0;
 	color: var(--fg-faint);
 	font-family: var(--font-mono);
-	font-size: 10px;
+	font-size: 13.5px;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	user-select: none;
@@ -203,13 +403,49 @@
 .tr-marker {
 	color: var(--fg-faint);
 	font-family: var(--font-mono);
-	font-size: 11px;
+	font-size: 14px;
 }
 
 .tr-shimmer {
 	color: var(--fg-muted);
-	font-size: 12.5px;
+	font-size: 14px;
 	animation: tr-pulse 1.4s ease-in-out infinite;
+}
+
+/* Streaming thinking block with no text yet: a compact label + animated
+ * dots instead of an empty shell (user: thinking state without content). */
+.tr-think--pending {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 2px;
+}
+
+.tr-think-dots {
+	display: inline-flex;
+	gap: 3px;
+	align-items: center;
+}
+
+.tr-think-dots i {
+	width: 4px;
+	height: 4px;
+	border-radius: 50%;
+	background: var(--fg-muted);
+	animation: tr-dot-bounce 1.2s ease-in-out infinite;
+}
+
+.tr-think-dots i:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.tr-think-dots i:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes tr-dot-bounce {
+	0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+	30% { transform: translateY(-3px); opacity: 1; }
 }
 
 /* ---- tool cards ----
@@ -227,7 +463,7 @@
  * possible, but still emergency-break long URLs or identifiers before they
  * overflow the transcript. */
 .tr-md {
-	line-height: 1.55;
+	line-height: var(--tr-md-lh, 1.55);
 	overflow-wrap: break-word;
 	word-break: keep-all;
 }
@@ -241,7 +477,7 @@
 }
 
 .tr-md p {
-	margin: 6px 0;
+	margin: var(--tr-para-gap, 6px) 0;
 }
 
 .tr-md p,
@@ -255,27 +491,27 @@
 .tr-md h4,
 .tr-md h5,
 .tr-md h6 {
-	margin: 14px 0 6px;
+	margin: var(--tr-heading-gap, 14px) 0 6px;
 	font-weight: 600;
 	line-height: 1.3;
 }
 
 .tr-md h1 {
-	font-size: 17px;
+	font-size: var(--tr-h1, 17px);
 }
 
 .tr-md h2 {
-	font-size: 15px;
+	font-size: var(--tr-h2, 15px);
 }
 
 .tr-md h3 {
-	font-size: 14px;
+	font-size: var(--tr-h3, 14px);
 }
 
 .tr-md h4,
 .tr-md h5,
 .tr-md h6 {
-	font-size: 13px;
+	font-size: var(--tr-h4, 13px);
 }
 
 .tr-md ul,
@@ -302,24 +538,205 @@
 	border-radius: var(--radius-sm);
 	background: var(--bg-inset);
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: var(--tr-code-size, 13.5px);
 }
 
-.tr-md pre {
-	margin: 8px 0;
-	padding: 8px 10px;
-	overflow-x: auto;
+/* Fenced code blocks now carry a header (language tag + copy button). */
+.tr-code {
+	margin: var(--tr-code-gap, 8px) 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
+	overflow: hidden;
 	background: var(--bg-inset);
+}
+
+.tr-code-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	justify-content: space-between;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--bg);
+}
+
+.tr-code-lang {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}
+
+.tr-code-copy {
+	border: 0;
+	border-radius: var(--radius-sm);
+	padding: 2px 8px;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 11px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tr-code-copy:hover {
+	background: var(--bg-raised);
+	color: var(--fg);
+}
+
+.tr-code-copy[data-copied] {
+	color: var(--ok);
+}
+
+.tr-code > pre {
+	margin: 0;
+	padding: 8px 10px;
+	/* openchamber parity: the pre is width-clamped to its container so a
+	 * long unbreakable line (wrap OFF) scrolls INSIDE the block instead of
+	 * stretching the message/transcript width; the wrap toggle only flips
+	 * white-space, never the box geometry. */
+	width: 100%;
+	min-width: 100%;
+	max-width: 100%;
+	overflow-x: auto;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 }
 
 .tr-md pre code {
 	padding: 0;
 	border-radius: 0;
 	background: none;
-	font-size: 12px;
+	font-size: 13.5px;
 	line-height: 1.5;
+}
+
+/* LaTeX math (KaTeX) — inline math keeps the text baseline; display math
+ * gets block spacing and horizontal scroll for wide formulas (a
+ * \begin{aligned} that exceeds the message width must not stretch the
+ * row). KaTeX inherits currentColor so it follows the app theme. */
+.tr-md .katex {
+	font-size: 1.06em;
+}
+.tr-md .katex-display {
+	margin: 6px 0;
+	padding: 2px 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: thin;
+}
+.tr-md .katex-display > .katex {
+	white-space: nowrap;
+}
+/* Display math wrapper + hover copy button (bitfun hover-reveal pattern).
+ * The button floats at the formula's top-right and only appears on hover
+ * so it never overlaps the equation while reading. It lives on the
+ * wrapper, OUTSIDE .katex-display's overflow-x scroll container, so wide
+ * formulas scroll under it instead of carrying it away. Visuals come from
+ * the shared .tr-code-copy class (buttons carry both). */
+.tr-md .tr-math {
+	display: block;
+	position: relative;
+}
+.tr-md .tr-math .tr-math-copy {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease-out, background 120ms ease-out, color 120ms ease-out;
+}
+.tr-md .tr-math:hover .tr-math-copy {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Bare <pre> inside markdown (non-fenced fallbacks): same containment as
+ * .tr-code > pre — never propagate an unbreakable line's intrinsic width
+ * up to the transcript. */
+.tr-md pre {
+	width: 100%;
+	min-width: 100%;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+/* Mermaid diagrams (chat settings → Mermaid 渲染): the SVG is rendered by
+ * beautiful-mermaid with CSS-var colors, so it follows the app theme. The
+ * ASCII variant is a plain pre with mono font; invalid sources fall back
+ * to a regular code block. */
+.tr-mermaid {
+	margin: 8px 0;
+	overflow-x: auto;
+	border-radius: 8px;
+	background: var(--bg);
+	padding: 6px;
+}
+
+.tr-mermaid svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+}
+
+.tr-mermaid-ascii {
+	margin: 8px 0;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--bg-inset);
+	color: var(--fg);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.4;
+	overflow-x: auto;
+	white-space: pre;
+}
+
+.tr-mermaid-fallback {
+	opacity: 0.75;
+}
+
+/* Mermaid toolbar (openchamber parity): hover-revealed copy-source +
+ * download-SVG buttons, floating at the diagram's top-right. The block
+ * wrapper is position:relative; the bar sits outside the .tr-mermaid
+ * scroll container so wide diagrams scroll under it. */
+.tr-mermaid-block {
+	position: relative;
+	margin: 8px 0;
+}
+
+.tr-mermaid-block .tr-mermaid {
+	overflow-x: auto;
+}
+
+.tr-mermaid-bar {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	display: flex;
+	gap: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease-out;
+	z-index: 1;
+}
+
+.tr-mermaid-block:hover .tr-mermaid-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tr-md .tr-path {
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.tr-md .tr-path:hover {
+	opacity: 0.85;
 }
 
 .tr-md blockquote {
@@ -332,7 +749,152 @@
 .tr-md table {
 	margin: 8px 0;
 	border-collapse: collapse;
-	font-size: 12.5px;
+	font-size: 14px;
+	width: 100%;
+}
+
+.tr-md th,
+.tr-md td {
+	border: 1px solid var(--border);
+	padding: 4px 10px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.tr-md th {
+	background: var(--bg-inset);
+	font-weight: 600;
+}
+
+/* Table toolbar (openchamber parity): hover-revealed copy/download menu in
+ * the table's top-right corner. The menu opens on hover of its wrap; items
+ * carry data-table-copy / data-table-download and are delegated in the
+ * Markdown component. Copy label reuses the shared .tr-code-copy visuals. */
+.tr-table {
+	position: relative;
+	margin: 8px 0;
+}
+
+.tr-table-scroll {
+	overflow-x: auto;
+}
+
+.tr-table-bar {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	display: flex;
+	gap: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease-out;
+	z-index: 1;
+}
+
+.tr-table:hover .tr-table-bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tr-table-menu-wrap {
+	position: relative;
+}
+
+.tr-table-menu {
+	position: absolute;
+	top: calc(100% + 2px);
+	right: 0;
+	display: none;
+	flex-direction: column;
+	min-width: 84px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg-raised);
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+}
+
+.tr-table-menu-wrap:hover .tr-table-menu,
+.tr-table-menu:hover {
+	display: flex;
+}
+
+.tr-table-menu button {
+	border: 0;
+	border-radius: 4px;
+	padding: 3px 8px;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 11px;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tr-table-menu button:hover {
+	background: var(--bg-inset);
+	color: var(--fg);
+}
+
+/* Advisor note cards (the advisor tool's <advisory> blocks): a bordered
+ * aside whose accent follows the severity (blocker > concern > nit). */
+.tr-advisory {
+	margin: 8px 0;
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-left-width: 3px;
+	border-radius: 8px;
+	background: var(--bg-inset);
+}
+
+.tr-advisory--blocker {
+	border-left-color: var(--color-error);
+}
+
+.tr-advisory--concern {
+	border-left-color: var(--color-warning);
+}
+
+.tr-advisory--nit {
+	border-left-color: var(--accent);
+}
+
+.tr-advisory-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.tr-advisory-tag {
+	padding: 1px 6px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--accent-fg);
+	background: var(--accent);
+}
+
+.tr-advisory-name {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.tr-advisory-sev {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--fg-muted);
+}
+
+.tr-advisory-note {
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--fg);
+}
+
+.tr-advisory-note > *:last-child {
+	margin-bottom: 0;
 }
 
 /* Table cells need `anywhere` so long URLs/identifiers contribute a shrinkable
@@ -377,7 +939,7 @@
 
 .tr-root--compact {
 	padding: 8px 10px 16px;
-	font-size: 12px;
+	font-size: 13.5px;
 }
 
 .tr-root--compact .tr-row {
@@ -418,10 +980,740 @@
 	.tr-gutter {
 		text-align: left;
 		padding-top: 0;
-		font-size: 10px;
+		font-size: 13.5px;
 		margin-bottom: 2px;
 	}
 	.tr-gutter:empty {
 		display: none;
 	}
+}
+
+/* Message action row (icon buttons + timestamp) — appears on hover,
+ * right-aligned (openchamber user-message parity: actions sit under the
+ * message's bottom-right corner). */
+.tr-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 10px;
+	margin-top: 2px;
+	opacity: 0;
+	transition: opacity 140ms ease-out;
+}
+
+.tr-row:hover .tr-actions {
+	opacity: 1;
+}
+
+.tr-action {
+	border: none;
+	background: none;
+	padding: 0;
+	color: var(--fg-faint);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.tr-action:hover {
+	color: var(--fg-muted);
+}
+
+.tr-action-time {
+	font-size: 13.5px;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+}
+
+/* TUI per-turn usage row (timestamp · in/out/cache tokens · duration ·
+ * tok/s) under the final message of a settled assistant turn. */
+.tr-usage {
+	margin-top: 5px;
+	padding: 2px 0 0;
+	border-top: 1px dashed var(--border);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 15px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+	overflow-x: auto;
+}
+
+/* Progressive per-sentence reveal (aicss thinking-reasoning style). */
+.tr-think-sentence {
+	/* Sentences sit flush against each other — thinking reads as one tight
+	 * paragraph (line-height 1.5 × 13.5px), not spaced-out list items. */
+	margin: 0;
+	opacity: 0;
+	animation: tr-sentence-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tr-sentence-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* ZCode message layout: user rows mirror — avatar at the bubble's right
+ * edge, agent rows keep the left gutter with a large orb. The grid column
+ * ORDER stays [body, avatar] while the DOM keeps [gutter, body], so each
+ * child must be placed explicitly — otherwise the gutter would claim the
+ * 1fr column and squeeze the bubble into the 28px gutter (vertical text). */
+.tr-row--user {
+	grid-template-columns: minmax(0, 1fr) 28px;
+}
+
+.tr-row--user .tr-gutter {
+	grid-column: 2;
+	grid-row: 1;
+	text-align: left;
+	padding-top: 8px;
+	padding-left: 0;
+}
+
+.tr-row--user .tr-body {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+/* Hover actions live on their own grid row — assistant rows align with the
+ * message block (body column), user rows sit under the bubble right edge. */
+.tr-row .tr-actions {
+	grid-column: 2;
+}
+
+.tr-row--user .tr-actions {
+	grid-column: 1;
+	justify-content: flex-end;
+}
+
+.tr-row--assistant .tr-gutter {
+	padding-top: 8px;
+	text-align: right;
+}
+
+/* Timestamp above the avatar (gutter) — text mode only; avatars hide it. */
+.tr-gutter {
+	font-size: 12px;
+	letter-spacing: 0.04em;
+}
+
+/* Quote-a-message action (ZCode 引用回复): hover-revealed on each row. */
+.tr-row {
+	position: relative;
+}
+
+.tr-quote {
+	position: absolute;
+	top: 6px;
+	right: 8px;
+	z-index: 2;
+	padding: 2px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-raised) 85%, transparent);
+	backdrop-filter: blur(8px);
+	color: var(--fg-muted);
+	font-family: var(--font-ui);
+	font-size: 11.5px;
+	line-height: 18px;
+	cursor: pointer;
+	opacity: 0;
+	transform: translateY(-2px);
+	transition: opacity 120ms ease-out, transform 120ms ease-out;
+	pointer-events: none;
+}
+
+.tr-row:hover .tr-quote {
+	opacity: 1;
+	transform: translateY(0);
+	pointer-events: auto;
+}
+
+.tr-quote:hover {
+	color: var(--accent);
+	border-color: var(--accent-bd);
+}
+
+/* Row action row (copy / quote / edit / retry / listen + time) — sits at
+ * the BOTTOM of each message (openchamber ChatMessage parity), revealed on
+ * row hover. Spans the full grid width below the body. */
+.tr-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 2px;
+	opacity: 0;
+	transition: opacity 140ms ease-out;
+}
+
+.tr-row:hover .tr-actions {
+	opacity: 1;
+}
+
+.tr-action {
+	padding: 2px 9px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--bg-raised) 85%, transparent);
+	backdrop-filter: blur(8px);
+	color: var(--fg-muted);
+	font-family: var(--font-ui);
+	font-size: 11.5px;
+	line-height: 18px;
+	cursor: pointer;
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.tr-action:hover {
+	color: var(--accent);
+	border-color: var(--accent-bd);
+}
+
+/* Timestamp rides at the end of the action row. */
+.tr-action-time {
+	margin-left: 2px;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	line-height: 18px;
+}
+
+/* ---- aicss tool-kind treatments (round-4) ----
+ * The transcript ToolCard tags tool cards with `tr-card--{diff|search|image}`
+ * (derived from the tool name/intent) and the shared renderer stack emits the
+ * `tr-tool-*` markup below. Unknown tools keep the plain tv-* rendering. */
+
+/* diff — aicss file-diff: left accent bar + deeper green/red row tints. */
+.tr-card--diff .tv-diff-row {
+	position: relative;
+	padding-left: 17px;
+}
+
+.tr-card--diff .tv-diff-row::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 6px;
+	width: 3px;
+	border-radius: 2px;
+}
+
+.tr-card--diff .tv-diff-row--add {
+	background: color-mix(in oklab, var(--ok, oklch(0.76 0.14 150)) 14%, transparent);
+}
+
+.tr-card--diff .tv-diff-row--add::before {
+	background: var(--ok, oklch(0.76 0.14 150));
+}
+
+.tr-card--diff .tv-diff-row--del {
+	background: color-mix(in oklab, var(--err, oklch(0.66 0.19 25)) 14%, transparent);
+}
+
+.tr-card--diff .tv-diff-row--del::before {
+	background: var(--err, oklch(0.66 0.19 25));
+}
+
+/* search — aicss web-search compact list: title-ish first line highlighted,
+ * URL-ish second line dimmed (web_search renderer + generic fallback). */
+.tr-tool-search {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	margin: 2px 0 2px 10px;
+	padding: 0 0 0 10px;
+	list-style: none;
+	border-left: 1px solid var(--border);
+	min-width: 0;
+	font-size: 12px;
+}
+
+.tr-tool-search-row {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.tr-tool-search-title {
+	color: var(--fg);
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-decoration: none;
+}
+
+a.tr-tool-search-title:hover {
+	color: var(--accent);
+	text-decoration: underline;
+}
+
+.tr-tool-search-url {
+	color: var(--fg-faint);
+	font-size: 11px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* image — aicss image-generation: framed preview (rounded, bordered) with a
+ * prompt caption under it. */
+.tr-tool-image {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	margin: 0;
+	min-width: 0;
+}
+
+.tr-card--image .tv-img {
+	max-height: 260px;
+	border-radius: 12px;
+	border: 1px solid var(--border-strong, var(--border, oklch(1 0 0 / 9%)));
+	box-shadow:
+		0 1px 2px oklch(0 0 0 / 12%),
+		0 6px 20px oklch(0 0 0 / 22%);
+}
+
+.tr-tool-image-caption {
+	margin: 0;
+	max-width: 100%;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--fg-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* streaming partial — aicss streaming-text: per-line fade-in with a stagger,
+ * plus a steady blinking caret while the tool keeps streaming. */
+.tr-stream {
+	margin: 0;
+	padding: 6px 10px;
+	border-top: 1px solid var(--border);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--fg-muted);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 160px;
+	overflow-y: auto;
+}
+
+.tr-stream-line {
+	opacity: 0;
+	animation: tr-stream-line-in 260ms ease-out forwards;
+	animation-delay: calc(var(--tr-i, 0) * 36ms);
+}
+
+.tr-stream-caret {
+	display: inline-block;
+	width: 7px;
+	height: 1.05em;
+	margin-left: 2px;
+	background: var(--fg);
+	vertical-align: text-bottom;
+	animation: tr-caret-blink 1s step-end infinite;
+}
+
+@keyframes tr-stream-line-in {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes tr-caret-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tr-stream-line {
+		animation: none;
+		opacity: 1;
+	}
+
+	.tr-stream-caret {
+		animation: none;
+	}
+}
+
+/* ── Session-switch stagger reveal (逐字错峰) ────────────────────────────
+ * When ChatView swaps sessions it marks the transcript container with
+ * data-switched for ~700ms; rows then fade in one after another so the
+ * context swap reads as a transition instead of a hard cut. */
+.gui-transcript[data-switched="1"] .tr-row,
+.gui-transcript[data-switched="1"] .tr-divider,
+.gui-transcript[data-switched="1"] .tr-marker {
+	animation: tr-switch-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gui-transcript[data-switched="1"] .tr-row:nth-child(1) { animation-delay: 0ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(2) { animation-delay: 14ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(3) { animation-delay: 28ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(4) { animation-delay: 42ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(5) { animation-delay: 56ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(6) { animation-delay: 70ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(7) { animation-delay: 84ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(8) { animation-delay: 98ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(9) { animation-delay: 112ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(10) { animation-delay: 126ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(11) { animation-delay: 140ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(12) { animation-delay: 154ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(13) { animation-delay: 168ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(14) { animation-delay: 182ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(15) { animation-delay: 196ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(n + 16) { animation-delay: 210ms; }
+
+@keyframes tr-switch-in {
+	from {
+		opacity: 0;
+		transform: translateY(5px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* daimon-canvas jump card (kimi parity): open the board from chat */
+.tr-canvas-jump {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	max-width: 420px;
+	margin: 8px 0 4px;
+	padding: 10px 12px;
+	border: 1px solid var(--tr-border, rgba(128, 128, 128, 0.25));
+	border-radius: 10px;
+	background: var(--tr-surface, rgba(128, 128, 128, 0.08));
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tr-canvas-jump:hover {
+	border-color: var(--tr-accent, rgba(120, 160, 255, 0.6));
+	background: var(--tr-surface-hover, rgba(128, 128, 128, 0.14));
+}
+.tr-canvas-jump-icon {
+	font-size: 16px;
+	opacity: 0.85;
+}
+.tr-canvas-jump-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+.tr-canvas-jump-title {
+	font-weight: 600;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.tr-canvas-jump-sub {
+	font-size: 11px;
+	opacity: 0.6;
+}
+.tr-canvas-jump-arrow {
+	font-size: 14px;
+	opacity: 0.7;
+}
+
+/* ── streaming caret (kimi parity): solid while text is live, blinking
+ * after the message settles (the class leaves after the final frame, so
+ * the caret is only visible while streaming). Rendered as a ::after on
+ * the last text block's container so it hugs the text end. */
+.tr-md--streaming::after {
+	content: "";
+	display: inline-block;
+	width: 7px;
+	height: 1.05em;
+	margin-left: 2px;
+	vertical-align: text-bottom;
+	border-radius: 1px;
+	background: var(--color-text, #c9d1d9);
+	animation: tr-caret-blink 1s step-end infinite;
+}
+@keyframes tr-caret-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.tr-md--streaming::after {
+		animation: none;
+	}
+}
+
+/* ---- 输出风格预设 (output style presets) ----
+ * Settings → 聊天 → 输出风格: the picker sets [data-output-style] on
+ * <html> (applied at startup from localStorage). Each preset overrides
+ * the --tr-* typography/rhythm variables above — no layout changes, the
+ * transcript components stay untouched.
+ *   default — the tuned MusePi rhythm (values above are the defaults)
+ *   kimi    — compact, dense reading (terminal heritage, tight code)
+ *   zcode   — relaxed reading: larger type, airier paragraphs/headings */
+[data-output-style="kimi"] {
+	--tr-font-size: 13.5px;
+	--tr-line-height: 1.45;
+	--tr-row-pad: 4px;
+	--tr-md-lh: 1.45;
+	--tr-para-gap: 4px;
+	--tr-heading-gap: 12px;
+	--tr-h1: 16px;
+	--tr-h2: 14px;
+	--tr-h3: 13.5px;
+	--tr-h4: 12.5px;
+	--tr-code-size: 12.5px;
+	--tr-code-gap: 6px;
+}
+
+[data-output-style="zcode"] {
+	--tr-font-size: 14.5px;
+	--tr-line-height: 1.65;
+	--tr-row-pad: 8px;
+	--tr-md-lh: 1.65;
+	--tr-para-gap: 8px;
+	--tr-heading-gap: 16px;
+	--tr-h1: 18px;
+	--tr-h2: 16px;
+	--tr-h3: 15px;
+	--tr-h4: 14px;
+	--tr-code-size: 14px;
+	--tr-code-gap: 10px;
+}
+
+/* 流式光标开关 (settings → 聊天 → 流式光标): OFF adds gui-chat-no-caret
+ * on <html> and hides the blinking caret on the streaming block. */
+.gui-chat-no-caret .tr-md--streaming::after {
+	display: none;
+}
+
+/* ── ZCode-style artifact cards: files a turn produced (preview / copy /
+ *    open-in-app). Compact chips under the assistant message. ─────────── */
+.tr-file-cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 6px;
+	max-width: 100%;
+}
+
+.tr-file-card {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	max-width: 100%;
+	padding: 4px 6px 4px 4px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--bg-overlay) 45%, transparent);
+}
+
+.tr-file-card-badge {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 26px;
+	height: 20px;
+	padding: 0 5px;
+	border-radius: 5px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-accent-fg);
+	background: var(--color-accent);
+}
+
+.tr-file-card-meta {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	line-height: 1.25;
+}
+
+.tr-file-card-name {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 220px;
+}
+
+.tr-file-card-path {
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 240px;
+	direction: rtl; /* keep the basename visible when truncated */
+	text-align: left;
+}
+
+.tr-file-card-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.tr-file-card-btn {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-text-muted);
+	padding: 2px 6px;
+	border-radius: 5px;
+	border: 1px solid transparent;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tr-file-card-btn:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+/* ── ZCode-style live work timer: "已工作 N 秒" under the streaming
+ *    message, with a small spinner. ──────────────────────────────────── */
+.tr-working {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-working-spin {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border: 2px solid var(--border);
+	border-top-color: var(--color-accent);
+	animation: tr-working-rotate 0.9s linear infinite;
+}
+
+@keyframes tr-working-rotate {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* ── TTSR warning block (TUI TtsrNotificationComponent parity): rule
+ *    violation → stream rewind → injected rules, warning-tinted. ─────── */
+.tr-ttsr {
+	margin: 6px 0;
+	border: 1px solid color-mix(in oklab, var(--color-warning, #d9a13b) 45%, transparent);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-warning, #d9a13b) 8%, transparent);
+	overflow: hidden;
+}
+
+.tr-ttsr-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 7px 10px;
+	text-align: left;
+	font-size: 12px;
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.tr-ttsr-icon {
+	flex-shrink: 0;
+	font-size: 12px;
+}
+
+.tr-ttsr-title {
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
+.tr-ttsr-names {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-muted);
+	font-weight: 500;
+}
+
+.tr-ttsr-body {
+	padding: 0 10px 9px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.tr-ttsr-body--closed {
+	height: 0;
+	overflow: hidden;
+	padding: 0 10px;
+}
+
+.tr-ttsr-desc {
+	margin-bottom: 5px;
+}
+
+.tr-ttsr-rule {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	line-height: 1.5;
+}
+
+.tr-ttsr-rule-name {
+	font-weight: 600;
+	color: var(--color-text);
+	flex-shrink: 0;
+}
+
+.tr-ttsr-rule-desc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── IRC / inter-agent coordination rows ─────────────────────────────── */
+.tr-irc {
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.tr-irc .tr-md p {
+	margin: 0;
 }

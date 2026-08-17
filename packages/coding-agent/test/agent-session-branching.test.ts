@@ -11,16 +11,16 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent, UserMessage } from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { createTools, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { Agent } from "@musepi/pi-agent-core";
+import type { ImageContent, UserMessage } from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 import { assistantMsg, createTestSession, e2eApiKey } from "./utilities";
 
 describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("AgentSession branching", () => {
@@ -180,6 +180,29 @@ function historicalImagePrompt(text: string): UserMessage {
 		timestamp: Date.now(),
 	};
 }
+
+describe("AgentSession branch title metadata", () => {
+	it("preserves an explicit title when branching before the first prompt", async () => {
+		const ctx = await createTestSession({ inMemory: true });
+		try {
+			const entryId = ctx.sessionManager.appendMessage({
+				role: "user",
+				content: "hello",
+				timestamp: Date.now(),
+			});
+			await ctx.sessionManager.setSessionName("new-ds", "user");
+
+			await ctx.session.branch(entryId);
+
+			expect(ctx.sessionManager.getSessionName()).toBe("new-ds");
+			expect(ctx.sessionManager.titleSource).toBe("user");
+			expect(await ctx.sessionManager.setSessionName("automatic", "auto")).toBe(false);
+			expect(ctx.sessionManager.getSessionName()).toBe("new-ds");
+		} finally {
+			await ctx.cleanup();
+		}
+	});
+});
 
 describe("AgentSession historical image prompts", () => {
 	it("returns the selected images when branching from a user prompt", async () => {

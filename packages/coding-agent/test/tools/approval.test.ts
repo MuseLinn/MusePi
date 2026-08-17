@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { AgentTool, ToolApproval } from "@oh-my-pi/pi-agent-core";
-import { LSP_READONLY_ACTIONS } from "@oh-my-pi/pi-coding-agent/lsp";
+import type { AgentTool, ToolApproval } from "@musepi/pi-agent-core";
+import { LSP_READONLY_ACTIONS } from "@musepi/pi-coding-agent/lsp";
 import {
 	type ApprovalMode,
 	formatApprovalPrompt,
 	requiresApproval,
 	resolveApproval,
 	truncateForPrompt,
-} from "@oh-my-pi/pi-coding-agent/tools/approval";
-import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
-import { DEBUG_READONLY_ACTIONS } from "@oh-my-pi/pi-coding-agent/tools/debug";
+} from "@musepi/pi-coding-agent/tools/approval";
+import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
+import { DEBUG_READONLY_ACTIONS } from "@musepi/pi-coding-agent/tools/debug";
 
 type ApprovalTool = Pick<AgentTool, "name" | "approval" | "formatApprovalDetails">;
 
@@ -329,6 +329,9 @@ describe("tool-owned dynamic approval declarations", () => {
 			"git $(rm file.txt)",
 			"git `rm file.txt` status",
 			"git status > /etc/passwd",
+			"git -c alias.x='!touch /tmp/pwn; printf ok' x",
+			'git -c alias.x="!touch /tmp/pwn; printf ok" x',
+			"git -c alias.x=!touch\\ /tmp/pwn\\;\\ printf\\ ok x",
 			"git status < seed",
 			// Different binary resolution than the pattern names.
 			"FOO=1 git status",
@@ -345,6 +348,16 @@ describe("tool-owned dynamic approval declarations", () => {
 		for (const command of ["git status", "git status --short", "git  status", "git\tstatus"]) {
 			expect(bashApproval(command, settingsOverrides)).toEqual({ tier: "write", policy: "allow" });
 		}
+	});
+
+	it("allows literal shell metacharacters in quoted arguments", () => {
+		const settingsOverrides = {
+			"bash.patterns": [{ match: "cargo *", approval: "allow" }],
+		};
+		const command =
+			"cargo bench --manifest-path layers/layer3/Cargo.toml --bench standardized_criterion -- --full '^layer3/write/file-wal/batch-(10|1000|10000)$'";
+
+		expect(bashApproval(command, settingsOverrides)).toEqual({ tier: "write", policy: "allow" });
 	});
 
 	it("honors bash pattern rules in yolo mode", () => {

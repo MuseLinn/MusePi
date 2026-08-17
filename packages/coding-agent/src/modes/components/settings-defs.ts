@@ -9,7 +9,7 @@
  * (or `options: "runtime"` for runtime-injected lists like themes).
  */
 
-import { TERMINAL } from "@oh-my-pi/pi-tui";
+import { TERMINAL } from "@musepi/pi-tui";
 import { Settings } from "../../config/settings";
 import {
 	type AnyUiMetadata,
@@ -25,6 +25,7 @@ import {
 	type SubmenuOption,
 	TAB_GROUPS,
 } from "../../config/settings-schema";
+import { t } from "../../i18n/index.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UI Definition Types
@@ -144,6 +145,20 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	lspActive: () => {
+		try {
+			return Settings.instance.get("lsp.enabled") === true;
+		} catch {
+			return false;
+		}
+	},
+	summarizeActive: () => {
+		try {
+			return Settings.instance.get("read.summarize.enabled") === true;
+		} catch {
+			return false;
+		}
+	},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -162,7 +177,7 @@ function pathToSettingDef(path: SettingPath): SettingDef | null {
 
 	const schemaType = getType(path);
 	const condition = ui.condition ? CONDITIONS[ui.condition] : undefined;
-	const base = { path, label: ui.label, description: ui.description, tab: ui.tab, group: ui.group, condition };
+	const base = { path, label: t(ui.label), description: t(ui.description), tab: ui.tab, group: ui.group, condition };
 
 	if (schemaType === "boolean") {
 		return { ...base, type: "boolean" };
@@ -221,6 +236,11 @@ function pathToSettingDef(path: SettingPath): SettingDef | null {
 
 /** Cache of generated definitions */
 let cachedDefs: SettingDef[] | null = null;
+
+/** Invalidate the cache (call after locale changes so defs rebuild with fresh translations). */
+export function invalidateSettingDefsCache(): void {
+	cachedDefs = null;
+}
 
 /** Get all setting definitions with UI */
 export function getAllSettingDefs(): SettingDef[] {

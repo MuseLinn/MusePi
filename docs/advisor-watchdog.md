@@ -44,7 +44,7 @@ Use `--advisor` to enable the advisor for one print-mode process without
 persisting `advisor.enabled`:
 
 ```sh
-omp -p --advisor "Review this task."
+musepi -p --advisor "Review this task."
 ```
 
 While a primary prompt is running, advisor concerns and blockers continue to steer that live turn. After the final prompt settles, print mode preserves late advisor notes without starting hidden primary turns, then waits up to ten minutes for final reviews before disposing the session. Error exits use a 30-second drain budget so failed automation can terminate. If either deadline expires, OMP logs the reviews that disposal will abandon; completed reviews retain their transcript and token/cost usage.
@@ -192,14 +192,14 @@ Especially watch for:
 
 `discoverWatchdogFiles(cwd, agentDir)` loads every readable candidate from these locations:
 
-1. user level: `<active agent dir>/WATCHDOG.md` (`~/.omp/agent/WATCHDOG.md` by default; relocated by `PI_CODING_AGENT_DIR`)
+1. user level: `<active agent dir>/WATCHDOG.md` (`~/.musepi/agent/WATCHDOG.md` by default; relocated by `PI_CODING_AGENT_DIR`)
 2. project levels while walking from `cwd` upward to the git repository root, or to the home directory when no repo root is found:
    - `<dir>/WATCHDOG.md`
-   - `<dir>/.omp/WATCHDOG.md`
+   - `<dir>/.musepi/WATCHDOG.md`
 
 Unlike native context files, watchdog discovery does not stop at the nearest project file. Multiple project watchdog files can load together.
 
-Candidates in hidden owner directories are ignored unless the file is inside an `.omp` directory. This keeps unrelated dot-directory conventions from being picked up accidentally while still allowing `.omp/WATCHDOG.md`.
+Candidates in hidden owner directories are ignored unless the file is inside an `.musepi` directory. This keeps unrelated dot-directory conventions from being picked up accidentally while still allowing `.musepi/WATCHDOG.md`.
 
 ### `@` imports
 
@@ -263,7 +263,7 @@ Fields:
 
 ### Discovery locations
 
-`WATCHDOG.yml`/`WATCHDOG.yaml` share the same user + project search path as `WATCHDOG.md`: the user-level `<active agent dir>/WATCHDOG.yml` plus every `WATCHDOG.yml`/`.omp/WATCHDOG.yml` encountered while walking from `cwd` up to the repository root (or the home directory when no repo root is found). All discovered files are loaded together; a more-specific file (project leaf > project ancestor > user) replaces an earlier entry with the same advisor slug.
+`WATCHDOG.yml`/`WATCHDOG.yaml` share the same user + project search path as `WATCHDOG.md`: the user-level `<active agent dir>/WATCHDOG.yml` plus every `WATCHDOG.yml`/`.musepi/WATCHDOG.yml` encountered while walking from `cwd` up to the repository root (or the home directory when no repo root is found). All discovered files are loaded together; a more-specific file (project leaf > project ancestor > user) replaces an earlier entry with the same advisor slug.
 
 ## Subagents
 
@@ -297,9 +297,9 @@ The path is derived from the session file (not the artifacts dir, which subagent
 
 Why a file:
 
-- **Usage attribution.** `omp stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
-- **Observability.** The Agent Hub discovers `__advisor.jsonl` on open and shows it as a read-only `advisor`-kind transcript under its owning session.
+- **Usage attribution.** `musepi stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
+- **Observability.** [Agent Hub](./agent-hub.md) discovers legacy and named `__advisor*.jsonl` files on open and shows each as a read-only `advisor`-kind transcript under its owning session.
 
 The file follows session switches: on `/new`, resume/switch, and branch the recorder reopens at the new session's path on the next advisor turn; before a `/drop` deletes the old artifacts dir the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
 
-The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or revived/killed from the Agent Hub or collab. It is not addressable as a peer, regardless of what tools it has been granted.
+The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or [revived or killed from Agent Hub](./agent-hub.md#persisted-agents-and-advisors) or collab. It is not addressable as a peer, regardless of what tools it has been granted.

@@ -3,12 +3,12 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { fetchCodexModels } from "@oh-my-pi/pi-catalog/discovery/codex";
-import { writeModelCache } from "@oh-my-pi/pi-catalog/model-cache";
-import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
-import { openaiCodexModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/special";
-import type { ModelSpec } from "@oh-my-pi/pi-catalog/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { fetchCodexModels } from "@musepi/pi-catalog/discovery/codex";
+import { writeModelCache } from "@musepi/pi-catalog/model-cache";
+import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
+import { openaiCodexModelManagerOptions } from "@musepi/pi-catalog/provider-models/special";
+import type { ModelSpec } from "@musepi/pi-catalog/types";
 
 describe("Codex model discovery", () => {
 	it("marks discovered models for provider-native V2 compaction", async () => {

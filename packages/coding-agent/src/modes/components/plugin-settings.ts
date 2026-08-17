@@ -18,8 +18,8 @@ import {
 	SettingsList,
 	Spacer,
 	Text,
-} from "@oh-my-pi/pi-tui";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { logger } from "@musepi/pi-utils";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import { PluginManager } from "../../extensibility/plugins/manager";
 import type { InstalledPluginSummary } from "../../extensibility/plugins/marketplace";
@@ -31,6 +31,7 @@ import {
 	MarketplaceManager,
 } from "../../extensibility/plugins/marketplace";
 import type { InstalledPlugin, PluginSettingSchema } from "../../extensibility/plugins/types";
+import { t } from "../../i18n/index.js";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../../modes/theme/theme";
 import { shortenPath } from "../../tools/render-utils";
 import { DynamicBorder } from "./dynamic-border";
@@ -112,15 +113,21 @@ export class PluginListComponent extends Container {
 
 		// Title
 		this.addChild(new DynamicBorder());
-		this.addChild(new Text(theme.bold(theme.fg("accent", "  Plugins")), 0, 0));
+		this.addChild(new Text(theme.bold(theme.fg("accent", t("  Plugins"))), 0, 0));
 		this.addChild(new Spacer(1));
 
 		if (entries.length === 0) {
-			this.addChild(new Text(theme.fg("muted", "  No plugins installed"), 0, 0));
+			this.addChild(new Text(theme.fg("muted", t("  No plugins installed")), 0, 0));
 			this.addChild(new Spacer(1));
-			this.addChild(new Text(theme.fg("dim", "  Install npm plugins:        omp plugin install <package>"), 0, 0));
 			this.addChild(
-				new Text(theme.fg("dim", "  Install marketplace plugins: omp plugin install <name>@<marketplace>"), 0, 0),
+				new Text(theme.fg("dim", t("  Install npm plugins:        omp plugin install <package>")), 0, 0),
+			);
+			this.addChild(
+				new Text(
+					theme.fg("dim", t("  Install marketplace plugins: omp plugin install <name>@<marketplace>")),
+					0,
+					0,
+				),
 			);
 			this.addChild(new Spacer(1));
 			this.addChild(new DynamicBorder());
@@ -152,7 +159,7 @@ export class PluginListComponent extends Container {
 
 		this.addChild(this.#selectList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "  Enter to configure · Esc to go back"), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to configure · Esc to go back")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -188,7 +195,7 @@ export class PluginListComponent extends Container {
 
 		let details = `${kindBadge} ${scopeTag} ${theme.sep.dot} v${version}`;
 		if (summary.shadowedBy) {
-			details += ` ${theme.sep.dot} shadowed by ${summary.shadowedBy}`;
+			details += ` ${theme.sep.dot} ${t("shadowed by {0}", summary.shadowedBy)}`;
 		}
 
 		return {
@@ -252,8 +259,8 @@ export class PluginDetailComponent extends Container {
 		// Enable/disable toggle
 		items.push({
 			id: "__enabled__",
-			label: "Enabled",
-			description: "Enable or disable this plugin",
+			label: t("Enabled"),
+			description: t("Enable or disable this plugin"),
 			currentValue: plugin.enabled ? "true" : "false",
 			values: ["true", "false"],
 		});
@@ -371,7 +378,7 @@ export class PluginDetailComponent extends Container {
 
 		this.addChild(this.#settingsList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "  Enter to edit · Esc to go back"), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to edit · Esc to go back")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -412,15 +419,15 @@ export class MarketplacePluginDetailComponent extends Container {
 		this.addChild(new Text(theme.bold(theme.fg("accent", `  ${plugin.id}`)), 0, 0));
 
 		const subtitleParts = [`[${plugin.scope}]`];
-		if (plugin.shadowedBy) subtitleParts.push(`${theme.status.shadowed} shadowed by ${plugin.shadowedBy}`);
+		if (plugin.shadowedBy) subtitleParts.push(`${theme.status.shadowed} ${t("shadowed by {0}", plugin.shadowedBy)}`);
 		this.addChild(new Text(theme.fg("muted", `  ${subtitleParts.join(" ")}`), 0, 0));
 		this.addChild(new Spacer(1));
 
 		const items: SettingItem[] = [
 			{
 				id: "__enabled__",
-				label: "Enabled",
-				description: "Enable or disable this marketplace plugin",
+				label: t("Enabled"),
+				description: t("Enable or disable this marketplace plugin"),
 				currentValue: enabled ? "true" : "false",
 				values: ["true", "false"],
 			},
@@ -448,23 +455,26 @@ export class MarketplacePluginDetailComponent extends Container {
 
 		// Read-only metadata. SettingsList rejects items without `values`/`submenu`,
 		// so we render the metadata as plain text rows beneath the toggle.
-		this.addChild(new Text(theme.fg("dim", `  version       ${entry?.version ?? "(unknown)"}`), 0, 0));
-		this.addChild(new Text(theme.fg("dim", `  scope         ${plugin.scope}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("version")}       ${entry?.version ?? t("(unknown)")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("scope")}         ${plugin.scope}`), 0, 0));
 		this.addChild(
 			new Text(
-				theme.fg("dim", `  install path  ${entry?.installPath ? shortenPath(entry.installPath) : "(unknown)"}`),
+				theme.fg(
+					"dim",
+					`  ${t("install path")}  ${entry?.installPath ? shortenPath(entry.installPath) : t("(unknown)")}`,
+				),
 				0,
 				0,
 			),
 		);
-		this.addChild(new Text(theme.fg("dim", `  installed at  ${entry?.installedAt ?? "(unknown)"}`), 0, 0));
-		this.addChild(new Text(theme.fg("dim", `  last updated  ${entry?.lastUpdated ?? "(unknown)"}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("installed at")}  ${entry?.installedAt ?? t("(unknown)")}`), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("last updated")}  ${entry?.lastUpdated ?? t("(unknown)")}`), 0, 0));
 		if (entry?.gitCommitSha) {
-			this.addChild(new Text(theme.fg("dim", `  git sha       ${entry.gitCommitSha}`), 0, 0));
+			this.addChild(new Text(theme.fg("dim", `  ${t("git sha")}       ${entry.gitCommitSha}`), 0, 0));
 		}
 
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "  Enter to toggle · Esc to go back"), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to toggle · Esc to go back")}`), 0, 0));
 		this.addChild(new DynamicBorder());
 	}
 
@@ -513,7 +523,7 @@ class ConfigEnumSubmenu extends Container {
 
 		this.addChild(this.#selectList);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "  Enter to select · Esc to cancel"), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to select · Esc to cancel")}`), 0, 0));
 	}
 
 	handleInput(data: string): void {
@@ -571,7 +581,7 @@ class ConfigInputSubmenu extends Container {
 
 		this.addChild(this.#input);
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("dim", "  Enter to save · Esc to cancel"), 0, 0));
+		this.addChild(new Text(theme.fg("dim", `  ${t("Enter to save · Esc to cancel")}`), 0, 0));
 	}
 
 	handleInput(data: string): void {

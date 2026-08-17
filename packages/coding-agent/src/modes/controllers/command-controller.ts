@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { CompactionCancelledError, type CompactionOutcome } from "@oh-my-pi/pi-agent-core/compaction";
+import { CompactionCancelledError, type CompactionOutcome } from "@musepi/pi-agent-core/compaction";
 import {
 	getEnvApiKey,
 	getProviderDetails,
@@ -9,9 +9,9 @@ import {
 	resolveUsedFraction,
 	type UsageLimit,
 	type UsageReport,
-} from "@oh-my-pi/pi-ai";
-import { Loader, Markdown, padding, Spacer, Text, visibleWidth } from "@oh-my-pi/pi-tui";
-import { formatDuration, Snowflake, sanitizeText } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import { Loader, Markdown, padding, Spacer, Text, visibleWidth } from "@musepi/pi-tui";
+import { formatDuration, logger, Snowflake, sanitizeText } from "@musepi/pi-utils";
 import { shouldEnableAppendOnlyContext } from "../../config/append-only-context-mode";
 import { type BashResult, isPersistentShellCdCommand } from "../../exec/bash-executor";
 import { type LoadedCustomShare, loadCustomShare } from "../../export/custom-share";
@@ -28,6 +28,7 @@ import {
 	seedAlreadyExists,
 	summarizeMentalModel,
 } from "../../hindsight";
+import { t } from "../../i18n/index.js";
 import { resolveMemoryBackend } from "../../memory-backend";
 import { BashExecutionComponent } from "../../modes/components/bash-execution";
 import { BorderedLoader } from "../../modes/components/bordered-loader";
@@ -80,15 +81,20 @@ export class CommandController {
 		try {
 			const { outputPath, useUserThemes } = parseExportArgs(text.slice("/export".length));
 			if (outputPath === "--copy" || outputPath === "clipboard" || outputPath === "copy") {
-				this.ctx.showWarning("Use /dump to copy the session to clipboard.");
+				this.ctx.showWarning(t("Use /dump to copy the session to clipboard."));
 				return;
 			}
 
 			const filePath = await this.ctx.session.exportToHtml(outputPath, useUserThemes);
-			this.ctx.showStatus(`Session exported to: ${filePath}`);
+			this.ctx.showStatus(t("Session exported to: {0}").replace("{0}", filePath));
 			this.openInBrowser(filePath);
 		} catch (error: unknown) {
-			this.ctx.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
+			this.ctx.showError(
+				t("Failed to export session: {0}").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("Unknown error"),
+				),
+			);
 		}
 	}
 
@@ -96,7 +102,7 @@ export class CommandController {
 		try {
 			const formatted = this.ctx.session.formatSessionAsText();
 			if (!formatted) {
-				this.ctx.showError("No messages to dump yet.");
+				this.ctx.showError(t("No messages to dump yet."));
 				return;
 			}
 			// Build the LLM request JSON sidecar first so its path (and a
@@ -109,15 +115,20 @@ export class CommandController {
 				sidecarError = error instanceof Error ? error.message : "Unknown error";
 			}
 			const doc = sidecarPath
-				? `${formatted}\n\n---\nLLM request JSON: ${sidecarPath}\nThis file persists on disk and may contain raw context/secrets — treat accordingly.`
+				? `${formatted}\n\n---\n${t("LLM request JSON: {0}").replace("{0}", sidecarPath)}\n${t("This file persists on disk and may contain raw context/secrets — treat accordingly.")}`
 				: formatted;
 			await copyToClipboard(doc);
-			const statusParts = ["Session copied to clipboard"];
-			if (sidecarPath) statusParts.push(`LLM request JSON: ${sidecarPath}`);
-			if (sidecarError) statusParts.push(`LLM request JSON unavailable: ${sidecarError}`);
+			const statusParts = [t("Session copied to clipboard")];
+			if (sidecarPath) statusParts.push(t("LLM request JSON: {0}").replace("{0}", sidecarPath));
+			if (sidecarError) statusParts.push(t("LLM request JSON unavailable: {0}").replace("{0}", sidecarError));
 			this.ctx.showStatus(statusParts.join("\n"));
 		} catch (error: unknown) {
-			this.ctx.showError(`Failed to copy session: ${error instanceof Error ? error.message : "Unknown error"}`);
+			this.ctx.showError(
+				t("Failed to copy session: {0}").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("Unknown error"),
+				),
+			);
 		}
 	}
 
@@ -125,18 +136,21 @@ export class CommandController {
 		try {
 			const advisorHistory = this.ctx.session.formatAdvisorHistoryAsText({ compact: !isRaw });
 			if (advisorHistory === null) {
-				this.ctx.showError("Advisor is not active for this session.");
+				this.ctx.showError(t("Advisor is not active for this session."));
 				return;
 			}
 			if (!advisorHistory) {
-				this.ctx.showError("Advisor has no history yet.");
+				this.ctx.showError(t("Advisor has no history yet."));
 				return;
 			}
 			copyToClipboard(advisorHistory);
-			this.ctx.showStatus("Advisor history copied to clipboard");
+			this.ctx.showStatus(t("Advisor history copied to clipboard"));
 		} catch (error: unknown) {
 			this.ctx.showError(
-				`Failed to copy advisor history: ${error instanceof Error ? error.message : "Unknown error"}`,
+				t("Failed to copy advisor history: {0}").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("Unknown error"),
+				),
 			);
 		}
 	}
@@ -147,15 +161,18 @@ export class CommandController {
 			const renderedLines = this.ctx.chatContainer.render(width).map(line => replaceTabs(Bun.stripANSI(line)));
 			const rendered = renderedLines.join("\n").trimEnd();
 			if (!rendered) {
-				this.ctx.showError("No messages to dump yet.");
+				this.ctx.showError(t("No messages to dump yet."));
 				return;
 			}
 			const tmpPath = path.join(os.tmpdir(), `${Snowflake.next()}-tmp.txt`);
 			await Bun.write(tmpPath, `${rendered}\n`);
-			this.ctx.showStatus(`Debug transcript written to:\n${tmpPath}`);
+			this.ctx.showStatus(t("Debug transcript written to:\n{0}").replace("{0}", tmpPath));
 		} catch (error: unknown) {
 			this.ctx.showError(
-				`Failed to write debug transcript: ${error instanceof Error ? error.message : "Unknown error"}`,
+				t("Failed to write debug transcript: {0}").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("Unknown error"),
+				),
 			);
 		}
 	}
@@ -169,7 +186,7 @@ export class CommandController {
 			return;
 		}
 
-		const loader = new BorderedLoader(this.ctx.ui, theme, "Sharing session...");
+		const loader = new BorderedLoader(this.ctx.ui, theme, t("Sharing session..."));
 		this.ctx.editorContainer.clear();
 		this.ctx.editorContainer.addChild(loader);
 		this.ctx.ui.setFocus(loader);
@@ -183,7 +200,7 @@ export class CommandController {
 		};
 		loader.onAbort = () => {
 			restoreEditor();
-			this.ctx.showStatus("Share cancelled");
+			this.ctx.showStatus(t("Share cancelled"));
 		};
 
 		// Custom share scripts keep their legacy contract: they receive a path
@@ -197,21 +214,23 @@ export class CommandController {
 				restoreEditor();
 
 				if (typeof result === "string") {
-					this.ctx.showStatus(`Share URL: ${result}`);
+					this.ctx.showStatus(t("Share URL: {0}").replace("{0}", result));
 					this.openInBrowser(result);
 				} else if (result) {
 					const parts: string[] = [];
-					if (result.url) parts.push(`Share URL: ${result.url}`);
+					if (result.url) parts.push(t("Share URL: {0}").replace("{0}", result.url));
 					if (result.message) parts.push(result.message);
 					if (parts.length > 0) this.ctx.showStatus(parts.join("\n"));
 					if (result.url) this.openInBrowser(result.url);
 				} else {
-					this.ctx.showStatus("Session shared");
+					this.ctx.showStatus(t("Session shared"));
 				}
 			} catch (err) {
 				if (!loader.signal.aborted) {
 					restoreEditor();
-					this.ctx.showError(`Custom share failed: ${err instanceof Error ? err.message : String(err)}`);
+					this.ctx.showError(
+						t("Custom share failed: {0}").replace("{0}", err instanceof Error ? err.message : String(err)),
+					);
 				}
 			} finally {
 				await fs.rm(tmpFile, { force: true }).catch(() => {});
@@ -231,15 +250,20 @@ export class CommandController {
 			if (loader.signal.aborted) return;
 			restoreEditor();
 
-			const lines = [`Share URL: ${result.url}`];
-			if (result.gistUrl) lines.push(`Gist: ${result.gistUrl}`);
-			if (result.truncated) lines.push("Note: large content was trimmed to fit the share size limit.");
+			const lines = [t("Share URL: {0}").replace("{0}", result.url)];
+			if (result.gistUrl) lines.push(t("Gist: {0}").replace("{0}", result.gistUrl));
+			if (result.truncated) lines.push(t("Note: large content was trimmed to fit the share size limit."));
 			this.ctx.showStatus(lines.join("\n"));
 			this.openInBrowser(result.url);
 		} catch (error: unknown) {
 			if (!loader.signal.aborted) {
 				restoreEditor();
-				this.ctx.showError(`Failed to share session: ${error instanceof Error ? error.message : "Unknown error"}`);
+				this.ctx.showError(
+					t("Failed to share session: {0}").replace(
+						"{0}",
+						error instanceof Error ? error.message : t("Unknown error"),
+					),
+				);
 			}
 		}
 	}
@@ -252,13 +276,13 @@ export class CommandController {
 				: this.ctx.session.sessionManager.getUsageStatistics().premiumRequests;
 		const normalizedPremiumRequests = Math.round((premiumRequests + Number.EPSILON) * 100) / 100;
 
-		let info = `${theme.bold("Session Info")}\n\n`;
-		info += `${theme.fg("dim", "File:")} ${stats.sessionFile ?? "In-memory"}\n`;
-		info += `${theme.fg("dim", "ID:")} ${stats.sessionId}\n\n`;
-		info += `\n${theme.bold("Provider")}\n`;
+		let info = `${theme.bold(t("Session Info"))}\n\n`;
+		info += `${theme.fg("dim", t("File:"))} ${stats.sessionFile ?? t("In-memory")}\n`;
+		info += `${theme.fg("dim", t("ID:"))} ${stats.sessionId}\n\n`;
+		info += `\n${theme.bold(t("Provider"))}\n`;
 		const model = this.ctx.session.model;
 		if (!model) {
-			info += `${theme.fg("dim", "No model selected")}\n`;
+			info += `${theme.fg("dim", t("No model selected"))}\n`;
 		} else {
 			const authMode = resolveProviderAuthMode(this.ctx.session.modelRegistry.authStorage, model.provider);
 			const openaiWebsocketSetting = this.ctx.settings.get("providers.openaiWebsockets") ?? "auto";
@@ -279,44 +303,44 @@ export class CommandController {
 			info += renderProviderSection(providerDetails, theme);
 		}
 		info += `\n`;
-		info += `${theme.bold("Messages")}\n`;
-		info += `${theme.fg("dim", "User:")} ${stats.userMessages}\n`;
-		info += `${theme.fg("dim", "Assistant:")} ${stats.assistantMessages}\n`;
-		info += `${theme.fg("dim", "Tool Calls:")} ${stats.toolCalls}\n`;
-		info += `${theme.fg("dim", "Tool Results:")} ${stats.toolResults}\n`;
-		info += `${theme.fg("dim", "Total:")} ${stats.totalMessages}\n\n`;
+		info += `${theme.bold(t("Messages"))}\n`;
+		info += `${theme.fg("dim", t("User:"))} ${stats.userMessages}\n`;
+		info += `${theme.fg("dim", t("Assistant:"))} ${stats.assistantMessages}\n`;
+		info += `${theme.fg("dim", t("Tool Calls:"))} ${stats.toolCalls}\n`;
+		info += `${theme.fg("dim", t("Tool Results:"))} ${stats.toolResults}\n`;
+		info += `${theme.fg("dim", t("Total:"))} ${stats.totalMessages}\n\n`;
 		// Append-only context
 		{
 			const setting = this.ctx.settings.get("provider.appendOnlyContext") ?? "auto";
 			const model = this.ctx.session.model;
 			const mode = shouldEnableAppendOnlyContext(setting, model);
-			const activeLabel = mode ? theme.fg("success", "active") : theme.fg("dim", "inactive");
+			const activeLabel = mode ? theme.fg("success", t("active")) : theme.fg("dim", t("inactive"));
 			const settingLabel = setting === "auto" ? `${setting} (${model?.provider ?? "?"})` : setting;
-			info += `${theme.fg("dim", "Append-Only:")} ${activeLabel} (setting: ${settingLabel})\n`;
+			info += `${theme.fg("dim", t("Append-Only:"))} ${activeLabel} (setting: ${settingLabel})\n`;
 		}
-		info += `${theme.bold("Tokens")}\n`;
-		info += `${theme.fg("dim", "Input:")} ${stats.tokens.input.toLocaleString()}\n`;
-		info += `${theme.fg("dim", "Output:")} ${stats.tokens.output.toLocaleString()}\n`;
+		info += `${theme.bold(t("Tokens"))}\n`;
+		info += `${theme.fg("dim", t("Input:"))} ${stats.tokens.input.toLocaleString()}\n`;
+		info += `${theme.fg("dim", t("Output:"))} ${stats.tokens.output.toLocaleString()}\n`;
 		if (stats.tokens.cacheRead > 0) {
-			info += `${theme.fg("dim", "Cache Read:")} ${stats.tokens.cacheRead.toLocaleString()}\n`;
+			info += `${theme.fg("dim", t("Cache Read:"))} ${stats.tokens.cacheRead.toLocaleString()}\n`;
 		}
 		if (stats.tokens.cacheWrite > 0) {
-			info += `${theme.fg("dim", "Cache Write:")} ${stats.tokens.cacheWrite.toLocaleString()}\n`;
+			info += `${theme.fg("dim", t("Cache Write:"))} ${stats.tokens.cacheWrite.toLocaleString()}\n`;
 		}
-		info += `${theme.fg("dim", "Total:")} ${stats.tokens.total.toLocaleString()}\n`;
+		info += `${theme.fg("dim", t("Total:"))} ${stats.tokens.total.toLocaleString()}\n`;
 
 		if (stats.cost > 0 || normalizedPremiumRequests > 0) {
-			info += `\n${theme.bold("Cost")}\n`;
+			info += `\n${theme.bold(t("Cost"))}\n`;
 			if (stats.cost > 0) {
-				info += `${theme.fg("dim", "Total:")} ${stats.cost.toFixed(4)}\n`;
+				info += `${theme.fg("dim", t("Total:"))} ${stats.cost.toFixed(4)}\n`;
 			}
 			if (normalizedPremiumRequests > 0) {
-				info += `${theme.fg("dim", "Premium Requests:")} ${normalizedPremiumRequests.toLocaleString()}\n`;
+				info += `${theme.fg("dim", t("Premium Requests:"))} ${normalizedPremiumRequests.toLocaleString()}\n`;
 			}
 		}
 
 		if (this.ctx.lspServers && this.ctx.lspServers.length > 0) {
-			info += `\n${theme.bold("LSP Servers")}\n`;
+			info += `\n${theme.bold(t("LSP Servers"))}\n`;
 			for (const server of this.ctx.lspServers) {
 				const statusColor =
 					server.status === "ready"
@@ -334,14 +358,14 @@ export class CommandController {
 
 		if (this.ctx.mcpManager) {
 			const mcpServers = this.ctx.mcpManager.getConnectedServers();
-			info += `\n${theme.bold("MCP Servers")}\n`;
+			info += `\n${theme.bold(t("MCP Servers"))}\n`;
 			if (mcpServers.length === 0) {
-				info += `${theme.fg("dim", "None connected")}\n`;
+				info += `${theme.fg("dim", t("None connected"))}\n`;
 			} else {
 				for (const name of mcpServers) {
 					const conn = this.ctx.mcpManager.getConnection(name);
 					const toolCount = conn?.tools?.length ?? 0;
-					info += `${theme.fg("dim", `${name}:`)} ${theme.fg("success", "connected")} ${theme.fg("dim", `(${toolCount} tools)`)}\n`;
+					info += `${theme.fg("dim", `${name}:`)} ${theme.fg("success", t("connected"))} ${theme.fg("dim", `(${toolCount} ${t("tools")})`)}`;
 				}
 			}
 		}
@@ -368,7 +392,7 @@ export class CommandController {
 	async handleAdvisorStatusCommand(): Promise<void> {
 		const stats = this.ctx.session.getAdvisorStats();
 		if (!stats.configured) {
-			this.ctx.presentCommandOutput([new Spacer(1), new Text("Advisor is disabled.", 1, 0)]);
+			this.ctx.presentCommandOutput([new Spacer(1), new Text(t("Advisor is disabled."), 1, 0)]);
 			return;
 		}
 		// Fetch live quota data (cached 5 min by the auth-gateway) so we can show
@@ -394,7 +418,7 @@ export class CommandController {
 		// none are live (all paused/no-model). The old code returned a generic
 		// message that hid the per-advisor state the user needs to act on.
 		if (stats.advisors.length > 1 || (stats.configured && !stats.active)) {
-			let info = `${theme.bold("Advisor Status")} (${stats.advisors.length} advisors)\n`;
+			let info = `${theme.bold(t("Advisor Status"))} (${stats.advisors.length} ${t("advisors")})\n`;
 			for (const a of stats.advisors) {
 				const glyph = CommandController.#advisorStatusGlyph[a.status] ?? "?";
 				const label = CommandController.#advisorStatusLabel[a.status] ?? a.status;
@@ -406,7 +430,7 @@ export class CommandController {
 							: "dim";
 				info += `\n${theme.fg(color, glyph)} ${theme.bold(a.name)} ${theme.fg("dim", `[${label}]`)}\n`;
 				if (a.model) {
-					info += `${theme.fg("dim", "Model:")} ${a.model.provider}/${a.model.id}\n`;
+					info += `${theme.fg("dim", t("Model:"))} ${a.model.provider}/${a.model.id}\n`;
 				}
 				if (a.model && usageReports) {
 					const quota = formatCompactQuota(
@@ -422,24 +446,24 @@ export class CommandController {
 						a.contextWindow > 0
 							? `${a.contextTokens.toLocaleString()} / ${a.contextWindow.toLocaleString()} (${Math.round((a.contextTokens / a.contextWindow) * 100)}%)`
 							: `${a.contextTokens.toLocaleString()}`;
-					info += `${theme.fg("dim", "Context:")} ${ctx}\n`;
-					info += `${theme.fg("dim", "Messages:")} ${a.messages.total.toLocaleString()}\n`;
-					info += `${theme.fg("dim", "Spend:")} ${a.tokens.input.toLocaleString()} in / ${a.tokens.output.toLocaleString()} out`;
+					info += `${theme.fg("dim", t("Context:"))} ${ctx}\n`;
+					info += `${theme.fg("dim", t("Messages:"))} ${a.messages.total.toLocaleString()}\n`;
+					info += `${theme.fg("dim", t("Spend:"))} ${a.tokens.input.toLocaleString()} in / ${a.tokens.output.toLocaleString()} out`;
 					if (a.cost > 0) info += `, $${a.cost.toFixed(4)}`;
 					info += "\n";
 				}
 			}
 			if (stats.active) {
-				info += `\n${theme.bold("Totals")}\n`;
-				info += `${theme.fg("dim", "Tokens:")} ${stats.tokens.total.toLocaleString()}\n`;
-				if (stats.cost > 0) info += `${theme.fg("dim", "Cost:")} $${stats.cost.toFixed(4)}\n`;
+				info += `\n${theme.bold(t("Totals"))}\n`;
+				info += `${theme.fg("dim", t("Tokens:"))} ${stats.tokens.total.toLocaleString()}\n`;
+				if (stats.cost > 0) info += `${theme.fg("dim", t("Cost:"))} $${stats.cost.toFixed(4)}\n`;
 			}
 			this.ctx.presentCommandOutput([new Spacer(1), new Text(info, 1, 0)]);
 			return;
 		}
 		// Single active advisor — detailed view.
 		const model = stats.model;
-		let info = `${theme.bold("Advisor Status")}\n\n`;
+		let info = `${theme.bold(t("Advisor Status"))}\n\n`;
 		if (stats.advisors.length === 1) {
 			const a = stats.advisors[0];
 			const glyph = CommandController.#advisorStatusGlyph[a.status] ?? "?";
@@ -447,8 +471,8 @@ export class CommandController {
 			info += `${theme.fg(a.status === "running" ? "success" : "error", glyph)} ${a.name} ${theme.fg("dim", `[${label}]`)}\n\n`;
 		}
 		if (model) {
-			info += `${theme.bold("Provider")}\n`;
-			info += `${theme.fg("dim", "Model:")} ${model.provider}/${model.id}\n`;
+			info += `${theme.bold(t("Provider"))}\n`;
+			info += `${theme.fg("dim", t("Model:"))} ${model.provider}/${model.id}\n`;
 		}
 		if (model && usageReports) {
 			const quota = formatCompactQuota(
@@ -458,51 +482,51 @@ export class CommandController {
 				resolveActiveAdvisorAccount(model.provider, stats.advisors[0]?.sessionId),
 			);
 			if (quota) {
-				info += `\n${theme.bold("Quota")}\n`;
+				info += `\n${theme.bold(t("Quota"))}\n`;
 				info += `${theme.fg("dim", quota)}\n`;
 			}
 		}
-		info += `\n${theme.bold("Messages")}\n`;
-		info += `${theme.fg("dim", "User:")} ${stats.messages.user.toLocaleString()}\n`;
-		info += `${theme.fg("dim", "Assistant:")} ${stats.messages.assistant.toLocaleString()}\n`;
-		info += `${theme.fg("dim", "Total:")} ${stats.messages.total.toLocaleString()}\n`;
-		info += `\n${theme.bold("Context")}\n`;
+		info += `\n${theme.bold(t("Messages"))}\n`;
+		info += `${theme.fg("dim", t("User:"))} ${stats.messages.user.toLocaleString()}\n`;
+		info += `${theme.fg("dim", t("Assistant:"))} ${stats.messages.assistant.toLocaleString()}\n`;
+		info += `${theme.fg("dim", t("Total:"))} ${stats.messages.total.toLocaleString()}\n`;
+		info += `\n${theme.bold(t("Context"))}\n`;
 		if (stats.contextWindow > 0) {
 			const percent = Math.round((stats.contextTokens / stats.contextWindow) * 100);
-			info += `${theme.fg("dim", "Tokens:")} ${stats.contextTokens.toLocaleString()} / ${stats.contextWindow.toLocaleString()} (${percent}%)\n`;
+			info += `${theme.fg("dim", t("Tokens:"))} ${stats.contextTokens.toLocaleString()} / ${stats.contextWindow.toLocaleString()} (${percent}%)\n`;
 		} else {
-			info += `${theme.fg("dim", "Tokens:")} ${stats.contextTokens.toLocaleString()}\n`;
+			info += `${theme.fg("dim", t("Tokens:"))} ${stats.contextTokens.toLocaleString()}\n`;
 		}
-		info += `\n${theme.bold("Spend")}\n`;
-		info += `${theme.fg("dim", "Input:")} ${stats.tokens.input.toLocaleString()}\n`;
-		info += `${theme.fg("dim", "Output:")} ${stats.tokens.output.toLocaleString()}\n`;
+		info += `\n${theme.bold(t("Spend"))}\n`;
+		info += `${theme.fg("dim", t("Input:"))} ${stats.tokens.input.toLocaleString()}\n`;
+		info += `${theme.fg("dim", t("Output:"))} ${stats.tokens.output.toLocaleString()}\n`;
 		if (stats.tokens.cacheRead > 0) {
-			info += `${theme.fg("dim", "Cache Read:")} ${stats.tokens.cacheRead.toLocaleString()}\n`;
+			info += `${theme.fg("dim", t("Cache Read:"))} ${stats.tokens.cacheRead.toLocaleString()}\n`;
 		}
-		if (stats.cost > 0) info += `${theme.fg("dim", "Cost:")} $${stats.cost.toFixed(4)}\n`;
+		if (stats.cost > 0) info += `${theme.fg("dim", t("Cost:"))} $${stats.cost.toFixed(4)}\n`;
 		this.ctx.presentCommandOutput([new Spacer(1), new Text(info, 1, 0)]);
 	}
 
 	async handleJobsCommand(): Promise<void> {
 		const snapshot = this.ctx.session.getAsyncJobSnapshot({ recentLimit: 5 });
 		if (!snapshot) {
-			this.ctx.showWarning("Async background jobs are unavailable in this session.");
+			this.ctx.showWarning(t("Async background jobs are unavailable in this session."));
 			return;
 		}
 
 		const now = Date.now();
 		const lineWidth = Math.max(24, (this.ctx.ui.terminal.columns ?? 100) - 24);
-		let info = `${theme.bold("Background Jobs")}\n\n`;
-		info += `${theme.fg("dim", "Running:")} ${snapshot.running.length}\n`;
+		let info = `${theme.bold(t("Background Jobs"))}\n\n`;
+		info += `${theme.fg("dim", t("Running:"))} ${snapshot.running.length}\n`;
 
 		if (snapshot.running.length === 0 && snapshot.recent.length === 0) {
-			info += `\n${theme.fg("dim", "No async jobs yet.")}\n`;
+			info += `\n${theme.fg("dim", t("No async jobs yet."))}\n`;
 			this.ctx.presentCommandOutput([new Spacer(1), new Text(info, 1, 0)]);
 			return;
 		}
 
 		if (snapshot.running.length > 0) {
-			info += `\n${theme.bold("Running Jobs")}\n`;
+			info += `\n${theme.bold(t("Running Jobs"))}\n`;
 			for (const job of snapshot.running) {
 				info += `${renderJobLine(job, now)}\n`;
 				info += `  ${theme.fg("dim", truncateJobLabel(job.label, lineWidth))}\n`;
@@ -510,7 +534,7 @@ export class CommandController {
 		}
 
 		if (snapshot.recent.length > 0) {
-			info += `\n${theme.bold("Recent Jobs")}\n`;
+			info += `\n${theme.bold(t("Recent Jobs"))}\n`;
 			for (const job of snapshot.recent) {
 				info += `${renderJobLine(job, now)}\n`;
 				info += `  ${theme.fg("dim", truncateJobLabel(job.label, lineWidth))}\n`;
@@ -525,19 +549,24 @@ export class CommandController {
 		if (!usageReports) {
 			const provider = this.ctx.session as { fetchUsageReports?: () => Promise<UsageReport[] | null> };
 			if (!provider.fetchUsageReports) {
-				this.ctx.showWarning("Usage reporting is not configured for this session.");
+				this.ctx.showWarning(t("Usage reporting is not configured for this session."));
 				return;
 			}
 			try {
 				usageReports = await provider.fetchUsageReports();
 			} catch (error) {
-				this.ctx.showError(`Failed to fetch usage data: ${error instanceof Error ? error.message : String(error)}`);
+				this.ctx.showError(
+					t("Failed to fetch usage data: {0}").replace(
+						"{0}",
+						error instanceof Error ? error.message : String(error),
+					),
+				);
 				return;
 			}
 		}
 
 		if (!usageReports || usageReports.length === 0) {
-			this.ctx.showWarning("No usage data available.");
+			this.ctx.showWarning(t("No usage data available."));
 			return;
 		}
 
@@ -566,11 +595,11 @@ export class CommandController {
 		const allEntries = await parseChangelog(changelogPath);
 		const entriesToShow = showFull ? allEntries : allEntries.slice(0, RECENT_CHANGELOG_ENTRY_LIMIT);
 		const changelogMarkdown =
-			entriesToShow.length > 0 ? renderChangelogEntries(entriesToShow).markdown : "No changelog entries found.";
-		const title = showFull ? "Full Changelog" : "Recent Changes";
+			entriesToShow.length > 0 ? renderChangelogEntries(entriesToShow).markdown : t("No changelog entries found.");
+		const title = showFull ? t("Full Changelog") : t("Recent Changes");
 		const hint = showFull
 			? ""
-			: `\n\n${theme.fg("dim", "Use")} ${theme.bold("/changelog full")} ${theme.fg("dim", "to view the complete changelog.")}`;
+			: `\n\n${theme.fg("dim", t("Use"))} ${theme.bold("/changelog full")} ${theme.fg("dim", t("to view the complete changelog."))}`;
 
 		const block = new TranscriptBlock();
 		block.addChild(new DynamicBorder());
@@ -583,7 +612,7 @@ export class CommandController {
 
 	handleHotkeysCommand(): void {
 		const hotkeys = buildHotkeysMarkdown({ keybindings: this.ctx.keybindings });
-		showMarkdownPanel(this.ctx, "Keyboard Shortcuts", hotkeys);
+		showMarkdownPanel(this.ctx, t("Keyboard Shortcuts"), hotkeys);
 	}
 
 	handleToolsCommand(): void {
@@ -591,19 +620,19 @@ export class CommandController {
 			tools: this.ctx.session.agent.state.tools,
 			xdevTools: this.ctx.session.getXdevToolEntries(),
 		});
-		showMarkdownPanel(this.ctx, "Available Tools", tools);
+		showMarkdownPanel(this.ctx, t("Available Tools"), tools);
 	}
 
 	handleContextCommand(): void {
 		const breakdown = computeContextBreakdown(this.ctx.session, { snapcompactSavings: true });
 		if (breakdown.contextWindow <= 0) {
-			this.ctx.showWarning("Context usage is unavailable: no model is selected for this session.");
+			this.ctx.showWarning(t("Context usage is unavailable: no model is selected for this session."));
 			return;
 		}
 		const output = renderContextUsage(breakdown, theme);
 		const block = new TranscriptBlock();
 		block.addChild(new DynamicBorder());
-		block.addChild(new Text(theme.bold(theme.fg("accent", "Context Usage")), 1, 0));
+		block.addChild(new Text(theme.bold(theme.fg("accent", t("Context Usage"))), 1, 0));
 		block.addChild(new Spacer(1));
 		block.addChild(new Text(output, 1, 0));
 		block.addChild(new DynamicBorder());
@@ -619,12 +648,12 @@ export class CommandController {
 		if (action === "view") {
 			const payload = await backend.buildDeveloperInstructions(agentDir, this.ctx.settings, this.ctx.session);
 			if (!payload) {
-				this.ctx.showWarning("Memory payload is empty (memory backend off, disabled, or no memory available).");
+				this.ctx.showWarning(t("Memory payload is empty (memory backend off, disabled, or no memory available)."));
 				return;
 			}
 			const block = new TranscriptBlock();
 			block.addChild(new DynamicBorder());
-			block.addChild(new Text(theme.bold(theme.fg("accent", "Memory Injection Payload")), 1, 0));
+			block.addChild(new Text(theme.bold(theme.fg("accent", t("Memory Injection Payload"))), 1, 0));
 			block.addChild(new Spacer(1));
 			block.addChild(new Markdown(payload, 1, 1, getMarkdownTheme()));
 			block.addChild(new DynamicBorder());
@@ -636,9 +665,11 @@ export class CommandController {
 			try {
 				await backend.clear(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
 				await this.ctx.session.refreshBaseSystemPrompt();
-				this.ctx.showStatus("Memory data cleared and system prompt refreshed.");
+				this.ctx.showStatus(t("Memory data cleared and system prompt refreshed."));
 			} catch (error) {
-				this.ctx.showError(`Memory clear failed: ${error instanceof Error ? error.message : String(error)}`);
+				this.ctx.showError(
+					t("Memory clear failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+				);
 			}
 			return;
 		}
@@ -646,9 +677,11 @@ export class CommandController {
 		if (action === "enqueue" || action === "rebuild") {
 			try {
 				await backend.enqueue(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
-				this.ctx.showStatus("Memory consolidation enqueued.");
+				this.ctx.showStatus(t("Memory consolidation enqueued."));
 			} catch (error) {
-				this.ctx.showError(`Memory enqueue failed: ${error instanceof Error ? error.message : String(error)}`);
+				this.ctx.showError(
+					t("Memory enqueue failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+				);
 			}
 			return;
 		}
@@ -658,12 +691,26 @@ export class CommandController {
 			try {
 				const payload = await hook?.(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
 				if (!payload) {
-					this.ctx.showWarning(`Memory ${action} is not available for the ${backend.id} backend.`);
+					this.ctx.showWarning(
+						backend.id === "off"
+							? t("Memory backend is off — there is nothing to show.")
+							: t("Memory {0} is not available for the {1} backend.")
+									.replace("{0}", action)
+									.replace("{1}", backend.id),
+					);
 					return;
 				}
-				showMarkdownPanel(this.ctx, `Memory ${action === "stats" ? "Stats" : "Diagnostics"}`, payload);
+				showMarkdownPanel(
+					this.ctx,
+					t("Memory {0}").replace("{0}", action === "stats" ? t("Stats") : t("Diagnostics")),
+					payload,
+				);
 			} catch (error) {
-				this.ctx.showError(`Memory ${action} failed: ${error instanceof Error ? error.message : String(error)}`);
+				this.ctx.showError(
+					t("Memory {0} failed: {1}")
+						.replace("{0}", action)
+						.replace("{1}", error instanceof Error ? error.message : String(error)),
+				);
 			}
 			return;
 		}
@@ -673,7 +720,7 @@ export class CommandController {
 			return;
 		}
 
-		this.ctx.showError("Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>");
+		this.ctx.showError(t("Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild|mm ...>"));
 	}
 
 	async #handleMentalModelsSubcommand(argumentText: string): Promise<void> {
@@ -685,11 +732,11 @@ export class CommandController {
 		const state = this.ctx.session.getHindsightSessionState();
 		const primary = state && !state.aliasOf ? state : undefined;
 		if (!primary) {
-			this.ctx.showError("Hindsight backend is not active for this session.");
+			this.ctx.showError(t("Hindsight backend is not active for this session."));
 			return;
 		}
 		if (!primary.config.mentalModelsEnabled) {
-			this.ctx.showError("Mental models are disabled (hindsight.mentalModelsEnabled = false).");
+			this.ctx.showError(t("Mental models are disabled (hindsight.mentalModelsEnabled = false)."));
 			return;
 		}
 
@@ -698,14 +745,14 @@ export class CommandController {
 				await this.#mmList(primary);
 				return;
 			case "show":
-				if (!arg) return this.ctx.showError("Usage: /memory mm show <id>");
+				if (!arg) return this.ctx.showError(t("Usage: /memory mm show <id>"));
 				await this.#mmShow(primary, arg);
 				return;
 			case "refresh":
 				await this.#mmRefresh(primary, arg);
 				return;
 			case "history":
-				if (!arg) return this.ctx.showError("Usage: /memory mm history <id>");
+				if (!arg) return this.ctx.showError(t("Usage: /memory mm history <id>"));
 				await this.#mmHistory(primary, arg);
 				return;
 			case "seed":
@@ -716,11 +763,11 @@ export class CommandController {
 				return;
 			case "delete":
 			case "remove":
-				if (!arg) return this.ctx.showError("Usage: /memory mm delete <id>");
+				if (!arg) return this.ctx.showError(t("Usage: /memory mm delete <id>"));
 				await this.#mmDelete(primary, arg);
 				return;
 			default:
-				this.ctx.showError("Usage: /memory mm <list|show|refresh|history|seed|reload|delete>");
+				this.ctx.showError(t("Usage: /memory mm <list|show|refresh|history|seed|reload|delete>"));
 		}
 	}
 
@@ -730,16 +777,18 @@ export class CommandController {
 			const response = await client.listMentalModels(state.bankId, { detail: "metadata" });
 			const items = response.items ?? [];
 			if (items.length === 0) {
-				this.ctx.showStatus(`No mental models on bank ${state.bankId}.`);
+				this.ctx.showStatus(t("No mental models on bank {0}.").replace("{0}", state.bankId));
 				return;
 			}
 			const lines = items
 				.slice()
 				.sort((a, b) => a.id.localeCompare(b.id))
 				.map(summarizeMentalModel);
-			showMarkdownPanel(this.ctx, `Mental Models — ${state.bankId}`, lines.join("\n"));
+			showMarkdownPanel(this.ctx, t("Mental Models — {0}").replace("{0}", state.bankId), lines.join("\n"));
 		} catch (error) {
-			this.ctx.showError(`mm list failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm list failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
@@ -747,20 +796,22 @@ export class CommandController {
 		try {
 			const model = await state.client.getMentalModel(state.bankId, id, { detail: "content" });
 			if (!model) {
-				this.ctx.showError(`Mental model not found: ${id}`);
+				this.ctx.showError(t("Mental model not found: {0}").replace("{0}", id));
 				return;
 			}
 			const tags = model.tags && model.tags.length > 0 ? `\n_tags: ${model.tags.join(", ")}_` : "";
 			const refreshed = model.last_refreshed_at ? `\n_last refreshed: ${model.last_refreshed_at}_` : "";
 			const sourceQuery = model.source_query ? `\n\n**Source query:** ${model.source_query}` : "";
-			const content = (model.content ?? "_(empty — background reflect may still be running)_").trim();
+			const content = (model.content ?? t("_(empty — background reflect may still be running)_")).trim();
 			showMarkdownPanel(
 				this.ctx,
 				model.name,
 				`**id:** \`${model.id}\`${tags}${refreshed}${sourceQuery}\n\n${content}`,
 			);
 		} catch (error) {
-			this.ctx.showError(`mm show failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm show failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
@@ -771,7 +822,7 @@ export class CommandController {
 				// auto-refresh filter so curated/manual models can still be
 				// refreshed on demand.
 				await state.client.refreshMentalModel(state.bankId, id);
-				this.ctx.showStatus(`Refresh queued for mental model ${id}.`);
+				this.ctx.showStatus(t("Refresh queued for mental model {0}.").replace("{0}", id));
 			} else {
 				// Bulk refresh: only touch models that opted into automatic
 				// refresh via `trigger.refresh_after_consolidation`. Curated
@@ -782,14 +833,16 @@ export class CommandController {
 				const list = await state.client.listMentalModels(state.bankId, { detail: "content" });
 				const items = list.items ?? [];
 				if (items.length === 0) {
-					this.ctx.showStatus(`No mental models on bank ${state.bankId}.`);
+					this.ctx.showStatus(t("No mental models on bank {0}.").replace("{0}", state.bankId));
 					return;
 				}
 				const targets = items.filter(m => m.trigger?.refresh_after_consolidation === true);
 				const skipped = items.length - targets.length;
 				if (targets.length === 0) {
 					this.ctx.showStatus(
-						`No mental models opted into auto-refresh; ${skipped} curated model(s) left untouched. Pass an explicit id to refresh one of them.`,
+						t(
+							"No mental models opted into auto-refresh; {0} curated model(s) left untouched. Pass an explicit id to refresh one of them.",
+						).replace("{0}", String(skipped)),
 					);
 					return;
 				}
@@ -800,13 +853,19 @@ export class CommandController {
 						queued++;
 					} catch (error) {
 						this.ctx.showWarning(
-							`Refresh failed for ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+							t("Refresh failed for {0}: {1}")
+								.replace("{0}", item.id)
+								.replace("{1}", error instanceof Error ? error.message : String(error)),
 						);
 					}
 				}
-				const skippedSuffix = skipped > 0 ? `; skipped ${skipped} curated model(s)` : "";
+				const skippedSuffix =
+					skipped > 0 ? t("; skipped {0} curated model(s)").replace("{0}", String(skipped)) : "";
 				this.ctx.showStatus(
-					`Refresh queued for ${queued}/${targets.length} auto-refresh model(s)${skippedSuffix}.`,
+					t("Refresh queued for {0}/{1} auto-refresh model(s){2}.")
+						.replace("{0}", String(queued))
+						.replace("{1}", String(targets.length))
+						.replace("{2}", skippedSuffix),
 				);
 			}
 			// Reload the cache after a brief grace so the new content (if the refresh
@@ -814,7 +873,9 @@ export class CommandController {
 			await Bun.sleep(500);
 			await reloadMentalModelsForSession(state.session);
 		} catch (error) {
-			this.ctx.showError(`mm refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm refresh failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
@@ -825,11 +886,11 @@ export class CommandController {
 				state.client.getMentalModelHistory(state.bankId, id),
 			]);
 			if (!model) {
-				this.ctx.showError(`Mental model not found: ${id}`);
+				this.ctx.showError(t("Mental model not found: {0}").replace("{0}", id));
 				return;
 			}
 			if (history.length === 0) {
-				this.ctx.showStatus(`No history recorded for ${id}.`);
+				this.ctx.showStatus(t("No history recorded for {0}.").replace("{0}", id));
 				return;
 			}
 			// History is most-recent first. Each entry stores the content BEFORE that
@@ -845,9 +906,11 @@ export class CommandController {
 				const diff = diffMentalModelContent(before, after);
 				sections.push(`### ${history[i].changed_at}\n\n\`\`\`diff\n${diff}\n\`\`\``);
 			}
-			showMarkdownPanel(this.ctx, `History — ${model.name}`, sections.join("\n\n"));
+			showMarkdownPanel(this.ctx, t("History — {0}").replace("{0}", model.name), sections.join("\n\n"));
 		} catch (error) {
-			this.ctx.showError(`mm history failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm history failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
@@ -864,7 +927,7 @@ export class CommandController {
 				config.scoping,
 			);
 			if (seeds.length === 0) {
-				this.ctx.showStatus(`No built-in seeds apply to scoping=${config.scoping}.`);
+				this.ctx.showStatus(t("No built-in seeds apply to scoping={0}.").replace("{0}", config.scoping));
 				return;
 			}
 			const list = await state.client.listMentalModels(state.bankId, { detail: "metadata" });
@@ -886,22 +949,30 @@ export class CommandController {
 					created++;
 				} catch (error) {
 					this.ctx.showWarning(
-						`Seed failed for ${seed.id}: ${error instanceof Error ? error.message : String(error)}`,
+						t("Seed failed for {0}: {1}")
+							.replace("{0}", seed.id)
+							.replace("{1}", error instanceof Error ? error.message : String(error)),
 					);
 				}
 			}
-			this.ctx.showStatus(`Seeded ${created} new mental model(s); ${skipped} already present.`);
+			this.ctx.showStatus(
+				t("Seeded {0} new mental model(s); {1} already present.")
+					.replace("{0}", String(created))
+					.replace("{1}", String(skipped)),
+			);
 		} catch (error) {
-			this.ctx.showError(`mm seed failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm seed failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
 	async #mmReload(state: HindsightSessionState): Promise<void> {
 		const ok = await reloadMentalModelsForSession(state.session);
 		if (ok) {
-			this.ctx.showStatus("Mental-model cache reloaded.");
+			this.ctx.showStatus(t("Mental-model cache reloaded."));
 		} else {
-			this.ctx.showError("Reload failed (Hindsight backend not active or mental models disabled).");
+			this.ctx.showError(t("Reload failed (Hindsight backend not active or mental models disabled)."));
 		}
 	}
 
@@ -909,19 +980,23 @@ export class CommandController {
 		try {
 			const removed = await state.client.deleteMentalModel(state.bankId, id);
 			if (!removed) {
-				this.ctx.showError(`Mental model not found: ${id}`);
+				this.ctx.showError(t("Mental model not found: {0}").replace("{0}", id));
 				return;
 			}
 			// Drop the cached snippet so the closing tag does not silently keep
 			// stale content in the system prompt until the next agent_end TTL.
 			await reloadMentalModelsForSession(state.session);
-			this.ctx.showStatus(`Deleted mental model ${id} from bank ${state.bankId}.`);
+			this.ctx.showStatus(
+				t("Deleted mental model {0} from bank {1}.").replace("{0}", id).replace("{1}", state.bankId),
+			);
 		} catch (error) {
-			this.ctx.showError(`mm delete failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("mm delete failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 		}
 	}
 
-	async #runNewSessionFlow(options?: NewSessionOptions, label: string = "New session started"): Promise<void> {
+	async #runNewSessionFlow(options?: NewSessionOptions, label: string = t("New session started")): Promise<void> {
 		this.ctx.clearTransientSessionUi();
 
 		if (this.ctx.session.isCompacting) {
@@ -952,26 +1027,63 @@ export class CommandController {
 	async handleFreshCommand(): Promise<void> {
 		const result = this.ctx.session.freshSession();
 		if (!result) {
-			this.ctx.showWarning("Wait for the current response to finish or abort it before refreshing provider state.");
+			this.ctx.showWarning(
+				t("Wait for the current response to finish or abort it before refreshing provider state."),
+			);
 			return;
 		}
-		const stateLabel = result.closedProviderSessions === 1 ? "provider state" : "provider states";
+		const stateLabel = result.closedProviderSessions === 1 ? t("provider state") : t("provider states");
 		this.ctx.statusLine.invalidate();
 		this.ctx.ui.requestRender();
-		this.ctx.showStatus(`Fresh provider session started (${result.closedProviderSessions} ${stateLabel} pruned).`);
+		this.ctx.showStatus(
+			t("Fresh provider session started ({0} {1} pruned).")
+				.replace("{0}", String(result.closedProviderSessions))
+				.replace("{1}", stateLabel),
+		);
+	}
+
+	async handleResetContextCommand(): Promise<void> {
+		if (this.ctx.session.isCompacting) {
+			this.ctx.session.abortCompaction();
+			while (this.ctx.session.isCompacting) {
+				await Bun.sleep(10);
+			}
+		}
+		const result = await this.ctx.session.resetSessionContext();
+		if (!result) {
+			this.ctx.showWarning("Wait for the current response to finish or abort it before resetting the context.");
+			return;
+		}
+		// Drop the rendered transcript so the UI matches the now-empty model
+		// context (mirrors #runNewSessionFlow's teardown, minus the new session —
+		// the session id, title, and transcript file all survive).
+		this.ctx.clearTransientSessionUi();
+		this.ctx.resetTranscript();
+		this.ctx.statusLine.invalidate();
+		this.ctx.updateEditorBorderColor();
+		const noun = result.droppedCount === 1 ? "message" : "messages";
+		this.ctx.present([
+			new Spacer(1),
+			new Text(
+				`${theme.fg("accent", `${theme.status.success} Context reset — ${result.droppedCount} ${noun} dropped; session continues.`)}`,
+				1,
+				1,
+			),
+		]);
+		this.ctx.ui.requestRender(true, { clearScrollback: true });
 	}
 
 	async handleDropCommand(): Promise<void> {
 		if (!this.ctx.sessionManager.getSessionFile()) {
-			this.ctx.showError("Nothing to drop (in-memory session)");
+			this.ctx.showError(t("Nothing to drop (in-memory session)"));
 			return;
 		}
-		await this.#runNewSessionFlow({ drop: true }, "Session dropped");
+		await this.#runNewSessionFlow({ drop: true }, t("Session dropped"));
 	}
 
 	async handleForkCommand(): Promise<void> {
 		if (this.ctx.session.isStreaming) {
-			this.ctx.showWarning("Wait for the current response to finish or abort it before forking.");
+			this.ctx.showWarning(t("Wait for the current response to finish or abort it before forking."));
 			return;
 		}
 		if (this.ctx.loadingAnimation) {
@@ -982,7 +1094,7 @@ export class CommandController {
 
 		const success = await this.ctx.session.fork();
 		if (!success) {
-			this.ctx.showError("Fork failed (session not persisted or cancelled)");
+			this.ctx.showError(t("Fork failed (session not persisted or cancelled)"));
 			return;
 		}
 
@@ -990,10 +1102,14 @@ export class CommandController {
 		this.ctx.ui.requestRender();
 
 		const sessionFile = this.ctx.session.sessionFile;
-		const shortPath = sessionFile ? sessionFile.split("/").pop() : "new session";
+		const shortPath = sessionFile ? (sessionFile.split("/").pop() ?? sessionFile) : t("new session");
 		this.ctx.present([
 			new Spacer(1),
-			new Text(`${theme.fg("accent", `${theme.status.success} Session forked to ${shortPath}`)}`, 1, 1),
+			new Text(
+				`${theme.fg("accent", `${theme.status.success} ${t("Session forked to {0}").replace("{0}", shortPath)}`)}`,
+				1,
+				1,
+			),
 		]);
 	}
 
@@ -1008,7 +1124,7 @@ export class CommandController {
 	 */
 	async handleMoveCommand(targetPath?: string): Promise<void> {
 		if (this.ctx.session.isStreaming) {
-			this.ctx.showWarning("Wait for the current response to finish or abort it before moving.");
+			this.ctx.showWarning(t("Wait for the current response to finish or abort it before moving."));
 			return;
 		}
 
@@ -1026,7 +1142,7 @@ export class CommandController {
 
 		const unquoted = stripOuterDoubleQuotes(input);
 		if (!unquoted) {
-			this.ctx.showError("Usage: /move <path>");
+			this.ctx.showError(t("Usage: /move <path>"));
 			return;
 		}
 
@@ -1050,32 +1166,38 @@ export class CommandController {
 				parentExists = false;
 			}
 			if (!parentExists) {
-				this.ctx.showError(`Cannot create "${path.basename(resolvedPath)}": parent directory does not exist`);
+				this.ctx.showError(
+					t('Cannot create "{0}": parent directory does not exist').replace("{0}", path.basename(resolvedPath)),
+				);
 				return;
 			}
 			const confirmed = await this.ctx.showHookConfirm(
-				"Create directory?",
-				`"${path.basename(resolvedPath)}" does not exist. Create it?`,
+				t("Create directory?"),
+				t('"{0}" does not exist. Create it?').replace("{0}", path.basename(resolvedPath)),
 			);
 			if (!confirmed) return;
 			try {
 				await fs.mkdir(resolvedPath, { recursive: true });
 			} catch (err) {
-				this.ctx.showError(`Failed to create directory: ${err instanceof Error ? err.message : String(err)}`);
+				this.ctx.showError(
+					t("Failed to create directory: {0}").replace("{0}", err instanceof Error ? err.message : String(err)),
+				);
 				return;
 			}
 		}
 		try {
 			await this.ctx.settings.flush();
 		} catch (err) {
-			this.ctx.showError(`Failed to save pending settings: ${err instanceof Error ? err.message : String(err)}`);
+			this.ctx.showError(
+				t("Failed to save pending settings: {0}").replace("{0}", err instanceof Error ? err.message : String(err)),
+			);
 			return;
 		}
 
 		try {
 			await this.ctx.session.moveSession(resolvedPath);
 		} catch (err) {
-			this.ctx.showError(`Move failed: ${err instanceof Error ? err.message : String(err)}`);
+			this.ctx.showError(t("Move failed: {0}").replace("{0}", err instanceof Error ? err.message : String(err)));
 			return;
 		}
 		await this.ctx.applyCwdChange(resolvedPath);
@@ -1086,7 +1208,11 @@ export class CommandController {
 
 		this.ctx.present([
 			new Spacer(1),
-			new Text(`${theme.fg("accent", `${theme.status.success} Moved to ${resolvedPath}`)}`, 1, 1),
+			new Text(
+				`${theme.fg("accent", `${theme.status.success} ${t("Moved to {0}").replace("{0}", resolvedPath)}`)}`,
+				1,
+				1,
+			),
 		]);
 	}
 
@@ -1094,13 +1220,13 @@ export class CommandController {
 		try {
 			const stored = await this.ctx.sessionManager.setSessionName(title, "user");
 			if (!stored) {
-				this.ctx.showError("Session name cannot be empty.");
+				this.ctx.showError(t("Session name cannot be empty."));
 				return;
 			}
 			const name = this.ctx.sessionManager.getSessionName()!;
-			this.ctx.showStatus(`Session renamed to "${name}".`);
+			this.ctx.showStatus(t('Session renamed to "{0}".').replace("{0}", name));
 		} catch (err) {
-			this.ctx.showError(`Rename failed: ${err instanceof Error ? err.message : String(err)}`);
+			this.ctx.showError(t("Rename failed: {0}").replace("{0}", err instanceof Error ? err.message : String(err)));
 		}
 	}
 
@@ -1108,7 +1234,7 @@ export class CommandController {
 		const isDeferred = this.ctx.session.isStreaming;
 		const shouldPersistCwd = isPersistentShellCdCommand(command);
 		if (isDeferred && shouldPersistCwd) {
-			this.ctx.showWarning("Wait for the current response to finish or abort it before changing directories.");
+			this.ctx.showWarning(t("Wait for the current response to finish or abort it before changing directories."));
 			return;
 		}
 
@@ -1143,16 +1269,19 @@ export class CommandController {
 				if (shouldPersistCwd) await this.#applyBashResultCwd(result);
 			} catch (error) {
 				this.ctx.showError(
-					`Bash command completed, but OMP failed to update its working directory: ${
-						error instanceof Error ? error.message : "Unknown error"
-					}`,
+					t("Bash command completed, but OMP failed to update its working directory: {0}").replace(
+						"{0}",
+						error instanceof Error ? error.message : t("Unknown error"),
+					),
 				);
 			}
 		} catch (error) {
 			if (this.ctx.bashComponent) {
 				this.ctx.bashComponent.setComplete(undefined, false);
 			}
-			this.ctx.showError(`Bash command failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			this.ctx.showError(
+				t("Bash command failed: {0}").replace("{0}", error instanceof Error ? error.message : t("Unknown error")),
+			);
 		}
 
 		this.ctx.bashComponent = undefined;
@@ -1218,7 +1347,12 @@ export class CommandController {
 			if (this.ctx.pythonComponent) {
 				this.ctx.pythonComponent.setComplete(undefined, false);
 			}
-			this.ctx.showError(`Python execution failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+			this.ctx.showError(
+				t("Python execution failed: {0}").replace(
+					"{0}",
+					error instanceof Error ? error.message : t("Unknown error"),
+				),
+			);
 		}
 
 		this.ctx.pythonComponent = undefined;
@@ -1235,7 +1369,7 @@ export class CommandController {
 		const messageCount = entries.filter(e => e.type === "message").length;
 
 		if (messageCount < 2) {
-			this.ctx.showWarning("Nothing to compact (no messages yet)");
+			this.ctx.showWarning(t("Nothing to compact (no messages yet)"));
 			return "ok";
 		}
 
@@ -1260,13 +1394,15 @@ export class CommandController {
 		try {
 			result = await this.ctx.session.shake(mode);
 		} catch (error) {
-			this.ctx.showError(`Shake failed: ${error instanceof Error ? error.message : String(error)}`);
+			this.ctx.showError(
+				t("Shake failed: {0}").replace("{0}", error instanceof Error ? error.message : String(error)),
+			);
 			return;
 		}
 
 		const dropped = result.toolResultsDropped + result.blocksDropped + (result.imagesDropped ?? 0);
 		if (dropped === 0) {
-			this.ctx.showStatus("Nothing to shake.");
+			this.ctx.showStatus(t("Nothing to shake."));
 			return;
 		}
 		this.ctx.rebuildChatFromMessages();
@@ -1287,7 +1423,9 @@ export class CommandController {
 		}
 		this.ctx.statusContainer.disposeChildren();
 
-		const label = isAuto ? "Auto-compacting context... (esc to cancel)" : "Compacting context... (esc to cancel)";
+		const label = isAuto
+			? t("Auto-compacting context... (esc to cancel)")
+			: t("Compacting context... (esc to cancel)");
 		const compactingLoader = new Loader(
 			this.ctx.ui,
 			spinner => theme.fg("accent", spinner),
@@ -1331,11 +1469,11 @@ export class CommandController {
 		} catch (error) {
 			if (error instanceof CompactionCancelledError) {
 				outcome = "cancelled";
-				this.ctx.showError("Compaction cancelled");
+				this.ctx.showError(t("Compaction cancelled"));
 			} else {
 				outcome = "failed";
 				const message = error instanceof Error ? error.message : String(error);
-				this.ctx.showError(`Compaction failed: ${message}`);
+				this.ctx.showError(t("Compaction failed: {0}").replace("{0}", message));
 			}
 		} finally {
 			compactingLoader.stop();
@@ -1352,7 +1490,7 @@ export class CommandController {
 
 	async handleHandoffCommand(customInstructions?: string): Promise<void> {
 		if (this.ctx.session.isStreaming) {
-			this.ctx.showWarning("Wait for the current response to finish or abort it before handing off.");
+			this.ctx.showWarning(t("Wait for the current response to finish or abort it before handing off."));
 			return;
 		}
 
@@ -1360,7 +1498,7 @@ export class CommandController {
 		const messageCount = entries.filter(e => e.type === "message").length;
 
 		if (messageCount < 2) {
-			this.ctx.showWarning("Nothing to hand off (no messages yet)");
+			this.ctx.showWarning(t("Nothing to hand off (no messages yet)"));
 			return;
 		}
 
@@ -1374,7 +1512,7 @@ export class CommandController {
 			this.ctx.ui,
 			spinner => theme.fg("accent", spinner),
 			text => theme.fg("muted", text),
-			"Generating handoff… (esc to cancel)",
+			t("Generating handoff… (esc to cancel)"),
 			getSymbolTheme().spinnerFrames,
 		);
 		this.ctx.statusContainer.addChild(handoffLoader);
@@ -1385,7 +1523,7 @@ export class CommandController {
 			const result = await this.ctx.session.handoff(customInstructions);
 
 			if (!result) {
-				this.ctx.showError("Handoff cancelled");
+				this.ctx.showError(t("Handoff cancelled"));
 				return;
 			}
 
@@ -1398,17 +1536,27 @@ export class CommandController {
 
 			this.ctx.present([
 				new Spacer(1),
-				new Text(`${theme.fg("accent", `${theme.status.success} New session started with handoff context`)}`, 1, 1),
+				new Text(
+					`${theme.fg("accent", `${theme.status.success} ${t("New session started with handoff context")}`)}`,
+					1,
+					1,
+				),
 			]);
 			if (result.savedPath) {
-				this.ctx.showStatus(`Handoff document saved to: ${result.savedPath}`);
+				this.ctx.showStatus(t("Handoff document saved to: {0}").replace("{0}", result.savedPath));
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			if (message === "Handoff cancelled" || (error instanceof Error && error.name === "AbortError")) {
-				this.ctx.showError("Handoff cancelled");
+			// `session.handoff()` normalizes genuine cancellations to this exact message; a
+			// provider error (even one named AbortError) is re-thrown verbatim so it surfaces
+			// as a real failure instead of a false "cancelled".
+			if (message === "Handoff cancelled") {
+				this.ctx.showError(t("Handoff cancelled"));
 			} else {
-				this.ctx.showError(`Handoff failed: ${message}`);
+				// Persist the real failure so it is debuggable after the transient
+				// TUI error clears (#7993).
+				logger.error("Handoff failed", { error: message });
+				this.ctx.showError(t("Handoff failed: {0}").replace("{0}", message));
 			}
 		} finally {
 			handoffLoader.stop();
@@ -1477,7 +1625,7 @@ function resolveProviderAuthMode(authStorage: AuthStorage, provider: string): st
 
 export function renderProviderSection(details: ProviderDetails, uiTheme: Pick<typeof theme, "fg">): string {
 	const lines: string[] = [];
-	lines.push(`${uiTheme.fg("dim", "Name:")} ${details.provider}`);
+	lines.push(`${uiTheme.fg("dim", t("Name:"))} ${details.provider}`);
 	for (const field of details.fields) {
 		lines.push(`${uiTheme.fg("dim", `${field.label}:`)} ${field.value}`);
 	}
@@ -1528,7 +1676,7 @@ function formatAccountLabel(limit: UsageLimit, report: UsageReport, index: numbe
 			? report.metadata.projectId
 			: limit.scope.projectId || undefined;
 	if (projectId) return projectId;
-	return `account ${index + 1}`;
+	return t("account {0}").replace("{0}", String(index + 1));
 }
 
 function formatUnlimitedReportLabel(report: UsageReport, index: number): string {
@@ -1538,7 +1686,7 @@ function formatUnlimitedReportLabel(report: UsageReport, index: number): string 
 	if (typeof accountId === "string" && accountId) return `${accountId}${orgSuffix(report)}`;
 	const projectId = report.metadata?.projectId;
 	if (typeof projectId === "string" && projectId) return projectId;
-	return `account ${index + 1}`;
+	return t("account {0}").replace("{0}", String(index + 1));
 }
 
 function formatResetShort(limit: UsageLimit, nowMs: number): string | undefined {
@@ -1634,7 +1782,7 @@ function formatAggregateAmount(limits: UsageLimit[]): string {
 	if (fractions.length === limits.length && fractions.length > 0) {
 		const sum = fractions.reduce((total, value) => total + value, 0);
 		const avgRemaining = Math.max(0, ((limits.length - sum) / limits.length) * 100);
-		return `${formatNumber(avgRemaining)}% free`;
+		return t("{0}% free").replace("{0}", formatNumber(avgRemaining));
 	}
 
 	const amounts = limits
@@ -1644,7 +1792,7 @@ function formatAggregateAmount(limits: UsageLimit[]): string {
 		const totalUsed = amounts.reduce((sum, amount) => sum + (amount.used ?? 0), 0);
 		const totalLimit = amounts.reduce((sum, amount) => sum + (amount.limit ?? 0), 0);
 		const remainingPct = totalLimit > 0 ? Math.max(0, 100 - (totalUsed / totalLimit) * 100) : 0;
-		return `${formatNumber(remainingPct)}% free`;
+		return t("{0}% free").replace("{0}", formatNumber(remainingPct));
 	}
 
 	if (limits.length > 0 && limits.every(isUsedOnlyAbsoluteAmount)) return "";
@@ -1653,10 +1801,13 @@ function formatAggregateAmount(limits: UsageLimit[]): string {
 	const uniqueAccountIds = new Set(
 		limits.map(limit => limit.scope.accountId).filter((id): id is string => typeof id === "string" && id.length > 0),
 	);
-	if (uniqueAccountIds.size > 0) return `${uniqueAccountIds.size} ${uniqueAccountIds.size === 1 ? "acct" : "accts"}`;
+	if (uniqueAccountIds.size > 0)
+		return t("{0} {1}")
+			.replace("{0}", String(uniqueAccountIds.size))
+			.replace("{1}", uniqueAccountIds.size === 1 ? t("acct") : t("accts"));
 	// No account IDs available — keep the pre-existing fallback so providers
 	// that don't populate scope.accountId still show a summary.
-	return `${limits.length} accts`;
+	return t("{0} accts").replace("{0}", String(limits.length));
 }
 
 function resolveResetRange(limits: UsageLimit[], nowMs: number): string | null {
@@ -1723,12 +1874,12 @@ export function formatCompactQuota(
 		// the window name, so the user can tell which credential's quota is shown.
 		const identity = limit.label.trim();
 		const header = identity && identity !== windowLabel ? `${windowLabel} (${identity})` : windowLabel;
-		const parts = [`${header}: ${pct}% used`];
+		const parts = [t("{0}: {1}% used").replace("{0}", header).replace("{1}", String(pct))];
 		const reset = resolveResetRange([limit], nowMs);
 		if (reset) parts.push(reset);
-		lines.push(parts.join(" · "));
+		lines.push(parts.join(t(" · ")));
 	}
-	return `Quota: ${lines.join(" │ ")}`;
+	return t("Quota: {0}").replace("{0}", lines.join(t(" │ ")));
 }
 
 function resolveStatusIcon(status: AggregateDisplayStatus, uiTheme: typeof theme): string {
@@ -1796,8 +1947,8 @@ export function renderUsageReports(
 ): string {
 	const lines: string[] = [];
 	const latestFetchedAt = Math.max(...reports.map(report => report.fetchedAt ?? 0));
-	const headerSuffix = latestFetchedAt ? ` (${formatDuration(nowMs - latestFetchedAt)} ago)` : "";
-	lines.push(uiTheme.bold(uiTheme.fg("accent", `Usage${headerSuffix}`)));
+	const headerSuffix = latestFetchedAt ? ` (${formatDuration(nowMs - latestFetchedAt)} ${t("ago")})` : "";
+	lines.push(uiTheme.bold(uiTheme.fg("accent", t("Usage{0}").replace("{0}", headerSuffix))));
 	const grouped = new Map<string, UsageReport[]>();
 	for (const report of reports) {
 		const list = grouped.get(report.provider) ?? [];
@@ -1844,11 +1995,11 @@ export function renderUsageReports(
 		lines.push(uiTheme.bold(uiTheme.fg("accent", providerName)));
 		const activeAccountLabel = formatActiveAccountLabel(activeAccount);
 		if (activeAccountLabel) {
-			lines.push(`  ${uiTheme.fg("accent", "in use by this session:")} ${activeAccountLabel}`);
+			lines.push(`  ${uiTheme.fg("accent", t("in use by this session:"))} ${activeAccountLabel}`);
 		}
 		const reportingModels = usageModelSelectors.filter(selector => selector.startsWith(`${provider}/`));
 		if (reportingModels.length > 0) {
-			lines.push(`  ${uiTheme.fg("accent", "Models with usage data")}`);
+			lines.push(`  ${uiTheme.fg("accent", t("Models with usage data"))}`);
 			for (const selector of reportingModels) {
 				lines.push(`    ${replaceTabs(truncateToWidth(sanitizeText(selector), availableWidth - 4))}`);
 			}
@@ -1872,13 +2023,13 @@ export function renderUsageReports(
 					? report.metadata.email
 					: typeof report.metadata?.accountId === "string" && report.metadata.accountId
 						? report.metadata.accountId
-						: "account";
+						: t("account");
 			const isActive =
 				!!activeAccount &&
 				((!!activeAccount.accountId && activeAccount.accountId === report.metadata?.accountId) ||
 					(!!activeAccount.email && activeAccount.email === report.metadata?.email));
 			resetAccountLines.push(
-				`    • ${label}: ${count} saved reset${count === 1 ? "" : "s"}${isActive ? " (active)" : ""}`,
+				`    • ${label}: ${count} ${t("saved reset")}${count === 1 ? "" : "s"}${isActive ? ` (${t("active")})` : ""}`,
 			);
 			const credits = report.resetCredits?.credits;
 			if (credits) {
@@ -1889,9 +2040,11 @@ export function renderUsageReports(
 							const remaining = expiryMs - nowMs;
 							const expiryDate = credit.expiresAt.slice(0, 10);
 							if (remaining > 0) {
-								resetAccountLines.push(`        expires in ${formatDuration(remaining)} (${expiryDate})`);
+								resetAccountLines.push(
+									`        ${t("expires in {0}").replace("{0}", formatDuration(remaining))} (${expiryDate})`,
+								);
 							} else {
-								resetAccountLines.push(`        expired (${expiryDate})`);
+								resetAccountLines.push(`        ${t("expired ({0})").replace("{0}", expiryDate)}`);
 							}
 						}
 					}
@@ -1900,7 +2053,7 @@ export function renderUsageReports(
 		}
 		if (resetAccountLines.length > 0) {
 			lines.push(
-				`  ${uiTheme.fg("accent", "Saved rate-limit resets")} ${uiTheme.fg("dim", "(/usage reset to spend)")}`,
+				`  ${uiTheme.fg("accent", t("Saved rate-limit resets"))} ${uiTheme.fg("dim", t("(/usage reset to spend)"))}`,
 			);
 			for (const line of resetAccountLines) lines.push(uiTheme.fg("dim", line));
 		}
@@ -1983,7 +2136,7 @@ export function renderUsageReports(
 			const tier = report.metadata?.planType;
 			const tierSuffix = typeof tier === "string" && tier ? ` ${uiTheme.fg("dim", `(${tier})`)}` : "";
 			lines.push(
-				`${uiTheme.fg("success", uiTheme.status.success)} ${label}${tierSuffix} ${uiTheme.fg("dim", "-- no limits")}`,
+				`${uiTheme.fg("success", uiTheme.status.success)} ${label}${tierSuffix} ${uiTheme.fg("dim", t("-- no limits"))}`,
 			);
 		}
 		// No per-provider footer; global header shows last check.

@@ -1,4 +1,4 @@
-import type { Api, Model, ToolChoice } from "@oh-my-pi/pi-ai";
+import type { Api, Model, ToolChoice } from "@musepi/pi-ai";
 
 /**
  * Build a provider-aware tool choice that targets one specific tool when supported.
@@ -11,19 +11,6 @@ export function buildNamedToolChoice(toolName: string, model?: Model<Api>): Tool
 	if (model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") {
 		return { type: "tool", name: toolName };
 	}
-
-	if (toolName === "computer" && model.supportsComputerUse === true) {
-		if (
-			model.api === "openai-codex-responses" ||
-			model.api === "openai-responses" ||
-			model.api === "azure-openai-responses"
-		) {
-			return { type: "computer" };
-		}
-		return undefined;
-	}
-	// Models without native computer support receive the tool as a regular
-	// function tool, so the generic named-function forcing below applies.
 
 	if (
 		model.api === "openai-codex-responses" ||

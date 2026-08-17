@@ -1,11 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	generateRoomKey,
-	generateWriteToken,
-	importRoomKey,
-	open,
-	seal,
-} from "@oh-my-pi/pi-coding-agent/collab/crypto";
+import { generateRoomKey, generateWriteToken, importRoomKey, open, seal } from "@musepi/pi-coding-agent/collab/crypto";
 import {
 	type CollabFrame,
 	DEFAULT_RELAY_URL,
@@ -16,14 +10,14 @@ import {
 	parseCollabLink,
 	rewriteEnvelopePeer,
 	unpackEnvelope,
-} from "@oh-my-pi/pi-coding-agent/collab/protocol";
+} from "@musepi/pi-coding-agent/collab/protocol";
 
 describe("collab crypto", () => {
 	it("round-trips a frame through seal/open", async () => {
 		const key = await importRoomKey(generateRoomKey());
 		const frame: CollabFrame = { t: "prompt", text: "check bun.lock — and ünïcode 🚀" };
 		const sealed = await seal(key, frame);
-		expect(await open(key, sealed)).toEqual(frame);
+		expect(await open<CollabFrame>(key, sealed)).toEqual(frame);
 	});
 
 	it("rejects tampered ciphertext", async () => {

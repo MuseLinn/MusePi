@@ -3,12 +3,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { StatusLineComponent, type StatusLineSettings } from "@oh-my-pi/pi-coding-agent/modes/components/status-line";
-import { STATUS_LINE_PRESETS } from "@oh-my-pi/pi-coding-agent/modes/components/status-line/presets";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import * as git from "@oh-my-pi/pi-coding-agent/utils/git";
-import { removeSyncWithRetries, setProjectDir } from "@oh-my-pi/pi-utils";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { StatusLineComponent, type StatusLineSettings } from "@musepi/pi-coding-agent/modes/components/status-line";
+import { STATUS_LINE_PRESETS } from "@musepi/pi-coding-agent/modes/components/status-line/presets";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as git from "@musepi/pi-coding-agent/utils/git";
+import { removeSyncWithRetries, setProjectDir } from "@musepi/pi-utils";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
 let settingsState: SettingsTestState | undefined;

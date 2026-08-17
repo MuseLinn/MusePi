@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { buildSpecializationAdvisory, TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import * as executorModule from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition, SingleResult } from "@oh-my-pi/pi-coding-agent/task/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { buildSpecializationAdvisory, TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import * as executorModule from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition, SingleResult } from "@musepi/pi-coding-agent/task/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 
 // Contract: the task tool appends an advisory (never a rejection) steering the
 // spawner toward more specific agent types when one call resolves ≥2 items to
@@ -78,7 +78,23 @@ describe("task tool advisory gating via suppressSpawnAdvisory", () => {
 		} as unknown as ToolSession;
 	}
 
-	async function spawnText(suppress: boolean): Promise<string> {
+	function sessionWithScoutDisabled(): ToolSession {
+		return {
+			cwd: "/tmp",
+			hasUI: false,
+			// `task.disabledAgents` is what the task tool reads to drop scout from
+			// the rendered description and the appended specialization advisory.
+			settings: Settings.isolated({
+				"task.isolation.mode": "none",
+				"task.batch": true,
+				"task.disabledAgents": ["scout"],
+			}),
+			getSessionFile: () => null,
+			getSessionSpawns: () => "*",
+		} as unknown as ToolSession;
+	}
+
+	async function spawnTextFor(s: ToolSession): Promise<string> {
 		vi.spyOn(discoveryModule, "discoverAgents").mockResolvedValue({ agents: [agent], projectAgentsDir: null });
 		vi.spyOn(executorModule, "runSubprocess").mockImplementation(
 			async (options): Promise<SingleResult> => ({
@@ -97,9 +113,7 @@ describe("task tool advisory gating via suppressSpawnAdvisory", () => {
 				requests: 1,
 			}),
 		);
-		const tool = await TaskTool.create(session(suppress));
-		// Both items omit `agent`, so each resolves to the generic spawn-policy
-		// default ("task") — the ≥2-generics condition the advisory gates on.
+		const tool = await TaskTool.create(s);
 		const result = await tool.execute("tc", {
 			context: "shared fan-out background",
 			tasks: [
@@ -111,10 +125,14 @@ describe("task tool advisory gating via suppressSpawnAdvisory", () => {
 	}
 
 	it("appends the specialization advisory when a batch resolves two generic workers", async () => {
-		expect(await spawnText(false)).toContain('`agent: "scout"`');
+		expect(await spawnTextFor(session(false))).toContain('`agent: "scout"`');
+	});
+
+	it("drops the scout example when scout is disabled", async () => {
+		expect(await spawnTextFor(sessionWithScoutDisabled())).not.toContain("scout");
 	});
 
 	it("omits the advisory entirely when the session suppresses it", async () => {
-		expect(await spawnText(true)).not.toContain('`agent: "scout"`');
+		expect(await spawnTextFor(session(true))).not.toContain('`agent: "scout"`');
 	});
 });

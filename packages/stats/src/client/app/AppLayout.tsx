@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { t } from "../i18n";
 import type { TimeRange } from "../types";
 import { NavRail } from "./NavRail";
 import type { DashboardSection } from "./routes";
@@ -47,18 +48,18 @@ export function AppLayout({
 						onClick={e => e.stopPropagation()}
 						role="dialog"
 						aria-modal="true"
-						aria-label="Navigation menu"
+						aria-label={t("Navigation menu")}
 					>
 						<div className="stats-mobile-drawer-header">
 							<div className="stats-logo-container">
-								<span className="stats-logo-text">OH MY PI</span>
-								<span className="stats-logo-subtext">Observability</span>
+								<span className="stats-logo-text">MusePi</span>
+								<span className="stats-logo-subtext">{t("Observability")}</span>
 							</div>
 							<button
 								type="button"
 								onClick={() => setMenuOpen(false)}
 								className="stats-drawer-close-btn"
-								aria-label="Close navigation menu"
+								aria-label={t("Close navigation menu")}
 							>
 								<X size={18} />
 							</button>

@@ -5,8 +5,9 @@
  * `omp auth-broker status` (liveness checks). All endpoints except
  * `/v1/healthz` require a bearer token.
  */
-import { readSseEvents } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+
+import { type } from "@musepi/omptype";
+import { readSseEvents } from "@musepi/pi-utils";
 import type { AuthCredential, DisabledCredentialSummary } from "../auth-storage";
 import type {
 	ClientUsageReportRequest,
@@ -212,7 +213,7 @@ export class AuthBrokerClient {
 		}
 
 		let sawFirstEvent = false;
-		for await (const sse of readSseEvents(response.body, opts.signal)) {
+		for await (const sse of readSseEvents(response.body as ReadableStream<Uint8Array>, opts.signal)) {
 			if (sse.event === null && sse.data === "") continue; // keepalive comment frames
 			let parsed: unknown;
 			try {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { TempDir } from "@musepi/pi-utils";
 
 const packageRoot = path.resolve(import.meta.dir, "..");
 
@@ -46,6 +46,9 @@ describe("ModelRegistry default custom models config", () => {
 			supportsLongPromptCacheRetention: false,
 			promptCacheMinimumTokens: 1024,
 			promptCacheMaximumCheckpoints: 4,
+			// Reasoning-tier Bedrock stream-stall watchdog widening applies to
+			// overrides too (model compat generation).
+			streamIdleTimeoutMs: 900000,
 		});
 	});
 
@@ -126,6 +129,7 @@ interface ModelSnapshot {
 		supportsLongPromptCacheRetention: boolean;
 		promptCacheMinimumTokens: number;
 		promptCacheMaximumCheckpoints: number;
+		streamIdleTimeoutMs?: number;
 	};
 }
 
@@ -201,8 +205,8 @@ function writeModelsJson(fixture: ProviderFixture): void {
 
 function loadDefaultRegistryModel(lookup: ModelLookup): ModelSnapshot | undefined {
 	const script = `
-		import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-		import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+		import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+		import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 
 		const authStorage = await AuthStorage.create(":memory:");
 		try {

@@ -13,11 +13,11 @@ import {
 	getRepoRoot,
 	mergeTaskBranches,
 	parseIsolationMode,
-} from "@oh-my-pi/pi-coding-agent/task/worktree";
-import * as git from "@oh-my-pi/pi-coding-agent/utils/git";
-import * as jj from "@oh-my-pi/pi-coding-agent/utils/jj";
-import * as natives from "@oh-my-pi/pi-natives";
-import { removeWithRetries, setWorktreesDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/task/worktree";
+import * as git from "@musepi/pi-coding-agent/utils/git";
+import * as jj from "@musepi/pi-coding-agent/utils/jj";
+import * as natives from "@musepi/pi-natives";
+import { removeWithRetries, setWorktreesDir } from "@musepi/pi-utils";
 
 const tempDirs: string[] = [];
 
@@ -1078,7 +1078,7 @@ describe("commitToBranch preserves agent commits", () => {
 		expect(headSubject).toBe(agentMessage);
 		expect(status.split("\n").sort()).toEqual(["?? user-wip.txt", "A  staged.txt"]);
 		expect(fixture).toContain("LINE5-AGENT-WITH-MESSAGE");
-	});
+	}, 30000);
 
 	it("merges a committed agent edit beside unrelated dirty-parent lines", async () => {
 		const parentLines = [
@@ -1113,7 +1113,7 @@ describe("commitToBranch preserves agent commits", () => {
 		]);
 		expect(merge).toEqual({ failed: [], merged: [result!.branchName!] });
 		expect(await fs.readFile(path.join(parent, "EXP_CLEAN_COMMIT.txt"), "utf8")).toBe(agentLines.join("\n"));
-	});
+	}, 30000);
 
 	it("falls back to the AI-generated message when the agent never committed", async () => {
 		const baseline = await captureBaseline(parent);

@@ -1,4 +1,5 @@
-import { type SgrMouseEvent, TabBar } from "@oh-my-pi/pi-tui";
+import { type SgrMouseEvent, TabBar } from "@musepi/pi-tui";
+import { t } from "../../../i18n/index.js";
 import { getTabBarTheme } from "../../shared";
 import { SignInTab } from "./sign-in";
 import type { SetupScene, SetupSceneController, SetupSceneHost, SetupTab } from "./types";
@@ -11,8 +12,8 @@ import { WebSearchTab } from "./web-search";
  * temporarily suppress tab switching.
  */
 class ProvidersSceneController implements SetupSceneController {
-	title = "Set up your providers";
-	subtitle = "Sign in and pick a web search provider. Press Esc when you're done.";
+	title = t("Set up your providers");
+	subtitle = t("Sign in and pick a web search provider. Press Esc when you're done.");
 
 	#tabs: SetupTab[];
 	#tabBar: TabBar;
@@ -22,7 +23,7 @@ class ProvidersSceneController implements SetupSceneController {
 	constructor(host: SetupSceneHost) {
 		this.#tabs = [new SignInTab(host), new WebSearchTab(host)];
 		this.#tabBar = new TabBar(
-			"Providers",
+			t("Providers"),
 			this.#tabs.map(tab => ({ id: tab.id, label: tab.label })),
 			getTabBarTheme(),
 		);
@@ -99,7 +100,7 @@ class ProvidersSceneController implements SetupSceneController {
 
 export const providersSetupScene: SetupScene = {
 	id: "providers",
-	title: "Set up your providers",
+	title: t("Set up your providers"),
 	minVersion: 1,
 	mount: host => new ProvidersSceneController(host),
 };

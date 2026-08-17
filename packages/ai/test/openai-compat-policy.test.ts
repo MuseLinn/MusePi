@@ -1,14 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import type { ResponseCreateParamsStreaming } from "@oh-my-pi/pi-ai/providers/openai-responses-wire";
+import type { ResponseCreateParamsStreaming } from "@musepi/pi-ai/providers/openai-responses-wire";
 import {
 	applyChatCompletionsCompatPolicy,
+	applyOpenAIExtraBody,
 	applyResponsesCompatPolicy,
 	type OpenAICompletionsParams,
 	resolveOpenAICompatPolicy,
-} from "@oh-my-pi/pi-ai/providers/openai-shared";
-import type { Model, ModelSpec, OpenAICompat } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
+} from "@musepi/pi-ai/providers/openai-shared";
+import type { Model, ModelSpec, OpenAICompat } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 
 function chatModel(compat: OpenAICompat): Model<"openai-completions"> {
 	return buildModel({
@@ -159,5 +161,42 @@ describe("OpenAI compat policy", () => {
 		expect(responsesPolicy.tools.toolCallIdKind).toBe("mistral-9-alnum");
 		expect(chatPolicy.stream.reasoningDeltasMayBeCumulative).toBe(true);
 		expect(responsesPolicy.stream.reasoningDeltasMayBeCumulative).toBe(true);
+	});
+
+	it("routes Token Plan qwen3.8-max effort selections onto the wire", () => {
+		const model = getBundledModel<"openai-completions">("alibaba-token-plan", "qwen3.8-max");
+		for (const effort of [Effort.Low, Effort.Medium, Effort.XHigh]) {
+			const params = chatParams();
+			const policy = resolveOpenAICompatPolicy(model, { endpoint: "chat-completions", reasoning: effort });
+			applyChatCompletionsCompatPolicy(params, policy);
+			applyOpenAIExtraBody(params, policy.compat.extraBody);
+			expect(params.reasoning_effort).toBe(effort);
+			expect(params.enable_thinking).toBe(true);
+			expect(params.chat_template_kwargs).toBeUndefined();
+		}
+
+		const disabledParams = chatParams();
+		const disabledPolicy = resolveOpenAICompatPolicy(model, {
+			endpoint: "chat-completions",
+			disableReasoning: true,
+		});
+		applyChatCompletionsCompatPolicy(disabledParams, disabledPolicy);
+		applyOpenAIExtraBody(disabledParams, disabledPolicy.compat.extraBody);
+		expect(disabledParams.reasoning_effort).toBeUndefined();
+		expect(disabledParams.enable_thinking).toBe(false);
+	});
+
+	it("keeps Token Plan qwen3.8-max-preview on the enable_thinking dialect", () => {
+		// The preview rides Alibaba's binary enable_thinking toggle, not the
+		// OpenAI reasoning_effort control, so effort selections must not leak an
+		// unsupported reasoning_effort onto the wire.
+		const model = getBundledModel<"openai-completions">("alibaba-token-plan", "qwen3.8-max-preview");
+		const params = chatParams();
+		applyChatCompletionsCompatPolicy(
+			params,
+			resolveOpenAICompatPolicy(model, { endpoint: "chat-completions", reasoning: Effort.High }),
+		);
+		expect(params.enable_thinking).toBe(true);
+		expect(params.reasoning_effort).toBeUndefined();
 	});
 });

@@ -1,4 +1,4 @@
-import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
+import { getAntigravityUserAgent } from "@musepi/pi-catalog/wire/gemini-headers";
 import * as AIError from "../error";
 import type {
 	CredentialRankingContext,
@@ -12,6 +12,7 @@ import type {
 	UsageStatus,
 	UsageWindow,
 } from "../usage";
+import { DAY_MS, parseIsoTimestamp, WEEK_MS } from "./shared";
 
 // (Refresh is the sole responsibility of AuthStorage; no provider-direct refresh here.)
 
@@ -47,9 +48,6 @@ interface AntigravityUsageResponse {
 const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 const FETCH_AVAILABLE_MODELS_PATH = "/v1internal:fetchAvailableModels";
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-const ONE_WEEK_MS = 7 * ONE_DAY_MS;
-
 interface AntigravityWindowDescriptor {
 	id: string;
 	label: string;
@@ -59,25 +57,20 @@ interface AntigravityWindowDescriptor {
 function classifyWindow(id: string | undefined, label: string | undefined): AntigravityWindowDescriptor | undefined {
 	const source = `${id ?? ""} ${label ?? ""}`.toLowerCase();
 	if (source.includes("week") || source.includes("7d") || /7[\s_-]*day/.test(source)) {
-		return { id: "weekly", label: "Weekly", durationMs: ONE_WEEK_MS };
+		return { id: "weekly", label: "Weekly", durationMs: WEEK_MS };
 	}
 	if (source.includes("day") || source.includes("daily") || source.includes("24h")) {
-		return { id: "daily", label: "Daily", durationMs: ONE_DAY_MS };
+		return { id: "daily", label: "Daily", durationMs: DAY_MS };
 	}
 	if (id || label) return { id: id ?? label ?? "default", label: label ?? id ?? "Default" };
 	return undefined;
 }
 
-function parseResetTime(info: AntigravityQuotaInfo): number | undefined {
-	const resetAt = info.resetTime ? Date.parse(info.resetTime) : undefined;
-	return resetAt !== undefined && Number.isFinite(resetAt) ? resetAt : undefined;
-}
-
 function inferWindowFromReset(resetAt: number | undefined, nowMs: number): AntigravityWindowDescriptor {
-	if (resetAt !== undefined && resetAt - nowMs > ONE_DAY_MS) {
-		return { id: "weekly", label: "Weekly", durationMs: ONE_WEEK_MS };
+	if (resetAt !== undefined && resetAt - nowMs > DAY_MS) {
+		return { id: "weekly", label: "Weekly", durationMs: WEEK_MS };
 	}
-	return { id: "daily", label: "Daily", durationMs: ONE_DAY_MS };
+	return { id: "daily", label: "Daily", durationMs: DAY_MS };
 }
 
 function quotaInferenceKey(info: AntigravityQuotaInfo): string {
@@ -98,7 +91,7 @@ function inferWindowDescriptors(
 			continue;
 		}
 		const group = groups.get(quotaInferenceKey(info)) ?? [];
-		group.push({ info, resetAt: parseResetTime(info) });
+		group.push({ info, resetAt: parseIsoTimestamp(info.resetTime) });
 		groups.set(quotaInferenceKey(info), group);
 	}
 
@@ -110,7 +103,7 @@ function inferWindowDescriptors(
 		for (const entry of group) {
 			const descriptor =
 				latestReset !== undefined && entry.resetAt === latestReset
-					? { id: "weekly", label: "Weekly", durationMs: ONE_WEEK_MS }
+					? { id: "weekly", label: "Weekly", durationMs: WEEK_MS }
 					: inferWindowFromReset(entry.resetAt, nowMs);
 			descriptors.set(entry.info, descriptor);
 		}
@@ -149,7 +142,7 @@ function parseWindow(
 	info: AntigravityQuotaInfo,
 	descriptor: AntigravityWindowDescriptor | undefined,
 ): UsageWindow | undefined {
-	const resetAt = parseResetTime(info);
+	const resetAt = parseIsoTimestamp(info.resetTime);
 	const hasResetAt = resetAt !== undefined;
 	if (!descriptor && !hasResetAt) return undefined;
 	return {
@@ -493,5 +486,5 @@ export const antigravityRankingStrategy: CredentialRankingStrategy = {
 	// Antigravity windows carry `durationMs` when the response identifies them
 	// as daily/weekly. Fall back to daily for legacy unlabelled quotaInfo
 	// entries from `daily-cloudcode-pa.googleapis.com`.
-	windowDefaults: { primaryMs: ONE_DAY_MS, secondaryMs: ONE_DAY_MS },
+	windowDefaults: { primaryMs: DAY_MS, secondaryMs: DAY_MS },
 };

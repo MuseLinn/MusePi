@@ -11,16 +11,16 @@
  *    poll from the transcript; any other tool seals it in place.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { TranscriptContainer } from "@oh-my-pi/pi-coding-agent/modes/components/transcript-container";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { UiHelpers } from "@oh-my-pi/pi-coding-agent/modes/utils/ui-helpers";
-import type { SessionContext } from "@oh-my-pi/pi-coding-agent/session/session-context";
-import type { Component, TUI } from "@oh-my-pi/pi-tui";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import { TranscriptContainer } from "@musepi/pi-coding-agent/modes/components/transcript-container";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import type { SessionContext } from "@musepi/pi-coding-agent/session/session-context";
+import type { Component, TUI } from "@musepi/pi-tui";
 
 const uiStub = { requestRender() {}, requestComponentRender() {} } as unknown as TUI;
 
@@ -175,9 +175,9 @@ describe("EventController displaces consecutive waiting polls", () => {
 			toolOutputExpanded: false,
 			pendingTools,
 			chatContainer,
-			session: { getToolByName: () => undefined },
+			session: { getToolByName: () => undefined, hasBuiltInTool: () => true },
 			showWarning: vi.fn(),
-			viewSession: { getToolByName: () => undefined },
+			viewSession: { getToolByName: () => undefined, hasBuiltInTool: () => true },
 			sessionManager: { getCwd: () => process.cwd() },
 			setTodos: vi.fn(),
 		} as unknown as InteractiveModeContext;
@@ -423,6 +423,7 @@ describe("UiHelpers.renderSessionContext collapses repeated todo snapshots", () 
 			session: {
 				retryAttempt: 0,
 				getToolByName: () => undefined,
+				hasBuiltInTool: () => true,
 				sessionManager: { getCwd: () => process.cwd() },
 			},
 			get viewSession() {
@@ -500,6 +501,7 @@ describe("UiHelpers.renderSessionContext collapses repeated todo snapshots", () 
 			session: {
 				retryAttempt: 0,
 				getToolByName: () => undefined,
+				hasBuiltInTool: () => true,
 				sessionManager: { getCwd: () => process.cwd() },
 				isStreaming: true,
 			},

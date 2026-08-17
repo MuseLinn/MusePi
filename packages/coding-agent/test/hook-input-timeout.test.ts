@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 
-import { HookInputComponent } from "@oh-my-pi/pi-coding-agent/modes/components/hook-input";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { TUI } from "@oh-my-pi/pi-tui";
+import { HookInputComponent } from "@musepi/pi-coding-agent/modes/components/hook-input";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { TUI } from "@musepi/pi-tui";
 
 beforeAll(async () => {
 	const theme = await getThemeByName("dark");

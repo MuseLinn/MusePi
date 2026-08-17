@@ -7,14 +7,14 @@
  * override verbatim, so generic discovery requested
  * `https://api.anthropic.com/models` (404) instead of `/v1/models`. The failed
  * refresh then retained a stale text-only cache row, which `mergeDynamicModel`
- * treated as authoritative over fresh models.dev vision metadata — leaving
+ * treated as authoritative over fresh stencil.so vision metadata — leaving
  * `claude-opus-5` marked text-only and snapcompact refusing to run.
  *
  * The fix normalizes the discovery URL to always end in `/v1` while model rows
  * keep the provider base URL.
  */
 import { describe, expect, it } from "bun:test";
-import { anthropicModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
+import { anthropicModelManagerOptions } from "@musepi/pi-catalog/provider-models/openai-compat";
 
 const PROVIDER_BASE_URL = "https://api.anthropic.com";
 
@@ -22,7 +22,7 @@ function modelsDevResponse(): Response {
 	const body = {
 		anthropic: {
 			models: {
-				// Not in the bundled catalog: capability must come from models.dev
+				// Not in the bundled catalog: capability must come from stencil.so
 				// through the discovery path under repair.
 				"claude-test-vision-1": {
 					name: "Claude Test Vision",
@@ -54,7 +54,7 @@ describe("issue #6563 — anthropic discovery base URL missing /v1", () => {
 		const fetchMock = (async (input: string | URL | Request): Promise<Response> => {
 			const url = String(input instanceof Request ? input.url : input);
 			requestedUrls.push(url);
-			if (url === "https://models.dev/api.json") return modelsDevResponse();
+			if (url === "https://catalog.stencil.so/models.json.zstd") return modelsDevResponse();
 			if (url === `${PROVIDER_BASE_URL}/v1/models`) return anthropicModelsResponse();
 			return new Response("not found", { status: 404 });
 		}) as typeof fetch;
@@ -78,7 +78,7 @@ describe("issue #6563 — anthropic discovery base URL missing /v1", () => {
 		// change that would make stale capabilities authoritative.
 		expect(opus5?.baseUrl).toBe(PROVIDER_BASE_URL);
 
-		// A model absent from the bundled catalog picks up vision from models.dev.
+		// A model absent from the bundled catalog picks up vision from stencil.so.
 		const unbundled = models?.find(m => m.id === "claude-test-vision-1");
 		expect(unbundled?.input).toContain("image");
 		expect(unbundled?.baseUrl).toBe(PROVIDER_BASE_URL);

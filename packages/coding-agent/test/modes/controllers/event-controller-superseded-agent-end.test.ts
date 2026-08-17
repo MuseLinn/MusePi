@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { TERMINAL } from "@oh-my-pi/pi-tui";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { TERMINAL } from "@musepi/pi-tui";
 
 /**
  * Models the loader lifecycle InteractiveMode owns: `agent_start` creates the
@@ -108,5 +108,25 @@ describe("EventController superseded agent_end", () => {
 
 		expect(loader.stop).toHaveBeenCalledTimes(1);
 		expect(ctx.loadingAnimation).toBeUndefined();
+	});
+
+	it("flushes queued command panels at a non-terminal settle", async () => {
+		const { ctx, streamState } = createContext();
+		const controller = new EventController(ctx);
+
+		await controller.handleEvent(AGENT_START);
+		// An async fan-out settles the loop without ending the run. `isStreaming`
+		// is already false here, so any command issued now mounts immediately —
+		// panels queued during the turn have to mount too, or they render out of
+		// order whenever the terminal settle finally lands.
+		streamState.isStreaming = false;
+		await controller.handleEvent({
+			type: "agent_end",
+			messages: [],
+			isTerminal: false,
+		} as unknown as AgentSessionEvent);
+
+		expect(ctx.flushPendingModelSwitch).toHaveBeenCalled();
+		expect(ctx.flushPendingCommandOutput).toHaveBeenCalled();
 	});
 });

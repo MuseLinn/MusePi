@@ -5,8 +5,26 @@
 	box-sizing: border-box;
 }
 
-* {
-	margin: 0;
+/* The universal margin reset must live in @layer base, never unlayered:
+ * Tailwind v4 utilities are emitted into @layer utilities, and unlayered
+ * rules outrank EVERY layer in the cascade — an unlayered `* { margin: 0 }`
+ * silently zeroes every margin utility it touches (mx-*, mt-*, ml-auto).
+ * The empty @layer blocks below pin the layer order (theme < base <
+ * components < utilities) ahead of the reset block — the tailwind CLI
+ * rewrites an `@layer a, b, c;` statement into exactly this form, so it
+ * also survives the GUI build's tailwind.out.css pass. */
+@layer theme {
+}
+@layer base {
+}
+@layer components {
+}
+@layer utilities {
+}
+@layer base {
+	* {
+		margin: 0;
+	}
 }
 
 html {
@@ -60,8 +78,12 @@ kbd {
 }
 
 :focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 2px;
+	/* No focus box at all: the previous 2px ring (solid outline, then a
+	 * soft glow) still read as a frame around inputs, collection cards,
+	 * settings and the session composer. Focus state is conveyed by the
+	 * controls themselves (accent borders, raised backgrounds, caret). */
+	outline: none;
+	box-shadow: none;
 }
 
 input,

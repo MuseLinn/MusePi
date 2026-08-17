@@ -1,20 +1,23 @@
 import * as path from "node:path";
-import { isEnoent, logger, postmortem, ptree, untilAborted } from "@oh-my-pi/pi-utils";
+import { isEnoent, logger, postmortem, ptree, untilAborted } from "@musepi/pi-utils";
 import { MessageFramer } from "../jsonrpc/message-framing";
 import { ToolAbortError, throwIfAborted } from "../tools/tool-errors";
 import { applyWorkspaceEdit } from "./edits";
 import { getLspmuxCommand, isLspmuxSupported } from "./lspmux";
+import { connectSharedLspTransport } from "./mux/daemon";
 import type {
 	LspClient,
 	LspJsonRpcId,
 	LspJsonRpcNotification,
 	LspJsonRpcRequest,
 	LspJsonRpcResponse,
+	LspTransport,
+	LspWriteSink,
 	PublishDiagnosticsParams,
 	ServerConfig,
 	WorkspaceEdit,
 } from "./types";
-import { detectLanguageId, fileToUri } from "./utils";
+import { detectLanguageId, EquivalentUriMap, fileToUri } from "./utils";
 
 // =============================================================================
 // Client State
@@ -33,6 +36,17 @@ const READER_EXIT_GRACE_MS = 100;
 let idleTimeoutMs: number | null = null;
 let idleCheckInterval: NodeJS.Timeout | null = null;
 const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
+
+// Broker-shared server mode (one language server per project shared by every
+// omp instance through the LSP mux daemon). Off by default so embedders and
+// tests that drive getOrCreateClient directly never touch the daemon broker;
+// the SDK turns it on from the `lsp.shared` setting at session creation.
+let sharedLspEnabled = false;
+
+/** Enable or disable attaching to broker-shared language servers. */
+export function setSharedLspEnabled(enabled: boolean): void {
+	sharedLspEnabled = enabled;
+}
 
 /**
  * Configure the idle timeout for LSP clients.
@@ -209,7 +223,7 @@ class LspDrainAbortError extends Error {
 }
 
 async function writeMessage(
-	sink: Bun.FileSink,
+	sink: LspWriteSink,
 	message: LspJsonRpcRequest | LspJsonRpcNotification | LspJsonRpcResponse,
 	signal?: AbortSignal,
 ): Promise<void> {
@@ -742,7 +756,14 @@ export async function getOrCreateClient(
 			? await getLspmuxCommand(baseCommand, baseArgs)
 			: { command: baseCommand, args: baseArgs };
 
-		const proc = ptree.spawn([command, ...args], {
+		// Prefer the broker-shared server unless an external lspmux wrapper is
+		// already multiplexing this command. Any shared-path failure falls back
+		// to a private spawn so LSP never regresses on broker trouble.
+		let proc: LspTransport | null = null;
+		if (sharedLspEnabled && command === baseCommand) {
+			proc = await connectSharedLspTransport({ command, args, cwd, env, signal });
+		}
+		proc ??= ptree.spawn([command, ...args], {
 			cwd,
 			stdin: "pipe",
 			env: env ? { ...Bun.env, ...env } : undefined,
@@ -766,7 +787,7 @@ export async function getOrCreateClient(
 			proc,
 			config,
 			requestId: 0,
-			diagnostics: new Map(),
+			diagnostics: new EquivalentUriMap(),
 			diagnosticsVersion: 0,
 			dynamicCapabilityRegistrations: new Map(),
 			openFiles: new Map(),

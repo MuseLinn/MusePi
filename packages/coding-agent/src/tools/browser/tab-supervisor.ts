@@ -1,11 +1,11 @@
-import { getPuppeteerDir, logger, postmortem, Snowflake, withTimeout, workerHostEntry } from "@oh-my-pi/pi-utils";
+import { getPuppeteerDir, logger, postmortem, Snowflake, withTimeout, workerHostEntry } from "@musepi/pi-utils";
 import type { Page, Target } from "puppeteer-core";
 import { callSessionTool } from "../../eval/js/tool-bridge";
 import { webpExclusionForModel } from "../../utils/image-loading";
 import type { ToolSession } from "../index";
 import { expandPath } from "../path-utils";
 import { ToolAbortError, ToolError } from "../tool-errors";
-import { pickElectronTarget } from "./attach";
+import { pickElectronTarget, shouldPreserveConnectedBrowserFocus } from "./attach";
 import { CmuxTab, runCmuxCode } from "./cmux/cmux-tab";
 import { mapWaitUntil } from "./cmux/rpc";
 import { DEFAULT_VIEWPORT } from "./launch";
@@ -81,6 +81,7 @@ interface TabSessionBase<TBrowser extends BrowserHandle = BrowserHandle> {
 export interface WorkerTabSession extends TabSessionBase<PuppeteerBrowserHandle> {
 	backend: "worker";
 	worker: WorkerHandle;
+	activateForScreenshot: boolean;
 }
 
 export interface CmuxTabSession extends TabSessionBase<CmuxBrowserHandle> {
@@ -133,12 +134,25 @@ const tabs = new Map<string, TabSession>();
 // awaits) cannot interleave and leak a worker + browser refCount.
 const acquireChains = new Map<string, Promise<void>>();
 const GRACE_MS = 750;
+const WORKER_INIT_TIMEOUT_MS = 15_000;
 // Names of tabs the supervisor force-killed (timeout past grace, failed recycle),
 // mapped to the kill reason. Lets the next `run` on that name explain WHY the tab
 // vanished instead of a bare "not alive". Cleared when the name is opened again.
 const killedTabs = new Map<string, string>();
 const DEFAULT_TAB_CLOSE_TIMEOUT_MS = 5_000;
 class RecoverableWorkerError extends ToolError {}
+const REPORTED_INIT_FAILURE = Symbol("reported-init-failure");
+
+type ReportedInitFailure = Error & { [REPORTED_INIT_FAILURE]?: true };
+
+function markReportedInitFailure(error: Error): Error {
+	(error as ReportedInitFailure)[REPORTED_INIT_FAILURE] = true;
+	return error;
+}
+
+function isReportedInitFailure(error: unknown): boolean {
+	return error instanceof Error && (error as ReportedInitFailure)[REPORTED_INIT_FAILURE] === true;
+}
 
 async function waitForTabCleanup<T>(
 	tab: TabSession,
@@ -259,13 +273,17 @@ async function acquireTabImpl(
 	}
 	let info: ReadyInfo;
 	try {
-		info = await initializeTabWorker(worker, initPayload, opts.timeoutMs + GRACE_MS);
+		info = await initializeTabWorker(
+			worker,
+			initPayload,
+			Math.max(WORKER_INIT_TIMEOUT_MS, opts.timeoutMs + GRACE_MS),
+		);
 	} catch (error) {
 		// `BuildMessage`-class failures arrive asynchronously via the worker's `error` event,
 		// after `spawnTabWorker`'s synchronous try/catch has already returned. Fall back to
 		// the inline worker here so module-resolution failures don't poison every tab open.
 		await worker.terminate().catch(() => undefined);
-		if (worker.mode === "inline") {
+		if (worker.mode === "inline" || isReportedInitFailure(error)) {
 			if (tempHold || browser.refCount === 0) await releaseBrowser(browser, { kill: false });
 			throw error;
 		}
@@ -274,7 +292,11 @@ async function acquireTabImpl(
 		});
 		worker = await spawnInlineWorker();
 		try {
-			info = await initializeTabWorker(worker, initPayload, opts.timeoutMs + GRACE_MS);
+			info = await initializeTabWorker(
+				worker,
+				initPayload,
+				Math.max(WORKER_INIT_TIMEOUT_MS, opts.timeoutMs + GRACE_MS),
+			);
 		} catch (inlineError) {
 			await worker.terminate().catch(() => undefined);
 			if (tempHold || browser.refCount === 0) await releaseBrowser(browser, { kill: false });
@@ -312,6 +334,7 @@ async function acquireTabImpl(
 		pending: new Map(),
 		dialogPolicy: opts.dialogs,
 		kindTag: browser.kind.kind,
+		activateForScreenshot: initPayload.mode === "headless" || initPayload.activateForScreenshot !== false,
 		ownerSessionId: opts.ownerSessionId,
 	};
 	worker.onMessage(msg => handleTabMessage(tab, msg));
@@ -684,7 +707,15 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 			timeoutMs: opts.timeoutMs,
 		};
 	}
-	const page = await pickElectronTarget(browser.browser, opts.target);
+	// Connected and relay browsers are user-driven. When no target is requested,
+	// adopt the visible tab and avoid raising it before screenshots. An explicit
+	// target may be backgrounded, so retain activation for target-correct pixels.
+	const userDriven = browser.kind.kind === "connected" || browser.kind.kind === "relay";
+	const activateForScreenshot = !userDriven || !shouldPreserveConnectedBrowserFocus(opts.target);
+	const page = await pickElectronTarget(browser.browser, {
+		matcher: opts.target,
+		preferVisible: !activateForScreenshot,
+	});
 	const targetId = await targetIdForPage(page);
 	return {
 		mode: "attach",
@@ -692,6 +723,10 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 		safeDir,
 		targetId,
 		dialogs: opts.dialogs,
+		url: opts.url,
+		waitUntil: opts.waitUntil,
+		timeoutMs: opts.timeoutMs,
+		activateForScreenshot,
 	};
 }
 
@@ -793,6 +828,8 @@ async function recycleTimedOutWorkerTab(tab: WorkerTabSession, timeoutMs: number
 		// Unblock a wedged page (open JS dialog, hung navigation) before adopting it —
 		// otherwise init stalls, times out, and the tab gets force-killed.
 		recover: true,
+		timeoutMs,
+		activateForScreenshot: tab.activateForScreenshot,
 	};
 	let worker = await spawnTabWorker();
 	try {
@@ -986,7 +1023,7 @@ async function spawnInlineWorker(): Promise<WorkerHandle> {
 		close: () => {},
 	};
 	const { WorkerCore } = await import("./tab-worker");
-	new WorkerCore(workerTransport);
+	new WorkerCore(workerTransport, false);
 	return {
 		mode: "inline",
 		send: msg =>
@@ -1010,7 +1047,7 @@ async function initializeTabWorker(
 	const { promise, resolve, reject } = Promise.withResolvers<ReadyInfo>();
 	const unlisten = worker.onMessage(msg => {
 		if (msg.type === "ready") resolve(msg.info);
-		else if (msg.type === "init-failed") reject(errorFromPayload(msg.error));
+		else if (msg.type === "init-failed") reject(markReportedInitFailure(errorFromPayload(msg.error)));
 		else if (msg.type === "log") logWorkerMessage(msg);
 	});
 	const unlistenError = worker.onError(error => {

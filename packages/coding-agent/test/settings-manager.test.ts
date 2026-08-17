@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Effort } from "@oh-my-pi/pi-ai";
-import { clearCustomApis } from "@oh-my-pi/pi-ai/api-registry";
-import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
-import { __providerInFlightForTesting, streamSimple } from "@oh-my-pi/pi-ai/stream";
-import type { Context } from "@oh-my-pi/pi-ai/types";
+import { Effort } from "@musepi/pi-ai";
+import { clearCustomApis } from "@musepi/pi-ai/api-registry";
+import { createMockModel, registerMockApi } from "@musepi/pi-ai/providers/mock";
+import { __providerInFlightForTesting, streamSimple } from "@musepi/pi-ai/stream";
+import type { Context } from "@musepi/pi-ai/types";
 import {
 	getDefault,
 	getEnumValues,
@@ -14,13 +14,13 @@ import {
 	resetSettingsForTest,
 	type SettingPath,
 	Settings,
-} from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentStorage } from "@oh-my-pi/pi-coding-agent/session/agent-storage";
-import { AUTO_IMAGE_PROVIDER_ORDER } from "@oh-my-pi/pi-coding-agent/tools/image-providers";
-import { SEARCH_PROVIDER_ORDER } from "@oh-my-pi/pi-coding-agent/web/search/types";
-import { getProjectAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/config/settings";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { AUTO_IMAGE_PROVIDER_ORDER } from "@musepi/pi-coding-agent/tools/image-providers";
+import { SEARCH_PROVIDER_ORDER } from "@musepi/pi-coding-agent/web/search/types";
+import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
+import * as fileLock from "@musepi/pi-utils/file-lock";
 import { YAML } from "bun";
-import * as fileLock from "../src/config/file-lock";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
 function context(): Context {
@@ -252,7 +252,7 @@ describe("Settings", () => {
 
 		it("backs up a corrupted project config and retains the pending project role for retry", async () => {
 			await writeSettings({});
-			const projectConfigPath = path.join(projectDir, ".omp", "config.yml");
+			const projectConfigPath = path.join(getProjectAgentDir(projectDir), "config.yml");
 			await Bun.write(
 				projectConfigPath,
 				YAML.stringify({ modelRoles: { default: "keep/default" }, custom: { keep: true } }, null, 2),
@@ -345,7 +345,7 @@ describe("Settings", () => {
 
 		it("leaves an unreadable project config untouched and retains its pending role", async () => {
 			await writeSettings({});
-			const projectConfigPath = path.join(projectDir, ".omp", "config.yml");
+			const projectConfigPath = path.join(getProjectAgentDir(projectDir), "config.yml");
 			const original = YAML.stringify({ modelRoles: { default: "keep/default" }, custom: { keep: true } }, null, 2);
 			await Bun.write(projectConfigPath, original);
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
@@ -371,7 +371,7 @@ describe("Settings", () => {
 			const malformed = 'modelRoles:\n  default: "unterminated\n';
 			await Promise.all([
 				Bun.write(getConfigPath(), malformed),
-				Bun.write(path.join(projectDir, ".omp", "config.yml"), malformed),
+				Bun.write(path.join(getProjectAgentDir(projectDir), "config.yml"), malformed),
 			]);
 			const unhandled: unknown[] = [];
 			const onUnhandled = (reason: unknown): void => {
@@ -383,7 +383,7 @@ describe("Settings", () => {
 				expect(unhandled).toEqual([]);
 				expect(fs.readdirSync(agentDir).some(name => name.startsWith("config.yml.broken-"))).toBe(true);
 				expect(
-					fs.readdirSync(path.join(projectDir, ".omp")).some(name => name.startsWith("config.yml.broken-")),
+					fs.readdirSync(getProjectAgentDir(projectDir)).some(name => name.startsWith("config.yml.broken-")),
 				).toBe(true);
 			} finally {
 				process.removeListener("unhandledRejection", onUnhandled);
@@ -401,6 +401,12 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 			expect(settings.get("terminal.showProgress")).toBe(false);
 			expect(getDefault("terminal.showProgress")).toBe(false);
+		});
+
+		it("shows tool activity by default", async () => {
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+			expect(settings.get("display.hideToolActivity")).toBe(false);
+			expect(getDefault("display.hideToolActivity")).toBe(false);
 		});
 
 		it("keeps the normal startup splash disabled by default", async () => {
@@ -913,6 +919,60 @@ describe("Settings", () => {
 	});
 
 	describe("migrations", () => {
+		it("consolidates legacy Exa suite toggles onto exa.enabled", async () => {
+			await writeSettings({
+				exa: {
+					enabled: true,
+					enableSearch: false,
+					enableResearcher: true,
+					enableWebsets: true,
+				},
+			});
+
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+
+			expect(settings.get("exa.enabled")).toBe(false);
+			settings.set("display.showTokenUsage", true);
+			await settings.flush();
+			expect((await readSettings()).exa).toEqual({ enabled: false });
+		});
+
+		it("migrates quoted dotted Exa toggles and removes obsolete suite settings", async () => {
+			await Bun.write(
+				getConfigPath(),
+				`"exa.enabled": true\n"exa.enableSearch": false\n"exa.enableResearcher": true\n"exa.enableWebsets": true\n`,
+			);
+
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+
+			expect(settings.get("exa.enabled")).toBe(false);
+			settings.set("display.showTokenUsage", true);
+			await settings.flush();
+			expect((await readSettings()).exa).toEqual({ enabled: false });
+		});
+
+		it("removes the legacy Exa block when it contains only retired suite toggles", async () => {
+			await writeSettings({ exa: { enableResearcher: true, enableWebsets: true } });
+
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+
+			expect(settings.get("exa.enabled")).toBe(true);
+			settings.set("display.showTokenUsage", true);
+			await settings.flush();
+			expect((await readSettings()).exa).toBeUndefined();
+		});
+
+		it("removes the retired computer backend setting", async () => {
+			await writeSettings({ computer: { backend: "auto", enabled: true }, "computer.backend": "native" });
+
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+
+			expect(settings.get("computer.enabled")).toBe(true);
+			settings.set("display.showTokenUsage", true);
+			await settings.flush();
+			expect((await readSettings()).computer).toEqual({ enabled: true });
+		});
+
 		it("maps removed atom edit mode settings to hashline", async () => {
 			await writeSettings({
 				edit: {

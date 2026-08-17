@@ -1,7 +1,7 @@
 import { Database, type Statement } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AsyncDrain, getHistoryDbPath, logger } from "@oh-my-pi/pi-utils";
+import { AsyncDrain, getDbBusyTimeoutMs, getHistoryDbPath, logger } from "@musepi/pi-utils";
 
 export interface HistoryEntry {
 	id: number;
@@ -51,7 +51,9 @@ export class HistoryStorage {
 		this.#db = new Database(dbPath);
 
 		// Install the busy handler BEFORE any lock-taking statement. See #2421.
-		this.#db.run("PRAGMA busy_timeout = 5000");
+		// Headless hosts bound the wait so lock contention cannot freeze the
+		// protocol loop for the full interactive timeout.
+		this.#db.run(`PRAGMA busy_timeout = ${getDbBusyTimeoutMs()}`);
 
 		const hasFts = this.#db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='history_fts'").get();
 		this.#db.run(`

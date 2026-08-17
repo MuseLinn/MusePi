@@ -7,6 +7,7 @@
  * result preview; we mirror that as rows plus the raw snapshot text.
  */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import type { Tone } from "../parts";
 import { Badge, Badges, Note, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
@@ -137,7 +138,7 @@ function stripTaskResultEnvelope(text: string): string {
 
 function JobRow({ job }: { job: JobSnapshotLike }): ReactNode {
 	const tone = statusTone(job.status);
-	const label = normalizeWs(job.label) || "(no label)";
+	const label = normalizeWs(job.label) || t("(no label)");
 	// Task jobs label themselves with their agent id — drop the id column
 	// instead of stuttering it twice.
 	const showId = label !== job.id;
@@ -179,7 +180,7 @@ function Summary({ args }: ToolRenderProps): ReactNode {
 			</Badge>,
 		);
 	}
-	if (items.length === 0) return <span className="tv-muted">all running jobs</span>;
+	if (items.length === 0) return <span className="tv-muted">{t("all running jobs")}</span>;
 	return <Badges items={items} />;
 }
 
@@ -211,7 +212,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		<>
 			{(args.list === true || poll.length > 0 || cancel.length > 0) && (
 				<div className="tv-list">
-					{args.list === true && <Row k="list">all jobs</Row>}
+					{args.list === true && <Row k="list">{t("all jobs")}</Row>}
 					{poll.length > 0 && <Row k="poll">{poll.join(", ")}</Row>}
 					{cancel.length > 0 && <Row k="cancel">{cancel.join(", ")}</Row>}
 				</div>
@@ -223,23 +224,26 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 							running > 0 && (
 								<Badge key="running" tone="accent">
 									{running === jobs.length
-										? `waiting on ${running}`
-										: `waiting on ${running} of ${jobs.length}`}
+										? t("waiting on {count}", { count: String(running) })
+										: t("waiting on {count} of {total}", {
+												count: String(running),
+												total: String(jobs.length),
+											})}
 								</Badge>
 							),
 							completed > 0 && (
 								<Badge key="done" tone="ok">
-									{completed} done
+									{t("{count} done", { count: String(completed) })}
 								</Badge>
 							),
 							failed > 0 && (
 								<Badge key="failed" tone="err">
-									{failed} failed
+									{t("{count} failed", { count: String(failed) })}
 								</Badge>
 							),
 							cancelledCount > 0 && (
 								<Badge key="cancelled" tone="warn">
-									{cancelledCount} cancelled
+									{t("{count} cancelled", { count: String(cancelledCount) })}
 								</Badge>
 							),
 						]}
@@ -254,7 +258,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			{badOutcomes.length > 0 && (
 				<Note tone="warn">{badOutcomes.map(o => `${o.id}: ${o.status.replace(/_/g, " ")}`).join(" · ")}</Note>
 			)}
-			<ResultText result={result} maxLines={10} title={jobs.length > 0 ? "snapshot" : undefined} />
+			<ResultText result={result} maxLines={10} title={jobs.length > 0 ? t("snapshot") : undefined} />
 		</>
 	);
 }

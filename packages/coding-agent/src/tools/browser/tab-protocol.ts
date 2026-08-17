@@ -1,4 +1,4 @@
-import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
+import type { ImageContent, TextContent } from "@musepi/pi-ai";
 
 export type Transferable = Bun.Transferable;
 
@@ -59,12 +59,20 @@ export type WorkerInitPayload =
 			safeDir: string;
 			targetId: string;
 			dialogs?: "accept" | "dismiss";
+			url?: string;
+			waitUntil?: "load" | "domcontentloaded" | "networkidle0" | "networkidle2";
+			timeoutMs: number;
 			/**
 			 * Post-timeout recycle: before adopting the page, dismiss any open JS dialog and
 			 * stop a pending navigation so a blocked target cannot stall worker init (which
 			 * previously force-killed the tab). Never set for first-time Electron attach.
 			 */
 			recover?: boolean;
+			/**
+			 * Whether the worker may raise this tab before capturing a screenshot. Unset
+			 * behaves as `true`; the supervisor clears it for browsers we did not launch.
+			 */
+			activateForScreenshot?: boolean;
 	  };
 
 export type ToolReply = { ok: true; value: unknown } | { ok: false; error: RunErrorPayload };

@@ -5,7 +5,10 @@
  * (`bun run build:bindings`) only when the Rust API changes its exported
  * typedefs. Host target only, local cargo profile — no cross-compilation.
  */
+
+import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import * as path from "node:path";
 import { $ } from "bun";
 import { detectHostAvx2Support } from "../../../scripts/host-detect";
@@ -19,6 +22,44 @@ process.env.PCRE2_SYS_STATIC ??= "1";
 // cmake_minimum_required below 3.5, which CMake 4.x refuses without this
 // policy override.
 process.env.CMAKE_POLICY_VERSION_MINIMUM ??= "3.5";
+
+// Windows: cc-rs and rustc auto-locate cl.exe/link.exe through the VS
+// registry, but the cmake crate (audiopus_sys' bundled opus) needs cmake —
+// and its Ninja generator needs ninja — on PATH. VS Build Tools ships both
+// without exposing them, so outside a vcvars prompt the build dies on
+// "cmake not found". Resolve the VS install via vswhere and append its
+// CMake/Ninja dirs, keeping any user-provided tools ahead.
+if (process.platform === "win32" && (!Bun.which("cmake") || !Bun.which("ninja"))) {
+	const vswhere = path.join(
+		process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+		"Microsoft Visual Studio",
+		"Installer",
+		"vswhere.exe",
+	);
+	const probe = Bun.spawnSync(
+		[
+			vswhere,
+			"-latest",
+			"-products",
+			"*",
+			"-requires",
+			"Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+			"-property",
+			"installationPath",
+		],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
+	const vsRoot = probe.exitCode === 0 ? probe.stdout.toString("utf-8").trim() : "";
+	if (vsRoot) {
+		const cmakeExt = path.join(vsRoot, "Common7", "IDE", "CommonExtensions", "Microsoft", "CMake");
+		const extraDirs = [path.join(cmakeExt, "CMake", "bin"), path.join(cmakeExt, "Ninja")].filter(dir =>
+			fsSync.existsSync(dir),
+		);
+		if (extraDirs.length > 0) {
+			process.env.PATH = [process.env.PATH ?? "", ...extraDirs].filter(Boolean).join(path.delimiter);
+		}
+	}
+}
 
 const repoRoot = path.join(import.meta.dir, "../../..");
 const rustDir = path.join(repoRoot, "crates/pi-natives");
@@ -142,18 +183,28 @@ const buildOutputDir = await fs.mkdtemp(
 	path.join(nativeDir, ".build", `${process.platform}-${process.arch}-${effectiveVariant ?? "default"}-local-`),
 );
 
-// Resolve napi bin directly: `bunx @napi-rs/cli` can pick up the wrong bin on
-// systems where `cli` exists on PATH (e.g. Mono's /usr/bin/cli on Ubuntu).
-const napiBin = Bun.which("napi", {
-	PATH: [
-		path.join(import.meta.dir, "..", "node_modules", ".bin"),
-		path.join(repoRoot, "node_modules", ".bin"),
-		process.env.PATH ?? "",
-	].join(path.delimiter),
-});
-if (!napiBin) {
-	throw new Error("Could not locate @napi-rs/cli `napi` binary in node_modules/.bin");
+// Resolve the CLI's JS entry from the package manifest rather than the
+// `node_modules/.bin` shim: `bunx @napi-rs/cli` can pick up the wrong bin on
+// systems where `cli` exists on PATH (e.g. Mono's /usr/bin/cli on Ubuntu), and
+// on Windows the shim is a `napi.exe` launcher that Bun would try to parse as
+// JavaScript.
+const require_ = createRequire(import.meta.url);
+const napiManifestPath = require_.resolve("@napi-rs/cli/package.json");
+const napiManifest: unknown = require_(napiManifestPath);
+const napiBinEntry =
+	typeof napiManifest === "object" &&
+	napiManifest !== null &&
+	"bin" in napiManifest &&
+	typeof napiManifest.bin === "object" &&
+	napiManifest.bin !== null &&
+	"napi" in napiManifest.bin &&
+	typeof napiManifest.bin.napi === "string"
+		? napiManifest.bin.napi
+		: null;
+if (!napiBinEntry) {
+	throw new Error(`@napi-rs/cli manifest at ${napiManifestPath} declares no string \`bin.napi\` entry`);
 }
+const napiBin = path.join(path.dirname(napiManifestPath), napiBinEntry);
 
 const napiArgs = [
 	"build",

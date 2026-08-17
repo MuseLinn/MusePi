@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRequire } from "node:module";
 import * as path from "node:path";
-import rootManifest from "../../../package.json" with { type: "json" };
 import packageManifest from "../package.json" with { type: "json" };
 import { fastembedRuntimeInstallPlan, prepareWindowsFastembedRuntime } from "../src/core/fastembed-runtime";
 
@@ -12,10 +11,10 @@ import { fastembedRuntimeInstallPlan, prepareWindowsFastembedRuntime } from "../
 // fastembed's own ORT dependency intact because its native addon links against
 // that exact bundled library name (#3054).
 describe("fastembed runtime version pins", () => {
-	const catalog = rootManifest.workspaces.catalog;
-
-	test("fastembed peer pin matches the workspace catalog", () => {
-		expect(packageManifest.peerDependencies.fastembed).toBe(catalog.fastembed);
+	// MusePi pins exact versions in package.json (no `workspaces.catalog`), so
+	// the peer must be a concrete installable version, not a `catalog:` spec.
+	test("fastembed peer pin is a concrete pinned version", () => {
+		expect(packageManifest.peerDependencies.fastembed).toMatch(/^\d+\.\d+\.\d+$/);
 	});
 
 	test("pins are exact installable versions, not catalog or range specs", () => {

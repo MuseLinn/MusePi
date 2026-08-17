@@ -7,6 +7,7 @@ import { askRenderer } from "./tools/ask";
 import { astEditRenderer } from "./tools/ast-edit";
 import { astGrepRenderer } from "./tools/ast-grep";
 import { bashRenderer } from "./tools/bash";
+import { boardRenderer } from "./tools/board";
 import { browserRenderer } from "./tools/browser";
 import { debugRenderer } from "./tools/debug";
 import { editRenderer } from "./tools/edit";
@@ -32,6 +33,7 @@ import { taskRenderer } from "./tools/task";
 import { todoRenderer } from "./tools/todo";
 import { webSearchRenderer } from "./tools/web-search";
 import { writeRenderer } from "./tools/write";
+import { widgetRenderer } from "./tools/widget";
 import { yieldRenderer } from "./tools/yield";
 import type { ToolRenderer } from "./types";
 
@@ -40,6 +42,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	ast_edit: astEditRenderer,
 	ast_grep: astGrepRenderer,
 	bash: bashRenderer,
+	board: boardRenderer,
 	browser: browserRenderer,
 	puppeteer: browserRenderer,
 	debug: debugRenderer,
@@ -74,9 +77,11 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	grep: grepRenderer,
 	search: grepRenderer,
 	task: taskRenderer,
+	swarm_run: taskRenderer,
 	todo: todoRenderer,
 	web_search: webSearchRenderer,
 	write: writeRenderer,
+	widget: widgetRenderer,
 	yield: yieldRenderer,
 };
 

@@ -7,8 +7,8 @@ import {
 	AuthStorage,
 	type CredentialDisabledEvent,
 	SqliteAuthCredentialStore,
-} from "@oh-my-pi/pi-ai/auth-storage";
-import * as oauthUtils from "@oh-my-pi/pi-ai/registry/oauth";
+} from "@musepi/pi-ai/auth-storage";
+import * as oauthUtils from "@musepi/pi-ai/registry/oauth";
 import { removeWithRetries } from "../../utils/src/temp";
 import { withEnv } from "./helpers";
 
@@ -756,5 +756,97 @@ describe("AuthStorage OAuth refresh race", () => {
 			access: "access-old",
 			refresh: "refresh-old",
 		});
+	});
+
+	test("refreshes an expired stored credential even when it mismatches the observed copy", async () => {
+		if (!authStorage || !store) throw new Error("test setup failed");
+
+		const now = Date.parse("2026-07-10T13:00:00.000Z");
+		setSystemTime(new Date(now));
+		await authStorage.set("unit-oauth-observed-mismatch-expired", [
+			{
+				type: "oauth",
+				access: "stored-access-expired",
+				refresh: "stored-refresh",
+				expires: now - 60_000,
+			},
+		]);
+
+		// The caller observed a different (also stale) copy of the credential — the
+		// exact state the finalize path hits when a concurrent usage-fetch cycle
+		// rotates the in-memory credential out from under the request between the
+		// selection sync and the refresh read. Before the fix the observed-mismatch
+		// guard returned the stored copy verbatim without checking whether it was
+		// usable, so the expired token flowed straight into getOAuthApiKey.
+		const observed = {
+			type: "oauth" as const,
+			access: "observed-access-different",
+			refresh: "stored-refresh",
+			expires: now - 120_000,
+		};
+
+		let refreshCalled = false;
+		const result = await authStorage.refreshStoredOAuthCredential("unit-oauth-observed-mismatch-expired", {
+			observedCredential: observed,
+			credentialFromRow: row => row,
+			forceRefresh: false,
+			refresh: async credential => {
+				refreshCalled = true;
+				return {
+					...credential,
+					access: "refreshed-access",
+					refresh: "stored-refresh",
+					expires: now + 60 * 60_000,
+				};
+			},
+		});
+
+		// The expired stored credential must be refreshed, not returned as-is.
+		expect(refreshCalled).toBe(true);
+		expect(result).toMatchObject({ refreshed: true, removed: false });
+		expect(result.credential).toMatchObject({ type: "oauth", access: "refreshed-access" });
+		const stored = store.listAuthCredentials("unit-oauth-observed-mismatch-expired");
+		expect(stored[0]?.credential).toMatchObject({ type: "oauth", access: "refreshed-access" });
+	});
+
+	test("adopts a fresh stored credential without refreshing when it mismatches the observed copy", async () => {
+		if (!authStorage || !store) throw new Error("test setup failed");
+
+		const now = Date.parse("2026-07-10T13:30:00.000Z");
+		setSystemTime(new Date(now));
+		await authStorage.set("unit-oauth-observed-mismatch-fresh", [
+			{
+				type: "oauth",
+				access: "peer-rotated-access",
+				refresh: "peer-rotated-refresh",
+				expires: now + 60 * 60_000,
+			},
+		]);
+
+		// A peer already rotated the row to a fresh token; the caller's observed
+		// copy is stale. The fresh stored copy must be adopted without a redundant
+		// refresh (which would waste a rotation and could invalidate the peer's
+		// token).
+		const observed = {
+			type: "oauth" as const,
+			access: "stale-observed-access",
+			refresh: "stale-observed-refresh",
+			expires: now - 60_000,
+		};
+
+		let refreshCalled = false;
+		const result = await authStorage.refreshStoredOAuthCredential("unit-oauth-observed-mismatch-fresh", {
+			observedCredential: observed,
+			credentialFromRow: row => row,
+			forceRefresh: false,
+			refresh: async credential => {
+				refreshCalled = true;
+				return { ...credential, access: "should-not-be-used", expires: now + 60 * 60_000 };
+			},
+		});
+
+		expect(refreshCalled).toBe(false);
+		expect(result).toMatchObject({ refreshed: false, removed: false });
+		expect(result.credential).toMatchObject({ type: "oauth", access: "peer-rotated-access" });
 	});
 });

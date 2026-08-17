@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { IrcBus } from "@oh-my-pi/pi-coding-agent/irc/bus";
-import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { resolveSoftRequestBudget, runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { IrcBus } from "@musepi/pi-coding-agent/irc/bus";
+import { RpcSubagentRegistry } from "@musepi/pi-coding-agent/modes/rpc/rpc-subagents";
+import type { RpcSubagentFrame } from "@musepi/pi-coding-agent/modes/rpc/rpc-types";
+import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
+import { resolveSoftRequestBudget, runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
+import { TempDir } from "@musepi/pi-utils";
 
 /**
  * Contracts under test — the soft request budget must degrade gracefully
@@ -21,7 +24,8 @@ import { TempDir } from "@oh-my-pi/pi-utils";
  *    forced final `yield`, so the run finishes as a normal completion with a
  *    partial report — not as an abort with no output.
  * 2. If the agent still refuses to yield (grace exhausted → hard abort), a
- *    kept-alive agent stays adopted (`idle`), so `irc` can message/resume it.
+ *    kept-alive agent stays adopted (`idle`), so `irc` can message/resume it
+ *    with the same RPC lifecycle/progress frames as the original run.
  * 3. Caller-signal aborts remain terminal, and the irc bus names the aborted
  *    agent precisely instead of claiming it is unknown.
  */
@@ -50,6 +54,9 @@ function createMockSession(
 	let abortCount = 0;
 	let disposeCount = 0;
 	let promptIndex = 0;
+	let ircWakeTurnObserver:
+		| ((records: CustomMessage[]) => ((error?: unknown) => void | Promise<void>) | undefined)
+		| undefined;
 
 	const emit = (event: AgentSessionEvent) => {
 		for (const listener of [...listeners]) listener(event);
@@ -80,7 +87,49 @@ function createMockSession(
 		waitForIdle: async () => {},
 		getLastAssistantMessage: () => messages[messages.length - 1] as never,
 		sendUserMessage: async () => {},
-		deliverIrcMessage: async () => "woken",
+		setIrcWakeTurnObserver: observer => {
+			ircWakeTurnObserver = observer;
+		},
+		deliverIrcMessage: async msg => {
+			const record: CustomMessage = {
+				role: "custom",
+				customType: "irc:incoming",
+				content: msg.body,
+				display: true,
+				details: { id: msg.id, from: msg.from, message: msg.body },
+				attribution: "agent",
+				timestamp: msg.ts,
+			};
+			const finishObservation = ircWakeTurnObserver?.([record]);
+			const yieldMessage = {
+				role: "assistant" as const,
+				content: [
+					{
+						type: "toolCall" as const,
+						id: "tool-irc-yield",
+						name: "yield",
+						arguments: { result: { data: { report: "resumed findings" } } },
+					},
+				],
+				stopReason: "toolUse" as const,
+			};
+			messages.push(yieldMessage);
+			emit({ type: "agent_start" } as AgentSessionEvent);
+			emit({ type: "message_end", message: yieldMessage } as unknown as AgentSessionEvent);
+			emit({
+				type: "tool_execution_end",
+				toolCallId: "tool-irc-yield",
+				toolName: "yield",
+				result: {
+					content: [{ type: "text", text: "Result submitted." }],
+					details: { status: "success", data: { report: "resumed findings" } },
+				},
+				isError: false,
+			} as AgentSessionEvent);
+			emit({ type: "agent_end", messages: [yieldMessage] } as unknown as AgentSessionEvent);
+			await finishObservation?.();
+			return "woken";
+		},
 		abort: async () => {
 			abortCount += 1;
 		},
@@ -129,7 +178,7 @@ describe("runSubprocess soft request budget", () => {
 		tempDir[Symbol.dispose]();
 	});
 
-	function baseOptions(id: string) {
+	function baseOptions(id: string, eventBus?: EventBus) {
 		return {
 			cwd: "/tmp",
 			agent: baseAgent,
@@ -140,6 +189,7 @@ describe("runSubprocess soft request budget", () => {
 			modelRegistry: { refresh: async () => {} } as unknown as ModelRegistry,
 			enableLsp: false,
 			artifactsDir: tempDir.path(),
+			eventBus,
 		};
 	}
 
@@ -221,6 +271,22 @@ describe("runSubprocess soft request budget", () => {
 
 	it("a budget hard-abort keeps the kept-alive agent adopted and messageable via irc", async () => {
 		const id = "StubbornScout";
+		const eventBus = new EventBus();
+		const frames: RpcSubagentFrame[] = [];
+		let resolveFollowUpTerminal: (() => void) | undefined;
+		const waitForFollowUpTerminal = (): Promise<void> => {
+			const deferred = Promise.withResolvers<void>();
+			resolveFollowUpTerminal = deferred.resolve;
+			return deferred.promise;
+		};
+		const rpcRegistry = new RpcSubagentRegistry(eventBus, frame => {
+			frames.push(frame);
+			if (frame.type !== "subagent_lifecycle" || frame.payload.status === "started") return;
+			const resolve = resolveFollowUpTerminal;
+			resolveFollowUpTerminal = undefined;
+			resolve?.();
+		});
+		rpcRegistry.setSubscriptionLevel("progress");
 		const handle = createMockSession(({ promptIndex, emit, pushMessage }) => {
 			if (promptIndex !== 1) return;
 			// Never yields: budget 2 → stop at 3, grace exhausted at 3 + 5 = 8.
@@ -233,7 +299,7 @@ describe("runSubprocess soft request budget", () => {
 		mockCreateAgentSession(handle.session);
 		registerRunning(id, handle.session);
 
-		const result = await runSubprocess(baseOptions(id));
+		const result = await runSubprocess(baseOptions(id, eventBus));
 
 		expect(result.aborted).toBe(true);
 		expect(result.abortReason).toMatch(/Soft request budget exceeded/);
@@ -242,9 +308,34 @@ describe("runSubprocess soft request budget", () => {
 		expect(AgentLifecycleManager.global().has(id)).toBe(true);
 		expect(handle.disposeCalls()).toBe(0);
 
-		// The whole point: irc can reach the stopped agent to resume it.
-		const receipt = await new IrcBus().send({ from: "Main", to: id, body: "resume your inventory" });
-		expect(receipt.outcome).toBe("woken");
+		const expectRpcTurn = (): void => {
+			expect(frames[0]).toMatchObject({
+				type: "subagent_lifecycle",
+				payload: { id, status: "started" },
+			});
+			expect(frames.some(frame => frame.type === "subagent_progress")).toBe(true);
+			expect(frames.at(-1)).toMatchObject({
+				type: "subagent_lifecycle",
+				payload: { id, status: "completed" },
+			});
+		};
+
+		frames.length = 0;
+		const idleTerminal = waitForFollowUpTerminal();
+		const idleReceipt = await new IrcBus().send({ from: "Main", to: id, body: "resume your inventory" });
+		expect(idleReceipt.outcome).toBe("woken");
+		await idleTerminal;
+		expectRpcTurn();
+
+		await AgentLifecycleManager.global().park(id);
+		expect(AgentRegistry.global().get(id)?.status).toBe("parked");
+		frames.length = 0;
+		const revivedTerminal = waitForFollowUpTerminal();
+		const revivedReceipt = await new IrcBus().send({ from: "Main", to: id, body: "resume after parking" });
+		expect(revivedReceipt.outcome).toBe("revived");
+		await revivedTerminal;
+		expectRpcTurn();
+		rpcRegistry.dispose();
 	});
 
 	it("a caller-signal abort stays terminal and irc names the aborted agent precisely", async () => {

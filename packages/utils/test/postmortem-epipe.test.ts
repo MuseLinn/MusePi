@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
-import { postmortem } from "@oh-my-pi/pi-utils";
+import { postmortem } from "@musepi/pi-utils";
 
 const childFlag = "--stdio-epipe-child";
 const raceChildFlag = "--stdio-epipe-race-child";
@@ -21,16 +21,13 @@ if (childFlagIndex >= 0) {
 } else if (process.argv.includes(raceChildFlag)) {
 	const marker = process.argv[process.argv.indexOf(raceChildFlag) + 1];
 	if (!marker) throw new Error("Missing cleanup marker path");
-	let cleanupComplete = false;
-	process.on("exit", () => {
-		fs.writeFileSync(marker, cleanupComplete ? "after cleanup" : "before cleanup");
-	});
+	fs.writeFileSync(marker, "before cleanup");
 	postmortem.registerStdioDisconnectHandling();
 	postmortem.register("stdio-epipe-race-test", async () => {
 		process.stderr.write("cleanup started\n");
 		void Promise.reject(Object.assign(new Error("broken pipe"), { code: "EPIPE", syscall: "write" }));
 		await new Response(Bun.stdin.stream()).text();
-		cleanupComplete = true;
+		fs.writeFileSync(marker, "after cleanup");
 	});
 	let rejectionCount = 0;
 	process.on("unhandledRejection", () => {
@@ -63,7 +60,7 @@ describe("postmortem broken-pipe handling", () => {
 
 	it("awaits cleanup and exits successfully when a registered stdio peer disconnects", async () => {
 		const marker = `/tmp/omp-postmortem-stdio-${process.pid}-${Date.now()}`;
-		const child = Bun.spawn([process.execPath, import.meta.path, childFlag, marker], {
+		const child = Bun.spawn([process.execPath, "run", import.meta.path, childFlag, marker], {
 			stdin: "pipe",
 			stdout: "pipe",
 			stderr: "pipe",
@@ -93,7 +90,7 @@ describe("postmortem broken-pipe handling", () => {
 
 	it("keeps waiting for active cleanup when another stdio EPIPE arrives", async () => {
 		const marker = `/tmp/omp-postmortem-stdio-race-${process.pid}-${Date.now()}`;
-		const child = Bun.spawn([process.execPath, import.meta.path, raceChildFlag, marker], {
+		const child = Bun.spawn([process.execPath, "run", import.meta.path, raceChildFlag, marker], {
 			stdin: "pipe",
 			stdout: "pipe",
 			stderr: "pipe",

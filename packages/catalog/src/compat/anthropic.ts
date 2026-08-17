@@ -172,6 +172,7 @@ export function buildAnthropicCompat(spec: ModelSpec<"anthropic-messages">): Res
 		// id or baseUrl marker.
 		replayUnsignedThinking: !signingEndpoint && (Boolean(spec.reasoning) || modelMatchesHost(spec, "deepseekFamily")),
 		escapeBuiltinToolNames: modelMatchesHost(spec, "umans"),
+		streamIdleTimeoutMs: spec.compat?.streamIdleTimeoutMs,
 	};
 	applyCompatOverrides(compat, spec.compat);
 	return compat;

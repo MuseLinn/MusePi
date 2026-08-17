@@ -1,14 +1,7 @@
-import { once } from "@oh-my-pi/pi-utils";
-import { scope } from "arktype";
+import { type } from "@musepi/omptype";
+import { once } from "@musepi/pi-utils";
 
 export const getModelsConfigSchemaBundle = once(() => {
-	// Config schemas validate at most a handful of times per process (on config
-	// load), so the eager JIT codegen ArkType runs at definition time is pure
-	// startup tax. A local jitless scope skips that codegen and falls back to
-	// interpreted traversal — ~65% cheaper to construct, validation correctness
-	// unchanged. (No `name`: duplicate module instances would collide.)
-	const { type } = scope({}, { jitless: true });
-
 	const OpenRouterRoutingSchema = type({
 		"only?": "string[]",
 		"order?": "string[]",
@@ -262,6 +255,15 @@ export const getModelsConfigSchemaBundle = once(() => {
 
 	const ProviderDiscoverySchema = type({
 		type: '"ollama" | "llama.cpp" | "lm-studio" | "openai-models-list" | "proxy" | "litellm"',
+		"timeoutMs?": "number",
+	}).narrow((value, ctx) => {
+		if (
+			value.timeoutMs !== undefined &&
+			(typeof value.timeoutMs !== "number" || value.timeoutMs <= 0 || !Number.isFinite(value.timeoutMs))
+		) {
+			return ctx.mustBe("timeoutMs a positive finite number");
+		}
+		return true;
 	});
 
 	const ProviderAuthSchema = type('"apiKey" | "none" | "oauth"');

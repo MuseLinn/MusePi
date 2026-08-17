@@ -2,7 +2,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isEnoent } from "@oh-my-pi/pi-utils";
+import { isEnoent } from "@musepi/pi-utils";
 import { buildDocsIndexPayload } from "./generate-docs-index";
 
 const packageDir = path.join(import.meta.dir, "..");
@@ -16,7 +16,7 @@ const legacyHtmlExportAssetPattern = /^(?:template-[^.]+\.(?:css|html|js)|tool-v
 // the npm bundle never executes that `isCompiledBinary()` branch.
 const ALWAYS_EXTERNAL = [
 	"mupdf",
-	"@oh-my-pi/pi-natives",
+	"@musepi/pi-natives",
 	"@huggingface/transformers",
 	"fastembed",
 	"onnxruntime-node",
@@ -30,17 +30,7 @@ const ALWAYS_EXTERNAL = [
 // import would load the unpatched npm package in users' installs (currently
 // @ark/schema is patched, so it — and arktype, which pulls @ark/schema — stay
 // bundled).
-const RUNTIME_EXTERNAL = [
-	"puppeteer-core",
-	"@puppeteer/browsers",
-	"@babel/parser",
-	"@xterm/headless",
-	"turndown",
-	"turndown-plugin-gfm",
-	"@mozilla/readability",
-	"linkedom",
-	"@agentclientprotocol/sdk",
-];
+const RUNTIME_EXTERNAL = ["puppeteer-core", "@babel/parser"];
 
 async function runCommand(command: string[]): Promise<void> {
 	const proc = Bun.spawn(command, {
@@ -107,6 +97,10 @@ async function main(): Promise<void> {
 			define: {
 				"process.env.PI_BUNDLED": JSON.stringify("true"),
 				"process.env.PI_DOCS_EMBED": JSON.stringify((await buildDocsIndexPayload()).payload),
+				// Mirror src/musepi.ts: the published bundle is the MusePi entry, so
+				// it must report the MusePi version (0.3.1), not the OMP-derived
+				// 17.1.8 that `@musepi/pi-utils` would otherwise resolve.
+				"process.env.MUSEPI_VERSION": JSON.stringify("0.3.1"),
 			},
 			minify: {
 				whitespace: true,

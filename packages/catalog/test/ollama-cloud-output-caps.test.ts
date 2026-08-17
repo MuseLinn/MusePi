@@ -1,7 +1,7 @@
 import { expect, test, vi } from "bun:test";
-import { streamSimple } from "@oh-my-pi/pi-ai/stream";
-import { ollamaCloudModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/ollama";
-import type { FetchImpl, Model } from "@oh-my-pi/pi-catalog/types";
+import { streamSimple } from "@musepi/pi-ai/stream";
+import { ollamaCloudModelManagerOptions } from "@musepi/pi-catalog/provider-models/ollama";
+import type { FetchImpl, Model } from "@musepi/pi-catalog/types";
 
 const cloudModel: Model<"ollama-chat"> = {
 	id: "deepseek-v4-flash",
@@ -26,7 +26,7 @@ test("ollama-cloud discovery does not inherit unsafe cross-provider maxTokens", 
 	const fetchMock: FetchImpl = vi.fn(async (input, _init) => {
 		const url = String(input);
 		if (url === "https://ollama.com/api/tags") {
-			return new Response(JSON.stringify({ models: [{ name: "deepseek-v4-flash" }] }), {
+			return new Response(JSON.stringify({ models: [{ name: "kimi-k2.5" }] }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" },
 			});
@@ -42,10 +42,64 @@ test("ollama-cloud discovery does not inherit unsafe cross-provider maxTokens", 
 
 	const options = ollamaCloudModelManagerOptions({ apiKey: "cloud-test-key", fetch: fetchMock });
 	const models = await options.fetchDynamicModels?.();
-	const model = models?.find(candidate => candidate.id === "deepseek-v4-flash");
+	const model = models?.find(candidate => candidate.id === "kimi-k2.5");
 
 	expect(model?.contextWindow).toBe(128000);
 	expect(model?.maxTokens).toBe(8192);
+});
+
+test("ollama-cloud discovery caps discovered max-output at the enforced ceiling (#7266)", async () => {
+	const fetchMock: FetchImpl = vi.fn(async (input, _init) => {
+		const url = String(input);
+		if (url === "https://ollama.com/api/tags") {
+			return new Response(JSON.stringify({ models: [{ name: "deepseek-v4-flash:0731" }] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (url === "https://ollama.com/api/show") {
+			return new Response(
+				JSON.stringify({ capabilities: ["completion"], model_info: { "deepseek.context_length": 1048576 } }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		}
+		throw new Error(`Unexpected URL: ${url}`);
+	});
+
+	const options = ollamaCloudModelManagerOptions({ apiKey: "cloud-test-key", fetch: fetchMock });
+	const models = await options.fetchDynamicModels?.();
+	const model = models?.find(candidate => candidate.id === "deepseek-v4-flash:0731");
+
+	expect(model?.contextWindow).toBe(1048576);
+	// Ollama Cloud rejects output budgets above 65536, so the 1M context window
+	// must not surface as the max-output figure.
+	expect(model?.maxTokens).toBe(65536);
+});
+
+test("ollama-cloud discovery caps a capped model by its context window when below the ceiling", async () => {
+	const fetchMock: FetchImpl = vi.fn(async (input, _init) => {
+		const url = String(input);
+		if (url === "https://ollama.com/api/tags") {
+			return new Response(JSON.stringify({ models: [{ name: "deepseek-v4-flash:mini" }] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+		if (url === "https://ollama.com/api/show") {
+			return new Response(
+				JSON.stringify({ capabilities: ["completion"], model_info: { "deepseek.context_length": 32768 } }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			);
+		}
+		throw new Error(`Unexpected URL: ${url}`);
+	});
+
+	const options = ollamaCloudModelManagerOptions({ apiKey: "cloud-test-key", fetch: fetchMock });
+	const models = await options.fetchDynamicModels?.();
+	const model = models?.find(candidate => candidate.id === "deepseek-v4-flash:mini");
+
+	expect(model?.contextWindow).toBe(32768);
+	expect(model?.maxTokens).toBe(32768);
 });
 
 test("ollama-cloud discovery always omits max output tokens", async () => {
@@ -78,7 +132,7 @@ test("ollama-cloud discovery always omits max output tokens", async () => {
 
 	expect(model?.provider).toBe("ollama-cloud");
 	expect(model?.contextWindow).toBe(1048576);
-	expect(model?.maxTokens).toBe(1048576);
+	expect(model?.maxTokens).toBe(65536);
 	expect(model?.omitMaxOutputTokens).toBe(true);
 });
 

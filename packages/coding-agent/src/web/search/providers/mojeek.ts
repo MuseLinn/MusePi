@@ -1,6 +1,6 @@
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
-import { untilAborted } from "@oh-my-pi/pi-utils";
-import { parseHTML } from "linkedom";
+import type { AuthStorage } from "@musepi/pi-ai";
+import { untilAborted } from "@musepi/pi-utils";
+import { parseHTML } from "@musepi/pi-utils/dom";
 import type { Page } from "puppeteer-core";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -137,13 +137,14 @@ function isRobotPage(page: LoadedHtmlPage): boolean {
 }
 
 async function callMojeekHtml(params: SearchParams, numResults: number): Promise<string> {
-	const signal = withHardTimeout(params.signal);
+	const signal = withHardTimeout(params.signal, params.timeoutMs);
 	const url = buildSearchUrl(params, numResults);
 	let page: LoadedHtmlPage;
 	try {
 		page = await browserFetch(url, {
 			fetch: params.fetch,
 			signal,
+			timeoutMs: params.timeoutMs,
 			randomizeHeaders: false,
 			referer: MOJEEK_HOME_URL,
 			browser: {
@@ -209,7 +210,7 @@ export class MojeekProvider extends SearchProvider {
 		return true;
 	}
 
-	isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
+	override isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
 		return true;
 	}
 

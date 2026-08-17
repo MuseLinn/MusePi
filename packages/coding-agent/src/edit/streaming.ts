@@ -16,19 +16,20 @@
 import {
 	ABORT_MARKER,
 	BEGIN_PATCH_MARKER,
+	type Clipboard,
 	containsRecognizableHashlineOperations,
 	END_PATCH_MARKER,
+	forkClipboard,
 	type PatchSection as HashlineInputSection,
 	Patch as HashlinePatch,
 	type SnapshotStore,
-} from "@oh-my-pi/hashline";
+} from "@musepi/hashline";
 import type { Theme } from "../modes/theme/theme";
 import { type EditMode, resolveEditMode } from "../utils/edit-mode";
 import { computeEditDiff, type DiffError, type DiffResult } from "./diff";
 import { computeHashlineDiff, computeHashlineSectionDiff } from "./hashline/diff";
 import { type ApplyPatchEntry, expandApplyPatchToEntries, expandApplyPatchToPreviewEntries } from "./modes/apply-patch";
 import { computePatchDiff, type PatchEditEntry } from "./modes/patch";
-import type { ReplaceEditEntry } from "./modes/replace";
 
 export interface PerFileDiffPreview {
 	path: string;
@@ -50,6 +51,13 @@ export interface StreamingDiffContext {
 	 * not flicker in the preview.
 	 */
 	isStreaming?: boolean;
+	/**
+	 * Session-persistent clipboard register (`CUT`/`PASTE`). Previews
+	 * fork it per frame — never mutating it — so a `PASTE` of content cut in
+	 * an earlier edit call (or an earlier section of this patch) renders the
+	 * real rows.
+	 */
+	clipboard?: Clipboard;
 }
 
 /**
@@ -324,27 +332,32 @@ function splitApplyPatchPerFile(input: string): EditMatcherEntry[] {
 
 interface ReplaceArgs {
 	path?: string;
-	edits?: ReplaceEditEntry[];
+	old_string?: string;
+	new_string?: string;
+	replace_all?: boolean;
 	__partialJson?: string;
 }
 
 const replaceStrategy: EditStreamingStrategy<ReplaceArgs> = {
 	extractCompleteEdits(args, partialJson) {
-		if (!args?.edits) return args;
-		return { ...args, edits: dropIncompleteLastEdit(args.edits, partialJson, "edits") };
+		// While args are still streaming, `old_string` is only trustworthy once
+		// the parser has moved past it — i.e. the `new_string` key has appeared.
+		// Previewing a half-streamed `old_string` would flash a bogus
+		// "no match" diff error until the rest of the value arrives.
+		if (!partialJson || partialJson.includes('"new_string"')) return args;
+		return { ...args, old_string: undefined, new_string: undefined };
 	},
 	async computeDiffPreview(args, ctx) {
 		if (!args.path) return null;
-		const first = args.edits?.[0];
-		if (!first || first.old_text === undefined || first.new_text === undefined) return null;
+		if (args.old_string === undefined || args.new_string === undefined) return null;
 		ctx.signal.throwIfAborted();
 		const result = await computeEditDiff(
 			args.path,
-			first.old_text,
-			first.new_text,
+			args.old_string,
+			args.new_string,
 			ctx.cwd,
 			ctx.allowFuzzy ?? true,
-			first.all,
+			args.replace_all,
 			ctx.fuzzyThreshold,
 		);
 		ctx.signal.throwIfAborted();
@@ -354,14 +367,7 @@ const replaceStrategy: EditStreamingStrategy<ReplaceArgs> = {
 		return "";
 	},
 	matcherDigest(args) {
-		const edits = args?.edits;
-		if (!Array.isArray(edits)) return undefined;
-		let digest: string | undefined;
-		for (const edit of edits) {
-			if (typeof edit?.new_text !== "string") continue;
-			digest = digest === undefined ? edit.new_text : `${digest}\n${edit.new_text}`;
-		}
-		return digest;
+		return typeof args?.new_string === "string" ? args.new_string : undefined;
 	},
 	matcherPaths(args) {
 		return typeof args?.path === "string" && args.path.length > 0 ? [args.path] : undefined;
@@ -542,7 +548,9 @@ const hashlineStrategy: EditStreamingStrategy<HashlineArgs> = {
 			// to parse; suppress until the next chunk arrives. Once args are
 			// complete, surface the error so the model sees what went wrong.
 			if (ctx.isStreaming) return null;
-			const result = await computeHashlineDiff({ input }, ctx.cwd, ctx.snapshots);
+			const result = await computeHashlineDiff({ input }, ctx.cwd, ctx.snapshots, {
+				clipboard: forkClipboard(ctx.clipboard),
+			});
 			ctx.signal.throwIfAborted();
 			return [toPerFilePreview("", result)];
 		}
@@ -558,12 +566,16 @@ const hashlineStrategy: EditStreamingStrategy<HashlineArgs> = {
 		const trailingProcessedIndex = sectionsToProcess.length - 1;
 
 		const previews: PerFileDiffPreview[] = [];
+		// Fork the session register per preview frame: sections feed each other
+		// in patch order, but a preview must never mutate the live register.
+		const clipboard = forkClipboard(ctx.clipboard);
 		for (let i = 0; i < sectionsToProcess.length; i++) {
 			ctx.signal.throwIfAborted();
 			const section = sectionsToProcess[i];
 			const result = await computeHashlineSectionDiff(section, ctx.cwd, ctx.snapshots, {
 				streaming: ctx.isStreaming,
 				skipHashValidation: ctx.isStreaming === true,
+				clipboard,
 			});
 			ctx.signal.throwIfAborted();
 			// Ignore parse/apply errors from the trailing (actively-typed)

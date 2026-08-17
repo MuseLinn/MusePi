@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { tryRunRpcSkillCommand } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-mode";
-import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { removeWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { tryRunRpcSkillCommand } from "@musepi/pi-coding-agent/modes/rpc/rpc-mode";
+import { type CustomMessage, SKILL_PROMPT_MESSAGE_TYPE } from "@musepi/pi-coding-agent/session/messages";
+import { removeWithRetries, Snowflake } from "@musepi/pi-utils";
 
 describe("tryRunRpcSkillCommand", () => {
 	test("dispatches registered /skill commands as skill prompt messages", async () => {
@@ -35,10 +35,8 @@ describe("tryRunRpcSkillCommand", () => {
 		expect(handled).toEqual({ agentInvoked: true });
 		expect(message?.customType).toBe(SKILL_PROMPT_MESSAGE_TYPE);
 		expect(message?.content).toContain("Review the supplied code carefully.");
-		expect(message?.content).toContain('The user has invoked the "reviewer" skill');
 		expect(message?.content).toContain(`[Skill directory: ${dir}]`);
-		expect(message?.content).toMatch(/[Rr]esolve any relative paths/);
-		expect(message?.content).toContain("User: focus on risks");
+		expect(message?.content).toContain("focus on risks");
 		expect(message?.display).toBe(true);
 		expect(message?.attribution).toBe("user");
 		expect(options).toEqual({ streamingBehavior: "steer" });

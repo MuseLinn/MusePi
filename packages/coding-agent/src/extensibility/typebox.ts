@@ -17,7 +17,7 @@
  * like a small validator at runtime.
  */
 
-import { areJsonValuesEqual, upgradeJsonSchemaTo202012, validateJsonSchemaValue } from "@oh-my-pi/pi-ai/utils/schema";
+import { areJsonValuesEqual, upgradeJsonSchemaTo202012, validateJsonSchemaValue } from "@musepi/pi-ai/utils/schema";
 
 // ---------------------------------------------------------------------------
 // Type aliases — exported so `import type { Static, TSchema } from "..."`

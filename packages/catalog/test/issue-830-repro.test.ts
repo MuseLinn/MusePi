@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { getOAuthProviders } from "@oh-my-pi/pi-ai/registry/oauth";
-import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
-import { DEFAULT_MODEL_PER_PROVIDER, PROVIDER_DESCRIPTORS } from "@oh-my-pi/pi-catalog/provider-models/descriptors";
-import { MODELS_DEV_PROVIDER_DESCRIPTORS } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { OpenAICompat } from "@oh-my-pi/pi-catalog/types";
+import { getOAuthProviders } from "@musepi/pi-ai/registry/oauth";
+import { getEnvApiKey } from "@musepi/pi-ai/stream";
+import { DEFAULT_MODEL_PER_PROVIDER, PROVIDER_DESCRIPTORS } from "@musepi/pi-catalog/provider-models/descriptors";
+import { MODELS_DEV_PROVIDER_DESCRIPTORS } from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { OpenAICompat } from "@musepi/pi-catalog/types";
 
 describe("deepseek built-in provider (issue #830)", () => {
 	test("registers built-in runtime descriptor with DEEPSEEK_API_KEY env discovery", () => {
@@ -34,7 +34,7 @@ describe("deepseek built-in provider (issue #830)", () => {
 		}
 	});
 
-	test("models.dev mapping descriptor uses api.deepseek.com and forces reasoning_content + no tool_choice", () => {
+	test("stencil.so mapping descriptor uses api.deepseek.com and forces reasoning_content + no tool_choice", () => {
 		const descriptor = MODELS_DEV_PROVIDER_DESCRIPTORS.find(d => d.providerId === "deepseek");
 		expect(descriptor).toBeDefined();
 		expect(descriptor?.modelsDevKey).toBe("deepseek");

@@ -1,4 +1,4 @@
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
 import type { ModelRegistry } from "../../../config/model-registry";
 import type { StructuredQuery } from "../query";
 import type { SearchProviderId, SearchResponse } from "../types";
@@ -47,6 +47,8 @@ export interface SearchParams {
 	recency?: "day" | "week" | "month" | "year";
 	systemPrompt: string;
 	signal?: AbortSignal;
+	/** Hard timeout for this provider's search transport, in milliseconds. */
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 	maxOutputTokens?: number;
 	numSearchResults?: number;

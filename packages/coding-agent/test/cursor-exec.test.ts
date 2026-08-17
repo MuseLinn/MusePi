@@ -3,11 +3,12 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { create, fromBinary } from "@bufbuild/protobuf";
-import type { AgentEvent, AgentTool, AgentToolContext } from "@oh-my-pi/pi-agent-core";
-import { type BlockState, handleServerMessage, type ToolCallState } from "@oh-my-pi/pi-ai/providers/cursor";
-import { buildPiLsResult, piTruncation } from "@oh-my-pi/pi-ai/providers/cursor/exec-modern";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai/types";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
+import { type } from "@musepi/omptype";
+import type { AgentEvent, AgentTool, AgentToolContext } from "@musepi/pi-agent-core";
+import { type BlockState, handleServerMessage, type ToolCallState } from "@musepi/pi-ai/providers/cursor";
+import { buildPiLsResult, piTruncation } from "@musepi/pi-ai/providers/cursor/exec-modern";
+import type { AssistantMessage } from "@musepi/pi-ai/types";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import {
 	AgentClientMessageSchema,
 	AgentServerMessageSchema,
@@ -16,22 +17,21 @@ import {
 	McpArgsSchema,
 	ReadArgsSchema,
 	ShellArgsSchema,
-} from "@oh-my-pi/pi-catalog/discovery/cursor-gen/agent_pb";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { CursorExecHandlers } from "@oh-my-pi/pi-coding-agent/cursor";
+} from "@musepi/pi-catalog/discovery/cursor-gen/agent_pb";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { CursorExecHandlers } from "@musepi/pi-coding-agent/cursor";
 import {
 	bridgeToolMap,
 	createBridgeEditTool,
 	createBridgeGrepFactory,
-} from "@oh-my-pi/pi-coding-agent/cursor-bridge-tools";
-import { EditTool } from "@oh-my-pi/pi-coding-agent/edit";
-import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { ExtensionToolWrapper } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { BUILTIN_TOOLS, GrepTool, ReadTool, type Tool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { BashTool } from "@oh-my-pi/pi-coding-agent/tools/bash";
-import type { TruncationMeta } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-coding-agent/cursor-bridge-tools";
+import { EditTool } from "@musepi/pi-coding-agent/edit";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { ExtensionToolWrapper } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { BUILTIN_TOOLS, GrepTool, ReadTool, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
+import type { TruncationMeta } from "@musepi/pi-coding-agent/tools/output-meta";
+import { removeWithRetries } from "@musepi/pi-utils";
 import { AdviseTool } from "../src/advisor/advise-tool";
 
 function createTestSession(cwd: string, overrides: Partial<ToolSession> = {}): ToolSession {
@@ -372,8 +372,7 @@ describe("bridge tool resolution beyond the model-facing registry", () => {
 	it("substitutes a replace-mode edit into a granted advisor tool map", async () => {
 		// The advisor roster hands the bridge the instances it built for the
 		// advisor's own loop — default `hashline` mode, whose schema is a single
-		// `input` string. A `pi_edit` frame's `old_text`/`new_text` pairs fail
-		// validation against it, so the file goes unmodified. This is the
+		// `input` string. A `pi_edit` frame's `old_string`/`new_string` args fail
 		// substitution the advisor path applies before constructing handlers.
 		const target = path.join(cwd, "sample.txt");
 		await Bun.write(target, "alpha\nbeta\n");
@@ -1695,7 +1694,36 @@ describe("CursorExecHandlers Pi frame translation", () => {
 			args: { path: "a.ts", edits: [{ oldText: "before", newText: "after" }] },
 		} as never);
 
-		expect(calls[0]).toEqual({ path: "a.ts", edits: [{ old_text: "before", new_text: "after" }] });
+		expect(calls[0]).toEqual({ path: "a.ts", old_string: "before", new_string: "after" });
+	});
+
+	it("sends a multi-replacement pi_edit frame as one batched tool call", async () => {
+		// One frame must stay one tool lifecycle: looping per replacement would
+		// emit duplicate start/end events under the same toolCallId and return
+		// only the last replacement's diff. Multi-replacement frames therefore
+		// ride the internal `edits` batch form, in frame order.
+		const { handlers, calls } = recordingHandlers("edit");
+
+		await handlers.piEdit({
+			toolCallId: "c1",
+			args: {
+				path: "a.ts",
+				edits: [
+					{ oldText: "one", newText: "ONE" },
+					{ oldText: "two", newText: "TWO" },
+				],
+			},
+		} as never);
+
+		expect(calls).toEqual([
+			{
+				path: "a.ts",
+				edits: [
+					{ old_string: "one", new_string: "ONE" },
+					{ old_string: "two", new_string: "TWO" },
+				],
+			},
+		]);
 	});
 
 	it("lists directories for pi_ls through read, defaulting an empty path to cwd", async () => {

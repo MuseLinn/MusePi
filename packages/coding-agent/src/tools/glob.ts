@@ -1,18 +1,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import * as natives from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { formatGroupedPaths, isEnoent, prompt, untilAborted } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { ToolExample } from "@musepi/pi-ai";
+import * as natives from "@musepi/pi-natives";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
+import { formatGroupedPaths, hasFsCode, isEnoent, prompt, untilAborted } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { InternalUrlRouter } from "../internal-urls";
 import { splitMemoryGlobPattern } from "../internal-urls/memory-protocol";
 import type { Theme } from "../modes/theme/theme";
 import globDescription from "../prompts/tools/glob.md" with { type: "text" };
 import { type TruncationResult, truncateHead } from "../session/streaming-output";
+import { isScoutSpawnable } from "../task/spawn-policy";
 import { Ellipsis, fileHyperlink, renderFileList, renderStatusLine, renderTreeList, truncateToWidth } from "../tui";
 import type { ToolSession } from ".";
 import { applyListLimit } from "./list-limit";
@@ -106,7 +107,14 @@ export class GlobTool implements AgentTool<typeof findSchema, GlobToolDetails> {
 	readonly approval = "read" as const;
 	readonly loadMode = "essential";
 	readonly label = "Glob";
-	readonly description: string;
+	get description(): string {
+		return prompt.render(globDescription, {
+			scoutAvailable: isScoutSpawnable(
+				this.session.settings.get("task.disabledAgents") as string[] | undefined,
+				this.session.getSessionSpawns?.() ?? "*",
+			),
+		});
+	}
 	readonly parameters = findSchema;
 
 	readonly examples: readonly ToolExample<typeof findSchema.infer>[] = [
@@ -138,7 +146,6 @@ export class GlobTool implements AgentTool<typeof findSchema, GlobToolDetails> {
 	) {
 		this.#customOps = options?.operations;
 		this.#rootPathAlias = options?.rootPathAlias === true;
-		this.description = prompt.render(globDescription);
 	}
 
 	async execute(
@@ -408,7 +415,9 @@ export class GlobTool implements AgentTool<typeof findSchema, GlobToolDetails> {
 				try {
 					stat = await fs.promises.stat(target.searchPath);
 				} catch (err) {
-					if (isEnoent(err)) {
+					// ENAMETOOLONG can never name a real target; surface a clean
+					// "Path not found" instead of leaking the raw errno (issue #7597).
+					if (isEnoent(err) || hasFsCode(err, "ENAMETOOLONG")) {
 						if (isSingle) throw new ToolError(`Path not found: ${scopePath}`);
 						return [];
 					}

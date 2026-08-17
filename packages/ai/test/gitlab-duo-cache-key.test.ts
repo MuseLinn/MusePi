@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { Context } from "@oh-my-pi/pi-ai";
+import type { Context } from "@musepi/pi-ai";
 import {
 	clearGitLabDuoDirectAccessCache,
 	getGitLabDuoModels,
 	streamGitLabDuo,
-} from "@oh-my-pi/pi-ai/providers/gitlab-duo";
-import * as registerBuiltins from "@oh-my-pi/pi-ai/providers/register-builtins";
+} from "@musepi/pi-ai/providers/gitlab-duo";
+import * as registerBuiltins from "@musepi/pi-ai/providers/register-builtins";
 
 const context: Context = {
 	systemPrompt: ["You are helpful."],

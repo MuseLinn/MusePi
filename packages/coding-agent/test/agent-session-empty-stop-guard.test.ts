@@ -1,19 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { type ThinkingContent, z } from "@oh-my-pi/pi-ai";
-import { createMockModel, type MockModel, type MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/runner";
-import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import type { ThinkingContent } from "@musepi/pi-ai";
+import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
+import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 
-const recordToolSchema = z.object({ value: z.string() });
+const recordToolSchema = type({ value: type("string") });
 
 type Harness = {
 	session: AgentSession;

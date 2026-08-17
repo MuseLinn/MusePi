@@ -9,7 +9,7 @@ import {
 	resolveTelemetry,
 	type StreamFn,
 	type ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import {
 	AGGRESSIVE_SHAKE_CONFIG,
 	AUTO_HANDOFF_THRESHOLD_FOCUS,
@@ -26,8 +26,10 @@ import {
 	DEFAULT_SHAKE_CONFIG,
 	effectiveReserveTokens,
 	estimateTokens,
+	hasContextTokenUsage,
 	NativeCompactionError,
 	prepareCompaction,
+	RESCUE_SHAKE_CONFIG,
 	resolveBudgetReserveTokens,
 	resolveThresholdTokens,
 	type ShakeConfig,
@@ -36,20 +38,20 @@ import {
 	shouldCompact,
 	shouldUseOpenAiRemoteCompaction,
 	shouldUseProviderNativeCompaction,
-} from "@oh-my-pi/pi-agent-core/compaction";
+} from "@musepi/pi-agent-core/compaction";
 import {
 	DEFAULT_PRUNE_CONFIG,
 	pruneSupersededToolResults,
 	pruneToolOutputs,
 	readToolSupersedeKey,
-} from "@oh-my-pi/pi-agent-core/compaction/pruning";
-import type { ProtectedToolMatcher } from "@oh-my-pi/pi-agent-core/compaction/tool-protection";
-import type { AssistantMessage, CodexCompactionContext, Message, Model, ProviderSessionState } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
-import { logger } from "@oh-my-pi/pi-utils";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+} from "@musepi/pi-agent-core/compaction/pruning";
+import type { ProtectedToolMatcher } from "@musepi/pi-agent-core/compaction/tool-protection";
+import type { AssistantMessage, CodexCompactionContext, Message, Model, ProviderSessionState } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { preferredDialect } from "@musepi/pi-catalog/identity";
+import { modelsAreEqual } from "@musepi/pi-catalog/models";
+import { logger } from "@musepi/pi-utils";
+import * as snapcompact from "@musepi/snapcompact";
 import type { ModelRegistry } from "../config/model-registry";
 import { MODEL_ROLE_IDS } from "../config/model-roles";
 import type { Settings } from "../config/settings";
@@ -74,7 +76,7 @@ import {
 	resolveRoleModelFull,
 } from "./role-models";
 import type { SessionContext } from "./session-context";
-import { getLatestCompactionEntry } from "./session-context";
+import { getLatestCompactionEntry, getOpenAiRemoteCompactionPayload } from "./session-context";
 import type { CompactionEntry, SessionEntry } from "./session-entries";
 import type { SessionManager } from "./session-manager";
 import type { ShakeMode, ShakeResult } from "./shake-types";
@@ -180,6 +182,7 @@ export interface SessionMaintenanceHost {
 	extensionRunner: ExtensionRunner | undefined;
 	sideStreamFn: StreamFn;
 	providerSessionState: Map<string, ProviderSessionState>;
+	preferWebsockets: boolean | undefined;
 	model(): Model | undefined;
 	thinkingLevel(): ThinkingLevel | undefined;
 	isDisposed(): boolean;
@@ -234,6 +237,7 @@ export interface SessionMaintenanceHost {
 	syncTodoPhasesFromBranch(): void;
 	resetAdvisorRuntimes(): void;
 	rebaseAfterCompaction(): void;
+	recordAnchoredHistoryRewrite(tokensRemoved: number): void;
 	getContextBreakdown(options?: {
 		contextWindow?: number;
 		pendingMessages?: AgentMessage[];
@@ -268,6 +272,19 @@ export interface SessionMaintenanceHost {
 export class SessionMaintenance {
 	#compactionAbortController: AbortController | undefined;
 	#autoCompactionAbortController: AbortController | undefined;
+	/**
+	 * Live tool-loop contexts parked after mid-turn maintenance hit a no-progress
+	 * dead end. Membership suppresses the repeated rescue + warning while no cut
+	 * point exists; {@link maintainContextMidRun} re-arms the entry once a later
+	 * tool result makes `prepareCompaction` viable again.
+	 */
+	readonly #midTurnCompactionDeadEnds = new WeakSet<AgentMessage[]>();
+	/**
+	 * Carries a mid-turn dead end across the loop's final answer to the next
+	 * pre-prompt check. That check must not warn again for the same oversized
+	 * persisted turn, but a new agent loop still gets its own live-array guard.
+	 */
+	#midTurnDeadEndPendingPrePrompt = false;
 	#skipPostTurnMaintenanceAssistantTimestamp: number | undefined;
 	readonly #host: SessionMaintenanceHost;
 
@@ -447,11 +464,12 @@ export class SessionMaintenance {
 		}
 
 		const branchEntries = this.#host.sessionManager.getBranch();
+		const latestCompaction = getLatestCompactionEntry(branchEntries);
 		const config = this.#withPlanProtection({
 			...(opts.config ?? AGGRESSIVE_SHAKE_CONFIG),
 			// Skip entries summarized away by the latest compaction — shaking them
 			// only churns persisted history with no prompt/cache effect.
-			keepBoundaryId: getLatestCompactionEntry(branchEntries)?.firstKeptEntryId,
+			keepBoundaryId: latestCompaction?.firstKeptEntryId,
 		});
 		const regions = collectShakeRegions(branchEntries, config);
 		if (regions.length === 0) {
@@ -461,20 +479,50 @@ export class SessionMaintenance {
 		const artifactId = await this.#saveShakeArtifact(regions);
 		const replacements = regions.map((region, index) => this.#shakeElidePlaceholder(region, index, artifactId));
 
+		const hasRemoteReplacementHistory = getOpenAiRemoteCompactionPayload(latestCompaction) !== undefined;
+		const compactionIndex = latestCompaction ? branchEntries.lastIndexOf(latestCompaction) : -1;
+		let anchorIndex = -1;
+		for (let index = branchEntries.length - 1; index > compactionIndex; index--) {
+			const entry = branchEntries[index];
+			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+			const assistant = entry.message;
+			if (
+				assistant.stopReason !== "aborted" &&
+				assistant.stopReason !== "error" &&
+				assistant.usage &&
+				hasContextTokenUsage(assistant.usage)
+			) {
+				anchorIndex = index;
+				break;
+			}
+		}
+		const entryIndexes = new Map(branchEntries.map((entry, index) => [entry, index]));
+
 		let toolResultsDropped = 0;
 		let blocksDropped = 0;
 		let originalTokens = 0;
 		let replacementTokens = 0;
+		let anchoredTokensRemoved = 0;
 		const items = regions.map((region, index) => {
 			if (region.kind === "toolResult") toolResultsDropped++;
 			else blocksDropped++;
 			originalTokens += region.tokens;
 			const replacement = replacements[index];
-			if (replacement.length > 0) replacementTokens += countTokens(replacement);
+			const replacementTokenCount = replacement.length > 0 ? countTokens(replacement) : 0;
+			replacementTokens += replacementTokenCount;
+			const entryIndex = entryIndexes.get(region.entry) ?? -1;
+			if (
+				entryIndex >= 0 &&
+				entryIndex < anchorIndex &&
+				(!hasRemoteReplacementHistory || entryIndex > compactionIndex)
+			) {
+				anchoredTokensRemoved += Math.max(0, region.tokens - replacementTokenCount);
+			}
 			return { region, replacement };
 		});
 
 		applyShakeRegions(items);
+		this.#host.recordAnchoredHistoryRewrite(anchoredTokensRemoved);
 
 		await this.#host.sessionManager.rewriteEntries();
 		const sessionContext = this.#host.buildDisplaySessionContext();
@@ -968,7 +1016,18 @@ export class SessionMaintenance {
 		if (contextWindow <= 0) return;
 		const compactionSettings = this.#host.settings.getGroup("compaction");
 		const contextTokens = this.#estimatePrePromptContextTokens(messages, contextWindow);
+		const pendingMidTurnDeadEnd = this.#midTurnDeadEndPendingPrePrompt;
+		this.#midTurnDeadEndPendingPrePrompt = false;
 		if (!shouldCompact(contextTokens, contextWindow, compactionSettings)) return;
+		if (
+			pendingMidTurnDeadEnd &&
+			prepareCompaction(this.#host.sessionManager.getBranch(), compactionSettings, model) === undefined
+		) {
+			// The prior tool loop already attempted the rescue and warned for this
+			// persisted oversized turn. Only a later persisted cut point makes a
+			// pre-prompt retry useful; the new agent loop may warn for its own turn.
+			return;
+		}
 
 		// Auto-promote first: switching to a larger-context model avoids compacting
 		// the history at all. The post-turn threshold path already promotes before
@@ -1039,6 +1098,25 @@ export class SessionMaintenance {
 		if (!lastAssistant || lastAssistant.stopReason === "aborted" || lastAssistant.stopReason === "error") return;
 
 		if (!(await this.#host.persistTurnMessagesForMidRunCompaction(context))) return;
+		if (this.#midTurnCompactionDeadEnds.has(activeMessages)) {
+			// A prior boundary already ran the dead-end rescue and could not reduce
+			// this turn. Re-running the rescue and re-emitting its warning on every
+			// following tool boundary is wasted work while nothing summarizable
+			// exists. But the tool loop keeps appending turns: once a later
+			// (smaller) tool result gives prepareCompaction a cut point before the
+			// now-older oversized turn, compaction can finally make progress and
+			// MUST run rather than stay suppressed until provider overflow (#7153
+			// review). Stay parked only while no cut point is available; re-arm as
+			// soon as one appears.
+			if (
+				!model ||
+				prepareCompaction(this.#host.sessionManager.getBranch(), compactionSettings, model) === undefined
+			) {
+				return;
+			}
+			this.#midTurnCompactionDeadEnds.delete(activeMessages);
+			this.#midTurnDeadEndPendingPrePrompt = false;
+		}
 
 		const billedContextTokens = calculateContextTokens(lastAssistant.usage);
 		const storedContextTokens = this.#estimateStoredContextTokens();
@@ -1061,13 +1139,17 @@ export class SessionMaintenance {
 		}
 
 		const messagesBefore = activeMessages.length;
-		await this.runAutoCompaction("threshold", false, false, false, {
+		const result = await this.runAutoCompaction("threshold", false, false, false, {
 			autoContinue: false,
 			suppressContinuation: true,
 			suppressHandoff: true,
 			triggerContextTokens: contextTokens,
 			phase: "mid_turn",
 		});
+		if (result.automaticContinuationBlocked) {
+			this.#midTurnCompactionDeadEnds.add(activeMessages);
+			this.#midTurnDeadEndPendingPrePrompt = true;
+		}
 
 		if (signal?.aborted) return;
 		const compactedMessages = this.#host.agent.state.messages;
@@ -1492,8 +1574,9 @@ export class SessionMaintenance {
 						thinkingLevel: this.#host.thinkingLevel(),
 						tools: this.#host.agent.state.tools,
 						sessionId: this.#host.sessionId(),
-						promptCacheKey: this.#host.sessionId(),
+						promptCacheKey: this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId,
 						providerSessionState: this.#host.providerSessionState,
+						preferWebsockets: this.#host.preferWebsockets,
 						// Route every summarization HTTP request through the
 						// session's side-stream transport so the provider
 						// concurrency cap (e.g. providers.ollama-cloud.maxConcurrency)
@@ -1810,7 +1893,7 @@ export class SessionMaintenance {
 		let elideSink = "placeholders";
 		if (!options.skipElide) {
 			try {
-				const result = await this.#host.shake("elide", { signal });
+				const result = await this.#host.shake("elide", { config: RESCUE_SHAKE_CONFIG, signal });
 				elided = result.toolResultsDropped + result.blocksDropped;
 				elidedTokens = result.tokensFreed;
 				if (result.artifactId) elideSink = "an artifact";
@@ -2538,8 +2621,9 @@ export class SessionMaintenance {
 									thinkingLevel: this.#host.thinkingLevel(),
 									tools: this.#host.agent.state.tools,
 									sessionId: this.#host.sessionId(),
-									promptCacheKey: this.#host.sessionId(),
+									promptCacheKey: this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId,
 									providerSessionState: this.#host.providerSessionState,
+									preferWebsockets: this.#host.preferWebsockets,
 									codexCompaction,
 								},
 							);

@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { streamAnthropic } from "@oh-my-pi/pi-ai/providers/anthropic";
-import { AnthropicMessagesClient, type AnthropicMessagesClientLike } from "@oh-my-pi/pi-ai/providers/anthropic-client";
-import type { Context, FetchImpl, Model } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as AIError from "@musepi/pi-ai/error";
+import { streamAnthropic } from "@musepi/pi-ai/providers/anthropic";
+import { AnthropicMessagesClient, type AnthropicMessagesClientLike } from "@musepi/pi-ai/providers/anthropic-client";
+import type { Context, FetchImpl, Model } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
 import { waitForDelayOrAbort } from "./helpers";
 
 const model: Model<"anthropic-messages"> = buildModel({
@@ -204,7 +204,37 @@ async function resolveAfterMicrotasks<T>(promise: Promise<T>, errorMessage: stri
 	return outcome.value;
 }
 
+const STREAM_TIMEOUT_ENV_KEYS = [
+	"PI_STREAM_IDLE_TIMEOUT_MS",
+	"PI_OPENAI_STREAM_IDLE_TIMEOUT_MS",
+	"PI_STREAM_FIRST_EVENT_TIMEOUT_MS",
+] as const;
+
+type StreamTimeoutEnvKey = (typeof STREAM_TIMEOUT_ENV_KEYS)[number];
+
+const originalStreamTimeoutEnv: Record<StreamTimeoutEnvKey, string | undefined> = {
+	PI_STREAM_IDLE_TIMEOUT_MS: undefined,
+	PI_OPENAI_STREAM_IDLE_TIMEOUT_MS: undefined,
+	PI_STREAM_FIRST_EVENT_TIMEOUT_MS: undefined,
+};
+
+beforeEach(() => {
+	for (const key of STREAM_TIMEOUT_ENV_KEYS) {
+		originalStreamTimeoutEnv[key] = Bun.env[key];
+		delete Bun.env[key];
+	}
+});
+
 afterEach(() => {
+	for (const key of STREAM_TIMEOUT_ENV_KEYS) {
+		const previous = originalStreamTimeoutEnv[key];
+		if (previous === undefined) {
+			delete Bun.env[key];
+		} else {
+			Bun.env[key] = previous;
+		}
+	}
+
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });
@@ -457,6 +487,114 @@ describe("anthropic first-event timeout retries", () => {
 				arguments: {},
 			},
 		]);
+	});
+});
+
+describe("anthropic model compat stream idle timeout floor", () => {
+	const baseModel = {
+		id: "claude-sonnet-4-5",
+		name: "Claude Sonnet 4.5",
+		api: "anthropic-messages" as const,
+		provider: "anthropic",
+		baseUrl: "https://api.anthropic.com",
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 200_000,
+		maxTokens: 8_192,
+	} satisfies Parameters<typeof buildModel>[0];
+
+	function createStalledAfterFirstEventClient(onIteratorStart?: () => void): {
+		attempt: () => number;
+		client: AnthropicMessagesClientLike;
+	} {
+		let attempt = 0;
+		const create = ((_body: unknown, requestOptions?: { signal?: AbortSignal }) => {
+			attempt += 1;
+			return createAnthropicMockStream({
+				signal: requestOptions?.signal,
+				events: [
+					{
+						type: "message_start",
+						message: {
+							id: "msg_compat_stall",
+							usage: {
+								input_tokens: 12,
+								output_tokens: 0,
+								cache_read_input_tokens: 0,
+								cache_creation_input_tokens: 0,
+							},
+						},
+					},
+				],
+				hangAfterEvents: true,
+				onIteratorStart,
+			}) as never;
+		}) as unknown as AnthropicMessagesClientLike["messages"]["create"];
+		return { attempt: () => attempt, client: { messages: { create } } as AnthropicMessagesClientLike };
+	}
+
+	it("uses model.compat.streamIdleTimeoutMs as the idle floor when no caller option is set", async () => {
+		const compatModel = buildModel({ ...baseModel, compat: { streamIdleTimeoutMs: 50 } });
+		const { attempt, client } = createStalledAfterFirstEventClient();
+
+		const result = await streamAnthropic(compatModel, context, {
+			client,
+			streamFirstEventTimeoutMs: 5_000,
+		}).result();
+
+		expect(attempt()).toBe(1);
+		expect(result.stopReason).toBe("error");
+		expect(result.errorMessage).toBe("Anthropic stream stalled while waiting for the next event");
+	});
+
+	it("disables the idle watchdog when model.compat.streamIdleTimeoutMs is 0", async () => {
+		vi.useFakeTimers();
+		const compatModel = buildModel({ ...baseModel, compat: { streamIdleTimeoutMs: 0 } });
+		const controller = new AbortController();
+		let iteratorStarted = false;
+		const { attempt, client } = createStalledAfterFirstEventClient(() => {
+			iteratorStarted = true;
+		});
+
+		let settled = false;
+		const resultPromise = streamAnthropic(compatModel, context, {
+			client,
+			signal: controller.signal,
+			// First-event watchdog stays out of this case's scope: it would need to
+			// be cleared by the mock's first event, and fake-timer advancement can
+			// outrun the microtask that consumes that event under filtered runs.
+			streamFirstEventTimeoutMs: 0,
+		}).result();
+		void resultPromise.then(
+			() => {
+				settled = true;
+			},
+			() => {
+				settled = true;
+			},
+		);
+
+		await drainMicrotasksUntil(
+			() => iteratorStarted,
+			"Anthropic mock stream did not start for the compat-disabled watchdog test",
+		);
+		// Well past the default 300s idle floor: the disabled watchdog must not
+		// classify the post-first-event silence as a stall.
+		vi.advanceTimersByTime(400_000);
+		await drainMicrotasksUntil(
+			() => vi.getTimerCount() === 0,
+			"Anthropic watchdog timer did not drain after advancing past the idle budget",
+		);
+		expect(settled).toBe(false);
+		expect(attempt()).toBe(1);
+
+		controller.abort();
+		const result = await resolveAfterMicrotasks(
+			resultPromise,
+			"Anthropic compat-disabled stream did not settle after the caller aborted",
+		);
+		expect(result.stopReason).toBe("aborted");
 	});
 });
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
-import { googleVertexModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/google";
+import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
+import { googleVertexModelManagerOptions } from "@musepi/pi-catalog/provider-models/google";
 import {
 	MODELS_DEV_PROVIDER_DESCRIPTORS,
 	mapModelsDevToModels,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
+} from "@musepi/pi-catalog/provider-models/openai-compat";
 
 const googleVertexModelsDevPayload = {
 	"google-vertex": {
@@ -44,7 +44,7 @@ const googleVertexModelsDevPayload = {
 } satisfies Record<string, unknown>;
 
 describe("google-vertex model catalog", () => {
-	it("maps the models.dev Vertex catalog instead of the project discovery endpoint", () => {
+	it("maps the stencil.so Vertex catalog instead of the project discovery endpoint", () => {
 		const models = mapModelsDevToModels(googleVertexModelsDevPayload, MODELS_DEV_PROVIDER_DESCRIPTORS).filter(
 			model => model.provider === "google-vertex",
 		);

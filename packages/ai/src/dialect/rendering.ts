@@ -1,4 +1,4 @@
-import { stringifyJson as stringifyJsonValue } from "@oh-my-pi/pi-utils";
+import { stringifyJson as stringifyJsonValue } from "@musepi/pi-utils";
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "../types";
 import type { DialectRenderOptions, DialectToolResult } from "./types";
 
@@ -17,6 +17,60 @@ export function harmonyRecipient(name: string): string {
 
 export function stringifyJson(value: unknown): string {
 	return stringifyJsonValue(value) ?? "null";
+}
+
+/**
+ * Render `name(key=value, …)` with Python-literal argument values. Top-level
+ * multiline strings render as verbatim `"""…"""` blocks so payload-carrying
+ * args (file content, scripts, patches) keep real newlines instead of `\n`
+ * escape soup; nested values always use escaped single-line literals.
+ */
+export function pyCall(name: string, args: Record<string, unknown>): string {
+	let kwargs = "";
+	for (const key in args) {
+		kwargs += `${kwargs ? ", " : ""}${key}=${pyArgValue(args[key])}`;
+	}
+	return `${name}(${kwargs})`;
+}
+
+function pyArgValue(value: unknown): string {
+	if (typeof value === "string" && value.includes("\n")) {
+		// Verbatim `"""` fencing is only unambiguous when the content cannot
+		// collide with the fence: no `"""` inside, no quote butting against a
+		// fence edge, no trailing backslash swallowing the closer.
+		const fenceSafe =
+			!value.includes('"""') && !value.startsWith('"') && !value.endsWith('"') && !value.endsWith("\\");
+		if (fenceSafe) return `"""${value}"""`;
+	}
+	return pyValue(value);
+}
+
+/** Render a JSON-ish value as a Python literal (`True`/`False`/`None`, escaped strings, lists, dicts). */
+export function pyValue(value: unknown): string {
+	if (value === null || value === undefined) return "None";
+	if (typeof value === "boolean") return value ? "True" : "False";
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : pyString(String(value));
+	if (typeof value === "string") return pyString(value);
+	if (Array.isArray(value)) return `[${value.map(pyValue).join(", ")}]`;
+	if (typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		let entries = "";
+		for (const key in record) {
+			entries += `${entries ? ", " : ""}${pyString(key)}: ${pyValue(record[key])}`;
+		}
+		return `{${entries}}`;
+	}
+	return pyString(String(value));
+}
+
+function pyString(value: string): string {
+	const escaped = value
+		.replaceAll("\\", "\\\\")
+		.replaceAll('"', '\\"')
+		.replaceAll("\n", "\\n")
+		.replaceAll("\r", "\\r")
+		.replaceAll("\t", "\\t");
+	return `"${escaped}"`;
 }
 
 export function escapeXmlAttr(value: string): string {

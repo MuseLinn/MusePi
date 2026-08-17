@@ -118,6 +118,86 @@ export function parseBazelFilesOutput(output: string): string[] {
 	return files;
 }
 
+/**
+ * Content hash of the native Rust sources an addon is built from. Covers every
+ * source file under `crates/pi-natives/` and `crates/pi-voice/` (the two crates
+ * that compile into the pi_natives addon). Deterministic: stable path order,
+ * one SHA-256 over `path:size:hash` lines, so irrelevant metadata (mtime,
+ * mode) never perturbs it.
+ */
+export async function computeNativeSourceHash(repoRoot: string): Promise<string> {
+	const crypto = await import("node:crypto");
+	const { glob } = await import("glob");
+	const roots = ["crates/pi-natives", "crates/pi-voice"];
+	const entries: { rel: string; content: Buffer }[] = [];
+	for (const root of roots) {
+		const files = await glob([`${root}/**/*.rs`, `${root}/**/Cargo.toml`, `${root}/**/BUILD.bazel`], {
+			cwd: repoRoot,
+			absolute: false,
+			dot: false,
+			ignore: ["**/target/**", "**/bazel-*/**"],
+		});
+		files.sort();
+		for (const rel of files) {
+			const content = await fs.readFile(path.join(repoRoot, rel));
+			entries.push({ rel, content });
+		}
+	}
+	entries.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+	const hash = crypto.createHash("sha256");
+	for (const { rel, content } of entries) {
+		hash.update(`${rel}:${content.length}:`);
+		hash.update(content);
+		hash.update("\n");
+	}
+	return hash.digest("hex");
+}
+
+/**
+ * Rebuild the host addon via cargo (musepi-local fallback for bazel's broken
+ * macOS link path). Runs `cargo build -p pi-natives --release` with the same
+ * nightly the bazel toolchain pins (rustup toolchain must provide it), then
+ * copies `target/release/libpi_natives.dylib` into destDir under the addon's
+ * canonical name. Returns the installed path, or null on any failure (caller
+ * falls through to bazel).
+ */
+async function tryCargoHostBuild(hostTarget: string, destDir: string): Promise<string | null> {
+	try {
+		const cargo = Bun.which("cargo");
+		if (!cargo) {
+			console.warn("cargo not found on PATH; skipping cargo rebuild");
+			return null;
+		}
+		const proc = Bun.spawn([cargo, "build", "-p", "pi-natives", "--release"], {
+			cwd: repoRoot,
+			stdout: "inherit",
+			stderr: "pipe",
+			env: { ...Bun.env },
+		});
+		const decoder = new TextDecoder();
+		let stderrTail = "";
+		for await (const chunk of proc.stderr) {
+			const text = decoder.decode(chunk, { stream: true });
+			process.stderr.write(text);
+			stderrTail = (stderrTail + text).split("\n").slice(-10).join("\n");
+		}
+		const exitCode = await proc.exited;
+		if (exitCode !== 0) {
+			console.warn(`cargo build failed (exit ${exitCode}):\n${stderrTail}`);
+			return null;
+		}
+		const dylib = path.join(repoRoot, "target/release/libpi_natives.dylib");
+		await fs.stat(dylib);
+		const destPath = path.join(destDir, ADDON_OUTPUTS[hostTarget]);
+		await installAddon(dylib, destPath);
+		console.log(`cargo-built ${hostTarget} → ${destPath}`);
+		return destPath;
+	} catch (err) {
+		console.warn(`cargo rebuild unavailable: ${err instanceof Error ? err.message : String(err)}`);
+		return null;
+	}
+}
+
 /** Parsed options for the native addon build and artifact install modes. */
 export interface CliOptions {
 	targets: string[];
@@ -212,13 +292,153 @@ async function installAddon(sourcePath: string, destPath: string): Promise<void>
 		await fs.unlink(tempPath).catch(() => {});
 		throw err;
 	}
+	// macOS only: ld64 ≥27036.1 misaligns the __LINKEDIT string pool of large
+	// addons (4-byte instead of 8-byte start) and macOS 26+ dyld rejects them
+	// at dlopen. Re-align the installed bytes so local rebuilds are loadable.
+	if (process.platform === "darwin") {
+		const { alignLinkEdit } = await import("./fix-linkedit-align.ts");
+		const patched = await alignLinkEdit(destPath);
+		if (patched) console.log(`LINKEDIT-aligned ${destPath}`);
+	}
+}
+
+async function buildWindowsHostAddon(host: HostInfo, destDir: string): Promise<void> {
+	const script = path.join(repoRoot, "packages/natives/scripts/build-bindings.ts");
+	console.log(`win32 host: bazel msvc toolchain is linux/mac-only; building via ${path.relative(repoRoot, script)}`);
+	const proc = Bun.spawn([process.execPath, script], {
+		cwd: repoRoot,
+		stdout: "inherit",
+		stderr: "inherit",
+	});
+	const exitCode = await proc.exited;
+	if (exitCode !== 0) process.exit(exitCode || 1);
+
+	const filename = `pi_natives.win32-x64-${host.avx2 ? "modern" : "baseline"}.node`;
+	const builtPath = path.join(repoRoot, "packages/natives/native", filename);
+	if (path.dirname(builtPath) !== destDir) {
+		await fs.mkdir(destDir, { recursive: true });
+		await installAddon(builtPath, path.join(destDir, filename));
+	}
+	console.log(`installed ${filename} → ${path.join(destDir, filename)}`);
 }
 
 async function main(): Promise<void> {
 	const options = parseCliArgs(process.argv.slice(2));
 	const host: HostInfo = { platform: process.platform, arch: process.arch, avx2: detectHostAvx2Support() };
 	const destDir = options.dest ? path.resolve(options.dest) : path.join(repoRoot, "packages/natives/native");
-	let outputs: string[];
+
+	if (host.platform === "win32" && !options.source) {
+		if (options.targets.length !== 1 || options.targets[0] !== "host") {
+			throw new Error(
+				`Cannot bazel-build [${options.targets.join(", ")}] on a Windows host: the msvc cross ` +
+					"toolchain (bazel/toolchains/msvc) only runs on linux/mac exec hosts. Use `host` here " +
+					"(local napi build via VS Build Tools), or run this script from WSL/linux for cross targets.",
+			);
+		}
+		await buildWindowsHostAddon(host, destDir);
+		return;
+	}
+	let outputs: string[] = [];
+
+	// musepi-local build resilience: when the requested target set is exactly
+	// the host addon and --dest already contains a loadable copy matching the
+	// current version sentinel AND the native sources it was built from, skip
+	// bazel entirely. The host toolchain (ld) can produce LINKEDIT-misaligned
+	// dylibs that dlopen refuses (macOS 27 / ld-27036.1 regression); an existing
+	// working addon (e.g. the upstream-published prebuilt) is preferred over
+	// rebuilding a broken one. CI (macOS-14 runners, older ld) and machines
+	// without a prebuilt fall through to bazel exactly as upstream.
+	//
+	// Two independent guards, both must pass to reuse an existing addon:
+	//   1. Sentinel — the addon exports `__piNativesV<version>` (catches a
+	//      version-mismatched stale prebuilt; matches upstream's loader check).
+	//   2. Source fingerprint — the addon records a hash of the native sources
+	//      it was built from in `native/.source-hash`. If the sources on disk
+	//      hash differently (natives Rust code moved without a version bump),
+	//      the guard rebuilds instead of silently shipping a stale addon.
+	// `OMP_NATIVES_FORCE_BUILD=1` bypasses both (escape hatch for manual
+	// rebuilds, e.g. after upgrading the local toolchain).
+	const hostTarget = hostTargetName(host);
+	const hostOnly =
+		options.targets.length === 1 &&
+		(options.targets[0] === "host" || options.targets[0] === hostTarget) &&
+		!options.source;
+	const forceBuild = Bun.env.OMP_NATIVES_FORCE_BUILD === "1";
+	// Hoisted so both the reuse-guard and the cargo-fallback branch share it.
+	const sourceHash = await computeNativeSourceHash(repoRoot);
+	if (hostOnly && !forceBuild) {
+		const existing = path.join(destDir, ADDON_OUTPUTS[hostTarget]);
+		const packageJson = JSON.parse(
+			await fs.readFile(path.join(repoRoot, "packages/natives/package.json"), "utf8"),
+		) as { version: string };
+		const expectedSentinel = `__piNativesV${packageJson.version.replace(/[^A-Za-z0-9]/g, "_")}`;
+		const hashFile = path.join(destDir, ".source-hash");
+		try {
+			const stat = await fs.stat(existing);
+			if (stat.isFile() && stat.size > 0) {
+				// Node-API modules must load via require()/process.dlopen — bun's
+				// import() rejects them, and dlopen failures surface as throws.
+				// A script file (not `bun -e`) enforces the failure like upstream
+				// CI's smoke-addons.js; `bun -e` would swallow it.
+				const { createRequire } = await import("node:module");
+				const require = createRequire(import.meta.url);
+				const mod = require(existing);
+				if (expectedSentinel in (mod as Record<string, unknown>)) {
+					let recordedHash: string | null = null;
+					try {
+						recordedHash = (await fs.readFile(hashFile, "utf8")).trim();
+					} catch {
+						// No fingerprint on disk.
+					}
+					if (recordedHash === sourceHash) {
+						console.log(
+							`using existing loadable addon ${existing} (sentinel ${expectedSentinel}, sources ${sourceHash.slice(0, 8)}); skipping bazel build`,
+						);
+						return;
+					}
+					if (recordedHash === null) {
+						// First run with an un-fingerprinted prebuilt (e.g. the
+						// upstream-published addon dropped into native/). It passes
+						// the sentinel check and the sources on disk are the ones it
+						// was built from, so adopt it: record the current source hash
+						// and reuse. From here on, any source drift rebuilds.
+						await fs.writeFile(hashFile, `${sourceHash}\n`, "utf8");
+						console.log(
+							`adopting existing addon ${existing} (sentinel ${expectedSentinel}); recorded source hash ${sourceHash.slice(0, 8)}; skipping bazel build`,
+						);
+						return;
+					}
+					console.warn(
+						`existing addon ${existing} sources ${recordedHash.slice(0, 8)} != on-disk ${sourceHash.slice(0, 8)}; rebuilding via bazel`,
+					);
+				} else {
+					console.warn(`existing addon ${existing} lacks sentinel ${expectedSentinel}; rebuilding via bazel`);
+				}
+			}
+		} catch {
+			// Missing or unloadable — fall through to a real bazel build.
+		}
+	}
+
+	// musepi-local: prefer a cargo rebuild over bazel when one is needed and
+	// cargo is available. Bazel's rules_rust link path can emit LINKEDIT-
+	// misaligned dylibs on macOS (ld-27036.1 + large outputs) that dlopen
+	// refuses, while the equivalent cargo build links cleanly (verified).
+	// Only the single host addon is rebuilt this way; multi-target/CI builds
+	// (linux-all, darwin-all, explicit targets, --source) keep using bazel.
+	if (hostOnly && outputs.length === 0) {
+		const cargoPath = await tryCargoHostBuild(hostTarget, destDir);
+		if (cargoPath) {
+			// tryCargoHostBuild already installed the addon into destDir; record
+			// the source fingerprint and return — no bazel, no re-install.
+			await fs.writeFile(path.join(destDir, ".source-hash"), `${sourceHash}\n`, "utf8").catch(() => {});
+			console.log(`cargo rebuild complete; recorded source hash ${sourceHash.slice(0, 8)}`);
+			return;
+		}
+		if (!forceBuild) {
+			console.warn("cargo rebuild unavailable or failed; falling through to bazel");
+		}
+	}
 
 	if (options.source) {
 		const sourceDir = path.resolve(options.source);
@@ -282,6 +502,17 @@ async function main(): Promise<void> {
 		const destPath = path.join(destDir, path.basename(output));
 		await installAddon(absolute, destPath);
 		console.log(`installed ${path.basename(output)} → ${destPath}`);
+	}
+	// Record the source fingerprint of what was just installed so the guard in
+	// main() can later tell a same-version stale addon from a current one.
+	// Best-effort: a hash write failure must not fail the install.
+	if (options.dest || options.targets.some(t => t === "host" || t in ADDON_OUTPUTS)) {
+		try {
+			const sourceHash = await computeNativeSourceHash(repoRoot);
+			await fs.writeFile(path.join(destDir, ".source-hash"), `${sourceHash}\n`, "utf8");
+		} catch {
+			// Ignore — the addon itself is installed; the hash only affects reuse.
+		}
 	}
 }
 

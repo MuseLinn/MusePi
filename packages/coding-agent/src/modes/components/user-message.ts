@@ -1,5 +1,6 @@
-import { type Component, Container, Markdown } from "@oh-my-pi/pi-tui";
-import { formatBytes } from "@oh-my-pi/pi-utils";
+import { type Component, Container, Markdown } from "@musepi/pi-tui";
+import { formatBytes } from "@musepi/pi-utils";
+import { t } from "../../i18n/index.js";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import { imageReferenceHyperlink, renderPlaceholders } from "../image-references";
 import { highlightMagicKeywords } from "../magic-keywords";
@@ -152,7 +153,7 @@ function summarizeSyntheticInput(text: string): string {
 	const size = formatBytes(Buffer.byteLength(text, "utf-8"));
 	const lineCount = text === "" ? 0 : text.split("\n").length;
 	const dot = theme.sep.dot.trim();
-	return `${syntheticInputLabel(text)} ${dot} ${size} ${dot} ${lineCount} line${lineCount === 1 ? "" : "s"}`;
+	return `${syntheticInputLabel(text)} ${dot} ${size} ${dot} ${lineCount === 1 ? t("{0} line", String(lineCount)) : t("{0} lines", String(lineCount))}`;
 }
 
 /** First Markdown heading text in `text`, else `Synthetic input`. */
@@ -161,7 +162,7 @@ function syntheticInputLabel(text: string): string {
 		const line = raw.trim();
 		if (!line) continue;
 		const heading = /^#{1,6}\s+(.*)$/.exec(line);
-		return heading ? heading[1]!.trim() || "Synthetic input" : "Synthetic input";
+		return heading ? heading[1]!.trim() || t("Synthetic input") : t("Synthetic input");
 	}
-	return "Synthetic input";
+	return t("Synthetic input");
 }

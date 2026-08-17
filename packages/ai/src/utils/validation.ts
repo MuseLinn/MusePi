@@ -1,31 +1,18 @@
 /**
  * Tool-call argument validation pipeline.
  *
- * Tools may declare their parameters as either Zod schemas (canonical) or
- * plain JSON Schema (legacy / extensions). This module is the single
- * entrypoint the agent calls before dispatching a tool — it:
- *
- *   1. Builds (or fetches from cache) a `ValidationContext` for the tool —
- *      the Zod schema if available plus the equivalent wire JSON Schema, or
- *      just the JSON Schema for non-Zod tools.
- *   2. Normalizes LLM quirks (null / "null" → omit-or-default substitution)
- *      against the JSON Schema before validation.
- *   3. Validates with the Zod or JSON-Schema validator.
- *   4. On failure, walks the resulting issues and coerces common LLM type
- *      drift (JSON-stringified values, boolean/number/string scalar drift),
- *      drops unrecognized keys, and retries up to `MAX_COERCION_PASSES` times.
- *   5. Throws a formatted error if reconciliation fails; otherwise returns
- *      the parsed arguments with original unknown root fields preserved (so
- *      hallucinated top-level keys still surface to the caller).
+ * Tools may declare ArkType schemas or plain JSON Schema. This module builds a
+ * cached validation context, normalizes common LLM quirks against the wire
+ * schema, validates, performs conservative schema-directed coercions, and
+ * returns parsed arguments while preserving unknown root fields.
  *
  * The goal is to be conservative: every coercion is a structural rewrite that
  * keeps the schema in charge of acceptance — we never invent values, only
  * massage shapes the LLM almost got right.
  */
-import { structuredCloneJSON } from "@oh-my-pi/pi-utils";
-import { type Type, type } from "arktype";
-import type { ZodType } from "zod/v4";
-import type { $ZodIssue as ZodIssue } from "zod/v4/core";
+
+import { type Type, type } from "@musepi/omptype";
+import { structuredCloneJSON } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import type { Tool, ToolCall } from "../types";
 import { upgradeJsonSchemaTo202012 } from "./schema/draft";
@@ -35,7 +22,7 @@ import {
 	validateJsonSchemaValue,
 } from "./schema/json-schema-validator";
 import { stamp } from "./schema/stamps";
-import { arkToWireSchema, isArkSchema, isZodSchema, zodToWireSchema } from "./schema/wire";
+import { arkToWireSchema, isArkSchema } from "./schema/wire";
 
 // ============================================================================
 // Type Coercion Utilities
@@ -46,12 +33,8 @@ import { arkToWireSchema, isArkSchema, isZodSchema, zodToWireSchema } from "./sc
 // `"[1, 2, 3]"`, a boolean as `"yes"` or `1`, or a string field as a structured
 // object that should be embedded verbatim.
 //
-// Rather than rejecting these outright, we attempt automatic coercion:
-//   1. Validate against the tool's schema (Zod, derived from TypeBox when the
-//      tool was authored with TypeBox).
-//   2. For each type error, perform only the schema-directed rewrite that
-//      matches the expected type.
-//   3. Re-validate the full argument object after each coercion pass.
+// Rather than rejecting these outright, validate against the declared schema
+// and perform only schema-directed rewrites for reported type errors.
 //
 // This is intentionally conservative: each rewrite is small and validation
 // remains the source of truth for whether the result is accepted.
@@ -527,13 +510,11 @@ function tryParseJsonForTypes(value: string, expectedTypes: string[], depth = 0)
 // JSON Pointer Utilities (RFC 6901)
 // ============================================================================
 //
-// Internally we still address error locations using JSON Pointer syntax
-// (e.g., `/foo/0/bar`).  These utilities let coercion read and write values at
-// those paths regardless of whether the original error came from Zod or
-// from JSON-Schema-shaped normalization.
+// Error locations use JSON Pointer syntax so coercion can read and write
+// validator-reported paths uniformly.
 // ============================================================================
 
-/** Encode a structured Zod issue path as a JSON Pointer. */
+/** Encode a structured issue path as a JSON Pointer. */
 function pathToPointer(path: ReadonlyArray<PropertyKey>): string {
 	if (path.length === 0) return "";
 	return `/${path.map(seg => String(seg).replace(/~/g, "~0").replace(/\//g, "~1")).join("/")}`;
@@ -813,11 +794,8 @@ function normalizeOptionalNullsForSchema(
 	// with non-null unknown values are left intact so genuine schema mistakes
 	// still surface as validation errors.
 	//
-	// At the ROOT level we deliberately keep unknown null-valued keys intact:
-	// Zod-emitted wire schemas always set `additionalProperties: false`, but the
-	// post-validation `preserveUnknownRootFields` pass re-attaches root extras
-	// so callers can observe (and reject) hallucinated fields. Stripping here
-	// would erase the field before that snapshot, hiding the rejection signal.
+	// At the root level unknown null-valued keys stay intact; the
+	// post-validation `preserveUnknownRootFields` pass re-attaches root extras.
 	if (!isRoot && schemaObject.additionalProperties === false) {
 		const knownKeys = new Set(Object.keys(properties));
 		for (const key of Object.keys(nextValue)) {
@@ -1048,9 +1026,8 @@ function trimIdentifierStringLeaf(input: unknown): unknown {
 
 /**
  * Recursively strip trailing line terminators from string values whose property
- * key matches {@link IDENTIFIER_STRING_KEYS}. Runs by property name only
- * (schema-agnostic) so it fires uniformly across Zod, ArkType, and plain JSON
- * Schema tools while preserving nested payloads under content-carrying keys.
+ * key matches {@link IDENTIFIER_STRING_KEYS}. Runs by property name only so it
+ * fires uniformly across ArkType and plain JSON Schema tools.
  */
 function normalizeIdentifierStringWhitespace(value: unknown): { value: unknown; changed: boolean } {
 	if (Array.isArray(value)) {
@@ -1253,12 +1230,9 @@ function parsedArrayMatchesArrayBranch(schema: Record<string, unknown>, value: u
 
 /**
  * Pre-validation normalization: when a schema field accepts BOTH `string` and
- * `array`, providers that double-serialize tool arguments (e.g. Z.AI / GLM)
- * deliver array values as JSON-encoded strings like `'["a","b"]'`. Zod's
- * `union([string, array])` happily accepts that string against the string
- * branch, so the type-error driven coercion in {@link coerceArgsFromIssues}
- * never fires, and downstream tools treat the literal `["a","b"]` as a path
- * (silently producing zero matches or glob parse errors).
+ * `array`, providers that double-serialize tool arguments can deliver array
+ * values as JSON-encoded strings like `'["a","b"]'`. A string-or-array union
+ * accepts that value against the string branch before issue-driven coercion.
  *
  * Walk the schema; when both shapes are accepted AND the incoming value is a
  * JSON-array-shaped string, substitute the parsed array only if it validates
@@ -1386,90 +1360,13 @@ function normalizeSingleStringField(schema: unknown, value: unknown): { value: u
 	return { value, changed: false };
 }
 
-// ============================================================================
-// Zod issue → coercion bridge
-// ============================================================================
+// Validation issue → coercion bridge
 
 interface FlatIssue {
 	keyword: "type" | "unrecognized" | "other";
 	instancePath: string;
 	expectedTypes: string[];
 	unionBranch: boolean;
-}
-
-/**
- * Translate the Zod expected-type marker into the JSON-Schema type name our
- * coercion helpers already understand.
- */
-function mapZodExpectedToJsonSchemaType(expected: unknown): string | null {
-	if (typeof expected !== "string") return null;
-	switch (expected) {
-		case "string":
-		case "number":
-		case "boolean":
-		case "array":
-		case "object":
-		case "null":
-			return expected;
-		case "record":
-			return "object";
-		case "int":
-		case "bigint":
-			return "integer";
-		case "nan":
-			return "number";
-		default:
-			return null;
-	}
-}
-
-/**
- * Flatten Zod issues into a list of (path, expected-types) records suitable
- * for the coercion pass. Recurses through `invalid_union` so each inner
- * candidate produces independent coercion attempts.
- */
-function flattenIssues(issues: ReadonlyArray<ZodIssue>): FlatIssue[] {
-	const out: FlatIssue[] = [];
-	const walk = (issue: ZodIssue, prefix: ReadonlyArray<PropertyKey>, unionBranch: boolean): void => {
-		const fullPath = prefix.length === 0 ? issue.path : [...prefix, ...issue.path];
-		if (issue.code === "invalid_type") {
-			const mapped = mapZodExpectedToJsonSchemaType((issue as { expected?: unknown }).expected);
-			if (mapped) {
-				out.push({ keyword: "type", instancePath: pathToPointer(fullPath), expectedTypes: [mapped], unionBranch });
-				return;
-			}
-		}
-		if (issue.code === "unrecognized_keys") {
-			const keys = (issue as { keys?: ReadonlyArray<string> }).keys ?? [];
-			for (const key of keys) {
-				out.push({
-					keyword: "unrecognized",
-					instancePath: pathToPointer([...fullPath, key]),
-					expectedTypes: [],
-					unionBranch,
-				});
-			}
-			return;
-		}
-		if (issue.code === "invalid_union") {
-			const inner = (issue as unknown as { errors?: ReadonlyArray<ReadonlyArray<ZodIssue>> }).errors;
-			if (inner) {
-				// A union-branch issue only competes with a sibling branch when it
-				// sits at the union node's own path. Issues whose own path is
-				// non-empty live on a deeper field that an already-identified
-				// branch owns, so the singleton-array repair should still apply.
-				for (const branch of inner) {
-					for (const child of branch) {
-						walk(child, fullPath, child.path.length === 0);
-					}
-				}
-			}
-			return;
-		}
-		out.push({ keyword: "other", instancePath: pathToPointer(fullPath), expectedTypes: [], unionBranch });
-	};
-	for (const issue of issues) walk(issue, [], false);
-	return out;
 }
 
 /**
@@ -1481,11 +1378,9 @@ function flattenIssues(issues: ReadonlyArray<ZodIssue>): FlatIssue[] {
  *    accept boolean spellings, stringify non-null values for string fields,
  *    map booleans to numeric 0/1, and wrap singleton array values for non-union
  *    array expectations.
- *  - **unrecognized**: when a strict object received an extra key (Zod's
- *    `unrecognized_keys` or JSON Schema's `additionalProperties: false`),
- *    drop that key so re-validation succeeds. This effectively coerces every
- *    object schema to loose semantics recursively without rebuilding the
- *    underlying Zod tree.
+ *  - **unrecognized**: when a closed object received an extra key
+ *    (`additionalProperties: false`), drop that key so re-validation succeeds.
+ *    This effectively coerces object schemas to loose semantics recursively.
  *
  * The function is safe and conservative:
  *   - Only processes "type" and "unrecognized" issues
@@ -1551,11 +1446,6 @@ function coerceArgsFromIssues(args: unknown, issues: FlatIssue[]): { value: unkn
 
 type ValidationContext =
 	| {
-			kind: "zod";
-			zod: ZodType;
-			json: Record<string, unknown>;
-	  }
-	| {
 			kind: "arktype";
 			ark: Type;
 			json: Record<string, unknown>;
@@ -1576,9 +1466,7 @@ function getValidationContext(tool: Tool): ValidationContext {
 	return stamp(tool.parameters as object, kValidationContext, params =>
 		isArkSchema(params)
 			? { kind: "arktype", ark: params, json: arkToWireSchema(params) }
-			: isZodSchema(params)
-				? { kind: "zod", zod: params, json: zodToWireSchema(params) }
-				: { kind: "json", json: upgradeJsonSchemaTo202012(params) as Record<string, unknown> },
+			: { kind: "json", json: upgradeJsonSchemaTo202012(params) as Record<string, unknown> },
 	);
 }
 
@@ -1620,18 +1508,6 @@ function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
 }
 
 function validateContext(ctx: ValidationContext, value: unknown): ContextValidationResult {
-	if (ctx.kind === "zod") {
-		const result = ctx.zod.safeParse(value);
-		if (result.success) {
-			return { success: true, value: preserveUnknownRootFields(value, result.data) };
-		}
-		return {
-			success: false,
-			flatIssues: flattenIssues(result.error.issues),
-			messages: result.error.issues.map(issue => `  - ${formatIssuePath(issue.path)}: ${issue.message}`),
-		};
-	}
-
 	if (ctx.kind === "arktype") {
 		const out = ctx.ark(value);
 		if (!(out instanceof type.errors)) {
@@ -1849,10 +1725,8 @@ function truncateArgsForError(value: unknown): unknown {
 }
 
 /**
- * Validates tool call arguments against the tool's schema (Zod or plain JSON
- * Schema). Applies LLM-quirk coercions (numeric strings, JSON-string
- * containers, null/invalid-empty-string-for-optional, null-for-default) before
- * declaring failure.
+ * Validates tool call arguments against an ArkType or plain JSON Schema schema.
+ * Applies conservative LLM-quirk normalization before declaring failure.
  *
  * @throws Error with a formatted message when validation cannot be reconciled.
  */
@@ -1915,9 +1789,7 @@ export function validateToolArguments(tool: Tool, toolCall: ToolCall): ToolCall[
 	}
 
 	// Then re-shape JSON-stringified arrays whose schema accepts both string
-	// and array (e.g. `paths: string | string[]`). Without this, zod accepts
-	// the literal `'["a","b"]'` as a string and downstream tools treat it as
-	// a single path with embedded glob brackets — silent zero results.
+	// and array. Otherwise downstream tools receive the encoded string.
 	const stringEncodedArrayNorm = normalizeStringEncodedArrayUnions(json, normalizedArgs);
 	if (stringEncodedArrayNorm.changed) {
 		normalizedArgs = stringEncodedArrayNorm.value;

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { type Component, Text } from "@musepi/pi-tui";
 import { Settings, settings } from "../../../src/config/settings";
 import { renderMCPResult } from "../../../src/mcp/render";
 import type { MCPToolDetails } from "../../../src/mcp/tool-bridge";
@@ -103,6 +103,37 @@ describe("ToolExecutionComponent custom renderer failures", () => {
 			text = visibleText(component.render(80));
 		}).not.toThrow();
 		expect(text).toContain(rawResultText);
+	});
+
+	it("renders a same-named extension tool result with the generic renderer", () => {
+		const resultText = "recalled postgres memory";
+		const tool: AgentTool = {
+			name: "recall",
+			label: "Extension Recall",
+			description: "recalls external memory",
+			parameters: { type: "object", additionalProperties: true },
+			async execute() {
+				return { content: [{ type: "text", text: resultText }] };
+			},
+		};
+		const ui: ToolExecutionUi = {
+			requestRender() {},
+			requestComponentRender(_component: Component) {},
+			resetDisplay() {},
+		};
+		const component = new ToolExecutionComponent(
+			"recall",
+			{ query: "project context" },
+			{ showImages: false, useBuiltInRenderer: false },
+			tool,
+			ui,
+			process.cwd(),
+		);
+		component.updateResult({ content: [{ type: "text", text: resultText }] }, false);
+
+		const rendered = visibleText(component.render(80));
+		expect(rendered).toContain(resultText);
+		expect(rendered).not.toContain("no matches");
 	});
 });
 

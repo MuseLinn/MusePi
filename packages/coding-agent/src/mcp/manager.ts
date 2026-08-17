@@ -6,8 +6,8 @@
  */
 import * as path from "node:path";
 import * as url from "node:url";
-import { isDefinitiveOAuthFailure, type TSchema } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import { isDefinitiveOAuthFailure, type TSchema } from "@musepi/pi-ai";
+import { logger } from "@musepi/pi-utils";
 import type { SourceMeta } from "../capability/types";
 import { resolveConfigValue } from "../config/resolve-config-value";
 import type { CustomTool } from "../extensibility/custom-tools/types";
@@ -37,6 +37,7 @@ import type { McpConnectionStatusEvent } from "./startup-events";
 import type { MCPToolDetails } from "./tool-bridge";
 import { DeferredMCPTool, MCPTool } from "./tool-bridge";
 import type { MCPToolCache } from "./tool-cache";
+import { setGeneratedHeader } from "./transports/header-policy";
 import type {
 	MCPAuthChallenge,
 	MCPGetPromptResult,
@@ -1458,13 +1459,11 @@ export class MCPManager {
 
 				if (credential) {
 					if (resolved.type === "http" || resolved.type === "sse") {
-						resolved = {
-							...resolved,
-							headers: {
-								...resolved.headers,
-								Authorization: `Bearer ${credential.access}`,
-							},
-						};
+						// Client-generated authorization wins over any configured header
+						// with the same case-insensitive name (Agent Plugins §7.2.1).
+						const headers = { ...resolved.headers };
+						setGeneratedHeader(headers, "Authorization", `Bearer ${credential.access}`);
+						resolved = { ...resolved, headers };
 					} else {
 						resolved = {
 							...resolved,
@@ -1481,7 +1480,9 @@ export class MCPManager {
 		}
 
 		if (resolved.type !== "http" && resolved.type !== "sse") {
-			if (resolved.env) {
+			// Literal env values (Agent Plugins §§4.1/9.2) are opaque package data:
+			// no env-name lookup, no `!command` execution, no dropping empty values.
+			if (resolved.env && resolved.envPolicy !== "literal") {
 				const nextEnv: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.env)) {
 					const resolvedValue = await resolveConfigValue(value);
@@ -1490,7 +1491,9 @@ export class MCPManager {
 				resolved = { ...resolved, env: nextEnv };
 			}
 		} else {
-			if (resolved.headers) {
+			// Origin-locked servers (Agent Plugins §9.2) carry literal header
+			// values: no placeholder or environment-variable expansion.
+			if (resolved.headers && resolved.headerPolicy !== "origin-locked") {
 				const nextHeaders: Record<string, string> = {};
 				for (const [key, value] of Object.entries(resolved.headers)) {
 					const resolvedValue = await resolveConfigValue(value);

@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { enforcePlanModeWrite, resolvePlanPath } from "@oh-my-pi/pi-coding-agent/tools/plan-mode-guard";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import type { PlanModeState } from "@musepi/pi-coding-agent/plan-mode/state";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { enforcePlanModeWrite, resolvePlanPath } from "@musepi/pi-coding-agent/tools/plan-mode-guard";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const ARTIFACTS_DIR = path.join(os.tmpdir(), "agent-artifacts");
 const REPO_ROOT = path.join(os.tmpdir(), "repo");

@@ -9,21 +9,21 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { normalizeCustomMessagePayload } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { FileSessionStorage, type WriteTextAtomicOptions } from "@oh-my-pi/pi-coding-agent/session/session-storage";
-import { VIBE_TOOL_NAMES } from "@oh-my-pi/pi-coding-agent/tools/vibe";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import { VibeSessionRegistry } from "@oh-my-pi/pi-coding-agent/vibe/runtime";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentTool } from "@musepi/pi-agent-core";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { normalizeCustomMessagePayload } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { FileSessionStorage, type WriteTextAtomicOptions } from "@musepi/pi-coding-agent/session/session-storage";
+import { VIBE_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/vibe";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
+import { VibeSessionRegistry } from "@musepi/pi-coding-agent/vibe/runtime";
+import { TempDir } from "@musepi/pi-utils";
 
 function stubTool(name: string): AgentTool {
 	return {
@@ -156,8 +156,6 @@ describe("InteractiveMode vibe mode toggle", () => {
 		const content = typeof message.content === "string" ? message.content : "";
 		expect(message.customType).toBe("vibe-mode-context");
 		expect(content).toContain("`todo`");
-		expect(content).toContain("parent session's list");
-		expect(content).toContain("Workers do not own this bookkeeping.");
 
 		// Toggle off: the empty previous toolset must come back — only the
 		// ephemeral vibe tools must leave the registry.

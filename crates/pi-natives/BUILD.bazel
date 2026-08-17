@@ -32,7 +32,12 @@ rust_shared_library(
         # keeps the addon resident across Worker teardown on linux-gnu (napi
         # emits it for gnu; harmless under musl's loader). windows-msvc needs
         # nothing — napi-sys v3 imports node.exe via raw-dylib.
-        "@platforms//os:macos": ["-Clink-arg=-Wl,-undefined,dynamic_lookup"],
+        "@platforms//os:macos": [
+            # ld64 ≥27036.1 misaligns the __LINKEDIT string pool on large
+            # addons and macOS 26+ dyld rejects them; installAddon re-aligns
+            # the produced bytes (scripts/fix-linkedit-align.ts).
+            "-Clink-arg=-Wl,-undefined,dynamic_lookup",
+        ],
         "@platforms//os:linux": ["-Clink-arg=-Wl,-z,nodelete"],
         "//conditions:default": [],
     }) + select({
@@ -47,7 +52,7 @@ rust_shared_library(
         "//crates/pi-ast",
         "//crates/pi-iso",
         "//crates/pi-shell",
-        "//crates/pi-uutils-ctx",
+        "//crates/pi-voice",
         "//crates/pi-walker",
     ],
 )

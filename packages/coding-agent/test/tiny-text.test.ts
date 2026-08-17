@@ -5,8 +5,8 @@ import {
 	MAX_TINY_MESSAGE_CHARS,
 	preprocessTinyMessage,
 	stripCodeBlocks,
-} from "@oh-my-pi/pi-coding-agent/tiny/message-preproc";
-import { isLowSignalTitleInput, NO_TITLE_SENTINEL, normalizeGeneratedTitle } from "@oh-my-pi/pi-coding-agent/tiny/text";
+} from "@musepi/pi-coding-agent/tiny/message-preproc";
+import { isLowSignalTitleInput, NO_TITLE_SENTINEL, normalizeGeneratedTitle } from "@musepi/pi-coding-agent/tiny/text";
 
 describe("stripCodeBlocks", () => {
 	it("drops fenced code blocks but keeps the surrounding prose", () => {
@@ -141,6 +141,21 @@ describe("normalizeGeneratedTitle", () => {
 		expect(normalizeGeneratedTitle("")).toBeNull();
 		expect(normalizeGeneratedTitle("   ")).toBeNull();
 		expect(normalizeGeneratedTitle(null)).toBeNull();
+	});
+
+	it("rejects an overlong answer the model produced instead of a title", () => {
+		// Regression (#7303): a model that ignores the titling task and answers the
+		// user's question returns a full sentence; without a length bound the whole
+		// reply became the session title. Reject so the caller defers titling.
+		const answer =
+			"I don't have context on a \"registration system\" — that's not something I recognize from this conversation, and I don't see any prior discussion or code about it here";
+		expect(normalizeGeneratedTitle(answer, "how does the registration system work?")).toBeNull();
+		// Word-count bound: 13 short words stays under the char cap but is not a title.
+		expect(
+			normalizeGeneratedTitle("one two three four five six seven eight nine ten eleven twelve thirteen"),
+		).toBeNull();
+		// A normal 3-7 word title is unaffected.
+		expect(normalizeGeneratedTitle("Investigate the title resolver bug")).toBe("Investigate the title resolver bug");
 	});
 });
 

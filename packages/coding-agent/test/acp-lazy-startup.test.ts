@@ -1,5 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
+import type { Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createAcpConnection } from "@musepi/pi-coding-agent/modes/acp/acp-mode";
+import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
 import {
 	type Client,
 	ClientSideConnection,
@@ -9,15 +17,7 @@ import {
 	type RequestPermissionRequest,
 	type RequestPermissionResponse,
 	type SessionNotification,
-} from "@agentclientprotocol/sdk";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAcpConnection } from "@oh-my-pi/pi-coding-agent/modes/acp/acp-mode";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils/acp";
 
 const TEST_MODEL: Model = buildModel({
 	id: "claude-sonnet-4-20250514",
@@ -156,7 +156,7 @@ async function closeTransport(writable: WritableStream<unknown>): Promise<void> 
 
 describe("ACP lazy startup", () => {
 	it("applies schema defaults for ACP background jobs and preserves explicit overrides", async () => {
-		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
+		const { runRootCommand } = await import("@musepi/pi-coding-agent/main");
 
 		type ObservedBackgroundSettings = {
 			asyncEnabled: boolean;
@@ -247,7 +247,7 @@ describe("ACP lazy startup", () => {
 		// configured value (caller, project, --config overlay, or global) with the
 		// schema default. The fix (re-)added an `isConfigured` guard so explicit
 		// configuration survives, and the schema default only fills holes.
-		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
+		const { runRootCommand } = await import("@musepi/pi-coding-agent/main");
 
 		const explicit = {
 			"task.isolation.mode": "rcopy",
@@ -337,7 +337,7 @@ describe("ACP lazy startup", () => {
 	});
 
 	it("honors explicit todo settings for protocol hosts", async () => {
-		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
+		const { runRootCommand } = await import("@musepi/pi-coding-agent/main");
 
 		type ObservedTodoSettings = {
 			enabled: boolean;
@@ -489,8 +489,8 @@ describe("ACP lazy startup", () => {
 		const authStorage = await AuthStorage.create(path.join(cwd, "auth.db"));
 		try {
 			const settings = Settings.isolated({ "marketplace.autoUpdate": "off" });
-			const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
-			const { createAgentSession } = await import("@oh-my-pi/pi-coding-agent/sdk");
+			const { runRootCommand } = await import("@musepi/pi-coding-agent/main");
+			const { createAgentSession } = await import("@musepi/pi-coding-agent/sdk");
 			let session: AgentSession | undefined;
 			let sessionHasUI: boolean | undefined;
 			let deferredUsageReserveConfirmation: boolean | undefined;

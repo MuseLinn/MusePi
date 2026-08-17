@@ -1,7 +1,9 @@
-import { type ResolvedThinkingLevel, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { Effort, type Model, THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
-import { clampThinkingLevelForModel, getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+import { type ResolvedThinkingLevel, ThinkingLevel } from "@musepi/pi-agent-core";
+import { Effort, type Model, THINKING_EFFORTS } from "@musepi/pi-ai";
+import { clampThinkingLevelForModel, getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
+import { modelsAreEqual } from "@musepi/pi-catalog/models";
+
+export { CLI_THINKING_LEVELS } from "./cli/thinking-levels";
 
 /**
  * Metadata used to render thinking selector values in the coding-agent UI.
@@ -208,14 +210,6 @@ export function parseConfiguredThinkingLevel(value: string | null | undefined): 
 export function getConfiguredThinkingLevelMetadata(level: ConfiguredThinkingLevel): ConfiguredThinkingLevelMetadata {
 	return level === AUTO_THINKING ? AUTO_THINKING_METADATA : getThinkingLevelMetadata(level);
 }
-
-/**
- * Thinking selectors accepted by the `--thinking` CLI flag, in display order:
- * `off`, every concrete effort (`minimal`..`max`), then `auto`. Single source
- * for the flag's `options` list, shell completions, and the "invalid level"
- * warning so all three stay in sync.
- */
-export const CLI_THINKING_LEVELS: readonly string[] = [ThinkingLevel.Off, ...THINKING_EFFORTS, AUTO_THINKING];
 
 /**
  * Parses a `--thinking` CLI value. Accepts every {@link parseConfiguredThinkingLevel}

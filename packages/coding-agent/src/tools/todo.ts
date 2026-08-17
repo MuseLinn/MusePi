@@ -1,10 +1,10 @@
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { isRecord, prompt, sanitizeText } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
-import chalk from "chalk";
+import { type } from "@musepi/omptype";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { ToolExample } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
+import { isRecord, prompt, sanitizeText } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import todoDescription from "../prompts/tools/todo.md" with { type: "text" };

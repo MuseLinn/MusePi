@@ -1,0 +1,32 @@
+Extension Modules
+Skills
+Commands
+Hooks
+Prompts
+Instructions
+No MCP servers configured.
+Use {0} to add a server.
+Configured MCP Servers
+User level
+Project level
+(discovered servers):
+Failed to list servers: {0}
+Select provider to login:
+No OAuth providers available
+No stored provider credentials to log out
+No matching providers
+Provider unavailable in this environment.
+  Plugins
+  No plugins installed
+  Install npm plugins:        omp plugin install <package>
+  Install marketplace plugins: omp plugin install <name>@<marketplace>
+Session-only switch — role models stay unchanged
+Quick role switch — applies its model and thinking for this session
+↑/↓ models · Enter use for this session · type to search · @ quick roles · Esc close
+↑/↓ roles · Enter apply role model · type to search · Esc close
+Agent Hub
+no subagents yet — task spawns appear here
+j/k:select  Enter:open  r:revive  x:kill  Esc/←←:close
+Description is required.
+Extension Control Center
+Choose the interface language for setup and the TUI.

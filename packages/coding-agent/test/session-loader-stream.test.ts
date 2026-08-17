@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { FileEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import * as sessionLoader from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { serializeTitleSlot } from "@oh-my-pi/pi-coding-agent/session/session-title-slot";
+import type { FileEntry } from "@musepi/pi-coding-agent/session/session-entries";
+import * as sessionLoader from "@musepi/pi-coding-agent/session/session-loader";
+import { serializeTitleSlot } from "@musepi/pi-coding-agent/session/session-title-slot";
 
 // Parity contract for the ≥8MiB streaming loader (now Bun.JSONL-based): it must
 // produce the SAME entries + titleSlot as the common-path parser
@@ -86,7 +86,9 @@ describe("loadEntriesFromFileStream (Bun.JSONL parity)", () => {
 		].join("\n");
 		const file = await writeTemp(content);
 		const visited: FileEntry[] = [];
-		const titleSlot = await sessionLoader.visitEntriesFromFileStream(file, entry => visited.push(entry));
+		const titleSlot = await sessionLoader.visitEntriesFromFileStream(file, entry => {
+			visited.push(entry);
+		});
 
 		expect(titleSlot?.title).toBe("Visitor");
 		expect(entryIds(visited)).toEqual(["s1", "m1", "m2"]);
@@ -101,9 +103,33 @@ describe("loadEntriesFromFileStream (Bun.JSONL parity)", () => {
 		const file = await writeTemp(content);
 		const visited: FileEntry[] = [];
 
-		await sessionLoader.visitEntriesFromFileStream(file, entry => visited.push(entry));
+		await sessionLoader.visitEntriesFromFileStream(file, entry => {
+			visited.push(entry);
+		});
 
 		expect(entryIds(visited)).toEqual(["s1", "m1", "m2"]);
+	});
+
+	it("bounds visitor scans by physical records, including malformed lines", async () => {
+		const content = [
+			JSON.stringify(HEADER),
+			"{ malformed one",
+			"{ malformed two",
+			"{ malformed three",
+			JSON.stringify(msg("after-bad", "s1", "must not be visited")),
+		].join("\n");
+		const file = await writeTemp(content);
+		const visited: FileEntry[] = [];
+
+		await sessionLoader.visitEntriesFromFileStream(
+			file,
+			entry => {
+				visited.push(entry);
+			},
+			{ maxRecords: 2 },
+		);
+
+		expect(entryIds(visited)).toEqual(["s1"]);
 	});
 
 	it("propagates ENOENT errors thrown by the visitor", async () => {

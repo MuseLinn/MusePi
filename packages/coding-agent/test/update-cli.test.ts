@@ -4,8 +4,8 @@ import * as nodeFs from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as pluginCli from "@oh-my-pi/pi-coding-agent/cli/plugin-cli";
-import * as updateCli from "@oh-my-pi/pi-coding-agent/cli/update-cli";
+import * as pluginCli from "@musepi/pi-coding-agent/cli/plugin-cli";
+import * as updateCli from "@musepi/pi-coding-agent/cli/update-cli";
 import {
 	buildBunInstallArgs,
 	buildHomebrewUpdateArgs,
@@ -13,6 +13,7 @@ import {
 	buildMiseUpgradeArgs,
 	buildNpmInstallArgs,
 	downloadVerifiedBinary,
+	isMuslLinuxForTest,
 	parseUpdateArgs,
 	pruneBunInstallCache,
 	replaceBinaryForUpdate,
@@ -21,10 +22,10 @@ import {
 	resolveUpdateMethodForTest,
 	sweepStaleBackups,
 	updateViaBinaryAt,
-} from "@oh-my-pi/pi-coding-agent/cli/update-cli";
-import Update from "@oh-my-pi/pi-coding-agent/commands/update";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import type { CliConfig } from "@oh-my-pi/pi-utils/cli";
+} from "@musepi/pi-coding-agent/cli/update-cli";
+import Update from "@musepi/pi-coding-agent/commands/update";
+import { removeWithRetries } from "@musepi/pi-utils";
+import type { CliConfig } from "@musepi/pi-utils/cli";
 
 const tempDirs: string[] = [];
 
@@ -74,6 +75,29 @@ describe("parseUpdateArgs", () => {
 		expect(parseUpdateArgs(["update", "-l"])).toEqual({ force: false, check: false, plugins: true });
 	});
 });
+
+describe("update-cli libc detection", () => {
+	it("does not mistake an installed musl loader for a glibc host", () => {
+		expect(
+			isMuslLinuxForTest({
+				platform: "linux",
+				alpineRelease: false,
+				lddOutput: "ldd (Ubuntu GLIBC 2.39-0ubuntu8.7) 2.39",
+			}),
+		).toBe(false);
+	});
+
+	it("recognizes a musl host from ldd output", () => {
+		expect(
+			isMuslLinuxForTest({
+				platform: "linux",
+				alpineRelease: false,
+				lddOutput: "musl libc (x86_64)",
+			}),
+		).toBe(true);
+	});
+});
+
 describe("update-cli install target detection", () => {
 	it("uses bun update when prioritized omp is inside bun global bin", () => {
 		const method = resolveUpdateMethodForTest("/Users/test/.bun/bin/omp", "/Users/test/.bun/bin");
@@ -175,10 +199,10 @@ describe("update-cli install target detection", () => {
 
 	it("uses mise update when prioritized omp is in an active mise bin path", () => {
 		const method = resolveUpdateMethodForTest(
-			"/Users/test/.local/share/mise/installs/github-can1357-oh-my-pi/latest/bin/omp",
+			"/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin/omp",
 			undefined,
 			{
-				miseBinDirs: ["/Users/test/.local/share/mise/installs/github-can1357-oh-my-pi/latest/bin"],
+				miseBinDirs: ["/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin"],
 			},
 		);
 
@@ -196,13 +220,13 @@ describe("update-cli install target detection", () => {
 
 describe("update-cli package manager commands", () => {
 	it("targets the Homebrew tap formula and switches to reinstall for forced updates", () => {
-		expect(buildHomebrewUpdateArgs(false)).toEqual(["upgrade", "can1357/tap/omp"]);
-		expect(buildHomebrewUpdateArgs(true)).toEqual(["reinstall", "can1357/tap/omp"]);
+		expect(buildHomebrewUpdateArgs(false)).toEqual(["upgrade", "MuseLinn/tap/MusePi"]);
+		expect(buildHomebrewUpdateArgs(true)).toEqual(["reinstall", "MuseLinn/tap/MusePi"]);
 	});
 
 	it("targets the mise GitHub backend tool and force-reinstalls the checked version when requested", () => {
-		expect(buildMiseUpgradeArgs()).toEqual(["upgrade", "github:can1357/oh-my-pi", "--bump"]);
-		expect(buildMiseForceInstallArgs("15.10.5")).toEqual(["install", "--force", "github:can1357/oh-my-pi@15.10.5"]);
+		expect(buildMiseUpgradeArgs()).toEqual(["upgrade", "github:MuseLinn/MusePi", "--bump"]);
+		expect(buildMiseForceInstallArgs("15.10.5")).toEqual(["install", "--force", "github:MuseLinn/MusePi@15.10.5"]);
 	});
 
 	it("pins npm package installs to the official registry and the checked native package versions", () => {
@@ -210,9 +234,9 @@ describe("update-cli package manager commands", () => {
 
 		expect(args.slice(0, 2)).toEqual(["install", "-g"]);
 		expect(args).toContain("--registry=https://registry.npmjs.org/");
-		expect(args).toContain("@oh-my-pi/pi-coding-agent@16.3.15");
-		expect(args).toContain("@oh-my-pi/pi-natives@16.3.15");
-		expect(args).toContain("@oh-my-pi/pi-natives-win32-x64@16.3.15");
+		expect(args).toContain("@musepi/pi-coding-agent@16.3.15");
+		expect(args).toContain("@musepi/pi-natives@16.3.15");
+		expect(args).toContain("@musepi/pi-natives-win32-x64@16.3.15");
 	});
 });
 
@@ -225,28 +249,28 @@ describe("update-cli bun install command", () => {
 		//   - or bun's local manifest snapshot does the same when the user's bun
 		//     is already pointed at the official registry but its cache predates
 		//     the release.
-		// See https://github.com/can1357/oh-my-pi/issues/1686.
+		// See https://github.com/MuseLinn/MusePi/issues/1686.
 		const args = buildBunInstallArgs("15.7.6", "linux-x64");
 		expect(args.slice(0, 5)).toEqual([
 			"install",
 			"-g",
 			"--no-cache",
 			"--registry=https://registry.npmjs.org/",
-			"@oh-my-pi/pi-coding-agent@15.7.6",
+			"@musepi/pi-coding-agent@15.7.6",
 		]);
 	});
 
 	it("pins the native addon core and the platform-specific leaf to the same version so the loader sentinel cannot drift on supported tags", () => {
 		// Regression: bun install -g <pkg>@<v> would update only the top-level
-		// package, leaving @oh-my-pi/pi-natives and @oh-my-pi/pi-natives-<tag>
+		// package, leaving @musepi/pi-natives and @musepi/pi-natives-<tag>
 		// at their previous version. The next launch then loaded a stale .node
 		// file and aborted at validateLoadedBindings with `The .node file on
 		// disk is from a different release than this loader`. See
-		// https://github.com/can1357/oh-my-pi/issues/1824.
+		// https://github.com/MuseLinn/MusePi/issues/1824.
 		for (const tag of ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"]) {
 			const args = buildBunInstallArgs("15.9.0", tag);
-			expect(args).toContain("@oh-my-pi/pi-natives@15.9.0");
-			expect(args).toContain(`@oh-my-pi/pi-natives-${tag}@15.9.0`);
+			expect(args).toContain("@musepi/pi-natives@15.9.0");
+			expect(args).toContain(`@musepi/pi-natives-${tag}@15.9.0`);
 		}
 	});
 
@@ -257,8 +281,8 @@ describe("update-cli bun install command", () => {
 		// pipeline doesn't publish, otherwise bun aborts with EBADPLATFORM
 		// and hides the real diagnostic from `loadNative`'s aggregated error.
 		const args = buildBunInstallArgs("15.9.0", "linux-arm");
-		expect(args).toContain("@oh-my-pi/pi-natives@15.9.0");
-		expect(args.some(arg => arg.startsWith("@oh-my-pi/pi-natives-"))).toBe(false);
+		expect(args).toContain("@musepi/pi-natives@15.9.0");
+		expect(args.some(arg => arg.startsWith("@musepi/pi-natives-"))).toBe(false);
 	});
 
 	it("derives global node_modules from supported bun global locations", () => {
@@ -284,15 +308,15 @@ describe("update-cli bun cache pruning", () => {
 			path.join(dir, "react@19.2.6@@@1", "package.json"),
 			JSON.stringify({ name: "react", version: "19.2.6" }),
 		);
-		await Bun.write(path.join(dir, "@oh-my-pi", "pi-utils", "15.7.6@@@1"), "");
-		await Bun.write(path.join(dir, "@oh-my-pi", "pi-utils", "15.8.0@@@1"), "");
+		await Bun.write(path.join(dir, "@musepi", "pi-utils", "15.7.6@@@1"), "");
+		await Bun.write(path.join(dir, "@musepi", "pi-utils", "15.8.0@@@1"), "");
 		await Bun.write(
-			path.join(dir, "@oh-my-pi", "pi-utils@15.7.6@@@1", "package.json"),
-			JSON.stringify({ name: "@oh-my-pi/pi-utils", version: "15.7.6" }),
+			path.join(dir, "@musepi", "pi-utils@15.7.6@@@1", "package.json"),
+			JSON.stringify({ name: "@musepi/pi-utils", version: "15.7.6" }),
 		);
 		await Bun.write(
-			path.join(dir, "@oh-my-pi", "pi-utils@15.8.0@@@1", "package.json"),
-			JSON.stringify({ name: "@oh-my-pi/pi-utils", version: "15.8.0" }),
+			path.join(dir, "@musepi", "pi-utils@15.8.0@@@1", "package.json"),
+			JSON.stringify({ name: "@musepi/pi-utils", version: "15.8.0" }),
 		);
 		await Bun.write(path.join(dir, "chalk", "4.1.2@@@1"), "");
 		await Bun.write(path.join(dir, "chalk", "5.6.2@@@1"), "");
@@ -305,17 +329,17 @@ describe("update-cli bun cache pruning", () => {
 			JSON.stringify({ name: "chalk", version: "5.6.2" }),
 		);
 
-		const result = await pruneBunInstallCache(dir, new Set(["react", "@oh-my-pi/pi-utils"]));
+		const result = await pruneBunInstallCache(dir, new Set(["react", "@musepi/pi-utils"]));
 
 		expect(result).toEqual({ scannedPackages: 2, removedEntries: 4 });
 		expect(await Bun.file(path.join(dir, "react", "18.3.1@@@1")).exists()).toBe(false);
 		expect(await Bun.file(path.join(dir, "react@18.3.1@@@1", "package.json")).exists()).toBe(false);
 		expect(await Bun.file(path.join(dir, "react", "19.2.6@@@1")).exists()).toBe(true);
 		expect(await Bun.file(path.join(dir, "react@19.2.6@@@1", "package.json")).exists()).toBe(true);
-		expect(await Bun.file(path.join(dir, "@oh-my-pi", "pi-utils", "15.7.6@@@1")).exists()).toBe(false);
-		expect(await Bun.file(path.join(dir, "@oh-my-pi", "pi-utils@15.7.6@@@1", "package.json")).exists()).toBe(false);
-		expect(await Bun.file(path.join(dir, "@oh-my-pi", "pi-utils", "15.8.0@@@1")).exists()).toBe(true);
-		expect(await Bun.file(path.join(dir, "@oh-my-pi", "pi-utils@15.8.0@@@1", "package.json")).exists()).toBe(true);
+		expect(await Bun.file(path.join(dir, "@musepi", "pi-utils", "15.7.6@@@1")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "@musepi", "pi-utils@15.7.6@@@1", "package.json")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "@musepi", "pi-utils", "15.8.0@@@1")).exists()).toBe(true);
+		expect(await Bun.file(path.join(dir, "@musepi", "pi-utils@15.8.0@@@1", "package.json")).exists()).toBe(true);
 		expect(await Bun.file(path.join(dir, "chalk", "4.1.2@@@1")).exists()).toBe(true);
 		expect(await Bun.file(path.join(dir, "chalk@4.1.2@@@1", "package.json")).exists()).toBe(true);
 	});
@@ -356,12 +380,36 @@ describe("update-cli bun cache pruning", () => {
 		expect(await Bun.file(path.join(dir, "pkg", "1.0.0@@@1")).exists()).toBe(true);
 		expect(await Bun.file(path.join(dir, "pkg@1.0.0@@@1", "package.json")).exists()).toBe(true);
 	});
+
+	it("compares numeric version segments without precision loss", async () => {
+		const dir = await makeTempDir();
+		const older = "1.0.99999999999999999999";
+		const newer = "1.0.100000000000000000000";
+		await Bun.write(path.join(dir, "pkg", `${older}@@@1`), "");
+		await Bun.write(path.join(dir, "pkg", `${newer}@@@1`), "");
+		await Bun.write(
+			path.join(dir, `pkg@${older}@@@1`, "package.json"),
+			JSON.stringify({ name: "pkg", version: older }),
+		);
+		await Bun.write(
+			path.join(dir, `pkg@${newer}@@@1`, "package.json"),
+			JSON.stringify({ name: "pkg", version: newer }),
+		);
+
+		const result = await pruneBunInstallCache(dir, new Set(["pkg"]));
+
+		expect(result).toEqual({ scannedPackages: 1, removedEntries: 2 });
+		expect(await Bun.file(path.join(dir, "pkg", `${older}@@@1`)).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, `pkg@${older}@@@1`, "package.json")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "pkg", `${newer}@@@1`)).exists()).toBe(true);
+		expect(await Bun.file(path.join(dir, `pkg@${newer}@@@1`, "package.json")).exists()).toBe(true);
+	});
 });
 
 describe("update-cli release binary integrity", () => {
 	const tag = "v17.1.2";
 	const binaryName = "omp-linux-x64";
-	const url = `https://github.com/can1357/oh-my-pi/releases/download/${tag}/${binaryName}`;
+	const url = `https://github.com/MuseLinn/MusePi/releases/download/${tag}/${binaryName}`;
 	const content = "verified binary";
 	const digest = `sha256:${createHash("sha256").update(content).digest("hex")}`;
 
@@ -599,7 +647,7 @@ describe("update-cli binary replacement", () => {
 				expectedVersion: "15.1.8",
 				verifyInstalledVersion: async () => ({ ok: false, path: targetPath }),
 			}),
-		).rejects.toThrow("restored previous omp binary");
+		).rejects.toThrow("restored previous musepi binary");
 
 		expect(await Bun.file(targetPath).text()).toBe("old binary");
 		expect(await Bun.file(tempPath).exists()).toBe(false);

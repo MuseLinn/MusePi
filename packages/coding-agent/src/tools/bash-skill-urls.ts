@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { resolveContainedPathSync } from "../discovery/contained-path";
 import type { Skill } from "../extensibility/skills";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import { validateRelativePath } from "../internal-urls/skill-protocol";
@@ -88,6 +89,20 @@ export function resolveSkillUrlToPath(url: string, skills: readonly Skill[]): st
 	const resolvedBaseDir = path.resolve(skill.baseDir);
 	if (!resolvedPath.startsWith(resolvedBaseDir + path.sep) && resolvedPath !== resolvedBaseDir) {
 		throw new ToolError("Path traversal is not allowed in skill:// URLs");
+	}
+	// Agent Plugin skills (§4.1): the resource must canonically resolve within
+	// the plugin root. Fail closed: a dangling or unresolvable path is rejected
+	// rather than handed to bash, where writing through it could create the
+	// outside target. Symlinks may target other files inside the same package.
+	if (skill.containRoot) {
+		const contained = resolveContainedPathSync(skill.containRoot, resolvedPath);
+		if (contained.status === "outside") {
+			throw new ToolError(`skill:// path resolves outside the plugin root: ${url}`);
+		}
+		if (contained.status === "missing") {
+			throw new ToolError(`skill:// path does not exist: ${url}`);
+		}
+		return contained.realPath;
 	}
 
 	return resolvedPath;

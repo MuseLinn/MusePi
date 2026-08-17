@@ -39,6 +39,7 @@ async function runScenario(scenario: string): Promise<ScenarioResult> {
 	const primaryDir = path.join(root, "primary");
 	const secondaryDir = path.join(root, "secondary");
 	const resultPath = path.join(root, "result.json");
+	const stdoutPath = path.join(root, "stdout.log");
 	await Promise.all([fs.mkdir(primaryDir), fs.mkdir(secondaryDir)]);
 	const proc = Bun.spawn(
 		[process.execPath, "--preload", preloadPath, probePath, scenario, primaryDir, secondaryDir, resultPath],
@@ -53,19 +54,19 @@ async function runScenario(scenario: string): Promise<ScenarioResult> {
 				XDG_DATA_HOME: "",
 				XDG_STATE_HOME: "",
 				XDG_CACHE_HOME: "",
+				// Empty XDG_CACHE_HOME makes Bun's transpiler cache path relative,
+				// spewing bun/@t@/*.pile into the repo root (the child's cwd) — disable it.
+				BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
 				OMP_LOGGER_TEST_NOW: fixedNow,
 				TZ: "Etc/GMT+5",
 			},
-			stdout: "pipe",
+			stdout: Bun.file(stdoutPath),
 			stderr: "pipe",
 		},
 	);
-	const [stdout, stderr, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
+	const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
 	expect(exitCode, stderr).toBe(0);
+	const stdout = await fs.readFile(stdoutPath, "utf8");
 	return { pid: proc.pid, root, primaryDir, secondaryDir, resultPath, stdout, stderr };
 }
 
@@ -245,6 +246,10 @@ describe("central logger transport lifecycle", () => {
 		expect(payload).toEqual({ reconfigureThrew: true, sinkCount: 1, sinkSameContext: true });
 	});
 
+	// Two sequential probe children writing 1000 records each measure ~4.4 s
+	// on an unloaded runner — bun's 5 s default test timeout SIGTERMed the
+	// probe (exit 143) whenever CI runners shared cores. The contract is
+	// order + drain, not latency; give it an explicit budget.
 	test("preserves burst order and drains on close and natural child exit", async () => {
 		for (const scenario of ["burst-close", "burst-natural"] as const) {
 			const result = await runScenario(scenario);
@@ -260,7 +265,7 @@ describe("central logger transport lifecycle", () => {
 				expect(entry).toMatchObject({ message: scenario, index });
 			}
 		}
-	});
+	}, 30_000);
 
 	test("runs local console output before sinks and isolates throwing or disposed sinks", async () => {
 		const result = await runScenario("sink-order");

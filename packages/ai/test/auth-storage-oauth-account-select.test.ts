@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { withOAuthAccess } from "@oh-my-pi/pi-ai/auth-retry";
-import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai/auth-storage";
-import * as oauthUtils from "@oh-my-pi/pi-ai/registry/oauth";
+import { withOAuthAccess } from "@musepi/pi-ai/auth-retry";
+import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@musepi/pi-ai/auth-storage";
+import * as oauthUtils from "@musepi/pi-ai/registry/oauth";
 
 const PROVIDER = "unit-oauth-select";
 
@@ -119,6 +119,54 @@ describe("AuthStorage OAuth account selection", () => {
 			// Only the targeted credential is resolved — no sibling is touched.
 			expect(seen).toEqual([`access-${suffix}`]);
 		}
+	});
+
+	test("getOAuthAccessByCredentialId refreshes only the durable requested row", async () => {
+		const storage = authStorage;
+		if (!storage) throw new Error("test setup failed");
+		const seen: string[] = [];
+		vi.spyOn(oauthUtils, "getOAuthApiKey").mockImplementation(async (provider, credentials) => {
+			const credential = credentials[provider];
+			if (!credential) return null;
+			seen.push(credential.access);
+			return { newCredentials: credential, apiKey: credential.access };
+		});
+		await storage.set(PROVIDER, [oauthCredential("a"), oauthCredential("b"), oauthCredential("c")]);
+		const target = storage.listOAuthAccounts(PROVIDER)[1];
+		if (!target) throw new Error("expected second OAuth account");
+
+		const result = await storage.getOAuthAccessByCredentialId(PROVIDER, target.credentialId, { forceRefresh: true });
+
+		expect(result?.ok).toBe(true);
+		if (!result?.ok) throw new Error("expected ok resolution");
+		expect(result.credentialId).toBe(target.credentialId);
+		expect(result.accountId).toBe("acc-b");
+		expect(result.accessToken).toBe("access-b");
+		expect(seen).toEqual(["access-b"]);
+	});
+
+	test("getOAuthAccessByCredentialId does not substitute a sibling on failure", async () => {
+		const storage = authStorage;
+		if (!storage) throw new Error("test setup failed");
+		const seen: string[] = [];
+		vi.spyOn(oauthUtils, "getOAuthApiKey").mockImplementation(async (provider, credentials) => {
+			const credential = credentials[provider];
+			if (!credential) return null;
+			seen.push(credential.access);
+			if (credential.accountId === "acc-b") throw new Error("invalid_grant");
+			return { newCredentials: credential, apiKey: credential.access };
+		});
+		await storage.set(PROVIDER, [oauthCredential("a"), oauthCredential("b"), oauthCredential("c")]);
+		const target = storage.listOAuthAccounts(PROVIDER)[1];
+		if (!target) throw new Error("expected second OAuth account");
+
+		const result = await storage.getOAuthAccessByCredentialId(PROVIDER, target.credentialId);
+
+		expect(result?.ok).toBe(false);
+		if (!result || result.ok) throw new Error("expected failed resolution");
+		expect(result.credentialId).toBe(target.credentialId);
+		expect(result.accountId).toBe("acc-b");
+		expect(seen).toEqual(["access-b"]);
 	});
 
 	test("getOAuthAccessAt returns undefined for an out-of-range position", async () => {

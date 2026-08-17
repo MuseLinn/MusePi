@@ -2,24 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { computeFileHash } from "@oh-my-pi/hashline";
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { computeFileHash } from "@musepi/hashline";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	DEFAULT_FUZZY_THRESHOLD,
 	type EditToolDetails,
 	executeHashlineSingle,
 	executePatchSingle,
-	executeReplaceSingle,
+	executeReplace,
 	type hashlineEditParamsSchema,
-} from "@oh-my-pi/pi-coding-agent/edit";
-import { HashlineFilesystem } from "@oh-my-pi/pi-coding-agent/edit/hashline/filesystem";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import type { WritethroughCallback } from "@oh-my-pi/pi-coding-agent/lsp";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { ClientBridge } from "@oh-my-pi/pi-coding-agent/session/client-bridge";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/edit";
+import { HashlineFilesystem } from "@musepi/pi-coding-agent/edit/hashline/filesystem";
+import { resolveLocalUrlToPath } from "@musepi/pi-coding-agent/internal-urls";
+import type { WritethroughCallback } from "@musepi/pi-coding-agent/lsp";
+import type { PlanModeState } from "@musepi/pi-coding-agent/plan-mode/state";
+import type { ClientBridge } from "@musepi/pi-coding-agent/session/client-bridge";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -258,7 +258,7 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 
 		const result = await executeHashlineSingle({
 			session,
-			input: `[${relPath}#${realTag}]\nSWAP 2.=2:\n+    const v0 = 100;`,
+			input: `[${relPath}#${realTag}]\nPUT 2-2:\n+    const v0 = 100;`,
 			writethrough,
 			beginDeferredDiagnosticsForPath: noopBeginDeferred,
 		});
@@ -282,7 +282,7 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 		const nextTag = extractTag(text);
 		const followUp = await executeHashlineSingle({
 			session,
-			input: `[${relPath}#${nextTag}]\nSWAP 1.=1:\n+function g() {`,
+			input: `[${relPath}#${nextTag}]\nPUT 1-1:\n+function g() {`,
 			writethrough,
 			beginDeferredDiagnosticsForPath: noopBeginDeferred,
 		});
@@ -303,7 +303,7 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 
 		const result = await executeHashlineSingle({
 			session,
-			input: `[${relPath}#${realTag}]\nSWAP 2.=2:\n+earth`,
+			input: `[${relPath}#${realTag}]\nPUT 2-2:\n+earth`,
 			writethrough,
 			beginDeferredDiagnosticsForPath: noopBeginDeferred,
 		});
@@ -334,7 +334,7 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 
 		const result = await executeHashlineSingle({
 			session,
-			input: `[${relPath}#${realTag}]\nSWAP 2.=2:\n+print('new')`,
+			input: `[${relPath}#${realTag}]\nPUT 2-2:\n+print('new')`,
 			writethrough,
 			beginDeferredDiagnosticsForPath: noopBeginDeferred,
 		});
@@ -344,7 +344,7 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 		const nextTag = extractTag(text);
 		const followUp = await executeHashlineSingle({
 			session,
-			input: `[${relPath}#${nextTag}]\nSWAP 2.=2:\n+print('newer')`,
+			input: `[${relPath}#${nextTag}]\nPUT 2-2:\n+print('newer')`,
 			writethrough,
 			beginDeferredDiagnosticsForPath: noopBeginDeferred,
 		});
@@ -355,9 +355,9 @@ describe("executeHashlineSingle model-visible payload under write-time drift", (
 	});
 });
 
-// ─── executeReplaceSingle ─────────────────────────────────────────────────────
+// ─── executeReplace ─────────────────────────────────────────────────────────
 
-describe("executeReplaceSingle ACP fs routing", () => {
+describe("executeReplace ACP fs routing", () => {
 	let tmpDir: string;
 
 	beforeEach(async () => {
@@ -379,10 +379,10 @@ describe("executeReplaceSingle ACP fs routing", () => {
 		const { writethrough, spy: writeSpy } = makeWritethroughMock();
 		const session = createSession(tmpDir, { bridge });
 
-		await executeReplaceSingle({
+		await executeReplace({
 			session,
 			path: filePath,
-			params: { old_text: "old content", new_text: "new content", all: false },
+			params: { old_string: "old content", new_string: "new content", replace_all: false },
 			allowFuzzy: false,
 			fuzzyThreshold: DEFAULT_FUZZY_THRESHOLD,
 			writethrough,
@@ -413,10 +413,10 @@ describe("executeReplaceSingle ACP fs routing", () => {
 
 		const { writethrough, spy: writeSpy } = makeWritethroughMock();
 
-		await executeReplaceSingle({
+		await executeReplace({
 			session,
 			path: planPath,
-			params: { old_text: "old plan", new_text: "new plan", all: false },
+			params: { old_string: "old plan", new_string: "new plan", replace_all: false },
 			allowFuzzy: false,
 			fuzzyThreshold: DEFAULT_FUZZY_THRESHOLD,
 			writethrough,

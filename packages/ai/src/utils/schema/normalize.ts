@@ -6,7 +6,7 @@
  * exposes one option-driven core plus thin dispatchers that pin the option set
  * for each target.
  */
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 import * as AIError from "../../error";
 import { dereferenceJsonSchema } from "./dereference";
 import { upgradeJsonSchemaTo202012 } from "./draft";
@@ -24,7 +24,6 @@ import { isValidJsonSchema } from "./meta-validator";
 import { type DescriptionSpillFormat, spillToDescription } from "./spill";
 import { enter, epochNext, exit, once, stamp } from "./stamps";
 import { isJsonObject, isJsonObjectEmpty, type JsonObject } from "./types";
-import { decontaminateZodInstance } from "./zod-decontaminate";
 
 export type ResidualSchemaIncompatibility = "type-array" | "type-null" | "nullable" | "combiners" | "not";
 
@@ -1069,8 +1068,7 @@ function hasResidualSchemaIncompatibilities(
 }
 
 export function normalizeSchema(value: unknown, options: NormalizeSchemaOptions): unknown {
-	const detoxified = decontaminateZodInstance(value);
-	const upgraded = upgradeJsonSchemaTo202012(detoxified);
+	const upgraded = upgradeJsonSchemaTo202012(value);
 	const dereferenced = dereferenceJsonSchema(upgraded);
 	let normalized = normalizeSchemaNode(dereferenced, {
 		...options,

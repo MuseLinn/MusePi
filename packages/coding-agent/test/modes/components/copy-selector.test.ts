@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import { CopySelectorComponent } from "@oh-my-pi/pi-coding-agent/modes/components/copy-selector";
-import { getThemeByName, setThemeInstance, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { CopyTarget } from "@oh-my-pi/pi-coding-agent/modes/utils/copy-targets";
-import { setKeybindings } from "@oh-my-pi/pi-tui";
+import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import { CopySelectorComponent } from "@musepi/pi-coding-agent/modes/components/copy-selector";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { CopyTarget } from "@musepi/pi-coding-agent/modes/utils/copy-targets";
+import { setKeybindings } from "@musepi/pi-tui";
 
 const UP = "\x1b[A";
 const DOWN = "\x1b[B";
@@ -87,6 +87,13 @@ describe("CopySelectorComponent", () => {
 		expect(out).toContain("Block 2");
 		expect(out).toContain("Older message");
 		expect(out).toMatch(/[├└]/);
+	});
+
+	it("renders human-readable keybinding hints in the footer", () => {
+		const out = render(new CopySelectorComponent(makeRoots(), { onPick: vi.fn(), onCancel: vi.fn() }));
+
+		expect(out).toContain("Enter copy");
+		expect(out).toContain("Ctrl+G quit");
 	});
 
 	it("copies the message node itself on Enter", () => {

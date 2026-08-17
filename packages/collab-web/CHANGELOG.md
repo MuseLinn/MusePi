@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- Fenced code blocks now render with a header bar: language tag on the left and a copy button on the right (copied state shows 已复制 briefly). The copy source is the raw fenced text, so it stays correct after tree-sitter highlighting.
+- Composer input raised to a roomier 14px/22px with 10px radius and a soft focus ring; header gets more breathing room (10px 14px padding, 14px semibold title).
+
+### Changed
+
+- Removed upstream omp branding from index.html: canonical/OG/Twitter URLs pointed at my.omp.sh, the um.can.ac analytics script (which sent visitor data to the upstream site), and the omp structured-data block. The page is now self-contained for LAN/tunnel deployment.
+
+## [17.2.2] - 2026-07-31
+
+### Fixed
+
+- Fixed an issue where the guest UI could incorrectly appear idle (such as the loading spinner disappearing) while the host agent was still running after a reconnection, and ensured tool cards are properly cleared if a connection drop occurs.
+
+## [17.2.0] - 2026-07-30
+
 ### Fixed
 
 - Fixed an issue where the agent would stop silently without a message by ensuring terminal auto-retry failures are properly surfaced as error notices.
@@ -207,7 +224,7 @@
 
 - Changed relay socket behavior to retry transient disconnections with exponential backoff while treating terminal relay-close conditions and decryption failures as non-retriable
 - Changed subagent transcript decoding to handle streamed JSONL payload chunks incrementally by preserving carry-over data across chunks
-- Replaced the vendored collab wire type mirror with shared `@oh-my-pi/pi-wire` protocol contracts.
+- Replaced the vendored collab wire type mirror with shared `@musepi/pi-wire` protocol contracts.
 
 ### Security
 

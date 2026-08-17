@@ -5,9 +5,10 @@ import {
 	findLeadingSlashCommandStart,
 	getKeybindings,
 	type SlashCommand,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import { formatKeyHints, type KeybindingsManager } from "../config/keybindings";
 import { isSettingsInitialized, settings } from "../config/settings";
+import { t } from "../i18n/index.js";
 import { applyEmojiCompletion, getEmojiSuggestions, isEmojiPrefix, tryEmojiInlineReplace } from "./emoji-autocomplete";
 import { getGithubRefContext, getGithubRefSuggestions } from "./github-ref-autocomplete";
 import {
@@ -178,8 +179,8 @@ export class PromptActionAutocompleteProvider implements AutocompleteProvider {
 					if (!fuzzyMatch(query, searchable)) return null;
 					return {
 						value: action.label,
-						label: action.label,
-						description: action.description,
+						label: t(action.label),
+						description: action.description ? t(action.description) : undefined,
 						actionId: action.id,
 						execute: action.execute,
 						score: fuzzyScore(query, searchable),

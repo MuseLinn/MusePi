@@ -1,4 +1,4 @@
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 import type { AgentSession } from "../session/agent-session";
 import { type BankScope, ensureBankExists } from "./bank";
 import type { HindsightApi, MemoryItemInput } from "./client";
@@ -411,24 +411,6 @@ export class HindsightSessionState {
 		}
 	}
 
-	async maybeRecallOnAgentStart(): Promise<void> {
-		if (!this.config.autoRecall || this.hasRecalledForFirstTurn) return;
-		const messages = extractMessages(this.session.sessionManager);
-		const lastUser = messages.findLast(m => m.role === "user");
-		if (!lastUser) return;
-
-		const query = composeRecallQuery(lastUser.content, messages, this.config.recallContextTurns);
-		const truncated = truncateRecallQuery(query, lastUser.content, this.config.recallMaxQueryChars);
-		const { context, ok } = await this.recallForContext(truncated);
-		if (!ok) return;
-
-		this.hasRecalledForFirstTurn = true;
-		if (!context) return;
-
-		this.lastRecallSnippet = context;
-		await this.#refreshBaseSystemPromptAfter("recall");
-	}
-
 	async beforeAgentStartPrompt(promptText: string): Promise<string | undefined> {
 		if (this.config.mentalModelsEnabled && this.mentalModelsLoadPromise && this.mentalModelsLoadedAt === undefined) {
 			await Promise.race([this.mentalModelsLoadPromise, Bun.sleep(MENTAL_MODEL_FIRST_TURN_DEADLINE_MS)]);
@@ -509,9 +491,7 @@ export class HindsightSessionState {
 	attachSessionListeners(): void {
 		this.unsubscribe?.();
 		this.unsubscribe = this.session.subscribe(event => {
-			if (event.type === "agent_start") {
-				void this.maybeRecallOnAgentStart();
-			} else if (event.type === "agent_end") {
+			if (event.type === "agent_end") {
 				void this.maybeRetainOnAgentEnd();
 				// Drain any queued tool-initiated retain calls now that the turn
 				// is settled. The queue is also debounced/size-bounded, but
@@ -540,7 +520,7 @@ export class HindsightSessionState {
 		this.retainQueue.dispose();
 	}
 
-	async #refreshBaseSystemPromptAfter(reason: "recall" | "MM load" | "MM reload" | "MM TTL reload"): Promise<void> {
+	async #refreshBaseSystemPromptAfter(reason: "MM load" | "MM reload" | "MM TTL reload"): Promise<void> {
 		try {
 			await this.session.refreshBaseSystemPrompt();
 		} catch (err) {

@@ -8,15 +8,15 @@
  * pin a banner.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { ErrorBannerComponent } from "@oh-my-pi/pi-coding-agent/modes/components/error-banner";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
+import { ErrorBannerComponent } from "@musepi/pi-coding-agent/modes/components/error-banner";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
 	return {

@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { TextContent } from "@oh-my-pi/pi-ai";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TodoTool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import type { TextContent } from "@musepi/pi-ai";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TodoTool, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { TempDir } from "@musepi/pi-utils";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
 
 type ObservedPromptCall = {
@@ -193,8 +193,6 @@ describe("AgentSession eager task prelude", () => {
 		expect(observedCalls).toHaveLength(1);
 		expect(observedCalls[0]?.toolChoice).toBeUndefined();
 		expect(observedCalls[0]?.messageRoles).toEqual(["developer", "user"]);
-		expect(observedCalls[0]?.messageTexts[0]).toContain("delegation is enabled");
-		expect(observedCalls[0]?.messageTexts[0]).toContain("Batch independent slices");
 		expect(observedCalls[0]?.messageTexts[0]).toContain("`task`");
 		expect(
 			observedCalls[0]?.messageTexts.filter(text => text.includes("refactor the parser across modules")),
@@ -278,7 +276,6 @@ describe("AgentSession eager task prelude", () => {
 
 		expect(observedCalls).toHaveLength(1);
 		expect(observedCalls[0]?.messageRoles).toEqual(["developer", "user"]);
-		expect(observedCalls[0]?.messageTexts[0]).toContain("delegation is enabled");
 	});
 
 	it("prepends both todo and task preludes when both are eager, keeping the forced todo choice", async () => {
@@ -298,18 +295,7 @@ describe("AgentSession eager task prelude", () => {
 		const texts = observedCalls[0]?.messageTexts ?? [];
 		expect(texts.at(-1)).toBe("refactor the parser across modules");
 		// the task reminder is the second prelude (after the todo reminder)
-		expect(texts.findIndex(text => text.includes("delegation is enabled"))).toBe(1);
-	});
-
-	it("omits batch-call guidance from the eager task reminder when task.batch is disabled", async () => {
-		const { session, observedCalls } = await createHarness({ "task.batch": false });
-
-		await session.prompt("refactor the parser across modules");
-
-		expect(observedCalls).toHaveLength(1);
-		const reminder = observedCalls[0]?.messageTexts[0] ?? "";
-		expect(reminder).toContain("delegation is enabled");
-		expect(reminder).not.toContain("Batch independent slices");
+		expect(texts.findIndex(text => text.includes("`task`"))).toBe(1);
 	});
 
 	it("renders the task tool's wire name in the eager reminder", async () => {

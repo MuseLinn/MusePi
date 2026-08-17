@@ -2,23 +2,23 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import type { AgentDefinition, TaskParams } from "@oh-my-pi/pi-coding-agent/task/types";
-import type { IsolationHandle, WorktreeBaseline } from "@oh-my-pi/pi-coding-agent/task/worktree";
-import * as worktreeModule from "@oh-my-pi/pi-coding-agent/task/worktree";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import "@oh-my-pi/pi-coding-agent/tools/yield";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { PlanModeState } from "@musepi/pi-coding-agent/plan-mode/state";
+import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import type { AgentDefinition, TaskParams } from "@musepi/pi-coding-agent/task/types";
+import type { IsolationHandle, WorktreeBaseline } from "@musepi/pi-coding-agent/task/worktree";
+import * as worktreeModule from "@musepi/pi-coding-agent/task/worktree";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { removeWithRetries } from "@musepi/pi-utils";
+import "@musepi/pi-coding-agent/tools/yield";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 const TEST_TASK: TaskParams = { agent: "task", name: "CheckLsp", task: "Inspect LSP tools." };
 
@@ -85,6 +85,7 @@ function createYieldingSession(): AgentSession {
 		getLastAssistantMessage: () => state.messages[state.messages.length - 1],
 		abort: async () => {},
 		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
 	} as unknown as AgentSession;
 }
 

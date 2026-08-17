@@ -38,7 +38,9 @@ describe("worker selector dispatch", () => {
 });
 
 describe("computer worker entry", () => {
-	it("is side-effect-free to import and exposes a named start function", () => {
+	it("is side-effect-free to import outside a worker and exposes a named start function", () => {
+		// Importing on the main thread (no parentPort) must not start the worker
+		// core; the CLI host and bundled hosts call the exported hook explicitly.
 		expect(computerWorkerEntry.startComputerWorker).toBeFunction();
 	});
 });

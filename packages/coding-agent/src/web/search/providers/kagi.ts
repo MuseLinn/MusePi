@@ -3,7 +3,7 @@
  *
  * Thin wrapper that adapts shared Kagi API utilities to SearchResponse shape.
  */
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
 import type { SearchResponse } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { KagiApiError, searchWithKagi } from "../../kagi";
@@ -26,6 +26,7 @@ export async function searchKagi(params: {
 	recency?: SearchParams["recency"];
 	parsedQuery?: StructuredQuery;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	authStorage: AuthStorage;
 	sessionId?: string;
 	fetch?: FetchImpl;
@@ -45,6 +46,7 @@ export async function searchKagi(params: {
 				recency: params.recency,
 				sessionId: params.sessionId,
 				signal: params.signal,
+				timeoutMs: params.timeoutMs,
 				fetch: params.fetch,
 			},
 			params.authStorage,
@@ -87,6 +89,7 @@ export class KagiProvider extends SearchProvider {
 			num_results: params.numSearchResults ?? params.limit,
 			recency: params.recency,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			authStorage: params.authStorage,
 			sessionId: params.sessionId,
 			fetch: fetchImpl,

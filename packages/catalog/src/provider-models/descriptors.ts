@@ -1,19 +1,24 @@
 /**
  * The provider catalog table: one entry per chat-model provider, carrying the
- * catalog half of what used to live in `@oh-my-pi/pi-ai`'s registry definitions
+ * catalog half of what used to live in `@musepi/pi-ai`'s registry definitions
  * (default model, runtime model-manager factory, discovery wiring). The auth
  * half (env keys, OAuth login/refresh) stays in the pi-ai registry, which
  * type-checks itself against `KnownProvider` from this table.
  */
+
+import { agnesModelManagerOptions } from "./agnes";
+import { agnesGlobalModelManagerOptions } from "./agnes-global";
 import type { ModelManagerConfig, ProviderCatalogEntry, ProviderDescriptor } from "./descriptor-types";
 import { googleModelManagerOptions, googleVertexModelManagerOptions } from "./google";
 import { ollamaCloudModelManagerOptions } from "./ollama";
 import {
+	aiandModelManagerOptions,
 	aimlApiModelManagerOptions,
 	alibabaCodingPlanModelManagerOptions,
 	alibabaTokenPlanModelManagerOptions,
 	anthropicModelManagerOptions,
 	basetenModelManagerOptions,
+	bedrockMantleModelManagerOptions,
 	cerebrasModelManagerOptions,
 	cloudflareAiGatewayModelManagerOptions,
 	coreWeaveModelManagerOptions,
@@ -21,6 +26,7 @@ import {
 	firepassModelManagerOptions,
 	fireworksModelManagerOptions,
 	githubCopilotModelManagerOptions,
+	gmiCloudModelManagerOptions,
 	groqModelManagerOptions,
 	huggingfaceModelManagerOptions,
 	kiloModelManagerOptions,
@@ -62,8 +68,42 @@ import {
 	gitLabDuoWorkflowModelManagerOptions,
 	zaiModelManagerOptions,
 } from "./special";
+import { stepplanModelManagerOptions } from "./stepplan";
+import { stepplanGlobalModelManagerOptions } from "./stepplan-global";
 
 export const CATALOG_PROVIDERS = [
+	{
+		id: "agnes",
+		defaultModel: "agnes-2.5-flash",
+		envVars: ["AGNES_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => agnesModelManagerOptions(config),
+	},
+	{
+		id: "agnes-global",
+		defaultModel: "agnes-2.5-flash",
+		envVars: ["AGNES_GLOBAL_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => agnesGlobalModelManagerOptions(config),
+	},
+	{
+		id: "stepplan",
+		defaultModel: "step-3.7-flash",
+		envVars: ["STEPPLAN_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => stepplanModelManagerOptions(config),
+	},
+	{
+		id: "stepplan-global",
+		defaultModel: "step-3.7-flash",
+		envVars: ["STEPPLAN_GLOBAL_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => stepplanGlobalModelManagerOptions(config),
+	},
+	{
+		id: "aiand",
+		defaultModel: "moonshotai/kimi-k2.7-code",
+		envVars: ["AIAND_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => aiandModelManagerOptions(config),
+		dynamicModelsAuthoritative: true,
+		catalogDiscovery: { label: "ai&" },
+	},
 	{
 		id: "aimlapi",
 		defaultModel: "gpt-5.5-2026-04-23",
@@ -98,6 +138,13 @@ export const CATALOG_PROVIDERS = [
 	{
 		id: "amazon-bedrock",
 		defaultModel: "us.anthropic.claude-opus-4-8",
+	},
+	{
+		id: "bedrock-mantle",
+		defaultModel: "openai.gpt-5.6-terra",
+		envVars: ["AWS_BEARER_TOKEN_BEDROCK"],
+		createModelManagerOptions: (config: ModelManagerConfig) => bedrockMantleModelManagerOptions(config),
+		dynamicModelsAuthoritative: true,
 	},
 	{
 		id: "anthropic",
@@ -177,6 +224,14 @@ export const CATALOG_PROVIDERS = [
 		envVars: ["GITLAB_TOKEN"],
 		createModelManagerOptions: (config: ModelManagerConfig) => gitLabDuoWorkflowModelManagerOptions(config),
 		dynamicModelsAuthoritative: true,
+	},
+	{
+		id: "gmi-cloud",
+		defaultModel: "deepseek-ai/DeepSeek-V4-Flash",
+		envVars: ["GMI_API_KEY"],
+		createModelManagerOptions: (config: ModelManagerConfig) => gmiCloudModelManagerOptions(config),
+		dynamicModelsAuthoritative: true,
+		catalogDiscovery: { label: "GMI Cloud" },
 	},
 	{
 		id: "google",

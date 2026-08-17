@@ -1,11 +1,15 @@
-import type { AvailableCommand } from "@agentclientprotocol/sdk";
+import type { AvailableCommand } from "@musepi/pi-utils/acp";
 import type { SkillsSettings } from "../config/settings";
 import type { LoadedCustomCommand } from "../extensibility/custom-commands";
 import type { ExtensionRunner } from "../extensibility/extensions";
 import { getSkillSlashCommandName, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
+import { t } from "../i18n/index.js";
 import { ACP_BUILTIN_RESERVED_NAMES, isAcpBuiltinShadowedName } from "./acp-builtins";
 import { BUILTIN_SLASH_COMMANDS_INTERNAL } from "./builtin-registry";
+
+/** Translate a description at menu-build time (locale is ready here), tolerating undefined. */
+const tr = (s: string | undefined): string | undefined => (s === undefined ? undefined : t(s));
 
 export type AvailableSlashCommandSource = "builtin" | "skill" | "extension" | "custom" | "mcp_prompt" | "file";
 
@@ -46,9 +50,9 @@ export async function buildAvailableSlashCommands(
 		appendCommand({
 			name: command.name,
 			aliases: command.aliases,
-			description: command.acpDescription ?? command.description,
+			description: tr(command.acpDescription ?? command.description),
 			input: hint ? { hint } : undefined,
-			subcommands: command.subcommands,
+			subcommands: command.subcommands?.map(s => ({ ...s, description: tr(s.description) })),
 			source: "builtin",
 		});
 	}
@@ -57,7 +61,7 @@ export async function buildAvailableSlashCommands(
 		for (const skill of session.skills) {
 			appendCommand({
 				name: getSkillSlashCommandName(skill),
-				description: skill.description || `Run ${skill.name} skill`,
+				description: tr(skill.description) ?? t("Run {0} skill", skill.name),
 				input: { hint: "arguments" },
 				source: "skill",
 			});
@@ -70,7 +74,7 @@ export async function buildAvailableSlashCommands(
 			if (isAcpBuiltinShadowedName(command.name)) continue;
 			appendCommand({
 				name: command.name,
-				description: command.description ?? "(extension command)",
+				description: tr(command.description) ?? t("(extension command)"),
 				input: { hint: "arguments" },
 				source: "extension",
 			});
@@ -81,7 +85,7 @@ export async function buildAvailableSlashCommands(
 		const source: AvailableSlashCommandSource = command.path?.startsWith("mcp:") ? "mcp_prompt" : "custom";
 		appendCommand({
 			name: command.command.name,
-			description: command.command.description,
+			description: tr(command.command.description),
 			input: { hint: "arguments" },
 			source,
 		});
@@ -90,7 +94,7 @@ export async function buildAvailableSlashCommands(
 	const fileCommands = await loadFileCommands(session.sessionManager.getCwd());
 	session.setSlashCommands(fileCommands);
 	for (const command of fileCommands) {
-		appendCommand({ name: command.name, description: command.description, source: "file" });
+		appendCommand({ name: command.name, description: tr(command.description), source: "file" });
 	}
 
 	return commands;
@@ -99,7 +103,7 @@ export async function buildAvailableSlashCommands(
 export function toAcpAvailableCommands(commands: readonly InternalAvailableSlashCommand[]): AvailableCommand[] {
 	return commands.map(command => ({
 		name: command.name,
-		description: command.description ?? "",
+		description: tr(command.description) ?? "",
 		input: command.input,
 	}));
 }

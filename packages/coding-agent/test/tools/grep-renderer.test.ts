@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import * as url from "node:url";
-import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
+import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { sanitizeText } from "@musepi/pi-utils";
 import { grepToolRenderer } from "../../src/tools/grep";
 
 function extractLinkUris(text: string): string[] {

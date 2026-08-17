@@ -15,7 +15,7 @@
  *
  * The relay never sees plaintext: payloads stay sealed end to end.
  */
-import { rewriteEnvelopePeer, unpackEnvelope } from "../src/lib/link";
+import { rewriteEnvelopePeer, unpackEnvelope } from "@musepi/collab-proto";
 
 const ROOM_PATH_RE = /^\/r\/([A-Za-z0-9_-]{10,64})$/;
 

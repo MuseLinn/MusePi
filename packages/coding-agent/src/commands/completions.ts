@@ -4,8 +4,10 @@
  * The script is derived entirely from the declarative command/flag metadata
  * (see `cli/completion-gen.ts`), so it never drifts from the actual CLI surface.
  */
-import { APP_NAME, VERSION } from "@oh-my-pi/pi-utils";
-import { Args, type CliConfig, Command, type CommandCtor } from "@oh-my-pi/pi-utils/cli";
+
+import { APP_NAME, VERSION } from "@musepi/pi-utils";
+import { Args, type CliConfig, Command, type CommandCtor } from "@musepi/pi-utils/cli";
+import { completionsHelp as commandHelp } from "../cli/command-help";
 import { buildSpec, generateCompletion, type Shell } from "../cli/completion-gen";
 import { commands } from "../cli-commands";
 
@@ -14,8 +16,7 @@ const ROOT_COMMAND = "launch";
 const SHELLS = ["bash", "zsh", "fish"] as const;
 
 export default class Completions extends Command {
-	static description = "Print a shell completion script (bash, zsh, or fish)";
-
+	static description = commandHelp.description;
 	static args = {
 		shell: Args.string({
 			description: "Target shell",

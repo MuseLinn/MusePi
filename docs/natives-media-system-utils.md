@@ -1,6 +1,6 @@
 # Natives media + system utilities
 
-This document covers the media/system/conversion exports currently present in `@oh-my-pi/pi-natives`: terminal SIXEL image encoding, HTML conversion, clipboard access, token counting, macOS appearance/power helpers, and work profiling.
+This document covers the media/system/conversion exports currently present in `@musepi/pi-natives`: terminal SIXEL image encoding, HTML conversion, clipboard access, token counting, macOS appearance/power helpers, and work profiling.
 
 ## Implementation files
 
@@ -108,7 +108,8 @@ Failure transitions:
 
 1. `htmlToMarkdown(html, options)` schedules a blocking conversion task.
 2. Conversion runs with defaulted options (`cleanContent=false`, `skipImages=false`) unless specified.
-3. Returns markdown string or rejects with `Conversion error: ...`.
+3. The upstream converter owns normalization and preprocessing, makes affected auxiliary traversals iterative, and caps remaining recursive DOM traversal at 64; hitting that cap rejects the conversion instead of returning partial Markdown.
+4. Returns markdown string or rejects with `Conversion error: ...`.
 
 ### Clipboard lifecycle
 

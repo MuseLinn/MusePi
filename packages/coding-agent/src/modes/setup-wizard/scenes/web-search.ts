@@ -1,10 +1,5 @@
-import {
-	routeSelectListMouse,
-	type SelectItem,
-	SelectList,
-	type SgrMouseEvent,
-	truncateToWidth,
-} from "@oh-my-pi/pi-tui";
+import { routeSelectListMouse, type SelectItem, SelectList, type SgrMouseEvent, truncateToWidth } from "@musepi/pi-tui";
+import { t } from "../../../i18n/index.js";
 import { getSearchProvider, setSearchProviderOrder } from "../../../web/search/provider";
 import {
 	isSearchProviderId,
@@ -17,12 +12,14 @@ import type { SetupSceneHost, SetupTab } from "./types";
 
 const MAX_VISIBLE = 8;
 
-/** Reuse the shared provider options as the single source of truth for labels/descriptions. */
-const WEB_SEARCH_ITEMS: readonly SelectItem[] = SEARCH_PROVIDER_OPTIONS.map(option => ({
-	value: option.value,
-	label: option.label,
-	description: option.description,
-}));
+/** Build the provider option list at mount time, translating labels/descriptions. */
+function buildWebSearchItems(): readonly SelectItem[] {
+	return SEARCH_PROVIDER_OPTIONS.map(option => ({
+		value: option.value,
+		label: t(option.label),
+		description: t(option.description),
+	}));
+}
 
 type Availability = "checking" | boolean;
 
@@ -34,10 +31,11 @@ type Availability = "checking" | boolean;
  */
 export class WebSearchTab implements SetupTab {
 	readonly id = "web-search";
-	readonly label = "Web search";
+	readonly label = t("Web search");
 	readonly modal = false;
 
 	#list: SelectList;
+	readonly #items: readonly SelectItem[] = buildWebSearchItems();
 	#availability = new Map<SearchProviderId, Availability>();
 	#status: string[] = [];
 	#disposed = false;
@@ -45,10 +43,10 @@ export class WebSearchTab implements SetupTab {
 	#listRowStart = 0;
 
 	constructor(private readonly host: SetupSceneHost) {
-		this.#list = new SelectList(WEB_SEARCH_ITEMS, MAX_VISIBLE, getSelectListTheme());
+		this.#list = new SelectList(this.#items, MAX_VISIBLE, getSelectListTheme());
 		const order = host.ctx.settings.get("providers.webSearchOrder");
 		const current = Array.isArray(order) && typeof order[0] === "string" ? order[0] : "auto";
-		const index = WEB_SEARCH_ITEMS.findIndex(item => item.value === current);
+		const index = this.#items.findIndex(item => item.value === current);
 		if (index >= 0) this.#list.setSelectedIndex(index);
 		this.#list.onSelectionChange = item => this.#onHighlight(item.value);
 		this.#list.onSelect = item => this.#apply(item.value);
@@ -82,7 +80,7 @@ export class WebSearchTab implements SetupTab {
 	}
 
 	render(width: number, maxLines?: number): readonly string[] {
-		const lines = [theme.fg("muted", "Choose the provider the web_search tool should prefer."), ""];
+		const lines = [theme.fg("muted", t("Choose the provider the web_search tool should prefer.")), ""];
 		this.#listRowStart = lines.length;
 		if (maxLines !== undefined) {
 			// Above: hint + blank. Below: the list's own search-status row plus
@@ -130,24 +128,24 @@ export class WebSearchTab implements SetupTab {
 		const order = value === "auto" ? [] : [value, ...SEARCH_PROVIDER_ORDER.filter(id => id !== value)];
 		this.host.ctx.settings.set("providers.webSearchOrder", order);
 		setSearchProviderOrder(order);
-		const label = WEB_SEARCH_ITEMS.find(item => item.value === value)?.label ?? value;
-		this.#status = [theme.fg("success", `${theme.status.success} Web search set to ${label}`)];
+		const label = this.#items.find(item => item.value === value)?.label ?? value;
+		this.#status = [theme.fg("success", `${theme.status.success} ${t("Web search set to {0}", label)}`)];
 		if (value !== "auto" && this.#availability.get(value as SearchProviderId) === false) {
-			this.#status.push(theme.fg("dim", "Not configured yet — add its API key or sign in to enable it."));
+			this.#status.push(theme.fg("dim", t("Not configured yet — add its API key or sign in to enable it.")));
 		}
 		this.host.requestRender();
 	}
 
 	#readinessLines(value: string): string[] {
 		if (value === "auto") {
-			return [theme.fg("dim", "Automatically uses the first configured provider.")];
+			return [theme.fg("dim", t("Automatically uses the first configured provider."))];
 		}
 		const state = this.#availability.get(value as SearchProviderId);
 		if (state === undefined || state === "checking") {
-			return [theme.fg("dim", "Checking availability…")];
+			return [theme.fg("dim", t("Checking availability…"))];
 		}
 		return state
-			? [theme.fg("success", `${theme.status.success} Ready to use`)]
-			: [theme.fg("warning", `${theme.status.pending} Needs credentials`)];
+			? [theme.fg("success", `${theme.status.success} ${t("Ready to use")}`)]
+			: [theme.fg("warning", `${theme.status.pending} ${t("Needs credentials")}`)];
 	}
 }

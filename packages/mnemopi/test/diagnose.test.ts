@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BeamMemory } from "@oh-my-pi/pi-mnemopi/core/beam";
-import { type DiagnosticSummary, inspectDatabase, runDiagnostics } from "@oh-my-pi/pi-mnemopi/diagnose";
+import { BeamMemory } from "@musepi/pi-mnemopi/core/beam";
+import { type DiagnosticSummary, inspectDatabase, runDiagnostics } from "@musepi/pi-mnemopi/diagnose";
 
 function tempRoot(): string {
 	return mkdtempSync(join(tmpdir(), "mnemopi-ts-diagnose-"));
@@ -29,9 +29,12 @@ describe("diagnose helpers", () => {
 				const id = memory.remember("Diagnose working row", { source: "test" });
 				memory.consolidateToEpisodic("Diagnose episodic row", [id], "test", 0.6);
 				memory.scratchpadWrite("diagnose scratchpad row");
-				memory.db
-					.prepare("INSERT INTO triples (subject, predicate, object, source) VALUES (?, ?, ?, ?)")
-					.run("alice", "uses", "beam", "test");
+				memory.db.run("INSERT INTO triples (subject, predicate, object, source) VALUES (?, ?, ?, ?)", [
+					"alice",
+					"uses",
+					"beam",
+					"test",
+				]);
 			} finally {
 				memory.close();
 			}

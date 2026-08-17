@@ -1,6 +1,8 @@
 import * as http2 from "node:http2";
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { isKimiK3ModelId } from "../identity";
+import { bareModelId, parseGlmModel, semverGte } from "../identity/classify";
 import { getBundledModels } from "../models";
 import { toModelSpec } from "../provider-models/bundled-references";
 import type { Model, ModelSpec } from "../types";
@@ -12,6 +14,19 @@ const CURSOR_GET_USABLE_MODELS_PATH = "/agent.v1.AgentService/GetUsableModels";
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const DEFAULT_MAX_TOKENS = 64_000;
+
+/**
+ * `GetUsableModels` carries no context-window field, so the 1M ceiling is
+ * recovered from the signals Cursor does send:
+ * - display-name labels ("Opus 5 1M", "GPT-5.5 1M High") across families,
+ * - natively 1M families Cursor serves unlabeled (Kimi K3, GLM 5.2+),
+ * - the max-mode flag on Claude/Gemini ids, whose max-mode ceiling is 1M.
+ */
+const CURSOR_1M_CONTEXT_WINDOW = 1_000_000;
+const CURSOR_1M_NAME_PATTERN = /\b1m\b/i;
+const CURSOR_MAX_MODE_1M_ID_PATTERN = /claude|gemini/;
+/** Kimi's official bare K3 id (`k3`, `kimi/k3`); `k3-256k` is the 256k SKU and stays out. */
+const CURSOR_KIMI_K3_BARE_ID_PATTERN = /(^|\/)k3$/i;
 
 /**
  * Model-id families whose native catalogs (anthropic, openai/openai-codex,
@@ -282,7 +297,7 @@ function normalizeCursorModel(
 
 	const name = pickModelDisplayName(details, id);
 	const reference = references.get(id);
-	const reasoning = Boolean(details.thinkingDetails) || reference?.reasoning === true;
+	const reasoning = isKimiK3ModelId(id) || Boolean(details.thinkingDetails) || reference?.reasoning === true;
 
 	if (reference) {
 		return {
@@ -291,6 +306,7 @@ function normalizeCursorModel(
 			name,
 			baseUrl: baseUrlOverride ?? reference.baseUrl,
 			reasoning,
+			contextWindow: resolveCursorContextWindow(details, id, reference.contextWindow),
 			cursorMaxMode: details.maxMode,
 		};
 	}
@@ -303,10 +319,51 @@ function normalizeCursorModel(
 		reasoning,
 		input: inferInputFromCursorId(id),
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: DEFAULT_CONTEXT_WINDOW,
+		contextWindow: resolveCursorContextWindow(details, id, DEFAULT_CONTEXT_WINDOW),
 		maxTokens: DEFAULT_MAX_TOKENS,
 		cursorMaxMode: details.maxMode,
 	};
+}
+
+/**
+ * Context window for a discovered Cursor model: the 1M ceiling when any 1M
+ * signal fires (never below a larger bundled reference), else the fallback.
+ */
+function resolveCursorContextWindow(
+	model: CursorModelDetailsValue,
+	id: string,
+	fallback: number | null,
+): number | null {
+	const labeled1M =
+		CURSOR_1M_NAME_PATTERN.test(id) ||
+		[model.displayName, model.displayNameShort, model.displayModelId, ...model.aliases].some(
+			candidate => typeof candidate === "string" && CURSOR_1M_NAME_PATTERN.test(candidate),
+		);
+	if (labeled1M || isCursorNative1MModelId(id) || (model.maxMode && CURSOR_MAX_MODE_1M_ID_PATTERN.test(id))) {
+		return Math.max(fallback ?? 0, CURSOR_1M_CONTEXT_WINDOW);
+	}
+	return fallback;
+}
+
+/**
+ * Natively 1M-context families Cursor serves without a "1M" label: Kimi K3 and
+ * GLM 5.2+ coding SKUs. The shared family parsers cover namespace forms
+ * (`moonshotai/kimi-k3`, `z-ai/glm-5.2`) and future GLM versions (`glm-5.10`,
+ * `glm-6`); vision and sub-1M variants stay out via the same gates as
+ * `isGlm52ReasoningEffortModelId`.
+ */
+function isCursorNative1MModelId(id: string): boolean {
+	if (isKimiK3ModelId(id) || CURSOR_KIMI_K3_BARE_ID_PATTERN.test(id)) {
+		return true;
+	}
+	const glm = parseGlmModel(bareModelId(id));
+	if (!glm || glm.vision) {
+		return false;
+	}
+	if (glm.variant !== "base" && glm.variant !== "air" && glm.variant !== "turbo") {
+		return false;
+	}
+	return semverGte(glm.version, "5.2");
 }
 
 function pickModelDisplayName(model: CursorModelDetailsValue, fallbackId: string): string {

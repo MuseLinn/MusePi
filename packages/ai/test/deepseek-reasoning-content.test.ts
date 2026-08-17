@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { renderDemotedThinking } from "@oh-my-pi/pi-ai/dialect";
-import { convertMessages } from "@oh-my-pi/pi-ai/providers/openai-completions";
-import type { AssistantMessage, Model, ModelSpec, ThinkingContent, ToolCall } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import { renderDemotedThinking } from "@musepi/pi-ai/dialect";
+import { convertMessages } from "@musepi/pi-ai/providers/openai-completions";
+import type { AssistantMessage, Model, ModelSpec, ThinkingContent, ToolCall } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 
 interface OpenAICompletionAssistantWireMessage {
 	role: "assistant";
@@ -67,26 +67,27 @@ function assistantToolCall(
 
 describe("DeepSeek reasoning_content tool-call replay", () => {
 	// ----------------------------------------------------------------
-	// Fix 1: honest [high, max] ladder for DeepSeek-family on any provider
+	// Fix 1: honest wire-exact ladders for DeepSeek-family on any provider —
+	// V4 Flash exposes [low, high, max] (#7668), V4 Pro stays [high, max].
 	// ----------------------------------------------------------------
 	describe("thinking ladder (Fix 1)", () => {
-		it("bakes the honest [high, max] ladder with no effortMap on opencode-go", () => {
+		it("bakes the honest [low, high, max] flash ladder with no effortMap on opencode-go", () => {
 			const model = deepseekModel({
 				provider: "opencode-go",
 				baseUrl: "https://opencode.ai/zen/go/v1",
 				id: "deepseek-v4-flash",
 			});
-			expect(model.thinking?.efforts).toEqual([Effort.High, Effort.Max]);
+			expect(model.thinking?.efforts).toEqual([Effort.Low, Effort.High, Effort.Max]);
 			expect(model.thinking?.effortMap).toBeUndefined();
 		});
 
-		it("bakes the honest [high, max] ladder with no effortMap on NVIDIA", () => {
+		it("bakes the honest [low, high, max] flash ladder with no effortMap on NVIDIA", () => {
 			const model = deepseekModel({
 				provider: "nvidia",
 				baseUrl: "https://integrate.api.nvidia.com/v1",
 				id: "deepseek-ai/deepseek-v4-flash",
 			});
-			expect(model.thinking?.efforts).toEqual([Effort.High, Effort.Max]);
+			expect(model.thinking?.efforts).toEqual([Effort.Low, Effort.High, Effort.Max]);
 			expect(model.thinking?.effortMap).toBeUndefined();
 		});
 

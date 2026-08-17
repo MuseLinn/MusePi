@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isEnoent } from "@oh-my-pi/pi-utils";
+import { isEnoent } from "@musepi/pi-utils";
 import { $ } from "bun";
 import {
 	getBehaviorDashboardStats,
@@ -21,7 +21,13 @@ import {
 import { decodeEmbeddedClientArchive } from "./embedded-client";
 import embeddedClientArchiveTxt from "./embedded-client.generated.txt";
 import { getGainDashboardStats } from "./gain-aggregator";
-import { recoverStatsPort, STATS_DASHBOARD_HEADER } from "./port-conflict";
+import {
+	prepareStatsPort,
+	recoverStatsPort,
+	STATS_DASHBOARD_HEADER,
+	STATS_DASHBOARD_HOSTNAME,
+	STATS_DASHBOARD_SECURITY_VERSION,
+} from "./port-conflict";
 
 const EMBEDDED_CLIENT_ARCHIVE = decodeEmbeddedClientArchive(embeddedClientArchiveTxt);
 
@@ -280,21 +286,35 @@ export async function handleApi(req: Request): Promise<Response> {
 
 /**
  * Handle static file requests.
+ *
+ * Assets are built to fixed names (no content hash: `index.js`, `styles.css`),
+ * so stale cache responses are a real hazard after source updates. Serve
+ * HTML with `no-cache` (revalidate every load) and JS/CSS with short
+ * max-age + revalidation; anything else (fonts, images) defaults to browser
+ * heuristics.
  */
 async function handleStatic(requestPath: string): Promise<Response> {
 	const staticDir = await getEmbeddedClientDir();
 	const filePath = requestPath === "/" ? "/index.html" : requestPath;
 	const fullPath = path.join(staticDir, filePath);
 
+	const headers = new Headers();
+	const cacheControl = filePath.endsWith(".html")
+		? "no-cache"
+		: filePath.endsWith(".js") || filePath.endsWith(".css")
+			? "public, max-age=300, must-revalidate"
+			: null;
+	if (cacheControl) headers.set("Cache-Control", cacheControl);
+
 	const file = Bun.file(fullPath);
 	if (await file.exists()) {
-		return new Response(file);
+		return new Response(file, { headers });
 	}
 
 	// SPA fallback
 	const index = Bun.file(path.join(staticDir, "index.html"));
 	if (await index.exists()) {
-		return new Response(index);
+		return new Response(index, { headers: new Headers({ "Cache-Control": "no-cache" }) });
 	}
 
 	return new Response("Not Found", { status: 404 });
@@ -303,21 +323,19 @@ async function handleStatic(requestPath: string): Promise<Response> {
 function createDashboardServer(port: number) {
 	const server = Bun.serve({
 		port,
+		hostname: STATS_DASHBOARD_HOSTNAME,
 		async fetch(req) {
 			const url = new URL(req.url);
 			const path = url.pathname;
 
-			// CORS headers for local development; the identity header lets another
-			// omp session's reuse probe positively recognize this dashboard.
-			const corsHeaders: Record<string, string> = {
-				"Access-Control-Allow-Origin": "*",
-				"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-				"Access-Control-Allow-Headers": "Content-Type",
-				[STATS_DASHBOARD_HEADER]: "1",
+			// The identity header lets another omp session's reuse probe positively
+			// recognize this dashboard without allowing cross-origin API reads.
+			const dashboardHeaders: Record<string, string> = {
+				[STATS_DASHBOARD_HEADER]: STATS_DASHBOARD_SECURITY_VERSION,
 			};
 
 			if (req.method === "OPTIONS") {
-				return new Response(null, { headers: corsHeaders });
+				return new Response(null, { headers: dashboardHeaders });
 			}
 
 			try {
@@ -329,10 +347,10 @@ function createDashboardServer(port: number) {
 					response = await handleStatic(path);
 				}
 
-				// Add CORS headers to all responses
+				// Add the dashboard identity header to all responses.
 				const headers = new Headers(response.headers);
-				for (const key in corsHeaders) {
-					headers.set(key, corsHeaders[key]);
+				for (const key in dashboardHeaders) {
+					headers.set(key, dashboardHeaders[key]);
 				}
 
 				return new Response(response.body, {
@@ -343,7 +361,7 @@ function createDashboardServer(port: number) {
 				console.error("Server error:", error);
 				return Response.json(
 					{ error: error instanceof Error ? error.message : "Unknown error" },
-					{ status: 500, headers: corsHeaders },
+					{ status: 500, headers: dashboardHeaders },
 				);
 			}
 		},
@@ -354,12 +372,17 @@ function createDashboardServer(port: number) {
 /**
  * Start the HTTP server, reusing a live dashboard or reclaiming a stale omp listener.
  */
-export async function startServer(port = 3847): Promise<{ port: number; stop: () => void }> {
+export async function startServer(port = 3847): Promise<{ hostname: string; port: number; stop: () => void }> {
 	await ensureClientBuild();
+	const preparation = await prepareStatsPort(port);
+	if (preparation === "reuse") {
+		return { hostname: STATS_DASHBOARD_HOSTNAME, port, stop: () => {} };
+	}
 
 	try {
 		const server = createDashboardServer(port);
 		return {
+			hostname: STATS_DASHBOARD_HOSTNAME,
 			port: server.port ?? port,
 			stop: () => server.stop(),
 		};
@@ -368,12 +391,13 @@ export async function startServer(port = 3847): Promise<{ port: number; stop: ()
 
 		const recovery = await recoverStatsPort(port);
 		if (recovery === "reuse") {
-			return { port, stop: () => {} };
+			return { hostname: STATS_DASHBOARD_HOSTNAME, port, stop: () => {} };
 		}
 
 		try {
 			const server = createDashboardServer(port);
 			return {
+				hostname: STATS_DASHBOARD_HOSTNAME,
 				port: server.port ?? port,
 				stop: () => server.stop(),
 			};

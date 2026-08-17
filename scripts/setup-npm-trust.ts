@@ -36,12 +36,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { $ } from "bun";
 import { LEAF_TARGETS } from "../packages/natives/scripts/gen-npm-packages.ts";
+import { compareVersions } from "../packages/utils/src/version.ts";
 import { packages } from "./ci-release-publish.ts";
 
 const repoRoot = path.join(import.meta.dir, "..");
 const MIN_NPM = "11.16.0";
 const DEFAULT_WORKFLOW = "ci.yml";
-const FALLBACK_REPO = "can1357/oh-my-pi";
+const FALLBACK_REPO = "MuseLinn/MusePi";
 const PLACEHOLDER_VERSION = "0.0.0";
 
 interface NativeLeafTarget {
@@ -168,7 +169,7 @@ async function collectTargets(): Promise<{ names: string[]; repoFromManifest: st
 		// own published package and needs its own trusted-publisher link.
 		if (pkg.kind === "native") {
 			for (const target of LEAF_TARGETS) {
-				const leaf = `@oh-my-pi/pi-natives-${target.tag}`;
+				const leaf = `@musepi/pi-natives-${target.tag}`;
 				if (!seen.has(leaf)) {
 					seen.add(leaf);
 					names.push(leaf);
@@ -177,17 +178,6 @@ async function collectTargets(): Promise<{ names: string[]; repoFromManifest: st
 		}
 	}
 	return { names, repoFromManifest };
-}
-
-/** Compare dotted version numbers; true when `version` >= `minimum`. */
-function meetsMinimum(version: string, minimum: string): boolean {
-	const a = version.split(".").map(Number);
-	const b = minimum.split(".").map(Number);
-	for (let i = 0; i < Math.max(a.length, b.length); i++) {
-		const diff = (a[i] ?? 0) - (b[i] ?? 0);
-		if (diff !== 0) return diff > 0;
-	}
-	return true;
 }
 
 /** Run npm with the terminal attached so the web 2FA flow stays interactive. */
@@ -246,7 +236,7 @@ async function waitForPackageExists(name: string): Promise<boolean> {
 }
 
 function nativeLeafName(tag: string): string {
-	return `@oh-my-pi/pi-natives-${tag}`;
+	return `@musepi/pi-natives-${tag}`;
 }
 
 function nativeLeafTargetForPackage(name: string): NativeLeafTarget | null {
@@ -264,7 +254,7 @@ function placeholderManifest(name: string, target: NativeLeafTarget, repo: strin
 	return {
 		name,
 		version: PLACEHOLDER_VERSION,
-		description: `Placeholder for the ${target.tag} native addon of @oh-my-pi/pi-natives. The real binary is published during release.`,
+		description: `Placeholder for the ${target.tag} native addon of @musepi/pi-natives. The real binary is published during release.`,
 		license: "MIT",
 		os: [target.os],
 		cpu: [target.cpu],
@@ -286,7 +276,7 @@ function placeholderReadme(name: string, target: NativeLeafTarget): string {
 	return [
 		`# ${name}`,
 		"",
-		`Placeholder package reserving the npm name for the \`${target.tag}\` native addon of \`@oh-my-pi/pi-natives\`.`,
+		`Placeholder package reserving the npm name for the \`${target.tag}\` native addon of \`@musepi/pi-natives\`.`,
 		"",
 		`This \`${PLACEHOLDER_VERSION}\` release ships no binary. The real, versioned platform addon is generated during release and installed as an optional dependency of the core package.`,
 		"",
@@ -321,7 +311,7 @@ async function main(): Promise<void> {
 		console.error("Could not determine npm version. Is npm installed and on PATH?");
 		process.exit(1);
 	}
-	if (!meetsMinimum(npmVersion, MIN_NPM)) {
+	if (compareVersions(npmVersion, MIN_NPM) < 0) {
 		console.error(`npm ${MIN_NPM}+ is required for trusted publishing (found ${npmVersion}).`);
 		console.error("Upgrade with: npm install -g npm@latest");
 		process.exit(1);

@@ -6,7 +6,7 @@
  * through the shared {@link AuthStorage} broker (Bearer token), and responses
  * are categorized result buckets rather than the legacy flat object array.
  */
-import { type AuthStorage, type FetchImpl, withAuth } from "@oh-my-pi/pi-ai";
+import { type AuthStorage, type FetchImpl, withAuth } from "@musepi/pi-ai";
 import { withHardTimeout } from "./search/providers/utils";
 
 const KAGI_SEARCH_URL = "https://kagi.com/api/v1/search";
@@ -156,6 +156,7 @@ export interface KagiSearchOptions {
 	recency?: "day" | "week" | "month" | "year";
 	sessionId?: string;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -253,7 +254,7 @@ export async function searchWithKagi(
 					Accept: "application/json",
 				},
 				body,
-				signal: withHardTimeout(options.signal),
+				signal: withHardTimeout(options.signal, options.timeoutMs),
 			});
 
 			if (!res.ok) {

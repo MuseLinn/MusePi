@@ -1,6 +1,6 @@
 # Plugin manager and installer plumbing
 
-This document describes how `omp plugin` npm/git/link and marketplace operations mutate plugin state on disk and become runtime capabilities. Marketplace installs keep their own registries and cache, then register the cached plugin through the same `node_modules` and `omp-plugins.lock.json` runtime surfaces used by npm/git/link installs; see `docs/marketplace.md`.
+This document describes how `musepi plugin` npm/git/link and marketplace operations mutate plugin state on disk and become runtime capabilities. Marketplace installs keep their own registries and cache, then register the cached plugin through the same `node_modules` and `omp-plugins.lock.json` runtime surfaces used by npm/git/link installs; see `docs/marketplace.md`.
 
 ## Scope and architecture
 
@@ -9,23 +9,23 @@ There are two plugin-management implementations in the codebase:
 1. **Active path used by CLI commands**: `PluginManager` (`src/extensibility/plugins/manager.ts`)
 2. **Legacy helper module**: installer functions (`src/extensibility/plugins/installer.ts`)
 
-`omp plugin` npm/git/link actions go through `PluginManager`; marketplace actions go through `MarketplaceManager`. `install` classifies each target (`classifyInstallTarget` in `cli/classify-install-target.ts`): `name@marketplace` routes to the marketplace manager, local paths route to `PluginManager.link()`, git and npm specs to `PluginManager.install()`.
+`musepi plugin` npm/git/link actions go through `PluginManager`; marketplace actions go through `MarketplaceManager`. `install` classifies each target (`classifyInstallTarget` in `cli/classify-install-target.ts`): `name@marketplace` routes to the marketplace manager, local paths route to `PluginManager.link()`, git and npm specs to `PluginManager.install()`.
 
 `installer.ts` still documents important safety checks and filesystem behavior, but it is not the path used by `src/commands/plugin.ts` + `src/cli/plugin-cli.ts`.
 
 ## Lifecycle: from CLI invocation to runtime availability
 
 ```text
-omp plugin <npm/link action> ...
+musepi plugin <npm/link action> ...
   -> src/commands/plugin.ts
   -> runPluginCommand(...) in src/cli/plugin-cli.ts
   -> PluginManager method (install/list/uninstall/link/...)
-  -> mutate ~/.omp/plugins/{package.json,node_modules,omp-plugins.lock.json}
+  -> mutate ~/.musepi/plugins/{package.json,node_modules,omp-plugins.lock.json}
   -> runtime discovery: discoverAndLoadCustomTools(...) and discoverAndLoadExtensions(...)
   -> getAllPluginToolPaths(cwd) / getAllPluginExtensionPaths(cwd)
   -> custom tool loader imports tool modules; extension loader imports extension modules
 
-omp plugin install name@marketplace / omp install name@marketplace
+musepi plugin install name@marketplace / musepi install name@marketplace
   -> MarketplaceManager
   -> mutate marketplace registries and cache
   -> symlink the cached package into the scope's node_modules and update omp-plugins.lock.json
@@ -42,7 +42,7 @@ omp plugin install name@marketplace / omp install name@marketplace
 
 ## On-disk model
 
-Global plugin state lives under `~/.omp/plugins`:
+Global plugin state lives under `~/.musepi/plugins`:
 
 - `package.json` — dependency manifest used by `bun install`/`bun uninstall` for npm-installed plugins
 - `node_modules/` — installed npm packages plus link and marketplace-cache symlinks
@@ -53,16 +53,16 @@ Global plugin state lives under `~/.omp/plugins`:
 
 Project-local overrides live at:
 
-- `<cwd>/.omp/plugin-overrides.json`
+- `<cwd>/.musepi/plugin-overrides.json`
 
 Overrides are read-only from manager/loader perspective (no write path here) and can disable plugins or override features/settings for this project.
 
 Marketplace installs add registry and cache state alongside those runtime entries:
 
-- `~/.omp/marketplaces.json` — configured marketplace catalogs
-- `~/.omp/plugins/installed_plugins.json` — user-scoped marketplace installs
-- `<cwd>/.omp/plugins/installed_plugins.json` — project-scoped marketplace installs when available
-- `~/.omp/plugins/cache/{marketplaces,plugins}/` — cached catalogs and plugin directories
+- `~/.musepi/marketplaces.json` — configured marketplace catalogs
+- `~/.musepi/plugins/installed_plugins.json` — user-scoped marketplace installs
+- `<cwd>/.musepi/plugins/installed_plugins.json` — project-scoped marketplace installs when available
+- `~/.musepi/plugins/cache/{marketplaces,plugins}/` — cached catalogs and plugin directories
 - `<scope>/plugins/node_modules/<package>` — symlink to the cached plugin, allowing its `package.json` `omp.extensions` and tools to load
 - `<scope>/plugins/omp-plugins.lock.json` — enablement and feature state shared with the runtime plugin loader
 
@@ -86,7 +86,7 @@ Marketplace installs add registry and cache state alongside those runtime entrie
 
 Manifest is resolved as:
 
-1. `package.json.omp`
+1. `package.json.musepi`
 2. fallback `package.json.pi`
 3. fallback `{ version: package.version }`
 
@@ -104,7 +104,7 @@ Malformed `package.json` JSON is a hard failure at read time; malformed manifest
 1. Parse feature bracket syntax from install spec.
 2. Validate the spec: git specs via `validateGitSpec`; npm specs against the package-name regex + shell-metacharacter denylist.
 3. Ensure plugin `package.json` exists (`omp-plugins`, private dependencies map).
-4. Run `bun install <packageSpec>` in `~/.omp/plugins`.
+4. Run `bun install <packageSpec>` in `~/.musepi/plugins`.
 5. Resolve the installed package name (npm: strip version via `extractPackageName`; git: diff `dependencies` before/after) and read `node_modules/<name>/package.json`.
 6. Resolve manifest and compute `enabledFeatures`:
    - `[*]`: all declared features (or `null` if no feature map)
@@ -118,7 +118,7 @@ Malformed `package.json` JSON is a hard failure at read time; malformed manifest
 
 Because update is install-driven:
 
-- `omp plugin install pkg@newVersion` updates dependency and lockfile version.
+- `musepi plugin install pkg@newVersion` updates dependency and lockfile version.
 - Existing settings are preserved; state entry is overwritten for version/features/enabled.
 - No separate “check updates” or transactional migration logic exists.
 
@@ -134,9 +134,9 @@ If uninstall command fails, runtime state is not changed.
 
 ## List flow (`PluginManager.list`)
 
-1. Read plugin dependency map from `~/.omp/plugins/package.json`.
+1. Read plugin dependency map from `~/.musepi/plugins/package.json`.
 2. Load lockfile runtime config (missing file -> empty defaults).
-3. Load project overrides (`<cwd>/.omp/plugin-overrides.json`, parse/read errors -> empty object with warning).
+3. Load project overrides (`<cwd>/.musepi/plugin-overrides.json`, parse/read errors -> empty object with warning).
 4. For each dependency with a resolvable package.json:
    - build `InstalledPlugin` record
    - merge feature/enable state:
@@ -148,7 +148,7 @@ This is the effective state used by CLI status output and settings/features oper
 
 ## Link flow (`PluginManager.link`)
 
-`link` supports local plugin development by symlinking a local package into `~/.omp/plugins/node_modules/<pkg.name>`.
+`link` supports local plugin development by symlinking a local package into `~/.musepi/plugins/node_modules/<pkg.name>`.
 
 Behavior:
 

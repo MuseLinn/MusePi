@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { clearCache } from "@oh-my-pi/pi-coding-agent/capability/fs";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import type { LoadContext, LoadResult } from "@oh-my-pi/pi-coding-agent/capability/types";
-import { scanSkillsFromDir } from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+import { clearCache } from "@musepi/pi-coding-agent/capability/fs";
+import type { Skill } from "@musepi/pi-coding-agent/capability/skill";
+import type { LoadContext, LoadResult } from "@musepi/pi-coding-agent/capability/types";
+import { scanSkillsFromDir } from "@musepi/pi-coding-agent/discovery/helpers";
+import { removeSyncWithRetries } from "@musepi/pi-utils";
 
 function writeSkill(dir: string, name: string, description: string): void {
 	const skillDir = path.join(dir, name);

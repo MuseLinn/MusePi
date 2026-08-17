@@ -1,60 +1,139 @@
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
+import { sanitizeText } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import { framedBlock, renderStatusLine } from "../tui";
 import type { ComputerToolDetails } from "./computer";
-import { replaceTabs, truncateToWidth } from "./render-utils";
+import { PREVIEW_LIMITS, replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "./render-utils";
 
 interface ComputerRenderArgs {
-	actions?: Array<{ type?: unknown }>;
+	code?: unknown;
+	read_only?: unknown;
+	window?: unknown;
+	actions?: unknown;
 }
 
 interface ComputerRenderResult {
-	content: Array<{ type: string; text?: string }>;
+	content?: Array<{ type: string; text?: string }>;
 	details?: unknown;
 	isError?: boolean;
 }
 
-function clean(value: unknown, width = 100): string {
-	const text = typeof value === "string" ? value : JSON.stringify(value) || String(value);
-	return truncateToWidth(replaceTabs(sanitizeText(text)).replace(/[\r\n]+/g, " "), width);
+function sanitizedLine(value: string, width: number, collapse = false): string {
+	const sanitized = replaceTabs(sanitizeText(value));
+	const text = collapse ? sanitized.replace(/[\r\n]+/g, " ") : sanitized;
+	return truncateToWidth(text, Math.max(1, Math.min(width, TRUNCATE_LENGTHS.LINE)));
 }
 
 function isComputerToolDetails(value: unknown): value is ComputerToolDetails {
 	if (!value || typeof value !== "object") return false;
 	const details = value as Partial<ComputerToolDetails>;
 	return (
-		Array.isArray(details.actions) &&
-		Array.isArray(details.displays) &&
-		typeof details.width === "number" &&
-		typeof details.height === "number"
+		Array.isArray(details.screenshots) &&
+		(details.code === undefined || typeof details.code === "string") &&
+		(details.readOnly === undefined || typeof details.readOnly === "boolean") &&
+		(details.returnValue === undefined || typeof details.returnValue === "string") &&
+		(details.backend === undefined || typeof details.backend === "string") &&
+		(details.capturePermission === undefined || typeof details.capturePermission === "string") &&
+		(details.inputPermission === undefined || typeof details.inputPermission === "string") &&
+		(details.axPermission === undefined || typeof details.axPermission === "string")
 	);
 }
 
-function actionDescription(args: ComputerRenderArgs | undefined): string | undefined {
-	if (!Array.isArray(args?.actions) || args.actions.length === 0) return undefined;
-	return clean(args.actions.map(action => (typeof action?.type === "string" ? action.type : "action")).join(" → "));
+function statusSuffix(
+	args: ComputerRenderArgs | undefined,
+	details: ComputerToolDetails | undefined,
+	isError: boolean,
+): string | undefined {
+	const parts: string[] = [];
+	if (details?.readOnly === true || args?.read_only === true) parts.push("read-only");
+	if (details) {
+		const count = details.screenshots.length;
+		parts.push(`${count} ${count === 1 ? "screenshot" : "screenshots"}`);
+	}
+	if (isError) parts.push("error");
+	return parts.length > 0 ? sanitizedLine(parts.join(" · "), TRUNCATE_LENGTHS.TITLE, true) : undefined;
 }
 
-function resultDescription(details: ComputerToolDetails): string {
-	return clean(`${details.actions.join(" → ")} · ${details.width}×${details.height}`, 120);
+function previewLines(text: string, limit: number, width: number): string[] {
+	if (!text) return [];
+	const rawLines = text.split(/\r?\n/);
+	const lines = rawLines.slice(0, limit).map(line => sanitizedLine(line, width));
+	if (rawLines.length > limit) {
+		lines.push(sanitizedLine(`… ${rawLines.length - limit} more lines`, width));
+	}
+	return lines;
 }
 
-function errorDescription(result: ComputerRenderResult, args: ComputerRenderArgs | undefined): string | undefined {
-	const text = result.content.find(item => item.type === "text" && typeof item.text === "string")?.text;
-	return text ? clean(text, 120) : actionDescription(args);
+function renderComputerCell(
+	args: ComputerRenderArgs | undefined,
+	details: ComputerToolDetails | undefined,
+	result: ComputerRenderResult | undefined,
+	options: RenderResultOptions,
+	theme: Theme,
+): Component {
+	const isError = result?.isError === true;
+	const code = typeof args?.code === "string" ? args.code : details?.code;
+	const header = renderStatusLine(
+		{
+			icon: isError ? "error" : options.isPartial ? "pending" : result ? "success" : "pending",
+			title: "Computer",
+			description: statusSuffix(args, details, isError),
+		},
+		theme,
+	);
+
+	// Old persisted calls used {window, actions}; keep their replay deliberately plain.
+	if (code === undefined) return new Text(header, 0, 0);
+
+	return framedBlock(theme, width => {
+		const lineWidth = Math.max(1, width - 4);
+		const codeLimit = options.expanded ? Number.POSITIVE_INFINITY : PREVIEW_LIMITS.COMPUTER_CODE_COLLAPSED;
+		const outputLimit = options.expanded ? PREVIEW_LIMITS.OUTPUT_EXPANDED : PREVIEW_LIMITS.OUTPUT_COLLAPSED;
+		const sections: Array<{ label?: string; lines: string[] }> = [];
+		const codeLines = previewLines(code, codeLimit, lineWidth).map(line => theme.fg("toolOutput", line));
+		if (codeLines.length > 0)
+			sections.push({ label: sanitizedLine("Code", TRUNCATE_LENGTHS.SHORT), lines: codeLines });
+
+		const output = result
+			? (result.content ?? [])
+					.filter(
+						(item): item is { type: string; text: string } =>
+							item.type === "text" && typeof item.text === "string",
+					)
+					.map(item => item.text)
+					.join("\n")
+			: "";
+		if (isError) {
+			const errorLine = sanitizedLine(output || "Unknown error", lineWidth, true);
+			sections.push({
+				label: sanitizedLine("Error", TRUNCATE_LENGTHS.SHORT),
+				lines: [theme.fg("error", errorLine)],
+			});
+		} else {
+			const outputLines = previewLines(output, outputLimit, lineWidth).map(line => theme.fg("toolOutput", line));
+			if (outputLines.length > 0) {
+				sections.push({ label: sanitizedLine("Output", TRUNCATE_LENGTHS.SHORT), lines: outputLines });
+			}
+		}
+
+		return {
+			header,
+			sections,
+			state: isError ? "error" : options.isPartial || !result ? "pending" : "success",
+			borderColor: isError ? "error" : "borderMuted",
+			applyBg: false,
+			width,
+		};
+	});
 }
 
+/** Renders computer scripts, run state, screenshots, and failures in the TUI. */
 export const computerToolRenderer = {
 	mergeCallAndResult: true,
-	renderCall(args: ComputerRenderArgs, _options: RenderResultOptions, theme: Theme): Component {
-		return new Text(
-			renderStatusLine({ icon: "pending", title: "Computer", description: actionDescription(args) }, theme),
-			0,
-			0,
-		);
+	renderCall(args: ComputerRenderArgs, options: RenderResultOptions, theme: Theme): Component {
+		return renderComputerCell(args, undefined, undefined, options, theme);
 	},
 	renderResult(
 		result: ComputerRenderResult,
@@ -63,46 +142,6 @@ export const computerToolRenderer = {
 		args?: ComputerRenderArgs,
 	): Component {
 		const details = isComputerToolDetails(result.details) ? result.details : undefined;
-		const header = renderStatusLine(
-			result.isError
-				? { icon: "error", title: "Computer", description: errorDescription(result, args) }
-				: { icon: "success", title: "Computer", description: details ? resultDescription(details) : undefined },
-			theme,
-		);
-		if (!details) return new Text(header, 0, 0);
-		return framedBlock(theme, width => {
-			const body: string[] = [
-				theme.fg(
-					"dim",
-					`backend ${clean(details.backend)}${details.displayServer ? ` · server ${clean(details.displayServer)}` : ""} · capture ${clean(details.capturePermission)} · input ${clean(details.inputPermission)} · ${details.displays.length} display(s)`,
-				),
-			];
-			const displayLimit = options.expanded ? details.displays.length : Math.min(details.displays.length, 3);
-			for (const display of details.displays.slice(0, displayLimit)) {
-				body.push(
-					theme.fg(
-						"toolOutput",
-						clean(
-							`${display.id}${display.name ? ` ${display.name}` : ""}: logical ${display.x},${display.y} ${display.width}×${display.height}; pixels ${display.pixelX},${display.pixelY} ${display.pixelWidth}×${display.pixelHeight}; scale ${display.scale}${display.isPrimary ? "; primary" : ""}`,
-							160,
-						),
-					),
-				);
-			}
-			if (displayLimit < details.displays.length) {
-				body.push(theme.fg("dim", `… ${details.displays.length - displayLimit} more display(s)`));
-			}
-			if (details.capabilities) {
-				body.push(theme.fg("dim", `capabilities ${clean(details.capabilities, 160)}`));
-			}
-			return {
-				header,
-				sections: [{ lines: body }],
-				state: result.isError ? "error" : "success",
-				borderColor: result.isError ? "error" : "borderMuted",
-				applyBg: false,
-				width,
-			};
-		});
+		return renderComputerCell(args, details, result, options, theme);
 	},
 };

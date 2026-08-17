@@ -15,8 +15,9 @@
  *   - Questions may time out and auto-select the recommended option (configurable, disabled in plan mode)
  */
 
-import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample } from "@oh-my-pi/pi-ai";
+import { type as arkType } from "@musepi/omptype";
+import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { ToolExample } from "@musepi/pi-ai";
 import {
 	type Component,
 	Ellipsis,
@@ -28,9 +29,8 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { prompt, untilAborted } from "@oh-my-pi/pi-utils";
-import { type as arkType } from "arktype";
+} from "@musepi/pi-tui";
+import { prompt, untilAborted } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { ExtensionUISelectItem } from "../extensibility/extensions";
 import { getMarkdownTheme, type Theme, theme } from "../modes/theme/theme";
@@ -156,6 +156,7 @@ const RECOMMENDED_SUFFIX = " (Recommended)";
 const TIMEOUT_DETECTION_TOLERANCE_MS = 1_000;
 
 function getDoneOptionLabel(): string {
+	if (typeof theme === "undefined") return "Done selecting";
 	return `${theme.status.success} Done selecting`;
 }
 
@@ -305,6 +306,37 @@ interface CustomInputRow {
 	priority: number;
 }
 
+/**
+ * Marker glyphs for the custom-input option list. The module-level `theme`
+ * is only assigned when the TUI initializes it — daemon sessions never do —
+ * so fall back to the plain uncolored glyphs before it exists, matching the
+ * `getDoneOptionLabel` guard below (headless ask prompts must not crash).
+ */
+function customInputMarkers(): {
+	radioSelected: string;
+	radioUnselected: string;
+	checkboxChecked: string;
+	checkboxUnchecked: string;
+	cursor: string;
+} {
+	if (typeof theme === "undefined") {
+		return {
+			radioSelected: "◉",
+			radioUnselected: "○",
+			checkboxChecked: "☑",
+			checkboxUnchecked: "☐",
+			cursor: "❯",
+		};
+	}
+	return {
+		radioSelected: theme.radio.selected,
+		radioUnselected: theme.radio.unselected,
+		checkboxChecked: theme.checkbox.checked,
+		checkboxUnchecked: theme.checkbox.unchecked,
+		cursor: theme.nav.cursor,
+	};
+}
+
 function buildCustomInputRows(
 	question: string,
 	options: ExtensionUISelectItem[],
@@ -314,6 +346,7 @@ function buildCustomInputRows(
 	const selectedIndex = options.findIndex(option => getSelectOptionLabel(option) === OTHER_OPTION);
 	const checked = new Set(context.checkedIndices ?? []);
 	const window = pickCustomInputOptionWindow(options.length, selectedIndex, checked);
+	const markers = customInputMarkers();
 	const rows: CustomInputRow[] = [];
 	rows.push({ text: clampLineToWidth(question, contentWidth), priority: -1 });
 	rows.push({ text: "", priority: -1 });
@@ -338,11 +371,11 @@ function buildCustomInputRows(
 		const isMarkable = index < context.markableCount;
 		const prefix =
 			context.selectionMarker === "radio" && (isMarkable || isSelected)
-				? `${isSelected ? theme.radio.selected : theme.radio.unselected} `
+				? `${isSelected ? markers.radioSelected : markers.radioUnselected} `
 				: context.selectionMarker === "checkbox" && isMarkable
-					? `${checked.has(index) ? theme.checkbox.checked : theme.checkbox.unchecked} `
+					? `${checked.has(index) ? markers.checkboxChecked : markers.checkboxUnchecked} `
 					: isSelected
-						? `${theme.nav.cursor} `
+						? `${markers.cursor} `
 						: "  ";
 		rows.push({ text: clampLineToWidth(prefix + label, contentWidth), priority: -1 });
 		const description = getSelectOptionDescription(option);

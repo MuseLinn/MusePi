@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { ToolCallLoopGuard } from "@oh-my-pi/pi-ai/utils/tool-call-loop-guard";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { ToolCallLoopGuard } from "@musepi/pi-ai/utils/tool-call-loop-guard";
+import { INTENT_FIELD } from "@musepi/pi-wire";
 
 const zeroUsage = {
 	input: 0,

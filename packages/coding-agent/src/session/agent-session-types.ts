@@ -3,9 +3,10 @@ import type {
 	AgentMessage,
 	AgentTool,
 	AgentToolContext,
+	PauseGate,
 	StreamFn,
 	ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import type {
 	Context,
 	Effort,
@@ -17,8 +18,8 @@ import type {
 	ServiceTierByFamily,
 	SimpleStreamOptions,
 	ToolChoice,
-} from "@oh-my-pi/pi-ai";
-import type { postmortem } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import type { postmortem } from "@musepi/pi-utils";
 import type { AdvisorConfig } from "../advisor";
 import type { AsyncJob, AsyncJobDeliveryState, AsyncJobManager } from "../async";
 import type { ModelRegistry } from "../config/model-registry";
@@ -35,6 +36,7 @@ import type { FileSlashCommand } from "../extensibility/slash-commands";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { XdevState } from "../tools/xdev";
+import type { CodexAutoRedeemCoordinator } from "./codex-auto-reset";
 import type { SessionManager } from "./session-manager";
 
 /** Maximum time the interactive shutdown path waits for Mnemopi consolidation. */
@@ -43,6 +45,12 @@ export const SHUTDOWN_CONSOLIDATE_BUDGET_MS = 1_500;
 /** Options controlling session disposal. */
 export interface AgentSessionDisposeOptions {
 	mnemopiConsolidateTimeoutMs?: number;
+	/**
+	 * Deadline for the settle/drain wait before the terminal memory release
+	 * (default 5s). The bounded-teardown paths (signal handlers, tests) may
+	 * shorten it; late event handlers are still finalized after they settle.
+	 */
+	drainTimeoutMs?: number;
 	/**
 	 * Postmortem reason that triggered this dispose (signal/fatal teardown
 	 * paths). When set, the persisted `session_exit` diagnostic records it
@@ -91,6 +99,14 @@ export interface UsageFallbackConfirmation {
 	remainingPercent: number | undefined;
 }
 
+/**
+ * Confirms whether a reserve-triggered model fallback may proceed.
+ *
+ * Interactive callers use the confirmation details to present the pending
+ * route change; aborting `signal` cancels that pending confirmation.
+ */
+export type UsageFallbackConfirmer = (confirmation: UsageFallbackConfirmation, signal: AbortSignal) => Promise<boolean>;
+
 /** Identifies a retry fallback chain already entered during startup model resolution. */
 export interface InitialRetryFallbackState {
 	/** Role whose configured primary was unavailable. */
@@ -108,6 +124,8 @@ export interface AgentSessionConfig {
 	agent: Agent;
 	sessionManager: SessionManager;
 	settings: Settings;
+	/** Whether the session spawn policy permits the read-only `scout` subagent. Defaults to true. */
+	scoutAllowedBySpawnPolicy?: boolean;
 	/** Whether the caller explicitly requested yolo/auto-approve behavior for this session. */
 	autoApprove?: boolean;
 	/** Models to cycle through with Ctrl+P (from --models flag). */
@@ -173,6 +191,8 @@ export interface AgentSessionConfig {
 	initialAdvisorCosts?: ReadonlyMap<string, number>;
 	/** Prefer websocket transport for OpenAI Codex requests when supported. */
 	preferWebsockets?: boolean;
+	/** Codex saved-reset coordinator; defaults to the process-wide singleton so concurrent sessions can't double-spend. Inject a fresh one in tests. */
+	codexResetCoordinator?: CodexAutoRedeemCoordinator;
 	/** Provider payload hook used by the active session request path. */
 	onPayload?: SimpleStreamOptions["onPayload"];
 	/** Provider response hook used by the active session request path. */
@@ -184,7 +204,10 @@ export interface AgentSessionConfig {
 	/** Current session message-to-LLM conversion pipeline. */
 	convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	/** System prompt builder that can consider tool availability. */
-	rebuildSystemPrompt?: (toolNames: string[], tools: Map<string, AgentTool>) => Promise<{ systemPrompt: string[] }>;
+	rebuildSystemPrompt?: (
+		toolNames: string[],
+		tools: Map<string, AgentTool>,
+	) => Promise<{ systemPrompt: string[]; xdevCatalogNames?: readonly string[] }>;
 	/** Local calendar date provider used by prompt-cache invalidation. */
 	getLocalCalendarDate?: () => string;
 	/** Tools mounted under `xd://`, for `/tools` display. */
@@ -226,7 +249,7 @@ export interface AgentSessionConfig {
 	/**
 	 * Build the `replace`-mode `edit` a Cursor `pi_edit` frame needs, against the
 	 * advisor-scoped tool session. The advisor's ordinary instance follows the
-	 * configured `edit.mode` and rejects the frame's `old_text`/`new_text` pairs.
+	 * configured `edit.mode` and rejects the frame's `old_string`/`new_string` args.
 	 */
 	advisorCreateEditTool?(): AgentTool | undefined;
 	/**
@@ -248,6 +271,9 @@ export interface AgentSessionConfig {
 	advisorMcpResources?: CursorMcpResourceAdapter;
 	/** Preloaded watchdog prompt content for the advisor. */
 	advisorWatchdogPrompt?: string;
+	/** Freeze gate of the owning session's agent scope; the advisor's loops
+	 *  park with it so a GUI-paused session's advisor stays frozen. */
+	pauseGate?: PauseGate;
 	/** Shared advisor instructions loaded from WATCHDOG.yml. */
 	advisorSharedInstructions?: string;
 	/** Project context rendered for advisor sessions. */
@@ -379,6 +405,12 @@ export interface FreshSessionResult {
 	previousSessionId: string;
 	sessionId: string;
 	closedProviderSessions: number;
+}
+
+/** Outcome of an in-place `/clear` conversation-context reset. */
+export interface ResetSessionContextResult {
+	/** Number of live messages dropped from the model's context. */
+	droppedCount: number;
 }
 
 /** Queued user content restored to the editor. */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type Component, TUI } from "@oh-my-pi/pi-tui";
+import { type Component, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 // Regression test for https://github.com/can1357/oh-my-pi/issues/2088
@@ -106,14 +106,16 @@ const MULTIPLEXER_ENV_KEYS = [
 	"CMUX_PANEL_ID",
 	"CMUX_TAB_ID",
 	"CMUX_SOCKET_PATH",
+	"HERDR_ENV",
 ];
 const NO_MULTIPLEXER_ENV: Record<string, string | undefined> = Object.fromEntries(
 	MULTIPLEXER_ENV_KEYS.map(key => [key, undefined]),
 );
 const TMUX_ENV: Record<string, string | undefined> = { ...NO_MULTIPLEXER_ENV, TMUX: "1" };
-const CMUX_ENV_CASES: Array<[string, Record<string, string | undefined>]> = [
+const MULTIPLEXER_ENV_CASES: Array<[string, Record<string, string | undefined>]> = [
 	["CMUX_WORKSPACE_ID", { ...NO_MULTIPLEXER_ENV, TERM: "dumb", CMUX_WORKSPACE_ID: "workspace:cmux-2088" }],
 	["CMUX_SURFACE_ID", { ...NO_MULTIPLEXER_ENV, TERM: "dumb", CMUX_SURFACE_ID: "surface:cmux-2088" }],
+	["HERDR_ENV", { ...NO_MULTIPLEXER_ENV, TERM: "dumb", HERDR_ENV: "1" }],
 ];
 const CMUX_SOCKET_ONLY_ENV: Record<string, string | undefined> = {
 	...NO_MULTIPLEXER_ENV,
@@ -426,8 +428,8 @@ describe("multiplexer detection gates ED3 on resize", () => {
 		});
 	}
 
-	for (const [label, env] of CMUX_ENV_CASES) {
-		it(`debounces resize and emits no ED3 when ${label} marks CMUX with TERM=dumb`, async () => {
+	for (const [label, env] of MULTIPLEXER_ENV_CASES) {
+		it(`debounces resize and emits no ED3 when ${label} marks a multiplexer with TERM=dumb`, async () => {
 			await withEnvPatch(env, async () => {
 				const term = new VirtualTerminal(40, 10, 1000);
 				const tui = new TUI(term);

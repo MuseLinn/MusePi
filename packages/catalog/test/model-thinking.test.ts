@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Effort } from "@musepi/pi-catalog/effort";
 import {
 	clampThinkingLevelForModel,
 	getSupportedEfforts,
@@ -8,8 +8,8 @@ import {
 	mapEffortToGoogleThinkingLevel,
 	minimumSupportedEffort,
 	requireSupportedEffort,
-} from "@oh-my-pi/pi-catalog/model-thinking";
-import type { Api, Model, ModelSpec, Provider } from "@oh-my-pi/pi-catalog/types";
+} from "@musepi/pi-catalog/model-thinking";
+import type { Api, Model, ModelSpec, Provider } from "@musepi/pi-catalog/types";
 
 function createModel<TApi extends Api>(overrides: {
 	id: string;
@@ -212,9 +212,7 @@ describe("model thinking derivation", () => {
 			medium: "default",
 			high: "default",
 		});
-		// DeepSeek's ladder is the wire-exact high/max pair; explicit compat
-		// overrides still win over the identity wire values.
-		expect(getSupportedEfforts(deepseek)).toEqual([Effort.High, Effort.Max]);
+		// Explicit compat overrides still win over identity-derived wire values.
 		expect(deepseek.thinking?.effortMap).toEqual({ max: "max-plus" });
 		// OpenRouter-hosted Anthropic adaptive models carry the wire-exact
 		// five-tier ladder with no remapping.

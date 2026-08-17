@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	registerArtifactsDir,
 	resetRegisteredArtifactDirsForTests,
-} from "@oh-my-pi/pi-coding-agent/internal-urls/registry-helpers";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
+} from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
 
 function getTextOutput(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content
@@ -102,6 +102,12 @@ describe("read tool large artifact handling", () => {
 		expect(output).toContain("line-031");
 		expect(output).not.toContain("line-030");
 		expect(output).not.toContain("line-032");
+	});
+
+	it("records the source line count for an open-ended artifact range that reaches EOF", async () => {
+		const result = await tool.execute("call-raw-tail", { path: "artifact://0:raw:301-" });
+
+		expect(result.details?.totalLines).toBe(400);
 	});
 
 	it("shortens artifact paths under the user's home dir instead of leaking the absolute path", async () => {

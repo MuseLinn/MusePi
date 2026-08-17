@@ -10,11 +10,12 @@
  * terminal), and wait/list draw the "TV wall" — one live screen per worker,
  * stacked, each showing its tool calls and streamed text as it works.
  */
-import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { prompt } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+
+import { type } from "@musepi/omptype";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
+import { prompt } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import { shimmerEnabled, shimmerText } from "../modes/theme/shimmer";
 import type { Theme } from "../modes/theme/theme";

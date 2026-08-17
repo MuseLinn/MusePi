@@ -1,0 +1,7 @@
+/* Tailwind v4 — full import so @source scanning works (utilities-only
+ * import does not trigger source scanning). Preflight lands in @layer base,
+ * below the app's own unlayered styles (tokens.css/base.css/gui.css), so
+ * existing component styles keep precedence. */
+@import "tailwindcss";
+@source "./src/**/*.{ts,tsx}";
+@source "../collab-web/src/**/*.{ts,tsx}";

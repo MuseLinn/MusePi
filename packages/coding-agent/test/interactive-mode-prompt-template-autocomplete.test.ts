@@ -8,19 +8,19 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { type Api, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import type { PromptTemplate } from "@oh-my-pi/pi-coding-agent/config/prompt-templates";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { AutocompleteProvider } from "@oh-my-pi/pi-tui";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentTool } from "@musepi/pi-agent-core";
+import { type Api, Effort, type Model } from "@musepi/pi-ai";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import type { PromptTemplate } from "@musepi/pi-coding-agent/config/prompt-templates";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import type { AutocompleteProvider } from "@musepi/pi-tui";
+import { TempDir } from "@musepi/pi-utils";
 
 function makeTool(name: string): AgentTool {
 	return {

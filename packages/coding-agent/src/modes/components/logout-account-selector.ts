@@ -1,4 +1,5 @@
-import { Container, matchesKey, ScrollView, Spacer, TruncatedText } from "@oh-my-pi/pi-tui";
+import { Container, matchesKey, ScrollView, Spacer, TruncatedText } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import type { LogoutAccount } from "../../slash-commands/helpers/logout";
@@ -30,7 +31,7 @@ export class LogoutAccountSelectorComponent extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold(`Select ${providerName} account to log out:`)));
+		this.addChild(new TruncatedText(theme.bold(t("Select {0} account to log out:", providerName))));
 		this.addChild(new Spacer(1));
 		this.#listContainer = new Container();
 		this.addChild(this.#listContainer);
@@ -54,7 +55,7 @@ export class LogoutAccountSelectorComponent extends Container {
 		for (let i = startIndex; i < endIndex; i++) {
 			const account = this.#accounts[i];
 			if (!account) continue;
-			const activeTag = account.active ? theme.fg("muted", " (active)") : "";
+			const activeTag = account.active ? theme.fg("muted", t(" (active)")) : "";
 			const detail = account.detail ? theme.fg("dim", `  ${account.detail}`) : "";
 			if (i === this.#selectedIndex) {
 				rows.push(`${theme.fg("accent", `${theme.nav.cursor} ${account.label}`)}${activeTag}${detail}`);
@@ -75,11 +76,13 @@ export class LogoutAccountSelectorComponent extends Container {
 		}
 
 		if (total === 0) {
-			this.#listContainer.addChild(new TruncatedText(theme.fg("muted", "  No stored accounts to log out"), 0, 0));
+			this.#listContainer.addChild(
+				new TruncatedText(theme.fg("muted", `  ${t("No stored accounts to log out")}`), 0, 0),
+			);
 		}
 
 		this.#listContainer.addChild(
-			new TruncatedText(theme.fg("muted", "  ↑/↓ select · ↵ log out account · Esc cancel"), 0, 0),
+			new TruncatedText(theme.fg("muted", `  ${t("↑/↓ select · ↵ log out account · Esc cancel")}`), 0, 0),
 		);
 
 		if (this.#statusMessage) {

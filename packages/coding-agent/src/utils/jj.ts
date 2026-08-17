@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { $which } from "@oh-my-pi/pi-utils";
-import { LRUCache } from "lru-cache/raw";
+import { $which } from "@musepi/pi-utils";
+import { LRUCache } from "@musepi/pi-utils/lru";
 import { withTimeoutSignal } from "./fetch-timeout";
 import * as git from "./git";
 

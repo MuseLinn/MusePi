@@ -4,10 +4,10 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { ToolExample, TSchema } from "@oh-my-pi/pi-ai";
-import { renderToolInventory } from "@oh-my-pi/pi-ai/dialect";
-import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@oh-my-pi/pi-utils";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import type { ToolExample, TSchema } from "@musepi/pi-ai";
+import { renderToolInventory } from "@musepi/pi-ai/dialect";
+import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@musepi/pi-utils";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { findConfigFile } from "./config";
@@ -332,6 +332,8 @@ export async function resolvePromptInput(input: string | undefined, description:
 export interface LoadContextFilesOptions {
 	/** Working directory to start walking up from. Default: getProjectDir() */
 	cwd?: string;
+	/** Disabled extension IDs to honor instead of the process-global settings. */
+	disabledExtensions?: string[];
 }
 
 function dedupeExactContextFiles(
@@ -356,7 +358,10 @@ export async function loadProjectContextFiles(
 ): Promise<Array<{ path: string; content: string; depth?: number }>> {
 	const resolvedCwd = options.cwd ?? getProjectDir();
 
-	const result = await loadCapability(contextFileCapability.id, { cwd: resolvedCwd });
+	const result = await loadCapability(contextFileCapability.id, {
+		cwd: resolvedCwd,
+		disabledExtensions: options.disabledExtensions,
+	});
 
 	// Materialize ContextFile items, expanding any `@path/to/file` includes
 	// in their content. The expansion uses the file's own directory as the
@@ -493,7 +498,8 @@ export interface BuildSystemPromptOptions {
 	/**
 	 * Whether provider-native tool calling is active (no owned/in-band syntax).
 	 * When true and `inlineToolDescriptors` is false, the inventory renders as a
-	 * compact tool-name list; otherwise it renders full `# Tool:` sections. Default: true
+	 * compact tool-name list; otherwise it renders the full Harmony-style
+	 * `namespace functions { … }` catalog. Default: true
 	 */
 	nativeTools?: boolean;
 	/** Skills settings for discovery. */
@@ -520,6 +526,9 @@ export interface BuildSystemPromptOptions {
 	taskMaxConcurrency?: number;
 	/** Whether IRC-backed parallel coordination can be included in delegation policy. */
 	taskIrcEnabled?: boolean;
+	/** Whether the read-only `scout` subagent is spawnable (not disabled, allowed by spawn policy). Defaults to true. */
+	scoutAvailable?: boolean;
+
 	/** Rules with alwaysApply=true — their full content is injected into the prompt. */
 	alwaysApplyRules?: AlwaysApplyRule[];
 	/** Whether secret obfuscation is active. When true, explains the redaction format in the prompt. */
@@ -528,6 +537,8 @@ export interface BuildSystemPromptOptions {
 	workspaceTree?: WorkspaceTree | Promise<WorkspaceTree>;
 	/** Whether the local memory://root summary is active. */
 	memoryRootEnabled?: boolean;
+	/** Whether the read-only security:// resource namespace is active. */
+	securityEnabled?: boolean;
 	/** Active model identifier (e.g. "anthropic/claude-opus-4") used by prompt policy and optionally surfaced. */
 	model?: string;
 	/** Whether to surface `model` in the workstation block. Model-specific prompt policy still uses it. Default: true. */
@@ -552,6 +563,14 @@ export interface BuildSystemPromptOptions {
 export interface BuildSystemPromptResult {
 	/** Ordered system prompt blocks. Providers should preserve entries as distinct messages/blocks. */
 	systemPrompt: string[];
+	/**
+	 * Names of `xd://` devices whose catalog/protocol section this prompt renders.
+	 * Empty/undefined when no catalog was emitted (no mounted devices, or a custom
+	 * prompt template that omits the section). Lets the session fold these devices
+	 * into its announced-mount baseline so a same-turn mount notice does not re-list
+	 * a catalog the prompt already carries (issue #7139).
+	 */
+	xdevCatalogNames?: readonly string[];
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -584,7 +603,9 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		taskIrcEnabled = false,
 		secretsEnabled = false,
 		workspaceTree: providedWorkspaceTree,
+		scoutAvailable = true,
 		memoryRootEnabled = false,
+		securityEnabled = false,
 		model,
 		includeModelInPrompt = true,
 		personality = "default",
@@ -777,7 +798,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 
 	// List mode shows a compact tool-name list; it only applies when descriptors
 	// stay in provider-native tool schemas AND native tool calling is active.
-	// Otherwise render full `# Tool:` sections inline in the system prompt.
+	// Otherwise render the full functions-namespace catalog in the system prompt.
 	const toolListMode = !inlineToolDescriptors && nativeTools;
 	// Build tool descriptions for system prompt rendering.
 	const toolPromptNames = new Map<string, string>(toolNames.map(name => [name, tools?.get(name)?.wireName ?? name]));
@@ -810,7 +831,6 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 						examples: meta?.examples,
 					};
 				}),
-				model ?? "",
 			);
 
 	// Filter skills for the rendered system prompt:
@@ -863,9 +883,11 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		eagerTasksAlways,
 		taskBatch,
 		MAX_CONCURRENCY: normalizeConcurrencyLimit(taskMaxConcurrency),
+		scoutAvailable,
 		taskIrcEnabled,
 		secretsEnabled,
 		hasMemoryRoot: memoryRootEnabled,
+		securityEnabled,
 		hasObsidian: hasObsidian(),
 		includeWorkspaceTree,
 		renderMermaid,
@@ -891,5 +913,9 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		systemPrompt.push(activeRepoContextPrompt);
 	}
 
-	return { systemPrompt };
+	// The xd:// protocol section (with its device catalog) is only rendered by the
+	// default template; a resolved custom prompt uses a template that omits it.
+	const xdevCatalogNames =
+		!resolvedCustomPrompt && xdevTools.length > 0 ? xdevTools.map(mounted => mounted.name) : undefined;
+	return { systemPrompt, xdevCatalogNames };
 }

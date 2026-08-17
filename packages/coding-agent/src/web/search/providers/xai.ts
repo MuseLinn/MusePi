@@ -1,5 +1,5 @@
-import { type ApiKey, type ApiKeyResolver, type AuthStorage, withAuth } from "@oh-my-pi/pi-ai";
-import { $env } from "@oh-my-pi/pi-utils";
+import { type ApiKey, type ApiKeyResolver, type AuthStorage, withAuth } from "@musepi/pi-ai";
+import { $env } from "@musepi/pi-utils";
 import { resolveXAIHttpTransport, type XAIHttpProvider, type XAIHttpTransport } from "../../../lib/xai-http";
 import type { SearchCitation, SearchResponse, SearchSource, SearchUsage } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -14,7 +14,7 @@ const XAI_WEB_SEARCH_MODEL = "grok-4.5";
 // grok-4.5 defaults reasoning.effort to "high"; xAI documents "low" for
 // latency-sensitive agentic use and simple tool calling
 // (docs.x.ai/developers/model-capabilities/text/reasoning). Web search is
-// exactly that and runs under a 60s hard timeout, so pin the search calls low.
+// latency-sensitive, so pin these calls low regardless of their configured timeout.
 const XAI_WEB_SEARCH_REASONING_EFFORT = "low";
 const DEFAULT_NUM_RESULTS = 10;
 const MAX_NUM_RESULTS = 30;
@@ -139,7 +139,7 @@ async function postXAIResponses(
 			Authorization: `Bearer ${apiKey}`,
 		},
 		body: JSON.stringify(body),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 }
 

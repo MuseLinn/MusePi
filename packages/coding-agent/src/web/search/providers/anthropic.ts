@@ -18,8 +18,9 @@ import {
 	stripClaudeToolPrefix,
 	withAuth,
 	wrapFetchForCch,
-} from "@oh-my-pi/pi-ai";
-import { $env } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import { hasOpus47ApiRestrictions } from "@musepi/pi-catalog/identity/family";
+import { $env } from "@musepi/pi-utils";
 import type {
 	AnthropicApiResponse,
 	AnthropicCitation,
@@ -97,6 +98,7 @@ export interface AnthropicSearchParams {
 	max_tokens?: number;
 	temperature?: number;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -152,6 +154,7 @@ async function callSearch(
 	temperature?: number,
 	signal?: AbortSignal,
 	fetchImpl: FetchImpl = fetch,
+	timeoutMs?: number,
 ): Promise<AnthropicApiResponse> {
 	const url = buildAnthropicUrl(auth);
 	const headers = buildAnthropicSearchHeaders(auth);
@@ -176,7 +179,8 @@ async function callSearch(
 		body.metadata = { user_id: metadataUserId };
 	}
 
-	if (temperature !== undefined) {
+	// Opus 4.7+, Sonnet 5+, and Fable/Mythos 5 reject sampling parameters with a 400.
+	if (temperature !== undefined && !hasOpus47ApiRestrictions(model)) {
 		body.temperature = temperature;
 	}
 
@@ -191,7 +195,7 @@ async function callSearch(
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
-		signal: withHardTimeout(signal),
+		signal: withHardTimeout(signal, timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -367,6 +371,7 @@ export async function searchAnthropic(
 				params.temperature,
 				params.signal,
 				params.fetch,
+				params.timeoutMs,
 			);
 		},
 		{

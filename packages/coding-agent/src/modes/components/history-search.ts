@@ -9,7 +9,8 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
@@ -66,7 +67,7 @@ function highlightTokens(text: string, tokens: string[]): string {
 /** Compact "time since" label (e.g. `now`, `5m`, `2h`, `3d`, `2w`, `6mo`, `1y`) from epoch seconds. */
 function relativeTime(epochSeconds: number): string {
 	const seconds = Math.max(0, Math.floor(Date.now() / 1000) - epochSeconds);
-	if (seconds < 60) return "now";
+	if (seconds < 60) return t("now");
 	const minutes = Math.floor(seconds / 60);
 	if (minutes < 60) return `${minutes}m`;
 	const hours = Math.floor(minutes / 60);
@@ -102,7 +103,7 @@ class HistoryResultsList implements Component {
 		const lines: string[] = [];
 
 		if (this.#results.length === 0) {
-			const message = this.#tokens.length > 0 ? "No matching history" : "No history yet";
+			const message = this.#tokens.length > 0 ? t("No matching history") : t("No history yet");
 			lines.push(theme.fg("muted", `  ${theme.status.info} ${message}`));
 			return lines;
 		}

@@ -7,8 +7,9 @@ import {
 	type SgrMouseEvent,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { APP_NAME } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { APP_NAME } from "@musepi/pi-utils";
+import { t } from "../../i18n/index.js";
 import { gradientLogo, PI_LOGO } from "../components/welcome";
 import { theme } from "../theme/theme";
 import type { InteractiveModeContext } from "../types";
@@ -198,7 +199,7 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 
 	#renderScene(width: number, height: number): string[] {
 		const scene = this.scenes[this.#sceneIndex];
-		const title = this.#activeScene?.title ?? scene?.title ?? "Setup";
+		const title = this.#activeScene?.title ?? scene?.title ?? t("Setup");
 		const subtitle = this.#activeScene?.subtitle;
 		const contentWidth = Math.max(MIN_CONTENT_WIDTH, width - SCENE_MARGIN_X * 2);
 		const logo = gradientLogo(PI_LOGO, 0);
@@ -206,7 +207,10 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 			"",
 			...logo.map(line => centerLine(line, width)),
 			centerLine(theme.bold(theme.fg("accent", APP_NAME)), width),
-			centerLine(theme.fg("muted", `Setup step ${this.#sceneIndex + 1} of ${this.scenes.length}`), width),
+			centerLine(
+				theme.fg("muted", t("Setup step {0} of {1}", String(this.#sceneIndex + 1), String(this.scenes.length))),
+				width,
+			),
 			"",
 			indentLine(theme.bold(title), width, SCENE_MARGIN_X),
 		];
@@ -218,7 +222,7 @@ export class SetupWizardComponent implements Component, OverlayFocusOwner {
 
 		const footer = [
 			"",
-			centerLine(theme.fg("dim", "↑/↓ select · enter confirm · esc skip · ctrl+c exit setup"), width),
+			centerLine(theme.fg("dim", t("↑/↓ select · enter confirm · esc skip · ctrl+c exit setup")), width),
 		];
 		const maxBodyLines = Math.max(0, height - header.length - footer.length);
 		const body = this.#activeScene?.render(contentWidth, maxBodyLines).slice(0, maxBodyLines) ?? [];

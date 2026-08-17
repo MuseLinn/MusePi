@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentState } from "@oh-my-pi/pi-agent-core";
-import { APP_NAME, isEnoent } from "@oh-my-pi/pi-utils";
+import type { AgentState } from "@musepi/pi-agent-core";
+import { APP_NAME, isEnoent } from "@musepi/pi-utils";
 import { getResolvedThemeColors, getThemeExportColors } from "../../modes/theme/theme";
 import type { SessionEntry, SessionHeader } from "../../session/session-entries";
 import { loadEntriesFromFile } from "../../session/session-loader";
@@ -181,10 +181,17 @@ export interface SessionData {
 	subSessions?: Record<string, SubSession>;
 }
 
+function sessionHeaderForExport(header: SessionHeader | null): SessionHeader | null {
+	if (!header) return null;
+	const exported = { ...header };
+	delete exported.previousSessionFiles;
+	return exported;
+}
+
 /** Snapshot the session (plus optional agent state) into the JSON shape the viewer renders. */
 export function buildSessionData(sm: SessionManager, state?: AgentState): SessionData {
 	return {
-		header: sm.getHeader(),
+		header: sessionHeaderForExport(sm.getHeader()),
 		entries: sm.getEntries(),
 		leafId: sm.getLeafId(),
 		systemPrompt: state?.systemPrompt.join("\n\n"),
@@ -231,7 +238,7 @@ async function collectSubSessionsFromDir(
 			out[key] = {
 				agentId,
 				parent: parentKey,
-				header,
+				header: sessionHeaderForExport(header),
 				entries,
 				leafId: entries.length > 0 ? entries[entries.length - 1].id : null,
 			};
@@ -295,7 +302,7 @@ export async function exportFromFile(inputPath: string, options?: ExportOptions 
 	}
 
 	const sessionData: SessionData = {
-		header: sm.getHeader(),
+		header: sessionHeaderForExport(sm.getHeader()),
 		entries: sm.getEntries(),
 		leafId: sm.getLeafId(),
 	};

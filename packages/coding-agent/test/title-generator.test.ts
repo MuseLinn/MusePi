@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn, vi } from "bun:test";
-import type { Api, Model } from "@oh-my-pi/pi-ai";
-import * as ai from "@oh-my-pi/pi-ai";
-import { type GeneratedProvider, getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import type { Api, Model } from "@musepi/pi-ai";
+import * as ai from "@musepi/pi-ai";
+import { type GeneratedProvider, getBundledModel } from "@musepi/pi-catalog/models";
 import {
 	disposeTerminalTitleState,
 	generateSessionTitle,
@@ -9,8 +9,8 @@ import {
 	setSessionTerminalTitle,
 	setTerminalTitle,
 	setTerminalTitleState,
-} from "@oh-my-pi/pi-coding-agent/utils/title-generator";
-import { logger, setTerminalHeadless } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/utils/title-generator";
+import { logger, setTerminalHeadless } from "@musepi/pi-utils";
 import { mockWindowsConsoleTitle, type WindowsConsoleTitleMock } from "./terminal-title-test-utils";
 
 function getModelOrThrow(id: string): Model<Api> {
@@ -427,24 +427,25 @@ describe("title generator", () => {
 		expect(title).toBe("Fix login button on mobile");
 	});
 
-	it.each(["Here's a thinking process:", "Thinking process:", "Reasoning process:"])(
-		"rejects a markerless prose thinking preamble: %s",
-		async responseText => {
-			const model = getModelFor("deepseek", "deepseek-v4-pro");
-			vi.spyOn(ai, "completeSimple").mockResolvedValue({
-				stopReason: "stop",
-				content: [{ type: "text", text: responseText }],
-			} as never);
+	it.each([
+		"Here's a thinking process:",
+		"Thinking process:",
+		"Reasoning process:",
+	])("rejects a markerless prose thinking preamble: %s", async responseText => {
+		const model = getModelFor("deepseek", "deepseek-v4-pro");
+		vi.spyOn(ai, "completeSimple").mockResolvedValue({
+			stopReason: "stop",
+			content: [{ type: "text", text: responseText }],
+		} as never);
 
-			const title = await generateSessionTitle(
-				"the login button is broken on mobile",
-				createRegistry(model),
-				createSettings(model),
-			);
+		const title = await generateSessionTitle(
+			"the login button is broken on mobile",
+			createRegistry(model),
+			createSettings(model),
+		);
 
-			expect(title).toBeNull();
-		},
-	);
+		expect(title).toBeNull();
+	});
 
 	it("preserves a markerless title that mentions a <think> tag", async () => {
 		const model = getModelFor("deepseek", "deepseek-v4-pro");
@@ -726,6 +727,28 @@ describe("terminal title runtime", () => {
 			vi.advanceTimersByTime(400);
 			expect(writes).toEqual([]);
 		} finally {
+			Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
+		}
+	});
+
+	it("keeps the working title static under WSL", () => {
+		const originalPlatform = process.platform;
+		const originalWslDistro = process.env.WSL_DISTRO_NAME;
+		try {
+			Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+			process.env.WSL_DISTRO_NAME = "Ubuntu";
+			setSessionTerminalTitle("wsl-project");
+			writes.length = 0;
+
+			setTerminalTitleState("working");
+			expect(emittedTitles()).toEqual(["π : wsl-project"]);
+
+			writes.length = 0;
+			vi.advanceTimersByTime(400);
+			expect(writes).toEqual([]);
+		} finally {
+			if (originalWslDistro === undefined) delete process.env.WSL_DISTRO_NAME;
+			else process.env.WSL_DISTRO_NAME = originalWslDistro;
 			Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
 		}
 	});

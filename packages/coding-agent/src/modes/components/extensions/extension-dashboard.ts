@@ -23,9 +23,10 @@ import {
 	TabBar,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { getMCPConfigPath, logger } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { getMCPConfigPath, logger } from "@musepi/pi-utils";
 import { Settings } from "../../../config/settings";
+import { t } from "../../../i18n/index.js";
 import { setMcpServerEnabled } from "../../../mcp/config-writer";
 import { getTabBarTheme } from "../../../modes/shared";
 import { theme } from "../../../modes/theme/theme";
@@ -162,7 +163,7 @@ export class ExtensionDashboard implements Component {
 		const bodyLines = this.#body.render(innerWidth);
 
 		const out: string[] = [];
-		out.push(topBorder(width, "Extension Control Center"));
+		out.push(topBorder(width, t("Extension Control Center")));
 		this.#tabRowStart = out.length;
 		this.#tabRowCount = tabLines.length;
 		for (const line of tabLines) out.push(row(line, width));
@@ -171,7 +172,7 @@ export class ExtensionDashboard implements Component {
 		this.#bodyRowCount = contentRows;
 		for (let i = 0; i < contentRows; i++) out.push(row(bodyLines[i] ?? "", width));
 		out.push(divider(width));
-		out.push(row(theme.fg("dim", EXT_FOOTER), width));
+		out.push(row(theme.fg("dim", t(EXT_FOOTER)), width));
 		out.push(bottomBorder(width));
 		return out;
 	}

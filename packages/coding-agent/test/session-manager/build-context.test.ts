@@ -1,6 +1,6 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { buildSessionContext } from "@oh-my-pi/pi-coding-agent/session/session-context";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { buildSessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import type {
 	BranchSummaryEntry,
 	CompactionEntry,
@@ -8,8 +8,8 @@ import type {
 	SessionEntry,
 	SessionMessageEntry,
 	ThinkingLevelChangeEntry,
-} from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+} from "@musepi/pi-coding-agent/session/session-entries";
+import * as snapcompact from "@musepi/snapcompact";
 
 function msg(id: string, parentId: string | null, role: "user" | "assistant", text: string): SessionMessageEntry {
 	const base = { type: "message" as const, id, parentId, timestamp: "2025-01-01T00:00:00Z" };

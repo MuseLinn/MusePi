@@ -5,7 +5,8 @@
  * behavior series.
  */
 
-import { format } from "date-fns";
+import { format } from "@musepi/pi-utils/dates";
+import { t } from "../i18n";
 
 // OMP brand palette (packages/collab-web/src/styles/tokens.css): pink/purple/cyan.
 // Categorical series lead with the brand gradient hues (pink -> purple -> cyan).
@@ -230,13 +231,13 @@ export function buildTopNByModelSeries<T extends ModelKeyedPoint, B>(
 	const allDays = [...new Set(points.map(p => p.timestamp))].sort((a, b) => a - b);
 	const seriesNames = topEntries.map(([key]) => labelByKey.get(key) ?? key);
 	const hasOther = points.some(p => !topKeys.has(`${p.model}::${p.provider}`));
-	if (hasOther) seriesNames.push("Other");
+	if (hasOther) seriesNames.push(t("Other"));
 
 	const dayMap = new Map<number, Record<string, B>>();
 	for (const day of allDays) dayMap.set(day, {});
 	for (const point of points) {
 		const key = `${point.model}::${point.provider}`;
-		const label = topKeys.has(key) ? (labelByKey.get(key) ?? point.model) : "Other";
+		const label = topKeys.has(key) ? (labelByKey.get(key) ?? point.model) : t("Other");
 		const row = dayMap.get(point.timestamp);
 		if (!row) continue;
 		const bucket = row[label] ?? initBucket();

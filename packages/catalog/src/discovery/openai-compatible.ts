@@ -1,4 +1,4 @@
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
 import type { Api, FetchImpl, ModelSpec, Provider } from "../types";
 import { discoveryFetch } from "../utils";
 

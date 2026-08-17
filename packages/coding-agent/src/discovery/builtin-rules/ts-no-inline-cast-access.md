@@ -27,14 +27,15 @@ const flag = (opts as { enabled: boolean })["enabled"];
 
 ## Use
 
-Prefer a schema parse at the boundary when a validator is available (Zod, Valibot, …) — validate once, then read from a fully typed value. If Zod is already in the project (e.g. Zod v4):
+Prefer a schema parse at the boundary when a validator is available — validate
+once, then read from a fully typed value:
 
 ```ts
-import { z } from "zod/v4";
+import { type } from "@musepi/omptype";
 
-const Resp = z.object({ data: z.object({ id: z.string() }) });
+const Resp = type({ data: { id: "string" } });
 
-const resp = Resp.parse(raw); // throws on bad input; resp.data.id is typed string
+const resp = Resp.assert(raw); // throws on bad input; resp.data.id is typed string
 const id = resp.data.id;
 ```
 

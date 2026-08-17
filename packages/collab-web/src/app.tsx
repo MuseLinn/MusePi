@@ -2,12 +2,17 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
 import { AgentsPanel } from "./components/agents/AgentsPanel";
+import { BoardPanel } from "./components/panels/BoardPanel";
+import { FilePanel } from "./components/panels/FilePanel";
+import { ScheduledPanel } from "./components/panels/ScheduledPanel";
 import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
-import { HeaderBar } from "./components/shell/HeaderBar";
+import { HeaderBar, type GuestPanel } from "./components/shell/HeaderBar";
 import { Toasts } from "./components/shell/Toasts";
+import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { Transcript } from "./components/transcript/Transcript";
+import { t } from "./i18n/index.js";
 import { GuestClient } from "./lib/client";
 import { useGuestSnapshot } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
@@ -42,9 +47,13 @@ export function App(): ReactNode {
 	const credsRef = useRef<Creds | null>(null);
 
 	const connect = useCallback((link: string, name: string): void => {
+		// WebCrypto only exists in secure contexts (https or localhost). On
+		// plain http (a LAN IP) the guest degrades to plaintext mode — no E2E
+		// sealing, but also no self-signed-cert warning to dismiss.
+		const plaintext = typeof crypto === "undefined" || !crypto.subtle;
 		let next: GuestClient;
 		try {
-			next = new GuestClient(link, name);
+			next = new GuestClient(link, name, { plaintext });
 		} catch (err) {
 			setConnectError(err instanceof Error ? err.message : String(err));
 			return;
@@ -104,13 +113,29 @@ export function App(): ReactNode {
 	}, [connect]);
 
 	useEffect(() => {
-		if (!client) document.title = "omp collab";
+		if (!client) document.title = t("musepi collab");
 	}, [client]);
 
 	if (!client) {
-		return <ConnectScreen defaultName={storedName()} error={connectError} onConnect={connect} />;
+		return (
+			<ConnectScreen
+				defaultName={storedName()}
+				defaultLink={hashLink() ?? undefined}
+				error={connectError}
+				onConnect={connect}
+			/>
+		);
 	}
 	return <Session client={client} onLeave={leave} onRejoin={rejoin} />;
+}
+
+/** Persistent warning strip for plaintext (no-E2E) sessions. */
+function PlaintextBanner(): ReactNode {
+	return (
+		<div className="plaintext-banner" role="alert">
+			{t("plaintext session: not encrypted — anyone on this network can read it")}
+		</div>
+	);
 }
 
 interface SessionProps {
@@ -123,6 +148,7 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 	const snap = useGuestSnapshot(client);
 	const [railOpen, setRailOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
 	const autoOpenedRef = useRef(false);
 
 	const subCount = useMemo(() => snap.agents.filter(a => a.kind === "sub").length, [snap.agents]);
@@ -135,8 +161,9 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 			openAgent: id => {
 				if (agentIds.has(id)) setSelectedId(id);
 			},
+			sendPrompt: text => client.sendPrompt(text),
 		}),
-		[agentIds],
+		[agentIds, client],
 	);
 
 	// Auto-open the rail the first time a subagent appears.
@@ -147,12 +174,14 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 		}
 	}, [subCount]);
 
-	const title = snap.header?.title ?? snap.state?.sessionName ?? "session";
+	const title = snap.header?.title ?? snap.state?.sessionName ?? t("session");
 	useEffect(() => {
-		document.title = `${title} · omp collab`;
+		document.title = `${title} · ${t("musepi collab")}`;
 	}, [title]);
 
 	const drawerAgent = selectedId != null ? snap.agents.find(a => a.id === selectedId) : undefined;
+	const inWorkspace = snap.workspace !== null && snap.focusedSessionId === null;
+	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
 
 	return (
 		<div className="sh-app">
@@ -162,21 +191,37 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 				railOpen={railOpen}
 				onToggleRail={() => setRailOpen(open => !open)}
 				onLeave={onLeave}
+				onBack={inWorkspace ? undefined : snap.workspace !== null ? backToWorkspace : undefined}
+				activePanel={activePanel}
+				onSelectPanel={setActivePanel}
 			/>
+			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">
-				<section className="sh-content" data-rail={railOpen ? "true" : "false"}>
-					<div className="sh-transcript">
-						<Transcript
-							entries={snap.entries}
-							stream={snap.stream}
-							streamDone={snap.streamDone}
-							activeTools={snap.activeTools}
-							working={snap.working}
-							host={toolHost}
-						/>
-					</div>
-				</section>
-				{railOpen && (
+				{inWorkspace && snap.workspace !== null ? (
+					<WorkspaceView client={client} sessions={snap.workspace} onSelect={id => client.selectWorkspaceSession(id)} />
+				) : activePanel !== null ? (
+					<section className="sh-content" data-rail="false">
+						<div className="sh-panel">
+							{activePanel === "board" && <BoardPanel client={client} snapshot={snap} />}
+							{activePanel === "scheduled" && <ScheduledPanel client={client} snapshot={snap} />}
+							{activePanel === "files" && <FilePanel client={client} snapshot={snap} />}
+						</div>
+					</section>
+				) : (
+					<section className="sh-content" data-rail={railOpen ? "true" : "false"}>
+						<div className="sh-transcript">
+							<Transcript
+								entries={snap.entries}
+								stream={snap.stream}
+								streamDone={snap.streamDone}
+								activeTools={snap.activeTools}
+								working={snap.working}
+								host={toolHost}
+							/>
+						</div>
+					</section>
+				)}
+				{railOpen && !inWorkspace && activePanel === null && (
 					<>
 						<div className="sh-rail-backdrop" onClick={() => setRailOpen(false)} />
 						<aside className="sh-rail">
@@ -191,7 +236,7 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 					</>
 				)}
 			</main>
-			<Composer client={client} snapshot={snap} />
+			{!inWorkspace && activePanel === null && <Composer client={client} snapshot={snap} />}
 			{drawerAgent && (
 				<>
 					<div className="ag-drawer-backdrop" onClick={() => setSelectedId(null)} />

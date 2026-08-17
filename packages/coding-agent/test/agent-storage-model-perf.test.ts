@@ -1,8 +1,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { AgentStorage } from "@oh-my-pi/pi-coding-agent/session/agent-storage";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { createSubagentSettings } from "@musepi/pi-coding-agent/task/executor";
+import { TempDir } from "@musepi/pi-utils";
 
 describe("AgentStorage model perf aggregates", () => {
 	let tempDir: TempDir;
@@ -36,6 +38,23 @@ describe("AgentStorage model perf aggregates", () => {
 		expect(stats?.samples).toBe(2);
 		expect(stats?.tps).toBeCloseTo(1500000 / 9000, 5);
 		expect(stats?.ttftMs).toBeCloseTo(750, 5);
+	});
+
+	it("records task subagent samples in the shared model performance aggregate", async () => {
+		tempDir = TempDir.createSync("@omp-subagent-perf-");
+		const parent = await Settings.loadIsolated({ cwd: tempDir.path(), agentDir: tempDir.path() });
+		const subagent = createSubagentSettings(parent);
+
+		await subagent.getStorage()?.recordModelPerf("opencode-go/deepseek-v4-flash", {
+			outputTokens: 130,
+			durationMs: 2989.23775,
+			ttftMs: 2324.873,
+		});
+
+		const stats = parent.getStorage()?.getModelPerf().get("opencode-go/deepseek-v4-flash");
+		expect(stats?.samples).toBe(1);
+		expect(stats?.tps).toBeCloseTo(130000 / 2989.23775, 5);
+		expect(stats?.ttftMs).toBeCloseTo(2324.873, 5);
 	});
 
 	it("keeps TTFT null when no sample reported one and uses full duration for TPS", async () => {

@@ -1,4 +1,5 @@
-import { type Component, Container, Markdown, Spacer, Text, type TUI } from "@oh-my-pi/pi-tui";
+import { type Component, Container, Markdown, Spacer, Text, type TUI } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { replaceTabs } from "../../tools/render-utils";
 import { getMarkdownTheme, theme } from "../theme/theme";
 import { DynamicBorder } from "./dynamic-border";
@@ -22,7 +23,7 @@ export class OmfgPanelComponent extends Container {
 	#complaint: string;
 	#tui: TUI;
 	#state: OmfgPanelState = "generating";
-	#status = "Generating TTSR rule…";
+	#status = t("Generating TTSR rule…");
 	#preview = "";
 	#savedPath: string | undefined;
 	#errorMessage: string | undefined;
@@ -59,7 +60,7 @@ export class OmfgPanelComponent extends Container {
 		if (this.#closed) return;
 		this.#state = "saved";
 		this.#savedPath = path;
-		this.#status = `Saved ${path}`;
+		this.#status = t("Saved {0}", path);
 		this.#errorMessage = undefined;
 		this.#rebuild();
 	}
@@ -67,7 +68,7 @@ export class OmfgPanelComponent extends Container {
 	markRejected(): void {
 		if (this.#closed) return;
 		this.#state = "rejected";
-		this.#status = "Rule was not saved.";
+		this.#status = t("Rule was not saved.");
 		this.#errorMessage = undefined;
 		this.#rebuild();
 	}
@@ -75,7 +76,7 @@ export class OmfgPanelComponent extends Container {
 	markAborted(): void {
 		if (this.#closed) return;
 		this.#state = "aborted";
-		this.#status = "Cancelled.";
+		this.#status = t("Cancelled.");
 		this.#errorMessage = undefined;
 		this.#rebuild();
 	}
@@ -83,7 +84,7 @@ export class OmfgPanelComponent extends Container {
 	markError(message: string): void {
 		if (this.#closed) return;
 		this.#state = "error";
-		this.#status = "Could not create rule.";
+		this.#status = t("Could not create rule.");
 		this.#errorMessage = message;
 		this.#rebuild();
 	}
@@ -113,28 +114,28 @@ export class OmfgPanelComponent extends Container {
 			case "validating":
 			case "confirming":
 			case "saving":
-				return theme.fg("muted", "Esc cancel /omfg");
+				return theme.fg("muted", t("Esc cancel /omfg"));
 			case "saved":
 				return theme.fg(
 					"success",
-					`${theme.status.success} Registered live · ${replaceTabs(this.#savedPath ?? "saved")} · Esc dismiss`,
+					`${theme.status.success} ${t("Registered live · {0} · Esc dismiss", replaceTabs(this.#savedPath ?? "saved"))}`,
 				);
 			case "rejected":
-				return theme.fg("warning", `${theme.status.warning} Not saved · Esc dismiss`);
+				return theme.fg("warning", `${theme.status.warning} ${t("Not saved · Esc dismiss")}`);
 			case "aborted":
-				return theme.fg("warning", `${theme.status.warning} Cancelled · Esc dismiss`);
+				return theme.fg("warning", `${theme.status.warning} ${t("Cancelled · Esc dismiss")}`);
 			case "error":
-				return theme.fg("error", `${theme.status.error} Error · Esc dismiss`);
+				return theme.fg("error", `${theme.status.error} ${t("Error · Esc dismiss")}`);
 		}
 	}
 
 	#contentComponent(): Component {
 		if (this.#state === "error") {
-			return new Text(theme.fg("error", replaceTabs(this.#errorMessage ?? "Unknown error")), 1, 0);
+			return new Text(theme.fg("error", replaceTabs(this.#errorMessage ?? t("Unknown error"))), 1, 0);
 		}
 		const text = replaceTabs(this.#preview).trim();
 		if (!text) {
-			return new Text(theme.fg("dim", `${theme.status.pending} Waiting for candidate rule…`), 1, 0);
+			return new Text(theme.fg("dim", `${theme.status.pending} ${t("Waiting for candidate rule…")}`), 1, 0);
 		}
 		return new Markdown(text, 1, 0, getMarkdownTheme());
 	}

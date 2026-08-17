@@ -4,7 +4,7 @@
  * long-running processes (launch).
  */
 
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
 import type { IrcDeliveryReceipt, IrcMessage } from "../../irc/bus";
 import type { LaunchParams, LaunchToolDetails } from "./launch";
 
@@ -42,7 +42,7 @@ export interface HubPeerInfo {
 /** Background-job row surfaced by `wait`/`cancel`/`jobs` results. */
 export interface JobSnapshot {
 	id: string;
-	type: "bash" | "task";
+	type: "bash" | "task" | "agnes-video";
 	status: "running" | "completed" | "failed" | "cancelled";
 	label: string;
 	durationMs: number;

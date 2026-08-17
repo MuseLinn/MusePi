@@ -2,12 +2,12 @@ import * as nodeCrypto from "node:crypto";
 import * as fs from "node:fs";
 import { scheduler } from "node:timers/promises";
 import * as tls from "node:tls";
-import { isAnthropicSigningProxyUrl, isOfficialAnthropicApiUrl } from "@oh-my-pi/pi-catalog/compat/anthropic";
-import { hostMatchesUrl, isVertexRawPredictUrl } from "@oh-my-pi/pi-catalog/hosts";
-import { mapEffortToAnthropicAdaptiveEffort } from "@oh-my-pi/pi-catalog/model-thinking";
-import { calculateCost, getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { isAnthropicOAuthToken } from "@oh-my-pi/pi-catalog/utils";
-import { parseGitHubCopilotApiKey } from "@oh-my-pi/pi-catalog/wire/github-copilot";
+import { isAnthropicSigningProxyUrl, isOfficialAnthropicApiUrl } from "@musepi/pi-catalog/compat/anthropic";
+import { hostMatchesUrl, isVertexRawPredictUrl } from "@musepi/pi-catalog/hosts";
+import { mapEffortToAnthropicAdaptiveEffort } from "@musepi/pi-catalog/model-thinking";
+import { calculateCost, getBundledModel } from "@musepi/pi-catalog/models";
+import { isAnthropicOAuthToken } from "@musepi/pi-catalog/utils";
+import { parseGitHubCopilotApiKey } from "@musepi/pi-catalog/wire/github-copilot";
 import {
 	$env,
 	getInstallId,
@@ -16,7 +16,7 @@ import {
 	parseJsonWithRepair,
 	parseStreamingJsonThrottled,
 	readSseEvents,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
 import { renderDemotedThinking } from "../dialect/demotion";
 import * as AIError from "../error";
 import { getEnvApiKey, OUTPUT_FALLBACK_BUFFER } from "../stream";
@@ -87,11 +87,10 @@ import {
 } from "./anthropic-wire";
 import {
 	CLAUDE_CODE_MAX_OUTPUT_TOKENS,
-	claudeAgentSdkVersion,
-	claudeClientVersion,
 	claudeCodeSystemInstruction,
 	claudeCodeVersion,
 	claudeToolPrefix,
+	coworkUserAgent,
 } from "./claude-code-fingerprint";
 import {
 	buildCopilotDynamicHeaders,
@@ -111,7 +110,7 @@ export type AnthropicHeaderOptions = {
 	modelHeaders?: Record<string, string>;
 	isCloudflareAiGateway?: boolean;
 	claudeCodeSessionId?: string;
-	claudeCodeBetas?: readonly string[];
+	coworkBetas?: readonly string[];
 	/** Allow explicit fingerprint headers to replace OAuth defaults on non-official endpoints. */
 	allowAnthropicHeaderOverrides?: boolean;
 };
@@ -158,52 +157,51 @@ function mergeAnthropicBetaHeader(callerHeaders: Record<string, string>, beta: s
 const midConversationSystemBeta = "mid-conversation-system-2026-04-07";
 const contextManagementBeta = "context-management-2025-06-27";
 const structuredOutputsBeta = "structured-outputs-2025-12-15";
-const claudeCodeUtilityBetaDefaults = [
-	"oauth-2025-04-20",
+const thinkingTokenCountBeta = "thinking-token-count-2026-05-13";
+const fallbackCreditBeta = "fallback-credit-2026-06-01";
+const coworkUtilityBetaDefaults = [
 	"interleaved-thinking-2025-05-14",
+	thinkingTokenCountBeta,
 	contextManagementBeta,
 	"prompt-caching-scope-2026-01-05",
 	structuredOutputsBeta,
 ] as const;
-const claudeCodeAgentBetaDefaults = [
+const coworkAgentBetaDefaults = [
 	"claude-code-20250219",
-	"oauth-2025-04-20",
 	"interleaved-thinking-2025-05-14",
+	thinkingTokenCountBeta,
 	contextManagementBeta,
 	"prompt-caching-scope-2026-01-05",
 	midConversationSystemBeta,
 	"advanced-tool-use-2025-11-20",
 ] as const;
 const extendedCacheTtlBeta = "extended-cache-ttl-2025-04-11";
-const claudeCodeAgentPostEffortBetas = [extendedCacheTtlBeta] as const;
 const fineGrainedToolStreamingBeta = "fine-grained-tool-streaming-2025-05-14";
 const interleavedThinkingBeta = "interleaved-thinking-2025-05-14";
-// Asks the API to redact thinking blocks from responses. Only sent when the
-// caller explicitly hides thinking (`thinkingDisplay: "omitted"`); sending it
-// by default suppresses the thinking traces callers expect to stream.
-const redactThinkingBeta = "redact-thinking-2026-02-12";
 const fastModeBeta = "fast-mode-2026-02-01";
 const taskBudgetBeta = "task-budgets-2026-03-13";
 const effortBeta = "effort-2025-11-24";
 const serverSideFallbackBeta = "server-side-fallback-2026-06-01";
 
-function buildClaudeCodeBetas(
+function buildCoworkBetas(
 	agentRequest: boolean,
 	thinkingRequest: boolean,
-	redactThinking: boolean,
 	disableStrictTools = false,
 ): readonly string[] {
-	if (!agentRequest && !redactThinking && !disableStrictTools) return claudeCodeUtilityBetaDefaults;
+	// `context-1m-2025-08-07` is intentionally never advertised. OAuth
+	// subscription credentials have no long-context credit balance, so Anthropic
+	// hard-429s ("Usage credits are required for long context requests") on any
+	// beta-gated 1M model regardless of prompt size (#7238). Natively-1M models
+	// (e.g. claude-sonnet-5) serve their full window without the beta anyway.
+	if (!agentRequest && !disableStrictTools) return coworkUtilityBetaDefaults;
 	const betas: string[] = [];
-	for (const beta of agentRequest ? claudeCodeAgentBetaDefaults : claudeCodeUtilityBetaDefaults) {
+	for (const beta of agentRequest ? coworkAgentBetaDefaults : coworkUtilityBetaDefaults) {
 		if (disableStrictTools && beta === structuredOutputsBeta) continue;
 		betas.push(beta);
-		// Match CC's header order: redact-thinking immediately follows interleaved-thinking.
-		if (redactThinking && beta === interleavedThinkingBeta) betas.push(redactThinkingBeta);
 	}
 	if (!agentRequest) return betas;
 	if (thinkingRequest) betas.push(effortBeta);
-	betas.push(...claudeCodeAgentPostEffortBetas);
+	betas.push(fallbackCreditBeta);
 	return betas;
 }
 
@@ -246,11 +244,10 @@ export function buildAnthropicHeaders(options: AnthropicHeaderOptions): Record<s
 	const incomingUserAgent = getHeaderCaseInsensitive(options.modelHeaders, "User-Agent");
 	const incomingAuthorization = getHeaderCaseInsensitive(options.modelHeaders, "Authorization");
 	const incomingApiKey = getHeaderCaseInsensitive(options.modelHeaders, "X-Api-Key");
-	// Claude Code betas (oauth-2025-04-20, claude-code-20250219, …) are part of
-	// the OAuth fingerprint; API-key requests default to extras only, matching
-	// the streaming path (buildAnthropicClientOptions passes [] for non-OAuth).
+	// Cowork's beta profile is part of the OAuth fingerprint; API-key requests
+	// default to extras only, matching the streaming path.
 	const betaHeader = buildBetaHeader(
-		options.claudeCodeBetas ?? (oauthToken ? buildClaudeCodeBetas(true, true, false) : []),
+		options.coworkBetas ?? (oauthToken ? buildCoworkBetas(true, true) : []),
 		extraBetas,
 	);
 	const acceptHeader = oauthToken ? "application/json" : stream ? "text/event-stream" : "application/json";
@@ -308,19 +305,22 @@ export function buildAnthropicHeaders(options: AnthropicHeaderOptions): Record<s
 	}
 
 	if (oauthToken) {
-		const userAgent = isClaudeCodeClientUserAgent(incomingUserAgent)
-			? incomingUserAgent
-			: `claude-cli/${claudeCodeVersion} (external, local-agent, agent-sdk/${claudeAgentSdkVersion})`;
+		const userAgent = isClaudeCodeClientUserAgent(incomingUserAgent) ? incomingUserAgent : coworkUserAgent;
 		const headers = {
 			...modelHeaders,
-			...claudeCodeHeaders,
 			Accept: acceptHeader,
-			Authorization: `Bearer ${options.apiKey}`,
-			...sharedHeaders,
-			...(betaHeader ? { "anthropic-beta": betaHeader } : {}),
-			...(options.claudeCodeSessionId ? { "X-Claude-Code-Session-Id": options.claudeCodeSessionId } : {}),
-			"x-client-request-id": nodeCrypto.randomUUID(),
+			"Content-Type": "application/json",
 			"User-Agent": userAgent,
+			...(options.claudeCodeSessionId ? { "X-Claude-Code-Session-Id": options.claudeCodeSessionId } : {}),
+			...coworkHeaders,
+			...(betaHeader ? { "anthropic-beta": betaHeader } : {}),
+			"anthropic-dangerous-direct-browser-access": "true",
+			"anthropic-version": "2023-06-01",
+			Authorization: `Bearer ${options.apiKey}`,
+			"x-app": "cli",
+			"x-client-request-id": nodeCrypto.randomUUID(),
+			Connection: "keep-alive",
+			"Accept-Encoding": "gzip, deflate, br, zstd",
 			...(incomingApiKey ? { "X-Api-Key": incomingApiKey } : {}),
 		};
 		return allowAnthropicHeaderOverrides ? mergeHeaders(headers, anthropicHeaderOverrides) : headers;
@@ -503,25 +503,9 @@ function getCacheControl(
 	};
 }
 
-// Stealth mode: mimic Claude Code's request fingerprint. Constants live in the
-// leaf module so registry/usage consumers avoid an init cycle through this file.
+// Cowork mode: mimic the desktop agent's direct inference transport. Constants
+// live in the leaf module so registry/usage consumers avoid an init cycle.
 export * from "./claude-code-fingerprint";
-
-export function mapStainlessOs(platform: string): "MacOS" | "Windows" | "Linux" | "FreeBSD" | `Other::${string}` {
-	switch (platform.toLowerCase()) {
-		case "darwin":
-			return "MacOS";
-		case "windows":
-		case "win32":
-			return "Windows";
-		case "linux":
-			return "Linux";
-		case "freebsd":
-			return "FreeBSD";
-		default:
-			return `Other::${platform.toLowerCase()}`;
-	}
-}
 
 export function mapStainlessArch(arch: string): "x64" | "arm64" | "x86" | `other::${string}` {
 	switch (arch.toLowerCase()) {
@@ -540,22 +524,21 @@ export function mapStainlessArch(arch: string): "x64" | "arm64" | "x86" | `other
 	}
 }
 
-export const claudeCodeHeaders = {
-	"X-Stainless-Retry-Count": "0",
-	"X-Stainless-Runtime-Version": "v24.3.0",
-	"X-Stainless-Package-Version": "0.94.0",
-	"X-Stainless-Runtime": "node",
-	"X-Stainless-Lang": "js",
+/** Static headers emitted by Cowork's Linux Claude runtime. */
+export const coworkHeaders = {
 	"X-Stainless-Arch": mapStainlessArch(process.arch),
-	"X-Stainless-OS": mapStainlessOs(process.platform),
-	"X-Stainless-Timeout": "900",
-	"anthropic-client-platform": "desktop_app",
-	"anthropic-client-version": claudeClientVersion,
+	"X-Stainless-Lang": "js",
+	"X-Stainless-OS": "Linux",
+	"X-Stainless-Package-Version": "0.94.0",
+	"X-Stainless-Retry-Count": "0",
+	"X-Stainless-Runtime": "node",
+	"X-Stainless-Runtime-Version": "v26.3.0",
+	"X-Stainless-Timeout": "600",
 };
 
 const enforcedHeaderKeys = new Set(
 	[
-		...Object.keys(claudeCodeHeaders),
+		...Object.keys(coworkHeaders),
 		"Accept",
 		"Accept-Encoding",
 		"Connection",
@@ -574,7 +557,7 @@ const enforcedHeaderKeys = new Set(
 );
 
 const overridableAnthropicHeaderKeys = new Set(
-	[...Object.keys(claudeCodeHeaders), "anthropic-beta", "User-Agent", "x-app"].map(key => key.toLowerCase()),
+	[...Object.keys(coworkHeaders), "anthropic-beta", "User-Agent", "x-app"].map(key => key.toLowerCase()),
 );
 
 const CLAUDE_BILLING_HEADER_PREFIX = "x-anthropic-billing-header:";
@@ -591,7 +574,7 @@ function createClaudeBillingHeader(firstUserMessageText: string): string {
 		.slice(0, 3);
 	// cch=00000: placeholder replaced with the real attestation hash by wrapFetchForCch
 	// before the request hits the wire (see below).
-	return `${CLAUDE_BILLING_HEADER_PREFIX} cc_version=${claudeCodeVersion}.${versionSuffix}; cc_entrypoint=local-agent; ${CCH_PLACEHOLDER_STR};`;
+	return `${CLAUDE_BILLING_HEADER_PREFIX} cc_version=${claudeCodeVersion}.${versionSuffix}; cc_entrypoint=claude-desktop; ${CCH_PLACEHOLDER_STR};`;
 }
 
 // cch attestation: XXHash64(body_with_placeholder, seed) low-20-bits, 5 hex chars.
@@ -1184,7 +1167,7 @@ export type AnthropicClientOptionsResult = {
 	fetchOptions?: AnthropicFetchOptions;
 };
 
-const CLAUDE_CODE_TLS_CIPHERS = tls.DEFAULT_CIPHERS;
+const COWORK_TLS_CIPHERS = tls.DEFAULT_CIPHERS;
 
 type FoundryTlsOptions = {
 	ca?: string | string[];
@@ -1229,7 +1212,14 @@ function resolveAnthropicBaseUrl(model: Model<"anthropic-messages">, apiKey?: st
 		}
 	}
 	if (model.provider === "anthropic") {
-		return normalizeAnthropicBaseUrl(model.baseUrl) ?? "https://api.anthropic.com";
+		const configured = normalizeAnthropicBaseUrl(model.baseUrl);
+		// An explicitly configured non-official baseUrl (e.g. a models.yml provider
+		// override) is more specific than the generic env fallback and wins.
+		if (configured && !isOfficialAnthropicApiUrl(configured)) return configured;
+		// Otherwise ANTHROPIC_BASE_URL routes chat through an enterprise gateway
+		// (docs/environment-variables.md), ahead of the official default. The
+		// Foundry redirect is already handled above.
+		return normalizeAnthropicBaseUrl($env.ANTHROPIC_BASE_URL) ?? configured ?? "https://api.anthropic.com";
 	}
 	return normalizeAnthropicBaseUrl(model.baseUrl);
 }
@@ -1289,9 +1279,12 @@ export function resolveAnthropicCustomHeadersForBaseUrl(
 	return parseAnthropicCustomHeaders($env.ANTHROPIC_CUSTOM_HEADERS);
 }
 
-function resolveAnthropicCustomHeaders(model: Model<"anthropic-messages">): Record<string, string> | undefined {
+function resolveAnthropicCustomHeaders(
+	model: Model<"anthropic-messages">,
+	baseUrl: string | undefined,
+): Record<string, string> | undefined {
 	if (model.provider !== "anthropic") return undefined;
-	return resolveAnthropicCustomHeadersForBaseUrl(model.baseUrl);
+	return resolveAnthropicCustomHeadersForBaseUrl(baseUrl);
 }
 
 function looksLikeFilePath(value: string): boolean {
@@ -1347,7 +1340,7 @@ function resolveFoundryTlsOptions(model: Model<"anthropic-messages">): FoundryTl
 	return resolved;
 }
 
-function buildClaudeCodeTlsFetchOptions(
+function buildCoworkTlsFetchOptions(
 	model: Model<"anthropic-messages">,
 	baseUrl: string | undefined,
 ): AnthropicFetchOptions | undefined {
@@ -1369,7 +1362,7 @@ function buildClaudeCodeTlsFetchOptions(
 		tls: {
 			rejectUnauthorized: true,
 			serverName,
-			...(CLAUDE_CODE_TLS_CIPHERS ? { ciphers: CLAUDE_CODE_TLS_CIPHERS } : {}),
+			...(COWORK_TLS_CIPHERS ? { ciphers: COWORK_TLS_CIPHERS } : {}),
 			...(foundryTlsOptions ?? {}),
 		},
 	};
@@ -1448,7 +1441,7 @@ async function* iterateAnthropicEvents(
 	let sawMessageStart = false;
 	let sawMessageEnd = false;
 
-	for await (const sse of readSseEvents(response.body, signal)) {
+	for await (const sse of readSseEvents(response.body as ReadableStream<Uint8Array>, signal)) {
 		notifyRawSseEvent(onSseEvent, sse);
 		if (sse.event === "error") {
 			throw createAnthropicSseStreamError(sse.data);
@@ -1549,6 +1542,13 @@ async function* observeDecodedAnthropicSdkEvents(
 const PROVIDER_MAX_RETRIES = 10;
 
 /**
+ * Flat delay between attempts when Copilot 400s a model its own `/models`
+ * catalog advertises. Part of the fleet carries the model and part doesn't, so
+ * the retry is a reroll rather than a wait for capacity to free up.
+ */
+const COPILOT_MODEL_FLAP_RETRY_DELAY_MS = 400;
+
+/**
  * How long `ping` keepalives may keep extending the idle deadline without any
  * semantic stream progress, as a multiple of the idle timeout. Anthropic pings
  * across legitimate generation gaps, so pings count as liveness — but a wedged
@@ -1578,8 +1578,8 @@ function shouldIgnoreAnthropicPreambleEvent(eventType: unknown): boolean {
 /**
  * Whether an Anthropic (or Copilot-over-Anthropic) stream error should be
  * retried. The classification lives in {@link AIError.isProviderRetryableError};
- * this wrapper injects the Copilot-specific `model_not_supported` transient
- * check, which the error module must not import directly.
+ * this wrapper injects the Copilot-specific model-availability transient check,
+ * which the error module must not import directly.
  */
 export function isProviderRetryableError(error: unknown, provider?: string): boolean {
 	return AIError.isProviderRetryableError(error, {
@@ -2019,7 +2019,7 @@ const streamAnthropicOnce = (
 				| (AnthropicServerToolContent & { [kStreamingPartialJson]?: string })
 				| (ToolCall & { [kStreamingPartialJson]: string; [kStreamingLastParseLen]?: number })
 			) & { [kStreamingBlockIndex]: number };
-			const idleTimeoutMs = options?.streamIdleTimeoutMs ?? getStreamIdleTimeoutMs();
+			const idleTimeoutMs = options?.streamIdleTimeoutMs ?? getStreamIdleTimeoutMs(model.compat.streamIdleTimeoutMs);
 			const firstEventTimeoutMs = options?.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs(idleTimeoutMs);
 			const requestTimeoutMs =
 				firstEventTimeoutMs !== undefined && firstEventTimeoutMs > 0 ? firstEventTimeoutMs : undefined;
@@ -2580,7 +2580,22 @@ const streamAnthropicOnce = (
 					if (!sawEvent || !sawMessageStart) {
 						throw new AIError.AnthropicStreamEnvelopeError("stream ended before message_start");
 					}
+					if (!sawTerminalEnvelope) {
+						// Neither a message_delta stop_reason nor message_stop arrived: the
+						// connection died mid-generation. Finalizing the partial message as
+						// a clean "stop" would make the agent loop treat the truncated turn
+						// as complete (silent mid-sentence halt), so fail the turn. The
+						// envelope error is transparently retried before replay-unsafe
+						// content streams; afterwards it surfaces as an error turn whose
+						// complete tool calls the agent loop salvages
+						// (`recoverTransientErrorToolTurn` recognizes the envelope-error
+						// text and `retainCompletedToolCalls` drops half-streamed calls).
+						throw new AIError.AnthropicStreamEnvelopeError("stream ended before message_stop");
+					}
 					if (!sawMessageStop) {
+						// A stop_reason arrived via message_delta, so generation finished;
+						// only the trailing message_stop frame is missing (non-conforming
+						// gateway). Degrade to best-effort instead of discarding the turn.
 						reportAnthropicEnvelopeAnomaly("stream ended before message_stop");
 					}
 					if (openBlocks.size > 0) {
@@ -2711,7 +2726,12 @@ const streamAnthropicOnce = (
 						throw streamFailure;
 					}
 					providerRetryAttempt++;
-					const backoffDelayMs = calculateAnthropicRetryDelayMs(providerRetryAttempt - 1);
+					// Copilot's model-availability 400 is a per-request replica reroll, not
+					// upstream backpressure — the exponential curve would just add dead
+					// time to a coin flip that the next attempt is as likely to win.
+					const backoffDelayMs = AIError.isCopilotTransientModelError(streamFailure)
+						? COPILOT_MODEL_FLAP_RETRY_DELAY_MS
+						: calculateAnthropicRetryDelayMs(providerRetryAttempt - 1);
 					// Honor the server's retry hint (`retry-after-ms`/`retry-after`) on
 					// 429/529-style failures: retrying sooner than the server asked is a
 					// guaranteed failure that just burns the retry budget.
@@ -2797,15 +2817,48 @@ type SystemBlockOptions = {
 	cacheControl?: AnthropicCacheControl;
 };
 
-function applyClaudeCodeSystemCache(
+/**
+ * Place system-block cache breakpoints that survive volatile project context.
+ *
+ * omp normally appends its project footer (cwd, date, workspace tree) after the
+ * stable system prefix. When cwd is outside a single direct child repository,
+ * an active-repo context block follows that footer. Caching up to the last three
+ * eligible blocks therefore covers both layouts:
+ *
+ * - stable prefix, project footer
+ * - stable prefix, project footer, active-repo context
+ *
+ * A footer change can then fall back to the stable-prefix entry instead of
+ * re-writing the entire system cache (issue #7324).
+ *
+ * @returns breakpoints placed, capped by `maxBreakpoints`.
+ */
+function cacheSystemPrefixBreakpoints(
 	blocks: AnthropicSystemBlock[],
 	cacheControl: AnthropicCacheControl | undefined,
+	maxBreakpoints: number,
+	firstCacheableIndex: number,
 ): number {
-	if (!cacheControl || blocks.length === 0) return 0;
-	const lastIndex = blocks.length - 1;
-	if (blocks[lastIndex].cache_control != null) return 0;
-	blocks[lastIndex] = { ...blocks[lastIndex], cache_control: cloneAnthropicCacheControl(cacheControl) };
-	return 1;
+	if (!cacheControl || maxBreakpoints <= 0) return 0;
+	let placed = 0;
+	for (let index = blocks.length - 1; index >= firstCacheableIndex && placed < maxBreakpoints; index--) {
+		if (blocks[index].cache_control != null) continue;
+		blocks[index] = { ...blocks[index], cache_control: cloneAnthropicCacheControl(cacheControl) };
+		placed++;
+	}
+	return placed;
+}
+
+/**
+ * First system-block index that may carry a cache breakpoint. Skips the OAuth
+ * cloak blocks that must stay uncached: the CC billing header (block 0, a
+ * per-request fingerprint) and the Claude Code identity instruction (block 1).
+ */
+function firstCacheableSystemIndex(blocks: readonly AnthropicSystemBlock[]): number {
+	let index = 0;
+	if (blocks[index]?.text?.startsWith(CLAUDE_BILLING_HEADER_PREFIX)) index++;
+	if (blocks[index]?.text === claudeCodeSystemInstruction) index++;
+	return index;
 }
 
 export function buildAnthropicSystemBlocks(
@@ -2829,7 +2882,7 @@ export function buildAnthropicSystemBlocks(
 		for (const prompt of sanitizedPrompts) {
 			blocks.push({ type: "text", text: prompt });
 		}
-		applyClaudeCodeSystemCache(blocks, cacheControl);
+		cacheSystemPrefixBreakpoints(blocks, cacheControl, 3, firstCacheableSystemIndex(blocks));
 
 		return blocks;
 	}
@@ -2865,7 +2918,6 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		dynamicHeaders,
 		hasTools = false,
 		thinkingEnabled = false,
-		thinkingDisplay,
 		isOAuth,
 		maxRetryDelayMs,
 		claudeCodeSessionId,
@@ -2902,8 +2954,8 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 	const supportsEagerToolInputStreaming = resolveEagerToolInputStreamingSupport(model, baseUrl);
 	const needsFineGrainedToolStreamingBeta =
 		hasTools && isOfficialAnthropicApiUrl(baseUrl) && !supportsEagerToolInputStreaming;
-	const foundryCustomHeaders = resolveAnthropicCustomHeaders(model);
-	const tlsFetchOptions = buildClaudeCodeTlsFetchOptions(model, baseUrl);
+	const foundryCustomHeaders = resolveAnthropicCustomHeaders(model, baseUrl);
+	const tlsFetchOptions = buildCoworkTlsFetchOptions(model, baseUrl);
 	// Disable Bun's native ~300s pre-response fetch timeout (issue #2422).
 	// `AnthropicMessagesClient` already arms its own DEFAULT_TIMEOUT_MS timer
 	// per request, so the native ceiling can only short-circuit slow-prefill
@@ -2969,14 +3021,7 @@ export function buildAnthropicClientOptions(args: AnthropicClientOptionsArgs): A
 		isCloudflareAiGateway: model.provider === "cloudflare-ai-gateway",
 		allowAnthropicHeaderOverrides: model.compat.allowAnthropicHeaderOverrides,
 		claudeCodeSessionId,
-		claudeCodeBetas: oauthToken
-			? buildClaudeCodeBetas(
-					hasTools || thinkingEnabled,
-					thinkingEnabled,
-					thinkingDisplay === "omitted",
-					disableStrictTools,
-				)
-			: [],
+		coworkBetas: oauthToken ? buildCoworkBetas(hasTools || thinkingEnabled, thinkingEnabled, disableStrictTools) : [],
 	});
 
 	if (model.provider === "cloudflare-ai-gateway") {
@@ -3108,17 +3153,6 @@ type CacheControlBlock = {
 	cache_control?: AnthropicCacheControl | null;
 };
 
-function applyCacheControlToLastBlock<T extends CacheControlBlock>(
-	blocks: T[],
-	cacheControl: AnthropicCacheControl,
-): boolean {
-	if (blocks.length === 0) return false;
-	const lastIndex = blocks.length - 1;
-	if (blocks[lastIndex].cache_control != null) return false;
-	blocks[lastIndex] = { ...blocks[lastIndex], cache_control: cloneAnthropicCacheControl(cacheControl) };
-	return true;
-}
-
 function applyCacheControlToLastTextBlock(
 	blocks: Array<ContentBlockParam & CacheControlBlock>,
 	cacheControl: AnthropicCacheControl,
@@ -3152,24 +3186,32 @@ function applyPromptCaching(params: MessageCreateParamsStreaming, cacheControl?:
 	let isCCLayout = false;
 
 	if (params.system && Array.isArray(params.system) && params.system.length > 0) {
-		isCCLayout =
-			params.system.length >= 3 &&
-			(params.system[0] as { text?: string }).text?.startsWith(CLAUDE_BILLING_HEADER_PREFIX) === true;
-		if (isCCLayout) {
-			const placed = Math.min(
-				MAX_CACHE_BREAKPOINTS - cacheBreakpointsUsed,
-				applyClaudeCodeSystemCache(params.system as AnthropicSystemBlock[], cacheControl),
-			);
-			cacheBreakpointsUsed += placed;
-		} else if (applyCacheControlToLastBlock(params.system, cacheControl)) {
-			cacheBreakpointsUsed++;
-		}
+		isCCLayout = params.system[0]?.text?.startsWith(CLAUDE_BILLING_HEADER_PREFIX) === true;
+		const maxSystemBreakpoints = Math.min(3, MAX_CACHE_BREAKPOINTS - cacheBreakpointsUsed);
+		cacheBreakpointsUsed += cacheSystemPrefixBreakpoints(
+			params.system as AnthropicSystemBlock[],
+			cacheControl,
+			maxSystemBreakpoints,
+			isCCLayout ? firstCacheableSystemIndex(params.system as AnthropicSystemBlock[]) : 0,
+		);
 	}
 
 	if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) return;
 
-	const start = isCCLayout ? Math.max(0, params.messages.length - 1) : Math.max(0, params.messages.length - 2);
-	for (let i = start; i < params.messages.length; i++) {
+	// `convertAnthropicMessages` appends this neutral pad after a trailing
+	// assistant because Anthropic rejects assistant-prefill endings. It is absent
+	// from the next normal turn, so caching it wastes a scarce breakpoint; anchor
+	// the cache window on the preceding real assistant instead.
+	const trailingIndex = params.messages.length - 1;
+	const trailingMessage = params.messages[trailingIndex];
+	const hasTrailingAssistantPad =
+		trailingMessage?.role === "user" &&
+		trailingMessage.content === "Continue." &&
+		params.messages[trailingIndex - 1]?.role === "assistant";
+	const messageEnd = hasTrailingAssistantPad ? trailingIndex - 1 : trailingIndex;
+	const messageWindowSize = isCCLayout ? 1 : 2;
+	const start = Math.max(0, messageEnd - messageWindowSize + 1);
+	for (let i = messageEnd; i >= start; i--) {
 		if (cacheBreakpointsUsed >= MAX_CACHE_BREAKPOINTS) break;
 		const message = params.messages[i];
 		if (!message) continue;

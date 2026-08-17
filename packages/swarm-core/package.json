@@ -1,0 +1,17 @@
+{
+  "name": "@musepi/pi-swarm-core",
+  "version": "17.2.2",
+  "description": "MusePi swarm core: pure types, widget line builders, and progress estimator for multi-agent braille-grid visualization",
+  "main": "src/index.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "license": "MIT"
+}

@@ -33,7 +33,7 @@
  * Reference: https://docs.searxng.org/dev/search_api.html
  */
 
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
 
 import { settings } from "../../../config/settings";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
@@ -197,11 +197,12 @@ async function fetchEngineNameMap(
 	auth: SearXNGAuth | null,
 	fetchImpl: FetchImpl | undefined,
 	signal: AbortSignal | undefined,
+	timeoutMs?: number,
 ): Promise<Map<string, string> | null> {
 	try {
 		const response = await (fetchImpl ?? fetch)(`${base}/config`, {
 			headers: buildHeaders(auth),
-			signal: withHardTimeout(signal),
+			signal: withHardTimeout(signal, timeoutMs),
 		});
 		if (!response.ok) return null;
 		const config = (await response.json()) as SearXNGConfig;
@@ -224,11 +225,12 @@ function getEngineNameMap(
 	auth: SearXNGAuth | null,
 	fetchImpl: FetchImpl | undefined,
 	signal: AbortSignal | undefined,
+	timeoutMs?: number,
 ): Promise<Map<string, string> | null> {
 	const base = endpoint.replace(/\/+$/, "");
 	let cached = engineNameMapCache.get(base);
 	if (!cached) {
-		cached = fetchEngineNameMap(base, auth, fetchImpl, signal).then(map => {
+		cached = fetchEngineNameMap(base, auth, fetchImpl, signal, timeoutMs).then(map => {
 			if (!map) engineNameMapCache.delete(base);
 			return map;
 		});
@@ -247,13 +249,14 @@ async function resolveEngineNames(
 	auth: SearXNGAuth | null,
 	fetchImpl: FetchImpl | undefined,
 	signal: AbortSignal | undefined,
+	timeoutMs?: number,
 ): Promise<string | undefined> {
 	const entries = raw
 		.split(",")
 		.map(entry => entry.trim())
 		.filter(Boolean);
 	if (!entries.length) return undefined;
-	const map = await getEngineNameMap(endpoint, auth, fetchImpl, signal);
+	const map = await getEngineNameMap(endpoint, auth, fetchImpl, signal, timeoutMs);
 	if (!map) return entries.join(",");
 	return entries.map(entry => map.get(entry.toLowerCase()) ?? entry).join(",");
 }
@@ -324,6 +327,7 @@ async function callSearXNGSearch(
 		engines?: string;
 		language?: string;
 		signal?: AbortSignal;
+		timeoutMs?: number;
 		fetch?: FetchImpl;
 	},
 	auth: SearXNGAuth | null,
@@ -332,7 +336,7 @@ async function callSearXNGSearch(
 
 	const response = await (params.fetch ?? fetch)(url, {
 		headers,
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -352,6 +356,7 @@ export async function searchSearXNG(params: {
 	num_results?: number;
 	recency?: "day" | "week" | "month" | "year";
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }): Promise<SearchResponse> {
 	const numResults = clampNumResults(params.num_results, DEFAULT_NUM_RESULTS, MAX_NUM_RESULTS);
@@ -386,7 +391,7 @@ export async function searchSearXNG(params: {
 	if (parsed.lang) language = parsed.lang;
 
 	const engines = configuredEngines
-		? await resolveEngineNames(configuredEngines, endpoint, auth, params.fetch, params.signal)
+		? await resolveEngineNames(configuredEngines, endpoint, auth, params.fetch, params.signal, params.timeoutMs)
 		: undefined;
 
 	const response = await callSearXNGSearch(
@@ -455,6 +460,7 @@ export class SearXNGProvider extends SearchProvider {
 			num_results: params.numSearchResults ?? params.limit,
 			recency: params.recency,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			fetch: params.fetch,
 		});
 	}

@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { AgentBusyError, type AgentTelemetryConfig, type Tracer } from "@oh-my-pi/pi-agent-core";
-import { type AssistantMessage, Effort } from "@oh-my-pi/pi-ai";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ExtensionActions, LoadExtensionsResult } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent, PromptOptions } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { AgentBusyError, type AgentTelemetryConfig, type Tracer } from "@musepi/pi-agent-core";
+import { type AssistantMessage, Effort } from "@musepi/pi-ai";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ExtensionActions, LoadExtensionsResult } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent, PromptOptions } from "@musepi/pi-coding-agent/session/agent-session";
+import type { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import {
 	finalizeSubprocessOutput,
 	runSubprocess,
 	SUBAGENT_WARNING_MISSING_YIELD,
-} from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
+import { logger } from "@musepi/pi-utils";
 
 function createAssistantStopMessage(text: string): AssistantMessage {
 	return {
@@ -79,6 +79,7 @@ function createMockSession(
 		getLastAssistantMessage: () => state.messages[state.messages.length - 1],
 		abort: async () => {},
 		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
 	};
 
 	return session as unknown as AgentSession;
@@ -118,7 +119,7 @@ describe("runSubprocess yield reminders", () => {
 		settings: Settings.isolated(),
 		modelRegistry: {
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry,
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry,
 		enableLsp: false,
 	};
 
@@ -193,7 +194,7 @@ describe("runSubprocess yield reminders", () => {
 		const createAgentSessionSpy = mockCreateAgentSession(session);
 		const modelRegistry = {
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry;
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry;
 		const refreshSpy = vi.spyOn(modelRegistry, "refresh");
 
 		await runSubprocess({ ...baseOptions, id: "subagent-skip-refresh", modelRegistry });
@@ -585,7 +586,7 @@ describe("runSubprocess yield reminders", () => {
 		const modelRegistry = {
 			refresh: async () => {},
 			getAvailable: () => [{ provider: "openai", id: "gpt-4o", name: "GPT-4o" }],
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry;
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry;
 
 		await runSubprocess({
 			...baseOptions,
@@ -708,7 +709,7 @@ describe("runSubprocess yield reminders", () => {
 		const modelRegistry = {
 			authStorage: fakeAuthStorage,
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry;
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry;
 
 		await runSubprocess({ ...baseOptions, id: "subagent-registry-only", modelRegistry });
 
@@ -724,7 +725,7 @@ describe("runSubprocess yield reminders", () => {
 		const modelRegistry = {
 			authStorage: registryStorage,
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry;
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry;
 
 		const result = await runSubprocess({
 			...baseOptions,
@@ -796,7 +797,7 @@ describe("runSubprocess telemetry propagation", () => {
 		settings: Settings.isolated(),
 		modelRegistry: {
 			refresh: async () => {},
-		} as unknown as import("@oh-my-pi/pi-coding-agent/config/model-registry").ModelRegistry,
+		} as unknown as import("@musepi/pi-coding-agent/config/model-registry").ModelRegistry,
 		enableLsp: false,
 	};
 

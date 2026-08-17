@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import type { ExtensionAskDialogQuestion } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/types";
-import { AskDialogComponent } from "@oh-my-pi/pi-coding-agent/modes/components/ask-dialog";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { setKeybindings } from "@oh-my-pi/pi-tui";
+import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import type { ExtensionAskDialogQuestion } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { AskDialogComponent } from "@musepi/pi-coding-agent/modes/components/ask-dialog";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { setKeybindings } from "@musepi/pi-tui";
 
 const DOWN = "\x1b[B";
 const UP = "\x1b[A";
@@ -1089,7 +1089,7 @@ describe("AskDialogComponent", () => {
 			expect(out).toContain("PgUp/PgDn");
 			expect(out).toContain("Tab/←/→");
 			expect(out).not.toContain(" tabs");
-			expect(out).toContain("ctrl+g cancel");
+			expect(out).toContain("Ctrl+G cancel");
 			setKeybindings(
 				KeybindingsManager.inMemory({
 					"tui.select.cancel": "ctrl+g",
@@ -1098,8 +1098,8 @@ describe("AskDialogComponent", () => {
 				}),
 			);
 			const remapped = render(component);
-			expect(remapped).toContain("ctrl+u/ctrl+d");
-			expect(remapped).toContain("ctrl+g cancel");
+			expect(remapped).toContain("Ctrl+U/Ctrl+D");
+			expect(remapped).toContain("Ctrl+G cancel");
 		} finally {
 			if (originalRows) Object.defineProperty(process.stdout, "rows", originalRows);
 			else Reflect.deleteProperty(process.stdout, "rows");
@@ -1361,5 +1361,27 @@ describe("AskDialogComponent", () => {
 		component.handleInput(ENTER);
 		expect(onSubmit).toHaveBeenCalledTimes(1);
 		expect(onSubmit.mock.calls[0][0].results[0].customInput).toBeUndefined();
+	});
+
+	it("normalizes malformed questions so render and submit do not crash", () => {
+		const onSubmit = vi.fn();
+		// A question entry that reaches the live dialog without a string
+		// `question` field (e.g. via the askDialog extension surface) used to
+		// throw `replaceTabs(undefined)` and take down the whole TUI.
+		const questions = [{ id: "q1", options: [{ label: "Option A" }] }] as unknown as ExtensionAskDialogQuestion[];
+
+		const component = new AskDialogComponent(questions, {
+			onSubmit,
+			onCancel: vi.fn(),
+			onPrompt: vi.fn(),
+		});
+
+		expect(() => render(component)).not.toThrow();
+
+		component.handleInput(ENTER);
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		const result = onSubmit.mock.calls[0][0].results[0];
+		expect(result.question).toBe("");
+		expect(result.selectedOptions).toEqual(["Option A"]);
 	});
 });

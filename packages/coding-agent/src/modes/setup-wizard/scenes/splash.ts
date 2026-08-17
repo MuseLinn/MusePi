@@ -1,4 +1,5 @@
-import { padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
+import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { t } from "../../../i18n/index.js";
 import { gradientEscape, gradientLogo, PI_LOGO, type ShineConfig } from "../../components/welcome";
 import { theme } from "../../theme/theme";
 
@@ -21,7 +22,10 @@ const RESET = "\x1b[0m";
 const MIN_SCENE_WIDTH = 56;
 const MIN_SCENE_HEIGHT = 22;
 
-const SKIP_HINT = "press enter to skip";
+/** Rendered at draw time so the locale is resolved per frame. */
+function skipHint(): string {
+	return t("press enter to skip");
+}
 
 /** Density ramp for the rippling water, lightest → heaviest. */
 const WATER_RAMP = [
@@ -176,12 +180,12 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 		}
 	});
 	// 4. skip hint on a cleared strip at the bottom so it stays legible over the water
-	const hintWidth = visibleWidth(SKIP_HINT);
+	const hintWidth = visibleWidth(skipHint());
 	const hintStart = Math.floor((w - hintWidth) / 2);
 	const hintRow = h - 1;
 	for (let x = hintStart - 1; x <= hintStart + hintWidth; x++) put(x, hintRow, " ");
 	let col = hintStart;
-	for (const ch of SKIP_HINT) put(col++, hintRow, ch === " " ? " " : theme.fg("dim", ch));
+	for (const ch of skipHint()) put(col++, hintRow, ch === " " ? " " : theme.fg("dim", ch));
 
 	return cells.map(row => row.join(""));
 }
@@ -189,13 +193,13 @@ export function renderSetupSplash(width: number, height: number, elapsedMs: numb
 /** Centered fallback for windows too small to hold the full scene. */
 function renderCompactSplash(width: number, height: number, phase: number, shine: ShineConfig): string[] {
 	const art = height >= 14 ? LARGE_LOGO : PI_LOGO;
-	const content = [...gradientLogo(art, phase, shine), "", theme.bold("O h   M y   P i")];
+	const content = [...gradientLogo(art, phase, shine), "", theme.bold("M u s e   P i")];
 	const start = Math.max(0, Math.floor((height - content.length) / 2));
 	const lines: string[] = [];
 	for (let y = 0; y < height; y++) {
 		const item = content[y - start];
 		lines.push(clampLine(item !== undefined ? centerLine(item, width) : "", width));
 	}
-	if (height > 2) lines[height - 2] = clampLine(centerLine(theme.fg("dim", SKIP_HINT), width), width);
+	if (height > 2) lines[height - 2] = clampLine(centerLine(theme.fg("dim", skipHint()), width), width);
 	return lines;
 }

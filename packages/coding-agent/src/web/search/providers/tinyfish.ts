@@ -4,7 +4,7 @@
  * Calls TinyFish's search API and maps results into the unified
  * SearchResponse shape used by the web search tool.
  */
-import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@oh-my-pi/pi-ai";
+import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@musepi/pi-ai";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, parseSearchQuery, type QuerySyntax } from "../query";
@@ -34,6 +34,7 @@ export interface TinyFishSearchParams {
 	recency?: SearchParams["recency"];
 	page?: number;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -78,7 +79,7 @@ async function callTinyFishSearch(apiKey: string, params: TinyFishSearchParams):
 			Accept: "application/json",
 			"X-API-Key": apiKey,
 		},
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -117,6 +118,7 @@ export async function searchTinyFish(params: SearchParams): Promise<SearchRespon
 		num_results: pageSize,
 		recency: params.recency,
 		signal: params.signal,
+		timeoutMs: params.timeoutMs,
 		fetch: params.fetch,
 	};
 	const keyOrResolver: ApiKey = params.authStorage.resolver("tinyfish", {

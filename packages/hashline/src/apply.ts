@@ -7,15 +7,21 @@
  * which absorbs common model mistakes where a payload restates unchanged range
  * boundaries or duplicates/drops structural closers.
  */
+
+import { resolveClipboardEdits } from "./clipboard";
 import {
 	afterInsertLandingShiftWarning,
 	ambiguousBoundaryEchoMessage,
 	ambiguousCloserSpareMessage,
+	ambiguousLeadingCloserSpareMessage,
 	blockInsertLandingShiftWarning,
+	midBlockRangeWarning,
+	REPLACEMENT_INDENT_AUTO_SHIFT_WARNING,
 	UNRESOLVED_BLOCK_INTERNAL,
 } from "./messages";
+import { parsesCleanly } from "./syntax";
 import { cloneCursor } from "./tokenizer";
-import type { Anchor, ApplyResult, Cursor, Edit } from "./types";
+import type { Anchor, ApplyResult, Clipboard, Cursor, Edit } from "./types";
 
 type LineOrigin = "original" | "insert" | "replacement";
 
@@ -116,6 +122,19 @@ function bucketAnchorEditsByLine(edits: IndexedEdit[]): Map<number, IndexedEdit[
 		else byLine.set(line, [entry]);
 	}
 	return byLine;
+}
+/**
+ * A closer-spare repair could not tell which side of a spared delimiter the
+ * payload belongs on. Distinct from the evidence-complete textual rejections
+ * (a one-sided boundary echo) so {@link applyEdits} can withhold *only* this
+ * delimiter-semantics verdict on a file the parser cannot vouch for, while
+ * every other rejection propagates unconditionally.
+ */
+class CloserSpareAmbiguityError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "CloserSpareAmbiguityError";
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -389,6 +408,66 @@ function findReplacementGroup(edits: readonly AppliedEdit[], start: number): Rep
 }
 
 /**
+ * Restore a uniformly omitted base indent only when the payload would escape
+ * a surviving `{` opener immediately above the replacement. Matching unchanged
+ * rows then prove the uniform shift; ordinary indentation-only edits stay exact.
+ */
+function repairReplacementIndentation(edits: AppliedEdit[], fileLines: readonly string[]): string[] {
+	let repaired = false;
+	for (let start = 0; start < edits.length; ) {
+		const group = findReplacementGroup(edits, start);
+		if (group === undefined) {
+			start++;
+			continue;
+		}
+		const lastDeleteIndex = group.deleteIndices.at(-1);
+		if (lastDeleteIndex === undefined) continue;
+		start = lastDeleteIndex + 1;
+		if (group.payload.length !== group.deleteIndices.length) continue;
+		const preceding = fileLines[group.startLine - 2] ?? "";
+		const sourceFirst = fileLines[group.startLine - 1] ?? "";
+		const payloadFirst = group.payload[0] ?? "";
+		if (
+			!preceding.trimEnd().endsWith("{") ||
+			!isIndentDeeper(leadingIndent(sourceFirst), leadingIndent(preceding)) ||
+			isIndentDeeper(leadingIndent(payloadFirst), leadingIndent(preceding))
+		) {
+			continue;
+		}
+
+		let shift: string | undefined;
+		let matches = 0;
+		let consistent = true;
+		for (let offset = 0; offset < group.payload.length; offset++) {
+			const source = fileLines[group.startLine - 1 + offset] ?? "";
+			const payload = group.payload[offset];
+			if (source.trim().length === 0 || source.trimStart() !== payload.trimStart()) continue;
+			const sourceIndent = leadingIndent(source);
+			const payloadIndent = leadingIndent(payload);
+			if (!sourceIndent.endsWith(payloadIndent)) {
+				consistent = false;
+				break;
+			}
+			const candidate = sourceIndent.slice(0, sourceIndent.length - payloadIndent.length);
+			if (shift === undefined) shift = candidate;
+			else if (shift !== candidate) {
+				consistent = false;
+				break;
+			}
+			matches++;
+		}
+		if (!consistent || !shift || matches < 2 || matches * 2 <= group.payload.length) continue;
+		for (const index of group.insertIndices) {
+			const edit = edits[index];
+			if (edit.kind !== "insert" || edit.text.trim().length === 0) continue;
+			edits[index] = { ...edit, text: `${shift}${edit.text}` };
+		}
+		repaired = true;
+	}
+	return repaired ? [REPLACEMENT_INDENT_AUTO_SHIFT_WARNING] : [];
+}
+
+/**
  * Largest `k` such that the payload's last `k` lines exactly equal the `k`
  * surviving file lines just below the range AND dropping them zeroes `delta`.
  * Requires a non-zero `delta`: a zero-balance candidate can never account for
@@ -598,12 +677,91 @@ function findDroppedSuffixClosers(
 	}
 	return { startLine: suffixStartLine + keepStart, count: keepEnd - keepStart, balance: keptBalance };
 }
+interface DroppedPrefixClosers {
+	readonly count: number;
+	readonly balance: DelimiterBalance;
+}
 
+/**
+ * Leading run of the range's deleted structural-closer line(s) that the
+ * payload never restates — the mirror of {@link findDroppedSuffixClosers} for
+ * the "range started one line early, on the `}` that ends the construct
+ * above" mistake. Fires only when the group's own delta and the whole-patch
+ * residual are both missing exactly those closers, no deleted lines above the
+ * range account for their opener, and dangling opener(s) actually survive
+ * above the range in the projected file.
+ */
+function findDroppedPrefixClosers(
+	group: ReplacementGroup,
+	fileLines: readonly string[],
+	delta: DelimiterBalance,
+	remainingDelta: DelimiterBalance,
+	deletedPrefixBalance: DelimiterBalance,
+	deletedLines: ReadonlySet<number>,
+	insertedByLine: ReadonlyMap<number, readonly string[]>,
+): DroppedPrefixClosers | undefined {
+	let prefixLength = 0;
+	while (
+		prefixLength < group.deleteIndices.length &&
+		STRUCTURAL_CLOSER_RE.test(fileLines[group.startLine + prefixLength - 1] ?? "")
+	) {
+		prefixLength++;
+	}
+	if (prefixLength === 0 || prefixLength >= group.deleteIndices.length) return undefined;
+	// A payload that opens with a closer restates the boundary itself; that is
+	// an echo/duplicate mistake with a different reading — leave it alone.
+	if (group.payload.length === 0 || isStructuralCloserLine(group.payload[0])) return undefined;
+	const prefixLines = fileLines.slice(group.startLine - 1, group.startLine - 1 + prefixLength);
+	const balance = computeDelimiterBalance(prefixLines);
+	if (balanceIsZero(balance)) return undefined;
+	const neededOpeners = balanceNegate(balance);
+	if (!balanceCovers(delta, neededOpeners)) return undefined;
+	if (balanceCovers(deletedPrefixBalance, neededOpeners)) return undefined;
+	if (!balanceCovers(remainingDelta, neededOpeners)) return undefined;
+	// The spared closers need dangling opener(s) above the range in the
+	// projected file; the payload cannot supply them — it lands below the
+	// closers either way.
+	const above: string[] = [];
+	for (let line = 1; line < group.startLine; line++) {
+		const inserted = insertedByLine.get(line);
+		if (inserted) above.push(...inserted);
+		if (!deletedLines.has(line)) above.push(fileLines[line - 1] ?? "");
+	}
+	if (!balanceCovers(computeDelimiterBalance(above), neededOpeners)) return undefined;
+	return { count: prefixLength, balance };
+}
+
+/**
+ * Total opening delimiters the range deletes without the payload reopening
+ * them while their matching closer(s) survive below — the "payload is a
+ * complete construct but the range ends mid-block" mistake, which orphans the
+ * surviving closers. A balance-only signal, so it is advisory input rather
+ * than proof: {@link applyEdits} surfaces it only once the tree-sitter probe
+ * confirms the authored edit broke the file, which is what separates a real
+ * mid-block range from a `}` living in prose or a regex literal. Zero when the
+ * payload is itself net-closing (deliberate rebalancing of a broken file) or
+ * when another hunk removes the surplus (whole-patch residual clean).
+ */
+function countOrphanedOpeners(
+	group: ReplacementGroup,
+	delta: DelimiterBalance,
+	remainingDelta: DelimiterBalance,
+	fileLines: readonly string[],
+): number {
+	const deletedBalance = computeDelimiterBalance(fileLines.slice(group.startLine - 1, group.endLine));
+	const payloadBalance = computeDelimiterBalance(group.payload);
+	let orphaned = 0;
+	for (const key of ["paren", "bracket", "brace"] as const) {
+		if (payloadBalance[key] < 0) return 0;
+		if (delta[key] >= 0 || deletedBalance[key] <= 0 || remainingDelta[key] >= 0) continue;
+		orphaned += Math.min(-delta[key], deletedBalance[key], -remainingDelta[key]);
+	}
+	return orphaned;
+}
 interface BoundaryEcho {
 	leading: number;
 	trailing: number;
 }
-
 function hasNonWhitespace(text: string): boolean {
 	for (let i = 0; i < text.length; i++) {
 		const code = text.charCodeAt(i);
@@ -807,24 +965,40 @@ function slotPatchDelta(slot: RepairSlot, fileLines: readonly string[]): Delimit
 /**
  * Normalize replacement groups so common off-by-one boundaries do not duplicate
  * unchanged surrounding lines or wrongly drop/keep structural closers. Local
- * repairs run in pass 1; the missing-closer repair is deferred to pass 2 and
- * weighed against the whole-patch delimiter residual, so a closer the range
- * deleted is only kept when the patch as a whole is missing it — never when
- * another hunk already removed the matching opener. Returns the repaired edits
- * plus one warning per repaired group.
+ * repairs run in pass 1; the missing-closer repairs (a closer the range
+ * deleted at its trailing or leading edge) are deferred to pass 2 and weighed
+ * against the whole-patch delimiter residual, so a closer is only kept when
+ * the patch as a whole is missing it — never when another hunk already
+ * removed the matching opener.
  *
- * Repairs fire only when exactly one reading explains the mistake. When the
- * evidence is ambiguous — a one-sided echo whose payload is too short for the
- * widened range, or a spared closer the payload neither opens nor indents
- * into — the function throws instead of guessing, so the author re-issues the
- * edit rather than shipping silently corrupted content.
+ * Textual repairs (boundary echoes, payload lines duplicated from just outside
+ * the range) are evidence-complete on their own and always applied. The
+ * closer-spare repairs are not: they claim a lone `}` is syntax. They run only
+ * when `applySpares` is set, which {@link applyEdits} does only after the
+ * tree-sitter probe shows the authored edits broke a file that previously
+ * parsed. With `applySpares` false the same detections are reported through
+ * `suspicious` / `advisories` and nothing is rewritten.
+ *
+ * When the spares do run, they fire only if exactly one reading explains the
+ * mistake; ambiguous evidence — a one-sided echo whose payload is too short
+ * for the widened range, a spared trailing closer the payload neither opens
+ * nor indents into, or a spared leading closer whose payload claims the block
+ * interior — throws instead of guessing, so the author re-issues the edit
+ * rather than shipping silently corrupted content.
  */
 function repairReplacementBoundaries(
 	edits: readonly AppliedEdit[],
 	fileLines: readonly string[],
+	applySpares: boolean,
 ): {
 	edits: AppliedEdit[];
 	warnings: string[];
+	/** A delimiter-semantics anomaly was detected: worth a parse to confirm. */
+	suspicious: boolean;
+	/** A swallowed block closer was detected and a spare repair is available. */
+	sparesProposed: boolean;
+	/** Diagnostics to surface only if the result is kept unrepaired. */
+	advisories: string[];
 } {
 	// Pass 1: apply every repair whose correctness is local to one group
 	// (boundary echo, duplicate prefix/suffix). Defer the missing-closer repair:
@@ -925,6 +1099,15 @@ function repairReplacementBoundaries(
 		after: new Map(),
 	};
 	for (const edit of projected) {
+		if (edit.kind === "insert" && edit.cursor.kind === "bof") {
+			const inserted = insertedByLine.get(1);
+			if (inserted) inserted.push(edit.text);
+			else insertedByLine.set(1, [edit.text]);
+			const before = insertedLineMaps.before.get(1);
+			if (before) before.push(edit.text);
+			else insertedLineMaps.before.set(1, [edit.text]);
+			continue;
+		}
 		if (edit.kind !== "insert") continue;
 		for (const anchor of getCursorAnchors(edit.cursor)) {
 			const lines = insertedByLine.get(anchor.line);
@@ -943,6 +1126,9 @@ function repairReplacementBoundaries(
 
 	const out: AppliedEdit[] = [];
 	const warnings: string[] = [];
+	const advisories: string[] = [];
+	let suspicious = false;
+	let sparesProposed = false;
 	for (const slot of slots) {
 		if (slot.kind !== "candidate") {
 			if (slot.warning !== undefined) warnings.push(slot.warning);
@@ -961,6 +1147,15 @@ function repairReplacementBoundaries(
 			insertedLineMaps,
 		);
 		if (droppedClosers) {
+			suspicious = true;
+			sparesProposed = true;
+			if (!applySpares) {
+				// A lone `}` is only syntax if the parser says so. Keep the
+				// authored edit; `sparesProposed` tells the caller a repair is
+				// available should the probe decline to vouch for it.
+				out.push(...slot.inserts, ...slot.deletes);
+				continue;
+			}
 			// Sparing a closer re-inserts it *after* the payload, which claims
 			// the payload lives inside the block the closer terminates. That
 			// claim needs evidence: the payload carries the closer's unmatched
@@ -975,7 +1170,7 @@ function repairReplacementBoundaries(
 				balanceNegate(droppedClosers.balance),
 			);
 			if (!payloadOpens && !(payloadIndent !== undefined && isIndentDeeper(payloadIndent, keptIndent))) {
-				throw new Error(
+				throw new CloserSpareAmbiguityError(
 					ambiguousCloserSpareMessage(
 						slot.group.startLine,
 						slot.group.endLine,
@@ -1005,9 +1200,64 @@ function repairReplacementBoundaries(
 			remainingDelta = balanceSum(remainingDelta, droppedClosers.balance);
 			continue;
 		}
+		const droppedPrefix = findDroppedPrefixClosers(
+			slot.group,
+			fileLines,
+			slot.delta,
+			remainingDelta,
+			deletedPrefixBalance,
+			deletedLines,
+			insertedByLine,
+		);
+		if (droppedPrefix) {
+			suspicious = true;
+			sparesProposed = true;
+			if (!applySpares) {
+				out.push(...slot.inserts, ...slot.deletes);
+				continue;
+			}
+			// Sparing a leading closer re-inserts it *before* the payload,
+			// which claims the payload lives outside (after) the block the
+			// closer terminates. The payload's indentation makes that call:
+			// at-or-above the closer's depth is sibling position; a deeper or
+			// incomparable claim would put the payload inside the block the
+			// range just closed — reject rather than guess.
+			const closerIndent = leadingIndent(fileLines[slot.group.startLine - 1] ?? "");
+			const payloadIndent = bodyTargetIndent(slot.group.payload);
+			if (payloadIndent !== undefined) {
+				if (!closerIndent.startsWith(payloadIndent)) {
+					throw new CloserSpareAmbiguityError(
+						ambiguousLeadingCloserSpareMessage(slot.group.startLine, slot.group.endLine, droppedPrefix.count),
+					);
+				}
+				const spareEnd = slot.group.startLine + droppedPrefix.count;
+				warnings.push(
+					describeBoundaryRepair(
+						slot.group,
+						`kept ${droppedPrefix.count} leading structural closing line(s) the range deleted without restating; the payload lands after them`,
+					),
+				);
+				out.push(
+					...slot.inserts.map(edit =>
+						edit.kind === "insert"
+							? { ...edit, cursor: { kind: "before_anchor" as const, anchor: { line: spareEnd } } }
+							: edit,
+					),
+					...slot.deletes.filter(edit => edit.kind !== "delete" || edit.anchor.line >= spareEnd),
+				);
+				for (let line = slot.group.startLine; line < spareEnd; line++) deletedLines.delete(line);
+				remainingDelta = balanceSum(remainingDelta, droppedPrefix.balance);
+				continue;
+			}
+		}
+		const orphanedOpeners = countOrphanedOpeners(slot.group, slot.delta, remainingDelta, fileLines);
+		if (orphanedOpeners > 0) {
+			suspicious = true;
+			advisories.push(midBlockRangeWarning(slot.group.startLine, slot.group.endLine, orphanedOpeners));
+		}
 		out.push(...slot.inserts, ...slot.deletes);
 	}
-	return { edits: out, warnings };
+	return { edits: out, warnings, suspicious, sparesProposed, advisories };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1221,39 +1471,47 @@ function repairAfterInsertLandings(
 	return { edits: out ?? edits, warnings };
 }
 
+/** Optional knobs for {@link applyEdits}. */
+export interface ApplyEditsOptions {
+	/**
+	 * Clipboard register filled by `cut` edits and read by `paste` edits.
+	 * Thread one register through every section of a batch to move content
+	 * across files; omitted, the call gets a private register.
+	 */
+	clipboard?: Clipboard;
+	/** Anonymous `PASTE` with an empty register: `throw` (default) or `drop` (streaming previews). An empty named-register paste never throws — it warns and pastes nothing. */
+	onEmptyPaste?: "throw" | "drop";
+	/**
+	 * Target file path, used only to infer a language for the tree-sitter
+	 * syntax probe (see {@link parsesCleanly}). Supplying it lets the applier
+	 * confirm that the edit as authored still parses, in which case no
+	 * delimiter-shape repair or advisory may touch it. Omitted, the probe casts
+	 * no veto and the delimiter heuristics decide alone.
+	 */
+	path?: string;
+}
+
+interface Materialized {
+	text: string;
+	firstChangedLine: number | undefined;
+	warnings: string[];
+}
+
 /**
- * Apply a parsed list of edits to a text body. Pure function — no I/O.
- *
- * Returns the post-edit text and the first changed line number (1-indexed).
- * Throws if an anchor is out of bounds.
+ * Splice one candidate edit list into `originalLines` and return the resulting
+ * text. Pure and repeatable: the caller materializes the authored edits, probes
+ * that result, and only materializes a repaired candidate if the probe casts no
+ * veto.
  */
-export function applyEdits(text: string, edits: readonly Edit[]): ApplyResult {
-	if (edits.length === 0) return { text, firstChangedLine: undefined };
-
-	// Block edits are deferred until `resolveBlockEdits` expands them into
-	// concrete inserts + deletes. Reaching the applier with one still present
-	// is an internal wiring bug, not authored-input error.
-	for (const edit of edits) {
-		if (edit.kind === "block") throw new Error(UNRESOLVED_BLOCK_INTERNAL);
-	}
-	const appliedEdits = edits as readonly AppliedEdit[];
-
-	const fileLines = text.split("\n");
+function materializeEdits(originalLines: readonly string[], edits: readonly AppliedEdit[]): Materialized {
+	const { edits: landed, warnings } = repairAfterInsertLandings(edits, originalLines);
+	const fileLines = [...originalLines];
 	const lineOrigins: LineOrigin[] = fileLines.map(() => "original");
 
 	let firstChangedLine: number | undefined;
 	const trackFirstChanged = (line: number) => {
 		if (firstChangedLine === undefined || line < firstChangedLine) firstChangedLine = line;
 	};
-
-	const targetEdits = dropTrailingPhantomDeletes(
-		appliedEdits.map((edit, index) => cloneAppliedEdit(edit, index)),
-		fileLines,
-	);
-	validateLineBounds(targetEdits, fileLines);
-	const { edits: repaired, warnings: boundaryWarnings } = repairReplacementBoundaries(targetEdits, fileLines);
-	const { edits: landed, warnings: landingWarnings } = repairAfterInsertLandings(repaired, fileLines);
-	const warnings = [...boundaryWarnings, ...landingWarnings];
 
 	// Partition edits into bof, eof, and anchor-targeted buckets.
 	const bofLines: string[] = [];
@@ -1323,9 +1581,94 @@ export function applyEdits(text: string, edits: readonly Edit[]): ApplyResult {
 	const eofChangedLine = insertAtEnd(fileLines, lineOrigins, eofLines);
 	if (eofChangedLine !== undefined) trackFirstChanged(eofChangedLine);
 
-	return {
-		text: fileLines.join("\n"),
-		firstChangedLine,
-		...(warnings.length > 0 ? { warnings } : {}),
+	return { text: fileLines.join("\n"), firstChangedLine, warnings };
+}
+
+/**
+ * Apply a parsed list of edits to a text body. Pure function — no I/O.
+ *
+ * Returns the post-edit text and the first changed line number (1-indexed).
+ * Throws if an anchor is out of bounds.
+ *
+ * Repairs that hinge on delimiter *semantics* (a range that swallowed the `}`
+ * closing the construct above or below it) are subject to a parser veto when
+ * `options.path` is supplied: the authored edits are materialized first, and if
+ * that result parses it is returned untouched. A `}` in prose, a string, or a
+ * regex literal is therefore never mistaken for a block closer. Only when the
+ * authored result does not parse — or the language is unknown to the parser, so
+ * balance arithmetic is the sole evidence — do the closer-spare repairs run.
+ */
+export function applyEdits(text: string, edits: readonly Edit[], options: ApplyEditsOptions = {}): ApplyResult {
+	if (edits.length === 0) return { text, firstChangedLine: undefined };
+
+	const fileLines = text.split("\n");
+
+	// Clipboard pre-pass: capture `cut` ranges from the original lines and
+	// expand `paste` edits into plain inserts in authored order.
+	const clipboardWarnings: string[] = [];
+	const concrete = resolveClipboardEdits(edits, fileLines, options.clipboard ?? {}, {
+		...(options.onEmptyPaste === undefined ? {} : { onEmptyPaste: options.onEmptyPaste }),
+		onWarning: message => clipboardWarnings.push(message),
+	});
+
+	// Block edits are deferred until `resolveBlockEdits` expands them into
+	// concrete inserts + deletes. Reaching the applier with one still present
+	// is an internal wiring bug, not authored-input error.
+	for (const edit of concrete) {
+		if (edit.kind === "block") throw new Error(UNRESOLVED_BLOCK_INTERNAL);
+	}
+	const appliedEdits = concrete as readonly AppliedEdit[];
+
+	const targetEdits = dropTrailingPhantomDeletes(
+		appliedEdits.map((edit, index) => cloneAppliedEdit(edit, index)),
+		fileLines,
+	);
+	validateLineBounds(targetEdits, fileLines);
+	const indentationWarnings = repairReplacementIndentation(targetEdits, fileLines);
+	const leading = [...clipboardWarnings, ...indentationWarnings];
+
+	// Pass 1: the authored edits, with every delimiter-semantics repair held
+	// back. Textual repairs (boundary echoes, duplicated payload lines) are
+	// evidence-complete on their own and already applied here.
+	const authored = repairReplacementBoundaries(targetEdits, fileLines, false);
+	const finish = (result: Materialized, warnings: string[]): ApplyResult => {
+		const merged = [...warnings, ...result.warnings];
+		return {
+			text: result.text,
+			firstChangedLine: result.firstChangedLine,
+			...(merged.length > 0 ? { warnings: merged } : {}),
+		};
 	};
+	const authoredWarnings = [...leading, ...authored.warnings];
+	if (!authored.suspicious) return finish(materializeEdits(fileLines, authored.edits), authoredWarnings);
+	const authoredResult = materializeEdits(fileLines, authored.edits);
+	// The authored edit keeps the file parsing, so no delimiter heuristic may
+	// second-guess its boundaries. This is what keeps a `}` in prose, in a
+	// string, or in a regex literal from ever being mistaken for a block closer.
+	if (parsesCleanly(options.path, authoredResult.text)) return finish(authoredResult, authoredWarnings);
+
+	// The authored result does not parse — or the parser does not know this
+	// language, in which case nothing below can be proven and nothing is
+	// rewritten. A repair lands only when it is *shown* to restore a parsing
+	// file, never on delimiter arithmetic alone.
+	const baselineParses = parsesCleanly(options.path, text);
+	if (authored.sparesProposed) {
+		try {
+			const spared = repairReplacementBoundaries(targetEdits, fileLines, true);
+			const sparedResult = materializeEdits(fileLines, spared.edits);
+			if (parsesCleanly(options.path, sparedResult.text)) {
+				return finish(sparedResult, [...leading, ...spared.warnings, ...spared.advisories]);
+			}
+		} catch (error) {
+			// Only the closer-spare verdict is the parser's business, and only on
+			// a file it can vouch for. Every other rejection — notably the
+			// evidence-complete one-sided boundary echo, which is proven by exact
+			// line equality and would otherwise delete range lines the body never
+			// restates — propagates regardless of what the parser knows.
+			if (baselineParses || !(error instanceof CloserSpareAmbiguityError)) throw error;
+		}
+	}
+	// Nothing proven: leave the authored edit exactly as written. Report the
+	// damage only when the baseline parsed, so this edit demonstrably caused it.
+	return finish(authoredResult, baselineParses ? [...authoredWarnings, ...authored.advisories] : authoredWarnings);
 }

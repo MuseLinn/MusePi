@@ -1,4 +1,5 @@
-import { Container, matchesKey, ScrollView, Spacer, TruncatedText } from "@oh-my-pi/pi-tui";
+import { Container, matchesKey, ScrollView, Spacer, TruncatedText } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import type { ResetUsageAccount } from "../../slash-commands/helpers/reset-usage";
@@ -30,7 +31,7 @@ export class ResetUsageSelectorComponent extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new TruncatedText(theme.bold("Spend a saved rate-limit reset:")));
+		this.addChild(new TruncatedText(theme.bold(t("Spend a saved rate-limit reset:"))));
 		this.addChild(new Spacer(1));
 		this.#listContainer = new Container();
 		this.addChild(this.#listContainer);
@@ -145,7 +146,7 @@ export class ResetUsageSelectorComponent extends Container {
 			const account = this.#accounts[this.#selectedIndex];
 			if (!account) return;
 			if (account.availableCount <= 0) {
-				this.#statusMessage = "That account has no saved resets to spend.";
+				this.#statusMessage = t("That account has no saved resets to spend.");
 				this.#updateList();
 				return;
 			}

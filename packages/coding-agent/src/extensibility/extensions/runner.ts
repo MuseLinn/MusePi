@@ -1,10 +1,17 @@
 /**
  * Extension runner - executes extensions and manages their lifecycle.
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { CredentialDisabledEvent, ImageContent, Model, ProviderResponseMetadata } from "@oh-my-pi/pi-ai";
-import type { KeyId } from "@oh-my-pi/pi-tui";
-import { logger } from "@oh-my-pi/pi-utils";
+import type {
+	AgentMessage,
+	AgentTool,
+	AgentToolContext,
+	AgentToolResult,
+	AgentToolUpdateCallback,
+} from "@musepi/pi-agent-core";
+import type { CredentialDisabledEvent, ImageContent, Model, ProviderResponseMetadata } from "@musepi/pi-ai";
+import type { KeyId } from "@musepi/pi-tui";
+import { logger } from "@musepi/pi-utils";
+import type { AsyncJobManager } from "../../async";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
@@ -338,6 +345,8 @@ export class ExtensionRunner {
 	#compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
 	#getSystemPromptFn: () => string[] = () => [];
 	#getAsyncJobSnapshotFn: () => AsyncJobSnapshot | null = () => null;
+	#getAsyncJobManagerFn: () => AsyncJobManager | undefined = () => undefined;
+	#getAgentIdFn: () => string | undefined = () => undefined;
 	#newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
 	#branchHandler: BranchHandler = async () => ({ cancelled: false });
 	#navigateTreeHandler: NavigateTreeHandler = async () => ({ cancelled: false });
@@ -407,20 +416,104 @@ export class ExtensionRunner {
 		return this.#emittedToolCalls.delete(`${toolCallId}:${toolName}`);
 	}
 
+	/**
+	 * Resolves a tool NAME to its native built-in implementation (the pre-extension-override,
+	 * unwrapped tool) plus a factory for the `AgentToolContext` that native tool expects, or
+	 * undefined when no native built-in of that name exists. Set by the SDK; backs same-tool
+	 * `invokeTool`. The context factory is the same one the agent loop uses for tool execution, so a
+	 * delegated native call sees the ordinary session tool context (ui, cwd, snapshot state, etc.).
+	 */
+	#nativeToolResolver?: (name: string) => { tool: AgentTool; makeContext: () => AgentToolContext } | undefined;
+
+	/** Wires the native-tool resolver used by {@link invokeNativeTool}. */
+	setNativeToolResolver(
+		resolve: (name: string) => { tool: AgentTool; makeContext: () => AgentToolContext } | undefined,
+	): void {
+		this.#nativeToolResolver = resolve;
+	}
+
+	/** Whether a native built-in of `name` is available to delegate to. */
+	hasNativeTool(name: string): boolean {
+		return this.#nativeToolResolver?.(name) !== undefined;
+	}
+
+	/**
+	 * Run the native built-in of `name` with `params` and return its result — the delegation target
+	 * of a same-tool `ctx.invokeTool`. Calls the unwrapped native `execute` directly with the loop's
+	 * ordinary tool context, so it inherits the caller's already-granted approval (the caller is the
+	 * same tool) rather than re-running the gate. `depth` guards a wrapper that recurses into itself;
+	 * it is per call chain (threaded from the caller), not session-global, so concurrent independent
+	 * delegations do not interfere.
+	 */
+	async invokeNativeTool<TDetails = unknown>(
+		name: string,
+		params: Record<string, unknown>,
+		options?: {
+			signal?: AbortSignal;
+			onUpdate?: AgentToolUpdateCallback<TDetails>;
+			depth?: number;
+			/**
+			 * The caller tool's own context. Reused for the native call so metadata the native tool
+			 * reads — `toolCall` (write/edit LSP batch flushing) and provider metadata /
+			 * `providerSafetyApproved` (computer) — is preserved. Falls back to a fresh session tool
+			 * context only when the caller had none.
+			 */
+			callerContext?: AgentToolContext;
+		},
+	): Promise<AgentToolResult<TDetails>> {
+		const resolved = this.#nativeToolResolver?.(name);
+		if (!resolved) throw new Error(`invokeTool: no native built-in named "${name}" to delegate to`);
+		const depth = options?.depth ?? 0;
+		if (depth >= 8) {
+			throw new Error(`invokeTool: delegation depth exceeded 8 (recursive invokeTool for "${name}"?)`);
+		}
+		const toolCallId = `invoke-${name}-${Date.now().toString(36)}-${depth}`;
+		return (await resolved.tool.execute(
+			toolCallId,
+			params as never,
+			options?.signal,
+			options?.onUpdate as never,
+			options?.callerContext ?? resolved.makeContext(),
+		)) as AgentToolResult<TDetails>;
+	}
+
 	constructor(
 		private readonly extensions: Extension[],
 		private readonly runtime: ExtensionRuntime,
-		private readonly cwd: string,
+		/** Ignored: `cwd` is always read live via the `cwd` getter below, not cached here. */
+		_initialCwd: string,
 		private readonly sessionManager: SessionManager,
 		private readonly modelRegistry: ModelRegistry,
 		getMemory?: () => MemoryRuntimeContext | undefined,
 		private readonly settings?: Settings,
 		private readonly localProtocolOptions?: LocalProtocolOptions,
 		getAsyncJobSnapshot?: () => AsyncJobSnapshot | null,
+		getAsyncJobManager?: () => AsyncJobManager | undefined,
+		getAgentId?: () => string | undefined,
 	) {
 		this.#uiContext = noOpUIContext;
 		this.#getMemoryFn = getMemory;
 		this.#getAsyncJobSnapshotFn = getAsyncJobSnapshot ?? (() => null);
+		this.#getAsyncJobManagerFn = getAsyncJobManager ?? (() => undefined);
+		this.#getAgentIdFn = getAgentId ?? (() => undefined);
+	}
+
+	/**
+	 * Live session directory, not a session-start snapshot: `/move`
+	 * (`SessionManager.moveTo()`) relocates the owning session by updating
+	 * `sessionManager`'s own `#cwd`, not a process-global. Reading it here
+	 * via the getter — instead of caching the constructor-time value in a
+	 * field — keeps every `ExtensionContext` built below in sync with this
+	 * session's actual, current directory. Deliberately `sessionManager.getCwd()`
+	 * rather than `getProjectDir()`: the latter is a single process-wide value
+	 * that only the interactive TUI's `/move` handler happens to also update
+	 * (`InteractiveModeContext#applyCwdChange`) — an SDK/ACP host running
+	 * several concurrent sessions each with their own `cwd` (see
+	 * `CreateAgentSessionOptions.cwd`) must never have one session's move
+	 * leak into another's `ctx.cwd` by reading a shared global.
+	 */
+	get cwd(): string {
+		return this.sessionManager.getCwd();
 	}
 
 	initialize(
@@ -444,6 +537,12 @@ export class ExtensionRunner {
 		this.runtime.setServiceTier = actions.setServiceTier ?? throwUnsupportedServiceTierAction;
 		this.runtime.getSessionName = actions.getSessionName;
 		this.runtime.setSessionName = actions.setSessionName;
+		this.runtime.registerProvider = (name, config, sourceId) => {
+			this.modelRegistry.registerProvider(name, config, sourceId);
+		};
+		this.runtime.unregisterProvider = name => {
+			this.modelRegistry.unregisterProvider(name);
+		};
 
 		// Context actions (required)
 		this.#getModel = contextActions.getModel;
@@ -561,6 +660,15 @@ export class ExtensionRunner {
 
 	getUIContext(): ExtensionUIContext {
 		return this.#uiContext;
+	}
+
+	/**
+	 * Swap the UI context (approval select / interactive dialogs) at runtime.
+	 * Used by non-interactive hosts (daemon) that attach a UI context after
+	 * session construction; `hasUI()` reflects the swap.
+	 */
+	setUIContext(uiContext: ExtensionUIContext | undefined): void {
+		this.#uiContext = uiContext ?? noOpUIContext;
 	}
 
 	hasUI(): boolean {
@@ -728,14 +836,35 @@ export class ExtensionRunner {
 		return undefined;
 	}
 
-	/** Creates an extension context, optionally scoped to a provider request model. */
-	createContext(model?: Model): ExtensionContext {
+	/**
+	 * Creates an extension context, optionally scoped to a provider request model.
+	 *
+	 * `delegation` wires the same-tool `ctx.invokeTool` for a re-registered built-in: when `toolName`
+	 * names an existing native built-in, the context carries an `invokeTool` that runs it (see
+	 * {@link invokeNativeTool}). The rest inherits the wrapper's own call so a bare
+	 * `ctx.invokeTool(params)` behaves like the outer call — `context` preserves `toolCall`/provider
+	 * metadata, `signal`/`onUpdate` default to the wrapper's own channels so aborting the outer tool
+	 * call stops the native one and native progress still streams, and `depth` bounds recursion per
+	 * call chain. Explicit options passed to `invokeTool` override the inherited `signal`/`onUpdate`.
+	 */
+	createContext(
+		model?: Model,
+		delegation?: {
+			toolName: string;
+			depth?: number;
+			context?: AgentToolContext;
+			signal?: AbortSignal;
+			onUpdate?: AgentToolUpdateCallback;
+		},
+	): ExtensionContext {
 		const getModel = model ? () => model : this.#getModel;
 		return {
 			ui: this.#uiContext,
 			getContextUsage: () => this.#getContextUsageFn(),
 			compact: instructionsOrOptions => this.#compactFn(instructionsOrOptions),
 			getAsyncJobSnapshot: () => this.#getAsyncJobSnapshotFn(),
+			asyncJobManager: this.#getAsyncJobManagerFn(),
+			agentId: this.#getAgentIdFn(),
 			hasUI: this.hasUI(),
 			cwd: this.cwd,
 			sessionManager: this.sessionManager,
@@ -754,6 +883,18 @@ export class ExtensionRunner {
 			setInterval: (callback, ms, ...args) => this.#managedTimers.setInterval(callback, ms, ...args),
 			setTimeout: (callback, ms, ...args) => this.#managedTimers.setTimeout(callback, ms, ...args),
 			clearTimer: timer => this.#managedTimers.clear(timer),
+			invokeTool:
+				delegation !== undefined && this.hasNativeTool(delegation.toolName)
+					? (params, options) =>
+							this.invokeNativeTool(delegation.toolName, params, {
+								// Inherit the wrapper's own channels so a bare `ctx.invokeTool(params)` aborts
+								// and streams with the outer call. Explicit options win.
+								signal: options?.signal ?? delegation.signal,
+								onUpdate: options?.onUpdate ?? delegation.onUpdate,
+								depth: (delegation.depth ?? 0) + 1,
+								callerContext: delegation.context,
+							})
+					: undefined,
 		};
 	}
 

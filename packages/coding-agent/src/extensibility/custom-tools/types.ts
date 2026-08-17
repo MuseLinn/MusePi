@@ -4,6 +4,10 @@
  * Custom tools are TypeScript modules that define additional tools for the agent.
  * They can provide custom rendering for tool calls and results in the TUI.
  */
+import type { type as ArkType } from "@musepi/omptype";
+import type * as TypeBox from "@musepi/omptype/typebox";
+import type * as zod from "@musepi/omptype/zod";
+
 import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
@@ -11,13 +15,12 @@ import type {
 	ToolApprovalDecision,
 	ToolLoadMode,
 	ToolTier,
-} from "@oh-my-pi/pi-agent-core";
-import type { CompactionResult } from "@oh-my-pi/pi-agent-core/compaction";
-import type { FetchImpl, Model, Static, TSchema } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import type { logger as PiLogger } from "@oh-my-pi/pi-utils";
-import type { type as ArkType } from "arktype";
-import type * as zod from "zod/v4";
+} from "@musepi/pi-agent-core";
+import type { CompactionResult } from "@musepi/pi-agent-core/compaction";
+import type { FetchImpl, Model, Static, TSchema } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import type { logger as PiLogger } from "@musepi/pi-utils";
+import type { AsyncJobManager } from "../../async";
 import type { Rule } from "../../capability/rule";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
@@ -28,8 +31,7 @@ import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { Theme } from "../../modes/theme/theme";
 import type { ReadonlySessionManager } from "../../session/session-manager";
 import type { TodoItem } from "../../tools/todo";
-import type { RecoveredRetryError } from "../shared-events";
-import type * as TypeBox from "../typebox";
+import type { RetryErrorUpdate } from "../shared-events";
 
 /** Alias for clarity */
 export type CustomToolUIContext = HookUIContext;
@@ -69,7 +71,7 @@ export interface CustomToolAPI {
 	typebox: typeof TypeBox;
 	/** Injected arktype module for arktype-authored custom tools. */
 	arktype: typeof ArkType;
-	/** Injected zod/v4 module for canonical parameter schemas. */
+	/** Injected Zod-compatible omptype builder for custom tools. */
 	zod: typeof zod;
 	/** Injected pi-coding-agent exports */
 	pi: typeof PiCodingAgent;
@@ -98,6 +100,15 @@ export interface CustomToolContext {
 	settings?: Settings;
 	/** Fetch implementation for outbound HTTP; defaults to global fetch when omitted. */
 	fetch?: FetchImpl;
+	/**
+	 * Live async job manager for registering background jobs. Jobs registered
+	 * with {@link CustomToolContext.agentId} as ownerId route their completion
+	 * text back to this session's async-result channel. Undefined when the
+	 * session has no job manager.
+	 */
+	asyncJobManager?: AsyncJobManager;
+	/** Registry identity of the owning agent (e.g. "Main"), for job ownership. */
+	agentId?: string;
 	/** Calling session's `local://` root mapping for tools that bridge out of the OMP process. */
 	localProtocolOptions?: LocalProtocolOptions;
 	/** Whether to auto-approve all destructive tool operations (--auto-approve CLI flag) */
@@ -138,7 +149,7 @@ export type CustomToolSessionEvent =
 			success: boolean;
 			attempt: number;
 			finalError?: string;
-			recoveredErrors?: RecoveredRetryError[];
+			retryErrors?: RetryErrorUpdate[];
 	  }
 	| {
 			reason: "ttsr_triggered";

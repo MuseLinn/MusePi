@@ -2,18 +2,19 @@ import { afterAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { toolWireSchema } from "@musepi/pi-ai/utils/schema";
+import { Type as TypeBoxShimType } from "@musepi/pi-coding-agent/extensibility/legacy-typebox";
 import {
 	installLegacyPiSpecifierShim,
 	loadLegacyPiModule,
-} from "@oh-my-pi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
-import { Type as TypeBoxShimType } from "@oh-my-pi/pi-coding-agent/extensibility/typebox";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/plugins/legacy-pi-compat";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 // The remap installs a Bun.plugin onResolve hook plus an explicit
 // rewrite branch inside `rewriteBareImportsForLegacyExtension` that
-// redirects bare `@sinclair/typebox` specifiers to the in-repo Zod-backed
-// shim. Extensions that authored against TypeBox should keep working
-// unchanged without `@sinclair/typebox` ever needing to be installed.
+// redirects bare `@sinclair/typebox` specifiers to the omptype-backed
+// compatibility surface. Extensions should keep working unchanged without
+// `@sinclair/typebox` ever needing to be installed.
 installLegacyPiSpecifierShim();
 
 const tempRoots: string[] = [];
@@ -57,17 +58,17 @@ describe("legacy-pi TypeBox remap", () => {
 			[
 				'import { Type } from "typebox";',
 				"export const probe = Type;",
-				"export const unsafeSchema = Type.Unsafe({ type: 'object', properties: { path: { type: 'string' } }, required: ['path'] });",
+				"export const schema = Type.Unsafe({ type: 'object', properties: { path: { type: 'string' } }, required: ['path'] });",
 			].join("\n"),
 		);
 
 		const loaded = (await loadLegacyPiModule(entry)) as {
 			probe: typeof TypeBoxShimType;
-			unsafeSchema: Record<string, unknown>;
+			schema: Record<string, unknown>;
 		};
 
 		expect(loaded.probe).toBe(TypeBoxShimType);
-		expect({ ...loaded.unsafeSchema }).toEqual({
+		expect(toolWireSchema({ name: "fixture", description: "", parameters: loaded.schema })).toEqual({
 			type: "object",
 			properties: { path: { type: "string" } },
 			required: ["path"],

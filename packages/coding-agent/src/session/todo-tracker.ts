@@ -1,6 +1,6 @@
-import type { Agent, AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Message, Model, TextContent, ToolChoice } from "@oh-my-pi/pi-ai";
-import { isRecord, logger, prompt, stringProperty } from "@oh-my-pi/pi-utils";
+import type { Agent, AgentMessage, AgentTool } from "@musepi/pi-agent-core";
+import type { AssistantMessage, Message, Model, TextContent, ToolChoice } from "@musepi/pi-ai";
+import { isRecord, logger, prompt, stringProperty } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
 import eagerTaskPrompt from "../prompts/system/eager-task.md" with { type: "text" };
 import eagerTodoPrompt from "../prompts/system/eager-todo.md" with { type: "text" };
@@ -27,6 +27,15 @@ const QUESTION_PROMPT_RE =
 const USER_DIRECTED_PROMPT_RE = /\b(?:you|your|we|our)\b/i;
 const USER_RESPONSE_CUE_RE =
 	/^(?:please\s+)?(?:confirm|reply|choose|pick|decide|advise)\b|^(?:please\s+)?answer\b|^(?:please\s+)?(?:let\s+me\s+know|tell\s+me)\b/i;
+/**
+ * A trailing question mark is the universal signal that a line is a question, but
+ * the English word/pronoun gates above exist to filter incidental "?" out of prose
+ * (e.g. a TypeScript `foo?: string` tail). Non-English text has no cheap word list,
+ * yet any non-ASCII character in a "?"/"？"-terminated line reliably marks it as
+ * genuine prose — CJK/Japanese/Korean, Spanish `¿…?`, accented Latin — so treat it
+ * as a real user-directed question. Fixes non-Latin prompts going undetected (#7803).
+ */
+const NON_ASCII_TEXT_RE = /[^\x00-\x7F]/;
 
 interface PromptLine {
 	text: string;
@@ -361,7 +370,8 @@ function isQuestionPromptLine(line: string): boolean {
 	return (
 		candidate.hadPromptLabel ||
 		QUESTION_PROMPT_RE.test(candidate.text) ||
-		USER_DIRECTED_PROMPT_RE.test(candidate.text)
+		USER_DIRECTED_PROMPT_RE.test(candidate.text) ||
+		NON_ASCII_TEXT_RE.test(candidate.text)
 	);
 }
 

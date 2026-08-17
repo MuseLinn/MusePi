@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { VERSION } from "@oh-my-pi/pi-utils";
+import { VERSION } from "@musepi/pi-utils";
 import type { BunPlugin } from "bun";
 import { resolveBundledChangelogPath } from "../../src/utils/changelog";
 
@@ -36,7 +36,7 @@ async function runProbe(command: string[], cwd?: string): Promise<BundleProbeRes
 }
 
 /**
- * Swap `@oh-my-pi/pi-utils` and the changelog module's `../config` import for a
+ * Swap `@musepi/pi-utils` and the changelog module's `../config` import for a
  * dependency-free stub. Both pull the native addon loader into the bundle graph, and
  * that loader resolves `pi_natives.<platform>.node` relative to the emitted artifact,
  * so any probe written outside the repo fails to start. The subject under test is
@@ -46,7 +46,7 @@ function changelogUtilsStubPlugin(): BunPlugin {
 	return {
 		name: "changelog-utils-stub",
 		setup(build) {
-			build.onResolve({ filter: /^@oh-my-pi\/pi-utils$/ }, () => ({ path: utilsStubPath }));
+			build.onResolve({ filter: /^@musepi\/pi-utils$/ }, () => ({ path: utilsStubPath }));
 			build.onResolve({ filter: /^\.\.\/config$/ }, args =>
 				args.importer.endsWith("/utils/changelog.ts") ? { path: utilsStubPath } : undefined,
 			);

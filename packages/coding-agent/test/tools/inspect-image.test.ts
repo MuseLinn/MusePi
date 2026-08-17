@@ -2,19 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { AuthStorage, type completeSimple, type ImageContent, type Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { InspectImageTool } from "@oh-my-pi/pi-coding-agent/tools/inspect-image";
-import { inspectImageToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/inspect-image-renderer";
-import { toolRenderers } from "@oh-my-pi/pi-coding-agent/tools/renderers";
-import { removeSyncWithRetries, sanitizeText } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { AuthStorage, type completeSimple, Effort, type ImageContent, type Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { getThemeByName } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { InspectImageTool } from "@musepi/pi-coding-agent/tools/inspect-image";
+import { inspectImageToolRenderer } from "@musepi/pi-coding-agent/tools/inspect-image-renderer";
+import { toolRenderers } from "@musepi/pi-coding-agent/tools/renderers";
+import { removeSyncWithRetries, sanitizeText } from "@musepi/pi-utils";
 
 const TINY_PNG_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
@@ -36,6 +36,13 @@ const textOnlyModel: Model<"openai-responses"> = {
 	...visionModel,
 	id: "gpt-4.1",
 	input: ["text"],
+};
+
+const reasoningVisionModel: Model<"openai-responses"> = {
+	...visionModel,
+	id: "gpt-5-vision",
+	reasoning: true,
+	thinking: { mode: "effort", efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High] },
 };
 
 interface CreateSessionOptions {
@@ -187,6 +194,32 @@ describe("InspectImageTool", () => {
 		const contentParts = (Array.isArray(content) ? content : []) as Array<{ type: string; text?: string }>;
 		expect(contentParts[0]?.type).toBe("image");
 		expect(contentParts[1]).toEqual({ type: "text", text: "Extract visible UI labels." });
+	});
+
+	it("passes the vision role's configured thinking effort into the oneshot", async () => {
+		const imagePath = path.join(testDir, "screen.png");
+		fs.writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+
+		const settings = Settings.isolated();
+		settings.setModelRole("vision", `${reasoningVisionModel.provider}/${reasoningVisionModel.id}:high`);
+
+		const stub = createCompleteSimpleSuccessStub("Red");
+		const tool = new InspectImageTool(
+			createSession(testDir, reasoningVisionModel, "test-key", settings, {
+				configureVisionRole: false,
+				availableModels: [reasoningVisionModel],
+			}),
+			stub.fn,
+		);
+
+		await tool.execute("call-effort", {
+			path: imagePath,
+			question: "What dominant color is this image? One word only.",
+		});
+
+		expect(stub.calls).toHaveLength(1);
+		const options = stub.calls[0]?.[2] as { reasoning?: string } | undefined;
+		expect(options?.reasoning).toBe("high");
 	});
 
 	it("resolves pasted image labels from current attachments without using cwd", async () => {

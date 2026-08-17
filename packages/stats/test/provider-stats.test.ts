@@ -2,11 +2,11 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getProviderDashboardStats } from "@oh-my-pi/omp-stats/aggregator";
-import { initDb, insertMessageStats } from "@oh-my-pi/omp-stats/db";
-import type { MessageStats } from "@oh-my-pi/omp-stats/types";
-import { computeUsageWindowStats, readUsageSnapshots, type UsageSnapshotRow } from "@oh-my-pi/omp-stats/usage-windows";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils";
+import { getProviderDashboardStats } from "@musepi/omp-stats/aggregator";
+import { initDb, insertMessageStats } from "@musepi/omp-stats/db";
+import type { MessageStats } from "@musepi/omp-stats/types";
+import { computeUsageWindowStats, readUsageSnapshots, type UsageSnapshotRow } from "@musepi/omp-stats/usage-windows";
+import { getAgentDbPath } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-providers-");
@@ -182,6 +182,35 @@ describe("readUsageSnapshots", () => {
 			email: "a@example.com",
 			usedFraction: 0.3,
 		});
+	});
+
+	it("waits for a contended database instead of returning no snapshots", async () => {
+		createAgentDb([snapshot({ recordedAt: T0, usedFraction: 0.3 })]);
+		const locker = Bun.spawn(
+			[
+				process.execPath,
+				"-e",
+				`import { Database } from "bun:sqlite";
+const db = new Database(process.argv[1]);
+db.run("BEGIN EXCLUSIVE");
+process.stdout.write("locked\\n");
+// This integration probe needs a real SQLite lock lifetime; fake timers cannot advance a separate process.
+await Bun.sleep(100);
+db.run("COMMIT");
+db.close();`,
+				getAgentDbPath(),
+			],
+			{ env: { HOME: process.env.HOME ?? "", PATH: process.env.PATH ?? "" }, stdout: "pipe", stderr: "pipe" },
+		);
+		const output = locker.stdout.getReader();
+		const ready = await output.read();
+		output.releaseLock();
+		expect(new TextDecoder().decode(ready.value)).toContain("locked");
+
+		const rows = readUsageSnapshots(0);
+		const [exitCode, stderr] = await Promise.all([locker.exited, new Response(locker.stderr).text()]);
+		expect(exitCode, stderr).toBe(0);
+		expect(rows).toHaveLength(1);
 	});
 });
 

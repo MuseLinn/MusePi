@@ -1,7 +1,7 @@
 import * as path from "node:path";
-import type { AssistantMessage, Usage } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Container, Text } from "@oh-my-pi/pi-tui";
+import type { AssistantMessage, Usage } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import { Container, Text } from "@musepi/pi-tui";
 import { InternalUrlRouter, XD_URL_PREFIX } from "../../internal-urls";
 import { getLanguageFromPath, theme } from "../../modes/theme/theme";
 import { parseLineRanges, selectorLineRanges, splitPathAndSel } from "../../tools/path-utils";
@@ -332,6 +332,7 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 	#usageBatchByToolCallId = new Map<string, string>();
 	#text: Text;
 	#expanded = false;
+	#toolActivityVisible = true;
 	#showContentPreview: boolean;
 	// A read group accretes entries across multiple assistant completions for as
 	// long as the run of reads is uninterrupted. While it is the active group it
@@ -353,6 +354,10 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 		this.#updateDisplay();
 	}
 
+	override render(width: number): readonly string[] {
+		if (!this.#toolActivityVisible) return [];
+		return super.render(width);
+	}
 	isTranscriptBlockFinalized(): boolean {
 		if (this.#sealed) return true;
 		if (!this.#finalized) return false;
@@ -395,6 +400,32 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 		entry.path = rawPath;
 		this.#entries.set(toolCallId, entry);
 		this.#updateDisplay();
+	}
+
+	/**
+	 * Re-key an entry whose streamed tool-call id changed mid-stream (a provider
+	 * rewriting the id across deltas; see EventController's
+	 * `#streamedToolCallIdByIndex`). Preserves row order so a sibling read run is
+	 * not visibly reshuffled, and no-ops when the rename would collide.
+	 */
+	renameEntry(oldId: string, newId: string): void {
+		if (oldId === newId || !newId) return;
+		const entry = this.#entries.get(oldId);
+		if (!entry || this.#entries.has(newId)) return;
+		entry.toolCallId = newId;
+		const reordered = [...this.#entries].map(([key, value]): [string, ReadEntry] => [
+			key === oldId ? newId : key,
+			value,
+		]);
+		this.#entries.clear();
+		for (const [key, value] of reordered) this.#entries.set(key, value);
+		this.#updateDisplay();
+	}
+	/** Remove one call without discarding successful siblings in the shared group. */
+	removeEntry(toolCallId: string): boolean {
+		if (!this.#entries.delete(toolCallId)) return this.#entries.size === 0;
+		this.#updateDisplay();
+		return this.#entries.size === 0;
 	}
 
 	updateResult(
@@ -468,6 +499,11 @@ export class ReadToolGroupComponent extends Container implements ToolExecutionHa
 	setExpanded(expanded: boolean): void {
 		this.#expanded = expanded;
 		this.#updateDisplay();
+	}
+
+	setToolActivityVisible(visible: boolean): void {
+		this.#toolActivityVisible = visible;
+		super.invalidate();
 	}
 
 	getComponent(): Component {

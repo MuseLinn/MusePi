@@ -1,7 +1,7 @@
 /**
  * Shared wire types for the omp collab live-session protocol.
  *
- * Dependency-free JSON shapes produced by `@oh-my-pi/pi-coding-agent`
+ * Dependency-free JSON shapes produced by `@musepi/pi-coding-agent`
  * (`src/collab/protocol.ts` and friends). Browser and test clients import this
  * package instead of depending on the coding-agent runtime; conformance is
  * asserted type-only in `packages/coding-agent/test/collab/web-wire.types.ts`.
@@ -86,6 +86,11 @@ export interface AssistantMessage {
 	stopReason: StopReason;
 	errorMessage?: string;
 	timestamp: number;
+	/** Provider request duration / first-token latency in ms — present on
+	 *  settled turns (TUI usage-row parity; the GUI shows them under the
+	 *  final message of a turn). */
+	duration?: number;
+	ttft?: number;
 }
 
 export interface ToolResultMessage {
@@ -111,6 +116,11 @@ export interface SessionHeader {
 	title?: string;
 	timestamp: string;
 	cwd: string;
+	/** User-picked model for a history (non-live) session — persisted by
+	 *  session.setModel and applied when the session is next continued. */
+	model?: string;
+	/** User-picked thinking effort for a history session (setThinkingLevel). */
+	thinkingLevel?: string;
 }
 
 export interface EntryBase {
@@ -174,6 +184,24 @@ export interface CollabPromptDetails {
 	from?: string;
 }
 
+/** Wire form of a TTSR rule (rule violation → stream rewind + inject). */
+export interface WireTtsrRule {
+	name: string;
+	description?: string;
+	content?: string;
+}
+
+/** Wire form of a session custom message (irc 等). */
+export interface WireCustomMessage {
+	role: "custom";
+	customType: string;
+	content: string | (TextContent | ImageContent)[];
+	display: boolean;
+	details?: unknown;
+	attribution?: string;
+	timestamp: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Events (handled subset)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -191,6 +219,8 @@ export type AgentEvent =
 	| { type: "tool_execution_update"; toolCallId: string; toolName: string; args: unknown; partialResult: unknown }
 	| { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError?: boolean }
 	| { type: "notice"; level: "info" | "warning" | "error"; message: string; source?: string }
+	| { type: "ttsr_triggered"; rules: WireTtsrRule[] }
+	| { type: "irc_message"; message: WireCustomMessage }
 	| { type: "auto_compaction_start"; reason: string; action: string }
 	| { type: "auto_compaction_end"; aborted: boolean; willRetry: boolean; errorMessage?: string; skipped?: boolean }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
@@ -233,6 +263,12 @@ export interface SessionState {
 	contextUsage?: ContextUsage;
 	participants: Participant[];
 	isAborting?: boolean;
+	/** Live goal mode (GUI badge) — populated by the daemon for live sessions. */
+	goalMode?: { enabled: boolean; objective?: string; status?: string } | null;
+	/** Live plan mode (read-only proposal flow). */
+	planMode?: boolean;
+	/** Aggregated todo progress per phase (done/total). */
+	todo?: { name: string; done: number; total: number }[];
 }
 
 export interface AgentSnapshot {
@@ -337,7 +373,15 @@ export type GuestFrame =
 	| { t: "ui-response"; reqId: number; value?: CollabUiResponseValue }
 	| { t: "abort" }
 	| { t: "agent-cmd"; cmd: "chat" | "kill" | "revive"; agentId: string; text?: string }
-	| { t: "fetch-transcript"; reqId: number; agentId: string; fromByte: number };
+	| { t: "fetch-transcript"; reqId: number; agentId: string; fromByte: number }
+	/** Multi-session workspace: pick a session to stream live (null returns to the directory). */
+	| { t: "workspace-select"; sessionId: string | null }
+	/**
+	 * Guest RPC: request a host-side capability (board / cron / workspace /
+	 * fs). The host answers with a directed `rpc-result` carrying the same
+	 * `reqId`. Mutating methods are rejected for read-only peers.
+	 */
+	| { t: "rpc-request"; reqId: number; method: string; params?: unknown };
 
 /** EventBus channels mirrored to guests (task subagent traffic only). */
 export type BusChannel = "task:subagent:progress" | "task:subagent:lifecycle";
@@ -376,10 +420,126 @@ export type HostFrame =
 	| { t: "ui-request-end"; reqId: number }
 	/** Targeted reply to fetch-transcript; `text` is decoded JSONL from `fromByte`, `newSize` the next offset base. */
 	| { t: "transcript"; reqId: number; text: string; newSize: number; error?: string }
+	/** Targeted reply to rpc-request; `ok:false` carries the failure reason. */
+	| { t: "rpc-result"; reqId: number; ok: boolean; data?: unknown; error?: string }
+	/** Multi-session workspace: full directory (after hello in workspace mode). */
+	| { t: "workspace"; sessions: WorkspaceSessionInfo[] }
+	/** One card changed (working flipped, message count grew, …). */
+	| { t: "workspace-session"; session: WorkspaceSessionInfo }
 	| { t: "bye"; reason: string }
 	| { t: "error"; message: string };
 
+/**
+ * Compact session card for the multi-session workspace view. Deliberately
+ * excludes transcripts — the guest focuses a session to stream its detail,
+ * keeping the directory cheap to sync.
+ */
+export interface WorkspaceSessionInfo {
+	id: string;
+	/** First user message, truncated; null when the session never sent. */
+	title: string | null;
+	cwd: string | null;
+	messageCount: number;
+	/** A live agent is currently streaming/running in this session. */
+	working: boolean;
+	paused: boolean;
+	/** True when the host can stream this session live (active agent session). */
+	live: boolean;
+	/** Read-only guests may not focus+prompt sessions they don't own. */
+	readOnly?: boolean;
+	updatedAt: number;
+}
+
 export type WireFrame = GuestFrame | HostFrame;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RPC payloads (board / cron / workspace / fs over rpc-request)
+//
+// JSON shapes shared with the desktop GUI and the daemon stores. The daemon
+// (boards.ts / crons.ts) and the GUI board define structurally identical
+// local types; the wire package pins the serialized contract so host, guest
+// and mock agree on one grammar.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One widget instance on a board (8px-grid pixel layout, kimi-style). */
+export interface BoardWidget {
+	id: string;
+	type: string;
+	title: string;
+	data: Record<string, unknown>;
+	pos: { x: number; y: number; w: number; h: number };
+}
+
+/** One board canvas; `builtin` seed examples are protected from mutation. */
+export interface BoardData {
+	id: string;
+	title: string;
+	widgets: BoardWidget[];
+	builtin?: boolean;
+}
+
+export type CronScheduleKind = "once" | "daily" | "weekly" | "monthly" | "cron";
+
+export interface CronSchedule {
+	kind: CronScheduleKind;
+	/** HH:mm — daily / weekly / monthly */
+	time?: string;
+	/** HH:mm list — daily (openchamber parity: multiple fire times a day) */
+	times?: string[];
+	/** YYYY-MM-DD — once */
+	date?: string;
+	/** 0 (Sun) .. 6 (Sat) — weekly */
+	weekdays?: number[];
+	/** 1..31 — monthly */
+	dayOfMonth?: number;
+	/** cron expression (5 fields) — kind=cron */
+	cron?: string;
+	timezone?: string;
+}
+
+export type CronStatus = "idle" | "running" | "success" | "error";
+
+export interface CronTask {
+	id: string;
+	name: string;
+	enabled: boolean;
+	schedule: CronSchedule;
+	prompt: string;
+	cwd: string;
+	/** Task-level model id; unset → session default. */
+	model?: string;
+	/** Task-level thinking effort; unset → session default. */
+	thinkingLevel?: "default" | "low" | "medium" | "high";
+	state: {
+		createdAt: number;
+		lastRunAt?: number;
+		lastStatus?: CronStatus;
+		lastError?: string;
+		lastSessionId?: string;
+		nextRunAt?: number;
+	};
+}
+
+/** One scheduled-task run (persisted, bounded history). */
+export interface CronRun {
+	id: string;
+	taskId: string;
+	startedAt: number;
+	finishedAt?: number;
+	status: CronStatus;
+	error?: string;
+	sessionId?: string;
+}
+
+/** One entry in a workspace tree (paths relative to `rootPath`, `/`-separated). */
+export interface WorkspaceEntry {
+	name: string;
+	path: string;
+	isDir: boolean;
+	size: number;
+	mtime: number;
+	depth: number;
+}
 
 /**
  * Wire protocol version carried in `hello`; the host rejects mismatches.
@@ -438,7 +598,11 @@ export interface ParsedCollabLink {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Relay → host control message. */
-export type RelayControlToHost = { t: "peer-joined" | "peer-left"; peer: number };
+export type RelayControlToHost = {
+	t: "peer-joined" | "peer-left";
+	peer: number /** Set on peer-joined when the guest joined in plaintext (no E2E) mode. */;
+	plaintext?: boolean;
+};
 /** Relay → guest control message. */
 export type RelayControlToGuest = { t: "room-closed" };
 export type RelayControlMessage = RelayControlToHost | RelayControlToGuest;

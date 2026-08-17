@@ -1,16 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
-import type { AgentMessage, AgentTool } from "@oh-my-pi/pi-agent-core";
-import {
-	AUTO_HANDOFF_THRESHOLD_FOCUS,
-	generateHandoff,
-	generateHandoffFromContext,
-	renderHandoffPrompt,
-} from "@oh-my-pi/pi-agent-core/compaction";
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core/thinking";
-import type { AssistantMessage, Model, ToolCall } from "@oh-my-pi/pi-ai";
-import * as ai from "@oh-my-pi/pi-ai";
-import { Effort, z } from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import { type } from "@musepi/omptype";
+import type { AgentMessage, AgentTool } from "@musepi/pi-agent-core";
+import { generateHandoff, generateHandoffFromContext, renderHandoffPrompt } from "@musepi/pi-agent-core/compaction";
+import { ThinkingLevel } from "@musepi/pi-agent-core/thinking";
+import type { AssistantMessage, Model, ToolCall } from "@musepi/pi-ai";
+import * as ai from "@musepi/pi-ai";
+import { Effort } from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 
 function createAssistantMessage(content: AssistantMessage["content"]): AssistantMessage {
 	return {
@@ -41,7 +37,7 @@ function createAssistantError(errorStatus: number, errorMessage: string): Assist
 	};
 }
 
-const handoffToolSchema = z.object({ note: z.string().optional() });
+const handoffToolSchema = type({ note: type("string").optional() });
 
 function createHandoffTool(): AgentTool<typeof handoffToolSchema> {
 	return {
@@ -70,12 +66,6 @@ describe("handoff helpers", () => {
 	test("renders custom focus into the handoff prompt", () => {
 		const rendered = renderHandoffPrompt("preserve failing test name");
 		expect(rendered).toContain("preserve failing test name");
-	});
-
-	test("exports the threshold focus text used by auto-handoff", () => {
-		expect(AUTO_HANDOFF_THRESHOLD_FOCUS).toBe(
-			"Threshold-triggered maintenance: preserve critical implementation state and immediate next actions.",
-		);
 	});
 
 	test("generates handoff with the live cache prefix and tool use disabled", async () => {

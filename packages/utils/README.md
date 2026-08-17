@@ -1,4 +1,4 @@
-# @oh-my-pi/pi-utils
+# @musepi/pi-utils
 
 Shared utilities for [oh-my-pi](https://github.com/can1357/oh-my-pi) packages. Zero ceremony, Bun-first.
 
@@ -20,12 +20,12 @@ Shared utilities for [oh-my-pi](https://github.com/can1357/oh-my-pi) packages. Z
 | `peek-file` | Read the first N bytes of a file with pooled buffers |
 | `frontmatter`, `glob`, `mime`, `temp`, `format`, `color`, `snowflake`, `tab-spacing`, `path-tree`, `sanitize-text` | Smaller single-purpose helpers |
 
-Import from the root barrel or per-module subpaths (`@oh-my-pi/pi-utils/<module>`).
+Import from the root barrel or per-module subpaths (`@musepi/pi-utils/<module>`).
 
 ## Install
 
 ```sh
-bun add @oh-my-pi/pi-utils
+bun add @musepi/pi-utils
 ```
 
 Ships TypeScript source directly (no build step); requires Bun ≥ 1.3.14.

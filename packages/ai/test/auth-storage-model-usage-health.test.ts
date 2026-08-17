@@ -1,12 +1,13 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
 	type ApiKeyCredential,
 	type AuthCredential,
 	type AuthCredentialStore,
 	AuthStorage,
 	type StoredAuthCredential,
-} from "@oh-my-pi/pi-ai/auth-storage";
-import type { CredentialRankingStrategy, UsageLimit, UsageProvider, UsageReport } from "@oh-my-pi/pi-ai/usage";
+} from "@musepi/pi-ai/auth-storage";
+import type { CredentialRankingStrategy, UsageLimit, UsageProvider, UsageReport } from "@musepi/pi-ai/usage";
+import { logger } from "@musepi/pi-utils";
 
 interface CacheEntry {
 	value: string;
@@ -394,5 +395,217 @@ describe("AuthStorage model usage health", () => {
 		controller.abort();
 		await expect(health).rejects.toThrow("usage fetch aborted");
 		pending.resolve(report("key-1", [limit("short", 0.2)]));
+	});
+});
+
+function sqliteCorruptError(): Error & { code: string } {
+	const err = new Error("database disk image is malformed (11) (Rowid 77291 out of order)") as Error & {
+		code: string;
+	};
+	err.code = "SQLITE_CORRUPT";
+	return err;
+}
+
+describe("AuthStorage corrupt persisted block store", () => {
+	const storages: AuthStorage[] = [];
+	afterEach(() => {
+		for (const storage of storages) storage.close();
+		storages.length = 0;
+		vi.restoreAllMocks();
+	});
+
+	it("latches a corrupt block read, reports once, and stops re-querying the store", async () => {
+		const rows = [oauthRow(1)];
+		const store = makeStore(rows);
+		let getBlockCalls = 0;
+		store.getCredentialBlock = () => {
+			getBlockCalls += 1;
+			throw sqliteCorruptError();
+		};
+		const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const storage = new AuthStorage(store, {
+			usageProviderResolver: provider =>
+				provider === "anthropic"
+					? makeUsageProvider({ "account-1": report("account-1", [limit("short", 0.2)]) })
+					: undefined,
+			rankingStrategyResolver: provider => (provider === "anthropic" ? strategy : undefined),
+			configValueResolver: async value => value,
+		});
+		await storage.reload();
+		storages.push(storage);
+
+		const first = await storage.getModelUsageHealth("anthropic", { modelId: "claude", reserveFraction: 0.1 });
+		const second = await storage.getModelUsageHealth("anthropic", { modelId: "claude", reserveFraction: 0.1 });
+
+		// Availability is preserved: a corrupt persisted read fails open to the
+		// in-memory backoff (no block) instead of spuriously forcing depletion.
+		expect(first.state).toBe("healthy");
+		expect(second.state).toBe("healthy");
+		// Latched on the first unrecoverable error: the broken store is queried
+		// exactly once despite three block-scope reads per health check across two calls.
+		expect(getBlockCalls).toBe(1);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("latches a corrupt block write and stops attempting persistence", async () => {
+		const rows = [apiKeyRow(1)];
+		const store = makeStore(rows);
+		let upsertCalls = 0;
+		store.upsertCredentialBlock = () => {
+			upsertCalls += 1;
+			throw sqliteCorruptError();
+		};
+		const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const storage = new AuthStorage(store);
+		await storage.reload();
+		storages.push(storage);
+
+		await storage.markUsageLimitReached("anthropic", undefined, { apiKey: "key-1" });
+		await storage.markUsageLimitReached("anthropic", undefined, { apiKey: "key-1" });
+
+		// First upsert throws SQLITE_CORRUPT and latches; the second mark skips
+		// the store entirely rather than retrying a broken write on every 429.
+		expect(upsertCalls).toBe(1);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("skips reconcile-after reads after a corrupt Codex block write latches the store", async () => {
+		const credential: AuthCredential = {
+			type: "oauth",
+			access: "access-1",
+			refresh: "refresh-1",
+			expires: Date.now() + 60 * 60_000,
+			accountId: "account-1",
+		};
+		const rows: StoredAuthCredential[] = [{ id: 1, provider: "openai-codex", credential, disabledCause: null }];
+		const healthyReport: UsageReport = {
+			provider: "openai-codex",
+			fetchedAt: Date.now(),
+			limits: [limit("short", 0.2)],
+			metadata: { accountId: "account-1", allowed: true, limitReached: false },
+		};
+		const usageProvider: UsageProvider = {
+			id: "openai-codex",
+			fetchUsage: async () => healthyReport,
+		};
+		const store = makeStore(rows);
+		let upsertCalls = 0;
+		let reconcileAfterCalls = 0;
+		store.upsertCredentialBlock = () => {
+			upsertCalls += 1;
+			throw sqliteCorruptError();
+		};
+		store.getCredentialBlockReconcileAfter = () => {
+			reconcileAfterCalls += 1;
+			throw sqliteCorruptError();
+		};
+		const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const storage = new AuthStorage(store, {
+			usageProviderResolver: provider => (provider === "openai-codex" ? usageProvider : undefined),
+			rankingStrategyResolver: provider => (provider === "openai-codex" ? strategy : undefined),
+			configValueResolver: async value => value,
+		});
+		await storage.reload();
+		storages.push(storage);
+
+		await storage.markUsageLimitReached("openai-codex", undefined, {
+			credentialId: 1,
+			modelId: "claude",
+		});
+		const health = await storage.getModelUsageHealth("openai-codex", {
+			modelId: "claude",
+			reserveFraction: 0.1,
+		});
+
+		expect(upsertCalls).toBe(1);
+		expect(reconcileAfterCalls).toBe(0);
+		expect(errorSpy).toHaveBeenCalledTimes(1);
+		expect(health.state).toBe("depleted");
+	});
+	it("latches every broker-facing block operation independently", async () => {
+		const block = {
+			credentialId: 1,
+			providerKey: "anthropic:api_key",
+			blockScope: "",
+			blockedUntilMs: Date.now() + 60_000,
+		};
+		const scenarios: Array<{
+			name: string;
+			install: (store: AuthCredentialStore, recordCall: () => void) => void;
+			invoke: (storage: AuthStorage) => unknown;
+			fallback: unknown;
+			failsWhenLatched: boolean;
+		}> = [
+			{
+				name: "listCredentialBlocks",
+				install: (store, recordCall) => {
+					store.listCredentialBlocks = () => {
+						recordCall();
+						throw sqliteCorruptError();
+					};
+				},
+				invoke: storage => storage.listCredentialBlocks([1]),
+				fallback: [],
+				failsWhenLatched: false,
+			},
+			{
+				name: "upsertCredentialBlock",
+				install: (store, recordCall) => {
+					store.upsertCredentialBlock = () => {
+						recordCall();
+						throw sqliteCorruptError();
+					};
+				},
+				invoke: storage => storage.upsertCredentialBlock(block),
+				fallback: undefined,
+				failsWhenLatched: true,
+			},
+			{
+				name: "deleteCredentialBlock",
+				install: (store, recordCall) => {
+					store.deleteCredentialBlock = () => {
+						recordCall();
+						throw sqliteCorruptError();
+					};
+				},
+				invoke: storage => storage.deleteCredentialBlock(1, block.providerKey, block.blockScope),
+				fallback: undefined,
+				failsWhenLatched: true,
+			},
+			{
+				name: "deleteCredentialBlocks",
+				install: (store, recordCall) => {
+					store.deleteCredentialBlocks = () => {
+						recordCall();
+						throw sqliteCorruptError();
+					};
+				},
+				invoke: storage => storage.deleteCredentialBlocks(1),
+				fallback: undefined,
+				failsWhenLatched: true,
+			},
+		];
+		const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+		for (const scenario of scenarios) {
+			const store = makeStore([]);
+			let calls = 0;
+			scenario.install(store, () => {
+				calls += 1;
+			});
+			const storage = new AuthStorage(store);
+			await storage.reload();
+			storages.push(storage);
+
+			if (scenario.failsWhenLatched) {
+				expect(() => scenario.invoke(storage), scenario.name).toThrow("unavailable after SQLite corruption");
+				expect(() => scenario.invoke(storage), scenario.name).toThrow("unavailable after SQLite corruption");
+			} else {
+				expect(scenario.invoke(storage), scenario.name).toEqual(scenario.fallback);
+				expect(scenario.invoke(storage), scenario.name).toEqual(scenario.fallback);
+			}
+			expect(calls, scenario.name).toBe(1);
+		}
+		expect(errorSpy).toHaveBeenCalledTimes(scenarios.length);
 	});
 });

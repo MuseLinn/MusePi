@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { CombinedAutocompleteProvider } from "@oh-my-pi/pi-tui/autocomplete";
+import { CombinedAutocompleteProvider } from "@musepi/pi-tui/autocomplete";
 
 describe("CombinedAutocompleteProvider", () => {
 	describe("extractPathPrefix", () => {
@@ -105,19 +105,23 @@ describe("CombinedAutocompleteProvider", () => {
 			expect(result).toBeNull();
 		});
 
-		it("falls back to path suggestions for an unmatched mid-prompt slash token", async () => {
-			const provider = new CombinedAutocompleteProvider(
-				[{ name: "skill:security-scan", description: "Security scan" }],
-				"/tmp",
-			);
-			const line = "see /tmp";
+		// Requires a real `/tmp` directory at the filesystem root.
+		it.skipIf(process.platform === "win32")(
+			"falls back to path suggestions for an unmatched mid-prompt slash token",
+			async () => {
+				const provider = new CombinedAutocompleteProvider(
+					[{ name: "skill:security-scan", description: "Security scan" }],
+					"/tmp",
+				);
+				const line = "see /tmp";
 
-			const result = await provider.getSuggestions([line], 0, line.length);
+				const result = await provider.getSuggestions([line], 0, line.length);
 
-			expect(result).not.toBeNull();
-			expect(result?.prefix).toBe("/tmp");
-			expect(result?.items.map(item => item.value)).toContain("/tmp/");
-		});
+				expect(result).not.toBeNull();
+				expect(result?.prefix).toBe("/tmp");
+				expect(result?.items.map(item => item.value)).toContain("/tmp/");
+			},
+		);
 
 		it("returns nothing for a prose token that only fuzzy-matches skill text", async () => {
 			const provider = new CombinedAutocompleteProvider(
@@ -362,6 +366,27 @@ describe("CombinedAutocompleteProvider", () => {
 
 			expect(result?.prefix).toBe(prefix);
 			expect(result?.items.map(item => item.value)).toContain(`${normalizedBaseDir}/alpha.ts`);
+		});
+
+		it("triggers automatic completion for a drive-letter path token on every platform", async () => {
+			// On Windows `C:/` is a real drive root; on POSIX it is a relative
+			// directory literally named `C:`, created here so the same drive-style
+			// token exercises the trigger without platform branching downstream.
+			if (process.platform !== "win32") {
+				fs.mkdirSync(path.join(baseDir, "C:"));
+				fs.writeFileSync(path.join(baseDir, "C:", "alpha.ts"), "export {};\n");
+			}
+			const provider = new CombinedAutocompleteProvider([{ name: "model", description: "Switch model" }], baseDir);
+			const line = "see C:/";
+
+			const result = await provider.getSuggestions([line], 0, line.length);
+
+			expect(result).not.toBeNull();
+			expect(result?.prefix).toBe("C:/");
+			expect(result?.items.length).toBeGreaterThan(0);
+			if (process.platform !== "win32") {
+				expect(result?.items.map(item => item.value)).toContain("C:/alpha.ts");
+			}
 		});
 
 		it("keeps slash command matches ahead of file suggestions", async () => {

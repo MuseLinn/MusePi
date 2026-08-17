@@ -1,11 +1,12 @@
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { estimateTokens } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { raceWithSignal } from "@oh-my-pi/pi-ai/utils/abort";
-import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { logger } from "@oh-my-pi/pi-utils";
-import { obfuscateToolArguments, type SecretObfuscator } from "../secrets/obfuscator";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import { estimateTokens } from "@musepi/pi-agent-core/compaction";
+import type { AssistantMessage, ImageContent, TextContent } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { raceWithSignal } from "@musepi/pi-ai/utils/abort";
+import { type CursorExecResolvedCarrier, kCursorExecResolved } from "@musepi/pi-ai/utils/block-symbols";
+import { logger } from "@musepi/pi-utils";
+import { obfuscateToolArguments } from "../secrets/message-transform";
+import type { SecretObfuscator } from "../secrets/obfuscator";
 import {
 	formatExecutionSourcePreview,
 	formatSessionHistoryMarkdown,
@@ -51,11 +52,11 @@ export interface AdvisorRuntimeHost {
 	maintainContext?(incomingTokens: number, signal: AbortSignal): Promise<boolean>;
 	/**
 	 * Called immediately before each `agent.prompt(batch)` cycle. Lets the host
-	 * clear per-update advisor state — currently the one-advise-per-update gate
-	 * in {@link AdvisorEmissionGuard}, which the host owns because it is the
-	 * one that routes `advise()` results back to the primary.
+	 * clear per-update advisor state and apply the in-progress delivery policy.
+	 * The host owns these gates because it routes `advise()` results back to the
+	 * primary.
 	 */
-	beginAdvisorUpdate?(): void;
+	beginAdvisorUpdate?(inProgress: boolean): void;
 	/**
 	 * Called with the error of every failed advisor turn, before the retry sleep
 	 * or the dropped-after-3 path. Lets the host apply credential-level remedies
@@ -296,6 +297,14 @@ export class AdvisorRuntime {
 	#failureNotified = false;
 	/** Consecutive quarantined turns since the last success/reset (issue #6661). */
 	#consecutiveQuarantines = 0;
+	/**
+	 * Model identities this refusal cascade has already tried. The cascade walks
+	 * the fallback chain to exhaustion — that is what the chain is for — but
+	 * visits each model at most once, so a chain whose keys point back at each
+	 * other (A→B, B→A) cannot ping-pong forever. Cleared when a successful or
+	 * terminal turn ends the cascade, or on reset, so a later refusal starts fresh.
+	 */
+	readonly #refusalModelsTried = new Set<string>();
 	/** Whether primary reasoning is included in advisor deltas for the current model. */
 	#includeThinking = true;
 	#modelIdentity: string | undefined;
@@ -541,6 +550,7 @@ export class AdvisorRuntime {
 		this.#failing = false;
 		this.#droppedBacklogs = 0;
 		this.#consecutiveQuarantines = 0;
+		this.#refusalModelsTried.clear();
 		this.#failureNotified = false;
 		this.#resetAdvisorContext(true, true);
 	}
@@ -909,8 +919,8 @@ export class AdvisorRuntime {
 				const contextWasFresh = resetContext || recoveringOverflow || messageSnapshot === 0;
 				try {
 					// Reset the host's per-update advisor state (one-advise-per-update
-					// gate) before each model cycle so the new batch starts fresh.
-					this.host.beginAdvisorUpdate?.();
+					// gate) and pass through whether this batch reviews partial work.
+					this.host.beginAdvisorUpdate?.(wip);
 					const prompt = this.agent.prompt(batch);
 					this.#promptInFlight = prompt;
 					try {
@@ -936,6 +946,7 @@ export class AdvisorRuntime {
 					this.#failureNotified = false;
 					this.#droppedBacklogs = 0;
 					this.#consecutiveQuarantines = 0;
+					this.#refusalModelsTried.clear();
 					if (this.host.onTurnSuccess) {
 						try {
 							await raceWithSignal(Promise.resolve(this.host.onTurnSuccess()), iterationAbort.signal);
@@ -960,14 +971,16 @@ export class AdvisorRuntime {
 					this.#wakeAllWaiters();
 					const failedMessages = this.agent.state.messages.slice(messageSnapshot);
 					const terminalFailure = this.#terminalAssistantFailure(messageSnapshot);
-					const classifierRefusal =
-						(terminalFailure !== undefined && isClassifierRefusal(terminalFailure)) ||
-						AIError.is(AIError.classify(err), AIError.Flag.ContentBlocked);
+					const rawErrorId = AIError.classify(err);
 					const terminalFailureId =
 						terminalFailure === undefined ? undefined : AIError.classifyMessage(terminalFailure);
+					const classifierRefusal =
+						(terminalFailure !== undefined && isClassifierRefusal(terminalFailure)) ||
+						(!AIError.is(rawErrorId, AIError.Flag.AccountPolicy) &&
+							AIError.is(rawErrorId, AIError.Flag.ContentBlocked));
 					const contextOverflow =
 						(terminalFailureId !== undefined && AIError.is(terminalFailureId, AIError.Flag.ContextOverflow)) ||
-						AIError.is(AIError.classify(err), AIError.Flag.ContextOverflow);
+						AIError.is(rawErrorId, AIError.Flag.ContextOverflow);
 					// A terminal provider failure that is neither retriable nor an
 					// overflow (e.g. a blocked prompt) will fail identically on every
 					// retry — classify it before rollback so the batch is dropped after
@@ -995,6 +1008,50 @@ export class AdvisorRuntime {
 								continue;
 							}
 						}
+						// A refusal that outlives the strip is this model's policy call, not
+						// a malformed request, so hand it to the host's model fallback before
+						// declaring the advisor dead. The cascade walks the chain to
+						// exhaustion (the host returns false once candidates run out); the
+						// tried-set only stops a cyclic chain from revisiting a model. The
+						// primary turn-recovery path already allows fallback on refusals.
+						const refusalModel = this.host.getModelIdentity?.() ?? this.#modelIdentity ?? "";
+						let refusalRecovered = false;
+						try {
+							if (!this.#refusalModelsTried.has(refusalModel)) {
+								this.#refusalModelsTried.add(refusalModel);
+								refusalRecovered =
+									(await raceWithSignal(
+										Promise.resolve(this.host.onTurnError?.(err, failedMessages, iterationAbort.signal)),
+										iterationAbort.signal,
+									)) === true;
+							} else {
+								logger.debug("advisor refusal chain exhausted", { model: refusalModel });
+							}
+						} catch (hookErr) {
+							logger.debug("advisor onTurnError hook failed after refusal", { err: String(hookErr) });
+						}
+						if (this.#epoch !== epoch) continue;
+						if (this.#sessionTransitionPaused) {
+							this.#pending.unshift(...popped);
+							continue;
+						}
+						if (refusalRecovered) {
+							this.#consecutiveFailures = 0;
+							this.#failureNotified = false;
+							this.#pending.unshift({
+								text: batch,
+								rawMessages,
+								renderRevision: this.#renderRevision,
+								turns: finalTurns,
+								wip,
+								overflowRecovery: recoveringOverflow || undefined,
+							});
+							logger.debug("advisor refusal recovered by model fallback");
+							continue;
+						}
+						// The batch is terminal, so the next primary update is a new
+						// refusal cascade and must be allowed to try the chain again.
+						this.#refusalModelsTried.clear();
 						this.#notifyFailureOnce(err);
 						this.#clearSeenContext();
 						this.#backlog = Math.max(0, this.#backlog - finalTurns);
@@ -1154,12 +1211,14 @@ export class AdvisorRuntime {
 	}
 }
 
-/** Mirrors turn recovery's refusal classification and retains AIError's provider-neutral content-block fallback. */
+/** Mirrors turn recovery's refusal classification without treating account eligibility as a model refusal. */
 function isClassifierRefusal(message: AssistantMessage): boolean {
 	if (message.stopReason !== "error") return false;
+	const id = AIError.classifyMessage(message);
+	if (AIError.is(id, AIError.Flag.AccountPolicy)) return false;
 	const stopType = message.stopDetails?.type;
 	if (stopType === "refusal" || stopType === "sensitive") return true;
-	return AIError.is(AIError.classifyMessage(message), AIError.Flag.ContentBlocked);
+	return AIError.is(id, AIError.Flag.ContentBlocked);
 }
 
 /**

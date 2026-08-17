@@ -3,7 +3,7 @@
  * {@link UiHelpers} and the input/event controllers, so the live chat surfaces
  * construct components and reset editor state identically.
  */
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage } from "@musepi/pi-ai";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import type { InteractiveModeContext } from "../types";
 
@@ -25,6 +25,7 @@ export function createAssistantMessageComponent(
 		ctx.proseOnlyThinking,
 	);
 	component.setImagesVisible(ctx.settings.get("terminal.showImages"));
+	component.setToolResultImagesVisible(!ctx.hideToolActivity);
 	component.setExpanded(ctx.toolOutputExpanded);
 	return component;
 }

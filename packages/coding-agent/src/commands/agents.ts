@@ -1,15 +1,16 @@
 /**
  * Manage bundled task agents.
  */
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+
+import { Args, Command, Flags, renderCommandHelp } from "@musepi/pi-utils/cli";
 import { type AgentsAction, type AgentsCommandArgs, runAgentsCommand } from "../cli/agents-cli";
+import { agentsHelp as commandHelp } from "../cli/command-help";
 import { initTheme } from "../modes/theme/theme";
 
 const ACTIONS: AgentsAction[] = ["unpack"];
 
 export default class Agents extends Command {
-	static description = "Manage bundled task agents";
-
+	static description = commandHelp.description;
 	static args = {
 		action: Args.string({
 			description: "Agents action",
@@ -36,7 +37,7 @@ export default class Agents extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Agents);
 		if (!args.action) {
-			renderCommandHelp("omp", "agents", Agents);
+			renderCommandHelp("musepi", "agents", Agents);
 			return;
 		}
 

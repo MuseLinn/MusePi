@@ -4,9 +4,9 @@
  * running-agents roster for activity with no job entry.
  */
 
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
 import type { AsyncJob, AsyncJobManager } from "../../async";
 import { settings } from "../../config/settings";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
@@ -132,7 +132,7 @@ function describeAgents(agents: AgentActivitySnapshot[]): string[] {
 
 interface TrackedJobLike {
 	id: string;
-	type: "bash" | "task";
+	type: "bash" | "task" | "agnes-video";
 	status: string;
 	label: string;
 	startTime: number;

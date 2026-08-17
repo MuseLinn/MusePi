@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { $which, getRemoteDir, postmortem } from "@oh-my-pi/pi-utils";
+import { $which, getRemoteDir, postmortem } from "@musepi/pi-utils";
 import { $ } from "bun";
 import {
 	getControlDir,
@@ -39,7 +39,7 @@ function getMountName(host: SSHConnectionTarget): string {
 	return sanitizeHostName(raw);
 }
 
-function getMountPath(host: SSHConnectionTarget): string {
+export function getMountPath(host: SSHConnectionTarget): string {
 	return path.join(REMOTE_DIR, getMountName(host));
 }
 
@@ -103,7 +103,18 @@ export async function isMounted(mountPath: string, options: MountCheckOptions = 
 	const mountpoint = which("mountpoint");
 	if (!mountpoint) {
 		const platform = options.platform ?? process.platform;
-		return platform === "darwin" ? isMountedByDeviceBoundary(mountPath, options.stat) : false;
+		if (platform === "darwin") return isMountedByDeviceBoundary(mountPath, options.stat);
+		// Windows (sshfs-win) and other platforms without `mountpoint`:
+		// sshfs mounts populate the root with the remote tree, so a
+		// non-empty mount dir means mounted; an empty/missing dir is not.
+		// (The remote root "/" always has entries, so an empty dir is a
+		// reliable "not mounted" signal for our connect flow.)
+		try {
+			const entries = await fs.promises.readdir(mountPath);
+			return entries.length > 0;
+		} catch {
+			return false;
+		}
 	}
 	const result = await $`${mountpoint} -q ${mountPath}`.quiet().nothrow();
 	return result.exitCode === 0;

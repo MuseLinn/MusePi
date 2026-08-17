@@ -10,12 +10,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ReadTool, type ReadToolDetails } from "@oh-my-pi/pi-coding-agent/tools/read";
-import * as markit from "@oh-my-pi/pi-coding-agent/utils/markit";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { ReadTool, type ReadToolDetails } from "@musepi/pi-coding-agent/tools/read";
+import * as markit from "@musepi/pi-coding-agent/utils/markit";
+import * as piUtils from "@musepi/pi-utils";
+import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 // 1x1 transparent PNG — small enough to pass through image loading untouched.
 const TINY_PNG = Buffer.from(
@@ -71,6 +72,25 @@ function mockBlockedExtraction() {
 	return { entered, release, spy };
 }
 
+/**
+ * Resolves once `count` callers are attached as waiters on the shared PDF
+ * extraction. Waiter attachment is the only `untilAborted` call that receives
+ * a promise (source snapshots pass thunks), so counting promise arguments
+ * observes it. The abort tests need this barrier: aborting a caller while it
+ * is the sole waiter tears the extraction down and deadlocks against the
+ * blocked conversion mock.
+ */
+function extractionWaitersAttached(count: number): Promise<void> {
+	const attached = Promise.withResolvers<void>();
+	const original = piUtils.untilAborted;
+	let seen = 0;
+	vi.spyOn(piUtils, "untilAborted").mockImplementation((signal, pr) => {
+		if (typeof pr !== "function" && ++seen === count) attached.resolve();
+		return original(signal, pr);
+	});
+	return attached.promise;
+}
+
 describe("read PDF image extraction", () => {
 	let testDir: string;
 	let pdfPath: string;
@@ -105,8 +125,8 @@ describe("read PDF image extraction", () => {
 			.join("\n");
 
 		expect(text).not.toContain("<!-- image:");
-		expect(text).toContain(`read \`${pdfPath}:p11-img0.png\``);
-		expect(text).toContain(`read \`${pdfPath}:p11-img1.png\``);
+		expect(text).toContain("read `doc.pdf:p11-img0.png`");
+		expect(text).toContain("read `doc.pdf:p11-img1.png`");
 		// Page/size metadata is preserved in the handle text.
 		expect(text).toContain("page 11, 199x124pt");
 	});
@@ -124,7 +144,7 @@ describe("read PDF image extraction", () => {
 			.join("\n");
 
 		expect(text).not.toContain("<!-- image:");
-		expect(text).toContain(`read \`${pdfPath}:p3-img0.png\``);
+		expect(text).toContain("read `doc.pdf:p3-img0.png`");
 	});
 
 	it("extracts a PDF image member as an inline image block", async () => {
@@ -226,11 +246,13 @@ describe("read PDF image extraction", () => {
 
 	it("keeps shared extraction running when its owner aborts", async () => {
 		const { entered, release, spy } = mockBlockedExtraction();
+		const bothAttached = extractionWaitersAttached(2);
 		const tool = new ReadTool(makeSession(testDir));
 		const ownerController = new AbortController();
 		const owner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` }, ownerController.signal);
-		const joiner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` });
 		await entered.promise;
+		const joiner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` });
+		await bothAttached;
 
 		ownerController.abort();
 		await expect(owner).rejects.toThrow(/Aborted|Cancelled/);
@@ -243,11 +265,13 @@ describe("read PDF image extraction", () => {
 
 	it("keeps shared extraction running when a joiner aborts", async () => {
 		const { entered, release, spy } = mockBlockedExtraction();
+		const bothAttached = extractionWaitersAttached(2);
 		const tool = new ReadTool(makeSession(testDir));
 		const joinerController = new AbortController();
 		const owner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` });
-		const joiner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` }, joinerController.signal);
 		await entered.promise;
+		const joiner = tool.execute("call", { path: `${pdfPath}:p11-img0.png` }, joinerController.signal);
+		await bothAttached;
 
 		joinerController.abort();
 		await expect(joiner).rejects.toThrow(/Aborted|Cancelled/);

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { AppendOnlyContextManager, AppendOnlyLog, StablePrefix } from "@oh-my-pi/pi-agent-core/append-only-context";
-import type { AgentContext, AgentTool } from "@oh-my-pi/pi-agent-core/types";
-import type { Message, Tool, ToolExample } from "@oh-my-pi/pi-ai";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { AppendOnlyContextManager, AppendOnlyLog, StablePrefix } from "@musepi/pi-agent-core/append-only-context";
+import type { AgentContext, AgentTool } from "@musepi/pi-agent-core/types";
+import type { Message, Tool, ToolExample } from "@musepi/pi-ai";
+import { INTENT_FIELD } from "@musepi/pi-wire";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -812,26 +812,16 @@ describe("tool examples injection through build()", () => {
 		properties: { paths: { type: "array", items: { type: "string" } } },
 	};
 
-	it("injects examples when exampleDialect is provided", () => {
-		const mgr = new AppendOnlyContextManager();
-		const tool = makeTool("find", "Find files.", findParams, findExamples);
-		const ctx = makeContext({ tools: [tool] });
-
-		const result = mgr.build(ctx, { intentTracing: false, exampleDialect: "anthropic" });
-		const desc = result.tools?.[0]?.description ?? "";
-		expect(desc).toContain("<examples>");
-		expect(desc).toContain("# Find files");
-		expect(desc).toContain('<invoke name="find">');
-	});
-
-	it("omits examples when exampleDialect is undefined", () => {
+	it("always injects Python-syntax examples", () => {
 		const mgr = new AppendOnlyContextManager();
 		const tool = makeTool("find", "Find files.", findParams, findExamples);
 		const ctx = makeContext({ tools: [tool] });
 
 		const result = mgr.build(ctx, { intentTracing: false });
 		const desc = result.tools?.[0]?.description ?? "";
-		expect(desc).toBe("Find files.");
+		expect(desc).toContain("<examples>");
+		expect(desc).toContain("# Find files");
+		expect(desc).toContain('find(paths=["src/**/*.ts"])');
 	});
 
 	it("injects the `i` placeholder into examples when intentTracing is on", () => {
@@ -839,21 +829,21 @@ describe("tool examples injection through build()", () => {
 		const tool = makeTool("find", "Find files.", findParams, findExamples);
 		const ctx = makeContext({ tools: [tool] });
 
-		const result = mgr.build(ctx, { intentTracing: true, exampleDialect: "anthropic" });
+		const result = mgr.build(ctx, { intentTracing: true });
 		const desc = result.tools?.[0]?.description ?? "";
-		expect(desc).toContain(`<parameter name="${INTENT_FIELD}"`);
-		expect(desc).toContain("…");
+		expect(desc).toContain(`${INTENT_FIELD}="…"`);
 	});
 
-	it("exampleDialect flip invalidates the fingerprint cache", () => {
+	it("examples presence flip invalidates the fingerprint cache", () => {
 		const mgr = new AppendOnlyContextManager();
-		const tool = makeTool("find", "Find files.", undefined, findExamples);
-		const ctx = makeContext({ tools: [tool] });
+		const ctx1 = makeContext({ tools: [makeTool("find", "Find files.", undefined, undefined)] });
+		const ctx2 = makeContext({ tools: [makeTool("find", "Find files.", undefined, findExamples)] });
 
-		mgr.build(ctx, { intentTracing: false });
+		mgr.build(ctx1, { intentTracing: false });
 		const fpNoExamples = mgr.prefix.fingerprint;
 
-		mgr.build(ctx, { intentTracing: false, exampleDialect: "anthropic" });
+		mgr.invalidate();
+		mgr.build(ctx2, { intentTracing: false });
 		const fpWithExamples = mgr.prefix.fingerprint;
 
 		expect(fpNoExamples).not.toBe(fpWithExamples);

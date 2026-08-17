@@ -11,6 +11,7 @@
  * loading that can be integrated when stream.ts is refactored.
  */
 
+import type { CompatOf } from "@musepi/pi-catalog/types";
 import * as AIError from "../error";
 import type {
 	Api,
@@ -240,12 +241,23 @@ function forwardStream<TApi extends Api>(
 	(async () => {
 		try {
 			const providerHandlesStreamTimeouts = limits?.providerHandlesStreamTimeouts === true;
+			// Per-model catalog compat can widen the fallback watchdog for hosts
+			// with no keepalive events (e.g. Bedrock reasoning models that go
+			// quiet for minutes mid-thinking, issue #4758). Caller options and
+			// env overrides still take precedence over the compat fallback. The
+			// annotated local up-casts the generic CompatOf<TApi> by assignment,
+			// so any compat shape redeclaring `streamIdleTimeoutMs` with another
+			// type is a compile error here.
+			const compat: CompatOf<Api> | undefined = model.compat;
+			const compatIdleTimeoutMs =
+				compat !== undefined && "streamIdleTimeoutMs" in compat ? compat.streamIdleTimeoutMs : undefined;
+			const idleTimeoutFallbackMs = compatIdleTimeoutMs ?? limits?.defaultIdleTimeoutMs;
 			const idleTimeoutMs = providerHandlesStreamTimeouts
 				? undefined
 				: (options.streamIdleTimeoutMs ??
 					(limits?.openAIIdleEnvFloorsFirstEvent
-						? getOpenAIStreamIdleTimeoutMs(limits.defaultIdleTimeoutMs)
-						: getStreamIdleTimeoutMs(limits?.defaultIdleTimeoutMs)));
+						? getOpenAIStreamIdleTimeoutMs(idleTimeoutFallbackMs)
+						: getStreamIdleTimeoutMs(idleTimeoutFallbackMs)));
 			const firstItemTimeoutMs = providerHandlesStreamTimeouts
 				? 0
 				: (options.streamFirstEventTimeoutMs ??
@@ -311,6 +323,7 @@ function createLazyLoadErrorMessage<TApi extends Api>(
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 		stopReason,
+		errorId: stopReason === "error" ? AIError.classify(error, model.api) || undefined : undefined,
 		errorMessage:
 			stopReason === "aborted" ? "Request was aborted" : error instanceof Error ? error.message : String(error),
 		timestamp: Date.now(),

@@ -9,10 +9,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { loadExtensions } from "@oh-my-pi/pi-coding-agent/extensibility/extensions/loader";
-import { loadHooks } from "@oh-my-pi/pi-coding-agent/extensibility/hooks/loader";
-import { ExtensionExitError, withHostGuard } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { loadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
+import { loadHooks } from "@musepi/pi-coding-agent/extensibility/hooks/loader";
+import { ExtensionExitError, withHostGuard } from "@musepi/pi-coding-agent/extensibility/utils";
+import { TempDir } from "@musepi/pi-utils";
 
 describe("extension/hook loader process.exit guard (#3680)", () => {
 	let project: TempDir | undefined;
@@ -34,8 +34,9 @@ describe("extension/hook loader process.exit guard (#3680)", () => {
 		return filePath;
 	};
 
-	const runProbe = async (probe: string) => {
-		const proc = Bun.spawn([process.execPath, "-e", probe], {
+	const runProbe = async (probe: string, preload: string[] = []) => {
+		const preloadArgs = preload.flatMap(file => ["--preload", file]);
+		const proc = Bun.spawn([process.execPath, ...preloadArgs, "-e", probe], {
 			cwd: path.resolve(import.meta.dir, "../../.."),
 			stdin: "pipe",
 			stdout: "pipe",
@@ -65,8 +66,8 @@ describe("extension/hook loader process.exit guard (#3680)", () => {
 				? 'process.kill(process.pid, "SIGINT");'
 				: 'void Promise.reject(new Error("probe fatal"));';
 		return runProbe(`
-import { postmortem } from "@oh-my-pi/pi-utils";
-import { withHostGuard } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
+import { postmortem } from "@musepi/pi-utils";
+import { withHostGuard } from "@musepi/pi-coding-agent/extensibility/utils";
 
 postmortem.register("probe-cleanup", reason => {
 	process.stdout.write(\`cleanup:\${reason}\\n\`);
@@ -175,8 +176,8 @@ void withHostGuard(async () => {
 
 	it("keeps postmortem.quit behind the extension exit guard", async () => {
 		const { exitCode, stdout, stderr } = await runProbe(`
-import { postmortem } from "@oh-my-pi/pi-utils";
-import { withHostGuard } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
+import { postmortem } from "@musepi/pi-utils";
+import { withHostGuard } from "@musepi/pi-coding-agent/extensibility/utils";
 
 try {
 	await withHostGuard(() => postmortem.quit(37));
@@ -207,6 +208,39 @@ try {
 		expect(stderr.match(/\[Unhandled Rejection\]/g)).toHaveLength(1);
 		expect(stderr).toContain("Error: probe fatal");
 		expect(stderr).not.toContain("ExtensionExitError");
+	});
+
+	it("exits cleanly on host SIGHUP when postmortem initialized inside a guard window (#7393)", async () => {
+		// Mirror the shipped bundle: postmortem's exit primitive is first resolved
+		// while withHostGuard has replaced process.reallyExit with a throwing stub.
+		// A preload swaps reallyExit before the entry's static postmortem import
+		// evaluates; the entry then restores it (as the guard's finally does) and
+		// self-SIGHUPs (the TUI terminal-disconnect path). A lazily resolved exit
+		// primitive must pick up the restored native reallyExit and exit 129
+		// instead of looping on ExtensionExitError.
+		const preload = writeModule(
+			"guard-init-preload.ts",
+			"globalThis.__ompNativeReallyExit = process.reallyExit;\n" +
+				'process.reallyExit = (() => { throw new Error("guarded during init"); });\n',
+		);
+		const { exitCode, stdout, stderr } = await runProbe(
+			`
+import { postmortem } from "@musepi/pi-utils";
+postmortem.register("probe", reason => process.stdout.write(\`cleanup:\${reason}\\n\`));
+process.reallyExit = globalThis.__ompNativeReallyExit;
+process.stdout.write("armed\\n");
+process.kill(process.pid, "SIGHUP");
+// Keep the real child event loop alive so the platform can deliver SIGHUP;
+// real signal delivery cannot be driven by fake timers.
+await Bun.sleep(10_000);
+`,
+			[preload],
+		);
+
+		expect(exitCode).toBe(129);
+		expect(stdout).toBe("armed\ncleanup:sighup\n");
+		expect(stderr).not.toContain("ExtensionExitError");
+		expect(stderr).not.toContain("Unhandled Rejection");
 	});
 
 	it("only the outermost guard restores process.exit when guards nest", async () => {

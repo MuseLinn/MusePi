@@ -71,7 +71,7 @@ cp permission-gate.ts ~/.omp/agent/extensions/
 See [docs/extensions.md](../../docs/extensions.md) for full documentation.
 
 ```typescript
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
 	const z = pi.zod;
@@ -114,7 +114,7 @@ export default function (pi: ExtensionAPI) {
 **Use `z.enum` for discriminated string tool args:**
 
 ```typescript
-const { z } = pi.zod;
+const z = pi.zod;
 
 parameters: z.object({
 	action: z.enum(["list", "add"]),

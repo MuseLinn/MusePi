@@ -2,15 +2,16 @@ import { describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type Skill as CapabilitySkill, skillCapability } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { getCapability } from "@oh-my-pi/pi-coding-agent/discovery";
+import { type Skill as CapabilitySkill, skillCapability } from "@musepi/pi-coding-agent/capability/skill";
+import { getCapability } from "@musepi/pi-coding-agent/discovery";
+import { getWslWindowsHomeCandidate } from "@musepi/pi-coding-agent/discovery/agents";
 import {
 	loadSkills,
 	loadSkillsFromDir,
 	parseSkillInvocation,
 	type Skill,
-} from "@oh-my-pi/pi-coding-agent/extensibility/skills";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/extensibility/skills";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const fixturesDir = path.resolve(import.meta.dirname, "fixtures/skills");
 const collisionFixturesDir = path.resolve(import.meta.dirname, "fixtures/skills-collision");
@@ -232,6 +233,69 @@ describe("skills", () => {
 				await removeWithRetries(tempHome);
 				await removeWithRetries(tempCwd);
 			}
+		});
+
+		it("should load Windows host ~/.agents/skills when running under WSL (#3779)", async () => {
+			const tempHostHome = await fs.mkdtemp(path.join(os.tmpdir(), "pi-agents-wsl-host-"));
+			const tempCwd = await fs.mkdtemp(path.join(os.tmpdir(), "pi-agents-wsl-cwd-"));
+			const skillDir = path.join(tempHostHome, ".agents", "skills", "wsl-host-skill");
+			await fs.mkdir(skillDir, { recursive: true });
+			await fs.writeFile(
+				path.join(skillDir, "SKILL.md"),
+				["---", "description: Loaded from WSL host USERPROFILE", "---", "", "# wsl-host-skill"].join("\n"),
+			);
+			const previousWslDistroName = process.env.WSL_DISTRO_NAME;
+			const previousWslInterop = process.env.WSL_INTEROP;
+			const previousUserProfile = process.env.USERPROFILE;
+			const previousPlatform = process.platform;
+			Object.defineProperty(process, "platform", { value: "linux" });
+			process.env.WSL_DISTRO_NAME = "Ubuntu";
+			delete process.env.WSL_INTEROP;
+			process.env.USERPROFILE = tempHostHome;
+			try {
+				const { skills } = await loadSkills({
+					enableCodexUser: false,
+					enableClaudeUser: false,
+					enableClaudeProject: false,
+					enablePiUser: false,
+					enablePiProject: false,
+					cwd: tempCwd,
+				});
+				const skill = skills.find(s => s.name === "wsl-host-skill");
+				expect(skill?.source).toBe("agents:user");
+				expect(skill?.filePath).toBe(path.join(skillDir, "SKILL.md"));
+			} finally {
+				if (previousWslDistroName === undefined) delete process.env.WSL_DISTRO_NAME;
+				else process.env.WSL_DISTRO_NAME = previousWslDistroName;
+				if (previousWslInterop === undefined) delete process.env.WSL_INTEROP;
+				else process.env.WSL_INTEROP = previousWslInterop;
+				if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+				else process.env.USERPROFILE = previousUserProfile;
+				Object.defineProperty(process, "platform", { value: previousPlatform });
+				await removeWithRetries(tempHostHome);
+				await removeWithRetries(tempCwd);
+			}
+		});
+
+		it("converts Windows USERPROFILE paths to the default WSL mount (#3779)", () => {
+			const resolved = getWslWindowsHomeCandidate({
+				platform: "linux",
+				env: { WSL_DISTRO_NAME: "Ubuntu", USERPROFILE: "C:\\Users\\alice" },
+				wslPath: () => undefined,
+			});
+
+			expect(resolved).toBe("/mnt/c/Users/alice");
+		});
+
+		it("resolves the Windows profile through interop when USERPROFILE is not exported (#3779)", () => {
+			const resolved = getWslWindowsHomeCandidate({
+				platform: "linux",
+				env: { WSL_DISTRO_NAME: "Ubuntu" },
+				windowsUserProfile: () => "C:\\Users\\alice",
+				wslPath: () => "/mnt/c/Users/alice",
+			});
+
+			expect(resolved).toBe("/mnt/c/Users/alice");
 		});
 
 		it("respects an explicit enableAgentsUser: false (#2401)", async () => {

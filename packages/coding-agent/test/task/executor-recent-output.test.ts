@@ -15,15 +15,15 @@
  * flush. Snapshot arrays must also stay immutable after later refreshes.
  */
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage, TextContent } from "@oh-my-pi/pi-ai";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition, AgentProgress } from "@oh-my-pi/pi-coding-agent/task/types";
-import { EventBus } from "@oh-my-pi/pi-coding-agent/utils/event-bus";
+import type { AssistantMessage, TextContent } from "@musepi/pi-ai";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession, AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition, AgentProgress } from "@musepi/pi-coding-agent/task/types";
+import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 const TAIL_BYTES = 8 * 1024;
 
@@ -192,6 +192,7 @@ function createScriptedSession(
 		},
 		isAborted: () => aborted,
 		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
 	};
 	// AgentSession is a concrete class; the executor consumes only this
 	// structural subset. Deliberate documented test-double escape hatch,

@@ -9,5 +9,5 @@ Searches files and internal URLs with Rust regex plus PCRE2 fallback.
 
 <critical>
 - MUST use this instead of shell `grep`/`rg`.
-- Open-ended multi-round search MUST use Task + scout, not chained calls.
+- Open-ended multi-round search MUST use {{#if scoutAvailable}}Task + scout,{{else}}Task,{{/if}} not chained calls.
 </critical>

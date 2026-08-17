@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { getBlobsDir, isEnoent, parseJsonlLenient } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import { getBlobsDir, isEnoent, parseJsonlLenient } from "@musepi/pi-utils";
 import { BlobStore, isBlobRef, resolveImageData, resolveImageDataUrl } from "./blob-store";
 import { buildSessionContext } from "./session-context";
 import {
@@ -21,6 +21,19 @@ import {
 } from "./session-title-slot";
 
 const STREAM_LOAD_THRESHOLD_BYTES = 8 * 1024 * 1024;
+const STREAM_YIELD_BYTES = 1 * 1024 * 1024;
+const STREAM_YIELD_ENTRIES = 8_192;
+
+export interface VisitEntriesFromFileStreamOptions {
+	/** Stop after the visitor returns `false`. */
+	shouldContinue?: () => boolean;
+	/** Stop after this many valid or malformed JSONL records have been consumed. */
+	maxRecords?: number;
+	/** Yield to the macrotask queue after this many bytes have been consumed. */
+	yieldEveryBytes?: number;
+	/** Yield to the macrotask queue after this many entries have been visited. */
+	yieldEveryEntries?: number;
+}
 
 function splitTitleSlot(content: string): { body: string; slot: SessionTitleUpdate | undefined } {
 	const slot = titleUpdateFromSlot(parseTitleSlotFromContent(content));
@@ -59,11 +72,19 @@ export function parseSessionContent(content: string): {
 /** Parse session JSONL and visit each entry without retaining prior entries. */
 export async function visitEntriesFromFileStream(
 	filePath: string,
-	visit: (entry: FileEntry) => void,
+	visit: (entry: FileEntry) => void | boolean,
+	options: VisitEntriesFromFileStreamOptions = {},
 ): Promise<SessionTitleUpdate | undefined> {
 	let titleSlot: SessionTitleUpdate | undefined;
 	let sawFirstLine = false;
+	let bytesSinceYield = 0;
+	let entriesSinceYield = 0;
+	let recordsSeen = 0;
+	const maxRecords = Math.max(0, options.maxRecords ?? Number.POSITIVE_INFINITY);
+	let stopped = false;
 	let visitorThrew = false;
+	const yieldEveryBytes = Math.max(0, options.yieldEveryBytes ?? STREAM_YIELD_BYTES);
+	const yieldEveryEntries = Math.max(0, options.yieldEveryEntries ?? STREAM_YIELD_ENTRIES);
 	// Byte buffer (NOT a decoded string): multibyte UTF-8 sequences that straddle
 	// a stream-chunk boundary stay intact, and Bun.JSONL.parseChunk accepts typed
 	// arrays directly. Only the unconsumed remainder is held (≤ one record + a
@@ -72,22 +93,62 @@ export async function visitEntriesFromFileStream(
 	let buffer: Uint8Array = new Uint8Array();
 	const decoder = new TextDecoder();
 
-	const drain = () => {
-		while (buffer.length > 0) {
+	const yieldToMacrotask = async (): Promise<void> => {
+		if (yieldEveryBytes === 0 && yieldEveryEntries === 0) return;
+		const bytesReady = yieldEveryBytes === 0 || bytesSinceYield < yieldEveryBytes;
+		const entriesReady = yieldEveryEntries === 0 || entriesSinceYield < yieldEveryEntries;
+		if (bytesReady && entriesReady) {
+			return;
+		}
+		bytesSinceYield = 0;
+		entriesSinceYield = 0;
+		await Bun.sleep(0);
+	};
+
+	const drain = async (): Promise<void> => {
+		while (buffer.length > 0 && !stopped) {
+			if (recordsSeen >= maxRecords) {
+				stopped = true;
+				break;
+			}
 			const { values, error, read, done } = Bun.JSONL.parseChunk(buffer);
 			for (const value of values) {
+				if (recordsSeen >= maxRecords) {
+					stopped = true;
+					break;
+				}
+				if (options.shouldContinue && !options.shouldContinue()) {
+					stopped = true;
+					break;
+				}
 				try {
-					visit(value as FileEntry);
+					if (visit(value as FileEntry) === false) {
+						stopped = true;
+						break;
+					}
+					recordsSeen++;
+					entriesSinceYield++;
+					if (recordsSeen >= maxRecords) {
+						stopped = true;
+						break;
+					}
 				} catch (err) {
 					visitorThrew = true;
 					throw err;
 				}
+				await yieldToMacrotask();
 			}
+			if (stopped) break;
 			if (error) {
 				// Malformed record: skip past the next newline and continue.
 				const nextNewline = buffer.indexOf(0x0a, read);
 				if (nextNewline === -1) break; // rest of the bad line not yet received
+				recordsSeen++;
 				buffer = buffer.subarray(nextNewline + 1);
+				if (recordsSeen >= maxRecords) {
+					stopped = true;
+					break;
+				}
 				continue;
 			}
 			if (read === 0) break; // incomplete record awaiting more data
@@ -101,6 +162,8 @@ export async function visitEntriesFromFileStream(
 
 	try {
 		for await (const chunk of Bun.file(filePath).stream()) {
+			if (stopped) break;
+			bytesSinceYield += chunk.byteLength;
 			buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk]);
 			// The optional fixed-width title slot is a physical first line that is
 			// NOT JSON; peel it before the parser would (correctly) reject it. The
@@ -121,14 +184,15 @@ export async function visitEntriesFromFileStream(
 					}
 				}
 			}
-			drain();
+			await drain();
+			await yieldToMacrotask();
 		}
 		// A trailing record without a final newline: terminate it so the parser
 		// can complete it (readline yielded it; parseChunk needs the delimiter).
-		if (buffer.length > 0 && buffer[buffer.length - 1] !== 0x0a) {
+		if (!stopped && buffer.length > 0 && buffer[buffer.length - 1] !== 0x0a) {
 			buffer = Buffer.concat([buffer, new Uint8Array([0x0a])]);
+			await drain();
 		}
-		drain();
 	} catch (err) {
 		if (visitorThrew) throw err;
 		if (isEnoent(err)) return undefined;
@@ -144,7 +208,9 @@ export async function loadEntriesFromFileStream(filePath: string): Promise<{
 	titleSlot: SessionTitleUpdate | undefined;
 }> {
 	const entries: FileEntry[] = [];
-	const titleSlot = await visitEntriesFromFileStream(filePath, entry => entries.push(entry));
+	const titleSlot = await visitEntriesFromFileStream(filePath, entry => {
+		entries.push(entry);
+	});
 	return { entries: foldTitleSlot(entries, titleSlot), titleSlot };
 }
 

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Rebranded the stats dashboard sidebar logo and footer from OH MY PI to MusePi, made relative-time formatting follow the UI language toggle ("N minutes ago" renders as "N 分钟前" in Chinese), and unified token-count units to K/M/B in both languages (no 万).
+
+## [17.2.4] - 2026-08-01
+
+### Fixed
+
+- Fixed provider usage window stats silently showing no data during SQLite contention by installing a five-second busy timeout on read-only agent database connections ([#7300](https://github.com/can1357/oh-my-pi/issues/7300)).
+
 ## [17.1.2] - 2026-07-24
 
 ### Added
@@ -160,7 +170,7 @@
 
 ### Changed
 
-- Bundled-model lookups (`getBundledModel`, `GeneratedProvider`) now import from the new `@oh-my-pi/pi-catalog` package instead of the `@oh-my-pi/pi-ai` barrel, which no longer re-exports catalog values
+- Bundled-model lookups (`getBundledModel`, `GeneratedProvider`) now import from the new `@musepi/pi-catalog` package instead of the `@musepi/pi-ai` barrel, which no longer re-exports catalog values
 - The session-sync worker re-enters the host CLI entry (`workerHostEntry()` + `__omp_stats_sync_worker` argv selector) when running inside omp — source, npm bundle, or compiled binary — and keeps loading its own `sync-worker.ts` module directly for standalone `omp-stats`, bun test, and SDK hosts
 
 ## [15.1.6] - 2026-05-19

@@ -4,9 +4,9 @@
  * transcript rows from persisted message entries; holding the row construction
  * here keeps the two byte-for-byte identical.
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { type Component, Text } from "@oh-my-pi/pi-tui";
-import { formatBytes, formatDuration } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import { type Component, Text } from "@musepi/pi-tui";
+import { formatBytes, formatDuration } from "@musepi/pi-utils";
 import {
 	type CustomMessage,
 	type FileMentionMessage,
@@ -31,10 +31,10 @@ export function buildAsyncResultBlock(message: CustomOrHookMessage): TranscriptB
 	const details = (
 		message as CustomMessage<{
 			jobId?: string;
-			type?: "bash" | "task";
+			type?: "bash" | "task" | "agnes-video";
 			label?: string;
 			durationMs?: number;
-			jobs?: Array<{ jobId?: string; type?: "bash" | "task"; label?: string; durationMs?: number }>;
+			jobs?: Array<{ jobId?: string; type?: "bash" | "task" | "agnes-video"; label?: string; durationMs?: number }>;
 		}>
 	).details;
 	const jobs =
@@ -211,13 +211,15 @@ function sanitizeRecoveredRetryNote(note: string): string {
 
 /**
  * Resolve the turn-ending assistant error presentation, if any.
- * Silent and user-interrupt aborts yield no label. Recovered auto-retry errors
- * collapse to a single non-error note; terminal errors keep the full red presentation.
+ * Silent and user-interrupt aborts yield no label. Recovered retry attempts
+ * render a compact note; attempts superseded by an exhausted budget are hidden
+ * while the final terminal error keeps its full presentation.
  */
 export function resolveAssistantErrorPresentation(
 	message: AssistantAgentMessage,
 	retryAttempt = 0,
 ): AssistantErrorPresentation {
+	if (message.retryRecovery?.status === "superseded") return { kind: "none" };
 	if (message.retryRecovery?.status === "recovered") {
 		return {
 			kind: "compact-recovered",

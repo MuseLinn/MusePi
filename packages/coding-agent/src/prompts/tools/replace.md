@@ -1,13 +1,14 @@
-Performs string replacements in files with fuzzy whitespace matching.
+Performs a single string replacement in a file with fuzzy whitespace matching.
 
 <instruction>
-- You MUST use the smallest `old_text` that uniquely identifies the change
-- If `old_text` is not unique, you MUST expand it with more context or use `all: true` to replace all occurrences
+- You MUST use the smallest `old_string` that uniquely identifies the change
+- If `old_string` is not unique, you MUST expand it with more context or use `replace_all: true` to replace all occurrences
+- Use `replace_all: true` when renaming a string across the file
 - You SHOULD prefer editing existing files over creating new ones
 </instruction>
 
 <output>
-Returns success/failure status. On success, file modified in place with replacement applied. On failure (e.g., `old_text` not found or matches multiple locations without `all: true`), returns error describing issue.
+Returns success/failure status. On success, file modified in place with replacement applied. On failure (e.g., `old_string` not found or matches multiple locations without `replace_all: true`), returns error describing issue.
 </output>
 
 <critical>

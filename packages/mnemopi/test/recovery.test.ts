@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { createBackup, emergencyRestore, restoreBackup, verifyIntegrity } from "@oh-my-pi/pi-mnemopi/dr/recovery";
+import { createBackup, emergencyRestore, restoreBackup, verifyIntegrity } from "@musepi/pi-mnemopi/dr/recovery";
 
 const tempDirs: string[] = [];
 const SQLITE_HEADER = Buffer.from("SQLite format 3\0", "binary");
@@ -19,7 +19,7 @@ function createSqliteDb(path: string): void {
 	const db = new Database(path, { create: true, readwrite: true, strict: true });
 	try {
 		db.exec("CREATE TABLE memories (id INTEGER PRIMARY KEY, content TEXT NOT NULL)");
-		db.prepare("INSERT INTO memories (content) VALUES (?)").run("backup me");
+		db.run("INSERT INTO memories (content) VALUES (?)", ["backup me"]);
 	} finally {
 		db.close();
 	}
@@ -52,7 +52,7 @@ function withFrozenNow<T>(iso: string, fn: () => T): T {
 			else super(value);
 		}
 
-		static now(): number {
+		static override now(): number {
 			return fixedMs;
 		}
 	}
@@ -152,7 +152,7 @@ describe("SQLite recovery helpers", () => {
 		try {
 			db.exec("PRAGMA journal_mode=WAL");
 			db.exec("CREATE TABLE memories (id INTEGER PRIMARY KEY, content TEXT NOT NULL)");
-			db.prepare("INSERT INTO memories (content) VALUES (?)").run("wal protected");
+			db.run("INSERT INTO memories (content) VALUES (?)", ["wal protected"]);
 			expect(existsSync(`${dbPath}-wal`)).toBe(true);
 
 			expect(() => restoreBackup(badBackup, dbPath)).toThrow(/integrity/);

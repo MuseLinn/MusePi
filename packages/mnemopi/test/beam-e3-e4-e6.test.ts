@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BeamMemory } from "@oh-my-pi/pi-mnemopi/core/beam";
+import { BeamMemory } from "@musepi/pi-mnemopi/core/beam";
 
 // Real embeddings (fastembed + onnxruntime-node, ~270MB) install on demand via
 // `bun install` on first use. These tests never exercise embeddings — the
@@ -33,7 +33,7 @@ function oldTimestamp(): string {
 }
 
 function seedOldWorking(beam: BeamMemory, ids: readonly string[], sessionId = "s1"): void {
-	const insert = beam.db.prepare(
+	using insert = beam.db.prepare(
 		"INSERT INTO working_memory (id, content, source, timestamp, session_id, importance, veracity) VALUES (?, ?, ?, ?, ?, ?, ?)",
 	);
 	for (const [index, id] of ids.entries()) {

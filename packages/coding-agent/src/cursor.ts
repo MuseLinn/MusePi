@@ -7,7 +7,7 @@ import type {
 	AgentToolContext,
 	AgentToolResult,
 	AgentToolUpdateCallback,
-} from "@oh-my-pi/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import type {
 	CursorMcpCall,
 	CursorMcpResource,
@@ -16,7 +16,7 @@ import type {
 	CursorTodoSnapshot,
 	CursorExecHandlers as ICursorExecHandlers,
 	ToolResultMessage,
-} from "@oh-my-pi/pi-ai";
+} from "@musepi/pi-ai";
 import {
 	piEscapeRegexLiteral,
 	piGrepSkip,
@@ -25,8 +25,8 @@ import {
 	piLsPath,
 	piReadPath,
 	piTimeout,
-} from "@oh-my-pi/pi-ai/providers/cursor/exec-modern";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai/providers/cursor/exec-modern";
+import { sanitizeText } from "@musepi/pi-utils";
 import type { MCPResourceReadResult } from "./mcp/types";
 import type { ApprovalMode } from "./tools/approval";
 import { resolveApproval } from "./tools/approval";
@@ -69,7 +69,7 @@ interface CursorExecBridgeOptions {
 	 *
 	 * `PiEditExecArgs` is that mode's schema verbatim, and the session's own
 	 * `edit` may be in any mode — `hashline` by default — whose schema rejects
-	 * `old_text`/`new_text` outright. {@link tools} therefore cannot be trusted
+	 * `old_string`/`new_string` outright. {@link tools} therefore cannot be trusted
 	 * for this one frame: a session that starts on another provider keeps its
 	 * configured instance in the map (only Cursor sessions move `edit` out), and
 	 * switching to Cursor later does not rebuild the roster.
@@ -641,25 +641,21 @@ export class CursorExecHandlers implements ICursorExecHandlers {
 	}
 
 	/**
-	 * `PiEditExecArgs` is the local `edit` tool's replace mode verbatim: a path
-	 * plus `old_text`/`new_text` pairs. The tool's schema is snake_case, so the
-	 * proto's camelCase accessors are mapped back on the way in.
+	 * `PiEditExecArgs` carries a path plus `oldText`/`newText` replacement
+	 * pairs. A single replacement maps onto the model-facing single-edit
+	 * `replace` schema verbatim; a multi-replacement frame still runs as ONE
+	 * tool lifecycle (one start/end event pair, one aggregate diff), so it is
+	 * sent in the tool's internal `edits` batch form (`ReplaceBatchParams`),
+	 * which only this bridge produces.
 	 *
 	 * The replace-mode instance is requested explicitly rather than resolved
 	 * from {@link CursorExecBridgeOptions.tools}: the registry's `edit` is in
 	 * the session's configured mode, whose schema rejects these arguments.
 	 */
 	async piEdit(call: Parameters<NonNullable<ICursorExecHandlers["piEdit"]>>[0]) {
-		return await executeTool(
-			this.options,
-			"edit",
-			call.toolCallId,
-			{
-				path: call.args.path,
-				edits: call.args.edits.map(edit => ({ old_text: edit.oldText, new_text: edit.newText })),
-			},
-			this.options.getEditReplaceTool?.(),
-		);
+		const edits = call.args.edits.map(edit => ({ old_string: edit.oldText, new_string: edit.newText }));
+		const args = edits.length === 1 ? { path: call.args.path, ...edits[0] } : { path: call.args.path, edits };
+		return await executeTool(this.options, "edit", call.toolCallId, args, this.options.getEditReplaceTool?.());
 	}
 
 	async piWrite(call: Parameters<NonNullable<ICursorExecHandlers["piWrite"]>>[0]) {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, setSystemTime, spyOn, vi } from "bun:test";
-import { Container, TUI } from "@oh-my-pi/pi-tui";
-import { Loader, type LoaderMessageColorFn } from "@oh-my-pi/pi-tui/components/loader";
-import { visibleWidth } from "@oh-my-pi/pi-tui/utils";
+import { Container, TUI } from "@musepi/pi-tui";
+import { Loader, type LoaderMessageColorFn } from "@musepi/pi-tui/components/loader";
+import { visibleWidth } from "@musepi/pi-tui/utils";
 import { VirtualTerminal } from "./virtual-terminal";
 
 describe("Loader component", () => {
@@ -130,6 +130,33 @@ describe("Loader component", () => {
 		expect(ui.requestDirectWrite).toHaveBeenCalledTimes(2);
 		expect(ui.requestComponentRender).not.toHaveBeenCalled();
 		expect(loader.render(40).join("\n")).toContain("0 Checking-");
+
+		loader.stop();
+	});
+
+	it("backs off animated paints when direct writes consume the frame budget", () => {
+		vi.useFakeTimers();
+		let now = 0;
+		const ui = {
+			synchronizedOutput: true,
+			requestDirectWrite: vi.fn(() => {
+				now += 40;
+			}),
+			requestComponentRender: vi.fn(),
+		};
+		const colorMessage = ((text: string) => text) as LoaderMessageColorFn & { animated: true };
+		colorMessage.animated = true;
+		spyOn(performance, "now").mockImplementation(() => now);
+		const loader = new Loader(ui as unknown as TUI, text => text, colorMessage, "Checking", ["0"]);
+
+		expect(ui.requestDirectWrite).toHaveBeenCalledTimes(1);
+		vi.advanceTimersByTime(34);
+		expect(ui.requestDirectWrite).toHaveBeenCalledTimes(2);
+
+		vi.advanceTimersByTime(200);
+		expect(ui.requestDirectWrite).toHaveBeenCalledTimes(2);
+		vi.advanceTimersByTime(160);
+		expect(ui.requestDirectWrite).toHaveBeenCalledTimes(3);
 
 		loader.stop();
 	});

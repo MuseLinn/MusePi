@@ -15,7 +15,7 @@ try {
  * lightweight CLI runner from pi-utils.
  */
 import { parentPort } from "node:worker_threads";
-import type { CliConfig } from "@oh-my-pi/pi-utils/cli";
+import type { CliConfig, CommandMetadata } from "@musepi/pi-utils/cli";
 import {
 	APP_NAME,
 	getActiveProfile,
@@ -23,16 +23,17 @@ import {
 	resolveProfileEnv,
 	setProfile,
 	VERSION,
-} from "@oh-my-pi/pi-utils/dirs";
-import { interceptUnhandledRejections } from "@oh-my-pi/pi-utils/postmortem";
-import { setProcessName } from "@oh-my-pi/pi-utils/process-name";
-import { declareWorkerHostEntry, installWorkerInbox, isWorkerHostSelector } from "@oh-my-pi/pi-utils/worker-host";
+} from "@musepi/pi-utils/dirs";
+import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
+import { setProcessName } from "@musepi/pi-utils/process-name";
+import { declareWorkerHostEntry, installWorkerInbox, isWorkerHostSelector } from "@musepi/pi-utils/worker-host";
 import { installProfileAlias, resolveProfileAliasCommandFromProcess } from "./cli/profile-alias";
 import { extractProfileFlags } from "./cli/profile-bootstrap";
 import { startJsEvalProcess } from "./eval/js/process-entry";
 import type { WorkerInbound as JsWorkerInbound, WorkerOutbound as JsWorkerOutbound } from "./eval/js/worker-protocol";
 import { DAEMON_BROKER_WORKER_ARG } from "./launch/protocol";
 import { TERMINAL_OUTPUT_WORKER_ARG } from "./launch/terminal-output-worker-protocol";
+import { LSP_MUX_WORKER_ARG } from "./lsp/mux/protocol";
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
 import { smokeTestComputerWorker } from "./tools/computer/supervisor";
 import { startComputerWorker } from "./tools/computer/worker-entry";
@@ -57,12 +58,16 @@ const isProcessEntry = import.meta.main || process.env.PI_COMPILED === "true";
 // Worker-host entry declaration (Worker threads and worker subprocesses
 // re-enter `Bun.main` with a hidden argv selector instead of loading separate
 // worker entrypoints) happens inside `runCli` after profile bootstrap:
-// `@oh-my-pi/pi-utils/env` eagerly loads `.env` from the agent directory at
+// `@musepi/pi-utils/env` eagerly loads `.env` from the agent directory at
 // import time, so it must not be imported before `setProfile` runs.
 
-async function showHelp(config: CliConfig): Promise<void> {
-	const { renderRootHelp } = await import("@oh-my-pi/pi-utils/cli");
-	const { getExtraHelpText } = await import("./cli/args");
+async function showHelp(config: CliConfig<CommandMetadata>): Promise<void> {
+	// Root help historically loads the selected profile's environment. The
+	// lazily loaded help module imports it statically after profile bootstrap.
+	const [{ renderRootHelp }, { getExtraHelpText }] = await Promise.all([
+		import("@musepi/pi-utils/cli"),
+		import("./cli/help-extra"),
+	]);
 	renderRootHelp(config);
 	const extra = getExtraHelpText();
 	if (extra.trim().length > 0) {
@@ -81,7 +86,7 @@ async function showHelp(config: CliConfig): Promise<void> {
  * tarball installs all exercise it on every CI run.
  */
 async function runSmokeTest(): Promise<void> {
-	const { smokeTestSyncWorker, startServer } = await import("@oh-my-pi/omp-stats");
+	const { smokeTestSyncWorker, startServer } = await import("@musepi/omp-stats");
 	const { smokeTestTinyTitleWorker } = await import("./tiny/title-client");
 	const { smokeTestSttWorker } = await import("./stt/asr-client");
 	const { smokeTestTtsWorker } = await import("./tts/tts-client");
@@ -89,6 +94,7 @@ async function runSmokeTest(): Promise<void> {
 	const { smokeTestJsEvalWorker } = await import("./eval/js/context-manager");
 	// Other smoke dependencies stay lazy so normal CLI startup does not load their worker clients.
 	const { smokeTestDaemonBroker } = await import("./launch/client");
+	const { smokeTestLspMux } = await import("./lsp/mux/daemon");
 	const { smokeTestTerminalOutputWorker } = await import("./launch/terminal-output-worker-client");
 	await smokeTestSyncWorker();
 
@@ -111,6 +117,7 @@ async function runSmokeTest(): Promise<void> {
 	await smokeTestTtsWorker();
 	await smokeTestMnemopiEmbedWorker();
 	await smokeTestDaemonBroker();
+	await smokeTestLspMux();
 	await smokeTestTerminalOutputWorker();
 	process.stdout.write("smoke-test: ok\n");
 }
@@ -144,7 +151,7 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 			pending.push(event);
 		};
 		scope.onmessage = buffer;
-		await import("@oh-my-pi/omp-stats/sync-worker");
+		await import("@musepi/omp-stats/sync-worker");
 		const handler = scope.onmessage;
 		if (handler && handler !== buffer) {
 			for (const event of pending) handler.call(scope, event);
@@ -208,6 +215,11 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 		// Worker selectors must dispatch before the normal command graph loads.
 		const { startDaemonBrokerFromEnvironment } = await import("./launch/broker");
 		await startDaemonBrokerFromEnvironment();
+		return true;
+	}
+	if (arg === LSP_MUX_WORKER_ARG) {
+		const { startLspMuxFromEnvironment } = await import("./lsp/mux/server");
+		await startLspMuxFromEnvironment();
 		return true;
 	}
 	return false;
@@ -372,7 +384,7 @@ export async function runCli(argv: string[]): Promise<void> {
 
 	// Declare this module as the worker-host entry now that the active profile
 	// is resolved. The worker-host module is side-effect-free; importing
-	// `@oh-my-pi/pi-utils/env` here would snapshot the wrong agent `.env`.
+	// `@musepi/pi-utils/env` here would snapshot the wrong agent `.env`.
 	// Gated on `isProcessEntry`: only the real CLI process entry is a valid
 	// worker host. Worker-thread re-entry already returned above at the
 	// `__omp_worker_` dispatch, and importers (`runCli` in profile-CLI tests,
@@ -386,7 +398,7 @@ export async function runCli(argv: string[]): Promise<void> {
 		return;
 	}
 	const [{ run }, { commands, resolveCliArgv }] = await Promise.all([
-		import("@oh-my-pi/pi-utils/cli"),
+		import("@musepi/pi-utils/cli"),
 		import("./cli-commands"),
 	]);
 	// --help and --version are handled by run() directly, don't rewrite those.
@@ -397,7 +409,8 @@ export async function runCli(argv: string[]): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	return run({ bin: APP_NAME, version: VERSION, argv: resolved.argv, commands, help: showHelp });
+	const displayVersion = process.env.MUSEPI_VERSION ? `${process.env.MUSEPI_VERSION} (OMP ${VERSION})` : VERSION;
+	return run({ bin: APP_NAME, version: displayVersion, argv: resolved.argv, commands, metadataHelp: showHelp });
 }
 
 // Floating call instead of top-level await: TLA forces `--bytecode` (CJS

@@ -316,10 +316,11 @@ pub fn matches_kitty_sequence(
 		return true;
 	}
 
-	// Only fall back to base layout key when the codepoint is NOT already a
-	// recognized ASCII letter (A-Z / a-z) or symbol. This prevents remapped layouts
-	// (Dvorak, Colemak) from causing false matches.
-	if let Some(base) = parsed.base_layout_key
+	// Only fall back to a base-layout key for modified shortcuts whose codepoint is
+	// not already a recognized ASCII letter or symbol. Unmodified input is text:
+	// matching its physical base key would make Cyrillic "с" trigger plain "c".
+	if actual_mod != 0
+		&& let Some(base) = parsed.base_layout_key
 		&& base == expected_codepoint
 	{
 		let cp = parsed.codepoint;
@@ -632,7 +633,8 @@ fn matches_key_inner(bytes: &[u8], key_id: &str, kitty_protocol_active: bool) ->
 		if parsed_codepoint == codepoint {
 			return true;
 		}
-		if let Some(base) = parsed_base
+		if actual_mod != 0
+			&& let Some(base) = parsed_base
 			&& base == codepoint
 		{
 			let is_ascii_letter =
@@ -1388,7 +1390,7 @@ fn format_kitty_key(parsed: &ParsedKittySequence) -> Option<Cow<'static, str>> {
 			let cp = parsed.codepoint;
 			let is_ascii_letter = u8::try_from(cp).is_ok_and(|b| b.is_ascii_alphabetic());
 			let is_known_symbol = is_symbol_key(cp);
-			if is_ascii_letter || is_known_symbol {
+			if effective_mod == 0 || is_ascii_letter || is_known_symbol {
 				cp
 			} else {
 				parsed.base_layout_key.unwrap_or(cp)
@@ -1581,6 +1583,27 @@ mod tests {
 		assert!(matches_key_inner(b"\x1b[127u", "backspace", true));
 		assert!(matches_key_inner(b"\x1b[127;1:2u", "backspace", true));
 		assert!(!matches_key_inner(b"\x1b[127;1:3u", "backspace", true));
+	}
+
+	#[test]
+	fn unmodified_non_latin_text_does_not_match_base_layout_shortcuts() {
+		let plain_cyrillic_c = b"\x1b[1089::99u";
+		assert!(!matches_key_inner(plain_cyrillic_c, "c", true));
+		assert_eq!(parse_key_inner(plain_cyrillic_c, true).as_deref(), None);
+		assert!(!matches_kitty_sequence(
+			String::from_utf8_lossy(plain_cyrillic_c).into_owned(),
+			i32::from(b'c'),
+			0,
+		));
+
+		let ctrl_cyrillic_c = b"\x1b[1089::99;5u";
+		assert!(matches_key_inner(ctrl_cyrillic_c, "ctrl+c", true));
+		assert_eq!(parse_key_inner(ctrl_cyrillic_c, true).as_deref(), Some("ctrl+c"));
+		assert!(matches_kitty_sequence(
+			String::from_utf8_lossy(ctrl_cyrillic_c).into_owned(),
+			i32::from(b'c'),
+			MOD_CTRL,
+		));
 	}
 
 	#[test]

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { InputController } from "@oh-my-pi/pi-coding-agent/modes/controllers/input-controller";
-import type { InteractiveModeContext, SubmittedUserInput } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { USER_INTERRUPT_LABEL } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { vocalizer } from "@oh-my-pi/pi-coding-agent/tts/vocalizer";
-import * as logger from "@oh-my-pi/pi-utils/logger";
+import type { ImageContent } from "@musepi/pi-ai";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { InputController } from "@musepi/pi-coding-agent/modes/controllers/input-controller";
+import type { InteractiveModeContext, SubmittedUserInput } from "@musepi/pi-coding-agent/modes/types";
+import { USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";
+import { vocalizer } from "@musepi/pi-coding-agent/tts/vocalizer";
+import * as logger from "@musepi/pi-utils/logger";
 
 type Spy = Mock<(...args: unknown[]) => unknown>;
 type StartPendingSubmissionSpy = Mock<InteractiveModeContext["startPendingSubmission"]>;
@@ -163,6 +163,7 @@ function createContext(): {
 			abortEval,
 			clearQueue,
 			getQueuedMessages,
+			maybeStartTitleGeneration: vi.fn(),
 			prompt,
 			subscribe: vi.fn((listener: (event: { type: string }) => void) => {
 				sessionListeners.push(listener);
@@ -365,6 +366,37 @@ describe("InputController escape behavior", () => {
 		// The Esc interrupt threads a user-facing reason so the aborted turn and its
 		// synthetic tool results read as a deliberate interrupt, not "Request was aborted".
 		expect(spies.abort).toHaveBeenCalledWith({ reason: USER_INTERRUPT_LABEL });
+	});
+
+	it("aborts a streaming loop iteration without pausing the loop", () => {
+		const { ctx, editor, spies } = createContext();
+		const pauseLoop = vi.fn();
+		ctx.loopModeEnabled = true;
+		ctx.pauseLoop = pauseLoop;
+		mutableSessionState(ctx).isStreaming = true;
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(pauseLoop).not.toHaveBeenCalled();
+		expect(spies.cancelPendingSubmission).not.toHaveBeenCalled();
+		expect(spies.abort).toHaveBeenCalledWith({ reason: USER_INTERRUPT_LABEL });
+	});
+
+	it("pauses an idle loop and cancels its pending submission", () => {
+		const { ctx, editor, spies } = createContext();
+		const pauseLoop = vi.fn();
+		ctx.loopModeEnabled = true;
+		ctx.pauseLoop = pauseLoop;
+		const controller = new InputController(ctx);
+
+		controller.setupKeyHandlers();
+		editor.onEscape?.();
+
+		expect(pauseLoop).toHaveBeenCalledTimes(1);
+		expect(spies.cancelPendingSubmission).toHaveBeenCalledTimes(1);
+		expect(spies.abort).not.toHaveBeenCalled();
 	});
 
 	it("aborts active handoff generation before default Esc handling", () => {

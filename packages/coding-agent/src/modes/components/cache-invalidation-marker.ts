@@ -1,6 +1,6 @@
-import type { Usage } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { formatNumber } from "@oh-my-pi/pi-utils";
+import type { Usage } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import { formatNumber } from "@musepi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 
 /**

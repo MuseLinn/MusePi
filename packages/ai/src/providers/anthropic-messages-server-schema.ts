@@ -4,7 +4,7 @@
  * and options.
  */
 
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
 import type {
 	ContentBlockParam,
 	ImageBlockParam,

@@ -1,5 +1,5 @@
 import { parentPort } from "node:worker_threads";
-import { consumeWorkerInbox } from "@oh-my-pi/pi-utils/worker-host";
+import { consumeWorkerInbox } from "@musepi/pi-utils/worker-host";
 import type { Transport, WorkerInbound, WorkerOutbound } from "./tab-protocol";
 import { WorkerCore } from "./tab-worker";
 
@@ -26,4 +26,4 @@ const transport: Transport = {
 	},
 };
 
-new WorkerCore(transport);
+new WorkerCore(transport, true);

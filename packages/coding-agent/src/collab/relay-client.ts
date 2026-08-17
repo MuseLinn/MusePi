@@ -5,7 +5,7 @@
  * exponential backoff on transient drops. Fatal relay close codes (room gone,
  * host conflict, room full) and decryption failures never reconnect.
  */
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 import { open, seal } from "./crypto";
 import type { CollabFrame, RelayControlMessage } from "./protocol";
 import { packEnvelope, unpackEnvelope } from "./protocol";
@@ -29,7 +29,15 @@ export interface CollabSocketOptions {
 	/** wss://host[:port]/r/<roomId> — no query string. */
 	wsUrl: string;
 	role: "host" | "guest";
-	key: CryptoKey;
+	/** Room key; required unless {@link plaintext} is set. */
+	key?: CryptoKey;
+	/**
+	 * Guest joined in plaintext mode (insecure-http browsers have no
+	 * crypto.subtle): frames are raw JSON, not AES-GCM sealed. Hosts never
+	 * set this — they encode per-peer via {@link setPeerMode} and
+	 * auto-detect plaintext frames on receive.
+	 */
+	plaintext?: boolean;
 }
 
 export class CollabSocket {
@@ -53,9 +61,18 @@ export class CollabSocket {
 	#recvChain: Promise<void> = Promise.resolve();
 	/** Envelopes sealed while disconnected, flushed on the next open. */
 	#pendingSends: Uint8Array[] = [];
+	/** Per-peer plaintext mode (host side, from relay peer-joined controls). */
+	#peerModes = new Map<number, boolean>();
+	readonly #encoder = new TextEncoder();
+	readonly #decoder = new TextDecoder();
 
 	constructor(opts: CollabSocketOptions) {
 		this.#opts = opts;
+	}
+
+	/** Host side: record a guest's plaintext mode so directed sends encode correctly. */
+	setPeerMode(peerId: number, plaintext: boolean): void {
+		this.#peerModes.set(peerId, plaintext);
 	}
 
 	get isOpen(): boolean {
@@ -78,8 +95,14 @@ export class CollabSocket {
 				}
 				const openWs = this.#ws;
 				if (openWs && openWs.readyState === WebSocket.OPEN) this.#drainPendingSends(openWs);
-				const sealed = await seal(this.#opts.key, frame);
-				const envelope = packEnvelope(targetPeer, sealed);
+				// Directed sends encode per-recipient; broadcast (target 0) uses our
+				// own mode. The host never broadcasts into a mixed room — it fans
+				// out per peer — so a single encoding always fits the recipients.
+				const plaintext = targetPeer === 0 ? !!this.#opts.plaintext : (this.#peerModes.get(targetPeer) ?? false);
+				const payload = plaintext
+					? this.#encoder.encode(JSON.stringify(frame))
+					: await seal(this.#opts.key!, frame);
+				const envelope = packEnvelope(targetPeer, payload);
 				const ws = this.#ws;
 				if (ws && ws.readyState === WebSocket.OPEN) {
 					if (this.#pendingSends.length > 0) {
@@ -171,7 +194,10 @@ export class CollabSocket {
 
 	#openSocket(): void {
 		this.#clearBackpressureDrain();
-		const ws = new WebSocket(`${this.#opts.wsUrl}?role=${this.#opts.role}`);
+		const url = new URL(this.#opts.wsUrl);
+		url.searchParams.set("role", this.#opts.role);
+		if (this.#opts.plaintext) url.searchParams.set("plaintext", "1");
+		const ws = new WebSocket(url.toString());
 		ws.binaryType = "arraybuffer";
 		this.#ws = ws;
 		ws.onopen = () => {
@@ -215,11 +241,23 @@ export class CollabSocket {
 			.then(async () => {
 				if (this.#ws !== ws) return;
 				let frame: CollabFrame;
-				try {
-					frame = await open(this.#opts.key, envelope.payload);
-				} catch {
-					this.#failFatal("bad key or corrupted frame");
-					return;
+				if (this.#opts.plaintext) {
+					frame = JSON.parse(this.#decoder.decode(envelope.payload)) as CollabFrame;
+				} else {
+					try {
+						frame = await open(this.#opts.key!, envelope.payload);
+					} catch {
+						// A plaintext guest's frame is not valid GCM ciphertext; the
+						// host auto-detects it. GCM auth failure is 2^-128 per block,
+						// so a sealed frame can never be misread as JSON.
+						const text = this.#decoder.decode(envelope.payload);
+						try {
+							frame = JSON.parse(text) as CollabFrame;
+						} catch {
+							this.#failFatal("bad key or corrupted frame");
+							return;
+						}
+					}
 				}
 				if (this.#ws !== ws) return;
 				this.onFrame?.(frame, envelope.peerId);

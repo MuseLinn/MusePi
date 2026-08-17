@@ -8,7 +8,7 @@
  * the final shipped behavior belongs in release notes.
  *
  * For every non-empty `[Unreleased]` section this script hands the whole section
- * to a small model (default `google-vertex/gemini-3.5-flash` via `@oh-my-pi/pi-ai`)
+ * to a small model (default `google-vertex/gemini-3.5-flash` via `@musepi/pi-ai`)
  * and asks for a complete replacement grouped by changelog category. The model
  * returns structured sections/items; markdown is rendered locally so only the
  * Unreleased section changes and formatting stays deterministic.
@@ -31,6 +31,7 @@
 
 import * as path from "node:path";
 import { parseArgs } from "node:util";
+import { type } from "@musepi/omptype";
 import {
 	type Api,
 	AuthStorage,
@@ -40,10 +41,9 @@ import {
 	SqliteAuthCredentialStore,
 	type Tool,
 	type ToolCall,
-} from "@oh-my-pi/pi-ai";
-import { type GeneratedProvider, getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { getAgentDbPath } from "@oh-my-pi/pi-utils";
-import { z } from "zod/v4";
+} from "@musepi/pi-ai";
+import { type GeneratedProvider, getBundledModel } from "@musepi/pi-catalog/models";
+import { getAgentDbPath } from "@musepi/pi-utils";
 import {
 	type ChangelogDocument,
 	changelogPaths,
@@ -151,15 +151,13 @@ interface RewrittenSection {
 	items: string[];
 }
 
-const REWRITE_RESPONSE = z.object({
-	sections: z
-		.array(
-			z.object({
-				category: z.enum(["Breaking Changes", "Added", "Changed", "Fixed", "Removed"]),
-				items: z.array(z.string()),
-			}),
-		)
-		.default([]),
+const REWRITE_RESPONSE = type({
+	sections: type({
+		category: "'Breaking Changes' | 'Added' | 'Changed' | 'Fixed' | 'Removed'",
+		items: "string[]",
+	})
+		.array()
+		.default(() => []),
 });
 
 const REWRITE_PARAMETERS = {
@@ -198,11 +196,11 @@ const REWRITE_TOOL: Tool = {
 };
 
 function validateRewrite(args: Record<string, unknown>): RewrittenSection[] {
-	const parsed = REWRITE_RESPONSE.safeParse(args);
-	if (!parsed.success) {
-		throw new Error(`invalid tool arguments: ${parsed.error.issues.map(issue => issue.message).join("; ")}`);
+	const parsed = REWRITE_RESPONSE(args);
+	if (parsed instanceof type.errors) {
+		throw new Error(`invalid tool arguments: ${parsed.summary}`);
 	}
-	return parsed.data.sections
+	return parsed.sections
 		.map(sec => ({
 			category: sec.category,
 			items: sec.items.map(item => item.trim()).filter(Boolean),

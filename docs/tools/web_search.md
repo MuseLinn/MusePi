@@ -50,7 +50,7 @@
 | `recency` | `"day" \| "week" \| "month" \| "year"` | No | Time filter. Only providers that implement it use it; code maps it for Brave, Perplexity, Tavily, SearXNG, Kagi, TinyFish, Firecrawl, and xAI. |
 | `limit` | `number` | No | Max results to return. Usually becomes the provider request's result-count parameter when `num_search_results` is absent. TinyFish uses it for paginated fetches before slicing; xAI sends it as `search_parameters.max_search_results` when `num_search_results` is absent and also caps parsed sources/citations locally, defaulting to `10` and max `30`. |
 | `max_tokens` | `number` | No | Passed through as provider token caps (`maxOutputTokens`, `max_tokens`, or xAI `max_output_tokens`) only by Anthropic, Gemini, xAI, and Perplexity API-key mode. Ignored by the other providers. |
-| `temperature` | `number` | No | Passed through only by Anthropic, Gemini, xAI, and Perplexity API-key mode. Ignored by the other providers. |
+| `temperature` | `number` | No | Passed through only by Anthropic models that support sampling parameters, Gemini, xAI, and Perplexity API-key mode. Ignored or omitted by the other provider/model paths. |
 | `num_search_results` | `number` | No | Requested search breadth or local result cap. Most providers send it upstream. TinyFish clamps to `1..20` with default `10`, sends it as `num_results` per page, and uses paginated fetches before slicing. xAI sends it as `search_parameters.max_search_results` and caps parsed sources/citations locally with default `10` and max `30`. |
 
 ## Outputs
@@ -126,7 +126,7 @@ Streaming: none. `WebSearchTool.execute()` forwards its `AbortSignal` into `exec
       - `ANTHROPIC_SEARCH_BASE_URL` — search-only base URL for either `ANTHROPIC_SEARCH_API_KEY` or fallback Anthropic credentials; overrides `ANTHROPIC_BASE_URL` (and `FOUNDRY_BASE_URL` in Foundry mode); defaults to `https://api.anthropic.com`.
       - `ANTHROPIC_SEARCH_MODEL` — search model; defaults to `claude-haiku-4-5`.
     - Querying: Claude Messages API with web-search tool enabled.
-    - `max_tokens` and `temperature` pass through.
+    - `max_tokens` passes through. `temperature` passes through only for models that support sampling parameters; it is omitted for Opus 4.7+, Sonnet 5+, and Fable/Mythos 5+ because those APIs reject sampling parameters.
     - `limit` and `num_search_results` are collapsed together before dispatch: `num_results = params.numSearchResults ?? params.limit`.
     - Output may include `answer`, `sources`, `citations`, `searchQueries`, `usage.searchRequests`, `model`, `requestId`.
   - **Codex** — `packages/coding-agent/src/web/search/providers/codex.ts`

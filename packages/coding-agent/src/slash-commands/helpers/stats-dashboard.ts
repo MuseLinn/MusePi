@@ -1,9 +1,10 @@
-import * as stats from "@oh-my-pi/omp-stats";
+import * as stats from "@musepi/omp-stats";
 import * as openUtils from "../../utils/open";
 
 export const DEFAULT_STATS_DASHBOARD_PORT = 3847;
 
 interface StatsDashboardServer {
+	hostname: string;
 	port: number;
 	stop: () => void;
 }
@@ -64,7 +65,7 @@ export async function launchStatsDashboard(args: StatsDashboardArgs): Promise<St
 		requestedPortIgnored = true;
 	}
 
-	const url = `http://localhost:${activeStatsServer.port}`;
+	const url = `http://${activeStatsServer.hostname}:${activeStatsServer.port}`;
 	openUtils.openPath(url);
 
 	const serverLine = requestedPortIgnored

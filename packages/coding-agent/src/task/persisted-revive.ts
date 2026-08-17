@@ -1,6 +1,8 @@
 import * as fs from "node:fs/promises";
 
+import type { PauseGate } from "@musepi/pi-agent-core";
 import type { ModelRegistry } from "../config/model-registry";
+import { formatModelRoleAlias } from "../config/model-roles";
 import type { Settings } from "../config/settings";
 import { MCPManager } from "../mcp/manager";
 import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
@@ -9,7 +11,9 @@ import { createAgentSession } from "../sdk";
 import type { AgentSession } from "../session/agent-session";
 import type { AuthStorage } from "../session/auth-storage";
 import { SessionManager } from "../session/session-manager";
-import { createMCPProxyTools, createSubagentSettings } from "./executor";
+import type { EventBus } from "../utils/event-bus";
+import { attachIrcWakeTurnMonitor, createMCPProxyTools, createSubagentSettings } from "./executor";
+import type { AgentDefinition } from "./types";
 
 /**
  * Ambient context the reviver needs at revive time. The top-level session is
@@ -22,8 +26,17 @@ export interface PersistedSubagentReviveContext {
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
 	settings: Settings;
+	/** Freeze gate of the reviving session; cold-revived subagents inherit it
+	 *  so a paused session's parked agents stay frozen after revive. */
+	pauseGate?: PauseGate;
 	/** LSP policy of the top-level session; revived subagents inherit it rather than defaulting on. */
 	enableLsp: boolean;
+	/**
+	 * Shared event bus feeding RPC/collab subagent subscriptions. Passed through
+	 * to the wake-turn monitor so an IRC send to a cold-revived subagent emits
+	 * the same lifecycle/progress frames a live run does.
+	 */
+	eventBus?: EventBus;
 }
 
 /**
@@ -71,6 +84,14 @@ export function createPersistedSubagentReviverFactory(
 			taskDepth++;
 			parentId = registry.get(parentId)?.parentId;
 		}
+		const subagentSettings = createSubagentSettings(
+			ctx.settings,
+			init.readSummarize === false ? { "read.summarize.enabled": false } : undefined,
+		);
+		const persistedModelPattern =
+			init.modelRole && init.modelRole !== "default"
+				? [formatModelRoleAlias(init.modelRole), ...(init.resolvedModel ? [init.resolvedModel] : [])]
+				: init.resolvedModel;
 		return async expectedRef => {
 			// Re-open fresh on every revive: park closes the writer, so this takes
 			// the single-writer lock cleanly and restores the full message history.
@@ -88,10 +109,10 @@ export function createPersistedSubagentReviverFactory(
 				cwd: ctx.session.sessionManager.getCwd(),
 				authStorage: ctx.authStorage,
 				modelRegistry: ctx.modelRegistry,
-				settings: createSubagentSettings(
-					ctx.settings,
-					init.readSummarize === false ? { "read.summarize.enabled": false } : undefined,
-				),
+				pauseGate: ctx.pauseGate,
+				...(persistedModelPattern ? { modelPattern: persistedModelPattern } : {}),
+				modelPatternAuthFallback: init.resolvedModel,
+				settings: subagentSettings,
 				sessionManager: reopened,
 				agentId: ref.id,
 				agentDisplayName: ref.displayName,
@@ -134,6 +155,23 @@ export function createPersistedSubagentReviverFactory(
 			session.subscribe(event => {
 				if (event.type === "agent_start") registry.setStatus(ref.id, "running", session);
 				else if (event.type === "agent_end") registry.setStatus(ref.id, "idle", session);
+			});
+			// Persisted files predate an agent-source field, so cold-revived frames
+			// report the runtime-neutral `user` source; name comes from the ref.
+			const wakeAgent: AgentDefinition = {
+				name: ref.displayName,
+				description: "",
+				systemPrompt: init.systemPrompt,
+				source: "user",
+			};
+			attachIrcWakeTurnMonitor(session, {
+				id: ref.id,
+				agent: wakeAgent,
+				eventBus: ctx.eventBus,
+				sessionFile,
+				outputSchema: init.outputSchema,
+				outputSchemaMode: init.outputSchemaMode,
+				artifactsDir: ctx.session.sessionFile?.slice(0, -6),
 			});
 			return session;
 		};

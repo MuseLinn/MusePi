@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import type { AuthStorage, FetchImpl } from "@oh-my-pi/pi-ai";
-import { AuthStorage as CodingAuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { searchAnthropic } from "@oh-my-pi/pi-coding-agent/web/search/providers/anthropic";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
+import { AuthStorage as CodingAuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { searchAnthropic } from "@musepi/pi-coding-agent/web/search/providers/anthropic";
+import { TempDir } from "@musepi/pi-utils";
 
 function makeCaptureFetch(): { fetch: FetchImpl; body: () => Record<string, unknown> | undefined } {
 	let captured: Record<string, unknown> | undefined;
@@ -23,6 +23,20 @@ function makeCaptureFetch(): { fetch: FetchImpl; body: () => Record<string, unkn
 		);
 	};
 	return { fetch, body: () => captured };
+}
+
+function withSearchModel(model: string) {
+	const original = Bun.env.ANTHROPIC_SEARCH_MODEL;
+	Bun.env.ANTHROPIC_SEARCH_MODEL = model;
+	return {
+		[Symbol.dispose]() {
+			if (original === undefined) {
+				delete Bun.env.ANTHROPIC_SEARCH_MODEL;
+			} else {
+				Bun.env.ANTHROPIC_SEARCH_MODEL = original;
+			}
+		},
+	};
 }
 
 describe("Anthropic search request body", () => {
@@ -123,6 +137,52 @@ describe("Anthropic search request body", () => {
 			expect(tool).not.toHaveProperty("allowed_domains");
 			const messages = body?.messages as { content: string }[];
 			expect(messages[0]?.content).toBe("rust async runtime");
+		} finally {
+			authStorage.close();
+		}
+	});
+
+	it("omits temperature for sampling-restricted models", async () => {
+		using _model = withSearchModel("claude-opus-5");
+		using tempDir = TempDir.createSync("@pi-anthropic-search-opus-");
+		const authStorage = await CodingAuthStorage.create(path.join(tempDir.path(), "auth.db"));
+		try {
+			authStorage.setRuntimeApiKey("anthropic", "test-key");
+
+			const cap = makeCaptureFetch();
+			await searchAnthropic({
+				query: "sampling compatibility",
+				systemPrompt: "Use web search.",
+				temperature: 0.1,
+				authStorage,
+				fetch: cap.fetch,
+			});
+
+			expect(cap.body()?.model).toBe("claude-opus-5");
+			expect(cap.body()).not.toHaveProperty("temperature");
+		} finally {
+			authStorage.close();
+		}
+	});
+
+	it("preserves temperature for compatible models", async () => {
+		using _model = withSearchModel("claude-haiku-4-5");
+		using tempDir = TempDir.createSync("@pi-anthropic-search-haiku-");
+		const authStorage = await CodingAuthStorage.create(path.join(tempDir.path(), "auth.db"));
+		try {
+			authStorage.setRuntimeApiKey("anthropic", "test-key");
+
+			const cap = makeCaptureFetch();
+			await searchAnthropic({
+				query: "sampling compatibility",
+				systemPrompt: "Use web search.",
+				temperature: 0.1,
+				authStorage,
+				fetch: cap.fetch,
+			});
+
+			expect(cap.body()?.model).toBe("claude-haiku-4-5");
+			expect(cap.body()?.temperature).toBe(0.1);
 		} finally {
 			authStorage.close();
 		}

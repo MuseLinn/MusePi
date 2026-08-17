@@ -44,7 +44,7 @@ export const handleWikipedia: SpecialHandler = async (
 		const contentResult = await loadPage(contentUrl, { timeout, signal });
 
 		if (contentResult.ok) {
-			const { parseHTML } = await import("linkedom");
+			const { parseHTML } = await import("@musepi/pi-utils/dom");
 			const doc = parseHTML(contentResult.content).document;
 
 			// Extract main content sections

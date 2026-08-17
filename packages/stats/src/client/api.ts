@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type {
 	BehaviorDashboardStats,
 	CostDashboardStats,
@@ -29,7 +30,7 @@ export class ApiError extends Error {
 async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(endpoint, options);
 	if (!res.ok) {
-		throw new ApiError(res.status, endpoint, `HTTP error ${res.status} on ${endpoint}`);
+		throw new ApiError(res.status, endpoint, t("HTTP error {0} on {1}", String(res.status), endpoint));
 	}
 	return res.json() as Promise<T>;
 }

@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { fuzzyFind } from "@oh-my-pi/pi-natives";
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import { fuzzyFind } from "@musepi/pi-natives";
+import { getProjectDir } from "@musepi/pi-utils";
 
 const PATH_DELIMITERS = new Set([" ", "\t", '"', "'", "="]);
 
@@ -687,7 +687,9 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			pathPrefix.startsWith("/") ||
 			pathPrefix.startsWith("./") ||
 			pathPrefix.startsWith("../") ||
-			pathPrefix.startsWith("~/")
+			pathPrefix.startsWith("~/") ||
+			// Windows drive-absolute paths (C:/Users, C:\Users).
+			/^[A-Za-z]:[\\/]/.test(pathPrefix)
 		) {
 			return pathPrefix;
 		}

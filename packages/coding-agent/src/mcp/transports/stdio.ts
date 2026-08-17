@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getProjectDir, readJsonl, Snowflake } from "@oh-my-pi/pi-utils";
+import { getProjectDir, readJsonl } from "@musepi/pi-utils";
 import type { Subprocess } from "bun";
 import { hostHasInheritableConsole } from "../../eval/py/spawn-options";
 import type {
@@ -20,6 +20,7 @@ import type {
 	MCPTransport,
 } from "../../mcp/types";
 import { toJsonRpcError } from "../../mcp/types";
+import { RequestIdAllocator } from "../request-id";
 import { isMCPTimeoutEnabled, resolveMCPTimeoutMs } from "../timeout";
 
 /** Subprocess argv and platform-derived spawn flags for an MCP stdio server. */
@@ -551,6 +552,7 @@ export class StdioTransport implements MCPTransport {
 	 * actually spawned into its own session may target it.
 	 */
 	#detached = false;
+	readonly #requestIds = new RequestIdAllocator();
 
 	onClose?: () => void;
 	onError?: (error: Error) => void;
@@ -734,7 +736,7 @@ export class StdioTransport implements MCPTransport {
 			throw new Error("Transport not connected");
 		}
 
-		const id = Snowflake.next();
+		const id = this.#requestIds.next(this.config.requestIdFormat);
 		const request = {
 			jsonrpc: "2.0" as const,
 			id,

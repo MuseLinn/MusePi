@@ -1,7 +1,7 @@
-import type { Dialect as CatalogDialect } from "@oh-my-pi/pi-catalog/identity";
+import type { Dialect as CatalogDialect } from "@musepi/pi-catalog/identity";
 import type { Context, Message, ToolCall } from "../types";
 
-export type { Dialect } from "@oh-my-pi/pi-catalog/identity";
+export type { Dialect } from "@musepi/pi-catalog/identity";
 
 export type InbandScanEvent =
 	| { type: "text"; text: string }
@@ -27,7 +27,6 @@ export interface DialectToolResult {
 
 export interface DialectRenderOptions {
 	readonly tools?: readonly InbandTool[];
-	readonly example?: boolean;
 }
 
 export interface DialectDefinition {

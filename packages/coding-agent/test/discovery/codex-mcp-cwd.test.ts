@@ -1,5 +1,5 @@
 /**
- * Regression tests for #5561.
+ * Regression tests for Codex MCP config discovery (#5561, #7538).
  *
  * The Codex `config.toml` MCP importer in `packages/coding-agent/src/discovery/codex.ts`
  * used to copy only `command`/`args`/`url` into the returned `MCPServer`, dropping
@@ -14,10 +14,10 @@ import { afterEach, beforeEach, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { MCPServer } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/discovery";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import type { MCPServer } from "@musepi/pi-coding-agent/capability/mcp";
+import { mcpCapability } from "@musepi/pi-coding-agent/capability/mcp";
+import { loadCapability } from "@musepi/pi-coding-agent/discovery";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 let tempHome = "";
 let tempCwd = "";
@@ -47,6 +47,59 @@ async function loadCodexServers(): Promise<MCPServer[]> {
 	});
 	return result.items;
 }
+
+test("disabled Codex MCP servers survive discovery tagged enabled: false (#7538)", async () => {
+	const codexDir = path.join(tempHome, ".codex");
+	await fs.writeFile(
+		path.join(codexDir, "config.toml"),
+		[
+			"[mcp_servers.computer-use]",
+			'command = "./Codex Computer Use.app/Contents/MacOS/SkyComputerUseClient"',
+			"enabled = false",
+			"",
+			"[mcp_servers.context7]",
+			'command = "npx"',
+			"enabled = true",
+			"",
+		].join("\n"),
+	);
+
+	const servers = await loadCodexServers();
+	const cu = servers.find(server => server.name === "computer-use");
+	const context7 = servers.find(server => server.name === "context7");
+
+	// The disabled entry is NOT dropped: it stays so loadAllMCPConfigs' suppress
+	// path can claim its dedupe key (keeping a same-named, lower-priority source
+	// disabled) and honor the user force-enable allowlist. `enabled: true` is the
+	// default, so it is not persisted onto the enabled sibling.
+	expect(cu?.enabled).toBe(false);
+	expect(context7?.command).toBe("npx");
+	expect(context7?.enabled).toBeUndefined();
+});
+
+test("project Codex disable suppresses a same-named user server (#7538)", async () => {
+	const userCodexDir = path.join(tempHome, ".codex");
+	const projectCodexDir = path.join(tempCwd, ".codex");
+	await fs.mkdir(projectCodexDir, { recursive: true });
+	await Promise.all([
+		fs.writeFile(
+			path.join(userCodexDir, "config.toml"),
+			["[mcp_servers.shared]", 'command = "user-server"', ""].join("\n"),
+		),
+		fs.writeFile(
+			path.join(projectCodexDir, "config.toml"),
+			["[mcp_servers.shared]", 'command = "project-server"', "enabled = false", ""].join("\n"),
+		),
+	]);
+
+	const result = await loadCapability<MCPServer>(mcpCapability.id, {
+		cwd: tempCwd,
+		providers: ["codex"],
+		suppress: server => server.enabled === false,
+	});
+
+	expect(result.items.find(server => server.name === "shared")).toBeUndefined();
+});
 
 test("relative path-like command and cwd resolve against the Codex config directory (#5561)", async () => {
 	const codexDir = path.join(tempHome, ".codex");

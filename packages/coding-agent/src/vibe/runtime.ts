@@ -16,7 +16,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { logger, prompt, Snowflake } from "@oh-my-pi/pi-utils";
+import { logger, prompt, Snowflake } from "@musepi/pi-utils";
 import type { AsyncJob, AsyncJobManager } from "../async/job-manager";
 import { resolveAgentModelPatterns } from "../config/model-resolver";
 import type { LocalProtocolOptions } from "../internal-urls";
@@ -25,7 +25,6 @@ import { MCPManager } from "../mcp/manager";
 import vibeTurnResultTemplate from "../prompts/tools/vibe-turn-result.md" with { type: "text" };
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
-import type { SessionEntry } from "../session/session-entries";
 import { SessionManager, SessionPersistenceIndeterminateError } from "../session/session-manager";
 import { getBundledAgent } from "../task/agents";
 import { type ExecutorOptions, runSubagentFollowUpTurn, runSubprocess } from "../task/executor";
@@ -70,8 +69,8 @@ const TRACE_LINE_MAX = 120;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
 /** Response text cap inside a delivered turn result; full output stays at agent://<id>. */
 const RESPONSE_PREVIEW_MAX = 6000;
-/** Grace period for abort-aware turns before teardown detaches a stuck provider/tool call. */
-const CANCELLED_TURN_SETTLE_GRACE_MS = 250;
+/** Grace period for Vibe cancellation/release cleanup before teardown detaches (ms). */
+const VIBE_TEARDOWN_GRACE_MS = 5_000;
 
 const VIBE_LIFECYCLE_CUSTOM_TYPE = "vibe-session-lifecycle";
 const VIBE_LIFECYCLE_VERSION = 1;
@@ -252,6 +251,48 @@ export interface VibeWaitOutcome {
 	timedOut: boolean;
 }
 
+type VibeTeardownStatus = "pending" | "settled" | "failed";
+
+interface TrackedVibeTeardown {
+	promise: Promise<void>;
+	status: () => VibeTeardownStatus;
+}
+
+/** Observe cleanup without propagating a detached late rejection. */
+function trackVibeTeardown(promise: Promise<unknown>, onError: (error: unknown) => void): TrackedVibeTeardown {
+	let status: VibeTeardownStatus = "pending";
+	return {
+		promise: promise.then(
+			() => {
+				status = "settled";
+			},
+			error => {
+				status = "failed";
+				onError(error);
+			},
+		),
+		status: () => status,
+	};
+}
+
+/** Wait for cleanup only until the caller's shared absolute deadline. */
+async function waitForVibeTeardown(tasks: readonly TrackedVibeTeardown[], deadline: number): Promise<boolean> {
+	if (tasks.length === 0 || tasks.every(task => task.status() !== "pending")) return true;
+	const remainingMs = deadline - Date.now();
+	if (remainingMs <= 0) return false;
+	const timeout = Promise.withResolvers<void>();
+	const timer = setTimeout(timeout.resolve, remainingMs);
+	timer.unref?.();
+	try {
+		return await Promise.race([
+			Promise.allSettled(tasks.map(task => task.promise)).then(() => true),
+			timeout.promise.then(() => false),
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 /** Normalize a text fragment to one bounded roster/trace line. */
 function firstLine(text: string, max = 100): string {
 	return oneLineLabel(text, max);
@@ -321,11 +362,12 @@ function parseLifecycleEvent(value: unknown): VibeLifecycleEvent | undefined {
 	return undefined;
 }
 
-/** Child ids claimed by any valid Vibe spawn event, independent of current parent scope. */
-export function persistedVibeChildIds(entries: Iterable<SessionEntry>): Set<string> {
+/** Child ids claimed by valid Vibe spawn records from untrusted persisted JSON. */
+export function persistedVibeChildIds(entries: Iterable<unknown>): Set<string> {
 	const ids = new Set<string>();
-	for (const entry of entries) {
-		if (entry.type !== "custom" || entry.customType !== VIBE_LIFECYCLE_CUSTOM_TYPE) continue;
+	for (const value of entries) {
+		const entry = objectRecord(value);
+		if (entry?.type !== "custom" || entry.customType !== VIBE_LIFECYCLE_CUSTOM_TYPE) continue;
 		const event = parseLifecycleEvent(entry.data);
 		if (
 			event?.action === "spawn" &&
@@ -353,24 +395,6 @@ function mergeTrace(turn: VibeTurn, progress: AgentProgress): void {
 
 /** Thrown from a turn job body so the job manager marks the job failed while carrying the formatted result. */
 export class VibeTurnError extends Error {}
-
-async function awaitCancelledTurnJobs(jobs: ReadonlySet<AsyncJob>): Promise<void> {
-	if (jobs.size === 0) return;
-	const settled = Promise.allSettled([...jobs].map(job => job.promise)).then(() => true);
-	const timeout = Promise.withResolvers<false>();
-	const timer = setTimeout(() => timeout.resolve(false), CANCELLED_TURN_SETTLE_GRACE_MS);
-	timer.unref();
-	try {
-		if (!(await Promise.race([settled, timeout.promise]))) {
-			logger.warn("vibe: detached cancelled turn that did not settle within teardown grace period", {
-				jobCount: jobs.size,
-				graceMs: CANCELLED_TURN_SETTLE_GRACE_MS,
-			});
-		}
-	} finally {
-		clearTimeout(timer);
-	}
-}
 
 /**
  * Process-global registry of vibe worker sessions, scoped by both owner agent
@@ -419,6 +443,12 @@ export class VibeSessionRegistry {
 	readonly #records = new Map<string, VibeRecord>();
 	readonly #terminationTails = new Map<string, Promise<void>>();
 	readonly #terminatedScopes = new Set<string>();
+	#teardownGraceMs = VIBE_TEARDOWN_GRACE_MS;
+
+	/** Override the teardown grace period for deterministic lifecycle tests. */
+	setTeardownGraceForTesting(timeoutMs: number): void {
+		this.#teardownGraceMs = Math.max(1, timeoutMs);
+	}
 
 	ownerScope(session: VibeParentSession): VibeOwnerScope {
 		const parentSessionId = session.getSessionId?.();
@@ -709,11 +739,50 @@ export class VibeSessionRegistry {
 		}
 	}
 
+	#trackAgentRelease(id: string, ref: AgentRef, action: "detach" | "release"): TrackedVibeTeardown {
+		return trackVibeTeardown(AgentLifecycleManager.global().release(id, ref), error => {
+			logger.warn(`vibe: failed to ${action} worker session`, {
+				id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+
+	#finishAgentRelease(id: string, ref: AgentRef, task: TrackedVibeTeardown, action: "detach" | "release"): void {
+		if (task.status() === "settled") return;
+		if (task.status() === "pending") {
+			logger.warn(`vibe: timed out waiting to ${action} worker session; detaching registry ref`, { id });
+		}
+		AgentRegistry.global().unregister(id, ref);
+	}
+
+	async #releaseRefWithinDeadline(
+		id: string,
+		ref: AgentRef,
+		deadline: number,
+		action: "detach" | "release",
+	): Promise<void> {
+		const task = this.#trackAgentRelease(id, ref, action);
+		await waitForVibeTeardown([task], deadline);
+		this.#finishAgentRelease(id, ref, task, action);
+	}
+
+	#trackJobSettlement(record: VibeRecord, job: AsyncJob): TrackedVibeTeardown {
+		return trackVibeTeardown(job.promise, error => {
+			logger.warn("vibe: cancelled worker turn cleanup failed", {
+				id: record.id,
+				jobId: job.id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+
 	async #markTerminalRef(
 		id: string,
 		ownerId: string,
 		childSessionFile: string,
 		expected?: AgentRef | null,
+		teardownDeadline?: number,
 	): Promise<void> {
 		const registry = AgentRegistry.global();
 		const existing = registry.get(id);
@@ -726,7 +795,9 @@ export class VibeSessionRegistry {
 		}
 		if (existing?.status === "aborted" && !existing.session) return;
 		if (existing && !registry.setStatus(id, "aborted", existing)) return;
-		if (existing && AgentLifecycleManager.global().has(id, existing)) {
+		if (existing && teardownDeadline !== undefined) {
+			await this.#releaseRefWithinDeadline(id, existing, teardownDeadline, "release");
+		} else if (existing && AgentLifecycleManager.global().has(id, existing)) {
 			await AgentLifecycleManager.global().release(id, existing);
 		} else if (existing?.session) {
 			await existing.session.dispose();
@@ -1086,19 +1157,48 @@ export class VibeSessionRegistry {
 			this.#records.delete(scopeKey(scope, record.id));
 			if (record.turn && manager) manager.cancel(record.turn.jobId, { ownerId: record.ownerId });
 		}
-		for (const { record, ref } of teardown) {
-			if (!ref) continue;
-			try {
-				await AgentLifecycleManager.global().release(record.id, ref);
-			} catch (error) {
-				logger.warn("vibe: failed to detach worker session", {
+		const deadline = Date.now() + this.#teardownGraceMs;
+		const cleanup = teardown.map(entry => ({
+			...entry,
+			releaseTask: entry.ref ? this.#trackAgentRelease(entry.record.id, entry.ref, "detach") : undefined,
+			jobTask: entry.job ? this.#trackJobSettlement(entry.record, entry.job) : undefined,
+		}));
+		await waitForVibeTeardown(
+			cleanup.flatMap(entry => [entry.releaseTask, entry.jobTask].filter(task => task !== undefined)),
+			deadline,
+		);
+		for (const { record, ref, releaseTask, job, jobTask } of cleanup) {
+			if (ref && releaseTask) this.#finishAgentRelease(record.id, ref, releaseTask, "detach");
+			if (job && jobTask?.status() === "pending") {
+				logger.warn("vibe: timed out waiting for cancelled worker turn; cleanup continues in the background", {
+					id: record.id,
+					jobId: job.id,
+				});
+				this.#continueSuspendedCleanup(scope, record, jobTask);
+			}
+			if (this.#records.has(scopeKey(scope, record.id))) continue;
+			const lateRef = this.#registeredAgent(record);
+			if (lateRef && lateRef !== ref) {
+				await this.#releaseRefWithinDeadline(record.id, lateRef, deadline, "detach");
+			}
+		}
+		return records.length;
+	}
+
+	#continueSuspendedCleanup(scope: VibeOwnerScope, record: VibeRecord, jobTask: TrackedVibeTeardown): void {
+		void jobTask.promise
+			.then(async () => {
+				if (this.#records.has(scopeKey(scope, record.id))) return;
+				const lateRef = this.#registeredAgent(record);
+				if (!lateRef) return;
+				await this.#releaseRefWithinDeadline(record.id, lateRef, Date.now() + this.#teardownGraceMs, "detach");
+			})
+			.catch(error => {
+				logger.warn("vibe: failed to finish suspended worker cleanup", {
 					id: record.id,
 					error: error instanceof Error ? error.message : String(error),
 				});
-			}
-		}
-		await awaitCancelledTurnJobs(new Set(teardown.flatMap(entry => (entry.job ? [entry.job] : []))));
-		return records.length;
+			});
 	}
 
 	/** Terminate one worker; a tombstone failure still tears it down before reconciliation and error delivery. */
@@ -1144,15 +1244,21 @@ export class VibeSessionRegistry {
 			await this.#persistModeExit(session, scope, records);
 		} catch (error) {
 			if (error instanceof SessionPersistenceIndeterminateError) {
-				for (const record of records) {
-					await this.#killRecord(record, session.asyncJobManager, session, "mode-exit", false);
-				}
+				const teardownDeadline = Date.now() + this.#teardownGraceMs;
+				await Promise.all(
+					records.map(record =>
+						this.#killRecord(record, session.asyncJobManager, session, "mode-exit", false, teardownDeadline),
+					),
+				);
 			}
 			throw error;
 		}
-		for (const record of records) {
-			await this.#killRecord(record, session.asyncJobManager, session, "mode-exit");
-		}
+		const teardownDeadline = Date.now() + this.#teardownGraceMs;
+		await Promise.all(
+			records.map(record =>
+				this.#killRecord(record, session.asyncJobManager, session, "mode-exit", true, teardownDeadline),
+			),
+		);
 		return records.length;
 	}
 
@@ -1162,6 +1268,7 @@ export class VibeSessionRegistry {
 		session: VibeParentSession,
 		reason: VibeTombstoneReason,
 		persistTerminal = true,
+		teardownDeadline?: number,
 	): Promise<VibeKillOutcome> {
 		const registered = this.#registeredAgent(record);
 		const settlingJobs = new Set<AsyncJob>();
@@ -1198,26 +1305,29 @@ export class VibeSessionRegistry {
 		record.state = "dead";
 		record.lastActivityAt = Date.now();
 		record.lastActivity = "killed";
-		if (registered) {
-			try {
-				await AgentLifecycleManager.global().release(record.id, registered);
-			} catch (error) {
-				logger.warn("vibe: failed to release worker session", {
-					id: record.id,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
+		const deadline = teardownDeadline ?? Date.now() + this.#teardownGraceMs;
+		const releaseTask = registered ? this.#trackAgentRelease(record.id, registered, "release") : undefined;
+		const jobCleanup = [...settlingJobs].map(job => ({ job, task: this.#trackJobSettlement(record, job) }));
+		await waitForVibeTeardown(
+			[releaseTask, ...jobCleanup.map(entry => entry.task)].filter(task => task !== undefined),
+			deadline,
+		);
+		if (registered && releaseTask) this.#finishAgentRelease(record.id, registered, releaseTask, "release");
+		const pendingJobs = jobCleanup.filter(entry => entry.task.status() === "pending");
+		for (const { job } of pendingJobs) {
+			logger.warn("vibe: timed out waiting for cancelled worker turn; cleanup continues in the background", {
+				id: record.id,
+				jobId: job.id,
+			});
 		}
-		await awaitCancelledTurnJobs(settlingJobs);
 		const terminalRef = registered ?? this.#registeredAgent(record) ?? null;
-		if (record.childSessionFile) {
-			try {
-				const persisted = await SessionManager.peekSessionInit(record.childSessionFile);
-				if (persisted?.init)
-					await this.#markTerminalRef(record.id, record.ownerId, record.childSessionFile, terminalRef);
-			} catch {
-				// A turn killed before session initialization has no readable history to retain.
-			}
+		await this.#markTerminalRecord(record, terminalRef, deadline);
+		if (pendingJobs.length > 0) {
+			this.#continueKilledCleanup(
+				record,
+				pendingJobs.map(entry => entry.task),
+				registered,
+			);
 		}
 		if (persistenceError) {
 			let finalPersistenceError = persistenceError;
@@ -1246,6 +1356,40 @@ export class VibeSessionRegistry {
 		return { id: record.id, cancelledTurn };
 	}
 
+	async #markTerminalRecord(
+		record: VibeRecord,
+		expected: AgentRef | null | undefined,
+		teardownDeadline: number,
+	): Promise<void> {
+		if (!record.childSessionFile) return;
+		try {
+			const persisted = await SessionManager.peekSessionInit(record.childSessionFile);
+			if (persisted?.init) {
+				await this.#markTerminalRef(record.id, record.ownerId, record.childSessionFile, expected, teardownDeadline);
+			}
+		} catch (error) {
+			logger.warn("vibe: failed to retain terminal worker transcript", {
+				id: record.id,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	#continueKilledCleanup(
+		record: VibeRecord,
+		jobTasks: readonly TrackedVibeTeardown[],
+		expected: AgentRef | undefined,
+	): void {
+		void Promise.allSettled(jobTasks.map(task => task.promise))
+			.then(() => this.#markTerminalRecord(record, expected, Date.now() + this.#teardownGraceMs))
+			.catch(error => {
+				logger.warn("vibe: failed to finish killed worker cleanup", {
+					id: record.id,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+	}
+
 	/** Build the ExecutorOptions for a first spawn, mirroring the `task`/eval-bridge plumbing. */
 	async #buildSpawnOptions(
 		session: ToolSession,
@@ -1265,6 +1409,7 @@ export class VibeSessionRegistry {
 		};
 		return {
 			cwd: session.cwd,
+			pauseGate: session.pauseGate,
 			agent: record.agent,
 			task: message,
 			assignment: message,

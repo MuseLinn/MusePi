@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
+import { ProcessTerminal } from "@musepi/pi-tui/terminal";
 import {
 	type Component,
 	CURSOR_MARKER,
@@ -12,7 +12,7 @@ import {
 	type OverlayHandle,
 	type OverlayOptions,
 	TUI,
-} from "@oh-my-pi/pi-tui/tui";
+} from "@musepi/pi-tui/tui";
 import {
 	Ellipsis,
 	extractSegments,
@@ -21,8 +21,8 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "@oh-my-pi/pi-tui/utils";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui/utils";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 import { StressRenderScheduler } from "./render-stress-scheduler";
 import { VirtualTerminal } from "./virtual-terminal";
 
@@ -425,7 +425,7 @@ const BURST_STEP_METADATA = {
 } satisfies Record<BurstStepKind, BurstStepMetadata>;
 
 class UnknownViewportTerminal extends VirtualTerminal {
-	isNativeViewportAtBottom(): undefined {
+	override isNativeViewportAtBottom(): undefined {
 		return undefined;
 	}
 }
@@ -433,7 +433,7 @@ class UnknownViewportTerminal extends VirtualTerminal {
 class IntermittentUnknownViewportTerminal extends VirtualTerminal {
 	#probeCount = 0;
 
-	isNativeViewportAtBottom(): boolean | undefined {
+	override isNativeViewportAtBottom(): boolean | undefined {
 		this.#probeCount += 1;
 		return this.#probeCount % 3 === 0 ? undefined : super.isNativeViewportAtBottom();
 	}
@@ -443,7 +443,7 @@ class StaleBottomTerminal extends VirtualTerminal {
 	#previous: boolean | undefined;
 	#returnStale = false;
 
-	isNativeViewportAtBottom(): boolean | undefined {
+	override isNativeViewportAtBottom(): boolean | undefined {
 		const current = super.isNativeViewportAtBottom();
 		if (this.#returnStale) {
 			this.#returnStale = false;

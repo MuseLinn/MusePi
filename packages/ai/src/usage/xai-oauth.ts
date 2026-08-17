@@ -9,6 +9,7 @@
  * product and must never be sent here.
  */
 
+import { toNumber } from "@musepi/pi-catalog/utils";
 import {
 	buildXAICliBillingUrl,
 	extractXAIAccessTokenSubject,
@@ -22,15 +23,12 @@ import type {
 	UsageLimit,
 	UsageProvider,
 	UsageReport,
-	UsageStatus,
 	UsageWindow,
 } from "../usage";
 import { isRecord } from "../utils";
-import { toNumber } from "./shared";
+import { DAY_MS, parseIsoTimestamp, usageStatus, WEEK_MS } from "./shared";
 
 const PROVIDER_ID = "xai-oauth";
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const BILLING_SOURCE = "cli-chat-proxy.grok.com/v1/billing";
 
 interface XaiBillingPeriod {
@@ -71,11 +69,6 @@ interface XaiMonthlyBillingConfig {
 
 type XaiBillingConfig = XaiWeeklyBillingConfig | XaiMonthlyBillingConfig;
 
-function parseIsoMs(value: string): number | undefined {
-	const parsed = Date.parse(value);
-	return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function parsePercent(value: unknown): number | undefined {
 	const percent = toNumber(value);
 	return percent !== undefined && percent >= 0 && percent <= 100 ? percent : undefined;
@@ -99,12 +92,6 @@ function buildPercentAmount(usagePercent: number): UsageAmount {
 	};
 }
 
-function buildUsageStatus(usedFraction: number): UsageStatus {
-	if (usedFraction >= 1) return "exhausted";
-	if (usedFraction >= 0.9) return "warning";
-	return "ok";
-}
-
 function slugifyProduct(product: string): string {
 	return product
 		.trim()
@@ -118,13 +105,13 @@ function buildPeriodWindow(period: XaiBillingPeriod): UsageWindow {
 		id: "1w",
 		label: "Weekly",
 		durationMs: WEEK_MS,
-		resetsAt: parseIsoMs(period.end),
+		resetsAt: parseIsoTimestamp(period.end),
 	};
 }
 
 function buildMonthlyWindow(periodStart: string, periodEnd: string): UsageWindow | undefined {
-	const startMs = parseIsoMs(periodStart);
-	const endMs = parseIsoMs(periodEnd);
+	const startMs = parseIsoTimestamp(periodStart);
+	const endMs = parseIsoTimestamp(periodEnd);
 	if (startMs === undefined || endMs === undefined || endMs <= startMs) return undefined;
 	// Real calendar months vary; use the observed period length from the API.
 	const durationMs = endMs - startMs;
@@ -140,8 +127,8 @@ function buildMonthlyWindow(periodStart: string, periodEnd: string): UsageWindow
 function parseWeeklyBillingConfig(raw: Record<string, unknown>): XaiWeeklyBillingConfig | null {
 	if (!isRecord(raw.currentPeriod)) return null;
 
-	const start = typeof raw.currentPeriod.start === "string" ? parseIsoMs(raw.currentPeriod.start) : undefined;
-	const end = typeof raw.currentPeriod.end === "string" ? parseIsoMs(raw.currentPeriod.end) : undefined;
+	const start = typeof raw.currentPeriod.start === "string" ? parseIsoTimestamp(raw.currentPeriod.start) : undefined;
+	const end = typeof raw.currentPeriod.end === "string" ? parseIsoTimestamp(raw.currentPeriod.end) : undefined;
 	const type = typeof raw.currentPeriod.type === "string" ? raw.currentPeriod.type : "";
 	// Keep recently-ended weekly windows so /usage still renders across period
 	// rollover while the billing API is mid-refresh. Reject only inverted ranges
@@ -182,8 +169,8 @@ function parseWeeklyBillingConfig(raw: Record<string, unknown>): XaiWeeklyBillin
 function parseMonthlyBillingConfig(raw: Record<string, unknown>): XaiMonthlyBillingConfig | null {
 	const periodStart = typeof raw.billingPeriodStart === "string" ? raw.billingPeriodStart : "";
 	const periodEnd = typeof raw.billingPeriodEnd === "string" ? raw.billingPeriodEnd : "";
-	const startMs = parseIsoMs(periodStart);
-	const endMs = parseIsoMs(periodEnd);
+	const startMs = parseIsoTimestamp(periodStart);
+	const endMs = parseIsoTimestamp(periodEnd);
 	if (!periodStart || !periodEnd || startMs === undefined || endMs === undefined || endMs <= startMs) {
 		return null;
 	}
@@ -227,7 +214,7 @@ function buildOnDemandLimit(
 			remainingFraction: 1 - usedFraction,
 			unit: "unknown",
 		},
-		status: buildUsageStatus(usedFraction),
+		status: usageStatus(usedFraction),
 	};
 }
 
@@ -248,7 +235,7 @@ function buildLimits(config: XaiBillingConfig, accountId: string | undefined): U
 				scope,
 				window,
 				amount: overall,
-				status: buildUsageStatus(overall.usedFraction ?? 0),
+				status: usageStatus(overall.usedFraction ?? 0),
 			},
 		];
 
@@ -262,7 +249,7 @@ function buildLimits(config: XaiBillingConfig, accountId: string | undefined): U
 				scope,
 				window,
 				amount,
-				status: buildUsageStatus(amount.usedFraction ?? 0),
+				status: usageStatus(amount.usedFraction ?? 0),
 			});
 		}
 		const onDemand = buildOnDemandLimit(config.onDemandCap, config.onDemandUsed, accountId);
@@ -293,7 +280,7 @@ function buildLimits(config: XaiBillingConfig, accountId: string | undefined): U
 				// xAI does not label the unit; amounts match the dashboard quota points.
 				unit: "unknown",
 			},
-			status: buildUsageStatus(usedFraction),
+			status: usageStatus(usedFraction),
 		},
 	];
 	const onDemand = buildOnDemandLimit(config.onDemandCap, config.onDemandUsed, accountId);

@@ -2,17 +2,17 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { listSessions } from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { MemorySessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { listSessions } from "@musepi/pi-coding-agent/session/session-listing";
+import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { MemorySessionStorage } from "@musepi/pi-coding-agent/session/session-storage";
+import * as snapcompact from "@musepi/snapcompact";
 
 class CountingMemorySessionStorage extends MemorySessionStorage {
 	writeTextSyncCalls = 0;
 
-	writeTextSync(filePath: string, content: string): void {
+	override writeTextSync(filePath: string, content: string): void {
 		this.writeTextSyncCalls++;
 		super.writeTextSync(filePath, content);
 	}

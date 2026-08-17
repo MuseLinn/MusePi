@@ -95,7 +95,7 @@ per-session cost, per-tool traffic (estimated arg/result tokens plus a
 reads of the same file, the largest single tool results, compactions, and
 edit-failure churn.
 
-The LLM phase (default `anthropic/claude-sonnet-4-6` via `@oh-my-pi/pi-ai`,
+The LLM phase (default `anthropic/claude-sonnet-4-6` via `@musepi/pi-ai`,
 credentials resolved through omp's auth storage — stored key, OAuth, or env
 var) classifies the costliest sessions: multi-topic sessions that should have
 been split or handed off, task spawns that were wasteful or failed to transfer

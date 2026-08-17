@@ -8,13 +8,13 @@
  * sibling SQLite store and never POSTs the broker sentinel to a Google token
  * endpoint.
  */
-import { type AuthStorage, type FetchImpl, type OAuthAccess, withOAuthAccess } from "@oh-my-pi/pi-ai";
+import { type AuthStorage, type FetchImpl, type OAuthAccess, withOAuthAccess } from "@musepi/pi-ai";
 import {
 	ANTIGRAVITY_SYSTEM_INSTRUCTION,
 	getAntigravityUserAgent,
 	getGeminiCliHeaders,
-} from "@oh-my-pi/pi-catalog/wire/gemini-headers";
-import { fetchWithRetry } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-catalog/wire/gemini-headers";
+import { fetchWithRetry } from "@musepi/pi-utils";
 
 import type { SearchCitation, SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -61,6 +61,7 @@ export interface GeminiSearchParams extends GeminiToolParams {
 	/** Sampling temperature (0–1). Lower = more focused/factual. */
 	temperature?: number;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	authStorage: AuthStorage;
 	sessionId?: string;
 	fetch?: FetchImpl;
@@ -309,6 +310,7 @@ async function callGeminiSearch(
 	toolParams: GeminiToolParams,
 	fetchImpl: FetchImpl | undefined,
 	signal: AbortSignal | undefined,
+	timeoutMs: number | undefined,
 	mode?: "auto" | "production" | "sandbox",
 ): Promise<GeminiSearchResult> {
 	let endpoints: string[];
@@ -383,7 +385,7 @@ async function callGeminiSearch(
 			...headers,
 		},
 		body: JSON.stringify(requestBody),
-		signal: withHardTimeout(signal),
+		signal: withHardTimeout(signal, timeoutMs),
 	});
 
 	let response: Response | undefined;
@@ -442,6 +444,7 @@ async function callGeminiDeveloperSearch(
 	toolParams: GeminiToolParams,
 	fetchImpl: FetchImpl | undefined,
 	signal: AbortSignal | undefined,
+	timeoutMs: number | undefined,
 ): Promise<GeminiSearchResult> {
 	const normalizedSystemPrompt = systemPrompt?.toWellFormed();
 	const requestBody: Record<string, unknown> = {
@@ -480,7 +483,7 @@ async function callGeminiDeveloperSearch(
 				Accept: "text/event-stream",
 			},
 			body: JSON.stringify(requestBody),
-			signal: withHardTimeout(signal),
+			signal: withHardTimeout(signal, timeoutMs),
 			fetch: fetchImpl,
 			maxAttempts: MAX_RETRIES + 1,
 			defaultDelayMs: attempt => BASE_DELAY_MS * 2 ** attempt,
@@ -548,6 +551,7 @@ export async function searchGemini(params: GeminiSearchParams): Promise<SearchRe
 					},
 					params.fetch,
 					params.signal,
+					params.timeoutMs,
 					params.antigravityEndpointMode,
 				),
 			{ sessionId: params.sessionId, signal: params.signal, seed: seed.access },
@@ -575,6 +579,7 @@ export async function searchGemini(params: GeminiSearchParams): Promise<SearchRe
 			},
 			params.fetch,
 			params.signal,
+			params.timeoutMs,
 		);
 	}
 
@@ -619,6 +624,7 @@ export class GeminiProvider extends SearchProvider {
 			code_execution: params.codeExecution,
 			url_context: params.urlContext,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			authStorage: params.authStorage,
 			sessionId: params.sessionId,
 			fetch: params.fetch,

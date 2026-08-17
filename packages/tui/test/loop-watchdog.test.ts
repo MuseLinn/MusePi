@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
-import { LoopWatchdog } from "@oh-my-pi/pi-tui/loop-watchdog";
-import { currentLoopPhase, logger, popLoopPhase, pushLoopPhase, takeRecentLoopPhase } from "@oh-my-pi/pi-utils";
+import { LoopWatchdog } from "@musepi/pi-tui/loop-watchdog";
+import { currentLoopPhase, logger, popLoopPhase, pushLoopPhase, takeRecentLoopPhase } from "@musepi/pi-utils";
 
 /**
  * Contract: LoopWatchdog turns event-loop lag into exactly one
@@ -15,7 +15,7 @@ import { currentLoopPhase, logger, popLoopPhase, pushLoopPhase, takeRecentLoopPh
  * ticks by hand; firing re-arms via schedule, so the captured callback always
  * advances to the next pending tick.
  */
-function harness(options: Partial<{ intervalMs: number; thresholdMs: number }> = {}) {
+function harness(options: Partial<{ intervalMs: number; thresholdMs: number; sleepMs: number }> = {}) {
 	let nowValue = 0;
 	let scheduled: (() => void) | undefined;
 	const now = () => nowValue;
@@ -87,6 +87,24 @@ describe("LoopWatchdog", () => {
 		fireTick();
 
 		expect(warnSpy).toHaveBeenCalledTimes(1);
+	});
+
+	test("treats a long missed interval as system sleep, not an event-loop block", () => {
+		const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+		const { wd, setNow, fireTick } = harness({ sleepMs: 5_000 });
+
+		wd.start(); // deadline at 250
+		setNow(10_250); // blockedMs = 10_000 exceeds the sleep cutoff
+		fireTick();
+
+		expect(warnSpy).not.toHaveBeenCalled();
+
+		setNow(10_760); // next deadline is 10_500 → a real 260ms stall still reports
+		fireTick();
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+		const [event, ctx] = warnSpy.mock.calls[0] as [string, { blockedMs: number; phase: string }];
+		expect(event).toBe("ui.loop-blocked");
+		expect(ctx.blockedMs).toBe(260);
 	});
 
 	test("emits nothing for a tick that fires after stop()", () => {

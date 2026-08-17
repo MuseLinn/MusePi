@@ -1,4 +1,4 @@
-import { parseJsonWithRepair } from "@oh-my-pi/pi-utils";
+import { parseJsonWithRepair } from "@musepi/pi-utils";
 import type { Message, ToolCall } from "../types";
 import { asRecord, mintToolCallId, partialSuffixOverlapAny } from "./coercion";
 import dialectPrompt from "./harmony.md" with { type: "text" };
@@ -273,8 +273,7 @@ function parseRecipient(header: string): string {
 	return match?.[1] ?? "";
 }
 
-function renderToolCall(call: ToolCall, options: DialectRenderOptions = {}): string {
-	if (options.example) return stringifyJson(call.arguments);
+function renderToolCall(call: ToolCall, _options: DialectRenderOptions = {}): string {
 	return `${START}assistant${CHANNEL}commentary to=${harmonyRecipient(call.name)}${MESSAGE}${stringifyJson(call.arguments)}${CALL}`;
 }
 

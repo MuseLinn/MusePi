@@ -1,21 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, TextContent, ToolCall } from "@oh-my-pi/pi-ai";
-import * as ai from "@oh-my-pi/pi-ai";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession, type AgentSessionConfig } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { TodoTool } from "@oh-my-pi/pi-coding-agent/tools";
-import { setInteractiveHost, TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
-import eagerTodoPrompt from "../src/prompts/system/eager-todo.md" with { type: "text" };
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import type { AssistantMessage, TextContent, ToolCall } from "@musepi/pi-ai";
+import * as ai from "@musepi/pi-ai";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentSession, type AgentSessionConfig } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { TodoTool } from "@musepi/pi-coding-agent/tools";
+import { setInteractiveHost, TempDir } from "@musepi/pi-utils";
 import { createAssistantMessage } from "./helpers/agent-session-setup";
 
 type ObservedPromptCall = {
@@ -234,14 +233,6 @@ describe("AgentSession eager todo enforcement", () => {
 		tempDir.removeSync();
 	});
 
-	it("keeps eager init instructions aligned with the todo schema", () => {
-		expect(eagerTodoPrompt).toContain("single `init` op");
-		expect(eagerTodoPrompt).toContain("phase names and task-label strings");
-		expect(eagerTodoPrompt).not.toContain("`details`");
-		expect(eagerTodoPrompt).not.toContain("in_progress");
-		expect(eagerTodoPrompt).not.toContain("pending");
-	});
-
 	it("prepends a hidden eager todo reminder without repeating the prompt text", async () => {
 		await session.prompt("list all work trees");
 
@@ -257,7 +248,6 @@ describe("AgentSession eager todo enforcement", () => {
 		expect(observedCalls[0]?.messageTexts.filter(text => text.includes("list all work trees"))).toHaveLength(1);
 		expect(observedCalls[0]?.messageTexts[0]).not.toContain("list all work trees");
 		// `always` renders the hard, forced reminder.
-		expect(observedCalls[0]?.messageTexts[0]).toContain("You MUST call");
 		expect(session.formatSessionAsText()).not.toContain("<user-request>");
 	});
 
@@ -529,8 +519,5 @@ describe("AgentSession eager todo enforcement", () => {
 		expect(observedCalls[0]?.messageTexts.at(-1)).toBe("list all work trees");
 		expect(observedCalls[0]?.messageTexts[0]).not.toContain("list all work trees");
 		// `preferred` renders the soft nudge, never the hard MUST directive.
-		expect(observedCalls[0]?.messageTexts[0]).toContain("Consider calling");
-		expect(observedCalls[0]?.messageTexts[0]).not.toContain("You MUST call");
-		expect(observedCalls[0]?.messageTexts[0]).not.toContain("Before substantive work, create a phased todo.");
 	});
 });

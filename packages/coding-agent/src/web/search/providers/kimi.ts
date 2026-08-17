@@ -7,8 +7,8 @@
  * `MOONSHOT_SEARCH_API_KEY` / `KIMI_SEARCH_API_KEY`), not `MOONSHOT_API_KEY`.
  * Endpoint: POST https://api.kimi.com/coding/v1/search
  */
-import { type ApiKey, type AuthStorage, type FetchImpl, withAuth } from "@oh-my-pi/pi-ai";
-import { $env } from "@oh-my-pi/pi-utils";
+import { type ApiKey, type AuthStorage, type FetchImpl, withAuth } from "@musepi/pi-ai";
+import { $env } from "@musepi/pi-utils";
 
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
@@ -42,6 +42,7 @@ export interface KimiSearchParams {
 	num_results?: number;
 	include_content?: boolean;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	authStorage: AuthStorage;
 	sessionId?: string;
 	fetch?: FetchImpl;
@@ -105,6 +106,7 @@ async function callKimiSearch(
 		limit: number;
 		includeContent: boolean;
 		signal?: AbortSignal;
+		timeoutMs?: number;
 		fetch?: FetchImpl;
 	},
 ): Promise<{ response: KimiSearchResponse; requestId?: string }> {
@@ -122,7 +124,7 @@ async function callKimiSearch(
 			enable_page_crawling: params.includeContent,
 			timeout_seconds: DEFAULT_TIMEOUT_SECONDS,
 		}),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -161,6 +163,7 @@ export async function searchKimi(params: KimiSearchParams): Promise<SearchRespon
 				limit,
 				includeContent: params.include_content ?? false,
 				signal: params.signal,
+				timeoutMs: params.timeoutMs,
 				fetch: params.fetch,
 			}),
 		{ signal: params.signal },
@@ -209,6 +212,7 @@ export class KimiProvider extends SearchProvider {
 			parsedQuery: params.parsedQuery,
 			num_results: params.numSearchResults ?? params.limit,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			authStorage: params.authStorage,
 			sessionId: params.sessionId,
 			fetch: fetchImpl,

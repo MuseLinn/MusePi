@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { ToolCall } from "@oh-my-pi/pi-ai";
-import { createInbandScanner, type Dialect, getDialectDefinition, type InbandScanEvent } from "@oh-my-pi/pi-ai/dialect";
+import type { ToolCall } from "@musepi/pi-ai";
+import { createInbandScanner, type Dialect, getDialectDefinition, type InbandScanEvent } from "@musepi/pi-ai/dialect";
 
 function scan(dialect: Dialect, text: string, charByChar = false): InbandScanEvent[] {
 	const scanner = createInbandScanner(dialect);
@@ -121,11 +121,11 @@ describe("gemini dialect (Pythonic tool_code)", () => {
 		]);
 	});
 
-	it("renders examples without a fence or print wrapper", () => {
+	it("renders a single call fenced with the default_api prefix", () => {
 		const definition = getDialectDefinition("gemini");
-		expect(definition.renderToolCall(call("read", { path: "a.ts" }), { example: true })).toBe('read(path="a.ts")');
-		expect(definition.renderAssistantToolCalls([call("read", { path: "a.ts" })], { example: true })).toBe(
-			'read(path="a.ts")',
+		expect(definition.renderToolCall(call("read", { path: "a.ts" }))).toBe('default_api.read(path="a.ts")');
+		expect(definition.renderAssistantToolCalls([call("read", { path: "a.ts" })])).toBe(
+			'```tool_code\ndefault_api.read(path="a.ts")\n```',
 		);
 	});
 

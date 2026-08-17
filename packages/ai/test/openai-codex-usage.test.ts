@@ -7,8 +7,8 @@
  * widget lose per-model visibility.
  */
 import { describe, expect, it } from "bun:test";
-import type { FetchImpl } from "@oh-my-pi/pi-ai/types";
-import { codexRankingStrategy, openaiCodexUsageProvider } from "@oh-my-pi/pi-ai/usage/openai-codex";
+import type { FetchImpl } from "@musepi/pi-ai/types";
+import { codexRankingStrategy, openaiCodexUsageProvider } from "@musepi/pi-ai/usage/openai-codex";
 
 const accessTokenFixture = (() => {
 	const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
@@ -65,6 +65,24 @@ describe("openai-codex usage parser", () => {
 		expect(main?.map(l => l.id)).toEqual(["openai-codex:primary", "openai-codex:secondary"]);
 		expect(main?.[0].scope).toEqual({ provider: "openai-codex", windowId: "5h", shared: true });
 		expect(main?.[0].amount.usedFraction).toBeCloseTo(0.04, 5);
+	});
+
+	it("keeps an explicitly allowed Team window usable at 100% reported usage", async () => {
+		const payload = makePayload();
+		payload.plan_type = "team";
+		payload.rate_limit.secondary_window.used_percent = 100;
+		const report = await openaiCodexUsageProvider.fetchUsage(
+			{
+				provider: "openai-codex",
+				credential: { type: "oauth", accessToken: accessTokenFixture, accountId: "acct-1", email: "u@example.com" },
+			},
+			{ fetch: fakeFetch(payload) },
+		);
+
+		const secondary = report?.limits.find(limit => limit.id === "openai-codex:secondary");
+		expect(secondary?.amount.usedFraction).toBe(1);
+		expect(secondary?.status).toBe("warning");
+		expect(report?.metadata).toMatchObject({ planType: "team", allowed: true, limitReached: false });
 	});
 
 	it("surfaces additional_rate_limits as spark UsageLimit entries the widget can detect", async () => {

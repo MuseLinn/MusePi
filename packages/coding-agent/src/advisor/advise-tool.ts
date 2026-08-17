@@ -1,3 +1,4 @@
+import { type } from "@musepi/omptype";
 import type {
 	AgentIdentity,
 	AgentTelemetryConfig,
@@ -5,9 +6,8 @@ import type {
 	AgentToolContext,
 	AgentToolResult,
 	AgentToolUpdateCallback,
-} from "@oh-my-pi/pi-agent-core";
-import { escapeXmlAttribute, escapeXmlText } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-agent-core";
+import { escapeXmlAttribute, escapeXmlText } from "@musepi/pi-utils";
 import adviseDescription from "../prompts/advisor/advise-tool.md" with { type: "text" };
 
 const adviseSchema = type({
@@ -180,12 +180,23 @@ export class AdviseTool implements AgentTool<typeof adviseSchema, AdviseDetails>
 	 *  escalation: nit → concern → blocker), so an advisor cannot bypass dedupe
 	 *  by retagging the same text at a lower or equal severity. */
 	#deliveredNoteSeverities = new Map<string, number>();
+	#inProgressUpdate = false;
 
 	constructor(private readonly onAdvice: (note: string, severity?: AdviseDetails["severity"]) => void) {}
+
+	/**
+	 * Mark whether the next advisor prompt reviews an in-progress primary turn.
+	 * Non-blockers are withheld until a completed update so partial work does
+	 * not interrupt the primary before it can finish its planned steps.
+	 */
+	beginUpdate(inProgress: boolean): void {
+		this.#inProgressUpdate = inProgress;
+	}
 
 	/** Clear delivered-note memory when the advisor starts a fresh conversation. */
 	resetDeliveredNotes(): void {
 		this.#deliveredNoteSeverities.clear();
+		this.#inProgressUpdate = false;
 	}
 
 	async execute(
@@ -195,6 +206,13 @@ export class AdviseTool implements AgentTool<typeof adviseSchema, AdviseDetails>
 		_onUpdate?: AgentToolUpdateCallback<AdviseDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<AdviseDetails>> {
+		if (this.#inProgressUpdate && args.severity !== "blocker") {
+			return {
+				content: [{ type: "text", text: "Recorded." }],
+				details: { note: args.note, severity: args.severity },
+				useless: true,
+			};
+		}
 		const key = advisorNoteDedupeKey(args.note);
 		const rank = advisorSeverityRank(args.severity);
 		const previousRank = this.#deliveredNoteSeverities.get(key) ?? 0;

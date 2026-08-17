@@ -1,12 +1,13 @@
 /**
  * Render every built-in tool's renderer across its lifecycle states.
  */
-import { Command, Flags } from "@oh-my-pi/pi-utils/cli";
+
+import { Command, Flags } from "@musepi/pi-utils/cli";
+import { galleryHelp as commandHelp } from "../cli/command-help";
 import { GALLERY_STATE_TOKENS, type GalleryState, parseGalleryStates, runGalleryCommand } from "../cli/gallery-cli";
 
 export default class Gallery extends Command {
-	static description = "Preview tool renderers across streaming, in-progress, success, and failure states";
-
+	static description = commandHelp.description;
 	static flags = {
 		tool: Flags.string({ char: "t", description: "Render a single tool by name" }),
 		state: Flags.string({

@@ -2,9 +2,14 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Settings } from "../../../src/config/settings";
+import { setLocale } from "../../../src/i18n/index.ts";
 import { SkillMessageComponent } from "../../../src/modes/components/skill-message";
 import { getThemeByName, setThemeInstance, type Theme } from "../../../src/modes/theme/theme";
 import type { CustomMessage, SkillPromptDetails } from "../../../src/session/messages";
+
+beforeAll(() => {
+	setLocale("en-US");
+});
 
 // Drop SGR colors and OSC 8 hyperlink wrappers so assertions see the visible text only.
 const strip = (lines: readonly string[]): string =>

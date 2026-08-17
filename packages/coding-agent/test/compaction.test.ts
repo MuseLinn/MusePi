@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage } from "@musepi/pi-agent-core";
 import {
 	type CompactionSettings,
 	calculateContextTokens,
@@ -10,24 +10,25 @@ import {
 	estimateTokens,
 	findCutPoint,
 	getLastAssistantUsage,
+	hasContextTokenUsage,
 	prepareCompaction,
 	resolveThresholdTokens,
 	shouldCompact,
-} from "@oh-my-pi/pi-agent-core/compaction/compaction";
-import * as ai from "@oh-my-pi/pi-ai";
-import { encodeTextSignatureV1 } from "@oh-my-pi/pi-ai/providers/openai-shared";
-import type { AssistantMessage, Model, ProviderPayload, Usage } from "@oh-my-pi/pi-ai/types";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { buildSessionContext } from "@oh-my-pi/pi-coding-agent/session/session-context";
+} from "@musepi/pi-agent-core/compaction/compaction";
+import * as ai from "@musepi/pi-ai";
+import { encodeTextSignatureV1 } from "@musepi/pi-ai/providers/openai-shared";
+import type { AssistantMessage, Model, ProviderPayload, Usage } from "@musepi/pi-ai/types";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { buildSessionContext } from "@musepi/pi-coding-agent/session/session-context";
 import type {
 	CompactionEntry,
 	ModelChangeEntry,
 	SessionEntry,
 	SessionMessageEntry,
 	ThinkingLevelChangeEntry,
-} from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { parseSessionEntries } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { migrateSessionEntries } from "@oh-my-pi/pi-coding-agent/session/session-migrations";
+} from "@musepi/pi-coding-agent/session/session-entries";
+import { parseSessionEntries } from "@musepi/pi-coding-agent/session/session-loader";
+import { migrateSessionEntries } from "@musepi/pi-coding-agent/session/session-migrations";
 import { mockFetch } from "./helpers/fetch-mock";
 import { e2eApiKey } from "./utilities";
 
@@ -186,6 +187,19 @@ describe("Token calculation", () => {
 	it("should handle zero values", () => {
 		const usage = createMockUsage(0, 0, 0, 0);
 		expect(calculateContextTokens(usage)).toBe(0);
+	});
+
+	it("prefers positive provider context occupancy without accepting an explicit zero", () => {
+		const usage = { ...createMockUsage(0, 0, 0, 0), contextTokens: 120_000 };
+		expect(calculateContextTokens(usage)).toBe(120_000);
+		expect(hasContextTokenUsage(usage)).toBe(true);
+		expect(hasContextTokenUsage({ ...usage, contextTokens: 0 })).toBe(false);
+	});
+
+	it("preserves total-only provider context without accepting response-only totals", () => {
+		const responseOnly = createMockUsage(0, 29, 0, 0);
+		expect(hasContextTokenUsage(responseOnly)).toBe(false);
+		expect(hasContextTokenUsage({ ...responseOnly, totalTokens: 120_000 })).toBe(true);
 	});
 });
 
@@ -933,7 +947,6 @@ describe("remote compaction setting", () => {
 			})
 			.join("\n");
 
-		expect(promptText).toContain("Previous snapcompact archive source text:");
 		expect(promptText).toContain("Archived snapcompact source");
 		expect(result.preserveData).toEqual({ otherState: "keep-me" });
 	});

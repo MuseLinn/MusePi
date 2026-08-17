@@ -1,7 +1,12 @@
-import type { Agent, AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { calculatePromptTokens, estimateTokens, type SessionMessageEntry } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, Model, ProviderResponseMetadata, Usage } from "@oh-my-pi/pi-ai";
-import { isRecord } from "@oh-my-pi/pi-utils";
+import type { Agent, AgentMessage } from "@musepi/pi-agent-core";
+import {
+	calculatePromptTokens,
+	estimateTokens,
+	hasContextTokenUsage,
+	type SessionMessageEntry,
+} from "@musepi/pi-agent-core/compaction";
+import type { AssistantMessage, Model, ProviderResponseMetadata, Usage } from "@musepi/pi-ai";
+import { isRecord } from "@musepi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import type { ContextUsage } from "../extensibility/extensions/types";
 import {
@@ -27,6 +32,11 @@ export interface SessionStatsTrackerHost {
 	modelRegistry: ModelRegistry;
 	model(): Model | undefined;
 	sessionId(): string;
+}
+
+function correctedPromptTokens(assistant: AssistantMessage): number {
+	const providerPromptTokens = assistant.contextSnapshot?.promptTokens ?? calculatePromptTokens(assistant.usage);
+	return Math.max(0, providerPromptTokens - (assistant.contextSnapshot?.historyRewriteTokensRemoved ?? 0));
 }
 
 /** Computes session totals and tracks the in-flight context estimate. */
@@ -127,7 +137,12 @@ export class SessionStatsTracker {
 			const entry = branchEntries[index];
 			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
 			const assistant = entry.message;
-			if (assistant.stopReason !== "aborted" && assistant.stopReason !== "error" && assistant.usage) {
+			if (
+				assistant.stopReason !== "aborted" &&
+				assistant.stopReason !== "error" &&
+				assistant.usage &&
+				hasContextTokenUsage(assistant.usage)
+			) {
 				anchorEntry = entry;
 				break;
 			}
@@ -150,8 +165,7 @@ export class SessionStatsTracker {
 		const useAnchor =
 			anchorAssistant !== undefined && anchorIndex !== -1 && (!pending || anchorIndex >= pending.cutoffCount);
 		if (useAnchor && anchorAssistant) {
-			const promptTokens =
-				anchorAssistant.contextSnapshot?.promptTokens ?? calculatePromptTokens(anchorAssistant.usage);
+			const promptTokens = correctedPromptTokens(anchorAssistant);
 			const nonMessageTokens =
 				anchorAssistant.contextSnapshot?.nonMessageTokens ?? computeNonMessageTokens(this.#host.session);
 			anchored = true;
@@ -184,11 +198,12 @@ export class SessionStatsTracker {
 					message.role !== "assistant" ||
 					message.stopReason === "aborted" ||
 					message.stopReason === "error" ||
-					!message.usage
+					!message.usage ||
+					!hasContextTokenUsage(message.usage)
 				) {
 					continue;
 				}
-				const promptTokens = message.contextSnapshot?.promptTokens ?? calculatePromptTokens(message.usage);
+				const promptTokens = correctedPromptTokens(message);
 				const nonMessageTokens =
 					message.contextSnapshot?.nonMessageTokens ?? computeNonMessageTokens(this.#host.session);
 				let tailTokens = 0;
@@ -243,6 +258,47 @@ export class SessionStatsTracker {
 	/** Non-message token count captured for the active provider request. */
 	get pendingNonMessageTokens(): number | undefined {
 		return this.#pendingContextSnapshot?.nonMessageTokens;
+	}
+
+	/**
+	 * Apply an estimated prompt-prefix reduction to the current provider anchor.
+	 *
+	 * History after the anchor is estimated live by {@link getContextBreakdown};
+	 * callers must pass only savings from entries already included in the
+	 * anchor's provider-reported prompt. Persisting the correction on the
+	 * assistant snapshot keeps reloads accurate, and the next successful
+	 * assistant response naturally replaces it with a fresh provider anchor.
+	 */
+	recordAnchoredHistoryRewrite(tokensRemoved: number): void {
+		if (!Number.isFinite(tokensRemoved) || tokensRemoved <= 0) return;
+
+		const branchEntries = this.#host.sessionManager.getBranch();
+		const latestCompaction = getLatestCompactionEntry(branchEntries);
+		const compactionIndex = latestCompaction ? branchEntries.lastIndexOf(latestCompaction) : -1;
+		for (let index = branchEntries.length - 1; index > compactionIndex; index--) {
+			const entry = branchEntries[index];
+			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+			const assistant = entry.message;
+			if (
+				assistant.stopReason === "aborted" ||
+				assistant.stopReason === "error" ||
+				!assistant.usage ||
+				!hasContextTokenUsage(assistant.usage)
+			) {
+				continue;
+			}
+
+			if (!assistant.contextSnapshot) {
+				assistant.contextSnapshot = {
+					promptTokens: calculatePromptTokens(assistant.usage),
+					nonMessageTokens: computeNonMessageTokens(this.#host.session),
+				};
+			}
+			const snapshot = assistant.contextSnapshot;
+			snapshot.historyRewriteTokensRemoved = (snapshot.historyRewriteTokensRemoved ?? 0) + Math.floor(tokensRemoved);
+			this.#contextUsageRevision++;
+			return;
+		}
 	}
 
 	/** Sets or clears the in-flight context snapshot. */

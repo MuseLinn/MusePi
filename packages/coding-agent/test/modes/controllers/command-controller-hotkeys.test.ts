@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildHotkeysMarkdown } from "@oh-my-pi/pi-coding-agent/modes/utils/hotkeys-markdown";
+import { buildHotkeysMarkdown } from "@musepi/pi-coding-agent/modes/utils/hotkeys-markdown";
 
 describe("buildHotkeysMarkdown", () => {
 	it("emits flush-left markdown and uses the configured temporary selector hint", () => {
@@ -8,7 +8,8 @@ describe("buildHotkeysMarkdown", () => {
 			"app.clipboard.copyPrompt": "Ctrl+Shift+P",
 			"app.plan.toggle": "Alt+Shift+P",
 			"app.tools.expand": "Ctrl+O",
-			"app.display.reset": "Ctrl+L",
+			"app.tools.toggleVisibility": "Ctrl+Shift+O",
+			"app.display.reset": "Alt+L",
 			"app.interrupt": "Esc",
 			"app.clear": "Ctrl+C",
 			"app.exit": "Ctrl+D",
@@ -24,6 +25,7 @@ describe("buildHotkeysMarkdown", () => {
 			"app.retry": "Alt+R",
 			"app.clipboard.pasteImage": "Ctrl+V",
 			"app.stt.toggle": "Alt+H",
+			"app.live.toggle": "Ctrl+L",
 		};
 		const markdown = buildHotkeysMarkdown({
 			keybindings: {
@@ -38,9 +40,11 @@ describe("buildHotkeysMarkdown", () => {
 		expect(markdown).toContain("| `Ctrl+Shift+P` | Copy whole prompt |");
 		expect(markdown).toContain("| `Ctrl+Shift+L` | Select model (temporary) |");
 		expect(markdown).toContain("| `Alt+M` | Select model (set roles) |");
-		expect(markdown).toContain("| `Ctrl+L` | Reset terminal display |");
+		expect(markdown).toContain("| `Alt+L` | Reset terminal display |");
+		expect(markdown).toContain("| `Ctrl+L` | Start/stop live voice mode (/live) |");
 		expect(markdown).toContain("| `Alt+R` | Retry last failed assistant turn |");
 		expect(markdown).toContain("| `Alt+Shift+P` | Toggle plan mode |");
+		expect(markdown).toContain("| `Ctrl+Shift+O` | Toggle tool activity visibility |");
 		expect(markdown).toContain("| `#<number>` | GitHub issue/PR reference");
 		expect(markdown).toContain("| `#` / `#<text>` | Prompt actions");
 		for (const line of lines) {
@@ -61,7 +65,7 @@ describe("buildHotkeysMarkdown", () => {
 						return "Alt+M";
 					}
 					if (action === "app.display.reset") {
-						return "Ctrl+L";
+						return "Alt+L";
 					}
 					return "Ctrl+K";
 				},

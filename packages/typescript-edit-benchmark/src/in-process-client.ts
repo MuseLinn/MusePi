@@ -5,17 +5,18 @@
  * Eliminates ~2-3s CLI startup overhead per task by creating sessions
  * in-process and sharing auth/model infrastructure across tasks.
  */
-import type { AgentEvent, AgentMessage, ResolvedThinkingLevel, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Model, ToolExample } from "@oh-my-pi/pi-ai";
-import type { AgentSession, AgentSessionEvent, AuthStorage, SessionStats } from "@oh-my-pi/pi-coding-agent";
+import type { AgentEvent, AgentMessage, ResolvedThinkingLevel, ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Model, ToolExample } from "@musepi/pi-ai";
+import type { AgentSession, AgentSessionEvent, AuthStorage, SessionStats } from "@musepi/pi-coding-agent";
 import {
+	AgentRegistry,
 	type CreateAgentSessionResult,
 	createAgentSession,
 	discoverAuthStorage,
 	ModelRegistry,
 	SessionManager,
 	Settings,
-} from "@oh-my-pi/pi-coding-agent";
+} from "@musepi/pi-coding-agent";
 
 export type InProcessEventListener = (event: AgentEvent) => void;
 
@@ -97,6 +98,11 @@ export class InProcessClient {
 			authStorage: shared?.authStorage,
 			modelRegistry: shared?.modelRegistry,
 			sessionManager: SessionManager.inMemory(this.#options.cwd),
+			// Benchmark tasks run many top-level sessions concurrently in one
+			// process. The global registry admits only one "Main" per process
+			// generation (later registrations replace earlier refs, which then
+			// fail session initialization), so each client gets its own registry.
+			agentRegistry: new AgentRegistry(),
 			systemPrompt: this.#options.appendSystemPrompt
 				? (defaultPrompt: string[]) => [...defaultPrompt, this.#options.appendSystemPrompt!]
 				: undefined,

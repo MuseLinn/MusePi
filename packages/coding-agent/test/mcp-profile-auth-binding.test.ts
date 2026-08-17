@@ -10,13 +10,13 @@
  */
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai";
-import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
-import { removeManagedMcpOAuthCredential } from "@oh-my-pi/pi-coding-agent/mcp/oauth-credentials";
-import * as oauthFlow from "@oh-my-pi/pi-coding-agent/mcp/oauth-flow";
-import { mcpOAuthCredentialId } from "@oh-my-pi/pi-coding-agent/mcp/oauth-flow";
-import type { MCPServerConfig } from "@oh-my-pi/pi-coding-agent/mcp/types";
-import { getActiveProfile, setProfile } from "@oh-my-pi/pi-utils/dirs";
+import { AuthStorage, SqliteAuthCredentialStore } from "@musepi/pi-ai";
+import { MCPManager } from "@musepi/pi-coding-agent/mcp/manager";
+import { removeManagedMcpOAuthCredential } from "@musepi/pi-coding-agent/mcp/oauth-credentials";
+import * as oauthFlow from "@musepi/pi-coding-agent/mcp/oauth-flow";
+import { mcpOAuthCredentialId } from "@musepi/pi-coding-agent/mcp/oauth-flow";
+import type { MCPServerConfig } from "@musepi/pi-coding-agent/mcp/types";
+import { getActiveProfile, setProfile } from "@musepi/pi-utils/dirs";
 
 const SERVER_URL = "https://mcp.example.com/mcp";
 const URL_KEY_ID = mcpOAuthCredentialId(SERVER_URL);

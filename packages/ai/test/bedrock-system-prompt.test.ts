@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { streamBedrock } from "@oh-my-pi/pi-ai/providers/amazon-bedrock";
-import type { Context, Model } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { streamBedrock } from "@musepi/pi-ai/providers/amazon-bedrock";
+import type { Context, Model } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
 
 interface Payload {
 	system?: Array<{ text: string } | { cachePoint: unknown }>;
@@ -37,6 +37,7 @@ async function capturePayload(systemPrompt: Context["systemPrompt"]): Promise<Pa
 	};
 	const { promise, resolve } = Promise.withResolvers<Payload | undefined>();
 	const stream = streamBedrock(model(), context, {
+		bearerToken: "test-token",
 		signal: abortedSignal(),
 		onPayload: payload => {
 			resolve(payload as Payload);

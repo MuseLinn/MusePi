@@ -2,12 +2,12 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as SessionSelector from "@oh-my-pi/pi-coding-agent/modes/components/session-selector";
-import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { SessionInfo } from "@oh-my-pi/pi-coding-agent/session/session-listing";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import * as SessionSelector from "@musepi/pi-coding-agent/modes/components/session-selector";
+import { SelectorController } from "@musepi/pi-coding-agent/modes/controllers/selector-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { SessionInfo } from "@musepi/pi-coding-agent/session/session-listing";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 
 beforeAll(async () => {
 	await initTheme();
@@ -220,8 +220,9 @@ describe("SelectorController.handleResumeSession preflight flush", () => {
 
 		selector!.handleInput("\n");
 		expect(selectionPromise).toBeDefined();
-		await expect(selectionPromise!).rejects.toBe(switchError);
+		await selectionPromise;
 
+		expect(ctx.showError).toHaveBeenCalledWith("switch failed");
 		expect(ctx.settings.flush).toHaveBeenCalledTimes(1);
 		expect(switchSession).toHaveBeenCalledWith(session.path);
 		expect(hide).toHaveBeenCalledTimes(1);

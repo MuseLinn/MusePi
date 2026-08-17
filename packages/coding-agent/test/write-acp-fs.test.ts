@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { computeFileHash } from "@oh-my-pi/hashline";
-import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type { ClientBridge } from "@oh-my-pi/pi-coding-agent/session/client-bridge";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { computeFileHash } from "@musepi/hashline";
+import type { AgentToolResult } from "@musepi/pi-agent-core";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resolveLocalUrlToPath } from "@musepi/pi-coding-agent/internal-urls";
+import type { PlanModeState } from "@musepi/pi-coding-agent/plan-mode/state";
+import type { ClientBridge } from "@musepi/pi-coding-agent/session/client-bridge";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const FILE_CONTENT = "bridge write content\n";
 

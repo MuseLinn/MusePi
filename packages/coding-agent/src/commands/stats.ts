@@ -1,13 +1,14 @@
 /**
  * View usage statistics dashboard.
  */
-import { Command, Flags } from "@oh-my-pi/pi-utils/cli";
+
+import { Command, Flags } from "@musepi/pi-utils/cli";
+import { statsHelp as commandHelp } from "../cli/command-help";
 import { runStatsCommand, type StatsCommandArgs } from "../cli/stats-cli";
 import { initTheme } from "../modes/theme/theme";
 
 export default class Stats extends Command {
-	static description = "View usage statistics";
-
+	static description = commandHelp.description;
 	static flags = {
 		port: Flags.integer({ char: "p", description: "Port for the dashboard server", default: 3847 }),
 		json: Flags.boolean({ char: "j", description: "Output stats as JSON", default: false }),

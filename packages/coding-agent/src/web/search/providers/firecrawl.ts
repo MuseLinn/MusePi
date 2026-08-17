@@ -11,7 +11,7 @@ import {
 	resolveApiKeyOnce,
 	seedApiKeyResolver,
 	withAuth,
-} from "@oh-my-pi/pi-ai";
+} from "@musepi/pi-ai";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, GOOGLE_QUERY_SYNTAX, parseSearchQuery, type StructuredQuery } from "../query";
@@ -38,6 +38,7 @@ export interface FirecrawlSearchParams {
 	/** Explicit `tbs` (custom date range); takes precedence over `recency`. */
 	tbs?: string;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -91,7 +92,7 @@ async function callFirecrawlSearch(
 		method: "POST",
 		headers,
 		body: JSON.stringify(buildRequestBody(params)),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -145,6 +146,7 @@ export async function searchFirecrawl(params: SearchParams): Promise<SearchRespo
 		recency: params.recency,
 		tbs,
 		signal: params.signal,
+		timeoutMs: params.timeoutMs,
 		fetch: params.fetch,
 	};
 	const keyResolver = params.authStorage.resolver("firecrawl", {
@@ -201,7 +203,7 @@ export class FirecrawlProvider extends SearchProvider {
 	 * Firecrawl supports keyless mode, so an explicit user selection
 	 * (`webSearch: firecrawl`) works without any credential configured.
 	 */
-	isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
+	override isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
 		return true;
 	}
 

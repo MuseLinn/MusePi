@@ -2,6 +2,33 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resolveLocalUrlToPath } from "@musepi/pi-coding-agent/internal-urls";
+import {
+	ACP_BOOTSTRAP_RACE_GUARD_MS,
+	AcpAgent,
+	createAcpExtensionUiContext,
+} from "@musepi/pi-coding-agent/modes/acp/acp-agent";
+import type { PlanModeState } from "@musepi/pi-coding-agent/plan-mode/state";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	UsageFallbackConfirmation,
+} from "@musepi/pi-coding-agent/session/agent-session";
+import { SILENT_ABORT_MARKER } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS } from "@musepi/pi-coding-agent/stt/models";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import {
+	DEFAULT_TTS_LOCAL_MODEL_KEY,
+	DEFAULT_TTS_VOICE,
+	TTS_LOCAL_MODELS,
+	TTS_LOCAL_VOICE_OPTIONS,
+} from "@musepi/pi-coding-agent/tts/models";
+import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
 import type {
 	AgentSideConnection,
 	ClientCapabilities,
@@ -9,50 +36,19 @@ import type {
 	CreateElicitationResponse,
 	PromptRequest,
 	SessionNotification,
-} from "@agentclientprotocol/sdk";
+	Validator,
+} from "@musepi/pi-utils/acp";
 import {
 	zForkSessionResponse,
 	zLoadSessionResponse,
 	zNewSessionResponse,
 	zPromptResponse,
 	zSessionNotification,
-} from "@agentclientprotocol/sdk/dist/schema/zod.gen.js";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import {
-	ACP_BOOTSTRAP_RACE_GUARD_MS,
-	AcpAgent,
-	createAcpExtensionUiContext,
-} from "@oh-my-pi/pi-coding-agent/modes/acp/acp-agent";
-import type { PlanModeState } from "@oh-my-pi/pi-coding-agent/plan-mode/state";
-import type {
-	AgentSession,
-	AgentSessionEvent,
-	UsageFallbackConfirmation,
-} from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { SILENT_ABORT_MARKER } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS } from "@oh-my-pi/pi-coding-agent/stt/models";
-import {
-	DEFAULT_TTS_LOCAL_MODEL_KEY,
-	DEFAULT_TTS_VOICE,
-	TTS_LOCAL_MODELS,
-	TTS_LOCAL_VOICE_OPTIONS,
-} from "@oh-my-pi/pi-coding-agent/tts/models";
-import { getConfigRootDir, setAgentDir } from "@oh-my-pi/pi-utils";
-import type { z } from "zod/v4";
+} from "@musepi/pi-utils/acp";
 import { TOOL_NAME as DELAYED_MCP_TOOL_NAME } from "./fixtures/delayed-tool-mcp";
 
-/**
- * Validate an ACP wire payload against the external `@agentclientprotocol/sdk`
- * Zod schemas. Those schemas come from the ACP protocol SDK (external boundary)
- * and cannot be expressed as ArkType, so they stay on Zod and are validated via
- * `.safeParse` directly rather than through the ArkType-only `expectAcpStructure`
- * helper in `./helpers/acp-schema`.
- */
-function expectAcpStructure(schema: z.ZodType, value: unknown): void {
+/** Validates an ACP wire payload against the in-house protocol schemas. */
+function expectAcpStructure(schema: Validator<unknown>, value: unknown): void {
 	const result = schema.safeParse(value);
 	expect(result.success, result.success ? undefined : JSON.stringify(result.error.issues, null, 2)).toBe(true);
 }
@@ -83,6 +79,16 @@ const TEST_MODELS: Model[] = [
 		maxTokens: 8_192,
 	}),
 ];
+
+function createTaskSession(cwd: string): ToolSession {
+	return {
+		cwd,
+		hasUI: false,
+		settings: Settings.isolated({}),
+		getSessionFile: () => null,
+		getSessionSpawns: () => "*",
+	} as unknown as ToolSession;
+}
 
 function makeAssistantMessage(text: string, thinking?: string) {
 	const content: Array<{ type: "text"; text: string } | { type: "thinking"; thinking: string }> = [
@@ -1104,6 +1110,48 @@ describe("ACP agent", () => {
 		await Bun.sleep(0);
 	});
 
+	it("loads a session stored under a legacy/hashed project directory (#7779)", async () => {
+		const harness = await createHarness();
+		const stored = new FakeAgentSession(harness.cwdA);
+		harness.sessions.push(stored);
+		stored.sessionManager.appendMessage({ role: "user", content: "legacy hello", timestamp: Date.now() });
+		stored.sessionManager.appendMessage(makeAssistantMessage("legacy reply"));
+		await stored.sessionManager.ensureOnDisk();
+		await stored.sessionManager.flush();
+
+		const sessionFile = stored.sessionManager.getSessionFile();
+		if (!sessionFile) throw new Error("session file not persisted");
+		const sessionId = stored.sessionId;
+		// Release the writer so the directory can be renamed out from under it.
+		await stored.dispose();
+
+		// Simulate the hashed-directory era (#7397, reverted in #7656): the
+		// session file lives under a project directory whose name the current
+		// cwd->dir scheme would never produce, so the cwd-scoped scan misses it.
+		const cwdDerivedDir = path.dirname(sessionFile);
+		const sessionsRoot = path.dirname(cwdDerivedDir);
+		const hashedDir = path.join(sessionsRoot, `home-cwd-a-${"a".repeat(64)}`);
+		await fs.promises.rename(cwdDerivedDir, hashedDir);
+
+		const loaded = await harness.agent.loadSession({
+			sessionId,
+			cwd: harness.cwdA,
+			mcpServers: [],
+		});
+		expectAcpStructure(zLoadSessionResponse, loaded);
+
+		const replayChunks = harness.updates.filter(
+			update =>
+				update.sessionId === sessionId &&
+				(update.update.sessionUpdate === "user_message_chunk" ||
+					update.update.sessionUpdate === "agent_message_chunk"),
+		);
+		expect(replayChunks.length).toBeGreaterThan(0);
+
+		harness.abortController.abort();
+		await Bun.sleep(0);
+	});
+
 	it("delivers the final visible answer when agent_end overtakes the assistant message_end (#4902)", async () => {
 		const harness = await createHarness();
 		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
@@ -1634,6 +1682,34 @@ describe("ACP agent", () => {
 		await Bun.sleep(0);
 	});
 
+	it("refreshes task agent descriptions on ACP /reload-plugins", async () => {
+		const harness = await createHarness();
+		const agentDir = path.join(harness.cwdA, ".musepi", "agents");
+		const agentFile = path.join(agentDir, "acp-reload-agent.md");
+		await fs.promises.mkdir(agentDir, { recursive: true });
+		await fs.promises.writeFile(
+			agentFile,
+			"---\nname: acp-reload-agent\ndescription: VERSION_ONE\n---\nACP reload agent.\n",
+		);
+		const taskTool = await TaskTool.create(createTaskSession(harness.cwdA));
+		expect(taskTool.description).toContain("VERSION_ONE");
+		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
+
+		await fs.promises.writeFile(
+			agentFile,
+			"---\nname: acp-reload-agent\ndescription: VERSION_TWO\n---\nACP reload agent.\n",
+		);
+		await harness.agent.prompt({
+			sessionId: created.sessionId,
+			messageId: "00000000-0000-4000-8000-000000000006",
+			prompt: [{ type: "text", text: "/reload-plugins" }],
+		} as PromptRequest);
+
+		expect(taskTool.description).toContain("VERSION_TWO");
+		expect(taskTool.description).not.toContain("VERSION_ONE");
+		harness.abortController.abort();
+	});
+
 	it("advertises ACP-safe builtins and skill commands", async () => {
 		const harness = await createHarness();
 		const created = await harness.agent.newSession({ cwd: harness.cwdA, mcpServers: [] });
@@ -1778,9 +1854,7 @@ describe("ACP agent", () => {
 		if (!customMessage) throw new Error("expected ACP skill prompt custom message");
 		expect(customMessage.customType).toBe("skill-prompt");
 		expect(customMessage.content).toContain("# Sample\nDo work.");
-		expect(customMessage.content).toContain('The user has invoked the "sample" skill');
 		expect(customMessage.content).toContain(`[Skill directory: ${skillDir}]`);
-		expect(customMessage.content).toMatch(/[Rr]esolve any relative paths/);
 		expect(customMessage.content).toContain("User: extra context");
 		expect(session.customMessageOptions[0]).toEqual({ streamingBehavior: "steer" });
 
@@ -2447,6 +2521,55 @@ describe("ACP agent", () => {
 			});
 		});
 
+		it("translates editor to a string elicitation with the prefill as default", async () => {
+			const { connection, calls } = createElicitConnection(async () => ({
+				action: "accept",
+				content: { value: "Reviewing auth changes" },
+			}));
+			const ctx = createAcpExtensionUiContext(connection, () => "session-editor", FORM_CAPABILITIES);
+
+			const result = await ctx.editor("Enter custom review instructions", "Review the following:\n\n");
+
+			expect(result).toBe("Reviewing auth changes");
+			expect(calls).toHaveLength(1);
+			const request = calls[0]!;
+			if (!isFormElicitation(request)) {
+				throw new Error("expected form-mode elicitation");
+			}
+			expect(request.message).toBe("Enter custom review instructions");
+			expect(request.requestedSchema.properties?.value).toEqual({
+				type: "string",
+				default: "Review the following:\n\n",
+			});
+		});
+
+		it("omits default on editor only when the prefill is empty, but preserves whitespace-only prefill", async () => {
+			const { connection, calls } = createElicitConnection(async () => ({
+				action: "accept",
+				content: { value: "text" },
+			}));
+			const ctx = createAcpExtensionUiContext(connection, () => "session-editor-empty", FORM_CAPABILITIES);
+
+			await ctx.editor("Title", "");
+
+			const emptyRequest = calls[0]!;
+			if (!isFormElicitation(emptyRequest)) throw new Error("expected form-mode elicitation");
+			expect(emptyRequest.requestedSchema.properties?.value).toEqual({ type: "string" });
+
+			// Unlike `input`'s placeholder, `editor` prefill is the document being
+			// edited: whitespace/blank lines are meaningful content, not absence,
+			// so they must round-trip verbatim (matching the interactive/RPC
+			// implementations, which set the editor's text to any truthy prefill).
+			await ctx.editor("Title", "   ");
+
+			const whitespaceRequest = calls[1]!;
+			if (!isFormElicitation(whitespaceRequest)) throw new Error("expected form-mode elicitation");
+			expect(whitespaceRequest.requestedSchema.properties?.value).toEqual({
+				type: "string",
+				default: "   ",
+			});
+		});
+
 		it("returns undefined / false for decline and cancel actions", async () => {
 			let nextAction: "decline" | "cancel" = "decline";
 			const { connection } = createElicitConnection(async () => ({ action: nextAction }));
@@ -2457,6 +2580,7 @@ describe("ACP agent", () => {
 				expect(await ctx.select("X", ["a"])).toBeUndefined();
 				expect(await ctx.confirm("X", "Y")).toBe(false);
 				expect(await ctx.input("X")).toBeUndefined();
+				expect(await ctx.editor("X")).toBeUndefined();
 			}
 		});
 
@@ -2470,6 +2594,7 @@ describe("ACP agent", () => {
 			expect(await ctx.select("X", ["a"])).toBeUndefined();
 			expect(await ctx.confirm("X", "Y")).toBe(false);
 			expect(await ctx.input("X")).toBeUndefined();
+			expect(await ctx.editor("X")).toBeUndefined();
 			expect(calls).toHaveLength(0);
 		});
 

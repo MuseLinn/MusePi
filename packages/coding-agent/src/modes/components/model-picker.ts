@@ -4,10 +4,11 @@
  * Model entries switch the current session only; a search beginning with `@`
  * exposes the configured ctrl+p quick roles.
  */
-import type { Model } from "@oh-my-pi/pi-ai";
-import type { Component, TUI } from "@oh-my-pi/pi-tui";
+import type { Model } from "@musepi/pi-ai";
+import type { Component, TUI } from "@musepi/pi-tui";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
+import { t } from "../../i18n/index.js";
 import type { ResolvedRoleModel } from "../../session/agent-session";
 import { theme } from "../theme/theme";
 import {
@@ -22,8 +23,12 @@ import { bottomBorder, row, topBorder } from "./overlay-box";
 import { resolveSegmentPalette } from "./segment-track";
 
 export interface ModelPickerCallbacks {
-	/** A model was chosen for a session-only switch. `selector` is `provider/id`. */
-	onPick: (model: Model, selector: string) => void;
+	/**
+	 * A model was chosen for a session-only switch. `selector` is `provider/id`.
+	 * `overContext` is true when the session transcript exceeds the model's
+	 * context window — the host must compact before switching.
+	 */
+	onPick: (model: Model, selector: string, meta: { overContext: boolean }) => void;
 	/** A configured ctrl+p quick role was chosen. */
 	onPickRole?: (entry: ResolvedRoleModel) => void;
 	/** The picker was dismissed. */
@@ -31,7 +36,7 @@ export interface ModelPickerCallbacks {
 }
 
 export interface ModelPickerOptions {
-	/** Session token count; models with smaller context windows are disabled. */
+	/** Session token count; models with smaller context windows are grayed and compact-first on pick. */
 	currentContextTokens?: number;
 	/** `provider/id` of the session's active model; highlighted and preselected. */
 	currentSelector?: string;
@@ -52,10 +57,10 @@ const MIN_VISIBLE = 5;
 /** Fraction of the terminal height the floating overlay occupies. */
 const HEIGHT_FRACTION = 0.4;
 
-const STATUS_HINT = "Session-only switch — role models stay unchanged";
-const QUICK_ROLE_STATUS_HINT = "Quick role switch — applies its model and thinking for this session";
-const FOOTER_HINT = "↑/↓ models · Enter use for this session · type to search · @ quick roles · Esc close";
-const QUICK_ROLE_FOOTER_HINT = "↑/↓ roles · Enter apply role model · type to search · Esc close";
+const STATUS_HINT = t("Session-only switch — role models stay unchanged");
+const QUICK_ROLE_STATUS_HINT = t("Quick role switch — applies its model and thinking for this session");
+const FOOTER_HINT = t("↑/↓ models · Enter use for this session · type to search · @ quick roles · Esc close");
+const QUICK_ROLE_FOOTER_HINT = t("↑/↓ roles · Enter apply role model · type to search · Esc close");
 
 /**
  * The alt+p picker component. Hosted as a non-fullscreen bottom-anchored
@@ -97,7 +102,7 @@ export class ModelPickerComponent implements Component {
 
 		this.#browser = new ModelBrowser(settings, {
 			currentContextTokens: options.currentContextTokens,
-			disableOverContext: true,
+			markOverContext: true,
 			emptyText: () => (this.#roleMode ? "  No quick roles in the Ctrl+P cycle" : undefined),
 		});
 		this.#browser.onActivate = item => {
@@ -106,7 +111,7 @@ export class ModelPickerComponent implements Component {
 				callbacks.onPickRole?.(quickRole);
 				return;
 			}
-			callbacks.onPick(item.model, item.selector);
+			callbacks.onPick(item.model, item.selector, { overContext: this.#browser.isOverContext(item) });
 		};
 		this.#browser.onCancel = () => callbacks.onCancel();
 		this.#browser.onQueryChange = query => this.#syncItemsForQuery(query);
@@ -193,7 +198,7 @@ export class ModelPickerComponent implements Component {
 
 		this.#roleMode = roleMode;
 		this.#browser.setShowProvider(!roleMode);
-		this.#browser.setDisableOverContext(!roleMode);
+		this.#browser.setMarkOverContext(!roleMode);
 		this.#browser.setPreserveQueryOrder(roleMode);
 		const currentSelector = roleMode ? this.#currentQuickRoleSelector : this.#currentSelector;
 		this.#browser.setCurrentSelector(currentSelector);
@@ -221,7 +226,7 @@ export class ModelPickerComponent implements Component {
 			: theme.fg("muted", ` ${this.#roleMode ? QUICK_ROLE_STATUS_HINT : STATUS_HINT}`);
 
 		const out: string[] = [];
-		out.push(topBorder(width, "Switch Model"));
+		out.push(topBorder(width, t("Switch Model")));
 		out.push(row(status, width));
 		for (const line of this.#browser.render(inner)) {
 			out.push(row(line, width));

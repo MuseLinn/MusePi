@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { parseArgs } from "@oh-my-pi/pi-coding-agent/cli/args";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { buildSessionOptions } from "@oh-my-pi/pi-coding-agent/main";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { parseArgs } from "@musepi/pi-coding-agent/cli/args";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { buildSessionOptions } from "@musepi/pi-coding-agent/main";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 // Regression for #6064: prewalk is an optional, off-by-default optimization.
 // A missing key (or unresolvable target) for the prewalk hand-off model must
@@ -64,6 +64,41 @@ describe("prewalk startup degradation", () => {
 		authStorage.setRuntimeApiKey(model.provider, "test-key");
 
 		const options = await buildSessionOptions(parseArgs([]), [], SessionManager.inMemory(), modelRegistry, settings);
+
+		expect(options.prewalk?.target.provider).toBe(model.provider);
+		expect(options.prewalk?.target.id).toBe(model.id);
+	});
+
+	test("does not implicitly re-arm configured prewalk while restoring a session", async () => {
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) throw new Error("expected claude-sonnet-4-5 to be bundled");
+		const settings = Settings.isolated();
+		settings.set("prewalk.enabled", true);
+		settings.setModelRole("smol", `${model.provider}/${model.id}`);
+		const { authStorage, modelRegistry } = await newRegistry("restoring");
+		authStorage.setRuntimeApiKey(model.provider, "test-key");
+
+		for (const args of [parseArgs(["--continue"]), parseArgs(["--resume=session.jsonl"])]) {
+			const options = await buildSessionOptions(args, [], SessionManager.inMemory(), modelRegistry, settings);
+			expect(options.prewalk).toBeUndefined();
+		}
+	});
+
+	test("honors an explicit prewalk flag while restoring a session", async () => {
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!model) throw new Error("expected claude-sonnet-4-5 to be bundled");
+		const settings = Settings.isolated();
+		settings.setModelRole("smol", `${model.provider}/${model.id}`);
+		const { authStorage, modelRegistry } = await newRegistry("explicit-restore");
+		authStorage.setRuntimeApiKey(model.provider, "test-key");
+
+		const options = await buildSessionOptions(
+			parseArgs(["--continue", "--prewalk"]),
+			[],
+			SessionManager.inMemory(),
+			modelRegistry,
+			settings,
+		);
 
 		expect(options.prewalk?.target.provider).toBe(model.provider);
 		expect(options.prewalk?.target.id).toBe(model.id);

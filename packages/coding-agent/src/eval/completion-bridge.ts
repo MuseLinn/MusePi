@@ -11,10 +11,11 @@
  * The call is oneshot and toolless from the model's perspective — pure text
  * in, text (or, with `schema`, a structured object) out.
  */
-import { instrumentedCompleteSimple, resolveTelemetry } from "@oh-my-pi/pi-agent-core";
-import { type Api, Effort, type Model, type Tool } from "@oh-my-pi/pi-ai";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { type } from "arktype";
+
+import { type } from "@musepi/omptype";
+import { instrumentedCompleteSimple, resolveTelemetry } from "@musepi/pi-agent-core";
+import { type Api, Effort, type Model, type Tool } from "@musepi/pi-ai";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { extractTextContent, extractToolCall, parseJsonPayload } from "../commit/utils";
 
 import {
@@ -46,7 +47,7 @@ const completionArgsSchema = type({
 	prompt: "string>0",
 	"model?": "'smol'|'default'|'slow'",
 	"system?": "string",
-	"schema?": "Record<string,unknown>",
+	"schema?": { "[string]": "unknown" },
 });
 
 export interface EvalCompletionBridgeOptions {

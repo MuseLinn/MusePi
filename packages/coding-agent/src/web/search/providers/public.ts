@@ -1,4 +1,4 @@
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import type { AuthStorage } from "@musepi/pi-ai";
 import { formatSearchProviderFailures, getSearchProvider, isSearchProviderExcluded } from "../provider";
 import type { SearchProviderId, SearchResponse, SearchSource } from "../types";
 import { SearchProviderError } from "../types";
@@ -130,7 +130,7 @@ export async function searchPublicWeb(
 	// hard deadline; the straggler controller lets the aggregate cancel
 	// still-running engines once it decides to return.
 	const straggler = new AbortController();
-	const signal = AbortSignal.any([withHardTimeout(params.signal), straggler.signal]);
+	const signal = AbortSignal.any([withHardTimeout(params.signal, params.timeoutMs), straggler.signal]);
 
 	const responses: (SearchResponse | undefined)[] = new Array(engineIds.length);
 	const failures: { provider: { id: SearchProviderId; label: string }; error: unknown }[] = [];
@@ -189,7 +189,7 @@ export class PublicWebProvider extends SearchProvider {
 		return false;
 	}
 
-	isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
+	override isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
 		return true;
 	}
 

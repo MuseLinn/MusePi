@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { SessionHeader } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { stripOuterDoubleQuotes } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
-import { getConfigRootDir, setAgentDir } from "@oh-my-pi/pi-utils";
+import type { SessionHeader } from "@musepi/pi-coding-agent/session/session-entries";
+import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { stripOuterDoubleQuotes } from "@musepi/pi-coding-agent/tools/path-utils";
+import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
 
 // -- helpers ----------------------------------------------------------------
 
@@ -106,6 +106,7 @@ describe("SessionManager.moveTo", () => {
 		const entries = await loadEntriesFromFile(newFile);
 		const header = getHeader(entries);
 		expect(header?.cwd).toBe(path.resolve(cwdB));
+		expect(header?.previousSessionFiles).toEqual([path.resolve(oldFile)]);
 		expect(hasAssistantEntry(entries)).toBe(true);
 	});
 
@@ -148,6 +149,7 @@ describe("SessionManager.moveTo", () => {
 		const entries = await loadEntriesFromFile(newFile);
 		const header = getHeader(entries);
 		expect(header?.cwd).toBe(path.resolve(cwdB));
+		expect(header?.previousSessionFiles).toBeUndefined();
 	});
 
 	it("recreates file from memory when old file is deleted (assistant exists)", async () => {
@@ -241,5 +243,246 @@ describe("SessionManager.moveTo", () => {
 		const newFile = session.getSessionFile()!;
 		const newArtifactDir = newFile.slice(0, -6); // strip .jsonl
 		expect(fs.existsSync(newArtifactDir)).toBe(true);
+	});
+	it("does not orphan appends that race the session file rename", async () => {
+		const session = SessionManager.create(cwdA);
+		session.appendMessage({ role: "user", content: "before move", timestamp: 1 });
+		session.appendMessage(makeAssistantMessage());
+		await session.flush();
+
+		const oldFile = session.getSessionFile();
+		if (!oldFile) throw new Error("Expected session file");
+
+		const renameFinished = Promise.withResolvers<void>();
+		const allowMoveToResume = Promise.withResolvers<void>();
+		const rename = fs.promises.rename.bind(fs.promises);
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
+			await rename(source, target);
+			if (path.resolve(source.toString()) !== path.resolve(oldFile)) return;
+			renameFinished.resolve();
+			await allowMoveToResume.promise;
+		});
+
+		try {
+			const move = session.moveTo(cwdB);
+			await renameFinished.promise;
+			session.appendMessage({ role: "user", content: "during move", timestamp: 2 });
+			allowMoveToResume.resolve();
+			await move;
+			await session.flush();
+		} finally {
+			allowMoveToResume.resolve();
+			renameSpy.mockRestore();
+		}
+
+		expect(fs.existsSync(oldFile)).toBe(false);
+		const movedFile = session.getSessionFile();
+		if (!movedFile) throw new Error("Expected moved session file");
+		const entries = await loadEntriesFromFile(movedFile);
+		expect(
+			entries.some(
+				entry =>
+					entry.type === "message" && entry.message.role === "user" && entry.message.content === "during move",
+			),
+		).toBe(true);
+	});
+
+	it("does not orphan a flushSync that races the session file rename", async () => {
+		const session = SessionManager.create(cwdA);
+		session.appendMessage({ role: "user", content: "before move", timestamp: 1 });
+		session.appendMessage(makeAssistantMessage());
+		await session.flush();
+
+		const oldFile = session.getSessionFile();
+		if (!oldFile) throw new Error("Expected session file");
+
+		const renameFinished = Promise.withResolvers<void>();
+		const allowMoveToResume = Promise.withResolvers<void>();
+		const rename = fs.promises.rename.bind(fs.promises);
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
+			await rename(source, target);
+			if (path.resolve(source.toString()) !== path.resolve(oldFile)) return;
+			renameFinished.resolve();
+			await allowMoveToResume.promise;
+		});
+
+		try {
+			const move = session.moveTo(cwdB);
+			await renameFinished.promise;
+			// A fenced append followed by a Ctrl+C flushSync in the post-rename,
+			// pre-repoint window must not recreate the old JSONL path.
+			session.appendMessage({ role: "user", content: "during move", timestamp: 2 });
+			session.flushSync();
+			allowMoveToResume.resolve();
+			await move;
+			await session.flush();
+		} finally {
+			allowMoveToResume.resolve();
+			renameSpy.mockRestore();
+		}
+
+		expect(fs.existsSync(oldFile)).toBe(false);
+		const movedFile = session.getSessionFile();
+		if (!movedFile) throw new Error("Expected moved session file");
+		const entries = await loadEntriesFromFile(movedFile);
+		expect(
+			entries.some(
+				entry =>
+					entry.type === "message" && entry.message.role === "user" && entry.message.content === "during move",
+			),
+		).toBe(true);
+	});
+
+	it("does not orphan title changes that race the session file rename", async () => {
+		const session = SessionManager.create(cwdA);
+		session.appendMessage({ role: "user", content: "before move", timestamp: 1 });
+		session.appendMessage(makeAssistantMessage());
+		await session.flush();
+
+		const oldFile = session.getSessionFile();
+		if (!oldFile) throw new Error("Expected session file");
+
+		const renameFinished = Promise.withResolvers<void>();
+		const allowMoveToResume = Promise.withResolvers<void>();
+		const rename = fs.promises.rename.bind(fs.promises);
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
+			await rename(source, target);
+			if (path.resolve(source.toString()) !== path.resolve(oldFile)) return;
+			renameFinished.resolve();
+			await allowMoveToResume.promise;
+		});
+
+		try {
+			const move = session.moveTo(cwdB);
+			await renameFinished.promise;
+			await session.setSessionName("during move", "user");
+			allowMoveToResume.resolve();
+			await move;
+			await session.flush();
+		} finally {
+			allowMoveToResume.resolve();
+			renameSpy.mockRestore();
+		}
+
+		expect(fs.existsSync(oldFile)).toBe(false);
+		const movedFile = session.getSessionFile();
+		if (!movedFile) throw new Error("Expected moved session file");
+		const entries = await loadEntriesFromFile(movedFile);
+		expect(entries.some(entry => entry.type === "title_change" && entry.title === "during move")).toBe(true);
+	});
+
+	it("materializes an ensureOnDisk session when moveTo races the queued rewrite", async () => {
+		// A header-only session (ACP session/new, drafts) forces creation via
+		// ensureOnDisk(), which schedules its materializing rewrite on the disk
+		// chain. Starting moveTo() before that task runs must not cancel it, or
+		// the explicitly materialized session is lost and never discoverable.
+		const session = SessionManager.create(cwdA);
+		const ensure = session.ensureOnDisk();
+		await session.moveTo(cwdB);
+		await ensure;
+		await session.flush();
+
+		const movedFile = session.getSessionFile();
+		if (!movedFile) throw new Error("Expected moved session file");
+		expect(fs.existsSync(movedFile)).toBe(true);
+
+		const targetSessions = await SessionManager.list(cwdB);
+		expect(targetSessions.some(item => item.path === movedFile)).toBe(true);
+	});
+
+	it("keeps post-rename fenced appends durable before trailing rewrite", async () => {
+		// Crash window: session file has been renamed to dest, `#sessionFile` is
+		// still the source path, and the trailing atomic rewrite has not run.
+		// Completed entries appended in this window must land on dest (not recreate
+		// source) and survive a crash-equivalent snapshot + reopen.
+		const session = SessionManager.create(cwdA);
+		session.appendMessage({ role: "user", content: "before move", timestamp: 1 });
+		session.appendMessage(makeAssistantMessage());
+		await session.flush();
+
+		const oldFile = session.getSessionFile();
+		if (!oldFile) throw new Error("Expected session file");
+
+		const renameFinished = Promise.withResolvers<{ dest: string }>();
+		const allowMoveToResume = Promise.withResolvers<void>();
+		const rename = fs.promises.rename.bind(fs.promises);
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async (source, target) => {
+			await rename(source, target);
+			if (path.resolve(source.toString()) !== path.resolve(oldFile)) return;
+			renameFinished.resolve({ dest: path.resolve(target.toString()) });
+			await allowMoveToResume.promise;
+		});
+
+		let dest = "";
+		try {
+			const move = session.moveTo(cwdB);
+			({ dest } = await renameFinished.promise);
+
+			session.appendMessage({ role: "user", content: "during move crash window", timestamp: 2 });
+			session.appendCustomEntry("tool_execution_start", {
+				toolCallId: "move-call",
+				toolName: "bash",
+			});
+			session.appendMessage({
+				role: "toolResult",
+				toolCallId: "move-call",
+				toolName: "bash",
+				content: [{ type: "text", text: "ok" }],
+				isError: false,
+				timestamp: 3,
+			});
+
+			// Crash-equivalent: only dest bytes exist; source must stay absent.
+			expect(fs.existsSync(oldFile)).toBe(false);
+			expect(fs.existsSync(dest)).toBe(true);
+			const crashBytes = fs.readFileSync(dest, "utf8");
+			expect(crashBytes).toContain("during move crash window");
+			expect(crashBytes).toContain('"customType":"tool_execution_start"');
+			expect(crashBytes).toContain("move-call");
+
+			const crashPath = path.join(testAgentDir, "crashed-move.jsonl");
+			fs.writeFileSync(crashPath, crashBytes);
+			const reopened = await SessionManager.open(crashPath);
+			const reopenedEntries = reopened.getEntries();
+			expect(
+				reopenedEntries.some(
+					entry =>
+						entry.type === "message" &&
+						entry.message.role === "user" &&
+						entry.message.content === "during move crash window",
+				),
+			).toBe(true);
+			expect(
+				reopenedEntries.some(
+					entry =>
+						entry.type === "message" &&
+						entry.message.role === "toolResult" &&
+						entry.message.toolCallId === "move-call",
+				),
+			).toBe(true);
+			expect(
+				reopenedEntries.some(entry => entry.type === "custom" && entry.customType === "tool_execution_start"),
+			).toBe(true);
+
+			allowMoveToResume.resolve();
+			await move;
+			await session.flush();
+		} finally {
+			allowMoveToResume.resolve();
+			renameSpy.mockRestore();
+		}
+
+		expect(fs.existsSync(oldFile)).toBe(false);
+		const movedFile = session.getSessionFile();
+		if (!movedFile) throw new Error("Expected moved session file");
+		const entries = await loadEntriesFromFile(movedFile);
+		expect(
+			entries.some(
+				entry =>
+					entry.type === "message" &&
+					entry.message.role === "user" &&
+					entry.message.content === "during move crash window",
+			),
+		).toBe(true);
 	});
 });

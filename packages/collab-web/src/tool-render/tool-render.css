@@ -135,25 +135,24 @@
 	gap: 8px;
 	padding: 8px 10px 10px;
 	border-top: 1px solid var(--tv-border);
+	box-sizing: content-box;
+	height: var(--h, 0px);
+	overflow: hidden;
+	transition:
+		height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+		padding 220ms cubic-bezier(0.22, 1, 0.36, 1),
+		border-top-width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tv-body--closed {
+	padding: 0;
+	border-top-width: 0;
 }
 
 .tv-intent {
 	font-style: italic;
 	font-size: 11px;
 	color: var(--tv-faint);
-}
-
-.tv-partial {
-	margin: 0;
-	padding: 6px 10px;
-	border-top: 1px solid var(--tv-border);
-	font-size: 11px;
-	line-height: 1.45;
-	color: var(--tv-faint);
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-	max-height: 160px;
-	overflow-y: auto;
 }
 
 /* ---- inline atoms ---- */
@@ -393,9 +392,104 @@
 	color: var(--tv-faint);
 }
 
+.tv-diff-row--header {
+	color: var(--tv-faint);
+}
+
 .tv-diff-row--gap {
 	color: var(--tv-faint);
 	user-select: none;
+}
+
+/* Diff sign glyph (+/−) sits before the highlighted code; tinted to match
+ * the row's add/del hue so the sign reads at a glance. */
+.tv-diff-sig {
+	display: inline-block;
+	width: 13px;
+	margin-left: -4px;
+	text-align: center;
+	user-select: none;
+}
+
+.tv-diff-row--add .tv-diff-sig {
+	color: color-mix(in oklch, var(--tv-ok) 80%, var(--tv-fg));
+}
+
+.tv-diff-row--del .tv-diff-sig {
+	color: color-mix(in oklch, var(--tv-err) 80%, var(--tv-fg));
+}
+
+/* Highlighted diff rows carry token spans (inline styles from the ANSI
+ * converter); keep them on the mono stack and let the row tint show. */
+.tv-diff-hl {
+	font-family: inherit;
+}
+
+.tv-diff-hl .tr-code-line {
+	display: inline;
+}
+
+/* Side-by-side diff (chat settings → 差异布局): two aligned columns,
+ * removed left / added right; hunk/header/gap rows span the width. */
+.tv-diff--sbs {
+	display: flex;
+	flex-direction: column;
+	overflow-x: auto;
+}
+
+.tv-diff-sbs-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	min-width: max-content;
+}
+
+.tv-diff-sbs-row--hunk,
+.tv-diff-sbs-row--header,
+.tv-diff-sbs-row--gap {
+	display: block;
+	min-width: 0;
+}
+
+.tv-diff-sbs-cell {
+	padding: 0 9px;
+	white-space: pre;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Side-by-side cell tints — applied via explicit cell classes (JS), so a
+ * paired del+add row can tint its right pane as an addition too (the old
+ * row-level `--del > :first-child` / `--add > :last-child` selectors left
+ * the replacement's right pane unmarked). */
+.tv-diff-sbs-cell--del {
+	background: color-mix(in oklch, var(--tv-err) 11%, transparent);
+	color: color-mix(in oklch, var(--tv-err) 70%, var(--tv-fg));
+}
+
+.tv-diff-sbs-cell--add {
+	background: color-mix(in oklch, var(--tv-ok) 11%, transparent);
+	color: color-mix(in oklch, var(--tv-ok) 70%, var(--tv-fg));
+}
+
+/* Intra-line change marks (TUI renderDiff parity): changed tokens get a
+ * deeper tint than the row so a same-line replacement reads at a glance. */
+.tv-diff-word {
+	border-radius: 2px;
+	padding: 0 1px;
+}
+
+.tv-diff-word--del {
+	background: color-mix(in oklch, var(--tv-err) 45%, transparent);
+}
+
+.tv-diff-word--add {
+	background: color-mix(in oklch, var(--tv-ok) 45%, transparent);
+}
+
+.tv-diff-sbs-row--hunk,
+.tv-diff-sbs-row--header {
+	color: var(--tv-faint);
 }
 
 /* ---- cells (eval / ast ops) ---- */
@@ -631,4 +725,237 @@
 			opacity: 0.35;
 		}
 	}
+}
+
+/* Line-number gutter (hashline/TUI parity): fixed-width dim column on
+ * the left of every diff row — old numbers left, new numbers right. */
+.tv-diff-ln {
+	display: inline-block;
+	width: 30px;
+	margin-right: 8px;
+	text-align: right;
+	color: var(--tv-faint);
+	user-select: none;
+	font-variant-numeric: tabular-nums;
+}
+
+.tv-diff-sbs-cell .tv-diff-ln {
+	width: 26px;
+	margin-right: 6px;
+}
+
+/* Inline widget card (kimi inline-widget parity): a compact shell around
+ * the shared widget registry components. */
+.tv-widget {
+	border: 1px solid var(--tv-border);
+	border-radius: 12px;
+	background: var(--tv-inset);
+	overflow: hidden;
+}
+
+.tv-widget-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--tv-border);
+}
+
+.tv-widget-title {
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--tv-fg);
+}
+
+.tv-widget-tag {
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--tv-fg) 10%, transparent);
+	color: var(--tv-muted);
+	font-size: 11px;
+	font-family: var(--font-mono);
+}
+
+.tv-widget-body {
+	padding: 12px;
+}
+
+/* The shared widgets reference the GUI theme tokens; bridge them here
+ * (the transcript may render outside the GUI chrome). */
+.tv-widget {
+	--color-text: var(--tv-fg);
+	--color-text-muted: var(--tv-muted);
+	--color-text-faint: var(--tv-faint);
+	--color-surface-raised: var(--tv-inset);
+	--color-surface-sunken: color-mix(in srgb, var(--tv-fg) 7%, transparent);
+	--color-accent: var(--tv-accent, oklch(0.674 0.23 341));
+	--color-accent-fg: oklch(0.98 0.01 60);
+	--color-accent-soft: color-mix(in srgb, var(--tv-accent, oklch(0.674 0.23 341)) 14%, transparent);
+	--color-accent-bd: color-mix(in srgb, var(--tv-accent, oklch(0.674 0.23 341)) 40%, transparent);
+	--color-ok: var(--tv-ok);
+	--color-danger: var(--tv-err);
+	--border: var(--tv-border);
+	--radius-xl: 12px;
+}
+
+/* Pomodoro widget (kimi Hello-World parity). */
+.gui-widget-pomodoro {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 2px;
+}
+
+.gui-widget-pomodoro-modes {
+	display: flex;
+	gap: 5px;
+}
+
+.gui-widget-pomodoro-mode {
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--tv-border);
+	background: transparent;
+	color: var(--tv-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.gui-widget-pomodoro-mode--active {
+	background: var(--tv-fg);
+	color: var(--tv-inset);
+	border-color: var(--tv-fg);
+}
+
+.gui-widget-pomodoro-ring-wrap {
+	position: relative;
+	width: 150px;
+	height: 150px;
+}
+
+.gui-widget-pomodoro-ring {
+	width: 100%;
+	height: 100%;
+}
+
+.gui-widget-pomodoro-ring-bg {
+	stroke: var(--tv-border);
+	stroke-width: 8;
+	fill: none;
+}
+
+.gui-widget-pomodoro-ring-fg {
+	stroke: var(--tv-accent, oklch(0.674 0.23 341));
+	stroke-width: 8;
+	fill: none;
+	stroke-linecap: round;
+	transition: stroke-dasharray 300ms linear;
+}
+
+.gui-widget-pomodoro-center {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+}
+
+.gui-widget-pomodoro-time {
+	font-size: 30px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	color: var(--tv-fg);
+}
+
+.gui-widget-pomodoro-state {
+	font-size: 11px;
+	color: var(--tv-faint);
+}
+
+.gui-widget-pomodoro-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.gui-widget-pomodoro-btn {
+	padding: 5px 18px;
+	border-radius: 8px;
+	border: 1px solid var(--tv-border);
+	background: transparent;
+	color: var(--tv-fg);
+	font-size: 12.5px;
+	cursor: pointer;
+}
+
+.gui-widget-pomodoro-btn--primary {
+	background: var(--tv-fg);
+	color: var(--tv-inset);
+	border-color: var(--tv-fg);
+}
+
+.gui-widget-pomodoro-stats {
+	display: flex;
+	gap: 18px;
+	font-size: 11.5px;
+	color: var(--tv-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-widget-pomodoro-hint {
+	font-size: 11px;
+	color: var(--tv-faint);
+}
+
+/* board save tool card — jump into the dashboard from chat */
+.tv-board {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+}
+.tv-board-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.tv-board-title {
+	font-weight: 600;
+	font-size: 13px;
+}
+.tv-board-tag {
+	font-size: 10px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: rgba(120, 160, 255, 0.16);
+	color: var(--tv-accent, #7aa2ff);
+}
+.tv-board-meta {
+	font-size: 11px;
+	opacity: 0.6;
+}
+.tv-board-open {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	align-self: flex-start;
+	margin-top: 2px;
+	padding: 5px 12px;
+	border: 1px solid rgba(128, 128, 128, 0.3);
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tv-board-open:hover {
+	border-color: rgba(120, 160, 255, 0.6);
+	background: rgba(120, 160, 255, 0.1);
+}
+.tv-board-open-arrow {
+	opacity: 0.7;
 }

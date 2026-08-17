@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { complete } from "@oh-my-pi/pi-ai/stream";
-import type { Api, AssistantMessage, Context, Message, Model, Tool, ToolResultMessage } from "@oh-my-pi/pi-ai/types";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { z } from "zod/v4";
+import { type } from "@musepi/omptype";
+import { complete } from "@musepi/pi-ai/stream";
+import type { Api, AssistantMessage, Context, Message, Model, Tool, ToolResultMessage } from "@musepi/pi-ai/types";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 import { e2eApiKey } from "./oauth";
 
 // Tool for testing
-const weatherSchema = z.object({
-	location: z.string().describe("City name"),
+const weatherSchema = type({
+	location: type("string").describe("City name"),
 });
 
 const weatherTool: Tool<typeof weatherSchema> = {

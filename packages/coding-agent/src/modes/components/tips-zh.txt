@@ -1,0 +1,26 @@
+厌倦了不停输入 "keep going"?发个 '.' 就行
+可以 /btw 开个旁路提问
+/tan 把当前对话 fork 成后台代理
+Ctrl+D 可退出,而且草稿会保存!
+看看你感情上虐待最多的模型是哪个:运行 `musepi stats`
+试试任务隔离来创建 CoW 工作树
+想要便宜的嵌套模型调用?用 `completion(x...)`。有一大堆任务?让 clanker 用上它!
+意大利面条式代码?试试 /omfg 吐槽
+你知道吗?每个 kitty/tmux/cmux/zellij/wezterm 分屏都持有自己的会话——`musepi -c` 会恢复到正确那个
+消息里带上 `ultrathink` 触发更硬的多步推理——输入时看它闪彩虹
+消息里说 `orchestrate` 驱动多阶段任务 + 并行子代理——输入时看它发光
+消息里说 `workflowz` 在 eval 里用并行子代理驱动任务——输入时看它发光
+同一供应商登录多个账号——再 `/login` 一次——musepi 会自动负载均衡
+跑一次 `musepi auth-broker serve`,每台机器就能在线拉取实时令牌——刷新密钥永不离机;`musepi auth-gateway` 作为透明代理前置,任何 OpenAI 兼容客户端都能连
+按 alt+p(或 /switch)切换供应商,按 ctrl+p 轮换角色模型 smol → slow 等
+按 ctrl+r 搜索提示词历史并复用过去的消息
+模型老拿错工具?`/force read` 把下一轮钉在某个特定工具上
+`/copy code` 复制最后一个代码块到剪贴板——`/copy cmd` 复制最后一条 shell/python 命令
+`/shake` 把沉重的工具结果从上下文里甩出去换回 token,不必整个 /compact——`/shake images` 只丢弃图像
+实时结对:`/collab` 通过端到端加密中继链接分享你的会话——队友在自己 musepi 里 `/join <链接>` 就能围观工具调用流并给代理下提示
+按 ← ← 钻入运行中或已结束的代理,检查它的工具调用和转录
+撞上 Codex 限流?`/usage reset` 消耗一次已存的重置额度,立刻恢复配额
+没有原生 tool_calling?推理供应商解析不了?`PI_DIALECT=glm|kimi|anthropic…` 让它在本地替你解析!
+打开 `/advisor`,挂一个第二模型,每轮都审查并悄悄注入建议
+试着用 -> 开头写提示,并写个列表(1. 做 X, 2. 做 Y)
+按 shift+tab 循环推理强度档位

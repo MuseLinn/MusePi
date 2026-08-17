@@ -1,5 +1,5 @@
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { getMCPConfigPath, logger } from "@oh-my-pi/pi-utils";
+import * as AIError from "@musepi/pi-ai/error";
+import { getMCPConfigPath, logger } from "@musepi/pi-utils";
 import { connectToServer, disconnectServer, listPrompts, listResources, listTools } from "../../mcp/client";
 import {
 	addMCPServer,

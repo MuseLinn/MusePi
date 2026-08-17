@@ -15,11 +15,11 @@
  *
  * The abstract base class lets callers plug in whatever storage they like
  * (LRU, persistent SQLite, etc.). {@link InMemorySnapshotStore} ships as a
- * sensible default backed by `lru-cache`: a bounded set of paths, each with a
+ * sensible default backed by a bounded LRU: a limited set of paths, each with a
  * short history of full-file versions so in-session edit chains can still
  * recover against the version a stale tag names.
  */
-import { LRUCache } from "lru-cache/raw";
+import { LRUCache } from "@musepi/pi-utils/lru";
 import { computeFileHash } from "./format";
 
 /**
@@ -137,7 +137,7 @@ export interface InMemorySnapshotStoreOptions {
 }
 
 /**
- * In-memory {@link SnapshotStore} backed by `lru-cache`. Per-path history is a
+ * In-memory {@link SnapshotStore} backed by a bounded LRU. Per-path history is a
  * short ring of full-file versions (oldest dropped first); per-session path
  * tracking is LRU-bounded so cold paths age out automatically.
  *
@@ -180,7 +180,7 @@ export class InMemorySnapshotStore extends SnapshotStore {
 		return history?.find(version => version.text === fullText) ?? null;
 	}
 
-	findByHash(hash: string): Snapshot[] {
+	override findByHash(hash: string): Snapshot[] {
 		const matches: Snapshot[] = [];
 		for (const history of this.#versions.values()) {
 			for (const version of history) {

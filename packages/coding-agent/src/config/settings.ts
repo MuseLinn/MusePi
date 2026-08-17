@@ -15,12 +15,13 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { configureCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-messages";
-import { configureProviderMaxInFlightRequests } from "@oh-my-pi/pi-ai/stream";
+import { configureCredentialRedaction } from "@musepi/pi-ai/providers/transform-messages";
+import { configureProviderMaxInFlightRequests } from "@musepi/pi-ai/stream";
 import {
 	getAgentDbPath,
 	getAgentDir,
 	getLastChangelogVersionPath,
+	getProjectAgentDir,
 	getProjectDir,
 	hasFsCode,
 	isEnoent,
@@ -29,7 +30,8 @@ import {
 	procmgr,
 	setWorktreesDir,
 	toError,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
+import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { JSONC, YAML } from "bun";
 import { invalidate as invalidateCapabilityFsCache } from "../capability/fs";
 import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
@@ -41,7 +43,6 @@ import { AUTO_IMAGE_PROVIDER_ORDER, isImageProviderId } from "../tools/image-pro
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { INSPECT_IMAGE_MODES } from "../utils/inspect-image-mode";
 import { isSearchProviderId, SEARCH_PROVIDER_ORDER } from "../web/search/types";
-import { withFileLock } from "./file-lock";
 import {
 	type BashInterceptorRule,
 	type GroupPrefix,
@@ -442,11 +443,15 @@ export class Settings {
 	}
 
 	/**
-	 * Create an isolated instance for testing.
-	 * Does not affect the global singleton.
+	 * Create an in-memory settings instance without affecting the global singleton.
+	 * A supplied storage handle remains shared for runtime data while setting overrides stay non-persistent.
 	 */
-	static isolated(overrides: Partial<Record<SettingPath, unknown>> = {}): Settings {
+	static isolated(
+		overrides: Partial<Record<SettingPath, unknown>> = {},
+		options: { storage?: AgentStorage | null } = {},
+	): Settings {
 		const instance = new Settings({ inMemory: true, overrides });
+		instance.#storage = options.storage ?? null;
 		instance.#rebuildMerged();
 		return instance;
 	}
@@ -1227,6 +1232,7 @@ export class Settings {
 
 	async #loadProjectSettings(): Promise<RawSettings> {
 		this.#projectShellPathSource = undefined;
+		await this.#migrateProjectConfigDir();
 		let merged: RawSettings = {};
 		try {
 			const result = await loadCapability(settingsCapability.id, { cwd: this.#cwd });
@@ -1241,7 +1247,7 @@ export class Settings {
 			// Capability discovery is best-effort; the native project config below
 			// remains authoritative for its model-role layer and must not be hidden.
 		}
-		const projectConfigPath = path.join(this.#cwd, ".omp", "config.yml");
+		const projectConfigPath = path.join(getProjectAgentDir(this.#cwd), "config.yml");
 		const nativeProject = await this.#loadYaml(projectConfigPath);
 		this.#projectFileSettings = structuredClone(nativeProject);
 		const nativeModelRoles = getByPath(nativeProject, ["modelRoles"]);
@@ -1289,6 +1295,32 @@ export class Settings {
 			throw new Error(`Config overlay must be a YAML mapping: ${filePath}`);
 		}
 		return this.#migrateRawSettings(parsed as RawSettings);
+	}
+
+	/**
+	 * One-time migration: copy a legacy project `.omp/config.yml` into the
+	 * branded `.musepi/` directory on first load, so existing users' project
+	 * configs survive the dir rename. Mirrors `#migrateFromLegacy`'s
+	 * settings.json pattern (copy + `.bak`), and deliberately does NOT keep a
+	 * perpetual read fallback — after migration only `.musepi` is authoritative.
+	 */
+	async #migrateProjectConfigDir(): Promise<void> {
+		if (this.#cwd === undefined) return;
+		const newDir = getProjectAgentDir(this.#cwd);
+		const newPath = path.join(newDir, "config.yml");
+		if (await Bun.file(newPath).exists()) return; // already at new location
+		const legacyPath = path.join(this.#cwd, ".omp", "config.yml");
+		if (!(await Bun.file(legacyPath).exists())) return;
+		try {
+			fs.mkdirSync(newDir, { recursive: true });
+			fs.copyFileSync(legacyPath, newPath);
+			try {
+				fs.renameSync(legacyPath, `${legacyPath}.bak`);
+			} catch {}
+			logger.debug(`Settings: migrated project config to ${newPath}`);
+		} catch (error) {
+			logger.warn("Settings: failed to migrate project config dir", { error: String(error) });
+		}
 	}
 
 	async #migrateFromLegacy(): Promise<void> {
@@ -1860,6 +1892,52 @@ export class Settings {
 				: undefined,
 		);
 
+		// Consolidate the retired Exa suite toggles onto the sole remaining
+		// provider switch. The old runtime required both `enabled` and
+		// `enableSearch`, so preserve that AND semantics when both are present.
+		// Researcher and Websets were removed with the standalone Exa tools.
+		const exaObj = isRecord(raw.exa) ? raw.exa : undefined;
+		const exaEnabledValues = [
+			exaObj?.enabled,
+			raw["exa.enabled"],
+			exaObj?.enableSearch,
+			raw["exa.enableSearch"],
+		].filter((value): value is boolean => typeof value === "boolean");
+		const hasFlatExaSetting =
+			"exa.enabled" in raw ||
+			"exa.enableSearch" in raw ||
+			"exa.enableResearcher" in raw ||
+			"exa.enableWebsets" in raw;
+		if (exaObj || hasFlatExaSetting) {
+			const exaRoot = exaObj ?? {};
+			if (exaEnabledValues.length > 0) {
+				exaRoot.enabled = exaEnabledValues.every(Boolean);
+			}
+			delete exaRoot.enableSearch;
+			delete exaRoot.enableResearcher;
+			delete exaRoot.enableWebsets;
+			if (Object.keys(exaRoot).length > 0) {
+				raw.exa = exaRoot;
+			} else {
+				delete raw.exa;
+			}
+			delete raw["exa.enabled"];
+			delete raw["exa.enableSearch"];
+			delete raw["exa.enableResearcher"];
+			delete raw["exa.enableWebsets"];
+		}
+
+		// computer.backend and model-specific controller routing were removed
+		// when the computer tool moved to one native desktop implementation.
+		const computerObj = isRecord(raw.computer) ? raw.computer : undefined;
+		if (computerObj && "backend" in computerObj) {
+			delete computerObj.backend;
+			if (Object.keys(computerObj).length === 0) {
+				delete raw.computer;
+			}
+		}
+		delete raw["computer.backend"];
+
 		return raw;
 	}
 
@@ -2089,7 +2167,7 @@ export class Settings {
 	async #saveProjectNow(): Promise<void> {
 		if (this.#savesCancelled || !this.#persist || this.#modifiedProjectModelRoles.size === 0) return;
 
-		const projectConfigPath = path.join(this.#cwd, ".omp", "config.yml");
+		const projectConfigPath = path.join(getProjectAgentDir(this.#cwd), "config.yml");
 		const modifiedModelRoles = [...this.#modifiedProjectModelRoles];
 		this.#modifiedProjectModelRoles.clear();
 

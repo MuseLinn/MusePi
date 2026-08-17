@@ -28,8 +28,9 @@ import {
 	ScrollView,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { sanitizeText } from "@musepi/pi-utils";
+import { t } from "../../i18n/index.js";
 import { sanitizeStatusText } from "../shared";
 import { getMarkdownTheme, theme } from "../theme/theme";
 import {
@@ -870,15 +871,15 @@ export class PlanReviewOverlay implements Component {
 			this.callbacks.onFeedbackChange?.("");
 			return;
 		}
-		let feedback = "Refinement feedback on the plan:\n";
+		let feedback = t("Refinement feedback on the plan:\n");
 		if (this.#deleted.length > 0) {
-			feedback += "\nRemove these sections:\n";
+			feedback += `\n${t("Remove these sections:")}\n`;
 			for (const title of this.#deleted) feedback += `- ${title}\n`;
 		}
 		for (const section of annotated) {
-			feedback += `\n## ${section.title || "Plan preamble"}\n`;
+			feedback += `\n## ${section.title || t("Plan preamble")}\n`;
 			for (const annotation of section.annotations) {
-				if (annotation.target.kind === "line") feedback += `> Line: ${annotation.target.context}\n`;
+				if (annotation.target.kind === "line") feedback += `${t("> Line: ")}${annotation.target.context}\n`;
 				feedback += this.#formatAnnotationFeedback(annotation.note);
 			}
 		}
@@ -951,7 +952,7 @@ export class PlanReviewOverlay implements Component {
 		if (this.callbacks.onCopyPlan) parts.push("c copy");
 		parts.push("tab regions");
 		if (this.#externalEditorLabel && this.#focus !== "toc") parts.push(`${this.#externalEditorLabel} editor`);
-		parts.push(this.#helpSuffix);
+		parts.push(t(this.#helpSuffix));
 		return parts.join(sep);
 	}
 
@@ -1066,7 +1067,7 @@ export class PlanReviewOverlay implements Component {
 		for (let i = 0; i < noteLines.length; i++) {
 			const prefix =
 				i === 0
-					? `${theme.fg("warning", "▎ ")}${theme.fg("dim", "note: ")}`
+					? `${theme.fg("warning", "▎ ")}${theme.fg("dim", t("note: "))}`
 					: `${theme.fg("warning", "▎ ")}${theme.fg("dim", "      ")}`;
 			const available = Math.max(0, bodyContentWidth - visibleWidth(prefix));
 			const displayLine = truncateToWidth(
@@ -1123,7 +1124,7 @@ export class PlanReviewOverlay implements Component {
 		const indent = " ".repeat(Math.max(0, section.level - this.#tocBaseLevel));
 		const ann = section.annotations.length > 0 ? " ✎" : "";
 		const avail = Math.max(0, width - 1 - indent.length - visibleWidth(ann));
-		const title = truncateToWidth(section.title || "(untitled)", avail, Ellipsis.Unicode);
+		const title = truncateToWidth(section.title || t("(untitled)"), avail, Ellipsis.Unicode);
 		const body = indent + title + ann;
 		// Single-column gutter glyph: a cursor `›` on the focused selection, an
 		// accent bar `▎` on the current scrolled section, otherwise blank. The
@@ -1140,17 +1141,17 @@ export class PlanReviewOverlay implements Component {
 		if (this.#annotating) {
 			const target = this.#annotationTarget;
 			const section = target ? this.#sections[target.sectionIndex] : undefined;
-			const title = sanitizeStatusText(section?.title || "Plan preamble");
+			const title = sanitizeStatusText(section?.title || t("Plan preamble"));
 			const location =
 				target?.row === null
 					? `‹${title}›`
 					: `‹${title}› · ${truncateToWidth(target?.context ?? "", Math.max(1, innerWidth - 16), Ellipsis.Unicode)}`;
 			const caption = truncateToWidth(
-				`${theme.fg("dim", "Annotate")} ${theme.fg("accent", location)}`,
+				`${theme.fg("dim", t("Annotate"))} ${theme.fg("accent", location)}`,
 				innerWidth,
 				Ellipsis.Unicode,
 			);
-			const hintParts = ["enter save", "esc cancel"];
+			const hintParts = [t("enter save"), t("esc cancel")];
 			if (this.#externalEditorLabel) hintParts.push(`${this.#externalEditorLabel} editor`);
 			return [caption, this.#input.render(innerWidth)[0] ?? "", theme.fg("dim", hintParts.join(" · "))];
 		}
@@ -1171,7 +1172,7 @@ export class PlanReviewOverlay implements Component {
 		const optionLines = committed ? [theme.bold(theme.fg("accent", submittingLabel))] : this.#renderOptionLines();
 		const promptLines = this.#promptTitle ? [theme.bold(theme.fg("accent", this.#promptTitle))] : [];
 		const footerLines = committed
-			? [theme.fg("dim", "Applying your selection — this can take a moment while context is prepared.")]
+			? [theme.fg("dim", t("Applying your selection — this can take a moment while context is prepared."))]
 			: this.#renderFooterLines(innerWidth);
 
 		// Chrome rows: top border, two dividers, bottom border, plus the
@@ -1196,7 +1197,7 @@ export class PlanReviewOverlay implements Component {
 		const out: string[] = [];
 		if (sidebarShown) {
 			const { lines: sidebar, posForRow } = this.#renderSidebarLines(regionRows, sidebarWidth);
-			out.push(topBorderSplit(width, OVERLAY_TITLE, sidebarWidth));
+			out.push(topBorderSplit(width, t(OVERLAY_TITLE), sidebarWidth));
 			for (let i = 0; i < regionRows; i++) {
 				const pos = posForRow[i];
 				if (pos !== undefined) this.#tocClickRows.set(out.length, pos);
@@ -1205,7 +1206,7 @@ export class PlanReviewOverlay implements Component {
 			}
 			out.push(dividerSplit(width, sidebarWidth));
 		} else {
-			out.push(topBorder(width, OVERLAY_TITLE));
+			out.push(topBorder(width, t(OVERLAY_TITLE)));
 			for (const line of body) {
 				this.#bodyClickRows.add(out.length);
 				out.push(row(line, width));

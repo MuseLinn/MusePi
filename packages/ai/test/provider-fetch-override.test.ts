@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { streamOpenAICompletions } from "@oh-my-pi/pi-ai/providers/openai-completions";
-import { streamOpenAIResponses } from "@oh-my-pi/pi-ai/providers/openai-responses";
-import type { Context, FetchImpl, Model } from "@oh-my-pi/pi-ai/types";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
+import { streamOpenAICompletions } from "@musepi/pi-ai/providers/openai-completions";
+import { streamOpenAIResponses } from "@musepi/pi-ai/providers/openai-responses";
+import type { Context, FetchImpl, Model } from "@musepi/pi-ai/types";
+import { getBundledModel } from "@musepi/pi-catalog/models";
 
 const openAIResponsesModel = getBundledModel("openai", "gpt-5-mini") as Model<"openai-responses">;
 const openAICompletionsModel = {

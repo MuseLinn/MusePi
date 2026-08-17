@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { Api, Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import * as sdkModule from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { runSubprocess } from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition } from "@oh-my-pi/pi-coding-agent/task/types";
+import type { Api, Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import * as sdkModule from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { runSubprocess } from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition } from "@musepi/pi-coding-agent/task/types";
 
 function model(provider: string, id: string): Model<Api> {
 	return buildModel({
@@ -32,6 +32,7 @@ function createYieldingSession(): AgentSession {
 		getActiveToolNames: () => ["yield"],
 		getEnabledToolNames: () => ["yield"],
 		setActiveToolsByName: async () => {},
+		setIrcWakeTurnObserver: () => {},
 		subscribe: (listener: (event: { type: string; [key: string]: unknown }) => void) => {
 			listeners.push(listener);
 			return () => {};
@@ -163,6 +164,90 @@ describe("subagent runtime model resolution", () => {
 		expect(childFallbackChains?.["subagent:single-model-configured-fallback"]).toEqual(["openai-codex/gpt-5.6-sol"]);
 		expect(childFallbackChains?.default).toEqual(["openai-codex/gpt-5.6-sol"]);
 		expect(childFallbackChains?.["existing-local-role"]).toEqual(["other-provider/other-model"]);
+	});
+
+	it("inherits the aliased role's chain, not the default chain, for a role-alias subagent model", async () => {
+		const fast = model("fast", "hy3");
+		const slow = model("slow", "opus");
+		let childFallbackChains: Record<string, string[]> | undefined;
+		let childModelRole: string | undefined;
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			if (!options) throw new Error("Expected createAgentSession options");
+			childFallbackChains = options.settings?.get("retry.fallbackChains") as Record<string, string[]> | undefined;
+			childModelRole = options.settings?.getModelRoles()["subagent:role-alias-chain"];
+			return { session: createYieldingSession(), extensionsResult: {}, setToolUIContext: () => {} } as never;
+		});
+
+		// Mirrors the bundled scout agent (`model: "@smol"`).
+		const agent: AgentDefinition = {
+			name: "scout",
+			description: "test",
+			systemPrompt: "test",
+			source: "bundled",
+			model: ["@smol"],
+		};
+		await runSubprocess({
+			cwd: "/tmp",
+			agent,
+			task: "work",
+			index: 0,
+			id: "role-alias-chain",
+			settings: Settings.isolated({
+				modelRoles: { default: "slow/opus", smol: "fast/hy3" },
+				"retry.fallbackChains": {
+					default: ["slow/opus-backup"],
+					smol: ["fast/composer"],
+				},
+			}),
+			modelRegistry: {
+				refresh: async () => {},
+				getAvailable: () => [fast, slow],
+				getApiKey: async () => "test-key",
+			} as never,
+			enableLsp: false,
+		});
+
+		expect(childModelRole).toBe("fast/hy3");
+		expect(childFallbackChains?.["subagent:role-alias-chain"]).toEqual(["fast/composer"]);
+		expect(childFallbackChains?.default).toEqual(["slow/opus-backup"]);
+	});
+
+	it("inherits the default chain for a role alias whose role configures no chain", async () => {
+		const fast = model("fast", "hy3");
+		const slow = model("slow", "opus");
+		let childFallbackChains: Record<string, string[]> | undefined;
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			if (!options) throw new Error("Expected createAgentSession options");
+			childFallbackChains = options.settings?.get("retry.fallbackChains") as Record<string, string[]> | undefined;
+			return { session: createYieldingSession(), extensionsResult: {}, setToolUIContext: () => {} } as never;
+		});
+
+		const agent: AgentDefinition = {
+			name: "scout",
+			description: "test",
+			systemPrompt: "test",
+			source: "bundled",
+			model: ["@smol"],
+		};
+		await runSubprocess({
+			cwd: "/tmp",
+			agent,
+			task: "work",
+			index: 0,
+			id: "role-alias-default-chain",
+			settings: Settings.isolated({
+				modelRoles: { default: "slow/opus", smol: "fast/hy3" },
+				"retry.fallbackChains": { default: ["slow/opus-backup"] },
+			}),
+			modelRegistry: {
+				refresh: async () => {},
+				getAvailable: () => [fast, slow],
+				getApiKey: async () => "test-key",
+			} as never,
+			enableLsp: false,
+		});
+
+		expect(childFallbackChains?.["subagent:role-alias-default-chain"]).toEqual(["slow/opus-backup"]);
 	});
 
 	it("does not inherit the default chain when multiple requested models collapse to one candidate", async () => {

@@ -1,5 +1,6 @@
-import { Box, Container, Spacer, Text } from "@oh-my-pi/pi-tui";
+import { Box, Container, Spacer, Text } from "@musepi/pi-tui";
 import type { Rule } from "../../capability/rule";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 
 /** Collapsed view shows at most this many rules before eliding the rest. */
@@ -65,7 +66,7 @@ export class TtsrNotificationComponent extends Container {
 	}
 
 	#rebuildSingle(rule: Rule): void {
-		const header = `${theme.icon.warning} Injecting rule: ${theme.bold(rule.name)}  ${theme.icon.rewind}`;
+		const header = `${theme.icon.warning} ${t("Injecting rule: {0}", theme.bold(rule.name))}  ${theme.icon.rewind}`;
 		this.#box.addChild(new Text(header, 0, 0));
 
 		const desc = (rule.description || rule.content)?.trim();
@@ -84,12 +85,12 @@ export class TtsrNotificationComponent extends Container {
 		this.#box.addChild(new Spacer(1));
 		this.#box.addChild(new Text(theme.italic(displayText), 0, 0));
 		if (truncated) {
-			this.#box.addChild(new Text(theme.italic(" (ctrl+o to expand)"), 0, 0));
+			this.#box.addChild(new Text(theme.italic(t(" (ctrl+o to expand)")), 0, 0));
 		}
 	}
 
 	#rebuildMulti(): void {
-		const header = `${theme.icon.warning} Injecting ${this.#rules.length} rules:  ${theme.icon.rewind}`;
+		const header = `${theme.icon.warning} ${t("Injecting {0} rules: ", String(this.#rules.length))}  ${theme.icon.rewind}`;
 		this.#box.addChild(new Text(header, 0, 0));
 		this.#box.addChild(new Spacer(1));
 
@@ -115,9 +116,9 @@ export class TtsrNotificationComponent extends Container {
 
 		const hidden = this.#rules.length - visible.length;
 		if (hidden > 0) {
-			this.#box.addChild(new Text(theme.italic(`… +${hidden} more (ctrl+o to expand)`), 0, 0));
+			this.#box.addChild(new Text(theme.italic(t("… +{0} more (ctrl+o to expand)", String(hidden))), 0, 0));
 		} else if (elidedDetail) {
-			this.#box.addChild(new Text(theme.italic(" (ctrl+o to expand)"), 0, 0));
+			this.#box.addChild(new Text(theme.italic(t(" (ctrl+o to expand)")), 0, 0));
 		}
 	}
 }

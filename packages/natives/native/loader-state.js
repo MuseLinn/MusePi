@@ -8,7 +8,7 @@ import packageJson from "../package.json" with { type: "json" };
 import { embeddedAddon } from "./embedded-addon.js";
 
 /**
- * Native addon loader for `@oh-my-pi/pi-natives`.
+ * Native addon loader for `@musepi/pi-natives`.
  *
  * Owns every step between "Node imports `native/index.js`" and "the right
  * `pi_natives.<platform>-<arch>*.node` is required, validated, and returned":
@@ -59,7 +59,7 @@ function getNativesDir() {
 function resolveLeafPackageDir(platformTag) {
 	try {
 		const require_ = createRequire(import.meta.url);
-		return path.dirname(require_.resolve(`@oh-my-pi/pi-natives-${platformTag}/package.json`));
+		return path.dirname(require_.resolve(`@musepi/pi-natives-${platformTag}/package.json`));
 	} catch {
 		return null;
 	}
@@ -109,7 +109,7 @@ export function getAddonFilenames({ tag, arch, variant }) {
  *
  * Windows-only safety net for `bun install -g` updates: when a previous `omp`
  * process is running, bun cannot overwrite the locked `.node` inside
- * `node_modules/@oh-my-pi/pi-natives/native/`, leaving an old binary next to a
+ * `node_modules/@musepi/pi-natives/native/`, leaving an old binary next to a
  * newer `index.js` and producing `<sym> is not a function` crashes on the next
  * launch. Staging into the version-pinned cache:
  *   1. Gives every package version its own filesystem path, so concurrent omp
@@ -129,7 +129,8 @@ export function shouldStageNodeModulesAddon({ platform, isCompiledBinary, native
 	// Check both separators independently of the host's `path.sep`: this helper
 	// is shared by the loader (running on Windows with `\`) and the test suite
 	// (typically running on POSIX hosts when CI executes the regression test).
-	return nativeDir.includes("\\node_modules\\") || nativeDir.includes("/node_modules/");
+	const normalizedNativeDir = nativeDir.toLowerCase();
+	return normalizedNativeDir.includes("\\node_modules\\") || normalizedNativeDir.includes("/node_modules/");
 }
 
 /**
@@ -195,6 +196,26 @@ function isOlderReleaseVersion(candidate, current) {
 	return false;
 }
 
+// A concurrently starting older OMP binary creates or refreshes this directory
+// before extracting its addon. Keep fresh directories long enough for that
+// startup to finish; a later launch can reclaim them once they are genuinely
+// stale.
+const NATIVE_CACHE_CLEANUP_GRACE_MS = 10 * 60_000;
+
+/**
+ * Create a version cache directory and refresh its activity timestamp before
+ * extraction or staging begins. Recursive mkdir does not update the mtime of
+ * an existing directory, so the explicit touch is what protects interrupted
+ * or partially populated caches from concurrent cleanup.
+ *
+ * @param {string} versionedDir
+ */
+export function prepareNativeVersionDir(versionedDir) {
+	fs.mkdirSync(versionedDir, { recursive: true });
+	const now = new Date();
+	fs.utimesSync(versionedDir, now, now);
+}
+
 /**
  * Remove version-pinned native cache directories older than the loaded package.
  * Best-effort by design: permission errors and concurrent processes must not
@@ -216,6 +237,8 @@ export function cleanupStaleNativeVersions({ nativesDir, currentVersion }) {
 		if (!entry.isDirectory() || !isOlderReleaseVersion(entry.name, currentVersion)) continue;
 		const targetPath = path.join(nativesDir, entry.name);
 		try {
+			const stat = fs.statSync(targetPath);
+			if (Date.now() - stat.mtimeMs < NATIVE_CACHE_CLEANUP_GRACE_MS) continue;
 			fs.rmSync(targetPath, { recursive: true, force: true });
 			removed.push(targetPath);
 		} catch {
@@ -301,13 +324,39 @@ function detectAvx2Support() {
 	}
 
 	if (process.platform === "win32") {
-		const output = runCommand("powershell.exe", [
-			"-NoProfile",
-			"-NonInteractive",
-			"-Command",
-			"[System.Runtime.Intrinsics.X86.Avx2]::IsSupported",
-		]);
-		return output && output.toLowerCase() === "true";
+		// Under Bun, ask the kernel: PF_AVX2_INSTRUCTIONS_AVAILABLE == 40. Exact,
+		// and ~0.5 ms against ~270 ms for the PowerShell spawn it replaces on the
+		// startup path.
+		if (typeof Bun !== "undefined") {
+			try {
+				const { dlopen, FFIType } = createRequire(import.meta.url)("bun:ffi");
+				const kernel32 = dlopen("kernel32.dll", {
+					IsProcessorFeaturePresent: { args: [FFIType.u32], returns: FFIType.i32 },
+				});
+				try {
+					return kernel32.symbols.IsProcessorFeaturePresent(40) !== 0;
+				} finally {
+					kernel32.close();
+				}
+			} catch {
+				// No FFI (embedder policy, unusual host): fall through to the shell probe.
+			}
+		}
+		// Node embeds have no `bun:ffi`. `[System.Runtime.Intrinsics.X86.Avx2]`
+		// exists only on .NET Core, so `pwsh` (PowerShell 7) answers correctly
+		// while a stock `powershell.exe` (Windows PowerShell 5.1, .NET Framework)
+		// raises TypeNotFound and pins such hosts to the baseline addon.
+		for (const shell of ["pwsh.exe", "powershell.exe"]) {
+			const output = runCommand(shell, [
+				"-NoProfile",
+				"-NonInteractive",
+				"-Command",
+				"[System.Runtime.Intrinsics.X86.Avx2]::IsSupported",
+			]);
+			if (output && output.toLowerCase() === "true") return true;
+			if (output && output.toLowerCase() === "false") return false;
+		}
+		return false;
 	}
 
 	return false;
@@ -513,7 +562,7 @@ function maybeExtractEmbeddedAddon(ctx, errors) {
 
 	startupMarker("native:extractEmbeddedAddon:start");
 	try {
-		fs.mkdirSync(ctx.versionedDir, { recursive: true });
+		prepareNativeVersionDir(ctx.versionedDir);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		errors.push(`embedded addon dir: ${message}`);
@@ -580,7 +629,7 @@ function maybeStageNodeModulesAddon(ctx, errors) {
 		if (!fs.existsSync(sourcePath)) continue;
 
 		try {
-			fs.mkdirSync(ctx.versionedDir, { recursive: true });
+			prepareNativeVersionDir(ctx.versionedDir);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			errors.push(`staged addon dir: ${message}`);
@@ -635,7 +684,7 @@ export function validateLoadedBindings(ctx, bindings, candidate) {
 	if (residentSentinel && diskHasExpectedSentinel) {
 		const residentVersion = residentSentinel.slice("__piNativesV".length).replace(/_/g, ".");
 		throw new Error(
-			`Loaded ${candidate}, which exposes the @oh-my-pi/pi-natives@${residentVersion} version ` +
+			`Loaded ${candidate}, which exposes the @musepi/pi-natives@${residentVersion} version ` +
 				`sentinel \`${residentSentinel}\` but not the @${ctx.packageVersion} sentinel ` +
 				`\`${ctx.versionSentinelExport}\` this loader expects. omp was upgraded to ` +
 				`${ctx.packageVersion} while this session was running; the ${residentVersion} addon is ` +
@@ -644,7 +693,7 @@ export function validateLoadedBindings(ctx, bindings, candidate) {
 		);
 	}
 	throw new Error(
-		`Loaded ${candidate} but it does not expose the @oh-my-pi/pi-natives@${ctx.packageVersion} ` +
+		`Loaded ${candidate} but it does not expose the @musepi/pi-natives@${ctx.packageVersion} ` +
 			`version sentinel \`${ctx.versionSentinelExport}\`. The .node file on disk is from a different ` +
 			"release than this loader — reinstall to re-sync.",
 	);
@@ -686,7 +735,7 @@ function buildHelpMessage(ctx) {
 		);
 	}
 	return (
-		"If installed via npm/bun, try reinstalling: bun install @oh-my-pi/pi-natives\n" +
+		"If installed via npm/bun, try reinstalling: bun install @musepi/pi-natives\n" +
 		"If developing locally, build with: bun --cwd=packages/natives run build\n" +
 		"Explicit targets: bun scripts/bazel-natives.ts <target> --dest packages/natives/native"
 	);
@@ -698,28 +747,47 @@ function buildHelpMessage(ctx) {
  * Called from `loadNative()` rather than at module scope so importing pure
  * helpers from this file doesn't trigger AVX2 detection or filesystem probes.
  */
-function initLoaderContext() {
-	const platformTag = `${process.platform}-${process.arch}`;
+/**
+ * @param {{ nativeDir?: string; platform?: NodeJS.Platform | string; isCompiledBinary?: boolean; leafPackageDir?: string | null }} [overrides]
+ */
+export function initLoaderContext(overrides = {}) {
+	const platform = overrides.platform ?? process.platform;
+	const platformTag = `${platform}-${process.arch}`;
 	const packageVersion = packageJson.version;
-	const nativeDir = path.join(import.meta.dir, "..", "native");
+	// `import.meta.dir` is a Node ≥24 alias; Bun and Electron's Node 22 only
+	// expose `import.meta.dirname` (Electron's own Node lacks the alias).
+	const metaDir = /** @type {string | undefined} */ (import.meta.dir ?? import.meta.dirname);
+	const nativeDir = overrides.nativeDir ?? path.join(metaDir, "..", "native");
 	const execDir = path.dirname(process.execPath);
 	const nativesDir = getNativesDir();
 	const versionedDir = path.join(nativesDir, packageVersion);
 	const userDataDir =
-		process.platform === "win32"
+		platform === "win32"
 			? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "omp")
 			: path.join(os.homedir(), ".local", "bin");
 
-	const isCompiledBinary = detectCompiledBinary({
-		embeddedAddon,
-		env: process.env,
-		importMetaUrl: import.meta.url,
-	});
-	const leafPackageDir = isCompiledBinary ? null : resolveLeafPackageDir(platformTag);
+	const isCompiledBinary =
+		overrides.isCompiledBinary ??
+		detectCompiledBinary({
+			embeddedAddon,
+			env: process.env,
+			importMetaUrl: import.meta.url,
+		});
+	const normalizedNativeDir = platform === "win32" ? nativeDir.toLowerCase() : nativeDir;
+	const isWorkspaceLoad =
+		!isCompiledBinary &&
+		!normalizedNativeDir.includes("\\node_modules\\") &&
+		!normalizedNativeDir.includes("/node_modules/");
+	const leafPackageDir =
+		isCompiledBinary || isWorkspaceLoad
+			? null
+			: overrides.leafPackageDir === undefined
+				? resolveLeafPackageDir(platformTag)
+				: overrides.leafPackageDir;
 	const stageFromNodeModules = shouldStageNodeModulesAddon({
-		platform: process.platform,
+		platform,
 		isCompiledBinary,
-		nativeDir,
+		nativeDir: normalizedNativeDir,
 	});
 
 	const selectedVariant = resolveCpuVariant(getVariantOverride());
@@ -745,8 +813,6 @@ function initLoaderContext() {
 	// turns the silent `<sym> is not a function` crash from a Windows
 	// locked-file update into an actionable load-time error.
 	const versionSentinelExport = `__piNativesV${packageVersion.replace(/[^A-Za-z0-9]/g, "_")}`;
-	const isWorkspaceLoad =
-		!isCompiledBinary && !nativeDir.includes("\\node_modules\\") && !nativeDir.includes("/node_modules/");
 
 	return {
 		platformTag,

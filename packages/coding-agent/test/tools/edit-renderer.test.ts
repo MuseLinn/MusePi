@@ -2,17 +2,17 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { InMemorySnapshotStore } from "@oh-my-pi/hashline";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { renderGalleryState, resolveFixture } from "@oh-my-pi/pi-coding-agent/cli/gallery-cli";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { editToolRenderer } from "@oh-my-pi/pi-coding-agent/edit/renderer";
-import { renderDiff } from "@oh-my-pi/pi-coding-agent/modes/components/diff";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import * as themeModule from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { Text, type TUI, visibleWidth } from "@oh-my-pi/pi-tui";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+import { InMemorySnapshotStore } from "@musepi/hashline";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { renderGalleryState, resolveFixture } from "@musepi/pi-coding-agent/cli/gallery-cli";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { editToolRenderer } from "@musepi/pi-coding-agent/edit/renderer";
+import { renderDiff } from "@musepi/pi-coding-agent/modes/components/diff";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
+import { Text, type TUI, visibleWidth } from "@musepi/pi-tui";
+import { removeWithRetries } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 
 beforeAll(async () => {
 	resetSettingsForTest();
@@ -46,8 +46,7 @@ describe("editToolRenderer", () => {
 		const uiTheme = await getUiTheme();
 		const component = editToolRenderer.renderCall(
 			{
-				edits: [{}],
-				__partialJson: '{"edits":[{"path":"packages/coding-agent/src/edit/renderer.ts","old_text":"before',
+				__partialJson: '{"path":"packages/coding-agent/src/edit/renderer.ts","old_string":"before',
 			},
 			{ expanded: false, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "replace" } },
 			uiTheme,
@@ -111,7 +110,7 @@ describe("editToolRenderer", () => {
 		const uiTheme = await getUiTheme();
 		const component = editToolRenderer.renderCall(
 			{
-				input: "[packages/coding-agent/src/edit/renderer.ts]\nINS.TAIL:\n+// preview",
+				input: "[packages/coding-agent/src/edit/renderer.ts]\nPUT >$:\n+// preview",
 			},
 			{ expanded: false, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "hashline" } },
 			uiTheme,
@@ -132,7 +131,7 @@ describe("editToolRenderer", () => {
 				input: [
 					"*** Begin Patch",
 					"[crates/pi-natives/src/shell.rs]",
-					"INS.TAIL:",
+					"PUT >$:",
 					"+pub fn streaming_preview() {",
 				].join("\n"),
 			},
@@ -143,7 +142,7 @@ describe("editToolRenderer", () => {
 
 		const rendered = Bun.stripANSI(component.render(160).join("\n"));
 		expect(rendered).toContain("crates/pi-natives/src/shell.rs");
-		expect(rendered).not.toContain("INS.TAIL:");
+		expect(rendered).not.toContain("PUT >$:");
 		expect(rendered).not.toContain("+pub fn streaming_preview() {");
 		expect(rendered).not.toContain("*** Begin Patch");
 	});
@@ -152,7 +151,7 @@ describe("editToolRenderer", () => {
 		const uiTheme = await getUiTheme();
 		const compactComponent = editToolRenderer.renderCall(
 			{
-				input: "[foo bar.ts]\nINS.HEAD:\n+// preview",
+				input: "[foo bar.ts]\nPUT <1:\n+// preview",
 			},
 			{ expanded: true, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "hashline" } },
 			uiTheme,
@@ -160,7 +159,7 @@ describe("editToolRenderer", () => {
 
 		const quotedComponent = editToolRenderer.renderCall(
 			{
-				input: "['baz qux.ts']\nINS.HEAD:\n+// preview",
+				input: "['baz qux.ts']\nPUT <1:\n+// preview",
 			},
 			{ expanded: false, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "hashline" } },
 			uiTheme,
@@ -179,7 +178,7 @@ describe("editToolRenderer", () => {
 		// renderer keeps the title clean.
 		const canonical = editToolRenderer.renderCall(
 			{
-				input: "[packages/coding-agent/src/slash-commands/builtin-registry.ts]\nINS.HEAD:\n+// preview",
+				input: "[packages/coding-agent/src/slash-commands/builtin-registry.ts]\nPUT <1:\n+// preview",
 			},
 			{ expanded: true, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "hashline" } },
 			uiTheme,
@@ -187,7 +186,7 @@ describe("editToolRenderer", () => {
 
 		// While streaming, the closing bracket may not have arrived yet.
 		const partial = editToolRenderer.renderCall(
-			{ input: "[a/b/c.ts\nINS.HEAD:\n+// preview" },
+			{ input: "[a/b/c.ts\nPUT <1:\n+// preview" },
 			{ expanded: true, isPartial: true, spinnerFrame: 0, renderContext: { editMode: "hashline" } },
 			uiTheme,
 		);
@@ -214,7 +213,7 @@ describe("editToolRenderer", () => {
 			{ expanded: false, isPartial: false, renderContext: { editMode: "hashline" } },
 			uiTheme,
 			{
-				input: "[packages/coding-agent/src/edit/renderer.ts]\nINS.TAIL:\n+// preview",
+				input: "[packages/coding-agent/src/edit/renderer.ts]\nPUT >$:\n+// preview",
 			},
 		);
 
@@ -301,7 +300,7 @@ describe("editToolRenderer", () => {
 			// The trailing payload line carries no newline — the common shape for a
 			// single-line edit. The streaming pass trims that in-flight line, so the
 			// preview only becomes computable once args are marked complete.
-			const input = `[memory.ts#${tag}]\nSWAP 2.=2:\n+export const b = 22;`;
+			const input = `[memory.ts#${tag}]\nPUT 2-2:\n+export const b = 22;`;
 			const component = new ToolExecutionComponent("edit", { input }, { snapshots }, hashlineTool, uiStub, tmpDir);
 
 			component.setArgsComplete();
@@ -328,7 +327,7 @@ describe("editToolRenderer", () => {
 
 			const snapshots = new InMemorySnapshotStore();
 			const tag = snapshots.record(filePath, content);
-			const input = `[memory.ts#${tag}]\nSWAP 2.=2:\n+export const b = 22;\n`;
+			const input = `[memory.ts#${tag}]\nPUT 2-2:\n+export const b = 22;\n`;
 			const component = new ToolExecutionComponent(
 				"edit",
 				{ __partialJson: input },

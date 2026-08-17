@@ -83,6 +83,16 @@ export const isDeepseekModelIdOrName = memo((value: string): boolean => {
 	return value.toLowerCase().includes("deepseek");
 });
 
+/**
+ * DeepSeek V4 Flash SKU in any host/namespace form (`deepseek-v4-flash`, dated
+ * `deepseek-v4-flash-0731`, `deepseek-ai/DeepSeek-V4-Flash`). Flash is the only
+ * V4 model whose `reasoning_effort` accepts the `low` tier; V4 Pro tops out at
+ * `high`/`max`. See https://api-docs.deepseek.com/api/create-chat-completion.
+ */
+export const isDeepseekV4FlashModelId = memo((modelId: string): boolean => {
+	return bareModelId(modelId).toLowerCase().includes("deepseek-v4-flash");
+});
+
 /** Xiaomi MiMo family by id or display name. */
 export const isMimoModelIdOrName = memo((value: string): boolean => {
 	return value.toLowerCase().includes("mimo");

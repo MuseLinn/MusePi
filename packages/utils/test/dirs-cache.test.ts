@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, type Mock, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -6,11 +6,14 @@ import {
 	__resetDirsFromEnvForTests,
 	getActiveProfile,
 	getConfigDirName,
+	getConfigRootDir,
 	getDocumentConversionCacheDir,
+	getMarketplacesRegistryPath,
 	getProfileRootDir,
+	getSecretPlaceholderKeyPath,
 	setAgentDir,
-} from "@oh-my-pi/pi-utils/dirs";
-import { Snowflake } from "@oh-my-pi/pi-utils/snowflake";
+} from "@musepi/pi-utils/dirs";
+import { Snowflake } from "@musepi/pi-utils/snowflake";
 
 function restoreEnv(key: string, value: string | undefined): void {
 	if (value === undefined) {
@@ -45,17 +48,17 @@ describe("document conversion cache directory", () => {
 		await fs.rm(tempRoot, { recursive: true, force: true });
 	});
 
-	it("uses XDG_CACHE_HOME for the default agent dir when $XDG_CACHE_HOME/omp exists", async () => {
+	it("uses XDG_CACHE_HOME for the default agent dir when $XDG_CACHE_HOME/musepi exists", async () => {
 		if (process.platform === "win32") return;
 
 		process.env.XDG_CACHE_HOME = path.join(tempRoot, "cache");
-		await fs.mkdir(path.join(process.env.XDG_CACHE_HOME, "omp"), { recursive: true });
+		await fs.mkdir(path.join(process.env.XDG_CACHE_HOME, "musepi"), { recursive: true });
 
 		const defaultAgentDir = path.join(os.homedir(), getConfigDirName(), "agent");
 		setAgentDir(defaultAgentDir);
 
 		expect(getDocumentConversionCacheDir()).toBe(
-			path.join(process.env.XDG_CACHE_HOME, "omp", "cache", "document-conversions"),
+			path.join(process.env.XDG_CACHE_HOME, "musepi", "cache", "document-conversions"),
 		);
 	});
 
@@ -66,7 +69,37 @@ describe("document conversion cache directory", () => {
 
 		expect(getDocumentConversionCacheDir()).toBe(path.join(customAgentDir, "cache", "document-conversions"));
 	});
-});
+
+describe("PI_CONFIG_DIR config-root override", () => {
+	let originalPiConfigDir: string | undefined;
+
+	beforeEach(() => {
+		originalPiConfigDir = process.env.PI_CONFIG_DIR;
+	});
+	afterEach(() => {
+		restoreEnv("PI_CONFIG_DIR", originalPiConfigDir);
+		__resetDirsFromEnvForTests();
+	});
+
+	it("treats an absolute PI_CONFIG_DIR as the full config root (not home-joined)", async () => {
+		const absoluteRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-utils-config-root-"));
+		process.env.PI_CONFIG_DIR = absoluteRoot;
+		__resetDirsFromEnvForTests();
+
+		expect(getConfigRootDir()).toBe(absoluteRoot);
+		expect(getProfileRootDir(undefined)).toBe(absoluteRoot);
+		expect(getConfigDirName()).toBe(absoluteRoot);
+
+		await fs.rm(absoluteRoot, { recursive: true, force: true });
+	});
+
+	it("keeps home-joining for a relative PI_CONFIG_DIR", () => {
+		process.env.PI_CONFIG_DIR = ".musepi-custom";
+		__resetDirsFromEnvForTests();
+
+		expect(getConfigRootDir()).toBe(path.join(os.homedir(), ".musepi-custom"));
+	});
+});});
 
 describe("test directory state cleanup", () => {
 	it("restores the active profile from the current env after setAgentDir mutations", () => {
@@ -100,5 +133,80 @@ describe("test directory state cleanup", () => {
 			restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
 			__resetDirsFromEnvForTests();
 		}
+	});
+});
+
+describe("legacy file adoption on XDG paths", () => {
+	let tempRoot = "";
+	let originalPiCodingAgentDir: string | undefined;
+	let originalOmpProfile: string | undefined;
+	let originalPiProfile: string | undefined;
+	let originalXdgStateHome: string | undefined;
+	let originalXdgDataHome: string | undefined;
+	let homedirSpy: Mock<() => string> | undefined;
+
+	beforeEach(async () => {
+		originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
+		originalOmpProfile = process.env.OMP_PROFILE;
+		originalPiProfile = process.env.PI_PROFILE;
+		originalXdgStateHome = process.env.XDG_STATE_HOME;
+		originalXdgDataHome = process.env.XDG_DATA_HOME;
+		tempRoot = path.join(os.tmpdir(), "pi-utils-xdg-adoption", Snowflake.next());
+		await fs.mkdir(tempRoot, { recursive: true });
+	});
+
+	afterEach(async () => {
+		homedirSpy?.mockRestore();
+		homedirSpy = undefined;
+		restoreEnv("PI_CODING_AGENT_DIR", originalPiCodingAgentDir);
+		restoreEnv("OMP_PROFILE", originalOmpProfile);
+		restoreEnv("PI_PROFILE", originalPiProfile);
+		restoreEnv("XDG_STATE_HOME", originalXdgStateHome);
+		restoreEnv("XDG_DATA_HOME", originalXdgDataHome);
+		__resetDirsFromEnvForTests();
+		await fs.rm(tempRoot, { recursive: true, force: true });
+	});
+
+	/** Rebuild the resolver with home at tempRoot, the default agent dir, and the given XDG env. */
+	function activateTempHome(xdgEnv: Record<string, string>): void {
+		homedirSpy = spyOn(os, "homedir").mockReturnValue(tempRoot);
+		delete process.env.PI_CODING_AGENT_DIR;
+		delete process.env.OMP_PROFILE;
+		delete process.env.PI_PROFILE;
+		delete process.env.XDG_STATE_HOME;
+		delete process.env.XDG_DATA_HOME;
+		for (const key in xdgEnv) {
+			process.env[key] = xdgEnv[key];
+		}
+		__resetDirsFromEnvForTests();
+	}
+
+	it("adopts legacy files at the XDG paths without clobbering existing XDG files", async () => {
+		if (process.platform === "win32") return;
+		const xdgState = path.join(tempRoot, "xdg-state");
+		const xdgData = path.join(tempRoot, "xdg-data");
+		await fs.mkdir(path.join(xdgState, "musepi"), { recursive: true });
+		await fs.mkdir(path.join(xdgData, "musepi"), { recursive: true });
+		// Legacy (pre-XDG) layout: key under ~/.musepi/agent, registry under ~/.musepi.
+		await fs.mkdir(path.join(tempRoot, ".musepi", "agent"), { recursive: true });
+		await fs.writeFile(path.join(tempRoot, ".musepi", "agent", "secret-placeholder.key"), "legacy-key");
+		await fs.writeFile(path.join(tempRoot, ".musepi", "marketplaces.json"), '{"legacy":true}');
+		// The XDG registry is already populated: adoption must not overwrite it.
+		await fs.writeFile(path.join(xdgData, "musepi", "marketplaces.json"), '{"xdg":true}');
+		activateTempHome({ XDG_STATE_HOME: xdgState, XDG_DATA_HOME: xdgData });
+
+		const key = getSecretPlaceholderKeyPath();
+		const registry = getMarketplacesRegistryPath();
+		expect(key).toBe(path.join(xdgState, "musepi", "secret-placeholder.key"));
+		expect(registry).toBe(path.join(xdgData, "musepi", "marketplaces.json"));
+		expect(await fs.readFile(key, "utf8")).toBe("legacy-key");
+		expect(await fs.readFile(registry, "utf8")).toBe('{"xdg":true}');
+	});
+
+	it("keeps the legacy paths canonical when XDG is inactive", async () => {
+		if (process.platform === "win32") return;
+		activateTempHome({});
+		expect(getSecretPlaceholderKeyPath()).toBe(path.join(tempRoot, ".musepi", "agent", "secret-placeholder.key"));
+		expect(getMarketplacesRegistryPath()).toBe(path.join(tempRoot, ".musepi", "marketplaces.json"));
 	});
 });

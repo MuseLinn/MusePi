@@ -34,7 +34,7 @@ export class CancellableLoader extends Loader {
 		}
 	}
 
-	dispose(): void {
+	override dispose(): void {
 		this.stop();
 	}
 }

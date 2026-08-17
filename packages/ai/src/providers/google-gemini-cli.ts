@@ -5,15 +5,15 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { scheduler } from "node:timers/promises";
-import { calculateCost } from "@oh-my-pi/pi-catalog/models";
+import { type } from "@musepi/omptype";
+import { calculateCost } from "@musepi/pi-catalog/models";
 import {
 	ANTIGRAVITY_SYSTEM_INSTRUCTION,
 	getAntigravityModelWireProfile,
 	getAntigravityUserAgent,
 	getGeminiCliHeaders,
-} from "@oh-my-pi/pi-catalog/wire/gemini-headers";
-import { extractHttpStatusFromError, fetchWithRetry, readSseJson } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-catalog/wire/gemini-headers";
+import { extractHttpStatusFromError, fetchWithRetry, readSseJson } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import type {
 	Api,
@@ -320,7 +320,7 @@ export {
 	getAntigravityUserAgent,
 	getGeminiCliHeaders,
 	getGeminiCliUserAgent,
-} from "@oh-my-pi/pi-catalog/wire/gemini-headers";
+} from "@musepi/pi-catalog/wire/gemini-headers";
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -756,7 +756,7 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli"> = (
 				};
 
 				for await (const chunk of readSseJson<CloudCodeAssistResponseChunk>(
-					activeResponse.body!,
+					activeResponse.body! as ReadableStream<Uint8Array>,
 					options?.signal,
 					event => options?.onSseEvent?.({ event: event.event, data: event.data, raw: [...event.raw] }, model),
 				)) {

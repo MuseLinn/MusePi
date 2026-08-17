@@ -3,7 +3,7 @@ members = ["crates/pi-*", "crates/vendor/*"]
 resolver = "3"
 
 [workspace.package]
-version = "17.1.8"
+version = "17.2.12"
 edition = "2024"
 license = "MIT"
 authors = ["Can Boluk"]
@@ -12,7 +12,6 @@ repository = "https://github.com/can1357/oh-my-pi"
 
 [patch.crates-io]
 brush-core = { path = "crates/vendor/brush-core" }
-brush-builtins = { path = "crates/vendor/brush-builtins" }
 
 [profile.release]
 opt-level = 3
@@ -138,6 +137,7 @@ option_if_let_else = "allow"                 # match/if-let-else often clearer
 enum_glob_use = "allow"
 items_after_statements = "allow" # Sometimes more readable
 wildcard_imports = "allow"       # Cleaner for preludes and test modules
+redundant_pub_crate = "allow"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Variables & Type Inference
@@ -177,14 +177,16 @@ too_many_lines = "allow"     # Arbitrary limits don't account for necessary comp
 pi-ast = { path = "crates/pi-ast" }
 pi-iso = { path = "crates/pi-iso" }
 pi-shell = { path = "crates/pi-shell" }
+pi-voice = { path = "crates/pi-voice" }
 pi-walker = { path = "crates/pi-walker" }
 brush-core = { path = "crates/vendor/brush-core" }
-brush-builtins = { path = "crates/vendor/brush-builtins" }
+pi-builtins = { path = "crates/pi-builtins" }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Async Runtime & Concurrency
 # ──────────────────────────────────────────────────────────────────────────────
 async-trait = "0.1"
+futures = "0.3"
 dashmap = "6.1"
 parking_lot = "0.12.5"
 rayon = "1.12"
@@ -236,14 +238,10 @@ smallvec = { version = "1.15.1", features = [
 # ──────────────────────────────────────────────────────────────────────────────
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Audio & Realtime Media
 # ──────────────────────────────────────────────────────────────────────────────
 audiopus_sys = { version = "0.2.2", features = ["static"] }
-# Pregenerated bindings (crate default): keeps bindgen/libclang out of the
-# build graph so Bazel actions stay hermetic.
-maudio = "0.1.6"
 opus = "0.3.1"
 webrtc = "0.17.2"
 
@@ -254,12 +252,16 @@ libc = "0.2"
 os_pipe = "1"
 windows-sys = { version = "0.61", features = [
    "Win32_Foundation",
+   "Win32_Media_Audio",
+   "Win32_Media_Multimedia",
+   "Win32_Security",
    "Win32_Storage_FileSystem",
    "Win32_Storage_ProjectedFileSystem",
    "Win32_System_Com",
    "Win32_System_LibraryLoader",
    "Win32_System_IO",
    "Win32_System_Ioctl",
+   "Win32_System_Threading",
 ] }
 winreg = "0.56"
 
@@ -297,6 +299,10 @@ image = { version = "0.25", default-features = false, features = [
    "gif",
    "webp",
 ] }
+# Not used directly: activates zune-jpeg's non-default `log` feature so image's
+# JPEG decoder compiles — zune-jpeg 0.5.15's no-log stub macros are not
+# expression-safe and the crate fails to build without it.
+zune-jpeg = { version = "0.5", default-features = false, features = ["log"] }
 png = "0.18"
 inferno = { version = "0.12", default-features = false }
 syntect = { version = "5.3", default-features = false, features = [
@@ -309,7 +315,7 @@ syntect = { version = "5.3", default-features = false, features = [
 # ──────────────────────────────────────────────────────────────────────────────
 # Markup Conversion
 # ──────────────────────────────────────────────────────────────────────────────
-html-to-markdown-rs = { version = "2.24", default-features = false }
+html-to-markdown-rs = { version = "3.9.2", default-features = false }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tokenization

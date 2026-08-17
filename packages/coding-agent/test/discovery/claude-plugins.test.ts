@@ -2,20 +2,20 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadCapability } from "@oh-my-pi/pi-coding-agent/capability";
-import { clearCache as clearFsCache } from "@oh-my-pi/pi-coding-agent/capability/fs";
+import { loadCapability } from "@musepi/pi-coding-agent/capability";
+import { clearCache as clearFsCache } from "@musepi/pi-coding-agent/capability/fs";
 import {
 	clearClaudePluginRootsCache,
 	listClaudePluginRoots,
 	parseClaudePluginsRegistry,
-} from "@oh-my-pi/pi-coding-agent/discovery/helpers";
-import { loadSlashCommands } from "@oh-my-pi/pi-coding-agent/extensibility/slash-commands";
-import { discoverAgents } from "@oh-my-pi/pi-coding-agent/task/discovery";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import "@oh-my-pi/pi-coding-agent/discovery/claude-plugins";
-import { type MCPServer, mcpCapability } from "@oh-my-pi/pi-coding-agent/capability/mcp";
-import type { Skill } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import type { SlashCommand } from "@oh-my-pi/pi-coding-agent/capability/slash-command";
+} from "@musepi/pi-coding-agent/discovery/helpers";
+import { loadSlashCommands } from "@musepi/pi-coding-agent/extensibility/slash-commands";
+import { discoverAgents } from "@musepi/pi-coding-agent/task/discovery";
+import { getProjectAgentDir, removeWithRetries } from "@musepi/pi-utils";
+import "@musepi/pi-coding-agent/discovery/claude-plugins";
+import { type MCPServer, mcpCapability } from "@musepi/pi-coding-agent/capability/mcp";
+import type { Skill } from "@musepi/pi-coding-agent/capability/skill";
+import type { SlashCommand } from "@musepi/pi-coding-agent/capability/slash-command";
 
 describe("parseClaudePluginsRegistry", () => {
 	test("parses valid registry", () => {
@@ -650,7 +650,7 @@ describe("listClaudePluginRoots", () => {
 	test("deduplicates a plugin alias of a directly configured MCP connection", async () => {
 		const pluginsDir = path.join(tempDir, ".claude", "plugins");
 		const pluginPath = path.join(tempDir, "plugins", "context7");
-		const directConfigPath = path.join(tempDir, ".omp", "mcp.json");
+		const directConfigPath = path.join(getProjectAgentDir(tempDir), "mcp.json");
 		const connection = {
 			type: "http",
 			url: "https://mcp.context7.example/mcp",

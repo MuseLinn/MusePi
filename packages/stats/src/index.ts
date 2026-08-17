@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { parseArgs } from "node:util";
-import { formatDuration, formatNumber, formatPercent } from "@oh-my-pi/pi-utils";
+import { formatDuration, formatNumber, formatPercent } from "@musepi/pi-utils";
 import { getDashboardStats, getTotalMessageCount, syncAllSessions } from "./aggregator";
 import { closeDb } from "./db";
 import { startServer } from "./server";
@@ -171,8 +171,8 @@ Examples:
 
 		// Start server
 		const port = parseInt(values.port || "3847", 10);
-		const { port: actualPort } = await startServer(port);
-		console.log(`Dashboard available at: http://localhost:${actualPort}`);
+		const { hostname, port: actualPort } = await startServer(port);
+		console.log(`Dashboard available at: http://${hostname}:${actualPort}`);
 		console.log("Press Ctrl+C to stop\n");
 
 		// Keep process running

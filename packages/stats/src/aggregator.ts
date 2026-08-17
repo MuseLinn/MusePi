@@ -1,5 +1,7 @@
 import * as fs from "node:fs";
-import { workerHostEntry } from "@oh-my-pi/pi-utils";
+import * as path from "node:path";
+import { getStatsDbPath, workerHostEntry } from "@musepi/pi-utils";
+import { withFileLock } from "@musepi/pi-utils/file-lock";
 import {
 	getRecentErrors as dbGetRecentErrors,
 	getRecentRequests as dbGetRecentRequests,
@@ -15,6 +17,7 @@ import {
 	getOverallStats,
 	getProviderHourlyBurn,
 	getProviderTimeSeries,
+	getSessionCount,
 	getStatsByAgentType,
 	getStatsByFolder,
 	getStatsByModel,
@@ -47,6 +50,24 @@ import type {
 	ToolDashboardStats,
 } from "./types";
 import { computeUsageWindowStats, fetchUsageSnapshots } from "./usage-windows";
+
+const STATS_SYNC_LOCK_RETRY_MS = 25;
+const STATS_SYNC_LOCK_WAIT_MS = 60 * 60 * 1000;
+
+/**
+ * Serialize stats ingestion and archive reconciliation across processes.
+ * The lock covers file discovery, parsing, and the final SQLite write so a
+ * parse result for a session moved by GC can never commit after cleanup.
+ * The native lock is owned by an operating-system primitive, so an interrupted
+ * owner is released automatically and a live owner is never displaced.
+ */
+export async function withStatsSyncLock<T>(dbPath: string, fn: () => Promise<T>): Promise<T> {
+	await fs.promises.mkdir(path.dirname(dbPath), { recursive: true });
+	return await withFileLock(`${dbPath}.sync`, fn, {
+		retryDelayMs: STATS_SYNC_LOCK_RETRY_MS,
+		retries: Math.ceil(STATS_SYNC_LOCK_WAIT_MS / STATS_SYNC_LOCK_RETRY_MS),
+	});
+}
 
 /**
  * Apply a freshly parsed result to the database. Runs entirely on the
@@ -111,7 +132,7 @@ interface WorkerHandle {
  * self-dispatching CLI entry (omp in source, npm-bundle, or compiled form),
  * re-enter that entry with a worker argv selector; otherwise (standalone
  * omp-stats, bun test, SDK embedding) load the worker module directly, so this
- * package keeps zero runtime dependency on `@oh-my-pi/pi-coding-agent`.
+ * package keeps zero runtime dependency on `@musepi/pi-coding-agent`.
  */
 function createSyncWorker(): Worker {
 	const hostEntry = workerHostEntry();
@@ -218,6 +239,10 @@ export async function smokeTestSyncWorker({ timeoutMs = 5_000 }: { timeoutMs?: n
  * bar walks at a steady rate).
  */
 export async function syncAllSessions(opts?: SyncOptions): Promise<{ processed: number; files: number }> {
+	return withStatsSyncLock(getStatsDbPath(), () => syncAllSessionsLocked(opts));
+}
+
+async function syncAllSessionsLocked(opts?: SyncOptions): Promise<{ processed: number; files: number }> {
 	await initDb();
 
 	const files = await listAllSessionFiles();
@@ -416,6 +441,7 @@ export async function getDashboardStats(range?: string | null): Promise<Dashboar
 		modelSeries: getModelTimeSeries(modelSeriesDays, cutoff, modelSeriesBucketMs),
 		modelPerformanceSeries: getModelPerformanceSeries(modelPerformanceDays, cutoff, modelPerformanceBucketMs),
 		costSeries: getCostTimeSeries(costSeriesDays, cutoff),
+		sessionCount: getSessionCount(cutoff ?? undefined),
 	};
 }
 

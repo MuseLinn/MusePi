@@ -6,10 +6,11 @@ import {
 	AppendOnlyContextManager,
 	type CompactionSummaryMessage,
 	countTokens,
+	type PauseGate,
 	resolveTelemetry,
 	type StreamFn,
 	ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import {
 	type CompactionResult,
 	calculateContextTokens,
@@ -22,7 +23,7 @@ import {
 	type SessionMessageEntry,
 	shouldCompact,
 	shouldUseProviderNativeCompaction,
-} from "@oh-my-pi/pi-agent-core/compaction";
+} from "@musepi/pi-agent-core/compaction";
 import type {
 	AssistantMessage,
 	CodexCompactionContext,
@@ -32,11 +33,11 @@ import type {
 	ProviderSessionState,
 	ServiceTier,
 	SimpleStreamOptions,
-} from "@oh-my-pi/pi-ai";
-import { isUsageLimitOutcome, resolveModelServiceTier, streamSimple } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
-import { extractHttpStatusFromError, extractRetryHint, logger } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import { isUsageLimitOutcome, resolveModelServiceTier, streamSimple } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { modelsAreEqual } from "@musepi/pi-catalog/models";
+import { extractHttpStatusFromError, extractRetryHint, logger } from "@musepi/pi-utils";
 import {
 	ADVISOR_DEFAULT_TOOL_NAMES,
 	AdviseTool,
@@ -181,6 +182,9 @@ interface AdvisorRuntimeDescriptor {
 export interface SessionAdvisorsOptions {
 	enabled: boolean;
 	tools?: AgentTool[];
+	/** Freeze gate of the owning session (GUI daemon per-session pause);
+	 *  advisor loops park with it so a paused session's advisor stays frozen. */
+	pauseGate?: PauseGate;
 	/**
 	 * Build a `grep` honoring a Cursor `pi_grep` frame's own context width and
 	 * match cap. The advisor's tools are fixed instances carrying session
@@ -191,7 +195,7 @@ export interface SessionAdvisorsOptions {
 	/**
 	 * Build the `replace`-mode `edit` a Cursor `pi_edit` frame needs. The
 	 * advisor's own instance follows the configured `edit.mode` (`hashline` by
-	 * default), whose schema the frame's `old_text`/`new_text` pairs do not
+	 * default), whose schema the frame's `old_string`/`new_string` args do not
 	 * match, so without this every native advisor edit fails validation.
 	 */
 	createEditTool?(): AgentTool | undefined;
@@ -293,6 +297,7 @@ export class SessionAdvisors {
 	#advisorContextPrompt: string | undefined;
 	#advisorStreamFn: StreamFn | undefined;
 	#transformProviderContext: ((context: Context, model: Model) => Context | Promise<Context>) | undefined;
+	#advisorPauseGate: PauseGate | undefined;
 	#advisors: ActiveAdvisor[] = [];
 	#advisorConfigs: AdvisorConfig[] | undefined;
 	#advisorStatuses = new Map<string, { name: string; status: AdvisorRuntimeStatus }>();
@@ -320,6 +325,7 @@ export class SessionAdvisors {
 		this.#advisorConfigs = options.configs;
 		this.#advisorStreamFn = options.streamFn;
 		this.#transformProviderContext = options.transformProviderContext;
+		this.#advisorPauseGate = options.pauseGate;
 		if (options.initialCosts) this.#advisorCosts = new Map(options.initialCosts);
 		if (this.#advisorEnabled) this.#buildAdvisorRuntime();
 	}
@@ -760,7 +766,7 @@ export class SessionAdvisors {
 			// to delete workspace files it was never granted (issue #5680 review).
 			const advisorCanMutateFiles = advisorToolMap.has("write") || advisorToolMap.has("edit");
 			if (advisorCanMutateFiles) availableAdvisorToolNames.add("delete");
-			// `pi_edit` speaks `replace`'s `old_text`/`new_text` schema, which the
+			// `pi_edit` speaks `replace`'s `old_string`/`new_string` schema, which the
 			// advisor's ordinary `EditTool` (built at the session's configured
 			// `edit.mode`, `hashline` by default) does not accept. The bridge map
 			// swaps in a `replace` instance for the exec channel only — the
@@ -804,6 +810,7 @@ export class SessionAdvisors {
 				sessionId: advisorProviderSessionId,
 				promptCacheKey: advisorPromptCacheKey,
 				providerSessionState: this.#host.providerSessionState,
+				pauseGate: this.#advisorPauseGate,
 				cursorExecHandlers: advisorCursorExecHandlers,
 				cwdResolver: () => this.#host.sessionManager.getCwd(),
 				preferWebsockets: this.#host.preferWebsockets,
@@ -877,7 +884,10 @@ export class SessionAdvisors {
 					this.#maintainAdvisorContext(advisorRef, incomingTokens, signal),
 				obfuscator: this.#host.obfuscator,
 				getModelIdentity: () => formatModelString(advisorRef.agent.state.model),
-				beginAdvisorUpdate: () => advisorRef.emissionGuard.beginUpdate(),
+				beginAdvisorUpdate: inProgress => {
+					advisorRef.adviseTool.beginUpdate(inProgress);
+					advisorRef.emissionGuard.beginUpdate();
+				},
 				onTurnError: (error, failedMessages, signal) =>
 					this.#recoverAdvisorTurn(advisorRef, error, failedMessages, signal),
 				onTurnSuccess: async () => {
@@ -1164,47 +1174,42 @@ export class SessionAdvisors {
 		const failedMessage = failedMessages.findLast(
 			(message): message is AssistantMessage => message.role === "assistant",
 		);
-		if (failedMessage?.stopReason !== "error") {
-			// Stream setup can reject before any assistant turn is recorded (e.g.
-			// an HTTP 429 thrown from prompt()); classify the raw error so a
-			// structural usage limit still marks the exhausted credential.
-			const message = error instanceof Error ? error.message : String(error);
-			if (!AIError.isUsageLimit(error) && !isUsageLimitOutcome(extractHttpStatusFromError(error), message)) {
-				return false;
-			}
-			const currentModel = advisor.agent.state.model;
-			const outcome = await this.#host.modelRegistry.authStorage.markUsageLimitReached(
-				currentModel.provider,
-				advisor.providerSessionId,
-				{
-					retryAfterMs: extractRetryHint(undefined, message),
-					baseUrl: currentModel.baseUrl,
-					modelId: currentModel.id,
-					signal,
-				},
-			);
-			return outcome.switched;
-		}
-		if (failedMessage.content.some(block => block.type === "toolCall")) return false;
+		const assistantFailure = failedMessage?.stopReason === "error" ? failedMessage : undefined;
+		if (assistantFailure?.content.some(block => block.type === "toolCall")) return false;
 
 		const currentModel = advisor.agent.state.model;
-		const message = failedMessage.errorMessage ?? (error instanceof Error ? error.message : String(error));
-		const errorId = AIError.classifyMessage({
-			api: currentModel.api,
-			errorId: failedMessage.errorId,
-			errorMessage: message,
-			errorStatus: failedMessage.errorStatus,
-		});
+		const message = assistantFailure?.errorMessage ?? (error instanceof Error ? error.message : String(error));
+		const errorId = assistantFailure
+			? AIError.classifyMessage({
+					api: currentModel.api,
+					errorId: assistantFailure.errorId,
+					errorMessage: message,
+					errorStatus: assistantFailure.errorStatus,
+				})
+			: AIError.classify(error, currentModel.api);
 		if (AIError.is(errorId, AIError.Flag.Abort) || AIError.is(errorId, AIError.Flag.UserInterrupt)) return false;
-		if (AIError.isContextOverflow(failedMessage, currentModel.contextWindow ?? 0)) return false;
+		if (
+			AIError.is(errorId, AIError.Flag.ContextOverflow) ||
+			(assistantFailure && AIError.isContextOverflow(assistantFailure, currentModel.contextWindow ?? 0))
+		) {
+			return false;
+		}
 
-		const currentSelector = formatRetryFallbackSelector(currentModel, advisor.thinkingLevel);
+		const accountPolicyDenial = AIError.is(errorId, AIError.Flag.AccountPolicy);
+		if (accountPolicyDenial) {
+			const switched = await this.#host.modelRegistry.authStorage.rotateSessionCredential(
+				currentModel.provider,
+				advisor.providerSessionId,
+				{ error: message, modelId: currentModel.id, signal },
+			);
+			if (switched) return true;
+		}
 
 		const retryAfterMs = extractRetryHint(undefined, message);
-		if (
+		const usageLimit =
 			AIError.is(errorId, AIError.Flag.UsageLimit) ||
-			isUsageLimitOutcome(extractHttpStatusFromError(error), message)
-		) {
+			isUsageLimitOutcome(extractHttpStatusFromError(error), message);
+		if (usageLimit) {
 			const outcome = await this.#host.modelRegistry.authStorage.markUsageLimitReached(
 				currentModel.provider,
 				advisor.providerSessionId,
@@ -1217,6 +1222,9 @@ export class SessionAdvisors {
 			);
 			if (outcome.switched) return true;
 		}
+		if (!assistantFailure && !accountPolicyDenial && !usageLimit) return false;
+
+		const currentSelector = formatRetryFallbackSelector(currentModel, advisor.thinkingLevel);
 
 		const retrySettings = this.#host.settings.getGroup("retry");
 		if (!retrySettings.enabled || !retrySettings.modelFallback) return false;
@@ -1449,6 +1457,7 @@ export class SessionAdvisors {
 						promptCacheKey: advisorProviderSessionId,
 						metadata: advisorMetadata,
 						providerSessionState: this.#host.providerSessionState,
+						preferWebsockets: this.#host.preferWebsockets,
 						codexCompaction,
 					},
 				);
@@ -1577,6 +1586,20 @@ export class SessionAdvisors {
 		this.#stopAdvisorRuntime();
 		this.#buildAdvisorRuntime(true);
 		return this.#advisors.length;
+	}
+
+	/**
+	 * Swap the project context prompt handed to advisor sessions after context
+	 * files change (`/reload-plugins` edit/disable). Rebuilds live runtimes in
+	 * place so the next advisor turn evaluates against the current instructions;
+	 * a no-op when the rendered prompt is unchanged.
+	 */
+	setContextPrompt(contextPrompt: string | undefined): void {
+		if (contextPrompt === this.#advisorContextPrompt) return;
+		this.#advisorContextPrompt = contextPrompt;
+		if (!this.#advisorEnabled || this.#advisors.length === 0) return;
+		this.#stopAdvisorRuntime();
+		this.#buildAdvisorRuntime(true);
 	}
 
 	/**

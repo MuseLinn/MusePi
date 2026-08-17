@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentDir, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import { ArkErrors, type Type } from "arktype";
+import { OmpErrors, type Type } from "@musepi/omptype";
+import { getAgentDir, isEnoent, logger } from "@musepi/pi-utils";
 import { JSONC, YAML } from "bun";
 
 /** Minimal subset of the AJV ConfigSchemaError shape this module actually relies on. */
@@ -109,11 +109,11 @@ export class ConfigError extends Error {
 		this.#message = message;
 	}
 
-	get message(): string {
+	override get message(): string {
 		return this.#message;
 	}
 
-	toString(): string {
+	override toString(): string {
 		return this.message;
 	}
 }
@@ -252,7 +252,7 @@ export class ConfigFile<T> implements IConfigFile<T> {
 			}
 
 			const checked = this.schema(parsed);
-			if (checked instanceof ArkErrors) {
+			if (checked instanceof OmpErrors) {
 				const schemaErrors: ConfigSchemaError[] = checked.map(error => ({
 					instancePath: error.path.length === 0 ? "root" : error.path.join("."),
 					message: error.problem,

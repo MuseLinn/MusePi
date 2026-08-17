@@ -7,9 +7,9 @@
  * rendered output to stdout. It exists for visual QA of tool renderers without
  * having to provoke each state through a live agent session.
  */
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import type { TUI } from "@oh-my-pi/pi-tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import type { TUI } from "@musepi/pi-tui";
+import { getProjectDir } from "@musepi/pi-utils";
 import { Settings } from "../config/settings";
 import { ToolExecutionComponent } from "../modes/components/tool-execution";
 import { initTheme, theme } from "../modes/theme/theme";
@@ -153,7 +153,7 @@ export async function renderGalleryState(
 	const component = new ToolExecutionComponent(
 		componentName,
 		streamingArgs,
-		{ showImages: false },
+		{ showImages: false, useBuiltInRenderer: !fixture.customRendered },
 		tool,
 		ui,
 		getProjectDir(),

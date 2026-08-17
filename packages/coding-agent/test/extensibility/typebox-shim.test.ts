@@ -1,15 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import type { Tool } from "@oh-my-pi/pi-ai/types";
-import { isValidJsonSchema, toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
-import { validateToolArguments } from "@oh-my-pi/pi-ai/utils/validation";
-import { type TSchema, Type } from "@oh-my-pi/pi-coding-agent/extensibility/typebox";
+import type { Tool } from "@musepi/pi-ai/types";
+import { isValidJsonSchema, toolWireSchema } from "@musepi/pi-ai/utils/schema";
+import { validateToolArguments } from "@musepi/pi-ai/utils/validation";
+import { type TSchema, Type } from "@musepi/pi-coding-agent/extensibility/legacy-typebox";
 
 /**
- * The typebox shim's `Type.*` builders return arktype-backed validator wrappers
- * (`TSchema`), not Zod schemas, so they expose neither `.parse` nor `.safeParse`.
- * The wrapped validator returns the validated value on success, or an object with
- * a `message` property on failure (mirroring the shim's internal `validate`). This
- * helper reproduces a `.safeParse`-style result on top of that contract.
+ * Exercise the legacy `__validator` failure-marker contract independently of
+ * the facade's `safeParse` helper.
  */
 function safeParse(schema: TSchema, value: unknown): { success: boolean; data?: unknown } {
 	const result = schema.__validator(value);
@@ -84,7 +81,7 @@ describe("pi.typebox compatibility shim", () => {
 
 	it("enforces and emits uniqueItems for arrays", () => {
 		const schema = Type.Array(Type.String(), { uniqueItems: true });
-		const wire = toolWireSchema({ name: "files", description: "", parameters: { ...schema } });
+		const wire = toolWireSchema({ name: "files", description: "", parameters: schema });
 
 		expect(safeParse(schema, ["a.ts", "b.ts"]).success).toBe(true);
 		expect(safeParse(schema, ["a.ts", "a.ts"]).success).toBe(false);
@@ -132,19 +129,16 @@ describe("pi.typebox compatibility shim", () => {
 			expect((parsed.data as { extra?: unknown }).extra).toBe(1);
 		}
 	});
-	// Regression: issue #1101. Real TypeBox lets extension authors do
-	// `JSON.stringify(schema)` and get a clean JSON Schema — that's the
-	// contract the shim is impersonating. Without a `toJSON` stamp, the shim
-	// leaks raw Zod internals (`def`, `_zod`, object-shaped `enum`,
-	// `"type":"enum"`) and breaks any pipeline that crosses a JSON boundary.
-	describe("JSON.stringify produces valid JSON Schema (TypeBox contract)", () => {
+	// Callable omptype schemas intentionally have no enumerable JSON Schema
+	// keywords. Wire serialization consumes their explicit JSON Schema emitter.
+	describe("toJsonSchema produces valid wire JSON Schema", () => {
 		it("emits clean JSON Schema for a complex object", () => {
 			const schema = Type.Object({
 				direction: Type.Enum({ upstream: "upstream", downstream: "downstream" }),
 				depth: Type.Optional(Type.Integer({ minimum: 1, maximum: 10, default: 3 })),
 				tags: Type.Array(Type.String()),
 			});
-			const round = JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
+			const round = schema.toJsonSchema();
 			expect(isValidJsonSchema(round)).toBe(true);
 			// No raw Zod internals leak through.
 			expect(round).not.toHaveProperty("_zod");
@@ -161,7 +155,7 @@ describe("pi.typebox compatibility shim", () => {
 				Type.Omit(base, ["a"]),
 				Type.Composite([base, Type.Object({ c: Type.Boolean() })]),
 			]) {
-				const round = JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
+				const round = schema.toJsonSchema();
 				expect(isValidJsonSchema(round)).toBe(true);
 				expect(round).not.toHaveProperty("_zod");
 			}

@@ -1,11 +1,10 @@
-import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
+import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import { runBenchCommand } from "../cli/bench-cli";
+import { benchHelp as commandHelp } from "../cli/command-help";
 import { SERVICE_TIER_OPENAI_VALUES } from "../config/service-tier";
 
 export default class Bench extends Command {
-	static description =
-		"Benchmark models with the same prompt: time-to-first-token and generation throughput (tokens/s)";
-
+	static description = commandHelp.description;
 	static args = {
 		models: Args.string({
 			description: "Model selectors (provider/model or fuzzy id, e.g. opus)",

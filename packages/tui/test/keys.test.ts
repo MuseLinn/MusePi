@@ -6,7 +6,7 @@ import {
 	matchesRawBackspace,
 	parseKey,
 	setKittyProtocolActive,
-} from "@oh-my-pi/pi-tui/keys";
+} from "@musepi/pi-tui/keys";
 
 describe("matchesKey", () => {
 	it("matches ctrl+letter sequences", () => {
@@ -55,6 +55,17 @@ describe("matchesKey", () => {
 		expect(matchesKey(dvorakCtrlSlash, "ctrl+/")).toBe(true);
 		expect(matchesKey(dvorakCtrlSlash, "ctrl+[")).toBe(false);
 		setKittyProtocolActive(false);
+	});
+
+	it("matches non-Latin shortcuts by their base-layout key", () => {
+		setKittyProtocolActive(true);
+		try {
+			expect(matchesKey("\x1b[1089::99;5u", "ctrl+c")).toBe(true);
+			expect(matchesKey("\x1b[1079::112;5u", "ctrl+p")).toBe(true);
+			expect(matchesKey("\x1b[1057::99;6u", "ctrl+shift+c")).toBe(true);
+		} finally {
+			setKittyProtocolActive(false);
+		}
 	});
 	it("ignores Kitty release events while still matching repeats", () => {
 		setKittyProtocolActive(true);
@@ -194,6 +205,7 @@ describe("Raw 0x08 backspace disambiguation", () => {
 		"TMUX",
 		"STY",
 		"ZELLIJ",
+		"HERDR_ENV",
 		"TERM",
 		"CMUX_WORKSPACE_ID",
 		"CMUX_SURFACE_ID",

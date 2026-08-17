@@ -49,7 +49,7 @@ function identifierProse(paragraphs: number): string {
 function fences(count: number): string {
 	const parts: string[] = [];
 	for (let i = 0; i < count; i++) {
-		parts.push("```ts\nconst x_" + i + " = await fetch(\"https://api.example.com/v1/usage\");\n```\n");
+		parts.push(`\`\`\`ts\nconst x_${i} = await fetch("https://api.example.com/v1/usage");\n\`\`\`\n`);
 	}
 	return `${parts.join("\n")}\n`;
 }

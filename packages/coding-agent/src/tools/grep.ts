@@ -1,19 +1,19 @@
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { formatHashlineHeader } from "@oh-my-pi/hashline";
+import { formatHashlineHeader } from "@musepi/hashline";
+import { type } from "@musepi/omptype";
 import type {
 	AgentTool,
 	AgentToolContext,
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ToolTier,
-} from "@oh-my-pi/pi-agent-core";
-import { type GrepMatch, GrepOutputMode, type GrepResult, grep } from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
-import { prompt, untilAborted } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-agent-core";
+import { type GrepMatch, GrepOutputMode, type GrepResult, grep } from "@musepi/pi-natives";
+import type { Component } from "@musepi/pi-tui";
+import { Text } from "@musepi/pi-tui";
+import { prompt, untilAborted } from "@musepi/pi-utils";
 import { recordFileSnapshot, recordSeenLinesFromBody } from "../edit/file-snapshot-store";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { LocalProtocolOptions } from "../internal-urls/local-protocol";
@@ -22,6 +22,7 @@ import type { InternalResource, ResolveContext } from "../internal-urls/types";
 import type { Theme } from "../modes/theme/theme";
 import grepDescription from "../prompts/tools/grep.md" with { type: "text" };
 import { DEFAULT_MAX_COLUMN, type TruncationResult, truncateHead, truncateLine } from "../session/streaming-output";
+import { isScoutSpawnable } from "../task/spawn-policy";
 import {
 	Ellipsis,
 	fileHyperlink,
@@ -909,7 +910,17 @@ export class GrepTool implements AgentTool<typeof searchSchema, GrepToolDetails>
 	readonly label = "Grep";
 	readonly loadMode = "discoverable";
 	readonly summary = "Grep file contents using ripgrep (fast regex search)";
-	readonly description: string;
+	get description(): string {
+		const displayMode = resolveFileDisplayMode(this.session);
+		return prompt.render(grepDescription, {
+			IS_HL_MODE: displayMode.hashLines,
+			IS_LINE_NUMBER_MODE: !displayMode.hashLines && displayMode.lineNumbers,
+			scoutAvailable: isScoutSpawnable(
+				this.session.settings.get("task.disabledAgents") as string[] | undefined,
+				this.session.getSessionSpawns?.() ?? "*",
+			),
+		});
+	}
 	readonly parameters = searchSchema;
 	readonly strict = true;
 
@@ -924,11 +935,6 @@ export class GrepTool implements AgentTool<typeof searchSchema, GrepToolDetails>
 		this.#contextOverride = context !== undefined ? Math.max(0, Math.floor(context)) : undefined;
 		const total = options?.totalMatchLimit;
 		this.#totalMatchLimit = total !== undefined ? Math.max(1, Math.floor(total)) : undefined;
-		const displayMode = resolveFileDisplayMode(session);
-		this.description = prompt.render(grepDescription, {
-			IS_HL_MODE: displayMode.hashLines,
-			IS_LINE_NUMBER_MODE: !displayMode.hashLines && displayMode.lineNumbers,
-		});
 	}
 
 	async execute(

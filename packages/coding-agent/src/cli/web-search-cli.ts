@@ -4,8 +4,8 @@
  * Handles `omp q`/`omp web-search` subcommands for testing web search providers.
  */
 
-import { APP_NAME, getProjectDir } from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+import { APP_NAME, getProjectDir } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { Settings } from "../config/settings";
 import { initTheme, theme } from "../modes/theme/theme";

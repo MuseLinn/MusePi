@@ -14,9 +14,9 @@
  *   - Session artifacts for debugging
  */
 import path from "node:path";
-import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
-import type { Usage } from "@oh-my-pi/pi-ai";
-import { $env, logger, prompt } from "@oh-my-pi/pi-utils";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
+import type { Usage } from "@musepi/pi-ai";
+import { $env, logger, prompt } from "@musepi/pi-utils";
 import type { ToolSession } from "..";
 import type { Theme } from "../modes/theme/theme";
 import subagentUserPromptTemplate from "../prompts/system/subagent-user-prompt.md" with { type: "text" };
@@ -27,7 +27,8 @@ import { TASK_EFFORTS, type TaskEffort } from "../thinking";
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/hub";
 import { formatBytes, formatDuration } from "../tools/render-utils";
-import { resolveSpawnPolicy } from "./spawn-policy";
+import { isReadOnlyAgent } from "./read-only-policy";
+import { isScoutSpawnable, resolveSpawnPolicy } from "./spawn-policy";
 import {
 	type AgentDefinition,
 	type AgentProgress,
@@ -102,6 +103,7 @@ export { loadBundledAgents as BUNDLED_AGENTS } from "./agents";
 export { discoverCommands, expandCommand, getCommand } from "./commands";
 export { discoverAgents, getAgent } from "./discovery";
 export { AgentOutputManager } from "./output-manager";
+export * from "./read-only-policy";
 export type {
 	AgentDefinition,
 	AgentProgress,
@@ -118,32 +120,6 @@ export {
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 	taskSchema,
 } from "./types";
-
-// Built-in tools whose approval tier is "read" (see tool classes' `approval`).
-// An agent is read-only iff its declared tools are a non-empty subset of this set.
-// Fail-safe: any unknown tool makes the agent not read-only.
-export const READ_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set([
-	"read",
-	"grep",
-	"glob",
-	"web_search",
-	"ast_grep",
-	"yield",
-	"hub",
-	"ask",
-	"todo",
-	"recall",
-	"reflect",
-	"retain",
-	"memory_edit",
-	"inspect_image",
-	"checkpoint",
-	"rewind",
-]);
-
-export function isReadOnlyAgent(agent: AgentDefinition): boolean {
-	return !!agent.tools?.length && agent.tools.every(tool => READ_ONLY_TOOL_NAMES.has(tool));
-}
 
 /**
  * Preview text for a child result. Falls back to "(no output)" — annotated
@@ -188,8 +164,10 @@ function renderDescription(options: TaskDescriptionOptions): string {
 		readOnly: isReadOnlyAgent(agent),
 		blocking: agent.blocking === true,
 	}));
+	const scoutAvailable = isScoutSpawnable(options.disabledAgents, options.parentSpawns);
 	return prompt.render(taskDescriptionTemplate, {
 		agents: renderedAgents,
+		scoutAvailable,
 		spawningDisabled,
 		defaultAgent: spawnPolicy.defaultAgent,
 		isolationEnabled: options.isolationEnabled,
@@ -398,15 +376,19 @@ const GENERIC_SPAWN_AGENTS: ReadonlySet<string> = new Set(["task", "sonic"]);
  * (DepthCapacity: it currently has the `task` tool). `agentNames` are the
  * per-item resolved agent types. Returns undefined when no nudge applies.
  */
-export function buildSpecializationAdvisory(agentNames: string[], depthCapacity: boolean): string | undefined {
+export function buildSpecializationAdvisory(
+	agentNames: string[],
+	depthCapacity: boolean,
+	scoutAvailable = true,
+): string | undefined {
 	if (!depthCapacity) return undefined;
 	const generics = agentNames.filter(name => GENERIC_SPAWN_AGENTS.has(name));
 	if (generics.length < 2) return undefined;
-	return (
-		`Tip: this call spawned ${generics.length} generic \`${generics[0]}\` workers. ` +
-		`Check the agent list for a closer specialist type — e.g. read-only research belongs on ` +
-		`\`agent: "scout"\`, which runs on a faster model.`
-	);
+	const specialist = scoutAvailable
+		? `Check the agent list for a closer specialist type — e.g. read-only research belongs on ` +
+			`\`agent: "scout"\`, which runs on a faster model.`
+		: `Check the agent list for a closer specialist type.`;
+	return `Tip: this call spawned ${generics.length} generic \`${generics[0]}\` workers. ${specialist}`;
 }
 
 /**
@@ -443,10 +425,11 @@ export function composeSpawnAdvisory(args: {
 	depthCapacity: boolean;
 	ircEnabled: boolean;
 	willRunAsync: boolean;
+	scoutAvailable?: boolean;
 }): string | undefined {
 	return (
 		[
-			buildSpecializationAdvisory(args.agents, args.depthCapacity),
+			buildSpecializationAdvisory(args.agents, args.depthCapacity, args.scoutAvailable),
 			args.willRunAsync ? buildCoordinationAdvisory(args.items, args.depthCapacity, args.ircEnabled) : undefined,
 		]
 			.filter(Boolean)
@@ -458,16 +441,19 @@ export function composeSpawnAdvisory(args: {
 class TaskJobError extends Error {}
 
 /**
- * Process-level memo for create-time agent discovery, keyed by resolved cwd.
+ * Process-level create-time discovery memo and published reload snapshots,
+ * keyed by resolved cwd.
  *
  * `TaskTool.create` runs for every (sub)agent session in this process and the
  * walk-up + plugin-registry scan in `discoverAgents` is identical for a given
- * cwd, so repeat creations reuse the first scan. Execution-time discovery
- * (`#runSpawn`) intentionally stays fresh. The memo also tracks the live
- * `discoverAgents` binding: test spies swap that binding, which invalidates
- * the memo automatically.
+ * cwd, so repeat creations reuse the first scan. Explicit plugin reloads
+ * replace the matching snapshot so already-created tools advertise the latest
+ * definitions. Execution-time discovery (`#runSpawn`) intentionally stays
+ * fresh. The memo also tracks the live `discoverAgents` binding: test spies
+ * swap that binding, which invalidates both caches automatically.
  */
 const discoveryMemo = new Map<string, Promise<DiscoveryResult>>();
+const discoverySnapshots = new Map<string, AgentDefinition[]>();
 let discoveryMemoFn: typeof discoverAgents | undefined;
 
 function discoverAgentsForCreate(cwd: string): Promise<DiscoveryResult> {
@@ -475,6 +461,7 @@ function discoverAgentsForCreate(cwd: string): Promise<DiscoveryResult> {
 	if (discoveryMemoFn !== fn) {
 		discoveryMemoFn = fn;
 		discoveryMemo.clear();
+		discoverySnapshots.clear();
 	}
 	const key = path.resolve(cwd);
 	let pending = discoveryMemo.get(key);
@@ -486,6 +473,17 @@ function discoverAgentsForCreate(cwd: string): Promise<DiscoveryResult> {
 		});
 	}
 	return pending;
+}
+
+/** Rescan one cwd and publish its definitions to existing and future task tools. */
+export async function refreshAgentDiscovery(cwd: string): Promise<void> {
+	const key = path.resolve(cwd);
+	discoveryMemo.delete(key);
+	const pending = discoverAgentsForCreate(cwd);
+	const { agents } = await pending;
+	if (discoveryMemo.get(key) === pending) {
+		discoverySnapshots.set(key, agents);
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -604,7 +602,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		const planMode = this.session.getPlanModeState?.()?.enabled === true;
 		const isolationMode = this.session.settings.get("task.isolation.mode");
 		return renderDescription({
-			agents: this.#discoveredAgents,
+			agents: discoverySnapshots.get(path.resolve(this.session.cwd)) ?? this.#discoveredAgents,
 			isolationEnabled: !planMode && isolationMode !== "none",
 			applyIsolatedChanges: this.session.settings.get("task.isolation.apply"),
 			disabledAgents,
@@ -751,6 +749,10 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						depthCapacity,
 						ircEnabled,
 						willRunAsync: false,
+						scoutAvailable: isScoutSpawnable(
+							this.session.settings.get("task.disabledAgents") as string[] | undefined,
+							this.session.getSessionSpawns?.() ?? "*",
+						),
 					});
 			const result = await this.#executeSyncFanout(
 				toolCallId,
@@ -784,6 +786,10 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					depthCapacity,
 					ircEnabled,
 					willRunAsync: asyncItems.length > 0,
+					scoutAvailable: isScoutSpawnable(
+						this.session.settings.get("task.disabledAgents") as string[] | undefined,
+						this.session.getSessionSpawns?.() ?? "*",
+					),
 				});
 		// Returns a fresh result (copied content array, copied text part) rather
 		// than mutating the caller's — task results are short-lived here, but an
@@ -845,6 +851,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					id: agentId,
 					agent: agentType,
 					agentSource,
+					modelRole: policy.modelRole,
 					status: "pending",
 					task: renderSubagentUserPrompt(assignment),
 					assignment,
@@ -1128,8 +1135,10 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 							// polling row reflects the resolved model, reasoning level,
 							// and running counters without reverting the "running"
 							// status back to the subagent's initial "pending" snapshot.
+							progress.modelRole = nextProgress.modelRole ?? progress.modelRole;
 							progress.resolvedModel = nextProgress.resolvedModel;
-							progress.resolvedModelIsFallback = nextProgress.resolvedModelIsFallback;
+							progress.resolvedModelIsFallback =
+								nextProgress.resolvedModelIsFallback ?? progress.resolvedModelIsFallback;
 							progress.tokens = nextProgress.tokens;
 							progress.requests = nextProgress.requests;
 							progress.contextTokens = nextProgress.contextTokens;
@@ -1172,9 +1181,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					progress.extractedToolData = singleResult?.extractedToolData;
 					progress.retryFailure = singleResult?.retryFailure;
 					progress.retryState = undefined;
+					progress.modelRole = singleResult?.modelRole ?? progress.modelRole;
 					if (singleResult?.resolvedModel) {
 						progress.resolvedModel = singleResult.resolvedModel;
-						progress.resolvedModelIsFallback = singleResult.resolvedModelIsFallback;
+						progress.resolvedModelIsFallback =
+							singleResult.resolvedModelIsFallback ?? progress.resolvedModelIsFallback;
 					} else {
 						delete progress.resolvedModel;
 						delete progress.resolvedModelIsFallback;

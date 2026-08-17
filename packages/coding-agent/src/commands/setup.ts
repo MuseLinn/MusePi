@@ -1,9 +1,11 @@
 /**
  * Run onboarding setup or install dependencies for optional features.
  */
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+
+import { Args, Command, Flags, renderCommandHelp } from "@musepi/pi-utils/cli";
 import { parseArgs } from "../cli/args";
 import { runSetupCommand, type SetupCommandArgs, type SetupComponent } from "../cli/setup-cli";
+import { t } from "../i18n/index.js";
 import { runRootCommand } from "../main";
 import { initTheme } from "../modes/theme/theme";
 
@@ -21,7 +23,7 @@ export async function runOnboardingSetup(deps: OnboardingSetupDependencies = {})
 	const stdinIsTTY = deps.stdinIsTTY ?? process.stdin.isTTY;
 	const stdoutIsTTY = deps.stdoutIsTTY ?? process.stdout.isTTY;
 	if (!stdinIsTTY || !stdoutIsTTY) {
-		(deps.writeStderr ?? (text => process.stderr.write(text)))("omp setup requires an interactive TTY.\n");
+		(deps.writeStderr ?? (text => process.stderr.write(text)))(`${t("musepi setup requires an interactive TTY.")}\n`);
 		(deps.exit ?? process.exit)(1);
 		return;
 	}
@@ -29,26 +31,34 @@ export async function runOnboardingSetup(deps: OnboardingSetupDependencies = {})
 }
 
 export default class Setup extends Command {
-	static description = "Run onboarding setup or install dependencies for optional features";
+	// Descriptions and flag help are evaluated lazily (getters) so locale is
+	// resolved at help/parse time, never at module load.
+	static get description(): string {
+		return t("Run onboarding setup or install dependencies for optional features");
+	}
 
-	static args = {
-		component: Args.string({
-			description: "Optional component to install",
-			required: false,
-			options: COMPONENTS,
-		}),
-	};
+	static get args() {
+		return {
+			component: Args.string({
+				description: t("Optional component to install"),
+				required: false,
+				options: COMPONENTS,
+			}),
+		};
+	}
 
-	static flags = {
-		check: Flags.boolean({ char: "c", description: "Check if dependencies are installed" }),
-		json: Flags.boolean({ description: "Output status as JSON" }),
-	};
+	static get flags() {
+		return {
+			check: Flags.boolean({ char: "c", description: t("Check if dependencies are installed") }),
+			json: Flags.boolean({ description: t("Output status as JSON") }),
+		};
+	}
 
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Setup);
 		if (!args.component) {
 			if (flags.check || flags.json) {
-				renderCommandHelp("omp", "setup", Setup);
+				renderCommandHelp("musepi", "setup", Setup);
 				return;
 			}
 			await runOnboardingSetup();

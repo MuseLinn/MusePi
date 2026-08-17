@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { RenderResultOptions } from "@oh-my-pi/pi-agent-core";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { bashToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/bash";
-import { previewWindowRows } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import { ImageProtocol, TERMINAL } from "@oh-my-pi/pi-tui";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+import type { RenderResultOptions } from "@musepi/pi-agent-core";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { bashToolRenderer } from "@musepi/pi-coding-agent/tools/bash";
+import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
+import { ImageProtocol, TERMINAL } from "@musepi/pi-tui";
+import { sanitizeText } from "@musepi/pi-utils";
 
 type MutableTerminalInfo = {
 	imageProtocol: ImageProtocol | null;
@@ -33,6 +33,20 @@ describe("bashToolRenderer", () => {
 		const rendered = sanitizeText(component.render(120).join("\n"));
 		expect(rendered).toContain('MERMAID="line \\"one\\"\\ntwo"');
 		expect(rendered).toContain("printf '%s' \"$MERMAID\"");
+	});
+
+	it("stringifies malformed env values in the command preview", async () => {
+		const theme = await getThemeByName("dark");
+		expect(theme).toBeDefined();
+		const uiTheme = theme!;
+		const component = bashToolRenderer.renderCall(
+			{ command: 'echo "$DEBUG"', env: { DEBUG: true } },
+			{ expanded: false, isPartial: false },
+			uiTheme,
+		);
+		const rendered = sanitizeText(component.render(120).join("\n"));
+		expect(rendered).toContain('DEBUG="true"');
+		expect(rendered).toContain('echo "$DEBUG"');
 	});
 
 	it("shows partial env assignments while tool args are still streaming", async () => {

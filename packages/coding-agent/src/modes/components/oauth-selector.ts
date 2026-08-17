@@ -1,5 +1,5 @@
-import { getOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
-import type { OAuthProviderInfo } from "@oh-my-pi/pi-ai/oauth/types";
+import { getOAuthProviders } from "@musepi/pi-ai/oauth";
+import type { OAuthProviderInfo } from "@musepi/pi-ai/oauth/types";
 import {
 	Container,
 	extractPrintableText,
@@ -9,8 +9,9 @@ import {
 	type SgrMouseEvent,
 	Spacer,
 	TruncatedText,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import { settings } from "../../config/settings";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import type { AuthStorage, CredentialOriginKind } from "../../session/auth-storage";
@@ -95,7 +96,7 @@ export class OAuthSelectorComponent extends Container {
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 		// Add title
-		const title = mode === "login" ? "Select provider to login:" : "Select provider to logout:";
+		const title = mode === "login" ? t("Select provider to login:") : t("Select provider to logout:");
 		this.addChild(new TruncatedText(theme.bold(title)));
 		this.addChild(new Spacer(1));
 		// Create list container
@@ -233,16 +234,16 @@ export class OAuthSelectorComponent extends Container {
 		if (state === "checking") {
 			const frameCount = theme.spinnerFrames.length;
 			const spinner = frameCount > 0 ? theme.spinnerFrames[this.#spinnerFrame % frameCount] : theme.status.pending;
-			return theme.fg("warning", ` ${spinner} checking`) + source;
+			return theme.fg("warning", ` ${spinner} ${t("checking")}`) + source;
 		}
 		if (state === "invalid") {
-			return theme.fg("error", ` ${theme.status.error} invalid`) + source;
+			return theme.fg("error", ` ${theme.status.error} ${t("invalid")}`) + source;
 		}
 		if (state === "valid") {
-			return theme.fg("success", ` ${theme.status.enabled} logged in`) + source;
+			return theme.fg("success", ` ${theme.status.enabled} ${t("logged in")}`) + source;
 		}
 		return this.#hasSelectableAuth(providerId)
-			? theme.fg("success", ` ${theme.status.enabled} logged in`) + source
+			? theme.fg("success", ` ${theme.status.enabled} ${t("logged in")}`) + source
 			: "";
 	}
 
@@ -256,7 +257,7 @@ export class OAuthSelectorComponent extends Container {
 
 	#renderStatusLine(_total: number): string {
 		const query = this.#searchQuery.trim();
-		const suffix = query ? `Search: ${this.#searchQuery}` : "Type to search";
+		const suffix = query ? t("Search: {0}", this.#searchQuery) : t("Type to search");
 		return theme.fg("muted", `  ${suffix}`);
 	}
 
@@ -264,11 +265,11 @@ export class OAuthSelectorComponent extends Container {
 		let text = `${provider.name} ${provider.id}`;
 		const origin = this.#authStorage.getCredentialOrigin(provider.id);
 		if (origin) {
-			text += ` logged in authenticated ${ORIGIN_LABELS[origin.kind]}`;
+			text += ` ${t("logged in authenticated {0}", ORIGIN_LABELS[origin.kind])}`;
 			if (origin.envVar) text += ` ${origin.envVar}`;
 		}
 		if (!provider.available) {
-			text += " unavailable";
+			text += ` ${t("unavailable")}`;
 		}
 		return text;
 	}
@@ -358,9 +359,9 @@ export class OAuthSelectorComponent extends Container {
 			const message =
 				this.#allProviders.length === 0
 					? this.#mode === "login"
-						? "No OAuth providers available"
-						: "No stored provider credentials to log out"
-					: "No matching providers";
+						? t("No OAuth providers available")
+						: t("No stored provider credentials to log out")
+					: t("No matching providers");
 			this.#listContainer.addChild(new TruncatedText(theme.fg("muted", `  ${message}`), 0, 0));
 		}
 		if (this.#statusMessage) {
@@ -428,7 +429,7 @@ export class OAuthSelectorComponent extends Container {
 			this.stopValidation();
 			this.#onSelectCallback(selectedProvider.id);
 		} else if (selectedProvider) {
-			this.#statusMessage = "Provider unavailable in this environment.";
+			this.#statusMessage = t("Provider unavailable in this environment.");
 			this.#updateList();
 		}
 	}

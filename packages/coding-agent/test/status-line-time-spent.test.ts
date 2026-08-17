@@ -12,11 +12,11 @@
  *   window so `/clear` and fresh-session flows zero the meter.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { StatusLineComponent } from "@oh-my-pi/pi-coding-agent/modes/components/status-line";
-import type { SegmentContext } from "@oh-my-pi/pi-coding-agent/modes/components/status-line/segments";
-import { renderSegment } from "@oh-my-pi/pi-coding-agent/modes/components/status-line/segments";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
+import type { SegmentContext } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
+import { renderSegment } from "@musepi/pi-coding-agent/modes/components/status-line/segments";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 
 beforeAll(async () => {
 	resetSettingsForTest();
@@ -44,6 +44,7 @@ function createCtx(activeMs: number): SegmentContext {
 		prewalk: null,
 		goalMode: null,
 		vibeMode: null,
+		swarmMode: null,
 		collab: null,
 		usageStats: {
 			input: 0,

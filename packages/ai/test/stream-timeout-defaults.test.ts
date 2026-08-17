@@ -6,7 +6,7 @@ import {
 	getStreamIdleTimeoutMs,
 	iterateWithIdleTimeout,
 	iterateWithTerminalGrace,
-} from "@oh-my-pi/pi-ai/utils/idle-iterator";
+} from "@musepi/pi-ai/utils/idle-iterator";
 
 /**
  * Per-provider fallback overrides on the stream-watchdog helpers.
@@ -101,8 +101,8 @@ describe("getStreamFirstEventTimeoutMs(idleTimeoutMs, fallbackMs)", () => {
 		expect(getStreamFirstEventTimeoutMs(undefined, 300_000)).toBeUndefined();
 	});
 
-	it("falls back to the 100s global default when no fallback or env is provided", () => {
-		expect(getStreamFirstEventTimeoutMs()).toBe(100_000);
+	it("falls back to the 300s global default when no fallback or env is provided", () => {
+		expect(getStreamFirstEventTimeoutMs()).toBe(300_000);
 	});
 });
 

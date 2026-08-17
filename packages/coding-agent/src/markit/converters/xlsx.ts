@@ -1,5 +1,5 @@
 // Adapted from markit-ai (MIT). See ../NOTICE.
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser } from "@musepi/pi-utils/xml";
 import { unzip, unzipText } from "../../utils/zip";
 import type { ConversionResult, Converter, StreamInfo } from "../types";
 

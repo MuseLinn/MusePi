@@ -19,7 +19,8 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { getMarkdownTheme, type ThemeColor, theme } from "../../modes/theme/theme";
 import {
 	matchesAppExternalEditor,
@@ -135,7 +136,7 @@ class OutlinedList extends Container {
 		this.invalidate();
 	}
 
-	render(width: number): readonly string[] {
+	override render(width: number): readonly string[] {
 		const borderColor = (text: string) => theme.fg("border", text);
 		const horizontal = borderColor(theme.boxRound.horizontal.repeat(Math.max(1, width)));
 		const innerWidth = Math.max(1, width - 2);
@@ -262,7 +263,7 @@ export class HookSelectorComponent extends Container {
 			this.addChild(this.#listContainer);
 		}
 		this.addChild(new Spacer(1));
-		const controlsHint = opts?.helpText ?? "up/down navigate  enter select  esc cancel";
+		const controlsHint = opts?.helpText ?? t("up/down navigate  enter select  esc cancel");
 		this.addChild(new Text(theme.fg("dim", controlsHint), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
@@ -685,7 +686,7 @@ export class HookSelectorComponent extends Container {
 		return super.render(renderWidth);
 	}
 
-	dispose(): void {
+	override dispose(): void {
 		this.#countdown?.dispose();
 	}
 }

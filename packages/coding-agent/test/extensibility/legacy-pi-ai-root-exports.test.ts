@@ -1,16 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage, FetchImpl } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { Effort } from "@musepi/pi-catalog/effort";
 import {
 	isContextOverflow,
 	parseJsonWithRepair,
 	parseStreamingJson,
 	repairJson,
-} from "@oh-my-pi/pi-coding-agent/extensibility/legacy-pi-ai-shim";
+	streamSimpleOpenAIResponses,
+} from "@musepi/pi-coding-agent/extensibility/legacy-pi-ai-shim";
 
 // Issue #6859: pi extensions import runtime helpers from the `@earendil-works/pi-ai`
-// (aliased to `@oh-my-pi/pi-ai`) package root that omp's barrel no longer forwards.
-// `isContextOverflow` moved under `@oh-my-pi/pi-ai/error` and the JSON-repair
-// helpers moved to `@oh-my-pi/pi-utils`, so `export * from "@oh-my-pi/pi-ai"` left
+// (aliased to `@musepi/pi-ai`) package root that omp's barrel no longer forwards.
+// `isContextOverflow` moved under `@musepi/pi-ai/error` and the JSON-repair
+// helpers moved to `@musepi/pi-utils`, so `export * from "@musepi/pi-ai"` left
 // them off the shim surface and a named import tripped Bun's static
 // "No matching export" check during plugin validation (e.g.
 // `omp plugin install pi-blackhole`). This pins the bridged root surface so it
@@ -52,5 +55,57 @@ describe("legacy pi-ai shim root exports", () => {
 		expect(parseJsonWithRepair<{ a: number }>("{a: 1,}")).toEqual({ a: 1 });
 		// parseStreamingJson completes a truncated object at the streaming edge.
 		expect(parseStreamingJson<{ a: number }>('{"a": 1')).toEqual({ a: 1 });
+	});
+	it("maps legacy simple options before streaming OpenAI Responses", async () => {
+		const requests: unknown[] = [];
+		const fetchMock: FetchImpl = Object.assign(
+			async () =>
+				new Response(
+					JSON.stringify({
+						error: { message: "intentional test response", type: "invalid_request_error" },
+					}),
+					{ status: 400, headers: { "content-type": "application/json" } },
+				),
+			{ preconnect: fetch.preconnect },
+		);
+		const model = buildModel({
+			id: "legacy-simple-options",
+			name: "Legacy Simple Options",
+			api: "openai-responses",
+			provider: "openai",
+			baseUrl: "https://responses.example.test/v1",
+			reasoning: true,
+			compat: {
+				supportsReasoningParams: true,
+				supportsReasoningEffort: true,
+			},
+			thinking: {
+				mode: "effort",
+				efforts: [Effort.High],
+			},
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128_000,
+			maxTokens: 16_384,
+		});
+
+		const result = await streamSimpleOpenAIResponses(
+			model,
+			{ messages: [{ role: "user", content: "hello", timestamp: 0 }] },
+			{
+				apiKey: "test-key",
+				reasoning: Effort.High,
+				hideThinkingSummary: true,
+				fetch: fetchMock,
+				onPayload: request => {
+					requests.push(request);
+				},
+			},
+		).result();
+
+		expect(result.stopReason).toBe("error");
+		expect(requests).toHaveLength(1);
+		expect(requests[0]).toMatchObject({ reasoning: { effort: "high" } });
+		expect(JSON.stringify(requests[0])).not.toContain('"summary"');
 	});
 });

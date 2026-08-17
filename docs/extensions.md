@@ -12,14 +12,14 @@ This document covers the current extension runtime in:
 
 For discovery paths and filesystem loading rules, see [`extension-loading.md`](./extension-loading.md).
 
-For packaged user-facing extension CLIs/features such as `packages/swarm-extension`, see [`user-facing-packages.md`](./user-facing-packages.md).
+For packaged user-facing extension CLIs/features, see [`user-facing-packages.md`](./user-facing-packages.md).
 
 ## What an extension is
 
 An extension is a TS/JS module exporting a default factory:
 
 ```ts
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
 export default function myExtension(pi: ExtensionAPI) {
   // register handlers/tools/commands/renderers
@@ -67,10 +67,10 @@ Important constraint from `loader.ts`:
 ## Quick start
 
 ```ts
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
-  const { z } = pi.zod;
+  const z = pi.zod;
 
   pi.setLabel("Safety + Utilities");
 
@@ -132,8 +132,9 @@ In interactive mode, `input` handlers run before the built-in first-message auto
 Also exposed:
 
 - `pi.logger`
-- `pi.typebox` (zod-backed compatibility shim for legacy TypeBox-style schemas)
-- `pi.zod` (injected `zod/v4` module — canonical for tool parameter schemas)
+- `pi.arktype` (the omptype `type(...)` schema builder)
+- `pi.zod` (Zod-compatible builder backed by omptype)
+- `pi.typebox` (legacy TypeBox-compatible shim)
 - `pi.pi` (package exports)
 
 ### Message delivery semantics
@@ -298,7 +299,7 @@ Current runtime note: `ExtensionRunner.emitResourcesDiscover(...)` is implemente
 
 ## Tool authoring details
 
-`registerTool` uses `ToolDefinition` from `types.ts`.
+`registerTool` uses `ToolDefinition` from `types.ts`. Its `parameters` field accepts omptype schemas; the injected TypeBox compatibility shim remains available for legacy extensions.
 
 Current `execute` signature:
 
@@ -312,10 +313,30 @@ execute(
 ): Promise<AgentToolResult>
 ```
 
+### Delegating to a native built-in (`ctx.invokeTool`)
+
+A tool that re-registers a built-in name (e.g. wrapping `write` to add logging or a policy check) can
+run the original instead of reimplementing it. When your registered tool shadows a built-in, the `ctx`
+passed to `execute` carries:
+
+```ts
+ctx.invokeTool?<TDetails>(
+  params: Record<string, unknown>,
+  options?: { signal?: AbortSignal; onUpdate?: AgentToolUpdateCallback },
+): Promise<AgentToolResult<TDetails>>
+```
+
+It runs the **native** built-in of the same name as your tool (delegation is same-tool only, so it
+cannot reach an arbitrary target or escalate past the approval already granted for this call) and
+returns its result, including the native tool's own side effects and internal bookkeeping. It is
+present only when a native built-in of that name exists — `ctx.invokeTool` is `undefined` for a
+net-new tool that shadows no built-in. The native call is not re-gated, since it is the same tool you
+are already approved as, and delegation depth is guarded against accidental self-recursion.
+
 Template:
 
 ```ts
-const { z } = pi.zod;
+const z = pi.zod;
 
 pi.registerTool({
   name: "my_tool",
@@ -391,7 +412,7 @@ When no UI context is supplied to runner init, `ctx.hasUI` is `false` and method
 
 ### ACP mode
 
-ACP installs an elicitation-bridged UI context (`createAcpExtensionUiContext` in `acp-agent.ts`). `ctx.hasUI` is `true` while only `select`/`confirm`/`input` round-trip (as ACP elicitations; defaults are returned when the client lacks the `elicitation.form` capability). The non-elicitation surface (widgets, editor, theming, terminal input, autocomplete stacking) is stubbed no-op.
+ACP installs an elicitation-bridged UI context (`createAcpExtensionUiContext` in `acp-agent.ts`). `ctx.hasUI` is `true` while `select`/`confirm`/`input`/`editor` round-trip (as ACP elicitations; defaults are returned when the client lacks the `elicitation.form` capability). The non-elicitation surface (widgets, theming, terminal input, autocomplete stacking) is stubbed no-op.
 
 ## Session and state patterns
 
@@ -430,7 +451,7 @@ Used by interactive rendering when custom messages are displayed.
 ## Assistant thinking renderer
 
 ```ts
-import { Container, Text } from "@oh-my-pi/pi-tui";
+import { Container, Text } from "@musepi/pi-tui";
 
 pi.registerAssistantThinkingRenderer((context, theme) => {
   const container = new Container();

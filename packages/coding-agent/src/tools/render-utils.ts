@@ -7,11 +7,11 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
-import type { Ellipsis } from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { getKeybindings, replaceTabs, truncateToWidth } from "@oh-my-pi/pi-tui";
-import { pluralize } from "@oh-my-pi/pi-utils";
+import type { ToolCallContext } from "@musepi/pi-agent-core";
+import type { Ellipsis } from "@musepi/pi-natives";
+import type { Component } from "@musepi/pi-tui";
+import { getKeybindings, replaceTabs, truncateToWidth } from "@musepi/pi-tui";
+import { pluralize } from "@musepi/pi-utils";
 import { formatKeyHints, type KeyId } from "../config/keybindings";
 import { isSettingsInitialized, settings } from "../config/settings";
 import { getDefault } from "../config/settings-schema";
@@ -19,8 +19,8 @@ import type { Theme } from "../modes/theme/theme";
 import { Hasher } from "../tui/utils";
 import { formatDimensionNote, type ResizedImage } from "../utils/image-resize";
 
-export { Ellipsis } from "@oh-my-pi/pi-natives";
-export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
+export { Ellipsis } from "@musepi/pi-natives";
+export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
 
 // =============================================================================
 // Standardized Display Constants
@@ -61,6 +61,8 @@ export const PREVIEW_LIMITS = {
 	OUTPUT_COLLAPSED: 3,
 	/** Output preview lines in expanded view */
 	OUTPUT_EXPANDED: 10,
+	/** Computer script lines shown in collapsed view */
+	COMPUTER_CODE_COLLAPSED: 10,
 	/** Max hunks shown when collapsed (edit tool) */
 	DIFF_COLLAPSED_HUNKS: 8,
 	/** Max diff lines shown when collapsed (edit tool) */
@@ -140,7 +142,7 @@ export function getDomain(url: string): string {
 // Formatting Utilities
 // =============================================================================
 
-export { formatAge, formatBytes, formatCount, formatDuration, pluralize } from "@oh-my-pi/pi-utils";
+export { formatAge, formatBytes, formatCount, formatDuration, pluralize } from "@musepi/pi-utils";
 
 // =============================================================================
 // Theme Helper Utilities

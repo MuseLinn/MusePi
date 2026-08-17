@@ -1,6 +1,6 @@
 {
-  "name": "@oh-my-pi/pi-natives",
-  "version": "17.1.8",
+  "name": "@musepi/pi-natives",
+  "version": "17.2.12",
   "description": "Native Rust bindings for audio, WebRTC, grep, clipboard, image processing, syntax highlighting, PTY, and shell operations via N-API",
   "type": "module",
   "homepage": "https://omp.sh",
@@ -67,6 +67,10 @@
     "./desktop": {
       "types": "./native/desktop.d.ts",
       "import": "./native/desktop.js"
+    },
+    "./clipboard": {
+      "types": "./native/clipboard.d.ts",
+      "import": "./native/clipboard.js"
     }
   }
 }

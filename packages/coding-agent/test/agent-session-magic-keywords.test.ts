@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { Effort } from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import * as autoThinkingClassifier from "@oh-my-pi/pi-coding-agent/auto-thinking/classifier";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { AUTO_THINKING } from "@oh-my-pi/pi-coding-agent/thinking";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentTool } from "@musepi/pi-agent-core";
+import { Effort } from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import * as autoThinkingClassifier from "@musepi/pi-coding-agent/auto-thinking/classifier";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const mockTaskTool: AgentTool = {
 	name: "task",
@@ -132,13 +132,31 @@ describe("AgentSession magic keyword settings", () => {
 
 		await session.prompt("please workflowz this");
 
+		const promptMessages = promptSpy.mock.calls[0]![0] as unknown as Array<{
+			content?: string;
+			customType?: string;
+		}>;
+		const notice = promptMessages.find(message => message.customType === "workflow-notice");
+		expect(notice?.customType).toBe("workflow-notice");
+		expect(notice?.content).toContain("`eval`");
+		expect(notice?.content).toContain("`parallel(thunks)`");
+		expect(notice?.content).toContain("**Python (`eval`, Python backend):**");
+		expect(notice?.content).toContain("**JavaScript (`eval`, JavaScript backend):**");
+	});
+
+	it("updates the workflowz notice when scout is disabled during the session", async () => {
+		const created = await createMagicKeywordSession(root);
+		session = created.session;
+		authStorage = created.authStorage;
+		created.settings.set("task.disabledAgents", ["scout"]);
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined);
+
+		await session.prompt("please workflowz this");
+
 		const promptMessages = promptSpy.mock.calls[0]![0] as unknown as Array<{ content?: string; customType?: string }>;
 		const notice = promptMessages.find(message => message.customType === "workflow-notice")?.content ?? "";
-		expect(notice).toContain("Author the orchestration in the `eval` tool");
-		expect(notice).toContain("Every eval call has:");
-		expect(notice).toContain("`parallel(thunks)`");
-		expect(notice).toContain("**Python (`eval`, Python backend):**");
-		expect(notice).toContain("**JavaScript (`eval`, JavaScript backend):**");
+		expect(notice.toLowerCase()).not.toContain("scout");
+		expect(notice).toContain("Explore inline FIRST");
 	});
 
 	it("skips workflowz notice when the task tool is inactive", async () => {

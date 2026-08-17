@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { AssistantMessage, SessionEntry } from "@oh-my-pi/pi-wire";
+import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import "./transcript-dom-shim";
 import { Transcript } from "../src/components/transcript/Transcript";
@@ -106,10 +106,15 @@ describe("Transcript live tool rendering", () => {
 		expect(html).not.toContain(RAW_ASSISTANT_TARGET);
 	});
 
-	it("keeps the working shimmer when no tool is active", () => {
+	it("keeps the working state quiet in the transcript when no tool is active", () => {
+		// musepi: the pre-stream thinking state is carried by the Composer
+		// status bar (orb + text); a transcript shimmer row with its own orb
+		// duplicated it (user-requested). The transcript must neither show the
+		// idle empty state nor a fake shimmer while working.
 		const html = renderTranscript({ working: true, activeTools: new Map() });
 
-		expect(html).toContain("thinking…");
+		expect(html).not.toContain("thinking…");
+		expect(html).not.toContain("no activity yet");
 	});
 });
 
@@ -143,5 +148,51 @@ describe("Transcript message Markdown", () => {
 
 		expect(countElements(html, ".tr-row--user .tr-md code")).toBe(1);
 		expect(countElements(html, ".tr-row--user .tr-md strong")).toBe(1);
+	});
+});
+
+describe("TTSR / IRC custom_message rendering", () => {
+	function ttsrEntry(): SessionEntry {
+		return {
+			type: "custom_message",
+			id: "ttsr-1",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:00Z",
+			customType: "ttsr",
+			content: "no-console、fence",
+			display: true,
+			details: {
+				rules: [
+					{ name: "no-console", description: "不许直接 console.log" },
+					{ name: "fence", content: "代码栅栏" },
+				],
+			},
+		};
+	}
+
+	it("renders a ttsr entry as a warning block with rule names", () => {
+		const html = renderTranscript({ entries: [ttsrEntry()], working: false });
+		expect(html).toContain("tr-ttsr");
+		expect(html).toContain("no-console");
+		expect(html).toContain("fence");
+		// description visible in the (collapsed-body still mounted) markup
+		expect(html).toContain("不许直接 console.log");
+	});
+
+	it("renders irc: entries as custom rows with the sender badge", () => {
+		const entry: SessionEntry = {
+			type: "custom_message",
+			id: "irc-1",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:01Z",
+			customType: "irc:incoming",
+			content: "sub: 我查一下 git 历史",
+			display: true,
+			details: { id: "m1", from: "sub", message: "我查一下 git 历史" },
+		};
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc");
+		expect(html).toContain("sub");
+		expect(html).toContain("我查一下 git 历史");
 	});
 });

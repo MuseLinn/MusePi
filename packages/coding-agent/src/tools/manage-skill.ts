@@ -1,6 +1,6 @@
 import * as path from "node:path";
-import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import {
 	deleteManagedSkill,
 	getManagedSkillsDir,

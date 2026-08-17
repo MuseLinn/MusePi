@@ -21,8 +21,25 @@
 /** Listener invoked with the new state on every pause/resume transition. */
 export type AgentPauseListener = (paused: boolean) => void;
 
+/**
+ * Minimal freeze-gate surface the agent loop consults. The process-global
+ * {@link AgentPauseGate} is the default; hosts that run several independent
+ * agent scopes in one process (the GUI daemon's sessions) pass a per-scope
+ * gate via {@link AgentLoopConfig.pauseGate} so pausing one session never
+ * freezes the others.
+ */
+export interface PauseGate {
+	/** True while the gate is engaged. */
+	readonly paused: boolean;
+	/**
+	 * Park until the gate is released. Resolves immediately when not paused.
+	 * An abort on `signal` releases only this wait — the gate stays engaged.
+	 */
+	waitUntilResumed(signal?: AbortSignal): Promise<void>;
+}
+
 /** Freeze switch shared by every agent loop in the process. See module docs. */
-export class AgentPauseGate {
+export class AgentPauseGate implements PauseGate {
 	/** Pending while paused; resolved and cleared on resume. */
 	#gate: PromiseWithResolvers<void> | undefined;
 	#pausedAt = 0;

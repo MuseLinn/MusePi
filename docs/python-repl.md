@@ -141,7 +141,7 @@ Environment is filtered before launching the runner:
 Runtime selection order (skipped entirely when the `python.interpreter` setting names an explicit executable):
 
 1. Active/located venv (`VIRTUAL_ENV`, then `CONDA_PREFIX`, then `<cwd>/.venv`, `<cwd>/venv`)
-2. Managed venv at `~/.omp/python-env`
+2. Managed venv at `~/.musepi/python-env`
 3. `python` or `python3` on PATH
 
 When a venv is selected, its bin/Scripts path is prepended to `PATH`.
@@ -160,7 +160,7 @@ The runner additionally receives `PYTHONUNBUFFERED=1` and `PYTHONIOENCODING=utf-
 
 If Python preflight fails and `eval.js` is enabled, `eval` remains available for `js` cells; `py` cells fail with a Python-backend availability error.
 
-Python prelude helpers include `agent(prompt, *, agent="task", model=None, label=None, schema=None, handle=False)`. It synchronously calls the host bridge, runs one subagent through the task executor, and returns the final text. When `schema` is supplied, the helper parses the subagent's JSON output and returns the object. When `handle=True`, it instead returns a DAG node dict (`{"text", "output", "handle", "id", "agent"}`) whose `handle` is the spawned agent's recoverable `agent://<id>` URI (the parsed object lands under `"data"` when `schema` is also set), so a downstream `pipeline`/`parallel` stage can reference the transcript by handle instead of re-inlining it.
+Python prelude helpers include `agent(prompt, *, agent="task", label=None, schema=None, schema_mode=None, isolated=None, apply=None, merge=None, handle=False)`. It synchronously calls the host bridge and returns final text, or parsed data when `schema` is supplied. `schema_mode` selects permissive or strict structured-output handling; the isolation/apply/merge flags control task worktree behavior. With `handle=True`, it returns a DAG node dict (`{"text", "output", "handle", "id", "agent"}`) whose handle is the recoverable `agent://<id>` URI; parsed output is also stored under `"data"` when available.
 
 ## Execution flow and cancellation/timeout
 
@@ -231,7 +231,7 @@ Output is streamed through `OutputSink` and may be persisted to artifact storage
 ## Operational troubleshooting
 
 - **Python backend not available** — Check `eval.py`, `PI_PY`, and that `python`/`python3` is on PATH. If preflight fails and `eval.js` is enabled, use a `js` cell.
-- **No Python on PATH** — Install a system Python 3.8+ or place a venv at `~/.omp/python-env`. `omp setup python --check` reports the resolved interpreter.
+- **No Python on PATH** — Install a system Python 3.8+ or place a venv at `~/.musepi/python-env`. `musepi setup python --check` reports the resolved interpreter.
 - **Execution hangs then times out** — Increase tool `timeout` (max 3600s) if workload is legitimate. For stuck native code, cancellation triggers `SIGINT` first then escalates; the session restarts on the next request.
 - **stdin/input prompts in Python code** — `input()` is not supported; pass data programmatically.
 - **Working directory errors** — Tool validates `cwd` exists and is a directory before execution.
@@ -242,3 +242,4 @@ Output is streamed through `OutputSink` and may be persisted to artifact storage
 - `PI_PYTHON_SKIP_CHECK=1` — bypass Python preflight/warm checks
 - `PI_PYTHON_INTEGRATION=1` — enable gated integration tests that spawn a real Python
 - `PI_PYTHON_IPC_TRACE=1` — log NDJSON frames exchanged with the runner subprocess
+

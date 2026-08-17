@@ -1,14 +1,14 @@
 import { beforeAll, describe, expect, type Mock, test, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ModelPickerComponent, type ModelPickerOptions } from "@oh-my-pi/pi-coding-agent/modes/components/model-picker";
-import { resolveSegmentPalette } from "@oh-my-pi/pi-coding-agent/modes/components/segment-track";
-import { getThemeByName, setThemeInstance, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { ResolvedRoleModel } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import type { TUI } from "@oh-my-pi/pi-tui";
+import type { Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { ModelPickerComponent, type ModelPickerOptions } from "@musepi/pi-coding-agent/modes/components/model-picker";
+import { resolveSegmentPalette } from "@musepi/pi-coding-agent/modes/components/segment-track";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { ResolvedRoleModel } from "@musepi/pi-coding-agent/session/agent-session";
+import type { TUI } from "@musepi/pi-tui";
 
 function normalize(lines: readonly string[]): string {
 	return stripVTControlCharacters(lines.join("\n")).replace(/\s+/g, " ").trim();
@@ -44,7 +44,7 @@ interface RegistryOverrides {
 
 interface PickerHarness {
 	picker: ModelPickerComponent;
-	onPick: Mock<(model: Model, selector: string) => void>;
+	onPick: Mock<(model: Model, selector: string, meta: { overContext: boolean }) => void>;
 	onPickRole: Mock<(entry: ResolvedRoleModel) => void>;
 	onCancel: Mock<() => void>;
 }
@@ -91,7 +91,7 @@ describe("ModelPicker", () => {
 		}
 	});
 
-	test("disables models below the current context size and picks the first enabled one", () => {
+	test("flags over-context models but keeps them selectable, reporting overContext on pick", () => {
 		const small = makeModel("test", "a-small", 4096);
 		const large = makeModel("test", "b-large", 128_000);
 		const { picker, onPick } = createPicker({
@@ -100,14 +100,33 @@ describe("ModelPicker", () => {
 			picker: { currentContextTokens: 6000 },
 		});
 
+		expect(normalize(picker.render(220))).toContain("Session-only switch");
+
+		picker.handleInput("small");
 		const rendered = normalize(picker.render(220));
-		expect(rendered).toContain("a-small");
 		expect(rendered).toContain("context>4.1k");
-		expect(rendered).toContain("Session-only switch");
+		expect(rendered).toContain("compacts with current model");
 
 		picker.handleInput("\n");
 		expect(onPick).toHaveBeenCalledTimes(1);
+		expect(onPick.mock.calls[0]?.[0]).toBe(small);
+		expect(onPick.mock.calls[0]?.[2]).toEqual({ overContext: true });
+	});
+
+	test("picking a model that fits reports overContext false", () => {
+		const small = makeModel("test", "a-small", 4096);
+		const large = makeModel("test", "b-large", 128_000);
+		const { picker, onPick } = createPicker({
+			models: [small, large],
+			scoped: true,
+			picker: { currentContextTokens: 6000 },
+		});
+
+		picker.handleInput("large");
+		picker.handleInput("\n");
+		expect(onPick).toHaveBeenCalledTimes(1);
 		expect(onPick.mock.calls[0]?.[0]).toBe(large);
+		expect(onPick.mock.calls[0]?.[2]).toEqual({ overContext: false });
 	});
 
 	test("uses cached models for Enter while the offline refresh is still pending", () => {

@@ -13,13 +13,14 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAcpSessionFactory } from "@oh-my-pi/pi-coding-agent/main";
-import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import * as path from "node:path";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createAcpSessionFactory } from "@musepi/pi-coding-agent/main";
+import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@musepi/pi-coding-agent/sdk";
+import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
 
 describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 	it("forces enableMCP=false even when baseOptions opts in", async () => {
@@ -74,6 +75,102 @@ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 			}
 		}
 	});
+
+	it("shares the trusted extension EventBus with the ACP session", async () => {
+		const tempDir = TempDir.createSync("@pi-acp-trusted-extension-");
+		let authStorage: AuthStorage | undefined;
+		try {
+			authStorage = await AuthStorage.create(tempDir.join("auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage);
+			const settings = Settings.isolated({});
+			const trustedPath = tempDir.join("trusted.ts");
+			const firedPath = tempDir.join("trusted-event-fired");
+			const ambientFiredPath = tempDir.join("ambient-extension-loaded");
+			await Bun.write(
+				tempDir.join(".omp/extensions/ambient.ts"),
+				`import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(ambientFiredPath)}, "loaded"); export default function () {}`,
+			);
+			await Bun.write(
+				trustedPath,
+				`import { writeFileSync } from "node:fs"; export default function (pi) { pi.events.on("acp-session-live", () => writeFileSync(${JSON.stringify(firedPath)}, "fired")); }`,
+			);
+			let captured: CreateAgentSessionOptions | undefined;
+			const fakeSession = {} as AgentSession;
+			const factory = createAcpSessionFactory({
+				baseOptions: {
+					disableExtensionDiscovery: true,
+					additionalExtensionPaths: [trustedPath],
+				} as CreateAgentSessionOptions,
+				settings,
+				sessionDir: tempDir.join("sessions"),
+				authStorage,
+				modelRegistry,
+				parsedArgs: { trustedExtensions: [trustedPath] },
+				rawArgs: [],
+				createSession: async options => {
+					captured = options;
+					options.eventBus?.emit("acp-session-live", undefined);
+					return {
+						session: fakeSession,
+						extensionsResult: options.preloadedExtensions,
+						setToolUIContext: () => {},
+						eventBus: options.eventBus,
+					} as CreateAgentSessionResult;
+				},
+			});
+
+			await factory(tempDir.path());
+
+			expect(captured?.eventBus).toBeDefined();
+			expect(captured?.preloadedExtensions?.extensions).toHaveLength(1);
+			expect(await Bun.file(firedPath).text()).toBe("fired");
+			expect(await Bun.file(ambientFiredPath).exists()).toBe(false);
+		} finally {
+			try {
+				authStorage?.close();
+			} finally {
+				await tempDir.remove();
+			}
+		}
+	});
+
+	it("fails before ACP session creation when a trusted extension cannot load", async () => {
+		const tempDir = TempDir.createSync("@pi-acp-trusted-extension-failure-");
+		let authStorage: AuthStorage | undefined;
+		try {
+			authStorage = await AuthStorage.create(tempDir.join("auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage);
+			const settings = Settings.isolated({});
+			const trustedPath = tempDir.join("throwing.ts");
+			await Bun.write(trustedPath, 'throw new Error("trusted extension fixture");');
+			let createCalls = 0;
+			const factory = createAcpSessionFactory({
+				baseOptions: {
+					disableExtensionDiscovery: true,
+					additionalExtensionPaths: [trustedPath],
+				} as CreateAgentSessionOptions,
+				settings,
+				sessionDir: tempDir.join("sessions"),
+				authStorage,
+				modelRegistry,
+				parsedArgs: { trustedExtensions: [trustedPath] },
+				rawArgs: [],
+				createSession: async () => {
+					createCalls++;
+					throw new Error("must not create ACP session");
+				},
+			});
+
+			await expect(factory(tempDir.path())).rejects.toThrow(/Trusted extension failed to load.*fixture/);
+			expect(createCalls).toBe(0);
+		} finally {
+			try {
+				authStorage?.close();
+			} finally {
+				await tempDir.remove();
+			}
+		}
+	});
 });
 
 describe("createAcpSessionFactory TITLE_SYSTEM.md per-cwd resolution (PR #3736)", () => {
@@ -86,7 +183,10 @@ describe("createAcpSessionFactory TITLE_SYSTEM.md per-cwd resolution (PR #3736)"
 			const settings = Settings.isolated({});
 
 			const projectDir = tempDir.join("project");
-			await Bun.write(`${projectDir}/.omp/TITLE_SYSTEM.md`, "Project-specific title policy.");
+			await Bun.write(
+				path.join(getProjectAgentDir(projectDir), "TITLE_SYSTEM.md"),
+				"Project-specific title policy.",
+			);
 
 			const fakeSession = {} as AgentSession;
 			const captured: CreateAgentSessionOptions[] = [];

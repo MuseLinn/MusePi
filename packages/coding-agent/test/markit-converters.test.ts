@@ -11,9 +11,9 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { convertBufferWithMarkit, convertFileWithMarkit } from "@oh-my-pi/pi-coding-agent/utils/markit";
-import { zip } from "@oh-my-pi/pi-coding-agent/utils/zip";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { convertBufferWithMarkit, convertFileWithMarkit } from "@musepi/pi-coding-agent/utils/markit";
+import { zip } from "@musepi/pi-coding-agent/utils/zip";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const WML = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -191,9 +191,11 @@ describe("markit converters", () => {
 			const stdout = new Response(proc.stdout).text();
 			const stderr = new Response(proc.stderr).text();
 			// The regression is a synchronous child-process spin; there is no in-process signal to await.
+			// 30s (not 5s): this spawns a real CLI child process; under a full parallel suite the
+			// cold start can exceed 5s on a loaded machine and only the spin is being guarded.
 			const outcome = await Promise.race([
 				proc.exited.then(exitCode => ({ type: "exit" as const, exitCode })),
-				Bun.sleep(5_000).then(() => ({ type: "timeout" as const })),
+				Bun.sleep(30_000).then(() => ({ type: "timeout" as const })),
 			]);
 			if (outcome.type === "timeout") {
 				try {

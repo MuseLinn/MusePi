@@ -1,6 +1,6 @@
 import { scheduler } from "node:timers/promises";
-import { hostMatchesUrl } from "@oh-my-pi/pi-catalog/hosts";
-import { $flag, logger, structuredCloneJSON } from "@oh-my-pi/pi-utils";
+import { hostMatchesUrl } from "@musepi/pi-catalog/hosts";
+import { $flag, logger, structuredCloneJSON } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import { getEnvApiKey } from "../stream";
 import type {
@@ -610,12 +610,11 @@ const streamOpenAIResponsesOnce = (
 							strictRetryAvailable &&
 							!requestSignal.aborted &&
 							(compiledGrammarTooLarge ||
-								shouldRetryWithoutStrictTools(
-									error,
-									capturedErrorResponse,
-									activeStrictToolsApplied,
-									context.tools,
-								));
+								shouldRetryWithoutStrictTools(error, capturedErrorResponse, {
+									model,
+									strictToolsApplied: activeStrictToolsApplied,
+									tools: context.tools,
+								}));
 						if (canRetryWithoutStrictTools) {
 							strictRetryAvailable = false;
 							forceDisableStrictTools = true;

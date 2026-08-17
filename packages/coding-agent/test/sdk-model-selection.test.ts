@@ -2,19 +2,19 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Effort, type FetchImpl } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { writeModelCache } from "@oh-my-pi/pi-catalog/model-cache";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { parseArgs } from "@oh-my-pi/pi-coding-agent/cli/args";
-import { ModelRegistry, type ProviderConfigInput } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { getModelMatchPreferences, resolveModelScope } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { buildSessionOptions as buildCliSessionOptions } from "@oh-my-pi/pi-coding-agent/main";
-import { createAgentSession, type ExtensionFactory } from "@oh-my-pi/pi-coding-agent/sdk";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { Effort, type FetchImpl } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { writeModelCache } from "@musepi/pi-catalog/model-cache";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { parseArgs } from "@musepi/pi-coding-agent/cli/args";
+import { ModelRegistry, type ProviderConfigInput } from "@musepi/pi-coding-agent/config/model-registry";
+import { getModelMatchPreferences, resolveModelScope } from "@musepi/pi-coding-agent/config/model-resolver";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { buildSessionOptions as buildCliSessionOptions } from "@musepi/pi-coding-agent/main";
+import { createAgentSession, type ExtensionFactory } from "@musepi/pi-coding-agent/sdk";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 describe("createAgentSession deferred model pattern resolution", () => {
 	let tempDir: string;
@@ -507,6 +507,33 @@ describe("createAgentSession deferred model pattern resolution", () => {
 		try {
 			expect(session.model?.provider).toBe("runtime-provider");
 			expect(session.model?.id).toBe("runtime-reasoning-model");
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	test("rejects a depleted terminal fallback after startup skips the primary", async () => {
+		const settings = Settings.isolated({
+			"retry.usageAwareFallback": true,
+			"retry.usageReservePolicy": "confirm",
+		});
+		settings.setModelRole("task", "runtime-provider/runtime-model,runtime-provider/runtime-reasoning-model");
+		const options = await buildSessionOptions("task");
+		const usageHealth = vi.spyOn(options.authStorage, "getModelUsageHealth").mockResolvedValue({
+			state: "depleted",
+			accounts: [{ credentialId: 1, credentialType: "oauth", state: "depleted" }],
+		});
+
+		const { session, modelFallbackMessage } = await createAgentSession({
+			...options,
+			modelPatternFallbackRole: "subagent:usage-aware-terminal",
+			settings,
+			hasUI: false,
+		});
+		try {
+			expect(usageHealth).toHaveBeenCalledTimes(2);
+			expect(session.model).toBeUndefined();
+			expect(modelFallbackMessage).toContain("not found");
 		} finally {
 			await session.dispose();
 		}

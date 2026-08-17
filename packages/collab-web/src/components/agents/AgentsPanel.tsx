@@ -1,11 +1,7 @@
-import type {
-	AgentProgress,
-	AgentSnapshot,
-	SubagentLifecyclePayload,
-	SubagentProgressPayload,
-} from "@oh-my-pi/pi-wire";
+import type { AgentProgress, AgentSnapshot, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { t } from "../../i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens, relTime } from "../../lib/format";
 import "./agents.css";
 
@@ -66,11 +62,11 @@ function AgentRow(props: {
 			<span className="ag-row-head">
 				<span className={`ag-dot ag-dot--${agent.status}`} />
 				<span className="ag-row-name">{agent.displayName}</span>
-				<span className="ag-chip">{agent.kind}</span>
+				<span className="ag-chip">{t(agent.kind)}</span>
 			</span>
 			<span className="ag-row-activity">{activityLine(agent, p, lifecycle, now)}</span>
 			<span className="ag-row-meta">
-				{p ? <span>{fmtTokens(p.tokens)} tok</span> : null}
+				{p ? <span>{t("{count} tok", { count: fmtTokens(p.tokens) })}</span> : null}
 				{p ? <span>{fmtCost(p.cost)}</span> : null}
 				<span className="ag-row-meta-when">{relTime(agent.lastActivity)}</span>
 			</span>
@@ -125,7 +121,7 @@ export function AgentsPanel(props: {
 					onSelect={onSelect}
 				/>
 			))}
-			{sorted.subs.length === 0 ? <div className="ag-empty">no subagents</div> : null}
+			{sorted.subs.length === 0 ? <div className="ag-empty">{t("no subagents")}</div> : null}
 		</div>
 	);
 }

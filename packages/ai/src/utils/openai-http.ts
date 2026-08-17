@@ -14,7 +14,7 @@
  *   captured response body for the strict-tools fallback and the responses
  *   chain-state detectors, which regex over `error.message`.
  */
-import { fetchWithRetry, readSseJson, type SseEventObserver } from "@oh-my-pi/pi-utils";
+import { fetchWithRetry, readSseJson, type SseEventObserver } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import { OpenAIHttpError } from "../error";
 
@@ -34,6 +34,18 @@ const DEFAULT_MAX_ATTEMPTS = 6;
 
 /** Bound the `Error.message` allocation for proxy HTML error pages and the like. */
 const MAX_DETAIL_CHARS = 4096;
+
+/**
+ * Detect a raw HTML error page (Cloudflare/gateway/proxy 502-504 pages and
+ * the like). Such bodies are useless verbatim in the chat — the status line
+ * plus a hint is all a user needs, and the full body stays on
+ * `captured.bodyText` for debugging.
+ */
+function isHtmlErrorBody(bodyText: string | undefined): boolean {
+	if (!bodyText) return false;
+	const head = bodyText.trimStart().slice(0, 128).toLowerCase();
+	return head.startsWith("<!doctype html") || head.startsWith("<html");
+}
 
 export interface OpenAIStreamRequestInit {
 	url: string;
@@ -110,10 +122,11 @@ export async function captureOpenAIHttpError(response: Response): Promise<AIErro
 		bodyJson,
 	};
 	const { detail, code } = OpenAIHttpError.parseEnvelope(bodyJson, bodyText);
+	const htmlBody = isHtmlErrorBody(bodyText);
 	// "status code (no body)" matches the SDK's former APIError phrasing;
 	// `finalizeErrorMessage` keys a repair path on that exact wording.
 	const message = detail
-		? `${response.status} ${detail.length > MAX_DETAIL_CHARS ? detail.slice(0, MAX_DETAIL_CHARS) : detail}`
+		? `${response.status} ${htmlBody ? "upstream returned an HTML error page (gateway or proxy failure)" : detail.length > MAX_DETAIL_CHARS ? detail.slice(0, MAX_DETAIL_CHARS) : detail}`
 		: `${response.status} status code (no body)`;
 	return new AIError.OpenAIHttpError(message, captured, code);
 }

@@ -2,17 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createAssistantMessageEventStream, getCustomApi } from "@oh-my-pi/pi-ai";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import {
-	type CreateAgentSessionOptions,
-	createAgentSession,
-	type ExtensionFactory,
-} from "@oh-my-pi/pi-coding-agent/sdk";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { createAssistantMessageEventStream, getCustomApi } from "@musepi/pi-ai";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { type CreateAgentSessionOptions, createAgentSession, type ExtensionFactory } from "@musepi/pi-coding-agent/sdk";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 const providerName = "restricted-session-provider";
 const modelId = "restricted-session-model";

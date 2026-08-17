@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { ImageProtocol, setTerminalImageProtocol, TERMINAL, TUI } from "@oh-my-pi/pi-tui";
+import { ImageProtocol, setTerminalImageProtocol, TERMINAL, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 type MutableTerminalInfo = {
@@ -9,6 +9,8 @@ type MutableTerminalInfo = {
 const terminalInfo = TERMINAL as unknown as MutableTerminalInfo;
 const originalProtocol = TERMINAL.imageProtocol;
 const originalWtSession = Bun.env.WT_SESSION;
+const originalWslDistro = Bun.env.WSL_DISTRO_NAME;
+const originalWslInterop = Bun.env.WSL_INTEROP;
 const stdinIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
 const stdoutIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
@@ -29,6 +31,10 @@ describe("TUI SIXEL capability probe", () => {
 		terminalInfo.imageProtocol = originalProtocol;
 		if (originalWtSession === undefined) delete Bun.env.WT_SESSION;
 		else Bun.env.WT_SESSION = originalWtSession;
+		if (originalWslDistro === undefined) delete Bun.env.WSL_DISTRO_NAME;
+		else Bun.env.WSL_DISTRO_NAME = originalWslDistro;
+		if (originalWslInterop === undefined) delete Bun.env.WSL_INTEROP;
+		else Bun.env.WSL_INTEROP = originalWslInterop;
 		restoreIsTty(process.stdin, stdinIsTtyDescriptor);
 		restoreIsTty(process.stdout, stdoutIsTtyDescriptor);
 	});
@@ -100,6 +106,29 @@ describe("TUI SIXEL capability probe", () => {
 		terminal.sendInput("\x1b[?2;0;0S");
 
 		expect(TERMINAL.imageProtocol).toBeNull();
+		tui.stop();
+	});
+
+	it("enables SIXEL under WSL + Windows Terminal (process.platform is linux)", () => {
+		// Regression for #6009: inside WSL, process.platform reports "linux" even
+		// though the host is Windows Terminal. The probe used to gate on
+		// process.platform === "win32", so WSL sessions never negotiated SIXEL and
+		// fell back to the text image card. It now gates on isConPTYHosted(), which
+		// treats WSL (WSL_DISTRO_NAME/WSL_INTEROP) as a Windows host.
+		if (process.platform !== "linux") return;
+		setTerminalImageProtocol(null);
+		terminalInfo.imageProtocol = null;
+		Bun.env.WT_SESSION = "test-wt-session";
+		Bun.env.WSL_DISTRO_NAME = "Ubuntu";
+		Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+		Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+
+		const terminal = new VirtualTerminal(80, 24);
+		const tui = new TUI(terminal);
+		tui.start();
+		terminal.sendInput("\x1b[?1;2;4c");
+
+		expect(TERMINAL.imageProtocol).toBe(ImageProtocol.Sixel);
 		tui.stop();
 	});
 });

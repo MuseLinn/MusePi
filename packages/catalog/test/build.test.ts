@@ -3,14 +3,15 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { isOfficialAnthropicApiUrl } from "@oh-my-pi/pi-catalog/compat/anthropic";
-import { buildOpenAICompat, buildOpenAIResponsesCompat } from "@oh-my-pi/pi-catalog/compat/openai";
-import { readModelCache, writeModelCache } from "@oh-my-pi/pi-catalog/model-cache";
-import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { openrouterModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { Model, ModelSpec } from "@oh-my-pi/pi-catalog/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { isOfficialAnthropicApiUrl } from "@musepi/pi-catalog/compat/anthropic";
+import { buildOpenAICompat, buildOpenAIResponsesCompat } from "@musepi/pi-catalog/compat/openai";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { readModelCache, writeModelCache } from "@musepi/pi-catalog/model-cache";
+import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { openrouterModelManagerOptions } from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { Model, ModelSpec } from "@musepi/pi-catalog/types";
 
 function completionsSpec(overrides: Partial<ModelSpec<"openai-completions">> = {}): ModelSpec<"openai-completions"> {
 	return {
@@ -326,6 +327,52 @@ describe("openai-completions wire-quirk compat detection", () => {
 		).toBe(false);
 	});
 
+	it("downgrades forced tool choice only for DeepSeek reasoning models on OpenCode gateways", () => {
+		const deepseekReasoning = {
+			id: "deepseek-v4-flash",
+			name: "DeepSeek V4 Flash",
+			reasoning: true,
+		} as const;
+
+		expect(
+			buildOpenAICompat(
+				completionsSpec({
+					...deepseekReasoning,
+					provider: "opencode-zen",
+					baseUrl: "https://opencode.ai/zen/v1",
+				}),
+			).supportsForcedToolChoice,
+		).toBe(false);
+		expect(
+			buildOpenAICompat(
+				completionsSpec({
+					...deepseekReasoning,
+					provider: "custom",
+					baseUrl: "https://opencode.ai/zen/go/v1",
+				}),
+			).supportsForcedToolChoice,
+		).toBe(false);
+		expect(
+			buildOpenAICompat(
+				completionsSpec({
+					...deepseekReasoning,
+					provider: "nvidia",
+					baseUrl: "https://integrate.api.nvidia.com/v1",
+				}),
+			).supportsForcedToolChoice,
+		).toBe(true);
+		expect(
+			buildOpenAICompat(
+				completionsSpec({
+					...deepseekReasoning,
+					provider: "opencode-zen",
+					baseUrl: "https://opencode.ai/zen/v1",
+					reasoning: false,
+				}),
+			).supportsForcedToolChoice,
+		).toBe(true);
+	});
+
 	it("requires a synthetic assistant bridge after tool results only for Mistral hosts", () => {
 		// Mistral/Devstral reject a user message directly after a tool result; the chat
 		// builder bridges it with a synthetic assistant turn, keyed on the Mistral host.
@@ -608,6 +655,34 @@ describe("OpenRouter model discovery", () => {
 		} finally {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
+	});
+
+	it("maps OpenRouter's advertised reasoning effort ladder and default", async () => {
+		const options = openrouterModelManagerOptions({
+			fetch: async () =>
+				Response.json({
+					data: [
+						{
+							id: "deepseek/deepseek-v4-flash-0731",
+							name: "DeepSeek V4 Flash 0731",
+							supported_parameters: ["tools", "reasoning", "reasoning_effort"],
+							reasoning: {
+								supported_efforts: ["max", "high", "low"],
+								default_effort: "high",
+							},
+						},
+					],
+				}),
+		});
+		const specs = await options.fetchDynamicModels?.();
+		const spec = specs?.find(model => model.id === "deepseek/deepseek-v4-flash-0731");
+		if (!spec) throw new Error("Expected discovered DeepSeek V4 Flash 0731 model");
+
+		expect(buildModel(spec).thinking).toEqual({
+			mode: "effort",
+			efforts: [Effort.Low, Effort.High, Effort.Max],
+			defaultLevel: Effort.High,
+		});
 	});
 
 	it("ignores legacy OpenRouter chat-completions cache rows", async () => {

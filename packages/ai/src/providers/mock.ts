@@ -6,7 +6,7 @@
  *
  * Usage:
  *
- *   import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
+ *   import { createMockModel, registerMockApi } from "@musepi/pi-ai/providers/mock";
  *
  *   // 1. Array of responses, one per call.
  *   const mock = createMockModel({
@@ -67,7 +67,7 @@ export type MockApi = typeof MOCK_API;
 export type MockContent =
 	| string
 	| { type: "text"; text: string }
-	| { type: "thinking"; thinking: string }
+	| { type: "thinking"; thinking: string; thinkingSignature?: string }
 	| {
 			type: "toolCall";
 			/** Optional explicit id; auto-generated when omitted. */

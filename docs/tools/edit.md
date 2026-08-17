@@ -8,7 +8,7 @@
 - Key collaborators:
   - `packages/coding-agent/src/utils/edit-mode.ts` — selects active edit mode
   - `packages/hashline/src/grammar.lark` — canonical constrained-decoding grammar
-  - `packages/hashline/src/format.ts` — sigils and header constants (`[`, `]`, `#`, `+`, `SWAP`, `DEL`, `INS`)
+  - `packages/hashline/src/format.ts` — sigils and header constants (`[`, `]`, `#`, `+`, `SWAP`, `CUT`, `INS`, `PASTE`)
   - `packages/hashline/src/input.ts` — parses `[PATH#TAG]` sections
   - `packages/hashline/src/tokenizer.ts` / `packages/hashline/src/parser.ts` — tokenizes and parses ops
   - `packages/hashline/src/apply.ts` — applies parsed edits to file text
@@ -30,18 +30,21 @@ Patch language inside `input`:
 - **Operations**:
   - `SWAP N.=M:` — replace original lines N.=M with the body rows below.
   - `SWAP.BLK N:` — replace the whole tree-sitter block beginning on line N (its header line through its closing line) with the body rows. The line span is resolved at apply time from the file's parse tree; point N at the line that opens the construct. The resolved span is exactly the node that begins on line N — a leading decorator, attribute, or doc-comment is a separate node and is not included; point N at the first decorator line (Python wraps `@dec` + `def` as one block) or fall back to `SWAP N.=M:` to take a leading line-comment that parses as its own node (e.g. Rust `///`). On success the result echoes the matched span (`SWAP.BLK N → resolved lines A-B`). Errors (and steers to `SWAP N.=M:`) when the language is unsupported, line N is blank or a closing delimiter, no node begins there, or the resolved block has a syntax error.
-  - `DEL N.=M` — delete original lines N.=M. No body.
-  - `DEL.BLK N` — delete the whole tree-sitter block beginning on line N (resolved like `SWAP.BLK N`, with the same decorator/comment caveat). No body. On success the result echoes the matched span (`DEL.BLK N → resolved lines A-B`). Same resolution failure modes and `DEL N.=M` fallback.
+  - `CUT N.=M` — delete original lines N.=M and capture them in the clipboard. No body. A standalone cut is valid; the latest cut replaces the clipboard contents.
+  - `CUT.BLK N` — delete and capture the whole tree-sitter block beginning on line N (resolved like `SWAP.BLK N`, with the same decorator/comment caveat). No body. On success the result echoes the matched span (`CUT.BLK N → resolved lines A-B`). Same resolution failure modes and `CUT N.=M` fallback.
   - `INS.PRE N:` — insert body rows immediately before line N.
   - `INS.POST N:` — insert body rows immediately after line N.
   - `INS.BLK.POST N:` — insert body rows after the last line of the tree-sitter block beginning on line N. Point N at the line that opens the construct, never its closing delimiter / last visible line; if you can see the last line already, use plain `INS.POST M:`. An anchor that can't resolve to a block is lowered to plain `INS.POST N:` with a warning instead of failing the patch.
-  - **Markdown sections**: tree-sitter-md nests a heading and its body (including deeper subsections) in one `section` node, so all three block ops anchored on a `#`/`##`/`###` heading line resolve the whole section — heading through every nested deeper heading, up to the next same-or-higher heading. `DEL.BLK` drops the section, `SWAP.BLK` rewrites it, `INS.BLK.POST` lands after it. A heading with no body resolves to a single line and falls back to the plain op like any other single-line block.
+  - **Markdown sections**: tree-sitter-md nests a heading and its body (including deeper subsections) in one `section` node, so all four block ops anchored on a `#`/`##`/`###` heading line resolve the whole section — heading through every nested deeper heading, up to the next same-or-higher heading. `CUT.BLK` drops and captures the section, `SWAP.BLK` rewrites it, and `INS.BLK.POST` / `PASTE.BLK.POST` land after it. A heading with no body resolves to a single line and is rejected with guidance to use the corresponding plain line op.
   - `INS.HEAD:` — insert body rows at the start of the file.
   - `INS.TAIL:` — insert body rows at the end of the file.
+  - `PASTE.PRE N` / `PASTE.POST N` / `PASTE.HEAD` / `PASTE.TAIL` — insert the clipboard at that position. No body. An empty clipboard is an error.
+  - `PASTE.BLK.POST N` — insert the clipboard after the resolved block's last line. An unresolvable anchor lowers to `PASTE.POST N` with a warning, matching `INS.BLK.POST`.
+  - **Clipboard**: operations execute top-to-bottom across all patch sections. The latest `CUT` wins; `PASTE` does not consume the clipboard and may be repeated. The coding agent persists the register across edit calls in the same session, enabling cross-file moves. Keep each path under one header when clipboard operations would otherwise be interleaved around another file's section.
 - **Body rows**:
   - Only body-bearing headers end in `:`.
   - Every body row is `+TEXT`; `+` alone adds a blank line.
-  - `DEL` never has body rows.
+  - `CUT` and `PASTE` never have body rows.
   - There is no repeat row kind. To keep a line, leave it out of every range; split edits into multiple hunks when needed.
   - `-` rows are invalid. Literal Markdown bullets or text beginning with `-` / `+` must be written as `+- item` / `++ item`.
 
@@ -52,7 +55,7 @@ Anchors come from `read`/`grep` output. `read` emits a `[PATH#TAG]` header from 
 The canonical grammar is strict, but the hand parser accepts a few non-dangerous variants:
 
 - `SWAP N:` — accepted as `SWAP N.=N:`.
-- `DEL N` — accepted as single-line delete.
+- `CUT N` — accepted as a single-line cut/delete.
 - Missing trailing colon on `SWAP` or `INS` — accepted.
 - `SWAP N-M:`, `SWAP N…M:`, `SWAP N M:`, and legacy `SWAP N..M:` — accepted as `SWAP N.=M:`.
 - Bare body rows with no `+` prefix are auto-prepended with `+` and a `BARE_BODY_AUTO_PIPED_WARNING` is appended.
@@ -61,16 +64,17 @@ The canonical grammar is strict, but the hand parser accepts a few non-dangerous
 - Some malformed bracketed headers are recovered after stripping apply-patch path noise such as `Update File:` / `Add File:` and extra `***`, but the recovered header still needs a valid four-hex tag for the patcher to apply it.
 - `*** Update File:` / `*** Add File:` / `*** Delete File:` / `*** Move to:` apply_patch sentinels inside the diff body throw an `apply_patch sentinel … is not valid in hashline` error.
 - `@@`-bracketed hunk headers are rejected with guidance to write a verb header.
-- Bare `N` and bare `N M` / `N.=M` headers are rejected with guidance to write `SWAP` or `DEL`.
-- `DEL N.=M:` and any body rows under `DEL` / `DEL.BLK` are rejected.
-- Empty `INS` / `SWAP.BLK` hunks are rejected; an empty `SWAP N.=M:` (no body rows) is treated as `DEL N.=M`.
+- Bare `N` and bare `N M` / `N.=M` headers are rejected with guidance to write `SWAP` or `CUT`.
+- A trailing colon on `CUT N.=M:` / `CUT.BLK N:` is tolerated and ignored, but body rows under `CUT`, `CUT.BLK`, or any `PASTE` form are rejected.
+- Bare `PASTE` is rejected because the insertion position is required.
+- Empty `INS` / `SWAP.BLK` hunks are rejected; an empty `SWAP N.=M:` deletes the range, though `CUT N.=M` is the canonical deletion form.
 - `-` body rows are rejected with `MINUS_ROW_REJECTED` unless the hunk is unambiguously a Markdown bullet list (see Tolerated input shapes).
-- `SWAP.BLK N:` / `DEL.BLK N` / `INS.BLK.POST N:` require a wired tree-sitter resolver; `SWAP.BLK` and `INS.BLK.POST` additionally need at least one `+TEXT` body row, while `DEL.BLK` takes none. An unresolvable block (unsupported language, blank/closing-delimiter line, no node beginning on N, or a syntax error in the resolved block) rejects a `SWAP.BLK` / `DEL.BLK` on the apply/final-preview path (the streaming preview silently drops it instead). `INS.BLK.POST N:` is never rejected this way — it is lowered to plain `INS.POST N:` with a warning: a closing-delimiter-anchor warning when line N is a pure closer (inserting after that end is exactly what the plain form does), a generic unresolved-anchor warning otherwise.
+- `SWAP.BLK N:` / `CUT.BLK N` / `INS.BLK.POST N:` / `PASTE.BLK.POST N` consult the wired tree-sitter resolver. `SWAP.BLK` and `INS.BLK.POST` need at least one `+TEXT` body row; `CUT.BLK` and `PASTE.BLK.POST` take none. A null resolution rejects `SWAP.BLK` / `CUT.BLK` on the apply or final-preview path (the streaming preview silently drops it), while `INS.BLK.POST` / `PASTE.BLK.POST` lower to the corresponding plain `POST` form with a warning. A single-line resolution rejects every block form with guidance to use its plain line equivalent.
 
 ## Outputs
 - Single-shot tool result; hashline mode does not use the staged preview/apply devices (`/xdev/resolve`, `/xdev/reject`).
 - `content` contains one text block per call. For a successful single-file edit it is the post-edit `[path#TAG]` section header (a fresh snapshot tag for the written content), followed by a compact diff preview from `packages/hashline/src/diff-preview.ts` when one is emitted.
-- When the patch used `SWAP.BLK`/`DEL.BLK`/`INS.BLK.POST` ops (and the apply matched the tagged content), one `SWAP.BLK N → resolved lines A-B (K lines)` line per block op (single-line spans render `resolved line A (1 line)`; INS.BLK.POST appends `; body lands after line B`) is inserted between the `[PATH#TAG]` header and the diff preview, so the caller can confirm tree-sitter resolved the construct it intended.
+- When the patch used `SWAP.BLK` / `CUT.BLK` / `INS.BLK.POST` / `PASTE.BLK.POST` ops (and the apply matched the tagged content), one `<OP> N → resolved lines A-B (K lines)` line per block op is inserted between the `[PATH#TAG]` header and the diff preview. Single-line spans render `resolved line A (1 line)`; `INS.BLK.POST` appends `body lands after line B`, and `PASTE.BLK.POST` appends `clipboard lands after line B`.
 - Parse, apply, or recovery warnings are appended as:
 
 ```text
@@ -126,11 +130,11 @@ INS.PRE 5:
 +console.log(X + Y);
 ```
 
-Delete lines 4.=5 entirely:
+Delete lines 4.=5 entirely and leave them in the clipboard:
 
 ```text
 [a.ts#0A3B]
-DEL 4.=5
+CUT 4.=5
 ```
 
 Insert at start and end of file:
@@ -143,20 +147,19 @@ INS.TAIL:
 +// trailer
 ```
 
-Multi-file:
+Move line 4 from `src/a.ts` to after line 20 in `src/b.ts`:
 ```text
 [src/a.ts#0A3B]
-SWAP 4.=4:
-+const enabled = true;
+CUT 4
 [src/b.ts#1F7C]
-DEL 20
+PASTE.POST 20
 ```
 
 ## Limits & Caps
 - File snapshot tags are exactly four uppercase-hex chars — content-derived hashes (`computeFileHash()`) recorded in the per-session snapshot store.
 - The visible mismatch report shows 2 lines of context on each side (`MISMATCH_CONTEXT`) in `packages/hashline/src/messages.ts`.
 - Stale-anchor recovery uses `fuzzFactor: 0` in `packages/hashline/src/recovery.ts`.
-- `HL_FILE_PREFIX` is `[`, `HL_FILE_SUFFIX` is `]`, `HL_PAYLOAD_REPLACE` is `+`, `HL_RANGE_SEP` is `.=`, `HL_FILE_HASH_SEP` is `#`, and hunk keyword constants are `SWAP` / `DEL` / `INS` (`packages/hashline/src/format.ts`).
+- `HL_FILE_PREFIX` is `[`, `HL_FILE_SUFFIX` is `]`, `HL_PAYLOAD_REPLACE` is `+`, `HL_RANGE_SEP` is `.=`, `HL_FILE_HASH_SEP` is `#`, and line/clipboard hunk keyword constants are `SWAP` / `CUT` / `INS` / `PASTE` (`packages/hashline/src/format.ts`).
 
 ## Errors
 - Missing section header:
@@ -164,28 +167,29 @@ DEL 20
 - Missing tag for any section:
   - `Missing hashline snapshot tag for <path>; use \`[<path>#tag]\` from your latest read/search output. To create a new file, use the write tool.`
 - Stray payload line:
-  - `line N: payload line has no preceding hunk header. Use \`SWAP N.=M:\`, \`DEL N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` above the body. Got "...".`
+  - `line N: payload line has no preceding hunk header. Use \`SWAP N.=M:\`, \`CUT N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` above the body. Got "...".`
 - Minus row (unless auto-piped as an unambiguous Markdown bullet — see Tolerated input shapes):
   - ``line N: `-` rows are not valid; the range already names the lines being changed. For Markdown bullets or other literal `-` lines, prefix the literal row with `+`: `+- item`.``
 - Empty body-bearing hunk:
   - `line N: \`INS\` needs at least one \`+TEXT\` body row.`
-  - `line N: \`SWAP.BLK N:\` needs at least one \`+TEXT\` body row. To delete a block, use \`DEL.BLK N\`.`
-- Unresolvable block anchor — `SWAP.BLK` / `DEL.BLK` only (apply / final-preview path; the streaming preview silently drops the op instead):
-  - `line N: \`SWAP.BLK X:\` could not resolve a syntactic block beginning on line X (unsupported language, blank/closer line, or parse error). Use \`SWAP X.=M:\` with explicit lines.` — followed by a blank line and numbered `*`-marked context rows around line X (same shape as the mismatch preview). `DEL.BLK X` produces the same message with a `DEL X.=M` fallback.
-  - `INS.BLK.POST X:` never reaches this error — an unresolvable anchor is lowered to plain `INS.POST X:` with a warning (see Tolerated input shapes).
-- Delete with body:
-  - `line N: \`DEL N.=M\` does not take body rows. Remove the body, or use \`SWAP N.=M:\`.`
-  - `line N: \`DEL.BLK N\` does not take body rows. Remove the body, or use \`SWAP.BLK N:\`.`
+  - `line N: \`SWAP.BLK N:\` needs at least one \`+TEXT\` body row. To delete a block, use \`CUT.BLK N\`.`
+- Unresolvable block anchor — `SWAP.BLK` / `CUT.BLK` only (apply / final-preview path; the streaming preview silently drops the op instead):
+  - `line N: \`SWAP.BLK X:\` could not resolve a syntactic block beginning on line X (unsupported language, blank/closer line, or parse error). Use \`SWAP X.=M:\` with explicit lines.` — followed by numbered context and, when available, a nearby block suggestion. `CUT.BLK X` produces the corresponding message with a `CUT X.=M` fallback.
+  - `INS.BLK.POST X:` and `PASTE.BLK.POST X` never reach this error when no block resolves — they lower to plain `INS.POST X:` / `PASTE.POST X` with a warning.
+- Clipboard operation errors:
+  - `line N: \`CUT N.=M\` captures + deletes lines and takes no body rows. To replace lines with new content, use \`SWAP N.=M:\`.`
+  - `line N: \`PASTE\` inserts the clipboard content and takes no \`+\` body rows. To insert literal text, use \`INS\`.`
+  - `line N: \`PASTE\` found nothing in the clipboard. Ops run top-to-bottom across the whole patch (sections included): put \`CUT N.=M\` or \`CUT.BLK N\` above the \`PASTE\`.`
 - Range out of order:
   - `line N: range A.=B ends before it starts.`
 - Overlapping hunks on the same anchor:
   - `line N: anchor line X is already targeted by another hunk on line Y. Issue ONE hunk per range; payload is only the final desired content, never a before/after pair.`
 - apply_patch / unified-diff contamination:
-  - `line N: apply_patch sentinel "*** …" is not valid in hashline. File sections start with \`[path#HASH]\` (no \`Update File:\` / \`Add File:\` keyword). Use \`SWAP N.=M:\`, \`DEL N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` ops.`
-  - `line N: unified-diff hunk header (\`@@ -N,M +N,M @@\`) is not valid in hashline. Use \`SWAP N.=M:\`, \`DEL N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` ops.`
+  - `line N: apply_patch sentinel "*** …" is not valid in hashline. File sections start with \`[path#HASH]\` (no \`Update File:\` / \`Add File:\` keyword). Use \`SWAP N.=M:\`, \`CUT N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` ops.`
+  - `line N: unified-diff hunk header (\`@@ -N,M +N,M @@\`) is not valid in hashline. Use \`SWAP N.=M:\`, \`CUT N.=M\`, or \`INS.PRE|POST|HEAD|TAIL:\` ops.`
   - `line N: \`@@\`-bracketed hunk header "@@ …" is not valid in hashline. Drop the \`@@ ... @@\` brackets and write a verb header such as \`SWAP N.=M:\`.`
-  - `line N: hunk headers need a verb. Use \`SWAP N.=N:\` to replace, or \`DEL N\` to delete.`
-  - `line N: bare range hunk header "N M" is not valid. Hunk headers need a verb: write \`SWAP ${bareRange[1]}.=${bareRange[2]}:\` or \`DEL ${bareRange[1]}.=${bareRange[2]}\`.`
+  - `line N: hunk headers need a verb. Use \`SWAP N.=N:\` to replace, or \`CUT N\` to delete.`
+  - `line N: bare range hunk header "N M" is not valid. Hunk headers need a verb: write \`SWAP ${bareRange[1]}.=${bareRange[2]}:\` or \`CUT ${bareRange[1]}.=${bareRange[2]}\`.`
 - Out-of-range anchor:
   - `Line N does not exist (file has M lines)`
 - Stale snapshot tag: the `Patcher` first attempts snapshot-based recovery. When recovery cannot prove a valid result it throws `MismatchError`, which distinguishes recognized-but-drifted hashes from never-recorded hashes. The error includes the current file hash plus context around each anchor.

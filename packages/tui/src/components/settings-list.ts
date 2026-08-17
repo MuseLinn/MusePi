@@ -76,6 +76,8 @@ export interface SettingsListOptions {
 	hint?: string;
 	/** Fixed split-sidebar width (columns incl. indent+gap); default derives from section names. */
 	sidebarWidth?: number;
+	/** Label for ungrouped items in the split sidebar. Falls back to "Other" when omitted. */
+	ungroupedSectionName?: string;
 }
 
 /** Searchable text for a setting item: label, id, value, description, and cycle values. */
@@ -628,7 +630,7 @@ export class SettingsList implements Component {
 	 * both panes, falling back to the flat single-column layout.
 	 */
 	#renderSplitList(width: number, sections: SettingSection[]): string[] | null {
-		const sectionNames = sections.map(section => section.name || "Other");
+		const sectionNames = sections.map(section => section.name || this.#options.ungroupedSectionName || "Other");
 		let nameWidth = 0;
 		for (const name of sectionNames) nameWidth = Math.max(nameWidth, visibleWidth(name));
 		const sidebarWidth = this.#options.sidebarWidth ?? Math.min(22, nameWidth) + 4; // 2-space indent + 2-space gap

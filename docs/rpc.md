@@ -16,7 +16,7 @@ Primary implementation:
 ## Startup
 
 ```bash
-omp --mode rpc [regular CLI options]
+musepi --mode rpc [regular CLI options]
 ```
 
 Behavior notes:
@@ -459,6 +459,9 @@ The response payload is:
 Schemes are case-insensitive on the wire and normalized to lowercase before
 the response is sent. Re-sending `set_host_uri_schemes` replaces the entire
 previous set — schemes missing from the new list are unregistered.
+
+`security://` is reserved for OMP's producer-neutral software-security resource
+store. RPC hosts cannot register or shadow that scheme.
 
 ## Event Stream Schema
 

@@ -1,22 +1,22 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Agent, type AgentMessage } from "@oh-my-pi/pi-agent-core";
-import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantMessage, Model } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { loadAdvisorTranscriptCosts } from "@oh-my-pi/pi-coding-agent/advisor/transcript-recorder";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ExtensionRunner } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
-import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AgentStorage } from "@oh-my-pi/pi-coding-agent/session/agent-storage";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getProjectAgentDir, TempDir } from "@oh-my-pi/pi-utils";
+import { Agent, type AgentMessage } from "@musepi/pi-agent-core";
+import * as compactionModule from "@musepi/pi-agent-core/compaction";
+import type { AssistantMessage, Model } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { createMockModel } from "@musepi/pi-ai/providers/mock";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { loadAdvisorTranscriptCosts } from "@musepi/pi-coding-agent/advisor/transcript-recorder";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
+import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
 
 describe("AgentSession advisor toggle", () => {
 	let sharedDir: TempDir;

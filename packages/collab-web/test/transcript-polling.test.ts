@@ -6,9 +6,9 @@
  * from the same cursor forever.
  */
 import { describe, expect, it, vi } from "bun:test";
-import type { HostFrame, SessionEntry } from "@oh-my-pi/pi-wire";
+import { encodeBase64Url } from "@musepi/collab-proto";
+import type { HostFrame, SessionEntry } from "@musepi/pi-wire";
 import { GuestClient } from "../src/lib/client";
-import { encodeBase64Url } from "../src/lib/link";
 import { decideTranscriptPoll } from "../src/lib/transcript-poll";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;

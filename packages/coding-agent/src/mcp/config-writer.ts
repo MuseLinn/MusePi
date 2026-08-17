@@ -6,9 +6,9 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isEnoent } from "@oh-my-pi/pi-utils";
+import { isEnoent } from "@musepi/pi-utils";
+import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { invalidate as invalidateFsCache } from "../capability/fs";
-import { withFileLock } from "../config/file-lock";
 
 import { validateServerConfig } from "./config";
 import { MCP_CONFIG_SCHEMA_URL, type MCPConfigFile, type MCPServerConfig } from "./types";

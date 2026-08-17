@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+import { ProcessTerminal } from "@musepi/pi-tui/terminal";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 
 // Regression: a recycled terminal pane (Muxy's "terminal offline" sweep, a
 // dropped ssh session) revokes the pty. stdin EOFs, the disconnect path runs,
@@ -73,6 +73,25 @@ describe("ProcessTerminal disconnect with a revoked pty", () => {
 		);
 
 		expect(() => process.stdin.emit("end")).not.toThrow();
+		expect(signals).toContain("SIGHUP");
+	});
+
+	it("treats an initial EIO enabling raw mode as a terminal disconnect", () => {
+		Object.defineProperty(process.stdin, "setRawMode", {
+			value: () => {
+				throw new Error("setRawMode failed with errno: 5");
+			},
+			configurable: true,
+		});
+
+		const terminal = new ProcessTerminal();
+		expect(() =>
+			terminal.start(
+				() => {},
+				() => {},
+				() => terminal.stop(),
+			),
+		).not.toThrow();
 		expect(signals).toContain("SIGHUP");
 	});
 

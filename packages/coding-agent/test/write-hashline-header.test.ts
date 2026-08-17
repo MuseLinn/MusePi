@@ -2,14 +2,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Patch, Patcher } from "@oh-my-pi/hashline";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { canonicalSnapshotKey, getFileSnapshotStore } from "@oh-my-pi/pi-coding-agent/edit/file-snapshot-store";
-import { HashlineFilesystem } from "@oh-my-pi/pi-coding-agent/edit/hashline/filesystem";
-import { writethroughNoop } from "@oh-my-pi/pi-coding-agent/lsp";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { Patch, Patcher } from "@musepi/hashline";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { canonicalSnapshotKey, getFileSnapshotStore } from "@musepi/pi-coding-agent/edit/file-snapshot-store";
+import { HashlineFilesystem } from "@musepi/pi-coding-agent/edit/hashline/filesystem";
+import { writethroughNoop } from "@musepi/pi-coding-agent/lsp";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 function createSession(cwd: string): ToolSession {
 	return {
@@ -83,7 +83,7 @@ describe("write tool hashline header", () => {
 
 		// Apply a hashline patch immediately, using only the tag the write tool
 		// returned — no intervening `read`.
-		const patchInput = `${headerLine}\nSWAP 1.=1:\n+export const enabled = true;\n`;
+		const patchInput = `${headerLine}\nPUT 1-1:\n+export const enabled = true;\n`;
 		const patch = Patch.parse(patchInput, { cwd: tmpDir });
 		expect(patch.sections).toHaveLength(1);
 

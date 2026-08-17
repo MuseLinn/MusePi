@@ -16,14 +16,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { SETTINGS_SCHEMA } from "@oh-my-pi/pi-coding-agent/config/settings-schema";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { TERMINAL } from "@oh-my-pi/pi-tui";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
+import { SETTINGS_SCHEMA } from "@musepi/pi-coding-agent/config/settings-schema";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import * as titleGenerator from "@musepi/pi-coding-agent/utils/title-generator";
+import { TERMINAL } from "@musepi/pi-tui";
 
 const originalWarpProtocolVersion = process.env.WARP_CLI_AGENT_PROTOCOL_VERSION;
 
@@ -401,5 +402,34 @@ describe("EventController — error toast gated while auto-retry is pending", ()
 		await controller.handleEvent(makeAgentEndEvent([makeAssistantMessage("error")]));
 		expect(spy).toHaveBeenCalledTimes(1);
 		expect(spy).toHaveBeenCalledWith(expect.objectContaining({ body: "Stopped with error", type: "error" }));
+	});
+});
+
+describe("EventController — terminal title across a non-terminal agent_end", () => {
+	it("keeps the working title and skips loader teardown but still flushes a deferred model switch during a pending async-wake pause (isTerminal:false)", async () => {
+		const stateSpy = vi.spyOn(titleGenerator, "setTerminalTitleState").mockImplementation(() => {});
+		const ctx = makeTurnEndContext();
+		const markActivityEnd = vi.spyOn(ctx.statusLine, "markActivityEnd");
+		const flushPendingModelSwitch = vi.spyOn(ctx, "flushPendingModelSwitch");
+		const controller = new EventController(ctx);
+		await controller.handleEvent({
+			...makeAgentEndEvent([makeAssistantMessage("stop")]),
+			isTerminal: false,
+		} as Extract<AgentSessionEvent, { type: "agent_end" }> & { isTerminal: false });
+		// The async job still runs: never drop to `idle`, never run #finishAgentEnd teardown.
+		expect(stateSpy).not.toHaveBeenCalledWith("idle");
+		expect(markActivityEnd).not.toHaveBeenCalled();
+		// The automatic continuation must still pick up a queued plan-mode model switch.
+		expect(flushPendingModelSwitch).toHaveBeenCalledTimes(1);
+	});
+
+	it("transitions to idle and tears down on the terminal agent_end", async () => {
+		const stateSpy = vi.spyOn(titleGenerator, "setTerminalTitleState").mockImplementation(() => {});
+		const ctx = makeTurnEndContext();
+		const markActivityEnd = vi.spyOn(ctx.statusLine, "markActivityEnd");
+		const controller = new EventController(ctx);
+		await controller.handleEvent(makeAgentEndEvent([makeAssistantMessage("stop")]));
+		expect(stateSpy).toHaveBeenCalledWith("idle");
+		expect(markActivityEnd).toHaveBeenCalledTimes(1);
 	});
 });

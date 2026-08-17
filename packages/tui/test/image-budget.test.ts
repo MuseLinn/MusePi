@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { TUI } from "@oh-my-pi/pi-tui";
-import { Image, ImageBudget } from "@oh-my-pi/pi-tui/components/image";
-import { Text } from "@oh-my-pi/pi-tui/components/text";
+import { TUI } from "@musepi/pi-tui";
+import { Image, ImageBudget } from "@musepi/pi-tui/components/image";
+import { Text } from "@musepi/pi-tui/components/text";
 import {
 	encodeKittyVirtualPlacement,
 	getKittyGraphics,
 	KITTY_PLACEHOLDER,
 	setKittyGraphics,
-} from "@oh-my-pi/pi-tui/kitty-graphics";
+} from "@musepi/pi-tui/kitty-graphics";
 import {
 	type CellDimensions,
 	encodeKitty,
@@ -19,7 +19,7 @@ import {
 	setCellDimensions,
 	TERMINAL,
 	wrapTmuxPassthrough,
-} from "@oh-my-pi/pi-tui/terminal-capabilities";
+} from "@musepi/pi-tui/terminal-capabilities";
 import { VirtualTerminal } from "./virtual-terminal";
 
 type MutableTerminalInfo = { id: string; imageProtocol: ImageProtocol | null };
@@ -29,14 +29,18 @@ const BASE64_ONE_PIXEL_PNG =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==";
 
 const ORIGINAL_TMUX = Bun.env.TMUX;
+const ORIGINAL_HERDR_ENV = Bun.env.HERDR_ENV;
 
 beforeEach(() => {
 	delete Bun.env.TMUX;
+	delete Bun.env.HERDR_ENV;
 });
 
 afterEach(() => {
 	if (ORIGINAL_TMUX === undefined) delete Bun.env.TMUX;
 	else Bun.env.TMUX = ORIGINAL_TMUX;
+	if (ORIGINAL_HERDR_ENV === undefined) delete Bun.env.HERDR_ENV;
+	else Bun.env.HERDR_ENV = ORIGINAL_HERDR_ENV;
 });
 
 /** Drive one render pass against the budget with `count` images (ids 1..count, stable across passes). */

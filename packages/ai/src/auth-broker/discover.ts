@@ -6,6 +6,7 @@
  */
 import * as path from "node:path";
 import {
+	$envExact,
 	getAgentDbPath,
 	getAgentDir,
 	getAuthBrokerSnapshotCachePath,
@@ -13,7 +14,7 @@ import {
 	isEnoent,
 	logger,
 	MAIN_CONFIG_FILENAMES,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
 import { YAML } from "bun";
 import { AuthStorage } from "../auth-storage";
 import * as AIError from "../error";
@@ -55,7 +56,7 @@ export function getAuthBrokerTokenFilePath(): string {
  */
 async function defaultResolveConfigValue(config: string): Promise<string | undefined> {
 	if (config.startsWith("!")) return undefined;
-	const envValue = process.env[config];
+	const envValue = $envExact(config);
 	return envValue || config;
 }
 

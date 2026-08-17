@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type Component, TUI } from "@oh-my-pi/pi-tui";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { type Component, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 // Regression probe for https://github.com/can1357/oh-my-pi/issues/4863
@@ -15,6 +15,7 @@ import { VirtualTerminal } from "./virtual-terminal";
 const PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, "platform");
 const WSL_DISTRO_NAME = process.env.WSL_DISTRO_NAME;
 const TMUX = process.env.TMUX;
+const HERDR_ENV = process.env.HERDR_ENV;
 
 // A full paint clears the viewport with ED2 (`CSI 2 J`), or — when it also
 // clears native scrollback — homes the cursor and emits ED3 (`CSI H CSI 3 J`)
@@ -41,6 +42,10 @@ class LargeContent implements Component {
 	}
 }
 
+beforeEach(() => {
+	delete process.env.HERDR_ENV;
+});
+
 describe("issue #4863: Ctrl+O full-view expand truncates the session on ConPTY", () => {
 	afterEach(() => {
 		if (PLATFORM_DESCRIPTOR) Object.defineProperty(process, "platform", PLATFORM_DESCRIPTOR);
@@ -48,6 +53,8 @@ describe("issue #4863: Ctrl+O full-view expand truncates the session on ConPTY",
 		else process.env.WSL_DISTRO_NAME = WSL_DISTRO_NAME;
 		if (TMUX === undefined) delete process.env.TMUX;
 		else process.env.TMUX = TMUX;
+		if (HERDR_ENV === undefined) delete process.env.HERDR_ENV;
+		else process.env.HERDR_ENV = HERDR_ENV;
 		vi.restoreAllMocks();
 	});
 

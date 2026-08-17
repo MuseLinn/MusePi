@@ -6,15 +6,15 @@
  * how assistant text snaps at message_end.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { kStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { resetSettingsForTest, Settings, settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
-import { STREAMING_REVEAL_FRAME_MS } from "@oh-my-pi/pi-coding-agent/modes/controllers/streaming-reveal";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { kStreamingPartialJson } from "@musepi/pi-ai/utils/block-symbols";
+import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import { EventController } from "@musepi/pi-coding-agent/modes/controllers/event-controller";
+import { STREAMING_REVEAL_FRAME_MS } from "@musepi/pi-coding-agent/modes/controllers/streaming-reveal";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 
 beforeAll(async () => {
 	await initTheme();
@@ -56,8 +56,8 @@ function createFixture(streamingMessage: AssistantMessage) {
 		noteDisplayableThinkingContent: vi.fn(() => false),
 		chatContainer: { addChild: vi.fn() },
 		toolOutputExpanded: false,
-		session: { getToolByName: () => undefined },
-		viewSession: { getToolByName: () => undefined },
+		session: { getToolByName: () => undefined, hasBuiltInTool: () => true },
+		viewSession: { getToolByName: () => undefined, hasBuiltInTool: () => true },
 		sessionManager: { getCwd: () => process.cwd() },
 	} as unknown as InteractiveModeContext;
 

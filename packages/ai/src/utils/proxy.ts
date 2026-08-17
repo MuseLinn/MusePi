@@ -177,6 +177,8 @@ export interface ConnectProxiedSocketOptions {
 	signal?: AbortSignal;
 	/** Maximum wall-clock time to establish the final TLS tunnel. Disabled when absent or non-positive. */
 	timeoutMs?: number;
+	/** Target TLS profile. Cursor defaults to HTTP/2 when this is absent. */
+	tls?: tls.ConnectionOptions;
 }
 
 /**
@@ -261,13 +263,16 @@ export async function connectProxiedSocket(
 			return;
 		}
 
-		tunnelSocket = tls.connect({
+		const tlsOptions = options?.tls;
+		const sock = tls.connect({
+			...tlsOptions,
 			socket: rawSocket,
-			servername: targetHost,
-			ALPNProtocols: ["h2"],
+			servername: tlsOptions?.servername ?? targetHost,
+			ALPNProtocols: tlsOptions?.ALPNProtocols ?? ["h2"],
 		});
-		tunnelSocket.once("secureConnect", onTunnelReady);
-		tunnelSocket.once("error", onTunnelError);
+		tunnelSocket = sock;
+		sock.once("secureConnect", onTunnelReady);
+		sock.once("error", onTunnelError);
 	};
 	const onProxyReady = (): void => {
 		if (!rawSocket) return;
@@ -294,7 +299,7 @@ export async function connectProxiedSocket(
 		timeout.unref?.();
 	}
 
-	rawSocket = useProxySsl
+	const sock = useProxySsl
 		? tls.connect({
 				host: proxyHost,
 				port: proxyPort,
@@ -303,8 +308,9 @@ export async function connectProxiedSocket(
 				host: proxyHost,
 				port: proxyPort,
 			});
-	rawSocket.once("error", onRawError);
-	rawSocket.once(readyEvent, onProxyReady);
+	rawSocket = sock;
+	sock.once("error", onRawError);
+	sock.once(readyEvent, onProxyReady);
 
 	return promise;
 }

@@ -189,9 +189,13 @@ macOS capture calls `CGPreflightScreenCaptureAccess()` without prompting. Input 
 - on abort, terminates worker and rejects pending requests;
 - owner registry supports bulk close on session/eval-owner teardown.
 
+Recover by refreshing the exact target screenshot after coordinate-frame errors, taking a new AX snapshot after `StaleRef`, using AX or a delivery mode listed by `desktop.capabilities()` after `BackgroundUnavailable`, and inspecting those capabilities for platform/permission failures.
+
 `ComputerWorkerCore` also serializes inbound messages. It initializes once, tracks whether a screenshot was returned, closes native session once, then unsubscribes and closes transport.
 
 Native `DesktopSession` starts a named `omp-desktop-session` thread. Capture/execute/close requests use a FIFO channel. Every execute batch carries a 60-second deadline enforced inside the native worker: the deadline is checked before each action and the final capture, expiry returns `DESKTOP_DEADLINE_EXCEEDED` without emitting further input, and wait-heavy batches that cannot finish in time are rejected upfront. Explicit close waits up to two seconds and is idempotent. Destructor sends best-effort close but does not block indefinitely on a stuck worker.
+
+Current native backends support macOS, Linux X11, Linux Wayland portal capture/input where available, and Windows; other targets depend on native-addon support. Capabilities and permission state are runtime facts—inspect `desktop.capabilities()` rather than assuming them. Wayland compositors do not permit omp to activate arbitrary windows, so per-window native input and `raise()` are unavailable; use AX actions, or desktop input after focusing the target yourself. See [Scriptable computer use: Platforms](../computer-use.md#platforms) for prerequisites and permission details.
 
 ## Side effects
 

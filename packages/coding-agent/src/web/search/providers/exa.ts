@@ -6,7 +6,7 @@
  * Requests per-result summaries via `contents.summary` and synthesizes
  * them into a combined `answer` string on the SearchResponse.
  */
-import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@oh-my-pi/pi-ai";
+import { type ApiKey, type AuthStorage, type FetchImpl, getEnvApiKey, withAuth } from "@musepi/pi-ai";
 import { getDefault, settings } from "../../../config/settings";
 import { findApiKey, isSearchResponse } from "../../../exa/mcp-client";
 import { parseSSE } from "../../../mcp/json-rpc";
@@ -115,6 +115,7 @@ export interface ExaSearchParams {
 	start_published_date?: string;
 	end_published_date?: string;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 	/**
 	 * Credential source. Resolved before falling back to `EXA_API_KEY` so
@@ -315,7 +316,7 @@ async function callExaSearch(apiKey: string, params: ExaSearchParams): Promise<E
 			"x-api-key": apiKey,
 		},
 		body: JSON.stringify(body),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -360,7 +361,7 @@ async function callExaMcpSearch(params: ExaSearchParams): Promise<ExaSearchRespo
 				arguments: buildExaMcpArgs(params),
 			},
 		}),
-		signal: withHardTimeout(params.signal),
+		signal: withHardTimeout(params.signal, params.timeoutMs),
 	});
 	if (!response.ok) {
 		throw new Error(`MCP request failed: ${response.status} ${response.statusText}`);
@@ -457,13 +458,13 @@ export class ExaProvider extends SearchProvider {
 	 * still uses {@link isAvailable} so an unrelated configured provider
 	 * keeps priority over the public fallback.
 	 */
-	isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
+	override isExplicitlyAvailable(_authStorage: AuthStorage): boolean {
 		return this.#settingsAllowSearch();
 	}
 
 	#settingsAllowSearch(): boolean {
 		try {
-			if (settings.get("exa.enabled") === false || settings.get("exa.enableSearch") === false) {
+			if (settings.get("exa.enabled") === false) {
 				return false;
 			}
 		} catch {
@@ -478,6 +479,7 @@ export class ExaProvider extends SearchProvider {
 			...directiveParams(parsed),
 			num_results: params.numSearchResults ?? params.limit,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			authStorage: params.authStorage,
 			sessionId: params.sessionId,
 			fetch: params.fetch,

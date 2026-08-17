@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
 
 function getTextOutput(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content
@@ -57,6 +57,12 @@ describe("read tool raw range exactness", () => {
 		const output = getTextOutput(result);
 
 		expect(output.trimEnd()).toBe("L01\nL02");
+	});
+
+	it("records the source line count for an open-ended range that reaches EOF", async () => {
+		const result = await tool.execute("call-raw-tail", { path: `${filePath}:raw:31-` });
+
+		expect(result.details?.totalLines).toBe(60);
 	});
 
 	it("keeps context padding for numbered range reads", async () => {

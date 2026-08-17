@@ -8,9 +8,9 @@
  * 1. Copy this file to ~/.omp/agent/extensions/ (legacy: ~/.pi/agent/extensions/) or your project's .omp/extensions/
  * 2. Use /tools to open the tool selector
  */
-import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { getSettingsListTheme } from "@oh-my-pi/pi-coding-agent";
-import { Container, type SettingItem, SettingsList } from "@oh-my-pi/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@musepi/pi-coding-agent";
+import { getSettingsListTheme } from "@musepi/pi-coding-agent";
+import { Container, type SettingItem, SettingsList } from "@musepi/pi-tui";
 
 // State persisted to session
 interface ToolsState {
@@ -36,7 +36,7 @@ export default function toolsExtension(pi: ExtensionAPI) {
 
 	// Find the last tools-config entry in the current branch
 	async function restoreFromBranch(ctx: ExtensionContext) {
-		allTools = pi.getAllTools();
+		allTools = pi.getAllTools().map(t => t.name);
 
 		// Get entries in current branch only
 		const branchEntries = ctx.sessionManager.getBranch();
@@ -66,7 +66,7 @@ export default function toolsExtension(pi: ExtensionAPI) {
 		description: "Enable/disable tools",
 		handler: async (_args, ctx) => {
 			// Refresh tool list
-			allTools = pi.getAllTools();
+			allTools = pi.getAllTools().map(t => t.name);
 
 			await ctx.ui.custom((tui, theme, _keybindings, done) => {
 				// Build settings items for each tool

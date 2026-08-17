@@ -24,11 +24,20 @@ build --@rules_rust//rust/toolchain/channel=nightly
 # Mirrors cargo semantics: crates with `[lints] workspace = true` (pi-ast,
 # pi-iso, pi-natives, pi-shell, pi-walker) get the strict workspace policy
 # (clippy-strict; bazel/clippy.bazelrc is generated from Cargo.toml); everything
-# else gets default clippy + -Dwarnings (clippy).
+# else gets default clippy + -Dwarnings (clippy). pi-builtins allows every
+# clippy group in its manifest (ported brush/uutils/jaq code) while keeping
+# rustc warnings at zero; the aspect ignores Cargo `[lints]`, so clippy-ported
+# re-states those allows on top of -Dwarnings.
 build:clippy --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 build:clippy --output_groups=+clippy_checks
 build:clippy --@rules_rust//rust/settings:clippy_flag=-Dwarnings
 build:clippy-strict --config=clippy
+build:clippy-ported --config=clippy
+build:clippy-ported --@rules_rust//rust/settings:clippy_flag=-Aclippy::all
+build:clippy-ported --@rules_rust//rust/settings:clippy_flag=-Aclippy::pedantic
+build:clippy-ported --@rules_rust//rust/settings:clippy_flag=-Aclippy::nursery
+build:clippy-ported --@rules_rust//rust/settings:clippy_flag=-Aclippy::cargo
+build:clippy-ported --@rules_rust//rust/settings:clippy_flag=-Aunfulfilled_lint_expectations
 import %workspace%/bazel/clippy.bazelrc
 # rustfmt check via aspect, against the workspace rustfmt.toml.
 build:rustfmt --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect

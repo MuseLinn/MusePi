@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { GuestSnapshot } from "../src/lib/client";
 import { GuestClient } from "../src/lib/client";
 import { Composer, shouldSubmitOnEnter } from "../src/components/shell/Composer";
-import { encodeBase64Url } from "../src/lib/link";
+import { encodeBase64Url } from "@musepi/collab-proto";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 const client = new GuestClient(LINK, "tester");
@@ -24,6 +24,8 @@ function snapshot(uiRequest: GuestSnapshot["uiRequest"]): GuestSnapshot {
 		activeTools: new Map(),
 		working: true,
 		readOnly: false,
+		workspace: null,
+		focusedSessionId: null,
 		uiRequest,
 		notices: [],
 	};

@@ -1,6 +1,6 @@
 # pi-native tool-call format
 
-The **pi-native** format is the tool-call serialization used by the omp / pi coding agent. Unlike the JSON-in-a-tag conventions (Hermes/Qwen, Harmony) and unlike the fully separate JSON content-block channel (Anthropic Messages API), pi-native serializes each call as an **XML-flavored block** whose tag carries the tool name — `<call:NAME>…</call:NAME>` — and whose arguments are child elements named after the parameters. It is **schema-driven**: the tool's JSON Schema decides how each value is typed (string vs number vs object vs array) and which compact spellings are legal.
+The **pi-native** format is the tool-call serialization used by the musepi / pi coding agent. Unlike the JSON-in-a-tag conventions (Hermes/Qwen, Harmony) and unlike the fully separate JSON content-block channel (Anthropic Messages API), pi-native serializes each call as an **XML-flavored block** whose tag carries the tool name — `<call:NAME>…</call:NAME>` — and whose arguments are child elements named after the parameters. It is **schema-driven**: the tool's JSON Schema decides how each value is typed (string vs number vs object vs array) and which compact spellings are legal.
 
 This document is a **specification** of the format (it is the contract a renderer must emit and a parser must accept), not a reverse-engineering of trained model weights. It is designed around four goals:
 

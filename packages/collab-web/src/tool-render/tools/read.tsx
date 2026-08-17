@@ -1,8 +1,9 @@
 /** `read` — file/URL/archive reads: path + selector summary, highlighted content, image thumbnails. */
 import type { ReactNode } from "react";
-import { Badge, Badges, Kv, KvGrid, PathText, ResultImages, ResultText } from "../parts";
+import { t } from "../../i18n/index.js";
+import { Badge, Badges, DiffBlock, Kv, KvGrid, PathText, ResultImages, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, languageFromPath, num, shortenPath, str } from "../util";
+import { detailsRecord, isRecord, languageFromPath, num, resultTextOf, shortenPath, str } from "../util";
 
 /** Fields of `ReadToolDetails` the web view surfaces (untrusted wire JSON). */
 interface ReadDetails {
@@ -66,31 +67,40 @@ function Summary(props: ToolRenderProps): ReactNode {
 	return <PathText path={path || "…"} from={from} to={to} sel={sel} />;
 }
 
-function Body({ args, result }: ToolRenderProps): ReactNode {
+function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 	const { path } = readArgs(args);
 	const d = readDetails(detailsRecord(result));
 	const conflictBadge = d.conflictCount !== null && d.conflictCount > 0 && (
-		<Badge tone="warn">
-			{d.conflictCount} conflict{d.conflictCount === 1 ? "" : "s"}
-		</Badge>
+		<Badge tone="warn">{t("{count} conflict(s)", { count: String(d.conflictCount) })}</Badge>
 	);
 	const elidedBadge = d.elidedSpans !== null && d.elidedSpans > 0 && (
-		<Badge>
-			{d.elidedSpans} elided span{d.elidedSpans === 1 ? "" : "s"}
-		</Badge>
+		<Badge>{t("{count} elided span(s)", { count: String(d.elidedSpans) })}</Badge>
 	);
-	const truncatedBadge = d.truncated && <Badge tone="warn">truncated</Badge>;
+	const truncatedBadge = d.truncated && <Badge tone="warn">{t("truncated")}</Badge>;
 	const resolved = d.suffixTo ?? d.resolvedPath;
+	// read with a diff/patch intent (transcript ToolCard kind): the result
+	// text is a diff body — render it with the aicss diff treatment.
+	if (kind === "diff") {
+		const text = resultTextOf(result);
+		if (text) {
+			return (
+				<>
+					<Badges items={[conflictBadge, elidedBadge, truncatedBadge]} />
+					<DiffBlock diff={text} maxLines={40} />
+				</>
+			);
+		}
+	}
 	return (
 		<>
 			{(resolved !== null || d.suffixFrom !== null) && (
 				<KvGrid>
 					{resolved !== null && (
-						<Kv k="resolved">
+						<Kv k={t("resolved")}>
 							<PathText path={resolved} />
 						</Kv>
 					)}
-					{d.suffixFrom !== null && <Kv k="corrected from">{shortenPath(d.suffixFrom)}</Kv>}
+					{d.suffixFrom !== null && <Kv k={t("corrected from")}>{shortenPath(d.suffixFrom)}</Kv>}
 				</KvGrid>
 			)}
 			<Badges items={[conflictBadge, elidedBadge, truncatedBadge]} />

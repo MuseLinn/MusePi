@@ -1,5 +1,5 @@
-import type { Component } from "@oh-my-pi/pi-tui";
-import { isRecord } from "@oh-my-pi/pi-utils";
+import type { Component } from "@musepi/pi-tui";
+import { isRecord } from "@musepi/pi-utils";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { Theme } from "../modes/theme/theme";
 import { renderStatusLine, WidthAwareText } from "../tui";
@@ -25,6 +25,9 @@ export interface DefaultToolRenderInput {
 	result?: {
 		output: string;
 		isError?: boolean;
+		/** Synthetic placeholder for a call skipped mid-batch to service steering/peer
+		 * input — the tool never ran, so it renders neutral (info) rather than as an error. */
+		skipped?: boolean;
 	};
 	/** Current expansion and lifecycle state. */
 	options: RenderResultOptions;
@@ -42,10 +45,22 @@ export function formatDefaultToolExecution(
 		? options.spinnerFrame !== undefined
 			? "running"
 			: "pending"
-		: result?.isError
-			? "error"
-			: "done";
-	lines.push(renderStatusLine({ icon, spinnerFrame: options.spinnerFrame, title: input.label }, uiTheme));
+		: result?.skipped
+			? "info"
+			: result?.isError
+				? "error"
+				: "done";
+	lines.push(
+		renderStatusLine(
+			{
+				icon,
+				spinnerFrame: options.spinnerFrame,
+				title: input.label,
+				...(result?.skipped ? { titleColor: "muted" as const } : {}),
+			},
+			uiTheme,
+		),
+	);
 
 	const args = isRecord(input.args) ? input.args : undefined;
 	if (!options.expanded && args && Object.keys(args).length > 0) {

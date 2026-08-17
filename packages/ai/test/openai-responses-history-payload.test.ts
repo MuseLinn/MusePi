@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { type } from "@musepi/omptype";
 import {
 	convertCodexResponsesMessages,
 	streamOpenAICodexResponses,
-} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { type OpenAIResponsesOptions, streamOpenAIResponses } from "@oh-my-pi/pi-ai/providers/openai-responses";
-import { buildResponsesInput } from "@oh-my-pi/pi-ai/providers/openai-shared";
-import type { Context, Model, ModelSpec, ProviderSessionState, Tool } from "@oh-my-pi/pi-ai/types";
-import { createOpenAIResponsesHistoryPayload, truncateResponseItemId } from "@oh-my-pi/pi-ai/utils";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { type GeneratedProvider, getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import * as piUtils from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-ai/providers/openai-codex-responses";
+import { type OpenAIResponsesOptions, streamOpenAIResponses } from "@musepi/pi-ai/providers/openai-responses";
+import { buildResponsesInput } from "@musepi/pi-ai/providers/openai-shared";
+import type { Context, Model, ModelSpec, ProviderSessionState, Tool } from "@musepi/pi-ai/types";
+import { createOpenAIResponsesHistoryPayload, truncateResponseItemId } from "@musepi/pi-ai/utils";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { type GeneratedProvider, getBundledModel } from "@musepi/pi-catalog/models";
+import * as piUtils from "@musepi/pi-utils";
 
 const TEST_INSTALLATION_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -726,8 +726,8 @@ describe("OpenAI responses history payload", () => {
 		]);
 	});
 
-	it("drops unfinished image generation calls from replayed native history", async () => {
-		const model = getOpenAIReasoningModel("openai", "gpt-5-mini");
+	it("normalizes result-bearing native images for full Codex replay", () => {
+		const model = getBundledModel<"openai-codex-responses">("openai-codex", "gpt-5.5");
 		const context: Context = {
 			messages: [
 				{ role: "user", content: "first user", timestamp: Date.now() },
@@ -742,36 +742,43 @@ describe("OpenAI responses history payload", () => {
 							id: "ig_generating",
 							type: "image_generation_call",
 							status: "generating",
-							action: "generate",
+						},
+						{
+							id: "ig_stale_result",
+							type: "image_generation_call",
+							status: "generating",
+							result: "stale-result-image",
 						},
 						{
 							id: "ig_completed",
 							type: "image_generation_call",
 							status: "completed",
-							result: "base64-image",
-							action: "generate",
-							background: "opaque",
-							output_format: "png",
-							quality: "medium",
+							result: "completed-image",
 						},
 					],
-					true,
+					false,
+					"openai-codex",
+					model.id,
 				),
 				{ role: "user", content: "follow-up user", timestamp: Date.now() },
 			],
 		};
-		const payload = (await captureResponsesPayload(model, context)) as { input?: unknown[] };
-		const imageGenerationItems = payload.input?.filter(item => {
-			if (!item || typeof item !== "object") return false;
-			return (item as { type?: unknown }).type === "image_generation_call";
-		});
+		const imageGenerationItems = convertCodexResponsesMessages(model, context).filter(
+			item => item.type === "image_generation_call",
+		);
 
 		expect(imageGenerationItems).toEqual([
+			{
+				id: "ig_stale_result",
+				type: "image_generation_call",
+				status: "completed",
+				result: "stale-result-image",
+			},
 			{
 				id: "ig_completed",
 				type: "image_generation_call",
 				status: "completed",
-				result: "base64-image",
+				result: "completed-image",
 			},
 		]);
 	});

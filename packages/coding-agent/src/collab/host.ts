@@ -10,17 +10,34 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
+import type { Dirent, Stats } from "node:fs";
 import * as fs from "node:fs/promises";
-import type { ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import * as path from "node:path";
+import type { ImageContent, TextContent } from "@musepi/pi-ai";
+import { logger } from "@musepi/pi-utils";
 import type {
 	BusChannel,
 	CollabUiRequest,
 	CollabUiRequestDraft,
 	CollabUiResponseValue,
-	AgentEvent as WireAgentEvent,
 	SessionEntry as WireSessionEntry,
-} from "@oh-my-pi/pi-wire";
+} from "@musepi/pi-wire";
+import { readBoards, validateBoards, writeBoards, type BoardRecord } from "../daemon/boards.js";
+import {
+	computeNextRun,
+	loadCronRuns,
+	loadCronTasks,
+	saveCronTasks,
+	validateCronTask,
+} from "../daemon/crons.js";
+import {
+	createWorkspaceDir,
+	deleteWorkspaceEntry,
+	renameWorkspaceEntry,
+	resolveInCwd,
+	writeWorkspaceFile,
+} from "../daemon/fs-ops.js";
+import { t } from "../i18n/index.js";
 import type { InteractiveModeContext } from "../modes/types";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry } from "../registry/agent-registry";
@@ -28,6 +45,7 @@ import type { AgentSessionEvent } from "../session/agent-session";
 import { stripImagesFromMessage, USER_INTERRUPT_LABEL } from "../session/messages";
 import type { SessionEntry as StoredSessionEntry } from "../session/session-entries";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
+import { WIDGET_TYPES } from "../tools/widget.js";
 import { generateRoomKey, generateWriteToken, importRoomKey } from "./crypto";
 import { collabDisplayName } from "./display-name";
 import {
@@ -38,13 +56,17 @@ import {
 	type CollabParticipant,
 	type CollabPromptDetails,
 	type CollabSessionState,
+	type CronTask,
+	type WorkspaceEntry,
 	formatCollabLink,
 	formatCollabWebLink,
 	generateRoomId,
 	parseCollabLink,
+	type WorkspaceSessionInfo,
 } from "./protocol";
 import { CollabSocket } from "./relay-client";
 import { shrinkForReplication } from "./replication-shrink";
+import { isWireAgentEvent, isWireSessionEntry } from "./wire-guard";
 
 /** Events that change the footer state guests render. */
 const STATE_TRIGGER_EVENTS: Record<string, true> = {
@@ -61,45 +83,11 @@ const STATE_DEBOUNCE_MS = 100;
 const AGENTS_DEBOUNCE_MS = 100;
 const STREAMING_STATE_INTERVAL_MS = 2000;
 const WELCOME_IMAGE_STRIP_THRESHOLD = 24 * 1024 * 1024;
-const WIRE_AGENT_EVENT_TYPES: Record<WireAgentEvent["type"], true> = {
-	agent_start: true,
-	agent_end: true,
-	turn_start: true,
-	turn_end: true,
-	message_start: true,
-	message_update: true,
-	message_end: true,
-	tool_execution_start: true,
-	tool_execution_update: true,
-	tool_execution_end: true,
-	notice: true,
-	auto_compaction_start: true,
-	auto_compaction_end: true,
-	auto_retry_start: true,
-	auto_retry_end: true,
-	thinking_level_changed: true,
-};
-
-const WIRE_SESSION_ENTRY_TYPES: Record<WireSessionEntry["type"], true> = {
-	message: true,
-	custom_message: true,
-	compaction: true,
-	branch_summary: true,
-	model_change: true,
-	thinking_level_change: true,
-};
 const COLLAB_BUS_CHANNELS = [
 	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
 	TASK_SUBAGENT_PROGRESS_CHANNEL,
 ] as const satisfies readonly BusChannel[];
 
-function isWireAgentEvent(event: AgentSessionEvent): event is AgentSessionEvent & WireAgentEvent {
-	return event.type in WIRE_AGENT_EVENT_TYPES;
-}
-
-function isWireSessionEntry(entry: StoredSessionEntry): entry is StoredSessionEntry & WireSessionEntry {
-	return entry.type in WIRE_SESSION_ENTRY_TYPES;
-}
 const CONNECT_TIMEOUT_MS = 15_000;
 /** Max bytes served per fetch-transcript reply (guest re-requests from `newSize`). */
 export const TRANSCRIPT_READ_CAP = 4 * 1024 * 1024;
@@ -119,8 +107,51 @@ const SNAPSHOT_CHUNK_BYTES = 512 * 1024;
  */
 export type CollabGuestUiResult = { kind: "answered"; value: CollabUiResponseValue } | { kind: "unavailable" };
 
+/** Extension → MIME for fs.read (fallback application/octet-stream). */
+const FILE_MIME: Record<string, string> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	svg: "image/svg+xml",
+	avif: "image/avif",
+	pdf: "application/pdf",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+	mp4: "video/mp4",
+	webm: "video/webm",
+};
+
+function mimeForPath(filePath: string): string {
+	const dot = filePath.lastIndexOf(".");
+	if (dot === -1) return "application/octet-stream";
+	const ext = filePath.slice(dot + 1).toLowerCase();
+	return FILE_MIME[ext] ?? "application/octet-stream";
+}
+
+/**
+ * Multi-session workspace support the host may opt into (`/collab
+ * workspace`, desktop share mode). The provider owns the session directory
+ * and can re-point the host's live session taps at another session.
+ */
+export interface CollabWorkspaceContext {
+	/** Compact cards for every known session (live + history). */
+	listWorkspaceSessions(): Promise<WorkspaceSessionInfo[]>;
+	/** Directory-change notifications (working flips, counts, sessions added). */
+	subscribeWorkspace(cb: () => void): () => void;
+	/**
+	 * Point the host's session taps at another live session. Returns false
+	 * when the session can't go live (no transcript, unsupported host).
+	 */
+	switchWorkspaceSession(sessionId: string): Promise<boolean>;
+}
+
+export type CollabHostMode = "session" | "workspace";
+
 export class CollabHost {
 	#ctx: InteractiveModeContext;
+	#mode: CollabHostMode;
 	#socket: CollabSocket | null = null;
 	#link = "";
 	#webLink = "";
@@ -129,6 +160,7 @@ export class CollabHost {
 	#writeToken: Uint8Array | null = null;
 	#sessionId = "";
 	#unsubscribe?: () => void;
+	#workspaceUnsubscribe?: () => void;
 	#peers = new Map<number, { name: string; canWrite: boolean }>();
 	#uiReqSeq = 0;
 	#pendingUi = new Map<number, { request: CollabUiRequest; settle(result: CollabGuestUiResult): void }>();
@@ -140,8 +172,9 @@ export class CollabHost {
 	#registryUnsubscribe?: () => void;
 	#stopped = false;
 
-	constructor(ctx: InteractiveModeContext) {
+	constructor(ctx: InteractiveModeContext, mode: CollabHostMode = "session") {
 		this.#ctx = ctx;
+		this.#mode = mode;
 	}
 
 	get link(): string {
@@ -208,15 +241,18 @@ export class CollabHost {
 		}
 	}
 
-	async start(relayUrl: string, webUrl = ""): Promise<void> {
+	async start(relayUrl: string, webUrl = "", webJoinUrl = ""): Promise<void> {
 		const rawKey = generateRoomKey();
 		const writeToken = generateWriteToken();
 		const roomId = generateRoomId();
 		this.#writeToken = writeToken;
+		// The browser deep link needs a wss join URL that is same-origin with
+		// the https web base (plaintext ws on an https page is mixed content).
+		const joinForWeb = webJoinUrl || relayUrl;
 		this.#link = formatCollabLink(relayUrl, roomId, rawKey, writeToken);
-		this.#webLink = formatCollabWebLink(relayUrl, roomId, rawKey, writeToken, webUrl);
+		this.#webLink = formatCollabWebLink(joinForWeb, roomId, rawKey, writeToken, webUrl);
 		this.#viewLink = formatCollabLink(relayUrl, roomId, rawKey);
-		this.#webViewLink = formatCollabWebLink(relayUrl, roomId, rawKey, undefined, webUrl);
+		this.#webViewLink = formatCollabWebLink(joinForWeb, roomId, rawKey, undefined, webUrl);
 		const parsed = parseCollabLink(this.#link);
 		if ("error" in parsed) throw new Error(parsed.error);
 		const key = await importRoomKey(rawKey);
@@ -236,6 +272,7 @@ export class CollabHost {
 		socket.onFrame = (frame, fromPeer) => this.#handleFrame(frame, fromPeer);
 		socket.onControl = msg => {
 			if (msg.t === "peer-left") this.#handlePeerLeft(msg.peer);
+			else if (msg.t === "peer-joined") this.#handlePeerJoined(msg.peer, !!msg.plaintext);
 		};
 		socket.onClose = (reason, willReconnect) => {
 			if (this.#stopped) return;
@@ -244,7 +281,7 @@ export class CollabHost {
 				return;
 			}
 			if (willReconnect) {
-				this.#ctx.showStatus(`Collab relay connection lost (${reason}), reconnecting…`, { dim: true });
+				this.#ctx.showStatus(t("Collab relay connection lost ({0}), reconnecting…", reason), { dim: true });
 			} else {
 				void this.#teardown();
 				this.#ctx.session.emitNotice("warning", `Collab ended: ${reason}`, "collab");
@@ -284,6 +321,12 @@ export class CollabHost {
 			// guest state promptly (debounce + JSON diff dedupe).
 			this.#scheduleStateBroadcast();
 		};
+		if (this.#mode === "workspace") {
+			const provider = this.#ctx.workspace;
+			if (provider) {
+				this.#workspaceUnsubscribe = provider.subscribeWorkspace(() => void this.#broadcastWorkspace());
+			}
+		}
 		this.#updateStatusSegment();
 	}
 
@@ -300,6 +343,8 @@ export class CollabHost {
 		this.#ctx.sessionManager.onEntryAppended = undefined;
 		this.#unsubscribe?.();
 		this.#unsubscribe = undefined;
+		this.#workspaceUnsubscribe?.();
+		this.#workspaceUnsubscribe = undefined;
 		for (const unsubscribe of this.#busUnsubscribers) unsubscribe();
 		this.#busUnsubscribers = [];
 		this.#registryUnsubscribe?.();
@@ -327,7 +372,9 @@ export class CollabHost {
 			this.#ctx.session.emitNotice("warning", "Collab ended: session switched", "collab");
 			return;
 		}
-		this.#socket.send(frame);
+		// Directed per-peer fan-out: sealed and plaintext guests need different
+		// encodings, and the relay can only broadcast one byte stream.
+		for (const peerId of this.#peers.keys()) this.#socket.send(frame, peerId);
 	}
 
 	#handleFrame(frame: CollabFrame, fromPeer: number): void {
@@ -350,9 +397,22 @@ export class CollabHost {
 			case "fetch-transcript":
 				void this.#handleFetchTranscript(frame.reqId, frame.agentId, frame.fromByte, fromPeer);
 				break;
+			case "rpc-request":
+				void this.#handleRpcRequest(frame, fromPeer);
+				break;
+			case "workspace-select":
+				void this.#handleWorkspaceSelect(frame.sessionId, fromPeer);
+				break;
 			default:
 				logger.debug("collab host ignoring unexpected frame", { type: frame.t, fromPeer });
 		}
+	}
+
+	/** Record a guest's plaintext mode before its first frame arrives (the relay
+	 *  sends peer-joined ahead of any guest traffic). Guests are only admitted
+	 *  to {@link #peers} once they say hello. */
+	#handlePeerJoined(peerId: number, plaintext: boolean): void {
+		this.#socket?.setPeerMode(peerId, plaintext);
 	}
 
 	/** Timing-safe write-token check; peers without a valid token are read-only. */
@@ -380,10 +440,33 @@ export class CollabHost {
 		const canWrite = this.#verifyWriteToken(writeToken);
 		this.#peers.set(fromPeer, { name: cleanName, canWrite });
 
-		// Snapshot and send synchronously: no awaits between snapshot, welcome,
-		// and chunk sends, so subsequent broadcast frames (entry/event/state/bus)
-		// queue behind the snapshot on the same socket and the guest can't
-		// observe a gap between the snapshot fragment and live traffic.
+		// Workspace mode: the guest lands on the session directory instead of
+		// a live transcript; it picks a session with `workspace-select`.
+		if (this.#mode === "workspace") {
+			void this.#broadcastWorkspace();
+			this.#ctx.session.emitNotice("info", `${cleanName} joined the workspace${canWrite ? "" : " (read-only)"}`, "collab");
+			this.#updateStatusSegment();
+			return;
+		}
+
+		this.#sendWelcome(fromPeer, canWrite);
+		this.#ctx.session.emitNotice(
+			"info",
+			`${cleanName} joined the collab session${canWrite ? "" : " (read-only)"}`,
+			"collab",
+		);
+		this.#updateStatusSegment();
+		this.#scheduleStateBroadcast();
+	}
+
+	/**
+	 * Send a guest the current focus session's welcome + snapshot chunks.
+	 * Snapshot and send synchronously: no awaits between snapshot, welcome,
+	 * and chunk sends, so subsequent broadcast frames (entry/event/state/bus)
+	 * queue behind the snapshot on the same socket and the guest can't
+	 * observe a gap between the snapshot fragment and live traffic.
+	 */
+	#sendWelcome(fromPeer: number, canWrite: boolean): void {
 		const snapshot = this.#ctx.sessionManager.snapshotForReplication();
 		if (JSON.stringify(snapshot).length > WELCOME_IMAGE_STRIP_THRESHOLD) {
 			let stripped = 0;
@@ -413,13 +496,89 @@ export class CollabHost {
 				socket.send({ t: "ui-request", request: pending.request }, fromPeer);
 			}
 		}
-		this.#ctx.session.emitNotice(
-			"info",
-			`${cleanName} joined the collab session${canWrite ? "" : " (read-only)"}`,
-			"collab",
-		);
+	}
+
+	/**
+	 * Workspace directory: refresh from the provider and broadcast. Called on
+	 * hello and on provider change notifications.
+	 */
+	async #broadcastWorkspace(): Promise<void> {
+		if (this.#stopped || !this.#socket) return;
+		const provider = this.#ctx.workspace;
+		if (!provider) return;
+		try {
+			const sessions = await provider.listWorkspaceSessions();
+			if (!this.#stopped) this.#broadcast({ t: "workspace", sessions });
+		} catch (err) {
+			logger.warn("collab workspace list failed", { error: String(err) });
+		}
+	}
+
+	/**
+	 * Guest picks a session to stream live (or null to return to the
+	 * directory). The focus is global — every guest watches the same session.
+	 */
+	async #handleWorkspaceSelect(sessionId: string | null, fromPeer: number): Promise<void> {
+		const provider = this.#ctx.workspace;
+		if (!provider) return;
+		if (sessionId === null) {
+			// Return to the directory: detach the live taps.
+			if (this.#unsubscribe) {
+				this.#unsubscribe();
+				this.#unsubscribe = undefined;
+			}
+			this.#ctx.sessionManager.onEntryAppended = undefined;
+			this.#ctx.session.emitNotice("info", "Collab focus returned to the workspace directory", "collab");
+			this.#updateStatusSegment();
+			return;
+		}
+		let ok = false;
+		let failReason: string | undefined;
+		try {
+			ok = await this.#switchFocus(sessionId);
+		} catch (err) {
+			// Providers may throw a user-facing reason (e.g. an empty session
+			// has no transcript to stream) — surface it to the guest.
+			failReason = err instanceof Error ? err.message : String(err);
+		}
+		if (!ok) {
+			this.#socket?.send(
+				{ t: "error", message: failReason ?? `Cannot stream session ${sessionId} live` },
+				fromPeer,
+			);
+			return;
+		}
+		this.#ctx.session.emitNotice("info", `Collab focus switched to session ${sessionId}`, "collab");
+		// Re-welcome every guest onto the focused session's transcript.
+		for (const [peerId, peer] of this.#peers) {
+			this.#sendWelcome(peerId, peer.canWrite);
+		}
 		this.#updateStatusSegment();
+	}
+
+	/** Re-point the session taps at another live session (provider-owned). */
+	async #switchFocus(sessionId: string): Promise<boolean> {
+		const provider = this.#ctx.workspace;
+		if (!provider) return false;
+		const ok = await provider.switchWorkspaceSession(sessionId);
+		if (!ok) return false;
+		if (this.#unsubscribe) {
+			this.#unsubscribe();
+			this.#unsubscribe = undefined;
+		}
+		this.#ctx.sessionManager.onEntryAppended = undefined;
+		this.#sessionId = this.#ctx.sessionManager.getSessionId();
+		this.#unsubscribe = this.#ctx.session.subscribe(event => {
+			if (isWireAgentEvent(event)) this.#broadcast({ t: "event", event: shrinkForReplication(event) });
+			this.#onEventForState(event);
+		});
+		this.#ctx.sessionManager.onEntryAppended = entry => {
+			if (isWireSessionEntry(entry)) this.#broadcast({ t: "entry", entry: shrinkForReplication(entry) });
+			this.#scheduleStateBroadcast();
+		};
 		this.#scheduleStateBroadcast();
+		this.#scheduleAgentsBroadcast();
+		return true;
 	}
 
 	/**
@@ -619,7 +778,7 @@ export class CollabHost {
 					if (ref.status === "running" && ref.session) {
 						await ref.session.abort({ reason: USER_INTERRUPT_LABEL });
 					}
-					await AgentLifecycleManager.global().release(agentId, ref);
+					await AgentLifecycleManager.global().release(agentId, ref, { tombstone: true });
 				};
 				kill().catch(fail);
 				break;
@@ -670,6 +829,224 @@ export class CollabHost {
 			logger.debug("collab transcript read failed", { agentId, error: String(err) });
 			reply("", fromByte, String(err));
 		}
+	}
+
+	/** RPC methods that mutate host state; read-only peers get them rejected. */
+	static readonly #RPC_MUTATING: Record<string, true> = {
+		"board.save": true,
+		"cron.upsert": true,
+		"cron.delete": true,
+		"cron.toggle": true,
+		"fs.write": true,
+		"fs.mkdir": true,
+		"fs.rename": true,
+		"fs.delete": true,
+	};
+
+	/**
+	 * Guest RPC dispatch: board / cron / workspace / fs capabilities served
+	 * from the host session's own stores and cwd. Mutating methods are gated
+	 * on the peer's write token; every request gets a directed `rpc-result`
+	 * carrying the same `reqId` (mirrors the fetch-transcript reply path).
+	 */
+	async #handleRpcRequest(
+		frame: Extract<CollabFrame, { t: "rpc-request" }>,
+		fromPeer: number,
+	): Promise<void> {
+		const reply = (ok: boolean, data?: unknown, error?: string) =>
+			this.#socket?.send({ t: "rpc-result", reqId: frame.reqId, ok, data, error }, fromPeer);
+		const peer = this.#peers.get(fromPeer);
+		if (!peer) return; // never said hello
+		if (!peer.canWrite && CollabHost.#RPC_MUTATING[frame.method]) {
+			reply(false, undefined, `${frame.method} is disabled on a read-only link`);
+			return;
+		}
+		try {
+			const data = await this.#rpcDispatch(frame.method, frame.params);
+			reply(true, data);
+		} catch (err) {
+			logger.warn("collab rpc failed", { method: frame.method, error: String(err) });
+			reply(false, undefined, err instanceof Error ? err.message : String(err));
+		}
+	}
+
+	async #rpcDispatch(method: string, params: unknown): Promise<unknown> {
+		const p = (params ?? {}) as Record<string, unknown>;
+		switch (method) {
+			case "board.list":
+				return { boards: readBoards() };
+			case "board.save": {
+				const { boards } = p as { boards?: unknown };
+				const check = validateBoards(boards, WIDGET_TYPES);
+				if (!check.ok) throw new Error(`board.save: ${check.error}`);
+				const list = (boards as BoardRecord[] | undefined) ?? [];
+				// Builtin examples are protected: a full-list overwrite from any
+				// guest must not drop them (mirrors the daemon's board.save).
+				const currentBuiltin = readBoards().filter(b => b.builtin === true && !list.some(x => x.id === b.id));
+				writeBoards(currentBuiltin.length > 0 ? [...list, ...currentBuiltin] : list);
+				return { ok: true };
+			}
+			case "cron.list":
+				return { tasks: loadCronTasks(), runs: loadCronRuns().slice(-20) };
+			case "cron.upsert": {
+				const { task } = p as { task?: unknown };
+				const check = validateCronTask(task);
+				if (!check.ok) throw new Error(`cron.upsert: ${check.error}`);
+				const t = task as CronTask;
+				const now = Date.now();
+				const tasks = loadCronTasks();
+				const existing = t.id ? tasks.find(x => x.id === t.id) : undefined;
+				const merged: CronTask = existing
+					? { ...existing, ...t, state: { ...existing.state, ...t.state } }
+					: {
+							id: t.id && /^[a-z0-9-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
+							name: t.name,
+							enabled: t.enabled !== false,
+							schedule: t.schedule,
+							prompt: t.prompt,
+							cwd: t.cwd || this.#ctx.sessionManager.getCwd(),
+							state: { ...t.state, createdAt: now },
+						};
+				if (merged.enabled) merged.state.nextRunAt = computeNextRun(merged, now) ?? undefined;
+				else merged.state.nextRunAt = undefined;
+				const next = existing ? tasks.map(x => (x.id === existing.id ? merged : x)) : [...tasks, merged];
+				saveCronTasks(next);
+				return { tasks: next, task: merged };
+			}
+			case "cron.delete": {
+				const { id } = p as { id?: string };
+				if (!id) throw new Error("cron.delete: id required");
+				const tasks = loadCronTasks().filter(t => t.id !== id);
+				saveCronTasks(tasks);
+				return { tasks };
+			}
+			case "cron.toggle": {
+				const { id, enabled } = p as { id?: string; enabled?: boolean };
+				const tasks = loadCronTasks();
+				const task = tasks.find(t => t.id === id);
+				if (!task) throw new Error(`cron.toggle: unknown task "${id}"`);
+				task.enabled = enabled !== false;
+				task.state.nextRunAt = task.enabled ? computeNextRun(task, Date.now()) ?? undefined : undefined;
+				saveCronTasks(tasks);
+				return { tasks };
+			}
+			case "workspace.tree": {
+				const { cwd, maxDepth, perDirLimit } = p as { cwd?: string; maxDepth?: number; perDirLimit?: number };
+				return await this.#workspaceTree(cwd, { maxDepth, perDirLimit });
+			}
+			case "fs.read": {
+				const { path: rel, maxBytes } = p as { path?: string; maxBytes?: number };
+				if (typeof rel !== "string") throw new Error("fs.read: path required");
+				const abs = resolveInCwd(this.#ctx.sessionManager.getCwd(), rel);
+				if (!abs) throw new Error("fs.read: path escapes workspace");
+				const stat = await fs.stat(abs);
+				if (!stat.isFile()) throw new Error("fs.read: not a file");
+				const cap = Math.max(0, Math.min(maxBytes ?? 8 * 1024 * 1024, 32 * 1024 * 1024));
+				if (stat.size > cap) throw new Error(`fs.read: file too large (${stat.size} bytes)`);
+				const buf = await fs.readFile(abs);
+				return { base64: buf.toString("base64"), size: buf.byteLength, mime: mimeForPath(abs) };
+			}
+			case "fs.write": {
+				const { path: rel, content } = p as { path?: string; content?: string };
+				if (typeof rel !== "string" || typeof content !== "string") {
+					throw new Error("fs.write: path + content required");
+				}
+				const res = writeWorkspaceFile(this.#ctx.sessionManager.getCwd(), rel, content);
+				if (!res.ok) throw new Error(res.error);
+				return { ok: true };
+			}
+			case "fs.mkdir": {
+				const { path: rel } = p as { path?: string };
+				if (typeof rel !== "string") throw new Error("fs.mkdir: path required");
+				const res = createWorkspaceDir(this.#ctx.sessionManager.getCwd(), rel);
+				if (!res.ok) throw new Error(res.error);
+				return { ok: true };
+			}
+			case "fs.rename": {
+				const { from, to } = p as { from?: string; to?: string };
+				if (typeof from !== "string" || typeof to !== "string") {
+					throw new Error("fs.rename: from + to required");
+				}
+				const res = renameWorkspaceEntry(this.#ctx.sessionManager.getCwd(), from, to);
+				if (!res.ok) throw new Error(res.error);
+				return { ok: true };
+			}
+			case "fs.delete": {
+				const { path: rel } = p as { path?: string };
+				if (typeof rel !== "string") throw new Error("fs.delete: path required");
+				const res = deleteWorkspaceEntry(this.#ctx.sessionManager.getCwd(), rel);
+				if (!res.ok) throw new Error(res.error);
+				return { ok: true };
+			}
+			default:
+				throw new Error(`unknown rpc method "${method}"`);
+		}
+	}
+
+	/**
+	 * Structured workspace tree for the guest file pane. Same shape as the
+	 * daemon's workspaceTree: paths relative to the root, `/`-separated,
+	 * per-directory caps keep the newest + oldest entries when over limit.
+	 */
+	async #workspaceTree(
+		cwd: string | undefined,
+		options: { maxDepth?: number; perDirLimit?: number } = {},
+	): Promise<{ rootPath: string; truncated: boolean; entries: WorkspaceEntry[] }> {
+		const rootPath = path.resolve(cwd && cwd.length > 0 ? cwd : this.#ctx.sessionManager.getCwd());
+		const maxDepth = Math.max(1, options.maxDepth ?? 2);
+		const perDirLimit = options.perDirLimit ?? 50;
+		const entries: WorkspaceEntry[] = [];
+		let truncated = false;
+		const walk = async (dir: string, rel: string, depth: number): Promise<void> => {
+			if (depth > maxDepth) return;
+			let dirents: Dirent[];
+			try {
+				dirents = await fs.readdir(dir, { withFileTypes: true });
+			} catch {
+				return; // unreadable / vanished — skip
+			}
+			let bucket = dirents;
+			if (perDirLimit > 0 && dirents.length > perDirLimit) {
+				const withMtime = await Promise.all(
+					dirents.map(async d => {
+						try {
+							return { dirent: d, mtime: (await fs.stat(path.join(dir, d.name))).mtimeMs };
+						} catch {
+							return { dirent: d, mtime: 0 };
+						}
+					}),
+				);
+				withMtime.sort((a, b) => b.mtime - a.mtime);
+				bucket =
+					perDirLimit <= 1
+						? withMtime.slice(0, perDirLimit).map(w => w.dirent)
+						: [...withMtime.slice(0, perDirLimit - 1), withMtime.at(-1)!].map(w => w.dirent);
+				truncated = true;
+			}
+			bucket.sort((a, b) => a.name.localeCompare(b.name));
+			for (const d of bucket) {
+				const childRel = rel ? `${rel}/${d.name}` : d.name;
+				let stat: Stats;
+				try {
+					stat = await fs.stat(path.join(dir, d.name));
+				} catch {
+					continue; // broken symlink / vanished
+				}
+				const isDir = stat.isDirectory();
+				entries.push({
+					name: d.name,
+					path: childRel,
+					isDir,
+					size: isDir ? 0 : stat.size,
+					mtime: Math.round(stat.mtimeMs),
+					depth,
+				});
+				if (isDir) await walk(path.join(dir, d.name), childRel, depth + 1);
+			}
+		};
+		await walk(rootPath, "", 1);
+		entries.sort((a, b) => a.path.localeCompare(b.path));
+		return { rootPath, truncated, entries };
 	}
 
 	#scheduleStateBroadcast(): void {

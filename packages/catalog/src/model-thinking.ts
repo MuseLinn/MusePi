@@ -24,6 +24,7 @@ import {
 import {
 	findThinkingVariantToken,
 	isDeepseekModelIdOrName,
+	isDeepseekV4FlashModelId,
 	isGlm52ReasoningEffortModelId,
 	isKimiK3ModelId,
 	isMimoModelIdOrName,
@@ -62,9 +63,9 @@ const GEMINI_3_FLASH_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, E
 const GPT_5_2_PLUS_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High, Effort.XHigh];
 const GPT_5_1_CODEX_MINI_EFFORTS: readonly Effort[] = [Effort.Medium, Effort.High];
 const LOW_MEDIUM_HIGH_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High];
-/** Kimi K3's wire-exact mandatory reasoning scale. */
-const KIMI_K3_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High, Effort.Max];
-/** Wire-exact two-tier scale (`high`/`max`): GLM-5.2 on Z.ai/Umans/Ollama Cloud/Baseten, Sakana Fugu, DeepSeek. */
+/** Wire-exact `low`/`high`/`max` scale used by Kimi K3 and DeepSeek V4 Flash (direct API and aggregators). */
+const LOW_HIGH_MAX_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High, Effort.Max];
+/** Wire-exact two-tier scale (`high`/`max`): GLM-5.2 on Z.ai/Umans/Ollama Cloud/Baseten, Sakana Fugu, DeepSeek V4 Pro. */
 const HIGH_MAX_REASONING_EFFORTS: readonly Effort[] = [Effort.High, Effort.Max];
 /** OpenRouter's DeepSeek route accepts only `high`. */
 const HIGH_ONLY_REASONING_EFFORTS: readonly Effort[] = [Effort.High];
@@ -339,7 +340,7 @@ function getModelDefinedEfforts<TApi extends Api>(
 		}
 	}
 	if (isKimiK3ModelId(spec.id)) {
-		return KIMI_K3_REASONING_EFFORTS;
+		return LOW_HIGH_MAX_REASONING_EFFORTS;
 	}
 	if (isSakanaFuguReasoningModel(spec)) {
 		return HIGH_MAX_REASONING_EFFORTS;
@@ -366,8 +367,13 @@ function getModelDefinedEfforts<TApi extends Api>(
 		return OLLAMA_REASONING_EFFORTS;
 	}
 	if (isOpenAICompatReasoningApi(spec.api) && isDeepseekReasoningModel(spec)) {
-		// DeepSeek's reasoning_effort accepts only high/max; OpenRouter's
-		// DeepSeek route tops out at high.
+		// DeepSeek V4 Flash accepts the wire-exact low/high/max ladder on every
+		// host — the direct API and aggregators alike (medium/xhigh map to
+		// high). V4 Pro and the older reasoners top out at high/max, and
+		// OpenRouter's non-flash DeepSeek route exposes only high.
+		if (isDeepseekV4FlashModelId(spec.id)) {
+			return LOW_HIGH_MAX_REASONING_EFFORTS;
+		}
 		return isOpenRouterThinkingFormat(compat) ? HIGH_ONLY_REASONING_EFFORTS : HIGH_MAX_REASONING_EFFORTS;
 	}
 	if (spec.provider === "baseten" && isOpenAIGptOssModelId(spec.id)) {

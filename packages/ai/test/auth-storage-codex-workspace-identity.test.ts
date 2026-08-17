@@ -23,9 +23,9 @@ import {
 	AuthStorage,
 	SqliteAuthCredentialStore,
 	type StoredAuthCredential,
-} from "@oh-my-pi/pi-ai/auth-storage";
-import type { UsageReport } from "@oh-my-pi/pi-ai/usage";
-import * as codexUsage from "@oh-my-pi/pi-ai/usage/openai-codex";
+} from "@musepi/pi-ai/auth-storage";
+import type { UsageReport } from "@musepi/pi-ai/usage";
+import * as codexUsage from "@musepi/pi-ai/usage/openai-codex";
 import { removeWithRetries } from "../../utils/src/temp";
 
 const EMAIL = "shared@example.com";
@@ -149,6 +149,50 @@ describe("openai-codex workspace-scoped credential identity", () => {
 		expect(readIdentityRows(dbPath)).toEqual([
 			{ identity_key: `email:${EMAIL}|org:${TEAM_WS}`, disabled_cause: null },
 		]);
+	});
+
+	it("purges a disabled legacy email-keyed row on the first workspace-scoped login with the same email", async () => {
+		if (!store) throw new Error("test setup failed");
+
+		// Pre-org login → bare email key, then upstream invalidates the refresh
+		// token and the row is auto-disabled (a tombstone).
+		store.upsertAuthCredentialForProvider(
+			"openai-codex",
+			codexCredential({ suffix: "legacy", accountId: PERSONAL_WS }),
+		);
+		const legacyId = store.listAuthCredentials("openai-codex")[0].id;
+		store.deleteAuthCredential(legacyId, "oauth refresh failed: OAuthError: 401 refresh_token_invalidated");
+
+		// Same human logs in again, now workspace-scoped: the org-scoped login
+		// claims and hard-deletes the pre-org tombstone instead of stranding it.
+		store.upsertAuthCredentialForProvider(
+			"openai-codex",
+			codexCredential({ suffix: "team", accountId: TEAM_WS, orgId: TEAM_WS, orgName: "team" }),
+		);
+		expect(readIdentityRows(dbPath)).toEqual([
+			{ identity_key: `email:${EMAIL}|org:${TEAM_WS}`, disabled_cause: null },
+		]);
+		expect(await store.listDisabledCredentials("openai-codex")).toHaveLength(0);
+	});
+
+	it("keeps a disabled row of a different member of the same workspace after a workspace-scoped login", async () => {
+		if (!store) throw new Error("test setup failed");
+
+		// Alice's org-scoped row is disabled (tombstone). Bob, a different member
+		// of the SAME workspace, logs in. The shared-workspace guard must keep
+		// Alice's tombstone — it is not Bob's subscription.
+		store.upsertAuthCredentialForProvider(
+			"openai-codex",
+			codexCredential({ suffix: "alice", accountId: TEAM_WS, orgId: TEAM_WS, email: "alice@example.com" }),
+		);
+		const aliceId = store.listAuthCredentials("openai-codex")[0].id;
+		store.deleteAuthCredential(aliceId, "oauth refresh failed: OAuthError: 401 refresh_token_invalidated");
+
+		store.upsertAuthCredentialForProvider(
+			"openai-codex",
+			codexCredential({ suffix: "bob", accountId: TEAM_WS, orgId: TEAM_WS, email: "bob@example.com" }),
+		);
+		expect(await store.listDisabledCredentials("openai-codex")).toHaveLength(1);
 	});
 
 	it("never clobbers workspace-scoped rows with a workspace-less credential", () => {

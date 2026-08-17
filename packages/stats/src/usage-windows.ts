@@ -13,8 +13,8 @@
  * dashboard must keep working for API-key-only setups that never record usage.
  */
 import { Database } from "bun:sqlite";
-import { AuthBrokerClient, resolveAuthBrokerConfig } from "@oh-my-pi/pi-ai/auth-broker";
-import { getAgentDbPath, logger } from "@oh-my-pi/pi-utils";
+import { AuthBrokerClient, resolveAuthBrokerConfig } from "@musepi/pi-ai/auth-broker";
+import { getAgentDbPath, logger } from "@musepi/pi-utils";
 import type { ProviderWindowInsight, UsageWindowPoint, UsageWindowSeries } from "./shared-types";
 
 /** Subset of a `usage_history` row consumed by the window analytics. */
@@ -59,6 +59,7 @@ export function readUsageSnapshots(sinceMs: number, dbPath = getAgentDbPath()): 
 	let db: Database | null = null;
 	try {
 		db = new Database(dbPath, { readonly: true });
+		db.run("PRAGMA busy_timeout = 5000");
 		const rows = db
 			.prepare(
 				`SELECT recorded_at, provider, account_key, email, account_id, limit_id, label, window_label, used_fraction, status

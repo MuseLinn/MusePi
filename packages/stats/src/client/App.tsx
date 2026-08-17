@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppLayout } from "./app/AppLayout";
 import type { DashboardSection } from "./app/routes";
 import { useHashRoute } from "./data/useHashRoute";
+import { useLocale } from "./i18n/use-locale";
 import {
 	BehaviorRoute,
 	CostsRoute,
@@ -17,6 +18,14 @@ import {
 import { RequestDrawer } from "./ui/RequestDrawer";
 
 export default function App() {
+	// Re-render the whole tree on language toggle: formatters read the locale
+	// snapshot at render time, so every component must subscribe. Also keeps
+	// <html lang> in sync (a11y + CSS :lang() hooks).
+	const locale = useLocale();
+	useEffect(() => {
+		document.documentElement.lang = locale;
+	}, [locale]);
+
 	const { section, setSection, range, setRange } = useHashRoute();
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);

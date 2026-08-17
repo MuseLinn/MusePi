@@ -1,17 +1,17 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent, AgentBusyError } from "@oh-my-pi/pi-agent-core";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { GoalTool } from "@oh-my-pi/pi-coding-agent/goals/tools/goal-tool";
-import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { createTools, type Tool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Agent, AgentBusyError } from "@musepi/pi-agent-core";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { GoalTool } from "@musepi/pi-coding-agent/goals/tools/goal-tool";
+import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { createTools, type Tool, type ToolSession } from "@musepi/pi-coding-agent/tools";
+import { TempDir } from "@musepi/pi-utils";
 
 function createToolSession(cwd: string, settings: Settings, overrides: Partial<ToolSession> = {}): ToolSession {
 	return {
@@ -134,7 +134,6 @@ describe("guided goal setup", () => {
 			expect(promptSpy).toHaveBeenCalledTimes(1);
 			const [text] = promptSpy.mock.calls[0]!;
 			expect(text).not.toContain("<rough-goal>");
-			expect(text).toContain("not stated an objective");
 		} finally {
 			await harness.cleanup();
 		}

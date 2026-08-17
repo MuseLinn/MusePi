@@ -1,5 +1,6 @@
 /** `fetch` — reader-mode URL fetch; output is markdown with a metadata header. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, InvalidArg, Kv, KvGrid, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, num, str, truncate } from "../util";
@@ -49,13 +50,13 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			{args.raw === true && (
 				<>
 					{" "}
-					<Badge>raw</Badge>
+					<Badge>{t("raw")}</Badge>
 				</>
 			)}
 			{details?.truncated && (
 				<>
 					{" "}
-					<Badge tone="warn">truncated</Badge>
+					<Badge tone="warn">{t("truncated")}</Badge>
 				</>
 			)}
 		</>
@@ -71,15 +72,15 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	return (
 		<>
 			<KvGrid>
-				<Kv k="url">{url ?? <InvalidArg what="url" />}</Kv>
-				<Kv k="method">{method && method !== "GET" && <Badge tone="accent">{method}</Badge>}</Kv>
-				<Kv k="raw">{args.raw === true && <Badge>raw</Badge>}</Kv>
-				<Kv k="timeout">{timeout != null && `${timeout}s`}</Kv>
-				<Kv k="final url">{redirected && details?.finalUrl}</Kv>
-				<Kv k="content-type">{details?.contentType}</Kv>
-				<Kv k="via">{details?.method}</Kv>
-				<Kv k="notes">{details && details.notes.length > 0 && details.notes.join("; ")}</Kv>
-				<Kv k="truncated">{details?.truncated && <Badge tone="warn">output truncated</Badge>}</Kv>
+				<Kv k={t("url")}>{url ?? <InvalidArg what="url" />}</Kv>
+				<Kv k={t("method")}>{method && method !== "GET" && <Badge tone="accent">{method}</Badge>}</Kv>
+				<Kv k={t("raw")}>{args.raw === true && <Badge>{t("raw")}</Badge>}</Kv>
+				<Kv k={t("timeout")}>{timeout != null && `${timeout}s`}</Kv>
+				<Kv k={t("final url")}>{redirected && details?.finalUrl}</Kv>
+				<Kv k={t("content-type")}>{details?.contentType}</Kv>
+				<Kv k={t("via")}>{details?.method}</Kv>
+				<Kv k={t("notes")}>{details && details.notes.length > 0 && details.notes.join("; ")}</Kv>
+				<Kv k={t("truncated")}>{details?.truncated && <Badge tone="warn">{t("output truncated")}</Badge>}</Kv>
 			</KvGrid>
 			<ResultText result={result} maxLines={12} lang="markdown" />
 		</>

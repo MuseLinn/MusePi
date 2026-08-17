@@ -2,6 +2,75 @@
 
 ## [Unreleased]
 
+## [17.2.12] - 2026-08-08
+
+### Breaking Changes
+
+- `PUT N.=M @name` over a *span* now throws when `@name` was never captured, instead of warning and deleting the range. Pasting a never-captured register over a span wrote nothing back, so a mistyped or hallucinated register name silently destroyed content. Gap pastes (`PUT >N @name`) keep the warned no-op behaviour from 17.2.11.
+
+### Added
+
+- `applyEdits` now takes a `path` and uses the native tree-sitter parser to decide every boundary repair that depends on delimiter *semantics*. The authored edits are materialized first: if that result parses, it is returned untouched, so a `}` inside a regex literal, a string, or Markdown prose is never mistaken for a block closer. A closer-spare repair lands only when the repaired result is *shown* to parse — never on delimiter arithmetic alone — so an unrecognized language or an unprovable candidate leaves the edit exactly as authored. Wired through the patcher, recovery, section apply, and the edit tool's preview.
+- Auto-repair for replacement ranges that start one line early on a structural closer (the `}` of the construct above): the closer is spared and the payload lands after it, gated on the same parse proof.
+- Warning for balanced payloads over ranges that end mid-block (deleting opener(s) whose closer(s) survive below), pointing at the block-op remedy (`PUT N*:`). Raised only when the baseline parsed and the authored result does not, so it cannot fire on prose or an unknown language.
+- Warning when a `+` body row is itself a valid hunk header (`+CUT 5.=9`). Such a row is literal content by definition and is inserted into the file as text; naming it at the moment it happens turns a silent source-file corruption into an actionable diagnostic.
+
+### Fixed
+
+- Rejected patches whose pasted `N:TEXT` read-output rows repeat a source line number. Each such row is recovered as a single-line `PUT N.=N:`, so a body written as consecutive lines under one number collapsed through the same-range coalescer, keeping only the last row and silently dropping the rest — in one incident replacing a block opener with `}` and deleting the following statement. The error now names the repeated line and teaches the explicit `PUT` form.
+
+## [17.2.11] - 2026-08-07
+
+### Changed
+
+- Pasting an empty named register (`PUT … @name` with no matching capture) now surfaces a warning listing available registers and removes the span target instead of throwing an error.
+
+### Fixed
+
+- Fixed an issue where pipe-numbered `read`/`search` rows copied into top-level and bare-body patch payloads were not properly recovered (#7905).
+
+## [17.2.10] - 2026-08-06
+
+### Changed
+
+- Updated internal caching dependency to use `@musepi/pi-utils/lru`.
+
+## [17.2.2] - 2026-07-31
+
+### Breaking Changes
+
+- Replaced legacy SWAP, INS, and PASTE syntax with unified PUT and CUT hunks
+
+### Added
+
+- Added named register support (@reg) and span paste capabilities to clipboard operations
+- Added conservative recovery for uniformly omitted replacement indents near brace openers, preserving intentional indentation-only edits
+
+### Changed
+
+- Made .= the canonical inclusive range separator while retaining legacy separator variants as lenient input
+- Unified replacement, insertion, register paste, block, head/tail, move, and removal headers under a composable PUT, CUT, MV, and REM grammar
+
+### Fixed
+
+- Improved resilience against common model output formatting errors, including numbered read rows, summarized ranges, diff-style old/new rows, empty PUT deletes, harmless CUT colons, and single-line span shorthand
+
+## [17.2.0] - 2026-07-30
+
+### Breaking Changes
+
+- Removed `DEL`, `DEL.BLK`, `COPY`, and `COPY.BLK` from the patch language. Use `CUT` / `CUT.BLK` for deletion; a cut does not require a following `PASTE` and leaves the removed content available to later pastes.
+
+### Added
+
+- Added clipboard ops: `CUT N.=M` captures lines into a register (and deletes them), `CUT.BLK N` captures tree-sitter blocks, and `PASTE.PRE|POST N` / `PASTE.HEAD|TAIL` / `PASTE.BLK.POST N` insert the captured lines without retyping. The register flows top-to-bottom across sections, so content moves between files in one patch; `PASTE` does not consume it and the last capture wins.
+- Added `PatcherOptions.clipboard` for a host-owned register that persists across `Patcher.apply` batches. Batches work on a fork (`forkClipboard`) published per landed section (`commitClipboard`), so failed batches never poison the register and a mid-batch write failure still preserves content already cut from disk.
+- Added clipboard safety guards: a `PASTE` with an empty register, a capture overwriting un-pasted `CUT` content, and clipboard ops in same-path sections interleaved across another file's section are all rejected with targeted diagnostics. `CUT` ranges participate in overlap validation, the seen-lines guard, and drift recovery (every captured line must remap).
+
+### Changed
+
+- Simplified `grammar.lark` around shared target and position shapes, collapsing the concrete and block `CUT` forms plus the `INS` / `PASTE` position variants into their common grammar rules.
+
 ### Fixed
 
 - Prevented CPU and memory exhaustion in streaming previews by rejecting line anchors above Number.MAX_SAFE_INTEGER and ranges spanning more than 100,000 lines.
@@ -399,7 +468,7 @@ All notable changes to this package will be documented in this file.
 - Added automatic line-ending and BOM normalization on read, with original encoding shape restored on write
 - Added follow-up helpers `buildCompactDiffPreview` and `streamHashLines` for compact diff previews and chunked streaming of numbered lines
 - Added stale-file-hash recovery that replays edits against snapshots and merges results onto current file content when direct hash validation fails
-- Initial standalone release. Extracted from `@oh-my-pi/pi-coding-agent`.
+- Initial standalone release. Extracted from `@musepi/pi-coding-agent`.
 
 ### Fixed
 

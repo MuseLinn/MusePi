@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AssistantMessage } from "@musepi/pi-ai";
+import { logger } from "@musepi/pi-utils";
 import { LiveSessionController, type LiveSessionControllerOptions, type LiveTranscript } from "../../live/controller";
 import { LIVE_MODEL } from "../../live/protocol";
 import { LiveVisualizer } from "../../live/visualizer";
@@ -99,6 +99,7 @@ export class LiveCommandController {
 				void this.stop().catch(cause => this.#ctx.showError(errorFrom(cause).message));
 			},
 			onToggleMute: () => this.#session?.toggleMute(),
+			stopKeys: this.#ctx.keybindings.getKeys("app.live.toggle"),
 		});
 		this.#mountVisualizer(visualizer);
 

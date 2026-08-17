@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as net from "node:net";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import type { FetchImpl } from "@oh-my-pi/pi-ai/types";
+import * as AIError from "@musepi/pi-ai/error";
+import type { FetchImpl } from "@musepi/pi-ai/types";
 import {
 	connectProxiedSocket,
 	getProxyForProvider,
@@ -9,7 +9,7 @@ import {
 	isLocalOrMetadataHost,
 	shouldBypassProxy,
 	wrapFetchForProxy,
-} from "@oh-my-pi/pi-ai/utils/proxy";
+} from "@musepi/pi-ai/utils/proxy";
 
 const PROXY = "http://127.0.0.1:24560";
 
@@ -24,6 +24,8 @@ async function createSilentProxyServer(): Promise<SilentProxyServer> {
 	const accepted = Promise.withResolvers<net.Socket>();
 	const server = net.createServer(socket => {
 		sockets.add(socket);
+		socket.resume();
+		socket.on("end", () => socket.destroy());
 		socket.once("close", () => sockets.delete(socket));
 		accepted.resolve(socket);
 	});
@@ -61,7 +63,6 @@ async function waitForSocketClose(socket: net.Socket): Promise<void> {
 	socket.once("close", () => closed.resolve());
 	await closed.promise;
 }
-
 const isProxyEnvKey = (k: string): boolean =>
 	k.startsWith("PI_PROXY") ||
 	k === "HTTP_PROXY" ||

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createTools, HIDDEN_TOOLS, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { createTools, HIDDEN_TOOLS, type ToolSession } from "@musepi/pi-coding-agent/tools";
 
 Bun.env.PI_PYTHON_SKIP_CHECK = "1";
 
@@ -112,7 +112,7 @@ describe("createTools", () => {
 	it("still exposes eval when python kernel is unavailable (dispatches to js)", async () => {
 		const session = createTestSession();
 		vi.spyOn(
-			await import("@oh-my-pi/pi-coding-agent/eval/py/kernel"),
+			await import("@musepi/pi-coding-agent/eval/py/kernel"),
 			"checkPythonKernelAvailability",
 		).mockResolvedValue({
 			ok: false,
@@ -150,10 +150,21 @@ describe("createTools", () => {
 
 	it("creates xd:// presentation state without remounting explicitly requested built-ins", async () => {
 		const session = createTestSession();
-		const tools = await createTools(session, ["read", "lsp"]);
+		const tools = await createTools(session, ["read", "lsp", "write"]);
 
 		expect(session.xdev).toBeDefined();
 		expect(session.xdev?.mountedNames.size).toBe(0);
+		expect(tools.map(tool => tool.name)).toEqual(["read", "lsp", "write"]);
+	});
+
+	it("skips xd:// state entirely when the session grants no write tool", async () => {
+		// The xd:// transport rides `write xd://<tool>`; without a granted write
+		// tool nothing can dispatch a device, so no state is allocated and later
+		// SDK assembly exposes custom/MCP tools top-level instead.
+		const session = createTestSession();
+		const tools = await createTools(session, ["read", "lsp"]);
+
+		expect(session.xdev).toBeUndefined();
 		expect(tools.map(tool => tool.name)).toEqual(["read", "lsp"]);
 	});
 

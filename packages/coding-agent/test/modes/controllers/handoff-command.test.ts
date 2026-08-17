@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import { CommandController } from "@oh-my-pi/pi-coding-agent/modes/controllers/command-controller";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
+import { CommandController } from "@musepi/pi-coding-agent/modes/controllers/command-controller";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 
 function createContainer() {
 	return {
@@ -88,6 +88,42 @@ describe("/handoff command", () => {
 		expect(statusContainer.children).toHaveLength(0);
 		expect(ctx.editor.onEscape).toBe(originalOnEscape);
 		expect(ctx.session.handoff).toHaveBeenCalledWith("focus on tests");
+	});
+
+	it("surfaces a provider failure named AbortError as a real error, not a cancellation", async () => {
+		// Regression: the catch used to map any name==="AbortError" error to
+		// "Handoff cancelled". session.handoff() now normalizes genuine cancellations
+		// to the exact "Handoff cancelled" message and re-throws real provider failures
+		// verbatim, so the controller must report those as a failure.
+		const providerError = new Error("Deepseek stream stalled");
+		providerError.name = "AbortError";
+		const showError = vi.fn();
+		const statusContainer = createContainer();
+		const ctx = {
+			sessionManager: {
+				getEntries: () => [{ type: "message" }, { type: "message" }],
+			},
+			session: {
+				handoff: vi.fn(async () => {
+					throw providerError;
+				}),
+				abortHandoff: vi.fn(),
+			},
+			loadingAnimation: undefined,
+			statusContainer,
+			chatContainer: createContainer(),
+			ui: { requestRender: vi.fn(), requestComponentRender: vi.fn() },
+			editor: { onEscape: vi.fn() },
+			showError,
+			showStatus: vi.fn(),
+			showWarning: vi.fn(),
+		} as unknown as InteractiveModeContext;
+		const controller = new CommandController(ctx);
+
+		await controller.handleHandoffCommand();
+
+		expect(showError).toHaveBeenCalledTimes(1);
+		expect(showError).toHaveBeenCalledWith("Handoff failed: Deepseek stream stalled");
 	});
 
 	it("refuses to hand off while a response is streaming", async () => {

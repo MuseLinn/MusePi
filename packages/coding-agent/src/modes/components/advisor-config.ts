@@ -15,9 +15,9 @@
  * {@link WatchdogConfigDoc} and only touches disk + the live advisors via the host
  * `save` callback.
  */
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Model, UsageReport } from "@oh-my-pi/pi-ai";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Model, UsageReport } from "@musepi/pi-ai";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import {
 	type Component,
 	Input,
@@ -28,7 +28,7 @@ import {
 	type SgrMouseEvent,
 	type TUI,
 	truncateToWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import {
 	ADVISOR_DEFAULT_TOOL_NAMES,
 	type AdvisorConfig,
@@ -38,6 +38,7 @@ import {
 import type { ModelRegistry } from "../../config/model-registry";
 import { formatModelSelectorValue } from "../../config/model-resolver";
 import type { Settings } from "../../config/settings";
+import { t } from "../../i18n/index.js";
 import type { PerAdvisorStat } from "../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../session/auth-storage";
 import { formatCompactQuota } from "../controllers/command-controller";
@@ -255,8 +256,8 @@ export class AdvisorConfigOverlayComponent implements Component {
 		if (lines.length > rows) {
 			const marker =
 				start + rows < lines.length
-					? theme.fg("dim", `  ↓ ${lines.length - rows - start} more`)
-					: theme.fg("dim", "  (end)");
+					? theme.fg("dim", `  ↓ ${t("{0} more", String(lines.length - rows - start))}`)
+					: theme.fg("dim", t("  (end)"));
 			window[rows - 1] = marker;
 		}
 		return window;
@@ -271,55 +272,59 @@ export class AdvisorConfigOverlayComponent implements Component {
 			if (advisor) return this.#advisorPreview(advisor, bodyWidth);
 		}
 		if (value === "shared") {
-			const lines = [theme.bold("Shared instructions"), ""];
+			const lines = [theme.bold(t("Shared instructions")), ""];
 			const text = this.#doc.instructions?.trim();
-			lines.push(...(text ? wrap(text, bodyWidth) : [theme.fg("muted", "(none)")]));
+			lines.push(...(text ? wrap(text, bodyWidth) : [theme.fg("muted", t("(none)"))]));
 			return lines.map(line => truncateToWidth(line, bodyWidth));
 		}
 		const help =
 			value === "add"
-				? "Create a new advisor entry, then edit its model, tools, and instructions."
+				? t("Create a new advisor entry, then edit its model, tools, and instructions.")
 				: value === "scope"
-					? `Switch between the project and user WATCHDOG.yml. Currently editing the ${this.#scope}-level file.`
+					? t(
+							"Switch between the project and user WATCHDOG.yml. Currently editing the {0}-level file.",
+							this.#scope,
+						)
 					: value === "save"
-						? "Write this scope's WATCHDOG.yml and reload the live advisors without a restart."
+						? t("Write this scope's WATCHDOG.yml and reload the live advisors without a restart.")
 						: value === "close"
-							? "Close the editor. Unsaved changes are discarded."
+							? t("Close the editor. Unsaved changes are discarded.")
 							: "";
 		return wrap(help, bodyWidth).map(line => truncateToWidth(theme.fg("muted", line), bodyWidth));
 	}
 
 	#advisorPreview(advisor: AdvisorConfig, bodyWidth: number): string[] {
-		const model = advisor.model?.trim() || this.#defaultModelLabel || "advisor role default";
-		const tools = formatAdvisorTools(advisor.tools, "no tools");
+		const model = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
+		const tools = formatAdvisorTools(advisor.tools, t("no tools"));
 		const lines = [
-			theme.bold(advisor.name || "(unnamed)"),
+			theme.bold(advisor.name || t("(unnamed)")),
 			"",
-			`${theme.fg("dim", "Enabled:")} ${advisor.enabled === false ? "○ off" : "● on"}`,
-			`${theme.fg("dim", "Model:")} ${model}`,
-			`${theme.fg("dim", "Tools:")} ${tools}`,
+			`${theme.fg("dim", t("Enabled:"))} ${advisor.enabled === false ? `○ ${t("off")}` : `● ${t("on")}`}`,
+			`${theme.fg("dim", t("Model:"))} ${model}`,
+			`${theme.fg("dim", t("Tools:"))} ${tools}`,
 			"",
-			theme.fg("dim", "Instructions:"),
+			theme.fg("dim", t("Instructions:")),
 		];
 		const instr = advisor.instructions?.trim();
-		lines.push(...(instr ? wrap(instr, bodyWidth) : [theme.fg("muted", "(none)")]));
+		lines.push(...(instr ? wrap(instr, bodyWidth) : [theme.fg("muted", t("(none)"))]));
 		// Show live usage stats when available from the session.
 		const liveStat = this.#cb.getAdvisorStats?.()?.find(s => s.name === (advisor.name || "default"));
 		if (liveStat && (liveStat.status === "running" || liveStat.status === "quota_exhausted")) {
-			lines.push("", theme.fg("dim", "Usage:"));
+			lines.push("", theme.fg("dim", t("Usage:")));
 			const spendParts: string[] = [
-				`${liveStat.tokens.input.toLocaleString()} in`,
-				`${liveStat.tokens.output.toLocaleString()} out`,
+				`${liveStat.tokens.input.toLocaleString()} ${t("in")}`,
+				`${liveStat.tokens.output.toLocaleString()} ${t("out")}`,
 			];
-			if (liveStat.tokens.cacheRead > 0) spendParts.push(`${liveStat.tokens.cacheRead.toLocaleString()} cache`);
-			lines.push(theme.fg("dim", `  Tokens: ${spendParts.join(", ")}`));
-			if (liveStat.cost > 0) lines.push(theme.fg("dim", `  Cost: $${liveStat.cost.toFixed(4)}`));
+			if (liveStat.tokens.cacheRead > 0)
+				spendParts.push(`${liveStat.tokens.cacheRead.toLocaleString()} ${t("cache")}`);
+			lines.push(theme.fg("dim", `  ${t("Tokens:")} ${spendParts.join(", ")}`));
+			if (liveStat.cost > 0) lines.push(theme.fg("dim", `  ${t("Cost:")} $${liveStat.cost.toFixed(4)}`));
 			if (liveStat.contextWindow > 0) {
 				const pct = Math.round((liveStat.contextTokens / liveStat.contextWindow) * 100);
 				lines.push(
 					theme.fg(
 						"dim",
-						`  Context: ${liveStat.contextTokens.toLocaleString()}/${liveStat.contextWindow.toLocaleString()} (${pct}%)`,
+						`  ${t("Context:")} ${liveStat.contextTokens.toLocaleString()}/${liveStat.contextWindow.toLocaleString()} (${pct}%)`,
 					),
 				);
 			}
@@ -366,8 +371,8 @@ export class AdvisorConfigOverlayComponent implements Component {
 	}
 
 	#advisorSummary(advisor: AdvisorConfig): string {
-		const model = advisor.model?.trim() || this.#defaultModelLabel || "advisor role default";
-		const tools = formatAdvisorTools(advisor.tools, "no tools");
+		const model = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
+		const tools = formatAdvisorTools(advisor.tools, t("no tools"));
 		return `${model} · ${tools}`;
 	}
 
@@ -375,14 +380,22 @@ export class AdvisorConfigOverlayComponent implements Component {
 		this.#ensureRosterVisible();
 		const items: SelectItem[] = this.#doc.advisors.map((advisor, index) => ({
 			value: `advisor:${index}`,
-			label: `${advisor.enabled === false ? "○" : "●"} ${advisor.name || "(unnamed)"}`,
+			label: `${advisor.enabled === false ? "○" : "●"} ${advisor.name || t("(unnamed)")}`,
 			description: this.#advisorSummary(advisor),
 		}));
-		items.push({ value: "add", label: "+ Add advisor" });
-		items.push({ value: "shared", label: "Shared instructions", description: previewLine(this.#doc.instructions) });
-		items.push({ value: "scope", label: `Scope: ${this.#scope}`, description: `→ ${this.#otherScope()}` });
-		items.push({ value: "save", label: "Save & apply" });
-		items.push({ value: "close", label: "Close" });
+		items.push({ value: "add", label: t("+ Add advisor") });
+		items.push({
+			value: "shared",
+			label: t("Shared instructions"),
+			description: previewLine(this.#doc.instructions),
+		});
+		items.push({
+			value: "scope",
+			label: `${t("Scope: ")}${t(this.#scope)}`,
+			description: `→ ${t(this.#otherScope())}`,
+		});
+		items.push({ value: "save", label: t("Save & apply") });
+		items.push({ value: "close", label: t("Close") });
 
 		// Show every row (no internal overflow-search); the split frame supplies height.
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
@@ -392,10 +405,10 @@ export class AdvisorConfigOverlayComponent implements Component {
 		};
 		list.onSelect = item =>
 			void this.#onListSelect(item.value).catch(err => {
-				this.#cb.notify(`Advisor config: ${err instanceof Error ? err.message : String(err)}`);
+				this.#cb.notify(t("Advisor config: {0}", err instanceof Error ? err.message : String(err)));
 			});
 		list.onCancel = () => this.#cb.close();
-		this.#setScreen("list", list, "↑↓ move · Enter / click select · scroll preview on the right · Esc close");
+		this.#setScreen("list", list, t("↑↓ move · Enter / click select · scroll preview on the right · Esc close"));
 	}
 
 	async #onListSelect(value: string): Promise<void> {
@@ -411,7 +424,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 		}
 		if (value === "scope") {
 			if (this.#dirty) {
-				this.#cb.notify('Unsaved changes — "Save & apply" or Close before switching scope.');
+				this.#cb.notify(t('Unsaved changes — "Save & apply" or Close before switching scope.'));
 				return;
 			}
 			const next = this.#otherScope();
@@ -441,30 +454,30 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showList();
 			return;
 		}
-		const modelDescription = advisor.model?.trim() || this.#defaultModelLabel || "advisor role default";
-		const toolsDescription = formatAdvisorTools(advisor.tools, "no tools");
+		const modelDescription = advisor.model?.trim() || this.#defaultModelLabel || t("advisor role default");
+		const toolsDescription = formatAdvisorTools(advisor.tools, t("no tools"));
 		const items: SelectItem[] = [
-			{ value: "name", label: "Name", description: advisor.name },
+			{ value: "name", label: t("Name"), description: advisor.name },
 			{
 				value: "toggleEnabled",
-				label: "Enabled",
-				description: advisor.enabled === false ? "○ off" : "● on",
+				label: t("Enabled"),
+				description: advisor.enabled === false ? `○ ${t("off")}` : `● ${t("on")}`,
 			},
-			{ value: "model", label: "Model", description: modelDescription },
+			{ value: "model", label: t("Model"), description: modelDescription },
 		];
 		if (advisor.model?.trim()) {
-			items.push({ value: "resetModel", label: "Reset model to advisor-role default" });
+			items.push({ value: "resetModel", label: t("Reset model to advisor-role default") });
 		}
 		items.push(
-			{ value: "tools", label: "Tools", description: toolsDescription },
-			{ value: "instructions", label: "Instructions", description: previewLine(advisor.instructions) },
-			{ value: "delete", label: "Delete this advisor" },
-			{ value: "back", label: "Back" },
+			{ value: "tools", label: t("Tools"), description: toolsDescription },
+			{ value: "instructions", label: t("Instructions"), description: previewLine(advisor.instructions) },
+			{ value: "delete", label: t("Delete this advisor") },
+			{ value: "back", label: t("Back") },
 		);
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.onSelect = item => this.#onDetailSelect(index, item.value);
 		list.onCancel = () => this.#showList();
-		this.#setScreen("detail", list, `Editing "${advisor.name}" · Enter / click edit field · Esc back`);
+		this.#setScreen("detail", list, t('Editing "{0}" · Enter / click edit field · Esc back', advisor.name));
 	}
 
 	#onDetailSelect(index: number, field: string): void {
@@ -519,7 +532,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showDetail(index);
 		};
 		input.onEscape = () => this.#showDetail(index);
-		this.#setScreen("name", input, "Type a name · Enter save · Esc cancel");
+		this.#setScreen("name", input, t("Type a name · Enter save · Esc cancel"));
 	}
 
 	#showModelPicker(index: number): void {
@@ -553,11 +566,11 @@ export class AdvisorConfigOverlayComponent implements Component {
 			}
 		};
 		picker.onCancel = () => this.#showDetail(index);
-		this.#setScreen("model", picker, "Type to search · Enter / click twice picks · Esc back");
+		this.#setScreen("model", picker, t("Type to search · Enter / click twice picks · Esc back"));
 	}
 
 	#showThinkingPicker(index: number, selector: string, efforts: readonly string[]): void {
-		const items: SelectItem[] = [{ value: "", label: "(model default thinking)" }];
+		const items: SelectItem[] = [{ value: "", label: t("(model default thinking)") }];
 		for (const effort of efforts) items.push({ value: effort, label: effort });
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.onSelect = item => {
@@ -569,7 +582,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			this.#showDetail(index);
 		};
 		list.onCancel = () => this.#showModelPicker(index);
-		this.#setScreen("thinking", list, `Thinking effort for ${selector} · Enter / click pick · Esc back`);
+		this.#setScreen("thinking", list, t("Thinking effort for {0} · Enter / click pick · Esc back", selector));
 	}
 
 	#showToolsEditor(index: number, selected: Set<string>, cursor: number): void {
@@ -578,7 +591,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 			value: name,
 			label: `${selected.has(name) ? "[x]" : "[ ]"} ${name}`,
 		}));
-		items.push({ value: "__done", label: "Done" });
+		items.push({ value: "__done", label: t("Done") });
 		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme());
 		list.setSelectedIndex(cursor);
 		let cursorIndex = cursor;
@@ -604,7 +617,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 		this.#setScreen(
 			"tools",
 			list,
-			"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)",
+			t("Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)"),
 		);
 	}
 
@@ -612,7 +625,7 @@ export class AdvisorConfigOverlayComponent implements Component {
 	#showInstructionsEditor(index: number): void {
 		const shared = index < 0;
 		const current = shared ? this.#doc.instructions : this.#doc.advisors[index].instructions;
-		const title = shared ? "Shared advisor instructions" : `Instructions — ${this.#doc.advisors[index].name}`;
+		const title = shared ? t("Shared advisor instructions") : t("Instructions — {0}", this.#doc.advisors[index].name);
 		const editor = new HookEditorComponent(
 			this.#tui,
 			title,

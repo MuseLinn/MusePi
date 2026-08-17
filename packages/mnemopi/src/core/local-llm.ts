@@ -6,8 +6,8 @@ import {
 	type FetchImpl,
 	type Model,
 	withAuth,
-} from "@oh-my-pi/pi-ai";
-import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
+} from "@musepi/pi-ai";
+import { ProviderHttpError } from "@musepi/pi-ai/error";
 import { type CompleteOptions, callHostLlm, getHostLlmBackend } from "./llm-backends";
 import {
 	getMnemopiRuntimeOptions,
@@ -254,6 +254,7 @@ export function cleanOutput(text: string): string {
 		.replaceAll("<|user|>", "")
 		.replaceAll("</s>", "")
 		.trim()
+		.replace(/^(?:\s*<think>[\s\S]*?<\/think>)+\s*/i, "")
 		.replace(/^(Summarize the following memories.*?[.!?:]\s*)/is, "")
 		.replace(/^(Preserve facts.*?[.!?:]\s*)/is, "")
 		.replace(/^Source:.*?\n/im, "")

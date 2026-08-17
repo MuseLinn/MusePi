@@ -2,6 +2,7 @@ import type { Settings } from "../../config/settings";
 import { CURRENT_SETUP_VERSION } from "../setup-version";
 import type { InteractiveModeContext } from "../types";
 import { glyphSetupScene } from "./scenes/glyph";
+import { languageSetupScene } from "./scenes/language";
 import { modelSetupScene } from "./scenes/model";
 import { providersSetupScene } from "./scenes/providers";
 import { themeSetupScene } from "./scenes/theme";
@@ -12,8 +13,8 @@ export type { SetupScene, SetupSceneController, SetupSceneHost, SetupSceneResult
 
 export { runStartupSplash } from "./startup-splash";
 export { CURRENT_SETUP_VERSION };
-
 export const ALL_SCENES = [
+	languageSetupScene,
 	providersSetupScene,
 	modelSetupScene,
 	glyphSetupScene,
@@ -21,21 +22,21 @@ export const ALL_SCENES = [
 ] as const satisfies readonly SetupScene[];
 
 export interface SetupSceneSelectionOptions {
-	resuming?: boolean;
-	isTTY?: boolean;
-	skipEnv?: string;
-	setupWizardEnabled?: boolean;
 	force?: boolean;
+	resuming?: boolean;
+	skipEnv?: string;
+	isTTY?: boolean;
+	setupWizardEnabled?: boolean;
 }
 
 function setupSkipEnvEnabled(value: string | undefined): boolean {
-	if (value === undefined) return false;
+	if (!value) return false;
 	const normalized = value.trim().toLowerCase();
-	return normalized !== "" && normalized !== "0" && normalized !== "false" && normalized !== "no";
+	return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
 export async function selectSetupScenes(
-	storedVersion: number,
+	storedVersion: number | undefined,
 	scenes: readonly SetupScene[],
 	ctx?: InteractiveModeContext,
 	options: SetupSceneSelectionOptions = {},
@@ -48,9 +49,10 @@ export async function selectSetupScenes(
 		if (options.setupWizardEnabled === false) return [];
 	}
 
+	const version = storedVersion ?? 0;
 	const selected: SetupScene[] = [];
 	for (const scene of scenes) {
-		if (!options.force && scene.minVersion <= storedVersion) continue;
+		if (!options.force && scene.minVersion <= version) continue;
 		if (scene.shouldRun) {
 			if (!ctx) continue;
 			if (!(await scene.shouldRun(ctx))) continue;
@@ -65,7 +67,6 @@ export async function markSetupWizardComplete(
 	version: number = CURRENT_SETUP_VERSION,
 ): Promise<void> {
 	settings.set("setupVersion", version);
-	await settings.flush();
 }
 
 export interface RunSetupWizardOptions {

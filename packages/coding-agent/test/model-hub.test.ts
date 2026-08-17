@@ -3,21 +3,21 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+import { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import type { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	type ModelHubCallbacks,
 	ModelHubComponent,
 	type ModelHubOptions,
 	resetProviderAutoRefreshGuard,
-} from "@oh-my-pi/pi-coding-agent/modes/components/model-hub";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { AUTO_THINKING } from "@oh-my-pi/pi-coding-agent/thinking";
-import type { TUI } from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-coding-agent/modes/components/model-hub";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
+import type { TUI } from "@musepi/pi-tui";
 
 function normalize(lines: readonly string[]): string {
 	return stripVTControlCharacters(lines.join("\n")).replace(/\s+/g, " ").trim();
@@ -167,11 +167,11 @@ describe("ModelHub", () => {
 			installTestTheme();
 
 			const rendered = normalize(hub.render(220));
-			expect(rendered).toContain("●default");
-			expect(rendered).toContain("●custom-fast");
+			expect(rendered).toContain("● default");
+			expect(rendered).toContain("● custom-fast");
 			// Explicit :low suffix surfaces as the low thinking glyph on the chip.
 			expect(rendered).toContain("◔");
-			expect(rendered).toContain("●smol");
+			expect(rendered).toContain("● smol");
 		});
 
 		test("list rows carry no role chips; only the selected model's detail line is tagged", () => {
@@ -185,9 +185,9 @@ describe("ModelHub", () => {
 			// Auto-selection tags smol → haiku and slow → codex, but only the
 			// selected model's chips render (in the detail line). With row
 			// chips both would appear at once.
-			const hollow = ["○smol", "○slow"].filter(chip => rendered.includes(chip));
+			const hollow = ["○ smol", "○ slow"].filter(chip => rendered.includes(chip));
 			expect(hollow).toHaveLength(1);
-			expect(rendered).not.toContain("●smol");
+			expect(rendered).not.toContain("● smol");
 		});
 
 		test("roles view reflects auto thinking from defaultThinkingLevel and :auto suffixes", () => {
@@ -446,7 +446,7 @@ describe("ModelHub", () => {
 				expect(settings.getProjectModelRole("default")).toBe(selector);
 
 				const projectDefault = createHub({ models: [model], scoped: true, settings });
-				expect(normalize(projectDefault.hub.render(220))).toContain("○smol");
+				expect(normalize(projectDefault.hub.render(220))).toContain("○ smol");
 				projectDefault.hub.handleInput("\n");
 				projectDefault.hub.handleInput("\n");
 				expect(projectDefault.onUnassign).toHaveBeenCalledWith("default", "project");
@@ -484,7 +484,7 @@ describe("ModelHub", () => {
 			const model = makeModel("test", "claude-haiku-4.5");
 			const settings = Settings.isolated({ modelRoleStorage: "project" });
 			const { hub, onAssign, onUnassign } = createHub({ models: [model], scoped: true, settings });
-			expect(normalize(hub.render(220))).toContain("○smol");
+			expect(normalize(hub.render(220))).toContain("○ smol");
 
 			hub.handleInput("\n");
 			hub.handleInput(DOWN);

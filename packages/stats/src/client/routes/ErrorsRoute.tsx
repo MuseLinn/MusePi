@@ -1,7 +1,8 @@
-import { useMemo } from "react";
 import { getRecentErrors } from "../api";
 import { formatCost, formatInteger, formatRelativeTime } from "../data/formatters";
 import { useResource } from "../data/useResource";
+import { t } from "../i18n";
+import { useLocale } from "../i18n/use-locale";
 import type { MessageStats, TimeRange } from "../types";
 import { AsyncBoundary, DataTable, Panel, StatusPill } from "../ui";
 
@@ -13,6 +14,8 @@ export interface ErrorsRouteProps {
 }
 
 export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: ErrorsRouteProps) {
+	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
+	const locale = useLocale();
 	const {
 		data: recentErrors,
 		error,
@@ -22,50 +25,47 @@ export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: E
 		enabled: active,
 	});
 
-	const columns = useMemo(
-		() => [
-			{
-				key: "model",
-				header: "Model",
-				render: (item: MessageStats) => (
-					<div>
-						<div className="stats-font-medium stats-text-primary">{item.model}</div>
-						<div className="stats-text-xs stats-text-muted">{item.provider}</div>
-					</div>
-				),
-			},
-			{
-				key: "timestamp",
-				header: "Time",
-				render: (item: MessageStats) => formatRelativeTime(item.timestamp),
-			},
-			{
-				key: "errorMessage",
-				header: "Error Message",
-				render: (item: MessageStats) => (
-					<div
-						className="stats-text-xs stats-text-danger stats-truncate stats-max-w-md stats-font-mono"
-						title={item.errorMessage || ""}
-					>
-						{item.errorMessage || "Unknown error"}
-					</div>
-				),
-			},
-			{
-				key: "tokens",
-				header: "Tokens",
-				numeric: true,
-				render: (item: MessageStats) => formatInteger(item.usage.totalTokens),
-			},
-			{
-				key: "cost",
-				header: "Cost",
-				numeric: true,
-				render: (item: MessageStats) => formatCost(item.usage.cost.total, 4),
-			},
-		],
-		[],
-	);
+	const columns = [
+		{
+			key: "model",
+			header: t("Model"),
+			render: (item: MessageStats) => (
+				<div>
+					<div className="stats-font-medium stats-text-primary">{item.model}</div>
+					<div className="stats-text-xs stats-text-muted">{item.provider}</div>
+				</div>
+			),
+		},
+		{
+			key: "timestamp",
+			header: t("Time"),
+			render: (item: MessageStats) => formatRelativeTime(item.timestamp),
+		},
+		{
+			key: "errorMessage",
+			header: t("Error Message"),
+			render: (item: MessageStats) => (
+				<div
+					className="stats-text-xs stats-text-danger stats-truncate stats-max-w-md stats-font-mono"
+					title={item.errorMessage || ""}
+				>
+					{item.errorMessage || t("Unknown error")}
+				</div>
+			),
+		},
+		{
+			key: "tokens",
+			header: t("Tokens"),
+			numeric: true,
+			render: (item: MessageStats) => formatInteger(item.usage.totalTokens),
+		},
+		{
+			key: "cost",
+			header: t("Cost"),
+			numeric: true,
+			render: (item: MessageStats) => formatCost(item.usage.cost.total, 4),
+		},
+	];
 
 	const renderMobileCard = (item: MessageStats, onClick?: () => void) => (
 		<div className="stats-mobile-card stats-border-danger" onClick={onClick}>
@@ -74,19 +74,19 @@ export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: E
 					<div className="stats-font-semibold stats-text-primary">{item.model}</div>
 					<div className="stats-text-xs stats-text-muted">{item.provider}</div>
 				</div>
-				<StatusPill variant="danger">Failed</StatusPill>
+				<StatusPill variant="danger">{t("Failed")}</StatusPill>
 			</div>
 			<div className="stats-mobile-card-grid">
 				<div>
-					<div className="stats-mobile-card-label">Time</div>
+					<div className="stats-mobile-card-label">{t("Time")}</div>
 					<div className="stats-mobile-card-value">{formatRelativeTime(item.timestamp)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Cost</div>
+					<div className="stats-mobile-card-label">{t("Cost")}</div>
 					<div className="stats-mobile-card-value">{formatCost(item.usage.cost.total, 4)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Tokens</div>
+					<div className="stats-mobile-card-label">{t("Tokens")}</div>
 					<div className="stats-mobile-card-value">{formatInteger(item.usage.totalTokens)}</div>
 				</div>
 			</div>
@@ -96,12 +96,12 @@ export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: E
 
 	return (
 		<div className="stats-route-container">
-			<Panel title="Recent Errors" subtitle="Up to 50 most recent failed requests in the stats database">
+			<Panel title={t("Recent Errors")} subtitle={t("Up to 50 most recent failed requests in the stats database")}>
 				<AsyncBoundary
 					loading={loading}
 					error={error}
 					data={recentErrors}
-					emptyText="No recent failures in the local stats database"
+					emptyText={t("No recent failures in the local stats database")}
 				>
 					<DataTable
 						columns={columns}
@@ -109,7 +109,7 @@ export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: E
 						keyExtractor={item => item.id || `${item.sessionFile}-${item.entryId}`}
 						onRowClick={item => item.id && onRequestClick(item.id)}
 						renderMobileCard={renderMobileCard}
-						emptyText="No recent failures in the local stats database"
+						emptyText={t("No recent failures in the local stats database")}
 					/>
 				</AsyncBoundary>
 			</Panel>

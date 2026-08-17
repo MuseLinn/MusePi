@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { AsyncJobManager } from "@oh-my-pi/pi-coding-agent/async/job-manager";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentLifecycleManager } from "@oh-my-pi/pi-coding-agent/registry/agent-lifecycle";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { TaskTool } from "@oh-my-pi/pi-coding-agent/task";
-import * as discoveryModule from "@oh-my-pi/pi-coding-agent/task/discovery";
-import * as executorModule from "@oh-my-pi/pi-coding-agent/task/executor";
-import type { AgentDefinition, SingleResult, TaskParams } from "@oh-my-pi/pi-coding-agent/task/types";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { AsyncJobManager } from "@musepi/pi-coding-agent/async/job-manager";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { TaskTool } from "@musepi/pi-coding-agent/task";
+import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";
+import * as executorModule from "@musepi/pi-coding-agent/task/executor";
+import type { AgentDefinition, SingleResult, TaskParams } from "@musepi/pi-coding-agent/task/types";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 
 const taskAgent: AgentDefinition = {
 	name: "task",
@@ -97,19 +97,22 @@ describe("task async preflight", () => {
 			spawns: "scout",
 			expectation: "Cannot spawn 'task'",
 		},
-	])(
-		"returns $name policy errors before registering an async job",
-		async ({ name, params, settings, spawns, expectation }) => {
-			mockDiscovery();
-			const jobs = manager();
-			const tool = await TaskTool.create(createSession({ manager: jobs, settings, spawns }));
+	])("returns $name policy errors before registering an async job", async ({
+		name,
+		params,
+		settings,
+		spawns,
+		expectation,
+	}) => {
+		mockDiscovery();
+		const jobs = manager();
+		const tool = await TaskTool.create(createSession({ manager: jobs, settings, spawns }));
 
-			const result = await tool.execute("preflight", params as TaskParams);
+		const result = await tool.execute("preflight", params as TaskParams);
 
-			expect(textOf(result)).toContain(expectation);
-			expect(jobs.getJob(name)).toBeUndefined();
-		},
-	);
+		expect(textOf(result)).toContain(expectation);
+		expect(jobs.getJob(name)).toBeUndefined();
+	});
 
 	it("rejects an invalid async batch atomically before dispatching any item", async () => {
 		mockDiscovery();

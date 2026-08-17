@@ -35,8 +35,74 @@ Parsing comes from frontmatter via `parseAgentFields()` (`src/discovery/helpers.
 - `spawns` accepts `*`, CSV, or array
 - backward-compat behavior: if `spawns` missing but `tools` includes `task`, `spawns` becomes `*`
 - `output` is passed through as opaque schema data
-- `read-summarize: false` (parsed as `readSummarize`) forces the subagent's `read` tool to return verbatim file content instead of structural summaries — `runSubprocess` applies it as a `read.summarize.enabled: false` override on the subagent's isolated settings (`src/task/executor.ts`). `scout` and `librarian` ship with it disabled. Defaults to enabled when the field is absent.
-- `prewalk: true` starts the subagent on its resolved model and hands off to the default prewalk target (the `smol` role) at its first edit/write, exactly like the session-level `--prewalk`; a string value (e.g. `prewalk: "@smol"` or `prewalk: "openai/gpt-5-mini"`) picks a custom target. The `task.agentPrewalk` settings record (agent name → `"on"` / `"off"` / pattern, toggled per agent from `/agents` with `P`) overrides the frontmatter. Resolution happens in `runSubprocess` (`src/task/executor.ts`); an unresolvable target or a target equal to the starting model skips the hand-off instead of failing the spawn.
+- `read-summarize: false` (normalized to `readSummarize`) forces the subagent's `read` tool to return verbatim file content instead of structural summaries — `runSubprocess` applies it as a `read.summarize.enabled: false` override on the subagent's isolated settings (`src/task/executor.ts`). `scout` and `librarian` ship with it disabled. Defaults to enabled when the field is absent.
+- `model` accepts one selector, CSV, or an array. Entries are tried in order after role aliases are expanded.
+- `thinking-level` / `thinking` selects the agent's configured effort. When `task.enableEffort` (default `false`) exposes it, a task item's coarse `effort` (`lo`, `med`, `hi`) takes precedence at launch. musepi maps that hint to the selected model's lowest, middle, or highest supported effort, then clamps it to `task.maxEffort` (default `max`). The ceiling is carried across retry-fallback model switches. If the selected model has no supported effort at or below the ceiling, the spawn fails; models without a controllable effort surface instead fall back to their normal selector.
+- `blocking: true` makes the parent wait for that agent even when async task execution is enabled
+- `autoloadSkills` names skills from the parent session to inject before the first child prompt; unknown names are ignored
+- `prewalk: true` starts the subagent on its resolved model and hands off to the default prewalk target (the `smol` role) at its first edit/write, exactly like the session-level `--prewalk`; a string value (e.g. `prewalk: "@smol"` or `prewalk: "openai/gpt-5-mini"`) picks a custom target. The `task.agentPrewalk` settings record (agent name → `"on"` / `"off"` / pattern, toggled per agent from `/agents` with `P`) overrides the frontmatter. Resolution happens in `runSubprocess` (`src/task/executor.ts`). An unavailable target is skipped instead of failing the spawn. A resolved target is skipped only when both its model identity and its effective thinking mode/level match the starting selection after model clamping; a same-model effort downgrade is a real hand-off and still arms and switches at the first edit/write.
+
+## Role-backed custom agents
+
+musepi discovers user agents from `~/.musepi/agent/agents/*.md` and project agents from `.musepi/agents/*.md`.
+
+Give the agent a role alias in frontmatter, then dispatch it by name. For model routing, task dispatch sets only `agent`; it does not set a worker model:
+
+`~/.musepi/agent/agents/reviewer.md`:
+
+```md
+---
+name: reviewer
+description: Review a change for correctness.
+model: "@review"
+---
+
+Review the assigned change and report concrete findings.
+```
+
+Set the role mapping in `~/.musepi/agent/config.yml`:
+
+```yaml
+modelRoles:
+  review: openai/gpt-5.4:high
+```
+
+`@review` resolves through `modelRoles.review`. Each `modelRoles.<role>` value stores a concrete model selector and may append a thinking suffix such as `:high` (`src/config/model-resolver.ts`). Changing that mapping affects subsequent task resolutions without editing agent definitions.
+
+For a dispatch, set the agent name and task:
+
+```json
+{
+  "context": "Review the current change in this repository.",
+  "tasks": [
+    { "agent": "reviewer", "task": "Report concrete correctness findings." }
+  ]
+}
+```
+
+`/model`'s Roles view can assign and persist custom role mappings such as `review`, `fast`, and `good`. Changing only the active or default session selection does not remap those roles.
+
+## Watch running agents
+
+After dispatch, press `Alt+A` to open [Agent Hub](./agent-hub.md). Its live roster shows each task agent's status, current activity, model, age, and usage. Select an agent to read its transcript and steer it directly; parked agents can be revived from the same view.
+
+### `vibe_spawn` tier routing
+
+`vibe_spawn` maps `fast` to bundled `sonic` and `good` to bundled `task`. Both resolve through `task.agentModelOverrides` before their bundled agent model defaults (`src/vibe/runtime.ts`, `src/task/agents.ts`).
+
+Route these tiers through roles by keeping aliases in `task.agentModelOverrides` and concrete selectors only in `modelRoles`:
+
+```yaml
+task:
+  agentModelOverrides:
+    sonic: "@fast_worker"
+    task: "@good_worker"
+modelRoles:
+  fast_worker: openai/gpt-5-mini
+  good_worker: openai/gpt-5.4:high
+```
+
+The `vibe_spawn` `cli` remains `fast` or `good`; update `modelRoles` to change the worker model.
 
 ## Bundled agents
 
@@ -57,19 +123,19 @@ Because bundled parsing uses `level: "fatal"`, malformed bundled frontmatter thr
 
 ## Filesystem and plugin discovery
 
-`discoverAgents(cwd, home)` (`src/task/discovery.ts`) merges agents from OMP-native roots and Claude plugin roots before appending bundled definitions. Cross-harness roots such as `.claude/agents`, `.codex/agents`, and `.gemini/agents` are intentionally skipped — their frontmatter schema is not the OMP task-agent contract (`TASK_AGENT_CONFIG_SOURCE = ".omp"` filters both dir lists).
+`discoverAgents(cwd, home)` (`src/task/discovery.ts`) merges agents from OMP-native roots and Claude plugin roots before appending bundled definitions. Cross-harness roots such as `.claude/agents`, `.codex/agents`, and `.gemini/agents` are intentionally skipped — their frontmatter schema is not the OMP task-agent contract (`TASK_AGENT_CONFIG_SOURCE = ".musepi"` filters both dir lists).
 
 ### Discovery inputs
 
-1. Nearest project `.omp` agents dir from `findAllNearestProjectConfigDirs("agents", cwd)` (filtered to `.omp`; first hit only)
-2. User `.omp` agents dir from `getConfigDirs("agents", { project: false })` (filtered to `.omp`; first hit only)
+1. Nearest project `.musepi` agents dir from `findAllNearestProjectConfigDirs("agents", cwd)` (filtered to `.musepi`; first hit only)
+2. User `.musepi` agents dir from `getConfigDirs("agents", { project: false })` (filtered to `.musepi`; first hit only)
 3. Claude plugin roots (`listClaudePluginRoots(home, cwd)`) with `agents/` subdirs — only when `isProviderEnabled("claude-plugins")`; project-scope plugins sort before user-scope
 4. Bundled agents (`loadBundledAgents()`)
 
 ### Actual source order
 
-1. project `.omp/agents`
-2. user `~/.omp/agent/agents`
+1. project `.musepi/agents`
+2. user `~/.musepi/agent/agents`
 3. plugin `agents/` dirs (project-scope first, then user-scope)
 4. bundled agents last
 
@@ -83,7 +149,7 @@ Discovery uses first-wins dedup by exact `agent.name`:
 
 Implications:
 
-- Project `.omp` overrides user `.omp`.
+- Project `.musepi` overrides user `.musepi`.
 - Non-bundled agents override bundled agents with the same name.
 - Name matching is case-sensitive (`Task` and `task` are distinct).
 - Within one directory, markdown files are read in lexicographic filename order before dedup.

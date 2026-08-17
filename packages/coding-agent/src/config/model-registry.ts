@@ -1,6 +1,10 @@
-import { execSync } from "node:child_process";
 import * as path from "node:path";
-import { registerCustomApi, unregisterCustomApis } from "@oh-my-pi/pi-ai/api-registry";
+import type { ApiKeyResolver, FetchImpl } from "@musepi/pi-ai";
+import { registerCustomApi, unregisterCustomApis } from "@musepi/pi-ai/api-registry";
+import { registerOAuthProvider, unregisterOAuthProvider, unregisterOAuthProviders } from "@musepi/pi-ai/oauth";
+import type { OAuthCredentials, OAuthLoginCallbacks } from "@musepi/pi-ai/oauth/types";
+import { setCodexAttestationProvider } from "@musepi/pi-ai/providers/openai-codex-responses";
+import { getProviderDefinition } from "@musepi/pi-ai/registry";
 import type {
 	Api,
 	Context,
@@ -9,75 +13,47 @@ import type {
 	RemoteCompactionConfig,
 	SimpleStreamOptions,
 	ThinkingConfig,
-} from "@oh-my-pi/pi-ai/types";
-import type { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { isVertexExpressOpenAIUrl } from "@oh-my-pi/pi-catalog/hosts";
-import { readModelCache } from "@oh-my-pi/pi-catalog/model-cache";
+} from "@musepi/pi-ai/types";
+import type { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { readModelCache } from "@musepi/pi-catalog/model-cache";
 import {
 	createModelManager,
 	type ModelManagerOptions,
 	type ModelRefreshStrategy,
-} from "@oh-my-pi/pi-catalog/model-manager";
-import { getBundledModels, getBundledProviders } from "@oh-my-pi/pi-catalog/models";
+} from "@musepi/pi-catalog/model-manager";
+import { getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import {
 	googleAntigravityModelManagerOptions,
 	googleGeminiCliModelManagerOptions,
-	type OpenAICodexAccount,
 	openaiCodexModelManagerOptions,
 	PROVIDER_DESCRIPTORS,
 	resolveModelCacheProviderId,
-} from "@oh-my-pi/pi-catalog/provider-models";
-import {
-	collapseBuiltModelVariants,
-	getVariantAliasSources,
-	resolveVariantAlias,
-} from "@oh-my-pi/pi-catalog/variant-collapse";
-
-const SPECIAL_MODEL_MANAGER_PROVIDER_IDS: readonly string[] = [
-	"google-antigravity",
-	"google-gemini-cli",
-	"openai-codex",
-];
-
-const STARTUP_MODEL_CACHE_PROVIDER_IDS: readonly string[] = [
-	...PROVIDER_DESCRIPTORS.map(descriptor => descriptor.providerId),
-	...SPECIAL_MODEL_MANAGER_PROVIDER_IDS,
-];
-
-// Sentinels for local-only OAuth tokens — declared inline to avoid loading
-// provider modules at startup. Must match packages/ai/src/registry/llama-cpp.ts,
-// packages/ai/src/registry/lm-studio.ts, and packages/ai/src/registry/vllm.ts.
-const LOCAL_PROVIDER_PLACEHOLDERS = new Set<string>(["llama-cpp-local", "lm-studio-local", "vllm-local"]);
-
-/**
- * Hard bound for extension-provided fetchDynamicModels to prevent indefinite hangs
- * during runtime provider discovery. Uses a cancellable manual timer (not AbortSignal.timeout)
- * so a successful fast path does not leave an armed timeout signal for concurrent GC.
- */
-const RUNTIME_DYNAMIC_MODEL_FETCH_TIMEOUT_MS = 15_000;
-// Built-in discovery preflight mirror of the catalog model-manager's private
-// cache timings (model-manager.ts: DEFAULT_CACHE_TTL_MS / NON_AUTHORITATIVE_RETRY_MS).
-// Built-in descriptors never override cacheTtlMs, so agreeing with these values
-// makes the OAuth-refresh preflight fire exactly when the manager will fetch.
-const BUILT_IN_DISCOVERY_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
-const BUILT_IN_DISCOVERY_NON_AUTHORITATIVE_RETRY_MS = 5 * 60 * 1000;
-
-import type { ApiKeyResolver, FetchImpl } from "@oh-my-pi/pi-ai";
-import { registerOAuthProvider, unregisterOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
-import type { OAuthCredentials, OAuthLoginCallbacks } from "@oh-my-pi/pi-ai/oauth/types";
-import { setCodexAttestationProvider } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import {
-	getBundledModelReferenceIndex,
-	inheritReferenceThinking,
-	resolveModelReference,
-} from "@oh-my-pi/pi-catalog/identity";
-import { isBunTestRuntime, isRecord, logger, wrapFetchForExtraCa } from "@oh-my-pi/pi-utils";
-import { parseModelString, resolveProviderModelReference } from "../config/model-resolver";
+	resolveOllamaModelCacheProviderId,
+} from "@musepi/pi-catalog/provider-models";
+import { collapseBuiltModelVariants } from "@musepi/pi-catalog/variant-collapse";
+import { isBunTestRuntime, logger, wrapFetchForExtraCa } from "@musepi/pi-utils";
+import { resolveProviderModelReference } from "../config/model-resolver";
 import { generateCodexAttestation } from "../live/attestation";
-import type { AuthStorage, OAuthCredential } from "../session/auth-storage";
+import type { AuthStorage } from "../session/auth-storage";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
 import type { ConfigError, ConfigFile } from "./config-file";
+import {
+	buildCustomModelOverlay,
+	type CustomModelDefinitionLike,
+	type CustomModelOverlay,
+	finalizeCustomModel,
+	mergeAuthHeaderSources,
+	normalizeSuppressedSelector,
+	resolveModelOverrideWithAliases,
+} from "./custom-models";
+import {
+	type CommandApiKeyResolution,
+	createLiveConfigHeaders,
+	isCommandConfigValue,
+	resolveConfigHeaders,
+	resolveConfigValue,
+} from "./model-config-values";
 import {
 	applyLlamaCppQwenThinking,
 	DISCOVERY_DEFAULT_MAX_TOKENS,
@@ -89,6 +65,45 @@ import {
 	getOllamaContextLengthOverride,
 	normalizeLiteLLMDiscoveryBaseUrl,
 } from "./model-discovery";
+import {
+	AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS,
+	applyModelOverride,
+	applyModelPatch,
+	dropProviderModels,
+	type ModelPatch,
+	mergeByModelKey,
+	mergeCompat,
+	mergeDiscoveredModel,
+	mergeProviderRemoteCompactionConfig,
+	mergeRemoteCompactionConfig,
+	type ProviderOverride,
+	providersWithAuthoritativeProjectCatalog,
+	toModelSpec,
+} from "./model-patch";
+import {
+	BUILT_IN_DISCOVERY_CACHE_TTL_MS,
+	BUILT_IN_DISCOVERY_NON_AUTHORITATIVE_RETRY_MS,
+	type BuiltInDiscoveryResult,
+	extractGoogleOAuthToken,
+	getOAuthCredentialsForProvider,
+	isAuthenticated,
+	isDiscoveryBearerApiKey,
+	kNoAuth,
+	type ProviderDiscoveryState,
+	RUNTIME_DYNAMIC_MODEL_FETCH_TIMEOUT_MS,
+	resolveCodexDiscoveryAccounts,
+	STARTUP_MODEL_CACHE_PROVIDER_IDS,
+	withRuntimeDynamicModelsTimeout,
+} from "./model-provider-discovery";
+
+export { mergeDiscoveredModel } from "./model-patch";
+export {
+	isAuthenticated,
+	kNoAuth,
+	type ProviderDiscoveryState,
+	type ProviderDiscoveryStatus,
+} from "./model-provider-discovery";
+
 import { ModelsConfigFile, type ProviderValidationModel, validateProviderConfiguration } from "./models-config";
 import type { ModelOverride, ModelsConfig, ProviderAuthMode } from "./models-config-schema";
 import { settings } from "./settings";
@@ -96,180 +111,6 @@ import { settings } from "./settings";
 // DeviceCheck attestation (`x-oai-attestation`) for ChatGPT-OAuth Codex
 // requests; the pi-ai provider resolves it just-in-time per request.
 setCodexAttestationProvider(generateCodexAttestation);
-
-export const kNoAuth = "N/A";
-
-export function isAuthenticated(apiKey: string | undefined | null): apiKey is string {
-	return Boolean(apiKey) && apiKey !== kNoAuth;
-}
-
-function isDiscoveryBearerApiKey(apiKey: string | undefined | null): apiKey is string {
-	return isAuthenticated(apiKey) && !LOCAL_PROVIDER_PLACEHOLDERS.has(apiKey);
-}
-
-/**
- * Wraps an extension-provided fetchDynamicModels call with a hard timeout.
- * Uses a cancellable manual timer (not AbortSignal.timeout) so that a fast
- * successful path does not leave an armed timeout signal for concurrent GC.
- * The inner fetcher does not receive a signal (extension contract has none).
- */
-async function withRuntimeDynamicModelsTimeout<T>(timeoutMs: number, run: () => Promise<T>): Promise<T> {
-	const { promise: timeoutPromise, reject: timeoutReject } = Promise.withResolvers<never>();
-	const timer = setTimeout(() => {
-		timeoutReject(new Error(`fetchDynamicModels timed out after ${timeoutMs}ms`));
-	}, timeoutMs);
-	try {
-		return await Promise.race([run(), timeoutPromise]);
-	} finally {
-		clearTimeout(timer);
-	}
-}
-
-/** Provider override config (baseUrl, headers, apiKey, compat, transport) without custom models */
-interface ProviderOverride {
-	baseUrl?: string;
-	headers?: Record<string, string>;
-	apiKey?: string;
-	authHeader?: boolean;
-	compat?: ModelSpec<Api>["compat"];
-	remoteCompaction?: RemoteCompactionConfig<Api>;
-	transport?: Model<Api>["transport"];
-}
-
-/**
- * Merge a freshly discovered model with the matching bundled/configured entry
- * (or a runtime provider override when no bundled entry exists).
- *
- * `baseUrl` resolution priority:
- *   1. User-set `providerOverride.baseUrl` (explicit override in models.json)
- *   2. Discovered baseUrl (xiaomi `tp-` token-plan keys resolve to
- *      `token-plan-sgp.xiaomimimo.com` at discovery time)
- *   3. Existing bundled baseUrl (the host baked into `models.json`)
- *
- * `transport` resolution priority:
- *   1. `providerOverride.transport` (e.g. `pi-native` for auth-gateway users)
- *   2. `existing.transport` (carried over from boot-time override application)
- *   3. `model.transport` (rarely set — discovery defaults omit it)
- *
- * Without (1), the user's override would lose to discovery; without (2)
- * preferred over (3), the bundled `api.xiaomimimo.com` would shadow the
- * tp- token-plan host and produce 401s on the first stream call.
- * Without explicit transport propagation, an openrouter (or any) entry
- * marked `transport: pi-native` in models.yml silently reverts to the
- * default openai-completions transport after the background catalog
- * refresh — so the first `/model` switch after boot hits the raw OpenAI
- * chat-completions URL instead of the gateway's `/v1/pi/stream` (#2555).
- * See `xiaomi-tp-discovery-merge.test.ts` and the `refresh()` baseUrl-override
- * regression in `model-registry.test.ts`.
- */
-export function mergeDiscoveredModel<TApi extends Api>(
-	model: Model<TApi>,
-	existing: Model<Api> | undefined,
-	providerOverride?: Pick<ProviderOverride, "baseUrl" | "compat" | "headers" | "remoteCompaction" | "transport">,
-): Model<TApi> {
-	if (existing) {
-		const supportsTools = model.supportsTools ?? existing.supportsTools;
-		return buildModel({
-			...model,
-			baseUrl: providerOverride?.baseUrl ?? model.baseUrl ?? existing.baseUrl,
-			headers: existing.headers ? { ...existing.headers, ...model.headers } : model.headers,
-			transport: providerOverride?.transport ?? existing.transport ?? model.transport,
-			remoteCompaction: mergeProviderRemoteCompactionConfig(
-				mergeRemoteCompactionConfig(existing.remoteCompaction, model.remoteCompaction),
-				providerOverride?.remoteCompaction,
-			),
-			...(supportsTools !== undefined ? { supportsTools } : {}),
-			compat: mergeCompat(model.compatConfig, providerOverride?.compat),
-		} as ModelSpec<TApi>);
-	}
-	if (providerOverride) {
-		return buildModel({
-			...model,
-			baseUrl: providerOverride.baseUrl ?? model.baseUrl,
-			headers: providerOverride.headers ? { ...model.headers, ...providerOverride.headers } : model.headers,
-			...(providerOverride.transport !== undefined ? { transport: providerOverride.transport } : {}),
-			remoteCompaction: mergeProviderRemoteCompactionConfig(
-				model.remoteCompaction,
-				providerOverride.remoteCompaction,
-			),
-			compat: mergeCompat(model.compatConfig, providerOverride.compat),
-		} as ModelSpec<TApi>);
-	}
-	return model;
-}
-
-const AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS = new Set<string>(
-	PROVIDER_DESCRIPTORS.filter(descriptor => descriptor.dynamicModelsAuthoritative).map(
-		descriptor => descriptor.providerId,
-	),
-);
-
-function isAuthoritativeProjectCatalogModel(model: Model<Api>): boolean {
-	return (
-		model.provider === "google-vertex" &&
-		model.api === "openai-completions" &&
-		isVertexExpressOpenAIUrl(model.baseUrl)
-	);
-}
-
-function providersWithAuthoritativeProjectCatalog(models: readonly Model<Api>[]): Set<string> {
-	const providers = new Set<string>();
-	for (const model of models) {
-		if (isAuthoritativeProjectCatalogModel(model)) {
-			providers.add(model.provider);
-		}
-	}
-	return providers;
-}
-
-function dropProviderModels(models: readonly Model<Api>[], providers: ReadonlySet<string>): Model<Api>[] {
-	return models.filter(model => !providers.has(model.provider));
-}
-
-/**
- * Merge `incoming` entries into a copy of `base`, keyed by `provider`+`id`.
- * Matches are replaced with `combine(existing, entry)`; new entries are
- * appended as `combine(undefined, entry)`.
- */
-function mergeByModelKey<T extends { provider: string; id: string }>(
-	base: readonly Model<Api>[],
-	incoming: readonly T[],
-	combine: (existing: Model<Api> | undefined, entry: T) => Model<Api>,
-): Model<Api>[] {
-	const merged = [...base];
-	const indexByKey = new Map<string, number>();
-	for (let i = 0; i < merged.length; i += 1) {
-		indexByKey.set(`${merged[i].provider}\u0000${merged[i].id}`, i);
-	}
-	for (const entry of incoming) {
-		const key = `${entry.provider}\u0000${entry.id}`;
-		const existingIndex = indexByKey.get(key);
-		if (existingIndex !== undefined) {
-			merged[existingIndex] = combine(merged[existingIndex], entry);
-		} else {
-			merged.push(combine(undefined, entry));
-			indexByKey.set(key, merged.length - 1);
-		}
-	}
-	return merged;
-}
-
-interface BuiltInDiscoveryResult {
-	models: Model<Api>[];
-	authoritativeProviders: Set<string>;
-}
-
-export type ProviderDiscoveryStatus = "idle" | "ok" | "empty" | "cached" | "unavailable" | "unauthenticated";
-
-export interface ProviderDiscoveryState {
-	provider: string;
-	status: ProviderDiscoveryStatus;
-	optional: boolean;
-	stale: boolean;
-	fetchedAt?: number;
-	models: string[];
-	error?: string;
-}
 
 /** Result of loading custom models config. */
 interface CustomModelsResult {
@@ -283,484 +124,11 @@ interface CustomModelsResult {
 	found: boolean;
 }
 
-const commandValueCache = new Map<string, string>();
-// Failed `!command` resolutions (non-zero exit, empty stdout) are negative-cached
-// with a TTL instead of forever: a transient failure (locked password manager,
-// network hiccup) must not disable the key until process restart, but re-running
-// the command on every resolution would restore the execSync storm this cache
-// exists to prevent. One probe per TTL window bounds both.
-const COMMAND_FAILURE_RETRY_MS = 30_000;
-const commandFailureRetryAt = new Map<string, number>();
-
-function isCommandConfigValue(valueConfig: string | undefined): valueConfig is string {
-	return valueConfig?.startsWith("!") === true;
-}
-
-function resolveCommandConfig(command: string): string | undefined {
-	const cached = commandValueCache.get(command);
-	if (cached !== undefined) return cached;
-	const retryAt = commandFailureRetryAt.get(command);
-	if (retryAt !== undefined && Date.now() < retryAt) return undefined;
-	try {
-		const stdout = execSync(command, { encoding: "utf8", timeout: 10_000, windowsHide: true });
-		const trimmed = stdout.trim();
-		if (trimmed.length === 0) {
-			commandFailureRetryAt.set(command, Date.now() + COMMAND_FAILURE_RETRY_MS);
-			return undefined;
-		}
-		commandFailureRetryAt.delete(command);
-		commandValueCache.set(command, trimmed);
-		return trimmed;
-	} catch {
-		commandFailureRetryAt.set(command, Date.now() + COMMAND_FAILURE_RETRY_MS);
-		return undefined;
-	}
-}
-
-interface CommandApiKeyResolution {
-	configured: boolean;
-	value?: string;
-}
-/**
- * Resolve a models.yml/models.yaml secret/config value to an actual value.
- * `!cmd` runs a shell command and returns trimmed stdout, otherwise env vars are
- * checked first and the input falls back to a literal value.
- */
-function resolveConfigValue(valueConfig: string): string | undefined {
-	if (valueConfig.startsWith("!")) return resolveCommandConfig(valueConfig.slice(1).trim());
-	const envValue = Bun.env[valueConfig];
-	if (envValue) return envValue;
-	return valueConfig;
-}
-
-type HeaderSource = Record<string, string> | undefined;
-
-interface HeaderResolutionOptions {
-	authHeader?: boolean;
-	apiKeyConfig?: string;
-}
-
-function materializeConfigHeaderSources(
-	sources: readonly HeaderSource[],
-	options?: HeaderResolutionOptions,
-): Record<string, string> | undefined {
-	const resolved: Record<string, string> = {};
-	for (const source of sources) {
-		if (!source) continue;
-		for (const [key, value] of Object.entries(source)) {
-			const next = resolveConfigValue(value);
-			if (next) resolved[key] = next;
-		}
-	}
-	if (options?.authHeader && options.apiKeyConfig) {
-		const resolvedKey = resolveConfigValue(options.apiKeyConfig);
-		if (resolvedKey) resolved.Authorization = `Bearer ${resolvedKey}`;
-	}
-	return Object.keys(resolved).length > 0 ? resolved : undefined;
-}
-
-function createLiveConfigHeaders(
-	sources: readonly HeaderSource[],
-	options?: HeaderResolutionOptions,
-): Record<string, string> | undefined {
-	const liveSources = sources.filter((source): source is Record<string, string> => source !== undefined);
-	if (liveSources.length === 0 && (!options?.authHeader || !options.apiKeyConfig)) return undefined;
-
-	const localHeaders: Record<string, string> = {};
-	const allSources = [...liveSources, localHeaders];
-	const current = () => materializeConfigHeaderSources(allSources, options) ?? {};
-	return new Proxy(localHeaders, {
-		get(target, property, receiver) {
-			if (typeof property !== "string") return Reflect.get(target, property, receiver);
-			return current()[property];
-		},
-		set(target, property, value) {
-			if (typeof property !== "string" || typeof value !== "string") return false;
-			target[property] = value;
-			return true;
-		},
-		deleteProperty(target, property) {
-			if (typeof property !== "string") return false;
-			delete target[property];
-			return true;
-		},
-		has(_target, property) {
-			if (typeof property !== "string") return false;
-			return Object.hasOwn(current(), property);
-		},
-		ownKeys() {
-			return Reflect.ownKeys(current());
-		},
-		getOwnPropertyDescriptor(_target, property) {
-			if (typeof property !== "string") return undefined;
-			const headers = current();
-			if (!Object.hasOwn(headers, property)) return undefined;
-			return {
-				configurable: true,
-				enumerable: true,
-				value: headers[property],
-				writable: true,
-			};
-		},
-	});
-}
-
-function resolveConfigHeaders(headers: Record<string, string> | undefined): Record<string, string> | undefined {
-	return materializeConfigHeaderSources([headers]);
-}
-
-function extractGoogleOAuthToken(value: string | undefined): string | undefined {
-	if (!isAuthenticated(value)) return undefined;
-	try {
-		const parsed = JSON.parse(value) as { token?: unknown };
-		if (Object.hasOwn(parsed, "token")) {
-			if (typeof parsed.token !== "string") {
-				return undefined;
-			}
-			const token = parsed.token.trim();
-			return token.length > 0 ? token : undefined;
-		}
-	} catch {
-		// OAuth values for Google providers are expected to be JSON, but custom setups may already provide raw token.
-	}
-	return value;
-}
-
-function getOAuthCredentialsForProvider(authStorage: AuthStorage, provider: string): OAuthCredential[] {
-	const providerEntry = authStorage.getAll()[provider];
-	if (!providerEntry) {
-		return [];
-	}
-	const entries = Array.isArray(providerEntry) ? providerEntry : [providerEntry];
-	return entries.filter((entry): entry is OAuthCredential => entry.type === "oauth");
-}
-
-/**
- * Resolve every configured Codex OAuth account for catalog discovery, refreshing
- * each credential exactly once. Codex `/models` is account-scoped, so discovery
- * must fetch per account and union the results; resolving a single access token
- * (as before) hid models available only through a sibling account (#6265).
- *
- * Returns `null` when any stored account fails to resolve (e.g. a transient
- * refresh failure): the Codex manager is authoritative, so unioning only the
- * accounts that resolved would cache a partial catalog and hide the failed
- * account's models for the cache TTL. Aborting keeps the previous/bundled
- * catalog instead.
- */
-async function resolveCodexDiscoveryAccounts(
-	authStorage: AuthStorage,
-	resolvedAccessToken: string,
-): Promise<OpenAICodexAccount[] | null> {
-	const accesses = await authStorage.getOAuthAccesses("openai-codex");
-	const accounts: OpenAICodexAccount[] = [];
-	for (const access of accesses) {
-		if (!access.ok) return null;
-		accounts.push({ accessToken: access.accessToken, accountId: access.accountId });
-	}
-	if (!accounts.some(account => account.accessToken === resolvedAccessToken)) {
-		const matchingCredential = getOAuthCredentialsForProvider(authStorage, "openai-codex").find(
-			credential => credential.access === resolvedAccessToken,
-		);
-		accounts.push({ accessToken: resolvedAccessToken, accountId: matchingCredential?.accountId });
-	}
-	return accounts;
-}
-
-function mergeCompat<TBase extends object, TOverride extends object>(
-	baseCompat: TBase | null | undefined,
-	overrideCompat: TOverride | null | undefined,
-): (TBase & TOverride) | TBase | TOverride | undefined {
-	if (!baseCompat) return overrideCompat ?? undefined;
-	if (!overrideCompat) return baseCompat;
-
-	const merged: Record<string, unknown> = { ...(baseCompat as Record<string, unknown>) };
-	for (const [key, overrideValue] of Object.entries(overrideCompat)) {
-		const baseValue = (baseCompat as Record<string, unknown>)[key];
-		merged[key] =
-			isRecord(baseValue) && isRecord(overrideValue) ? mergeCompat(baseValue, overrideValue) : overrideValue;
-	}
-	return merged as TBase & TOverride;
-}
-
-function mergeRemoteCompactionConfig(
-	baseConfig: RemoteCompactionConfig<Api> | undefined,
-	overrideConfig: RemoteCompactionConfig<Api> | undefined,
-): RemoteCompactionConfig<Api> | undefined {
-	if (!baseConfig) return overrideConfig;
-	if (!overrideConfig) return baseConfig;
-	return { ...baseConfig, ...overrideConfig };
-}
-
-function mergeProviderRemoteCompactionConfig(
-	modelConfig: RemoteCompactionConfig<Api> | undefined,
-	providerConfig: RemoteCompactionConfig<Api> | undefined,
-): RemoteCompactionConfig<Api> | undefined {
-	return mergeRemoteCompactionConfig(providerConfig, modelConfig);
-}
-
-/**
- * Project a built model back to spec shape for the model-manager/cache
- * boundary: sparse compat comes from `compatConfig`, never from the resolved
- * record.
- */
-function toModelSpec<TApi extends Api>(model: Model<TApi>): ModelSpec<TApi> {
-	return { ...model, compat: model.compatConfig } as ModelSpec<TApi>;
-}
-
-/**
- * The patchable subset of `Model` fields shared by `modelOverrides` entries,
- * custom model definitions, and parsed custom-model overlays. `undefined`
- * always means "leave the base value alone".
- */
-interface ModelPatch {
-	name?: string;
-	reasoning?: boolean;
-	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
-	supportsTools?: boolean;
-	cost?: Partial<Model<Api>["cost"]>;
-	contextWindow?: number;
-	maxTokens?: number;
-	omitMaxOutputTokens?: boolean;
-	headers?: Record<string, string>;
-	compat?: ModelSpec<Api>["compat"];
-	contextPromotionTarget?: string;
-	compactionModel?: string;
-	remoteCompaction?: RemoteCompactionConfig<Api>;
-	premiumMultiplier?: number;
-}
-
-/**
- * How a patch treats the base model's transport metadata (headers/compat):
- * - `merge`: fold the patch into the base's (modelOverrides semantics).
- * - `replace`: the patch owns transport wholesale — same-id custom definitions
- *   already folded provider-level headers/compat in during parsing, so bundled
- *   transport metadata must not be re-merged (see `#mergeCustomModels`).
- */
-type ModelTransportPolicy = "merge" | "replace";
-
 /**
  * Credential-aware model projection supplied by an extension provider. Receives
  * the fully composed catalog and returns the list the host should serve.
  */
 type ModifyModelsHook = (models: Model<Api>[], credentials: OAuthCredentials) => Model<Api>[];
-
-function applyModelPatch(base: Model<Api>, patch: ModelPatch, transport: ModelTransportPolicy): Model<Api> {
-	const result = { ...base };
-	if (patch.name !== undefined) result.name = patch.name;
-	if (patch.reasoning !== undefined) result.reasoning = patch.reasoning;
-	if (patch.thinking !== undefined) result.thinking = patch.thinking;
-	if (patch.input !== undefined) result.input = patch.input;
-	if (patch.supportsTools !== undefined) result.supportsTools = patch.supportsTools;
-	if (patch.contextWindow !== undefined) result.contextWindow = patch.contextWindow;
-	if (patch.maxTokens !== undefined) result.maxTokens = patch.maxTokens;
-	if (patch.omitMaxOutputTokens !== undefined) result.omitMaxOutputTokens = patch.omitMaxOutputTokens;
-	if (patch.contextPromotionTarget !== undefined) result.contextPromotionTarget = patch.contextPromotionTarget;
-	if (patch.compactionModel !== undefined) result.compactionModel = patch.compactionModel;
-	if (patch.remoteCompaction !== undefined) {
-		result.remoteCompaction = mergeRemoteCompactionConfig(base.remoteCompaction, patch.remoteCompaction);
-	}
-	if (patch.premiumMultiplier !== undefined) result.premiumMultiplier = patch.premiumMultiplier;
-	if (patch.cost) {
-		result.cost = {
-			input: patch.cost.input ?? base.cost.input,
-			output: patch.cost.output ?? base.cost.output,
-			cacheRead: patch.cost.cacheRead ?? base.cost.cacheRead,
-			cacheWrite: patch.cost.cacheWrite ?? base.cost.cacheWrite,
-		};
-	}
-	let compat: ModelSpec<Api>["compat"];
-	if (transport === "merge") {
-		if (patch.headers) {
-			result.headers = { ...base.headers, ...patch.headers };
-		}
-		compat = mergeCompat(base.compatConfig, patch.compat);
-	} else {
-		result.headers = patch.headers;
-		compat = patch.compat;
-	}
-	return buildModel({ ...result, compat } as ModelSpec<Api>);
-}
-
-function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<Api> {
-	return applyModelPatch(model, override as ModelPatch, "merge");
-}
-
-interface CustomModelDefinitionLike extends ModelPatch {
-	id: string;
-	api?: Api;
-	baseUrl?: string;
-	cost?: Model<Api>["cost"];
-}
-
-interface CustomModelBuildOptions {
-	useDefaults: boolean;
-}
-
-interface CustomModelOverlay extends ModelPatch {
-	id: string;
-	provider: string;
-	api: Api;
-	baseUrl: string;
-	cost?: Model<Api>["cost"];
-	isOAuth?: boolean;
-}
-
-function mergeCustomModelHeaders(
-	providerHeaders: Record<string, string> | undefined,
-	modelHeaders: Record<string, string> | undefined,
-	authHeader: boolean | undefined,
-	apiKeyConfig: string | undefined,
-): Record<string, string> | undefined {
-	return createLiveConfigHeaders([providerHeaders, modelHeaders], { authHeader, apiKeyConfig });
-}
-
-function mergeAuthHeaderSources(
-	sources: readonly HeaderSource[],
-	authHeader: boolean | undefined,
-	apiKeyConfig: string | undefined,
-): Record<string, string> | undefined {
-	return createLiveConfigHeaders(sources, { authHeader, apiKeyConfig });
-}
-
-/**
- * Decide whether a custom-yaml model should force OAuth-style request shaping.
- * - Explicit `auth: oauth` → force on.
- *   endpoints are typically Claude-Code-style proxies (e.g. CLIProxyAPI) that expect
- *   the cloaked request shape regardless of how the proxy itself is authenticated.
- * - Otherwise → unset.
- */
-function resolveCustomModelIsOAuth(api: Api, providerAuth: ProviderAuthMode | undefined): boolean | undefined {
-	if (providerAuth === "oauth") return true;
-	if (providerAuth !== undefined) return undefined;
-	if (api === "anthropic-messages") return true;
-	return undefined;
-}
-
-function buildCustomModelOverlay(
-	providerName: string,
-	providerBaseUrl: string,
-	providerApi: Api | undefined,
-	providerHeaders: Record<string, string> | undefined,
-	providerApiKey: string | undefined,
-	authHeader: boolean | undefined,
-	providerCompat: ModelSpec<Api>["compat"] | undefined,
-	providerAuth: ProviderAuthMode | undefined,
-	providerRemoteCompaction: RemoteCompactionConfig<Api> | undefined,
-	modelDef: CustomModelDefinitionLike,
-): CustomModelOverlay | undefined {
-	const api = modelDef.api ?? providerApi;
-	if (!api) return undefined;
-	return {
-		id: modelDef.id,
-		provider: providerName,
-		api,
-		baseUrl: modelDef.baseUrl ?? providerBaseUrl,
-		name: modelDef.name,
-		reasoning: modelDef.reasoning,
-		thinking: modelDef.thinking,
-		input: modelDef.input,
-		supportsTools: modelDef.supportsTools,
-		cost: modelDef.cost,
-		contextWindow: modelDef.contextWindow,
-		maxTokens: modelDef.maxTokens,
-		omitMaxOutputTokens: modelDef.omitMaxOutputTokens,
-		headers: mergeCustomModelHeaders(providerHeaders, modelDef.headers, authHeader, providerApiKey),
-		compat: mergeCompat(providerCompat, modelDef.compat),
-		contextPromotionTarget: modelDef.contextPromotionTarget,
-		compactionModel: modelDef.compactionModel,
-		remoteCompaction: mergeRemoteCompactionConfig(providerRemoteCompaction, modelDef.remoteCompaction),
-		premiumMultiplier: modelDef.premiumMultiplier,
-		isOAuth: resolveCustomModelIsOAuth(api, providerAuth),
-	};
-}
-
-function applyStandaloneCustomModelPolicies(model: CustomModelOverlay): CustomModelOverlay {
-	if (model.id !== "gpt-5.4" || model.provider === "github-copilot" || model.contextWindow !== undefined) {
-		return model;
-	}
-	return { ...model, contextWindow: 1_000_000 };
-}
-
-function finalizeCustomModel(model: CustomModelOverlay, options: CustomModelBuildOptions): Model<Api> {
-	const resolvedModel = options.useDefaults ? applyStandaloneCustomModelPolicies(model) : model;
-	const reference = options.useDefaults
-		? resolveModelReference(resolvedModel.id, getBundledModelReferenceIndex())
-		: undefined;
-	const cost =
-		resolvedModel.cost ??
-		reference?.cost ??
-		(options.useDefaults ? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } : undefined);
-	const input = resolvedModel.input ?? reference?.input ?? (options.useDefaults ? ["text"] : undefined);
-	const supportsTools = resolvedModel.supportsTools ?? reference?.supportsTools;
-	return buildModel({
-		id: resolvedModel.id,
-		name: resolvedModel.name ?? (options.useDefaults ? resolvedModel.id : undefined),
-		api: resolvedModel.api,
-		provider: resolvedModel.provider,
-		baseUrl: resolvedModel.baseUrl,
-		reasoning: resolvedModel.reasoning ?? reference?.reasoning ?? (options.useDefaults ? false : undefined),
-		thinking: inheritReferenceThinking(resolvedModel.thinking, reference, resolvedModel.provider),
-		input: input as ("text" | "image")[],
-		...(supportsTools !== undefined ? { supportsTools } : {}),
-		cost,
-		contextWindow: resolvedModel.contextWindow ?? reference?.contextWindow ?? (options.useDefaults ? 128000 : null),
-		maxTokens: resolvedModel.maxTokens ?? reference?.maxTokens ?? (options.useDefaults ? 16384 : null),
-		headers: resolvedModel.headers,
-		omitMaxOutputTokens: resolvedModel.omitMaxOutputTokens ?? reference?.omitMaxOutputTokens,
-		compat: mergeCompat(reference?.compatConfig, resolvedModel.compat),
-		contextPromotionTarget: resolvedModel.contextPromotionTarget,
-		compactionModel: resolvedModel.compactionModel,
-		remoteCompaction: resolvedModel.remoteCompaction,
-		premiumMultiplier: resolvedModel.premiumMultiplier,
-		isOAuth: resolvedModel.isOAuth,
-	} as ModelSpec<Api>);
-}
-
-function normalizeSuppressedSelector(
-	selector: string,
-	hasLiveModel?: (provider: string, id: string) => boolean,
-): string {
-	const trimmed = selector.trim();
-	if (!trimmed) return trimmed;
-	const parsed = parseModelString(trimmed, {
-		allowMaxSuffix: true,
-		allowAutoAlias: true,
-		isLiteralModelId: (provider, id) => hasLiveModel?.(provider, id) === true,
-	});
-	if (!parsed) return trimmed;
-	// Retired effort-tier variant ids normalize to their collapsed logical id
-	// so persisted suppressions keyed by raw member ids still bind.
-	const aliasId = resolveVariantAlias(parsed.provider, parsed.id);
-	return `${parsed.provider}/${aliasId ?? parsed.id}`;
-}
-
-/**
- * Look up a model's override, falling back to entries keyed by retired
- * effort-tier variant ids (models.yml authored before collapsing). A raw key
- * only re-binds when no live model holds that id.
- */
-function resolveModelOverrideWithAliases(
-	overrides: Map<string, ModelOverride>,
-	model: Model<Api>,
-	hasLiveModel: (provider: string, id: string) => boolean,
-): ModelOverride | undefined {
-	const direct = overrides.get(model.id);
-	if (direct) return direct;
-	for (const rawId of getVariantAliasSources(model.provider, model.id)) {
-		if (hasLiveModel(model.provider, rawId)) continue;
-		const remapped = overrides.get(rawId);
-		if (remapped) {
-			logger.debug("model override re-keyed through variant alias", {
-				provider: model.provider,
-				from: rawId,
-				to: model.id,
-			});
-			return remapped;
-		}
-	}
-	return undefined;
-}
 
 function getDisabledProviderIdsFromSettings(): Set<string> {
 	try {
@@ -965,14 +333,18 @@ export class ModelRegistry {
 	 * Refresh dynamic metadata that can appear only after a local model loads.
 	 */
 	async refreshSelectedModelMetadata(model: Model<Api>): Promise<Model<Api>> {
-		const isLlamaCppDiscovery = this.#discoverableProviders.some(
+		const llamaCppDiscoveryConfig = this.#discoverableProviders.find(
 			providerConfig => providerConfig.provider === model.provider && providerConfig.discovery.type === "llama.cpp",
 		);
-		if (!isLlamaCppDiscovery) {
+		if (!llamaCppDiscoveryConfig) {
 			return model;
 		}
 		this.#ensureFullSnapshot();
-		const runtimeMetadata = await discoverLlamaCppModelRuntimeMetadata(model, this.#nonResolvingDiscoveryContext());
+		const runtimeMetadata = await discoverLlamaCppModelRuntimeMetadata(
+			model,
+			this.#nonResolvingDiscoveryContext(),
+			llamaCppDiscoveryConfig.discovery.timeoutMs,
+		);
 		if (runtimeMetadata === undefined) {
 			return this.find(model.provider, model.id) ?? model;
 		}
@@ -1699,8 +1071,14 @@ export class ModelRegistry {
 	}
 
 	#configuredDiscoveryCacheProviderId(providerConfig: DiscoveryProviderConfig): string {
+		if (providerConfig.discovery.type === "ollama") {
+			return resolveOllamaModelCacheProviderId(providerConfig.provider, providerConfig.baseUrl);
+		}
 		if (providerConfig.discovery.type === "openai-models-list") {
-			return `${providerConfig.provider}:openai-models-list-context-v2`;
+			// context-v3 invalidates rows cached before server-advertised input
+			// modalities were parsed from `/v1/models`; warm v2 rows pinned
+			// vision-capable ids at `input: ["text"]` until a forced refresh.
+			return `${providerConfig.provider}:openai-models-list-context-v3`;
 		}
 		if (providerConfig.discovery.type === "litellm") {
 			// rich-v2 invalidates rows cached before reseller usage-suffix stripping
@@ -1997,14 +1375,15 @@ export class ModelRegistry {
 					this.#providerOverrides.has(descriptor.providerId) ||
 					this.#keylessProviders.has(descriptor.providerId));
 			if (isAuthenticated(apiKey) || descriptor.allowUnauthenticated || hasExplicitVllmConfig) {
-				const discoveryBaseUrl = this.#descriptorBaseUrl(descriptor.providerId);
-				options.push(
-					descriptor.createModelManagerOptions({
-						apiKey: isDiscoveryBearerApiKey(apiKey) ? apiKey : undefined,
-						baseUrl: discoveryBaseUrl,
-						fetch: this.#fetch,
-					}),
-				);
+				const discoveryConfig = {
+					apiKey: isDiscoveryBearerApiKey(apiKey) ? apiKey : undefined,
+					baseUrl: this.#descriptorBaseUrl(descriptor.providerId),
+					fetch: this.#fetch,
+				};
+				const preparedConfig =
+					getProviderDefinition(descriptor.providerId)?.prepareModelDiscovery?.(discoveryConfig) ??
+					discoveryConfig;
+				options.push(descriptor.createModelManagerOptions(preparedConfig));
 			}
 		}
 
@@ -2491,6 +1870,26 @@ export class ModelRegistry {
 			this.#runtimeProviderSourceByName.delete(providerName);
 			this.#clearRuntimeProviderState(providerName);
 		}
+		this.#lastStaticLoadMtime = null;
+		this.#reloadStaticModels();
+	}
+
+	/**
+	 * Remove one extension-registered provider and restore its static models.
+	 */
+	unregisterProvider(providerName: string): void {
+		const sourceId = this.#runtimeProviderSourceByName.get(providerName);
+		if (sourceId) {
+			const sourceProviders = this.#runtimeProvidersBySource.get(sourceId);
+			sourceProviders?.delete(providerName);
+			if (sourceProviders?.size === 0) {
+				this.#runtimeProvidersBySource.delete(sourceId);
+			}
+			this.#runtimeProviderSourceByName.delete(providerName);
+		}
+		unregisterOAuthProvider(providerName);
+		this.#ensureFullSnapshot();
+		this.#clearRuntimeProviderState(providerName);
 		this.#lastStaticLoadMtime = null;
 		this.#reloadStaticModels();
 	}

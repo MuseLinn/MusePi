@@ -10,6 +10,9 @@ packages/*/dist-firefox/
 target/
 *.tsbuildinfo
 *.node
+.source-hash
+.bun-build
+*[0-9a-f]*.bun-build
 *.b64.js
 
 # Environment
@@ -84,4 +87,7 @@ packages/coding-agent/bench/boot-baseline.json
 /bazel-out
 /bazel-testlogs
 /bazel-pi
+/bazel-oh-my-pi
 /.bazelrc.user
+packages/gui/release/
+packages/gui/dist/

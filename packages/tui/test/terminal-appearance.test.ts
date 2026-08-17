@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { extractPrintableText } from "@oh-my-pi/pi-tui/keys";
-import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
+import { extractPrintableText } from "@musepi/pi-tui/keys";
+import { ProcessTerminal } from "@musepi/pi-tui/terminal";
 import {
 	type CellDimensions,
 	getCellDimensions,
 	getTerminalInfo,
 	setCellDimensions,
-} from "@oh-my-pi/pi-tui/terminal-capabilities";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui/terminal-capabilities";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 
 const stdinIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
 const stdoutIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
@@ -47,6 +47,7 @@ describe("ProcessTerminal OSC 11 appearance detection", () => {
 		Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
 		Object.defineProperty(process.stdin, "setRawMode", { value: vi.fn(), configurable: true });
 		previousHeadless = setTerminalHeadless(false);
+		delete Bun.env.TMUX;
 	});
 
 	afterEach(() => {
@@ -127,6 +128,51 @@ describe("ProcessTerminal OSC 11 appearance detection", () => {
 		expect(sentinelCount()).toBe(2);
 
 		terminal.stop();
+	});
+
+	it("preserves an explicit refresh token queued behind an automatic OSC 11 query", () => {
+		vi.useFakeTimers();
+		const { terminal, queryCount } = setupTerminal();
+
+		// Seed the current appearance and drain all startup probe sentinels.
+		process.stdin.emit("data", "\x1b]11;rgb:0000/0000/0000\x07");
+		for (let i = 0; i < 7; i++) process.stdin.emit("data", "\x1b[?1;2c");
+
+		const events: Array<{ kind: "report" | "change"; appearance: string; token: number | undefined }> = [];
+		terminal.onAppearanceReport?.((appearance, token) => {
+			events.push({ kind: "report", appearance, token });
+		});
+		terminal.onAppearanceChange((appearance, token) => {
+			events.push({ kind: "change", appearance, token });
+		});
+		events.length = 0;
+
+		// Mode 2031 starts an automatic query. The explicit refresh must queue
+		// behind it rather than lending its identity to the in-flight response.
+		process.stdin.emit("data", "\x1b[?997;1n");
+		vi.advanceTimersByTime(100);
+		expect(queryCount()).toBe(2);
+		const supersededToken = 41;
+		const requestToken = 42;
+		expect(terminal.refreshAppearance?.(supersededToken)).toBe(supersededToken);
+		expect(terminal.refreshAppearance?.(requestToken)).toBe(requestToken);
+		expect(queryCount()).toBe(2);
+
+		// The automatic response is unchanged and therefore reports without a
+		// change callback or request token. Its DA1 starts the queued refresh.
+		process.stdin.emit("data", "\x1b]11;rgb:0000/0000/0000\x07");
+		process.stdin.emit("data", "\x1b[?1;2c");
+		expect(queryCount()).toBe(3);
+
+		process.stdin.emit("data", "\x1b]11;rgb:ffff/ffff/ffff\x07");
+		process.stdin.emit("data", "\x1b[?1;2c");
+		terminal.stop();
+
+		expect(events).toEqual([
+			{ kind: "report", appearance: "dark", token: undefined },
+			{ kind: "report", appearance: "light", token: requestToken },
+			{ kind: "change", appearance: "light", token: requestToken },
+		]);
 	});
 
 	it("reports every OSC 11 response while change callbacks remain deduplicated", () => {
@@ -326,9 +372,62 @@ describe("ProcessTerminal OSC 11 appearance detection", () => {
 		for (let i = 0; i < 7; i++) process.stdin.emit("data", "\x1b[?1;2c");
 		terminal.refreshAppearance?.();
 
-		expect(writes).toContain("\x1bPtmux;\x1b\x1b]11;?\x07\x1b\x1b[c\x1b\\");
+		expect(writes).toContain("\x1bPtmux;\x1b\x1b]11;?\x07\x1b\\");
 
 		terminal.stop();
+	});
+
+	it("reads tmux's refreshed cache without passing a DA1 reply through tmux", () => {
+		vi.useFakeTimers();
+		Bun.env.TMUX = "/tmp/tmux-1000/default,1234,0";
+		const { terminal, received, queryCount } = setupTerminal();
+
+		process.stdin.emit("data", "\x1b]11;rgb:0000/0000/0000\x07");
+		for (let i = 0; i < 7; i++) process.stdin.emit("data", "\x1b[?1;2c");
+		const reports: Array<{ appearance: string; token: number | undefined }> = [];
+		terminal.onAppearanceReport?.((appearance, token) => reports.push({ appearance, token }));
+		const beforeRefresh = queryCount();
+
+		const token = 42;
+		terminal.refreshAppearance?.(token);
+		expect(queryCount()).toBe(beforeRefresh);
+
+		// A fragmented outer DA1 reply can be decoded by tmux as an Alt+[ key
+		// followed by printable capability bytes. Wait for the OSC 11 response to
+		// reach tmux's cache, then query that cache directly with a local sentinel.
+		vi.advanceTimersByTime(99);
+		expect(queryCount()).toBe(beforeRefresh);
+		vi.advanceTimersByTime(1);
+		expect(queryCount()).toBe(beforeRefresh + 1);
+
+		process.stdin.emit("data", "\x1b]11;rgb:ffff/ffff/ffff\x07");
+		process.stdin.emit("data", "\x1b[?1;2c");
+		const detected = terminal.appearance;
+		terminal.stop();
+
+		expect(detected).toBe("light");
+		expect(reports).toEqual([{ appearance: "light", token }]);
+		expect(received).toEqual([]);
+	});
+
+	it("cancels a pending tmux appearance cache read during teardown", () => {
+		vi.useFakeTimers();
+		Bun.env.TMUX = "/tmp/tmux-1000/default,1234,0";
+		const { terminal, queryCount, sentinelCount } = setupTerminal();
+
+		process.stdin.emit("data", "\x1b]11;rgb:0000/0000/0000\x07");
+		for (let i = 0; i < 7; i++) process.stdin.emit("data", "\x1b[?1;2c");
+		const directQueriesBeforeRefresh = queryCount();
+		const directSentinelsBeforeRefresh = sentinelCount();
+
+		terminal.refreshAppearance?.();
+		expect(vi.getTimerCount()).toBe(1);
+		terminal.stop();
+		expect(vi.getTimerCount()).toBe(0);
+		vi.advanceTimersByTime(100);
+
+		expect(queryCount()).toBe(directQueriesBeforeRefresh);
+		expect(sentinelCount()).toBe(directSentinelsBeforeRefresh);
 	});
 
 	it("refreshAppearance() re-evaluates a changed background through the callback pipeline", () => {
@@ -550,13 +649,39 @@ describe("ProcessTerminal OSC 11 appearance detection", () => {
 		terminal.stop();
 	});
 
+	it("uses disambiguation-only keyboard reporting on ConPTY", () => {
+		Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+		Bun.env.WSL_DISTRO_NAME = "Ubuntu";
+
+		const { terminal, writes } = setupTerminal();
+		writes.length = 0;
+		process.stdin.emit("data", "\x1b[?0u");
+
+		expect(writes).toContain("\x1b[>1u");
+		expect(writes).not.toContain("\x1b[>5u");
+		terminal.stop();
+	});
+
+	it("avoids alternate-key reporting on ConPTY while preserving parent event reporting", () => {
+		Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+		Bun.env.WSL_INTEROP = "/run/WSL/1_interop";
+
+		const { terminal, writes } = setupTerminal();
+		writes.length = 0;
+		process.stdin.emit("data", "\x1b[?3u");
+
+		expect(writes).toContain("\x1b[>3u");
+		expect(writes).not.toContain("\x1b[>7u");
+		terminal.stop();
+	});
+
 	it("shutdown balances the single kitty push performed on detection", () => {
 		const { terminal, writes } = setupTerminal();
 
 		// Simulate kitty-capable terminal reply (level >=1).
 		process.stdin.emit("data", "\x1b[?1u");
 
-		const pushes = writes.filter(w => w === "\x1b[>1u" || w === "\x1b[>7u" || w === "\x1b[>31u").length;
+		const pushes = writes.filter(w => w === "\x1b[>5u" || w === "\x1b[>7u" || w === "\x1b[>31u").length;
 		expect(pushes).toBe(1);
 
 		terminal.stop();

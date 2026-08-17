@@ -12,8 +12,9 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
-import { formatBytes } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { formatBytes } from "@musepi/pi-utils";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import type { SessionInfo, SessionStatus } from "../../session/session-listing";
@@ -533,7 +534,10 @@ class SessionList implements Component {
 			} else {
 				// "Current folder" scope - hint to try "all"
 				lines.push(
-					truncateToWidth(theme.fg("muted", "  No sessions in current folder. Press Tab to view all."), width),
+					truncateToWidth(
+						theme.fg("muted", `  ${t("No sessions in current folder. Press Tab to view all.")}`),
+						width,
+					),
 				);
 			}
 			return lines;
@@ -798,7 +802,7 @@ export class SessionSelectorComponent extends Container {
 		this.#globalSessions = options.allSessions ?? null;
 		this.#getTerminalRows = options.getTerminalRows ?? (() => 24);
 		this.#fillHeight = options.fillHeight ?? false;
-		this.#title = options.title ?? "Resume Session";
+		this.#title = options.title ?? t("Resume Session");
 		this.#scopeLabel = options.scopeLabel;
 		// Add header
 		this.addChild(new Spacer(1));
@@ -864,7 +868,7 @@ export class SessionSelectorComponent extends Container {
 				if (!this.#loadAllSessions) return;
 				this.#toggling = true;
 				this.#messageContainer.clear();
-				this.#messageContainer.addChild(new Text(theme.fg("muted", "  Loading all projects…"), 1, 0));
+				this.#messageContainer.addChild(new Text(theme.fg("muted", `  ${t("Loading all projects…")}`), 1, 0));
 				this.#onRequestRender?.();
 				try {
 					global = await this.#loadAllSessions();
@@ -905,7 +909,7 @@ export class SessionSelectorComponent extends Container {
 	 * is mounted the list is detached from the child tree, so Container's
 	 * child-walking dispose would miss its pending history-merge timer.
 	 */
-	dispose(): void {
+	override dispose(): void {
 		this.#sessionList.dispose();
 		super.dispose();
 	}
@@ -916,7 +920,7 @@ export class SessionSelectorComponent extends Container {
 
 	#showError(message: string): void {
 		this.#messageContainer.clear();
-		this.#messageContainer.addChild(new Text(theme.fg("error", `Error: ${replaceTabs(message)}`), 1, 0));
+		this.#messageContainer.addChild(new Text(theme.fg("error", t("Error: {0}", replaceTabs(message))), 1, 0));
 		this.#messageContainer.addChild(new Spacer(1));
 	}
 
@@ -971,7 +975,7 @@ export class SessionSelectorComponent extends Container {
 	 * footer is always visible and never drifts as the list window resizes. The
 	 * in-editor selector just appends the footer directly.
 	 */
-	render(width: number): readonly string[] {
+	override render(width: number): readonly string[] {
 		const lines: string[] = [];
 		for (const child of this.children) {
 			const childLines = child.render(width);

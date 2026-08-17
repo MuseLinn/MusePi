@@ -1,10 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { type Component, padding, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { formatNumber, getProjectDir } from "@oh-my-pi/pi-utils";
+import { ThinkingLevel } from "@musepi/pi-agent-core";
+import { type Component, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../config/settings";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import type { AgentSession } from "../../session/agent-session";
 import { shortenPath } from "../../tools/render-utils";
@@ -112,7 +113,7 @@ export class FooterComponent implements Component {
 
 		const headState = git.head.resolveSync(getProjectDir());
 		this.#cachedBranch =
-			headState === null ? null : headState.kind === "ref" ? (headState.branchName ?? headState.ref) : "detached";
+			headState === null ? null : headState.kind === "ref" ? (headState.branchName ?? headState.ref) : t("detached");
 		return this.#cachedBranch;
 	}
 
@@ -180,13 +181,13 @@ export class FooterComponent implements Component {
 			const billingParts: string[] = [];
 			if (totalCost) billingParts.push(`$${totalCost.toFixed(3)}`);
 			if (normalizedPremiumRequests) billingParts.push(`★ ${formatNumber(normalizedPremiumRequests)}`);
-			if (usingSubscription) billingParts.push("(sub)");
+			if (usingSubscription) billingParts.push(t("(sub)"));
 			if (billingParts.length > 0) statsParts.push(billingParts.join(" "));
 		}
 
 		// Colorize context percentage based on usage
 		let contextPercentStr: string;
-		const autoIndicator = this.#autoCompactEnabled ? " (auto)" : "";
+		const autoIndicator = this.#autoCompactEnabled ? ` ${t("(auto)")}` : "";
 		const contextPercentDisplay = `${formatContextUsage(contextPercentValue, contextWindow, contextTokens)}${autoIndicator}`;
 		if (contextUsage && contextPercentValue !== null) {
 			const color = getContextUsageThemeColor(getContextUsageLevel(contextPercentValue, contextWindow));
@@ -200,7 +201,7 @@ export class FooterComponent implements Component {
 		let statsLeft = statsParts.join(" ");
 
 		// Add model name on the right side, plus thinking level if model supports it
-		const modelName = state.model?.id || "no-model";
+		const modelName = state.model?.id || t("no-model");
 
 		// Add thinking level hint when the current model advertises supported efforts
 		let rightSide = modelName;
@@ -212,9 +213,7 @@ export class FooterComponent implements Component {
 				rightSide = `${modelName} • ${resolved ? resolved : `${theme.thinking.autoPending} auto`}`;
 			} else {
 				const thinkingLevel = state.thinkingLevel ?? ThinkingLevel.Off;
-				if (thinkingLevel !== ThinkingLevel.Off) {
-					rightSide = `${modelName} • ${thinkingLevel}`;
-				}
+				rightSide = `${modelName} • ${thinkingLevel}`;
 			}
 		}
 

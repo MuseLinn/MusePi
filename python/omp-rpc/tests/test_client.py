@@ -12,7 +12,14 @@ import threading
 import time
 import unittest
 
-from omp_rpc import RpcClient, RpcCommandError, RpcConcurrencyError, RpcError, host_tool
+from omp_rpc import (
+    AgentEndEvent,
+    RpcClient,
+    RpcCommandError,
+    RpcConcurrencyError,
+    RpcError,
+    host_tool,
+)
 from omp_rpc.client import _RpcFrameDecoder
 
 
@@ -806,6 +813,67 @@ BROKEN_STARTUP_SERVER = textwrap.dedent(
     """
 )
 
+FORWARD_COMPAT_SERVER = textwrap.dedent(
+    """
+    import json
+    import sys
+    import time
+
+    print(json.dumps({"type": "ready"}), flush=True)
+    for raw_line in sys.stdin:
+        command = json.loads(raw_line)
+        print(
+            json.dumps(
+                {
+                    "id": command.get("id"),
+                    "type": "response",
+                    "command": command["type"],
+                    "success": True,
+                }
+            ),
+            flush=True,
+        )
+        if command["type"] != "prompt":
+            continue
+        if command.get("message") == "malformed terminal":
+            print(
+                json.dumps(
+                    {
+                        "type": "agent_end",
+                        "messages": [{"role": "future_role"}],
+                        "isTerminal": True,
+                    }
+                ),
+                flush=True,
+            )
+            time.sleep(2)
+            continue
+        print(
+            json.dumps(
+                {
+                    "type": "auto_compaction_start",
+                    "reason": "future_reason",
+                    "action": "future_action",
+                }
+            ),
+            flush=True,
+        )
+        print(
+            json.dumps(
+                {"type": "agent_end", "messages": [], "isTerminal": False}
+            ),
+            flush=True,
+        )
+        time.sleep(0.15)
+        print(
+            json.dumps(
+                {"type": "agent_end", "messages": [], "isTerminal": True}
+            ),
+            flush=True,
+        )
+    """
+)
+
 
 class RpcClientTests(unittest.TestCase):
     def make_client(self, server: str = FAKE_SERVER, **kwargs: object) -> RpcClient:
@@ -1259,6 +1327,39 @@ class RpcClientTests(unittest.TestCase):
 
         self.assertEqual(seen_extension_errors, ["boom"])
         self.assertEqual(seen_unknown, ["unknown_future_event"])
+
+    def test_additive_notification_values_do_not_stop_the_reader(self) -> None:
+        unknown_errors: list[str | None] = []
+
+        with self.make_client(server=FORWARD_COMPAT_SERVER) as client:
+            client.on_unknown_notification(
+                lambda event: unknown_errors.append(event.parse_error)
+            )
+            turn = client.prompt_and_wait("forward compatible", timeout=2.0)
+
+        terminal_events = [
+            event for event in turn.events if isinstance(event, AgentEndEvent)
+        ]
+        self.assertEqual(
+            [event.is_terminal for event in terminal_events], [False, True]
+        )
+        self.assertEqual(len(unknown_errors), 1)
+        self.assertIn("auto_compaction_start.reason", unknown_errors[0] or "")
+
+    def test_malformed_terminal_agent_end_wakes_waiter(self) -> None:
+        unknown_errors: list[str | None] = []
+
+        with self.make_client(server=FORWARD_COMPAT_SERVER) as client:
+            client.on_unknown_notification(
+                lambda event: unknown_errors.append(event.parse_error)
+            )
+            with self.assertRaisesRegex(
+                RpcError, "Failed to parse terminal agent_end"
+            ):
+                client.prompt_and_wait("malformed terminal", timeout=1.0)
+
+        self.assertEqual(len(unknown_errors), 1)
+        self.assertIn("messages[0].role", unknown_errors[0] or "")
 
     def test_ui_confirmation_and_cancel_round_trip(self) -> None:
         with self.make_client() as client:

@@ -10,11 +10,11 @@ import type {
 	UsageWindow,
 } from "../usage";
 import { isRecord } from "../utils";
+import { HOUR_MS } from "./shared";
 
 const UMANS_PROVIDER = "umans";
 const DEFAULT_ENDPOINT = "https://api.code.umans.ai";
 const USAGE_PATH = "/v1/usage";
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
 
 /** Umans `GET /v1/usage` response (subset; extras ignored). */
 interface UmansUsagePayload {
@@ -89,7 +89,7 @@ function buildRequestsLimit(payload: UmansUsagePayload, provider: string): Usage
 	const window: UsageWindow = {
 		id: "5h",
 		label: "rolling 5h",
-		durationMs: windowSeconds ? windowSeconds * 1000 : FIVE_HOURS_MS,
+		durationMs: windowSeconds ? windowSeconds * 1000 : 5 * HOUR_MS,
 	};
 	return {
 		id: "umans:requests",

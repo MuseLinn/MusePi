@@ -6,24 +6,24 @@
  * behavior they have in the TUI.
  */
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
-import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { createMockModel, type MockModelOptions } from "@oh-my-pi/pi-ai/providers/mock";
-import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EditTool } from "@oh-my-pi/pi-coding-agent/edit";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentTool } from "@musepi/pi-agent-core";
+import { createMockModel, type MockModelOptions } from "@musepi/pi-ai/providers/mock";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EditTool } from "@musepi/pi-coding-agent/edit";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import type {
 	ClientBridge,
 	ClientBridgePermissionOutcome,
 	ClientBridgePermissionToolCall,
-} from "@oh-my-pi/pi-coding-agent/session/client-bridge";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
-import { dispatchXdevTool, resolveMountedXdevExecutable, type XdevState } from "@oh-my-pi/pi-coding-agent/tools/xdev";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-coding-agent/session/client-bridge";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
+import { dispatchXdevTool, resolveMountedXdevExecutable, type XdevState } from "@musepi/pi-coding-agent/tools/xdev";
+import { TempDir } from "@musepi/pi-utils";
 
 // ---------------------------------------------------------------------------
 // Shared setup
@@ -849,57 +849,56 @@ it("allow_always: caches decision and calls bridge only once for subsequent exec
 	expect(bashTool.executeCalls).toBe(2);
 });
 
-it.each(boundaryCases)(
-	"%s permission decisions prompt again after a successful %s session boundary",
-	async (decision, transition) => {
-		const bashTool = makeFakeTool("bash");
-		const bridge = makeBridge({ outcome: "selected", optionId: decision, kind: decision });
-		const permissionSpy = spyOn(bridge, "requestPermission");
-		session = await createSession([bashTool], bridge, {}, { persist: true });
+it.each(
+	boundaryCases,
+)("%s permission decisions prompt again after a successful %s session boundary", async (decision, transition) => {
+	const bashTool = makeFakeTool("bash");
+	const bridge = makeBridge({ outcome: "selected", optionId: decision, kind: decision });
+	const permissionSpy = spyOn(bridge, "requestPermission");
+	session = await createSession([bashTool], bridge, {}, { persist: true });
 
-		await session.setActiveToolsByName(["bash"]);
-		const wrappedBash = session.agent.state.tools.find(tool => tool.name === "bash");
-		if (!wrappedBash) throw new Error("Expected wrapped bash tool");
+	await session.setActiveToolsByName(["bash"]);
+	const wrappedBash = session.agent.state.tools.find(tool => tool.name === "bash");
+	if (!wrappedBash) throw new Error("Expected wrapped bash tool");
 
-		for (let callIndex = 0; callIndex < 2; callIndex++) {
-			if (callIndex === 1) {
-				if (transition === "new") {
-					expect(await session.newSession()).toBe(true);
-				} else {
-					const targetId = `permission-target-${Bun.nanoseconds()}`;
-					const targetPath = `${tempDir.path()}/${targetId}.jsonl`;
-					await Bun.write(
-						targetPath,
-						`${JSON.stringify({
-							type: "session",
-							version: 3,
-							id: targetId,
-							timestamp: new Date().toISOString(),
-							cwd: tempDir.path(),
-						})}\n`,
-					);
-					expect(await session.switchSession(targetPath)).toBe(true);
-				}
-			}
-
-			const execution = wrappedBash.execute(
-				`call-${callIndex}`,
-				{ command: "echo boundary" },
-				undefined,
-				undefined as never,
-				undefined as never,
-			);
-			if (decision === "reject_always") {
-				await expect(execution).rejects.toThrow(/rejected by user/);
+	for (let callIndex = 0; callIndex < 2; callIndex++) {
+		if (callIndex === 1) {
+			if (transition === "new") {
+				expect(await session.newSession()).toBe(true);
 			} else {
-				await execution;
+				const targetId = `permission-target-${Bun.nanoseconds()}`;
+				const targetPath = `${tempDir.path()}/${targetId}.jsonl`;
+				await Bun.write(
+					targetPath,
+					`${JSON.stringify({
+						type: "session",
+						version: 3,
+						id: targetId,
+						timestamp: new Date().toISOString(),
+						cwd: tempDir.path(),
+					})}\n`,
+				);
+				expect(await session.switchSession(targetPath)).toBe(true);
 			}
 		}
 
-		expect(permissionSpy).toHaveBeenCalledTimes(2);
-		expect(bashTool.executeCalls).toBe(decision === "allow_always" ? 2 : 0);
-	},
-);
+		const execution = wrappedBash.execute(
+			`call-${callIndex}`,
+			{ command: "echo boundary" },
+			undefined,
+			undefined as never,
+			undefined as never,
+		);
+		if (decision === "reject_always") {
+			await expect(execution).rejects.toThrow(/rejected by user/);
+		} else {
+			await execution;
+		}
+	}
+
+	expect(permissionSpy).toHaveBeenCalledTimes(2);
+	expect(bashTool.executeCalls).toBe(decision === "allow_always" ? 2 : 0);
+});
 
 // ---------------------------------------------------------------------------
 // 4. Read tool not gated: bridge never called even when bridge is set

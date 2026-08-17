@@ -2,7 +2,13 @@ import type { ModelManagerOptions } from "../model-manager";
 import type { Api, FetchImpl } from "../types";
 
 /** Config passed to a provider's runtime model-manager factory. */
-export type ModelManagerConfig = { apiKey?: string; baseUrl?: string; fetch?: FetchImpl };
+export type ModelManagerConfig = {
+	apiKey?: string;
+	baseUrl?: string;
+	fetch?: FetchImpl;
+	/** The supplied fetch already applies provider-specific authentication. */
+	authenticated?: boolean;
+};
 
 /** Catalog discovery configuration for providers that support endpoint-based model listing. */
 export interface CatalogDiscoveryConfig {
@@ -48,7 +54,7 @@ export function allowsUnauthenticatedCatalogDiscovery(descriptor: CatalogProvide
 
 /**
  * One model provider's catalog-side description. The auth half of a provider
- * (env keys, OAuth login/refresh flows) lives in `@oh-my-pi/pi-ai`'s registry;
+ * (env keys, OAuth login/refresh flows) lives in `@musepi/pi-ai`'s registry;
  * the catalog table below is the single source of truth for ids, default
  * models, and discovery wiring.
  *

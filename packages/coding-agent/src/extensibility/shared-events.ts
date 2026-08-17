@@ -12,9 +12,9 @@
  * carry subsystem-specific message types — lives in the per-subsystem
  * `types.ts` files and is documented there.
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { CompactionPreparation, CompactionResult } from "@oh-my-pi/pi-agent-core/compaction";
-import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { CompactionPreparation, CompactionResult } from "@musepi/pi-agent-core/compaction";
+import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage } from "@musepi/pi-ai";
 import type { Rule } from "../capability/rule";
 import type { Goal, GoalModeState } from "../goals/state";
 import type { BranchSummaryEntry, CompactionEntry, SessionEntry } from "../session/session-entries";
@@ -249,7 +249,8 @@ export interface AutoRetryStartEvent {
 	errorId?: number;
 }
 
-export interface RecoveredRetryError {
+/** Persisted retry error whose transcript presentation changed when the retry saga settled. */
+export interface RetryErrorUpdate {
 	entryId: string;
 	persistenceKey?: string;
 	note: string;
@@ -262,7 +263,7 @@ export interface AutoRetryEndEvent {
 	success: boolean;
 	attempt: number;
 	finalError?: string;
-	recoveredErrors?: RecoveredRetryError[];
+	retryErrors?: RetryErrorUpdate[];
 }
 
 // ============================================================================

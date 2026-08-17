@@ -1,18 +1,19 @@
 /**
  * `omp auth-gateway` — run a forward proxy that injects auth from the broker.
  */
-import { Args, Command, Flags, renderCommandHelp } from "@oh-my-pi/pi-utils/cli";
+
+import { Args, Command, Flags, renderCommandHelp } from "@musepi/pi-utils/cli";
 import {
 	AUTH_GATEWAY_ACTIONS,
 	type AuthGatewayAction,
 	type AuthGatewayCommandArgs,
 	runAuthGatewayCommand,
 } from "../cli/auth-gateway-cli";
+import { authGatewayHelp as commandHelp } from "../cli/command-help";
 import { initTheme } from "../modes/theme/theme";
 
 export default class AuthGateway extends Command {
-	static description = "Run an auth-gateway forward proxy backed by the configured broker";
-
+	static description = commandHelp.description;
 	static args = {
 		action: Args.string({
 			description: "Sub-command",
@@ -50,7 +51,7 @@ export default class AuthGateway extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(AuthGateway);
 		if (!args.action) {
-			renderCommandHelp("omp", "auth-gateway", AuthGateway);
+			renderCommandHelp("musepi", "auth-gateway", AuthGateway);
 			return;
 		}
 		const cmd: AuthGatewayCommandArgs = {

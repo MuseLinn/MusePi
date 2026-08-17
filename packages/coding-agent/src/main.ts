@@ -7,8 +7,8 @@
 import * as fsSync from "node:fs";
 import * as os from "node:os";
 import { createInterface } from "node:readline/promises";
-import { EventLoopKeepalive } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
+import { EventLoopKeepalive } from "@musepi/pi-agent-core";
+import type { ImageContent } from "@musepi/pi-ai";
 import {
 	$env,
 	directoryExists,
@@ -20,8 +20,8 @@ import {
 	setInteractiveHost,
 	setProjectDir,
 	VERSION,
-} from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+} from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import { reset as resetCapabilities } from "./capability";
 import { type Args, reportUnrecognizedFlags } from "./cli/args";
 import { applyExtensionFlags, type ExtensionFlagSink } from "./cli/extension-flags";
@@ -41,6 +41,7 @@ import {
 	type ScopedModel,
 } from "./config/model-resolver";
 import { ModelsConfigFile } from "./config/models-config";
+import { serviceTierSettingToTier } from "./config/service-tier";
 import { getDefault, type SettingPath, Settings, type SettingValue, settings } from "./config/settings";
 import { initializeWithSettings } from "./discovery";
 import {
@@ -51,9 +52,11 @@ import {
 } from "./discovery/helpers";
 import { injectOmpExtensionCliRoots } from "./discovery/omp-extension-roots";
 import { formatExtensionLoadNotifications } from "./extensibility/extensions/load-errors";
+import { loadExtensions } from "./extensibility/extensions/loader";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/marketplace-auto-update";
+import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
 import type { MCPManager } from "./mcp";
 import { InteractiveMode } from "./modes/interactive-mode";
@@ -112,7 +115,7 @@ async function checkForNewVersion(currentVersion: string): Promise<string | unde
 		return;
 	}
 	try {
-		const response = await fetch("https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/latest", {
+		const response = await fetch("https://registry.npmjs.org/@musepi/pi-coding-agent/latest", {
 			signal: withTimeoutSignal(5_000),
 		});
 		if (!response.ok) return undefined;
@@ -188,8 +191,9 @@ function applyAcpDefaultSettingOverrides(targetSettings: Settings = settings): v
 	applyDefaultSettingOverrides(HOST_DEFAULTED_SETTING_PATHS, targetSettings);
 }
 
-async function readPipedInput(): Promise<string | undefined> {
-	if (process.stdin.isTTY !== false) return undefined;
+/** Reads a non-TTY stdin stream as prompt text. */
+export async function readPipedInput(): Promise<string | undefined> {
+	if (process.stdin.isTTY === true) return undefined;
 	// stdin is a pipe: a producer that never writes nor closes would block
 	// startup forever with zero output. Say what we're blocked on after 1s.
 	const notice = setTimeout(() => {
@@ -356,9 +360,29 @@ export interface AcpSessionFactoryOptions {
 	sessionDir?: string;
 	authStorage: AuthStorage;
 	modelRegistry: ModelRegistry;
-	parsedArgs: Pick<Args, "apiKey">;
+	parsedArgs: Pick<Args, "apiKey" | "trustedExtensions">;
 	rawArgs: string[];
 	createSession: (options: CreateAgentSessionOptions) => Promise<CreateAgentSessionResult>;
+}
+
+async function loadTrustedSessionExtensions(
+	options: Pick<CreateAgentSessionOptions, "additionalExtensionPaths">,
+	cwd: string,
+	eventBus: EventBus,
+) {
+	const paths = options.additionalExtensionPaths ?? [];
+	for (const trustedPath of paths) {
+		let stat: fsSync.Stats;
+		try {
+			stat = fsSync.statSync(trustedPath);
+		} catch {
+			throw new Error(`Trusted extension must be an existing module file: ${trustedPath}`);
+		}
+		if (!stat.isFile()) {
+			throw new Error(`Trusted extension must be a module file, not a directory: ${trustedPath}`);
+		}
+	}
+	return loadExtensions(paths, cwd, eventBus);
 }
 
 /**
@@ -383,6 +407,16 @@ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSess
 		// policy (PR #3736 follow-up).
 		const titleSystemPromptSource = discoverTitleSystemPromptFile(cwd);
 		const titleSystemPrompt = await resolvePromptInput(titleSystemPromptSource, "title system prompt");
+		const eventBus = new EventBus();
+		const trustedExtensions =
+			args.parsedArgs.trustedExtensions && args.parsedArgs.trustedExtensions.length > 0
+				? await loadTrustedSessionExtensions(args.baseOptions, cwd, eventBus)
+				: undefined;
+		if (trustedExtensions && trustedExtensions.errors.length > 0) {
+			throw new Error(
+				`Trusted extension failed to load: ${trustedExtensions.errors.map(item => item.error).join("; ")}`,
+			);
+		}
 		const { session: nextSession } = await args.createSession({
 			...args.baseOptions,
 			cwd,
@@ -396,6 +430,8 @@ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSess
 			deferUsageReserveConfirmation: true,
 			enableMCP: false,
 			titleSystemPrompt,
+			eventBus,
+			preloadedExtensions: trustedExtensions,
 		});
 		if (args.parsedArgs.apiKey && !args.baseOptions.model && nextSession.model) {
 			args.authStorage.setRuntimeApiKey(nextSession.model.provider, args.parsedArgs.apiKey);
@@ -504,6 +540,7 @@ async function runInteractiveMode(
 	}
 
 	if (initialMessage !== undefined) {
+		session.maybeStartTitleGeneration(initialMessage);
 		try {
 			using _keepalive = new EventLoopKeepalive();
 			await session.prompt(initialMessage, { images: initialImages });
@@ -514,6 +551,7 @@ async function runInteractiveMode(
 	}
 
 	for (const message of initialMessages) {
+		session.maybeStartTitleGeneration(message);
 		try {
 			using _keepalive = new EventLoopKeepalive();
 			await session.prompt(message);
@@ -860,6 +898,9 @@ export async function buildSessionOptions(
 		autoApprove: parsed.autoApprove ?? false,
 	};
 	const restoringSession = Boolean(parsed.continue || parsed.resume || isForeignSessionImport(parsed));
+	if (parsed.serviceTier !== undefined) {
+		options.openAIServiceTier = serviceTierSettingToTier(parsed.serviceTier) ?? null;
+	}
 	const cliDirs = parsed.addDir ?? [];
 	const settingsDirs = activeSettings.get("workspace.additionalDirectories");
 	if (cliDirs.length > 0 || settingsDirs.length > 0) {
@@ -993,11 +1034,12 @@ export async function buildSessionOptions(
 	if (parsed.noPrewalk && (parsed.prewalk || parsed.prewalkInto !== undefined)) {
 		throw new Error("--no-prewalk cannot be combined with --prewalk or --prewalk-into");
 	}
+	const explicitPrewalk = parsed.prewalk === true || parsed.prewalkInto !== undefined;
 	const prewalkEnabled = parsed.noPrewalk
 		? false
-		: parsed.prewalk === true || parsed.prewalkInto !== undefined
+		: explicitPrewalk
 			? true
-			: activeSettings.get("prewalk.enabled");
+			: !restoringSession && activeSettings.get("prewalk.enabled");
 	if (prewalkEnabled) {
 		const rolePattern = expandRoleAlias(parsed.prewalkInto ?? DEFAULT_PREWALK_TARGET, activeSettings);
 		const resolved = resolveCliModel({ cliModel: rolePattern, modelRegistry, preferences: modelMatchPreferences });
@@ -1107,15 +1149,34 @@ export async function buildSessionOptions(
 		options.rules = [];
 	}
 
-	// Additional extension paths from CLI
-	const cliExtensionPaths = parsed.noExtensions ? [] : [...(parsed.extensions ?? []), ...(parsed.hooks ?? [])];
-	if (cliExtensionPaths.length > 0) {
-		options.additionalExtensionPaths = cliExtensionPaths;
-	}
-
-	if (parsed.noExtensions) {
+	// Trusted extension paths are an exact allowlist for extension modules.
+	if (parsed.trustedExtensions && parsed.trustedExtensions.length > 0) {
+		const trustedPaths = parsed.trustedExtensions.map(trustedPath => {
+			let resolvedPath: string;
+			let stat: fsSync.Stats;
+			try {
+				resolvedPath = fsSync.realpathSync.native(trustedPath);
+				stat = fsSync.statSync(resolvedPath);
+			} catch {
+				throw new Error(`Trusted extension must be an existing module file: ${trustedPath}`);
+			}
+			if (!stat.isFile()) {
+				throw new Error(`Trusted extension must be a module file, not a directory: ${trustedPath}`);
+			}
+			return resolvedPath;
+		});
 		options.disableExtensionDiscovery = true;
-		options.additionalExtensionPaths = [];
+		options.additionalExtensionPaths = trustedPaths;
+	} else {
+		// Additional extension paths from CLI
+		const cliExtensionPaths = [...(parsed.extensions ?? []), ...(parsed.hooks ?? [])];
+		if (cliExtensionPaths.length > 0) {
+			options.additionalExtensionPaths = cliExtensionPaths;
+		}
+
+		if (parsed.noExtensions) {
+			options.disableExtensionDiscovery = true;
+		}
 	}
 
 	return options;
@@ -1149,12 +1210,9 @@ export async function runRootCommand(
 
 	const notifs: (InteractiveModeNotify | null)[] = [];
 
-	// Create AuthStorage and ModelRegistry upfront
-	const authStorage = await logger.time("discoverAuthStorage", deps.discoverAuthStorage ?? discoverAuthStorage);
-	const modelRegistry = logger.time("modelRegistry:init", () => new ModelRegistry(authStorage));
-
 	if (parsedArgs.version) {
-		writeStartupNotice(parsedArgs, `${VERSION}\n`);
+		const displayVersion = process.env.MUSEPI_VERSION ? `${process.env.MUSEPI_VERSION} (OMP ${VERSION})` : VERSION;
+		writeStartupNotice(parsedArgs, `${displayVersion}\n`);
 		process.exit(0);
 	}
 
@@ -1192,18 +1250,37 @@ export async function runRootCommand(
 	// warning before we reach the await site below.
 	pluginPreloadPromise.catch(() => {});
 
-	// Register CLI-provided extension package paths (`--extension`, `--hook`) so
-	// the `omp-plugins` discovery provider can surface their `skills/`, `hooks/`,
-	// `tools/`, `commands/`, `rules/`, `prompts/`, and `.mcp.json` sub-trees.
-	// `--no-extensions` short-circuits both the factory load and the sub-discovery.
-	if (!parsedArgs.noExtensions) {
+	// Trusted files load as exact module paths, never as package roots whose
+	// sibling hooks/tools/commands/MCP content could be discovered implicitly.
+	if (!parsedArgs.trustedExtensions?.length) {
+		// Register CLI-provided extension package paths (`--extension`, `--hook`) so
+		// the `omp-plugins` discovery provider can surface their `skills/`, `hooks/`,
+		// `tools/`, `commands/`, `rules/`, `prompts/`, and `.mcp.json` sub-trees.
+		// Explicit roots remain authorized under `--no-extensions`; only ambient
+		// extension discovery is disabled.
 		const cliExtensions = [...(parsedArgs.extensions ?? []), ...(parsedArgs.hooks ?? [])];
-		if (cliExtensions.length > 0) {
-			injectOmpExtensionCliRoots(cliExtensions, home, getProjectDir());
-		}
+		injectOmpExtensionCliRoots(cliExtensions, home, getProjectDir(), {
+			mode: parsedArgs.noExtensions ? "explicit-only" : "merge",
+			replace: true,
+		});
 	}
 
 	let cwd = getProjectDir();
+	// Classify the host before opening auth or settings storage so every
+	// session-critical database connection picks the right busy timeout.
+	// See getDbBusyTimeoutMs() (upstream 17.2.4 ordering).
+	const isProtocolMode = mode === "rpc" || mode === "rpc-ui" || mode === "acp";
+	// Protocol modes own stdin; treating it as prompt text would consume JSON-RPC frames before their transports start.
+	const pipedInput = isProtocolMode ? undefined : await logger.time("readPipedInput", readPipedInput);
+	const autoPrint = pipedInput !== undefined && !parsedArgs.print && parsedArgs.mode === undefined;
+	const isInteractive = !parsedArgs.print && !autoPrint && parsedArgs.mode === undefined;
+	// Only the interactive host renders a focusable Agent Hub / subagent session
+	// tree; declare it so headless subagent optimizations (e.g. skipping replan
+	// title refresh) can tell a focusable process from a print/RPC/eval one.
+	setInteractiveHost(isInteractive);
+	// Create AuthStorage and ModelRegistry upfront
+	const authStorage = await logger.time("discoverAuthStorage", deps.discoverAuthStorage ?? discoverAuthStorage);
+	const modelRegistry = logger.time("modelRegistry:init", () => new ModelRegistry(authStorage));
 	const settingsInstance =
 		deps.settings ?? (await logger.time("settings:init", Settings.init, { cwd, configFiles: parsedArgs.config }));
 	if (parsedArgs.approvalMode) {
@@ -1226,15 +1303,10 @@ export async function runRootCommand(
 	if (parsedArgs.noTitle || parsedArgs.mode === "rpc" || parsedArgs.mode === "rpc-ui" || parsedArgs.mode === "acp") {
 		Bun.env.PI_NO_TITLE = "1";
 	}
-	const isProtocolMode = mode === "rpc" || mode === "rpc-ui" || mode === "acp";
-	// Protocol modes own stdin; treating it as prompt text would consume JSON-RPC frames before their transports start.
-	const pipedInput = isProtocolMode ? undefined : await logger.time("readPipedInput", readPipedInput);
-	const autoPrint = pipedInput !== undefined && !parsedArgs.print && parsedArgs.mode === undefined;
-	const isInteractive = !parsedArgs.print && !autoPrint && parsedArgs.mode === undefined;
-	// Only the interactive host renders a focusable Agent Hub / subagent session
-	// tree; declare it so headless subagent optimizations (e.g. skipping replan
-	// title refresh) can tell a focusable process from a print/RPC/eval one.
-	setInteractiveHost(isInteractive);
+	// Apply the persisted interface language before anything renders — setLocale
+	// is otherwise only called when the setting changes at runtime (selector /
+	// setup wizard), so a restart would fall back to env/system locale.
+	setLocale(settingsInstance.get("settings.locale") ?? "en-US");
 
 	// Initialize discovery system with settings for provider persistence
 	logger.time("initializeWithSettings", initializeWithSettings, settingsInstance);
@@ -1533,12 +1605,14 @@ export async function runRootCommand(
 		// string-flag value such as `--target @notes.md` is the flag's value, not a
 		// file — and the same result is handed to createAgentSession via
 		// `preloadedExtensions` so the discovery work is not repeated.
-		if (isInteractive) {
+		if (isInteractive && !parsedArgs.trustedExtensions?.length) {
 			sessionOptions.extensions = [...(sessionOptions.extensions ?? []), createWarpEventBridgeExtension()];
 		}
 
 		const eventBus = new EventBus();
-		const extensionsResult = await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus);
+		const extensionsResult = parsedArgs.trustedExtensions?.length
+			? await loadTrustedSessionExtensions(sessionOptions, cwd, eventBus)
+			: await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus);
 		const extensionFlagSink: ExtensionFlagSink = {
 			getFlags: () => ExtensionRunner.aggregateFlags(extensionsResult.extensions),
 			setFlagValue: (name, value) => {
@@ -1547,6 +1621,11 @@ export async function runRootCommand(
 		};
 		const initialArgs = applyExtensionFlags(extensionFlagSink, rawArgs) ?? parsedArgs;
 		normalizeContinueSessionArgs(initialArgs, rawArgs);
+		if ((parsedArgs.trustedExtensions?.length ?? 0) > 0 && extensionsResult.errors.length > 0) {
+			throw new Error(
+				`Trusted extension failed to load: ${extensionsResult.errors.map(item => item.error).join("; ")}`,
+			);
+		}
 		for (const message of formatExtensionLoadNotifications(extensionsResult.errors)) {
 			if (isInteractive) {
 				notifs.push({ kind: "warn", message });
@@ -1588,6 +1667,18 @@ export async function runRootCommand(
 			stdoutIsTTY: process.stdout.isTTY,
 		});
 
+		// Startup changelog is only consumed by interactive mode below; kick the
+		// CHANGELOG.md parse off now so it overlaps session creation instead of
+		// serializing after it.
+		const startupChangelogPromise = isInteractive
+			? logger.time(
+					"main:getChangelogForDisplay",
+					getChangelogForDisplay,
+					parsedArgs,
+					settingsInstance.get("startup.changelogMode"),
+				)
+			: undefined;
+
 		const { session, setToolUIContext, modelFallbackMessage, lspServers, mcpManager } = await createSession({
 			...sessionOptions,
 			eventBus,
@@ -1608,6 +1699,7 @@ export async function runRootCommand(
 				modelRegistry,
 				settings: settingsInstance,
 				enableLsp: sessionOptions.enableLsp ?? true,
+				eventBus,
 			}),
 			Math.trunc(Number(settingsInstance.get("task.agentIdleTtlMs") ?? 420_000) || 0),
 		);
@@ -1646,12 +1738,7 @@ export async function runRootCommand(
 			await runRpcMode(session, mode === "rpc-ui" ? setToolUIContext : undefined, eventBus, rpcInput);
 		} else if (isInteractive) {
 			const versionCheckPromise = checkForNewVersion(VERSION).catch(() => undefined);
-			const startupChangelog = await logger.time(
-				"main:getChangelogForDisplay",
-				getChangelogForDisplay,
-				parsedArgs,
-				settingsInstance.get("startup.changelogMode"),
-			);
+			const startupChangelog = await startupChangelogPromise;
 
 			const modelScopeNotification = buildModelScopeNotification(
 				scopedModels,

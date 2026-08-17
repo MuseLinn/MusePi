@@ -3,19 +3,20 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { stripVTControlCharacters } from "node:util";
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
-import { getThemeByName, setThemeInstance } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import type { ResolvedRoleModel } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AUTO_THINKING } from "@oh-my-pi/pi-coding-agent/thinking";
-import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+import { ThinkingLevel } from "@musepi/pi-agent-core";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
+import { ReadToolGroupComponent } from "@musepi/pi-coding-agent/modes/components/read-tool-group";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import { SelectorController } from "@musepi/pi-coding-agent/modes/controllers/selector-controller";
+import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import type { ResolvedRoleModel } from "@musepi/pi-coding-agent/session/agent-session";
+import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
+import { getProjectAgentDir, removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
 
 let settingsState: SettingsTestState | undefined;
@@ -123,6 +124,50 @@ describe("selector setting side effects", () => {
 				}
 			});
 		}
+	}
+
+	for (const hidden of [true, false]) {
+		it(`applies display.hideToolActivity=${hidden} to existing tool components`, () => {
+			const setToolVisible = vi.fn();
+			const setToolExpanded = vi.fn();
+			const tool = Object.create(ToolExecutionComponent.prototype) as ToolExecutionComponent;
+			tool.setToolActivityVisible = setToolVisible;
+			tool.setExpanded = setToolExpanded;
+			const setReadVisible = vi.fn();
+			const setReadExpanded = vi.fn();
+			const readGroup = Object.create(ReadToolGroupComponent.prototype) as ReadToolGroupComponent;
+			readGroup.setToolActivityVisible = setReadVisible;
+			readGroup.setExpanded = setReadExpanded;
+			const setToolResultImagesVisible = vi.fn();
+			const assistant = Object.create(AssistantMessageComponent.prototype) as AssistantMessageComponent;
+			assistant.setToolResultImagesVisible = setToolResultImagesVisible;
+			const clearInlineImages = vi.fn();
+			const resetDisplay = vi.fn();
+			const ctx = {
+				hideToolActivity: !hidden,
+				toolOutputExpanded: true,
+				chatContainer: { children: [tool, readGroup, assistant] },
+				ui: { clearInlineImages, resetDisplay },
+			};
+			const controller = new SelectorController(ctx as unknown as InteractiveModeContext);
+
+			controller.handleSettingChange("display.hideToolActivity", hidden);
+
+			expect(ctx.hideToolActivity).toBe(hidden);
+			expect(setToolVisible).toHaveBeenCalledWith(!hidden);
+			expect(setReadVisible).toHaveBeenCalledWith(!hidden);
+			expect(setToolResultImagesVisible).toHaveBeenCalledWith(!hidden);
+			expect(setToolExpanded).toHaveBeenCalledTimes(hidden ? 0 : 1);
+			expect(setReadExpanded).toHaveBeenCalledTimes(hidden ? 0 : 1);
+			expect(ctx.toolOutputExpanded).toBe(hidden);
+			expect(clearInlineImages).toHaveBeenCalledTimes(hidden ? 1 : 0);
+			expect(resetDisplay).toHaveBeenCalledTimes(1);
+			if (hidden) {
+				expect(clearInlineImages.mock.invocationCallOrder[0]).toBeLessThan(
+					resetDisplay.mock.invocationCallOrder[0],
+				);
+			}
+		});
 	}
 
 	it("clears stale default role thinking when auto is selected", async () => {
@@ -491,8 +536,11 @@ describe("selector setting side effects", () => {
 		const globalSelector = `${globalModel.provider}/${globalModel.id}`;
 		const testDir = path.join(os.tmpdir(), `selector-runtime-identical-${Snowflake.next()}`);
 		const projectDir = path.join(testDir, "project");
-		fs.mkdirSync(path.join(projectDir, ".omp"), { recursive: true });
-		fs.writeFileSync(path.join(projectDir, ".omp", "config.yml"), `modelRoles:\n  default: ${projectSelector}\n`);
+		fs.mkdirSync(getProjectAgentDir(projectDir), { recursive: true });
+		fs.writeFileSync(
+			path.join(getProjectAgentDir(projectDir), "config.yml"),
+			`modelRoles:\n  default: ${projectSelector}\n`,
+		);
 
 		try {
 			const settings = await Settings.loadIsolated({
@@ -687,7 +735,7 @@ describe("selector setting side effects", () => {
 				expect(settings.getGlobalModelRole("default")).toBeUndefined();
 				expect(settings.getModelRole("default")).toBe(overlaySelector);
 				expect(settings.getModelRoleProvenance("default")).toBe("overlay");
-				expect(await Bun.file(path.join(projectDir, ".omp", "config.yml")).text()).toContain(
+				expect(await Bun.file(path.join(getProjectAgentDir(projectDir), "config.yml")).text()).toContain(
 					`default: ${projectSelector}`,
 				);
 				expect(setModel).not.toHaveBeenCalled();

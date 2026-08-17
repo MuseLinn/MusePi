@@ -1,21 +1,19 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import type { FetchImpl } from "@musepi/pi-ai";
 import {
 	buildExtractionPrompt,
 	extractFacts,
 	extractFactsSafe,
 	heuristicExtractFacts,
 	parseFacts,
-} from "@oh-my-pi/pi-mnemopi/core/extraction";
-import { getExtractionStats, resetExtractionStats } from "@oh-my-pi/pi-mnemopi/core/extraction/diagnostics";
+} from "@musepi/pi-mnemopi/core/extraction";
+import { getExtractionStats, resetExtractionStats } from "@musepi/pi-mnemopi/core/extraction/diagnostics";
 import {
 	CallableLlmBackend,
 	resetHostLlmBackendForTests,
 	setHostLlmBackend,
-} from "@oh-my-pi/pi-mnemopi/core/llm-backends";
-import {
-	type ResolvedMnemopiRuntimeOptions,
-	withMnemopiRuntimeOptions,
-} from "@oh-my-pi/pi-mnemopi/core/runtime-options";
+} from "@musepi/pi-mnemopi/core/llm-backends";
+import { type ResolvedMnemopiRuntimeOptions, withMnemopiRuntimeOptions } from "@musepi/pi-mnemopi/core/runtime-options";
 
 const OLD_ENV = { ...process.env };
 function restoreEnv(): void {
@@ -112,6 +110,23 @@ describe("structured extraction", () => {
 		expect(facts).toEqual(["Alex uses Neovim", "Alex dislikes VSCode"]);
 		expect(capturedTemperature).toBe(0);
 		expect(getExtractionStats().by_tier.host.successes).toBe(1);
+	});
+
+	it("strips reasoning wrappers from remote extraction so facts are not reasoning prose", async () => {
+		process.env.MNEMOPI_LLM_ENABLED = "true";
+		process.env.MNEMOPI_HOST_LLM_ENABLED = "false";
+		process.env.MNEMOPI_LLM_BASE_URL = "http://reasoning.invalid/v1";
+		const content =
+			'<think>\nThe user is providing information in English. Let me analyze what qualifies:\n- candidate fact\n</think>\n{"facts":["My preferred shell is zsh"],"instructions":[],"preferences":[],"timelines":[],"kg":[]}';
+		const fetchMock: FetchImpl = async () =>
+			new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			});
+
+		const facts = await extractFacts("I use zsh.", { fetch: fetchMock });
+		expect(facts).toEqual(["My preferred shell is zsh"]);
+		expect(getExtractionStats().by_tier.remote.successes).toBe(1);
 	});
 
 	it("prefers a configured completion with the extraction-prompt override at temperature zero", async () => {

@@ -1,5 +1,6 @@
 /** `glob` (legacy `find`) — glob-based file finder; results are paths sorted by mtime. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Note, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, num, scopePaths, shortenPath, str, truncate } from "../util";
@@ -35,22 +36,22 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		<>
 			<Badges
 				items={[
-					limit !== null && <Badge>limit {limit}</Badge>,
-					args.gitignore === false && <Badge>no-gitignore</Badge>,
-					args.hidden === false && <Badge>no-hidden</Badge>,
-					timeout !== null && <Badge>timeout {timeout}s</Badge>,
-					fileCount !== null && (
-						<Badge tone="accent">
-							{fileCount} file{fileCount === 1 ? "" : "s"}
-						</Badge>
-					),
-					scopePath !== null && <Badge>in {shortenPath(scopePath)}</Badge>,
+					limit !== null && <Badge>{t("limit {count}", { count: String(limit) })}</Badge>,
+					args.gitignore === false && <Badge>{t("no-gitignore")}</Badge>,
+					args.hidden === false && <Badge>{t("no-hidden")}</Badge>,
+					timeout !== null && <Badge>{t("timeout={secs}s", { secs: String(timeout) })}</Badge>,
+					fileCount !== null && <Badge tone="accent">{t("{count} file(s)", { count: String(fileCount) })}</Badge>,
+					scopePath !== null && <Badge>{t("in {path}", { path: shortenPath(scopePath) })}</Badge>,
 					truncated && (
-						<Badge tone="warn">{resultLimit !== null ? `truncated at ${resultLimit}` : "truncated"}</Badge>
+						<Badge tone="warn">
+							{resultLimit !== null ? t("truncated at {count}", { count: String(resultLimit) }) : t("truncated")}
+						</Badge>
 					),
 				]}
 			/>
-			{missing.length > 0 && <Note tone="warn">skipped missing: {missing.map(shortenPath).join(", ")}</Note>}
+			{missing.length > 0 && (
+				<Note tone="warn">{t("skipped missing: {path}", { path: missing.map(shortenPath).join(", ") })}</Note>
+			)}
 			{error !== null && !result?.isError && <Note tone="err">{error}</Note>}
 			<ResultText result={result} maxLines={12} />
 		</>

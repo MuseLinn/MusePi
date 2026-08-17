@@ -118,7 +118,8 @@ updates never rewrite anything a scrolled reader could be looking at.
 **ED3 (`CSI 3 J`) is emitted in exactly one place** — `#emitFullPaint` with
 `clearScrollback: true` — and is reached only by user gestures: session
 replace/branch/resume (`requestRender(true, { clearScrollback: true })`),
-resize outside a multiplexer, `resetDisplay()` (Ctrl+L). It clears native
+resize outside a multiplexer, `resetDisplay()` (the display-reset chord,
+`Alt+L` by default). It clears native
 history without `ED2` first; the replay overwrites every row from home so
 terminals without synchronized output do not expose a blank viewport. A gesture
 pins the user to the tail, so the history snap is acceptable; multiplexers never
@@ -259,7 +260,7 @@ cosmetic, not corrupting.
 `visibleWidth` / `truncateToWidth` / `sliceByColumn` / `wrapTextWithAnsi`
 (`utils.ts`) all agree on **one UAX#11 width model**. Slicing, truncation,
 wrapping, and segment extraction run on the native engine
-(`@oh-my-pi/pi-natives`, Rust `unicode-width`); `visibleWidth` measures with
+(`@musepi/pi-natives`, Rust `unicode-width`); `visibleWidth` measures with
 `Bun.stringWidth` **pinned to that same model** (`STRING_WIDTH_OPTS`:
 `countAnsiEscapeCodes: false`, `ambiguousIsNarrow: true`) — a JSC builtin that
 shares the native width tables without the per-call N-API box the native

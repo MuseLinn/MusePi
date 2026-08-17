@@ -1,4 +1,5 @@
 import type React from "react";
+import { t } from "../i18n";
 
 export interface DataTableColumn<T> {
 	key: string;
@@ -33,7 +34,7 @@ export function DataTable<T>({
 	};
 
 	if (data.length === 0) {
-		return <div className="stats-table-empty">{emptyText}</div>;
+		return <div className="stats-table-empty">{t(emptyText)}</div>;
 	}
 
 	return (

@@ -15,12 +15,12 @@ In the TUI, `/marketplace` with no arguments opens the interactive plugin browse
 
 A **marketplace** is a Git repository (or local directory) containing a catalog file at `.omp-plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json` (Claude Code-compatible fallback). The catalog lists available plugins with their sources, descriptions, and metadata.
 
-A **plugin** is a directory containing Claude/OMP plugin content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Marketplace installs also load extension modules declared by `package.json` `omp.extensions`: installation symlinks the cached plugin into the scope's `node_modules` tree and records it in `omp-plugins.lock.json`, the same runtime surfaces used by npm-installed and `omp plugin link`ed plugins. Plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
+A **plugin** is a directory containing Claude/OMP plugin content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Marketplace installs also load extension modules declared by `package.json` `omp.extensions`: installation symlinks the cached plugin into the scope's `node_modules` tree and records it in `omp-plugins.lock.json`, the same runtime surfaces used by npm-installed and `musepi plugin link`ed plugins. Plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
 
 **Scopes**: marketplace plugins can be installed at two scopes:
 
-- **user** (default) -- available in all projects, stored in `~/.omp/plugins/installed_plugins.json`
-- **project** -- available only in the active project, stored in the nearest project `.omp/plugins/installed_plugins.json`
+- **user** (default) -- available in all projects, stored in `~/.musepi/plugins/installed_plugins.json`
+- **project** -- available only in the active project, stored in the nearest project `.musepi/plugins/installed_plugins.json`
 
 Enabled project-scoped installs shadow enabled user-scoped installs of the same plugin. A disabled project install does not shadow the user install.
 
@@ -59,16 +59,16 @@ Enabled project-scoped installs shadow enabled user-scoped installs of the same 
 The same operations are available from the command line:
 
 ```
-omp plugin marketplace add <source>
-omp plugin marketplace remove <name>
-omp plugin marketplace update [name]
-omp plugin marketplace list
-omp plugin discover [marketplace]
-omp plugin install [--force] [--scope user|project] name@marketplace
-omp plugin uninstall [--scope user|project] name@marketplace
-omp plugin upgrade [--scope user|project] [name@marketplace]
-omp plugin enable [--scope user|project] name@marketplace
-omp plugin disable [--scope user|project] name@marketplace
+musepi plugin marketplace add <source>
+musepi plugin marketplace remove <name>
+musepi plugin marketplace update [name]
+musepi plugin marketplace list
+musepi plugin discover [marketplace]
+musepi plugin install [--force] [--scope user|project] name@marketplace
+musepi plugin uninstall [--scope user|project] name@marketplace
+musepi plugin upgrade [--scope user|project] [name@marketplace]
+musepi plugin enable [--scope user|project] name@marketplace
+musepi plugin disable [--scope user|project] name@marketplace
 ```
 
 ## Marketplace sources
@@ -87,7 +87,7 @@ Git and local sources must contain a catalog at `.omp-plugin/marketplace.json` (
 
 ## Catalog format (marketplace.json)
 
-A marketplace catalog lives at `.omp-plugin/marketplace.json` in the repository root. When omp is the only intended consumer, prefer this path. To remain Claude Code-compatible (omp loads the same shape from either path), publish at `.claude-plugin/marketplace.json` instead — omp uses it as a fallback when `.omp-plugin/marketplace.json` is absent. A repository may ship both: omp reads the `.omp-plugin/` copy, Claude Code reads the `.claude-plugin/` copy. Same catalog format either way:
+A marketplace catalog lives at `.omp-plugin/marketplace.json` in the repository root. When musepi is the only intended consumer, prefer this path. To remain Claude Code-compatible (musepi loads the same shape from either path), publish at `.claude-plugin/marketplace.json` instead — musepi uses it as a fallback when `.omp-plugin/marketplace.json` is absent. A repository may ship both: musepi reads the `.omp-plugin/` copy, Claude Code reads the `.claude-plugin/` copy. Same catalog format either way:
 
 ```json
 {
@@ -204,7 +204,7 @@ Current installer behavior rejects npm marketplace sources with `npm plugin sour
 ## On-disk layout
 
 ```
-~/.omp/
+~/.musepi/
   marketplaces.json              # Registry of added marketplaces
   plugins/
     installed_plugins.json       # User-scoped marketplace plugins (version: 2)
@@ -214,7 +214,7 @@ Current installer behavior rejects npm marketplace sources with `npm plugin sour
       marketplaces/<name>/       # Cached marketplace clone/catalog
       plugins/<marketplace>___<plugin>___<version>/  # Cached plugin directories
 
-<project>/.omp/
+<project>/.musepi/
   plugins/
     installed_plugins.json       # Project-scoped marketplace plugins (version: 2)
     omp-plugins.lock.json         # Project runtime enable/feature state

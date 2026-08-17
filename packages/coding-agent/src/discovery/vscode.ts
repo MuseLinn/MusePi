@@ -4,7 +4,7 @@
  * Loads config from `.vscode` directory (project-only).
  * Supports MCP server discovery from `mcp.json` with nested `mcp.servers` structure.
  */
-import { tryParseJson } from "@oh-my-pi/pi-utils";
+import { tryParseJson } from "@musepi/pi-utils";
 import { registerProvider } from "../capability";
 import { readFile } from "../capability/fs";
 import { type MCPServer, mcpCapability } from "../capability/mcp";
@@ -83,6 +83,7 @@ async function loadMCPConfig(
 
 		const server: MCPServer = {
 			name,
+			enabled: typeof expanded.enabled === "boolean" ? expanded.enabled : undefined,
 			command: typeof expanded.command === "string" ? expanded.command : undefined,
 			args: Array.isArray(expanded.args) ? (expanded.args as string[]) : undefined,
 			env: expanded.env && typeof expanded.env === "object" ? (expanded.env as Record<string, string>) : undefined,

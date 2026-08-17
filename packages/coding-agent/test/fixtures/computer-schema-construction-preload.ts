@@ -1,19 +1,26 @@
 import { spyOn } from "bun:test";
-import * as arktype from "arktype";
+import * as arktype from "@musepi/omptype";
 
 declare global {
-	var __computerCoordinateSchemaConstructionCount: number;
+	var __computerSchemaConstructionCount: number;
 }
 
-const coordinateDefinition = "0 <= number.integer <= 2147483647";
-globalThis.__computerCoordinateSchemaConstructionCount = 0;
+globalThis.__computerSchemaConstructionCount = 0;
 const originalType = arktype.type;
-const countedType = ((...args: unknown[]) => {
-	if (args[0] === coordinateDefinition) {
-		globalThis.__computerCoordinateSchemaConstructionCount += 1;
-	}
-	return Reflect.apply(originalType, undefined, args);
-}) as typeof originalType;
-Object.assign(countedType, originalType);
+const invokeType = originalType as unknown as (definition: unknown) => unknown;
+const countedType = new Proxy(originalType, {
+	apply(_target, thisArg, args) {
+		const definition = args[0];
+		if (
+			definition !== null &&
+			typeof definition === "object" &&
+			Object.hasOwn(definition, "code") &&
+			Object.hasOwn(definition, "read_only?")
+		) {
+			globalThis.__computerSchemaConstructionCount += 1;
+		}
+		return Reflect.apply(invokeType, thisArg, args);
+	},
+});
 const typeSpy = spyOn(arktype, "type").mockImplementation(countedType);
 Object.assign(typeSpy, originalType);

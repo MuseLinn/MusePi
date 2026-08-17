@@ -1,5 +1,6 @@
-import type { Model } from "@oh-my-pi/pi-ai";
-import type { SgrMouseEvent } from "@oh-my-pi/pi-tui";
+import type { Model } from "@musepi/pi-ai";
+import type { SgrMouseEvent } from "@musepi/pi-tui";
+import { t } from "../../../i18n/index.js";
 import {
 	buildBrowserItems,
 	ModelBrowser,
@@ -14,8 +15,8 @@ const MAX_VISIBLE_MODELS = 10;
 const BROWSER_FRAME_ROWS = 5;
 
 class ModelSceneController implements SetupSceneController {
-	title = "Choose your default model";
-	subtitle = "Search configured models and save the model used for new sessions.";
+	title = t("Choose your default model");
+	subtitle = t("Search configured models and save the model used for new sessions.");
 	#browser: ModelBrowser;
 	#status: string | undefined;
 	#selecting = false;
@@ -32,7 +33,7 @@ class ModelSceneController implements SetupSceneController {
 	}
 
 	async onMount(): Promise<void> {
-		this.#status = theme.fg("muted", "Discovering available models…");
+		this.#status = theme.fg("muted", t("Discovering available models…"));
 		this.host.requestRender();
 		await this.#refreshModels();
 	}
@@ -57,7 +58,7 @@ class ModelSceneController implements SetupSceneController {
 
 	render(width: number, maxLines?: number): readonly string[] {
 		const lines = [
-			this.#status ?? theme.fg("muted", "Type to search. Enter saves the highlighted model as your default."),
+			this.#status ?? theme.fg("muted", t("Type to search. Enter saves the highlighted model as your default.")),
 			"",
 		];
 		const budget = maxLines === undefined ? MAX_VISIBLE_MODELS : maxLines - lines.length - BROWSER_FRAME_ROWS;
@@ -104,7 +105,7 @@ class ModelSceneController implements SetupSceneController {
 	async #select(model: Model, selector: string): Promise<void> {
 		if (this.#selecting) return;
 		this.#selecting = true;
-		this.#status = theme.fg("muted", `Saving ${selector} as the default model…`);
+		this.#status = theme.fg("muted", t("Saving {0} as the default model…", selector));
 		this.host.requestRender();
 		try {
 			const projectScope = this.host.ctx.settings.get("modelRoleStorage") === "project";
@@ -126,7 +127,9 @@ class ModelSceneController implements SetupSceneController {
 /** Setup step that assigns one available model to the persisted default role. */
 export const modelSetupScene: SetupScene = {
 	id: "model",
-	title: "Choose your default model",
+	get title() {
+		return t("Choose your default model");
+	},
 	minVersion: 1,
 	mount: host => new ModelSceneController(host),
 };

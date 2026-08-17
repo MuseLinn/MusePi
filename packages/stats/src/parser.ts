@@ -9,8 +9,8 @@ import {
 	type ToolCall,
 	type ToolResultMessage,
 	type Usage,
-} from "@oh-my-pi/pi-ai";
-import { getSessionsDir, isEnoent, readLines } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import { getSessionsDir, isEnoent, readLines } from "@musepi/pi-utils";
 import type {
 	AgentType,
 	MessageStats,

@@ -1,34 +1,30 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import type { Api, Model } from "@oh-my-pi/pi-ai";
-import * as ai from "@oh-my-pi/pi-ai";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { isSubcommand } from "@oh-my-pi/pi-coding-agent/cli-commands";
-import { getDefault, getEnumValues, getUi } from "@oh-my-pi/pi-coding-agent/config/settings-schema";
-import { TinyTitleDownloadProgressComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tiny-title-download-progress";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { RefCountedWorkerHandle } from "@oh-my-pi/pi-coding-agent/subprocess/worker-client";
+import type { Api, Model } from "@musepi/pi-ai";
+import * as ai from "@musepi/pi-ai";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { isSubcommand } from "@musepi/pi-coding-agent/cli-commands";
+import { getDefault, getEnumValues, getUi } from "@musepi/pi-coding-agent/config/settings-schema";
+import { TinyTitleDownloadProgressComponent } from "@musepi/pi-coding-agent/modes/components/tiny-title-download-progress";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { RefCountedWorkerHandle } from "@musepi/pi-coding-agent/subprocess/worker-client";
 import {
 	TINY_MODEL_DEVICE_DEFAULT,
 	TINY_MODEL_DEVICE_SETTING_OPTIONS,
 	TINY_MODEL_DEVICE_SETTING_VALUES,
-} from "@oh-my-pi/pi-coding-agent/tiny/device";
+} from "@musepi/pi-coding-agent/tiny/device";
 import {
 	TINY_MODEL_DTYPE_DEFAULT,
 	TINY_MODEL_DTYPE_SETTING_OPTIONS,
 	TINY_MODEL_DTYPE_SETTING_VALUES,
-} from "@oh-my-pi/pi-coding-agent/tiny/dtype";
+} from "@musepi/pi-coding-agent/tiny/dtype";
 import {
 	ONLINE_TINY_TITLE_MODEL_KEY,
 	TINY_TITLE_MODEL_OPTIONS,
 	TINY_TITLE_MODEL_VALUES,
-} from "@oh-my-pi/pi-coding-agent/tiny/models";
-import {
-	createTinyTitleSubprocess,
-	TinyTitleClient,
-	tinyTitleClient,
-} from "@oh-my-pi/pi-coding-agent/tiny/title-client";
-import type { TinyTitleWorkerInbound, TinyTitleWorkerOutbound } from "@oh-my-pi/pi-coding-agent/tiny/title-protocol";
-import { generateSessionTitle } from "@oh-my-pi/pi-coding-agent/utils/title-generator";
+} from "@musepi/pi-coding-agent/tiny/models";
+import { createTinyTitleSubprocess, TinyTitleClient, tinyTitleClient } from "@musepi/pi-coding-agent/tiny/title-client";
+import type { TinyTitleWorkerInbound, TinyTitleWorkerOutbound } from "@musepi/pi-coding-agent/tiny/title-protocol";
+import { generateSessionTitle } from "@musepi/pi-coding-agent/utils/title-generator";
 import type { Subprocess } from "bun";
 
 function getModelOrThrow(id: string): Model<Api> {

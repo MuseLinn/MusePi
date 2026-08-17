@@ -1,18 +1,18 @@
 {
   "type": "module",
-  "name": "@oh-my-pi/pi-wire",
-  "version": "17.1.8",
+  "name": "@musepi/pi-wire",
+  "version": "17.2.12",
   "description": "Shared wire protocol types for Oh My Pi packages",
-  "homepage": "https://omp.sh",
-  "author": "Can Boluk",
+  "homepage": "https://github.com/MuseLinn/MusePi",
+  "author": "MuseLinn",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/can1357/oh-my-pi.git",
+    "url": "git+https://github.com/MuseLinn/MusePi.git",
     "directory": "packages/wire"
   },
   "bugs": {
-    "url": "https://github.com/can1357/oh-my-pi/issues"
+    "url": "https://github.com/MuseLinn/MusePi/issues"
   },
   "keywords": [
     "wire",
@@ -51,5 +51,7 @@
       "import": "./src/*.ts"
     },
     "./*.js": "./src/*.ts"
-  }
+  },
+  "dependencies": {},
+  "optionalDependencies": {}
 }

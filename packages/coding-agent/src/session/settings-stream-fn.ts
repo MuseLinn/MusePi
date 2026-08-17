@@ -10,9 +10,9 @@
  * OpenRouter never saw `providers.openrouterVariant`, breaking sticky routing
  * and OpenRouter response-cache hits across advisor calls.
  */
-import type { StreamFn } from "@oh-my-pi/pi-agent-core";
-import { type SimpleStreamOptions, streamSimple } from "@oh-my-pi/pi-ai";
-import { isAnthropicFableOrMythosModel } from "@oh-my-pi/pi-catalog/identity";
+import type { StreamFn } from "@musepi/pi-agent-core";
+import { type SimpleStreamOptions, streamSimple } from "@musepi/pi-ai";
+import { isAnthropicFableOrMythosModel } from "@musepi/pi-catalog/identity";
 import { type Settings, validateProviderMaxInFlightRequests } from "../config/settings";
 
 function timeoutSecondsToMs(value: number): number | undefined {
@@ -34,9 +34,13 @@ export function createSettingsAwareStreamFn(settings: Settings, base: StreamFn =
 			openrouterRoutingPreset && openrouterRoutingPreset !== "default" ? openrouterRoutingPreset : undefined;
 		const antigravityEndpointMode = settings.get("providers.antigravityEndpoint");
 		const textVerbosity =
-			model.api === "openai-codex-responses" || model.api === "openai-responses"
-				? settings.get("textVerbosity")
-				: undefined;
+			model.api === "openai-codex-responses"
+				? settings.isConfigured("textVerbosity")
+					? settings.get("textVerbosity")
+					: undefined
+				: model.api === "openai-responses"
+					? settings.get("textVerbosity")
+					: undefined;
 		const streamFirstEventTimeoutMs = timeoutSecondsToMs(settings.get("providers.streamFirstEventTimeoutSeconds"));
 		const streamIdleTimeoutMs = timeoutSecondsToMs(settings.get("providers.streamIdleTimeoutSeconds"));
 		// Server-side fallback (opt-in): when the user enables it AND the

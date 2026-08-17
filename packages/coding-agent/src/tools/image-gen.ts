@@ -1,15 +1,16 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { type ApiKey, type FetchImpl, getEnvApiKey, type Model, withAuth } from "@oh-my-pi/pi-ai";
-import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
+import { type } from "@musepi/omptype";
+import { type ApiKey, type FetchImpl, getEnvApiKey, type Model, withAuth } from "@musepi/pi-ai";
+import { ProviderHttpError } from "@musepi/pi-ai/error";
 import {
 	CODEX_BASE_URL,
 	getCodexAccountId,
 	OPENAI_HEADER_VALUES,
 	OPENAI_HEADERS,
 	URL_PATHS,
-} from "@oh-my-pi/pi-catalog/wire/codex";
-import { getAntigravityUserAgent } from "@oh-my-pi/pi-catalog/wire/gemini-headers";
+} from "@musepi/pi-catalog/wire/codex";
+import { getAntigravityUserAgent } from "@musepi/pi-catalog/wire/gemini-headers";
 import {
 	$env,
 	isEnoent,
@@ -19,8 +20,7 @@ import {
 	readSseJson,
 	Snowflake,
 	untilAborted,
-} from "@oh-my-pi/pi-utils";
-import { type } from "arktype";
+} from "@musepi/pi-utils";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAuthenticated, type ModelRegistry } from "../config/model-registry";
 import { settings } from "../config/settings";
@@ -34,6 +34,13 @@ const DEFAULT_MODEL = "gemini-3-pro-image-preview";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-3-pro-image-preview";
 const DEFAULT_ANTIGRAVITY_MODEL = "gemini-3-pro-image";
 const DEFAULT_XAI_IMAGE_MODEL = "grok-imagine-image";
+const DEFAULT_AGNES_MODEL = "agnes-image-2.1-flash";
+// Mainland China endpoint — https://www.agnes-ai.cn; international endpoint —
+// https://agnes-ai.com. Mirrors the agnes / agnes-global catalog base URLs in
+// `@musepi/pi-catalog` provider-models; the active session model decides which
+// one is used.
+const AGNES_BASE_URL_CN = "https://api.agnes-ai.cn/v1";
+const AGNES_BASE_URL_GLOBAL = "https://apihub.agnes-ai.com/v1";
 const IMAGE_TIMEOUT = 3 * 60 * 1000; // 3 minutes
 const MAX_IMAGE_SIZE = 35 * 1024 * 1024;
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -53,18 +60,26 @@ interface ImageApiKey {
 	apiKey: ApiKey;
 	projectId?: string;
 	model?: Model;
+	baseUrl?: string;
 }
 
 const COMMON_IMAGE_ASPECT_RATIOS = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
 const XAI_IMAGE_ASPECT_RATIOS = [...COMMON_IMAGE_ASPECT_RATIOS, "3:2", "2:3"] as const;
-const COMMON_IMAGE_ASPECT_RATIO_SET = new Set<string>(COMMON_IMAGE_ASPECT_RATIOS);
+// Agnes docs (agnes-image-2.1-flash) add 2:3 / 3:2 / 21:9 on top of the common set.
+const AGNES_IMAGE_ASPECT_RATIOS = [...COMMON_IMAGE_ASPECT_RATIOS, "2:3", "3:2", "21:9"] as const;
+const ALL_IMAGE_ASPECT_RATIOS = [...COMMON_IMAGE_ASPECT_RATIOS, "3:2", "2:3", "21:9"] as const;
+// Agnes tier sizes (1K-4K) per docs; other providers map them to the nearest exact pixel size.
+const AGNES_TIER_IMAGE_SIZES = ["1K", "2K", "3K", "4K"] as const;
+const ALL_IMAGE_SIZES = ["1024x1024", "1536x1024", "1024x1536", ...AGNES_TIER_IMAGE_SIZES] as const;
 const IMAGE_PROVIDER_REQUEST_CHOICES = ["auto", ...AUTO_IMAGE_PROVIDER_ORDER] as const;
 const IMAGE_PROVIDER_PREFERENCES = new Set<string>(IMAGE_PROVIDER_REQUEST_CHOICES);
 
 const responseModalitySchema = type('"IMAGE" | "TEXT"');
 
-const aspectRatioSchema = type.enumerated(...XAI_IMAGE_ASPECT_RATIOS).describe("aspect ratio");
-const imageSizeSchema = type('"1024x1024" | "1536x1024" | "1024x1536"').describe("image size");
+const aspectRatioSchema = type.enumerated(...ALL_IMAGE_ASPECT_RATIOS).describe("aspect ratio");
+const imageSizeSchema = type
+	.enumerated(...ALL_IMAGE_SIZES)
+	.describe("image size; 1K-4K tiers are native to Agnes, other providers map to the nearest exact size");
 
 const inputImageSchema = type({
 	"path?": type("string").describe("input image path"),
@@ -396,8 +411,8 @@ async function loadImageFromUrl(
 	if (!contentType?.startsWith("image/")) {
 		throw new Error(`Unsupported image type from URL: ${imageUrl}`);
 	}
-	const buffer = await response.bytes();
-	return { data: buffer.toBase64(), mimeType: contentType };
+	const buffer = Buffer.from(await response.arrayBuffer());
+	return { data: buffer.toString("base64"), mimeType: contentType };
 }
 
 function collectOpenRouterResponseText(message: OpenRouterMessage | undefined): string | undefined {
@@ -450,12 +465,23 @@ export function isImageProviderPreference(value: unknown): value is ImageProvide
 export function setImageProviderOrder(providers: readonly string[]): void {
 	configuredImageProviderOrder = providers.filter(isImageProviderId);
 }
+const ASPECT_RATIOS_BY_PROVIDER: Record<ImageProvider, readonly string[]> = {
+	agnes: AGNES_IMAGE_ASPECT_RATIOS,
+	"agnes-global": AGNES_IMAGE_ASPECT_RATIOS,
+	antigravity: COMMON_IMAGE_ASPECT_RATIOS,
+	gemini: COMMON_IMAGE_ASPECT_RATIOS,
+	openai: COMMON_IMAGE_ASPECT_RATIOS,
+	"openai-codex": COMMON_IMAGE_ASPECT_RATIOS,
+	openrouter: COMMON_IMAGE_ASPECT_RATIOS,
+	xai: XAI_IMAGE_ASPECT_RATIOS,
+};
+
 function assertImageAspectRatioSupported(provider: ImageProvider, aspectRatio: ImageGenParams["aspect_ratio"]): void {
-	if (!aspectRatio || provider === "xai" || COMMON_IMAGE_ASPECT_RATIO_SET.has(aspectRatio)) {
-		return;
-	}
+	if (!aspectRatio) return;
+	const supported = ASPECT_RATIOS_BY_PROVIDER[provider];
+	if (supported.includes(aspectRatio)) return;
 	throw new Error(
-		`Aspect ratio ${aspectRatio} is only supported by xAI image generation. Set providers.image to xai or use one of ${COMMON_IMAGE_ASPECT_RATIOS.join(", ")}.`,
+		`Aspect ratio ${aspectRatio} is not supported by ${provider} image generation. Supported ratios: ${supported.join(", ")}.`,
 	);
 }
 
@@ -554,6 +580,32 @@ async function findOpenAIHostedImageCredentials(
 	};
 }
 
+async function findAgnesImageCredentials(
+	modelRegistry?: ModelRegistry,
+	activeModel?: Model,
+	sessionId?: string,
+	explicitProvider?: "agnes" | "agnes-global",
+): Promise<ImageApiKey | null> {
+	// Route by the explicit request first, then the active chat model's provider:
+	// agnes-global hits the international endpoint, everything else stays on the
+	// mainland CN endpoint. The returned ImageApiKey.provider stays "agnes" so
+	// execute dispatch is unchanged; baseUrl carries the endpoint choice.
+	const provider: "agnes" | "agnes-global" =
+		explicitProvider ?? (activeModel?.provider === "agnes-global" ? "agnes-global" : "agnes");
+	const baseUrl = provider === "agnes-global" ? AGNES_BASE_URL_GLOBAL : AGNES_BASE_URL_CN;
+	if (modelRegistry) {
+		const apiKey = await modelRegistry.getApiKeyForProvider(provider, sessionId);
+		if (apiKey) {
+			const model = modelRegistry.find(provider, DEFAULT_AGNES_MODEL);
+			return { provider: "agnes", apiKey: modelRegistry.resolver(provider, { sessionId }), model, baseUrl };
+		}
+		return null;
+	}
+	const apiKey = getEnvApiKey(provider);
+	if (apiKey) return { provider: "agnes", apiKey, baseUrl };
+	return null;
+}
+
 // Codex (ChatGPT subscription) chat models that carry OpenAI's hosted
 // `image_generation` tool. Priority: newest general model first, then Codex
 // variants; any available openai-codex hosted-image model is the last resort.
@@ -599,6 +651,9 @@ async function findCodexSubscriptionImageCredentials(
 
 function activeImageProvider(model: Model | undefined): Exclude<ImageProviderPreference, "auto"> | null {
 	switch (model?.provider) {
+		case "agnes":
+		case "agnes-global":
+			return "agnes";
 		case "openai":
 		case "openai-codex":
 			return "openai";
@@ -653,6 +708,12 @@ async function findImageApiKey(
 			return findOpenRouterImageCredentials(modelRegistry, sessionId);
 		case "gemini":
 			return findGeminiImageCredentials(modelRegistry, sessionId);
+		case "agnes":
+			return findAgnesImageCredentials(modelRegistry, activeModel, sessionId);
+		case "agnes-global":
+			// Explicit international request: force the global endpoint/key even
+			// when the active chat model is the CN provider.
+			return findAgnesImageCredentials(modelRegistry, activeModel, sessionId, "agnes-global");
 	}
 }
 
@@ -764,8 +825,28 @@ function getOpenAIHostedImageProvider(model: Model): ImageProvider {
 	return model.api === "openai-codex-responses" || model.provider === "openai-codex" ? "openai-codex" : "openai";
 }
 
+/**
+ * Maps Agnes tier sizes (1K-4K) to exact pixel sizes for providers that only
+ * accept pixel values (OpenAI hosted, Gemini/Antigravity). 2K+ caps at 2048x2048
+ * — the largest size those providers advertise; unsupported sizes surface as
+ * ProviderHttpError and ride the existing provider fallback chain.
+ */
+function resolvePixelImageSize(imageSize: string | undefined): string | undefined {
+	if (!imageSize) return undefined;
+	switch (imageSize) {
+		case "1K":
+			return "1024x1024";
+		case "2K":
+		case "3K":
+		case "4K":
+			return "2048x2048";
+		default:
+			return imageSize;
+	}
+}
+
 function resolveOpenAIImageSize(aspectRatio: string | undefined, imageSize: string | undefined): string | undefined {
-	if (imageSize) return imageSize;
+	if (imageSize) return resolvePixelImageSize(imageSize);
 	switch (aspectRatio) {
 		case "1:1":
 			return "1024x1024";
@@ -999,7 +1080,8 @@ function buildAntigravityRequest(
 	}
 	parts.push({ text: prompt });
 
-	const imageConfig = aspectRatio || imageSize ? { aspectRatio: aspectRatio, imageSize: imageSize } : undefined;
+	const imageConfig =
+		aspectRatio || imageSize ? { aspectRatio: aspectRatio, imageSize: resolvePixelImageSize(imageSize) } : undefined;
 
 	return {
 		project: projectId,
@@ -1035,7 +1117,9 @@ const XAI_MAX_EDIT_IMAGES = 3;
 // image_size defaults to "1k", matching hermes-agent's DEFAULT_RESOLUTION
 // (plugins/image_gen/xai/__init__.py:71).
 function resolveXAIResolution(imageSize: string | undefined): "1k" | "2k" {
-	if (!imageSize || imageSize === "1024x1024") return "1k";
+	// 1K tier (or the exact 1024x1024 pixel value) → 1k; anything larger (2K+
+	// tiers, 1536x1024, …) → 2k, xAI's ceiling.
+	if (!imageSize || imageSize === "1K" || imageSize === "1024x1024") return "1k";
 	return "2k";
 }
 
@@ -1135,13 +1219,11 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 									? DEFAULT_OPENROUTER_MODEL
 									: provider === "xai"
 										? DEFAULT_XAI_IMAGE_MODEL
-										: DEFAULT_MODEL;
+										: provider === "agnes"
+											? DEFAULT_AGNES_MODEL
+											: DEFAULT_MODEL;
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
-					if (
-						params.aspect_ratio &&
-						provider !== "xai" &&
-						!COMMON_IMAGE_ASPECT_RATIO_SET.has(params.aspect_ratio)
-					) {
+					if (params.aspect_ratio && !ASPECT_RATIOS_BY_PROVIDER[provider].includes(params.aspect_ratio)) {
 						unsupportedAspectRatioProvider ??= provider;
 						continue;
 					}
@@ -1547,6 +1629,107 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 						};
 					}
 
+					if (provider === "agnes") {
+						const prompt = assemblePrompt(params);
+						// Docs (agnes-image-2.1-flash): size accepts 1K-4K tiers or legacy
+						// exact sizes; ratio pairs with tier sizes; img2img / multi-image
+						// composition goes in extra_body.image as public URL or Data URI
+						// Base64 (response_format must live in extra_body, never top level).
+						const agnesRequestBody: Record<string, unknown> = {
+							model: DEFAULT_AGNES_MODEL,
+							prompt,
+							n: 1,
+							size: params.image_size ?? "1K",
+						};
+						if (params.aspect_ratio) {
+							agnesRequestBody.ratio = params.aspect_ratio;
+						}
+						if (resolvedImages.length > 0) {
+							agnesRequestBody.extra_body = {
+								image: resolvedImages.map(toDataUrl),
+								response_format: "b64_json",
+							};
+						}
+						const agnesBaseUrl = (apiKey.baseUrl ?? AGNES_BASE_URL_CN).replace(/\/+$/, "");
+
+						const agnesRawText = await withAuth(
+							apiKey.apiKey,
+							async key => {
+								const resp = await fetchImpl(`${agnesBaseUrl}/images/generations`, {
+									method: "POST",
+									headers: {
+										Authorization: `Bearer ${key}`,
+										"Content-Type": "application/json",
+									},
+									body: JSON.stringify(agnesRequestBody),
+									signal: requestSignal,
+								});
+								const text = await resp.text();
+								if (!resp.ok) {
+									let message = text;
+									try {
+										const parsed = JSON.parse(text) as { error?: { message?: string } };
+										message = parsed.error?.message ?? message;
+									} catch {
+										// Keep raw text.
+									}
+									throw new ProviderHttpError(
+										`Agnes image request failed (${resp.status}): ${message}`,
+										resp.status,
+										{ headers: resp.headers },
+									);
+								}
+								return text;
+							},
+							{ signal: requestSignal },
+						);
+
+						const agnesData = JSON.parse(agnesRawText) as {
+							data?: Array<{ b64_json?: string; url?: string }>;
+						};
+						const agnesInlineImages: InlineImageData[] = [];
+						for (const entry of agnesData.data ?? []) {
+							if (entry.b64_json) {
+								const bytes = Buffer.from(entry.b64_json, "base64");
+								const mimeType = parseImageMetadata(bytes)?.mimeType ?? "image/png";
+								agnesInlineImages.push({ data: entry.b64_json, mimeType });
+							} else if (entry.url) {
+								agnesInlineImages.push(await loadImageFromUrl(entry.url, fetchImpl, requestSignal));
+							}
+						}
+
+						if (agnesInlineImages.length === 0) {
+							return {
+								content: [{ type: "text", text: "No image data returned." }],
+								details: {
+									provider,
+									model: DEFAULT_AGNES_MODEL,
+									imageCount: 0,
+									imagePaths: [],
+									images: [],
+								},
+							};
+						}
+
+						const agnesImagePaths = await saveImagesToTemp(agnesInlineImages);
+
+						return {
+							content: [
+								{
+									type: "text",
+									text: buildResponseSummary(provider, DEFAULT_AGNES_MODEL, agnesImagePaths, undefined),
+								},
+							],
+							details: {
+								provider,
+								model: DEFAULT_AGNES_MODEL,
+								imageCount: agnesInlineImages.length,
+								imagePaths: agnesImagePaths,
+								images: agnesInlineImages,
+							},
+						};
+					}
+
 					const parts = [] as Array<{ text?: string; inlineData?: InlineImageData }>;
 					for (const image of resolvedImages) {
 						parts.push({ inlineData: image });
@@ -1563,7 +1746,7 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 					if (params.aspect_ratio || params.image_size) {
 						generationConfig.imageConfig = {
 							aspectRatio: params.aspect_ratio,
-							imageSize: params.image_size,
+							imageSize: resolvePixelImageSize(params.image_size),
 						};
 					}
 

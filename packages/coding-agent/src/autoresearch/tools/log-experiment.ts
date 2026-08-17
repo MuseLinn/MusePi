@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-
-import { Text } from "@oh-my-pi/pi-tui";
-import { type } from "arktype";
+import { type } from "@musepi/omptype";
+import { Text } from "@musepi/pi-tui";
 import type { ToolDefinition } from "../../extensibility/extensions";
 import type { Theme } from "../../modes/theme/theme";
 import { replaceTabs, truncateToWidth } from "../../tools/render-utils";

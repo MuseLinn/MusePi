@@ -10,12 +10,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import type { AgentHubRemote } from "@oh-my-pi/pi-coding-agent/modes/components/agent-hub";
-import { AgentTranscriptViewer } from "@oh-my-pi/pi-coding-agent/modes/components/agent-transcript-viewer";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
-import { CURRENT_SESSION_VERSION } from "@oh-my-pi/pi-coding-agent/session/session-entries";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import type { AgentHubRemote } from "@musepi/pi-coding-agent/modes/components/agent-hub";
+import { AgentTranscriptViewer } from "@musepi/pi-coding-agent/modes/components/agent-transcript-viewer";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
+import { CURRENT_SESSION_VERSION } from "@musepi/pi-coding-agent/session/session-entries";
 import {
 	getKittyGraphics,
 	ImageBudget,
@@ -24,8 +24,8 @@ import {
 	setTerminalImageProtocol,
 	TERMINAL,
 	type TUI,
-} from "@oh-my-pi/pi-tui";
-import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { removeSyncWithRetries } from "@musepi/pi-utils";
 
 const TS = new Date().toISOString();
 

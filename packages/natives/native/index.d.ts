@@ -28,20 +28,53 @@ export declare class AudioPlayback {
   stop(): void
 }
 
-/** Persistent, serialized native desktop capture/input session. */
+/** Persistent, serialized native desktop capture/input/accessibility session. */
 export declare class DesktopSession {
   constructor(options?: DesktopSessionOptions | undefined | null)
-  /** Current backend capability and permission state. */
   get capabilities(): DesktopCapabilities
-  /** Capture a fresh PNG composite of the selected display(s). */
-  capture(): Promise<DesktopCapture>
+  listDisplays(): Promise<Array<DesktopDisplay>>
+  listWindows(): Promise<Array<DesktopWindow>>
+  capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
+  click(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
+  moveMouse(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
+  drag(target: string, path: Array<DesktopPoint>, opts?: PointerOptions | undefined | null): Promise<undefined>
+  scroll(target: string, x: number, y: number, dx: number, dy: number, opts?: PointerOptions | undefined | null): Promise<undefined>
+  typeText(target: string, text: string, opts?: PointerOptions | undefined | null): Promise<undefined>
+  keyChord(target: string, keys: Array<string>, opts?: PointerOptions | undefined | null): Promise<undefined>
+  raiseWindow(windowId: string): Promise<undefined>
+  axSnapshot(target: string, opts?: AxSnapshotOptions | undefined | null): Promise<AxSnapshot>
+  axQuery(target: string, query: AxQuery): Promise<Array<AxNode>>
   /**
-   * Execute a validated action batch in order, then return a fresh
-   * screenshot.
+   * Accessibility hit-test at global logical desktop coordinates; needs no
+   * prior capture.
    */
-  execute(actions: Array<DesktopAction>): Promise<DesktopCapture>
-  /** Close the worker and native platform connections. Idempotent and bounded. */
+  axElementAt(target: string, x: number, y: number): Promise<AxNode | undefined | null>
+  axFocused(): Promise<AxNode | undefined | null>
+  axNode(reference: string): Promise<AxNode>
+  axAttributes(reference: string): Promise<Array<[string, string]>>
+  axChildren(reference: string): Promise<Array<AxNode>>
+  axParent(reference: string): Promise<AxNode | undefined | null>
+  axPerform(reference: string, action: string): Promise<undefined>
+  axSetValue(reference: string, value: string): Promise<undefined>
+  axFocus(reference: string): Promise<undefined>
+  axClick(reference: string, opts?: PointerOptions | undefined | null): Promise<undefined>
   close(): Promise<undefined>
+}
+
+/**
+ * Process-owned cross-platform advisory lock.
+ *
+ * `tryAcquire()` is non-blocking; its returned handle reports whether it won
+ * through `acquired`. Ownership ends on `release()`, garbage collection, or
+ * process exit; `release()` is idempotent.
+ */
+export declare class FileLock {
+  /** Try to acquire `path` without blocking. */
+  static tryAcquire(path: string): FileLock
+  /** Whether this handle owns the requested lock. */
+  get acquired(): boolean
+  /** Release this handle's ownership without affecting a successor. */
+  release(): void
 }
 
 /** WebRTC peer that accepts 16 kHz mono PCM and renders remote Opus audio. */
@@ -246,7 +279,7 @@ export declare function __ompInstallTokioRuntime(): void
  * `packages/natives/native/index.js` (which derives the name from
  * `package.json#version`).
  */
-export declare function __piNativesV17_1_8(): void
+export declare function __piNativesV17_2_12(): void
 
 /**
  * Apply ast-grep rewrite rules to matching files; honors `dryRun` and returns
@@ -487,6 +520,42 @@ export interface AstReplaceResult {
   parseErrors?: Array<string>
 }
 
+export interface AxNode {
+  ref: string
+  role: string
+  nativeRole: string
+  title?: string
+  value?: string
+  description?: string
+  enabled: boolean
+  focused: boolean
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  actions?: Array<string>
+  childCount: number
+}
+
+export interface AxQuery {
+  role?: string
+  title?: string
+  value?: string
+  limit?: number
+}
+
+export interface AxSnapshot {
+  text: string
+  nodeCount: number
+  truncated: boolean
+}
+
+export interface AxSnapshotOptions {
+  maxDepth?: number
+  maxNodes?: number
+  all?: boolean
+}
+
 export interface BlockRange {
   /** 1-indexed inclusive first line of the resolved block. */
   startLine: number
@@ -512,6 +581,11 @@ export interface BlockRangeOptions {
   path?: string
   /** 1-indexed source line the block must begin on. */
   line: number
+}
+
+export interface CaptureCaps {
+  maxWidth?: number
+  maxHeight?: number
 }
 
 /** Clipboard image payload encoded as PNG bytes. */
@@ -566,59 +640,35 @@ export declare function cosineSimilarityPairs(vectors: Float64Array, count: numb
  */
 export declare function countTokens(input: string | Array<string>, encoding?: Encoding | undefined | null): number
 
-/**
- * One `OpenAI` GA computer action.
- *
- * This is an optional-field carrier because napi-rs object generation cannot
- * emit TypeScript discriminated unions. Native validation enforces the exact
- * fields required and allowed by each `type` before any input is emitted.
- */
-export interface DesktopAction {
-  type: string
-  x?: number
-  y?: number
-  button?: string
-  path?: Array<DesktopPoint>
-  keys?: Array<string>
-  scroll_x?: number
-  scroll_y?: number
-  text?: string
-}
-
-/** Native desktop backend and permission state. */
 export interface DesktopCapabilities {
-  /**
-   * Concrete selected backend: `quartz`, `x11`, `wayland`, `win32`, or
-   * `unavailable`.
-   */
   backend: string
-  /** OS display-server endpoint or subsystem label. */
   displayServer?: string
-  /** Whether screen capture is currently usable. */
   capture: boolean
-  /** Whether native input is currently usable. */
   input: boolean
-  /** `granted`, `denied`, `unknown`, or `unavailable`. */
+  ax: boolean
+  backgroundWindowInput: boolean
+  deliveryModes: Array<string>
   capturePermission: string
-  /** `granted`, `denied`, `unknown`, or `unavailable`. */
   inputPermission: string
-  /** Number of selected displays observed by the most recent successful probe. */
+  axPermission: string
   displayCount: number
 }
 
-/**
- * A PNG composite and the exact geometry needed to map its pixels back to the
- * global logical desktop.
- */
 export interface DesktopCapture {
   data: Uint8Array
   width: number
   height: number
+  /** Pre-scaling capture width in native pixels; equals `width` when unscaled. */
+  sourceWidth: number
+  /**
+   * Pre-scaling capture height in native pixels; equals `height` when
+   * unscaled.
+   */
+  sourceHeight: number
+  target: string
   displays: Array<DesktopDisplay>
   backend: string
   displayServer?: string
-  capturePermission: string
-  inputPermission: string
 }
 
 /**
@@ -640,25 +690,36 @@ export interface DesktopDisplay {
   isPrimary: boolean
 }
 
-/** One point in a drag path, in pixels of the preceding screenshot. */
 export interface DesktopPoint {
   x: number
   y: number
 }
 
-/** Options for a persistent native desktop session. */
 export interface DesktopSessionOptions {
-  /**
-   * Backend preference. `auto` and `native` both prohibit non-native
-   * fallback.
-   */
-  backend?: string
-  /** `all` or a monitor id returned in `DesktopDisplay.id`. */
   display?: string
-  /** Maximum composite screenshot width in pixels. */
-  maxWidth?: number
-  /** Maximum composite screenshot height in pixels. */
-  maxHeight?: number
+}
+
+/** One capturable top-level window in global logical desktop coordinates. */
+export interface DesktopWindow {
+  /**
+   * Backend-defined opaque window id, valid as a capture target while the
+   * window lives. Numeric on X11/Win32/macOS; a composite AT-SPI string on
+   * Wayland (e.g. `atspi::1.31:/org/a11y/atspi/accessible/1`). Never parse
+   * it.
+   */
+  id: string
+  /** Window title; may be empty for untitled windows. */
+  title: string
+  /** Owning application name. */
+  app: string
+  /** Owning process id when the platform exposes it. */
+  pid?: number
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Whether the window currently holds input focus. */
+  focused: boolean
 }
 
 /**
@@ -1515,6 +1576,13 @@ export interface PatchHunk {
    * `\ No newline at end of file` markers where applicable.
    */
   lines: Array<string>
+}
+
+export interface PointerOptions {
+  button?: string
+  count?: number
+  modifiers?: Array<string>
+  deliveryMode?: string
 }
 
 /** Current state of a process reference. */

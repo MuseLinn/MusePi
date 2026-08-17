@@ -5,7 +5,7 @@
  * cleaned content.
  */
 
-import { type AuthStorage, type FetchImpl, getEnvApiKey } from "@oh-my-pi/pi-ai";
+import { type AuthStorage, type FetchImpl, getEnvApiKey } from "@musepi/pi-ai";
 import type { SearchResponse, SearchSource } from "../../../web/search/types";
 import { SearchProviderError } from "../../../web/search/types";
 import { formatQuery, parseSearchQuery } from "../query";
@@ -22,6 +22,7 @@ export interface JinaSearchParams {
 	/** Single bare host for Jina's `X-Site` in-site search header. */
 	site?: string;
 	signal?: AbortSignal;
+	timeoutMs?: number;
 	fetch?: FetchImpl;
 }
 
@@ -45,6 +46,7 @@ async function callJinaSearch(
 	site?: string,
 	signal?: AbortSignal,
 	fetchImpl: FetchImpl = fetch,
+	timeoutMs?: number,
 ): Promise<JinaSearchResponse> {
 	const requestUrl = `${JINA_SEARCH_URL}/${encodeURIComponent(query)}`;
 	const headers: Record<string, string> = {
@@ -54,7 +56,7 @@ async function callJinaSearch(
 	if (site) headers["X-Site"] = site;
 	const response = await fetchImpl(requestUrl, {
 		headers,
-		signal: withHardTimeout(signal),
+		signal: withHardTimeout(signal, timeoutMs),
 	});
 
 	if (!response.ok) {
@@ -75,7 +77,14 @@ export async function searchJina(params: JinaSearchParams): Promise<SearchRespon
 		throw new Error("JINA_API_KEY not found. Set it in environment or .env file.");
 	}
 
-	const response = await callJinaSearch(apiKey, params.query, params.site, params.signal, params.fetch);
+	const response = await callJinaSearch(
+		apiKey,
+		params.query,
+		params.site,
+		params.signal,
+		params.fetch,
+		params.timeoutMs,
+	);
 	const sources: SearchSource[] = [];
 
 	for (const result of response) {
@@ -128,6 +137,7 @@ export class JinaProvider extends SearchProvider {
 			num_results: params.numSearchResults ?? params.limit,
 			site,
 			signal: params.signal,
+			timeoutMs: params.timeoutMs,
 			fetch: params.fetch,
 		});
 	}

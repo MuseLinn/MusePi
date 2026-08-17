@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
-import type { Usage } from "@oh-my-pi/pi-ai";
-import type { GeneratedProvider } from "@oh-my-pi/pi-catalog/models";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { getConfigRootDir, getStatsDbPath } from "@oh-my-pi/pi-utils";
+import type { Usage } from "@musepi/pi-ai";
+import type { GeneratedProvider } from "@musepi/pi-catalog/models";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { getConfigRootDir, getStatsDbPath } from "@musepi/pi-utils";
 import { classifyAgentType } from "./parser";
 import type {
 	AgentType,
@@ -387,7 +387,7 @@ export function setFileOffset(sessionFile: string, offset: number, lastModified:
  * Insert message stats into the database.
  *
  * Forked / branched sessions (see `SessionManager.fork()` and
- * `createBranchedSession()` in `@oh-my-pi/pi-coding-agent`) deep-copy a parent
+ * `createBranchedSession()` in `@musepi/pi-coding-agent`) deep-copy a parent
  * session's entries into a new JSONL — same `entry_id`, `timestamp`, `model`,
  * `provider`, token counts, and `responseId`. The `UNIQUE(session_file,
  * entry_id)` constraint alone keys each row by file, so without the guard
@@ -709,7 +709,8 @@ export function getModelTimeSeries(
 			(timestamp / ?) * ? as bucket,
 			model,
 			provider,
-			COUNT(*) as requests
+			COUNT(*) as requests,
+			SUM(total_tokens) as tokens
 		FROM messages
 		${hasCutoff ? "WHERE timestamp >= ?" : ""}
 		GROUP BY bucket, model, provider
@@ -717,13 +718,30 @@ export function getModelTimeSeries(
 	`);
 
 	const rowsRaw = hasCutoff ? stmt.all(bucketMs, bucketMs, seriesCutoff) : stmt.all(bucketMs, bucketMs);
-	const rows = rowsRaw as Array<{ bucket: number; model: string; provider: string; requests: number }>;
+	const rows = rowsRaw as Array<{ bucket: number; model: string; provider: string; requests: number; tokens: number }>;
 	return rows.map(row => ({
 		timestamp: row.bucket,
 		model: row.model,
 		provider: row.provider,
 		requests: row.requests,
+		tokens: row.tokens,
 	}));
+}
+
+/**
+ * Number of distinct session transcript files that produced messages in the
+ * active range (the stats "会话数量" card).
+ */
+export function getSessionCount(cutoff?: number | null): number {
+	if (!db) return 0;
+	if (cutoff !== null && cutoff !== undefined && cutoff > 0) {
+		const row = db
+			.prepare(`SELECT COUNT(DISTINCT session_file) as n FROM messages WHERE timestamp >= ?`)
+			.get(cutoff) as { n: number };
+		return row.n;
+	}
+	const row = db.prepare(`SELECT COUNT(DISTINCT session_file) as n FROM messages`).get() as { n: number };
+	return row.n;
 }
 
 /**

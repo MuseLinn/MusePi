@@ -10,6 +10,8 @@ const RETRY_DELAY_FIELD_PATTERN = /"retryDelay":\s*"([0-9.]+)(ms|s)"/i;
 // "try again in 5 min" / "try again in ~158 min." / "try again in 2h" /
 // "try again in 90 minutes" / "try again in 1 hour"
 const TRY_AGAIN_PATTERN = /try again in\s+~?\s*([0-9.]+)\s*(ms|sec|s|minutes?|mins?|m|hours?|hrs?|h)\b/i;
+// "Your limit will reset in 13 minutes" / "reset in 13 minutes" / "will reset in 2h"
+const WILL_RESET_IN_PATTERN = /(?:will\s+)?reset in\s+~?\s*([0-9.]+)\s*(ms|sec|s|minutes?|mins?|m|hours?|hrs?|h)\b/i;
 
 /**
  * Server-suggested retry delay extraction. Merges the patterns historically used
@@ -83,7 +85,11 @@ export function extractRetryHint(source: Response | Headers | null | undefined, 
 			if (totalMs > 0) return totalMs;
 		}
 	}
-	for (const pattern of [PLEASE_RETRY_PATTERN, RETRY_DELAY_FIELD_PATTERN, TRY_AGAIN_PATTERN]) {
+	// Account-reset hints ("will reset in …") take precedence over short
+	// retry hints ("please retry in 5s"): a body carrying both must honour the
+	// longer account window, not the shorter generic one. QUOTA_RESET_PATTERN
+	// ("reset after …") above already runs first and stays first.
+	for (const pattern of [WILL_RESET_IN_PATTERN, PLEASE_RETRY_PATTERN, RETRY_DELAY_FIELD_PATTERN, TRY_AGAIN_PATTERN]) {
 		const match = pattern.exec(body);
 		if (match?.[1]) {
 			const value = Number.parseFloat(match[1]);

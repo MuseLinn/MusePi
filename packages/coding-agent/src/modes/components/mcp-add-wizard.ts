@@ -12,8 +12,9 @@ import {
 	Text,
 	TruncatedText,
 	truncateToWidth,
-} from "@oh-my-pi/pi-tui";
-import { getMCPConfigPath, getProjectDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { getMCPConfigPath, getProjectDir } from "@musepi/pi-utils";
+import { t } from "../../i18n/index.js";
 import { validateServerName } from "../../mcp/config-writer";
 import { analyzeAuthError, discoverOAuthEndpoints, fetchResourceMetadataScopes } from "../../mcp/oauth-discovery";
 import type { MCPHttpServerConfig, MCPServerConfig, MCPSseServerConfig, MCPStdioServerConfig } from "../../mcp/types";
@@ -184,7 +185,7 @@ export class MCPAddWizard extends Container {
 		this.addChild(new Spacer(1));
 
 		// Add title
-		this.addChild(new TruncatedText(theme.bold("Add MCP Server")));
+		this.addChild(new TruncatedText(theme.bold(t("Add MCP Server"))));
 		this.addChild(new Spacer(1));
 
 		// Content container for step-specific content
@@ -267,9 +268,9 @@ export class MCPAddWizard extends Container {
 	}
 
 	#renderNameStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step 1: Server Name")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step 1: Server Name"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter a unique name for this server:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter a unique name for this server:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
@@ -284,21 +285,21 @@ export class MCPAddWizard extends Container {
 		}
 
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[Only letters, numbers, dash, underscore, dot, colon]"), 0, 0),
+			new Text(theme.fg("muted", t("[Only letters, numbers, dash, underscore, dot, colon]")), 0, 0),
 		);
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to cancel]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to cancel]")), 0, 0));
 	}
 
 	#renderTransportStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step 2: Transport Type")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step 2: Transport Type"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Select the transport type:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Select the transport type:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		const options = [
-			{ value: "stdio" as const, label: "stdio (Local process)" },
-			{ value: "http" as const, label: "http (HTTP server)" },
-			{ value: "sse" as const, label: "sse (Server-Sent Events)" },
+			{ value: "stdio" as const, label: t("stdio (Local process)") },
+			{ value: "http" as const, label: t("http (HTTP server)") },
+			{ value: "sse" as const, label: t("sse (Server-Sent Events)") },
 		];
 
 		for (let i = 0; i < options.length; i++) {
@@ -311,40 +312,40 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to cancel]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to cancel]")), 0, 0),
 		);
 	}
 
 	#renderCommandStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step 3: Command")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step 3: Command"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the command to run:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the command to run:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.command);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderArgsStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step 4: Arguments (Optional)")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step 4: Arguments (Optional)"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter command arguments (space-separated):", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter command arguments (space-separated):"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.args);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Press Enter to skip or continue]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Press Enter to skip or continue]")), 0, 0));
 	}
 
 	#renderUrlStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step 3: Server URL")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step 3: Server URL"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the server URL:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the server URL:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
@@ -358,17 +359,17 @@ export class MCPAddWizard extends Container {
 			this.#contentContainer.addChild(new Spacer(1));
 		}
 
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Must start with http:// or https://]"), 0, 0));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Must start with http:// or https://]")), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderAuthLocationStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step: How to provide the key?")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step: How to provide the key?"))));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		const options = [
-			{ value: "env" as const, label: "Environment variable" },
-			{ value: "header" as const, label: "HTTP header" },
+			{ value: "env" as const, label: t("Environment variable") },
+			{ value: "header" as const, label: t("HTTP header") },
 		];
 
 		for (let i = 0; i < options.length; i++) {
@@ -381,38 +382,38 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 		);
 	}
 
 	#renderEnvVarNameStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step: Environment Variable Name")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step: Environment Variable Name"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the environment variable name:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the environment variable name:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.envVarName);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderHeaderNameStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step: HTTP Header Name")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step: HTTP Header Name"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the HTTP header name:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the HTTP header name:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.headerName);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderScopeStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step: Configuration Scope")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step: Configuration Scope"))));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		const cwd = getProjectDir();
@@ -420,8 +421,8 @@ export class MCPAddWizard extends Container {
 		const userPathLabel = shortenPath(getMCPConfigPath("user", cwd));
 		const projectPathLabel = shortenPath(getMCPConfigPath("project", cwd));
 		const options = [
-			{ value: "user" as const, label: `User level (${userPathLabel})` },
-			{ value: "project" as const, label: `Project level (${projectPathLabel})` },
+			{ value: "user" as const, label: `${t("User level")} (${userPathLabel})` },
+			{ value: "project" as const, label: `${t("Project level")} (${projectPathLabel})` },
 		];
 
 		for (let i = 0; i < options.length; i++) {
@@ -434,48 +435,50 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 		);
 	}
 
 	#renderConfirmStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Review Configuration")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Review Configuration"))));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		// Show summary
-		this.#contentContainer.addChild(new Text(`Name: ${theme.fg("accent", this.#state.name)}`, 0, 0));
-		this.#contentContainer.addChild(new Text(`Type: ${this.#state.transport}`, 0, 0));
+		this.#contentContainer.addChild(new Text(`${t("Name:")} ${theme.fg("accent", this.#state.name)}`, 0, 0));
+		this.#contentContainer.addChild(new Text(`${t("Type: ")}${this.#state.transport}`, 0, 0));
 
 		if (this.#state.transport === "stdio") {
-			this.#contentContainer.addChild(new Text(`Command: ${this.#state.command}`, 0, 0));
+			this.#contentContainer.addChild(new Text(`${t("Command:")} ${this.#state.command}`, 0, 0));
 			if (this.#state.args) {
-				this.#contentContainer.addChild(new Text(`Args: ${this.#state.args}`, 0, 0));
+				this.#contentContainer.addChild(new Text(`${t("Args:")} ${this.#state.args}`, 0, 0));
 			}
 		} else {
-			this.#contentContainer.addChild(new Text(`URL: ${sanitize(this.#state.url)}`, 0, 0));
+			this.#contentContainer.addChild(new Text(`${t("URL:")} ${sanitize(this.#state.url)}`, 0, 0));
 		}
 
 		// Auth info
 		if (this.#state.authMethod === "none") {
-			this.#contentContainer.addChild(new Text("Auth: None", 0, 0));
+			this.#contentContainer.addChild(new Text(t("Auth: None"), 0, 0));
 		} else if (this.#state.authMethod === "oauth") {
-			this.#contentContainer.addChild(new Text("Auth: OAuth (authenticated)", 0, 0));
+			this.#contentContainer.addChild(new Text(t("Auth: OAuth (authenticated)"), 0, 0));
 		} else if (this.#state.authMethod === "manual") {
 			if (this.#state.authLocation === "env") {
-				this.#contentContainer.addChild(new Text(`Auth: API key via env (${this.#state.envVarName})`, 0, 0));
+				this.#contentContainer.addChild(new Text(t("Auth: API key via env ({0})", this.#state.envVarName), 0, 0));
 			} else {
-				this.#contentContainer.addChild(new Text(`Auth: API key via header (${this.#state.headerName})`, 0, 0));
+				this.#contentContainer.addChild(
+					new Text(t("Auth: API key via header ({0})", this.#state.headerName), 0, 0),
+				);
 			}
 		}
 
-		const scopeLabel = this.#state.scope === "user" ? "User level" : "Project level";
-		this.#contentContainer.addChild(new Text(`Scope: ${scopeLabel}`, 0, 0));
+		const scopeLabel = this.#state.scope === "user" ? t("User level") : t("Project level");
+		this.#contentContainer.addChild(new Text(`${t("Scope:")} ${scopeLabel}`, 0, 0));
 
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Save this configuration?", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Save this configuration?"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
-		const options = ["Yes", "No"];
+		const options = [t("Yes"), t("No")];
 		for (let i = 0; i < options.length; i++) {
 			const isSelected = i === this.#selectedIndex;
 			const prefix = isSelected ? theme.fg("accent", `${theme.nav.cursor} `) : "  ";
@@ -485,7 +488,7 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 		);
 	}
 
@@ -495,7 +498,7 @@ export class MCPAddWizard extends Container {
 		// "(Press Esc to cancel)" during the wait, and stepping back would
 		// leave the OAuth login orphaned.
 		if (this.#oauthAbort && (keyData === "\x03" || matchesAppInterrupt(keyData))) {
-			this.#oauthAbort.abort("MCP OAuth flow cancelled by user");
+			this.#oauthAbort.abort(t("MCP OAuth flow cancelled by user"));
 			return;
 		}
 
@@ -582,7 +585,7 @@ export class MCPAddWizard extends Container {
 			case "url": {
 				// Validate URL
 				if (!value) {
-					this.#validationError = "URL is required";
+					this.#validationError = t("URL is required");
 					this.#renderStep();
 					return;
 				}
@@ -590,12 +593,12 @@ export class MCPAddWizard extends Container {
 				try {
 					parsedUrl = new URL(value);
 				} catch {
-					this.#validationError = "Invalid URL format (must start with http:// or https://)";
+					this.#validationError = t("Invalid URL format (must start with http:// or https://)");
 					this.#renderStep();
 					return;
 				}
 				if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-					this.#validationError = "URL must use http:// or https:// scheme";
+					this.#validationError = t("URL must use http:// or https:// scheme");
 					this.#renderStep();
 					return;
 				}
@@ -835,12 +838,12 @@ export class MCPAddWizard extends Container {
 	}
 
 	#renderAuthMethodStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "Step: Authentication Method")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("Step: Authentication Method"))));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		const options = [
-			{ value: "oauth" as const, label: "OAuth flow (web-based)", desc: "(opens browser)" },
-			{ value: "manual" as const, label: "Manual API key/token", desc: "(paste or use shell command)" },
+			{ value: "oauth" as const, label: t("OAuth flow (web-based)"), desc: t("(opens browser)") },
+			{ value: "manual" as const, label: t("Manual API key/token"), desc: t("(paste or use shell command)") },
 		];
 
 		for (let i = 0; i < options.length; i++) {
@@ -856,14 +859,14 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 		);
 	}
 
 	#renderOAuthAuthUrlStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth: Authorization URL")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth: Authorization URL"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the OAuth authorization endpoint:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the OAuth authorization endpoint:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
@@ -871,76 +874,78 @@ export class MCPAddWizard extends Container {
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "e.g., https://auth.example.com/oauth/authorize"), 0, 0),
+			new Text(theme.fg("muted", t("e.g., https://auth.example.com/oauth/authorize")), 0, 0),
 		);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderOAuthTokenUrlStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth: Token URL")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth: Token URL"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter the OAuth token endpoint:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter the OAuth token endpoint:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.oauthTokenUrl);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "e.g., https://auth.example.com/oauth/token"), 0, 0));
+		this.#contentContainer.addChild(
+			new Text(theme.fg("muted", t("e.g., https://auth.example.com/oauth/token")), 0, 0),
+		);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderOAuthClientIdStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth: Client ID")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth: Client ID"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter your OAuth client ID:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter your OAuth client ID:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.oauthClientId);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderOAuthClientSecretStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth: Client Secret (Optional)")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth: Client Secret (Optional)"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter your OAuth client secret:", 0, 0));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "(Leave empty for PKCE-only flows)"), 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter your OAuth client secret:"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("(Leave empty for PKCE-only flows)")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.oauthClientSecret);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderOAuthScopesStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth: Scopes (Optional)")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth: Scopes (Optional)"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter OAuth scopes (space-separated):", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter OAuth scopes (space-separated):"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.oauthScopes);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "e.g., read write"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("e.g., read write")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	#renderOAuthErrorStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("error", "OAuth authentication failed"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("error", t("OAuth authentication failed")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Choose next action:", 0, 0));
+		this.#contentContainer.addChild(new Text(t("Choose next action:"), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
-		const options = ["Retry OAuth authentication", "Edit OAuth settings"];
+		const options = [t("Retry OAuth authentication"), t("Edit OAuth settings")];
 		for (let i = 0; i < options.length; i++) {
 			const isSelected = i === this.#selectedIndex;
 			const prefix = isSelected ? theme.fg("accent", `${theme.nav.cursor} `) : "  ";
@@ -950,22 +955,22 @@ export class MCPAddWizard extends Container {
 
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+			new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 		);
 	}
 
 	#renderApiKeyStep(): void {
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "API Key Required")));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("API Key Required"))));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Enter your API key or token:", 0, 0));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "(Supports !command for password manager)"), 0, 0));
+		this.#contentContainer.addChild(new Text(t("Enter your API key or token:"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("(Supports !command for password manager)")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 
 		this.#inputField = new Input();
 		this.#inputField.setValue(this.#state.apiKey);
 		this.#contentContainer.addChild(this.#inputField);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "[Enter to continue, Esc to go back]"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Enter to continue, Esc to go back]")), 0, 0));
 	}
 
 	/**
@@ -988,9 +993,9 @@ export class MCPAddWizard extends Container {
 
 			// Success! No auth required
 			this.#contentContainer.clear();
-			this.#contentContainer.addChild(new Text(theme.fg("success", "✓ Connection successful!"), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("success", t("✓ Connection successful!")), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(new Text("No authentication required", 0, 0));
+			this.#contentContainer.addChild(new Text(t("No authentication required"), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
 
 			setTimeout(() => {
@@ -1036,9 +1041,9 @@ export class MCPAddWizard extends Container {
 					this.#state.authMethod = "oauth";
 
 					this.#contentContainer.clear();
-					this.#contentContainer.addChild(new Text(theme.fg("success", "✓ OAuth detected"), 0, 0));
+					this.#contentContainer.addChild(new Text(theme.fg("success", t("✓ OAuth detected")), 0, 0));
 					this.#contentContainer.addChild(new Spacer(1));
-					this.#contentContainer.addChild(new Text("Launching browser for authorization...", 0, 0));
+					this.#contentContainer.addChild(new Text(t("Launching browser for authorization..."), 0, 0));
 					this.#contentContainer.addChild(new Spacer(1));
 
 					void this.#launchOAuthFlow();
@@ -1047,10 +1052,10 @@ export class MCPAddWizard extends Container {
 
 				// OAuth metadata unavailable: fallback to manual API key.
 				this.#contentContainer.clear();
-				this.#contentContainer.addChild(new Text(theme.fg("warning", "⚠ Authentication required"), 0, 0));
+				this.#contentContainer.addChild(new Text(theme.fg("warning", t("⚠ Authentication required")), 0, 0));
 				this.#contentContainer.addChild(new Spacer(1));
-				this.#contentContainer.addChild(new Text("OAuth parameters could not be discovered.", 0, 0));
-				this.#contentContainer.addChild(new Text("Provide API key/token manually.", 0, 0));
+				this.#contentContainer.addChild(new Text(t("OAuth parameters could not be discovered."), 0, 0));
+				this.#contentContainer.addChild(new Text(t("Provide API key/token manually."), 0, 0));
 				this.#contentContainer.addChild(new Spacer(1));
 				this.#currentStep = "apikey";
 				this.#renderStep();
@@ -1058,11 +1063,11 @@ export class MCPAddWizard extends Container {
 				// Not an auth error - just a connection failure
 				const errorMsg = sanitize(error instanceof Error ? error.message : String(error));
 				this.#contentContainer.clear();
-				this.#contentContainer.addChild(new Text(theme.fg("error", "✗ Connection failed"), 0, 0));
+				this.#contentContainer.addChild(new Text(theme.fg("error", t("✗ Connection failed")), 0, 0));
 				this.#contentContainer.addChild(new Spacer(1));
 				this.#contentContainer.addChild(new Text(errorMsg, 0, 0));
 				this.#contentContainer.addChild(new Spacer(1));
-				this.#contentContainer.addChild(new Text(theme.fg("muted", "Adding server anyway..."), 0, 0));
+				this.#contentContainer.addChild(new Text(theme.fg("muted", t("Adding server anyway...")), 0, 0));
 
 				setTimeout(() => {
 					this.#state.authMethod = "none";
@@ -1156,7 +1161,7 @@ export class MCPAddWizard extends Container {
 	async #launchOAuthFlow(): Promise<void> {
 		if (!this.#onOAuthCallback) {
 			this.#contentContainer.clear();
-			this.#contentContainer.addChild(new Text(theme.fg("error", "OAuth flow not available"), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("error", t("OAuth flow not available")), 0, 0));
 			this.#renderStep();
 			this.#requestRender();
 			return;
@@ -1165,27 +1170,27 @@ export class MCPAddWizard extends Container {
 		// Validate OAuth configuration
 		if (!this.#state.oauthAuthUrl || !this.#state.oauthTokenUrl) {
 			this.#contentContainer.clear();
-			this.#contentContainer.addChild(new Text(theme.fg("error", "OAuth configuration incomplete"), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("error", t("OAuth configuration incomplete")), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(new Text("Authorization and Token URLs are required.", 0, 0));
+			this.#contentContainer.addChild(new Text(t("Authorization and Token URLs are required."), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(new Text(theme.fg("muted", "[Press Esc to go back]"), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("muted", t("[Press Esc to go back]")), 0, 0));
 			this.#requestRender();
 			return;
 		}
 
 		// Show "Authenticating..." message
 		this.#contentContainer.clear();
-		this.#contentContainer.addChild(new Text(theme.fg("accent", "OAuth Authentication"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("accent", t("OAuth Authentication")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text("Launching OAuth flow...", 0, 0));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "Browser will open automatically."), 0, 0));
+		this.#contentContainer.addChild(new Text(t("Launching OAuth flow..."), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("Browser will open automatically.")), 0, 0));
 		this.#contentContainer.addChild(new Spacer(1));
 		this.#contentContainer.addChild(
-			new Text(theme.fg("warning", "If browser doesn't open, copy the URL from chat."), 0, 0),
+			new Text(theme.fg("warning", t("If browser doesn't open, copy the URL from chat.")), 0, 0),
 		);
 		this.#contentContainer.addChild(new Spacer(1));
-		this.#contentContainer.addChild(new Text(theme.fg("muted", "(Press Esc to cancel)"), 0, 0));
+		this.#contentContainer.addChild(new Text(theme.fg("muted", t("(Press Esc to cancel)")), 0, 0));
 		this.#requestRender();
 
 		this.#oauthAbort = new AbortController();
@@ -1214,18 +1219,21 @@ export class MCPAddWizard extends Container {
 
 			// Show success message
 			this.#contentContainer.clear();
-			this.#contentContainer.addChild(new Text(theme.fg("success", "✓ Authentication successful!"), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("success", t("✓ Authentication successful!")), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(new Text(theme.fg("muted", "Running connection health check..."), 0, 0));
+			this.#contentContainer.addChild(new Text(theme.fg("muted", t("Running connection health check...")), 0, 0));
 			const spinnerFrames = theme.spinnerFrames;
 			const initialFrame = spinnerFrames[0] ?? "|";
-			const healthText = new Text(theme.fg("muted", `${initialFrame} Checking server connection...`), 0, 0);
+			const healthText = new Text(theme.fg("muted", `${initialFrame} ${t("Checking server connection...")}`), 0, 0);
 			this.#contentContainer.addChild(healthText);
 
 			let spinnerIndex = 0;
 			const spinner = setInterval(() => {
 				healthText.setText(
-					theme.fg("muted", `${spinnerFrames[spinnerIndex % spinnerFrames.length]} Checking server connection...`),
+					theme.fg(
+						"muted",
+						`${spinnerFrames[spinnerIndex % spinnerFrames.length]} ${t("Checking server connection...")}`,
+					),
 				);
 				spinnerIndex++;
 				this.#requestRender();
@@ -1237,7 +1245,7 @@ export class MCPAddWizard extends Container {
 				try {
 					const { promise: timeoutPromise, reject: timeoutReject } = Promise.withResolvers<never>();
 					const timer = setTimeout(
-						() => timeoutReject(new Error("Health check timed out after 10 seconds")),
+						() => timeoutReject(new Error(t("Health check timed out after 10 seconds"))),
 						10_000,
 					);
 					try {
@@ -1256,9 +1264,9 @@ export class MCPAddWizard extends Container {
 
 			clearInterval(spinner);
 			if (healthPassed) {
-				healthText.setText(theme.fg("success", "✓ Health check passed"));
+				healthText.setText(theme.fg("success", t("✓ Health check passed")));
 			} else {
-				healthText.setText(theme.fg("warning", "⚠ Health check failed (will still save config)"));
+				healthText.setText(theme.fg("warning", t("⚠ Health check failed (will still save config)")));
 				this.#contentContainer.addChild(new Spacer(1));
 				this.#contentContainer.addChild(new Text(theme.fg("muted", healthError), 0, 0));
 			}
@@ -1283,7 +1291,9 @@ export class MCPAddWizard extends Container {
 			this.#contentContainer.clear();
 			this.#contentContainer.addChild(
 				new Text(
-					cancelled ? theme.fg("muted", "○ OAuth cancelled") : theme.fg("error", "✗ OAuth authentication failed"),
+					cancelled
+						? theme.fg("muted", t("○ OAuth cancelled"))
+						: theme.fg("error", t("✗ OAuth authentication failed")),
 					0,
 					0,
 				),
@@ -1295,28 +1305,28 @@ export class MCPAddWizard extends Container {
 			// Provide helpful tips based on error type
 			if (cancelled) {
 				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", "Tip: Choose Retry to launch the browser again."), 0, 0),
+					new Text(theme.fg("muted", t("Tip: Choose Retry to launch the browser again.")), 0, 0),
 				);
 			} else if (errorMsg.includes("timeout") || errorMsg.includes("timed out")) {
 				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", "Tip: Complete authorization faster next time"), 0, 0),
+					new Text(theme.fg("muted", t("Tip: Complete authorization faster next time")), 0, 0),
 				);
 			} else if (errorMsg.includes("Invalid OAuth URLs")) {
 				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", "Tip: Check that the OAuth URLs are correct"), 0, 0),
+					new Text(theme.fg("muted", t("Tip: Check that the OAuth URLs are correct")), 0, 0),
 				);
 			} else if (errorMsg.includes("ECONNREFUSED")) {
 				this.#contentContainer.addChild(
-					new Text(theme.fg("muted", "Tip: Verify the OAuth server is accessible"), 0, 0),
+					new Text(theme.fg("muted", t("Tip: Verify the OAuth server is accessible")), 0, 0),
 				);
 			}
 
 			this.#contentContainer.addChild(new Spacer(1));
-			this.#contentContainer.addChild(new Text(`${theme.fg("accent", "→ ")}Retry`, 0, 0));
-			this.#contentContainer.addChild(new Text("  Edit OAuth settings", 0, 0));
+			this.#contentContainer.addChild(new Text(`${theme.fg("accent", "→ ")}${t("Retry")}`, 0, 0));
+			this.#contentContainer.addChild(new Text(t("  Edit OAuth settings"), 0, 0));
 			this.#contentContainer.addChild(new Spacer(1));
 			this.#contentContainer.addChild(
-				new Text(theme.fg("muted", "[↑↓ to navigate, Enter to select, Esc to go back]"), 0, 0),
+				new Text(theme.fg("muted", t("[↑↓ to navigate, Enter to select, Esc to go back]")), 0, 0),
 			);
 			this.#requestRender();
 

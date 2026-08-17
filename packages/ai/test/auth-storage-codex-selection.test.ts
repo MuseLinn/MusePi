@@ -3,17 +3,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { parseCodexRateLimitHeaders } from "@oh-my-pi/pi-ai";
+import { parseCodexRateLimitHeaders } from "@musepi/pi-ai";
 import {
 	AuthBrokerClient,
 	RemoteAuthCredentialStore,
 	type SnapshotResponse,
 	startAuthBroker,
-} from "@oh-my-pi/pi-ai/auth-broker";
-import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai/auth-storage";
-import * as oauthUtils from "@oh-my-pi/pi-ai/registry/oauth";
-import type { OAuthCredentials } from "@oh-my-pi/pi-ai/registry/oauth/types";
-import type { UsageLimit, UsageProvider, UsageReport } from "@oh-my-pi/pi-ai/usage";
+} from "@musepi/pi-ai/auth-broker";
+import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@musepi/pi-ai/auth-storage";
+import * as oauthUtils from "@musepi/pi-ai/registry/oauth";
+import type { OAuthCredentials } from "@musepi/pi-ai/registry/oauth/types";
+import type { UsageLimit, UsageProvider, UsageReport } from "@musepi/pi-ai/usage";
 import { removeWithRetries } from "../../utils/src/temp";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -416,6 +416,37 @@ describe("AuthStorage codex oauth ranking", () => {
 
 		const apiKey = await authStorage.getApiKey("openai-codex", "session-exhausted");
 		expect(apiKey).toBe("api-acct-healthy");
+	});
+
+	test("selects an explicitly allowed 100% Team account over a rejected exhausted sibling", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-exhausted", "exhausted@example.com") },
+			{ type: "oauth", ...createCredential("acct-team", "team@example.com") },
+		]);
+
+		usageByAccount.set(
+			"acct-exhausted",
+			createCodexUsageReport({
+				accountId: "acct-exhausted",
+				primary: { usedFraction: 1, resetInMs: 3 * 24 * HOUR_MS },
+				secondary: { usedFraction: 1, resetInMs: 3 * 24 * HOUR_MS },
+				metadata: { allowed: false, limitReached: true, planType: "prolite" },
+			}),
+		);
+		const teamReport = createCodexUsageReport({
+			accountId: "acct-team",
+			primary: { usedFraction: 0.2, resetInMs: HOUR_MS },
+			secondary: { usedFraction: 1, resetInMs: 6 * 24 * HOUR_MS },
+			metadata: { allowed: true, limitReached: false, planType: "team" },
+		});
+		const teamSecondary = teamReport.limits.find(limit => limit.id === "openai-codex:secondary");
+		if (!teamSecondary) throw new Error("expected Team weekly usage limit");
+		teamSecondary.status = "warning";
+		usageByAccount.set("acct-team", teamReport);
+
+		expect(await authStorage.getApiKey("openai-codex", "allowed-team-at-100-percent")).toBe("api-acct-team");
 	});
 
 	test("temporarily blocks only the exhausted Codex OAuth credential after a quota 429", async () => {
@@ -1746,39 +1777,36 @@ describe("AuthStorage codex oauth ranking", () => {
 	test.each([
 		["gpt-5.6-terra", "free", "enterprise"],
 		["gpt-5.6-terra-pro", "go", "pro"],
-	])(
-		"%s keeps a less-used %s account in ordinary ranking ahead of %s",
-		async (modelId, lowUsagePlan, highUsagePlan) => {
-			if (!authStorage) throw new Error("test setup failed");
+	])("%s keeps a less-used %s account in ordinary ranking ahead of %s", async (modelId, lowUsagePlan, highUsagePlan) => {
+		if (!authStorage) throw new Error("test setup failed");
 
-			await authStorage.set("openai-codex", [
-				{ type: "oauth", ...createCredential("acct-low-usage", "low-usage@example.com") },
-				{ type: "oauth", ...createCredential("acct-high-usage", "high-usage@example.com") },
-			]);
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-low-usage", "low-usage@example.com") },
+			{ type: "oauth", ...createCredential("acct-high-usage", "high-usage@example.com") },
+		]);
 
-			usageByAccount.set(
-				"acct-low-usage",
-				createCodexUsageReport({
-					accountId: "acct-low-usage",
-					primary: { usedFraction: 0.01, resetInMs: 30 * 60 * 1000 },
-					secondary: { usedFraction: 0.01, resetInMs: 6 * 24 * 60 * 60 * 1000 },
-					metadata: { planType: lowUsagePlan, email: "low-usage@example.com" },
-				}),
-			);
-			usageByAccount.set(
-				"acct-high-usage",
-				createCodexUsageReport({
-					accountId: "acct-high-usage",
-					primary: { usedFraction: 0.8, resetInMs: 30 * 60 * 1000 },
-					secondary: { usedFraction: 0.8, resetInMs: 6 * 24 * 60 * 60 * 1000 },
-					metadata: { planType: highUsagePlan, email: "high-usage@example.com" },
-				}),
-			);
+		usageByAccount.set(
+			"acct-low-usage",
+			createCodexUsageReport({
+				accountId: "acct-low-usage",
+				primary: { usedFraction: 0.01, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.01, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+				metadata: { planType: lowUsagePlan, email: "low-usage@example.com" },
+			}),
+		);
+		usageByAccount.set(
+			"acct-high-usage",
+			createCodexUsageReport({
+				accountId: "acct-high-usage",
+				primary: { usedFraction: 0.8, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.8, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+				metadata: { planType: highUsagePlan, email: "high-usage@example.com" },
+			}),
+		);
 
-			const apiKey = await authStorage.getApiKey("openai-codex", undefined, { modelId });
-			expect(apiKey).toBe("api-acct-low-usage");
-		},
-	);
+		const apiKey = await authStorage.getApiKey("openai-codex", undefined, { modelId });
+		expect(apiKey).toBe("api-acct-low-usage");
+	});
 
 	test("keeps an eligible Codex session credential when usage headroom makes its sibling rank better", async () => {
 		if (!authStorage) throw new Error("test setup failed");
@@ -2025,6 +2053,90 @@ describe("AuthStorage codex oauth ranking", () => {
 			modelId: "gpt-5.3-codex-spark",
 		});
 		expect(apiKey).toBe("api-acct-pro");
+	});
+
+	test("ignores plan-ineligible headroom when reporting Spark model health", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-free", "free@example.com") },
+			{ type: "oauth", ...createCredential("acct-pro", "pro@example.com") },
+		]);
+		usageByAccount.set(
+			"acct-free",
+			addSparkUsage(
+				createCodexUsageReport({
+					accountId: "acct-free",
+					primary: { usedFraction: 0.05, resetInMs: 30 * 60 * 1000 },
+					secondary: { usedFraction: 0.05, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+					metadata: { planType: "free", email: "free@example.com" },
+				}),
+				0.05,
+				0.05,
+			),
+		);
+		usageByAccount.set(
+			"acct-pro",
+			addSparkUsage(
+				createCodexUsageReport({
+					accountId: "acct-pro",
+					primary: { usedFraction: 1, resetInMs: 2 * HOUR_MS },
+					secondary: { usedFraction: 1, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+					metadata: { planType: "pro", email: "pro@example.com", limitReached: true },
+				}),
+				1,
+				1,
+			),
+		);
+
+		const health = await authStorage.getModelUsageHealth("openai-codex", {
+			modelId: "gpt-5.3-codex-spark",
+			reserveFraction: 0.1,
+		});
+
+		expect(health.state).toBe("depleted");
+		expect(health.accounts).toHaveLength(1);
+		expect(health.accounts[0]?.state).toBe("depleted");
+	});
+
+	test("reports an all-plan-ineligible Codex pool as depleted", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-free", "free@example.com") },
+			{ type: "oauth", ...createCredential("acct-plus", "plus@example.com") },
+		]);
+		usageByAccount.set(
+			"acct-free",
+			createCodexUsageReport({
+				accountId: "acct-free",
+				primary: { usedFraction: 0.05, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.05, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+				metadata: { planType: "free", email: "free@example.com" },
+			}),
+		);
+		usageByAccount.set(
+			"acct-plus",
+			createCodexUsageReport({
+				accountId: "acct-plus",
+				primary: { usedFraction: 0.05, resetInMs: 30 * 60 * 1000 },
+				secondary: { usedFraction: 0.05, resetInMs: 6 * 24 * 60 * 60 * 1000 },
+				metadata: { planType: "plus", email: "plus@example.com" },
+			}),
+		);
+
+		const paidHealth = await authStorage.getModelUsageHealth("openai-codex", {
+			modelId: "gpt-5.6-sol",
+			reserveFraction: 0.1,
+		});
+		const proHealth = await authStorage.getModelUsageHealth("openai-codex", {
+			modelId: "gpt-5.3-codex-spark",
+			reserveFraction: 0.1,
+		});
+
+		expect(paidHealth.state).toBe("healthy");
+		expect(paidHealth.accounts).toHaveLength(1);
+		expect(proHealth).toEqual({ state: "depleted", accounts: [] });
 	});
 
 	test("routes codex spark to a single Plus account when no Pro is connected", async () => {
@@ -2365,65 +2477,62 @@ describe("AuthStorage codex oauth ranking", () => {
 	test.each([
 		["gpt-5.6-sol", 0.06, 0.09, true, false, 1, 1, false, true, "spark"],
 		["gpt-5.3-codex-spark", 1, 1, false, true, 0.06, 0.09, true, false, "chat"],
-	] as const)(
-		"reports %s healthy after splitting a legacy shared block when only its meter has headroom",
-		async (modelId, chatPrimary, chatSecondary, chatAllowed, chatLimitReached, sparkPrimary, sparkSecondary, sparkAllowed, sparkLimitReached, remainingBlockScope) => {
-			if (!authStorage || !store?.listCredentialBlocks) throw new Error("test setup failed");
-			await authStorage.set("openai-codex", [
-				{ type: "oauth", ...createCredential("acct-legacy-meter", "legacy-meter@example.com") },
-			]);
-			const [row] = store.listAuthCredentials("openai-codex");
-			if (!row) throw new Error("expected credential row");
-			const blockedUntilMs = Date.now() + WEEK_MS;
-			insertLegacyCodexSharedBlock(
-				dbPath,
-				row.id,
-				blockedUntilMs,
-				Math.floor((Date.now() - STALE_BLOCK_GUARD_MS) / 1000),
-			);
-			usageByAccount.set(
-				"acct-legacy-meter",
-				addSparkUsage(
-					createCodexUsageReport({
+	] as const)("reports %s healthy after splitting a legacy shared block when only its meter has headroom", async (modelId, chatPrimary, chatSecondary, chatAllowed, chatLimitReached, sparkPrimary, sparkSecondary, sparkAllowed, sparkLimitReached, remainingBlockScope) => {
+		if (!authStorage || !store?.listCredentialBlocks) throw new Error("test setup failed");
+		await authStorage.set("openai-codex", [
+			{ type: "oauth", ...createCredential("acct-legacy-meter", "legacy-meter@example.com") },
+		]);
+		const [row] = store.listAuthCredentials("openai-codex");
+		if (!row) throw new Error("expected credential row");
+		const blockedUntilMs = Date.now() + WEEK_MS;
+		insertLegacyCodexSharedBlock(
+			dbPath,
+			row.id,
+			blockedUntilMs,
+			Math.floor((Date.now() - STALE_BLOCK_GUARD_MS) / 1000),
+		);
+		usageByAccount.set(
+			"acct-legacy-meter",
+			addSparkUsage(
+				createCodexUsageReport({
+					accountId: "acct-legacy-meter",
+					primary: { usedFraction: chatPrimary, resetInMs: FIVE_HOUR_MS },
+					secondary: { usedFraction: chatSecondary, resetInMs: WEEK_MS },
+					metadata: {
+						allowed: chatAllowed,
+						limitReached: chatLimitReached,
+						planType: "pro",
+						email: "legacy-meter@example.com",
 						accountId: "acct-legacy-meter",
-						primary: { usedFraction: chatPrimary, resetInMs: FIVE_HOUR_MS },
-						secondary: { usedFraction: chatSecondary, resetInMs: WEEK_MS },
-						metadata: {
-							allowed: chatAllowed,
-							limitReached: chatLimitReached,
-							planType: "pro",
-							email: "legacy-meter@example.com",
-							accountId: "acct-legacy-meter",
-						},
-					}),
-					sparkPrimary,
-					sparkSecondary,
-					{ allowed: sparkAllowed, limitReached: sparkLimitReached },
-				),
-			);
-
-			const health = await authStorage.getModelUsageHealth("openai-codex", {
-				modelId,
-				reserveFraction: 0.1,
-			});
-
-			expect(health).toMatchObject({
-				state: "healthy",
-				accounts: [
-					{
-						credentialId: row.id,
-						credentialType: "oauth",
-						state: "healthy",
 					},
-				],
-			});
-			expect(health.accounts[0]?.remainingFraction).toBeCloseTo(0.91, 10);
-			expect(store.listCredentialBlocks([row.id]).map(block => [block.blockScope, block.blockedUntilMs])).toEqual([
-				[remainingBlockScope, blockedUntilMs],
-			]);
-			expect(readLegacyCodexSharedBlock(dbPath, row.id)).toBe(blockedUntilMs);
-		},
-	);
+				}),
+				sparkPrimary,
+				sparkSecondary,
+				{ allowed: sparkAllowed, limitReached: sparkLimitReached },
+			),
+		);
+
+		const health = await authStorage.getModelUsageHealth("openai-codex", {
+			modelId,
+			reserveFraction: 0.1,
+		});
+
+		expect(health).toMatchObject({
+			state: "healthy",
+			accounts: [
+				{
+					credentialId: row.id,
+					credentialType: "oauth",
+					state: "healthy",
+				},
+			],
+		});
+		expect(health.accounts[0]?.remainingFraction).toBeCloseTo(0.91, 10);
+		expect(store.listCredentialBlocks([row.id]).map(block => [block.blockScope, block.blockedUntilMs])).toEqual([
+			[remainingBlockScope, blockedUntilMs],
+		]);
+		expect(readLegacyCodexSharedBlock(dbPath, row.id)).toBe(blockedUntilMs);
+	});
 
 	test("deletes only the recovered persisted Codex meter block", async () => {
 		if (!authStorage || !store?.upsertCredentialBlock || !store.getCredentialBlock) {

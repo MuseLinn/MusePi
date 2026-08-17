@@ -3,6 +3,7 @@
  * back as plain result text (details are always empty).
  */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Note, Output, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { normalizeWs, resultTextOf, str, truncate } from "../util";
@@ -18,9 +19,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const failedSilently = result?.isError === true && !resultTextOf(result);
 	return (
 		<>
-			{query && <Output text={query} title="query" maxLines={4} />}
-			{context && <Output text={context} title="context" maxLines={6} />}
-			{failedSilently ? <Note tone="err">Reflect failed</Note> : <ResultText result={result} maxLines={12} />}
+			{query && <Output text={query} title={t("query")} maxLines={4} />}
+			{context && <Output text={context} title={t("context")} maxLines={6} />}
+			{failedSilently ? <Note tone="err">{t("Reflect failed")}</Note> : <ResultText result={result} maxLines={12} />}
 		</>
 	);
 }

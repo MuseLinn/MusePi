@@ -7,7 +7,7 @@ This document describes the **current hook subsystem code** in `src/extensibilit
 The default CLI runtime initializes the **extension runner** path. In current startup flow:
 
 - `--hook` is treated as an alias for `--extension` (CLI paths are merged into `additionalExtensionPaths`)
-- JS/TS hook factories discovered through `hookCapability` (for example `.omp/hooks/pre/*.ts`) are loaded as extension modules so their `pi.on(...)` handlers bind to the runtime event bus
+- JS/TS hook factories discovered through `hookCapability` (for example `.musepi/hooks/pre/*.ts`) are loaded as extension modules so their `pi.on(...)` handlers bind to the runtime event bus
 - tools are wrapped by `ExtensionToolWrapper`, not `HookToolWrapper`
 - context transforms and lifecycle emissions go through `ExtensionRunner`
 
@@ -26,7 +26,7 @@ So this file documents the legacy hook subsystem implementation itself (types/lo
 A hook module must default-export a factory:
 
 ```ts
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "@musepi/pi-coding-agent/extensibility/hooks";
 
 export default function hook(pi: HookAPI): void {
   pi.on("tool_call", async (event, ctx) => {
@@ -47,8 +47,8 @@ The factory can:
 - persist non-LLM state with `pi.appendEntry(...)`
 - register slash commands via `pi.registerCommand(...)`
 - register custom message renderers via `pi.registerMessageRenderer(...)`
-- run shell commands via `pi.exec(...)`
-- author schemas/helpers with injected `pi.zod`, `pi.typebox`, and package exports via `pi.pi`
+- run shell commands via `pi.exec(...)` and log through `pi.logger`
+- use the injected Zod-compatible builder `pi.zod`, native omptype builder `pi.arktype`, legacy `pi.typebox`, and package exports via `pi.pi`
 
 ## Discovery and loading
 
@@ -257,7 +257,7 @@ Hook status text set via `ctx.ui.setStatus(key, text)` is:
 ### Block unsafe bash commands
 
 ```ts
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "@musepi/pi-coding-agent/extensibility/hooks";
 
 export default function (pi: HookAPI): void {
   pi.on("tool_call", async (event, ctx) => {
@@ -275,7 +275,7 @@ export default function (pi: HookAPI): void {
 ### Redact tool output on post-execution
 
 ```ts
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "@musepi/pi-coding-agent/extensibility/hooks";
 
 export default function (pi: HookAPI): void {
   pi.on("tool_result", async (event) => {
@@ -297,7 +297,7 @@ export default function (pi: HookAPI): void {
 ### Modify model context per LLM call
 
 ```ts
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "@musepi/pi-coding-agent/extensibility/hooks";
 
 export default function (pi: HookAPI): void {
   pi.on("context", async (event) => {
@@ -312,7 +312,7 @@ export default function (pi: HookAPI): void {
 ### Register slash command with command-safe context methods
 
 ```ts
-import type { HookAPI } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
+import type { HookAPI } from "@musepi/pi-coding-agent/extensibility/hooks";
 
 export default function (pi: HookAPI): void {
   pi.registerCommand("handoff", {
@@ -338,11 +338,11 @@ export default function (pi: HookAPI): void {
 
 ## Export surface
 
-`src/extensibility/hooks/index.ts` and the package subpath `@oh-my-pi/pi-coding-agent/extensibility/hooks` export:
+`src/extensibility/hooks/index.ts` and the package subpath `@musepi/pi-coding-agent/extensibility/hooks` export:
 
 - loading APIs (`discoverAndLoadHooks`, `loadHooks`)
 - runner and wrapper (`HookRunner`, `HookToolWrapper`)
 - all hook types
 - `execCommand` re-export
 
-The package root (`@oh-my-pi/pi-coding-agent`) does not re-export `HookAPI`; import legacy hook types from the hooks subpath.
+The package root (`@musepi/pi-coding-agent`) does not re-export `HookAPI`; import legacy hook types from the hooks subpath.

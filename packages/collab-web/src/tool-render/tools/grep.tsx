@@ -1,5 +1,6 @@
 /** `grep` (legacy `search`) — ripgrep content search across workspace files. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Note, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, num, resultTextOf, scopePaths, shortenPath, str } from "../util";
@@ -14,14 +15,14 @@ function pathsOf(args: Record<string, unknown>): string[] {
 function argBadges(args: Record<string, unknown>): ReactNode[] {
 	const badges: ReactNode[] = [];
 	const glob = str(args.glob);
-	if (glob) badges.push(`glob=${glob}`);
+	if (glob) badges.push(t("glob={value}", { value: glob }));
 	const type = str(args.type);
-	if (type) badges.push(`type=${type}`);
+	if (type) badges.push(t("type={value}", { value: type }));
 	if (args.i === true) badges.push("i");
-	if (args.multiline === true) badges.push("multiline");
-	if (args.gitignore === false) badges.push("no-gitignore");
+	if (args.multiline === true) badges.push(t("multiline"));
+	if (args.gitignore === false) badges.push(t("no-gitignore"));
 	const skip = num(args.skip);
-	if (skip !== null && skip > 0) badges.push(`skip=${skip}`);
+	if (skip !== null && skip > 0) badges.push(t("skip={count}", { count: String(skip) }));
 	return badges;
 }
 
@@ -34,7 +35,7 @@ function Pattern({ args }: { args: Record<string, unknown> }): ReactNode {
 function Summary({ args }: ToolRenderProps): ReactNode {
 	return (
 		<span>
-			<Pattern args={args} /> <span className="tv-muted">in</span>{" "}
+			<Pattern args={args} /> <span className="tv-muted">{t("in")}</span>{" "}
 			<span className="tv-path">{pathsOf(args).join(", ")}</span> <Badges items={argBadges(args)} />
 		</span>
 	);
@@ -53,21 +54,21 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		}
 	}
 	const badges = argBadges(args);
-	if (matchCount !== null) badges.push(`${matchCount} ${matchCount === 1 ? "match" : "matches"}`);
-	if (fileCount !== null) badges.push(`${fileCount} ${fileCount === 1 ? "file" : "files"}`);
+	if (matchCount !== null) badges.push(t("{count} match(es)", { count: String(matchCount) }));
+	if (fileCount !== null) badges.push(t("{count} file(s)", { count: String(fileCount) }));
 	return (
 		<>
 			<div>
-				<Pattern args={args} /> <span className="tv-muted">in</span>{" "}
+				<Pattern args={args} /> <span className="tv-muted">{t("in")}</span>{" "}
 				<span className="tv-path">{pathsOf(args).join(", ")}</span> <Badges items={badges} />
 				{truncated && (
 					<>
 						{" "}
-						<Badge tone="warn">truncated</Badge>
+						<Badge tone="warn">{t("truncated")}</Badge>
 					</>
 				)}
 			</div>
-			{missing.length > 0 && <Note tone="warn">skipped missing: {missing.join(", ")}</Note>}
+			{missing.length > 0 && <Note tone="warn">{t("skipped missing: {path}", { path: missing.join(", ") })}</Note>}
 			{error !== null && !resultTextOf(result).trim() && <Note tone="err">{error}</Note>}
 			<ResultText result={result} maxLines={14} variant="code" />
 		</>

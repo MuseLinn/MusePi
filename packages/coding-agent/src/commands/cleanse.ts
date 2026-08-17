@@ -1,11 +1,11 @@
-import { postmortem } from "@oh-my-pi/pi-utils";
-import { Command, Flags } from "@oh-my-pi/pi-utils/cli";
+import { postmortem } from "@musepi/pi-utils";
+import { Command, Flags } from "@musepi/pi-utils/cli";
 import { runCleanseCommand } from "../cleanse";
+import { cleanseHelp as commandHelp } from "../cli/command-help";
 import { CliUsageError } from "../cli/usage-error";
 
 export default class Cleanse extends Command {
-	static description = "Detect and fix project diagnostics with weighted parallel subagents";
-
+	static description = commandHelp.description;
 	static flags = {
 		agents: Flags.integer({
 			char: "n",

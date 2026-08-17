@@ -4,8 +4,9 @@ import {
 	disposeTerminalTitleState,
 	setSessionTerminalTitle,
 	setTerminalTitleState,
-} from "@oh-my-pi/pi-coding-agent/utils/title-generator";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/utils/title-generator";
+import { isConPTYHosted } from "@musepi/pi-tui";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 import { mockWindowsConsoleTitle, type WindowsConsoleTitleMock } from "./terminal-title-test-utils";
 
 const LABEL = "my-project";
@@ -117,31 +118,28 @@ describe("disposeTerminalTitleState", () => {
 		vi.useRealTimers();
 	});
 
-	it.skipIf(process.platform === "win32")(
-		"stops the spinner so no further OSC-title write fires on a tick after dispose",
-		() => {
-			// CONTRACT (the fix): entering `working` arms the spinner interval; once
-			// `disposeTerminalTitleState()` runs, advancing the clock across many tick
-			// periods must produce ZERO additional OSC-title writes. A pending tick
-			// re-emitting the title after teardown is exactly the shell-tab leak.
-			setTerminalTitleState("working");
+	it.skipIf(isConPTYHosted())("stops the spinner so no further OSC-title write fires on a tick after dispose", () => {
+		// CONTRACT (the fix): entering `working` arms the spinner interval; once
+		// `disposeTerminalTitleState()` runs, advancing the clock across many tick
+		// periods must produce ZERO additional OSC-title writes. A pending tick
+		// re-emitting the title after teardown is exactly the shell-tab leak.
+		setTerminalTitleState("working");
 
-			// Control: BEFORE dispose the interval is live — advancing the clock across
-			// several 80ms tick periods DOES emit further OSC-title writes (proves the
-			// timer was actually running, so the post-dispose silence is meaningful and
-			// not a headless/TTY misconfiguration masking all writes).
-			writes.length = 0;
-			vi.advanceTimersByTime(400);
-			const ticksWhileLive = writes.filter(payload => payload.includes(OSC_TITLE_SEQ)).length;
-			expect(ticksWhileLive).toBeGreaterThan(0);
+		// Control: BEFORE dispose the interval is live — advancing the clock across
+		// several 80ms tick periods DOES emit further OSC-title writes (proves the
+		// timer was actually running, so the post-dispose silence is meaningful and
+		// not a headless/TTY misconfiguration masking all writes).
+		writes.length = 0;
+		vi.advanceTimersByTime(400);
+		const ticksWhileLive = writes.filter(payload => payload.includes(OSC_TITLE_SEQ)).length;
+		expect(ticksWhileLive).toBeGreaterThan(0);
 
-			// The fix under test.
-			disposeTerminalTitleState();
+		// The fix under test.
+		disposeTerminalTitleState();
 
-			// After dispose: advance far past many tick periods. No tick may fire.
-			writes.length = 0;
-			vi.advanceTimersByTime(4000);
-			expect(writes.filter(payload => payload.includes(OSC_TITLE_SEQ))).toEqual([]);
-		},
-	);
+		// After dispose: advance far past many tick periods. No tick may fire.
+		writes.length = 0;
+		vi.advanceTimersByTime(4000);
+		expect(writes.filter(payload => payload.includes(OSC_TITLE_SEQ))).toEqual([]);
+	});
 });

@@ -12,18 +12,19 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, Usage } from "@oh-my-pi/pi-ai";
-import { kStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { UiHelpers } from "@oh-my-pi/pi-coding-agent/modes/utils/ui-helpers";
-import type { SessionContext } from "@oh-my-pi/pi-coding-agent/session/session-context";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { type Component, Container, Image, ImageProtocol, setTerminalImageProtocol, TERMINAL } from "@oh-my-pi/pi-tui";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { AssistantMessage, ImageContent, Usage } from "@musepi/pi-ai";
+import { kStreamingPartialJson } from "@musepi/pi-ai/utils/block-symbols";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
+import { StrippedToolCallsPlaceholder } from "@musepi/pi-coding-agent/modes/components/stripped-tool-calls-placeholder";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
+import { UiHelpers } from "@musepi/pi-coding-agent/modes/utils/ui-helpers";
+import type { SessionContext, StrippedToolCallsMarker } from "@musepi/pi-coding-agent/session/session-context";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { type Component, Container, Image, ImageProtocol, setTerminalImageProtocol, TERMINAL } from "@musepi/pi-tui";
+import { TempDir } from "@musepi/pi-utils";
 
 beforeAll(() => {
 	initTheme();
@@ -74,6 +75,7 @@ function makeCtx(): {
 		session: { buildTranscriptSessionContext: transcriptSpy },
 		viewSession: {
 			buildTranscriptSessionContext: transcriptSpy,
+			hasBuiltInTool: () => true,
 			sessionManager: {
 				buildSessionContext: llmContextSpy,
 				getEntries: vi.fn(() => []),
@@ -139,6 +141,7 @@ function hasImageComponent(component: Component): boolean {
 function makeRenderCtx(
 	transcript: SessionContext,
 	showImages = true,
+	hideToolActivity = false,
 ): { ctx: InteractiveModeContext; chatContainer: Container } {
 	const chatContainer = new Container();
 	let helpers: UiHelpers;
@@ -156,14 +159,22 @@ function makeRenderCtx(
 		resetTranscript: () => chatContainer.clear(),
 		// Rebuild paths honor terminal.showImages since the native-image work;
 		// keep it on so the image-replay contracts below stay meaningful.
-		settings: { get: (key: string) => key === "terminal.showImages" && showImages },
+		settings: {
+			get: (key: string) => {
+				if (key === "terminal.showImages") return showImages;
+				if (key === "display.hideToolActivity") return hideToolActivity;
+				return false;
+			},
+		},
 		toolOutputExpanded: false,
+		hideToolActivity,
 		hideThinkingBlock: false,
 		focusedAgentId: undefined,
 		editor: { addToHistory: vi.fn() },
 		viewSession: {
 			buildTranscriptSessionContext: () => transcript,
 			getToolByName: () => undefined,
+			hasBuiltInTool: () => true,
 			extensionRunner: undefined,
 			sessionManager: {
 				getEntries: vi.fn(() => []),
@@ -306,6 +317,33 @@ describe("UiHelpers.renderInitialMessages — image replay", () => {
 		expect(hasImageComponent(chatContainer)).toBe(true);
 	});
 
+	it("preserves tool-result images while tool activity is hidden so revealing it can replay the image", async () => {
+		await Settings.init({ inMemory: true, overrides: { "terminal.showImages": true } });
+		setTerminalImageProtocol(ImageProtocol.Sixel);
+		const transcript = transcriptWith([
+			assistantToolCall("read-tool-hidden", "read", { path: "tool-hidden.png" }),
+			{
+				role: "toolResult",
+				toolCallId: "read-tool-hidden",
+				toolName: "read",
+				content: [{ type: "text", text: "Read image: tool-hidden.png" }, pngImage],
+				isError: false,
+				timestamp: 2,
+			},
+		]);
+		const { ctx, chatContainer } = makeRenderCtx(transcript, true, true);
+
+		new UiHelpers(ctx).renderInitialMessages();
+
+		expect(hasImageComponent(chatContainer)).toBe(false);
+		const assistant = chatContainer.children.find(
+			(child): child is AssistantMessageComponent => child instanceof AssistantMessageComponent,
+		);
+		expect(assistant).toBeDefined();
+		assistant?.setToolResultImagesVisible(true);
+		expect(hasImageComponent(chatContainer)).toBe(true);
+	});
+
 	it("replays reopened session image blocks through the cold-start rebuild path", async () => {
 		await Settings.init({ inMemory: true, overrides: { "terminal.showImages": true } });
 		setTerminalImageProtocol(ImageProtocol.Sixel);
@@ -345,6 +383,86 @@ describe("UiHelpers.renderInitialMessages — image replay", () => {
 		expect(countImageComponents(chatContainer)).toBe(2);
 		expect(Bun.stripANSI(chatContainer.render(100).join("\n"))).toContain("Read reopened.png");
 		expect(ctx.ui.requestRender).toHaveBeenCalledWith(true, { clearScrollback: true });
+	});
+});
+
+describe("UiHelpers.renderInitialMessages — hidden tool activity", () => {
+	it("hides replayed tool cards without discarding them from the persisted transcript", () => {
+		const toolCallId = "replayed-hidden-tool";
+		const toolArgumentMarker = "REPLAYED TOOL ARGUMENT MARKER";
+		const toolResultMarker = "REPLAYED TOOL RESULT MARKER";
+		const narrationMarker = "ASSISTANT NARRATION STAYS VISIBLE";
+		const finalMarker = "FINAL ASSISTANT RESPONSE STAYS VISIBLE";
+		const transcript = transcriptWith([
+			{
+				...assistantToolCall(toolCallId, "contract_probe", { value: toolArgumentMarker }),
+				content: [
+					{ type: "text", text: narrationMarker },
+					{ type: "toolCall", id: toolCallId, name: "contract_probe", arguments: { value: toolArgumentMarker } },
+				],
+			},
+			{
+				role: "toolResult",
+				toolCallId,
+				toolName: "contract_probe",
+				content: [{ type: "text", text: toolResultMarker }],
+				isError: false,
+				timestamp: 2,
+			},
+			{
+				role: "assistant",
+				content: [{ type: "text", text: finalMarker }],
+				api: "anthropic-messages",
+				provider: "anthropic",
+				model: "claude-sonnet",
+				usage: emptyUsage,
+				stopReason: "stop",
+				timestamp: 3,
+			},
+		]);
+
+		const hidden = makeRenderCtx(transcript, true, true);
+		new UiHelpers(hidden.ctx).renderInitialMessages();
+		const hiddenRender = Bun.stripANSI(hidden.chatContainer.render(120).join("\n"));
+		expect(hiddenRender).toContain(narrationMarker);
+		expect(hiddenRender).toContain(finalMarker);
+		expect(hiddenRender).not.toContain(toolArgumentMarker);
+		expect(hiddenRender).not.toContain(toolResultMarker);
+
+		const visible = makeRenderCtx(transcript, true, false);
+		new UiHelpers(visible.ctx).renderInitialMessages();
+		const visibleRender = Bun.stripANSI(visible.chatContainer.render(120).join("\n"));
+		expect(visibleRender).toContain(toolArgumentMarker);
+		expect(visibleRender).toContain(toolResultMarker);
+	});
+
+	it("hides the stripped-tool-calls placeholder with tool activity and restores it on reveal", () => {
+		const strippedAssistant: AgentMessage & StrippedToolCallsMarker = {
+			role: "assistant",
+			content: [{ type: "text", text: "narration" }],
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet",
+			usage: emptyUsage,
+			stopReason: "stop",
+			timestamp: 1,
+			strippedToolCalls: 2,
+		};
+		const transcript = transcriptWith([strippedAssistant]);
+
+		const hidden = makeRenderCtx(transcript, true, true);
+		new UiHelpers(hidden.ctx).renderInitialMessages();
+		expect(Bun.stripANSI(hidden.chatContainer.render(120).join("\n"))).not.toContain(
+			"elided — no result on this branch",
+		);
+
+		// A live reveal must restore the placeholder without a transcript rebuild.
+		for (const child of hidden.chatContainer.children) {
+			if (child instanceof StrippedToolCallsPlaceholder) child.setToolActivityVisible(true);
+		}
+		expect(Bun.stripANSI(hidden.chatContainer.render(120).join("\n"))).toContain(
+			"2 tool calls elided — no result on this branch",
+		);
 	});
 });
 

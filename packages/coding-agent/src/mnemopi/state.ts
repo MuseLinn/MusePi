@@ -1,10 +1,10 @@
 import { dirname } from "node:path";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type * as MnemopiNs from "@oh-my-pi/pi-mnemopi";
-import type { Mnemopi, RecallResult } from "@oh-my-pi/pi-mnemopi";
-import type * as MnemopiCoreNs from "@oh-my-pi/pi-mnemopi/core";
-import type { LocalModelInitializer } from "@oh-my-pi/pi-mnemopi/core";
-import { logger } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type * as MnemopiNs from "@musepi/pi-mnemopi";
+import type { Mnemopi, RecallResult } from "@musepi/pi-mnemopi";
+import type * as MnemopiCoreNs from "@musepi/pi-mnemopi/core";
+import type { LocalModelInitializer } from "@musepi/pi-mnemopi/core";
+import { logger, toError } from "@musepi/pi-utils";
 import {
 	composeRecallQuery,
 	formatCurrentTime,
@@ -41,7 +41,7 @@ function installLocalModelInitializer(setInitializer: (initializer: LocalModelIn
 }
 
 /**
- * Lazily load `@oh-my-pi/pi-mnemopi` (memoized) and route fastembed loads
+ * Lazily load `@musepi/pi-mnemopi` (memoized) and route fastembed loads
  * through the dedicated embeddings subprocess. The override is installed once
  * — before any consumer gets the chance to call `embed()` — so
  * `onnxruntime-node`'s NAPI constructor + finalizer never run inside the
@@ -51,16 +51,16 @@ function installLocalModelInitializer(setInitializer: (initializer: LocalModelIn
  */
 export async function loadMnemopi(): Promise<typeof MnemopiNs> {
 	if (!mnemopiMod) {
-		mnemopiMod = await import("@oh-my-pi/pi-mnemopi");
+		mnemopiMod = await import("@musepi/pi-mnemopi");
 		installLocalModelInitializer(mnemopiMod.setLocalModelInitializer);
 	}
 	return mnemopiMod;
 }
 
-/** Lazily load `@oh-my-pi/pi-mnemopi/core` (memoized). */
+/** Lazily load `@musepi/pi-mnemopi/core` (memoized). */
 export async function loadMnemopiCore(): Promise<typeof MnemopiCoreNs> {
 	if (!mnemopiCoreMod) {
-		mnemopiCoreMod = await import("@oh-my-pi/pi-mnemopi/core");
+		mnemopiCoreMod = await import("@musepi/pi-mnemopi/core");
 		installLocalModelInitializer(mnemopiCoreMod.setLocalModelInitializer);
 	}
 	return mnemopiCoreMod;
@@ -386,6 +386,8 @@ export class MnemopiSessionState {
 		const merged: RecallResult[] = [];
 		const byId = new Map<string, number>();
 		const byContent = new Map<string, number>();
+		const failures: Array<{ bank: string; error: Error }> = [];
+		let successfulTargets = 0;
 		const sharedFallbackQuery = deriveSharedRecallFallbackQuery(
 			query,
 			this.scoped.retain.bank,
@@ -394,24 +396,35 @@ export class MnemopiSessionState {
 		for (const target of this.scoped.recall) {
 			const queries =
 				target.bank === this.scoped.global?.bank && sharedFallbackQuery ? [query, sharedFallbackQuery] : [query];
+			let targetSucceeded = false;
 			try {
 				for (const recallQuery of queries) {
 					const results = await target.memory.recallEnhanced(recallQuery, this.config.recallLimit, {
 						includeFacts: true,
 						channelId: target.bank,
 					});
+					targetSucceeded = true;
 					for (const result of results) {
 						mergeRecallResult(merged, byId, byContent, result);
 					}
 				}
 			} catch (error) {
-				if (this.config.debug) {
-					logger.debug("Mnemopi: scoped recall target failed", {
-						bank: target.bank,
-						error: String(error),
-					});
-				}
+				const failure = toError(error);
+				failures.push({ bank: target.bank, error: failure });
+				logger.warn("Mnemopi: scoped recall target failed", {
+					bank: target.bank,
+					error: failure.message,
+				});
 			}
+			if (targetSucceeded) successfulTargets++;
+		}
+		if (successfulTargets === 0 && failures.length > 0) {
+			if (failures.length === 1) throw failures[0].error;
+			const details = failures.map(({ bank, error }) => `${bank}: ${error.message}`).join("; ");
+			throw new AggregateError(
+				failures.map(({ error }) => error),
+				`Mnemopi recall failed for all scoped targets (${details})`,
+			);
 		}
 		merged.sort(compareRecallResults);
 		if (merged.length > this.config.recallLimit) merged.length = this.config.recallLimit;
@@ -575,7 +588,16 @@ export class MnemopiSessionState {
 		if (!lastUser) return;
 		const query = composeRecallQuery(lastUser.content, messages, this.config.recallContextTurns);
 		const truncated = truncateRecallQuery(query, lastUser.content, this.config.recallMaxQueryChars);
-		const context = await this.recallForContext(truncated);
+		let context: string | undefined;
+		try {
+			context = await this.recallForContext(truncated);
+		} catch (error) {
+			logger.warn("Mnemopi: auto-recall failed", {
+				bank: this.config.bank,
+				error: toError(error).message,
+			});
+			return;
+		}
 		this.hasRecalledForFirstTurn = true;
 		if (!context) return;
 		this.lastRecallSnippet = context;
@@ -639,17 +661,26 @@ export class MnemopiSessionState {
 	 * tokens on memories that will be wiped on the next line is wasted work
 	 * (PR #2327 review).
 	 *
-	 * `timeoutMs` caps how long the consolidate await blocks the caller
-	 * (the user-visible `/quit` / `/exit` shutdown path passes this so
-	 * dispose returns within a UX budget — issue #3641). When the cap is
-	 * hit, dispose returns immediately and detaches the still-in-flight
-	 * consolidate; the SQLite handles are closed in the background once
-	 * the consolidate settles so writes never race a closed handle, and
-	 * any pending embeddings are SIGKILL'd along with the embed worker
+	 * `timeoutMs` caps both synchronous SQLite lock waits during final retention
+	 * and the asynchronous consolidation drain (the user-visible `/quit`,
+	 * `/exit`, and print paths pass this so disposal stays within their shutdown
+	 * budget). When the cap is hit, dispose returns immediately and detaches the
+	 * still-in-flight consolidate; the SQLite handles are closed in the
+	 * background once the consolidate settles so writes never race a closed handle,
+	 * and any pending embeddings are SIGKILL'd along with the embed worker
 	 * (a tolerable loss — working memory rows are durable; only the
 	 * episodic promotion / embedding for the LAST few turns is skipped,
 	 * and `maybeRetainOnAgentEnd` has already retained earlier turns).
 	 */
+	#boundOwnedBusyTimeout(timeoutMs: number): void {
+		// SQLite lock waits block the JS thread, so a Promise race cannot interrupt
+		// them. consolidate() flushes every owned bank, so bound each one — not just
+		// the retain bank — or a locked shared bank (per-project-tagged) still stalls
+		// teardown for Mnemopi's default 5s busy timeout (#7351 review).
+		const busyTimeoutMs = Math.max(1, Math.floor(timeoutMs));
+		for (const memory of this.scoped.owned) memory.beam.db.exec(`PRAGMA busy_timeout=${busyTimeoutMs}`);
+	}
+
 	async dispose(options: { consolidate?: boolean; timeoutMs?: number } = {}): Promise<void> {
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
@@ -661,19 +692,22 @@ export class MnemopiSessionState {
 			closeOwned();
 			return;
 		}
+		const { timeoutMs } = options;
+		const boundedTimeoutMs = timeoutMs !== undefined && timeoutMs > 0 ? timeoutMs : undefined;
+		const deadline = boundedTimeoutMs !== undefined ? performance.now() + boundedTimeoutMs : undefined;
+		if (boundedTimeoutMs !== undefined) this.#boundOwnedBusyTimeout(boundedTimeoutMs);
 		const consolidatePromise = this.consolidate({ full: false, extract: false, sleep: false }).catch(
 			(error: unknown) => {
 				logger.warn("Mnemopi: consolidation on dispose failed.", { error: String(error) });
 			},
 		);
-		const { timeoutMs } = options;
-		if (timeoutMs !== undefined && timeoutMs > 0) {
-			const TIMED_OUT = Symbol("mnemopi.dispose.timedOut");
-			const winner = await Promise.race([
-				consolidatePromise.then(() => undefined as unknown),
-				Bun.sleep(timeoutMs).then(() => TIMED_OUT as unknown),
-			]);
-			if (winner === TIMED_OUT) {
+		if (deadline !== undefined) {
+			const remainingMs = deadline - performance.now();
+			const completed =
+				remainingMs > 0
+					? await Promise.race([consolidatePromise.then(() => true), Bun.sleep(remainingMs).then(() => false)])
+					: false;
+			if (!completed) {
 				logger.warn("Mnemopi: consolidate-on-dispose exceeded shutdown budget; detaching to background.", {
 					timeoutMs,
 				});

@@ -5,7 +5,7 @@
  * Priority: 80 (tool-specific, below builtin but above shared standards)
  */
 import * as path from "node:path";
-import { hasFsCode, tryParseJson } from "@oh-my-pi/pi-utils";
+import { hasFsCode, tryParseJson } from "@musepi/pi-utils";
 import { registerProvider } from "../capability";
 import { type ContextFile, contextFileCapability } from "../capability/context-file";
 import { type ExtensionModule, extensionModuleCapability } from "../capability/extension-module";
@@ -90,6 +90,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 			const serverConfig = config as Record<string, unknown>;
 			return {
 				name,
+				enabled: typeof serverConfig.enabled === "boolean" ? serverConfig.enabled : undefined,
 				timeout: typeof serverConfig.timeout === "number" ? serverConfig.timeout : undefined,
 				command: serverConfig.command as string | undefined,
 				args: serverConfig.args as string[] | undefined,
@@ -102,17 +103,19 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 		});
 	};
 
-	for (let i = 0; i < userPaths.length; i++) {
-		const servers = parseMcpServers(contents[i], userPaths[i].path, userPaths[i].level);
+	// Load project entries before user entries so a project `enabled: false`
+	// claims its dedupe key before a same-named user server can survive (#7654).
+	const projectOffset = userPaths.length;
+	for (let i = 0; i < projectPaths.length; i++) {
+		const servers = parseMcpServers(contents[projectOffset + i], projectPaths[i].path, projectPaths[i].level);
 		if (servers.length > 0) {
 			items.push(...servers);
 			break;
 		}
 	}
 
-	const projectOffset = userPaths.length;
-	for (let i = 0; i < projectPaths.length; i++) {
-		const servers = parseMcpServers(contents[projectOffset + i], projectPaths[i].path, projectPaths[i].level);
+	for (let i = 0; i < userPaths.length; i++) {
+		const servers = parseMcpServers(contents[i], userPaths[i].path, userPaths[i].level);
 		if (servers.length > 0) {
 			items.push(...servers);
 			break;

@@ -2,16 +2,16 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import { matchesAppFollowUp } from "@oh-my-pi/pi-coding-agent/modes/utils/keybinding-matchers";
-import { type KeybindingsConfig, setKeybindings } from "@oh-my-pi/pi-tui";
+import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import { matchesAppFollowUp } from "@musepi/pi-coding-agent/modes/utils/keybinding-matchers";
+import { type KeybindingsConfig, setKeybindings } from "@musepi/pi-tui";
 import {
 	__resetDirsFromEnvForTests,
 	getAgentDir,
 	getProfileRootDir,
 	removeWithRetries,
 	setProfile,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
 import { YAML } from "bun";
 
 function ctrl(key: string): string {
@@ -279,21 +279,22 @@ describe("KeybindingsManager.create", () => {
 		}
 	});
 
-	it("defaults model selection to Alt+M and display reset to Ctrl+L", () => {
+	it("defaults model selection to Alt+M, display reset to Alt+L, and live toggle to Ctrl+L", () => {
 		const manager = KeybindingsManager.inMemory();
 
 		expect(manager.getKeys("app.model.select")).toEqual(["alt+m"]);
-		expect(manager.getKeys("app.display.reset")).toEqual(["ctrl+l"]);
+		expect(manager.getKeys("app.display.reset")).toEqual(["alt+l"]);
+		expect(manager.getKeys("app.live.toggle")).toEqual(["ctrl+l"]);
 	});
 
-	it("keeps the Ctrl+L display reset default when an old model remap still claims Ctrl+L", () => {
+	it("keeps the Ctrl+L live toggle default when an old model remap still claims Ctrl+L", () => {
 		const manager = KeybindingsManager.inMemory({
 			"app.model.select": "ctrl+l",
 		});
 
 		expect(manager.getKeys("app.model.select")).toEqual(["ctrl+l"]);
-		expect(manager.getKeys("app.display.reset")).toEqual(["ctrl+l"]);
-		expect(manager.getEffectiveConfig()["app.display.reset"]).toBe("ctrl+l");
+		expect(manager.getKeys("app.live.toggle")).toEqual(["ctrl+l"]);
+		expect(manager.getEffectiveConfig()["app.live.toggle"]).toBe("ctrl+l");
 	});
 
 	it("keeps Ctrl+L when the user explicitly assigns it to display reset", () => {

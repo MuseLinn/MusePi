@@ -1,8 +1,8 @@
-import type { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { toFirepassWireModelId, toFireworksWireModelId } from "@oh-my-pi/pi-catalog/fireworks-model-id";
-import { isGlm52ReasoningEffortModelId, isKimiK3ModelId } from "@oh-my-pi/pi-catalog/identity";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { calculateCost } from "@oh-my-pi/pi-catalog/models";
+import type { Effort } from "@musepi/pi-catalog/effort";
+import { toFirepassWireModelId, toFireworksWireModelId } from "@musepi/pi-catalog/fireworks-model-id";
+import { isGlm52ReasoningEffortModelId, isKimiK3ModelId } from "@musepi/pi-catalog/identity";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
+import { calculateCost } from "@musepi/pi-catalog/models";
 import type {
 	OpenAICompat,
 	OpenAIReasoningDisableMode,
@@ -12,15 +12,15 @@ import type {
 	ResolvedOpenAIResponsesCompat,
 	ResolvedOpenAISharedCompat,
 	VercelGatewayRouting,
-} from "@oh-my-pi/pi-catalog/types";
-import { parseAlibabaTokenPlanCredential } from "@oh-my-pi/pi-catalog/wire/alibaba-token-plan";
+} from "@musepi/pi-catalog/types";
+import { parseAlibabaTokenPlanCredential } from "@musepi/pi-catalog/wire/alibaba-token-plan";
 import {
 	COREWEAVE_PROJECT_HEADER,
 	coreWeaveProjectHeaders,
 	hasCoreWeaveProjectHeader,
 	removeBlankCoreWeaveProjectHeaders,
-} from "@oh-my-pi/pi-catalog/wire/coreweave";
-import { parseGitHubCopilotApiKey } from "@oh-my-pi/pi-catalog/wire/github-copilot";
+} from "@musepi/pi-catalog/wire/coreweave";
+import { parseGitHubCopilotApiKey } from "@musepi/pi-catalog/wire/github-copilot";
 import {
 	$env,
 	classifyJsonPrefix,
@@ -31,7 +31,7 @@ import {
 	parseStreamingJsonThrottled,
 	stringifyJson,
 	structuredCloneJSON,
-} from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-utils";
 import * as AIError from "../error";
 import {
 	type Api,
@@ -78,7 +78,11 @@ import {
 	kStreamingPartialJson,
 } from "../utils/block-symbols";
 import type { AssistantMessageEventStream } from "../utils/event-stream";
-import { escapeHarmonyControlTokens, isHarmonyDialectModel } from "../utils/harmony-leak";
+import {
+	escapeHarmonyControlTokens,
+	escapeHarmonyControlTokensInJson,
+	isHarmonyDialectModel,
+} from "../utils/harmony-leak";
 import type { CapturedHttpErrorResponse } from "../utils/http-inspector";
 import { getOpenRouterHeaders } from "../utils/openrouter-headers";
 import { isForcedToolChoice } from "../utils/tool-choice";
@@ -329,9 +333,7 @@ export function applyOpenAIServiceTier(
 	model: Pick<Model, "provider" | "api" | "id">,
 ): void {
 	if (!shouldSendServiceTier(serviceTier, model)) return;
-	if (serviceTier === "flex" || serviceTier === "scale" || serviceTier === "priority") {
-		params.service_tier = serviceTier;
-	}
+	params.service_tier = serviceTier;
 }
 
 /**
@@ -1181,21 +1183,46 @@ export function isCompiledGrammarTooLargeStrictError(
 	);
 }
 
+interface StrictToolsRetryContext {
+	model: OpenAIModelIdentity;
+	strictToolsApplied: boolean;
+	tools: Tool[] | undefined;
+}
+
+/** Decide whether an OpenAI-family request should retry once with non-strict tools. */
 export function shouldRetryWithoutStrictTools(
 	error: unknown,
 	capturedErrorResponse: CapturedHttpErrorResponse | undefined,
-	strictToolsApplied: boolean,
-	tools: Tool[] | undefined,
+	context: StrictToolsRetryContext,
 ): boolean {
+	const { model, strictToolsApplied, tools } = context;
 	if (!tools || tools.length === 0 || !strictToolsApplied) return false;
 	const status = extractHttpStatusFromError(error) ?? capturedErrorResponse?.status;
 	if (status !== 400 && status !== 422) return false;
+	const errorMessage = error instanceof Error ? error.message.trim() : "";
 	const messageParts = [error instanceof Error ? error.message : undefined, capturedErrorResponse?.bodyText]
 		.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
 		.join("\n");
-	return /wrong_api_format|mixed values for 'strict'|tool[s]?\b.*strict|\bstrict\b.*tool|tool parameters? schema|invalid schema for function|structured[_ -]?outputs?\b[^\n]*(?:not (?:supported|available|enabled)|unsupported)|(?:not support|unsupported)[^\n]*structured[_ -]?outputs?\b/i.test(
-		messageParts,
-	);
+	if (
+		/wrong_api_format|mixed values for 'strict'|tool[s]?\b.*strict|\bstrict\b.*tool|tool parameters? schema|invalid schema for function|structured[_ -]?outputs?\b[^\n]*(?:not (?:supported|available|enabled)|unsupported)|(?:not support|unsupported)[^\n]*structured[_ -]?outputs?\b/i.test(
+			messageParts,
+		)
+	) {
+		return true;
+	}
+	if (model.provider !== "openrouter" || !/^(?:400\s+)?Provider returned error$/i.test(errorMessage)) return false;
+	const body = capturedErrorResponse?.bodyJson;
+	if (body && typeof body === "object" && "error" in body) {
+		const errorBody = body.error;
+		if (errorBody && typeof errorBody === "object" && "metadata" in errorBody) {
+			const metadata = errorBody.metadata;
+			if (metadata && typeof metadata === "object" && "raw" in metadata) {
+				const raw = metadata.raw;
+				if (typeof raw === "string" ? raw.trim().length > 0 : raw != null) return false;
+			}
+		}
+	}
+	return true;
 }
 
 function normalizeOpenAIStableId(value: string | undefined, maxLength: number, hashPrefix: string): string | undefined {
@@ -1611,39 +1638,71 @@ export interface BuildResponsesInputOptions<TApi extends Api> {
 }
 
 /**
- * Escape reserved Harmony control tokens in the client-boundary text of
- * replayed Responses input items — user/developer/system message text and
- * tool-result output. Model-owned items (assistant output, reasoning, tool-call
- * arguments) carry no client data and are returned untouched.
+ * Escape reserved Harmony control tokens in the free-text fields of replayed
+ * Responses input items: user/developer/system text, tool-result output,
+ * assistant message text, and tool-call payloads.
+ *
+ * Tool-call items are covered deliberately. The original #6913 fix skipped
+ * model-owned items on the theory that they carry no client data — but a model
+ * legitimately writing *about* Harmony samples `<|channel|>` etc. into its own
+ * `function_call.arguments`, and a full-transcript replay (stale or blocked
+ * previous_response_id, provider fallback) feeds those bytes back as input,
+ * which gpt-5.x reject with invalid_prompt / "Request blocked", permanently
+ * poisoning the session. `arguments` is a JSON document, so it uses
+ * {@link escapeHarmonyControlTokensInJson} to stay parseable. Reasoning items
+ * are left untouched: `encrypted_content` is opaque and plaintext summaries
+ * are never rendered back into the prompt.
  *
  * Native history replay pushes stored `providerPayload` items straight onto the
  * wire, bypassing {@link convertResponsesInputContent}; without this a stored
  * `input_text` carrying `<|channel|>analysis` still reaches gpt-5.x raw (#6913).
  * Callers gate on {@link isHarmonyDialectModel}. Items are copied, not mutated.
  */
-export function escapeReplayedClientText(items: ResponseInput): ResponseInput {
+export function escapeReplayedControlTokens(items: ResponseInput): ResponseInput {
 	return items.map(item => {
 		if (item.type === "function_call_output" || item.type === "custom_tool_call_output") {
 			return typeof item.output === "string" ? { ...item, output: escapeHarmonyControlTokens(item.output) } : item;
 		}
+		if (item.type === "function_call") {
+			return typeof item.arguments === "string"
+				? { ...item, arguments: escapeHarmonyControlTokensInJson(item.arguments) }
+				: item;
+		}
+		if (item.type === "custom_tool_call") {
+			return typeof item.input === "string" ? { ...item, input: escapeHarmonyControlTokens(item.input) } : item;
+		}
 		// EasyInputMessage may omit `type` (`{ role, content }`); the responses
 		// server persists it verbatim, so treat missing type as a message too.
 		const isTypedMessage = item.type === "message" || item.type === undefined;
-		if (isTypedMessage && "role" in item && "content" in item) {
-			const role = item.role;
-			if (role !== "user" && role !== "developer" && role !== "system") return item;
-			const content = item.content;
-			if (typeof content === "string") {
-				return { ...item, content: escapeHarmonyControlTokens(content) };
-			}
-			if (Array.isArray(content)) {
+		if (!isTypedMessage || !("role" in item) || !("content" in item)) return item;
+		if (item.role === "assistant") {
+			// Assistant output text is model-owned but equally capable of carrying
+			// control tokens as data. `status` discriminates ResponseOutputMessage.
+			if ("status" in item && Array.isArray(item.content)) {
 				return {
 					...item,
-					content: content.map(part =>
-						part.type === "input_text" ? { ...part, text: escapeHarmonyControlTokens(part.text) } : part,
+					content: item.content.map(part =>
+						part.type === "output_text"
+							? { ...part, text: escapeHarmonyControlTokens(part.text) }
+							: part.type === "refusal"
+								? { ...part, refusal: escapeHarmonyControlTokens(part.refusal) }
+								: part,
 					),
 				};
 			}
+			return item;
+		}
+		const content = item.content;
+		if (typeof content === "string") {
+			return { ...item, content: escapeHarmonyControlTokens(content) };
+		}
+		if (Array.isArray(content)) {
+			return {
+				...item,
+				content: content.map(part =>
+					part.type === "input_text" ? { ...part, text: escapeHarmonyControlTokens(part.text) } : part,
+				),
+			};
 		}
 		return item;
 	});
@@ -1708,7 +1767,7 @@ export function buildResponsesInput<TApi extends Api>(options: BuildResponsesInp
 					customToolWireNameMap,
 					options.model.supportsComputerUse === true,
 				);
-				messages.push(...(escapeControlTokens ? escapeReplayedClientText(replayItems) : replayItems));
+				messages.push(...(escapeControlTokens ? escapeReplayedControlTokens(replayItems) : replayItems));
 				knownCallIds = collectKnownCallIds(messages);
 				for (const id of collectCustomCallIds(messages)) customCallIds.add(id);
 				for (const id of collectComputerCallIds(messages)) computerCallIds.add(id);
@@ -1769,10 +1828,16 @@ export function buildResponsesInput<TApi extends Api>(options: BuildResponsesInp
 						)
 					: undefined;
 				if (nativeReplayEnabled && sanitizedHistoryItems) {
+					// Model-owned replay items can carry reserved control-token
+					// spellings as data (the model writing *about* Harmony); escape the
+					// transport copy just like client turns.
+					const wireItems = escapeControlTokens
+						? escapeReplayedControlTokens(sanitizedHistoryItems)
+						: sanitizedHistoryItems;
 					if (providerPayload?.dt) {
-						messages.push(...sanitizedHistoryItems);
+						messages.push(...wireItems);
 					} else {
-						messages.splice(0, messages.length, ...sanitizedHistoryItems);
+						messages.splice(0, messages.length, ...wireItems);
 						customCallIds.clear();
 						computerCallIds.clear();
 					}
@@ -1801,7 +1866,7 @@ export function buildResponsesInput<TApi extends Api>(options: BuildResponsesInp
 				? sanitizeOpenAIResponsesAssistantFallbackItemsForReplay(convertedOutputItems)
 				: convertedOutputItems;
 			if (outputItems.length === 0) continue;
-			messages.push(...outputItems);
+			messages.push(...(escapeControlTokens ? escapeReplayedControlTokens(outputItems) : outputItems));
 		} else if (msg.role === "toolResult") {
 			appendResponsesToolResultMessages(
 				messages,
@@ -2394,6 +2459,26 @@ export function computerCallMetadata(item: ResponseComputerToolCall): ComputerTo
 	};
 }
 
+/** Append a native Responses image result and emit its completion event. */
+export function appendResponsesImageResult(
+	output: AssistantMessage,
+	stream: AssistantMessageEventStream,
+	result: string,
+): void {
+	const image: ImageContent = {
+		type: "image",
+		data: result,
+		mimeType: parseImageMetadata(Buffer.from(result, "base64"))?.mimeType ?? "image/png",
+	};
+	output.content.push(image);
+	stream.push({
+		type: "image_end",
+		contentIndex: output.content.length - 1,
+		content: image,
+		partial: output,
+	});
+}
+
 export async function processResponsesStream<TApi extends Api>(
 	openaiStream: AsyncIterable<ResponseStreamEvent>,
 	output: AssistantMessage,
@@ -2907,18 +2992,7 @@ export async function processResponsesStream<TApi extends Api>(
 				closeOpenItem(event.output_index, item.id, entry, item.call_id, prefixedFunctionCallItemKey(item.call_id));
 				stream.push({ type: "toolcall_end", contentIndex, toolCall, partial: output });
 			} else if (item.type === "image_generation_call" && item.status === "completed" && item.result) {
-				const image: ImageContent = {
-					type: "image",
-					data: item.result,
-					mimeType: parseImageMetadata(Buffer.from(item.result, "base64"))?.mimeType ?? "image/png",
-				};
-				output.content.push(image);
-				stream.push({
-					type: "image_end",
-					contentIndex: output.content.length - 1,
-					content: image,
-					partial: output,
-				});
+				appendResponsesImageResult(output, stream, item.result);
 			}
 		} else if (terminalEvent) {
 			const response = terminalEvent.response;

@@ -6,7 +6,7 @@ import * as path from "node:path";
 import { Writable } from "node:stream";
 import * as util from "node:util";
 
-import * as logger from "@oh-my-pi/pi-utils/logger";
+import * as logger from "@musepi/pi-utils/logger";
 
 import { createHelpers, type HelperBundle } from "./helpers";
 import { awaitMaybePromise, indirectEval } from "./indirect-eval";
@@ -377,7 +377,7 @@ export class JsRuntime {
 					},
 				});
 				const tableConsole = new Console({ stdout: stream, colorMode: false });
-				(tableConsole.table as (...a: unknown[]) => void)(...args);
+				(tableConsole as unknown as { table(...a: unknown[]): void }).table(...args);
 				hooks.onText(buffer.endsWith("\n") ? buffer : `${buffer}\n`);
 			},
 			__omp_display__: (value: unknown) => this.displayValue(value),

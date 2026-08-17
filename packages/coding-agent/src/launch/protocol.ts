@@ -8,7 +8,7 @@ export const DAEMON_BROKER_WORKER_ARG = "__omp_worker_daemon_broker";
 export const DAEMON_PTY_COLUMNS = 120;
 export const DAEMON_PTY_ROWS = 40;
 
-/** Environment key carrying the broker's canonical project directory. */
+/** Environment key carrying the broker's canonical project or synthetic global scope directory. */
 export const DAEMON_PROJECT_DIR_ENV = "OMP_DAEMON_PROJECT_DIR";
 
 /** Environment key carrying the broker's private runtime directory. */
@@ -45,7 +45,7 @@ export interface DaemonSpec {
 	detached: boolean;
 }
 
-/** Serializable daemon state visible to every client in one project directory. */
+/** Serializable daemon state visible to every client in one broker scope. */
 export interface DaemonSnapshot {
 	name: string;
 	id: string;
@@ -122,11 +122,28 @@ export type DaemonRpcResult =
 export interface DaemonWireRequest {
 	id: string;
 	token: string;
+	owners?: string[];
+	detachedOwners?: string[];
+	completionEvents?: boolean;
+	completionAcks?: string[];
+	completionUnsubscribes?: string[];
+	completionReplays?: string[];
+	completionSubscriptionId?: string;
 	operation: DaemonOperation;
 }
 
 /** Response envelope kept raw until matched with its pending operation. */
 export type DaemonWireResponse = { id: string; ok: true; result: unknown } | { id: string; ok: false; error: string };
+
+/** Unsolicited terminal completion sent to the socket that owns a daemon. */
+export interface DaemonCompletionNotification {
+	event: "daemon-completed";
+	completionId: string;
+	owner: string;
+	daemon: DaemonSnapshot;
+}
+
+export type DaemonWireMessage = DaemonWireResponse | DaemonCompletionNotification;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -149,6 +166,11 @@ function rawString(value: unknown, label: string): string {
 function optionalString(value: unknown, label: string): string | undefined {
 	if (value === undefined) return undefined;
 	return stringValue(value, label);
+}
+
+function optionalRawString(value: unknown, label: string): string | undefined {
+	if (value === undefined) return undefined;
+	return rawString(value, label);
 }
 
 function booleanValue(value: unknown, label: string): boolean {
@@ -255,7 +277,7 @@ export function parseDaemonSnapshot(value: unknown): DaemonSnapshot {
 		restartCount: numberValue(source.restartCount, "daemon.restartCount"),
 		outputBytes: numberValue(source.outputBytes, "daemon.outputBytes"),
 		owner: optionalString(source.owner, "daemon.owner"),
-		readyMatch: optionalString(source.readyMatch, "daemon.readyMatch"),
+		readyMatch: optionalRawString(source.readyMatch, "daemon.readyMatch"),
 		readyPending: source.readyPending === undefined ? undefined : readyPendingList(source.readyPending),
 		persist: booleanValue(source.persist, "daemon.persist"),
 		detached: source.detached === undefined ? false : booleanValue(source.detached, "daemon.detached"),
@@ -268,6 +290,27 @@ export function parseDaemonWireRequest(value: unknown): DaemonWireRequest {
 	return {
 		id: stringValue(source.id, "request.id"),
 		token: stringValue(source.token, "request.token"),
+		owners: source.owners === undefined ? undefined : stringArray(source.owners, "request.owners"),
+		detachedOwners:
+			source.detachedOwners === undefined ? undefined : stringArray(source.detachedOwners, "request.detachedOwners"),
+		completionEvents:
+			source.completionEvents === undefined
+				? undefined
+				: booleanValue(source.completionEvents, "request.completionEvents"),
+		completionAcks:
+			source.completionAcks === undefined ? undefined : stringArray(source.completionAcks, "request.completionAcks"),
+		completionUnsubscribes:
+			source.completionUnsubscribes === undefined
+				? undefined
+				: stringArray(source.completionUnsubscribes, "request.completionUnsubscribes"),
+		completionReplays:
+			source.completionReplays === undefined
+				? undefined
+				: stringArray(source.completionReplays, "request.completionReplays"),
+		completionSubscriptionId:
+			source.completionSubscriptionId === undefined
+				? undefined
+				: stringValue(source.completionSubscriptionId, "request.completionSubscriptionId"),
 		operation: parseDaemonOperation(source.operation),
 	};
 }
@@ -279,6 +322,20 @@ export function parseDaemonWireResponse(value: unknown): DaemonWireResponse {
 	if (source.ok === true) return { id, ok: true, result: source.result };
 	if (source.ok === false) return { id, ok: false, error: stringValue(source.error, "response.error") };
 	throw new Error("response.ok must be a boolean");
+}
+
+/** Decode one broker response or unsolicited completion notification. */
+export function parseDaemonWireMessage(value: unknown): DaemonWireMessage {
+	const source = record(value, "daemon message");
+	if (source.event === "daemon-completed") {
+		return {
+			event: "daemon-completed",
+			completionId: stringValue(source.completionId, "completion.id"),
+			owner: stringValue(source.owner, "completion.owner"),
+			daemon: parseDaemonSnapshot(source.daemon),
+		};
+	}
+	return parseDaemonWireResponse(value);
 }
 
 function parseDaemonOperation(value: unknown): DaemonOperation {
@@ -375,7 +432,7 @@ export function parseDaemonRpcResult(operation: DaemonOperation, value: unknown)
 			return {
 				op: "wait",
 				daemon: parseDaemonSnapshot(source.daemon),
-				matched: optionalString(source.matched, "result.matched"),
+				matched: optionalRawString(source.matched, "result.matched"),
 				timedOut: booleanValue(source.timedOut, "result.timedOut"),
 			};
 		case "send":

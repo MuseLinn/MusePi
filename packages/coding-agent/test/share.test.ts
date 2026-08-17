@@ -152,7 +152,14 @@ describe("buildShareSnapshot", () => {
 				},
 			} as unknown as SessionEntry,
 		];
-		const header = { type: "session", version: 3, id: "t", timestamp: ts, cwd: `/home/${secret}/proj` };
+		const header = {
+			type: "session",
+			version: 3,
+			id: "t",
+			timestamp: ts,
+			cwd: `/home/${secret}/proj`,
+			previousSessionFiles: [`/home/${secret}/old/session.jsonl`],
+		};
 		const sm = {
 			getHeader: () => header,
 			getEntries: () => entries,
@@ -169,6 +176,7 @@ describe("buildShareSnapshot", () => {
 		expect(flat).toContain("/.env");
 		// Source entries keep the real values; redaction is share-only.
 		expect(JSON.stringify(entries)).toContain(secret);
+		expect(JSON.stringify(header)).toContain(secret);
 	});
 
 	test("redacts assistant tool calls / error messages and bash meta, and drops provider replay payloads", () => {

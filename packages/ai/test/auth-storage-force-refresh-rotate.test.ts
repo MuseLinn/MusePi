@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { withAuth } from "@oh-my-pi/pi-ai";
-import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@oh-my-pi/pi-ai/auth-storage";
-import { ProviderHttpError } from "@oh-my-pi/pi-ai/error";
-import { registerOAuthProvider, unregisterOAuthProviders } from "@oh-my-pi/pi-ai/registry/oauth";
-import type { CredentialRankingStrategy, UsageProvider } from "@oh-my-pi/pi-ai/usage";
+import { withAuth } from "@musepi/pi-ai";
+import { type AuthCredentialStore, AuthStorage, SqliteAuthCredentialStore } from "@musepi/pi-ai/auth-storage";
+import { ProviderHttpError } from "@musepi/pi-ai/error";
+import { registerOAuthProvider, unregisterOAuthProviders } from "@musepi/pi-ai/registry/oauth";
+import type { CredentialRankingStrategy, UsageProvider } from "@musepi/pi-ai/usage";
 import { removeWithRetries } from "../../utils/src/temp";
 
 const PROVIDER = "unit-rotate-oauth";
@@ -504,6 +504,27 @@ describe("AuthStorage forceRefresh + rotateSessionCredential", () => {
 
 		const second = await authStorage.getApiKey(PROVIDER, "sess");
 		expect(second).not.toBe(first);
+	});
+
+	test("rotateSessionCredential(cyber policy) soft-blocks the denied account and rotates", async () => {
+		if (!authStorage) throw new Error("test setup failed");
+		registerProvider();
+		await authStorage.set(PROVIDER, [
+			{ type: "oauth", access: "acc-A", refresh: "ref-A", expires: farExpiry() },
+			{ type: "oauth", access: "acc-B", refresh: "ref-B", expires: farExpiry() },
+		]);
+
+		const first = await authStorage.getApiKey(PROVIDER, "cyber-policy");
+		const usageLimitSpy = vi.spyOn(authStorage, "markUsageLimitReached");
+		const rotated = await authStorage.rotateSessionCredential(PROVIDER, "cyber-policy", {
+			error: new Error(
+				"Codex error event: This content was flagged for possible cybersecurity risk. Join Trusted Access for Cyber. (code=cyber_policy)",
+			),
+		});
+
+		expect(rotated).toBe(true);
+		expect(usageLimitSpy).not.toHaveBeenCalled();
+		expect(await authStorage.getApiKey(PROVIDER, "cyber-policy")).not.toBe(first);
 	});
 
 	test("rotateSessionCredential treats structured usage codes as quota blocks despite generic messages", async () => {

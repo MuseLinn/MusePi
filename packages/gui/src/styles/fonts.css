@@ -1,0 +1,76 @@
+/* Bundled fonts (self-hosted, latin-only where the rest is system):
+ *
+ * - "Source Serif 4 Variable" — default UI face (Claude-style serif,
+ *   user pick). Latin subset only: CJK falls back to the system serif
+ *   (Songti SC on macOS, Noto Serif SC elsewhere).
+ * - "Maple Mono NF CN" — default monospace (user pick). The OFFICIAL
+ *   Nerd Font + Simplified-Chinese build, converted from the upstream
+ *   TTF (v7.9 unhinted) to woff2, 400 + 700. local() lets a locally
+ *   installed copy win; the bundled files cover everyone else.
+ * - "Inter Variable" / "JetBrains Mono Variable" — kept as selectable
+ *   options in the appearance settings (latin subsets).
+ *
+ * The old @fontsource-variable imports shipped EVERY subset (cyrillic,
+ * greek, vietnamese…) and bun inlined each woff2 as base64 into the CSS,
+ * defeating unicode-range lazy loading — ~290KB of dead base64.
+ */
+@font-face {
+	font-family: "Source Serif 4 Variable";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/ss4-latin-normal.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "Source Serif 4 Variable";
+	font-style: italic;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/ss4-latin-italic.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "Maple Mono NF CN";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 400;
+	src:
+		local("Maple Mono NF CN"),
+		url(./fonts/maple/maple-cn-400.woff2) format("woff2");
+}
+@font-face {
+	font-family: "Maple Mono NF CN";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 700;
+	src:
+		local("Maple Mono NF CN"),
+		url(./fonts/maple/maple-cn-700.woff2) format("woff2");
+}
+@font-face {
+	font-family: "Inter Variable";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/inter-latin-wght-normal.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "Inter Variable";
+	font-style: italic;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/inter-latin-wght-italic.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "JetBrains Mono Variable";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2-variations");
+}
+@font-face {
+	font-family: "JetBrains Mono Variable";
+	font-style: italic;
+	font-display: swap;
+	font-weight: 100 900;
+	src: url(./fonts/jetbrains-mono-latin-wght-italic.woff2) format("woff2-variations");
+}

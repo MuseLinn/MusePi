@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
 	type Component,
 	Container,
@@ -8,10 +8,21 @@ import {
 	type NativeScrollbackLiveRegion,
 	type NativeScrollbackReplay,
 	TUI,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import { StressRenderScheduler } from "./render-stress-scheduler";
 import { defaultEditorTheme } from "./test-themes";
 import { VirtualTerminal } from "./virtual-terminal";
+
+const ORIGINAL_HERDR_ENV = Bun.env.HERDR_ENV;
+
+beforeEach(() => {
+	delete Bun.env.HERDR_ENV;
+});
+
+afterEach(() => {
+	if (ORIGINAL_HERDR_ENV === undefined) delete Bun.env.HERDR_ENV;
+	else Bun.env.HERDR_ENV = ORIGINAL_HERDR_ENV;
+});
 
 // Behavioral tests for TUI.requestComponentRender: a component whose own
 // content changed (spinner frame, blink) asks for a component-scoped frame.

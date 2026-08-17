@@ -1,8 +1,8 @@
-import type { AgentEvent, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { CompactionResult } from "@oh-my-pi/pi-agent-core/compaction";
-import type { Effort } from "@oh-my-pi/pi-ai";
+import type { AgentEvent, ThinkingLevel } from "@musepi/pi-agent-core";
+import type { CompactionResult } from "@musepi/pi-agent-core/compaction";
+import type { Effort } from "@musepi/pi-ai";
 import type { Rule } from "../capability/rule";
-import type { RecoveredRetryError } from "../extensibility/shared-events";
+import type { RetryErrorUpdate } from "../extensibility/shared-events";
 import type { Goal, GoalModeState } from "../goals/state";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { TodoItem } from "../tools/todo";
@@ -43,7 +43,7 @@ export type AgentSessionEvent =
 			success: boolean;
 			attempt: number;
 			finalError?: string;
-			recoveredErrors?: RecoveredRetryError[];
+			retryErrors?: RetryErrorUpdate[];
 	  }
 	| { type: "retry_fallback_applied"; from: string; to: string; role: string }
 	| { type: "retry_fallback_succeeded"; model: string; role: string }

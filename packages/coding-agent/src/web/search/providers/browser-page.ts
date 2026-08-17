@@ -1,5 +1,5 @@
-import type { FetchImpl } from "@oh-my-pi/pi-ai";
-import { untilAborted } from "@oh-my-pi/pi-utils";
+import type { FetchImpl } from "@musepi/pi-ai";
+import { untilAborted } from "@musepi/pi-utils";
 import type { Page } from "puppeteer-core";
 import { applyStealthPatches, applyViewport } from "../../../tools/browser/launch";
 import { acquireBrowser, holdBrowser, releaseBrowser } from "../../../tools/browser/registry";
@@ -26,6 +26,7 @@ interface BrowserFallbackOptions {
 export interface BrowserFetchOptions {
 	fetch?: FetchImpl;
 	signal: AbortSignal;
+	timeoutMs?: number;
 	randomizeHeaders?: boolean;
 	referer?: string;
 	init?: Omit<RequestInit, "headers" | "signal">;
@@ -50,6 +51,7 @@ async function browseHtmlPage(
 	url: string,
 	options: BrowserFallbackOptions,
 	signal: AbortSignal,
+	timeoutMs = SEARCH_HARD_TIMEOUT_MS,
 ): Promise<LoadedHtmlPage> {
 	const { homeUrl, ready } = options;
 	const attempts = Math.max(1, options.attempts ?? 1);
@@ -76,14 +78,14 @@ async function browseHtmlPage(
 		await applyStealthPatches(handle.browser, activePage, handle.stealth);
 		if (homeUrl) {
 			await untilAborted(signal, () =>
-				activePage.goto(homeUrl, { waitUntil: "domcontentloaded", timeout: SEARCH_HARD_TIMEOUT_MS }),
+				activePage.goto(homeUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs }),
 			);
 		}
 		for (let attempt = 0; attempt < attempts; attempt++) {
 			if (attempt > 0 && options.retryDelayMs) await Bun.sleep(options.retryDelayMs);
 
 			const response = await untilAborted(signal, () =>
-				activePage.goto(url, { waitUntil: "domcontentloaded", timeout: SEARCH_HARD_TIMEOUT_MS }),
+				activePage.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs }),
 			);
 			if (options.afterNavigation) await options.afterNavigation(activePage, signal);
 			if (ready) {
@@ -113,11 +115,11 @@ export async function browserFetch(url: string, options: BrowserFetchOptions): P
 		page = await fetchHtmlPage(url, options, fetchImpl);
 	} catch (error) {
 		if (options.fetch || !options.browser) throw error;
-		return browseHtmlPage(url, options.browser, options.signal);
+		return browseHtmlPage(url, options.browser, options.signal, options.timeoutMs);
 	}
 
 	if (!options.browser || options.fetch) return page;
 	const isSuccessful = page.status >= 200 && page.status < 300;
 	if (isSuccessful && !options.browser.shouldFallback(page)) return page;
-	return browseHtmlPage(url, options.browser, options.signal);
+	return browseHtmlPage(url, options.browser, options.signal, options.timeoutMs);
 }

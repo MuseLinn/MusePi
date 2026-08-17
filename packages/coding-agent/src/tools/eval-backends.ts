@@ -1,4 +1,4 @@
-import { $flag } from "@oh-my-pi/pi-utils";
+import { $flag } from "@musepi/pi-utils";
 import type { ToolSession } from ".";
 
 export interface EvalBackendsAllowance {

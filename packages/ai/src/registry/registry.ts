@@ -1,4 +1,7 @@
-import type { KnownProvider } from "@oh-my-pi/pi-catalog";
+import type { KnownProvider } from "@musepi/pi-catalog";
+import { agnesProvider } from "./agnes";
+import { agnesGlobalProvider } from "./agnes-global";
+import { aiandProvider } from "./aiand";
 import { aimlApiProvider } from "./aimlapi";
 import { alibabaCodingPlanProvider } from "./alibaba-coding-plan";
 import { alibabaTokenPlanProvider } from "./alibaba-token-plan";
@@ -6,6 +9,7 @@ import { amazonBedrockProvider } from "./amazon-bedrock";
 import { anthropicProvider } from "./anthropic";
 import { azureProvider } from "./azure";
 import { basetenProvider } from "./baseten";
+import { bedrockMantleProvider } from "./bedrock-mantle";
 import { cerebrasProvider } from "./cerebras";
 import { cloudflareAiGatewayProvider } from "./cloudflare-ai-gateway";
 import { coreWeaveProvider } from "./coreweave";
@@ -18,6 +22,7 @@ import { fireworksProvider } from "./fireworks";
 import { githubCopilotProvider } from "./github-copilot";
 import { gitlabDuoProvider } from "./gitlab-duo";
 import { gitLabDuoWorkflowProvider } from "./gitlab-duo-workflow";
+import { gmiCloudProvider } from "./gmi-cloud";
 import { googleProvider } from "./google";
 import { googleAntigravityProvider } from "./google-antigravity";
 import { googleGeminiCliProvider } from "./google-gemini-cli";
@@ -54,6 +59,8 @@ import { qwenPortalProvider } from "./qwen-portal";
 import { sakanaProvider } from "./sakana";
 import { siliconflowProvider } from "./siliconflow";
 import { siliconflowCnProvider } from "./siliconflow-cn";
+import { stepplanProvider } from "./stepplan";
+import { stepplanGlobalProvider } from "./stepplan-global";
 import { syntheticProvider } from "./synthetic";
 import { tavilyProvider } from "./tavily";
 import { togetherProvider } from "./together";
@@ -81,6 +88,8 @@ import { zhipuCodingPlanProvider } from "./zhipu-coding-plan";
  * list for the loginable providers; non-login model providers are appended.
  */
 const ALL = [
+	agnesProvider,
+	agnesGlobalProvider,
 	azureProvider,
 	openaiCodexProvider,
 	anthropicProvider,
@@ -100,6 +109,7 @@ const ALL = [
 	gitLabDuoWorkflowProvider,
 	alibabaCodingPlanProvider,
 	alibabaTokenPlanProvider,
+	aiandProvider,
 	aimlApiProvider,
 	zhipuCodingPlanProvider,
 	umansProvider,
@@ -154,6 +164,10 @@ const ALL = [
 	mistralProvider,
 	minimaxProvider,
 	amazonBedrockProvider,
+	bedrockMantleProvider,
+	gmiCloudProvider,
+	stepplanProvider,
+	stepplanGlobalProvider,
 ];
 
 export type RegistryDef = (typeof ALL)[number];

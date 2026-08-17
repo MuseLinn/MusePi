@@ -6,7 +6,7 @@
  * an OMP-owned Chromium survived the exit (issue #5643).
  */
 import { describe, expect, it, spyOn } from "bun:test";
-import type { AssistantMessage } from "@oh-my-pi/pi-ai";
+import type { AssistantMessage } from "@musepi/pi-ai";
 import { runPrintMode } from "../../src/modes/print-mode";
 import type { AgentSession } from "../../src/session/agent-session";
 import * as telemetryExport from "../../src/telemetry-export";
@@ -40,6 +40,7 @@ describe("print-mode error exit disposes the session before exit", () => {
 			state: { messages: [errorMsg] },
 			getLastAssistantMessage: () => errorMsg,
 			prepareForHeadlessAdvisorDrain: () => {},
+			setTextOutputCommitted: () => {},
 			waitForAdvisorCatchup: async () => {
 				order.push("catchup");
 				return true;

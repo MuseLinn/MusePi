@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
 	Agent,
 	type AgentEvent,
@@ -7,8 +10,9 @@ import {
 	type AgentTool,
 	AppendOnlyContextManager,
 	filterProviderReplayMessages,
+	type PauseGate,
 	type ThinkingLevel,
-} from "@oh-my-pi/pi-agent-core";
+} from "@musepi/pi-agent-core";
 import type {
 	Context,
 	CredentialDisabledEvent,
@@ -17,17 +21,22 @@ import type {
 	Model,
 	ModelUsageHealth,
 	ProviderSessionState,
+	ServiceTier,
 	SimpleStreamOptions,
-} from "@oh-my-pi/pi-ai";
-import type { Dialect } from "@oh-my-pi/pi-ai/dialect";
+} from "@musepi/pi-ai";
+import { resolveApiKeyOnce } from "@musepi/pi-ai/auth-retry";
+import bundledWidgetDesignSkill from "./bundled-skills/widget-design/SKILL.md" with { type: "text" };
+import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
+import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
+import type { Dialect } from "@musepi/pi-ai/dialect";
 import {
 	getOpenAICodexTransportDetails,
 	prewarmOpenAICodexResponses,
-} from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
-import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { $env, $flag, getAgentDir, getProjectDir, logger, postmortem, prompt, Snowflake } from "@oh-my-pi/pi-utils";
-import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
+} from "@musepi/pi-ai/providers/openai-codex-responses";
+import { FALLBACK_DIALECT, preferredDialect } from "@musepi/pi-catalog/identity";
+import type { Component } from "@musepi/pi-tui";
+import { $env, $flag, getAgentDir, getProjectDir, logger, postmortem, prompt, Snowflake } from "@musepi/pi-utils";
+import { INTENT_FIELD } from "@musepi/pi-wire";
 import {
 	discoverAdvisorConfigs,
 	discoverWatchdogFiles,
@@ -65,7 +74,9 @@ import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
 import "./discovery";
 import { initializeWithSettings } from "./discovery";
+import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
+import { disposeVmContextsByOwner } from "./eval/js/context-manager";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
 import { disposeAllRubyKernelSessions, disposeRubyKernelSessionsByOwner } from "./eval/rb/executor";
 import { defaultEvalSessionId } from "./eval/session-id";
@@ -99,6 +110,7 @@ import {
 import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal } from "./extensibility/slash-commands";
 import type { HindsightSessionState } from "./hindsight/state";
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
+import { setSharedLspEnabled } from "./lsp/client";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
 import {
 	deduplicateMCPToolsByName,
@@ -118,16 +130,12 @@ import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
 import {
-	collectEnvSecrets,
+	buildSecretObfuscator,
 	deobfuscateSessionContext,
 	deobfuscateToolArguments,
-	getExistingSecretPlaceholderKey,
-	getSecretPlaceholderKey,
-	loadSecrets,
 	obfuscateMessages,
 	obfuscateProviderContext,
-	SecretObfuscator,
-	secretEntriesNeedPlaceholderKey,
+	type SecretObfuscator,
 } from "./secrets";
 import { AgentSession, type InitialRetryFallbackState, type PlanYolo, type Prewalk } from "./session/agent-session";
 import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
@@ -164,6 +172,7 @@ import {
 } from "./system-prompt";
 import { AgentOutputManager } from "./task/output-manager";
 import { wrapStreamFnWithProviderConcurrency } from "./task/provider-concurrency";
+import { isScoutSpawnable } from "./task/spawn-policy";
 import type { StructuredSubagentSchemaMode } from "./task/types";
 import {
 	AUTO_THINKING,
@@ -204,6 +213,7 @@ import {
 	xdevDocsAll,
 	xdevEntries,
 } from "./tools";
+import { agnesVideoGenTool } from "./tools/agnes-video-gen";
 import { isMCPToolName, normalizeToolNames } from "./tools/builtin-names";
 import { ToolContextStore } from "./tools/context";
 import { isIrcEnabled } from "./tools/hub";
@@ -351,6 +361,21 @@ export interface CreateAgentSessionOptions {
 	authStorage?: AuthStorage;
 	/** Model registry. Default: discoverModels(authStorage, agentDir) */
 	modelRegistry?: ModelRegistry;
+	/**
+	 * Request credential resolver. Defaults to the model registry's normal
+	 * session-affine resolver. Security scans use this narrow seam to keep one
+	 * durable OAuth row pinned for the operation without changing ordinary
+	 * provider routing.
+	 */
+	getApiKey?: AgentOptions["getApiKey"];
+
+	/**
+	 * Freeze gate for this session's agent scope. Multi-session hosts (the
+	 * GUI daemon) pass a per-session gate so pausing one session never
+	 * freezes the others; inherited by subagents spawned from this session.
+	 * Absent ⇒ the process-global TUI `/pause` gate applies.
+	 */
+	pauseGate?: PauseGate;
 
 	/** Model to use. Default: from settings, else first available */
 	model?: Model;
@@ -367,6 +392,8 @@ export interface CreateAgentSessionOptions {
 	thinkingLevel?: ConfiguredThinkingLevel;
 	/** Hard ceiling on the session's thinking effort (e.g. a task spawn's `task.maxEffort`-capped hint); retry-fallback recovery re-clamps to it. */
 	thinkingLevelCeiling?: Effort;
+	/** OpenAI service-tier override for this session. `null` omits `service_tier`. */
+	openAIServiceTier?: ServiceTier | null;
 	/** Models available for cycling (Ctrl+P in interactive mode) */
 	scopedModels?: Array<{ model: Model; thinkingLevel?: ThinkingLevel }>;
 	/** Prewalk from the starting model to a fast/cheap target at the first edit/write once the todo list exists. */
@@ -471,6 +498,8 @@ export interface CreateAgentSessionOptions {
 
 	/** Enable LSP integration (tool, formatting, diagnostics, warmup). Default: true */
 	enableLsp?: boolean;
+	/** Restrict LSP to navigation and diagnostics even when enabled. Defaults to true for restricted sessions. */
+	lspReadOnly?: boolean;
 	/** Whether this invocation may expose IRC. `false` removes it even for subagents. */
 	enableIrc?: boolean;
 	/** Skip subprocess-kernel availability checks and prelude warmup */
@@ -479,6 +508,12 @@ export interface CreateAgentSessionOptions {
 	toolNames?: string[];
 	/** Limit the session to explicitly supplied tool names, without discovered extras. */
 	restrictToolNames?: boolean;
+	/**
+	 * Permit only caller-supplied SDK custom tools inside a restricted session.
+	 * They must still be named in {@link toolNames}; discovered extensions, MCP,
+	 * and ambient custom tools remain disabled. Default: false.
+	 */
+	allowRestrictedCustomTools?: boolean;
 
 	/** Output schema for structured completion (subagents). */
 	outputSchema?: unknown;
@@ -609,6 +644,10 @@ export type * from "./extensibility/extensions";
 export type { Skill } from "./extensibility/skills";
 export type { FileSlashCommand } from "./extensibility/slash-commands";
 export type { MCPManager, MCPServerConfig, MCPServerConnection, MCPToolsLoadResult } from "./mcp";
+// Agent registry: pass a private instance per `createAgentSession` when
+// embedding several concurrent top-level sessions in one process (the default
+// global registry admits only one "Main" per process generation).
+export { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
 export type { Tool } from "./tools";
 export { buildDirectoryTree, buildWorkspaceTree, type DirectoryTree, type WorkspaceTree } from "./workspace-tree";
 
@@ -672,12 +711,15 @@ export async function discoverSessionExtensionPaths(
 	cwd: string,
 	settings: Settings,
 ): Promise<string[]> {
-	if (options.disableExtensionDiscovery) {
-		return options.additionalExtensionPaths ?? [];
-	}
-	const configuredPaths = [...(options.additionalExtensionPaths ?? []), ...(settings.get("extensions") ?? [])];
-	const disabledExtensionIds = settings.get("disabledExtensions") ?? [];
-	return discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds);
+	const configuredPaths = options.disableExtensionDiscovery
+		? (options.additionalExtensionPaths ?? [])
+		: [...(options.additionalExtensionPaths ?? []), ...(settings.get("extensions") ?? [])];
+	const disabledExtensionIds = options.disableExtensionDiscovery
+		? undefined
+		: (settings.get("disabledExtensions") ?? []);
+	return discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds, {
+		ambient: !options.disableExtensionDiscovery,
+	});
 }
 
 /**
@@ -742,6 +784,8 @@ export async function discoverSkills(
 	_agentDir?: string,
 	settings?: SkillsSettings,
 ): Promise<{ skills: Skill[]; warnings: SkillWarning[] }> {
+	// MusePi-internal bundled skills live in <agentDir>/skills, scanned by
+	// the native provider (builtin.ts) — a private dir other CLIs never read.
 	return await loadSkillsInternal({
 		...settings,
 		cwd: cwd ?? getProjectDir(),
@@ -755,9 +799,11 @@ export async function discoverSkills(
 export async function discoverContextFiles(
 	cwd?: string,
 	_agentDir?: string,
+	disabledExtensions?: string[],
 ): Promise<Array<{ path: string; content: string; depth?: number }>> {
 	return await loadContextFilesInternal({
 		cwd: cwd ?? getProjectDir(),
+		disabledExtensions,
 	});
 }
 
@@ -813,6 +859,8 @@ export interface BuildSystemPromptOptions {
 	appendPrompt?: string;
 	inlineToolDescriptors?: boolean;
 	includeWorkspaceTree?: boolean;
+	/** Include the read-only security:// resource inventory entry. Default: false. */
+	securityEnabled?: boolean;
 }
 
 /**
@@ -838,6 +886,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		appendSystemPrompt: options.appendPrompt,
 		inlineToolDescriptors: options.inlineToolDescriptors,
 		includeWorkspaceTree: options.includeWorkspaceTree,
+		securityEnabled: options.securityEnabled,
 		toolNames,
 		tools: promptTools,
 	});
@@ -1002,7 +1051,7 @@ function createCustomToolsExtension(tools: CustomTool[]): ExtensionFactory {
 					success: event.success,
 					attempt: event.attempt,
 					finalError: event.finalError,
-					recoveredErrors: event.recoveredErrors,
+					retryErrors: event.retryErrors,
 				},
 				ctx,
 			),
@@ -1165,7 +1214,7 @@ export function createAutoLearnCaptureRunner(
  * const { session } = await createAgentSession();
  *
  * // With explicit model
- * import { getModel } from '@oh-my-pi/pi-ai';
+ * import { getModel } from '@musepi/pi-ai';
  * const { session } = await createAgentSession({
  *   model: getModel('anthropic', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',
@@ -1187,9 +1236,126 @@ export function createAutoLearnCaptureRunner(
  * });
  * ```
  */
+/**
+ * Bundled product skills (widget design + MusePi help) installed once into
+ * the user-level `~/.agents/skills` (agents provider — enabled by default,
+ * surfaced in the settings → skills tab). Idempotent: an existing
+ * SKILL.md of the same name is left untouched so user edits survive.
+ */
+const BUNDLED_SKILLS = [
+	{ name: "widget-design", content: bundledWidgetDesignSkill },
+	{ name: "musepi-help", content: bundledMusepiHelpSkill },
+	{ name: "musepi-extension-dev", content: bundledExtensionDevSkill },
+] as const;
+let bundledSkillsEnsured = false;
+
+/**
+ * Directory for MusePi-internal bundled skills. Kept inside the MusePi
+ * agentDir (NOT ~/.agents — the shared OMP ecosystem dir other CLIs scan),
+ * so product-internal knowledge is only ever exposed to MusePi agents.
+ */
+export function bundledSkillsDir(agentDir = getAgentDir()): string {
+	return path.join(agentDir, "skills");
+}
+
+/** Installed bundled skills (names present on disk). */
+export function installedBundledSkillNames(): string[] {
+	const dir = bundledSkillsDir();
+	try {
+		return fs.readdirSync(dir).filter(n => fs.existsSync(path.join(dir, n, "SKILL.md")));
+	} catch {
+		return [];
+	}
+}
+
+const BUNDLED_MANIFEST = ".bundled-manifest.json";
+
+function hashSkillContent(content: string): string {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < content.length; i++) {
+		h ^= content.charCodeAt(i);
+		h = Math.imul(h, 0x01000193);
+	}
+	return String(h >>> 0);
+}
+
+function readBundledManifest(skillsDir: string): Record<string, string> {
+	try {
+		const parsed = JSON.parse(fs.readFileSync(path.join(skillsDir, BUNDLED_MANIFEST), "utf8")) as unknown;
+		return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, string>) : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeBundledManifest(skillsDir: string, manifest: Record<string, string>): void {
+	try {
+		fs.writeFileSync(path.join(skillsDir, BUNDLED_MANIFEST), JSON.stringify(manifest, null, "\t"));
+	} catch {
+		// Manifest is best-effort; a failed write only degrades future
+		// update detection, never the installed skill files.
+	}
+}
+
+export function ensureBundledSkills(agentDir = getAgentDir()): void {
+	if (bundledSkillsEnsured) return;
+	bundledSkillsEnsured = true;
+	const skillsDir = bundledSkillsDir(agentDir);
+	const manifest = readBundledManifest(skillsDir);
+	let manifestDirty = false;
+	for (const skill of BUNDLED_SKILLS) {
+		const dir = path.join(skillsDir, skill.name);
+		const target = path.join(dir, "SKILL.md");
+		const bundledHash = hashSkillContent(skill.content);
+		try {
+			if (!fs.existsSync(target)) {
+				fs.mkdirSync(dir, { recursive: true });
+				fs.writeFileSync(target, skill.content);
+				manifest[skill.name] = bundledHash;
+				manifestDirty = true;
+				continue;
+			}
+			const disk = fs.readFileSync(target, "utf8");
+			if (disk === skill.content) {
+				// Already the current bundled version (or the user restored it).
+				if (manifest[skill.name] !== bundledHash) {
+					manifest[skill.name] = bundledHash;
+					manifestDirty = true;
+				}
+				continue;
+			}
+			if (String(manifest[skill.name]) === String(hashSkillContent(disk))) {
+				// Disk holds the previously-seeded bundled version and was not
+				// edited since — roll it forward to the new bundled content.
+				fs.writeFileSync(target, skill.content);
+				manifest[skill.name] = bundledHash;
+				manifestDirty = true;
+				continue;
+			}			// Disk differs from both the current and the previously-seeded
+			// bundled content: treat it as a user edit and keep it. Record the
+			// current bundled hash so a later bundled change doesn't retry.
+			if (manifest[skill.name] !== bundledHash) {
+				manifest[skill.name] = bundledHash;
+				manifestDirty = true;
+			}
+		} catch (error) {
+			console.error(`[sdk] failed to install bundled skill ${skill.name}:`, error);
+		}
+	}
+	if (manifestDirty) writeBundledManifest(skillsDir, manifest);
+}
+
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
+	const rootMode = options.disableExtensionDiscovery ? "explicit-only" : "merge";
+	return await withOmpExtensionRootScope(options.additionalExtensionPaths ?? [], rootMode, () =>
+		createAgentSessionScoped(options),
+	);
+}
+
+async function createAgentSessionScoped(options: CreateAgentSessionOptions): Promise<CreateAgentSessionResult> {
 	const cwd = options.cwd ?? getProjectDir();
 	const agentDir = options.agentDir ?? getAgentDir();
+	ensureBundledSkills(agentDir);
 	const eventBus = options.eventBus ?? new EventBus();
 
 	registerSshCleanup();
@@ -1251,14 +1417,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		? Promise.resolve(options.contextFiles)
 		: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
 	contextFilesPromise.catch(() => {});
-	const activeRepoContextPromise = logger.time("resolveActiveRepoContext", async () => {
+	const resolveRepoContext = async (repoCwd: string) => {
 		try {
-			return await resolveActiveRepoContext(cwd);
+			return await resolveActiveRepoContext(repoCwd);
 		} catch (err) {
 			logger.debug("Failed to resolve active repo context", { err: String(err) });
 			return null;
 		}
-	});
+	};
+	const activeRepoContextPromise = logger.time("resolveActiveRepoContext", resolveRepoContext, cwd);
 	activeRepoContextPromise.catch(() => {});
 	const watchdogFilesPromise = logger.time("discoverWatchdogFiles", () => discoverWatchdogFiles(cwd, agentDir));
 	watchdogFilesPromise.catch(() => {});
@@ -1332,37 +1499,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	// Load and create secret obfuscator early so resumed session state and prompt warnings
 	// reflect actual loaded secrets, not just the setting toggle.
-	let obfuscator: SecretObfuscator | undefined;
-	if (settings.get("secrets.enabled")) {
-		const fileEntries = await logger.time("loadSecrets", loadSecrets, cwd, agentDir);
-		const envEntries = collectEnvSecrets();
-		const allEntries = [...envEntries, ...fileEntries];
-		const needsPlaceholderKey = secretEntriesNeedPlaceholderKey(allEntries);
-		const placeholderKey = needsPlaceholderKey
-			? await getSecretPlaceholderKey(agentDir)
-			: await getExistingSecretPlaceholderKey(agentDir);
-		if (allEntries.length > 0) {
-			// The persisted placeholder key — and creating its key file under the
-			// configured agentDir — is only needed for reversible obfuscate-mode
-			// placeholders, or for a default (no custom `replacement`) replace-mode
-			// regex whose key-derived idempotent fallback marker needs a stable key
-			// across restarts (see `secretEntryNeedsPlaceholderKey`). A replace-only
-			// secrets set with no such regex must not require the key; otherwise a
-			// headless run with an unwritable default config root fails startup for a
-			// feature it does not use.
-			obfuscator = new SecretObfuscator(allEntries, placeholderKey);
-		}
-		if (obfuscator?.hasSecrets() !== true && placeholderKey !== undefined) {
-			// No configured entry produced an active secret (e.g. only ignored short
-			// plain entries, or no entries at all), but a persisted key exists. Build a
-			// redaction-only obfuscator so a tool read of the key file does not ship the
-			// reusable HMAC key to the provider.
-			obfuscator = new SecretObfuscator(
-				[{ type: "plain", mode: "replace", content: placeholderKey }],
-				placeholderKey,
-			);
-		}
-	}
+	const obfuscator: SecretObfuscator | undefined = settings.get("secrets.enabled")
+		? await buildSecretObfuscator(cwd, agentDir, options.agentDir)
+		: undefined;
 	const secretsEnabled = obfuscator?.hasSecrets() === true;
 
 	// An abnormal process exit after a non-terminal message tail is durable
@@ -1560,7 +1699,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 		return result;
 	};
-	const [contextFiles, resolvedWorkspaceTree, watchdogFiles, activeRepoContext, discoveredAdvisors] =
+	const [initialContextFiles, resolvedWorkspaceTree, watchdogFiles, initialActiveRepoContext, discoveredAdvisors] =
 		await Promise.all([
 			contextFilesPromise,
 			raceWithDeadline("buildWorkspaceTree", workspaceTreePromise),
@@ -1568,13 +1707,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			activeRepoContextPromise,
 			advisorConfigsPromise,
 		]);
+	let contextFiles = initialContextFiles;
 
 	let agent: Agent;
 	let session!: AgentSession;
 	let hasSession = false;
 	let hasRegistered = false;
 	const restrictToolNames = options.restrictToolNames === true;
-	const enableLsp = !restrictToolNames && (options.enableLsp ?? true);
+	const enableLsp = options.enableLsp ?? !restrictToolNames;
+	const lspReadOnly = options.lspReadOnly ?? restrictToolNames;
 	const asyncMaxJobs = Math.min(100, Math.max(1, settings.get("async.maxJobs") ?? 100));
 	// Only the first top-level session in a process owns an AsyncJobManager.
 	// Subagents inherit the parent's manager via `AsyncJobManager.instance()`
@@ -1601,14 +1742,19 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const agentKind = (options.taskDepth ?? 0) > 0 || options.parentTaskPrefix ? ("sub" as const) : ("main" as const);
 	let registeredAgentRef: AgentRef | undefined;
 	/**
-	 * Forget the agent ref on teardown — unless the agent is being parked (or is
-	 * already parked). Parking disposes the session but keeps the ref addressable
-	 * (history://, revive); only process teardown / explicit kill unregisters.
+	 * Forget the agent ref on teardown — unless it is a retained terminal ref.
+	 * Parking disposes the session but keeps the ref addressable (history://,
+	 * revive); a hard kill leaves it as a terminal `aborted` tombstone. Both are
+	 * detached (session === null) by the time dispose runs, per the AgentRef
+	 * invariant, so preserving them never keeps a disposed session reachable — an
+	 * aborted ref that still holds a live session is a bug and is unregistered
+	 * rather than handed to ensureLive. Only process teardown / a plain release
+	 * unregisters.
 	 */
 	const unregisterUnlessParked = (): void => {
 		const ref = registeredAgentRef;
 		if (!ref || agentRegistry.get(resolvedAgentId) !== ref) return;
-		if (ref.status === "parked") return;
+		if (ref.status === "parked" || (ref.status === "aborted" && !ref.session)) return;
 		if (AgentLifecycleManager.global().isParking(resolvedAgentId, ref)) return;
 		agentRegistry.unregister(resolvedAgentId, ref);
 	};
@@ -1625,6 +1771,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// entries capture it at fetch time and are dropped at injection if a newer
 		// mutation (any tool) bumped it in the meantime.
 		const fileMutationVersions = new Map<string, number>();
+		const disposeCallbacks = new Set<() => void>();
 		const activeToolNames = new Set<string>();
 		const toolRegistry = new Map<string, Tool>();
 		const setActiveToolNames = (names: Iterable<string>): void => {
@@ -1641,10 +1788,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			setActiveToolNames,
 			toolRegistry,
 			hasUI: options.hasUI ?? false,
+			getApiKey: options.getApiKey,
+			pauseGate: options.pauseGate,
 			get additionalDirectories() {
 				return sessionManager.getAdditionalDirectories();
 			},
 			enableLsp,
+			lspReadOnly,
 			enableIrc: restrictToolNames ? false : options.enableIrc,
 			restrictToolNames,
 			get hasEditTool() {
@@ -1676,6 +1826,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			trackEvalExecution: (execution, abortController) =>
 				session ? session.trackEvalExecution(execution, abortController) : execution,
 			getSessionId: () => sessionManager.getSessionId?.() ?? null,
+			isDisposed: () => session?.isDisposed ?? false,
 			getHindsightSessionState: () => session?.getHindsightSessionState(),
 			getMnemopiSessionState: () => session?.getMnemopiSessionState(),
 			getAgentId: () => resolvedAgentId,
@@ -1702,6 +1853,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			recordEvalSubagentUsage: output => sessionManager.recordEvalSubagentOutput(output),
 			getClientBridge: () => session?.clientBridge,
 			queueDeferredDiagnostics: entry => session?.yieldQueue.enqueue(LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE, entry),
+			queueLaunchCompletion: notification =>
+				session?.queueLaunchCompletion(notification) ??
+				Promise.reject(new Error("Session unavailable for launch completion delivery")),
+			registerDisposeCallback: callback => {
+				disposeCallbacks.add(callback);
+				return () => disposeCallbacks.delete(callback);
+			},
+			registerSessionChangeCallback: callback => session?.registerSessionChangeCallback(callback),
 			bumpFileMutationVersion: path => {
 				const next = (fileMutationVersions.get(path) ?? 0) + 1;
 				fileMutationVersions.set(path, next);
@@ -1896,6 +2055,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 			if (settings.get("speechgen.enabled")) {
 				customTools.push(ttsTool as unknown as CustomTool);
+			}
+
+			// Agnes video generation (custom tool, settings-gated like speechgen).
+			if (settings.get("agnes_video_gen.enabled")) {
+				customTools.push(agnesVideoGenTool as unknown as CustomTool);
 			}
 
 			// Add web search tools
@@ -2210,9 +2374,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					}
 				}
 				const usageReservePolicy = settings.get("retry.usageReservePolicy");
+				const modelFallbackEnabled = settings.get("retry.modelFallback");
 				if (
-					(hasUsageFallbackCandidate || usageReservePolicy === "fail-closed") &&
-					settings.get("retry.modelFallback") &&
+					((modelFallbackEnabled && (hasUsageFallbackCandidate || usageFallbackTriggered)) ||
+						usageReservePolicy === "fail-closed") &&
 					settings.get("retry.usageAwareFallback")
 				) {
 					let usageHealth: ModelUsageHealth | undefined;
@@ -2235,8 +2400,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 								`Usage depleted for ${primary.model.provider}/${primary.model.id}; reserve policy is fail-closed.`,
 							);
 						}
-						usageFallbackTriggered = true;
-						continue;
+						if (modelFallbackEnabled) {
+							usageFallbackTriggered = true;
+							continue;
+						}
 					}
 					if (usageHealth?.state === "reserve") {
 						if (usageReservePolicy === "fail-closed") {
@@ -2244,7 +2411,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 								`Usage reserve reached for ${primary.model.provider}/${primary.model.id}; reserve policy is fail-closed.`,
 							);
 						}
-						if (usageReservePolicy === "auto" || (!options.hasUI && !options.deferUsageReserveConfirmation)) {
+						if (
+							modelFallbackEnabled &&
+							(usageReservePolicy === "auto" || (!options.hasUI && !options.deferUsageReserveConfirmation))
+						) {
 							usageFallbackTriggered = true;
 							continue;
 						}
@@ -2538,11 +2708,20 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			autoApprove: options.autoApprove ?? false,
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
+		// Native built-in implementations backing same-tool `ctx.invokeTool`, so a tool that
+		// re-registers a built-in (e.g. wrapping `write`) can delegate to the original — reaching the
+		// unwrapped native execute, which inherits the caller's already-granted approval rather than
+		// re-running the gate. Seeded from the xdev registry when present (it retains discoverable
+		// built-ins like `browser` that xdev partitioning removes from the active tool array), else
+		// from the built-in registry; captured before the ExtensionToolWrapper pass so the natives
+		// stay unwrapped. The extension runner exposes it to re-registered tools via createContext.
+		const nativeToolsByName = new Map<string, Tool>(toolSession.xdev?.tools ?? undefined);
 
 		const registeredTools = restrictToolNames ? [] : extensionRunner.getAllRegisteredTools();
-		const sdkCustomTools = restrictToolNames
-			? []
-			: (options.customTools?.filter(tool => !isLegacyBuiltinToolDefinition(tool)) ?? []);
+		const sdkCustomTools =
+			restrictToolNames && options.allowRestrictedCustomTools !== true
+				? []
+				: (options.customTools?.filter(tool => !isLegacyBuiltinToolDefinition(tool)) ?? []);
 		const allCustomTools = [
 			...registeredTools,
 			...sdkCustomTools.map(tool => {
@@ -2560,17 +2739,32 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 		// All built-in tools are active (conditional tools like git/ask return null from factory if disabled)
 		const builtInRegistryToolNames = toolSession.xdev?.builtInNames ?? new Set(toolRegistry.keys());
+		// Capture the native built-in implementations before extension re-registration replaces registry
+		// entries and before the ExtensionToolWrapper pass below, so `ctx.invokeTool` reaches the
+		// unwrapped native execute (inheriting the caller's already-granted approval, not re-gating).
+		for (const [name, tool] of toolRegistry) {
+			nativeToolsByName.set(name, tool);
+		}
 		if (!restrictToolNames && !toolRegistry.has("goal") && settings.get("goal.enabled")) {
 			const goalTool = await logger.time("createTools:goal:session", HIDDEN_TOOLS.goal, toolSession);
 			if (goalTool) {
-				toolRegistry.set(goalTool.name, wrapToolWithMetaNotice(goalTool));
+				const wrapped = wrapToolWithMetaNotice(goalTool);
+				toolRegistry.set(goalTool.name, wrapped);
 				builtInRegistryToolNames.add(goalTool.name);
+				nativeToolsByName.set(goalTool.name, wrapped);
 			}
 		}
 		for (const tool of wrappedExtensionTools) {
 			toolRegistry.set(tool.name, tool);
 			builtInRegistryToolNames.delete(tool.name);
 		}
+		// Expose the native built-ins to same-tool `ctx.invokeTool` on re-registered tools. Set after
+		// the override loop so the map holds the natives, not the extension replacements. The context
+		// factory is the loop's own tool context, so a delegated native call sees ordinary session state.
+		extensionRunner.setNativeToolResolver(name => {
+			const tool = nativeToolsByName.get(name);
+			return tool ? { tool, makeContext: () => toolContextStore.getContext() } : undefined;
+		});
 		if (deferMCPDiscoveryForUI && mcpManager) {
 			for (const name of collectPendingMCPToolNames(options.toolNames)) {
 				if (!toolRegistry.has(name)) {
@@ -2592,7 +2786,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// a real tool.
 		//
 		// It must be a `replace`-mode instance. `PiEditExecArgs` carries
-		// `old_text`/`new_text` pairs, which is exactly `replace`'s schema and
+		// `old_string`/`new_string` replacements, which is exactly `replace`'s schema and
 		// nothing else's — under the default `hashline` mode the frame's args do
 		// not match the tool's parameters at all. The registry instance follows
 		// the session's configured mode, so the bridge builds its own.
@@ -2633,11 +2827,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			writeRegistration ??= (async () => {
 				const writeTool = await logger.time("createTools:write:session", BUILTIN_TOOLS.write, toolSession);
 				if (!writeTool || toolRegistry.has("write")) return builtInRegistryToolNames.has("write");
-				toolRegistry.set(
-					writeTool.name,
-					new ExtensionToolWrapper(wrapToolWithMetaNotice(writeTool), extensionRunner) as Tool,
-				);
+				const nativeWrite = wrapToolWithMetaNotice(writeTool);
+				toolRegistry.set(writeTool.name, new ExtensionToolWrapper(nativeWrite, extensionRunner) as Tool);
 				builtInRegistryToolNames.add(writeTool.name);
+				nativeToolsByName.set(writeTool.name, nativeWrite);
 				return true;
 			})().finally(() => {
 				writeRegistration = undefined;
@@ -2647,10 +2840,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 		// Existing staged/device paths need write registered before active-set assembly.
 		// Deferred MCP also registers it now, but refresh activates it only after a server connects.
+		// xd:// mounts never register write: xdev state only exists when the session
+		// already granted a write tool (see createTools), so mounting rides that grant.
 		const hasDeferrableTools = Array.from(toolRegistry.values()).some(tool => tool.deferrable === true);
-		const hasXdevTools = (toolSession.xdev?.mountedNames.size ?? 0) > 0;
 		const planModeAvailable = settings.get("plan.enabled");
-		if (!restrictToolNames && (hasDeferrableTools || hasXdevTools || planModeAvailable || deferMCPDiscoveryForUI)) {
+		if (!restrictToolNames && (hasDeferrableTools || planModeAvailable || deferMCPDiscoveryForUI)) {
 			await ensureWriteRegistered();
 		}
 
@@ -2726,6 +2920,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			tools: Map<string, AgentTool>,
 		): Promise<BuildSystemPromptResult> => {
 			toolContextStore.setToolNames(toolNames);
+			const promptCwd = sessionManager.getCwd();
+			const activeRepoContext = hasSession
+				? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
+				: initialActiveRepoContext;
+			if (hasSession && options.contextFiles === undefined) {
+				contextFiles = await logger.time("discoverContextFiles", discoverContextFiles, promptCwd, agentDir, [
+					...(settings.get("disabledExtensions") ?? []),
+				]);
+				toolSession.contextFiles = contextFiles;
+				session.setAdvisorContextPrompt(formatAdvisorContextPrompt(contextFiles));
+			}
 			const memoryBackend = restrictToolNames ? undefined : await resolveMemoryBackend(settings);
 			const memoryInstructions = memoryBackend
 				? await memoryBackend.buildDeveloperInstructions(agentDir, settings, session)
@@ -2782,8 +2987,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				}
 			}
 			let appendPrompt: string | undefined = appendParts.length > 0 ? appendParts.join("\n\n") : undefined;
-			// Owned/in-band tool dialects (non-native) require the catalog as `# Tool:`
-			// sections; native tool calling lets the compact name list suffice.
+			// Owned/in-band tool dialects (non-native) require the full functions-
+			// namespace catalog; native tool calling lets the compact name list suffice.
 			const nativeTools = resolveDialect(settings.get("tools.format"), agent?.state.model ?? model) === undefined;
 			const promptTools = projectSystemPromptToolMetadata(
 				tools,
@@ -2795,7 +3000,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					: options.appendSystemPrompt;
 			}
 			const defaultPrompt = await buildSystemPromptInternal({
-				cwd,
+				cwd: promptCwd,
 				additionalWorkspaceRoots: sessionManager.getAdditionalDirectories(),
 				xdevTools: toolSession.xdev ? xdevEntries(toolSession.xdev) : [],
 				xdevDocs: toolSession.xdev
@@ -2817,12 +3022,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				eagerTasksAlways,
 				taskBatch: settings.get("task.batch"),
 				taskMaxConcurrency: settings.get("task.maxConcurrency"),
+				scoutAvailable: isScoutSpawnable(
+					settings.get("task.disabledAgents") as string[] | undefined,
+					options.spawns ?? "*",
+				),
 				taskIrcEnabled: !restrictToolNames && isIrcEnabled(settings, options.taskDepth ?? 0),
 				autoQaEnabled: !restrictToolNames && isAutoQaEnabled(settings),
 				secretsEnabled,
 				workspaceTree: workspaceTreePromise,
 				includeWorkspaceTree,
 				memoryRootEnabled: memoryBackend?.id === "local",
+				securityEnabled: settings.get("security.enabled"),
 				model: getActiveModelString(),
 				includeModelInPrompt: settings.get("includeModelInPrompt"),
 				personality: agentKind === "sub" ? "none" : settings.get("personality"),
@@ -2895,6 +3105,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const xdevReadAvailable =
 			builtInRegistryToolNames.has("read") &&
 			(explicitlyRequestedToolNameSet === undefined || explicitlyRequestedToolNameSet.has("read"));
+		const xdevWriteAvailable =
+			builtInRegistryToolNames.has("write") &&
+			(explicitlyRequestedToolNameSet === undefined || explicitlyRequestedToolNameSet.has("write"));
 		const initialRequestedActiveToolNames = options.toolNames
 			? requestedActiveToolNames
 			: requestedActiveToolNames.filter(name => !defaultInactiveToolNames.has(name));
@@ -2940,23 +3153,23 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 		// Partition the initial enabled set for the xd:// transport. Tool instances
 		// remain in the canonical map; only presentation names move between layers.
+		// Mounting requires both transport halves in the granted set (`read xd://`
+		// discovers, `write xd://<tool>` executes); a session without either keeps
+		// every tool top-level instead of auto-granting the missing transport.
 		if (toolSession.xdev) {
 			const topLevelToolNames: string[] = [];
 			const mountedNames: string[] = [];
 			for (const name of initialToolNames) {
 				const tool = toolRegistry.get(name);
 				const explicitlyRequested = explicitlyRequestedToolNameSet?.has(name) === true;
-				if (tool && xdevReadAvailable && !explicitlyRequested && isMountableUnderXdev(tool))
+				if (tool && xdevReadAvailable && xdevWriteAvailable && !explicitlyRequested && isMountableUnderXdev(tool))
 					mountedNames.push(name);
 				else topLevelToolNames.push(name);
 			}
-			const writeTransportAvailable = mountedNames.length === 0 || (await ensureWriteRegistered());
 			toolSession.xdev.mountedNames.clear();
-			if (writeTransportAvailable) {
-				for (const name of mountedNames) toolSession.xdev.mountedNames.add(name);
-				initialToolNames = topLevelToolNames;
-				if (mountedNames.length > 0 && !initialToolNames.includes("write")) initialToolNames.push("write");
-			}
+			for (const name of mountedNames) toolSession.xdev.mountedNames.add(name);
+			initialToolNames = topLevelToolNames;
+			if (mountedNames.length > 0 && !initialToolNames.includes("write")) initialToolNames.push("write");
 		}
 
 		setActiveToolNames(initialToolNames);
@@ -3046,13 +3259,19 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const openaiWebsocketSetting = settings.get("providers.openaiWebsockets") ?? "off";
 		const preferOpenAICodexWebsockets =
 			openaiWebsocketSetting === "on" ? true : openaiWebsocketSetting === "off" ? false : undefined;
-		const initialServiceTierByFamily = hasServiceTierEntry
+		const configuredServiceTierByFamily = hasServiceTierEntry
 			? (existingSession.serviceTier ?? {})
 			: buildServiceTierByFamily(
 					settings.get("tier.openai"),
 					settings.get("tier.anthropic"),
 					settings.get("tier.google"),
 				);
+		const initialServiceTierByFamily = { ...configuredServiceTierByFamily };
+		if (options.openAIServiceTier === null) {
+			delete initialServiceTierByFamily.openai;
+		} else if (options.openAIServiceTier !== undefined) {
+			initialServiceTierByFamily.openai = options.openAIServiceTier;
+		}
 
 		// One-shot launch-latency marker: fired the first time the loop dispatches
 		// a chat request to the provider transport. See onFirstChatDispatch.
@@ -3095,6 +3314,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			// namespace/project discovery on the original repo's git remote. Re-read it
 			// per turn from the SessionManager.
 			cwdResolver: () => sessionManager.getCwd(),
+			pauseGate: options.pauseGate,
 			convertToLlm: convertToLlmFinal,
 			onPayload,
 			onResponse,
@@ -3117,7 +3337,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			kimiApiFormat,
 			preferWebsockets: preferOpenAICodexWebsockets,
 			getToolContext: tc => toolContextStore.getContext(tc),
-			getApiKey: requestModel => modelRegistry.resolver(requestModel, agent.sessionId),
+			getApiKey: options.getApiKey ?? (requestModel => modelRegistry.resolver(requestModel, agent.sessionId)),
 			streamFn: (streamModel, context, streamOptions) => {
 				if (notifyFirstChatDispatch) {
 					const cb = notifyFirstChatDispatch;
@@ -3155,6 +3375,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		// Restore messages if session has existing data
 		if (hasExistingSession) {
 			agent.replaceMessages(existingSession.messages);
+			if (options.openAIServiceTier !== undefined) {
+				sessionManager.appendServiceTierChange(
+					Object.keys(initialServiceTierByFamily).length > 0 ? initialServiceTierByFamily : null,
+				);
+			}
 		} else {
 			// Save initial model, thinking level, and service tier for new sessions so they can be restored on resume.
 			if (model) {
@@ -3165,8 +3390,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				// classification persists its concrete effort once a real user turn runs.
 				sessionManager.appendThinkingLevelChange(effectiveThinkingLevel);
 			}
-			if (Object.keys(initialServiceTierByFamily).length > 0) {
-				sessionManager.appendServiceTierChange(initialServiceTierByFamily);
+			if (options.openAIServiceTier !== undefined || Object.keys(initialServiceTierByFamily).length > 0) {
+				sessionManager.appendServiceTierChange(
+					Object.keys(initialServiceTierByFamily).length > 0 ? initialServiceTierByFamily : null,
+				);
 			}
 		}
 
@@ -3188,6 +3415,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				const id = sessionManager.getSessionId?.();
 				return id ? `${id}-advisor` : null;
 			},
+			queueLaunchCompletion: notification =>
+				session?.queueLaunchCompletion(notification) ??
+				Promise.reject(new Error("Session unavailable for launch completion delivery")),
 			getAgentId: () => "advisor",
 			// The primary's availability signals are wrong for advisors: their tool
 			// slate is filtered separately at runtime (default read/grep/glob, no
@@ -3213,8 +3443,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			.map(tool => new ExtensionToolWrapper(wrapToolWithMetaNotice(tool), extensionRunner) as Tool);
 
 		const advisorWatchdogPrompts = [...watchdogFiles];
-		if (activeRepoContext) {
-			advisorWatchdogPrompts.push(formatActiveRepoWatchdogPrompt(activeRepoContext));
+		if (initialActiveRepoContext) {
+			advisorWatchdogPrompts.push(formatActiveRepoWatchdogPrompt(initialActiveRepoContext));
 		}
 		const advisorWatchdogPrompt = advisorWatchdogPrompts.length > 0 ? advisorWatchdogPrompts.join("\n\n") : undefined;
 		// Hand the advisor the same project context files (AGENTS.md, etc.) the
@@ -3232,6 +3462,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			advisorContextPrompt,
 			advisorSharedInstructions: discoveredAdvisors.sharedInstructions,
 			advisorConfigs: discoveredAdvisors.advisors,
+			pauseGate: options.pauseGate,
 			agent,
 			pruneToolDescriptions: inlineToolDescriptors,
 			thinkingLevel: autoThinking ? AUTO_THINKING : effectiveThinkingLevel,
@@ -3244,6 +3475,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			initialAdvisorCosts,
 			settings,
 			autoApprove: options.autoApprove,
+			scoutAllowedBySpawnPolicy: isScoutSpawnable(undefined, options.spawns ?? "*"),
 			evalKernelOwnerId,
 			// Defined only for top-level sessions (creation is gated above).
 			// AgentSession uses this to decide whether it may dispose the global
@@ -3402,6 +3634,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					unsubscribeCredentialDisabled?.();
 					unsubscribeMcpNotifications?.();
 					unregisterMcpPostmortem?.();
+					for (const callback of disposeCallbacks) callback();
+					disposeCallbacks.clear();
 					// Drop refs so the process-global postmortem list doesn't retain
 					// the bridge closure past explicit dispose.
 					unsubscribeMcpNotifications = undefined;
@@ -3422,7 +3656,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (codexTransport.websocketPreferred) {
 				void (async () => {
 					try {
-						const codexPrewarmApiKey = await modelRegistry.getApiKey(codexModel, providerSessionId);
+						const codexPrewarmApiKey = options.getApiKey
+							? // `getApiKey` returns a value-or-promise union; unwrap the promise,
+								// then resolve the result if it is itself an ApiKeyResolver.
+								await resolveApiKeyOnce(await options.getApiKey(codexModel))
+							: await modelRegistry.getApiKey(codexModel, providerSessionId);
 						if (!codexPrewarmApiKey) return;
 						await logger.time("prewarmOpenAICodexResponses", prewarmOpenAICodexResponses, codexModel, {
 							apiKey: codexPrewarmApiKey,
@@ -3441,6 +3679,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				})();
 			}
 		}
+
+		// Broker-shared language servers: one server per project, multiplexed
+		// across omp instances by the LSP mux daemon. Session-level because the
+		// flag lives in module state consulted on every client cold-start.
+		setSharedLspEnabled(enableLsp && settings.get("lsp.shared"));
 
 		// Start LSP warmup in the background so startup does not block on language server initialization.
 		// With `lsp.lazy` (the default) the warmup is skipped: recognized servers are still discovered and
@@ -3515,6 +3758,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 					...captureOptions,
 					cwd: sessionManager.getCwd(),
 					cwdResolver: () => sessionManager.getCwd(),
+					pauseGate: options.pauseGate,
 					convertToLlm: convertToLlmFinal,
 					transformContext: async messages => wrapSteeringForModel(messages),
 					transformProviderContext: async (context, transformModel) => {
@@ -3683,6 +3927,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 				await disposeKernelSessionsByOwner(evalKernelOwnerId);
 				await disposeRubyKernelSessionsByOwner(evalKernelOwnerId);
 				await disposeJuliaKernelSessionsByOwner(evalKernelOwnerId);
+				await disposeVmContextsByOwner(evalKernelOwnerId);
 				if (ownsAuthStorage) authStorage.close();
 			}
 		} catch (cleanupError) {

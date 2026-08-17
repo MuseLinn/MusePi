@@ -1,0 +1,89 @@
+import { runPauseScreen } from "../modes/components/pause-screen";
+import { shutdownHandlerTui } from "./builtin-lifecycle";
+
+import { t } from "../i18n/index.js";import { commandConsumed, errorMessage, usage } from "./helpers/parse";
+import type { SlashCommandSpec } from "./types";
+
+/**
+ * Render a "<Prefix>: <state>" autocomplete status line, translating both
+ * parts at render time (the locale is applied after this module loads and can
+ * change at runtime). Pass already-translated or dynamic text as `state`.
+ */
+const statusLine = (prefix: string, state: string): string => `${t(prefix)}: ${state}`;
+
+export const BUILTIN_CONTROL_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
+	{
+		name: "force",
+		description: "Force next turn to use a specific tool",
+		aliases: ["force:"],
+		inlineHint: "<tool-name> [prompt]",
+		allowArgs: true,
+		getTuiAutocompleteDescription: runtime => {
+			const count = runtime.ctx.session.getActiveToolNames().length;
+			return count === 0
+				? statusLine("Force", t("no active tools"))
+				: statusLine("Force", `${count} ${t("active tools")}`);
+		},
+		
+		handle: async (command, runtime) => {
+			const spaceIdx = command.args.indexOf(" ");
+			const toolName = spaceIdx === -1 ? command.args : command.args.slice(0, spaceIdx);
+			const prompt = spaceIdx === -1 ? "" : command.args.slice(spaceIdx + 1).trim();
+			if (!toolName) return usage("Usage: /force:<tool-name> [prompt]", runtime);
+			try {
+				runtime.session.setForcedToolChoice(toolName);
+			} catch (err) {
+				return usage(errorMessage(err), runtime);
+			}
+			await runtime.output(`Next turn forced to use ${toolName}.`);
+			return prompt ? { prompt } : commandConsumed();
+		},
+		handleTui: (command, runtime) => {
+			const spaceIdx = command.args.indexOf(" ");
+			const toolName = spaceIdx === -1 ? command.args : command.args.slice(0, spaceIdx);
+			const prompt = spaceIdx === -1 ? "" : command.args.slice(spaceIdx + 1).trim();
+
+			if (!toolName) {
+				runtime.ctx.showError("Usage: /force:<tool-name> [prompt]");
+				runtime.ctx.editor.setText("");
+				return;
+			}
+
+			try {
+				runtime.ctx.session.setForcedToolChoice(toolName);
+				runtime.ctx.showStatus(`Next turn forced to use ${toolName}.`);
+			} catch (error) {
+				runtime.ctx.showError(errorMessage(error));
+				runtime.ctx.editor.setText("");
+				return;
+			}
+
+			runtime.ctx.editor.setText("");
+
+			// If a prompt was provided, pass it through as input
+			if (prompt) return { prompt };
+		},
+	},
+	{
+		name: "live",
+		description: "Start Codex-backed realtime voice mode",
+		handleTui: async (_command, runtime) => {
+			runtime.ctx.editor.setText("");
+			await runtime.ctx.handleLiveCommand();
+		},
+	},
+	{
+		name: "pause",
+		description: "Freeze all agents (main, subagents, advisor) until resumed",
+		handleTui: async (_command, runtime) => {
+			runtime.ctx.editor.setText("");
+			await runPauseScreen(runtime.ctx);
+		},
+	},
+	{
+		name: "quit",
+		aliases: ["q"],
+		description: "Quit the application",
+		handleTui: shutdownHandlerTui,
+	},
+];

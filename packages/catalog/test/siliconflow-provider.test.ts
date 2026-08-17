@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { getOAuthProviders } from "@oh-my-pi/pi-ai/registry/oauth";
-import { getEnvApiKey } from "@oh-my-pi/pi-ai/stream";
-import { getBundledModelReferenceIndex } from "@oh-my-pi/pi-catalog/identity/bundled";
-import { resolveModelReference } from "@oh-my-pi/pi-catalog/identity/reference";
-import type { ProviderCatalogEntry } from "@oh-my-pi/pi-catalog/provider-models/descriptor-types";
+import { getOAuthProviders } from "@musepi/pi-ai/registry/oauth";
+import { getEnvApiKey } from "@musepi/pi-ai/stream";
+import { getBundledModelReferenceIndex } from "@musepi/pi-catalog/identity/bundled";
+import { resolveModelReference } from "@musepi/pi-catalog/identity/reference";
+import type { ProviderCatalogEntry } from "@musepi/pi-catalog/provider-models/descriptor-types";
 import {
 	CATALOG_PROVIDERS,
 	DEFAULT_MODEL_PER_PROVIDER,
 	PROVIDER_DESCRIPTORS,
-} from "@oh-my-pi/pi-catalog/provider-models/descriptors";
+} from "@musepi/pi-catalog/provider-models/descriptors";
 import {
 	MODELS_DEV_PROVIDER_DESCRIPTORS,
 	siliconflowCnModelManagerOptions,
 	siliconflowModelManagerOptions,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { FetchImpl } from "@oh-my-pi/pi-catalog/types";
+} from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { FetchImpl } from "@musepi/pi-catalog/types";
 
 function withEnv(key: string, value: string, run: () => void): void {
 	const previous = Bun.env[key];
@@ -82,7 +82,7 @@ describe("siliconflow built-in providers", () => {
 			expect(entry?.dynamicModelsAuthoritative).toBe(true);
 			expect(entry?.catalogDiscovery).toBeUndefined();
 		}
-		// Runtime: no models.dev mapping may feed the generator either.
+		// Runtime: no stencil.so mapping may feed the generator either.
 		expect(MODELS_DEV_PROVIDER_DESCRIPTORS.some(d => d.providerId === "siliconflow")).toBe(false);
 		expect(MODELS_DEV_PROVIDER_DESCRIPTORS.some(d => d.providerId === "siliconflow-cn")).toBe(false);
 	});
@@ -106,12 +106,12 @@ describe("siliconflow built-in providers", () => {
 		});
 	});
 
-	test("dynamic discovery filters non-chat ids and hydrates metadata from models.dev and bundled references", async () => {
+	test("dynamic discovery filters non-chat ids and hydrates metadata from stencil.so and bundled references", async () => {
 		const seen: { urls: string[]; authorization?: string } = { urls: [] };
 		const stubFetch: FetchImpl = async (input, init) => {
 			const url = String(input);
 			seen.urls.push(url);
-			if (url.startsWith("https://models.dev/")) {
+			if (url.startsWith("https://catalog.stencil.so/")) {
 				return new Response(JSON.stringify(MODELS_DEV_STUB_PAYLOAD), {
 					status: 200,
 					headers: { "content-type": "application/json" },
@@ -142,7 +142,7 @@ describe("siliconflow built-in providers", () => {
 		expect(models).not.toBeNull();
 		expect((models ?? []).map(model => model.id)).toEqual(["deepseek-ai/DeepSeek-V4-Pro", "zai-org/GLM-5.1"]);
 
-		// Tier 1: models.dev carries the id — pricing, limits, and reasoning hydrate.
+		// Tier 1: stencil.so carries the id — pricing, limits, and reasoning hydrate.
 		const glm = models?.find(model => model.id === "zai-org/GLM-5.1");
 		expect(glm?.reasoning).toBe(true);
 		expect(glm?.contextWindow).toBe(205000);
@@ -152,7 +152,7 @@ describe("siliconflow built-in providers", () => {
 		expect(glm?.api).toBe("openai-completions");
 		expect(glm?.baseUrl).toBe("https://api.siliconflow.com/v1");
 
-		// Tier 2: absent from models.dev — reasoning and canonical limits recover
+		// Tier 2: absent from stencil.so — reasoning and canonical limits recover
 		// from the bundled upstream/reseller reference, but provider-specific
 		// pricing stays unknown instead of inheriting another host's values.
 		const canonical = resolveModelReference("deepseek-ai/DeepSeek-V4-Pro", getBundledModelReferenceIndex());
@@ -168,16 +168,16 @@ describe("siliconflow built-in providers", () => {
 		}
 
 		expect(seen.urls).toContain("https://api.siliconflow.com/v1/models");
-		expect(seen.urls.some(url => url.startsWith("https://models.dev/"))).toBe(true);
+		expect(seen.urls.some(url => url.startsWith("https://catalog.stencil.so/"))).toBe(true);
 		expect(seen.authorization).toBe("Bearer sk-test");
 	});
 
-	test("cn variant discovers against the China endpoint with cn models.dev pricing", async () => {
+	test("cn variant discovers against the China endpoint with cn stencil.so pricing", async () => {
 		const seen: { urls: string[] } = { urls: [] };
 		const stubFetch: FetchImpl = async input => {
 			const url = String(input);
 			seen.urls.push(url);
-			if (url.startsWith("https://models.dev/")) {
+			if (url.startsWith("https://catalog.stencil.so/")) {
 				return new Response(JSON.stringify(MODELS_DEV_STUB_PAYLOAD), {
 					status: 200,
 					headers: { "content-type": "application/json" },
@@ -204,11 +204,11 @@ describe("siliconflow built-in providers", () => {
 		expect(seen.urls).toContain("https://api.siliconflow.cn/v1/models");
 	});
 
-	test("models.dev lookup failure still yields endpoint-discovered models", async () => {
+	test("stencil.so lookup failure still yields endpoint-discovered models", async () => {
 		const stubFetch: FetchImpl = async input => {
 			const url = String(input);
-			if (url.startsWith("https://models.dev/")) {
-				throw new Error("models.dev stalled");
+			if (url.startsWith("https://catalog.stencil.so/")) {
+				throw new Error("stencil.so stalled");
 			}
 			const payload = {
 				object: "list",
@@ -223,7 +223,7 @@ describe("siliconflow built-in providers", () => {
 		const options = siliconflowCnModelManagerOptions({ apiKey: "sk-test", fetch: stubFetch });
 		const models = await options.fetchDynamicModels?.();
 		expect(models?.map(model => model.id)).toEqual(["deepseek-ai/DeepSeek-V4-Pro"]);
-		// Canonical fallback still hydrates reasoning when models.dev is unreachable.
+		// Canonical fallback still hydrates reasoning when stencil.so is unreachable.
 		expect(models?.[0]?.reasoning).toBe(true);
 	});
 });

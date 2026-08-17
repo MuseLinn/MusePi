@@ -14,9 +14,9 @@
  * Throws on any failure (no model, no key, unparseable output, abort/timeout);
  * the caller falls back to a concrete level and continues the turn.
  */
-import { type AssistantMessage, completeSimple, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { getSupportedEfforts } from "@oh-my-pi/pi-catalog/model-thinking";
-import { prompt } from "@oh-my-pi/pi-utils";
+import { type AssistantMessage, completeSimple, Effort, type Model } from "@musepi/pi-ai";
+import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
+import { prompt } from "@musepi/pi-utils";
 
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveRoleSelection } from "../config/model-resolver";

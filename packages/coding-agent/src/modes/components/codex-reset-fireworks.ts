@@ -6,7 +6,8 @@ import {
 	type OverlayOptions,
 	truncateToWidth,
 	visibleWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { type ThemeColor, theme } from "../theme/theme";
 
 const FRAME_INTERVAL_MS = 85;
@@ -173,10 +174,10 @@ function drawBanner(
 		event.kind === "unscheduled-weekly-reset" ? " O P E N A I   R E S E T " : " S A V E D   R E S E T ";
 	const subtitleText =
 		event.kind === "unscheduled-weekly-reset"
-			? "Weekly usage cleared early · ESC to return"
+			? t("Weekly usage cleared early · ESC to return")
 			: event.added === 1
-				? `New reset banked · ${event.available} available · ESC to return`
-				: `${event.added} resets banked · ${event.available} available · ESC to return`;
+				? t("New reset banked · {0} available · ESC to return", String(event.available))
+				: t("{0} resets banked · {1} available · ESC to return", String(event.added), String(event.available));
 	const title = truncateToWidth(titleText, innerWidth, "");
 	const subtitle = truncateToWidth(subtitleText, innerWidth, "");
 	const titleOffset = Math.floor((innerWidth - visibleWidth(title)) / 2);

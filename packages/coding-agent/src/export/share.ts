@@ -19,12 +19,13 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage, AgentState } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, ImageContent, TextContent } from "@oh-my-pi/pi-ai";
-import { $which, logger } from "@oh-my-pi/pi-utils";
-import { DEFAULT_SHARE_URL } from "@oh-my-pi/pi-wire";
+import type { AgentMessage, AgentState } from "@musepi/pi-agent-core";
+import type { AssistantMessage, ImageContent, TextContent } from "@musepi/pi-ai";
+import { $which, logger } from "@musepi/pi-utils";
+import { DEFAULT_SHARE_URL } from "@musepi/pi-wire";
 import { $ } from "bun";
-import { obfuscateToolArguments, type SecretObfuscator } from "../secrets/obfuscator";
+import { obfuscateToolArguments } from "../secrets/message-transform";
+import type { SecretObfuscator } from "../secrets/obfuscator";
 import { type SessionEntry, type SessionHeader, TITLE_CHANGE_ENTRY_TYPE } from "../session/session-entries";
 import type { SessionManager } from "../session/session-manager";
 import type { OutputMeta } from "../tools/output-meta";
@@ -223,6 +224,7 @@ function collectShareRegexSecretValues(o: SecretObfuscator, data: SessionData): 
 		if (!header) return;
 		add(header.title);
 		add(header.cwd);
+		for (const previousSessionFile of header.previousSessionFiles ?? []) add(previousSessionFile);
 	};
 
 	addHeader(data.header);
@@ -246,6 +248,9 @@ function redactShareHeader(
 		...header,
 		title: header.title === undefined ? undefined : o.obfuscate(header.title, sharedRegexSecretValues),
 		cwd: o.obfuscate(header.cwd, sharedRegexSecretValues),
+		previousSessionFiles: header.previousSessionFiles?.map(previousSessionFile =>
+			o.obfuscate(previousSessionFile, sharedRegexSecretValues),
+		),
 	};
 }
 

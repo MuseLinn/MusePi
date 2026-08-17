@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { $which, hasFsCode, isEisdir, isEnoent, isEnotdir, Snowflake } from "@oh-my-pi/pi-utils";
+import { $which, hasFsCode, isEisdir, isEnoent, isEnotdir, Snowflake } from "@musepi/pi-utils";
 import type { Subprocess } from "bun";
 import {
 	parseDiffHunks as parseCommitDiffHunks,
@@ -1726,6 +1726,12 @@ export const revList = {
 	/** Commits in `base..head`, oldest first. */
 	async range(cwd: string, base: string, head: string, signal?: AbortSignal): Promise<string[]> {
 		return splitLines(await runText(cwd, ["rev-list", "--reverse", `${base}..${head}`], { readOnly: true, signal }));
+	},
+	/** Commits reachable from `ref` that touched `file`, newest first, capped at `limit`. */
+	async touching(cwd: string, ref: string, file: string, limit: number, signal?: AbortSignal): Promise<string[]> {
+		return splitLines(
+			await runText(cwd, ["rev-list", `--max-count=${limit}`, ref, "--", file], { readOnly: true, signal }),
+		);
 	},
 };
 

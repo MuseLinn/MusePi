@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, UsageLimit, UsageReport } from "@oh-my-pi/pi-ai";
-import { type Component, truncateToWidth, visibleWidth } from "@oh-my-pi/pi-tui";
-import { getProjectDir } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { AssistantMessage, UsageLimit, UsageReport } from "@musepi/pi-ai";
+import { type Component, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../../config/settings";
 import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
@@ -350,6 +350,7 @@ export class StatusLineComponent implements Component {
 	#loopModeStatus: SegmentContext["loopMode"] = null;
 	#goalModeStatus: { enabled: boolean; paused: boolean } | null = null;
 	#vibeModeStatus: { enabled: boolean } | null = null;
+	#swarmModeStatus: { enabled: boolean } | null = null;
 	/**
 	 * Injected aggregator that returns the aggregate tok/s of this session's
 	 * live vibe worker sessions, or null when no workers are streaming. Kept as
@@ -609,6 +610,10 @@ export class StatusLineComponent implements Component {
 
 	setVibeModeStatus(status: { enabled: boolean } | undefined): void {
 		this.#vibeModeStatus = status ?? null;
+	}
+
+	setSwarmModeStatus(status: { enabled: boolean } | undefined): void {
+		this.#swarmModeStatus = status ?? null;
 	}
 
 	/**
@@ -1556,6 +1561,7 @@ export class StatusLineComponent implements Component {
 		return {
 			session: this.session,
 			focusedAgentId: this.#focusedAgentId,
+			sessionAccent: this.#resolveSettings().sessionAccent !== false,
 			activeRepo: activeRepoCache.activeRepo,
 			width,
 			options: segmentOptions ?? {},
@@ -1568,6 +1574,7 @@ export class StatusLineComponent implements Component {
 					: null,
 			goalMode: this.#goalModeStatus,
 			vibeMode: this.#vibeModeStatus,
+			swarmMode: this.#swarmModeStatus,
 			collab: this.#collabStatus,
 			usageStats,
 			contextPercent,
@@ -1785,7 +1792,7 @@ export class StatusLineComponent implements Component {
 						: separatorDef.endCaps.left
 					: "";
 			const capPrefix = separatorDef.endCaps?.useBgAsFg ? bgAnsi.replace("\x1b[48;", "\x1b[38;") : bgAnsi + sepAnsi;
-			const capText = cap ? `${capPrefix}${cap}\x1b[0m` : "";
+			const capText = cap ? `${capPrefix}${this.#focusedAgentId ? "\x1b[22m" : ""}${cap}\x1b[0m` : "";
 
 			let content = bgAnsi + fgAnsi;
 			content += ` ${parts.join(` ${sepAnsi}${sep}${fgAnsi} `)} `;

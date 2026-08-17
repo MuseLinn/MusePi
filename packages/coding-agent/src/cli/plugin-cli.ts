@@ -4,8 +4,8 @@
  * Handles `omp plugin <command>` subcommands for plugin lifecycle management.
  */
 
-import { APP_NAME, getProjectDir } from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+import { APP_NAME, getProjectDir } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import { resolveOrDefaultProjectRegistryPath } from "../discovery/helpers";
 import { PluginManager, parseSettingValue, validateSetting } from "../extensibility/plugins";
 import {
@@ -350,7 +350,7 @@ async function handleInstall(
 	if (packages.length === 0) {
 		console.error(chalk.red(`Usage: ${APP_NAME} plugin install <source>[features] ...`));
 		console.error(chalk.dim("Examples:"));
-		console.error(chalk.dim(`  ${APP_NAME} plugin install @oh-my-pi/exa`));
+		console.error(chalk.dim(`  ${APP_NAME} plugin install @musepi/exa`));
 		console.error(chalk.dim(`  ${APP_NAME} plugin install name@marketplace`));
 		console.error(chalk.dim(`  ${APP_NAME} plugin install github:user/repo`));
 		console.error(chalk.dim(`  ${APP_NAME} plugin install https://github.com/user/repo#v1.0`));
@@ -985,7 +985,7 @@ ${chalk.bold("Options:")}
   -l, --local      Use project-local overrides
 
 ${chalk.bold("Examples:")}
-  ${APP_NAME} plugin install @oh-my-pi/exa[search]
+  ${APP_NAME} plugin install @musepi/exa[search]
   ${APP_NAME} plugin list --json
   ${APP_NAME} plugin features my-plugin --enable search,web
   ${APP_NAME} plugin config set my-plugin apiKey sk-xxx

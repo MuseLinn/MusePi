@@ -7,10 +7,20 @@
  */
 
 /** Image generation backends, in settings/tool vocabulary. */
-export type ImageProvider = "antigravity" | "gemini" | "openai" | "openai-codex" | "openrouter" | "xai";
+export type ImageProvider =
+	| "agnes"
+	| "agnes-global"
+	| "antigravity"
+	| "gemini"
+	| "openai"
+	| "openai-codex"
+	| "openrouter"
+	| "xai";
 
 /** Auto-resolution fallback order when no configured entry or session provider matches. */
 export const AUTO_IMAGE_PROVIDER_ORDER: readonly ImageProvider[] = [
+	"agnes",
+	"agnes-global",
 	"openai",
 	"openai-codex",
 	"antigravity",
@@ -21,6 +31,16 @@ export const AUTO_IMAGE_PROVIDER_ORDER: readonly ImageProvider[] = [
 
 /** Settings choices for `providers.imageOrder` (labels shared with the retired single-preference enum). */
 export const IMAGE_PROVIDER_CHOICES = [
+	{
+		value: "agnes",
+		label: "Agnes",
+		description: "Requires AGNES_API_KEY",
+	},
+	{
+		value: "agnes-global",
+		label: "Agnes (Global)",
+		description: "Requires AGNES_GLOBAL_API_KEY",
+	},
 	{
 		value: "openai",
 		label: "OpenAI",

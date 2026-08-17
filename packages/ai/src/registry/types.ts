@@ -7,8 +7,10 @@
  * the registry of these definitions. Adding a provider is one new file in
  * `./providers/` plus one line in `./registry.ts`. Model-catalog metadata
  * (default model, model-manager factory, catalog discovery) lives in
- * `@oh-my-pi/pi-catalog`'s descriptor table.
+ * `@musepi/pi-catalog`'s descriptor table.
  */
+
+import type { Api, FetchImpl, Model, SimpleStreamOptions, StreamOptions } from "../types";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "./oauth/types";
 
 /**
@@ -17,6 +19,26 @@ import type { OAuthCredentials, OAuthLoginCallbacks } from "./oauth/types";
  * the host (Vertex ADC, Bedrock credential chains, …).
  */
 export type KeyResolver = string | (() => string | undefined);
+
+/** Credentials are resolved by the provider transport rather than used as a bearer string. */
+export const AUTHENTICATED_SENTINEL = "<authenticated>";
+
+export interface PreparedProviderRequest {
+	readonly model: Model<Api>;
+	readonly options: StreamOptions;
+}
+
+export type ProviderRequestPreparer = (model: Model<Api>, options: StreamOptions) => PreparedProviderRequest;
+export type ProviderSimpleOptionsMapper = (options: SimpleStreamOptions) => Readonly<Record<string, unknown>>;
+
+export interface ProviderModelDiscoveryConfig {
+	readonly apiKey?: string;
+	readonly baseUrl?: string;
+	readonly fetch?: FetchImpl;
+	readonly authenticated?: boolean;
+}
+
+export type ProviderModelDiscoveryPreparer = (config: ProviderModelDiscoveryConfig) => ProviderModelDiscoveryConfig;
 
 /**
  * Declarative description of a single provider's auth/login wiring. All
@@ -42,6 +64,14 @@ export interface ProviderDefinition {
 	readonly showInLoginList?: boolean;
 	// --- env-var fallback (the catalog table's `envVars` supplies plain names; set this only for computed resolvers) ---
 	readonly envKeys?: KeyResolver;
+	/** Provider transport can authenticate without a resolved API-key string. */
+	readonly allowsMissingApiKey?: boolean;
+	/** Provider-owned request shaping applied before generic API dispatch. */
+	readonly prepareRequest?: ProviderRequestPreparer;
+	/** Provider-owned projection from the generic simple-stream option bag. */
+	readonly mapSimpleOptions?: ProviderSimpleOptionsMapper;
+	/** Provider-owned authentication and endpoint setup for model discovery. */
+	readonly prepareModelDiscovery?: ProviderModelDiscoveryPreparer;
 	// --- interactive login (OAuthProviderInterface-compatible) ---
 	readonly login?: (callbacks: OAuthLoginCallbacks) => Promise<OAuthCredentials | string>;
 	readonly refreshToken?: (credentials: OAuthCredentials) => Promise<OAuthCredentials>;

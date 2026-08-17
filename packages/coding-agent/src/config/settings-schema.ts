@@ -1,6 +1,6 @@
-import { THINKING_EFFORTS } from "@oh-my-pi/pi-ai";
-import { DEFAULT_SHARE_URL } from "@oh-my-pi/pi-wire";
-import { SHAPE_VARIANT_NAMES } from "@oh-my-pi/snapcompact";
+import { THINKING_EFFORTS } from "@musepi/pi-ai";
+import { DEFAULT_SHARE_URL } from "@musepi/pi-wire";
+import { SHAPE_VARIANT_NAMES } from "@musepi/snapcompact";
 import { DEFAULT_RELAY_URL } from "../collab/protocol";
 import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
 import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS, STT_MODEL_VALUES } from "../stt/models";
@@ -37,7 +37,12 @@ import {
 	TTS_LOCAL_VOICE_VALUES,
 } from "../tts/models";
 import { EDIT_MODES } from "../utils/edit-mode";
-import { SEARCH_PROVIDER_CHOICES, type SearchProviderId } from "../web/search/types";
+import {
+	DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS,
+	MAX_WEB_SEARCH_TIMEOUT_SECONDS,
+	SEARCH_PROVIDER_CHOICES,
+	type SearchProviderId,
+} from "../web/search/types";
 import {
 	SERVICE_TIER_ANTHROPIC_OPTIONS,
 	SERVICE_TIER_ANTHROPIC_VALUES,
@@ -132,6 +137,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Startup & Updates",
 		"Power (macOS)",
 		"Agent",
+		"Language",
 		"Git",
 	],
 	context: ["General", "Compaction", "Rules (TTSR)", "Experimental"],
@@ -555,7 +561,7 @@ export const SETTINGS_SCHEMA = {
 				{
 					value: "project",
 					label: "Per-project",
-					description: "Save project role models in .omp/config.yml; missing project roles use global defaults",
+					description: "Save project role models in .musepi/config.yml; missing project roles use global defaults",
 				},
 			],
 		},
@@ -1010,6 +1016,17 @@ export const SETTINGS_SCHEMA = {
 			group: "Display",
 			label: "Smooth Streaming",
 			description: "Reveal assistant text and streamed tool input smoothly while chunks arrive",
+		},
+	},
+
+	"display.hideToolActivity": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "appearance",
+			group: "Display",
+			label: "Hide Tool Activity",
+			description: "Hide model-initiated tool calls and results from the transcript",
 		},
 	},
 
@@ -2621,7 +2638,7 @@ export const SETTINGS_SCHEMA = {
 	},
 
 	// Auto-Learn (experimental): post-stop nudge to capture lessons to memory
-	// and mint/enhance isolated managed skills under ~/.omp/agent/managed-skills.
+	// and mint/enhance isolated managed skills under ~/.musepi/agent/managed-skills.
 	// Master flag is default-off → zero footprint; sub-flags gate behaviour.
 	"autolearn.enabled": {
 		type: "boolean",
@@ -3286,6 +3303,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "Read Summaries",
 			label: "Prose Summaries",
+			condition: "summarizeActive",
 			description: "Return structural summaries for Markdown and plain text reads",
 		},
 	},
@@ -3297,6 +3315,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "Read Summaries",
 			label: "Read Summary Body Lines",
+			condition: "summarizeActive",
 			description: "Minimum multiline body or literal length before read summaries collapse it",
 		},
 	},
@@ -3308,6 +3327,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "Read Summaries",
 			label: "Read Summary Comment Lines",
+			condition: "summarizeActive",
 			description: "Minimum multiline block comment length before read summaries collapse it",
 		},
 	},
@@ -3319,6 +3339,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "Read Summaries",
 			label: "Read Summary Minimum File Length",
+			condition: "summarizeActive",
 			description: "Files with fewer total lines are read verbatim instead of structurally summarized",
 		},
 	},
@@ -3332,6 +3353,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Read Summary Unfold Target",
 			description:
 				"BFS-unfold elidable spans until the summary is at least this many visible lines. 0 keeps only the outermost elisions.",
+			condition: "summarizeActive",
 		},
 	},
 
@@ -3344,6 +3366,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Read Summary Unfold Ceiling",
 			description:
 				"Hard ceiling on summary size while BFS-unfolding. An unfold whose revealed lines would exceed this is skipped (that span stays folded) and unfolding continues with the remaining spans.",
+			condition: "summarizeActive",
 		},
 	},
 
@@ -3379,6 +3402,20 @@ export const SETTINGS_SCHEMA = {
 			label: "Lazy LSP Startup",
 			description:
 				"Start language servers on first use (lsp tool or editing a matching file type) instead of at session startup",
+			condition: "lspActive",
+		},
+	},
+
+	"lsp.shared": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "files",
+			group: "LSP",
+			label: "Shared Language Servers",
+			description:
+				"Share one language server per project across omp instances via the daemon broker (falls back to private servers when unavailable)",
+			condition: "lspActive",
 		},
 	},
 
@@ -3389,6 +3426,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "LSP",
 			label: "Format on Write",
+			condition: "lspActive",
 			description: "Automatically format code files using LSP after writing",
 		},
 	},
@@ -3400,6 +3438,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "LSP",
 			label: "Diagnostics on Write",
+			condition: "lspActive",
 			description: "Return LSP diagnostics after writing code files",
 		},
 	},
@@ -3411,6 +3450,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "LSP",
 			label: "Diagnostics on Edit",
+			condition: "lspActive",
 			description: "Return LSP diagnostics after editing code files",
 		},
 	},
@@ -3422,6 +3462,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "files",
 			group: "LSP",
 			label: "Deduplicate Diagnostics",
+			condition: "lspActive",
 			description: "Suppress post-edit LSP diagnostics already shown for a file; only surface new or changed ones",
 		},
 	},
@@ -3853,6 +3894,16 @@ export const SETTINGS_SCHEMA = {
 			description: "Enable the tts tool for on-device (Kokoro) or xAI Grok Voice speech-file synthesis",
 		},
 	},
+	"agnes_video_gen.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Available Tools",
+			label: "Agnes Video Generation",
+			description: "Enable the agnes_video_gen tool for Agnes AI video generation",
+		},
+	},
 	"generate_image.enabled": {
 		type: "boolean",
 		default: false,
@@ -3897,23 +3948,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			group: "Available Tools",
 			label: "Computer",
-			description: "Enable native host-desktop screenshots and input for OpenAI computer use",
-		},
-	},
-
-	"computer.backend": {
-		type: "enum",
-		values: ["auto", "native"] as const,
-		default: "auto",
-		ui: {
-			tab: "tools",
-			group: "Computer",
-			label: "Computer Backend",
-			description: "Select automatic or explicit platform-native desktop capture and input",
-			options: [
-				{ value: "auto", label: "Auto" },
-				{ value: "native", label: "Native" },
-			],
+			description: "Enable the scriptable host-desktop control tool (screenshots, input, accessibility)",
 		},
 	},
 
@@ -3930,7 +3965,7 @@ export const SETTINGS_SCHEMA = {
 
 	"computer.maxWidth": {
 		type: "number",
-		default: 1920,
+		default: 3840,
 		ui: {
 			tab: "tools",
 			group: "Computer",
@@ -3941,7 +3976,7 @@ export const SETTINGS_SCHEMA = {
 
 	"computer.maxHeight": {
 		type: "number",
-		default: 1200,
+		default: 2400,
 		ui: {
 			tab: "tools",
 			group: "Computer",
@@ -4023,7 +4058,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			group: "GitHub",
 			label: "GitHub View Cache",
-			description: "Cache rendered issue/PR view output in ~/.omp/cache/github-cache.db so repeated reads are free",
+			description:
+				"Cache rendered issue/PR view output in ~/.musepi/cache/github-cache.db so repeated reads are free",
 		},
 	},
 
@@ -4062,6 +4098,45 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"security.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Available Tools",
+			label: "Security",
+			description:
+				"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
+		},
+	},
+
+	// MusePi customization: interface language for the TUI and setup wizard.
+	// Persisted here so the setup wizard and runtime share one source of truth
+	// (the i18n module accepts it as the highest-precedence locale input).
+	"settings.locale": {
+		type: "enum",
+		values: ["en-US", "zh-CN"] as const,
+		default: "en-US",
+		ui: {
+			tab: "interaction",
+			group: "Language",
+			label: "Interface Language",
+			description: "Language for the TUI and the setup wizard",
+			options: [
+				{
+					value: "en-US",
+					label: "English",
+					description: "Use English for the interface",
+				},
+				{
+					value: "zh-CN",
+					label: "简体中文",
+					description: "使用中文界面",
+				},
+			],
+		},
+	},
+
 	"ask.enabled": {
 		type: "boolean",
 		default: true,
@@ -4093,6 +4168,29 @@ export const SETTINGS_SCHEMA = {
 			label: "Browser CDP URL",
 			description:
 				"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.",
+		},
+	},
+
+	"browser.relay": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Browser Relay",
+			description:
+				"Drive your own Chrome tabs through the omp browser relay. Install the extension once (`omp browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
+		},
+	},
+
+	"browser.relayUrl": {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Browser Relay URL",
+			description: "omp browser relay endpoint (default http://127.0.0.1:9224).",
 		},
 	},
 
@@ -4242,7 +4340,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Discovery & MCP",
 			label: "xd:// Tools",
 			description:
-				"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Disable to expose every enabled tool top-level.",
+				"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
 		},
 	},
 
@@ -4499,7 +4597,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Isolation",
 			label: "Worktree Base Directory",
 			description:
-				"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.omp/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.",
+				"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.",
 		},
 	},
 
@@ -4855,6 +4953,23 @@ export const SETTINGS_SCHEMA = {
 			label: "Excluded Web Search Providers",
 			description: "Providers that web_search should never use, even as fallbacks",
 			options: SEARCH_PROVIDER_CHOICES,
+		},
+	},
+	"providers.webSearchTimeoutSeconds": {
+		type: "number",
+		default: DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS,
+		ui: {
+			tab: "providers",
+			group: "Services",
+			label: "Web Search Timeout",
+			description: `Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum ${MAX_WEB_SEARCH_TIMEOUT_SECONDS})`,
+			options: [
+				{ value: "30", label: "30 seconds" },
+				{ value: "60", label: "1 minute" },
+				{ value: "120", label: "2 minutes" },
+				{ value: "180", label: "3 minutes" },
+				{ value: "300", label: "5 minutes" },
+			],
 		},
 	},
 	"providers.webSearchGeminiModel": {
@@ -5277,7 +5392,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Services",
 			label: "Codex Auto-Redeem Saved Resets",
 			description:
-				"When a turn is blocked by the Codex weekly limit on the active account and no other account is available, run the conservative saved-reset check. unset asks before spending the first eligible reset, yes spends eligible resets without prompting, and no disables the check entirely. Requires retries enabled.",
+				"Spend saved Codex rate-limit resets automatically: restore an account blocked by an exhausted 5h or weekly window when a turn is stuck and no other account can take over, and salvage credits that are about to expire. unset asks before the first spend, yes spends without prompting, and no disables both checks.",
 			options: [
 				{
 					value: "unset",
@@ -5297,7 +5412,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Services",
 			label: "Codex Auto-Redeem Min Block",
 			description:
-				"Only auto-redeem when the natural weekly reset is at least this many minutes away (don't spend a ~30-day credit to save a short wait).",
+				"Only auto-redeem when the natural unblock — the latest reset among the exhausted 5h/weekly windows — is at least this many minutes away (don't spend a scarce credit to save a short wait). Raise it (e.g. 360) to ignore 5h-only blocks.",
 		},
 	},
 	"codexResets.keepCredits": {
@@ -5307,7 +5422,19 @@ export const SETTINGS_SCHEMA = {
 			tab: "providers",
 			group: "Services",
 			label: "Codex Auto-Redeem Reserve",
-			description: "Never auto-spend below this many saved resets (0 = the last credit may be spent automatically).",
+			description:
+				"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.",
+		},
+	},
+	"codexResets.salvageHorizonHours": {
+		type: "number",
+		default: 12,
+		ui: {
+			tab: "providers",
+			group: "Services",
+			label: "Codex Reset Salvage Horizon",
+			description:
+				"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).",
 		},
 	},
 	"provider.appendOnlyContext": {
@@ -5332,17 +5459,11 @@ export const SETTINGS_SCHEMA = {
 	"exa.enabled": {
 		type: "boolean",
 		default: true,
-		ui: { tab: "providers", group: "Services", label: "Exa", description: "Master toggle for all Exa search tools" },
-	},
-
-	"exa.enableSearch": {
-		type: "boolean",
-		default: true,
 		ui: {
 			tab: "providers",
 			group: "Services",
-			label: "Exa Search",
-			description: "Enable Exa basic search, deep search, code search, and crawl tools",
+			label: "Exa",
+			description: "Enable the Exa web search provider",
 		},
 	},
 
@@ -5354,28 +5475,6 @@ export const SETTINGS_SCHEMA = {
 			group: "Services",
 			label: "Exa Search Delay",
 			description: "Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
-		},
-	},
-
-	"exa.enableResearcher": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "providers",
-			group: "Services",
-			label: "Exa Researcher",
-			description: "Enable the Exa researcher tool for AI-powered deep research",
-		},
-	},
-
-	"exa.enableWebsets": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "providers",
-			group: "Services",
-			label: "Exa Websets",
-			description: "Enable Exa webset management and enrichment tools",
 		},
 	},
 
@@ -5545,7 +5644,7 @@ export function getDefault<P extends SettingPath>(path: P): SettingValue<P> {
 
 /** Check if a path has UI metadata (should appear in settings panel) */
 export function hasUi(path: SettingPath): boolean {
-	return "ui" in SETTINGS_SCHEMA[path];
+	return path in SETTINGS_SCHEMA && "ui" in SETTINGS_SCHEMA[path];
 }
 
 /**
@@ -5718,10 +5817,7 @@ export interface TtsrSettings {
 
 export interface ExaSettings {
 	enabled: boolean;
-	enableSearch: boolean;
 	searchDelayMs: number;
-	enableResearcher: boolean;
-	enableWebsets: boolean;
 }
 
 export interface StatusLineSettings {
@@ -5772,6 +5868,7 @@ export interface CodexResetsSettings {
 	autoRedeem: CodexAutoRedeemMode;
 	minBlockedMinutes: number;
 	keepCredits: number;
+	salvageHorizonHours: number;
 }
 
 export interface GcSettings {

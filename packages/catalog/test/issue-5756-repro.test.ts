@@ -2,7 +2,7 @@
  * Issue #5756 — `moonshot/kimi-k3 is incorrectly shown as free`
  *
  * The native Moonshot `kimi-k3` entry is dynamically discovered but has no
- * bundled/models.dev reference, so `mapWithBundledReference` produced the
+ * bundled/stencil.so reference, so `mapWithBundledReference` produced the
  * generic dynamic defaults: zero token cost, null limits, text-only input,
  * and `reasoning: false`. `/models` then labeled the paid model "Free".
  *
@@ -11,11 +11,11 @@
  * (K3 does NOT accept the K2.x binary `thinking: { type }` block).
  */
 import { describe, expect, it } from "bun:test";
-import { streamOpenAICompletions } from "@oh-my-pi/pi-ai/providers/openai-completions";
-import type { Context } from "@oh-my-pi/pi-ai/types";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { moonshotModelManagerOptions } from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { ModelSpec } from "@oh-my-pi/pi-catalog/types";
+import { streamOpenAICompletions } from "@musepi/pi-ai/providers/openai-completions";
+import type { Context } from "@musepi/pi-ai/types";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { moonshotModelManagerOptions } from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { ModelSpec } from "@musepi/pi-catalog/types";
 
 function moonshotModelsResponse(): Response {
 	const body = {

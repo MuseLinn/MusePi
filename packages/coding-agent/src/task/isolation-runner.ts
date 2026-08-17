@@ -19,10 +19,12 @@
  * before mutation); steps 2 and 3 are per-spawn.
  */
 import * as path from "node:path";
-import type * as natives from "@oh-my-pi/pi-natives";
+import type * as natives from "@musepi/pi-natives";
+import { AgentRegistry } from "../registry/agent-registry";
 import type { ToolSession } from "../tools";
 import { generateCommitMessage } from "../utils/commit-message-generator";
 import * as git from "../utils/git";
+import { trackLateCleanup } from "../utils/late-cleanup";
 import type { ExecutorOptions } from "./executor";
 import { runSubprocess } from "./executor";
 import type { SingleResult } from "./types";
@@ -42,6 +44,15 @@ import {
 } from "./worktree";
 
 type IsoBackendKind = natives.IsoBackendKind;
+
+function rememberAgentArtifacts(result: SingleResult): SingleResult {
+	AgentRegistry.global().setHistory(result.id, {
+		outputPath: result.outputPath,
+		patchPath: result.patchPath,
+		branchName: result.branchName,
+	});
+	return result;
+}
 
 /** Resolved repo + baseline used by every isolated spawn in a single call. */
 export interface IsolationContext {
@@ -146,6 +157,7 @@ async function writeIsolationPatch(
  */
 export async function runIsolatedSubprocess(opts: IsolatedRunOptions): Promise<SingleResult> {
 	let handle: IsolationHandle | undefined;
+	let deferredCleanup: Promise<void> | undefined;
 	try {
 		const taskBaseline = structuredClone(opts.context.baseline);
 		handle = await ensureIsolation(opts.context.repoRoot, opts.agentId, opts.preferredBackend);
@@ -155,7 +167,12 @@ export async function runIsolatedSubprocess(opts: IsolatedRunOptions): Promise<S
 			worktree: isolationDir,
 			preloadedExtensionPaths: undefined,
 			preloadedCustomToolPaths: undefined,
+			onCleanupDeferred: completion => {
+				deferredCleanup = completion;
+				opts.baseOptions.onCleanupDeferred?.(completion);
+			},
 		});
+		if (deferredCleanup) return result;
 		if (opts.mergeMode === "branch" && result.exitCode === 0) {
 			try {
 				const commitResult = await commitToBranch(
@@ -165,14 +182,14 @@ export async function runIsolatedSubprocess(opts: IsolatedRunOptions): Promise<S
 					opts.description,
 					opts.buildCommitMessage?.(),
 				);
-				return {
+				return rememberAgentArtifacts({
 					...result,
 					branchName: commitResult?.branchName,
 					branchBaseSha: commitResult?.baseSha,
 					nestedPatches: commitResult?.nestedPatches,
-				};
+				});
 			} catch (mergeErr) {
-				// Agent succeeded but branch commit failed — clean up stale branch
+				// Agent succeeded but branch commit failed — clean up stale branch.
 				const branchName = `omp/task/${opts.agentId}`;
 				await git.branch.tryDelete(opts.context.repoRoot, branchName);
 				const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr);
@@ -183,37 +200,51 @@ export async function runIsolatedSubprocess(opts: IsolatedRunOptions): Promise<S
 						opts.artifactsDir,
 						opts.agentId,
 					);
-					return {
+					return rememberAgentArtifacts({
 						...result,
 						patchPath: patchResult.patchPath,
 						nestedPatches: patchResult.nestedPatches,
 						error: `Merge failed: ${msg}`,
-					};
+					});
 				} catch (patchErr) {
 					const patchMsg = patchErr instanceof Error ? patchErr.message : String(patchErr);
-					return { ...result, error: `Merge failed: ${msg}; patch capture failed: ${patchMsg}` };
+					return rememberAgentArtifacts({
+						...result,
+						error: `Merge failed: ${msg}; patch capture failed: ${patchMsg}`,
+					});
 				}
 			}
 		}
 		if (result.exitCode === 0) {
 			try {
 				const patchResult = await writeIsolationPatch(isolationDir, taskBaseline, opts.artifactsDir, opts.agentId);
-				return {
+				return rememberAgentArtifacts({
 					...result,
 					patchPath: patchResult.patchPath,
 					nestedPatches: patchResult.nestedPatches,
-				};
+				});
 			} catch (patchErr) {
 				const msg = patchErr instanceof Error ? patchErr.message : String(patchErr);
-				return { ...result, error: `Patch capture failed: ${msg}` };
+				return rememberAgentArtifacts({ ...result, error: `Patch capture failed: ${msg}` });
 			}
 		}
-		return result;
+		return rememberAgentArtifacts(result);
 	} catch (err) {
-		return opts.buildFailureResult(err);
+		return rememberAgentArtifacts(opts.buildFailureResult(err));
 	} finally {
 		if (handle) {
-			await cleanupIsolation(handle);
+			const isolationHandle = handle;
+			if (deferredCleanup) {
+				trackLateCleanup(
+					deferredCleanup.then(() => cleanupIsolation(isolationHandle)),
+					{
+						agentId: opts.agentId,
+						resource: "isolation",
+					},
+				);
+			} else {
+				await cleanupIsolation(isolationHandle);
+			}
 		}
 	}
 }

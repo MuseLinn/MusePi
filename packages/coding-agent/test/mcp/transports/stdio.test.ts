@@ -425,3 +425,38 @@ describe.skipIf(process.platform === "win32")("StdioTransport.close teardown", (
 		}
 	}, 5000);
 });
+
+describe.skipIf(process.platform === "win32")("StdioTransport request ids", () => {
+	/** Echoes each request back with the JSON type the server actually observed for `id`. */
+	const ECHO_OBSERVED_ID = `for await (const line of console) {
+		const message = JSON.parse(line);
+		process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { idType: typeof message.id, id: message.id } }) + "\\n");
+	}`;
+
+	async function observeIds(requestIdFormat: "string" | "number" | undefined, methods: string[]) {
+		const transport = new StdioTransport({ command: "bun", args: ["-e", ECHO_OBSERVED_ID], requestIdFormat });
+		try {
+			await transport.connect();
+			const observed: { idType: string; id: unknown }[] = [];
+			for (const method of methods) observed.push(await transport.request(method));
+			return observed;
+		} finally {
+			await transport.close();
+		}
+	}
+
+	it("sends integer ids by default", async () => {
+		// The MCP ecosystem norm; integer-only decoders like Apple's `xcrun
+		// mcpbridge` (#7053) work without configuration.
+		expect(await observeIds(undefined, ["first", "second"])).toEqual([
+			{ idType: "number", id: 1 },
+			{ idType: "number", id: 2 },
+		]);
+	}, 15000);
+
+	it("sends snowflake strings for servers opting into string ids", async () => {
+		const [observed] = await observeIds("string", ["probe"]);
+
+		expect(observed.idType).toBe("string");
+	}, 15000);
+});

@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import { type AsyncJob, AsyncJobManager } from "@oh-my-pi/pi-coding-agent/async";
-import type { CustomMessage } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { YieldQueue } from "@oh-my-pi/pi-coding-agent/session/yield-queue";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import {
+	type AgentMessage,
+	ASIDE_MESSAGE_COMMIT,
+	ASIDE_MESSAGE_DISCARD,
+	type CommittableAsideMessage,
+} from "@musepi/pi-agent-core";
+import { type AsyncJob, AsyncJobManager } from "@musepi/pi-coding-agent/async";
+import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
+import { YieldQueue } from "@musepi/pi-coding-agent/session/yield-queue";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { type CoordinationDetails, HubTool } from "../src/tools/hub";
 
 type AsyncEntry = {
@@ -16,7 +21,7 @@ type AsyncEntry = {
 type AsyncDetails = {
 	jobs: Array<{
 		jobId: string;
-		type?: "bash" | "task";
+		type?: "bash" | "task" | "agnes-video";
 		label?: string;
 		durationMs?: number;
 	}>;
@@ -170,5 +175,59 @@ describe("async result yield queue delivery", () => {
 		expect(harness.prompts).toHaveLength(1);
 		expect(harness.prompts[0]).toHaveLength(1);
 		expect(asyncDetails(harness.prompts[0]![0]!).jobs.map(job => job.jobId)).toEqual([jobId]);
+	});
+
+	test("releases a canceled idle-flush latch for rescheduling", () => {
+		const harness = createHarness(false);
+		harness.queue.enqueue<AsyncEntry>("async-result", {
+			jobId: "idle-retry",
+			result: "retry",
+			job: undefined,
+			durationMs: undefined,
+		});
+		expect(harness.scheduledFlushes).toHaveLength(1);
+
+		harness.queue.cancelIdleFlushScheduling();
+		harness.queue.requestIdleFlush();
+
+		expect(harness.scheduledFlushes).toHaveLength(2);
+	});
+
+	test("holds a streaming receipt until the aside enters live context", async () => {
+		const harness = createHarness(true);
+		const receipt = harness.queue.enqueueWithReceipt<AsyncEntry>("async-result", {
+			jobId: "streaming-receipt",
+			result: "done",
+			job: undefined,
+			durationMs: undefined,
+		});
+		let delivered = false;
+		void receipt.then(() => {
+			delivered = true;
+		});
+		const message = harness.queue.drainLazy()[0]?.();
+		if (!message) throw new Error("Expected a lazy aside");
+
+		await Promise.resolve();
+		expect(delivered).toBe(false);
+		(message as CommittableAsideMessage)[ASIDE_MESSAGE_COMMIT]?.();
+		await receipt;
+		expect(delivered).toBe(true);
+	});
+
+	test("rejects a streaming receipt when the agent discards its aside", async () => {
+		const harness = createHarness(true);
+		const receipt = harness.queue.enqueueWithReceipt<AsyncEntry>("async-result", {
+			jobId: "discarded-receipt",
+			result: "done",
+			job: undefined,
+			durationMs: undefined,
+		});
+		const message = harness.queue.drainLazy()[0]?.();
+		if (!message) throw new Error("Expected a lazy aside");
+
+		(message as CommittableAsideMessage)[ASIDE_MESSAGE_DISCARD]?.(new Error("deadline expired"));
+
+		await expect(receipt).rejects.toThrow("deadline expired");
 	});
 });

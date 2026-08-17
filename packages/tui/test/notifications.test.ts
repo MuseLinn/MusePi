@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as desktopNotify from "@oh-my-pi/pi-tui/desktop-notify";
-import { ProcessTerminal } from "@oh-my-pi/pi-tui/terminal";
+import * as desktopNotify from "@musepi/pi-tui/desktop-notify";
+import { ProcessTerminal } from "@musepi/pi-tui/terminal";
 import {
 	getTerminalInfo,
 	isInsideTmux,
@@ -10,8 +10,8 @@ import {
 	setOsc99Supported,
 	TERMINAL,
 	wrapTmuxPassthrough,
-} from "@oh-my-pi/pi-tui/terminal-capabilities";
-import { setTerminalHeadless } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui/terminal-capabilities";
+import { setTerminalHeadless } from "@musepi/pi-utils";
 
 const stdinIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
 const stdoutIsTtyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
@@ -19,6 +19,7 @@ const stdinSetRawModeDescriptor = Object.getOwnPropertyDescriptor(process.stdin,
 const originalOsc99Probe = Bun.env.PI_TUI_OSC99_PROBE;
 const originalTmux = Bun.env.TMUX;
 const originalZellij = Bun.env.ZELLIJ;
+const originalHerdrEnv = Bun.env.HERDR_ENV;
 const originalPiNotifications = Bun.env.PI_NOTIFICATIONS;
 const originalCmuxSurfaceId = Bun.env.CMUX_SURFACE_ID;
 const originalCmuxWorkspaceId = Bun.env.CMUX_WORKSPACE_ID;
@@ -77,6 +78,7 @@ describe("terminal notifications", () => {
 		// assertions never see a stray inherited TMUX leaking the DCS wrap in.
 		delete Bun.env.TMUX;
 		delete Bun.env.ZELLIJ;
+		delete Bun.env.HERDR_ENV;
 		delete Bun.env.CMUX_SURFACE_ID;
 		delete Bun.env.CMUX_WORKSPACE_ID;
 		delete Bun.env.CMUX_SOCKET_PATH;
@@ -94,6 +96,7 @@ describe("terminal notifications", () => {
 		restoreEnv("PI_TUI_OSC99_PROBE", originalOsc99Probe);
 		restoreEnv("TMUX", originalTmux);
 		restoreEnv("ZELLIJ", originalZellij);
+		restoreEnv("HERDR_ENV", originalHerdrEnv);
 		restoreEnv("PI_NOTIFICATIONS", originalPiNotifications);
 		restoreEnv("CMUX_SURFACE_ID", originalCmuxSurfaceId);
 		restoreEnv("CMUX_WORKSPACE_ID", originalCmuxWorkspaceId);

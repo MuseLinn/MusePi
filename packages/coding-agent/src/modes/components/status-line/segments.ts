@@ -1,10 +1,12 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import { TERMINAL } from "@oh-my-pi/pi-tui";
-import { formatDuration, formatNumber, getProjectDir, pathIsWithin, relativePathWithinRoot } from "@oh-my-pi/pi-utils";
+import { ThinkingLevel } from "@musepi/pi-agent-core";
+import { TERMINAL } from "@musepi/pi-tui";
+import { formatDuration, formatNumber, getProjectDir, pathIsWithin, relativePathWithinRoot } from "@musepi/pi-utils";
+import { t } from "../../../i18n/index.js";
 import { type ThemeColor, theme } from "../../../modes/theme/theme";
 import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../../tools/render-utils";
+import { fileHyperlink } from "../../../tui/hyperlink";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/session-color";
 import { sanitizeStatusText } from "../../shared";
 import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } from "./context-thresholds";
@@ -98,7 +100,7 @@ const modelSegment: StatusLineSegment = {
 		const state = ctx.session.state;
 		const opts = ctx.options.model ?? {};
 
-		let modelName = state.model?.name || state.model?.id || "no-model";
+		let modelName = state.model?.name || state.model?.id || t("no-model");
 		if (modelName.startsWith("Claude ")) {
 			modelName = modelName.slice(7);
 		}
@@ -116,9 +118,10 @@ const modelSegment: StatusLineSegment = {
 					: `${theme.thinking.autoPending} auto`;
 			} else {
 				const level = state.thinkingLevel ?? ThinkingLevel.Off;
-				if (level !== ThinkingLevel.Off) {
-					thinkingDisplay = theme.thinking[level as keyof typeof theme.thinking] ?? "";
-				}
+				thinkingDisplay =
+					level === ThinkingLevel.Off
+						? `${theme.status.disabled} off`
+						: (theme.thinking[level as keyof typeof theme.thinking] ?? level);
 			}
 		}
 
@@ -202,7 +205,7 @@ function renderGoalMode(ctx: SegmentContext, mode: { enabled: boolean; paused: b
 			break;
 	}
 
-	const parts: string[] = [withIcon(icon, "Goal")];
+	const parts: string[] = [withIcon(icon, t("Goal"))];
 	const showBudget = ctx.session.settings.get("goal.statusInFooter") === true;
 	if (showBudget && goal) {
 		parts.push(formatGoalBudget(goal.tokensUsed, goal.tokenBudget));
@@ -218,19 +221,25 @@ function formatLoopLimit(limit: NonNullable<SegmentContext["loopMode"]>["limit"]
 	const hours = Math.floor(totalSeconds / 3_600);
 	const minutes = Math.floor((totalSeconds % 3_600) / 60);
 	const seconds = totalSeconds % 60;
-	if (hours > 0) return `${hours}h${minutes > 0 ? `${minutes}m` : ""} left`;
-	if (minutes > 0) return `${minutes}m${seconds > 0 ? `${seconds}s` : ""} left`;
-	return `${seconds}s left`;
+	if (hours > 0) {
+		if (minutes > 0) return t("{0}h{1}m left", String(hours), String(minutes));
+		return t("{0}h left", String(hours));
+	}
+	if (minutes > 0) {
+		if (seconds > 0) return t("{0}m{1}s left", String(minutes), String(seconds));
+		return t("{0}m left", String(minutes));
+	}
+	return t("{0}s left", String(seconds));
 }
 
 const modeSegment: StatusLineSegment = {
 	id: "mode",
 	render(ctx) {
-		const pauseSuffix = theme.icon.pause ? ` ${theme.icon.pause}` : " (paused)";
+		const pauseSuffix = theme.icon.pause ? ` ${theme.icon.pause}` : ` ${t("(paused)")}`;
 
 		const plan = ctx.planMode;
 		if (plan && (plan.enabled || plan.paused)) {
-			const label = plan.paused ? `Plan${pauseSuffix}` : "Plan";
+			const label = plan.paused ? `${t("Plan")}${pauseSuffix}` : t("Plan");
 			const content = withIcon(theme.icon.plan, label);
 			const color = plan.paused ? "warning" : "accent";
 			return { content: theme.fg(color, content), visible: true };
@@ -238,7 +247,7 @@ const modeSegment: StatusLineSegment = {
 
 		const prewalk = ctx.prewalk;
 		if (prewalk?.enabled) {
-			const content = withIcon(theme.icon.prewalk, "Prewalk");
+			const content = withIcon(theme.icon.prewalk, t("Prewalk"));
 			return { content: theme.fg("accent", content), visible: true };
 		}
 
@@ -249,7 +258,7 @@ const modeSegment: StatusLineSegment = {
 
 		const vibe = ctx.vibeMode;
 		if (vibe?.enabled) {
-			const content = withIcon(theme.icon.agents, "Vibe");
+			const content = withIcon(theme.icon.agents, t("Vibe"));
 			return { content: theme.fg("accent", content), visible: true };
 		}
 
@@ -257,7 +266,7 @@ const modeSegment: StatusLineSegment = {
 		if (loop) {
 			const icon = loop.state === "paused" ? theme.icon.pause || theme.icon.loop : theme.icon.loop;
 			const color: ThemeColor = loop.state === "paused" ? "warning" : "customMessageLabel";
-			const parts = [withIcon(icon, `Loop ${loop.state}`)];
+			const parts = [withIcon(icon, `${t("Loop")} ${t(loop.state)}`)];
 			const limit = formatLoopLimit(loop.limit);
 			if (limit) parts.push(limit);
 			return { content: theme.fg(color, parts.join(" ")), visible: true };
@@ -280,7 +289,8 @@ const pathSegment: StatusLineSegment = {
 		if (stripPrefix && ctx.worktree) {
 			const { projectName, worktreeName } = ctx.worktree;
 			const label = ctx.git.branch === worktreeName ? projectName : `${projectName}/${worktreeName}`;
-			const content = withIcon(theme.icon.worktree, clampPathLength(label, opts.maxLength ?? 40));
+			const text = fileHyperlink(getProjectDir(), clampPathLength(label, opts.maxLength ?? 40));
+			const content = withIcon(theme.icon.worktree, text);
 			return { content: theme.fg("statusLinePath", content), visible: true };
 		}
 
@@ -301,13 +311,10 @@ const pathSegment: StatusLineSegment = {
 		}
 
 		pwd = clampPathLength(pwd, opts.maxLength ?? 40);
-		if (repoSuffix) {
-			pwd = `${pwd}${repoSuffix}`;
-		}
 
 		const showScratchIcon = scratch && stripPrefix;
 		const icon = showScratchIcon ? theme.icon.scratchFolder : theme.icon.folder;
-		const content = withIcon(icon, pwd);
+		const content = withIcon(icon, `${fileHyperlink(projectDir, pwd)}${repoSuffix}`);
 		return { content: theme.fg("statusLinePath", content), visible: true };
 	},
 };
@@ -445,8 +452,11 @@ const costSegment: StatusLineSegment = {
 		const billingParts: string[] = [];
 		if (cost) billingParts.push(`$${cost.toFixed(2)}`);
 		if (normalizedPremiumRequests) billingParts.push(`★ ${formatNumber(normalizedPremiumRequests)}`);
-		if (usingSubscription) billingParts.push("(sub)");
-		if (advisorCost) billingParts.push(`${billingParts.length ? "+ " : ""}$${advisorCost.toFixed(2)} (adv)`);
+		if (usingSubscription) billingParts.push(t("(sub)"));
+		if (advisorCost) {
+			const prefix = billingParts.length ? "+ " : "";
+			billingParts.push(`${prefix}$${advisorCost.toFixed(2)} ${t("(adv)")}`);
+		}
 
 		return { content: theme.fg("statusLineCost", billingParts.join(" ")), visible: true };
 	},
@@ -505,7 +515,7 @@ const timeSegment: StatusLineSegment = {
 		let hours = now.getHours();
 		let suffix = "";
 		if (opts.format === "12h") {
-			suffix = hours >= 12 ? "pm" : "am";
+			suffix = hours >= 12 ? t("pm") : t("am");
 			hours = hours % 12 || 12;
 		}
 
@@ -525,7 +535,7 @@ const sessionSegment: StatusLineSegment = {
 	render(ctx) {
 		const sessionManager = ctx.session.sessionManager;
 		const sessionId = sessionManager?.getSessionId?.();
-		const display = sessionId?.slice(0, 8) || "new";
+		const display = sessionId?.slice(0, 8) || t("new");
 
 		return { content: withIcon(theme.icon.session, display), visible: true };
 	},
@@ -592,10 +602,12 @@ const sessionNameSegment: StatusLineSegment = {
 		const name = sessionManager?.getSessionName();
 		if (!name) return { content: "", visible: false };
 
-		const ansi =
-			getSessionAccentAnsi(
-				getSessionAccentHex(name, theme.getMajorThemeColorHexes(), theme.accentSurfaceLuminance),
-			) ?? theme.getFgAnsi("accent");
+		const accentEnabled = ctx.sessionAccent !== false;
+		const ansi = accentEnabled
+			? (getSessionAccentAnsi(
+					getSessionAccentHex(name, theme.getMajorThemeColorHexes(), theme.accentSurfaceLuminance),
+				) ?? theme.getFgAnsi("accent"))
+			: theme.getFgAnsi("accent");
 		return { content: `${ansi}${sanitizeStatusText(name)}\x1b[39m`, visible: true };
 	},
 };
@@ -606,8 +618,8 @@ const collabSegment: StatusLineSegment = {
 		if (!ctx.collab) return { content: "", visible: false };
 		const label =
 			ctx.collab.role === "host"
-				? `⇄ collab:${ctx.collab.participantCount}`
-				: `⇄ collab guest:${ctx.collab.participantCount}`;
+				? `⇄ ${t("collab:{0}", String(ctx.collab.participantCount))}`
+				: `⇄ ${t("collab guest:{0}", String(ctx.collab.participantCount))}`;
 		return { content: theme.fg("accent", label), visible: true };
 	},
 };

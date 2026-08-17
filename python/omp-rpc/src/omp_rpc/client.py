@@ -1353,7 +1353,9 @@ class RpcClient:
 
                 event_payloads = self._events.snapshot_from(start_index)
                 if any(
-                    payload.get("type") == "agent_end" for payload in event_payloads
+                    payload.get("type") == "agent_end"
+                    and payload.get("isTerminal") is not False
+                    for payload in event_payloads
                 ):
                     events = tuple(
                         cast(RpcAgentEvent, parse_notification(payload))
@@ -1898,13 +1900,28 @@ class RpcClient:
                 payload_type = payload.get("type")
                 if payload_type in ("tool_execution_update", "tool_execution_end"):
                     self._normalize_host_tool_event(payload)
-                notification = parse_notification(payload)
-                listener_notification = parse_notification(payload)
+                try:
+                    notification = parse_notification(payload)
+                except (TypeError, ValueError) as exc:
+                    # Protocol drift must not terminate the reader. This also
+                    # demotes parser defects to UnknownNotification; consumers
+                    # that need visibility should register an unknown listener.
+                    notification = UnknownNotification(
+                        _clone_json_object(payload), parse_error=str(exc)
+                    )
+                    if (
+                        payload_type == "agent_end"
+                        and payload.get("isTerminal") is not False
+                    ):
+                        self._append_async_error(
+                            RpcError(f"Failed to parse terminal agent_end: {exc}")
+                        )
+                        self._mark_agent_run_completed()
                 self._dispatch_listeners(
                     "notification",
-                    listener_notification.type,
+                    notification.type,
                     self._notification_listeners,
-                    listener_notification,
+                    notification,
                 )
 
                 if isinstance(notification, ReadyEvent):
@@ -1913,9 +1930,9 @@ class RpcClient:
                     self._ready.set()
                     self._dispatch_listeners(
                         "ready",
-                        listener_notification.type,
+                        notification.type,
                         self._ready_listeners,
-                        listener_notification,
+                        notification,
                     )
                     continue
 
@@ -1923,42 +1940,45 @@ class RpcClient:
                     self._ui_requests.put(notification)
                     self._dispatch_listeners(
                         "ui_request",
-                        listener_notification.type,
+                        notification.type,
                         self._ui_request_listeners,
-                        cast(ExtensionUiRequest, listener_notification),
+                        notification,
                     )
                     continue
 
                 if isinstance(notification, ExtensionError):
                     self._dispatch_listeners(
                         "extension_error",
-                        listener_notification.type,
+                        notification.type,
                         self._extension_error_listeners,
-                        cast(ExtensionError, listener_notification),
+                        notification,
                     )
                     continue
 
                 if isinstance(notification, UnknownNotification):
                     self._dispatch_listeners(
                         "unknown_notification",
-                        listener_notification.type,
+                        notification.type,
                         self._unknown_notification_listeners,
-                        cast(UnknownNotification, listener_notification),
+                        notification,
                     )
                     continue
 
-                listener_event = cast(RpcAgentEvent, listener_notification)
+                event = cast(RpcAgentEvent, notification)
                 self._append_event(payload)
-                if listener_event.type == "agent_end":
+                if (
+                    isinstance(event, AgentEndEvent)
+                    and event.is_terminal is not False
+                ):
                     self._mark_agent_run_completed()
                 self._dispatch_listeners(
-                    "event", listener_event.type, self._event_listeners, listener_event
+                    "event", event.type, self._event_listeners, event
                 )
                 self._dispatch_listeners(
                     "typed_event",
-                    listener_event.type,
-                    self._typed_event_listeners.get(listener_event.type, []),
-                    listener_event,
+                    event.type,
+                    self._typed_event_listeners.get(event.type, []),
+                    event,
                 )
         except Exception as exc:
             self._mark_closed(exc)

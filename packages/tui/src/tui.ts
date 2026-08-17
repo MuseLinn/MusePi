@@ -17,7 +17,7 @@
  */
 import * as fs from "node:fs";
 import { performance } from "node:perf_hooks";
-import { $flag, getDebugLogPath } from "@oh-my-pi/pi-utils";
+import { $flag, getDebugLogPath } from "@musepi/pi-utils";
 import { DEFAULT_MAX_INLINE_IMAGES, ImageBudget } from "./components/image";
 import { planDeccaraFills } from "./deccara";
 import { isKeyRelease, matchesKey } from "./keys";
@@ -1670,7 +1670,10 @@ export class TUI extends Container {
 
 	#querySixelSupport(): void {
 		if (TERMINAL.imageProtocol) return;
-		if (process.platform !== "win32") return;
+		// win32 native or WSL under Windows Terminal — both are ConPTY-hosted and
+		// reach the same WT graphics negotiation. WSL reports process.platform
+		// "linux", so a bare win32 check silently skips the probe there (#6009).
+		if (!isConPTYHosted()) return;
 		if (!Bun.env.WT_SESSION) return;
 		if (!process.stdin.isTTY || !process.stdout.isTTY) return;
 

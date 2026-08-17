@@ -5,7 +5,7 @@
  */
 import * as fs from "node:fs/promises";
 import * as url from "node:url";
-import { getWorkProfile } from "@oh-my-pi/pi-natives";
+import { getWorkProfile } from "@musepi/pi-natives";
 import {
 	Container,
 	isNotificationSuppressed,
@@ -17,8 +17,8 @@ import {
 	TERMINAL,
 	type TerminalNotification,
 	Text,
-} from "@oh-my-pi/pi-tui";
-import { getSessionsDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-tui";
+import { getSessionsDir } from "@musepi/pi-utils";
 import { DynamicBorder } from "../modes/components/dynamic-border";
 import { TranscriptBlock } from "../modes/components/transcript-container";
 import { getSelectListTheme, getSymbolTheme, theme } from "../modes/theme/theme";

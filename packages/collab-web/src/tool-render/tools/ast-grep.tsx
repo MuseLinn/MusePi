@@ -1,5 +1,6 @@
 /** `ast_grep` — structural AST pattern search across files. */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, CodeBlock, InvalidArg, Kv, KvGrid, Output, PathText, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, normalizeWs, num, scopePaths, str, truncate } from "../util";
@@ -51,27 +52,27 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				{lang}
 			</Badge>
 		),
-		glob && <Badge key="glob">glob={glob}</Badge>,
-		sel && <Badge key="sel">sel={sel}</Badge>,
-		skip !== null && skip > 0 && <Badge key="skip">skip:{skip}</Badge>,
+		glob && <Badge key="glob">{t("glob={value}", { value: glob })}</Badge>,
+		sel && <Badge key="sel">{t("sel={value}", { value: sel })}</Badge>,
+		skip !== null && skip > 0 && <Badge key="skip">{t("skip:{count}", { count: String(skip) })}</Badge>,
 	];
 	const resultBadges: ReactNode[] =
 		result && !result.isError
 			? [
 					matchCount !== null && (
 						<Badge key="matches" tone={matchCount === 0 ? "warn" : "ok"}>
-							{matchCount} {matchCount === 1 ? "match" : "matches"}
+							{t("{count} match(es)", { count: String(matchCount) })}
 						</Badge>
 					),
 					fileCount !== null && fileCount > 0 && (
-						<Badge key="files">
-							{fileCount} {fileCount === 1 ? "file" : "files"}
-						</Badge>
+						<Badge key="files">{t("{count} file(s)", { count: String(fileCount) })}</Badge>
 					),
-					filesSearched !== null && <Badge key="searched">searched {filesSearched}</Badge>,
+					filesSearched !== null && (
+						<Badge key="searched">{t("searched {count}", { count: String(filesSearched) })}</Badge>
+					),
 					limitReached && (
 						<Badge key="limit" tone="warn">
-							limit reached
+							{t("limit reached")}
 						</Badge>
 					),
 				]
@@ -88,7 +89,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 						key={i}
 						code={pat}
 						lang={lang ?? undefined}
-						title={patterns.length > 1 ? `pattern ${i + 1}` : "pattern"}
+						title={patterns.length > 1 ? t("pattern {count}", { count: String(i + 1) }) : t("pattern")}
 						maxLines={12}
 					/>
 				))
@@ -96,7 +97,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			{(paths.length > 0 || scopePath) && (
 				<KvGrid>
 					{paths.length > 0 && (
-						<Kv k={paths.length === 1 ? "path" : "paths"}>
+						<Kv k={paths.length === 1 ? t("path") : t("paths")}>
 							{paths.map((p, i) => (
 								<span key={i}>
 									{i > 0 && ", "}
@@ -117,7 +118,9 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					text={parseErrors.join("\n")}
 					maxLines={6}
 					title={
-						parseErrorsTotal > parseErrors.length ? `parse issues (${parseErrorsTotal} total)` : "parse issues"
+						parseErrorsTotal > parseErrors.length
+							? t("parse issues ({count} total)", { count: String(parseErrorsTotal) })
+							: t("parse issues")
 					}
 				/>
 			)}

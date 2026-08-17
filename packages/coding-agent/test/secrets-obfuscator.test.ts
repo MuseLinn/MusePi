@@ -3,32 +3,36 @@
  */
 
 import { describe, expect, it, spyOn } from "bun:test";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Context, Message, TextContent } from "@oh-my-pi/pi-ai";
+import { type } from "@musepi/omptype";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { AssistantMessage, Context, Message, TextContent } from "@musepi/pi-ai";
 import {
+	builtinCredentialSecretEntries,
 	getExistingSecretPlaceholderKey,
 	getSecretPlaceholderKey,
+	getSecretPlaceholderKeySync,
 	loadSecrets,
-} from "@oh-my-pi/pi-coding-agent/secrets";
+} from "@musepi/pi-coding-agent/secrets";
 import {
 	deobfuscateAgentMessages,
 	deobfuscateToolArguments,
 	obfuscateMessages,
 	obfuscateProviderContext,
 	obfuscateToolArguments,
-	type SecretEntry,
-	SecretObfuscator,
+} from "@musepi/pi-coding-agent/secrets/message-transform";
+import { type SecretEntry, SecretObfuscator } from "@musepi/pi-coding-agent/secrets/obfuscator";
+import {
 	sanitizeSecretFriendlyName,
 	secretEntriesNeedPlaceholderKey,
 	secretEntryNeedsPlaceholderKey,
 	stripPendingSecretPlaceholderSuffix,
-} from "@oh-my-pi/pi-coding-agent/secrets/obfuscator";
-import { compileSecretRegex } from "@oh-my-pi/pi-coding-agent/secrets/regex";
-import { getActiveProfile, getAgentDir, setProfile } from "@oh-my-pi/pi-utils/dirs";
-import { type } from "arktype";
+} from "@musepi/pi-coding-agent/secrets/placeholder";
+import { compileSecretRegex } from "@musepi/pi-coding-agent/secrets/regex";
+import { getActiveProfile, getAgentDir, setProfile } from "@musepi/pi-utils/dirs";
 
 describe("compileSecretRegex", () => {
 	it("adds global flag when not provided", () => {
@@ -48,6 +52,80 @@ describe("compileSecretRegex", () => {
 	});
 	it("rejects invalid regex flags", () => {
 		expect(() => compileSecretRegex("x", "zz")).toThrow();
+	});
+});
+
+describe("builtinCredentialSecretEntries", () => {
+	// Issue #6968: an unconfigured credential-shaped token in a tool result used
+	// to fall through to pi-ai's irreversible `[*_token_redacted]` rewrite, so an
+	// edit-tool `old_string` echoing that placeholder could never match the file.
+	// The contract: the token is hidden from provider-visible text AND restored
+	// byte-exact in tool-call arguments before tool execution.
+	it("hides unconfigured credential-shaped tokens and restores them in tool-call arguments", () => {
+		const obfuscator = new SecretObfuscator(builtinCredentialSecretEntries());
+		expect(obfuscator.hasSecrets()).toBe(true);
+
+		const tokens = [`sk-${"a1B-c2D".repeat(7)}e3F`, `ghp_${"aB1".repeat(12)}`, `glpat-${"xY2-".repeat(5)}`];
+		for (const token of tokens) {
+			const fileLine = `MOONSHOT_API_KEY=${token}`;
+			const providerView = obfuscator.obfuscate(fileLine);
+			expect(providerView).not.toContain(token);
+			// Re-obfuscation is a fixed point: the placeholder itself is never re-matched.
+			expect(obfuscator.obfuscate(providerView)).toBe(providerView);
+			// The model echoes the placeholder into edit-tool old_string verbatim.
+			const args = deobfuscateToolArguments(obfuscator, { old_string: providerView });
+			expect(args.old_string).toBe(fileLine);
+		}
+	});
+});
+
+describe("lazy placeholder key", () => {
+	// The built-in credential entries match dynamically, so they must not force
+	// `secret-placeholder.key` creation for every secrets.enabled session: the
+	// key provider is only invoked when a credential-shaped token is actually
+	// obfuscated, and exactly once across the obfuscator's lifetime.
+	it("resolves the key provider only on the first real credential match", () => {
+		let resolutions = 0;
+		const obfuscator = new SecretObfuscator(builtinCredentialSecretEntries(), () => {
+			resolutions++;
+			return crypto.randomBytes(32).toString("base64url");
+		});
+		expect(resolutions).toBe(0);
+		obfuscator.obfuscate("MOONSHOT_API_KEY=huntsville");
+		expect(resolutions).toBe(0);
+
+		const token = `sk-${"a1B-c2D".repeat(7)}e3F`;
+		const providerView = obfuscator.obfuscate(`MOONSHOT_API_KEY=${token}`);
+		expect(resolutions).toBe(1);
+		expect(providerView).not.toContain(token);
+		obfuscator.obfuscate(`repeat: ${token}`);
+		expect(resolutions).toBe(1);
+		const args = deobfuscateToolArguments(obfuscator, { old_string: providerView });
+		expect(args.old_string).toBe(`MOONSHOT_API_KEY=${token}`);
+	});
+
+	it("redacts a lazily resolved key from the same input that triggers resolution", () => {
+		const key = "K".repeat(43);
+		const obfuscator = new SecretObfuscator(builtinCredentialSecretEntries(), () => key);
+		const token = `sk-${"a1B-c2D".repeat(7)}e3F`;
+
+		const providerView = obfuscator.obfuscate(`key=${key}\ncredential=${token}`);
+
+		expect(providerView).not.toContain(key);
+		expect(providerView).not.toContain(token);
+	});
+
+	it("getSecretPlaceholderKeySync creates the key file on demand and shares it with the async readers", async () => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-lazy-placeholder-key-"));
+		try {
+			expect(await getExistingSecretPlaceholderKey(dir)).toBeUndefined();
+			const key = getSecretPlaceholderKeySync(dir);
+			expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+			expect(await getExistingSecretPlaceholderKey(dir)).toBe(key);
+			expect(await getSecretPlaceholderKey(dir)).toBe(key);
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
 	});
 });
 

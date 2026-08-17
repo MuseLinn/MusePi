@@ -1,4 +1,5 @@
 /** Small pure formatting helpers shared across collab-web components. */
+import { t } from "../i18n/index.js";
 
 /** "950", "12.3k", "1.2M" — tolerant of non-finite input. */
 export function fmtTokens(n: number): string {
@@ -34,14 +35,14 @@ export function fmtDuration(ms: number): string {
 export function relTime(tsMs: number): string {
 	if (!Number.isFinite(tsMs)) return "";
 	const delta = Date.now() - tsMs;
-	if (delta < 10_000) return "now";
+	if (delta < 10_000) return t("now");
 	const s = Math.floor(delta / 1000);
-	if (s < 60) return `${s}s ago`;
+	if (s < 60) return t("{count}s ago", { count: String(s) });
 	const min = Math.floor(s / 60);
-	if (min < 60) return `${min}m ago`;
+	if (min < 60) return t("{count}m ago", { count: String(min) });
 	const h = Math.floor(min / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
+	if (h < 24) return t("{count}h ago", { count: String(h) });
+	return t("{count}d ago", { count: String(Math.floor(h / 24)) });
 }
 
 /** "73%" from a 0–100 percent; em dash for null/non-finite. */

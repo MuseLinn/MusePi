@@ -34,23 +34,9 @@ test("computer schema is constructed once on first parameters access", async () 
 			crossToolIdentity: true,
 			validAccepted: true,
 			validOutput: {
-				actions: [
-					{ type: "click", x: 1, y: 2, button: "left", keys: null },
-					{ type: "double_click", x: 3, y: 4 },
-					{
-						type: "drag",
-						path: [
-							{ x: 0, y: 0 },
-							{ x: 9, y: 9 },
-						],
-					},
-					{ type: "keypress", keys: ["CTRL", "A"] },
-					{ type: "move", x: 5, y: 6 },
-					{ type: "screenshot" },
-					{ type: "scroll", x: 7, y: 8, scroll_x: -10, scroll_y: 20 },
-					{ type: "type", text: "hello" },
-					{ type: "wait" },
-				],
+				code: "const windows = await desktop.windows(); windows.length",
+				read_only: true,
+				timeout: 10,
 			},
 			invalidRejected: [true, true, true, true, true, true],
 		},

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@oh-my-pi/pi-tui";
+import { type Component, type RenderScheduler, type RenderTimer, TUI } from "@musepi/pi-tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 // A terminal that re-reports its size when the alternate screen buffer toggles
@@ -13,6 +13,7 @@ const ENV: Record<string, string | undefined> = {
 	TMUX: undefined,
 	STY: undefined,
 	ZELLIJ: undefined,
+	HERDR_ENV: undefined,
 	CMUX_WORKSPACE_ID: undefined,
 	CMUX_SURFACE_ID: undefined,
 	CMUX_REMOTE_TRANSPORT: undefined,

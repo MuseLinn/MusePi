@@ -2,14 +2,14 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { resolveProviderModels } from "@oh-my-pi/pi-catalog/model-manager";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
 import {
 	MODELS_DEV_PROVIDER_DESCRIPTORS,
 	mapModelsDevToModels,
 	umansModelManagerOptions,
-} from "@oh-my-pi/pi-catalog/provider-models/openai-compat";
-import type { FetchImpl, ModelSpec } from "@oh-my-pi/pi-catalog/types";
+} from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { FetchImpl, ModelSpec } from "@musepi/pi-catalog/types";
 import modelsJson from "../src/models.json";
 
 const bundledModels = modelsJson;
@@ -228,7 +228,7 @@ describe("umans provider catalog", () => {
 		}
 	});
 
-	it("maps the models.dev Umans PAYG pricing to the Anthropic endpoint", () => {
+	it("maps the stencil.so Umans PAYG pricing to the Anthropic endpoint", () => {
 		const models = mapModelsDevToModels(
 			{
 				"umans-ai": {

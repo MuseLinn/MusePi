@@ -16,9 +16,10 @@
  * transcript behavior are native by construction.
  */
 import * as path from "node:path";
-import type { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { getConfigRootDir, logger } from "@oh-my-pi/pi-utils";
+import type { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { ImageContent } from "@musepi/pi-ai";
+import { getConfigRootDir, logger } from "@musepi/pi-utils";
+import { t } from "../i18n/index.js";
 import type { AgentHubRemote, AgentHubRemoteTranscript } from "../modes/components/agent-hub";
 import type { InteractiveModeContext } from "../modes/types";
 import { AgentRegistry } from "../registry/agent-registry";
@@ -242,7 +243,7 @@ export class CollabGuestLink {
 	/** Shows the read-only status hint when applicable; true when the action must be dropped. */
 	#rejectReadOnly(): boolean {
 		if (!this.#readOnly) return false;
-		this.#ctx.showStatus("This collab link is read-only");
+		this.#ctx.showStatus(t("This collab link is read-only"));
 		return true;
 	}
 
@@ -314,7 +315,7 @@ export class CollabGuestLink {
 						// Fail the join with the host's message instead of hanging
 						// until the welcome timeout.
 						this.#clearWelcomeTimer();
-						if (joined) this.#ctx.showError(`Collab host: ${frame.message}`);
+						if (joined) this.#ctx.showError(t("Collab host: {0}", frame.message));
 						else firstWelcome.reject(new Error(frame.message));
 						return;
 					}
@@ -338,10 +339,10 @@ export class CollabGuestLink {
 				return;
 			}
 			if (willReconnect) {
-				this.#ctx.showStatus(`Collab connection lost (${reason}), reconnecting…`, { dim: true });
+				this.#ctx.showStatus(t("Collab connection lost ({0}), reconnecting…", reason), { dim: true });
 				return;
 			}
-			this.#ctx.showStatus(`Collab session ended (${reason})`);
+			this.#ctx.showStatus(t("Collab session ended ({0})", reason));
 			void this.#restoreLocalSession();
 		};
 		socket.connect();
@@ -459,7 +460,7 @@ export class CollabGuestLink {
 		this.#welcomed = true;
 		const suffix = this.#readOnly ? " (read-only)" : "";
 		this.#ctx.showStatus(
-			pending.isResync ? `Reconnected to collab session${suffix}` : `Joined collab session${suffix}`,
+			pending.isResync ? t("Reconnected to collab session{0}", suffix) : t("Joined collab session{0}", suffix),
 		);
 	}
 
@@ -544,13 +545,13 @@ export class CollabGuestLink {
 				break;
 			}
 			case "bye": {
-				this.#ctx.showStatus(`Collab session ended (${frame.reason})`);
+				this.#ctx.showStatus(t("Collab session ended ({0})", frame.reason));
 				this.#socket?.close();
 				void this.#restoreLocalSession();
 				break;
 			}
 			case "error":
-				this.#ctx.showError(`Collab host: ${frame.message}`);
+				this.#ctx.showError(t("Collab host: {0}", frame.message));
 				break;
 			default:
 				logger.debug("collab guest ignoring unexpected frame", { type: frame.t });

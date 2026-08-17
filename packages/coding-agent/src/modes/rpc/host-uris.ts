@@ -1,4 +1,4 @@
-import { Snowflake } from "@oh-my-pi/pi-utils";
+import { Snowflake } from "@musepi/pi-utils";
 import { InternalUrlRouter } from "../../internal-urls";
 import type {
 	InternalResource,
@@ -15,6 +15,9 @@ import type {
 } from "./rpc-types";
 
 type RpcHostUriOutput = (frame: RpcHostUriRequest | RpcHostUriCancelRequest) => void;
+
+/** OMP-owned namespaces that RPC hosts may not replace. */
+const RESERVED_HOST_URI_SCHEMES: ReadonlySet<string> = new Set(["security"]);
 
 type PendingUriRequest = {
 	operation: "read" | "write";
@@ -93,6 +96,9 @@ export class RpcHostUriBridge {
 			}
 			if (!/^[a-z][a-z0-9+.-]*$/.test(scheme)) {
 				throw new Error(`Host URI scheme contains invalid characters: ${raw.scheme}`);
+			}
+			if (RESERVED_HOST_URI_SCHEMES.has(scheme)) {
+				throw new Error(`Host URI scheme is reserved by OMP: ${scheme}://`);
 			}
 			normalized.set(scheme, {
 				scheme,

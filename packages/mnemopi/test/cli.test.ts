@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cmdRecall, cmdRemember, cmdStats, runCli } from "@oh-my-pi/pi-mnemopi/cli";
-import { BeamMemory } from "@oh-my-pi/pi-mnemopi/core/beam";
+import { cmdRecall, cmdRemember, cmdStats, runCli } from "@musepi/pi-mnemopi/cli";
+import { BeamMemory } from "@musepi/pi-mnemopi/core/beam";
 
 function tempRoot(): string {
 	return mkdtempSync(join(tmpdir(), "mnemopi-ts-cli-"));
@@ -56,9 +56,12 @@ describe("CLI command handlers", () => {
 			try {
 				const id = memory.remember("Working memory item", { source: "test", importance: 0.5 });
 				memory.consolidateToEpisodic("Episodic summary", [id], "test", 0.6);
-				memory.db
-					.prepare("INSERT INTO triples (subject, predicate, object, source) VALUES (?, ?, ?, ?)")
-					.run("alice", "likes", "typescript", "test");
+				memory.db.run("INSERT INTO triples (subject, predicate, object, source) VALUES (?, ?, ?, ?)", [
+					"alice",
+					"likes",
+					"typescript",
+					"test",
+				]);
 			} finally {
 				memory.close();
 			}

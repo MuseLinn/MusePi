@@ -15,19 +15,19 @@
  *   CLI flags, scope globs — onto that pipeline.
  */
 
-import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { Api, Effort, KnownProvider, Model, ModelSpec } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { modelMatchesHost } from "@oh-my-pi/pi-catalog/hosts";
-import { buildModelProviderPriorityRank } from "@oh-my-pi/pi-catalog/identity";
-import { stripThinkingVariantToken } from "@oh-my-pi/pi-catalog/identity/family";
-import { clampThinkingLevelForModel } from "@oh-my-pi/pi-catalog/model-thinking";
-import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
-import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-catalog/provider-models";
-import { resolveBareVariantAlias, resolveVariantAlias } from "@oh-my-pi/pi-catalog/variant-collapse";
-import { fuzzyMatch } from "@oh-my-pi/pi-tui";
-import { logger } from "@oh-my-pi/pi-utils";
-import chalk from "chalk";
+import { ThinkingLevel } from "@musepi/pi-agent-core";
+import type { Api, Effort, KnownProvider, Model, ModelSpec } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { modelMatchesHost } from "@musepi/pi-catalog/hosts";
+import { buildModelProviderPriorityRank } from "@musepi/pi-catalog/identity";
+import { stripThinkingVariantToken } from "@musepi/pi-catalog/identity/family";
+import { clampThinkingLevelForModel } from "@musepi/pi-catalog/model-thinking";
+import { modelsAreEqual } from "@musepi/pi-catalog/models";
+import { DEFAULT_MODEL_PER_PROVIDER } from "@musepi/pi-catalog/provider-models";
+import { resolveBareVariantAlias, resolveVariantAlias } from "@musepi/pi-catalog/variant-collapse";
+import { fuzzyMatch } from "@musepi/pi-tui";
+import { logger } from "@musepi/pi-utils";
+import chalk from "@musepi/pi-utils/chalk";
 import MODEL_PRIO from "../priority.json" with { type: "json" };
 import {
 	AUTO_THINKING,
@@ -932,6 +932,28 @@ function normalizeModelPatternList(value: string | string[] | undefined): string
 	return patterns.map(pattern => pattern.trim()).filter(Boolean);
 }
 
+/**
+ * Extract the first explicit model-role alias from a raw model selection.
+ *
+ * This intentionally runs before role expansion so callers can retain the
+ * source identity (`@smol`, `pi/slow`, or `*`) even when it resolves to a
+ * concrete provider/model or inherited fallback. Bare role names and explicit
+ * provider/model selectors are not role aliases.
+ */
+export function resolveExplicitModelRole(
+	value: string | string[] | undefined,
+	settings?: ModelRoleLookup,
+): string | undefined {
+	for (const pattern of normalizeModelPatternList(value)) {
+		const prefixLength = modelRoleAliasPrefixLength(pattern);
+		if (prefixLength === undefined) continue;
+		const { base } = splitThinkingSuffix(pattern, prefixLength, MAX_THINKING_SUFFIX_OPTIONS);
+		const role = getModelRoleAlias(base, settings);
+		if (role) return role;
+	}
+	return undefined;
+}
+
 function isSessionInheritedAgentPattern(value: string): boolean {
 	return (
 		value === DEFAULT_MODEL_ROLE ||
@@ -1068,6 +1090,8 @@ export function resolveConfiguredModelPatterns(
 	});
 }
 export interface AgentModelPatternResolutionOptions {
+	/** Highest-priority request selector, when supplied by a caller. */
+	requestModel?: string | string[];
 	settingsOverride?: string | string[];
 	agentModel?: string | string[];
 	settings?: Settings;
@@ -1075,11 +1099,25 @@ export interface AgentModelPatternResolutionOptions {
 	fallbackModelPattern?: string;
 }
 
-export function resolveAgentModelPatterns(options: AgentModelPatternResolutionOptions): string[] {
-	const { settingsOverride, agentModel, settings, activeModelPattern, fallbackModelPattern } = options;
+interface EffectiveAgentModelSelection {
+	source?: string | string[];
+	patterns: string[];
+}
+
+function resolveEffectiveAgentModelSelection(
+	options: AgentModelPatternResolutionOptions,
+): EffectiveAgentModelSelection {
+	const { requestModel, settingsOverride, agentModel, settings, activeModelPattern, fallbackModelPattern } = options;
+
+	const requestPatterns = resolveConfiguredModelPatterns(requestModel, settings);
+	if (requestPatterns.length > 0) {
+		return { source: requestModel, patterns: requestPatterns };
+	}
 
 	const overridePatterns = resolveConfiguredModelPatterns(settingsOverride, settings);
-	if (overridePatterns.length > 0) return overridePatterns;
+	if (overridePatterns.length > 0) {
+		return { source: settingsOverride, patterns: overridePatterns };
+	}
 
 	const normalizedAgentPatterns = normalizeModelPatternList(agentModel);
 	const configuredAgentPatterns = resolveConfiguredModelPatterns(agentModel, settings);
@@ -1090,14 +1128,23 @@ export function resolveAgentModelPatterns(options: AgentModelPatternResolutionOp
 			singleAgentPattern === formatModelRoleAlias("task") ||
 			singleAgentPattern === `${LEGACY_MODEL_ROLE_ALIAS_PREFIX}task`
 		) {
-			return configuredAgentPatterns;
+			return { source: agentModel, patterns: configuredAgentPatterns };
 		}
-		if (!agentInheritsSessionModel) return configuredAgentPatterns;
+		if (!agentInheritsSessionModel) return { source: agentModel, patterns: configuredAgentPatterns };
 	}
 
 	const fallback =
 		activeModelPattern?.trim() || fallbackModelPattern?.trim() || settings?.getModelRole("default")?.trim() || "";
-	return resolveConfiguredModelPatterns(fallback, settings);
+	return { patterns: resolveConfiguredModelPatterns(fallback, settings) };
+}
+
+/** Return the raw selector source that supplies the effective agent patterns. */
+export function resolveAgentModelSource(options: AgentModelPatternResolutionOptions): string | string[] | undefined {
+	return resolveEffectiveAgentModelSelection(options).source;
+}
+
+export function resolveAgentModelPatterns(options: AgentModelPatternResolutionOptions): string[] {
+	return resolveEffectiveAgentModelSelection(options).patterns;
 }
 /** Default prewalk hand-off target when no explicit target is configured. */
 export const DEFAULT_PREWALK_TARGET = "@smol";

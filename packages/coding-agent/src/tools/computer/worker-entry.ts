@@ -1,11 +1,14 @@
 import { parentPort } from "node:worker_threads";
-import { consumeWorkerInbox, isWorkerHostSelector } from "@oh-my-pi/pi-utils/worker-host";
+import { consumeWorkerInbox, isWorkerHostSelector } from "@musepi/pi-utils/worker-host";
 import type { ComputerWorkerInbound, ComputerWorkerTransport } from "./protocol";
 import { ComputerWorkerCore } from "./worker";
 
-export function startComputerWorker(): void {
-	if (!parentPort) throw new Error("computer-worker-entry: missing parentPort");
+let started = false;
 
+/** Starts the computer worker once when running inside a Bun worker thread. */
+export function startComputerWorker(): void {
+	if (started || !parentPort) return;
+	started = true;
 	const port = parentPort;
 	const inbox = consumeWorkerInbox();
 	const transport: ComputerWorkerTransport = {
@@ -26,9 +29,11 @@ export function startComputerWorker(): void {
 	new ComputerWorkerCore(transport);
 }
 
-// Bun workers report `import.meta.main === false`. The source fallback still
-// enters this file directly, while packaged CLI workers carry the selector and
-// start the named entry only after installing its inbox.
-if (!Bun.isMainThread && !process.argv.some(isWorkerHostSelector) && import.meta.path === Bun.main) {
+// Direct-source fallback: loaded as a worker's entry module outside a CLI
+// host there is no selector argv, so start immediately. When any CLI-host
+// worker re-enters cli.ts (which imports this module statically), the
+// selector guard defers to the host's dispatch — an unguarded auto-start
+// would hijack the message port of every other worker kind.
+if (!Bun.argv.some(isWorkerHostSelector)) {
 	startComputerWorker();
 }

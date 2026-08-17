@@ -10,12 +10,12 @@ import {
 	type FetchImpl,
 	getCustomApi,
 	type Model,
-} from "@oh-my-pi/pi-ai";
-import { getOAuthProviders, unregisterOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
-import type { OAuthCredentials } from "@oh-my-pi/pi-ai/oauth/types";
-import { ModelRegistry, type ProviderConfigInput } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { logger, removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-ai";
+import { getOAuthProviders, unregisterOAuthProviders } from "@musepi/pi-ai/oauth";
+import type { OAuthCredentials } from "@musepi/pi-ai/oauth/types";
+import { ModelRegistry, type ProviderConfigInput } from "@musepi/pi-coding-agent/config/model-registry";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { logger, removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
 describe("ModelRegistry runtime provider registration", () => {
 	let tempDir: string;
@@ -27,7 +27,7 @@ describe("ModelRegistry runtime provider registration", () => {
 
 	// Stub transport: reject every request so refresh("online") drives the full
 	// online discovery path with deterministic, instant failures instead of real
-	// network. Provider fetches (dynamic + models.dev) are caught and swallowed,
+	// network. Provider fetches (dynamic + stencil.so) are caught and swallowed,
 	// leaving the registry with its bundled catalog plus runtime overlays.
 	const offlineFetch: FetchImpl = () => Promise.reject(new Error("network disabled in model-registry runtime test"));
 

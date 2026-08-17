@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { formatCompact, formatInteger, formatPercent } from "../data/formatters";
 import { buildAgentTokenShare } from "../data/view-models";
+import { t } from "../i18n";
 import type { AgentType, AgentTypeStats } from "../types";
 
 /**
@@ -22,7 +23,7 @@ export function AgentTokenShare({ stats }: AgentTokenShareProps) {
 	const view = useMemo(() => buildAgentTokenShare(stats), [stats]);
 
 	if (view.totalTokens === 0) {
-		return <div className="py-8 text-center stats-text-muted text-sm">No token usage in this range</div>;
+		return <div className="py-8 text-center stats-text-muted text-sm">{t("No token usage in this range")}</div>;
 	}
 
 	return (
@@ -35,7 +36,7 @@ export function AgentTokenShare({ stats }: AgentTokenShareProps) {
 								key={seg.agentType}
 								className="h-full"
 								style={{ width: `${seg.share * 100}%`, background: AGENT_META[seg.agentType].color }}
-								title={`${AGENT_META[seg.agentType].label}: ${formatPercent(seg.share)}`}
+								title={`${t(AGENT_META[seg.agentType].label)}: ${formatPercent(seg.share)}`}
 							/>
 						),
 				)}
@@ -49,7 +50,7 @@ export function AgentTokenShare({ stats }: AgentTokenShareProps) {
 								className="w-2.5 h-2.5 rounded-full flex-shrink-0"
 								style={{ background: AGENT_META[seg.agentType].color }}
 							/>
-							<span className="stats-text-primary truncate">{AGENT_META[seg.agentType].label}</span>
+							<span className="stats-text-primary truncate">{t(AGENT_META[seg.agentType].label)}</span>
 							<span className="stats-text-muted stats-text-xs whitespace-nowrap">
 								{formatInteger(seg.requests)} req
 							</span>

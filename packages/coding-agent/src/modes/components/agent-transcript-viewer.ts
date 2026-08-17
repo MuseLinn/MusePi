@@ -14,11 +14,12 @@
  * same append path over the host's byte-capped transcript reads.
  */
 import * as fs from "node:fs";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { type Component, Editor, matchesKey, routeSgrMouseInput, ScrollView, type TUI } from "@oh-my-pi/pi-tui";
-import { formatDuration, formatNumber, logger } from "@oh-my-pi/pi-utils";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { type Component, Editor, matchesKey, routeSgrMouseInput, ScrollView, type TUI } from "@musepi/pi-tui";
+import { formatDuration, formatNumber, logger } from "@musepi/pi-utils";
 import type { KeyId } from "../../config/keybindings";
 import type { MessageRenderer } from "../../extensibility/extensions/types";
+import { t } from "../../i18n/index.js";
 import type { AgentLifecycleManager } from "../../registry/agent-lifecycle";
 import type { AgentRegistry, AgentStatus } from "../../registry/agent-registry";
 import type { FileEntry, SessionMessageEntry } from "../../session/session-entries";
@@ -43,6 +44,8 @@ export interface AgentTranscriptViewerDeps {
 	lifecycle?: () => AgentLifecycleManager;
 	ui: TUI;
 	getTool?: (name: string) => AgentTool | undefined;
+	/** Whether the active registry entry came from a built-in factory. */
+	isBuiltInTool?: (name: string) => boolean;
 	getMessageRenderer?: (customType: string) => MessageRenderer | undefined;
 	cwd: string;
 	hideThinkingBlock?: () => boolean;
@@ -125,13 +128,13 @@ function sentinelsFromFile(file: string, size: number): LocalTranscriptSentinel[
 function statusBadge(status: AgentStatus): string {
 	switch (status) {
 		case "running":
-			return theme.fg("success", "running");
+			return theme.fg("success", t("running"));
 		case "idle":
-			return theme.fg("accent", "idle");
+			return theme.fg("accent", t("idle"));
 		case "parked":
-			return theme.fg("muted", "parked");
+			return theme.fg("muted", t("parked"));
 		case "aborted":
-			return theme.fg("error", "aborted");
+			return theme.fg("error", t("aborted"));
 	}
 }
 
@@ -161,6 +164,7 @@ export class AgentTranscriptViewer implements Component {
 		this.#builder = new ChatTranscriptBuilder({
 			ui: deps.ui,
 			getTool: deps.getTool,
+			isBuiltInTool: deps.isBuiltInTool,
 			getMessageRenderer: deps.getMessageRenderer,
 			cwd: deps.cwd,
 			hideThinkingBlock: deps.hideThinkingBlock,
@@ -613,9 +617,7 @@ export class AgentTranscriptViewer implements Component {
 	}
 
 	#statsLine(): string {
-		const observed: ObservableSession | undefined = this.deps.observers
-			?.getSessions()
-			.find(s => s.id === this.deps.agentId);
+		const observed: ObservableSession | undefined = this.deps.observers?.getSession(this.deps.agentId);
 		const progress = observed?.progress;
 		if (!progress) return "";
 		const stats: string[] = [];
@@ -640,10 +642,10 @@ export class AgentTranscriptViewer implements Component {
 	#placeholder(maxWidth: number): string {
 		if (this.deps.remote) {
 			if (this.#remoteError) return sanitizeErrorLine(this.#remoteError, maxWidth);
-			if (this.#remoteUnavailable) return "Transcript lives on the host — not available.";
-			return this.#hasRemoteData ? "No messages yet." : "Loading transcript from host…";
+			if (this.#remoteUnavailable) return t("Transcript lives on the host — not available.");
+			return this.#hasRemoteData ? t("No messages yet.") : t("Loading transcript from host…");
 		}
-		if (!this.deps.registry.get(this.deps.agentId)?.sessionFile) return "No session file available yet.";
-		return "No messages yet.";
+		if (!this.deps.registry.get(this.deps.agentId)?.sessionFile) return t("No session file available yet.");
+		return t("No messages yet.");
 	}
 }

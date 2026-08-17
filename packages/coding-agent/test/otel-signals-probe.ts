@@ -6,20 +6,20 @@
  *
  * Stands up a loopback OTLP/proto receiver, points the standard env vars at it,
  * registers the providers, drives a log record through the bridged
- * `@oh-my-pi/pi-utils` logger and metric instruments through the agent
+ * `@musepi/pi-utils` logger and metric instruments through the agent
  * telemetry hooks, flushes, and exits 0 only if the receiver got a non-empty
  * protobuf POST at both /v1/logs and /v1/metrics.
  */
 
-import type { AgentRunCoverage, AgentRunSummary, ChatUsageEvent } from "@oh-my-pi/pi-agent-core";
-import { emptyAgentRunCoverage, emptyAgentRunSummary } from "@oh-my-pi/pi-agent-core";
+import type { AgentRunCoverage, AgentRunSummary, ChatUsageEvent } from "@musepi/pi-agent-core";
+import { emptyAgentRunCoverage, emptyAgentRunSummary } from "@musepi/pi-agent-core";
 import {
 	createTelemetryExportConfig,
 	flushTelemetryExport,
 	initTelemetryExport,
 	isTelemetryExportEnabled,
-} from "@oh-my-pi/pi-coding-agent/telemetry-export";
-import { logger } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/telemetry-export";
+import { logger } from "@musepi/pi-utils";
 
 const seen = new Set<string>();
 const metricPayloads: Uint8Array[] = [];

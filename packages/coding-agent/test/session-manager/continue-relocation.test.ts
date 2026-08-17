@@ -3,11 +3,11 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { SessionHeader } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getTerminalId } from "@oh-my-pi/pi-tui";
-import { getConfigRootDir, getTerminalSessionsDir, setAgentDir } from "@oh-my-pi/pi-utils";
+import type { SessionHeader } from "@musepi/pi-coding-agent/session/session-entries";
+import { loadEntriesFromFile } from "@musepi/pi-coding-agent/session/session-loader";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { getTerminalId } from "@musepi/pi-tui";
+import { getConfigRootDir, getTerminalSessionsDir, setAgentDir } from "@musepi/pi-utils";
 
 import { makeAssistantMessage } from "./helpers";
 

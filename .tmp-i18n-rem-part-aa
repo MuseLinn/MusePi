@@ -1,0 +1,32 @@
+ New fallback chain — Enter picks the model it protects, Esc cancels
+Adding fallback for
+Replacing fallback of
+ Assigning {0} — Enter assigns, Esc cancels
+Recently used models
+Model roles — f adds a retry fallback, cleared roles fall back to auto-selection
+Enter create + pick model · Esc cancel
+←/→ choose · Enter assign/clear · Esc cancel
+←/→ save scope · Enter choose · Esc cancel
+←/→ thinking level · Enter apply · Esc keep
+Enter pick fallback · ↑/↓ providers · type to search · Esc cancel
+Enter pick the protected model · ↑/↓ providers · type to search · Esc cancel
+Enter assign · ↑/↓ providers · type to search · Esc cancel
+Enter log in · ↑/↓ providers · Esc close
+↑/↓ providers · Esc close
+New role name:
+Models
+Select an extension
+to view details
+Type: 
+Origin:
+Status:
+Arguments:
+Required
+Optional
+Instruction:
+Connection:
+Transport:
+Command:
+Args:
+Env vars:
+Trigger:

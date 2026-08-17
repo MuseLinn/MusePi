@@ -1,4 +1,4 @@
-import { getProjectDir, logger } from "@oh-my-pi/pi-utils";
+import { getProjectDir, logger } from "@musepi/pi-utils";
 import {
 	type AutocompleteProvider,
 	findLeadingSlashCommandStart,

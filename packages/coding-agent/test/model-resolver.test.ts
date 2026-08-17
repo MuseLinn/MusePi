@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { type Api, Effort, type Model } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-catalog/provider-models";
+import { type Api, Effort, type Model } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { DEFAULT_MODEL_PER_PROVIDER } from "@musepi/pi-catalog/provider-models";
 import {
 	expandRoleAlias,
 	extractExplicitThinkingSelector,
@@ -10,16 +10,18 @@ import {
 	parseModelString,
 	pickDefaultAvailableModel,
 	resolveAgentModelPatterns,
+	resolveAgentModelSource,
 	resolveAgentPrewalkPattern,
 	resolveAllowedModels,
 	resolveCliModel,
+	resolveExplicitModelRole,
 	resolveModelFromString,
 	resolveModelOverride,
 	resolveModelRoleValue,
 	resolveModelScope,
-} from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import { DEFAULT_MODEL_ROLE_ALIAS, LEGACY_MODEL_ROLE_ALIAS_PREFIX } from "@oh-my-pi/pi-coding-agent/config/model-roles";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
+} from "@musepi/pi-coding-agent/config/model-resolver";
+import { DEFAULT_MODEL_ROLE_ALIAS, LEGACY_MODEL_ROLE_ALIAS_PREFIX } from "@musepi/pi-coding-agent/config/model-roles";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
 
 // Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
@@ -844,6 +846,43 @@ describe("resolveAgentPrewalkPattern", () => {
 	});
 });
 describe("resolveAgentModelPatterns", () => {
+	test("selects the first non-empty source and skips aliases with no patterns", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				empty: "",
+				override: "openai/gpt-4o",
+				definition: "anthropic/claude-sonnet-4-5",
+			},
+		});
+
+		const emptyRequest = {
+			requestModel: "",
+			settingsOverride: "@override",
+			agentModel: ["@definition"],
+			settings,
+		};
+		expect(resolveAgentModelPatterns(emptyRequest)).toEqual(["openai/gpt-4o"]);
+		expect(resolveAgentModelSource(emptyRequest)).toBe("@override");
+
+		const emptyAlias = {
+			requestModel: "@empty",
+			settingsOverride: ",,",
+			agentModel: ["@definition"],
+			settings,
+		};
+		expect(resolveAgentModelPatterns(emptyAlias)).toEqual(["anthropic/claude-sonnet-4-5"]);
+		expect(resolveAgentModelSource(emptyAlias)).toEqual(["@definition"]);
+
+		const concreteRequest = {
+			requestModel: "openai/gpt-4o",
+			settingsOverride: "@override",
+			agentModel: ["@definition"],
+			settings,
+		};
+		expect(resolveAgentModelSource(concreteRequest)).toBe("openai/gpt-4o");
+		expect(resolveExplicitModelRole(resolveAgentModelSource(concreteRequest), settings)).toBeUndefined();
+	});
+
 	test("falls back to the active session model when @task is unset", () => {
 		const settings = Settings.isolated({
 			modelRoles: { default: "anthropic/claude-sonnet-4-5" },
@@ -1696,6 +1735,29 @@ describe("resolveModelFromString", () => {
 		const result = resolveModelFromString("example/runtime:auto", mockAutoSuffixModels);
 		expect(result?.provider).toBe("example");
 		expect(result?.id).toBe("runtime:auto");
+	});
+});
+
+describe("resolveExplicitModelRole", () => {
+	test("extracts built-in, custom, legacy, default, and thinking-suffixed aliases before expansion", () => {
+		const settings = Settings.isolated({
+			modelRoles: {
+				reviewer: "openai/gpt-4o",
+			},
+		});
+
+		expect(resolveExplicitModelRole("@task", settings)).toBe("task");
+		expect(resolveExplicitModelRole("pi/reviewer:high", settings)).toBe("reviewer");
+		expect(resolveExplicitModelRole("@reviewer:xhigh", settings)).toBe("reviewer");
+		expect(resolveExplicitModelRole("*:low", settings)).toBe("default");
+	});
+
+	test("does not infer a role from an explicit model selector", () => {
+		const settings = Settings.isolated({ modelRoles: { reviewer: "openai/gpt-4o" } });
+		expect(resolveExplicitModelRole("openai/gpt-4o", settings)).toBeUndefined();
+		expect(resolveExplicitModelRole("openai/gpt-4o:high", settings)).toBeUndefined();
+		expect(resolveExplicitModelRole("openai/gpt-4o:max", settings)).toBeUndefined();
+		expect(resolveExplicitModelRole(["openai/gpt-4o", "@reviewer:high"], settings)).toBe("reviewer");
 	});
 });
 

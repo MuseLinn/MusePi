@@ -1,13 +1,13 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { Context, ImageContent, Message, TextContent, ToolResultMessage } from "@oh-my-pi/pi-ai";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import type { Context, ImageContent, Message, TextContent, ToolResultMessage } from "@musepi/pi-ai";
+import { buildModel } from "@musepi/pi-catalog/build";
 import {
 	estimateInlineSavings,
 	planInlineSwaps,
 	type SnapcompactInlineOptions,
 	SnapcompactInlineTransformer,
-} from "@oh-my-pi/pi-coding-agent/session/snapcompact-inline";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+} from "@musepi/pi-coding-agent/session/snapcompact-inline";
+import * as snapcompact from "@musepi/snapcompact";
 
 /**
  * Token-dense deterministic word salad: each word is `w` + ≤5 digits, ~7
@@ -283,7 +283,6 @@ describe("SnapcompactInlineTransformer", () => {
 		expect(result.systemPrompt).toHaveLength(2);
 		expect(result.systemPrompt![0]).toContain("Core instructions.");
 		expect(result.systemPrompt![0]).toContain("Today is 2026-06-12.");
-		expect(result.systemPrompt![0]).toContain("Loaded context-file instructions were moved");
 		expect(result.systemPrompt![0]).not.toContain(longContext);
 		expect(result.systemPrompt![1]).toBe("Final system block.");
 

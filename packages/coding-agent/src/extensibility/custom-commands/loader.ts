@@ -6,14 +6,14 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentDir, getProjectDir, isEnoent, logger } from "@oh-my-pi/pi-utils";
-import * as arktype from "arktype";
-import * as zodModule from "zod/v4";
+import { type } from "@musepi/omptype";
+import * as zod from "@musepi/omptype/zod";
+import { getAgentDir, getProjectDir, isEnoent, logger } from "@musepi/pi-utils";
 import { getConfigDirs } from "../../config";
 import { execCommand } from "../../exec/exec";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
-import * as typebox from "../typebox";
+import * as typebox from "../legacy-typebox";
 import { GreenCommand } from "./bundled/ci-green";
 import { ReviewCommand } from "./bundled/review";
 import type {
@@ -187,8 +187,8 @@ export async function loadCustomCommands(options: LoadCustomCommandsOptions = {}
 		exec: (command: string, args: string[], execOptions) =>
 			execCommand(command, args, execOptions?.cwd ?? cwd, execOptions),
 		typebox,
-		arktype,
-		zod: zodModule,
+		arktype: type,
+		zod,
 		pi: PiCodingAgent,
 	};
 

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { Api, ApiKey, Model } from "@oh-my-pi/pi-ai";
+import type { Api, ApiKey, Model } from "@musepi/pi-ai";
 
 import { dbPath as configuredDbPath } from "../config";
 import { closeQuietly } from "../db";
@@ -329,7 +329,8 @@ function toRecallOptions(options: RecallFacadeOptions): BeamRecallFacadeOptions 
 }
 
 function countRows(db: Database, sql: string, ...params: (string | number | null)[]): number {
-	const row = db.prepare(sql).get(...params) as { total?: number; count?: number } | null;
+	using statement = db.prepare(sql);
+	const row = statement.get(...params) as { total?: number; count?: number } | null;
 	return row?.total ?? row?.count ?? 0;
 }
 
@@ -344,9 +345,8 @@ function dataDirForDbPath(path: string): string | undefined {
 
 function sourceCounts(db: Database): Record<string, number> {
 	const counts: Record<string, number> = {};
-	for (const row of db
-		.prepare("SELECT source, COUNT(*) AS total FROM working_memory GROUP BY source")
-		.all() as Row[]) {
+	using statement = db.prepare("SELECT source, COUNT(*) AS total FROM working_memory GROUP BY source");
+	for (const row of statement.all() as Row[]) {
 		counts[String(row.source ?? "") || "conversation"] = Number(row.total ?? 0);
 	}
 	return counts;
@@ -482,7 +482,8 @@ export class Mnemopi {
 		const episodic = this.#withRuntimeOptions(() => this.beam.getEpisodicStats(authorId, authorType, channelId));
 		const totalMemories = countRows(this.conn, "SELECT COUNT(*) AS total FROM working_memory");
 		const totalSessions = countRows(this.conn, "SELECT COUNT(DISTINCT session_id) AS total FROM working_memory");
-		const last = this.conn.prepare("SELECT timestamp FROM working_memory ORDER BY timestamp DESC LIMIT 1").get() as {
+		using lastStatement = this.conn.prepare("SELECT timestamp FROM working_memory ORDER BY timestamp DESC LIMIT 1");
+		const last = lastStatement.get() as {
 			timestamp: string | null;
 		} | null;
 		const tripleTotal = countRows(this.conn, "SELECT COUNT(*) AS total FROM triples");

@@ -1,4 +1,4 @@
-import { logger } from "@oh-my-pi/pi-utils";
+import { logger } from "@musepi/pi-utils";
 
 const DELIVERY_RETRY_BASE_MS = 500;
 const DELIVERY_RETRY_MAX_MS = 30_000;
@@ -29,7 +29,7 @@ interface PollEscalationState {
 
 export interface AsyncJob {
 	id: string;
-	type: "bash" | "task";
+	type: "bash" | "task" | "agnes-video";
 	status: "running" | "completed" | "failed" | "cancelled";
 	startTime: number;
 	label: string;
@@ -92,6 +92,12 @@ export interface AsyncJobDeliveryState {
 	delivering: boolean;
 	nextRetryAt?: number;
 	pendingJobIds: string[];
+}
+
+export interface AsyncJobReapResult {
+	settled: boolean;
+	pendingJobIds: string[];
+	completion: Promise<void>;
 }
 
 export interface AsyncJobRegisterOptions {
@@ -174,7 +180,7 @@ export class AsyncJobManager {
 	}
 
 	register(
-		type: "bash" | "task",
+		type: "bash" | "task" | "agnes-video",
 		label: string,
 		run: (ctx: {
 			jobId: string;
@@ -488,6 +494,26 @@ export class AsyncJobManager {
 			);
 			if (!settled) return false;
 		}
+	}
+
+	/**
+	 * Cancel every job owned by `ownerId`, then wait only until `deadlineAt`.
+	 * The returned completion keeps waiting for actual process settlement when
+	 * the deadline expires, so callers can move that cleanup out of the
+	 * user-visible Task wait without losing ownership of the live work.
+	 */
+	async cancelAndReapOwnerJobs(ownerId: string, deadlineAt: number): Promise<AsyncJobReapResult> {
+		this.cancelAll({ ownerId });
+		const timeoutMs = Math.max(0, deadlineAt - Date.now());
+		const settled = await this.waitForOwnerJobs(ownerId, { timeoutMs });
+		if (settled) {
+			return { settled: true, pendingJobIds: [], completion: Promise.resolve() };
+		}
+		const pendingJobIds = this.getAllJobs({ ownerId })
+			.filter(job => job.status === "running" || job.status === "cancelled")
+			.map(job => job.id);
+		const completion = this.waitForOwnerJobs(ownerId).then(() => {});
+		return { settled: false, pendingJobIds, completion };
 	}
 
 	async #waitForAllUntil(deadline: number): Promise<boolean> {

@@ -2,9 +2,85 @@
 
 ## [Unreleased]
 
+## [17.2.11] - 2026-08-07
+
+### Added
+
+- Added `repair` and `rawKeys` options to `parseFrontmatter` to support spec-conformant loading (disabling lenient recovery and preserving keys verbatim), and exported `normalizeFrontmatterKeys` for manual key normalization.
+
+### Fixed
+
+- Fixed the in-house `marked` list tokenizer incorrectly consuming trailing blank lines at the end of input, ensuring correct list tightness and token generation matching standard `marked` behavior.
+
+## [17.2.10] - 2026-08-06
+
+### Added
+
+- Introduced zero-dependency in-house modules replacing external packages, importable via `@musepi/pi-utils/<module>`: `acp` (Agent Client Protocol), `browsers` (Chrome for Testing discovery/install), `chalk` (ANSI styling), `dates` (date formatting), `dom` (HTML parser, WHATWG DOM subset, and CSS selectors), `docx` (DOCX to HTML), `headers` (browser header generation), `lru` (LRU cache), `marked` (GFM markdown lexer/parser), `readability` (article extraction), `template` (Handlebars-compatible templating), `turndown` (HTML to Markdown), `vterm` (headless terminal emulator), and `xml` (XML parser).
+- Added postmortem fatal recovery hint providers to allow applications to print actionable recovery commands before cleanup starts.
+
+### Changed
+
+- Rewrote the logger file backend in-house, maintaining the identical line format, daily rotation, and pruning behavior without external dependencies.
+
+### Fixed
+
+- Fixed PowerShell (`powershell.exe` / `pwsh`) support when used as a custom `shellPath` by correctly passing `-NoLogo -Command` (and `-NoProfile` under `PI_BASH_NO_LOGIN`) instead of POSIX flags.
+- Fixed the in-house `marked` list tokenizer consuming the trailing blank line into the list token when the next top-level line was a plain paragraph. The blank now always becomes a separate `space` token (matching real marked), so a list's token shape no longer depends on what follows it — restoring the TUI streaming lexer's freeze invariant — and a list followed by a paragraph is tight, not loose, per CommonMark.
+- Added the missing Handlebars built-in `lookup` helper to the in-house `template` engine (`{{lookup obj key}}`, proto-safe property access; a user-registered `lookup` helper still takes precedence).
+
+### Removed
+
+- Removed external dependencies on `handlebars`, `winston`, and `winston-daily-rotate-file`.
+
+## [17.2.9] - 2026-08-05
+
+### Added
+
+- Added a public `compareVersions` utility (`@musepi/pi-utils`) that compares two version strings with SemVer-2.0 prerelease ordering, build-metadata stripping, and numeric segment comparison without float overflow; never throws.
+
+### Fixed
+
+- Honor the current process `PATH` when caching executable lookups, preventing stale tool paths after environment reloads.
+- Parsed account-cap reset windows such as “Your limit will reset in 13 minutes” so credential backoff honors the provider's full reset duration.
+
+## [17.2.6] - 2026-08-03
+
+### Added
+
+- Added a shared `file-lock` utility backed by process-owned native OS locks with automatic crash release and bounded asynchronous retry.
+
+## [17.2.5] - 2026-08-03
+
+### Added
+
+- Added utility functions `parseFlag()`, `getBrowserRelayDir()`, and `getGlobalDaemonRuntimeDir()` to support browser relay mode and global daemon runtime directory resolution.
+
+### Changed
+
+- Updated the lightweight CLI runner to support static command metadata, allowing root help to render without importing full command implementations.
+
+## [17.2.4] - 2026-08-01
+
+### Added
+
+- Added `getSecretPlaceholderKeyPath()`, `getDaemonRuntimeDir()`, `getProviderInFlightRoot()`, and `getMarketplacesRegistryPath()` to resolve secret key, daemon runtime, provider in-flight, and marketplace registry paths under their respective XDG categories (state, data) instead of the config root.
+- Existing installs enabling XDG keep their data: a legacy `~/.omp/agent/secret-placeholder.key` or `~/.omp/marketplaces.json` is copied to its XDG location on first resolution, so persisted transcripts still deobfuscate and added marketplaces survive the move.
+
+### Changed
+
+- Headless hosts (print/RPC/ACP/eval/SDK) now use a 1s SQLite `busy_timeout` for the session-critical databases (agent.db, history.db, stats.db) via `getDbBusyTimeoutMs()`, so lock contention no longer freezes the protocol loop for the full interactive 5s timeout; interactive hosts keep the 5s timeout.
+
+### Fixed
+
+- Fixed Bun test-runtime detection treating application-owned `NODE_ENV=test` and `BUN_ENV=test` values as test-runner signals ([#7261](https://github.com/can1357/oh-my-pi/issues/7261)).
+
+## [17.2.1] - 2026-07-30
+
 ### Added
 
 - Added a `postmortem.quit` configuration option to safely handle shutdown paths when the terminal output has already disconnected.
+- Added project-keyed OMP security-state directory helpers under the user state root.
 
 ## [17.1.8] - 2026-07-28
 
@@ -209,7 +285,7 @@
 
 ### Removed
 
-- Removed the public `createAbortableStream` API from `@oh-my-pi/pi-utils`. Consumers should use the lighter, direct-reader `abortableSource` async generator inside `@oh-my-pi/pi-utils/stream` to avoid the extra ReadableStream wrapper layer and per-chunk enqueue overhead.
+- Removed the public `createAbortableStream` API from `@musepi/pi-utils`. Consumers should use the lighter, direct-reader `abortableSource` async generator inside `@musepi/pi-utils/stream` to avoid the extra ReadableStream wrapper layer and per-chunk enqueue overhead.
 
 ## [16.0.11] - 2026-06-19
 
@@ -238,7 +314,7 @@
 
 ### Added
 
-- Added `installWorkerInbox(port)` / `consumeWorkerInbox()` to `@oh-my-pi/pi-utils/worker-host`. A self-dispatching CLI host that imports a Bun worker module dynamically attaches the worker's real `message` listener after Bun flushes the messages the parent posted before spawn, dropping a synchronously-posted `init`. The host installs this buffering inbox synchronously in the entry's sync prefix so a listener exists at flush time; the worker module consumes it and binds the real handler, replaying anything buffered.
+- Added `installWorkerInbox(port)` / `consumeWorkerInbox()` to `@musepi/pi-utils/worker-host`. A self-dispatching CLI host that imports a Bun worker module dynamically attaches the worker's real `message` listener after Bun flushes the messages the parent posted before spawn, dropping a synchronously-posted `init`. The host installs this buffering inbox synchronously in the entry's sync prefix so a listener exists at flush time; the worker module consumes it and binds the real handler, replaying anything buffered.
 
 ## [15.13.1] - 2026-06-15
 
@@ -249,7 +325,7 @@
 - Added support for a runtime `overrides` map in `RuntimeInstallSpec`, which is now written into generated runtime `package.json` manifests to force dependency pins (including transitive ones) across the runtime tree
 - Added a lightweight loop-phase breadcrumb stack (`pushLoopPhase`/`popLoopPhase`/`currentLoopPhase`, plus `takeRecentLoopPhase` which returns the live phase or the most recently popped one and clears it) so the TUI event-loop watchdog can attribute a main-thread block to the phase that caused it — including a synchronous phase already popped before the watchdog's delayed tick runs ([#2485](https://github.com/can1357/oh-my-pi/issues/2485))
 - Added `FetchWithRetryOptions.timeout` (forwarded to the underlying `fetch` call). `false` disables Bun's native ~300s pre-response timeout; a positive number overrides the ceiling. Bare browser/Node fetch ignores it ([#2422](https://github.com/can1357/oh-my-pi/issues/2422))
-- Added the side-effect-free `@oh-my-pi/pi-utils/worker-host` module (`declareWorkerHostEntry()` / `workerHostEntry()`), extracted from `env` (still re-exported there) so worker spawn sites can resolve the self-dispatching CLI host entry without importing `env`'s side-effecting module graph.
+- Added the side-effect-free `@musepi/pi-utils/worker-host` module (`declareWorkerHostEntry()` / `workerHostEntry()`), extracted from `env` (still re-exported there) so worker spawn sites can resolve the self-dispatching CLI host entry without importing `env`'s side-effecting module graph.
 
 ### Fixed
 

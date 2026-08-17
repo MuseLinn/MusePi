@@ -44,7 +44,19 @@ export interface ToolRenderHost {
 	hasAgent?(id: string): boolean;
 	/** Open the sub-session/transcript view for an agent id. */
 	openAgent?(id: string): void;
+	/** Submit a message to the conversation as if the user typed it
+	 *  (kimi sendPrompt parity — inline widgets hand results back to the
+	 *  agent). Absent in board-only hosts. */
+	sendPrompt?(text: string): void;
 }
+
+/**
+ * aicss-style rendering kind derived from the tool name/intent by the
+ * transcript's ToolCard. Dedicated renderers may branch on it; the generic
+ * fallback uses it to pick a treatment instead of the raw JSON dump. Absent
+ * for plain unknown tools (tolerant fallback) and HTML-export hosts.
+ */
+export type ToolKind = "diff" | "search" | "image";
 
 export interface ToolRenderProps {
 	/** Wire tool name (may be an alias of the registry key, e.g. `grep` → search). */
@@ -56,6 +68,8 @@ export interface ToolRenderProps {
 	running?: boolean;
 	/** Host capabilities (sub-session drill-down, …). */
 	host?: ToolRenderHost;
+	/** Transcript-derived rendering kind (see {@link ToolKind}). */
+	kind?: ToolKind;
 }
 
 export interface ToolRenderer {

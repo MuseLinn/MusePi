@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { buildModel } from "@oh-my-pi/pi-catalog/build";
-import { buildOpenAIResponsesCompat } from "@oh-my-pi/pi-catalog/compat/openai";
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { buildModel } from "@musepi/pi-catalog/build";
+import { buildOpenAIResponsesCompat } from "@musepi/pi-catalog/compat/openai";
+import { Effort } from "@musepi/pi-catalog/effort";
 import {
 	DEFAULT_MODEL_PER_PROVIDER,
 	MODELS_DEV_PROVIDER_DESCRIPTORS,
 	mapModelsDevToModels,
 	PROVIDER_DESCRIPTORS,
-} from "@oh-my-pi/pi-catalog/provider-models";
-import type { ModelSpec } from "@oh-my-pi/pi-catalog/types";
+} from "@musepi/pi-catalog/provider-models";
+import type { ModelSpec } from "@musepi/pi-catalog/types";
 
-// A models.dev "azure" payload: two OpenAI-family models (one reasoning), a
+// A stencil.so "azure" payload: two OpenAI-family models (one reasoning), a
 // non-tool-capable instruct model, and a Foundry-hosted third party served via
 // a per-model `provider` override (claude over .services.ai.azure.com).
 const AZURE_MODELS_DEV_FIXTURE = {
@@ -37,7 +37,7 @@ describe("azure catalog provider", () => {
 		expect(DEFAULT_MODEL_PER_PROVIDER.azure).toBe("gpt-5.5");
 	});
 
-	test("models.dev descriptor keeps only OpenAI-family Responses models, baseUrl resolved at runtime", () => {
+	test("stencil.so descriptor keeps only OpenAI-family Responses models, baseUrl resolved at runtime", () => {
 		const azure = mapModelsDevToModels(AZURE_MODELS_DEV_FIXTURE, MODELS_DEV_PROVIDER_DESCRIPTORS).filter(
 			model => model.provider === "azure",
 		);

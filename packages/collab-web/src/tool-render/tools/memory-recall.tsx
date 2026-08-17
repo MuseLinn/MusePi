@@ -4,6 +4,7 @@
  * header followed by blank-line-separated `- <text> [type] (date)` bullets.
  */
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Output, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { normalizeWs, resultTextOf, str, truncate } from "../util";
@@ -22,7 +23,14 @@ function Summary(props: ToolRenderProps): ReactNode {
 		<>
 			{query !== null ? <span>{truncate(normalizeWs(query), 96)}</span> : <InvalidArg what="query" />}
 			{found !== null && (
-				<> {found > 0 ? <Badge tone="accent">{found} found</Badge> : <Badge tone="warn">no matches</Badge>}</>
+				<>
+					{" "}
+					{found > 0 ? (
+						<Badge tone="accent">{t("{count} found", { count: String(found) })}</Badge>
+					) : (
+						<Badge tone="warn">{t("no matches")}</Badge>
+					)}
+				</>
 			)}
 		</>
 	);
@@ -69,10 +77,10 @@ function Body(props: ToolRenderProps): ReactNode {
 	}
 	return (
 		<>
-			{query && <Output text={query} title="query" maxLines={4} />}
+			{query && <Output text={query} title={t("query")} maxLines={4} />}
 			{entries.length > 0 ? (
 				<>
-					{asOf && <Badges items={[`as of ${asOf} UTC`]} />}
+					{asOf && <Badges items={[t("as of {value} UTC", { value: asOf })]} />}
 					<div className="tv-list">
 						{entries.map((entry, i) => (
 							<Row key={i}>

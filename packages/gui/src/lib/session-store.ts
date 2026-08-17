@@ -1,0 +1,389 @@
+/**
+ * GUI session store — subscribes to one daemon session and applies the
+ * stream to a shared MaterializedView (from @musepi/sdk) plus the
+ * streaming/active-tool state the transcript needs on top of the snapshot.
+ *
+ * The daemon sends `{ kind, seq, payload }` envelopes after session.subscribe
+ * / session.resume. Entry-bearing payloads project straight into the view;
+ * tool_execution_* events drive `activeTools`; message updates keep a
+ * streaming "ghost" message until the matching entry lands in the view.
+ */
+
+import type {
+	AgentEvent,
+	AgentProgress,
+	AgentSnapshot,
+	SessionEntry,
+	SessionState,
+	SubagentLifecyclePayload,
+	SubagentProgressPayload,
+} from "@musepi/pi-wire";
+import { MaterializedView } from "@musepi/sdk";
+import { dispatchNotification, type NotifyContext } from "./notify";
+import type { StreamEvent } from "./rpc";
+import { sfxFor } from "./sfx";
+
+/** Pet bubble kinds (伙伴): one per notification event, mapped 1:1 by the
+ *  main-window bridge to the floating pet window. */
+export type PetBubbleKind = "completed" | "subtask" | "error" | "question";
+
+/** Broadcast a pet bubble (window event — app.tsx forwards it to the pet
+ *  window over Electron IPC; plain browsers ignore it). `requestId` rides
+ *  along for question bubbles so the pet panel can answer approvals. */
+export function dispatchPetActivity(kind: PetBubbleKind, text: string, requestId?: string, sessionId?: string): void {
+	if (typeof window === "undefined") return;
+	window.dispatchEvent(new CustomEvent("omp-pet-activity", { detail: { kind, text, requestId, sessionId } }));
+}
+
+/** Matches collab-web's ActiveTool shape (the Transcript consumes it). */
+export interface ActiveTool {
+	toolCallId: string;
+	toolName: string;
+	args: unknown;
+	intent?: string;
+	partialResult?: unknown;
+	startedAt: number;
+}
+
+export interface GuiSessionState {
+	sessionId: string;
+	entries: readonly SessionEntry[];
+	state: SessionState | null;
+	/** True once the assistant message of a turn has started streaming.
+	 *  The transcript renders the message itself (the view folds it in at
+	 *  message_start); no separate stream ghost is kept — a ghost row
+	 *  beside the entry duplicated it (user: 俩 orbs and thinking). */
+	streaming: boolean;
+	activeTools: ReadonlyMap<string, ActiveTool>;
+	working: boolean;
+	cursor: number;
+	/** Subagent visuals (details panel): snapshots, progress, lifecycle. */
+	agents: readonly AgentSnapshot[];
+	progress: ReadonlyMap<string, SubagentProgressPayload>;
+	lifecycle: ReadonlyMap<string, SubagentLifecyclePayload>;
+	/** Pending tool approvals (approval cards above the composer). */
+	approvals: readonly ApprovalRequest[];
+	/** Latest idle recap (TUI parity) — cleared on any new wire activity. */
+	recap: { text: string; at: number } | null;
+}
+
+/** One pending tool approval awaiting a GUI decision. */
+export interface ApprovalRequest {
+	requestId: string;
+	tool: string;
+}
+
+export class GuiSessionStore {
+	readonly #sessionId: string;
+	readonly #cwd: string;
+	#view: MaterializedView;
+	#streaming = false;
+	#activeTools = new Map<string, ActiveTool>();
+	#working = false;
+	#agents = new Map<string, AgentSnapshot>();
+	#progress = new Map<string, SubagentProgressPayload>();
+	#lifecycle = new Map<string, SubagentLifecyclePayload>();
+	#approvals = new Map<string, ApprovalRequest>();
+	#recap: { text: string; at: number } | null = null;
+	#listeners = new Set<() => void>();
+	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
+	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
+	#snapshot: GuiSessionState;
+
+	constructor(
+		sessionId: string,
+		snapshot: { entries: SessionEntry[]; state?: SessionState; cursor: number },
+		cwd: string,
+	) {
+		this.#sessionId = sessionId;
+		this.#cwd = cwd;
+		this.#view =
+			MaterializedView.fromSnapshot(sessionId, cwd, snapshot) ?? MaterializedView.replay(sessionId, cwd, []);
+		this.#snapshot = this.#buildSnapshot();
+	}
+
+	subscribe(listener: () => void): () => void {
+		this.#listeners.add(listener);
+		return () => this.#listeners.delete(listener);
+	}
+
+	get sessionId(): string {
+		return this.#sessionId;
+	}
+
+	/** Notification template context (Settings → 通知与音效): resolved from
+	 *  the live snapshot at event time; per-event extras override. */
+	#notifyCtx(extra: NotifyContext): NotifyContext {
+		const state = this.#view.snapshot().state;
+		const main = [...this.#agents.values()].find(a => a.kind === "main");
+		const slash = this.#cwd.lastIndexOf("/");
+		return {
+			projectName: slash >= 0 ? this.#cwd.slice(slash + 1) : this.#cwd,
+			sessionName: state?.sessionName,
+			agentName: main?.displayName,
+			modelName: state?.model ? state.model.name || state.model.id : undefined,
+			...extra,
+		};
+	}
+
+	/** Session workspace root — composer "@" completion scope. */
+	get cwd(): string {
+		return this.#cwd;
+	}
+
+	/** User-dismissed the idle recap (× on the row) — cleared, not re-armed. */
+	dismissRecap(): void {
+		if (!this.#recap) return;
+		this.#recap = null;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	getSnapshot(): GuiSessionState {
+		return this.#snapshot;
+	}
+
+	#buildSnapshot(): GuiSessionState {
+		const snap = this.#view.snapshot();
+		return {
+			sessionId: this.#sessionId,
+			entries: snap.entries,
+			state: snap.state,
+			streaming: this.#streaming,
+			activeTools: this.#activeTools,
+			working: this.#working || snap.state.isStreaming,
+			cursor: snap.cursor,
+			agents: [...this.#agents.values()],
+			progress: this.#progress,
+			lifecycle: this.#lifecycle,
+			approvals: [...this.#approvals.values()],
+			recap: this.#recap,
+		};
+	}
+
+	#emit(): void {
+		for (const l of this.#listeners) l();
+	}
+
+	/** Apply one daemon stream envelope. */
+	apply(event: StreamEvent): void {
+		// Pending tool approvals — the GUI answers via tool.approve / tool.deny.
+		if (event.kind === "approval-request") {
+			const p = event.payload as { requestId?: unknown; tool?: unknown };
+			if (typeof p?.requestId === "string") {
+				this.#approvals.set(p.requestId, {
+					requestId: p.requestId,
+					tool: typeof p.tool === "string" ? p.tool : "unknown",
+				});
+				// The agent is asking the user a question (approval request).
+				dispatchNotification(
+					"question",
+					this.#notifyCtx({ lastMessage: typeof p.tool === "string" ? p.tool : undefined }),
+				);
+				dispatchPetActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
+				this.#snapshot = this.#buildSnapshot();
+				this.#emit();
+			}
+			return;
+		}
+		// Non-AgentEvent envelopes: subagent visuals + terminal state.
+		if (event.kind === "stream-end") {
+			this.#emit();
+			return;
+		}
+		if (event.kind === "agent-lifecycle") {
+			const p = event.payload as SubagentLifecyclePayload;
+			if (p.status === "completed") {
+				// Sub-agent finished — notify before the frames are dropped.
+				dispatchNotification(
+					"subtask",
+					this.#notifyCtx({ agentName: p.agent, lastMessage: p.description ?? p.agent }),
+				);
+				dispatchPetActivity("subtask", p.description ?? p.agent);
+			}
+			this.#lifecycle.set(p.id, p);
+			// Terminal lifecycle: the progress/lifecycle frames are process
+			// data for live visuals — without this, long sessions keep one
+			// entry per finished subagent forever. The #agents row stays
+			// (the panel shows completed subagent history), bounded by the
+			// number of subagents rather than their progress frames.
+			if (p.status !== "started") {
+				this.#progress.delete(p.id);
+				this.#lifecycle.delete(p.id);
+			}
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+			return;
+		}
+		if (event.kind === "agent-progress") {
+			// The stream carries the EventBus wrapper (SubagentProgressPayload);
+			// the AgentProgress lives inside it. AgentsPanel consumes the
+			// wrapper shape, keyed by the subagent id.
+			const wrapper = event.payload as SubagentProgressPayload;
+			const p = wrapper?.progress as AgentProgress | undefined;
+			if (!wrapper || !p || typeof p.id !== "string") {
+				this.#emit();
+				return;
+			}
+			this.#progress.set(p.id, wrapper);
+			const existing = this.#agents.get(p.id);
+			if (existing) {
+				existing.status = p.status === "running" ? "running" : "idle";
+				existing.lastActivity = Date.now();
+				this.#agents.set(p.id, existing);
+			} else {
+				// First sight of a subagent: synthesize its AgentSnapshot (the
+				// daemon stream carries progress but no per-subagent start
+				// envelope, so the row appears from the first progress frame).
+				this.#agents.set(p.id, {
+					id: p.id,
+					displayName: p.agent,
+					kind: "sub",
+					parentId: undefined,
+					status: p.status === "running" ? "running" : "idle",
+					hasSessionFile: false,
+					createdAt: Date.now(),
+					lastActivity: Date.now(),
+				});
+			}
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+			return;
+		}
+		// Idle recap (daemon recap.enabled parity): the latest summary text, kept
+		// until the next wire activity supersedes it.
+		if (event.kind === "recap") {
+			const p = event.payload as { text?: unknown; at?: unknown };
+			if (typeof p?.text === "string") {
+				this.#recap = { text: p.text, at: typeof p.at === "number" ? p.at : Date.now() };
+				this.#snapshot = this.#buildSnapshot();
+				this.#emit();
+			}
+			return;
+		}
+		const payload = event.payload as AgentEvent | undefined;
+		if (!payload || typeof payload !== "object") {
+			// Non-AgentEvent envelopes (state snapshots from resume etc.) are
+			// already folded into the snapshot by the daemon — nothing to do.
+			this.#emit();
+			return;
+		}
+		const ev = payload as AgentEvent;
+		switch (ev.type) {
+			case "message_start": {
+				// The view folds the assistant message into entries right here
+				// (message_start), so no stream ghost is kept — a separate ghost
+				// row rendered beside the entry duplicated the message while
+				// streaming (user: two identical rows, both with orb + 思考).
+				if (ev.message.role === "assistant") this.#streaming = true;
+				break;
+			}
+			case "message_update": {
+				// Entry updates flow through the view (immutable upsert), so the
+				// transcript row re-renders with the streamed content directly.
+				break;
+			}
+			case "message_end": {
+				// Final message folds into the view like any update. A finished
+				// assistant text reply (no pending tool call) = turn completion.
+				const m = ev.message;
+				if (m.role === "assistant") {
+					const blocks = m.content;
+					const hasText = blocks.some(b => b.type === "text");
+					const hasTools = blocks.some(b => b.type === "toolCall");
+					if (hasText && !hasTools) {
+						const text = blocks
+							.filter(b => b.type === "text")
+							.map(b => (b as { text?: string }).text ?? "")
+							.join(" ")
+							.slice(0, 140);
+						dispatchNotification("completion", this.#notifyCtx({ lastMessage: text }));
+						dispatchPetActivity("completed", text, undefined, this.#sessionId);
+					}
+				}
+				break;
+			}
+			case "tool_execution_start": {
+				const t = ev as {
+					type: "tool_execution_start";
+					toolCallId: string;
+					toolName: string;
+					args: unknown;
+					intent?: string;
+				};
+				this.#activeTools.set(t.toolCallId, {
+					toolCallId: t.toolCallId,
+					toolName: t.toolName,
+					args: t.args,
+					intent: t.intent,
+					startedAt: Date.now(),
+				});
+				break;
+			}
+			case "tool_execution_update": {
+				const t = ev as {
+					type: "tool_execution_update";
+					toolCallId: string;
+					args: unknown;
+					partialResult: unknown;
+				};
+				const existing = this.#activeTools.get(t.toolCallId);
+				if (existing) {
+					existing.args = t.args ?? existing.args;
+					existing.partialResult = t.partialResult;
+					this.#activeTools.set(t.toolCallId, existing);
+				}
+				break;
+			}
+			case "tool_execution_end": {
+				const t = ev as { type: "tool_execution_end"; toolCallId: string; isError?: boolean };
+				const toolName = this.#activeTools.get(t.toolCallId)?.toolName;
+				this.#activeTools.delete(t.toolCallId);
+				// Tool result arrived — soft tick (effects prefs gate it).
+				sfxFor("tool");
+				if (t.isError) {
+					dispatchNotification("error", this.#notifyCtx({ lastMessage: toolName ?? "tool" }));
+					dispatchPetActivity("error", toolName ?? "tool");
+				}
+				break;
+			}
+			case "turn_start":
+				this.#working = true;
+				break;
+			case "turn_end":
+				this.#working = false;
+				this.#streaming = false;
+				break;
+			case "agent_end": {
+				// Agent run finished (opencode turn-complete parity): the
+				// "ready" cue — once per run, NOT per model-call turn
+				// (turn_end fires per tool batch inside one run). Aborted
+				// runs get the stop cue instead; errors have their own.
+				const t = ev as { type: "agent_end"; messages?: Array<{ role?: string; stopReason?: string }> };
+				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
+				const stopReason = last?.stopReason;
+				if (stopReason !== "aborted" && stopReason !== "error") sfxFor("complete");
+				break;
+			}
+			default:
+				break;
+		}
+		// Any new wire activity supersedes the idle recap (TUI parity).
+		this.#recap = null;
+		this.#view.apply(ev);
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	dispose(): void {
+		this.#listeners.clear();
+	}
+
+	/** Remove a resolved/denied approval from the pending set. */
+	dismissApproval(requestId: string): void {
+		if (this.#approvals.delete(requestId)) {
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+		}
+	}
+}

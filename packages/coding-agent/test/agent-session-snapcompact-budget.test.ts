@@ -20,17 +20,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
-import { effectiveReserveTokens, estimateTokens, prepareCompaction } from "@oh-my-pi/pi-agent-core/compaction";
-import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { computeNonMessageTokens } from "@oh-my-pi/pi-coding-agent/modes/utils/context-usage";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@oh-my-pi/pi-utils";
-import * as snapcompact from "@oh-my-pi/snapcompact";
+import { Agent } from "@musepi/pi-agent-core";
+import { effectiveReserveTokens, estimateTokens, prepareCompaction } from "@musepi/pi-agent-core/compaction";
+import { getBundledModel } from "@musepi/pi-catalog/models";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { computeNonMessageTokens } from "@musepi/pi-coding-agent/modes/utils/context-usage";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { TempDir } from "@musepi/pi-utils";
+import * as snapcompact from "@musepi/snapcompact";
 
 describe("AgentSession snapcompact frame-budget sizing", () => {
 	let tempDir: TempDir;
@@ -246,6 +246,11 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 		const model = session.model;
 		if (!model) throw new Error("Expected model");
 		await session.dispose();
+		// dispose() released the manager's in-memory transcript; reopen the
+		// persisted file for the replacement session, as revival paths do.
+		const sessionFile = sessionManager.getSessionFile();
+		if (!sessionFile) throw new Error("Expected a persisted session file");
+		sessionManager = await SessionManager.open(sessionFile, tempDir.path());
 		const unknownWindowModel = { ...model, contextWindow: 0 };
 		session = new AgentSession({
 			agent: new Agent({

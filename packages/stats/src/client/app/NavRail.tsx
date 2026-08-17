@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { type DashboardSection, routes } from "./routes";
 
 export interface NavRailProps {
@@ -11,8 +12,8 @@ export function NavRail({ activeSection, onSectionChange, className = "" }: NavR
 		<aside className={`stats-nav-rail ${className}`}>
 			<div className="stats-nav-rail-header">
 				<div className="stats-logo-container">
-					<span className="stats-logo-text">OH MY PI</span>
-					<span className="stats-logo-subtext">Observability</span>
+					<span className="stats-logo-text">MusePi</span>
+					<span className="stats-logo-subtext">{t("Observability")}</span>
 				</div>
 			</div>
 
@@ -30,14 +31,14 @@ export function NavRail({ activeSection, onSectionChange, className = "" }: NavR
 							aria-current={isActive ? "page" : undefined}
 						>
 							<Icon size={16} className="stats-nav-rail-item-icon" />
-							<span className="stats-nav-rail-item-label">{route.label}</span>
+							<span className="stats-nav-rail-item-label">{t(route.label)}</span>
 						</button>
 					);
 				})}
 			</nav>
 
 			<div className="stats-nav-rail-footer">
-				<span className="stats-version-tag">OMP Stats v1.0.0</span>
+				<span className="stats-version-tag">MusePi Stats v1.0.0</span>
 			</div>
 		</aside>
 	);

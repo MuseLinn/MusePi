@@ -19,7 +19,7 @@ The runtime has two layers:
 
 If your extension/tool can run in non-interactive mode, guard with `ctx.hasUI` / `pi.hasUI`.
 
-## Core component contract (`@oh-my-pi/pi-tui`)
+## Core component contract (`@musepi/pi-tui`)
 
 `packages/tui/src/tui.ts` defines:
 
@@ -58,7 +58,7 @@ Your `render(width)` output must be terminal-safe:
 Minimal pattern:
 
 ```ts
-import { replaceTabs, truncateToWidth } from "@oh-my-pi/pi-tui";
+import { replaceTabs, truncateToWidth } from "@musepi/pi-tui";
 
 render(width: number): readonly string[] {
   return this.lines.map(line => truncateToWidth(replaceTabs(line), width));
@@ -97,6 +97,10 @@ Then use `isKeyRelease()` / `isKeyRepeat()` if needed.
 - `TUI.setFocus(component)` routes input to that component.
 - Overlay APIs exist in `TUI` (`showOverlay`, `OverlayHandle`). In interactive extension/custom UI, `custom(..., { overlay: true })` mounts your component through `TUI.showOverlay(...)`; without `overlay`, it replaces the editor component area directly.
 - Overlay custom UI is anchored at `bottom-center` with full terminal width/max height and is removed through the returned overlay handle when `done(...)` closes the flow.
+
+### Built-in full-screen surfaces
+
+The coding-agent integration also mounts built-in full-screen surfaces outside `ctx.ui.custom(...)`. [Agent Hub](./agent-hub.md) is the live roster and control surface for subagents. Its file-backed transcript viewer borrows the alternate screen while it is open, then restores the Hub beneath it on close.
 
 ## Mount points and return contracts
 
@@ -185,17 +189,17 @@ return loader;
 ## Realistic custom component example (extension command)
 
 ```ts
-import type { Component } from "@oh-my-pi/pi-tui";
+import type { Component } from "@musepi/pi-tui";
 import {
   SelectList,
   matchesKey,
   replaceTabs,
   truncateToWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
 import {
   getSelectListTheme,
   type ExtensionAPI,
-} from "@oh-my-pi/pi-coding-agent";
+} from "@musepi/pi-coding-agent";
 
 class Picker implements Component {
   list: SelectList;

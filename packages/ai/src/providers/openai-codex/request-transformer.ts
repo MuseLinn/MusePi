@@ -1,7 +1,7 @@
-import { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { supportsAllTurnsReasoningContext, supportsCodexReasoningSummary } from "@oh-my-pi/pi-catalog/identity";
-import { requireSupportedEffort } from "@oh-my-pi/pi-catalog/model-thinking";
-import { $env } from "@oh-my-pi/pi-utils";
+import { Effort } from "@musepi/pi-catalog/effort";
+import { supportsAllTurnsReasoningContext, supportsCodexReasoningSummary } from "@musepi/pi-catalog/identity";
+import { requireSupportedEffort } from "@musepi/pi-catalog/model-thinking";
+import { $env } from "@musepi/pi-utils";
 import type { Model } from "../../types";
 import { mapOpenAIReasoningEffort } from "../openai-shared";
 
@@ -33,7 +33,7 @@ export interface CodexRequestOptions {
 	/** User-facing effort; maps 1:1 onto the wire tier of the same name. */
 	reasoningEffort?: CodexCallerEffort | "none";
 	reasoningSummary?: ReasoningConfig["summary"] | null;
-	/** Explicit `reasoning.context` override; defaults to `all_turns` when unset. Gated to gpt-5.4+ Codex models (older ids reject it, so it is suppressed and `context` omitted). Note that under Responses Lite (`responsesLite`), the server strictly requires `reasoning.context` to be `all_turns`, which overrides this option and forces `all_turns`. */
+	/** Explicit `reasoning.context` override. Omitted by default; Responses Lite forces `all_turns` as required by that transport. */
 	reasoningContext?: CodexReasoningContext;
 	textVerbosity?: "low" | "medium" | "high";
 	include?: string[];
@@ -145,13 +145,12 @@ function getReasoningConfig(
 	const config: ReasoningConfig = {
 		effort: effort === "none" ? "none" : mapCodexWireEffort(model, effort),
 	};
-	// `reasoning.summary` is accepted only from gpt-5.4 onward; earlier Codex ids
-	// (gpt-5.1-codex, gpt-5.3-codex, gpt-5.3-codex-spark) reject it with
-	// "Unsupported parameter: 'reasoning.summary' is not supported with this model".
-	// Mirrors the all_turns gate: an explicit summary is suppressed on unsupported
-	// ids, letting the server skip the human-readable summary stream.
-	if (options.reasoningSummary !== null && supportsCodexReasoningSummary(model.id)) {
-		config.summary = options.reasoningSummary ?? "detailed";
+	if (
+		options.reasoningSummary !== undefined &&
+		options.reasoningSummary !== null &&
+		supportsCodexReasoningSummary(model.id)
+	) {
+		config.summary = options.reasoningSummary;
 	}
 	return config;
 }
@@ -444,21 +443,14 @@ export async function transformRequestBody(
 			...body.reasoning,
 			...reasoningConfig,
 		};
-		// Default reasoning replay to `all_turns`, mirroring codex-rs; an
-		// explicit `reasoningContext` overrides the default. The `all_turns`
-		// value is only accepted from gpt-5.4 onward — earlier Codex ids
-		// (gpt-5.1-codex, gpt-5.3-codex, gpt-5.3-codex-spark) reject it with
-		// "Unsupported value: 'all_turns' is not supported with this model".
-		// For those, drop `context` so the server applies its `current_turn`
-		// default. The version gate is authoritative: even an explicit
-		// `all_turns` override is suppressed on unsupported models, while
-		// `current_turn`/`auto` (universally supported) always pass through.
-		// Note: Responses Lite forces `all_turns` to satisfy the transport's server invariant.
-		const context = responsesLite ? "all_turns" : (options.reasoningContext ?? "all_turns");
-		if (context === "all_turns" && !supportsAllTurnsReasoningContext(model.id)) {
-			delete body.reasoning.context;
-		} else {
-			body.reasoning.context = context;
+		// Responses Lite requires `all_turns`; the full transport leaves context to the server unless explicitly set.
+		const context = responsesLite ? "all_turns" : options.reasoningContext;
+		if (context !== undefined) {
+			if (context === "all_turns" && !supportsAllTurnsReasoningContext(model.id)) {
+				delete body.reasoning.context;
+			} else {
+				body.reasoning.context = context;
+			}
 		}
 	} else {
 		delete body.reasoning;
@@ -481,10 +473,12 @@ export async function transformRequestBody(
 		delete body.stream_options;
 	}
 
-	body.text = {
-		...body.text,
-		verbosity: options.textVerbosity || "medium",
-	};
+	if (options.textVerbosity !== undefined) {
+		body.text = {
+			...body.text,
+			verbosity: options.textVerbosity,
+		};
+	}
 
 	const include = Array.isArray(options.include) ? [...options.include] : [];
 	include.push("reasoning.encrypted_content");

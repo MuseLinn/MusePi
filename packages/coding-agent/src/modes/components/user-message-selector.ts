@@ -8,7 +8,8 @@ import {
 	Spacer,
 	Text,
 	truncateToWidth,
-} from "@oh-my-pi/pi-tui";
+} from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectCancel, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
 import { DynamicBorder } from "./dynamic-border";
@@ -51,7 +52,7 @@ class UserMessageList implements Component {
 
 	#renderStatusLine(_total: number): string {
 		const query = this.#searchQuery.trim();
-		const suffix = query ? `Search: ${this.#searchQuery}` : "Type to search";
+		const suffix = query ? t("Search: {0}", this.#searchQuery) : t("Type to search");
 		return theme.fg("muted", `  ${suffix}`);
 	}
 
@@ -198,8 +199,8 @@ export class UserMessageSelectorComponent extends Container {
 
 		// Add header
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.bold("Branch from Message"), 1, 0));
-		this.addChild(new Text(theme.fg("muted", "Select a message to create a new branch from that point"), 1, 0));
+		this.addChild(new Text(theme.bold(t("Branch from Message")), 1, 0));
+		this.addChild(new Text(theme.fg("muted", t("Select a message to create a new branch from that point")), 1, 0));
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));

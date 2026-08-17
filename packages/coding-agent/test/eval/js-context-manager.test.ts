@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { type } from "@musepi/omptype";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { TempDir } from "@musepi/pi-utils";
 import { Settings } from "../../src/config/settings";
 import {
 	disposeAllVmContexts,
@@ -22,9 +24,14 @@ interface FakeWorkerBehavior {
 	exitOnClose: boolean;
 	settleRuns: boolean;
 	errorOnStart?: boolean;
+	/**
+	 * Reproduces `WorkerCore#runOne` for a floated bridge call: start a tool call
+	 * and report the run finished in the same turn, without awaiting the call.
+	 */
+	floatingToolCall?: string;
 }
 
-function makeSession(cwd: string): ToolSession {
+function makeSession(cwd: string, ...tools: AgentTool[]): ToolSession {
 	return {
 		cwd,
 		hasUI: false,
@@ -42,6 +49,7 @@ function makeSession(cwd: string): ToolSession {
 		getArtifactsDir: () => null,
 		getSessionId: () => "test-session",
 		getEvalSessionId: () => "test-eval-session",
+		getToolByName: name => tools.find(tool => tool.name === name),
 	};
 }
 
@@ -108,6 +116,20 @@ function installFakeWorker(stats: FakeWorkerStats, behavior: FakeWorkerBehavior)
 		postMessage(message: unknown): void {
 			if (!message || typeof message !== "object") return;
 			const typed = message as { type?: string; runId?: string };
+			if (typed.type === "run" && typed.runId && behavior.floatingToolCall) {
+				const runId = typed.runId;
+				queueMicrotask(() => {
+					this.#emitMessage({
+						type: "tool-call",
+						runId,
+						id: `tc-${runId}`,
+						name: behavior.floatingToolCall,
+						args: {},
+					});
+					this.#emitMessage({ type: "result", runId, ok: true });
+				});
+				return;
+			}
 			if (typed.type === "run" && typed.runId && behavior.settleRuns) {
 				queueMicrotask(() => this.#emitMessage({ type: "result", runId: typed.runId, ok: true }));
 				return;
@@ -365,6 +387,57 @@ describe("JavaScript eval worker lifecycle", () => {
 		expect(result.output.trim()).toBe("42");
 		// The errored primary worker is torn down before the inline retry takes over.
 		expect(stats.terminateCalls).toBe(1);
+	});
+
+	it("holds a finished run until its floated tool call drains", async () => {
+		// Regression, and the sharpest form of the runaway `agent()` fan-out — no
+		// cancellation required. `WorkerCore#runOne` reports a finished run without
+		// awaiting outstanding tool calls, so `agent(...)` with no `await` used to
+		// settle the cell immediately; `runOnce` then dropped the run's abort
+		// listener and pending entry, leaving the subagent running with nothing
+		// able to cancel it. A cell must own every bridge call it starts.
+		using tempDir = TempDir.createSync("@omp-js-worker-float-");
+		const stats: FakeWorkerStats = { closeRequests: 0, terminateCalls: 0 };
+		installFakeWorker(stats, { exitOnClose: true, settleRuns: false, floatingToolCall: "park" });
+
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let toolReturned = false;
+		const park: AgentTool = {
+			name: "park",
+			label: "Park",
+			description: "Parks until released",
+			parameters: type({}),
+			execute: async () => {
+				started.resolve();
+				await release.promise;
+				toolReturned = true;
+				return { content: [{ type: "text", text: "parked" }] };
+			},
+		};
+		const session = makeSession(tempDir.path(), park);
+
+		let settled = false;
+		const cell = executeJs('tool.park({});\nreturn "floated";', {
+			cwd: tempDir.path(),
+			sessionId: `js-float:${crypto.randomUUID()}`,
+			session,
+		}).finally(() => {
+			settled = true;
+		});
+
+		await started.promise;
+		// The fake worker already reported the run finished, in the same microtask
+		// that started the call. Draining the microtask queue is exact here: the
+		// harness is queueMicrotask-driven, with no IPC or timers in the path.
+		for (let i = 0; i < 50; i++) await Promise.resolve();
+		expect(settled).toBe(false);
+		expect(toolReturned).toBe(false);
+
+		release.resolve();
+		const result = await cell;
+		expect(toolReturned).toBe(true);
+		expect(result.exitCode).toBe(0);
 	});
 });
 

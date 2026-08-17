@@ -19,9 +19,9 @@ interface TemplateProbeResult {
 }
 
 const expectedTemplate: TemplateProbeResult = {
-	chars: 377_268,
-	bytes: 377_446,
-	sha256: "023cf3773498db52ff0ec508b22ef2c002710f9e9fcb90fea361659d5b0205df",
+	chars: 514_273,
+	bytes: 535_150,
+	sha256: "298712d2601a3bd2d95da2eafcf05824b6068f70da8afa66f344fc8805d20079",
 	stableCache: true,
 	assetsRemoved: 0,
 };
@@ -35,7 +35,7 @@ const bundleDir = path.join(tempRoot, "bundle");
 const compiledPath = path.join(tempRoot, "compiled-template-probe");
 let bundlePath: string;
 const bundledDependencyStubs: Record<string, string> = {
-	"@oh-my-pi/pi-utils": 'export const APP_NAME = "omp"; export const isEnoent = () => false;',
+	"@musepi/pi-utils": 'export const APP_NAME = "omp"; export const isEnoent = () => false;',
 	"../../modes/theme/theme":
 		"export const getResolvedThemeColors = async () => ({}); export const getThemeExportColors = async () => ({});",
 	"../../session/session-loader": "export const loadEntriesFromFile = async () => [];",
@@ -78,6 +78,7 @@ function composeExpectedTemplate(): string {
 async function runProbe(command: string[]): Promise<TemplateProbeResult> {
 	const proc = Bun.spawn(command, {
 		cwd: unrelatedCwd,
+		stdin: "ignore",
 		stderr: "pipe",
 		stdout: "pipe",
 	});
@@ -149,8 +150,9 @@ describe("HTML export template", () => {
 		fs.writeFileSync(staleAssetPath, "stale");
 		const build = Bun.spawn([process.execPath, "run", "gen:bundle"], {
 			cwd: packageDir,
-			stderr: "pipe",
+			stdin: "ignore",
 			stdout: "pipe",
+			stderr: "pipe",
 		});
 		const [buildStdout, buildStderr, buildExitCode] = await Promise.all([
 			new Response(build.stdout).text(),
@@ -162,8 +164,9 @@ describe("HTML export template", () => {
 
 		const proc = Bun.spawn([process.execPath, "pm", "pack", "--dry-run", "--ignore-scripts"], {
 			cwd: packageDir,
-			stderr: "pipe",
+			stdin: "ignore",
 			stdout: "pipe",
+			stderr: "pipe",
 		});
 		const [stdout, stderr, exitCode] = await Promise.all([
 			new Response(proc.stdout).text(),
@@ -195,6 +198,7 @@ describe("HTML export template", () => {
 
 	test("does not retain source asset strings during a static import", async () => {
 		const proc = Bun.spawn([process.execPath, heapProbePath], {
+			stdin: "ignore",
 			stderr: "pipe",
 			stdout: "pipe",
 		});

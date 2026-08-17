@@ -1,8 +1,8 @@
-import { $env } from "@oh-my-pi/pi-utils";
+import { $env } from "@musepi/pi-utils";
 import * as AIError from "../error";
 
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 120_000;
-const DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS = 100_000;
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000;
+const DEFAULT_STREAM_FIRST_EVENT_TIMEOUT_MS = 300_000;
 /** Re-mint persistent race promises every N iterations (see hoisted-racer comment). */
 const RACER_REMINT_INTERVAL = 1024;
 

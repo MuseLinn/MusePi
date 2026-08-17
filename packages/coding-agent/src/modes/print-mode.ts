@@ -5,9 +5,9 @@
  * - `omp -p "prompt"` - text output
  * - `omp --mode json "prompt"` - JSON event stream
  */
-import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
-import type { ImageContent } from "@oh-my-pi/pi-ai";
-import { logger, sanitizeText } from "@oh-my-pi/pi-utils";
+import type { AgentMessage } from "@musepi/pi-agent-core";
+import type { ImageContent } from "@musepi/pi-ai";
+import { logger, sanitizeText } from "@musepi/pi-utils";
 import { resolvePlanModelTransition } from "../plan-mode/model-transition";
 import { type AgentSession, type AgentSessionEvent, SHUTDOWN_CONSOLIDATE_BUDGET_MS } from "../session/agent-session";
 import { isSilentAbort } from "../session/messages";
@@ -91,11 +91,29 @@ export function printableEvent(event: AgentSessionEvent): unknown {
 export async function runPrintMode(session: AgentSession, options: PrintModeOptions): Promise<void> {
 	const { mode, messages = [], initialMessage, initialImages, printThoughts } = options;
 
+	// process.stdout.write is fire-and-forget: a large final record (e.g. a
+	// multi-MB agent_end) can be dropped when the process exits before the pipe
+	// drains, truncating the record mid-line while the process still exits 0.
+	// Serialize every stdout write on the previous write's completion callback so
+	// records stay ordered and honor backpressure, then block shutdown on the
+	// tail before dispose/exit. Same truncation class as issue #5309 (issue #7635).
+	let stdoutTail: Promise<void> = Promise.resolve();
+	const writeStdoutLine = (text: string): void => {
+		stdoutTail = stdoutTail.then(() => {
+			const { promise, resolve, reject } = Promise.withResolvers<void>();
+			process.stdout.write(text, err => {
+				if (err) reject(err);
+				else resolve();
+			});
+			return promise;
+		});
+	};
+
 	// Emit session header for JSON mode
 	if (mode === "json") {
 		const header = session.sessionManager.getHeader();
 		if (header) {
-			process.stdout.write(`${JSON.stringify(header)}\n`);
+			writeStdoutLine(`${JSON.stringify(header)}\n`);
 		}
 	}
 	// Set up extensions for print mode (no UI, no command context)
@@ -172,7 +190,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 		}
 		// In JSON mode, output all events
 		if (mode === "json") {
-			process.stdout.write(`${JSON.stringify(printableEvent(event))}\n`);
+			writeStdoutLine(`${JSON.stringify(printableEvent(event))}\n`);
 		}
 	});
 
@@ -186,12 +204,14 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 	// Send initial message with attachments
 	if (initialMessage !== undefined) {
 		writeTextWorkingIndicator();
+		if (mode === "text") session.setTextOutputCommitted(false);
 		await logger.time("print:prompt:initial", () => session.prompt(initialMessage, { images: initialImages }));
 	}
 
 	// Send remaining messages
 	for (const message of messages) {
 		writeTextWorkingIndicator();
+		if (mode === "text") session.setTextOutputCommitted(false);
 		await logger.time("print:prompt:next", () => session.prompt(message));
 	}
 
@@ -243,23 +263,20 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			// Output text content
 			for (const content of assistantMsg.content) {
 				if (content.type === "text") {
-					process.stdout.write(`${sanitizeText(content.text)}\n`);
+					writeStdoutLine(`${sanitizeText(content.text)}\n`);
 				} else if (printThoughts && content.type === "thinking" && content.thinking.trim().length > 0) {
-					process.stdout.write(`${sanitizeText(content.thinking)}\n`);
+					writeStdoutLine(`${sanitizeText(content.thinking)}\n`);
 				}
 			}
 		}
+		session.setTextOutputCommitted(true);
 	}
 
 	await session.waitForAdvisorCatchup(PRINT_MODE_ADVISOR_DRAIN_TIMEOUT_MS);
 
-	// Ensure stdout, including late JSON advisor events, is fully flushed before returning.
-	// This prevents race conditions where the process exits before all output is written.
-	await new Promise<void>((resolve, reject) => {
-		process.stdout.write("", err => {
-			if (err) reject(err);
-			else resolve();
-		});
-	});
+	// Block shutdown until every serialized stdout write (including the final
+	// agent_end and late JSON advisor events) has drained; process.exit would
+	// otherwise discard the buffered tail and truncate the last record.
+	await stdoutTail;
 	await session.dispose({ mnemopiConsolidateTimeoutMs: SHUTDOWN_CONSOLIDATE_BUDGET_MS });
 }

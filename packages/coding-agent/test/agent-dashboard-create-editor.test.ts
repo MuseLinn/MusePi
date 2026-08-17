@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentDashboard } from "@oh-my-pi/pi-coding-agent/modes/components/agent-dashboard";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import * as discovery from "@oh-my-pi/pi-coding-agent/task/discovery";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentDashboard } from "@musepi/pi-coding-agent/modes/components/agent-dashboard";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import * as discovery from "@musepi/pi-coding-agent/task/discovery";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 const ANSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const tempDirs: string[] = [];

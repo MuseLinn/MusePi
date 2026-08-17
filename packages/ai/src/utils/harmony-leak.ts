@@ -7,7 +7,7 @@
  * hashline DSL form. Other tools and surfaces fall through to
  * abort-and-retry handled by the agent loop.
  */
-import { preferredDialect } from "@oh-my-pi/pi-catalog/identity";
+import { preferredDialect } from "@musepi/pi-catalog/identity";
 import type { AssistantMessage, Model, ToolCall } from "../types";
 
 // Single source of truth for the marker pattern. `M` in the errata.
@@ -33,6 +33,18 @@ const HARMONY_CONTROL_TOKEN_ESCAPE_RE = /<\|(start|end|message|channel|constrain
  */
 export function escapeHarmonyControlTokens(text: string): string {
 	return text.replace(HARMONY_CONTROL_TOKEN_ESCAPE_RE, "<\\|$1\\|>");
+}
+
+/**
+ * Escape reserved Harmony control tokens inside a JSON document string (e.g.
+ * `function_call.arguments`). Doubles the backslash so the document remains
+ * valid JSON whose *decoded* strings carry the inert `<\|token\|>` spelling.
+ * `<|` cannot occur outside a string literal in valid JSON, so the blanket
+ * replace never corrupts structure; malformed documents are escaped
+ * best-effort.
+ */
+export function escapeHarmonyControlTokensInJson(text: string): string {
+	return text.replace(HARMONY_CONTROL_TOKEN_ESCAPE_RE, "<\\\\|$1\\\\|>");
 }
 
 /**

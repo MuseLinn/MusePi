@@ -7,9 +7,9 @@ import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ToolLoadMode,
-} from "@oh-my-pi/pi-agent-core";
-import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema } from "@oh-my-pi/pi-ai";
-import { sanitizeText } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-agent-core";
+import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema } from "@musepi/pi-ai";
+import { sanitizeText } from "@musepi/pi-utils";
 import type { Settings } from "../../config/settings";
 import type { Theme } from "../../modes/theme/theme";
 import { type ApprovalMode, formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
@@ -64,9 +64,26 @@ export class RegisteredToolAdapter implements AgentTool<any, any, any> {
 		params: any,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<any>,
-		_context?: AgentToolContext,
+		context?: AgentToolContext,
 	) {
-		return this.registeredTool.definition.execute(toolCallId, params, signal, onUpdate, this.runner.createContext());
+		// Bind the extension context to this tool's own name so `ctx.invokeTool` delegates to the
+		// native built-in of the same name (present only when this tool re-registers a built-in). The
+		// wrapper's own context, abort signal, and progress callback are inherited by the delegated
+		// call, so a bare `ctx.invokeTool(params)` keeps the caller's `toolCall`/provider metadata
+		// (write/edit LSP batching, computer safety acknowledgement), stops when the outer call is
+		// aborted, and still streams native progress.
+		return this.registeredTool.definition.execute(
+			toolCallId,
+			params,
+			signal,
+			onUpdate,
+			this.runner.createContext(undefined, {
+				toolName: this.registeredTool.definition.name,
+				context,
+				signal,
+				onUpdate,
+			}),
+		);
 	}
 }
 
@@ -222,6 +239,7 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 		// short-circuit above.
 		const resolvedArgs = approvalArgs(effectiveParams, context);
 		const resolved = resolveApproval(this.tool, resolvedArgs, approvalMode, userPolicies);
+		context?.xdevTierResolved?.(resolved.tier);
 		if (resolved.policy === "deny") {
 			throw new Error(
 				`Tool "${this.tool.name}" is blocked by user policy.\n` +

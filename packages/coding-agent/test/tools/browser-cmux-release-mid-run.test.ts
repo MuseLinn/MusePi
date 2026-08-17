@@ -23,7 +23,7 @@
  *    immediately instead of blocking to the run's timeout.
  * 2. When the in-flight run is doing work that does NOT make another cmux
  *    socket request (e.g. `await wait(60_000)`), releasing the tab still
- *    unwinds the run — proving `closeAc.signal` reaches `waitForBrowserRun`
+ *    unwinds the run — proving `closeAc.signal` reaches `waitForRun`
  *    and the facade proxies, not just the outer race. (Reviewer feedback
  *    from PR #4502.)
  */
@@ -32,16 +32,17 @@ import { afterEach, describe, expect, it, spyOn, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { CmuxKind } from "@oh-my-pi/pi-coding-agent/tools/browser/cmux/rpc";
-import { CmuxSocketClient } from "@oh-my-pi/pi-coding-agent/tools/browser/cmux/socket-client";
-import { acquireBrowser } from "@oh-my-pi/pi-coding-agent/tools/browser/registry";
+import type { CmuxKind } from "@musepi/pi-coding-agent/tools/browser/cmux/rpc";
+import { CmuxSocketClient } from "@musepi/pi-coding-agent/tools/browser/cmux/socket-client";
+import { acquireBrowser } from "@musepi/pi-coding-agent/tools/browser/registry";
 import {
 	acquireTab,
 	getTabsMapForTest,
 	releaseTab,
 	runInTab,
-} from "@oh-my-pi/pi-coding-agent/tools/browser/tab-supervisor";
-import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools/index";
+} from "@musepi/pi-coding-agent/tools/browser/tab-supervisor";
+import type { ToolSession } from "@musepi/pi-coding-agent/tools/index";
+import * as logger from "@musepi/pi-utils/logger";
 
 function makeKind(socketSuffix: string): CmuxKind {
 	return {
@@ -218,7 +219,7 @@ describe("browser tab-supervisor — cmux tab close mid-run (#4499)", () => {
 
 			const session = makeSession("/tmp");
 			// The user code awaits `wait(60_000)` — which drives
-			// `waitForBrowserRun(60_000, signal)` -> `untilAborted(signal,
+			// `waitForRun(60_000, signal)` -> `untilAborted(signal,
 			// () => Bun.sleep(60_000))` INSIDE the runtime. Nothing hits the
 			// cmux socket, so on `main` the reviewer's exact scenario applies:
 			// even after `pending.reject` unblocks the caller, `runCmuxCode`
@@ -251,7 +252,7 @@ describe("browser tab-supervisor — cmux tab close mid-run (#4499)", () => {
 			// the map. This is the wire the reviewer asked us to check: the
 			// tab-close event must reach the cmux run body, not only the
 			// awaiting caller. Its `.signal.aborted` is the observable proof
-			// that `waitForBrowserRun` / cmux socket calls will unwind
+			// that `waitForRun` / cmux socket calls will unwind
 			// synchronously (via `untilAborted`) instead of blocking to the
 			// 60_000ms timeout.
 			const pendingBeforeRelease = [...(tabBeforeRelease?.pending.values() ?? [])];
@@ -284,6 +285,146 @@ describe("browser tab-supervisor — cmux tab close mid-run (#4499)", () => {
 		} finally {
 			process.removeListener("unhandledRejection", onUnhandled);
 		}
+	});
+
+	it("logs a user continuation rejection after its cmux run ends", async () => {
+		spyOn(CmuxSocketClient.prototype, "connect").mockResolvedValue(undefined);
+		spyOn(CmuxSocketClient.prototype, "close").mockImplementation(() => undefined);
+		spyOn(CmuxSocketClient.prototype, "request").mockImplementation(
+			async (method: string): Promise<Record<string, unknown>> => {
+				switch (method) {
+					case "browser.open_split":
+						return { surface_id: "surface-late-rejection", url: "about:blank" };
+					case "browser.url.get":
+						return { url: "about:blank" };
+					case "browser.snapshot":
+						return { page: { html: "" } };
+					case "browser.eval":
+						return { value: "" };
+					default:
+						return {};
+				}
+			},
+		);
+		const warningLogged = Promise.withResolvers<void>();
+		const warn = spyOn(logger, "warn").mockImplementation(message => {
+			if (message === "Unhandled rejection after browser run ended") warningLogged.resolve();
+		});
+		const browser = await acquireBrowser(makeKind("late-rejection"), { cwd: "/tmp" });
+		await acquireTab("late-rejection", browser, {
+			timeoutMs: 5_000,
+			ownerSessionId: "session-late-rejection",
+		});
+
+		const result = await runInTab("late-rejection", {
+			code: `
+				const continuationStarted = Promise.withResolvers();
+				void tab.title().then(async () => {
+					continuationStarted.resolve();
+					await Bun.sleep(50);
+					throw new Error("late cmux continuation failed");
+				});
+				await continuationStarted.promise;
+				return "completed";
+			`,
+			timeoutMs: 5_000,
+			session: makeSession("/tmp"),
+		});
+		expect(result.returnValue).toBe("completed");
+
+		await warningLogged.promise;
+		expect(warn).toHaveBeenCalledWith("Unhandled rejection after browser run ended", {
+			runId: expect.any(String),
+			error: "late cmux continuation failed",
+		});
+	});
+
+	it("fails a browser error rethrown through a native promise combinator", async () => {
+		spyOn(CmuxSocketClient.prototype, "connect").mockResolvedValue(undefined);
+		spyOn(CmuxSocketClient.prototype, "close").mockImplementation(() => undefined);
+		spyOn(CmuxSocketClient.prototype, "request").mockImplementation(
+			async (method: string): Promise<Record<string, unknown>> => {
+				switch (method) {
+					case "browser.open_split":
+						return { surface_id: "surface-combinator-rejection", url: "about:blank" };
+					case "browser.url.get":
+						return { url: "about:blank" };
+					case "browser.snapshot":
+						return { page: { html: "" } };
+					case "browser.eval":
+						return { value: "" };
+					case "browser.navigate":
+						throw new Error("navigation failed");
+					default:
+						return {};
+				}
+			},
+		);
+		const browser = await acquireBrowser(makeKind("combinator-rejection"), { cwd: "/tmp" });
+		await acquireTab("combinator-rejection", browser, {
+			timeoutMs: 5_000,
+			ownerSessionId: "session-combinator-rejection",
+		});
+
+		const run = runInTab("combinator-rejection", {
+			code: `
+				void Promise.all([
+					tab.goto("https://example.test"),
+				]).catch(reason => {
+					throw reason;
+				});
+				await wait(50);
+				return "incorrect success";
+			`,
+			timeoutMs: 5_000,
+			session: makeSession("/tmp"),
+		});
+
+		await expect(run).rejects.toThrow("Unhandled rejection (missing await?): navigation failed");
+	});
+
+	it("aborts the cmux run facade before draining floated continuations", async () => {
+		spyOn(CmuxSocketClient.prototype, "connect").mockResolvedValue(undefined);
+		spyOn(CmuxSocketClient.prototype, "close").mockImplementation(() => undefined);
+		const navigatedUrls: string[] = [];
+		spyOn(CmuxSocketClient.prototype, "request").mockImplementation(
+			async (method: string, params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+				switch (method) {
+					case "browser.open_split":
+						return { surface_id: "surface-drain-abort", url: "about:blank" };
+					case "browser.url.get":
+						return { url: "about:blank" };
+					case "browser.snapshot":
+						return { page: { html: "" } };
+					case "browser.eval":
+						await Bun.sleep(0);
+						return { value: "ready" };
+					case "browser.navigate":
+						navigatedUrls.push(String(params.url));
+						return { url: params.url };
+					default:
+						return {};
+				}
+			},
+		);
+		const browser = await acquireBrowser(makeKind("drain-abort"), { cwd: "/tmp" });
+		await acquireTab("drain-abort", browser, {
+			timeoutMs: 5_000,
+			ownerSessionId: "session-drain-abort",
+		});
+
+		const result = await runInTab("drain-abort", {
+			code: `
+				void tab.title().then(() => tab.goto("https://late.example"));
+				return "completed";
+			`,
+			timeoutMs: 5_000,
+			session: makeSession("/tmp"),
+		});
+		expect(result.returnValue).toBe("completed");
+
+		await Bun.sleep(20);
+		expect(navigatedUrls).toEqual([]);
 	});
 
 	it("ignores the daemon screenshot path when no screenshot directory is configured", async () => {

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { getEditorCommand } from "../src/utils/external-editor";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { TempDir } from "@musepi/pi-utils";
+import { getEditorCommand, openInEditor } from "../src/utils/external-editor";
 
 interface MutableProcess {
 	platform: NodeJS.Platform;
@@ -59,5 +62,23 @@ describe("getEditorCommand", () => {
 		delete Bun.env.EDITOR;
 		setPlatform("linux");
 		expect(getEditorCommand()).toBeUndefined();
+	});
+});
+
+describe("openInEditor", () => {
+	it.skipIf(process.platform === "win32")("supports quoted editor paths containing spaces", async () => {
+		const tempDir = TempDir.createSync("@external-editor-");
+		try {
+			const editorPath = path.join(tempDir.path(), "My Editor", "edit");
+			fs.mkdirSync(path.dirname(editorPath), { recursive: true });
+			await Bun.write(editorPath, '#!/bin/sh\nprintf "edited" > "$1"\n');
+			fs.chmodSync(editorPath, 0o755);
+
+			const result = await openInEditor(`"${editorPath}"`, "original");
+
+			expect(result).toBe("edited");
+		} finally {
+			await tempDir.remove();
+		}
 	});
 });

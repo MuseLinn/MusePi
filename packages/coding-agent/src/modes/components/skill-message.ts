@@ -1,6 +1,7 @@
-import type { TextContent } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Box, Container, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
+import type { TextContent } from "@musepi/pi-ai";
+import type { Component } from "@musepi/pi-tui";
+import { Box, Container, Markdown, Spacer, Text } from "@musepi/pi-tui";
+import { t } from "../../i18n/index.js";
 import { getMarkdownTheme, theme } from "../../modes/theme/theme";
 import type { CustomMessage, SkillPromptDetails } from "../../session/messages";
 import { shortenPath } from "../../tools/render-utils";
@@ -44,12 +45,12 @@ export class SkillMessageComponent extends Container {
 		this.#box.setBorder({ chars: theme.boxRound, color: t => theme.fg("borderMuted", t) });
 
 		const details = this.message.details;
-		const name = details?.name?.trim() || "unknown";
+		const name = details?.name?.trim() || t("unknown");
 		// Collapse args to one line: a stray newline/tab in user-supplied args would split the header.
 		const args = details?.args?.replace(/\s+/g, " ").trim() ?? "";
 
 		// Header: icon-tag + skill name, with the invocation args trailing dimmed.
-		const tag = theme.fg("customMessageLabel", theme.bold(`${theme.icon.extensionSkill} skill`));
+		const tag = theme.fg("customMessageLabel", theme.bold(`${theme.icon.extensionSkill} ${t("skill")}`));
 		let header = `${tag} ${theme.fg("customMessageText", theme.bold(name))}`;
 		if (args) {
 			header += ` ${theme.fg("dim", args)}`;
@@ -71,7 +72,7 @@ export class SkillMessageComponent extends Container {
 		}
 
 		this.#box.addChild(new Spacer(1));
-		this.#box.addChild(new Text(theme.fg("muted", "prompt"), 0, 0));
+		this.#box.addChild(new Text(theme.fg("muted", t("prompt")), 0, 0));
 		this.#box.addChild(new Spacer(1));
 
 		this.#contentComponent = new Markdown(text, 0, 0, getMarkdownTheme(), {
@@ -89,7 +90,14 @@ export class SkillMessageComponent extends Container {
 			parts.push(fileHyperlink(filePath, theme.fg("accent", shortenPath(filePath)), { line: 1 }));
 		}
 		if (typeof details?.lineCount === "number") {
-			parts.push(theme.fg("muted", `${details.lineCount} ${details.lineCount === 1 ? "line" : "lines"}`));
+			parts.push(
+				theme.fg(
+					"muted",
+					details.lineCount === 1
+						? t("{0} line", String(details.lineCount))
+						: t("{0} lines", String(details.lineCount)),
+				),
+			);
 		}
 
 		if (parts.length === 0) {

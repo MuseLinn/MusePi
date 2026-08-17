@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { Agent, type AgentMessage, type AgentTool } from "@oh-my-pi/pi-agent-core";
-import { z } from "@oh-my-pi/pi-ai";
-import { createMockModel, type MockModel, type MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { type SettingPath, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { convertToLlm } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import * as unexpectedStopClassifier from "@oh-my-pi/pi-coding-agent/session/unexpected-stop-classifier";
-import { logger, TempDir } from "@oh-my-pi/pi-utils";
+import { type } from "@musepi/omptype";
+import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
+import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import * as unexpectedStopClassifier from "@musepi/pi-coding-agent/session/unexpected-stop-classifier";
+import { logger, TempDir } from "@musepi/pi-utils";
 
-const recordToolSchema = z.object({ value: z.string() });
+const recordToolSchema = type({ value: type("string") });
 
 type Harness = {
 	session: AgentSession;
@@ -46,6 +46,13 @@ function recordCall(value: string, id: string): MockResponse {
 function unexpectedStop(text: string): MockResponse {
 	return {
 		content: [{ type: "text", text }],
+		stopReason: "stop",
+	};
+}
+
+function thinkingOnlyStop(thinking: string): MockResponse {
+	return {
+		content: [{ type: "thinking", thinking, thinkingSignature: "reasoning_content" }],
 		stopReason: "stop",
 	};
 }
@@ -165,6 +172,30 @@ describe("AgentSession unexpected stop guard", () => {
 		await session.waitForIdle();
 
 		expect(spy).toHaveBeenCalledTimes(2);
+		expect(mock.calls).toHaveLength(2);
+		expect(assistantText(session.agent.state.messages)).toContain("done now");
+		expect(reminderMessages(session.agent.state.messages)).toHaveLength(1);
+	});
+
+	it("classifies a thinking-only stop on its thinking text and continues", async () => {
+		let calls = 0;
+		const spy = vi.spyOn(unexpectedStopClassifier, "classifyUnexpectedStop").mockImplementation(async () => {
+			calls++;
+			return calls === 1;
+		});
+		const { session, mock } = await createHarness(
+			[thinkingOnlyStop(" 响应"), { content: ["done now"], stopReason: "stop" }],
+			{
+				"features.unexpectedStopDetection": true,
+				"providers.unexpectedStopModel": "online",
+			},
+		);
+
+		await session.prompt("do the thing");
+		await session.waitForIdle();
+
+		expect(spy).toHaveBeenCalledTimes(2);
+		expect(spy.mock.calls[0]?.[0]).toContain("响应");
 		expect(mock.calls).toHaveLength(2);
 		expect(assistantText(session.agent.state.messages)).toContain("done now");
 		expect(reminderMessages(session.agent.state.messages)).toHaveLength(1);

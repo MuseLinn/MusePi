@@ -8,7 +8,7 @@
  * the construction lives in one place rather than being repeated per callsite.
  */
 
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool } from "@musepi/pi-agent-core";
 import { EditTool } from "./edit";
 import type { ExtensionRunner } from "./extensibility/extensions";
 import { ExtensionToolWrapper } from "./extensibility/extensions";
@@ -39,7 +39,7 @@ export function createBridgeGrepFactory(
 /**
  * Build the `replace`-mode `edit` the bridge answers `pi_edit` with.
  *
- * `PiEditExecArgs` carries `old_text`/`new_text` pairs, which is exactly
+ * `PiEditExecArgs` carries `old_string`/`new_string` replacements, which is exactly
  * `replace`'s schema and nothing else's. The session's own instance follows the
  * configured `edit.mode` — `hashline` by default, whose schema is a single
  * `input` string — so a frame handed that instance fails validation instead of

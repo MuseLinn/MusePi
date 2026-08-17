@@ -1,30 +1,30 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { Agent, AgentBusyError, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
-import type { AssistantMessage, Usage } from "@oh-my-pi/pi-ai";
-import * as AIError from "@oh-my-pi/pi-ai/error";
-import { KeybindingsManager } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { resolveLocalUrlToPath } from "@oh-my-pi/pi-coding-agent/internal-urls";
-import { AssistantMessageComponent } from "@oh-my-pi/pi-coding-agent/modes/components/assistant-message";
-import type { HookSelectorSlider } from "@oh-my-pi/pi-coding-agent/modes/components/hook-selector";
+import { Agent, AgentBusyError, ThinkingLevel } from "@musepi/pi-agent-core";
+import type { AssistantMessage, Usage } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
+import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
+import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resolveLocalUrlToPath } from "@musepi/pi-coding-agent/internal-urls";
+import { AssistantMessageComponent } from "@musepi/pi-coding-agent/modes/components/assistant-message";
+import type { HookSelectorSlider } from "@musepi/pi-coding-agent/modes/components/hook-selector";
 import {
 	type PlanReviewAnnotationState,
 	PlanReviewOverlay,
-} from "@oh-my-pi/pi-coding-agent/modes/components/plan-review-overlay";
-import { InteractiveMode } from "@oh-my-pi/pi-coding-agent/modes/interactive-mode";
-import { initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import type { SubmittedUserInput } from "@oh-my-pi/pi-coding-agent/modes/types";
-import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@oh-my-pi/pi-coding-agent/session/messages";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { AUTO_THINKING } from "@oh-my-pi/pi-coding-agent/thinking";
-import * as clipboard from "@oh-my-pi/pi-coding-agent/utils/clipboard";
-import { type OverlayHandle, type OverlayOptions, setKeybindings, Text } from "@oh-my-pi/pi-tui";
-import { formatNumber, TempDir } from "@oh-my-pi/pi-utils";
+} from "@musepi/pi-coding-agent/modes/components/plan-review-overlay";
+import { InteractiveMode } from "@musepi/pi-coding-agent/modes/interactive-mode";
+import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import type { SubmittedUserInput } from "@musepi/pi-coding-agent/modes/types";
+import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
+import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+import { SILENT_ABORT_MARKER, USER_INTERRUPT_LABEL } from "@musepi/pi-coding-agent/session/messages";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
+import * as clipboard from "@musepi/pi-coding-agent/utils/clipboard";
+import { type OverlayHandle, type OverlayOptions, setKeybindings, Text } from "@musepi/pi-tui";
+import { formatNumber, TempDir } from "@musepi/pi-utils";
 
 /**
  * Matches the plan-approved synthetic-prompt dispatch. `#approvePlan` calls
@@ -1878,13 +1878,14 @@ describe("InteractiveMode plan review rendering", () => {
 	// `#approvePlan`'s `finally`. No aborted message_end is required to consume it,
 	// so a stranded flag could otherwise silence the next unrelated abort. One
 	// parametrized case per outcome keeps ok/cancelled/failed each covered.
-	it.each(["ok", "cancelled", "failed"] as const)(
-		"B1-B3: Approve and compact context + %s outcome → flag cleared by finally",
-		async outcome => {
-			await approveWithCompact(outcome);
-			expect(session.isPlanInternalAbortPending).toBe(false);
-		},
-	);
+	it.each([
+		"ok",
+		"cancelled",
+		"failed",
+	] as const)("B1-B3: Approve and compact context + %s outcome → flag cleared by finally", async outcome => {
+		await approveWithCompact(outcome);
+		expect(session.isPlanInternalAbortPending).toBe(false);
+	});
 
 	it("B4: Approve and compact context + handleCompactCommand throws → showError surfaces the failure AND flag cleared by finally before the outer catch", async () => {
 		// `handlePlanApproval` wraps `#approvePlan` in a try/catch

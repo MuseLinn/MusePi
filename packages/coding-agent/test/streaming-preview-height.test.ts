@@ -2,14 +2,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
-import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { EDIT_MODE_STRATEGIES } from "@oh-my-pi/pi-coding-agent/edit";
-import { ToolExecutionComponent } from "@oh-my-pi/pi-coding-agent/modes/components/tool-execution";
-import { theme as activeTheme, initTheme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
-import { previewWindowRows } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import { TUI, visibleWidth } from "@oh-my-pi/pi-tui";
-import { removeWithRetries } from "@oh-my-pi/pi-utils";
+import type { AgentTool } from "@musepi/pi-agent-core";
+import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { EDIT_MODE_STRATEGIES } from "@musepi/pi-coding-agent/edit";
+import { ToolExecutionComponent } from "@musepi/pi-coding-agent/modes/components/tool-execution";
+import { theme as activeTheme, initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { previewWindowRows } from "@musepi/pi-coding-agent/tools/render-utils";
+import { TUI, visibleWidth } from "@musepi/pi-tui";
+import { removeWithRetries } from "@musepi/pi-utils";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal";
 
 // The streaming edit preview is a fixed-height tail window ("cursor"): the last
@@ -144,7 +144,7 @@ describe("streaming edit preview height (stable, full tail window)", () => {
 		const tool = { mode: "replace" } as unknown as AgentTool;
 		const component = new ToolExecutionComponent(
 			"edit",
-			{ path: file, edits: [{ old_text: oldBlock, new_text: fullNew.slice(0, 1) }] },
+			{ path: file, old_string: oldBlock, new_string: fullNew.slice(0, 1) },
 			{},
 			tool,
 			tui,
@@ -199,7 +199,7 @@ describe("streaming edit preview height (stable, full tail window)", () => {
 		const tool = { mode: "replace" } as unknown as AgentTool;
 		const component = new ToolExecutionComponent(
 			"edit",
-			{ path: bigFile, edits: [{ old_text: bigOld, new_text: bigNew.slice(0, 1) }] },
+			{ path: bigFile, old_string: bigOld, new_string: bigNew.slice(0, 1) },
 			{},
 			tool,
 			uiStub,
@@ -225,7 +225,7 @@ describe("streaming edit preview height (stable, full tail window)", () => {
 		const heights: number[] = [];
 		let maxTrailingBlank = 0;
 		for (const newText of bigPartials) {
-			component.updateArgs({ path: bigFile, edits: [{ old_text: bigOld, new_text: newText }] });
+			component.updateArgs({ path: bigFile, old_string: bigOld, new_string: newText });
 			await component.whenPreviewSettled();
 			const rows = component.render(RENDER_WIDTH_WIDE);
 			heights.push(rows.length);
@@ -284,7 +284,7 @@ describe("streaming edit preview height (stable, full tail window)", () => {
 			const streamingStepCount = streamedReplacements.length;
 			const lifecycleSteps = [
 				...streamedReplacements.map((newText, i) => () => {
-					component.updateArgs({ path: file, edits: [{ old_text: oldBlock, new_text: newText }] });
+					component.updateArgs({ path: file, old_string: oldBlock, new_string: newText });
 					if (i % 4 === 1) {
 						component.setExpanded(true);
 					} else if (i % 4 === 3) {
@@ -367,7 +367,7 @@ describe("streaming edit preview height (stable, full tail window)", () => {
 		const rawLineCounts: number[] = [];
 		for (const newText of partials) {
 			const previews = await EDIT_MODE_STRATEGIES.replace.computeDiffPreview(
-				{ path: file, edits: [{ old_text: oldBlock, new_text: newText }] },
+				{ path: file, old_string: oldBlock, new_string: newText },
 				ctx,
 			);
 			const first = previews?.[0];

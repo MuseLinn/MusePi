@@ -6,11 +6,11 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { disposeAllKernelSessions, executePythonWithKernel } from "@oh-my-pi/pi-coding-agent/eval/py/executor";
-import { PythonKernel } from "@oh-my-pi/pi-coding-agent/eval/py/kernel";
-import { filterEnv, resolvePythonRuntime } from "@oh-my-pi/pi-coding-agent/eval/py/runtime";
-import { TempDir } from "@oh-my-pi/pi-utils";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { disposeAllKernelSessions, executePythonWithKernel } from "@musepi/pi-coding-agent/eval/py/executor";
+import { PythonKernel } from "@musepi/pi-coding-agent/eval/py/kernel";
+import { filterEnv, resolvePythonRuntime } from "@musepi/pi-coding-agent/eval/py/runtime";
+import { TempDir } from "@musepi/pi-utils";
 
 const SHOULD_RUN = Bun.env.PI_PYTHON_INTEGRATION === "1";
 const MATPLOTLIB_TEST_CWD = process.cwd();

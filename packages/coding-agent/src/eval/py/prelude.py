@@ -376,10 +376,14 @@ if "__omp_prelude_loaded__" not in globals():
             raise RuntimeError("tool bridge is unavailable in this kernel")
         return (base.rstrip("/"), token, session)
 
+    import urllib.error, urllib.request
+
+    # urllib discovers environment and macOS SystemConfiguration proxies. This
+    # host-owned loopback endpoint must always connect directly.
+    _BRIDGE_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
     def _bridge_call(name: str, args: dict):
         """POST one request to the host tool bridge and return its `value`."""
-        import urllib.request, urllib.error
-
         base, token, session = _tool_proxy_from_env()
         _run_id_getter = globals().get("__omp_current_run_id__")
         _run_id = (
@@ -400,7 +404,7 @@ if "__omp_prelude_loaded__" not in globals():
             },
         )
         try:
-            with urllib.request.urlopen(req) as resp:
+            with _BRIDGE_OPENER.open(req) as resp:
                 body = resp.read()
         except urllib.error.HTTPError as exc:
             body = exc.read()
@@ -484,7 +488,6 @@ if "__omp_prelude_loaded__" not in globals():
         prompt,
         *,
         agent="task",
-        model=None,
         label=None,
         schema=None,
         schema_mode=None,
@@ -502,8 +505,6 @@ if "__omp_prelude_loaded__" not in globals():
         args = {"prompt": prompt}
         if agent is not None:
             args["agent"] = agent
-        if model is not None:
-            args["model"] = model
         if label is not None:
             args["label"] = label
         if schema is not None:

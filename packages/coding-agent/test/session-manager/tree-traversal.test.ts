@@ -1,6 +1,6 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { CustomEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
-import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
+import type { CustomEntry } from "@musepi/pi-coding-agent/session/session-entries";
+import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { assistantMsg, userMsg } from "../utilities";
 
 describe("SessionManager append and tree traversal", () => {
@@ -451,6 +451,19 @@ describe("createBranchedSession", () => {
 		expect(entries).toHaveLength(2);
 		expect(entries[0].id).toBe(id1);
 		expect(entries[1].id).toBe(id2);
+	});
+
+	it("preserves the session title when creating a branch", async () => {
+		const session = SessionManager.inMemory();
+		const leafId = session.appendMessage(userMsg("hello"));
+		await session.setSessionName("new-ds", "user");
+
+		session.createBranchedSession(leafId);
+
+		expect(session.getSessionName()).toBe("new-ds");
+		expect(session.titleSource).toBe("user");
+		expect(await session.setSessionName("automatic", "auto")).toBe(false);
+		expect(session.getSessionName()).toBe("new-ds");
 	});
 
 	it("extracts correct path from branched tree", () => {
