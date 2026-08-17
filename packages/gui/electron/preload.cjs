@@ -8,6 +8,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
+	/** Node platform of the desktop shell ("darwin" | "win32" | "linux") —
+	 *  gates macOS-only features (haptics, native window glass). */
+	platform: process.platform,
 	/** Port of a running daemon (ws.port file), or null. */
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
 	/** Spawn `musepi serve --port` and resolve once the listener is up. */
@@ -58,17 +61,57 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Pet window drag (renderer client coords → main converts to screen
 	 *  deltas with the window position; window moves cancel out). */
 	movePetWindowByClient: (clientX, clientY) => ipcRenderer.invoke("pet-drag-client", { clientX, clientY }),
+	/** Pointer down on the pet: keep the window interactive until the drag
+	 *  ends (click-through poll must not flip ignore mid-gesture). */
+	petDragArm: () => ipcRenderer.invoke("pet-drag-arm"),
 	/** Drag finished (resets the main-process delta tracker). */
 	petDragEnd: () => ipcRenderer.invoke("pet-drag-end"),
 	/** Pet window click → focus the main window. */
 	focusMainWindow: () => ipcRenderer.invoke("pet-click"),
+	/** Pet double-click → toggle the main window (visible → minimize,
+	 *  hidden/minimized → show + focus). */
+	toggleMainWindow: () => ipcRenderer.invoke("pet-toggle-main"),
+	/** Pet right-click → native context menu (main process). */
+	petContextMenu: () => ipcRenderer.invoke("pet-context-menu"),
+	/** Pet window: sprite-only rect (dock alignment uses the character
+	 *  edge, not the larger window). */
+	setPetRect: (rect) => ipcRenderer.invoke("pet-set-rect", rect),
+	/** Computer-use overlay glow: ring the displays while the agent
+	 *  drives the desktop (`computer` tool running). */
+	computerGlow: (on) => ipcRenderer.invoke("computer-glow", Boolean(on)),
+	/** Computer-use overlay target: highlight one desktop input action
+	 *  (window/element frame + action point) on the glow overlay. */
+	glowTarget: (event) => ipcRenderer.invoke("glow-target", event),
+	/** Context-menu "显示/隐藏面板" → the pet renderer toggles the panel. */
+	onPetPanelToggle: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("pet:panel-toggle", listener);
+		return () => ipcRenderer.removeListener("pet:panel-toggle", listener);
+	},
 	/** Pet panel recent-session click → open the session in the main window. */
 	petOpenSession: (sessionId) => ipcRenderer.invoke("pet-open-session", sessionId),
+	/** Pet bubble × → mark that session read in the main window (it owns
+	 *  the unread badge set — dismissing the notification must clear it). */
+	petMarkRead: (sessionId) => ipcRenderer.invoke("pet-mark-read", sessionId),
+	/** Pet badge click → mark every session read (badge + pet bubbles). */
+	petMarkAllRead: () => ipcRenderer.invoke("pet-mark-all-read"),
 	/** Main window: pet asked to open a session. */
 	onPetOpenSession: (cb) => {
 		const listener = (_e, sessionId) => cb(sessionId);
 		ipcRenderer.on("pet:open-session", listener);
 		return () => ipcRenderer.removeListener("pet:open-session", listener);
+	},
+	/** Main window: menu-bar tray session click → open that session. */
+	onTrayOpenSession: (cb) => {
+		const listener = (_e, sessionId) => cb(sessionId);
+		ipcRenderer.on("tray:open-session", listener);
+		return () => ipcRenderer.removeListener("tray:open-session", listener);
+	},
+	/** Main window: menu-bar tray "New Session" → create one. */
+	onTrayNewSession: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("tray:new-session", listener);
+		return () => ipcRenderer.removeListener("tray:new-session", listener);
 	},
 	/** Report the interactive rect (pet + bubble, window-relative) that
 	 *  drives the main-process click-through cursor poll. */
@@ -129,6 +172,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	petApprove: (requestId, approved) => ipcRenderer.invoke("pet-approve", { requestId, approved }),
 	/** Pet window: expand/collapse the interaction panel (window resize). */
 	petSetPanel: (open) => ipcRenderer.invoke("pet-set-panel", open),
+	/** Pet window single click → toggle the BUBBLE window's interaction
+	 *  panel (the panel moved to its own glass window). */
+	toggleBubblePanel: () => ipcRenderer.invoke("pet-toggle-panel"),
+	/** Bubble window: report its content bounding box (CSS px) so the main
+	 *  process sizes the OS window to exactly the bubbles/panel. */
+	setBubbleSize: (rect) => ipcRenderer.invoke("bubble-set-size", rect),
 	/** Board card 固定至桌面: opens a small always-on-top window with the
 	 *  card payload (kimi parity, M5 skeleton). */
 	pinWidget: (payload) => ipcRenderer.invoke("widget-pin", payload),
@@ -144,7 +193,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return () => ipcRenderer.removeListener("pet:command", listener);
 	},
 	/** Keep the machine from idle-sleeping (settings 常规 → 保持电脑运行).
-	 *  Main process holds a caffeinate -i child while enabled. */
+	 *  Main process holds a powerSaveBlocker assertion while enabled
+	 *  (cross-platform: caffeinate-equivalent on macOS, ES_SYSTEM_REQUIRED
+	 *  on Windows, ScreenSaver Inhibit on Linux). */
 	setKeepAwake: (enabled) => ipcRenderer.invoke("keep-awake-set", enabled),
 	/** Import a Petdex zip (dialog + unpack); null when cancelled. */
 	importPetdex: () => ipcRenderer.invoke("pet-import"),
@@ -152,4 +203,39 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	searchPetdex: (query) => ipcRenderer.invoke("pet-search", query),
 	/** Download + install a petdex zip by URL (same unpack path as import). */
 	installPetdexUrl: (zipUrl) => ipcRenderer.invoke("pet-install-url", zipUrl),
+	/** Managed in-app browser (right-pane tool): open the panel browser
+	 *  (WebContentsView tabs owned by main) and return its projected state. */
+	managedBrowserOpen: () => ipcRenderer.invoke("managed-browser:open"),
+	/** Close + destroy all managed browser tabs (panel close button). */
+	managedBrowserClose: () => ipcRenderer.invoke("managed-browser:close"),
+	/** Projected state snapshot (port/tabs/active/activity). */
+	managedBrowserGetState: () => ipcRenderer.invoke("managed-browser:get-state"),
+	/** Project the panel slot's CSS rect onto the native view
+	 *  ({ tabId, bounds: {x,y,width,height}, visible, revision }). */
+	managedBrowserSetLayout: (layout) => ipcRenderer.invoke("managed-browser:set-layout", layout),
+	/** Address-bar navigation of the active tab ({ url }). */
+	managedBrowserNavigate: (input) => ipcRenderer.invoke("managed-browser:navigate", input),
+	managedBrowserGoBack: () => ipcRenderer.invoke("managed-browser:go-back"),
+	managedBrowserGoForward: () => ipcRenderer.invoke("managed-browser:go-forward"),
+	managedBrowserReload: () => ipcRenderer.invoke("managed-browser:reload"),
+	managedBrowserPickElement: () => ipcRenderer.invoke("managed-browser:pick-element"),
+	managedBrowserNewTab: () => ipcRenderer.invoke("managed-browser:new-tab"),
+	managedBrowserSelectTab: (tabId) => ipcRenderer.invoke("managed-browser:select-tab", tabId),
+	managedBrowserCloseTab: (tabId) => ipcRenderer.invoke("managed-browser:close-tab", tabId),
+	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
+	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
+	/** Renderer answer to a risky-navigation consent request. */
+	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
+	/** Managed browser state pushed on any change. */
+	onManagedBrowserState: (cb) => {
+		const listener = (_e, state) => cb(state);
+		ipcRenderer.on("managed-browser:state", listener);
+		return () => ipcRenderer.removeListener("managed-browser:state", listener);
+	},
+	/** Risky-navigation consent request from the bridge. */
+	onManagedBrowserConfirm: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:confirm", listener);
+		return () => ipcRenderer.removeListener("managed-browser:confirm", listener);
+	},
 });

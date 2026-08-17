@@ -11,6 +11,7 @@
 
 import { createHash } from "node:crypto";
 import * as net from "node:net";
+import { logger } from "@musepi/pi-utils";
 import {
 	encodeClosePayload,
 	encodeFrame,
@@ -122,28 +123,40 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 				}
 			},
 		};
+		logger.debug("ws connection open", { connId: conn.id, remote: socket.remoteAddress ?? null });
 		const frameDecoder = new FrameDecoder();
 		let closed = false;
+		let closeCode: number | null = null;
 		const teardown = (): void => {
 			if (closed) return;
 			closed = true;
+			logger.info("ws connection closed", { connId: conn.id, closeCode });
 			options.onClose(conn.id);
 		};
 
 		socket.on("data", (chunk: Buffer) => {
 			try {
 				for (const frame of frameDecoder.push(new Uint8Array(chunk))) {
-					handleFrame(conn, socket, frame, teardown);
+					handleFrame(conn, socket, frame, teardown, code => {
+						closeCode = code;
+					});
 				}
 			} catch (err) {
 				const code = err instanceof RelayProtocolError ? err.closeCode : 1002;
+				closeCode = code;
 				void closeWithCode(socket, code, err instanceof Error ? err.message : "protocol error");
 			}
 		});
 		socket.on("close", teardown);
 	}
 
-	function handleFrame(conn: DaemonConnection, socket: net.Socket, frame: WsFrame, teardown: () => void): void {
+	function handleFrame(
+		conn: DaemonConnection,
+		socket: net.Socket,
+		frame: WsFrame,
+		teardown: () => void,
+		onCloseFrame?: (code: number) => void,
+	): void {
 		if (frame.opcode === OP_TEXT) {
 			options.onMessage(conn, decoder.decode(frame.payload));
 			return;
@@ -158,6 +171,7 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 				frame.payload.byteLength >= 2
 					? new DataView(frame.payload.buffer, frame.payload.byteOffset).getUint16(0, false)
 					: 1000;
+			onCloseFrame?.(code);
 			// Teardown synchronously: the client's close handshake may not
 			// deliver a FIN to this socket, so the 'close' event could never
 			// fire teardown (same lesson as the relay's detachPeer).

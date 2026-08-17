@@ -29,6 +29,7 @@ export function GroupedSessionTree({
 	onContextMenu,
 	unread,
 	pausedIds,
+	workingIds,
 }: {
 	nodes: GuiTreeNode[];
 	selectedId: string | null;
@@ -36,6 +37,7 @@ export function GroupedSessionTree({
 	onContextMenu?(sessionId: string, x: number, y: number): void;
 	unread?: ReadonlySet<string>;
 	pausedIds?: ReadonlySet<string>;
+	workingIds?: ReadonlySet<string>;
 }): ReactNode {
 	const groups = new Map<string, GuiTreeNode[]>();
 	for (const n of nodes) {
@@ -64,6 +66,7 @@ export function GroupedSessionTree({
 						onContextMenu={onContextMenu}
 						unread={unread}
 						pausedIds={pausedIds}
+						workingIds={workingIds}
 					/>
 				</div>
 			))}

@@ -201,6 +201,13 @@ interface UiBase {
 	description: string;
 	/** Condition function name - setting only shown when true */
 	condition?: string;
+	/**
+	 * Terminal-only effect: the setting only affects the TUI/terminal rendering
+	 * (theme registry, status line, OSC sequences, terminal title…). The desktop
+	 * GUI settings panel still lists it (muted, with a note) so the TUI can be
+	 * configured from either surface, but it has no effect on the desktop UI.
+	 */
+	tuiOnly?: boolean;
 }
 
 interface UiBoolean extends UiBase {}
@@ -517,6 +524,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Git",
 			label: "Enable Git Integration",
 			description: "Show git branch, status, and PR information in the TUI and watch repository metadata.",
@@ -575,6 +583,16 @@ export const SETTINGS_SCHEMA = {
 
 	cycleOrder: { type: "array", default: DEFAULT_CYCLE_ORDER },
 
+	// GUI-only side-channel model override (selection→ask / prompt enhance /
+	// idle recap / auto titles): empty = follow the session model (TUI
+	// parity). No TUI UI; the GUI 行为 tab renders its own picker.
+	sideChannelModel: { type: "string", default: "" },
+
+	// Busy-state plain-Enter behavior (dsh parity): steer (insert into the
+	// running turn immediately — the TUI default) or queue (follow-up,
+	// delivered after the turn yields). Cmd/Ctrl+Enter uses the opposite.
+	busyEnter: { type: "string", default: "steer" },
+
 	// ────────────────────────────────────────────────────────────────────────
 	// Appearance
 	// ────────────────────────────────────────────────────────────────────────
@@ -585,6 +603,7 @@ export const SETTINGS_SCHEMA = {
 		default: "titanium",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Theme",
 			label: "Dark Theme",
 			description: "Theme used when the terminal has a dark background",
@@ -597,6 +616,7 @@ export const SETTINGS_SCHEMA = {
 		default: "light",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Theme",
 			label: "Light Theme",
 			description: "Theme used when the terminal has a light background",
@@ -610,6 +630,7 @@ export const SETTINGS_SCHEMA = {
 		default: "unicode",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Theme",
 			label: "Symbol Preset",
 			description: "Glyph set for icons and symbols (Unicode, Nerd Font, or ASCII)",
@@ -639,6 +660,7 @@ export const SETTINGS_SCHEMA = {
 		default: "default",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Status Line Preset",
 			description: "Pre-built status line configurations",
@@ -660,6 +682,7 @@ export const SETTINGS_SCHEMA = {
 		default: "powerline-thin",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Status Line Separator",
 			description: "Style of separators between segments",
@@ -680,6 +703,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Session Accent",
 			description: "Use the session name color for the editor border and status line gap",
@@ -691,6 +715,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Transparent Status Line",
 			description:
@@ -702,6 +727,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Compact Thinking Level",
 			description:
@@ -819,6 +845,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Status Line",
 			label: "Show Hook Status",
 			description: "Display hook status messages below the status line",
@@ -837,6 +864,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Images",
 			label: "Show Inline Images",
 			description: "Render images inline in the terminal",
@@ -904,6 +932,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Native Terminal Progress",
 			description: "Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
@@ -915,6 +944,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Large Headings (Kitty)",
 			description:
@@ -929,7 +959,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "appearance",
 			group: "Display",
 			label: "Render Mermaid Diagrams",
-			description: "Render Mermaid fenced code blocks as ASCII diagrams",
+			description:
+				"Render Mermaid fenced code blocks as ASCII diagrams (TUI). The desktop transcript renders mermaid blocks as SVG via its own chat preference.",
 		},
 	},
 
@@ -938,6 +969,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Codex Reset Fireworks",
 			description:
@@ -950,6 +982,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Terminal Title Run State",
 			description:
@@ -963,6 +996,7 @@ export const SETTINGS_SCHEMA = {
 		default: "auto",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Terminal Hyperlinks",
 			description:
@@ -974,6 +1008,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Tight Layout",
 			description: "Remove the 1-character horizontal padding from the left and right of the terminal output",
@@ -984,6 +1019,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Rewrite Scrollback",
 			description:
@@ -997,6 +1033,7 @@ export const SETTINGS_SCHEMA = {
 		default: "classic",
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Shimmer",
 			description: "Animation style for working/loading messages",
@@ -1046,6 +1083,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Cache Miss Marker",
 			description: "Show a divider above an assistant turn whose request lost (missed) the prompt cache",
@@ -1069,6 +1107,7 @@ export const SETTINGS_SCHEMA = {
 		default: true, // will be computed based on platform if undefined
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Show Hardware Cursor",
 			description: "Show terminal cursor for IME support",
@@ -1080,6 +1119,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "IME-Safe Prompt Layout",
 			description: "Move the prompt's bottom border to a separate row so macOS IME preedit cannot displace it",
@@ -1112,6 +1152,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "model",
+			tuiOnly: true,
 			group: "Thinking",
 			label: "Hide Thinking Blocks",
 			description: "Hide thinking blocks in assistant responses",
@@ -1122,6 +1163,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "model",
+			tuiOnly: true,
 			group: "Thinking",
 			label: "Prose Only Thinking",
 			description: "Omit code blocks from thinking summaries and replace them with an ellipsis",
@@ -1723,6 +1765,7 @@ export const SETTINGS_SCHEMA = {
 		default: "default",
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Input",
 			label: "Session Tree Filter",
 			description: "Default filter mode when opening the session tree",
@@ -1734,6 +1777,7 @@ export const SETTINGS_SCHEMA = {
 		default: 5,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Input",
 			label: "Autocomplete Items",
 			description: "Max visible items in autocomplete dropdown (3-20)",
@@ -1753,6 +1797,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Input",
 			label: "Emoji Autocomplete",
 			description: "Suggest emojis from `:name:` shortcodes and expand text emoticons like `:D` or `:-)`",
@@ -1764,6 +1809,7 @@ export const SETTINGS_SCHEMA = {
 		default: 100,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Input",
 			label: "Large Paste Menu",
 			description:
@@ -1794,6 +1840,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Show Startup Splash",
 			description:
@@ -1806,6 +1853,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Setup Wizard",
 			description: "Show newly added onboarding steps once per setup version",
@@ -1817,6 +1865,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Check for Updates",
 			description: "Check for omp updates on startup",
@@ -1846,6 +1895,7 @@ export const SETTINGS_SCHEMA = {
 		default: "summary",
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Startup Changelog",
 			description: "Choose whether update notes start as a summary, full details, or stay hidden",
@@ -1920,6 +1970,7 @@ export const SETTINGS_SCHEMA = {
 		default: "on",
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Notifications",
 			label: "Completion Notification",
 			description: "Notify when the agent finishes a turn",
@@ -1932,6 +1983,7 @@ export const SETTINGS_SCHEMA = {
 		default: "off",
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Notifications",
 			label: "Error Notification",
 			description: "Notify when the agent stops with an error",
@@ -1962,6 +2014,7 @@ export const SETTINGS_SCHEMA = {
 		default: "on",
 		ui: {
 			tab: "interaction",
+			tuiOnly: true,
 			group: "Notifications",
 			label: "Ask Notification",
 			description: "Notify when the ask tool is waiting for input",
@@ -3985,6 +4038,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"computer.glow": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Computer",
+			label: "Screen Glow Indicator",
+			description:
+				"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing",
+		},
+	},
+
 	"inspect_image.timeoutMs": {
 		type: "number",
 		default: 300_000,
@@ -4179,7 +4244,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Grep & Browser",
 			label: "Browser Relay",
 			description:
-				"Drive your own Chrome tabs through the omp browser relay. Install the extension once (`omp browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
+				"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
 		},
 	},
 
@@ -4190,7 +4255,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			group: "Grep & Browser",
 			label: "Browser Relay URL",
-			description: "omp browser relay endpoint (default http://127.0.0.1:9224).",
+			description: "musepi browser relay endpoint (default http://127.0.0.1:9224).",
 		},
 	},
 
@@ -4214,6 +4279,38 @@ export const SETTINGS_SCHEMA = {
 			label: "cmux Browser",
 			description:
 				"Use cmux WKWebView surfaces for browser automation when a cmux socket is available. Set PI_BROWSER_CMUX=0 or PI_BROWSER_CMUX=1 to override.",
+		},
+	},
+	"browser.gui": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "GUI Managed Browser",
+			description:
+				"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium. Enable when using the MusePi desktop app: the agent's pages are visible in the panel and share its persistent login state. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.",
+		},
+	},
+	"browser.guiUrl": {
+		type: "string",
+		default: "http://127.0.0.1:9230",
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "GUI Managed Browser URL",
+			description: "Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230).",
+		},
+	},
+	"browser.policy.restrictToPublic": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Grep & Browser",
+			label: "Public Internet Only",
+			description:
+				"Restrict browser navigation to public http/https sites: block localhost, private networks and credentials-in-URL, and re-check DNS before navigating (DNS-rebinding guard). OFF by default because navigating localhost dev servers is a core feature; enable for workflows that need a strictly public browser surface.",
 		},
 	},
 	"browser.screenshotDir": {
@@ -4818,6 +4915,7 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
+			tuiOnly: true,
 			group: "Display",
 			label: "Show Resolved Model Badge",
 			description: "Display the actual model ID used by each subagent in the task widget status line",
@@ -5673,6 +5771,14 @@ export function getPathsForTab(tab: SettingTab): SettingPath[] {
 		const ui = getUi(path);
 		return ui?.tab === tab;
 	});
+}
+
+/** All paths marked `ui.tuiOnly` — settings that only affect the terminal
+ *  interface (TUI). Consumed by the daemon to tell GUI-session agents which
+ *  settings edits are no-ops, and by the GUI settings renderer to badge rows.
+ *  Single source of truth: the `ui.tuiOnly` flag on each definition. */
+export function tuiOnlySettingKeys(): SettingPath[] {
+	return (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(path => getUi(path)?.tuiOnly === true);
 }
 
 /** Get the type of a setting */

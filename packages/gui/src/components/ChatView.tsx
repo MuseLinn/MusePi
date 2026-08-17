@@ -1,6 +1,6 @@
 import { CodeHighlightProvider, relTime, Transcript, t } from "@musepi/collab-web";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { moodFromState } from "../lib/pet";
@@ -13,9 +13,13 @@ import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
+import { AskPopover } from "./AskPopover";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
+import { MessageTreeButton } from "./MessageTree";
+import type { ReminderRow } from "./RemindersPanel";
+import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -57,7 +61,7 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	}, [rpc, cwd]);
 	useEffect(() => {
 		setAvatarFailed(false);
-	}, [avatarUrl]);
+	}, []);
 	const initial = user?.name?.trim().charAt(0)?.toLocaleUpperCase() ?? "";
 	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("you");
 	return (
@@ -156,6 +160,7 @@ export function ChatView({
 	onReloadSession,
 	onForkSession,
 	presetModelId,
+	presetThinkingLevel,
 	busy,
 	project,
 	onProject,
@@ -163,11 +168,16 @@ export function ChatView({
 	rightPanelOpen,
 	onOpenFileInPanel,
 	terminalOpen,
+	onCloseTerminal,
 	focusMode,
 	onToggleFocus,
 	paused,
 	pausedAt,
 	onResume,
+	reminders,
+	onSelectReminder,
+	onMarkAllRead,
+	sessionLoading,
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
@@ -185,10 +195,12 @@ export function ChatView({
 	onForkSession?(sessionId: string): Promise<void> | void;
 	/** Model chosen in the welcome composer before the session existed. */
 	presetModelId?: string | null;
+	/** Daemon thinking default (boot snapshot) for the welcome composer. */
+	presetThinkingLevel?: ThinkingLevel | null | undefined;
 	/** Welcome scene (before the first session of the run). */
 	busy: boolean;
 	project: string | null;
-	onProject(action: "folder" | "remote" | "none"): void;
+	onProject(action: "folder" | "remote" | "none" | string): void;
 	onSubmitNewSession(
 		text: string,
 		opts?: {
@@ -213,9 +225,19 @@ export function ChatView({
 	 *  ChatView relays the path into the ContextPanel/FilePane preview. */
 	onOpenFileInPanel?(path: string): void;
 	terminalOpen: boolean;
+	/** Last terminal tab closed → fold the dock (TerminalPanel onAllClosed). */
+	onCloseTerminal?(): void;
 	/** Focus mode (openchamber ⌘⇧E): composer fills the surface. */
 	focusMode: boolean;
 	onToggleFocus(): void;
+	/** Welcome-scene reminders (kimi 实时提醒 parity): background-working +
+	 *  completed-unread sessions below the empty composer. */
+	reminders?: readonly ReminderRow[];
+	onSelectReminder?(sessionId: string): void;
+	onMarkAllRead?(): void;
+	/** History-session cold open in flight: show the skeleton overlay
+	 *  over the transcript until the store lands. */
+	sessionLoading?: boolean;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
 	const snap = useStore(
@@ -234,9 +256,55 @@ export function ChatView({
 	const [, setRecapTick] = useState(0);
 	useEffect(() => {
 		if (!snap?.recap) return;
-		const timer = setInterval(() => setRecapTick(t => t + 1), 60_000);
-		return () => clearInterval(timer);
+		const id = window.setInterval(() => setRecapTick(t => t + 1), 60_000);
+		return () => clearInterval(id);
 	}, [snap?.recap]);
+	// Recap card fold: long recaps collapse to one line; click to expand.
+	const [recapExpanded, setRecapExpanded] = useState(false);
+	// TUI display-settings parity: the transcript honors these daemon
+	// settings (colorBlindMode, display.smoothStreaming / hideToolActivity
+	// / showTokenUsage / collapseCompacted). Read once on mount and on
+	// settings-panel commits (SchemaSettings dispatches
+	// omp-settings-changed). settings.get returns schema defaults, so
+	// unconfigured keys resolve to the same values the TUI uses.
+	const [displaySettings, setDisplaySettings] = useState<Record<string, unknown>>({});
+	useEffect(() => {
+		let alive = true;
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown>>("settings.get", {
+					keys: [
+						"colorBlindMode",
+						"display.smoothStreaming",
+						"display.hideToolActivity",
+						"display.showTokenUsage",
+						"display.collapseCompacted",
+					],
+				})
+				.then(v => {
+					if (alive) setDisplaySettings(v ?? {});
+				})
+				.catch(() => {});
+		};
+		load();
+		window.addEventListener("omp-settings-changed", load);
+		return () => {
+			alive = false;
+			window.removeEventListener("omp-settings-changed", load);
+		};
+	}, [rpc]);
+	// display.smoothStreaming controls the reveal via the html class —
+	// sole source since the chat-settings toggle merged into 外观 (the old
+	// omp-gui-chat-smooth localStorage key no longer writes it, so stale
+	// values must not stick).
+	useEffect(() => {
+		const cls = document.documentElement.classList;
+		if (displaySettings["display.smoothStreaming"] === false) {
+			cls.add("gui-chat-no-smooth");
+		} else {
+			cls.remove("gui-chat-no-smooth");
+		}
+	}, [displaySettings["display.smoothStreaming"]]);
 	// One container, two scenes, BIDIRECTIONAL transition: the incoming
 	// scene mounts (fade/zoom in) while the outgoing one lingers 420ms
 	// with a fade-out before unmounting.
@@ -343,7 +411,11 @@ export function ChatView({
 	const showAvatars = localStorage.getItem("omp-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
+	const terminalDockRef = useRef<HTMLDivElement | null>(null);
 	const dockResize = (e: ReactPointerEvent): void => {
+		// While dragging, suppress the open/close height transition so the
+		// handle stays 1:1 with the pointer.
+		terminalDockRef.current?.classList.add("gui-terminal-dock--resizing");
 		const startY = e.clientY;
 		const startH = dockHeight;
 		const onMove = (ev: PointerEvent): void => {
@@ -351,6 +423,7 @@ export function ChatView({
 			setDockHeight(h);
 		};
 		const onUp = (): void => {
+			terminalDockRef.current?.classList.remove("gui-terminal-dock--resizing");
 			window.removeEventListener("pointermove", onMove);
 			window.removeEventListener("pointerup", onUp);
 		};
@@ -366,15 +439,29 @@ export function ChatView({
 		if (!store) return;
 		const el = transcriptRef.current;
 		if (!el) return;
-		const sessionId = store.sessionId;
 		el.dataset.switched = "1";
 		const timer = setTimeout(() => {
 			delete el.dataset.switched;
 		}, 700);
 		return () => clearTimeout(timer);
-	}, [store?.sessionId]);
-	// ZCode 引用回复: quoted text prepends the next composer message.
-	const [pendingQuote, setPendingQuote] = useState<string | null>(null);
+	}, [store?.sessionId, store]);
+	// ZCode 引用回复 / Cmd+L 追加引用: quoted texts prepend the next
+	// composer message; multiple quotes append as stacked cards.
+	const [quotes, setQuotes] = useState<string[]>([]);
+	const appendQuote = useCallback((text: string): void => {
+		setQuotes(q => (q.includes(text) ? q : [...q, text]));
+	}, []);
+	// Global Cmd+L (app.tsx) lands here through the shared window event —
+	// identical style to the toolbar 引用 button (quote cards), unlike the
+	// old fenced-code insert.
+	useEffect(() => {
+		const onQuoteAppend = (e: Event): void => {
+			const detail = (e as CustomEvent<{ text?: string }>).detail;
+			if (detail?.text) appendQuote(detail.text);
+		};
+		window.addEventListener("omp-gui-quote-append", onQuoteAppend);
+		return () => window.removeEventListener("omp-gui-quote-append", onQuoteAppend);
+	}, [appendQuote]);
 	// File-reveal requests from transcript paths / artifact cards: relayed
 	// into the ContextPanel → FilePane preview. nonce re-triggers the same
 	// path (re-click while already open).
@@ -397,111 +484,164 @@ export function ChatView({
 			.request("session.setThinkingLevel", { sessionId: store.sessionId, thinkingLevel: level ?? null })
 			.catch(() => {});
 	};
-	// Revert history (user: revert should offer a restorable list — the old
-	// pencil "edit and resend" merged into this; the pencil button is gone).
-	const [revertHistory, setRevertHistory] = useState<{ id: string; messageId: string; text: string; at: number }[]>(
-		[],
-	);
-	// Revert / edit-and-reconverse: truncate the session to before the user
-	// message, reload the snapshot, then record the message in the revert
-	// list (恢复 refills the composer, 重新发送 re-delivers as followUp).
-	/** Render an assistant reply as a compact text card and copy it to the
-	 *  clipboard as PNG (openchamber 保存为图片 parity). Plain canvas
-	 *  drawing — no DOM snapshotting, so it works regardless of the
-	 *  message's rendered markdown. Wrapped in try/catch: clipboard image
-	 *  writes are async and can fail (permissions, unavailable API). */
-	const saveMessageAsImage = async (text: string): Promise<void> => {
+	// Revert history (openchamber RevertedMessageDock parity): the daemon
+	// is the single source of truth — session.revertList returns the
+	// backed-up reverts (one entry per session.revertTo), so the dock can
+	// never drift from what session.restoreRevert can actually restore.
+	// The list renders as a collapsed dock card above the composer — NOT
+	// inline in the transcript, so it never scrolls away with the messages.
+	const [revertItems, setRevertItems] = useState<{ index: number; text: string; messageId: string }[]>([]);
+	const [revertDockOpen, setRevertDockOpen] = useState(false);
+	const prevRevertLen = useRef(revertItems.length);
+	useEffect(() => {
+		if (revertItems.length > prevRevertLen.current) setRevertDockOpen(false);
+		prevRevertLen.current = revertItems.length;
+	}, [revertItems.length]);
+	const refreshReverts = useCallback(async (): Promise<void> => {
+		if (!store) return;
 		try {
-			const lines = text.split("\n");
-			const maxWidth = 640;
-			const lineHeight = 22;
-			const pad = 24;
-			const canvas = document.createElement("canvas");
-			const ctx = canvas.getContext("2d");
-			if (!ctx) return;
-			// Two passes: measure wrapped lines, then draw.
-			ctx.font = "13px ui-monospace, SF Mono, Menlo, monospace";
-			const wrapped: string[] = [];
-			for (const line of lines) {
-				if (line.length === 0) {
-					wrapped.push("");
-					continue;
-				}
-				let cur = "";
-				for (const ch of line) {
-					if (ctx.measureText(cur + ch).width > maxWidth - pad * 2) {
-						wrapped.push(cur);
-						cur = ch;
-					} else {
-						cur += ch;
-					}
-				}
-				wrapped.push(cur);
-			}
-			const height = pad * 2 + wrapped.length * lineHeight + 14;
-			canvas.width = maxWidth;
-			canvas.height = height;
-			const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-			ctx.fillStyle = dark ? "#16161a" : "#fdfdfd";
-			ctx.fillRect(0, 0, maxWidth, height);
-			ctx.fillStyle = dark ? "#e8e8e8" : "#232323";
-			ctx.font = "13px ui-monospace, SF Mono, Menlo, monospace";
-			wrapped.forEach((line, i) => {
-				ctx.fillText(line, pad, pad + 18 + i * lineHeight);
-			});
-			const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
-			if (!blob) return;
-			await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+			const res = await rpc.request<{ items: { index: number; text: string; messageId: string }[] }>(
+				"session.revertList",
+				{ sessionId: store.sessionId },
+			);
+			setRevertItems(res?.items ?? []);
 		} catch {
-			// clipboard/image API unavailable — silent
+			// old daemon without the RPC — keep the current list
 		}
-	};
+	}, [rpc, store]);
+	useEffect(() => {
+		void refreshReverts();
+	}, [refreshReverts, store?.sessionId]);
+	// Revert / edit-and-reconverse: truncate the session to before the user
+	// message, reload the snapshot — the daemon records the backup, the
+	// dock re-fetches it from session.revertList.
+	// 保存为图片 → the export dialog (options + live preview) owns the
+	// rasterization; the transcript row's save button just opens it.
+	const [saveImageText, setSaveImageText] = useState<string | null>(null);
 
-	const revertToMessage = async (messageId: string, text: string, _edit: boolean): Promise<void> => {		if (!store) return;
+	const revertToMessage = async (messageId: string, _text: string, _edit: boolean): Promise<void> => {
+		if (!store) return;
 		try {
 			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
 			await onReloadSession?.();
-			setRevertHistory(prev => [...prev, { id: crypto.randomUUID(), messageId, text, at: Date.now() }]);
+			await refreshReverts();
 		} catch {
 			// daemon rejected — keep the transcript as-is
 		}
 	};
-	const restoreReverted = (id: string, text: string): void => {
-		setRevertHistory(prev => prev.filter(r => r.id !== id));
+	// Retry (重新生成该回复): truncate to the user message that produced
+	// this reply, then re-send it — the turn replays from the user node.
+	// The old reply (and any later tail) lands in the revert backup, so
+	// the 撤回 dock can restore it. NOT "send the assistant text back".
+	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
+		if (!store) return;
+		try {
+			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
+			await onReloadSession?.();
+			await refreshReverts();
+			onSend(text, undefined, "followUp");
+		} catch {
+			// daemon rejected — keep the transcript as-is
+		}
+	};
+	// 回填: put the reverted text into the composer for re-editing.
+	const restoreReverted = (text: string): void => {
 		setPendingEdit(text);
 	};
-	const resendReverted = (id: string, text: string): void => {
-		setRevertHistory(prev => prev.filter(r => r.id !== id));
+	// Undo ONE revert (还原单轮): the daemon re-inserts that backed-up
+	// tail (agent context + journal + view), then we re-fetch the list and
+	// reload the snapshot.
+	const restoreItem = async (index: number): Promise<void> => {
+		if (!store) return;
+		try {
+			const res = await rpc.request<{ ok: boolean }>("session.restoreRevert", {
+				sessionId: store.sessionId,
+				index,
+			});
+			if (res?.ok === true) {
+				await refreshReverts();
+				await onReloadSession?.();
+			}
+		} catch {
+			// daemon rejected — keep the list as-is
+		}
+	};
+	// Undo EVERY revert (还原全部): the daemon re-inserts every backed-up
+	// tail (deduped), then we re-fetch the list and reload.
+	const restoreAllReverts = async (): Promise<void> => {
+		if (!store) return;
+		try {
+			const res = await rpc.request<{ ok: boolean }>("session.restoreRevert", {
+				sessionId: store.sessionId,
+				all: true,
+			});
+			if (res?.ok === true) {
+				await refreshReverts();
+				await onReloadSession?.();
+			}
+		} catch {
+			// daemon rejected — keep the list as-is
+		}
+	};
+	const resendReverted = (text: string): void => {
 		onSend(text, undefined, "followUp");
 	};
-	const discardReverted = (id: string): void => {
-		setRevertHistory(prev => prev.filter(r => r.id !== id));
+	const discardReverted = async (index: number): Promise<void> => {
+		if (!store) return;
+		try {
+			await rpc.request("session.discardRevert", { sessionId: store.sessionId, index });
+			await refreshReverts();
+		} catch {
+			// old daemon without the RPC — drop locally so the dock clears
+			setRevertItems(prev => prev.filter(r => r.index !== index));
+		}
 	};
-	// Fork (分叉): non-destructive — copy the session truncated to before
-	// this message into a NEW session, then open it. The parent is intact.
-	const forkFromMessage = async (messageId: string): Promise<void> => {
+	// Fork (分叉 / TUI /branch parity): non-destructive — copy the session
+	// truncated at this message into a NEW session, open it, and backfill
+	// the composer with the message text (the TUI /branch loads the
+	// selected message into the editor so the user can re-answer it).
+	// `includeTarget` keeps the node as the new session's last record (TUI
+	// navigateTree parity for assistant/toolResult nodes — continue from
+	// there with a fresh prompt); user messages truncate before the node
+	// and re-answer via the backfilled text.
+	const forkFromMessage = async (messageId: string, text?: string, includeTarget?: boolean): Promise<void> => {
 		if (!store) return;
 		try {
 			const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
 				sessionId: store.sessionId,
 				messageId,
+				includeTarget,
 			});
-			if (res?.sessionId) await onForkSession?.(res.sessionId);
+			if (res?.sessionId) {
+				await onForkSession?.(res.sessionId);
+				if (text) setPendingEdit(text);
+			}
 		} catch {
 			// daemon rejected (unknown message/session) — keep as-is
 		}
 	};
+	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
+	// ladder rungs are disabled in the composer's ThinkingSelector, and the
+	// ladder itself is the current model's supported efforts. GuiHeader runs
+	// the same query for its title label; this one feeds the selector.
+	const [thinkingInfoLevel, setThinkingInfoLevel] = useState<string | null>(null);
+	const [thinkingInfoAuto, setThinkingInfoAuto] = useState(false);
+	const [thinkingCeiling, setThinkingCeiling] = useState<string | null>(null);
+	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
 	// Live thinking level: the daemon records thinking_level_change entries
 	// but never mutates state.thinkingLevel, so derive the current level from
 	// the LAST change entry — the composer chip updates the moment the entry
-	// lands, without a transcript marker row.
+	// lands, without a transcript marker row. Auto mode reads as the user's
+	// selector ("auto") from session.thinkingInfo — the realtime RPC is the
+	// authoritative auto flag, since the wire entry carries only the
+	// provisional/resolved effort, not the "auto" configuration.
 	const thinkingLevel: string | null = (() => {
 		if (!snap) return null;
 		let level: string | null = snap.state?.thinkingLevel ?? null;
 		for (const entry of snap.entries) {
 			if (entry.type === "thinking_level_change") level = entry.thinkingLevel ?? null;
 		}
-		return level;
+		return thinkingInfoAuto ? "auto" : (level ?? thinkingInfoLevel ?? null);
 	})();
 	const host = {
 		hasAgent: () => false,
@@ -510,29 +650,52 @@ export function ChatView({
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => onSend(text),
 	};
-	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
-	// ladder rungs are disabled in the composer's ThinkingSelector, and the
-	// ladder itself is the current model's supported efforts. GuiHeader runs
-	// the same query for its title label; this one feeds the selector.
-	const [thinkingCeiling, setThinkingCeiling] = useState<string | null>(null);
-	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
+	const fetchThinkingInfo = useCallback((): void => {
+		if (!rpc || !store) return;
+		void rpc
+			.request<{ ceiling?: string | null; efforts?: string[]; level?: string | null; auto?: boolean }>(
+				"session.thinkingInfo",
+				{ sessionId: store.sessionId },
+			)
+			.then(info => {
+				setThinkingCeiling(info?.ceiling ?? null);
+				setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
+				setThinkingInfoLevel(info?.level ?? null);
+				setThinkingInfoAuto(info?.auto === true);
+			})
+			.catch(() => {});
+	}, [rpc, store]);
 	useEffect(() => {
 		if (!store) return;
 		let cancelled = false;
-		void rpc
-			.request<{ ceiling?: string | null; efforts?: string[] }>("session.thinkingInfo", {
-				sessionId: store.sessionId,
-			})
-			.then(info => {
-				if (cancelled) return;
-				setThinkingCeiling(info?.ceiling ?? null);
-				setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
-			})
-			.catch(() => {});
+		const load = (): void => {
+			void rpc
+				.request<{ ceiling?: string | null; efforts?: string[]; level?: string | null; auto?: boolean }>(
+					"session.thinkingInfo",
+					{ sessionId: store.sessionId },
+				)
+				.then(info => {
+					if (cancelled) return;
+					setThinkingCeiling(info?.ceiling ?? null);
+					setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
+					setThinkingInfoLevel(info?.level ?? null);
+					setThinkingInfoAuto(info?.auto === true);
+				})
+				.catch(() => {});
+		};
+		load();
 		return () => {
 			cancelled = true;
 		};
 	}, [rpc, store]);
+	// The composer switches models itself (session.setModel) and the daemon
+	// pushes a model_changed wire event — that re-renders the view but the
+	// store reference stays stable, so the effect above never re-runs and the
+	// selector would keep the OLD model's effort ladder. Refetch explicitly on
+	// model change (ModelSection does the same via its own refreshThinking).
+	const onComposerModelChange = useCallback((): void => {
+		fetchThinkingInfo();
+	}, [fetchThinkingInfo]);
 	const { confirm } = useConfirm();
 	// Terminate confirmation (openchamber parity): the stop button asks
 	// before aborting — the dialog explains what abort means (same
@@ -588,6 +751,8 @@ export function ChatView({
 
 	return (
 		<main className="gui-pane-center relative flex min-h-0 min-w-0 flex-1 flex-col">
+			{/* Selection→ask popover (session-scoped throwaway turns). */}
+			<AskPopover rpc={rpc} sessionId={store?.sessionId ?? null} />
 			{/* Window drag strip: the 8px margin above the floating surface
 			 * plus the header's blank areas stay draggable (openchamber
 			 * app-region-drag header); every button inside is no-drag. */}
@@ -595,98 +760,308 @@ export function ChatView({
 			{/* The single rounded floating app surface — both scenes live in it.
 			 * The window header (GuiHeader) is a separate container ABOVE it. */}
 			<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-				{showWelcome && (
-					<div
-						ref={welcomeSceneRef}
-						className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
-					>
-						<WelcomeComposer
-							busy={busy}
-							rpc={rpc}
-							project={project}
-							onProject={onProject}
-							focused={focusMode}
-							onToggleFocus={onToggleFocus}
-							presetModelId={presetModelId}
-							onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
-						/>
-					</div>
-				)}
-				{showChat && store && (
-					<div
-						ref={chatSceneRef}
-						className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
-					>
-						<div className="flex min-h-0 flex-1">
-							{/* Session column: transcript + composer + dock — the
-							 * right panel sits BESIDE this column (same level), so
-							 * opening it pushes the composer left (openchamber
-							 * MainLayout main | ContextPanel). */}
-							<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-								{/* Focus mode hides the whole transcript column (not just the
-								 * scroll container): the wrapper also carries flex:1, so
-								 * leaving it mounted would split the surface in half and
-								 * the composer could never fill it. */}
-								<div className={focusMode ? "hidden" : "relative flex min-h-0 min-w-0 flex-1 flex-col"}>
-									{paused === true && (
-										<div className="gui-pause-banner" role="status" aria-live="polite">
-											<span className="gui-pause-banner-icon">
-												<Icon name="pause" className="h-3.5 w-3.5" />
-											</span>
-											<span className="gui-pause-banner-text">
-												{t("paused")}
-												{pausedAt ? (
-													<span className="gui-pause-banner-timer" data-paused-at={pausedAt}>
-														{" "}
-														· {formatPauseElapsed(pausedAt)}
-													</span>
-												) : null}
-											</span>
-											{onResume && (
-												<button
-													type="button"
-													className="gui-pause-banner-resume"
-													onClick={() => onResume()}
+				{/* Scene stack: both scenes mount during the 420ms overlap window,
+				 * each absolute-filling this wrapper (so they cross-fade/morph
+				 * full-surface). The wrapper itself is IN FLOW — the terminal
+				 * dock after it genuinely pushes the scenes up instead of the
+				 * dock becoming the only in-flow child and landing on top. */}
+				<div className="gui-scenes relative min-h-0 flex-1">
+					{showWelcome && (
+						<div
+							ref={welcomeSceneRef}
+							className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
+						>
+							<WelcomeComposer
+								busy={busy}
+								rpc={rpc}
+								project={project}
+								onProject={onProject}
+								focused={focusMode}
+								onToggleFocus={onToggleFocus}
+								presetModelId={presetModelId}
+								presetThinkingLevel={presetThinkingLevel}
+								onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
+								reminders={reminders}
+								onSelectReminder={onSelectReminder}
+								onMarkAllRead={onMarkAllRead}
+							/>
+						</div>
+					)}
+					{showChat && store && (
+						<div
+							ref={chatSceneRef}
+							className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
+						>
+							<div className="flex min-h-0 flex-1">
+								{/* Session column: transcript + composer + dock — the
+								 * right panel sits BESIDE this column (same level), so
+								 * opening it pushes the composer left (openchamber
+								 * MainLayout main | ContextPanel). */}
+								<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+									{/* Focus mode hides the whole transcript column (not just the
+									 * scroll container): the wrapper also carries flex:1, so
+									 * leaving it mounted would split the surface in half and
+									 * the composer could never fill it. */}
+									<div className={focusMode ? "hidden" : "relative flex min-h-0 min-w-0 flex-1 flex-col"}>
+										{paused === true && (
+											<div className="gui-pause-banner" role="status" aria-live="polite">
+												<span className="gui-pause-banner-icon">
+													<Icon name="pause" className="h-3.5 w-3.5" />
+												</span>
+												<span className="gui-pause-banner-text">
+													{t("paused")}
+													{pausedAt ? (
+														<span className="gui-pause-banner-timer" data-paused-at={pausedAt}>
+															{" "}
+															· {formatPauseElapsed(pausedAt)}
+														</span>
+													) : null}
+												</span>
+												{onResume && (
+													<button
+														type="button"
+														className="gui-pause-banner-resume"
+														onClick={() => onResume()}
+													>
+														{t("resume")}
+													</button>
+												)}
+											</div>
+										)}
+										{/* Scroll-shadow (openchamber ScrollShadow parity): a real
+										 * content fade via mask-image, applied only while the
+										 * transcript overflows (top/bottom data attrs). */}
+										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
+											{/* History-session cold-open skeleton (React-Bits style):
+											 * the daemon reactivates the session on demand — cover
+											 * the (stale) previous transcript while the RPC runs. */}
+											{sessionLoading === true && (
+												<div
+													className="gui-session-loading"
+													role="status"
+													aria-label={t("loading session")}
 												>
-													{t("resume")}
-												</button>
+													<div className="gui-loading-skeleton" aria-hidden>
+														<span className="gui-loading-bar" />
+														<span className="gui-loading-bar" style={{ width: "82%" }} />
+														<span className="gui-loading-bar" style={{ width: "58%" }} />
+													</div>
+													<div className="gui-loading-note">
+														<span className="gui-loading-orb" aria-hidden />
+														{t("loading session")}
+													</div>
+												</div>
+											)}
+											<div
+												ref={transcriptRef}
+												className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
+												data-top-scroll="false"
+												data-bottom-scroll="false"
+											>
+												<CodeHighlightProvider highlight={chatHighlight}>
+													<Transcript
+														entries={snap?.entries ?? []}
+														/* No stream ghost: the view folds the assistant message into
+														 * entries at message_start, so the entry row IS the live
+														 * stream renderer (immutable upserts re-render it). */
+														stream={null}
+														streamDone={true}
+														activeTools={snap?.activeTools ?? new Map()}
+														working={snap?.working ?? false}
+														roundDurations={snap?.roundDurations}
+														host={host}
+														/* Chat settings (openchamber parity): user message
+														 * markdown/plain + long-message collapse. */
+														userPlain={(() => {
+															try {
+																return localStorage.getItem("omp-gui-chat-usermsg") === "plain";
+															} catch {
+																return false;
+															}
+														})()}
+														collapseLongUserMessages={(() => {
+															try {
+																return localStorage.getItem("omp-gui-chat-collapseuser") !== "0";
+															} catch {
+																return true;
+															}
+														})()}
+														/* TUI display-settings parity: the daemon
+														 * settings drive the transcript (unflagged
+														 * from tuiOnly 2026-08-12). */
+														smoothStreaming={displaySettings["display.smoothStreaming"] !== false}
+														hideToolActivity={displaySettings["display.hideToolActivity"] === true}
+														showTokenUsage={displaySettings["display.showTokenUsage"] === true}
+														collapseCompacted={displaySettings["display.collapseCompacted"] !== false}
+														colorBlind={displaySettings.colorBlindMode === true}
+														onQuote={text => appendQuote(text)}
+														onRevert={(id, text) => void revertToMessage(id, text, false)}
+														onFork={(id, text) => void forkFromMessage(id, text)}
+														onRetry={(id, text) => void retryFromUserMessage(id, text)}
+														onSpeak={text => {
+															// TTS read-aloud via the daemon's local Kokoro worker.
+															speak(text, rpc);
+														}}
+														onSaveImage={text => setSaveImageText(text)}
+														/* ZCode: avatars replace the 宿主/代理 gutter labels. */
+														userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
+														agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
+													/>
+												</CodeHighlightProvider>
+											</div>
+											{/* Jump-to-bottom (openchamber ScrollToBottomButton parity):
+											 * floats over the composer edge while scrolled up. */}
+											<JumpToBottomButton rootRef={transcriptRef} />
+											{/* Message-tree navigation (TUI tree-selector parity):
+											 * a floating searchable turn tree — jump to any
+											 * position in the conversation, or fork a new session
+											 * from any node (user nodes re-answer with the message
+											 * text; assistant/toolResult nodes continue from the
+											 * node). Anchored to the WRAP (not the outer column) so
+											 * the pause banner — which lives in the column above
+											 * the wrap — can never sit under it. */}
+											<MessageTreeButton
+												entries={snap?.entries ?? []}
+												transcriptRef={transcriptRef}
+												onFork={(entry, text, includeTarget) =>
+													void forkFromMessage(entry.id, text, includeTarget)
+												}
+											/>
+											{/* In-message text selection actions (openchamber parity):
+											 * quote a snippet (not the whole message), copy, start a
+											 * new session from it, or append it to the workspace notes. */}
+											<SelectionToolbar
+												containerRef={transcriptRef}
+												onQuote={text => appendQuote(text)}
+												onAsk={(text, x, y) =>
+													window.dispatchEvent(new CustomEvent("omp-gui-ask", { detail: { text, x, y } }))
+												}
+												onCopy={text => void navigator.clipboard.writeText(text)}
+												onNewSession={text => onSubmitNewSession(text)}
+												onAddNote={text => {
+													const cwd = store.cwd;
+													void rpc
+														.request<{ text: string }>("notes.get", { cwd })
+														.then(res => {
+															const existing = res?.text ?? "";
+															const next = existing ? `${existing}\n\n> ${text}` : `> ${text}`;
+															return rpc.request("notes.set", { cwd, text: next });
+														})
+														.catch(() => {});
+												}}
+											/>
+											{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
+											 * generates it after recap.idleSeconds of quiet; a rounded
+											 * floating card above the composer edge, foldable to one
+											 * line (click to expand/collapse), cleared by the next
+											 * wire activity or the dismiss button. */}
+											{snap?.recap && (
+												<div
+													className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
+													title={recapExpanded ? t("collapse") : t("expand")}
+													role="button"
+													onClick={() => setRecapExpanded(v => !v)}
+												>
+													<span className="gui-recap-prefix">※</span>
+													<span className="gui-recap-text">{snap.recap.text}</span>
+													<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
+													<Icon
+														name="arrow-down-s"
+														className={`gui-recap-chevron${recapExpanded ? " gui-recap-chevron--open" : ""}`}
+													/>
+													<button
+														type="button"
+														className="gui-recap-dismiss"
+														title={t("dismiss")}
+														aria-label={t("dismiss")}
+														onClick={e => {
+															e.stopPropagation();
+															store?.dismissRecap();
+														}}
+													>
+														<Icon name="close" className="h-3 w-3" />
+													</button>
+												</div>
 											)}
 										</div>
-									)}
-									{/* Scroll-shadow (openchamber ScrollShadow parity): a real
-									 * content fade via mask-image, applied only while the
-									 * transcript overflows (top/bottom data attrs). */}
-									<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
-										<div
-											ref={transcriptRef}
-											className="gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4"
-											data-top-scroll="false"
-											data-bottom-scroll="false"
-										>
-											<CodeHighlightProvider highlight={chatHighlight}>
-												{/* Revert-history list (会话内顶部): every revert lands here
-												 * with 恢复(回填输入框)/重新发送/丢弃 — the old pencil
-												 * button merged into this. */}
-												{revertHistory.length > 0 && (
-													<div
-														className="gui-revert-list"
-														role="region"
-														aria-label={t("reverted messages")}
+										{/* Turn-position rail (openchamber PromptNavigatorRail
+										 * parity): a marker per user message — hover previews
+										 * the prompt, click jumps to that turn. */}
+										<TurnRail rootRef={transcriptRef} entryCount={snap?.entries.length ?? 0} />
+									</div>
+									<div
+										ref={composerWrapRef}
+										className={
+											focusMode
+												? "gui-composer-wrap flex min-h-0 flex-col px-5 pb-3"
+												: "gui-composer-wrap flex flex-shrink-0 flex-col px-5 pb-3"
+										}
+									>
+										{/* Reverted-messages dock (openchamber RevertedMessageDock
+										 * parity): a floating card above the input — collapsed
+										 * to a header row by default, expand for 恢复/重发/分叉/丢弃.
+										 * Lives OUTSIDE the transcript so it never scrolls away. */}
+										{revertItems.length > 0 && (
+											<div className="gui-revert-dock" role="region" aria-label={t("reverted messages")}>
+												<div
+													role="button"
+													tabIndex={0}
+													className="gui-revert-dock-head"
+													onClick={() => setRevertDockOpen(v => !v)}
+													onKeyDown={e => {
+														if (e.key === "Enter" || e.key === " ") {
+															e.preventDefault();
+															setRevertDockOpen(v => !v);
+														}
+													}}
+													aria-expanded={revertDockOpen}
+												>
+													<Icon
+														name="arrow-go-back"
+														className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
+													/>
+													<span className="gui-revert-dock-title">
+														{t("reverted messages ({count})", { count: String(revertItems.length) })}
+													</span>
+													<button
+														type="button"
+														className="gui-pane-action !w-auto px-1.5"
+														title={t("restore all reverts")}
+														onClick={e => {
+															// The head is a click target for collapse/expand —
+															// don't toggle it when the restore-all button fires.
+															e.stopPropagation();
+															void restoreAllReverts();
+														}}
 													>
-														{revertHistory.map(r => (
-															<div key={r.id} className="gui-revert-item">
-																<Icon
-																	name="arrow-go-back"
-																	className="h-3 w-3 flex-shrink-0 text-[var(--color-warning)]"
-																/>
+														<Icon name="arrow-go-forward" className="h-3 w-3" />
+													</button>
+													<Icon
+														name="arrow-down-s"
+														className={`gui-revert-dock-chevron${revertDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
+														aria-hidden="true"
+													/>
+												</div>
+												{revertDockOpen && (
+													<div className="gui-revert-dock-body">
+														{revertItems.map(r => (
+															<div key={r.index} className="gui-revert-item">
 																<span className="gui-revert-item-text" title={r.text}>
 																	{r.text}
 																</span>
 																<button
 																	type="button"
 																	className="gui-pane-action !w-auto px-1.5"
+																	title={t("restore this revert")}
+																	onClick={() => void restoreItem(r.index)}
+																>
+																	<Icon name="arrow-go-forward" className="h-3 w-3" />
+																</button>
+																<button
+																	type="button"
+																	className="gui-pane-action !w-auto px-1.5"
 																	title={t("restore into the input")}
-																	onClick={() => restoreReverted(r.id, r.text)}
+																	onClick={() => restoreReverted(r.text)}
 																>
 																	<Icon name="arrow-go-back" className="h-3 w-3" />
 																</button>
@@ -694,7 +1069,7 @@ export function ChatView({
 																	type="button"
 																	className="gui-pane-action !w-auto px-1.5"
 																	title={t("resend")}
-																	onClick={() => resendReverted(r.id, r.text)}
+																	onClick={() => resendReverted(r.text)}
 																>
 																	<Icon name="send-plane" className="h-3 w-3" />
 																</button>
@@ -702,15 +1077,15 @@ export function ChatView({
 																	type="button"
 																	className="gui-pane-action !w-auto px-1.5"
 																	title={t("continue from this point in a new session")}
-																	onClick={() => void forkFromMessage(r.messageId)}
+																	onClick={() => void forkFromMessage(r.messageId, r.text)}
 																>
-																	<Icon name="git-branch" className="h-3 w-3" />
+																	<Icon name="git-fork" className="h-3 w-3" />
 																</button>
 																<button
 																	type="button"
 																	className="gui-pane-action !w-auto px-1.5"
 																	title={t("discard")}
-																	onClick={() => discardReverted(r.id)}
+																	onClick={() => void discardReverted(r.index)}
 																>
 																	<Icon name="close" className="h-3 w-3" />
 																</button>
@@ -718,165 +1093,82 @@ export function ChatView({
 														))}
 													</div>
 												)}
-												<Transcript
-													entries={snap?.entries ?? []}
-													/* No stream ghost: the view folds the assistant message into
-													 * entries at message_start, so the entry row IS the live
-													 * stream renderer (immutable upserts re-render it). */
-													stream={null}
-													streamDone={true}
-													activeTools={snap?.activeTools ?? new Map()}
-													working={snap?.working ?? false}
-													host={host}
-													/* Chat settings (openchamber parity): user message
-													 * markdown/plain + long-message collapse. */
-													userPlain={(() => {
-														try {
-															return localStorage.getItem("omp-gui-chat-usermsg") === "plain";
-														} catch {
-															return false;
-														}
-													})()}
-													collapseLongUserMessages={(() => {
-														try {
-															return localStorage.getItem("omp-gui-chat-collapseuser") !== "0";
-														} catch {
-															return true;
-														}
-													})()}
-													onQuote={text => setPendingQuote(text)}
-													onRevert={(id, text) => void revertToMessage(id, text, false)}
-													onFork={id => void forkFromMessage(id)}
-													onRetry={onSend}
-													onSpeak={text => {
-														// TTS read-aloud via the daemon's local Kokoro worker.
-														speak(text, rpc);
-													}}
-													onSaveImage={text => {
-														// Render the reply as a text card and push it to the
-														// clipboard as PNG (openchamber 保存为图片 parity).
-														void saveMessageAsImage(text);
-													}}
-													/* ZCode: avatars replace the 宿主/代理 gutter labels. */
-													userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
-													agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
-												/>
-											</CodeHighlightProvider>
-										</div>
-										{/* Jump-to-bottom (openchamber ScrollToBottomButton parity):
-										 * floats over the composer edge while scrolled up. */}
-										<JumpToBottomButton rootRef={transcriptRef} />
-										{/* In-message text selection actions (openchamber parity):
-										 * quote a snippet (not the whole message), copy, start a
-										 * new session from it, or append it to the workspace notes. */}
-										<SelectionToolbar
-											containerRef={transcriptRef}
-											onQuote={text => setPendingQuote(text)}
-											onCopy={text => void navigator.clipboard.writeText(text)}
-											onNewSession={text => onSubmitNewSession(text)}
-											onAddNote={text => {
-												const cwd = store.cwd;
-												void rpc
-													.request<{ text: string }>("notes.get", { cwd })
-													.then(res => {
-														const existing = res?.text ?? "";
-														const next = existing ? `${existing}\n\n> ${text}` : `> ${text}`;
-														return rpc.request("notes.set", { cwd, text: next });
-													})
-													.catch(() => {});
-											}}
-										/>
-										{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
-										 * generates it after recap.idleSeconds of quiet; fixed below
-										 * the transcript, cleared by the next wire activity or the
-										 * dismiss button. */}
-										{snap?.recap && (
-											<div className="gui-recap-row" title={t("idle recap")}>
-												<span className="gui-recap-prefix">※</span>
-												<span className="gui-recap-text">{snap.recap.text}</span>
-												<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
-												<button
-													type="button"
-													className="gui-recap-dismiss"
-													title={t("dismiss")}
-													aria-label={t("dismiss")}
-													onClick={() => store?.dismissRecap()}
-												>
-													<Icon name="close" className="h-3 w-3" />
-												</button>
 											</div>
 										)}
-									</div>
-									{/* Turn-position rail (openchamber PromptNavigatorRail
-									 * parity): a marker per user message — hover previews
-									 * the prompt, click jumps to that turn. */}
-									<TurnRail rootRef={transcriptRef} entryCount={snap?.entries.length ?? 0} />
-								</div>
-								<div
-									ref={composerWrapRef}
-									className={
-										focusMode
-											? "gui-composer-wrap flex min-h-0 flex-col px-5 pb-3"
-											: "gui-composer-wrap flex flex-shrink-0 flex-col px-5 pb-3"
-									}
-								>
-									{snap?.approvals.map(a => (
-										<ApprovalCard
-											key={a.requestId}
-											requestId={a.requestId}
-											tool={a.tool}
-											onDecide={onDecideApproval}
+										{snap?.approvals.map(a => (
+											<ApprovalCard
+												key={a.requestId}
+												requestId={a.requestId}
+												tool={a.tool}
+												onDecide={onDecideApproval}
+											/>
+										))}
+										<Composer
+											working={snap?.working ?? false}
+											petMood={moodFromState({
+												working: snap?.working ?? false,
+												streaming: snap?.streaming ?? false,
+												hasApprovals: (snap?.approvals.length ?? 0) > 0,
+											})}
+											onSend={onSend}
+											onStop={() => void handleStop()}
+											rpc={rpc}
+											sessionId={store.sessionId}
+											cwd={store.cwd}
+											thinkingLevel={thinkingLevel}
+											onSetThinking={setThinking}
+											onModelChange={onComposerModelChange}
+											thinkingCeiling={thinkingCeiling}
+											thinkingEfforts={thinkingEfforts}
+											presetModelId={presetModelId}
+											quotes={quotes}
+											onQuotesChange={setQuotes}
+											pendingEdit={pendingEdit}
+											onEditConsumed={() => setPendingEdit(null)}
+											focused={focusMode}
+											onToggleFocus={onToggleFocus}
 										/>
-									))}
-									<Composer
-										working={snap?.working ?? false}
-										petMood={moodFromState({
-											working: snap?.working ?? false,
-											streaming: snap?.streaming ?? false,
-											hasApprovals: (snap?.approvals.length ?? 0) > 0,
-										})}
-										onSend={onSend}
-										onStop={() => void handleStop()}
-										rpc={rpc}
-										sessionId={store.sessionId}
-										cwd={store.cwd}
-										thinkingLevel={thinkingLevel}
-										onSetThinking={setThinking}
-										thinkingCeiling={thinkingCeiling}
-										thinkingEfforts={thinkingEfforts}
-										presetModelId={presetModelId}
-										pendingQuote={pendingQuote}
-										onQuoteConsumed={() => setPendingQuote(null)}
-										pendingEdit={pendingEdit}
-										onEditConsumed={() => setPendingEdit(null)}
-										focused={focusMode}
-										onToggleFocus={onToggleFocus}
-									/>
+									</div>
 								</div>
+								{/* Right panel stays mounted so the width collapse animates;
+								 * `open` folds it to a 0px sliver instead of unmounting. */}
+								<ContextPanel
+									snap={snap}
+									rpc={rpc}
+									open={rightPanelOpen && !focusMode}
+									openRequest={openFileReq}
+								/>
 							</div>
-							{/* Right panel stays mounted so the width collapse animates;
-							 * `open` folds it to a 0px sliver instead of unmounting. */}
-							<ContextPanel
-								snap={snap}
-								rpc={rpc}
-								open={rightPanelOpen && !focusMode}
-								openRequest={openFileReq}
-							/>
 						</div>
-					</div>
-				)}
-				{terminalOpen && (
-					<div
-						className="gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]"
-						style={{ height: dockHeight }}
-					>
-						{/* Drag handle: the dock pushes the composer up and its
-						 * height is user-adjustable (openchamber bottom dock). */}
-						<div className="gui-dock-handle" onPointerDown={dockResize} aria-hidden />
-						<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} />
-					</div>
-				)}
+					)}
+				</div>
+				{/* Terminal dock: stays MOUNTED so open/close animates (height
+				 * 0 ↔ dockHeight) and running pty/xterm sessions survive the
+				 * toggle — closing the last tab folds the dock instead. */}
+				<div
+					ref={terminalDockRef}
+					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]${
+						terminalOpen ? " gui-terminal-dock--open" : ""
+					}`}
+					style={{ height: terminalOpen ? dockHeight : 0 }}
+				>
+					{/* Drag handle: the dock pushes the composer up and its
+					 * height is user-adjustable (openchamber bottom dock). */}
+					<div className="gui-dock-handle" onPointerDown={dockResize} aria-hidden />
+					<TerminalPanel
+						rpc={rpc}
+						cwd={store?.cwd ?? project ?? ""}
+						onAllClosed={onCloseTerminal}
+					/>
+				</div>
 			</div>
+			{/* 保存为图片 export dialog (always mounted — DialogFrame drives its
+			 * own enter/exit animation via `open`). */}
+			<SaveImageDialog
+				open={saveImageText !== null}
+				text={saveImageText ?? ""}
+				onClose={() => setSaveImageText(null)}
+			/>
 		</main>
 	);
 }

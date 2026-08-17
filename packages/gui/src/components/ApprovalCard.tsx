@@ -1,8 +1,8 @@
 import { t } from "@musepi/collab-web";
 import { ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
-import { sfxFor } from "../lib/sfx";
 import { haptic } from "../lib/haptic";
+import { sfxFor } from "../lib/sfx";
 import { BorderBeam } from "../vendor/border-beam";
 
 /**
@@ -26,7 +26,6 @@ export function ApprovalCard({
 	// Notify once per pending card (browser blocks audio before a gesture).
 	// requestId is the per-card identity — the effect must re-run when the
 	// card swaps even though the body doesn't read it.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: per-card notify
 	useEffect(() => {
 		sfxFor("approval");
 	}, [requestId]);

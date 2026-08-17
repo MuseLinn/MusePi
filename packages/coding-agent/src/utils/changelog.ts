@@ -348,7 +348,7 @@ export { getChangelogPath } from "../config";
 
 /**
  * Last omp version whose changelog the user has seen. Stored as a plain-text
- * marker file (`~/.omp/agent/last-changelog-version`) rather than in
+ * marker file (`~/.musepi/agent/last-changelog-version`) rather than in
  * `config.yml`, so version bumps never dirty user-tracked config files.
  */
 export async function readLastChangelogVersion(agentDir?: string): Promise<string | undefined> {

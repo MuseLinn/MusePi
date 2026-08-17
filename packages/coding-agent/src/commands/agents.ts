@@ -23,7 +23,7 @@ export default class Agents extends Command {
 		force: Flags.boolean({ char: "f", description: "Overwrite existing agent files" }),
 		json: Flags.boolean({ description: "Output JSON" }),
 		dir: Flags.string({ description: "Output directory (overrides --user/--project)" }),
-		user: Flags.boolean({ description: "Write to ~/.omp/agent/agents (default)" }),
+		user: Flags.boolean({ description: "Write to ~/.musepi/agent/agents (default)" }),
 		project: Flags.boolean({ description: "Write to ./.omp/agents" }),
 	};
 

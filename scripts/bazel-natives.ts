@@ -131,12 +131,20 @@ export async function computeNativeSourceHash(repoRoot: string): Promise<string>
 	const roots = ["crates/pi-natives", "crates/pi-voice"];
 	const entries: { rel: string; content: Buffer }[] = [];
 	for (const root of roots) {
-		const files = await glob([`${root}/**/*.rs`, `${root}/**/Cargo.toml`, `${root}/**/BUILD.bazel`], {
-			cwd: repoRoot,
-			absolute: false,
-			dot: false,
-			ignore: ["**/target/**", "**/bazel-*/**"],
-		});
+		// Note: the installed glob@7.2.3 has no promise API (await returns an
+		// EventEmitter) and does not expand array patterns (setopts has no
+		// array handling → minimatch throws "invalid pattern"); use glob.sync
+		// per pattern instead.
+		const files: string[] = [];
+		for (const pat of [`${root}/**/*.rs`, `${root}/**/Cargo.toml`, `${root}/**/BUILD.bazel`]) {
+			const found = glob.sync(pat, {
+				cwd: repoRoot,
+				absolute: false,
+				dot: false,
+				ignore: ["**/target/**", "**/bazel-*/**"],
+			});
+			files.push(...found);
+		}
 		files.sort();
 		for (const rel of files) {
 			const content = await fs.readFile(path.join(repoRoot, rel));

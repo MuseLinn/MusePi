@@ -37,6 +37,28 @@ export interface JournalCheckpoint {
 export const COMPACT_EVENT_THRESHOLD = 2000;
 export const COMPACT_BYTE_THRESHOLD = 4 * 1024 * 1024;
 
+/**
+ * Per-file exclusive queue for the rewrite operations (compact /
+ * replaceCheckpoint / truncate). Each writes a fixed `<file>.tmp` then
+ * renames it — two rewrites of the same journal racing (e.g. a turn-end
+ * compaction overlapping a revert truncation) delete each other's .tmp
+ * and the loser crashes with ENOENT. Appends are chained per instance
+ * already; rewrites go through this module-level queue so different
+ * AppendJournal instances for the same session serialize too.
+ */
+const rewriteLocks = new Map<string, Promise<void>>();
+function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<void> {
+	const prev = rewriteLocks.get(filePath) ?? Promise.resolve();
+	const next = prev.then(fn, fn);
+	rewriteLocks.set(
+		filePath,
+		next.catch(() => {
+			// keep the chain alive for the next caller
+		}),
+	);
+	return next;
+}
+
 export class AppendJournal {
 	readonly filePath: string;
 	#fd: fs.promises.FileHandle | null = null;
@@ -126,23 +148,25 @@ export class AppendJournal {
 	 */
 	async compact(checkpointSeq: number, snapshot: unknown): Promise<void> {
 		await this.flush();
-		const ckpt: JournalCheckpoint = { seq: checkpointSeq, ts: new Date().toISOString(), snapshot };
-		const tmpCkpt = `${this.checkpointPath()}.tmp`;
-		await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");
-		await fs.promises.rename(tmpCkpt, this.checkpointPath());
+		await withRewriteLock(this.filePath, async () => {
+			const ckpt: JournalCheckpoint = { seq: checkpointSeq, ts: new Date().toISOString(), snapshot };
+			const tmpCkpt = `${this.checkpointPath()}.tmp`;
+			await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");
+			await fs.promises.rename(tmpCkpt, this.checkpointPath());
 
-		const keep: JournalRecord[] = [];
-		for (const record of await this.readAll()) {
-			if (record.seq > checkpointSeq) keep.push(record);
-		}
-		const tmpJournal = `${this.filePath}.tmp`;
-		await fs.promises.writeFile(
-			tmpJournal,
-			keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
-			"utf8",
-		);
-		await fs.promises.rename(tmpJournal, this.filePath);
-		this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
+			const keep: JournalRecord[] = [];
+			for (const record of await this.readAll()) {
+				if (record.seq > checkpointSeq) keep.push(record);
+			}
+			const tmpJournal = `${this.filePath}.tmp`;
+			await fs.promises.writeFile(
+				tmpJournal,
+				keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
+				"utf8",
+			);
+			await fs.promises.rename(tmpJournal, this.filePath);
+			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
+		});
 	}
 
 	/** Should the journal be compacted? (event count or byte size bound) */
@@ -160,14 +184,16 @@ export class AppendJournal {
 	 */
 	async replaceCheckpoint(snapshot: unknown, seq: number): Promise<void> {
 		await this.flush();
-		const ckpt: JournalCheckpoint = { seq, ts: new Date().toISOString(), snapshot };
-		const tmpCkpt = `${this.checkpointPath()}.tmp`;
-		await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");
-		await fs.promises.rename(tmpCkpt, this.checkpointPath());
-		const tmpJournal = `${this.filePath}.tmp`;
-		await fs.promises.writeFile(tmpJournal, "", "utf8");
-		await fs.promises.rename(tmpJournal, this.filePath);
-		this.#writtenBytes = 0;
+		await withRewriteLock(this.filePath, async () => {
+			const ckpt: JournalCheckpoint = { seq, ts: new Date().toISOString(), snapshot };
+			const tmpCkpt = `${this.checkpointPath()}.tmp`;
+			await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");
+			await fs.promises.rename(tmpCkpt, this.checkpointPath());
+			const tmpJournal = `${this.filePath}.tmp`;
+			await fs.promises.writeFile(tmpJournal, "", "utf8");
+			await fs.promises.rename(tmpJournal, this.filePath);
+			this.#writtenBytes = 0;
+		});
 	}
 
 	/**
@@ -178,23 +204,25 @@ export class AppendJournal {
 	 */
 	async truncate(targetSeq: number): Promise<void> {
 		await this.flush();
-		const keep: JournalRecord[] = [];
-		for (const record of await this.readAll()) {
-			if (record.seq <= targetSeq) keep.push(record);
-		}
-		const tmpJournal = `${this.filePath}.tmp`;
-		await fs.promises.writeFile(
-			tmpJournal,
-			keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
-			"utf8",
-		);
-		await fs.promises.rename(tmpJournal, this.filePath);
-		this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
-		try {
-			await fs.promises.unlink(this.checkpointPath());
-		} catch {
-			// no checkpoint — nothing to drop
-		}
+		await withRewriteLock(this.filePath, async () => {
+			const keep: JournalRecord[] = [];
+			for (const record of await this.readAll()) {
+				if (record.seq <= targetSeq) keep.push(record);
+			}
+			const tmpJournal = `${this.filePath}.tmp`;
+			await fs.promises.writeFile(
+				tmpJournal,
+				keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
+				"utf8",
+			);
+			await fs.promises.rename(tmpJournal, this.filePath);
+			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
+			try {
+				await fs.promises.unlink(this.checkpointPath());
+			} catch {
+				// no checkpoint — nothing to drop
+			}
+		});
 	}
 
 	/** Replay source: checkpoint + journal increments. Returns the checkpoint

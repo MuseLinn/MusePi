@@ -1,8 +1,8 @@
+import { t } from "@musepi/collab-web/src/i18n/index.js";
+import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/collab-web/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Icon } from "../vendor/oc-icons";
-import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/collab-web/src/widgets/registry";
-import { t } from "@musepi/collab-web/src/i18n/index.js";
 
 /**
  * Board edit panel (kimi 修改 parity): opens from the header 编辑 button.
@@ -15,17 +15,24 @@ export function WidgetEditor({
 	boards,
 	activeId,
 	selectedId,
-	onSelect,
 	onUpdate,
 	onRename,
 	onDelete,
 	onAdd,
 	onClose,
 }: {
-	boards: { id: string; widgets: { id: string; type: string; title: string; data: Record<string, unknown>; pos: { w: number; h: number } }[] }[];
+	boards: {
+		id: string;
+		widgets: {
+			id: string;
+			type: string;
+			title: string;
+			data: Record<string, unknown>;
+			pos: { w: number; h: number };
+		}[];
+	}[];
 	activeId: string;
 	selectedId: string | null;
-	onSelect(id: string | null): void;
 	onUpdate(id: string, patch: Record<string, unknown>): void;
 	onRename(id: string, title: string): void;
 	onDelete(id: string): void;
@@ -54,10 +61,16 @@ export function WidgetEditor({
 						/>
 					</div>
 					<div className="gui-widget-editor-field">
-						<span className="gui-widget-editor-label">{t("widget type")} · {widget.type}</span>
+						<span className="gui-widget-editor-label">
+							{t("widget type")} · {widget.type}
+						</span>
 						<div className="gui-widget-editor-meta">
-							<span>{widget.pos.w} × {widget.pos.h}px</span>
-							<span>{t("widget tone")}: {def.tone ?? "default"}</span>
+							<span>
+								{widget.pos.w} × {widget.pos.h}px
+							</span>
+							<span>
+								{t("widget tone")}: {def.tone ?? "default"}
+							</span>
 						</div>
 					</div>
 					{def.fields.map(field => (
@@ -164,11 +177,7 @@ function FieldInput({
 	return (
 		<div className="gui-widget-editor-field">
 			<span className="gui-widget-editor-label">{label}</span>
-			<input
-				className="gui-task-input"
-				value={str}
-				onChange={e => onChange(e.target.value)}
-			/>
+			<input className="gui-task-input" value={str} onChange={e => onChange(e.target.value)} />
 		</div>
 	);
 }

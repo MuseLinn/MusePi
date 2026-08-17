@@ -1,13 +1,19 @@
 import {
 	CodeHighlightProvider,
+	countGraphemes,
 	DARK_THEME_PRESETS,
 	DiffBlock,
 	getLocaleSnapshot,
+	graphemeSpans,
 	highlightToCodeHtml,
 	LIGHT_THEME_PRESETS,
+	nextStep,
 	renderMermaidHtml,
+	STREAMING_REVEAL_FRAME_MS,
 	setLocale,
+	sliceGraphemes,
 	subscribeLocale,
+	TAIL_RENDERERS,
 	type TranslationKey,
 	t,
 	type UiThemeId,
@@ -17,10 +23,10 @@ import {
 	useUiThemePreferences,
 } from "@musepi/collab-web";
 import type { SoundName } from "cuelume";
+import { LoaderCircle as LoaderCircleIconData, RefreshCw as RefreshCwIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useChatHighlight } from "../lib/highlight";
-import { tapFeedback } from "../lib/haptic";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
 	applyCodeSize,
 	applyCodeThemes,
@@ -49,7 +55,8 @@ import {
 } from "../lib/appearance";
 import { openExternalUrl } from "../lib/electron";
 import { applyGlassLevel, applyGlassMaterial, GLASS_MAX, GLASS_MIN, readGlassLevel } from "../lib/glass";
-import { type ElectronApi, nativeHighlight } from "../lib/highlight";
+import { tapFeedback } from "../lib/haptic";
+import { nativeHighlight, useChatHighlight } from "../lib/highlight";
 import {
 	defaultTemplate,
 	eventEnabled,
@@ -82,26 +89,28 @@ import {
 	setPetScale,
 } from "../lib/pet";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import type { RpcClient, StreamEvent } from "../lib/rpc";
 import {
+	cleanupAction as cleanupActionPref,
 	cleanupCandidates,
 	cleanupDays as cleanupDaysPref,
 	cleanupEnabled as cleanupEnabledPref,
-	cleanupAction as cleanupActionPref,
 	runCleanupOnce,
 } from "../lib/session-cleanup";
-import type { RpcClient, StreamEvent } from "../lib/rpc";
 import {
 	ALL_SOUNDS,
 	DEFAULT_SFX,
 	previewSound,
 	SFX_EVENTS,
+	type SfxEvent,
 	setSoundFor,
 	soundFor,
 	WIRED_SOUNDS,
-	type SfxEvent,
 } from "../lib/sfx";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
+import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
 import { AgentStatusLine } from "./Composer";
 import { DialogFrame } from "./DialogFrame";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -111,8 +120,8 @@ import { ModelSelector } from "./ModelSelector";
 import { BuiltinPetSprite, PetdexSprite } from "./PetSprite";
 import { Pop } from "./Pop";
 import { Reveal } from "./Reveal";
-import { SpotlightCard } from "./SpotlightCard";
 import { type SchemaItem, SchemaSettings } from "./SchemaSettings";
+import { SpotlightCard } from "./SpotlightCard";
 import { ThinkingSelector } from "./ThinkingSelector";
 import {
 	TURN_RAIL_CHANGED_EVENT,
@@ -128,14 +137,16 @@ type SectionId =
 	| "model"
 	| "files"
 	| "memory"
-	| "about"
-	| "chat"
 	| "notifications"
 	| "pet"
 	| "sessions"
 	| "git"
 	| "shortcuts"
-	| "agents"
+	| "interaction"
+	| "context"
+	| "shell"
+	| "tools"
+	| "providers"
 	| "plugins"
 	| "skills"
 	| "subagents"
@@ -164,47 +175,51 @@ interface SectionDef {
  * openchamber-parity tabs (chat / notifications / sessions / shortcuts /
  * agents) are backed by live settings; hooks (extensions RPC), 索引库
  * (session.search) and 使用统计 (packages/stats) complete the capability
- * groups. */
-const NAV_GROUPS: { title: string; items: SectionDef[] }[] = [
-	{
-		title: t("basic settings"),
-		items: [
-			{ id: "general", icon: "settings-3", label: t("general"), enabled: true },
-			{ id: "appearance", icon: "palette", label: t("appearance"), enabled: true },
-			{ id: "chat", icon: "chat-ai-3", label: t("chat settings"), enabled: true },
-			{ id: "notifications", icon: "notification-3", label: t("notifications & sound"), enabled: true },
-			{ id: "pet", icon: "robot-2", label: t("agent companion"), enabled: true },
-			{ id: "sessions", icon: "history", label: t("sessions"), enabled: true },
-			{ id: "git", icon: "git-branch", label: t("git settings"), enabled: true },
-			{ id: "shortcuts", icon: "command", label: t("shortcuts"), enabled: true },
-			{ id: "model", icon: "ai-agent", label: t("model settings"), enabled: true },
-			{ id: "files", icon: "file-text", label: t("files & lsp"), enabled: true },
-			{ id: "memory", icon: "brain", label: t("memory settings"), enabled: true },
-			{ id: "about", icon: "information", label: t("about"), enabled: true },
-		],
-	},
-	{
-		title: t("agent capabilities"),
-		items: [
-			{ id: "agents", icon: "robot", label: t("agents"), enabled: true },
-			{ id: "plugins", icon: "plug", label: t("plugins"), enabled: true },
-			{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
-			{ id: "subagents", icon: "user", label: t("sub agents"), enabled: true },
-			{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
-			{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
-			{ id: "hooks", icon: "node-tree", label: t("hooks"), enabled: true },
-			{ id: "browser", icon: "compass-3", label: t("browser"), enabled: true },
-		],
-	},
-	{
-		title: t("data and statistics"),
-		items: [
-			{ id: "history", icon: "history", label: t("session history"), enabled: true },
-			{ id: "indexes", icon: "book", label: t("index library"), enabled: true },
-			{ id: "usage", icon: "star", label: t("usage statistics"), enabled: true },
-		],
-	},
-];
+ * groups. Evaluated at render so the labels follow locale switches (a
+ * module-level const would freeze the first locale's strings). */
+function navGroups(): { title: string; items: SectionDef[] }[] {
+	return [
+		{
+			title: t("basic settings"),
+			items: [
+				{ id: "general", icon: "settings-3", label: t("general"), enabled: true },
+				{ id: "appearance", icon: "palette", label: t("appearance"), enabled: true },
+				{ id: "notifications", icon: "notification-3", label: t("notifications & sound"), enabled: true },
+				{ id: "pet", icon: "robot-2", label: t("agent companion"), enabled: true },
+				{ id: "sessions", icon: "history", label: t("sessions"), enabled: true },
+				{ id: "git", icon: "git-branch", label: t("git settings"), enabled: true },
+				{ id: "shortcuts", icon: "command", label: t("shortcuts"), enabled: true },
+				{ id: "model", icon: "ai-agent", label: t("model settings"), enabled: true },
+				{ id: "interaction", icon: "shuffle", label: t("interaction"), enabled: true },
+				{ id: "context", icon: "stack", label: t("context"), enabled: true },
+				{ id: "shell", icon: "terminal-window", label: t("shell"), enabled: true },
+				{ id: "tools", icon: "plug-2", label: t("tools"), enabled: true },
+				{ id: "files", icon: "file-text", label: t("files & lsp"), enabled: true },
+				{ id: "memory", icon: "brain", label: t("memory settings"), enabled: true },
+			],
+		},
+		{
+			title: t("agent capabilities"),
+			items: [
+				{ id: "plugins", icon: "plug", label: t("plugins"), enabled: true },
+				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
+				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
+				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
+				{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
+				{ id: "hooks", icon: "node-tree", label: t("hooks"), enabled: true },
+				{ id: "browser", icon: "compass-3", label: t("browser"), enabled: true },
+			],
+		},
+		{
+			title: t("data and statistics"),
+			items: [
+				{ id: "history", icon: "history", label: t("session history"), enabled: true },
+				{ id: "indexes", icon: "book", label: t("index library"), enabled: true },
+				{ id: "usage", icon: "star", label: t("usage statistics"), enabled: true },
+			],
+		},
+	];
+}
 
 interface ProviderInfo {
 	id: string;
@@ -293,46 +308,28 @@ export function SettingsView({
 	cwd?: string | null;
 }): ReactNode {
 	const [section, setSection] = useState<SectionId>(initialSection ?? "appearance");
+	// Fixed settings search: filters the nav by section label (live).
+	const [settingsQuery, setSettingsQuery] = useState("");
 	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("omp-gui-avatars") !== "0");
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
-	const [updateStatus, setUpdateStatus] = useState<string>(t("check for updates"));
-	const [updateChecking, setUpdateChecking] = useState(false);
-	const runUpdateCheck = async (): Promise<void> => {
-		const api = (window as unknown as { electronAPI?: { checkUpdates?(): Promise<unknown> } }).electronAPI;
-		if (!api?.checkUpdates) {
-			setUpdateStatus(t("updates only in the desktop app"));
-			return;
-		}
-		setUpdateChecking(true);
-		try {
-			const r = (await api.checkUpdates()) as {
-				enabled?: boolean;
-				newer?: boolean;
-				latest?: string;
-				current?: string;
-				url?: string;
-				error?: string;
-				reason?: string;
-			};
-			if (!r.enabled) setUpdateStatus(t("no update source configured"));
-			else if (r.error) setUpdateStatus(`⚠ ${r.error}`);
-			else if (r.newer) {
-				setUpdateStatus(`${t("new version")}: v${r.latest}`);
-				if (r.url) window.open(r.url, "_blank");
-			} else setUpdateStatus(`${t("up to date")} (v${r.current ?? "?"})`);
-		} finally {
-			setUpdateChecking(false);
-		}
-	};
 	const [custom, setCustom] = useState<CustomProvider[]>([]);
 	const [loginState, setLoginState] = useState<{
 		providerId: string;
 		url?: string;
+		launchUrl?: string;
+		instructions?: string;
 		message?: string;
 		waitingInput?: boolean;
 	} | null>(null);
 	const [busy, setBusy] = useState(false);
+	// Content-boundary feather (transcript parity): the nav column and the
+	// section content both scroll inside the settings surface — the shared
+	// hook flips their data-top-scroll / data-bottom-scroll mask attrs.
+	const settingsNavRef = useRef<HTMLDivElement | null>(null);
+	const settingsContentRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(settingsNavRef);
+	useScrollShadow(settingsContentRef);
 
 	const loadProviders = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -371,11 +368,20 @@ export function SettingsView({
 	// Provider auth/prompt envelopes drive the inline login panel.
 	useEffect(() => {
 		if (!providerEvent) return;
-		const p = providerEvent.payload as { providerId?: string; url?: string; message?: string; placeholder?: string };
+		const p = providerEvent.payload as {
+			providerId?: string;
+			url?: string;
+			launchUrl?: string;
+			instructions?: string;
+			message?: string;
+			placeholder?: string;
+		};
 		if (providerEvent.kind === "provider-auth") {
 			setLoginState({
 				providerId: p.providerId ?? "",
 				url: p.url,
+				...(p.launchUrl ? { launchUrl: p.launchUrl } : {}),
+				...(p.instructions ? { instructions: p.instructions } : {}),
 				...(p.message ? { message: p.message } : {}),
 			});
 		} else if (providerEvent.kind === "provider-prompt") {
@@ -461,8 +467,42 @@ export function SettingsView({
 							<span className="gui-settings-back-label">{t("back to workspace")}</span>
 						</button>
 					</div>
-					<div className="gui-settings-nav-scroll">
-						{NAV_GROUPS.map(group => (
+					<div className="gui-settings-search">
+						<Icon name="search" className="h-3.5 w-3.5 flex-none" />
+						<input
+							className="gui-input min-w-0 flex-1"
+							value={settingsQuery}
+							onChange={e => setSettingsQuery(e.target.value)}
+							placeholder={t("search settings…")}
+							aria-label={t("search settings…")}
+						/>
+						{settingsQuery && (
+							<button
+								type="button"
+								className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+								onClick={() => setSettingsQuery("")}
+								title={t("clear")}
+								aria-label={t("clear")}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+						)}
+					</div>
+					<div
+						ref={settingsNavRef}
+						className="gui-settings-nav-scroll"
+						data-top-scroll="false"
+						data-bottom-scroll="false"
+					>
+						{navGroups()
+							.map(group => ({
+								...group,
+								items: settingsQuery.trim()
+									? group.items.filter(item => item.label.toLowerCase().includes(settingsQuery.trim().toLowerCase()))
+									: group.items,
+							}))
+							.filter(group => group.items.length > 0)
+							.map(group => (
 							<div key={group.title} className="mb-1">
 								<div className="gui-settings-nav-group">{group.title}</div>
 								{group.items.map(item => (
@@ -482,7 +522,7 @@ export function SettingsView({
 							</div>
 						))}
 					</div>
-					{/* Bottom: onboarding + daemon status (user-area slot). */}
+					{/* Bottom: onboarding + announcements + daemon status (user-area slot). */}
 					<div className="flex flex-col gap-0.5 border-t border-[var(--border)] px-2 py-2">
 						<button
 							type="button"
@@ -491,6 +531,14 @@ export function SettingsView({
 						>
 							<Icon name="rocket" className="h-4 w-4" />
 							<span className="gui-settings-nav-label">{t("onboarding")}</span>
+						</button>
+						<button
+							type="button"
+							className="gui-settings-nav"
+							onClick={() => window.dispatchEvent(new CustomEvent("omp-open-announcement"))}
+						>
+							<Icon name="sparkling" className="h-4 w-4" />
+							<span className="gui-settings-nav-label">{t("what's new")}</span>
 						</button>
 					</div>
 				</nav>
@@ -502,10 +550,15 @@ export function SettingsView({
 						 * container animates nothing (height is constant), but
 						 * the keyed inner supplies the standard 160ms fade-in
 						 * instead of an abrupt content swap. */}
-						<HeightMorph morphKey={section} className="gui-settings-content">
+						<HeightMorph
+							morphKey={section}
+							innerRef={settingsContentRef}
+							className={`gui-settings-content${section === "history" ? " gui-settings-content--fill" : ""}`}
+						>
 							{section === "general" && <GeneralSection rpc={rpc} />}
 							{section === "appearance" && (
 								<AppearanceSection
+									rpc={rpc}
 									showAvatars={showAvatars}
 									onToggleAvatars={() => {
 										const next = !showAvatars;
@@ -530,15 +583,17 @@ export function SettingsView({
 									sessionId={sessionId}
 								/>
 							)}
-							{section === "chat" && <ChatSection />}
 							{section === "notifications" && <NotificationsSection rpc={rpc} />}
 							{section === "pet" && <PetSection />}
 							{section === "sessions" && <SessionsSection rpc={rpc} currentSessionId={sessionId} />}
 							{section === "git" && <GitSection rpc={rpc} />}
 							{section === "shortcuts" && <ShortcutsSection />}
+							{section === "interaction" && <InteractionSection rpc={rpc} />}
+							{section === "context" && <ContextSection rpc={rpc} />}
+							{section === "shell" && <ShellSection rpc={rpc} />}
+							{section === "tools" && <ToolsSection rpc={rpc} />}
 							{section === "files" && <FilesLspSection rpc={rpc} />}
 							{section === "memory" && <MemorySection rpc={rpc} />}
-							{section === "agents" && <AgentsSection rpc={rpc} />}
 							{section === "plugins" && <PluginsSection rpc={rpc} />}
 							{section === "skills" && <SkillsSection rpc={rpc} />}
 							{section === "subagents" && <SubagentsSection rpc={rpc} />}
@@ -549,30 +604,6 @@ export function SettingsView({
 							{section === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 							{section === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
 							{section === "usage" && <UsageSection rpc={rpc} />}
-							{section === "about" && (
-								<>
-									<h2 className="gui-settings-page-title">{t("about")}</h2>
-									<p className="gui-settings-page-desc">MusePi GUI</p>
-									<div className="gui-settings-row">
-										<div className="gui-settings-row-label">v0.1.0 — openchamber-inspired shell</div>
-									</div>
-									<div className="gui-settings-row">
-										<div>
-											<div className="gui-settings-row-label">{t("check for updates")}</div>
-											<div className="gui-settings-row-desc">{updateStatus}</div>
-										</div>
-										<button
-											type="button"
-											className="gui-btn"
-											disabled={updateChecking}
-											onClick={() => void runUpdateCheck()}
-										>
-											<Icon name="download" className="h-3.5 w-3.5" />
-											<span>{updateChecking ? t("checking…") : t("check")}</span>
-										</button>
-									</div>
-								</>
-							)}
 						</HeightMorph>
 					</div>
 				</div>
@@ -606,9 +637,11 @@ const THEME_OPTIONS = [
 function AppearanceSection({
 	showAvatars,
 	onToggleAvatars,
+	rpc,
 }: {
 	showAvatars: boolean;
 	onToggleAvatars(): void;
+	rpc: RpcClient | null;
 }): ReactNode {
 	const { preference, resolved, setPreference } = useThemePreference();
 	const { accent, setAccent, customAccent, setCustomAccent } = useAccentPreference();
@@ -632,9 +665,9 @@ function AppearanceSection({
 		const v = localStorage.getItem("omp-gui-statusbar");
 		return v === "kitt" || v === "plain" ? v : "shimmer";
 	});
-	const [statusBarIndicator, setStatusBarIndicator] = useState<"braille" | "orb">(() => {
+	const [statusBarIndicator, setStatusBarIndicator] = useState<"braille" | "orb" | "lattice" | "ring">(() => {
 		const v = localStorage.getItem("omp-gui-statusbar-indicator");
-		return v === "orb" ? "orb" : "braille";
+		return v === "orb" || v === "lattice" || v === "ring" ? v : "braille";
 	});
 	const [sweepColor, setSweepColor] = useState<"default" | "accent">(() => {
 		const v = localStorage.getItem("omp-gui-statusbar-kitt-color");
@@ -690,7 +723,18 @@ function AppearanceSection({
 				<div className="gui-settings-section-title">{t("localization")}</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("language")}</div>
-					<select className="gui-settings-select" value={locale} onChange={e => setLocale(e.target.value)}>
+					<select
+						className="gui-settings-select"
+						value={locale}
+						onChange={e => {
+							const next = e.target.value;
+							// Renderer mirror updates immediately; the daemon key
+							// (settings.locale, config.yml) is the single source the
+							// TUI and the GUI boot sync both read (F1 audit fix).
+							setLocale(next);
+							if (rpc) void rpc.request("settings.set", { key: "settings.locale", value: next }).catch(() => {});
+						}}
+					>
 						<option value="zh-CN">中文</option>
 						<option value="en-US">English</option>
 					</select>
@@ -796,42 +840,40 @@ function AppearanceSection({
 					</div>
 				</Reveal>
 				<Reveal open={!unifiedMode}>
-					<>
-						<div className="gui-settings-field">
-							<div className="gui-settings-field-label">{t("light theme")}</div>
-							<div className="gui-settings-field-hint">{t("light theme description")}</div>
-							<div className="gui-settings-field-control">
-								<select
-									className="gui-settings-select"
-									value={lightThemeId}
-									onChange={e => setLightTheme(e.target.value as UiThemeId)}
-								>
-									{LIGHT_THEME_PRESETS.map(p => (
-										<option key={p.id} value={p.id}>
-											{t(`theme preset ${p.id}`)}
-										</option>
-									))}
-								</select>
-							</div>
+					<div className="gui-settings-field">
+						<div className="gui-settings-field-label">{t("light theme")}</div>
+						<div className="gui-settings-field-hint">{t("light theme description")}</div>
+						<div className="gui-settings-field-control">
+							<select
+								className="gui-settings-select"
+								value={lightThemeId}
+								onChange={e => setLightTheme(e.target.value as UiThemeId)}
+							>
+								{LIGHT_THEME_PRESETS.map(p => (
+									<option key={p.id} value={p.id}>
+										{t(`theme preset ${p.id}`)}
+									</option>
+								))}
+							</select>
 						</div>
-						<div className="gui-settings-field">
-							<div className="gui-settings-field-label">{t("dark theme")}</div>
-							<div className="gui-settings-field-hint">{t("dark theme description")}</div>
-							<div className="gui-settings-field-control">
-								<select
-									className="gui-settings-select"
-									value={darkThemeId}
-									onChange={e => setDarkTheme(e.target.value as UiThemeId)}
-								>
-									{DARK_THEME_PRESETS.map(p => (
-										<option key={p.id} value={p.id}>
-											{t(`theme preset ${p.id}`)}
-										</option>
-									))}
-								</select>
-							</div>
+					</div>
+					<div className="gui-settings-field">
+						<div className="gui-settings-field-label">{t("dark theme")}</div>
+						<div className="gui-settings-field-hint">{t("dark theme description")}</div>
+						<div className="gui-settings-field-control">
+							<select
+								className="gui-settings-select"
+								value={darkThemeId}
+								onChange={e => setDarkTheme(e.target.value as UiThemeId)}
+							>
+								{DARK_THEME_PRESETS.map(p => (
+									<option key={p.id} value={p.id}>
+										{t(`theme preset ${p.id}`)}
+									</option>
+								))}
+							</select>
 						</div>
-					</>
+					</div>
 				</Reveal>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("interface font size")}</div>
@@ -1243,7 +1285,7 @@ function AppearanceSection({
 						<div className="flex items-center gap-2">
 							<span className="text-[12px] text-[var(--color-text-muted)]">{t("indicator")}</span>
 							<div className="gui-segmented">
-								{(["braille", "orb"] as const).map(s => (
+								{(["braille", "orb", "lattice", "ring"] as const).map(s => (
 									<button
 										key={s}
 										type="button"
@@ -1253,7 +1295,13 @@ function AppearanceSection({
 											localStorage.setItem("omp-gui-statusbar-indicator", s);
 										}}
 									>
-										{s === "braille" ? t("braille") : t("orb")}
+										{s === "braille"
+											? t("braille")
+											: s === "orb"
+												? t("orb")
+												: s === "lattice"
+													? t("lattice")
+													: t("ring")}
 									</button>
 								))}
 							</div>
@@ -1374,6 +1422,12 @@ function AppearanceSection({
 					</div>
 				</div>
 			</div>
+			{/* TUI appearance-tab parity (schema-driven): theme presets, status
+			 * line, display and images groups from settings.schema. */}
+			<SchemaTabSection rpc={rpc} tabs={["appearance"]} />
+			{/* Chat display settings (previously the 聊天设置 tab): transcript
+			 * rendering prefs are appearance — merged into one 外观 page. */}
+			<ChatSection />
 		</>
 	);
 }
@@ -1519,6 +1573,8 @@ function PrefToggle({
 	storageKey,
 	onClass,
 	on = true,
+	disabled = false,
+	onChange,
 }: {
 	label: string;
 	description: string;
@@ -1527,6 +1583,10 @@ function PrefToggle({
 	onClass?: string;
 	/** Default value when the key is unset. */
 	on?: boolean;
+	/** Grey the row out and block interaction (a conflicting pref is active). */
+	disabled?: boolean;
+	/** Notified with the new value after the toggle commits. */
+	onChange?: (on: boolean) => void;
 }): ReactNode {
 	const [onState, setOnState] = useState<boolean>(() => {
 		try {
@@ -1537,7 +1597,7 @@ function PrefToggle({
 		}
 	});
 	return (
-		<div className="gui-settings-row">
+		<div className={`gui-settings-row${disabled ? " gui-settings-row--disabled" : ""}`}>
 			<div>
 				<div className="gui-settings-row-label">{label}</div>
 				<div className="gui-settings-row-desc">{description}</div>
@@ -1546,6 +1606,7 @@ function PrefToggle({
 				type="button"
 				role="switch"
 				aria-checked={onState}
+				disabled={disabled}
 				className={`gui-toggle${onState ? " gui-toggle--on" : ""}`}
 				onClick={() => {
 					tapFeedback();
@@ -1557,6 +1618,7 @@ function PrefToggle({
 						// ignore
 					}
 					if (onClass) document.documentElement.classList.toggle(onClass, !next);
+					onChange?.(next);
 				}}
 				aria-label={label}
 			>
@@ -1617,13 +1679,25 @@ function PrefSegmented<T extends string>({
 	);
 }
 
-/** openchamber-parity chat display settings (transcript rendering). */
+/** Chat display settings (transcript rendering) — rendered as a block at
+ *  the bottom of 外观 (previously the standalone 聊天设置 tab; merged
+ *  2026-08-12 so transcript rendering prefs live with the rest of the
+ *  appearance options). All prefs are renderer-local (localStorage). */
 function ChatSection(): ReactNode {
 	const [mermaidModeState, setMermaidModeState] = useState<"svg" | "ascii">(() => {
 		try {
 			return localStorage.getItem("omp-gui-chat-mermaid") === "ascii" ? "ascii" : "svg";
 		} catch {
 			return "svg";
+		}
+	});
+	// Widget standalone display — when ON, the in-tool-card toggle below
+	// is inert (tool cards collapse; the widget lives on its own card).
+	const [widgetStandalone, setWidgetStandalone] = useState<boolean>(() => {
+		try {
+			return (localStorage.getItem("omp-gui-widget-standalone") ?? "1") !== "0";
+		} catch {
+			return true;
 		}
 	});
 	const [diffLayoutState, setDiffLayoutState] = useState<"dynamic" | "inline" | "side-by-side">(() => {
@@ -1642,6 +1716,16 @@ function ChatSection(): ReactNode {
 			return "default";
 		}
 	});
+	const [typingEffect, setTypingEffect] = useState<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">(
+		() => {
+			try {
+				const v = localStorage.getItem("omp-gui-chat-effect");
+				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
+			} catch {
+				return "typewriter";
+			}
+		},
+	);
 	// Live previews re-render with the segments (mermaid svg/ascii + diff
 	// layout) — same renderers the transcript uses, sample content only.
 	const mermaidPreviewHtml = useMemo(() => renderMermaidHtml(MERMAID_SAMPLE, mermaidModeState), [mermaidModeState]);
@@ -1649,183 +1733,249 @@ function ChatSection(): ReactNode {
 	// natives); the provider makes the preview's DiffBlock highlight too.
 	const chatHighlight = useChatHighlight();
 	return (
-		<>
-			<h2 className="gui-settings-page-title">{t("chat settings")}</h2>
-			<p className="gui-settings-page-desc">{t("chat settings description")}</p>
-			<PrefSegmented
-				label={t("user message rendering")}
-				description={t("user message rendering description")}
-				storageKey="omp-gui-chat-usermsg"
-				defaultValue="markdown"
-				options={[
-					{ id: "markdown", label: t("markdown") },
-					{ id: "plain", label: t("plain text") },
-				]}
-			/>
-			<PrefToggle
-				label={t("collapse long user messages")}
-				description={t("collapse long user messages description")}
-				storageKey="omp-gui-chat-collapseuser"
-			/>
-			<PrefToggle
-				label={t("show reasoning traces")}
-				description={t("show reasoning traces description")}
-				storageKey="omp-gui-chat-thinking"
-				onClass="gui-chat-hide-thinking"
-			/>
-			<PrefToggle
-				label={t("widgets expanded")}
-				description={t("widgets expanded description")}
-				storageKey="omp-gui-widget-expanded"
-			/>
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("mermaid rendering")}</div>
-					<div className="gui-settings-row-desc">{t("mermaid rendering description")}</div>
-				</div>
-				<div className="gui-segmented">
-					{(["svg", "ascii"] as const).map(m => (
-						<button
-							key={m}
-							type="button"
-							className={`gui-seg-btn${mermaidModeState === m ? " gui-seg-btn--active" : ""}`}
-							onClick={() => {
-								setMermaidModeState(m);
-								try {
-									localStorage.setItem("omp-gui-chat-mermaid", m);
-								} catch {
-									// ignore
-								}
-							}}
-						>
-							{m === "svg" ? t("svg") : t("ascii")}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("diff layout")}</div>
-					<div className="gui-settings-row-desc">{t("diff layout description")}</div>
-				</div>
-				<div className="gui-segmented">
-					{(
-						[
-							{ id: "dynamic", label: t("dynamic") },
-							{ id: "inline", label: t("always inline") },
-							{ id: "side-by-side", label: t("always side by side") },
-						] as const
-					).map(o => (
-						<button
-							key={o.id}
-							type="button"
-							className={`gui-seg-btn${diffLayoutState === o.id ? " gui-seg-btn--active" : ""}`}
-							onClick={() => {
-								setDiffLayoutState(o.id);
-								try {
-									localStorage.setItem("omp-gui-chat-difflayout", o.id);
-								} catch {
-									// ignore
-								}
-							}}
-						>
-							{o.label}
-						</button>
-					))}
-				</div>
-			</div>
-			<PrefToggle
-				label={t("preserve draft messages")}
-				description={t("preserve draft messages description")}
-				storageKey="omp-gui-chat-draft"
-			/>
-			<PrefToggle
-				label={t("enable spell check in text input")}
-				description={t("enable spell check in text input description")}
-				storageKey="omp-gui-chat-spellcheck"
-				on={false}
-			/>
-			<PrefToggle
-				label={t("show timestamps")}
-				description={t("time next to assistant messages")}
-				storageKey="omp-gui-chat-time"
-				onClass="gui-chat-hide-time"
-			/>
-			<PrefToggle
-				label={t("row actions")}
-				description={t("row actions description")}
-				storageKey="omp-gui-chat-rowactions"
-				onClass="gui-chat-hide-row-actions"
-			/>
-			<PrefToggle
-				label={t("smooth streaming")}
-				description={t("smooth streaming description")}
-				storageKey="omp-gui-chat-smooth"
-				onClass="gui-chat-no-smooth"
-			/>
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("output style")}</div>
-					<div className="gui-settings-row-desc">{t("output style description")}</div>
-				</div>
-				<div className="gui-segmented">
-					{(
-						[
-							{ id: "default", label: t("output style default") },
-							{ id: "kimi", label: t("output style kimi") },
-							{ id: "zcode", label: t("output style zcode") },
-						] as const
-					).map(o => (
-						<button
-							key={o.id}
-							type="button"
-							className={`gui-seg-btn${outputStyle === o.id ? " gui-seg-btn--active" : ""}`}
-							onClick={() => {
-								tapFeedback();
-								setOutputStyle(o.id);
-								try {
-									localStorage.setItem("omp-gui-chat-output-style", o.id);
-								} catch {
-									// ignore
-								}
-								document.documentElement.dataset.outputStyle = o.id;
-							}}
-						>
-							{o.label}
-						</button>
-					))}
-				</div>
-			</div>
-			<PrefToggle
-				label={t("streaming caret")}
-				description={t("streaming caret description")}
-				storageKey="omp-gui-chat-caret"
-				onClass="gui-chat-no-caret"
-			/>
-			<PrefToggle
-				label={t("code highlight")}
-				description={t("code highlight description")}
-				storageKey="omp-gui-chat-codehl"
-				onClass="gui-chat-plain-code"
-			/>
+		<CodeHighlightProvider highlight={chatHighlight}>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("chat preview")}</div>
-				<div className="gui-settings-section-desc">{t("chat preview description")}</div>
-				<CodeHighlightProvider highlight={chatHighlight}>
-					<div className="gui-chat-preview">
-						<div className="gui-chat-preview-label">{t("mermaid")}</div>
-						{/* biome-ignore lint/security/noDangerouslySetInnerHtml: built by renderMermaidHtml (escaped source) */}
-						<div className="gui-chat-preview-mermaid" dangerouslySetInnerHTML={{ __html: mermaidPreviewHtml }} />
-						<div className="gui-chat-preview-label">{t("diff")}</div>
-						{/* tr-card--diff container: same aicss file-diff tinting the transcript
-						 * ToolCard applies (accent bar + green/red row tints). */}
-						<div className="tr-card--diff">
-							<DiffBlock diff={DIFF_SAMPLE} layout={diffLayoutState} />
+				<div className="gui-settings-section-title">{t("chat settings")}</div>
+				<div className="gui-settings-section-desc">{t("chat settings description")}</div>
+			</div>
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("message rendering")}</div>
+				<PrefSegmented
+					label={t("user message rendering")}
+					description={t("user message rendering description")}
+					storageKey="omp-gui-chat-usermsg"
+					defaultValue="markdown"
+					options={[
+						{ id: "markdown", label: t("markdown") },
+						{ id: "plain", label: t("plain text") },
+					]}
+				/>
+				<PrefToggle
+					label={t("collapse long user messages")}
+					description={t("collapse long user messages description")}
+					storageKey="omp-gui-chat-collapseuser"
+				/>
+				<PrefToggle
+					label={t("show reasoning traces")}
+					description={t("show reasoning traces description")}
+					storageKey="omp-gui-chat-thinking"
+					onClass="gui-chat-hide-thinking"
+				/>
+				<PrefToggle
+					label={t("widget standalone")}
+					description={t("widget standalone description")}
+					storageKey="omp-gui-widget-standalone"
+					onChange={setWidgetStandalone}
+				/>
+				<PrefToggle
+					label={t("widgets expanded")}
+					description={t("widgets expanded description")}
+					storageKey="omp-gui-widget-expanded"
+					disabled={widgetStandalone}
+				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("mermaid rendering")}</div>
+						<div className="gui-settings-row-desc">{t("mermaid rendering description")}</div>
+					</div>
+					<div className="gui-segmented">
+						{(["svg", "ascii"] as const).map(m => (
+							<button
+								key={m}
+								type="button"
+								className={`gui-seg-btn${mermaidModeState === m ? " gui-seg-btn--active" : ""}`}
+								onClick={() => {
+									setMermaidModeState(m);
+									try {
+										localStorage.setItem("omp-gui-chat-mermaid", m);
+									} catch {
+										// ignore
+									}
+								}}
+							>
+								{m === "svg" ? t("svg") : t("ascii")}
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="gui-chat-preview-inline">
+					<div className="gui-chat-preview-label">{t("mermaid preview")}</div>
+					{/* biome-ignore lint/security/noDangerouslySetInnerHtml: built by renderMermaidHtml (escaped source) */}
+					<div className="gui-chat-preview-mermaid" dangerouslySetInnerHTML={{ __html: mermaidPreviewHtml }} />
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("diff layout")}</div>
+						<div className="gui-settings-row-desc">{t("diff layout description")}</div>
+					</div>
+					<div className="gui-segmented">
+						{(
+							[
+								{ id: "dynamic", label: t("dynamic") },
+								{ id: "inline", label: t("always inline") },
+								{ id: "side-by-side", label: t("always side by side") },
+							] as const
+						).map(o => (
+							<button
+								key={o.id}
+								type="button"
+								className={`gui-seg-btn${diffLayoutState === o.id ? " gui-seg-btn--active" : ""}`}
+								onClick={() => {
+									setDiffLayoutState(o.id);
+									try {
+										localStorage.setItem("omp-gui-chat-difflayout", o.id);
+									} catch {
+										// ignore
+									}
+								}}
+							>
+								{o.label}
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="gui-chat-preview-inline">
+					<div className="gui-chat-preview-label">{t("diff preview")}</div>
+					{/* tr-card--diff container: same aicss file-diff tinting the transcript
+					 * ToolCard applies (accent bar + green/red row tints). */}
+					<div className="tr-card--diff">
+						<DiffBlock diff={DIFF_SAMPLE} layout={diffLayoutState} />
+					</div>
+				</div>
+			</div>
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("interface and input")}</div>
+				<PrefToggle
+					label={t("preserve draft messages")}
+					description={t("preserve draft messages description")}
+					storageKey="omp-gui-chat-draft"
+				/>
+				<PrefToggle
+					label={t("enable spell check in text input")}
+					description={t("enable spell check in text input description")}
+					storageKey="omp-gui-chat-spellcheck"
+					on={false}
+				/>
+				<PrefToggle
+					label={t("show timestamps")}
+					description={t("time next to assistant messages")}
+					storageKey="omp-gui-chat-time"
+					onClass="gui-chat-hide-time"
+				/>
+				<PrefToggle
+					label={t("row actions")}
+					description={t("row actions description")}
+					storageKey="omp-gui-chat-rowactions"
+					onClass="gui-chat-hide-row-actions"
+				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("output style")}</div>
+						<div className="gui-settings-row-desc">{t("output style description")}</div>
+					</div>
+					<div className="gui-segmented">
+						{(
+							[
+								{ id: "default", label: t("output style default") },
+								{ id: "kimi", label: t("output style kimi") },
+								{ id: "zcode", label: t("output style zcode") },
+							] as const
+						).map(o => (
+							<button
+								key={o.id}
+								type="button"
+								className={`gui-seg-btn${outputStyle === o.id ? " gui-seg-btn--active" : ""}`}
+								onClick={() => {
+									tapFeedback();
+									setOutputStyle(o.id);
+									try {
+										localStorage.setItem("omp-gui-chat-output-style", o.id);
+									} catch {
+										// ignore
+									}
+									document.documentElement.dataset.outputStyle = o.id;
+								}}
+							>
+								{o.label}
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("typing effect")}</div>
+						<div className="gui-settings-row-desc">{t("typing effect description")}</div>
+					</div>
+					<div className="gui-segmented">
+						{(
+							[
+								{ id: "typewriter", label: t("typing effect typewriter") },
+								{ id: "burst", label: t("typing effect burst") },
+								{ id: "shimmer", label: t("typing effect shimmer") },
+								{ id: "glitch", label: t("typing effect glitch") },
+								{ id: "flip", label: t("typing effect flip") },
+								{ id: "ink", label: t("typing effect ink") },
+							] as const
+						).map(o => (
+							<button
+								key={o.id}
+								type="button"
+								className={`gui-seg-btn${typingEffect === o.id ? " gui-seg-btn--active" : ""}`}
+								onClick={() => {
+									tapFeedback();
+									setTypingEffect(o.id);
+									try {
+										localStorage.setItem("omp-gui-chat-effect", o.id);
+									} catch {
+										// ignore
+									}
+									// No root-class swap here: the transcript applies the
+									// effect only to the block that is streaming right now,
+									// and this preview re-renders from `effect` below.
+								}}
+							>
+								{o.label}
+							</button>
+						))}
+					</div>
+				</div>
+				<div className="gui-chat-preview-inline">
+					<div className="gui-chat-preview-label">{t("output style preview")}</div>
+					<div className="gui-chat-preview-desc">{t("output style preview description")}</div>
+					{/* The output-style presets are --tr-* variable overrides keyed
+					 * off [data-output-style] — scoping this container to the
+					 * picker's value previews the exact transcript typography.
+					 * The typewriter demo shows the 逐字输出 (smooth streaming)
+					 * motion under that typography: reveal + live caret. */}
+					<div data-output-style={outputStyle} className="gui-chat-preview-style">
+						<TypewriterPreview />
+						<div className="tr-md gui-chat-preview-static">
+							<h2>{t("preview heading")}</h2>
+							<p>{t("preview paragraph")}</p>
+							<pre>
+								<code>{t("preview code")}</code>
+							</pre>
+							<ul>
+								<li>{t("preview list item")}</li>
+								<li>{t("preview list item")}</li>
+							</ul>
 						</div>
 					</div>
-				</CodeHighlightProvider>
+				</div>
+				<PrefToggle
+					label={t("streaming caret")}
+					description={t("streaming caret description")}
+					storageKey="omp-gui-chat-caret"
+					onClass="gui-chat-no-caret"
+				/>
+				<PrefToggle
+					label={t("code highlight")}
+					description={t("code highlight description")}
+					storageKey="omp-gui-chat-codehl"
+					onClass="gui-chat-plain-code"
+				/>
 			</div>
-		</>
+		</CodeHighlightProvider>
 	);
 }
 
@@ -1847,6 +1997,134 @@ const DIFF_SAMPLE = `--- a/src/hello.ts
 +  return \`\${prefix}, \${name}!\`;
  }
 +export const version = "1.2.0";`;
+
+/**
+ * Looping typewriter demo for the output-style preview — driven by the SAME
+ * reveal engine the transcript uses (proportional nextStep catch-up +
+ * grapheme slicing), so the preview shows the real 逐字输出 motion: a token
+ * burst drains over ~8 frames, a trickle advances 1 grapheme/frame. Follows
+ * the 平滑流式渲染 toggle: off → the full text appears instantly.
+ */
+function TypewriterPreview(): ReactNode {
+	const text = useTypewriterSample();
+	const smoothOn = (() => {
+		try {
+			// PrefToggle writes "1"/"0" — absent key = default on.
+			const v = localStorage.getItem("omp-gui-chat-smooth");
+			return v === null ? true : v !== "0";
+		} catch {
+			return true;
+		}
+	})();
+	const effect = (() => {
+		try {
+			const v = localStorage.getItem("omp-gui-chat-effect");
+			return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
+		} catch {
+			return "typewriter";
+		}
+	})();
+	const total = countGraphemes(text);
+	const [arrived, setArrived] = useState(0);
+	const [shown, setShown] = useState(0);
+	const [done, setDone] = useState(false);
+	// Replay cycle: increments 1.8s after each demo settles; the arrival
+	// effect below depends on it, so the demo restarts (the preview loops).
+	const [cycle, setCycle] = useState(0);
+	const arrivedRef = useRef(0);
+	useEffect(() => {
+		arrivedRef.current = arrived;
+	}, [arrived]);
+	useEffect(() => {
+		if (!smoothOn) {
+			setArrived(total);
+			setShown(total);
+			setDone(true);
+			return;
+		}
+		setArrived(0);
+		setShown(0);
+		setDone(false);
+		// Simulated model token stream: 2–3 graphemes arrive every 110ms
+		// (~23 chars/s, like a real model), while the reveal eats the
+		// backlog at the transcript's own cadence (3/frame floor, catch-up
+		// on bursts) — so the preview shows the ACTUAL smooth-streaming
+		// motion at a readable pace, not a one-shot dump.
+		const arrival = setInterval(() => {
+			setArrived(a => {
+				if (a >= total) {
+					clearInterval(arrival);
+					return a;
+				}
+				return Math.min(total, a + 2 + Math.floor(Math.random() * 2));
+			});
+		}, 110);
+		const reveal = setInterval(() => {
+			setShown(s => {
+				const target = arrivedRef.current;
+				return Math.min(target, s + nextStep(target - s));
+			});
+		}, STREAMING_REVEAL_FRAME_MS);
+		return () => {
+			clearInterval(arrival);
+			clearInterval(reveal);
+		};
+		// effect in deps: switching the typing-effect preset restarts the
+		// demo immediately (the preview must track the engine's selection).
+		// cycle: replay loop — each increment restarts the demo.
+	}, [smoothOn, total, cycle]);
+	useEffect(() => {
+		if (!done || !smoothOn) return;
+		const id = setTimeout(() => setCycle(c => c + 1), 1800);
+		return () => clearTimeout(id);
+	}, [done, smoothOn]);
+	useEffect(() => {
+		if (smoothOn && arrived >= total && shown >= total) setDone(true);
+	}, [arrived, shown, total, smoothOn]);
+	const display = smoothOn ? sliceGraphemes(text, shown) : text;
+	// The effect only applies while the demo is "typing" — once done, the
+	// full text shows plain (no gradient/spans/jitter), same contract as
+	// the real transcript: finished output is never colored.
+	const eff = done ? "typewriter" : effect;
+	// shimmer applies via the CSS class on this .tr-md root (the only
+	// preset with pure-CSS styling); the rest render per-grapheme spans
+	// through TAIL_RENDERERS. typewriter carries no class.
+	const effectCls = eff === "shimmer" ? " gui-chat-effect-shimmer" : "";
+	return (
+		<div className={`tr-md gui-typewriter${done ? "" : " gui-typewriter--live"}${effectCls}`}>
+			<p>
+				{(() => {
+					const cfg = TAIL_RENDERERS[eff];
+					if (!cfg || !smoothOn || done || countGraphemes(display) <= cfg.windowSize) return display;
+					const n = countGraphemes(display);
+					const head = sliceGraphemes(display, n - cfg.windowSize);
+					const tail = graphemeSpans(display.slice(head.length));
+					return (
+						<>
+							{head}
+							{tail.map(({ word }, i) => {
+								const r = cfg.render(i, word);
+								return r ? (
+									<span key={i} className={r.cls} style={r.style}>
+										{r.text}
+									</span>
+								) : (
+									<span key={i}>{word}</span>
+								);
+							})}
+						</>
+					);
+				})()}
+				{eff === "typewriter" && !done && <span className="gui-typewriter-caret" />}
+			</p>
+		</div>
+	);
+}
+
+/** Sample sentence the typewriter demo types out (i18n, keeps it localized). */
+function useTypewriterSample(): string {
+	return t("preview paragraph");
+}
 
 /** Wired sound → trigger description (i18n keys); see sfx.ts WIRED_SOUNDS. */
 const SOUND_USAGE_KEYS: Partial<Record<SoundName, TranslationKey>> = {
@@ -1960,37 +2238,37 @@ function PetCard({
 					}
 				}}
 			>
-			<span className="gui-pet-card__thumb">
-				<PetdexSprite
-					mood="rest"
-					src={entry.src}
-					width={entry.width}
-					height={entry.height}
-					rows={entry.rows}
-					contentH={entry.contentH}
-				/>
-			</span>
-			<span className="gui-pet-card__body">
-				<span className="gui-pet-card__name">
-					{entry.name}
-					{selected && <Icon name="check" className="gui-pet-card__check" />}
+				<span className="gui-pet-card__thumb">
+					<PetdexSprite
+						mood="rest"
+						src={entry.src}
+						width={entry.width}
+						height={entry.height}
+						rows={entry.rows}
+						contentH={entry.contentH}
+					/>
 				</span>
-				<span className="gui-pet-card__desc">{entry.description}</span>
-			</span>
-			{onDelete && (
-				<button
-					type="button"
-					className="gui-pet-card__delete"
-					aria-label={t("delete pet")}
-					title={t("delete pet")}
-					onClick={e => {
-						e.stopPropagation();
-						onDelete();
-					}}
-				>
-					<Icon name="delete-bin" className="h-3.5 w-3.5" />
-				</button>
-			)}
+				<span className="gui-pet-card__body">
+					<span className="gui-pet-card__name">
+						{entry.name}
+						{selected && <Icon name="check" className="gui-pet-card__check" />}
+					</span>
+					<span className="gui-pet-card__desc">{entry.description}</span>
+				</span>
+				{onDelete && (
+					<button
+						type="button"
+						className="gui-pet-card__delete"
+						aria-label={t("delete pet")}
+						title={t("delete pet")}
+						onClick={e => {
+							e.stopPropagation();
+							onDelete();
+						}}
+					>
+						<Icon name="delete-bin" className="h-3.5 w-3.5" />
+					</button>
+				)}
 			</div>
 		</SpotlightCard>
 	);
@@ -2099,9 +2377,12 @@ function PetMarket({
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<PetdexCatalogEntry[] | null>(null);
-	const [searching, setSearching] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [installing, setInstalling] = useState<string | null>(null);
+	// Petdex catalog search in-flight flag (the search effect + status line
+	// both reference it — this state was dropped in a refactor, making the
+	// search handler throw on first use).
+	const [searching, setSearching] = useState(false);
 	const searchRef = useRef(0);
 	const runSearch = useCallback(async (q: string): Promise<void> => {
 		const bridge = (
@@ -2228,6 +2509,7 @@ function PetSection(): ReactNode {
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
 	const [dock, setDock] = useState<boolean>(() => localStorage.getItem("omp-gui-pet-dock") === "1");
 	const [importing, setImporting] = useState(false);
+	const [importError, setImportError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(true);
 	const commit = (): void => {
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
@@ -2255,11 +2537,13 @@ function PetSection(): ReactNode {
 			return;
 		}
 		setImporting(true);
+		setImportError(null);
 		try {
 			const raw = await electronAPI.importPetdex();
 			if (!raw) return;
 			if ("error" in raw) {
 				console.error("[pet] import failed:", raw.error);
+				setImportError(t("pet import failed"));
 				return;
 			}
 			// The main process cannot decode image dimensions — measure the
@@ -2273,6 +2557,7 @@ function PetSection(): ReactNode {
 			await decoded;
 			if (!img.naturalWidth || !img.naturalHeight) {
 				console.error("[pet] spritesheet undecodable");
+				setImportError(t("pet import failed"));
 				return;
 			}
 			const { rows, contentH } = measurePetdex(img);
@@ -2307,10 +2592,13 @@ function PetSection(): ReactNode {
 	const isDesktopShell =
 		typeof (window as unknown as { electronAPI?: { importPetdex?: unknown } }).electronAPI?.importPetdex ===
 		"function";
+	// Preset names/descriptions are i18n keys (English source strings,
+	// localized via collab-web zh-CN); imported packages keep their own
+	// pet.json text.
 	const presetEntries: PetGridEntry[] = BUILTIN_PETDEX.map(p => ({
 		id: p.id,
-		name: p.displayName,
-		description: p.description,
+		name: t(p.displayName as TranslationKey),
+		description: t(p.description as TranslationKey),
 		src: p.spritesheetPath,
 		width: p.width,
 		height: p.height,
@@ -2336,6 +2624,7 @@ function PetSection(): ReactNode {
 			<h2 className="gui-settings-page-title">{t("agent companion")}</h2>
 			<p className="gui-settings-page-desc">{t("pet settings")}</p>
 			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("pet display")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("show agent companion")}</div>
@@ -2428,6 +2717,13 @@ function PetSection(): ReactNode {
 								<span className="gui-toggle-knob" />
 							</button>
 						</div>
+					</>
+				)}
+			</div>
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("pet appearance")}</div>
+				{enabled && (
+					<>
 						{/* Appearance (BitFun parity): header row with refresh +
 						 * import, a trigger showing the selected pet, and an
 						 * expandable preset grid grouped 预设 / 已导入. */}
@@ -2460,6 +2756,11 @@ function PetSection(): ReactNode {
 									{importing ? "…" : t("import petdex")}
 								</button>
 							</div>
+							{importError && (
+								<p className="gui-pet-import-error" role="alert">
+									{importError}
+								</p>
+							)}
 						</div>
 						<button
 							type="button"
@@ -2476,7 +2777,6 @@ function PetSection(): ReactNode {
 										height={selectedEntry.height}
 										rows={selectedEntry.rows}
 										contentH={selectedEntry.contentH}
-										scale={sizeScale}
 									/>
 								) : (
 									<BuiltinPetSprite mood="rest" />
@@ -3136,7 +3436,7 @@ function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// new login → re-enable the avatar image (previous one may have failed)
 	useEffect(() => {
 		setAvatarFailed(false);
-	}, [auth?.avatarUrl]);
+	}, []);
 
 	const stopFlow = (): void => {
 		if (pollRef.current) clearTimeout(pollRef.current);
@@ -3188,7 +3488,7 @@ function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				setFlowError(err instanceof Error ? err.message : String(err));
 			}
 		},
-		[rpc, refreshAuth],
+		[rpc, refreshAuth, stopFlow],
 	);
 
 	const startFlow = async (): Promise<void> => {
@@ -3485,6 +3785,9 @@ function GitPrefsRow(): ReactNode {
 						const next = !gitmoji;
 						setGitmoji(next);
 						localStorage.setItem("omp-gui-gitmoji", next ? "1" : "0");
+						// Live consumers (ContextPanel gitmojiOn badge) re-read
+						// on this event — same-window storage events don't fire.
+						window.dispatchEvent(new CustomEvent("omp-gitmoji-changed"));
 					}}
 					aria-label={t("enable gitmoji picker")}
 				>
@@ -3545,106 +3848,48 @@ function ShortcutsSection(): ReactNode {
 	);
 }
 
-/** Agent Control Center (TUI /agents parity): live roster from the
- *  daemon — kind chips, subagent parent links, and a 2s live refresh so
- *  the status/activity columns track running turns. */
-function AgentsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [agents, setAgents] = useState<
-		| {
-				id: string;
-				displayName: string;
-				kind: string;
-				parentId: string | null;
-				status: string;
-				activity: string | null;
-		  }[]
-		| null
-	>(null);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			if (document.visibilityState === "hidden") return;
-			void rpc
-				.request<{
-					agents: {
-						id: string;
-						displayName: string;
-						kind: string;
-						parentId: string | null;
-						status: string;
-						activity: string | null;
-					}[];
-				}>("agents.list", {})
-				.then(res => {
-					if (alive) setAgents(res?.agents ?? []);
-				})
-				.catch(() => {
-					if (alive) setAgents([]);
-				});
-		};
-		load();
-		// Visibility guard (parity with the other settings polls): never
-		// poll the daemon from a hidden window.
-		let id = setInterval(load, 2000);
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				load();
-				id = setInterval(load, 2000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			alive = false;
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
-	}, [rpc]);
-	const byId = new Map((agents ?? []).map(a => [a.id, a]));
-	const list = agents ?? [];
-	const mains = list.filter(a => a.kind === "main");
-	const subs = list.filter(a => a.kind !== "main");
-	const Card = (a: (typeof list)[number]): ReactNode => (
-		<div key={a.id} className="gui-agent-card">
-			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-1.5">
-					<span className="truncate text-[13px] font-medium">{a.displayName}</span>
-					<span className="gui-provider-chip">{a.kind}</span>
-				</div>
-				<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-					{a.id}
-					{a.parentId && byId.has(a.parentId) && ` · ${t("subagent of")} ${byId.get(a.parentId)?.displayName}`}
-				</div>
-			</div>
-			<span className={`gui-agent-status gui-agent-status--${a.status ?? "idle"}`}>{a.status}</span>
-			{a.activity && <div className="truncate text-[12px] text-[var(--color-text-muted)]">{a.activity}</div>}
-		</div>
-	);
+/** Settings → 交互: TUI interaction-tab parity (input/approvals/
+ *  notifications/speech/collab/magic-keywords/startup/power/agent/
+ *  language/git groups), schema driven. */
+function InteractionSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("agents")}</h2>
-			<p className="gui-settings-page-desc">{t("agents settings")}</p>
-			{agents === null ? (
-				<div className="text-[13px] text-[var(--color-text-faint)]">…</div>
-			) : agents.length === 0 ? (
-				<div className="gui-settings-row">{t("no running agents")}</div>
-			) : (
-				<>
-					{mains.length > 0 && (
-						<h3 className="gui-settings-group-h">
-							{t("main agents")} · {mains.length}
-						</h3>
-					)}
-					{mains.map(Card)}
-					{subs.length > 0 && (
-						<h3 className="gui-settings-group-h">
-							{t("subagents")} · {subs.length}
-						</h3>
-					)}
-					{subs.length === 0 && <div className="gui-settings-row">{t("no subagents running")}</div>}
-				</>
-			)}
+			<h2 className="gui-settings-page-title">{t("interaction")}</h2>
+			<SchemaTabSection rpc={rpc} tabs={["interaction"]} />
+		</>
+	);
+}
+
+/** Settings → 上下文: TUI context-tab parity (general/compaction/
+ *  TTSR/experimental groups), schema driven. */
+function ContextSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	return (
+		<>
+			<h2 className="gui-settings-page-title">{t("context")}</h2>
+			<SchemaTabSection rpc={rpc} tabs={["context"]} />
+		</>
+	);
+}
+
+/** Settings → Shell: TUI shell-tab parity (bash/eval groups), schema
+ *  driven. */
+function ShellSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	return (
+		<>
+			<h2 className="gui-settings-page-title">{t("shell")}</h2>
+			<SchemaTabSection rpc={rpc} tabs={["shell"]} />
+		</>
+	);
+}
+
+/** Settings → 工具: TUI tools-tab parity (available tools/todos/grep &
+ *  browser/computer/github/output-limits/execution/discovery/dev groups),
+ *  schema driven. */
+function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	return (
+		<>
+			<h2 className="gui-settings-page-title">{t("tools")}</h2>
+			<SchemaTabSection rpc={rpc} tabs={["tools"]} />
 		</>
 	);
 }
@@ -3702,7 +3947,7 @@ function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: string[]
 		return () => {
 			alive = false;
 		};
-	}, [rpc, tabs.join(",")]);
+	}, [rpc, tabs]);
 	const onChange = (key: string, value: unknown): void => {
 		if (!rpc) return;
 		// Optimistic flip; revert on failure.
@@ -3725,6 +3970,8 @@ function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: string[]
 function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [info, setInfo] = useState<{
 		version?: string;
+		musepiVersion?: string | null;
+		engineVersion?: string;
 		engine?: string;
 		dataRoot?: string;
 		configDir?: string;
@@ -3734,7 +3981,57 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [pickedRoot, setPickedRoot] = useState<string | null>(null);
 	const [rootBusy, setRootBusy] = useState(false);
 	const [rootMsg, setRootMsg] = useState<{ ok: boolean; text: string } | null>(null);
+	const [updateStatus, setUpdateStatus] = useState<string>(t("check for updates"));
+	const [updateChecking, setUpdateChecking] = useState(false);
+	const runUpdateCheck = async (): Promise<void> => {
+		const api = (window as unknown as { electronAPI?: { checkUpdates?(): Promise<unknown> } }).electronAPI;
+		if (!api?.checkUpdates) {
+			setUpdateStatus(t("updates only in the desktop app"));
+			return;
+		}
+		setUpdateChecking(true);
+		try {
+			const r = (await api.checkUpdates()) as {
+				enabled?: boolean;
+				newer?: boolean;
+				latest?: string;
+				current?: string;
+				url?: string;
+				error?: string;
+				reason?: string;
+			};
+			if (!r.enabled) setUpdateStatus(t("no update source configured"));
+			else if (r.error) setUpdateStatus(`⚠ ${r.error}`);
+			else if (r.newer) {
+				setUpdateStatus(`${t("new version")}: v${r.latest}`);
+				if (r.url) window.open(r.url, "_blank");
+			} else setUpdateStatus(`${t("up to date")} (v${r.current ?? "?"})`);
+		} finally {
+			setUpdateChecking(false);
+		}
+	};
 	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("omp-gui-dotmatrix") !== "0");
+	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
+	// Busy-state plain-Enter behavior (dsh parity): steer (TUI default) or
+	// queue; Cmd/Ctrl+Enter uses the opposite.
+	const [busyEnter, setBusyEnterState] = useState<"steer" | "queue">("steer");
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<Record<string, unknown> | null>("settings.get", { keys: ["busyEnter"] })
+			.then(v => {
+				const b = v?.busyEnter;
+				if (b === "queue" || b === "steer") setBusyEnterState(b);
+			})
+			.catch(() => {});
+	}, [rpc]);
+	const setBusyEnter = (next: "steer" | "queue"): void => {
+		setBusyEnterState(next);
+		void rpc
+			?.request("settings.set", { key: "busyEnter", value: next })
+			.then(() => window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key: "busyEnter" } })))
+			.catch(() => {});
+	};
 	const [dotMatrixText, setDotMatrixText] = useState(() => localStorage.getItem("omp-gui-dotmatrix-text") ?? "MusePi");
 	const [keepAwake, setKeepAwake] = useState(() => localStorage.getItem("omp-gui-keep-awake") === "1");
 	useEffect(() => {
@@ -3742,9 +4039,15 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		let alive = true;
 		const load = (): void => {
 			void rpc
-				.request<{ version?: string; engine?: string; dataRoot?: string; configDir?: string; runtime?: string }>(
-					"system.meta",
-				)
+				.request<{
+					version?: string;
+					musepiVersion?: string | null;
+					engineVersion?: string;
+					engine?: string;
+					dataRoot?: string;
+					configDir?: string;
+					runtime?: string;
+				}>("system.meta")
 				.then(res => {
 					if (alive) {
 						setInfo(res ?? null);
@@ -3773,6 +4076,45 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		<>
 			<h2 className="gui-settings-page-title">{t("general")}</h2>
 			<p className="gui-settings-page-desc">{t("general settings")}</p>
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("busy enter behavior")}</div>
+					<div className="gui-settings-row-desc">{t("busy enter behavior description")}</div>
+				</div>
+				<select
+					className="gui-input max-w-[200px]"
+					value={busyEnter}
+					onChange={e => setBusyEnter(e.target.value === "queue" ? "queue" : "steer")}
+					aria-label={t("busy enter behavior")}
+				>
+					<option value="queue">{t("busy enter queue")}</option>
+					<option value="steer">{t("busy enter steer")}</option>
+				</select>
+			</div>
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("agent avatar style")}</div>
+					<div className="gui-settings-row-desc">{t("agent avatar style description")}</div>
+				</div>
+				<div className="flex items-center gap-1.5">
+					{AVATAR_PRESETS.map(p => (
+						<button
+							key={p.id}
+							type="button"
+							className={`gui-avatar-opt${avatarId === p.id ? " gui-avatar-opt--active" : ""}`}
+							title={t(p.labelKey as TranslationKey)}
+							aria-pressed={avatarId === p.id}
+							onClick={() => {
+								setAvatarId(p.id);
+								localStorage.setItem("omp-gui-avatar", p.id);
+								window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+							}}
+						>
+							{p.render("working", 20)}
+						</button>
+					))}
+				</div>
+			</div>
 			<div className="gui-settings-row">
 				<div>
 					<div className="gui-settings-row-label">{t("dot matrix background")}</div>
@@ -3832,8 +4174,9 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						const next = !keepAwake;
 						setKeepAwake(next);
 						localStorage.setItem("omp-gui-keep-awake", next ? "1" : "0");
-						void (window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } })
-							.electronAPI?.setKeepAwake?.(next);
+						void (
+							window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
+						).electronAPI?.setKeepAwake?.(next);
 					}}
 					aria-label={t("keep computer awake")}
 				>
@@ -3851,14 +4194,18 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="gui-settings-row">
 						<div>
 							<div className="gui-settings-row-label">{t("version")}</div>
-							<div className="text-[13px] text-[var(--color-text-muted)]">{info.version}</div>
+							{/* MusePi brand version first; the daemon reports the OMP
+							 * engine version when it was spawned unbranded. */}
+							<div className="text-[13px] text-[var(--color-text-muted)]">
+								MusePi {info.musepiVersion ?? info.version}
+							</div>
 						</div>
 					</div>
-					{info.engine && (
+					{info.engineVersion && (
 						<div className="gui-settings-row">
 							<div>
 								<div className="gui-settings-row-label">{t("engine")}</div>
-								<div className="text-[13px] text-[var(--color-text-muted)]">{info.engine}</div>
+								<div className="text-[13px] text-[var(--color-text-muted)]">OMP {info.engineVersion}</div>
 							</div>
 						</div>
 					)}
@@ -3953,6 +4300,21 @@ function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							</div>
 						</div>
 					)}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("check for updates")}</div>
+							<div className="gui-settings-row-desc">{updateStatus}</div>
+						</div>
+						<button
+							type="button"
+							className="gui-btn"
+							disabled={updateChecking}
+							onClick={() => void runUpdateCheck()}
+						>
+							<Icon name="download" className="h-3.5 w-3.5" />
+							<span>{updateChecking ? t("checking…") : t("check")}</span>
+						</button>
+					</div>
 				</>
 			)}
 			{metaErr && (
@@ -4055,84 +4417,15 @@ function SkillsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	);
 }
 
-/** Settings → 智能体 → 子代理: live subagent list (agents.list, kind filter). */
+/** Settings → 任务与子智能体: TUI tasks-tab parity (modes, subagent
+ *  limits, isolation, commands & skills groups), schema driven — the
+ *  live subagent roster lives in the session right rail (AgentsPanel),
+ *  not in settings (dedupe 2026-08-11). */
 function SubagentsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [agents, setAgents] = useState<
-		| {
-				id: string;
-				displayName: string;
-				kind: string;
-				parentId: string | null;
-				status: string;
-				activity: string | null;
-		  }[]
-		| null
-	>(null);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			if (document.visibilityState === "hidden") return;
-			void rpc
-				.request<{
-					agents: {
-						id: string;
-						displayName: string;
-						kind: string;
-						parentId: string | null;
-						status: string;
-						activity: string | null;
-					}[];
-				}>("agents.list", {})
-				.then(res => {
-					if (alive) setAgents(res?.agents ?? []);
-				})
-				.catch(() => alive && setAgents([]));
-		};
-		load();
-		// Visibility guard (parity with the other settings polls): never
-		// poll the daemon from a hidden window.
-		let id = setInterval(load, 2000);
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				load();
-				id = setInterval(load, 2000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			alive = false;
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
-	}, [rpc]);
-	const subs = (agents ?? []).filter(a => a.kind !== "main");
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("sub agents")}</h2>
-			<p className="gui-settings-page-desc">{t("subagents settings")}</p>
-			{agents === null ? (
-				<div className="text-[13px] text-[var(--color-text-faint)]">…</div>
-			) : subs.length === 0 ? (
-				<div className="gui-settings-row">{t("no subagents running")}</div>
-			) : (
-				subs.map(a => (
-					<div key={a.id} className="gui-agent-card">
-						<div className="min-w-0 flex-1">
-							<div className="flex items-center gap-1.5">
-								<span className="truncate text-[13px] font-medium">{a.displayName}</span>
-								<span className="gui-provider-chip">{a.kind}</span>
-							</div>
-							<div className="truncate text-[12px] text-[var(--color-text-faint)]">{a.id}</div>
-						</div>
-						<span className={`gui-agent-status gui-agent-status--${a.status ?? "idle"}`}>{a.status}</span>
-						{a.activity && (
-							<div className="truncate text-[12px] text-[var(--color-text-muted)]">{a.activity}</div>
-						)}
-					</div>
-				))
-			)}
+			<h2 className="gui-settings-page-title">{t("tasks & subagents")}</h2>
+			<SchemaTabSection rpc={rpc} tabs={["tasks"]} />
 		</>
 	);
 }
@@ -4161,7 +4454,14 @@ function ModelSection({
 	providers: ProviderInfo[] | null;
 	apiProviders: ApiProviderInfo[];
 	custom: CustomProvider[];
-	loginState: { providerId: string; url?: string; message?: string; waitingInput?: boolean } | null;
+	loginState: {
+		providerId: string;
+		url?: string;
+		launchUrl?: string;
+		instructions?: string;
+		message?: string;
+		waitingInput?: boolean;
+	} | null;
 	busy: boolean;
 	onLogin(providerId: string): void;
 	onLogout(providerId: string): void;
@@ -4175,9 +4475,9 @@ function ModelSection({
 		name: "",
 		baseUrl: "",
 		apiKey: "",
-		api: "openai-completions",
-		modelId: "",
+		api: "openai-completions",		modelId: "",
 		modelName: "",
+		compactionModel: "",
 	});
 	// Section collapse (bitfun parity): show the first few cards, expand on
 	// demand — 70 login providers + the full catalog is too much for a grid.
@@ -4186,6 +4486,7 @@ function ModelSection({
 	const [formBusy, setFormBusy] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 	const [inputValue, setInputValue] = useState("");
+	const [copied, setCopied] = useState(false);
 	// Current-session thinking effort (TUI /model parity): seeded once from
 	// the live session (session.thinkingInfo), then tracks what was last
 	// applied here via session.setThinkingLevel.
@@ -4207,25 +4508,70 @@ function ModelSection({
 	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
 	// Stored credentials per provider (multi-account logout dropdown).
 	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
+	// Side-channel model override (settings.sideChannelModel): "" = follow
+	// the session model (TUI parity for /btw /omfg recap, ephemeral ask).
+	const [sideChannelModel, setSideChannelModel] = useState<string>("");
+	// Catalog for the side-channel/compaction pickers (models.list).
+	const [catalogModels, setCatalogModels] = useState<{ id: string; name?: string }[] | null>(null);
 	// Provider id whose credential menu is open (single-open dropdown).
 	const [credsMenu, setCredsMenu] = useState<string | null>(null);
+	// Provider id whose inline actions menu (login / import API key) is open.
+	const [actionsMenu, setActionsMenu] = useState<string | null>(null);
+	// Anchor elements for the portal-rendered card menus (credential list /
+	// actions). Keyed by `p.id` (creds) and `actions-${p.id}` (actions) so the
+	// fixed-position popups can pin to their trigger button.
+	const cardMenuAnchors = useRef(new Map<string, HTMLElement>());
+	// Close the provider card menus on outside click / Escape. The menus are
+	// portal-rendered into the root (fixed position) and carry
+	// data-header-menu so clicks inside them are ignored here.
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<{ id: string; name?: string }[]>("models.list", {})
+			.then(list => setCatalogModels(list ?? []))
+			.catch(() => {});
+		void rpc
+			.request<Record<string, unknown> | null>("settings.get", { keys: ["modelRoles", "cycleOrder", "sideChannelModel"] })
+			.then(v => setSideChannelModel((v?.sideChannelModel as string | undefined) ?? ""))
+			.catch(() => {});
+	}, [rpc]);
+
+	useEffect(() => {
+		if (!credsMenu && !actionsMenu) return;
+		const onDown = (e: MouseEvent | KeyboardEvent): void => {
+			if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
+			const target = e.target as Node | null;
+			if (target instanceof Node && (target as Element | null)?.closest?.("[data-header-menu]")) return;
+			setCredsMenu(null);
+			setActionsMenu(null);
+		};
+		document.addEventListener("mousedown", onDown);
+		document.addEventListener("keydown", onDown);
+		return () => {
+			document.removeEventListener("mousedown", onDown);
+			document.removeEventListener("keydown", onDown);
+		};
+	}, [credsMenu, actionsMenu]);
 	// Provider awaiting an imported API key (/setup parity modal).
 	const [apiKeyTarget, setApiKeyTarget] = useState<string | null>(null);
 	const [apiKeyValue, setApiKeyValue] = useState("");
 	// Unified provider list: subscription (OAuth) + API-key providers merged
 	// by id — subscription wins login state, API model tags merge in.
 	const mergedProviders = useMemo(() => {
-		const map = new Map<string, {
-			id: string;
-			name: string;
-			loggedIn: boolean;
-			configured: boolean;
-			models: string[];
-			modelCount: number;
-			available: boolean;
-			canLogin: boolean;
-			canImport: boolean;
-		}>();
+		const map = new Map<
+			string,
+			{
+				id: string;
+				name: string;
+				loggedIn: boolean;
+				configured: boolean;
+				models: string[];
+				modelCount: number;
+				available: boolean;
+				canLogin: boolean;
+				canImport: boolean;
+			}
+		>();
 		for (const p of providers ?? []) {
 			map.set(p.id, {
 				id: p.id,
@@ -4249,7 +4595,10 @@ function ModelSection({
 			} else {
 				map.set(p.id, {
 					id: p.id,
-					name: p.name,
+					// API-key providers from the daemon may ship an EMPTY name —
+					// fall back to the id so the card header never renders blank
+					// (user: bottom cards showed no provider name at all).
+					name: p.name || p.id,
 					loggedIn: false,
 					configured: p.configured,
 					models: p.models,
@@ -4264,8 +4613,7 @@ function ModelSection({
 		// providers stay visible without scrolling.
 		return [...map.values()].sort(
 			(a, b) =>
-				Number(b.loggedIn || b.configured) - Number(a.loggedIn || a.configured) ||
-				a.name.localeCompare(b.name),
+				Number(b.loggedIn || b.configured) - Number(a.loggedIn || a.configured) || a.name.localeCompare(b.name),
 		);
 	}, [providers, apiProviders]);
 
@@ -4314,10 +4662,16 @@ function ModelSection({
 					baseUrl: form.baseUrl,
 					...(form.apiKey ? { apiKey: form.apiKey } : {}),
 					...(form.api !== "openai" ? { api: form.api } : {}),
-					models: [{ id: form.modelId, ...(form.modelName ? { name: form.modelName } : {}) }],
+					models: [
+						{
+							id: form.modelId,
+							...(form.modelName ? { name: form.modelName } : {}),
+							...(form.compactionModel.trim() ? { compactionModel: form.compactionModel.trim() } : {}),
+						},
+					],
 				},
 			});
-			setForm({ name: "", baseUrl: "", apiKey: "", api: "openai-completions", modelId: "", modelName: "" });
+			setForm({ name: "", baseUrl: "", apiKey: "", api: "openai-completions", modelId: "", modelName: "", compactionModel: "" });
 			onChanged();
 		} catch (err) {
 			setFormError(err instanceof Error ? err.message : String(err));
@@ -4344,6 +4698,7 @@ function ModelSection({
 			const info = await rpc.request<{
 				ceiling?: string | null;
 				level?: string | null;
+				auto?: boolean;
 				efforts?: string[];
 				model?: { id: string; name: string; provider: string } | null;
 			}>("session.thinkingInfo", { sessionId });
@@ -4352,7 +4707,9 @@ function ModelSection({
 			setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
 			if (!liveThinkingSeeded.current) {
 				liveThinkingSeeded.current = true;
-				setLiveThinking(info?.level ?? null);
+				// Auto mode reads as the user's selector ("auto"), not the
+				// provisional level it resolved to (TUI parity).
+				setLiveThinking(info?.auto ? "auto" : (info?.level ?? null));
 			}
 		} catch {
 			// session not live — the current-session card just doesn't show
@@ -4479,6 +4836,7 @@ function ModelSection({
 
 	const modelTabs = [
 		{ id: "roles", label: t("role models") },
+		{ id: "behavior", label: t("model behavior") },
 		{ id: "providers", label: t("providers") },
 		{ id: "custom", label: t("custom providers") },
 		{ id: "add", label: t("add custom provider") },
@@ -4531,17 +4889,6 @@ function ModelSection({
 							const next = { ...roleModels, [role]: joinRoleValue(model, nextLevel) };
 							setRoleModels(next);
 							void rpc.request("settings.set", { key: "modelRoles", value: next }).catch(() => {});
-							if (role === "default") {
-								// The DEFAULT role IS the new-session thinking default —
-								// keep the welcome-composer preselect in sync with the
-								// role assignment (same pattern as the model sync).
-								try {
-									if (nextLevel === "inherit") localStorage.removeItem("omp-gui-default-thinking");
-									else localStorage.setItem("omp-gui-default-thinking", nextLevel);
-								} catch {
-									// storage unavailable
-								}
-							}
 						}}
 					>
 						<option value="inherit">{t("inherit")}</option>
@@ -4707,7 +5054,7 @@ function ModelSection({
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("model")}</h2>
+			<h2 className="gui-settings-page-title">{t("model settings")}</h2>
 			<p className="gui-settings-page-desc">{t("model settings description")}</p>
 
 			<div className="gui-model-pane">
@@ -4727,6 +5074,7 @@ function ModelSection({
 				 * (different content heights — no more abrupt jump). */}
 				<HeightMorph morphKey={activeTab} className="gui-model-pane-body">
 					{activeTab === "roles" && rpc && (
+						<>
 						<div className="gui-settings-section">
 							<div className="gui-settings-section-title">{t("role models")}</div>
 							<div className="gui-settings-section-desc">
@@ -4824,6 +5172,53 @@ function ModelSection({
 								</>
 							)}
 						</div>
+					</>
+					)}
+
+					{activeTab === "behavior" && rpc && (
+						<>
+						<div className="gui-settings-section">
+							<div className="gui-settings-section-title">{t("model behavior")}</div>
+							<div className="gui-settings-section-desc">
+								{t("model behavior description")}
+							</div>
+						</div>
+						<div className="gui-schema-card">
+							{/* Model behaviour (thinking/sampling/prompt/retry & fallback/
+							 * advisor/prewalk/vision) — TUI settings model-tab parity.
+							 * Own tab so role assignment stays focused. */}
+							<SchemaTabSection rpc={rpc} tabs={["model"]} />
+						</div>
+						<div className="gui-settings-section mt-4">
+							<div className="gui-settings-section-title">{t("side channel model")}</div>
+							<div className="gui-settings-section-desc">{t("side channel model description")}</div>
+							<div className="gui-settings-row">
+								<div>
+									<div className="gui-settings-row-label">{t("side channel model")}</div>
+									<div className="gui-settings-row-desc">{t("side channel model label desc")}</div>
+								</div>
+								<select
+									className="gui-input max-w-[260px]"
+									value={sideChannelModel}
+									onChange={e => {
+										const next = e.target.value;
+										setSideChannelModel(next);
+										void rpc
+											.request("settings.set", { key: "sideChannelModel", value: next })
+											.catch(() => {});
+									}}
+									aria-label={t("side channel model")}
+								>
+									<option value="">{t("follow session model")}</option>
+									{(catalogModels ?? []).map(m => (
+										<option key={m.id} value={m.id}>
+											{m.name ?? m.id}
+										</option>
+									))}
+								</select>
+							</div>
+						</div>
+						</>
 					)}
 
 					{activeTab === "providers" && (
@@ -4839,10 +5234,21 @@ function ModelSection({
 											<button
 												type="button"
 												className="gui-btn gui-btn-primary"
-												onClick={() => void openExternalUrl(loginState.url!)}
+												onClick={() => void openExternalUrl(loginState.launchUrl ?? loginState.url!)}
 											>
 												<Icon name="external-link" className="h-3.5 w-3.5" />
 												{t("open login page")}
+											</button>
+											<button
+												type="button"
+												className="gui-link"
+												onClick={() => {
+													void navigator.clipboard.writeText(loginState.url ?? "").catch(() => {});
+													setCopied(true);
+													window.setTimeout(() => setCopied(false), 1500);
+												}}
+											>
+												{copied ? t("link copied") : t("copy link")}
 											</button>
 											{!loginState.waitingInput && !busy && (
 												<button type="button" className="gui-link" onClick={() => void onCancelLogin()}>
@@ -4851,6 +5257,7 @@ function ModelSection({
 											)}
 										</div>
 									)}
+									{loginState.instructions && <div className="gui-github-flow-hint">{loginState.instructions}</div>}
 									{loginState.message && <div className="gui-github-flow-hint">{loginState.message}</div>}
 									{loginState.waitingInput ? (
 										<div className="mt-2 flex items-center gap-2">
@@ -4927,6 +5334,12 @@ function ModelSection({
 																		active ? " gui-provider-card-status--ok" : ""
 																	}`}
 																>
+																	<span
+																		className={`gui-provider-status-dot${
+																			active ? " gui-provider-status-dot--on" : ""
+																		}`}
+																		aria-hidden="true"
+																	/>
 																	{p.loggedIn
 																		? creds.length > 1
 																			? t("logged in · {count}", { count: String(creds.length) })
@@ -4943,6 +5356,10 @@ function ModelSection({
 																	<button
 																		type="button"
 																		className="gui-btn gui-btn-stop"
+																		ref={el => {
+																			if (el) cardMenuAnchors.current.set(p.id, el);
+																			else cardMenuAnchors.current.delete(p.id);
+																		}}
 																		aria-expanded={credsMenu === p.id}
 																		onClick={() =>
 																			setCredsMenu(menu => (menu === p.id ? null : p.id))
@@ -4951,7 +5368,16 @@ function ModelSection({
 																		{t("logout")}
 																		<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 																	</button>
-																	<Pop open={credsMenu === p.id} className="gui-creds-menu">
+																	<Pop
+																		open={credsMenu === p.id}
+																		className="gui-creds-menu"
+																		anchor={cardMenuAnchors.current.get(p.id) ?? null}
+																		portal
+																		align="right"
+																		onOpenChange={open => {
+																			if (!open && credsMenu === p.id) setCredsMenu(null);
+																		}}
+																	>
 																		<div className="gui-creds-menu-label">{t("accounts")}</div>
 																		{creds.map(c => (
 																			<div key={c.id} className="gui-creds-row">
@@ -5019,30 +5445,62 @@ function ModelSection({
 																	</Pop>
 																</div>
 															) : (
-																<div className="flex shrink-0 items-center gap-2">
-																	{p.canLogin && (
-																		<button
-																			type="button"
-																			className="gui-btn gui-btn-approve shrink-0"
-																			disabled={!p.available || busy}
-																			onClick={() => void onLogin(p.id)}
-																		>
-																			{t("login")}
-																		</button>
-																	)}
-																	{p.canImport && (
-																		<button
-																			type="button"
-																			className="gui-btn shrink-0"
-																			onClick={() => {
-																				setApiKeyTarget(p.id);
-																				setApiKeyValue("");
-																			}}
-																		>
-																			<Icon name="key" className="h-3.5 w-3.5" />
-																			<span>{t("import api key")}</span>
-																		</button>
-																	)}
+																<div className="relative shrink-0">
+																	<button
+																		type="button"
+																		className="gui-btn gui-btn--icon"
+																		ref={el => {
+																			if (el) cardMenuAnchors.current.set(`actions-${p.id}`, el);
+																			else cardMenuAnchors.current.delete(`actions-${p.id}`);
+																		}}
+																		aria-expanded={actionsMenu === p.id}
+																		aria-label={t("provider actions")}
+																		title={t("provider actions")}
+																		onClick={() =>
+																			setActionsMenu(menu => (menu === p.id ? null : p.id))
+																		}
+																	>
+																		<Icon name="more" className="h-3.5 w-3.5" />
+																	</button>
+																	<Pop
+																		open={actionsMenu === p.id}
+																		className="gui-creds-menu"
+																		anchor={cardMenuAnchors.current.get(`actions-${p.id}`) ?? null}
+																		portal
+																		align="right"
+																		onOpenChange={open => {
+																			if (!open && actionsMenu === p.id) setActionsMenu(null);
+																		}}
+																	>
+																		{p.canLogin && (
+																			<button
+																				type="button"
+																				className="gui-view-opt"
+																				disabled={!p.available || busy}
+																				onClick={() => {
+																					setActionsMenu(null);
+																					void onLogin(p.id);
+																				}}
+																			>
+																				<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+																				<span className="min-w-0 flex-1">{t("login")}</span>
+																			</button>
+																		)}
+																		{p.canImport && (
+																			<button
+																				type="button"
+																				className="gui-view-opt"
+																				onClick={() => {
+																					setActionsMenu(null);
+																					setApiKeyTarget(p.id);
+																					setApiKeyValue("");
+																				}}
+																			>
+																				<Icon name="key" className="h-3.5 w-3.5" />
+																				<span className="min-w-0 flex-1">{t("import api key")}</span>
+																			</button>
+																		)}
+																	</Pop>
 																</div>
 															)}
 														</div>
@@ -5084,20 +5542,15 @@ function ModelSection({
 									</>
 								)}
 							</div>
+							{/* Provider behaviour (services, tiny-model, protocol,
+							 * timeouts, privacy) — TUI providers-tab parity. Merged
+							 * here (previously a duplicated sidebar 供应商 section /
+							 * page-bottom flat block) so the providers tab is the
+							 * single home for everything provider-side. */}
+							<div className="gui-schema-card">
+								<SchemaTabSection rpc={rpc} tabs={["providers"]} />
+							</div>
 
-							{/* 自定义配置 dashed card → add-tab (bitfun custom-option parity). */}
-							<button type="button" className="gui-provider-custom" onClick={() => setActiveTab("add")}>
-								<Icon name="settings-3" className="h-4 w-4 shrink-0" />
-								<span className="min-w-0 flex-1 text-start">
-									<span className="block text-[13px] font-semibold text-[var(--color-text)]">
-										{t("custom configuration")}
-									</span>
-									<span className="block text-[12px] text-[var(--color-text-faint)]">
-										{t("custom configuration description")}
-									</span>
-								</span>
-								<Icon name="arrow-right" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-							</button>
 						</>
 					)}
 
@@ -5146,6 +5599,7 @@ function ModelSection({
 					{activeTab === "custom" && (
 						<div className="gui-settings-section">
 							<div className="gui-settings-section-title">{t("custom providers")}</div>
+							<div className="gui-settings-section-desc">{t("custom providers hint")}</div>
 							{custom.length === 0 ? (
 								<div className="text-[13px] text-[var(--color-text-faint)]">{t("no custom providers")}</div>
 							) : (
@@ -5163,6 +5617,13 @@ function ModelSection({
 									</div>
 								))
 							)}
+							{/* Explicit entry to the add-form tab — the only custom-config
+							 * entry point now (the old dashed card inside the providers
+							 * tab duplicated this tab). */}
+							<button type="button" className="gui-connect-add" onClick={() => setActiveTab("add")}>
+								<Icon name="add-circle" className="h-4 w-4" />
+								<span>{t("add custom provider")}</span>
+							</button>
 						</div>
 					)}
 
@@ -5203,6 +5664,12 @@ function ModelSection({
 										onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
 									/>
 								</div>
+								<input
+									className="gui-input"
+									placeholder={t("compaction model id (optional)")}
+									value={form.compactionModel}
+									onChange={e => setForm(v => ({ ...v, compactionModel: e.target.value }))}
+								/>
 								<select
 									className="gui-input"
 									value={form.api}
@@ -5463,7 +5930,14 @@ interface UsageDashboard {
  * numbers render natively in the settings surface. */
 function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [stats, setStats] = useState<UsageDashboard | null>(null);
+	const [heatSeries, setHeatSeries] = useState<UsageDashboard["timeSeries"]>([]);
 	const [range, setRange] = useState<"7d" | "30d">("7d");
+	// Blur-morphs the trend chart on range switch (new/removed bars would
+	// otherwise pop in abruptly). Cleared on animation end.
+	const [trendMorph, setTrendMorph] = useState(false);
+	useEffect(() => {
+		setTrendMorph(true);
+	}, []);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const load = useCallback(
@@ -5473,7 +5947,14 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			setError(null);
 			try {
 				if (doSync) await rpc.request("stats.sync");
-				setStats(await rpc.request<UsageDashboard>("stats.dashboard", { range: rng }));
+				const [main, yearly] = await Promise.all([
+					rpc.request<UsageDashboard>("stats.dashboard", { range: rng }),
+					// Yearly view for the contribution-graph heatmap — the range
+					// toggle only refocuses which days are highlighted.
+					rpc.request<UsageDashboard>("stats.dashboard", { range: "1y" }),
+				]);
+				setStats(main);
+				setHeatSeries(yearly.timeSeries ?? []);
 			} catch (err) {
 				setError(err instanceof Error ? err.message : String(err));
 				setStats(null);
@@ -5491,7 +5972,10 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const modelSeries = stats?.modelSeries ?? [];
 	// ── ZCode-parity summary cards (user-facing metrics) ──────────────────
 	const tokensTotal = overall
-		? overall.totalInputTokens + overall.totalOutputTokens + overall.totalCacheReadTokens + overall.totalCacheWriteTokens
+		? overall.totalInputTokens +
+			overall.totalOutputTokens +
+			overall.totalCacheReadTokens +
+			overall.totalCacheWriteTokens
 		: 0;
 	const msgTotal = series.reduce((a, p) => a + p.requests, 0);
 	const activeDays = series.filter(p => p.requests > 0).length;
@@ -5504,26 +5988,101 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const topModel = byRequests[0];
 	const topShare =
 		topModel && overall?.totalRequests ? Math.round((topModel.totalRequests / overall.totalRequests) * 100) : 0;
-	// ── Heatmap (per-day buckets, depth = tokens) ────────────────────────
-	const heatMax = Math.max(1, ...series.map(p => p.tokens));
+	// ── Shared calendar window ──────────────────────────────────────────
+	// Fixed 7/30 calendar days (zero-value days kept) so the heatmap grid
+	// and trend bars follow real dates. `series`/`modelSeries` are day
+	// buckets that only contain days with activity; they are mapped onto
+	// the calendar window rather than compressed.
+	const DAY_MS = 86400000;
+	const rangeDays = range === "30d" ? 30 : 7;
+	const keyOf = (ts: number): string => new Date(ts).toDateString();
+	const dayIndex = new Map<string, (typeof series)[number]>();
+	for (const p of series) {
+		const k = keyOf(p.timestamp);
+		if (!dayIndex.has(k)) dayIndex.set(k, p);
+	}
+	const todayStart = (() => {
+		const d = new Date();
+		d.setHours(0, 0, 0, 0);
+		return d.getTime();
+	})();
+	const windowStart = todayStart - (rangeDays - 1) * DAY_MS;
+	const windowDays: number[] = Array.from({ length: rangeDays }, (_, i) => windowStart + i * DAY_MS);
+	const inWindow = (ts: number): boolean => ts >= windowStart && ts <= todayStart;
+	// ── Heatmap: full-year contribution graph (GitHub parity) ───────────
+	// One cell per calendar day over the last 365 days; columns are
+	// calendar weeks (Mon..Sun, Monday top), today bottom-right. The
+	// 7d/30d range toggle does NOT resize the graph — it refocuses which
+	// days are highlighted (full color) versus dimmed history, so the
+	// switch reads as a color morph over a stable grid.
+	const heatMax = Math.max(1, ...heatSeries.map(p => p.tokens));
+	const heatIndex = new Map<string, (typeof heatSeries)[number]>();
+	for (const p of heatSeries) {
+		const k = keyOf(p.timestamp);
+		if (!heatIndex.has(k)) heatIndex.set(k, p);
+	}
+	const yearStart = todayStart - 364 * DAY_MS;
+	const gridStart = yearStart - ((new Date(yearStart).getDay() + 6) % 7) * DAY_MS; // Monday of the year's first week
+	const totalSlots = Math.floor((todayStart - gridStart) / DAY_MS) + 1; // ≤ 371 → ≤ 53 columns
+	const heatCols = Math.ceil(totalSlots / 7);
+	const heatGrid: ((typeof heatSeries)[number] | null | undefined)[][] = Array.from({ length: heatCols }, () =>
+		Array(7).fill(undefined),
+	);
+	for (let i = 0; i < totalSlots; i++) {
+		const ts = gridStart + i * DAY_MS;
+		heatGrid[Math.floor(i / 7)][i % 7] = heatIndex.get(keyOf(ts)) ?? null;
+	}
+	const heatRowLabels = ["一", "三", "五"];
 	const fmtDay = (ts: number): string =>
 		new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 	// ── Per-model daily token trend (stacked bars) ───────────────────────
 	const trendModels: string[] = [];
 	for (const p of modelSeries) if (!trendModels.includes(p.model)) trendModels.push(p.model);
 	const MODEL_COLORS = ["#4c8dff", "#34b97c", "#9b7bff", "#f5a742", "#e0688a", "#3ec6c8", "#8a9db5"];
-	const byDay = new Map<number, Map<string, number>>();
+	const byDay = new Map<string, Map<string, number>>();
 	for (const p of modelSeries) {
-		let day = byDay.get(p.timestamp);
+		const k = keyOf(p.timestamp);
+		let day = byDay.get(k);
 		if (!day) {
 			day = new Map();
-			byDay.set(p.timestamp, day);
+			byDay.set(k, day);
 		}
 		day.set(p.model, (day.get(p.model) ?? 0) + p.tokens);
 	}
-	const days = [...byDay.keys()].sort((a, b) => a - b);
-	const dayTotal = (d: number): number => [...(byDay.get(d)?.values() ?? [])].reduce((a, b) => a + b, 0);
+	const days = windowDays;
+	const dayTotal = (d: number): number => [...(byDay.get(keyOf(d))?.values() ?? [])].reduce((a, b) => a + b, 0);
 	const trendMax = Math.max(1, ...days.map(dayTotal));
+	// ── Trend-bar FLIP morph ─────────────────────────────────────────────
+	// 7d↔30d switching changes bar count/width/height. Bars are keyed by
+	// day and reused across ranges, so after every render we capture their
+	// rects; when a range switch changes geometry, bars FLIP from the old
+	// rect to the new one via a transform morph (not a cross-fade).
+	const barRefs = useRef(new Map<number, HTMLDivElement>());
+	const prevBarRects = useRef(new Map<number, { x: number; y: number; w: number; h: number }>());
+	useLayoutEffect(() => {
+		const next = new Map<number, { x: number; y: number; w: number; h: number }>();
+		for (const [ts, el] of barRefs.current) {
+			const r = el.getBoundingClientRect();
+			const prev = prevBarRects.current.get(ts);
+			if (prev) {
+				const dx = prev.x - r.x;
+				const dy = prev.y - r.y;
+				const sx = r.width > 0 ? prev.w / r.width : 1;
+				const sy = r.height > 0 ? prev.h / r.height : 1;
+				if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || Math.abs(sx - 1) > 0.02 || Math.abs(sy - 1) > 0.02) {
+					el.style.transformOrigin = "bottom left";
+					el.style.transform = `translate(${dx}px, ${dy}px) scaleX(${sx}) scaleY(${sy})`;
+					el.style.transition = "none";
+					requestAnimationFrame(() => {
+						el.style.transition = "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)";
+						el.style.transform = "";
+					});
+				}
+			}
+			next.set(ts, { x: r.x, y: r.y, w: r.width, h: r.height });
+		}
+		prevBarRects.current = next;
+	});
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("usage statistics")}</h2>
@@ -5535,8 +6094,13 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							key={r}
 							type="button"
 							className={`rounded-md px-3 py-1 text-[12.5px] transition-colors duration-150${
-								range === r ? " bg-[var(--color-surface-raised)] font-semibold text-[var(--color-text)]" : " text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+								range === r ? " bg-[var(--color-accent)] shadow-sm" : " hover:bg-[var(--color-surface-raised)]"
 							}`}
+							style={
+								range === r
+									? { color: "var(--color-accent-fg)", fontWeight: 600 }
+									: { color: "var(--color-text-muted)" }
+							}
 							onClick={() => {
 								tapFeedback();
 								setRange(r);
@@ -5548,15 +6112,23 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 				<button
 					type="button"
-					className="gui-btn"
+					className="gui-btn min-w-[92px] justify-center"
 					disabled={busy || !rpc}
 					onClick={() => {
 						tapFeedback();
 						void load(true, range);
 					}}
 				>
-					<Icon name="refresh" className="h-3.5 w-3.5" />
-					<span>{busy ? t("syncing…") : t("refresh")}</span>
+					{/* MorphIcon springs refresh-cw ↔ loader-circle on state change;
+					 * busy spins the loader. Label stays constant so the button
+					 * never changes size. */}
+					<MorphIcon
+						icon={busy ? LoaderCircleIconData : RefreshCwIconData}
+						size={14}
+						spring="snappy"
+						className={busy ? "gui-spin" : undefined}
+					/>
+					<span>{t("refresh")}</span>
 				</button>
 			</div>
 			{error ? (
@@ -5579,18 +6151,20 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								sub: topModel ? `${t("usage share")} ${topShare}%` : null,
 							},
 						].map(card => (
-							<div key={card.label} className="gui-agent-card">
-								<div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-[var(--color-text-faint)]">
-									<Icon name={card.icon as never} className="h-3 w-3" />
-									<span className="truncate">{card.label}</span>
-								</div>
+							<div key={card.label} className="gui-stats-card">
 								<div
-									className="mt-1 truncate font-mono text-[15px] font-medium"
+									className="truncate font-mono text-[17px] font-semibold leading-none"
 									title={typeof card.value === "string" && card.value.length > 18 ? card.value : undefined}
 								>
 									{card.value}
 								</div>
-								{card.sub && <div className="text-[11px] text-[var(--color-text-muted)]">{card.sub}</div>}
+								<div className="flex items-center justify-between gap-1.5 text-[11px] text-[var(--color-text-faint)]">
+									<span className="flex min-w-0 items-center gap-1.5">
+										<Icon name={card.icon as never} className="h-3 w-3 shrink-0" />
+										<span className="truncate">{card.label}</span>
+									</span>
+									{card.sub && <span className="shrink-0 text-[var(--color-text-muted)]">{card.sub}</span>}
+								</div>
 							</div>
 						))}
 					</div>
@@ -5605,80 +6179,144 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 										<span
 											key={a}
 											className="h-2.5 w-2.5 rounded-[3px]"
-											style={{ background: `color-mix(in oklab, var(--color-accent) ${a * 100}%, transparent)` }}
+											style={{
+												background: `color-mix(in oklab, var(--color-accent) ${a * 100}%, transparent)`,
+											}}
 										/>
 									))}
 								</span>
 								<span>{t("more activity")}</span>
 							</div>
 						</div>
-						<div className="mt-2 grid grid-cols-7 gap-[3px]">
-							{series.map(p => {
-								const a = p.tokens / heatMax;
-								return (
-									<div
-										key={p.timestamp}
-										title={`${fmtDay(p.timestamp)}: ${fmtCompact(p.tokens)} Tokens · ${p.requests} 轮`}
-										className="h-4 w-4 rounded-[4px] transition-transform duration-100 hover:scale-110"
-										style={{
-											background:
-												p.requests > 0
-													? `color-mix(in oklab, var(--color-accent) ${Math.max(12, a * 100)}%, transparent)`
-													: "color-mix(in oklab, var(--color-text) 6%, transparent)",
-										}}
-									/>
-								);
-							})}
+						<div className="mt-2">
+							{/* Month labels: shown when a column's data first rolls into a
+							 * new month (GitHub contribution-graph style). */}
+							<div className="flex gap-[2px] pl-[13px]">
+								{heatGrid.map((_col, ci) => {
+									// GitHub rule: the column containing the 1st of a month
+									// shows that month — independent of data, so all 12
+									// months label the year view.
+									const firstOfMonth = Array.from(
+										{ length: 7 },
+										(_, r) => gridStart + (ci * 7 + r) * DAY_MS,
+									).find(ts => new Date(ts).getDate() === 1);
+									const label = firstOfMonth ? `${new Date(firstOfMonth).getMonth() + 1}月` : "";
+									return (
+										<div
+											key={ci}
+											className="w-[11px] whitespace-nowrap text-center text-[8.5px] leading-[11px] text-[var(--color-text-faint)]"
+										>
+											{label}
+										</div>
+									);
+								})}
+							</div>
+							<div className="mt-[2px] flex gap-[2px]">
+								{/* Weekday row labels: Mon / Wed / Fri (GitHub parity). */}
+								<div
+									className="grid pr-[4px] text-[8.5px] leading-none text-[var(--color-text-faint)]"
+									style={{ gridTemplateRows: "repeat(7, 11px)", gap: "2px" }}
+								>
+									<span className="flex items-center">{heatRowLabels[0]}</span>
+									<span />
+									<span className="flex items-center">{heatRowLabels[1]}</span>
+									<span />
+									<span className="flex items-center">{heatRowLabels[2]}</span>
+								</div>
+								{heatGrid.map((col, ci) => (
+									<div key={ci} className="flex flex-col gap-[2px]">
+										{col.map((d, ri) =>
+											d === undefined ? (
+												// Future day (beyond today) — no cell at all.
+												<div key={ri} className="h-[11px] w-[11px]" />
+											) : (
+												<div
+													key={ri}
+													title={
+														d
+															? `${fmtDay(d.timestamp)}: ${fmtCompact(d.tokens)} Tokens · ${d.requests} 轮`
+															: undefined
+													}
+													className="h-[11px] w-[11px] rounded-[2px] hover:scale-110"
+													style={{
+														background: d
+															? d.requests > 0
+																? `color-mix(in oklab, var(--color-accent) ${Math.max(12, (d.tokens / heatMax) * 100)}%, transparent)`
+																: "color-mix(in oklab, var(--color-text) 6%, transparent)"
+															: "color-mix(in oklab, var(--color-text) 3%, transparent)",
+														// Selected range (last 7/30 days) stays full color; older
+														// history dims — the 7d↔30d switch morphs which days are lit.
+														opacity: d && !inWindow(d.timestamp) ? 0.35 : 1,
+														transition: "background 200ms ease, opacity 200ms ease, transform 100ms ease",
+													}}
+												/>
+											),
+										)}
+									</div>
+								))}
+							</div>
 						</div>
 					</div>
 					{/* Daily token trend, stacked per model (ZCode parity) */}
 					{days.length > 0 && (
 						<div className="gui-settings-section">
 							<div className="gui-settings-section-title">{t("daily token trend")}</div>
-							<div className="flex h-24 items-end gap-[3px] pt-2">
-								{days.map(d => (
-									<div
-										key={d}
-										title={`${fmtDay(d)}: ${fmtCompact(dayTotal(d))} Tokens`}
-										className="flex min-w-[3px] flex-1 flex-col justify-end gap-px overflow-hidden rounded-t-[2px]"
-										style={{ height: `${Math.max(4, (dayTotal(d) / trendMax) * 100)}%` }}
-									>
-										{trendModels.map((m, i) => {
-											const v = byDay.get(d)?.get(m) ?? 0;
-											if (!v) return null;
-											return (
-												<div
-													key={m}
-													style={{
-														height: `${(v / dayTotal(d)) * 100}%`,
-														background: MODEL_COLORS[i % MODEL_COLORS.length],
-													}}
-												/>
-											);
-										})}
-									</div>
-								))}
-							</div>
-							<div className="mt-1 flex gap-[3px]">
-								{days.map((d, i) => {
-									// Label roughly every ceil(n/7)th day (7-8 ticks
-									// regardless of range) plus the last day.
-									const step = Math.max(1, Math.ceil(days.length / 7));
-									const show = i % step === 0 || i === days.length - 1;
-									return (
+							<div
+								className={trendMorph ? "gui-blur-morph" : undefined}
+								onAnimationEnd={() => setTrendMorph(false)}
+							>
+								<div className="flex h-24 items-end gap-[3px] pt-2">
+									{days.map(d => (
 										<div
 											key={d}
-											className="flex-1 overflow-hidden text-center text-[10px] leading-none text-[var(--color-text-muted)]"
+											ref={el => {
+												if (el) barRefs.current.set(d, el);
+												else barRefs.current.delete(d);
+											}}
+											title={`${fmtDay(d)}: ${fmtCompact(dayTotal(d))} Tokens`}
+											className="flex min-w-[3px] flex-1 flex-col justify-end gap-px overflow-hidden rounded-t-[2px]"
+											style={{ height: `${Math.max(4, (dayTotal(d) / trendMax) * 100)}%` }}
 										>
-											{show ? fmtDay(d) : ""}
+											{trendModels.map((m, i) => {
+												const v = byDay.get(keyOf(d))?.get(m) ?? 0;
+												if (!v) return null;
+												return (
+													<div
+														key={m}
+														style={{
+															height: `${(v / dayTotal(d)) * 100}%`,
+															background: MODEL_COLORS[i % MODEL_COLORS.length],
+														}}
+													/>
+												);
+											})}
 										</div>
-									);
-								})}
+									))}
+								</div>
+								<div className="mt-1 flex gap-[3px]">
+									{days.map((d, i) => {
+										// Label roughly every ceil(n/7)th day (7-8 ticks
+										// regardless of range) plus the last day.
+										const step = Math.max(1, Math.ceil(days.length / 7));
+										const show = i % step === 0 || i === days.length - 1;
+										return (
+											<div
+												key={d}
+												className="flex-1 overflow-hidden text-center text-[10px] leading-none text-[var(--color-text-muted)]"
+											>
+												{show ? fmtDay(d) : ""}
+											</div>
+										);
+									})}
+								</div>
 							</div>
 							{trendModels.length > 1 && (
 								<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
 									{trendModels.map((m, i) => (
-										<span key={m} className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]">
+										<span
+											key={m}
+											className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]"
+										>
 											<span
 												className="h-2 w-2 rounded-full"
 												style={{ background: MODEL_COLORS[i % MODEL_COLORS.length] }}
@@ -5698,10 +6336,13 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									<div className="min-w-0 flex-1">
 										<div className="truncate text-[13px] font-medium">{m.model}</div>
 										<div className="truncate text-[12px] text-[var(--color-text-muted)]">
-											{m.provider} · {fmtCompact(m.totalRequests)} {t("requests")} · {fmtCompact(m.totalInputTokens + m.totalOutputTokens)} tok · {fmtCost(m.totalCost)}
+											{m.provider} · {fmtCompact(m.totalRequests)} {t("requests")} ·{" "}
+											{fmtCompact(m.totalInputTokens + m.totalOutputTokens)} tok · {fmtCost(m.totalCost)}
 										</div>
 									</div>
-									<div className="text-right font-mono text-[12px] text-[var(--color-text-muted)]">{fmtMs(m.avgDuration)}</div>
+									<div className="text-right font-mono text-[12px] text-[var(--color-text-muted)]">
+										{fmtMs(m.avgDuration)}
+									</div>
 								</div>
 							))}
 						</div>
@@ -5714,7 +6355,8 @@ function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									<div className="min-w-0 flex-1">
 										<div className="truncate text-[13px] font-medium">{f.folder}</div>
 										<div className="truncate text-[12px] text-[var(--color-text-muted)]">
-											{fmtCompact(f.totalRequests)} {t("requests")} · {fmtCompact(f.totalInputTokens + f.totalOutputTokens)} tok · {fmtCost(f.totalCost)}
+											{fmtCompact(f.totalRequests)} {t("requests")} ·{" "}
+											{fmtCompact(f.totalInputTokens + f.totalOutputTokens)} tok · {fmtCost(f.totalCost)}
 										</div>
 									</div>
 								</div>
@@ -5777,13 +6419,7 @@ interface IndexHit {
 /** Settings → 数据与统计 → 索引库: Zed-style code-library index — workspace
  * file contents → daemon FTS5 → instant search. (History-session search
  * lives in its own 历史会话 tab now.) */
-function IndexesSection({
-	rpc,
-	cwd,
-}: {
-	rpc: RpcClient | null;
-	cwd?: string | null;
-}): ReactNode {
+function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: string | null }): ReactNode {
 	const [idxStatus, setIdxStatus] = useState<IndexStatus | null>(null);
 	const [idxEnabled, setIdxEnabled] = useState(() => {
 		try {
@@ -5977,10 +6613,12 @@ function HistorySection({
 	const [sessions, setSessions] = useState<SessionRow[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [searchRes, setSearchRes] = useState<SearchResult | null>(null);
-	const [searching, setSearching] = useState(false);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [messages, setMessages] = useState<SearchHit[] | null>(null);
 	const [loadingMsgs, setLoadingMsgs] = useState(false);
+	// Cross-session message-search in-flight flag (the debounced search
+	// effect below sets it; was referenced without a declaration).
+	const [searching, setSearching] = useState(false);
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -6060,18 +6698,14 @@ function HistorySection({
 	// pane keeps a stable anchor). Not searching: the full list.
 	const visibleSessions = searchRes
 		? (sessions ?? []).filter(s => bySession.has(s.id) || s.id === selected)
-		: sessions ?? [];
+		: (sessions ?? []);
 	// Search hits land on a session with matches (jump off a stale pick).
 	useEffect(() => {
 		if (searchRes && selected && !bySession.has(selected) && bySession.size > 0) {
 			setSelected([...bySession.keys()][0] ?? null);
 		}
 	}, [searchRes, selected, bySession]);
-	const visibleMsgs = selected
-		? searchRes
-			? (bySession.get(selected) ?? [])
-			: (messages ?? [])
-		: [];
+	const visibleMsgs = selected ? (searchRes ? (bySession.get(selected) ?? []) : (messages ?? [])) : [];
 
 	return (
 		<>
@@ -6140,32 +6774,34 @@ function HistorySection({
 						)}
 					</div>
 					<div className="gui-ext-list-scroll">
-						{loadingMsgs ? (
-							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-faint)]">…</div>
-						) : visibleMsgs.length === 0 ? (
-							<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">
-								{searchRes ? t("no results") : t("no messages")}
-							</div>
-						) : (
-							visibleMsgs.map(m => (
-								<div key={`${m.sessionId}:${m.seq}`} className="gui-history-msg">
-									<div className="flex items-center gap-2">
-										<span className={`gui-history-role gui-history-role--${m.role}`}>{m.role}</span>
-										<span className="text-[11px] text-[var(--color-text-faint)]">
-											{new Date(m.timestamp).toLocaleTimeString()}
-										</span>
-										{m.model && (
-											<span className="truncate font-mono text-[11px] text-[var(--color-text-faint)]">
-												{m.model}
-											</span>
-										)}
-									</div>
-									<div className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed">
-										{hitText(m.content)}
-									</div>
+						<div key={selected ?? "none"} className="gui-history-swap">
+							{loadingMsgs ? (
+								<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-faint)]">…</div>
+							) : visibleMsgs.length === 0 ? (
+								<div className="px-2 py-3 text-[12.5px] text-[var(--color-text-muted)]">
+									{searchRes ? t("no results") : t("no messages")}
 								</div>
-							))
-						)}
+							) : (
+								visibleMsgs.map(m => (
+									<div key={`${m.sessionId}:${m.seq}`} className="gui-history-msg">
+										<div className="flex items-center gap-2">
+											<span className={`gui-history-role gui-history-role--${m.role}`}>{m.role}</span>
+											<span className="text-[11px] text-[var(--color-text-faint)]">
+												{new Date(m.timestamp).toLocaleTimeString()}
+											</span>
+											{m.model && (
+												<span className="truncate font-mono text-[11px] text-[var(--color-text-faint)]">
+													{m.model}
+												</span>
+											)}
+										</div>
+										<div className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed">
+											{hitText(m.content)}
+										</div>
+									</div>
+								))
+							)}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -6260,11 +6896,13 @@ interface BrowserExtensionInfo {
 }
 
 /** 浏览器 section: shared automation Chromium status + defaults + the
- *  OMP Browser Relay extension (chrome.debugger bridge into the user's own
+ *  MusePi Browser Relay extension (chrome.debugger bridge into the user's own
  *  Chrome — kimi webbridge 同款) install entry. */
 function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [headless, setHeadless] = useState<boolean | null>(null);
 	const [relay, setRelay] = useState<boolean | null>(null);
+	const [gui, setGui] = useState<boolean | null>(null);
+	const [restrictToPublic, setRestrictToPublic] = useState<boolean | null>(null);
 	const [endpoint, setEndpoint] = useState<string | null>(null);
 	const [profileDir, setProfileDir] = useState<string | null>(null);
 	const [tabCount, setTabCount] = useState<number | null>(null);
@@ -6274,14 +6912,26 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [importing, setImporting] = useState(false);
 	const [importMsg, setImportMsg] = useState<string | null>(null);
 	const [clearing, setClearing] = useState(false);
+	const [glow, setGlow] = useState<boolean | null>(null);
 
 	const refresh = (): void => {
 		if (!rpc) return;
 		void rpc
-			.request<{ [k: string]: unknown }>("settings.get", { keys: ["browser.headless", "browser.relay"] })
+			.request<{ [k: string]: unknown }>("settings.get", {
+				keys: [
+					"browser.headless",
+					"browser.relay",
+					"browser.gui",
+					"browser.policy.restrictToPublic",
+					"computer.glow",
+				],
+			})
 			.then(res => {
 				setHeadless(res["browser.headless"] === true);
 				setRelay(res["browser.relay"] === true);
+				setGui(res["browser.gui"] === true);
+				setRestrictToPublic(res["browser.policy.restrictToPublic"] === true);
+				setGlow(res["computer.glow"] !== false);
 			})
 			.catch(() => {});
 		void rpc
@@ -6306,10 +6956,17 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		const id = setInterval(refresh, 4000);
 		return () => clearInterval(id);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [rpc]);
+	}, [refresh]);
 
-	const setBool = (key: "browser.headless" | "browser.relay", next: boolean): void => {
-		void rpc?.request("settings.set", { key, value: next }).then(() => refresh());
+	const setBool = (
+		key: "browser.headless" | "browser.relay" | "browser.gui" | "browser.policy.restrictToPublic" | "computer.glow",
+		next: boolean,
+	): void => {
+		void rpc?.request("settings.set", { key, value: next }).then(() => {
+			refresh();
+			// The app's glow latch caches this setting — poke it to re-read.
+			if (key === "computer.glow") window.dispatchEvent(new Event("omp-glow-setting"));
+		});
 	};
 
 	const installRelay = (): void => {
@@ -6326,6 +6983,7 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<h2 className="gui-settings-page-title">{t("browser")}</h2>
 			<p className="gui-settings-page-desc">{t("browser settings description")}</p>
 			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("browser engine")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("headless browser")}</div>
@@ -6358,6 +7016,38 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("managed browser")}</div>
+						<div className="gui-settings-row-desc">{t("managed browser description")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={gui === true}
+						className={`gui-toggle${gui === true ? " gui-toggle--on" : ""}`}
+						onClick={() => setBool("browser.gui", !(gui === true))}
+						aria-label={t("managed browser")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("public internet only")}</div>
+						<div className="gui-settings-row-desc">{t("public internet only description")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={restrictToPublic === true}
+						className={`gui-toggle${restrictToPublic === true ? " gui-toggle--on" : ""}`}
+						onClick={() => setBool("browser.policy.restrictToPublic", !(restrictToPublic === true))}
+						aria-label={t("public internet only")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
 				{/* Relay extension install (chrome.debugger bridge — the agent
 				 * drives your own Chrome tabs, kimi webbridge 同款). */}
 				<div className="gui-settings-row">
@@ -6365,27 +7055,43 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="gui-settings-row-label">{t("browser relay extension")}</div>
 						<div className="gui-settings-row-desc">
 							{relayDir ? (
-								<span className="break-all">
-									{t("browser relay installed at {dir}", { dir: relayDir })}
-								</span>
+								<span className="break-all">{t("browser relay installed at {dir}", { dir: relayDir })}</span>
 							) : (
 								t("browser relay extension description")
 							)}
 						</div>
 					</div>
+					<button type="button" className="gui-btn gui-btn--small" disabled={installing} onClick={installRelay}>
+						{installing ? "…" : t("install")}
+					</button>
+				</div>
+			</div>
+			{/* Computer-use screen glow: full-screen edge + target highlight
+			 * while the agent operates the desktop (computer.glow) — its own
+			 * section, this tab covers desktop automation too. */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("desktop operation hints")}</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("computer glow")}</div>
+						<div className="gui-settings-row-desc">{t("computer glow description")}</div>
+					</div>
 					<button
 						type="button"
-						className="gui-btn gui-btn--small"
-						disabled={installing}
-						onClick={installRelay}
+						role="switch"
+						aria-checked={glow === true}
+						className={`gui-toggle${glow === true ? " gui-toggle--on" : ""}`}
+						onClick={() => setBool("computer.glow", !(glow === true))}
+						aria-label={t("computer glow")}
 					>
-						{installing ? "…" : t("install")}
+						<span className="gui-toggle-knob" />
 					</button>
 				</div>
 			</div>
 			{/* Browser data (zcode 浏览器数据 parity): one-time Chrome
 			 * import, cache clear, full clear. */}
 			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("browser data")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("import chrome data")}</div>
@@ -6400,16 +7106,14 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							setImporting(true);
 							void rpc
 								.request<{ ok?: boolean; importedFrom?: string; error?: string }>("browser.importChrome", {})
-								.then(res => setImportMsg(res?.ok ? res.importedFrom ?? "" : res?.error ?? ""))
+								.then(res => setImportMsg(res?.ok ? (res.importedFrom ?? "") : (res?.error ?? "")))
 								.finally(() => setImporting(false));
 						}}
 					>
 						{importing ? "…" : t("import browser data")}
 					</button>
 				</div>
-				{importMsg && (
-					<div className="px-3 pb-2 text-[11.5px] text-[var(--color-text-faint)]">{importMsg}</div>
-				)}
+				{importMsg && <div className="px-3 pb-2 text-[11.5px] text-[var(--color-text-faint)]">{importMsg}</div>}
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("clear browser cache")}</div>
@@ -6449,6 +7153,7 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			</div>
 			{/* Shared browser status + installed extensions */}
 			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("running state")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("shared browser")}</div>
@@ -6458,11 +7163,7 @@ function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								: t("shared browser idle")}
 						</div>
 					</div>
-					{endpoint && (
-						<span className="gui-provider-chip">
-							{t("running")}
-						</span>
-					)}
+					{endpoint && <span className="gui-provider-chip">{t("running")}</span>}
 				</div>
 				{profileDir && (
 					<div className="px-3 pb-2">

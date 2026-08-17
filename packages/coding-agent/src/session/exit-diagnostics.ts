@@ -146,6 +146,11 @@ export function createInterruptedTurnAbortMessage(
 	if (!model) return undefined;
 
 	const recordedAt = Date.parse(exit.recordedAt);
+	// Name the concrete teardown cause when known (sigterm/sigint/fatal
+	// crash) and tell the user the turn will NOT auto-resume — the
+	// interrupted work is recoverable by sending a new message.
+	const cause = exit.reason === "sigterm" || exit.reason === "sigint" ? exit.reason : exit.kind;
+	const causeText = cause && cause !== "normal" ? ` (${cause})` : "";
 	return {
 		role: "assistant",
 		content: [],
@@ -161,7 +166,7 @@ export function createInterruptedTurnAbortMessage(
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 		stopReason: "aborted",
-		errorMessage: "Previous OMP process exited before completing the turn.",
+		errorMessage: `Previous OMP process exited before completing the turn${causeText}. The turn was interrupted and will not continue automatically; send a new message to continue.`,
 		timestamp: Number.isFinite(recordedAt) ? recordedAt : Date.now(),
 	};
 }

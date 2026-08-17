@@ -33,6 +33,39 @@ export interface ComputerRunOk {
 	capabilities?: DesktopCapabilities;
 }
 
+/**
+ * One desktop input action performed by the agent during a run
+ * (click/type/press/…). Streamed to the tool session's update callback
+ * so the GUI can highlight the operation target; never part of the
+ * model-visible output.
+ */
+export interface ComputerInputEvent {
+	/** Action performed (matches the desktop API method names). */
+	kind:
+		| "click"
+		| "doubleClick"
+		| "move"
+		| "drag"
+		| "scroll"
+		| "type"
+		| "press"
+		| "raise"
+		| "setValue"
+		| "perform"
+		| "focus";
+	/** Target app name when the action targets a specific window. */
+	app?: string;
+	/** Target window title when the action targets a specific window. */
+	title?: string;
+	/** Target frame in global screen coords — window bounds for Win
+	 *  actions, element bounds for AX actions. Omitted for desktop-wide
+	 *  input with no specific target. */
+	rect?: { x: number; y: number; width: number; height: number };
+	/** Best-effort action point in global screen coords (click coords
+	 *  are screenshot pixels scaled onto the window bounds). */
+	point?: { x: number; y: number };
+}
+
 /** Full-resolution screenshot emitted during one computer run. */
 export interface ComputerScreenshot {
 	path: string;
@@ -59,6 +92,7 @@ export type ComputerWorkerOutbound =
 	| { type: "result"; id: string; ok: true; payload: ComputerRunOk }
 	| { type: "result"; id: string; ok: false; error: RunErrorPayload }
 	| { type: "tool-call"; id: string; runId: string; name: string; args: unknown }
+	| { type: "input"; id: string; runId: string; event: ComputerInputEvent }
 	| { type: "closed" };
 
 /** Transport used by the worker core in Bun workers and tests. */

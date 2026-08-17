@@ -140,7 +140,10 @@ export function ToolView(props: ToolViewProps): ReactNode {
 							// biome-ignore lint/suspicious/noArrayIndexKey: streamed lines have no stable id
 							key={i}
 							className="tr-stream-line"
-							style={{ "--tr-i": String(Math.min(i, 10)) } as CSSProperties}
+							// Tight cascade: 16ms steps, capped at 5 lines (~80ms) so a
+							// multi-line tool burst lands together instead of trailing
+							// line-by-line (the old 36ms × 10 = 620ms tail).
+							style={{ "--tr-i": String(Math.min(i, 5)) } as CSSProperties}
 						>
 							{line.length > 0 ? line : "\u00A0"}
 						</div>

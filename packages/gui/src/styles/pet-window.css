@@ -3,11 +3,40 @@
  * the pet window and carries the minimal fixed-dark token values the pet
  * needs (the pet window never loads the main app stylesheet). */
 
+/* Focus-box parity with the main window (base.css): no UA outline/ring on
+ * focus — Tab and mouse focus look identical; the control's own accent
+ * state conveys focus. Without this the pet/bubble windows (which never
+ * load base.css) paint Chromium's system-blue focus box. */
+:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
 :root {
 	--color-accent: oklch(0.674 0.23 341);
 	--color-text: oklch(0.93 0.008 60);
 	--color-danger: oklch(0.66 0.19 25);
 	--font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+	/* Surfaces — tokenized so the light scheme can flip the whole chrome.
+	 * Everything else already derives from --color-text via color-mix, so
+	 * overriding text + these three flips the panel/bubbles/transcript.
+	 * Direct oklch+alpha (no color-mix with transparent — Chromium
+	 * serializes that form back as rgba(0,0,0,0)). */
+	--pet-panel-bg: oklch(0.135 0.005 60 / 0.68);
+	--pet-surface: oklch(0.24 0.012 60 / 0.66);
+	--pet-chip-bg: oklch(0.28 0.014 60);
+	--pet-chip-bg-hover: oklch(0.36 0.016 60);
+}
+
+/* Light scheme (main window writes data-theme="light" — the pet window
+ * mirrors it in pet-main.tsx). Text flips dark; the glass surfaces become
+ * near-white so bubbles and the panel read as frosted light glass. */
+[data-theme="light"] {
+	--color-text: oklch(0.24 0.012 60);
+	--pet-panel-bg: oklch(0.99 0.002 60 / 0.72);
+	--pet-surface: oklch(0.99 0.002 60 / 0.78);
+	--pet-chip-bg: oklch(0.92 0.006 60);
+	--pet-chip-bg-hover: oklch(0.86 0.008 60);
 }
 
 .pet-window {
@@ -22,11 +51,14 @@
 	cursor: grabbing;
 }
 
-/* Hover feedback (BitFun parity: the pet reacts when the pointer is over
- * it — here a gentle lift + brighten, CSS-only). Only the pet element is
- * interactive (pointer-events: auto); the rest of the transparent window
- * stays inert like BitFun's backdrop. */
-.pet-window__pet {
+/* Stage: centers the sprite and anchors the unread badge to it. The
+ * window is 320px wide while the sprite is only ~104px — a badge
+ * anchored to the WINDOW (top/right) floats ~70px right of the pet in
+ * empty space. The stage shrink-wraps the sprite, so the badge's
+ * absolute top/right tracks the sprite's top-right corner no matter the
+ * pet's frame size or the user's scale. pointer-events: none so only
+ * the pet stays interactive. */
+.pet-window__stage {
 	position: absolute;
 	/* 52px clearance: rest shadow (0 6px 16px ≈ 22px) has 30px margin and
 	 * the hover shadow (0 10px 22px ≈ 32px, + bump scaleY ≈ +2px) still
@@ -36,6 +68,16 @@
 	bottom: 52px;
 	left: 50%;
 	transform: translateX(-50%);
+	width: max-content;
+	pointer-events: none;
+}
+
+/* Hover feedback (BitFun parity: the pet reacts when the pointer is over
+ * it — here a gentle lift + brighten, CSS-only). Only the pet element is
+ * interactive (pointer-events: auto); the rest of the transparent window
+ * stays inert like BitFun's backdrop. */
+.pet-window__pet {
+	position: relative;
 	filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
 	pointer-events: auto;
 	transition:		transform 160ms ease,
@@ -43,7 +85,7 @@
 }
 
 .pet-window__pet:hover {
-	transform: translateX(-50%) translateY(-6px) scale(1.08);
+	transform: translateY(-6px) scale(1.08);
 	filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.5)) brightness(1.06);
 }
 
@@ -58,14 +100,16 @@
 	transform: scaleX(-1);
 }
 
-/* Bubble stack above the pet — translucent scrim like the main app's
- * overlays. Newest on top (BitFun parity), max 2 visible, each with a
- * dismiss ×. The whole stack is interactive (dismiss buttons). */
+/* Bubble stack above the pet — iOS Notification-Center style. Collapsed:
+ * only the newest bubble (a frosted card with an "N more" count chip);
+ * clicked → the full list expands (scrolls inside the window instead of
+ * clipping past the top edge). Glass recipe matches the main window
+ * (.gui-main: translucent surface + blur(24px) saturate(180%)), and the
+ * pet window's own vibrancy layer supplies the real backdrop to blur. */
 .pet-bubbles {
 	position: absolute;
 	/* bottom:174px puts the stack's bottom EDGE at y=116 (290−174) — 20px
-	 * above the rabbit's visual top (y≈136; the sprite frame is 134). The
-	 * old bottom:128px landed the edge at 162, overlapping the ears. */
+	 * above the rabbit's visual top (y≈136; the sprite frame is 134). */
 	bottom: 174px;
 	left: 50%;
 	transform: translateX(-50%);
@@ -81,29 +125,161 @@
 	max-width: 240px;
 	width: max-content;
 	padding: 8px 12px;
-	border: 1px solid oklch(1 0 0 / 13%);
-	border-radius: 12px;
-	background: oklch(0.23 0.012 60 / 0.92);
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
+	border-radius: 16px;
+	/* Glass-look surface WITHOUT a vibrancy layer (the pet window must
+	 * stay fully transparent so the pet floats on the desktop — vibrancy
+	 * + transparent:true renders the whole window as an opaque panel): a
+	 * translucent tint lets the desktop read through, a top highlight
+	 * gradient fakes the glass sheen, and an inner top hairline adds the
+	 * catch-light. */
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		var(--pet-surface);
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 14%, transparent),
+		0 4px 20px rgba(0, 0, 0, 0.45);
 	pointer-events: auto;
+	/* Blur/fade transitions for the collapse morph. */
+	transition: filter 160ms ease, opacity 160ms ease;
+}
+
+/* Collapsed stack card — content-sized like every .pet-bubble (the
+ * bubble window sizes to its content; a vw-based width would shrink
+ * with the window and converge to nothing). A tighter text cap so a
+ * single bubble fits the room above the pet; the width morph to the
+ * expanded list smooths the jump when the newest bubble and the widest
+ * row differ. */
+.pet-bubble--stacked .pet-bubble__text {
+	max-height: 96px;
+}
+
+.pet-bubble__more {
+	position: absolute;
+	top: -9px;
+	left: 12px;
+	padding: 1px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent);
+	border-radius: 999px;
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		color-mix(in oklab, var(--pet-chip-bg) 82%, transparent);
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
+		0 2px 8px rgba(0, 0, 0, 0.25);
+	color: var(--color-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	line-height: 1.6;
+	pointer-events: none;
+}
+
+/* Expanded stack — header row (count + collapse) over the full list.
+ * Height follows content (window auto-sizes to it); the cap only kicks
+ * in for huge stacks, which then scroll inside the window. */
+.pet-bubbles--expanded {
+	align-items: stretch;
+	width: min(248px, 74vw);
+	max-height: 360px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
+}
+
+/* During a collapsed ⇄ expanded morph the container height is animated
+ * inline; clip the new content until it grows into view. */
+.pet-bubbles--morphing {
+	overflow: hidden;
+}
+
+/* Collapsing: the list blurs and fades as it is squeezed back into the
+ * single card (dynamic-blur transition instead of a hard cut). */
+.pet-bubbles--shrinking {
+	overflow: hidden;
+}
+
+.pet-bubbles--shrinking .pet-bubble {
+	filter: blur(6px);
+	opacity: 0.55;
+}
+
+/* Cards in the expanded list pop in with a blur-to-sharp settle and a
+ * small slide from the collapsed card's position (iOS Notification-
+ * Center feel). */
+.pet-bubbles--expanded .pet-bubble {
+	animation: pet-bubble-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pet-bubble-pop {
+	from {
+		opacity: 0;
+		transform: translateY(-8px);
+		filter: blur(6px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+		filter: blur(0);
+	}
+}
+
+.pet-bubbles__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 6px 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
+	border-radius: 12px;
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		color-mix(in oklab, var(--pet-panel-bg) 85%, transparent);
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
+		0 4px 16px rgba(0, 0, 0, 0.3);
+	font-size: 11px;
+	cursor: pointer;
+	pointer-events: auto;
+	flex-shrink: 0;
+}
+
+.pet-bubbles__count {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.pet-bubbles__collapse {
+	color: color-mix(in oklab, var(--color-text) 58%, transparent);
+}
+
+.pet-bubbles--expanded .pet-bubble {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.pet-bubbles--expanded .pet-bubble__text {
+	max-height: 88px;
 }
 
 .pet-bubble--error {
-	border-color: oklch(0.66 0.19 25 / 55%);
+	border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
 }
 
 .pet-bubble__text {
 	font-size: 12.5px;
 	line-height: 1.45;
-	color: oklch(0.93 0.008 60);
+	color: var(--color-text);
 	white-space: pre-wrap;
 	word-break: break-word;
+	/* The translucent surface shows the desktop through — a soft shadow
+	 * keeps the copy legible over any wallpaper. */
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
 	/* Long session-completion previews scroll instead of truncating
 	 * (user: bubble preview must support scrolling). */
 	max-height: 132px;
 	overflow-y: auto;
 	scrollbar-width: thin;
-	scrollbar-color: oklch(0.45 0.01 60 / 0.6) transparent;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 45%, transparent) transparent;
 	padding-right: 2px;
 }
 
@@ -116,10 +292,10 @@
 	padding: 0;
 	display: grid;
 	place-items: center;
-	border: 1px solid oklch(1 0 0 / 16%);
+	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
 	border-radius: 999px;
-	background: oklch(0.28 0.014 60);
-	color: oklch(0.93 0.008 60);
+	background: var(--pet-chip-bg);
+	color: var(--color-text);
 	font-size: 12px;
 	line-height: 1;
 	cursor: pointer;
@@ -127,12 +303,58 @@
 }
 
 .pet-bubble__dismiss:hover {
-	background: oklch(0.36 0.016 60);
+	background: var(--pet-chip-bg-hover);
+}
+
+/* ── Bubble window (bubble.html, 双窗口) ─────────────────────────────────
+ * The bubbles/panel live in their OWN window (real vibrancy glass, sized
+ * to exactly its content). The window content is the glass card; the
+ * panel inside it is flow-positioned so its box drives the reported size. */
+.pet-bubble-window {
+	position: relative;
+	width: 100vw;
+	height: 100vh;
+	overflow: visible;
+}
+
+.pet-bubble-window .pet-bubbles {
+	bottom: auto;
+	position: relative;
+	left: auto;
+	transform: none;
+	pointer-events: auto;
+	/* Content-sized: the reported box sizes the window, so any vw-based
+	 * width would shrink with the window and converge to nothing. The
+	 * margin is the transparent shadow room — the report adds the same
+	 * pad (PAD=24 in bubble-main.tsx) so the box-shadows (0 4px 20px,
+	 * 0 10px 30px) and the dismiss/stack-chip overhangs (-7px/-9px) are
+	 * never clipped at the window edge. */
+	width: max-content;
+	max-width: none;
+	margin: 24px;
+}
+
+.pet-bubble-window .pet-panel {
+	/* In the bubble window the panel is the whole content: flow-positioned
+	 * (no pet to float above), auto height — the content box sizes the
+	 * OS window via bubble-set-size. Fixed width (not vw-based — a vw
+	 * width would shrink with the reported size and converge to nothing). */
+	position: relative;
+	top: auto;
+	left: auto;
+	transform: none;
+	bottom: auto;
+	/* Transparent shadow room (must match PAD=24 in bubble-main.tsx) —
+	 * the 0 10px 30px shadow would otherwise clip at the window edge. */
+	margin: 24px;
+	width: 316px;
+	height: auto;
+	min-height: 0;
 }
 
 /* ── Interaction panel (click the pet to toggle) ─────────────────────────
- * Grows the window via pet-set-panel; the panel is the only interactive
- * area while open (the whole panel is inside the reported hitbox). */
+ * In the pet window (legacy positioning) the panel was absolute over the
+ * pet; now it renders in the bubble window only. */
 .pet-panel {
 	position: absolute;
 	top: 10px;
@@ -146,23 +368,56 @@
 	box-sizing: border-box;
 	border-radius: 14px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
-	background: color-mix(in oklab, #16161a 92%, transparent);
+	/* Self-drawn glass (same recipe as .pet-bubble): the bubble window has
+	 * NO vibrancy layer (it must stay fully transparent), and backdrop-
+	 * filter cannot blur the desktop through a transparent window — the
+	 * translucent tint + top highlight + inner hairline fake the frosted
+	 * sheen. backdrop-filter stays as a best-effort for content layered
+	 * behind the panel inside the window (e.g. bubbles). */
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		var(--pet-panel-bg);
 	backdrop-filter: blur(18px) saturate(160%);
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 14%, transparent),
+		0 10px 30px rgba(0, 0, 0, 0.4);
 	overflow: hidden;
 	pointer-events: auto;
 	display: flex;
 	flex-direction: column;
-	/* Spotlight entrance (kimiwork 魔灯): fade + rise + blur-in. The
-	 * keyframes carry the full transform (translateX(-50%) is the static
-	 * centering — an animation that dropped it would make the panel jump
-	 * horizontally on mount). filter (element blur) is used instead of
-	 * animating backdrop-filter, which flashes on first paint. */
-	animation: pet-panel-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
+	/* Entrance is gated on the OS window resize (see bubble-main panel
+	 * entrance effect): the panel mounts inside a still-bubble-sized
+	 * window, and an immediate animation would paint the wider panel
+	 * clipped to the old window — right half first, left half popping
+	 * in once the window resizes. Keep it invisible here; .pet-panel--in
+	 * plays the spotlight entrance once the window is panel-sized. */
+	opacity: 0;
+}
+
+.pet-panel--in {
+	/* Spotlight entrance (kimiwork 魔灯): fade + rise + blur-in. filter
+	 * (element blur) is used instead of animating backdrop-filter, which
+	 * flashes on first paint. forwards: the base rule now has opacity 0
+	 * (entrance gating), so the animation must hold its end state. */
+	animation: pet-panel-in 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Bubble-window variant: the panel is flow-positioned + margin-centered
+ * there (transform: none) — the legacy keyframes bake in translateX(-50%)
+ * (the pet-window absolute centering), which would shove the panel half
+ * its width to the left mid-animation and make it appear "right half
+ * first". Use flat keyframes (vertical rise only) inside the bubble
+ * window. */
+.pet-bubble-window .pet-panel--in {
+	animation: pet-panel-in-flat 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .pet-panel--leaving {
 	animation: pet-panel-out 140ms ease-in forwards;
+}
+
+.pet-bubble-window .pet-panel--leaving {
+	animation: pet-panel-out-flat 140ms ease-in forwards;
 }
 
 @keyframes pet-panel-in {
@@ -182,6 +437,27 @@
 	to {
 		opacity: 0;
 		transform: translateX(-50%) translateY(6px) scale(0.99);
+		filter: blur(4px);
+	}
+}
+
+@keyframes pet-panel-in-flat {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.98);
+		filter: blur(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+		filter: blur(0);
+	}
+}
+
+@keyframes pet-panel-out-flat {
+	to {
+		opacity: 0;
+		transform: translateY(6px) scale(0.99);
 		filter: blur(4px);
 	}
 }
@@ -261,6 +537,37 @@
 	letter-spacing: 0.02em;
 }
 
+/* View tabs (消息 / 会话): the recent-session list lives in its own
+ * panel view, so the message view stays focused on the live session. */
+.pet-panel__tabs {
+	display: flex;
+	gap: 2px;
+	padding: 4px 10px 0;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.pet-panel__tab {
+	flex: 1;
+	padding: 5px 0 7px;
+	border: none;
+	background: transparent;
+	font-size: 11.5px;
+	font-weight: 550;
+	color: color-mix(in oklab, var(--color-text) 48%, transparent);
+	cursor: pointer;
+	border-bottom: 2px solid transparent;
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.pet-panel__tab:hover {
+	color: var(--color-text);
+}
+
+.pet-panel__tab--active {
+	color: var(--color-text);
+	border-bottom-color: var(--color-accent, #6ea8ff);
+}
+
 .pet-panel__close {
 	display: flex;
 	align-items: center;
@@ -310,6 +617,25 @@
 	flex-shrink: 0;
 }
 
+/* Working: accent dot with a soft pulse — the agent is doing something,
+ * the idle grey dot reads as "available". */
+.pet-panel__status-dot--working {
+	background: var(--color-accent);
+	animation: pet-dot-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes pet-dot-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 45%, transparent);
+		transform: scale(1);
+	}
+	50% {
+		box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 0%, transparent);
+		transform: scale(1.15);
+	}
+}
+
 .pet-panel__status-text {
 	font-size: 12px;
 	font-weight: 500;
@@ -339,6 +665,13 @@
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+	/* Many concurrent approvals must scroll, not shove the reply row off
+	 * the panel (the body is height-bounded by the window). */
+	max-height: 132px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 30%, transparent) transparent;
+	padding-right: 2px;
 }
 
 .pet-panel__approval {
@@ -451,20 +784,18 @@
 	cursor: default;
 }
 
-/* ── Recent sessions (pet panel) ─────────────────────────────────────── */
-.pet-panel__recent {
-	margin-top: 2px;
-	border-top: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-	padding-top: 6px;
+/* ── Sessions view (最近会话 tab — its own panel view) ─────────────── */
+.pet-panel__sessions {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 }
 
-.pet-panel__recent-head {
-	font-size: 10.5px;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
+.pet-panel__sessions-empty {
+	padding: 14px 8px;
+	font-size: 12px;
 	color: color-mix(in oklab, var(--color-text) 45%, transparent);
-	margin-bottom: 3px;
+	text-align: center;
 }
 
 .pet-panel__recent-row {
@@ -506,20 +837,32 @@
 	flex: 1;
 	min-height: 0;
 }
-.pet-panel__session-back {
-	align-self: flex-start;
-	display: inline-flex;
+/* Back affordance: the recent-list rows drop you into the transcript with
+ * no way back to the status/approvals/reply view (the messages tab is
+ * shadowed by the active session). ← exits back to it. */
+.pet-panel__session-head {
+	display: flex;
 	align-items: center;
-	gap: 4px;
-	padding: 3px 8px;
-	border-radius: 6px;
-	font-size: 11px;
-	color: color-mix(in oklab, var(--color-text) 60%, transparent);
-	transition: background 120ms ease-out, color 120ms ease-out;
+	gap: 6px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
+	padding-bottom: 4px;
 }
-.pet-panel__session-back:hover {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+.pet-panel__back {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
 	color: var(--color-text);
+	font-size: 13px;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+.pet-panel__back:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
 .pet-panel__session-title {
 	font-size: 12.5px;
@@ -528,12 +871,14 @@
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	padding-bottom: 4px;
-	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
 }
 .pet-panel__session-msgs {
 	flex: 1;
 	min-height: 0;
+	/* Bounded transcript: the panel sizes to its content (bubble-set-size),
+	 * so an unbounded message list would stretch the window past the
+	 * screen edge. Cap it and scroll inside the card. */
+	max-height: min(300px, 45vh);
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
@@ -566,17 +911,24 @@
 	color: var(--color-text);
 }
 
-/* ── Unread badge (completion count, floats over the pet) ────────────── */
+/* ── Unread badge (completion count, floats over the pet) ──────────────
+ * Anchored to the sprite's top-right corner (the stage shrink-wraps the
+ * sprite) instead of the window — a window-anchored badge floated ~70px
+ * right of the pet in empty space. Docked right, the sprite sits flush
+ * to the screen edge, so the badge pulls fully inside its box. */
 .pet-window__badge {
 	position: absolute;
-	right: 6px;
-	top: 118px;
+	/* Straddle the sprite's top-right corner so it reads as the pet's
+	 * badge, not a detached window chip. */
+	top: -8px;
+	right: -6px;
 	z-index: 5;
 	min-width: 18px;
 	height: 18px;
 	padding: 0 5px;
 	display: grid;
 	place-items: center;
+	border: 0;
 	border-radius: 999px;
 	background: #e5484d;
 	color: #fff;
@@ -584,8 +936,23 @@
 	font-weight: 700;
 	line-height: 1;
 	box-shadow: 0 0 10px rgba(229, 72, 77, 0.55);
-	pointer-events: none;
+	/* The stage is click-through (only the pet is interactive); the badge
+	 * re-enables itself — clicking it marks every session read. */
+	pointer-events: auto;
+	cursor: pointer;
 	animation: pet-badge-pop 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pet-window__badge:hover {
+	background: #f2555a;
+	box-shadow: 0 0 14px rgba(229, 72, 77, 0.8);
+}
+
+/* Docked flush to the right screen edge: the sprite's right edge IS the
+ * screen edge, so right: -6px would hang the badge off-screen. Pull it
+ * fully inside the sprite's box. */
+.pet-window--dock-right .pet-window__badge {
+	right: 6px;
 }
 
 @keyframes pet-badge-pop {

@@ -65,12 +65,55 @@ export interface GuiSessionState {
 	approvals: readonly ApprovalRequest[];
 	/** Latest idle recap (TUI parity) — cleared on any new wire activity. */
 	recap: { text: string; at: number } | null;
+	/** Frozen per-round totals (final assistant msg ts → ms) — each completed
+	 *  round's "已工作 X 秒" stays under its final message. */
+	roundDurations: ReadonlyMap<number, number>;
 }
 
 /** One pending tool approval awaiting a GUI decision. */
 export interface ApprovalRequest {
 	requestId: string;
 	tool: string;
+}
+
+// ── Completed-round totals (GUI-lifetime registry) ─────────────────────────
+// The store is DISPOSED and recreated on every session switch (app.tsx
+// openSession), so frozen round durations live in a module-level registry
+// keyed by sessionId. Seeded from the daemon snapshot (authoritative for
+// rounds that completed while the GUI was switched away — the daemon records
+// them at agent_end) AND from live agent_end events this store processed
+// (covers rounds completed in-session even before the daemon restarts with
+// the recording code). Pruned on session delete.
+const roundDurationsBySession = new Map<string, Map<number, number>>();
+
+function roundDurationsFor(sessionId: string): Map<number, number> {
+	let m = roundDurationsBySession.get(sessionId);
+	if (!m) {
+		m = new Map();
+		roundDurationsBySession.set(sessionId, m);
+	}
+	return m;
+}
+
+/** Drop a deleted session's recorded totals (GUI session.delete path). */
+export function clearRoundDurations(sessionId: string): void {
+	roundDurationsBySession.delete(sessionId);
+}
+
+/** Round duration (ms) of a just-completed run — craft-agents parity: start
+ *  = the last user message timestamp (the round's anchor), end = agent_end.
+ *  Keyed by the final assistant message's timestamp so the transcript can
+ *  pin the frozen total to exactly the round's last row. */
+function recordRoundDuration(entries: readonly SessionEntry[]): { assistantTs: number; durationMs: number } | null {
+	let userTs: number | undefined;
+	let assistantTs: number | undefined;
+	for (const e of entries) {
+		if (e.type !== "message") continue;
+		if (e.message.role === "user") userTs = e.message.timestamp;
+		else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
+	}
+	if (userTs === undefined || assistantTs === undefined) return null;
+	return { assistantTs, durationMs: Date.now() - userTs };
 }
 
 export class GuiSessionStore {
@@ -85,6 +128,7 @@ export class GuiSessionStore {
 	#lifecycle = new Map<string, SubagentLifecyclePayload>();
 	#approvals = new Map<string, ApprovalRequest>();
 	#recap: { text: string; at: number } | null = null;
+	#roundDurations: Map<number, number>;
 	#listeners = new Set<() => void>();
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
 	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
@@ -92,13 +136,18 @@ export class GuiSessionStore {
 
 	constructor(
 		sessionId: string,
-		snapshot: { entries: SessionEntry[]; state?: SessionState; cursor: number },
+		snapshot: { entries: SessionEntry[]; state?: SessionState; cursor: number; roundDurations?: [number, number][] },
 		cwd: string,
 	) {
 		this.#sessionId = sessionId;
 		this.#cwd = cwd;
 		this.#view =
 			MaterializedView.fromSnapshot(sessionId, cwd, snapshot) ?? MaterializedView.replay(sessionId, cwd, []);
+		// Merge the daemon-recorded totals (rounds completed while this
+		// session was not subscribed) into the GUI-lifetime registry.
+		const merged = roundDurationsFor(sessionId);
+		for (const [ts, ms] of snapshot.roundDurations ?? []) merged.set(ts, ms);
+		this.#roundDurations = merged;
 		this.#snapshot = this.#buildSnapshot();
 	}
 
@@ -158,6 +207,7 @@ export class GuiSessionStore {
 			lifecycle: this.#lifecycle,
 			approvals: [...this.#approvals.values()],
 			recap: this.#recap,
+			roundDurations: this.#roundDurations,
 		};
 	}
 
@@ -363,6 +413,13 @@ export class GuiSessionStore {
 				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
 				const stopReason = last?.stopReason;
 				if (stopReason !== "aborted" && stopReason !== "error") sfxFor("complete");
+				// Freeze this run's total into the GUI-lifetime registry: the
+				// store is recreated on every session switch, so without this
+				// the totals would die with the disposed instance. (The daemon
+				// records the same at agent_end in its own view — the registry
+				// covers the window before a daemon restart picks that up.)
+				const rec = recordRoundDuration(this.#view.snapshot().entries);
+				if (rec) this.#roundDurations.set(rec.assistantTs, rec.durationMs);
 				break;
 			}
 			default:

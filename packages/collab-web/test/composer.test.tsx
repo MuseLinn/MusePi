@@ -23,6 +23,7 @@ function snapshot(uiRequest: GuestSnapshot["uiRequest"]): GuestSnapshot {
 		streamDone: false,
 		activeTools: new Map(),
 		working: true,
+		roundDurations: new Map(),
 		readOnly: false,
 		workspace: null,
 		focusedSessionId: null,

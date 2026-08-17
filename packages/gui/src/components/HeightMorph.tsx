@@ -35,11 +35,15 @@ export function HeightMorph({
 	morphKey,
 	className,
 	children,
+	innerRef,
 }: {
 	/** Value whose change triggers the morph (tab id, toggle state, …). */
 	morphKey: unknown;
 	className?: string;
 	children: ReactNode;
+	/** Extra ref for the morph container (e.g. a scroll-shadow observer on
+	 *  a fixed-height scroll container that HeightMorph itself owns). */
+	innerRef?: React.Ref<HTMLDivElement>;
 }): ReactNode {
 	const ref = useRef<HTMLDivElement | null>(null);
 	const prevKey = useRef(morphKey);
@@ -86,7 +90,14 @@ export function HeightMorph({
 		};
 	}, [morphKey]);
 	return (
-		<div className={`gui-morph-fade${className ? ` ${className}` : ""}`} ref={ref}>
+		<div
+			className={`gui-morph-fade${className ? ` ${className}` : ""}`}
+			ref={el => {
+				ref.current = el;
+				if (typeof innerRef === "function") innerRef(el);
+				else if (innerRef) innerRef.current = el;
+			}}
+		>
 			{children}
 		</div>
 	);

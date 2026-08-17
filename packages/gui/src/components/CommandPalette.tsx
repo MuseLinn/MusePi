@@ -2,8 +2,11 @@ import { t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
+import { MENU_ANIM_MS } from "./Pop";
 
 type PaletteTab = "all" | "actions" | "tasks";
 
@@ -54,52 +57,76 @@ export function CommandPalette({
 	const [active, setActive] = useState(0);
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
+	// Stay mounted through the exit (Pop/DialogFrame parity): the parent
+	// renders us unconditionally and drives `open`; closing plays
+	// gui-menu-out before unmounting. Two-phase enter via the hook.
+	const [visible, setVisible] = useState(open);
+	const [closing, setClosing] = useState(false);
+	const enteredCls = useTwoPhaseEnter(open);
+	useEffect(() => {
+		if (open) {
+			setVisible(true);
+			setClosing(false);
+			return;
+		}
+		setClosing(true);
+		const t = setTimeout(() => {
+			setVisible(false);
+			setClosing(false);
+		}, MENU_ANIM_MS);
+		return () => clearTimeout(t);
+	}, [open]);
 
 	// Cross-session message search (debounced), like the daemon's search.
 	useEffect(() => {
-		if (!open) {
+		if (open) {
+			setActive(0);
+			const q = query.trim();
+			if (!q) {
+				setRows(null);
+				setSearching(false);
+				return;
+			}
+			setSearching(true);
+			const id = setTimeout(() => {
+				void rpc
+					.request<{
+						matches: { sessionId: string; content: string; timestamp: string }[];
+						sessions: { sessionId: string; messageCount: number }[];
+					}>("session.search", { query: q, limit: 40 })
+					.then(res => {
+						const counts = new Map((res?.sessions ?? []).map(s => [s.sessionId, s.messageCount]));
+						const labelOf = (id: string): string =>
+							sessions.find(s => s.id === id)?.label ?? t("untitled session");
+						const seen = new Map<string, SearchRow>();
+						for (const m of res?.matches ?? []) {
+							if (!seen.has(m.sessionId)) {
+								seen.set(m.sessionId, {
+									sessionId: m.sessionId,
+									label: labelOf(m.sessionId),
+									count: counts.get(m.sessionId) ?? 1,
+									snippet: m.content.trim().slice(0, 90),
+								});
+							}
+						}
+						setRows([...seen.values()].slice(0, 12));
+						setSearching(false);
+					})
+					.catch(() => {
+						setRows([]);
+						setSearching(false);
+					});
+			}, 250);
+			return () => clearTimeout(id);
+		}
+		// Closed: defer the reset until the exit animation finished so the
+		// list doesn't collapse mid-fade.
+		if (!visible) {
 			setQuery("");
 			setRows(null);
-			return;
 		}
-		setActive(0);
-		const q = query.trim();
-		if (!q) {
-			setRows(null);
-			setSearching(false);
-			return;
-		}
-		setSearching(true);
-		const id = setTimeout(() => {
-			void rpc
-				.request<{
-					matches: { sessionId: string; content: string; timestamp: string }[];
-					sessions: { sessionId: string; messageCount: number }[];
-				}>("session.search", { query: q, limit: 40 })
-				.then(res => {
-					const counts = new Map((res?.sessions ?? []).map(s => [s.sessionId, s.messageCount]));
-					const labelOf = (id: string): string => sessions.find(s => s.id === id)?.label ?? t("untitled session");
-					const seen = new Map<string, SearchRow>();
-					for (const m of res?.matches ?? []) {
-						if (!seen.has(m.sessionId)) {
-							seen.set(m.sessionId, {
-								sessionId: m.sessionId,
-								label: labelOf(m.sessionId),
-								count: counts.get(m.sessionId) ?? 1,
-								snippet: m.content.trim().slice(0, 90),
-							});
-						}
-					}
-					setRows([...seen.values()].slice(0, 12));
-					setSearching(false);
-				})
-				.catch(() => {
-					setRows([]);
-					setSearching(false);
-				});
-		}, 250);
-		return () => clearTimeout(id);
-	}, [query, open, rpc, sessions]);
+		return;
+	}, [query, open, visible, rpc, sessions]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -120,6 +147,7 @@ export function CommandPalette({
 	}, [open, onClose]);
 
 	const run = (fn: () => void): void => {
+		tapFeedback();
 		fn();
 		onClose();
 	};
@@ -157,10 +185,11 @@ export function CommandPalette({
 			?.scrollIntoView({ block: "nearest" });
 	}, [active]);
 
+	if (!visible) return null;
 	return createPortal(
-		<div className="gui-palette-backdrop" onClick={onClose}>
+		<div className={`gui-palette-backdrop${closing ? " gui-palette-backdrop--closing" : ""}`} onClick={onClose}>
 			<div
-				className="gui-palette"
+				className={`gui-palette${enteredCls ? " gui-palette--entered" : ""}${closing ? " gui-palette--closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("search")}

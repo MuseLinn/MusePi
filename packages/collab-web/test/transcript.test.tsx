@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import "./transcript-dom-shim";
-import { Transcript } from "../src/components/transcript/Transcript";
+import { msgText, Transcript } from "../src/components/transcript/Transcript";
 import type { ActiveTool } from "../src/lib/client";
 
 const TOOL_CALL_ID = "call-running-tool";
@@ -51,10 +51,43 @@ function activeTool(): ActiveTool {
 	};
 }
 
+function assistantEntry(overrides: { timestamp: number; duration?: number; text?: string }): SessionEntry {
+	return {
+		type: "message",
+		id: `assistant-${overrides.timestamp}`,
+		parentId: null,
+		timestamp: "2026-07-09T00:00:00Z",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: overrides.text ?? "hello" }],
+			model: "test/model",
+			usage: assistantUsage(),
+			stopReason: "stop",
+			timestamp: overrides.timestamp,
+			...(overrides.duration !== undefined ? { duration: overrides.duration } : {}),
+		},
+	};
+}
+
+function userEntry(timestamp: number): SessionEntry {
+	return {
+		type: "message",
+		id: `user-${timestamp}`,
+		parentId: null,
+		timestamp: "2026-07-09T00:00:00Z",
+		message: { role: "user", content: "do it", timestamp },
+	};
+}
+
 function renderTranscript(props: {
 	entries?: readonly SessionEntry[];
 	activeTools?: ReadonlyMap<string, ActiveTool>;
 	working: boolean;
+	roundDurations?: ReadonlyMap<number, number>;
+	hideToolActivity?: boolean;
+	showTokenUsage?: boolean;
+	collapseCompacted?: boolean;
+	colorBlind?: boolean;
 }): string {
 	return renderToStaticMarkup(
 		<Transcript
@@ -63,6 +96,11 @@ function renderTranscript(props: {
 			streamDone={true}
 			activeTools={props.activeTools ?? new Map()}
 			working={props.working}
+			roundDurations={props.roundDurations}
+			hideToolActivity={props.hideToolActivity}
+			showTokenUsage={props.showTokenUsage}
+			collapseCompacted={props.collapseCompacted}
+			colorBlind={props.colorBlind}
 		/>,
 	);
 }
@@ -115,6 +153,104 @@ describe("Transcript live tool rendering", () => {
 
 		expect(html).not.toContain("thinking…");
 		expect(html).not.toContain("no activity yet");
+	});
+});
+
+describe("work timer (已工作 X 秒, per-round)", () => {
+	// 5.5s in the past: elapsed >= 5500ms at SSR → rounds to 6 deterministically
+	// (the anchor is the LAST USER message timestamp — the round start — NOT
+	// the component mount time, craft-agents ProcessingIndicator parity).
+	const USER_TS = Date.now() - 5_500;
+	const ASSISTANT_TS = USER_TS + 100;
+	const ticking = /working for 6s|已工作 6 秒/;
+	const took = /took 6s|用时 6 秒/;
+	const round = (ms: number): ReadonlyMap<number, number> => new Map([[ASSISTANT_TS, ms]]);
+
+	it("ticks from the round start (last user message) while working", () => {
+		const html = renderTranscript({
+			entries: [userEntry(USER_TS), assistantEntry({ timestamp: ASSISTANT_TS })],
+			working: true,
+		});
+		expect(countElements(html, ".tr-working")).toBe(1);
+		expect(countElements(html, ".tr-working-spin")).toBe(1);
+		expect(html).toMatch(ticking);
+	});
+
+	it("stays anchored across remounts (switching sessions and back)", () => {
+		const entries = [userEntry(USER_TS), assistantEntry({ timestamp: ASSISTANT_TS })];
+		// Two independent mounts of the same data must report the SAME total —
+		// a mount-anchored timer (the pre-fix bug) restarts at 0 here.
+		const a = renderTranscript({ entries, working: true });
+		const b = renderTranscript({ entries, working: true });
+		expect(a).toMatch(ticking);
+		expect(b).toMatch(ticking);
+	});
+
+	it("shows the frozen round total on the completed round's final message (no spinner)", () => {
+		const html = renderTranscript({
+			entries: [userEntry(USER_TS), assistantEntry({ timestamp: ASSISTANT_TS })],
+			working: false,
+			roundDurations: round(6_300),
+		});
+		expect(countElements(html, ".tr-working")).toBe(1);
+		expect(countElements(html, ".tr-working-spin")).toBe(0);
+		expect(html).toMatch(took);
+	});
+
+	it("keeps EVERY completed round's total visible (每轮单独计时)", () => {
+		const a1 = USER_TS - 60_000;
+		const a2 = USER_TS - 30_000;
+		const entries = [
+			userEntry(a1 - 100),
+			assistantEntry({ timestamp: a1 }),
+			userEntry(a2 - 100),
+			assistantEntry({ timestamp: a2 }),
+			userEntry(USER_TS),
+			assistantEntry({ timestamp: ASSISTANT_TS }),
+		];
+		const html = renderTranscript({
+			entries,
+			working: false,
+			roundDurations: new Map([
+				[a1, 6_300],
+				[a2, 12_700],
+				[ASSISTANT_TS, 1_900],
+			]),
+		});
+		expect(countElements(html, ".tr-working")).toBe(3);
+		expect(countElements(html, ".tr-working-spin")).toBe(0);
+	});
+
+	it("shows no frozen total without a recorded round duration (history replay)", () => {
+		const html = renderTranscript({
+			entries: [userEntry(USER_TS), assistantEntry({ timestamp: ASSISTANT_TS })],
+			working: false,
+		});
+		expect(countElements(html, ".tr-working")).toBe(0);
+	});
+
+	it("ghost stream row shows the frozen total once streamDone", () => {
+		const stream: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "text", text: "done" }],
+			model: "test/model",
+			usage: assistantUsage(),
+			stopReason: "stop",
+			timestamp: ASSISTANT_TS,
+		};
+		const html = renderToStaticMarkup(
+			<Transcript
+				entries={[]}
+				stream={stream}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+				roundDurations={round(6_300)}
+			/>,
+		);
+		expect(countElements(html, ".tr-working")).toBe(1);
+		expect(countElements(html, ".tr-working-spin")).toBe(0);
+		expect(html).toMatch(took);
 	});
 });
 
@@ -194,5 +330,105 @@ describe("TTSR / IRC custom_message rendering", () => {
 		expect(html).toContain("tr-irc");
 		expect(html).toContain("sub");
 		expect(html).toContain("我查一下 git 历史");
+	});
+});
+
+describe("Transcript display-settings parity (TUI)", () => {
+	it("hideToolActivity drops toolCall cards and running tail tools", () => {
+		const html = renderTranscript({
+			entries: [committedAssistantToolCall()],
+			activeTools: new Map([[TOOL_CALL_ID, activeTool()]]),
+			working: true,
+			hideToolActivity: true,
+		});
+		expect(countElements(html, ".tv-card")).toBe(0);
+		expect(html).not.toContain(TOOL_NAME);
+		expect(html).not.toContain(ACTIVE_TOOL_TARGET);
+	});
+
+	it("showTokenUsage gates the per-turn usage row", () => {
+		const settled = committedAssistantToolCall();
+		if (settled.type !== "message") throw new Error("fixture must be a message entry");
+		if (settled.message.role !== "assistant") throw new Error("fixture must be an assistant message");
+		// duration present → this is a settled turn (the row's own gate)
+		settled.message.duration = 1200;
+		const on = renderTranscript({ entries: [settled], working: false, showTokenUsage: true });
+		expect(countElements(on, ".tr-usage")).toBe(1);
+		const off = renderTranscript({ entries: [settled], working: false });
+		expect(countElements(off, ".tr-usage")).toBe(0);
+	});
+
+	it("colorBlind marks the root with data-colorblind", () => {
+		const html = renderTranscript({ working: false, colorBlind: true });
+		expect(html).toContain('data-colorblind="true"');
+		const plain = renderTranscript({ working: false });
+		expect(plain).not.toContain("data-colorblind");
+	});
+
+	it("collapseCompacted folds pre-compaction history behind a toggle row", () => {
+		const entries: SessionEntry[] = [
+			{
+				type: "message",
+				id: "pre-1",
+				parentId: null,
+				timestamp: "2026-07-01T00:00:00Z",
+				message: { role: "user", content: "old history", timestamp: 1 },
+			},
+			{
+				type: "compaction",
+				id: "comp-1",
+				parentId: null,
+				timestamp: "2026-07-01T00:01:00Z",
+				summary: "sum",
+				firstKeptEntryId: "post-1",
+				tokensBefore: 1000,
+			},
+			{
+				type: "message",
+				id: "post-1",
+				parentId: null,
+				timestamp: "2026-07-01T00:02:00Z",
+				message: { role: "user", content: "after compaction", timestamp: 1 },
+			},
+		];
+		const folded = renderTranscript({ entries, working: false, collapseCompacted: true });
+		expect(folded).toContain("tr-compacted-fold");
+		// Pre-compaction history is hidden: only the post-compaction user
+		// row renders. (Text content is not asserted — Markdown SSR renders
+		// empty in this harness, a pre-existing baseline issue.)
+		expect(countElements(folded, ".tr-row--user")).toBe(1);
+		const unfolded = renderTranscript({ entries, working: false });
+		expect(countElements(unfolded, ".tr-row--user")).toBe(2);
+		expect(unfolded).not.toContain("tr-compacted-fold");
+	});
+});
+
+describe("msgText (per-message copy / edit / fork source)", () => {
+	it("returns a string content message in full, however long", () => {
+		const long = "字".repeat(500);
+		expect(msgText({ content: long })).toBe(long);
+	});
+
+	it("joins ALL text blocks without truncating", () => {
+		const long = "长文本".repeat(300); // 900 chars — well past the old 200 cap
+		const joined = msgText({ content: [{ type: "text", text: long }, { type: "text", text: "尾巴" }] });
+		expect(joined).toBe(`${long} 尾巴`);
+		expect(joined.length).toBeGreaterThan(200);
+	});
+
+	it("skips non-text blocks but keeps their neighbors", () => {
+		const msg = {
+			content: [
+				{ type: "text", text: "开头" },
+				{ type: "toolCall", id: "t1", name: "probe", arguments: {} },
+				{ type: "text", text: "结尾" },
+			],
+		};
+		expect(msgText(msg)).toBe("开头 结尾");
+	});
+
+	it("returns empty for unknown shapes", () => {
+		expect(msgText({ content: 42 })).toBe("");
+		expect(msgText({ content: undefined })).toBe("");
 	});
 });

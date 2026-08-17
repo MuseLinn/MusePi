@@ -8,6 +8,7 @@
 - 当前同步基线：**v17.2.12**（2026-08-09 完成，60 commits / 641 files / +88,543 / −87,950 原始 diff；**shell builtins 大重构**——`crates/vendor/brush-builtins` + `crates/pi-shell` 的 coreutils/moreutils 等 50+ 模块合并为第一方 `crates/pi-builtins`，vendor/uu-* 全部移除，crates 净 −96k 行；slash-command 注册表拆分为 builtin-{modes,session,control,lifecycle,marketplace,collaboration,completions}.ts 7 模块 + 统一 registry；新增 /cleanup 命令（scripts/cleanup-scan.ts）；若干修复）
 - 上次基线：v17.2.11（2026-08-08 完成，141 commits / 256 files / +11,890 / −15,938；含 **Agent Plugins 1.0.0 标准支持**、pi-voice miniaudio→原生平台音频后端、MCP header 策略、secrets 重构等。注意：同步内容被并发 GUI 会话合入 0e45e3551（"fix: maximized widget modal"），历史未拆分）
 - musepi 应用版本：**0.3.0**（独立于上游版本号，见「版本说明」）
+- ⚠️ **musepi 定制（2026-08-10，基线 v17.2.12 之后）**：`packages/coding-agent/src/tools/computer.ts` + `computer/{protocol,supervisor,worker}.ts` 含 ours 定制——**ComputerInputEvent 输入事件透出**（worker 的 Win/El 输入方法经 supervisor `run(…, onInput)` → computer.ts `_onUpdate` 推 `details.inputEvents`，驱动 GUI computer-use 光晕覆盖层的目标高亮）。上游同步时这 4 个文件按 OVERLAP 处理：保留 ours 事件透出 + 并入 theirs 变更；`test/computer-input-events.test.ts` 为 musepi 新增（NEW，无冲突）。参考：docs 的 computer-use.md/computer.md 同属 ours 深度定制
 
 ## 验证记录（v17.2.12 移植）
 

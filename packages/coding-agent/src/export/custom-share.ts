@@ -1,7 +1,7 @@
 /**
  * Custom share script loader.
  *
- * Allows users to define a custom share handler at ~/.omp/agent/share.ts
+ * Allows users to define a custom share handler at ~/.musepi/agent/share.ts
  * that will be used instead of the default GitHub Gist sharing.
  */
 import * as fs from "node:fs";

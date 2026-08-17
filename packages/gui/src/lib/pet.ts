@@ -27,7 +27,17 @@ export type PetDisplayMode = "input" | "desktop";
  */
 export interface PetActivity {
 	mood?: PetMood;
-	bubble?: { kind: "completed" | "error" | "question" | "subtask"; text: string; requestId?: string } | null;
+	bubble?: {
+		kind: "completed" | "error" | "question" | "subtask";
+		text: string;
+		requestId?: string;
+		/** Session the notification belongs to — lets the bubble
+		 *  click open that session directly (and mark it read). */
+		sessionId?: string;
+	} | null;
+	/** Sessions that became read in the main window (opened) — the bubble
+	 *  window dismisses their completion/error bubbles (read-闭环). */
+	dismissSessions?: string[];
 	state?: {
 		working: boolean;
 		streaming: boolean;
@@ -45,6 +55,10 @@ export interface PetActivity {
 	/** Main-window locale (the pet window cannot read its localStorage —
 	 *  carried so the panel strings match the main UI language). */
 	locale?: string;
+	/** Resolved light/dark scheme of the main window. Pushed on change
+	 *  (the pet window mirrors it as data-theme — see pet-main.tsx);
+	 *  cross-window storage events don't fire reliably under file://. */
+	theme?: "light" | "dark";
 }
 
 export const PET_MOODS: readonly PetMood[] = ["rest", "working", "waiting", "analyzing", "error"];
@@ -91,23 +105,14 @@ export const BUILTIN_PETDEX: readonly {
 		contentH: 102,
 	},
 	{
-		id: "elaina",
-		displayName: "Elaina",
+		id: "jiyi",
+		displayName: "Jiyi",
 		description:
-			"A cute pixel-art Codex pet inspired by Elaina, the tiny traveling witch with a bright hat and gentle broom-side charm.",
-		spritesheetPath: "./pets/elaina-2.webp",
+			"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.",
+		spritesheetPath: "./pets/jiyi.webp",
 		width: 768,
 		height: 936,
-		contentH: 101,
-	},
-	{
-		id: "gugugaga",
-		displayName: "咕咕嘎嘎",
-		description: "A cheerful chibi girl in a black penguin suit with a simple silver collar pendant.",
-		spritesheetPath: "./pets/gugugaga.webp",
-		width: 768,
-		height: 936,
-		contentH: 101,
+		contentH: 100,
 	},
 	{
 		id: "hachiware",
@@ -120,37 +125,6 @@ export const BUILTIN_PETDEX: readonly {
 		contentH: 101,
 	},
 	{
-		id: "ikun",
-		displayName: "IKUN",
-		description: "A hoodie chick with hot path stage energy.",
-		spritesheetPath: "./pets/ikun.webp",
-		width: 768,
-		height: 936,
-		contentH: 94,
-	},
-	{
-		id: "jiyi",
-		displayName: "吉伊",
-		description:
-			"A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.",
-		spritesheetPath: "./pets/jiyi.webp",
-		width: 768,
-		height: 936,
-		contentH: 100,
-	},
-	{
-		id: "panda-pix",
-		displayName: "Panda",
-		description: "Codux bundled pet atlas.",
-		spritesheetPath: "./pets/panda-pix.webp",
-		width: 768,
-		height: 936,
-		// The only preset whose rows are fully drawn (8/8 everywhere) —
-		// others follow PETDEX_ROW_FRAMES_DEFAULT (6-frame calm rows).
-		rows: [8, 8, 8, 8, 8, 8, 8, 8, 8],
-		contentH: 104,
-	},
-	{
 		id: "usagi",
 		displayName: "Usagi",
 		description: "A tiny cream rabbit companion based on the provided Usagi reference.",
@@ -158,6 +132,50 @@ export const BUILTIN_PETDEX: readonly {
 		width: 768,
 		height: 936,
 		contentH: 102,
+	},
+	{
+		id: "han-li-yujian-feixing",
+		displayName: "Han Li",
+		description: "A calm, cautious Q-version of Han Li in a dark-cyan Daoist robe, quietly riding his sword.",
+		spritesheetPath: "./pets/han-li-yujian-feixing.webp",
+		width: 1536,
+		height: 1872,
+		// Imported package scan (192×208 frames); rows 3/4 map to no mood.
+		rows: [6, 8, 8, 4, 5, 8, 6, 6, 6],
+		contentH: 199,
+	},
+	{
+		id: "doraemon",
+		displayName: "Doraemon",
+		description: "A compact blue robot-cat pet inspired by Doraemon.",
+		spritesheetPath: "./pets/doraemon.webp",
+		width: 1536,
+		height: 1872,
+		// Imported package scan (192×208 frames); rows 3/4 map to no mood.
+		rows: [6, 8, 8, 4, 5, 8, 6, 6, 6],
+		contentH: 199,
+	},
+	{
+		id: "noir-webling",
+		displayName: "Noir Webling",
+		description: "A tiny monochrome spider detective in a fedora and trench coat.",
+		spritesheetPath: "./pets/noir-webling.webp",
+		width: 1536,
+		height: 1872,
+		// Imported package scan (192×208 frames); rows 3/4 map to no mood.
+		rows: [6, 8, 8, 4, 5, 8, 6, 6, 6],
+		contentH: 199,
+	},
+	{
+		id: "feixue",
+		displayName: "Feixue",
+		description: "A white-haired, red-eyed character from Wuthering Waves, made into a pixel desktop pet.",
+		spritesheetPath: "./pets/feixue.webp",
+		width: 1536,
+		height: 1872,
+		// Imported package scan (192×208 frames); rows 3/4 map to no mood.
+		rows: [6, 8, 8, 4, 5, 8, 6, 6, 6],
+		contentH: 199,
 	},
 ];
 
@@ -402,7 +420,12 @@ export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH
 		return fallback;
 	}
 	const rows: number[] = [];
-	const threshold = Math.max(1, Math.floor(fw * fh * 0.01));
+	// Opaque-pixel threshold per cell. BitFun's own frames are >1% of the
+	// cell, but imported sheets can carry thin/partial frames (a staff, a
+	// sword, a trailing scarf) that still legitimately animate — 1% would
+	// drop them and truncate the cycle. 0.25% keeps real frames while
+	// ignoring near-empty noise cells.
+	const threshold = Math.max(1, Math.floor(fw * fh * 0.0025));
 	// Rest-row content bounds: row 0 across its valid columns (the row is
 	//  where the pet rests — the size the eye judges first).
 	let restTop = fh;

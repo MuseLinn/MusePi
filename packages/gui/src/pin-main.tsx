@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
-import { createRoot } from "react-dom/client";
-import { useState } from "react";
 import { WidgetErrorBoundary } from "@musepi/collab-web/src/widgets/error-boundary";
 import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/collab-web/src/widgets/registry";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { createRoot } from "react-dom/client";
+import { initTooltips } from "./lib/tooltips";
 import { Icon, type IconName } from "./vendor/oc-icons";
 import "@musepi/collab-web/src/styles/tokens.css";
 import "@musepi/collab-web/src/styles/base.css";
@@ -24,7 +25,6 @@ const pinAPI = (window as unknown as { electronAPI?: PinAPI }).electronAPI;
 function PinApp(): ReactNode {
 	const params = new URLSearchParams(window.location.search);
 	const type = params.get("type") ?? "";
-	const title = params.get("title") ?? "";
 	let data: Record<string, unknown> = {};
 	try {
 		const raw = params.get("data");
@@ -86,6 +86,9 @@ function PinApp(): ReactNode {
 		</div>
 	);
 }
+
+// Unified tooltip layer for this window too (widget controls have titles).
+initTooltips();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");

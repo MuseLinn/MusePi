@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="color-scheme" content="light dark" />
+		<title>MusePi Glow</title>
+		<style>
+			/* Computer-use glow overlay: pure visual layer. The window is
+			 * click-through (setIgnoreMouseEvents forward) so this never
+			 * blocks the agent's own input; body keeps pointer-events off
+			 * as a belt-and-braces guard. */
+			html,
+			body {
+				margin: 0;
+				width: 100vw;
+				height: 100vh;
+				overflow: hidden;
+				background: transparent;
+				pointer-events: none;
+			}
+			/* Four edge rings — radial gradients hugging each side. */
+			body::before {
+				content: "";
+				position: fixed;
+				inset: 0;
+				background:
+					radial-gradient(130% 22% at 50% 0%, oklch(0.62 0.23 341 / 0.34), transparent 72%),
+					radial-gradient(130% 22% at 50% 100%, oklch(0.62 0.23 341 / 0.34), transparent 72%),
+					radial-gradient(22% 130% at 0% 50%, oklch(0.62 0.23 341 / 0.3), transparent 72%),
+					radial-gradient(22% 130% at 100% 50%, oklch(0.62 0.23 341 / 0.3), transparent 72%);
+				animation: glow-breathe 2.4s ease-in-out infinite;
+			}
+			@keyframes glow-breathe {
+				0%,
+				100% {
+					opacity: 0.6;
+				}
+				50% {
+					opacity: 1;
+				}
+			}
+			.badge {
+				position: fixed;
+				top: 18px;
+				left: 50%;
+				transform: translateX(-50%);
+				display: flex;
+				align-items: center;
+				gap: 9px;
+				padding: 9px 18px;
+				border-radius: 999px;
+				white-space: nowrap;
+				color: #fff;
+				font: 500 13px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+				background: oklch(0.3 0.05 341 / 0.92);
+				border: 1px solid oklch(0.62 0.23 341 / 0.65);
+				box-shadow: 0 6px 24px oklch(0.62 0.23 341 / 0.4), 0 0 0 4px oklch(0.62 0.23 341 / 0.12);
+				animation: badge-in 220ms ease-out both;
+			}
+			@keyframes badge-in {
+				from {
+					opacity: 0;
+					transform: translateX(-50%) translateY(-6px);
+				}
+			}
+			.dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+				background: #ff8fd8;
+				box-shadow: 0 0 8px #ff8fd8;
+				animation: dot-pulse 1.2s ease-in-out infinite;
+			}
+			@keyframes dot-pulse {
+				0%,
+				100% {
+					opacity: 0.45;
+					transform: scale(0.85);
+				}
+				50% {
+					opacity: 1;
+					transform: scale(1.15);
+				}
+			}
+			/* Computer-input target: window/element frame highlight. */
+			.target {
+				position: fixed;
+				border: 2px solid oklch(0.62 0.23 341 / 0.9);
+				border-radius: 6px;
+				box-shadow:
+					0 0 0 3px oklch(0.62 0.23 341 / 0.25),
+					0 0 28px oklch(0.62 0.23 341 / 0.55),
+					inset 0 0 22px oklch(0.62 0.23 341 / 0.18);
+				pointer-events: none;
+				z-index: 10;
+				animation:
+					target-pop 220ms ease-out,
+					target-fade 1.1s ease-in 750ms forwards;
+			}
+			.target-label {
+				position: absolute;
+				left: 50%;
+				transform: translateX(-50%);
+				background: oklch(0.3 0.05 341 / 0.92);
+				color: #fff;
+				border: 1px solid oklch(0.62 0.23 341 / 0.6);
+				border-radius: 999px;
+				padding: 4px 10px;
+				font: 500 11px/1 -apple-system, "PingFang SC", sans-serif;
+				white-space: nowrap;
+				box-shadow: 0 4px 14px oklch(0 0 0 / 0.3);
+			}
+			/* Action point pulse (best-effort click coordinates). */
+			.target-ring {
+				position: fixed;
+				width: 30px;
+				height: 30px;
+				margin: -15px 0 0 -15px;
+				border: 3px solid oklch(0.62 0.23 341 / 0.9);
+				border-radius: 50%;
+				box-shadow: 0 0 16px oklch(0.62 0.23 341 / 0.6);
+				pointer-events: none;
+				z-index: 10;
+				animation: ring-pulse 900ms ease-out forwards;
+			}
+			@keyframes target-pop {
+				from {
+					opacity: 0;
+					transform: scale(0.985);
+				}
+			}
+			@keyframes target-fade {
+				to {
+					opacity: 0;
+				}
+			}
+			@keyframes ring-pulse {
+				0% {
+					transform: scale(0.5);
+					opacity: 1;
+				}
+				100% {
+					transform: scale(1.6);
+					opacity: 0;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="badge"><span class="dot"></span><span id="label">AI 正在操作桌面</span></div>
+		<script>
+			// The overlay is a plain window (no collab-web bundle): carry the
+			// main window's locale for the badge text. Theme is baked into
+			// the accent already (works on both schemes), nothing to do.
+			try {
+				if ((localStorage.getItem("omp.collab.locale") || "zh-CN").startsWith("en")) {
+					document.getElementById("label").textContent = "AI is controlling the desktop";
+				}
+			} catch {
+				/* isolated page — best effort */
+			}
+			// Computer-input target highlighting. Coordinates arrive already
+			// rebased to this window's viewport (main process distributes by
+			// display and subtracts the window origin).
+			const KIND_LABELS = {
+				click: "点击",
+				doubleClick: "双击",
+				move: "移动",
+				drag: "拖拽",
+				scroll: "滚动",
+				type: "输入",
+				press: "按键",
+				raise: "置顶",
+				setValue: "填写",
+				perform: "执行",
+				focus: "聚焦",
+			};
+			// The sandboxed preload bridge can land after this classic
+			// script runs — poll until it appears (the overlay window lives
+			// as long as the glow is active, so this terminates with it).
+			(function boot() {
+				const bridge = window.glowBridge;
+				if (!bridge) {
+					setTimeout(boot, 60);
+					return;
+				}
+				bridge.onTarget(ev => {
+					const kind = KIND_LABELS[ev.kind] ?? ev.kind;
+					if (ev.rect && ev.rect.width > 0 && ev.rect.height > 0) {
+						const border = document.createElement("div");
+						border.className = "target";
+						border.style.left = `${ev.rect.x}px`;
+						border.style.top = `${ev.rect.y}px`;
+						border.style.width = `${ev.rect.width}px`;
+						border.style.height = `${ev.rect.height}px`;
+						const label = document.createElement("span");
+						label.className = "target-label";
+						const title =
+							ev.title && ev.title.length > 24 ? `${ev.title.slice(0, 24)}…` : ev.title;
+						label.textContent = title ? `${kind} · ${title}` : kind;
+						// Keep the label inside the viewport when the frame
+						// hugs the top edge.
+						label.style.top = ev.rect.y < 32 ? "8px" : "-30px";
+						border.appendChild(label);
+						document.body.appendChild(border);
+						setTimeout(() => border.remove(), 1900);
+					}
+					if (ev.point) {
+						const ring = document.createElement("div");
+						ring.className = "target-ring";
+						ring.style.left = `${ev.point.x}px`;
+						ring.style.top = `${ev.point.y}px`;
+						document.body.appendChild(ring);
+						setTimeout(() => ring.remove(), 1200);
+					}
+				});
+			})();
+		</script>
+	</body>
+</html>

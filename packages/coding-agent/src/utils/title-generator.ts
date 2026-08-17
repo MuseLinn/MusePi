@@ -145,6 +145,13 @@ export async function generateSessionTitle(
 	}
 
 	const titleSystemPrompt = customSystemPrompt?.trim() || undefined;
+	// Follow the interface language (settings.locale): zh-CN titles are
+	// generated in Chinese (proper nouns / untranslatable task text aside).
+	const locale = settings.get("settings.locale") as string | undefined;
+	const effectiveSystem =
+		locale === "zh-CN"
+			? `${titleSystemPrompt ?? ""}\n\n# Language\nRespond in Chinese (简体中文). Write the title in Chinese unless the task text is in another language and consists of untranslatable proper nouns.`.trim()
+			: titleSystemPrompt;
 	const tinyModel = settings.get("providers.tinyModel");
 	if (tinyModel === ONLINE_TINY_TITLE_MODEL_KEY) {
 		return generateTitleOnline(
@@ -155,7 +162,7 @@ export async function generateSessionTitle(
 			currentModel,
 			metadataResolver,
 			signal,
-			titleSystemPrompt,
+			effectiveSystem,
 		);
 	}
 
@@ -179,10 +186,10 @@ export async function generateSessionTitle(
 			localTitle = await tinyTitleClient.generate(
 				tinyModel,
 				firstMessage,
-				titleSystemPrompt ? { signal, systemPrompt: titleSystemPrompt } : { signal },
+				effectiveSystem ? { signal, systemPrompt: effectiveSystem } : { signal },
 			);
-		} else if (titleSystemPrompt) {
-			localTitle = await tinyTitleClient.generate(tinyModel, firstMessage, { systemPrompt: titleSystemPrompt });
+		} else if (effectiveSystem) {
+			localTitle = await tinyTitleClient.generate(tinyModel, firstMessage, { systemPrompt: effectiveSystem });
 		} else {
 			localTitle = await tinyTitleClient.generate(tinyModel, firstMessage);
 		}

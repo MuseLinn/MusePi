@@ -922,7 +922,7 @@ export class WorkerCore {
 	}
 
 	/**
-	 * Tell the omp browser relay this worker drives the adopted page, so the
+	 * Tell the musepi browser relay this worker drives the adopted page, so the
 	 * relay adds it to the per-window "omp" tab group. Best-effort: plain CDP
 	 * backends (real Chrome, cmux) reject the relay-private method.
 	 */
@@ -933,7 +933,7 @@ export class WorkerCore {
 			// Puppeteer's protocol map cannot express the relay-private method; the
 			// send signature is otherwise identical.
 			const raw = session as unknown as { send(method: string): Promise<unknown> };
-			await raw.send("OMP.claimTarget");
+			await raw.send("MusePi.claimTarget");
 		} catch {
 			// Not the omp relay; nothing to claim.
 		} finally {

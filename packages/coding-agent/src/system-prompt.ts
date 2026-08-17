@@ -557,6 +557,9 @@ export interface BuildSystemPromptOptions {
 	xdevDocs?: string;
 	/** Whether Auto-QA grievance reporting is enabled; renders the `xd://report_issue` note. */
 	autoQaEnabled?: boolean;
+	/** Interface label surfaced in the role line, e.g. "terminal (TUI)" or
+	 *  "desktop (GUI)". Omitted for an unqualified "MusePi" brand. */
+	interfaceLabel?: string;
 }
 
 /** Result of building provider-facing system prompt messages. */
@@ -614,6 +617,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		xdevTools = [],
 		xdevDocs = "",
 		autoQaEnabled = false,
+		interfaceLabel,
 		activeRepoContext: providedActiveRepoContext,
 	} = options;
 	const inlineToolDescriptors = providedInlineToolDescriptors ?? false;
@@ -895,6 +899,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		hasDynamicXdevTools: xdevTools.some(mounted => mounted.dynamic === true),
 		xdevDocs,
 		autoQaEnabled,
+		interfaceLabel,
 	};
 	const rendered = prompt.render(resolvedCustomPrompt ? customSystemPromptTemplate : systemPromptTemplate, data);
 	const systemPrompt = [rendered];

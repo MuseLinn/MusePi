@@ -75,7 +75,7 @@ export function Kv({ k, children }: { k: ReactNode; children: ReactNode }): Reac
 	);
 }
 
-function useHighlight(code: string, lang: string | null | undefined): string | null {
+export function useHighlight(code: string, lang: string | null | undefined): string | null {
 	return useMemo(() => {
 		if (!lang) return null;
 		const hljs = getHljs();
@@ -215,6 +215,8 @@ export function ResultImages({ result }: { result: ToolResultLike | undefined })
 						className="tv-img"
 						src={`data:${img.mimeType};base64,${img.data}`}
 						alt={t("tool result {count}", { count: String(i + 1) })}
+						loading="lazy"
+						decoding="async"
 					/>
 				</button>
 			))}

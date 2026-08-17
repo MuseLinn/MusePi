@@ -192,6 +192,55 @@ describe("GuestClient frame apply", () => {
 		client.applyFrameForTest({ t: "state", state: { ...STATE, isStreaming: false } });
 		expect(client.getSnapshot().working).toBe(false);
 	});
+	it("agent_end freezes the completed round's total pinned to its final message", () => {
+		// Round = last user message → agent_end (craft-agents completedAt
+		// parity): the frozen value spans the whole working period, including
+		// tool execution.
+		const client = liveClient([messageEntry("u1", { role: "user", content: "do it", timestamp: 1_000 })]);
+		const finalMsg = assistantMessage("done");
+		finalMsg.timestamp = 2_000;
+		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: finalMsg } });
+		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: finalMsg } });
+		// agent_end may arrive while the ghost still holds the final message
+		// (its entry frame lands later) — the total must still pin to the
+		// ghost's timestamp, not some older assistant message.
+		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
+		const snap = client.getSnapshot();
+		expect(snap.roundDurations.size).toBe(1);
+		const [ts, ms] = [...snap.roundDurations][0];
+		expect(ts).toBe(2_000);
+		expect(ms).toBeGreaterThan(0);
+	});
+	it("agent_end pins the total to the folded entry once the ghost cleared", () => {
+		const client = liveClient([messageEntry("u1", { role: "user", content: "do it", timestamp: 1_000 })]);
+		const finalMsg = assistantMessage("done");
+		finalMsg.timestamp = 2_000;
+		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: finalMsg } });
+		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: finalMsg } });
+		client.applyFrameForTest({ t: "entry", entry: messageEntry("e2", finalMsg) });
+		expect(client.getSnapshot().stream).toBeNull();
+		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
+		const [ts, ms] = [...client.getSnapshot().roundDurations][0];
+		expect(ts).toBe(2_000);
+		expect(ms).toBeGreaterThan(0);
+	});
+	it("round totals accumulate per completed round (每轮单独计时)", () => {
+		const client = liveClient([messageEntry("u1", { role: "user", content: "first", timestamp: 1_000 })]);
+		const first = assistantMessage("answer 1");
+		first.timestamp = 2_000;
+		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: first } });
+		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: first } });
+		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
+		// Round 2: a new user message anchors the next round.
+		client.applyFrameForTest({ t: "entry", entry: messageEntry("u2", { role: "user", content: "again", timestamp: 3_000 }) });
+		const second = assistantMessage("answer 2");
+		second.timestamp = 4_000;
+		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: second } });
+		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: second } });
+		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
+		const durations = client.getSnapshot().roundDurations;
+		expect([...durations.keys()].sort()).toEqual([2_000, 4_000]);
+	});
 	it("a state frame recovers a stuck-idle guest when agent_start was dropped", () => {
 		// The host begins streaming mid-turn, but the matching `agent_start`
 		// never arrived (e.g. dropped on a reconnect). Before the fix nothing

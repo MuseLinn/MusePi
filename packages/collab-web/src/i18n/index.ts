@@ -5,6 +5,7 @@
  * `t()` must only be called at render time, never at module load time.
  */
 
+import { enUS } from "./en-US.js";
 import { zhCN } from "./zh-CN.js";
 
 /** Translation map: English source string → localized string. */
@@ -35,6 +36,7 @@ export type ParamsOf<K extends TranslationKey> = [PlaceholderOf<(typeof zhCN)[K]
 
 const locales: Record<string, TranslationMap> = {
 	"zh-CN": zhCN,
+	"en-US": enUS,
 };
 
 let currentLocale = detectLocale();

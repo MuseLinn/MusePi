@@ -3625,14 +3625,18 @@ class CodexWebSocketConnection {
 			this.#push(new CodexWebSocketTransportError(`websocket closed (${event.code})`));
 			this.#push(null);
 		};
-		socket.onmessage = event => {
+		socket.onmessage = (event: unknown) => {
+			// bun-types 1.3.14 resolves its MessageEvent to the CONSTRUCTOR type
+			// under a DOM lib compile (collab-web type-checks ../ai), so the
+			// handler param is unusable — read the frame shape structurally.
+			const frame = event as { data?: unknown };
 			// Stamp inbound activity before parsing so even malformed frames refresh
 			// the liveness clock — what matters for reuse health is that the upstream
 			// is still talking to us, not that every frame is well-formed.
 			this.#lastInboundAt = Date.now();
-			this.#writeDebugWebSocketFrame(event.data);
+			this.#writeDebugWebSocketFrame(frame.data);
 			try {
-				const text = typeof event.data === "string" ? event.data : Buffer.from(event.data).toString("utf-8");
+				const text = typeof frame.data === "string" ? frame.data : Buffer.from(frame.data as Uint8Array).toString("utf-8");
 				if (!text) return;
 				const parsed = JSON.parse(text) as Record<string, unknown>;
 				if (parsed.type === "error" && typeof parsed.error === "object" && parsed.error) {
@@ -3647,7 +3651,7 @@ class CodexWebSocketConnection {
 				notifyCodexWebSocketInbound(this.#streamObserver, parsed, text);
 				this.#push(parsed);
 			} catch (error) {
-				notifyCodexWebSocketMalformed(this.#streamObserver, event.data, error);
+				notifyCodexWebSocketMalformed(this.#streamObserver, frame.data, error);
 				this.#push(new CodexWebSocketTransportError(`${String(error)}`));
 			}
 		};
@@ -4170,7 +4174,7 @@ async function openCodexSseEventStream(
 		fetchWithRetry(url, {
 			method: "POST",
 			headers,
-			body: requestBody,
+			body: requestBody as ConstructorParameters<typeof Response>[0],
 			signal,
 			prepareInit: () => {
 				const watchdog = armPreResponseTimeout(signal, firstEventTimeoutMs);

@@ -96,6 +96,18 @@ export function StocksCard({
 				script.onload = () => resolve();
 				script.onerror = () => reject(new Error("script load failed"));
 				document.head.appendChild(script);
+				// A blocked script (network dead / geo-blocked) never fires
+				// onerror in some Chromium versions — hard-timeout it so the
+				// card degrades instead of hanging on "实时 A 股行情".
+				const timer = setTimeout(() => reject(new Error("script load timeout")), 8000);
+				script.onload = () => {
+					clearTimeout(timer);
+					resolve();
+				};
+				script.onerror = () => {
+					clearTimeout(timer);
+					reject(new Error("script load failed"));
+				};
 			});
 
 		const parseKline = (row: StockRow, payload: unknown): Quote => {

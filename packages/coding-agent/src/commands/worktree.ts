@@ -1,5 +1,5 @@
 /**
- * List and clean up agent-managed git worktrees under `~/.omp/wt`.
+ * List and clean up agent-managed git worktrees under `~/.musepi/wt`.
  */
 
 import { getProjectDir } from "@musepi/pi-utils";
@@ -47,7 +47,7 @@ export default class Worktree extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Worktree);
 		// Load settings so the `worktree.base` override is applied before we scan
-		// — otherwise this command would inspect ~/.omp/wt while the agent created
+		// — otherwise this command would inspect ~/.musepi/wt while the agent created
 		// its worktrees under the configured base.
 		await Settings.init({ cwd: getProjectDir() });
 		if (args.action === "clear") {

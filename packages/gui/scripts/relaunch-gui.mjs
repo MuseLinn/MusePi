@@ -9,12 +9,35 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 
+// Match only Electron binaries inside this repo so unrelated apps (Kimi,
+// etc.) are never touched. Per-platform layout: macOS runs from the .app
+// bundle, Windows/Linux from dist/electron(.exe).
 const REPO_ELECTRON =
-	/harness-engineering\/musepi-omp\/node_modules\/\.bun\/electron@[^/]+\/node_modules\/electron\/dist\/Electron\.app\/Contents\/MacOS\/Electron/;
+	/harness-engineering[\\/]musepi-omp[\\/]node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](?:Electron\.app\/Contents\/MacOS\/Electron|electron(?:\.exe)?)/;
 
 function runningPids() {
-	const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
 	const pids = [];
+	if (process.platform === "win32") {
+		// tasklist has no command line; PowerShell CIM is the supported
+		// route. Lines: "<pid>\t<executable path>".
+		const out = execFileSync(
+			"powershell",
+			[
+				"-NoProfile",
+				"-Command",
+				"Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath } | ForEach-Object { \"$($_.ProcessId)`t$($_.ExecutablePath)\" }",
+			],
+			{ encoding: "utf8" },
+		);
+		for (const line of out.split(/\r?\n/)) {
+			const [pidStr, ...rest] = line.split("\t");
+			if (rest.length === 0 || !REPO_ELECTRON.test(rest.join("\t"))) continue;
+			const pid = Number.parseInt(pidStr, 10);
+			if (Number.isFinite(pid)) pids.push(pid);
+		}
+		return pids;
+	}
+	const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
 	for (const line of out.split("\n")) {
 		if (!REPO_ELECTRON.test(line)) continue;
 		const pid = Number.parseInt(line.trim().split(/\s+/)[0], 10);

@@ -5,6 +5,7 @@ import { getAgentDir as getDefaultAgentDir, logger, parseJsonlLenient, toError }
 import { LRUCache } from "@musepi/pi-utils/lru";
 import { computeDefaultSessionDir } from "./session-paths";
 import { FileSessionStorage, type SessionStorage, type SessionStorageStat } from "./session-storage";
+import { parseTitleSlotFromContent } from "./session-title-slot";
 
 /**
  * Coarse lifecycle status of a session, derived from its last persisted message.
@@ -456,11 +457,18 @@ async function scanSessionFile(
 
 		firstMessage ||= extractFirstDisplayMessageFromPrefix(content) ?? "";
 		const messageCount = Math.max(parsedMessageCount, countMessageMarkers(content));
+		// The fixed-width first-line title slot is the live session name —
+		// auto-generated titles and user /rename both persist there (the
+		// session-manager writes it via updateSessionTitle, and setSessionFile
+		// reads it back). header.title only covers the legacy session-line
+		// field, so the slot wins when present.
+		const titleSlot = parseTitleSlotFromContent(content);
+		const slotTitle = titleSlot?.title?.trim();
 		const info: SessionInfo = {
 			path: file,
 			id: header.id,
 			cwd: header.cwd ?? "",
-			title: header.title ?? shortSummary,
+			title: slotTitle ? slotTitle : (header.title ?? shortSummary),
 			parentSessionPath: header.parentSession,
 			created: new Date(header.timestamp ?? ""),
 			modified: mtime,

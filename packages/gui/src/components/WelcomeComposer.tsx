@@ -1,23 +1,24 @@
-import { t, type TranslationKey } from "@musepi/collab-web";
+import { type TranslationKey, t } from "@musepi/collab-web";
 import type { FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ComposerFrame } from "../lib/composer-frame";
+import { X } from "lucide-react";
 import { projectName } from "../lib/electron";
+import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { BlurText } from "./BlurText";
-import { ShinyText } from "./ShinyText";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
+import { BlurText } from "./BlurText";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
 import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
-import { Pop } from "./Pop";
+import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
+import { ShinyText } from "./ShinyText";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
-import { THINKING_LEVELS } from "./thinking-selector-shared";
 
 /** Time-aware greeting (ZCode-style): 早上好 / 下午好 / 晚上好 / 夜深了. */
 function greeting(): string {
@@ -62,6 +63,10 @@ export function WelcomeComposer({
 	focused,
 	onToggleFocus,
 	presetModelId,
+	presetThinkingLevel,
+	reminders,
+	onSelectReminder,
+	onMarkAllRead,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -84,16 +89,56 @@ export function WelcomeComposer({
 	/** Current project (workspace folder), if any. */
 	project?: string | null;
 	/** 打开文件夹 / 远程连接 / 不在项目中 project actions. */
-	onProject?(action: "folder" | "remote" | "none"): void;
+	/** 打开文件夹 / 远程连接 / 不在项目中 project actions, or an already
+	 *  saved workspace path (picked from the saved-workspaces list). */
+	onProject?(action: "folder" | "remote" | "none" | string): void;
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
 	/** Daemon-settings default model (modelRoles.default, boot snapshot) —
 	 *  preselects the model button over the localStorage fallback. */
 	presetModelId?: string | null;
+	/** Daemon-settings thinking default (modelRoles.default suffix, else
+	 *  settings.defaultThinkingLevel incl. auto) — boot snapshot replacing
+	 *  the old localStorage mirror (omp-gui-default-thinking removed). */
+	presetThinkingLevel?: ThinkingLevel | null | undefined;
+	/** Welcome-scene reminders (kimi 实时提醒 parity): background-working +
+	 *  completed-unread sessions rendered below the composer. */
+	reminders?: readonly ReminderRow[];
+	onSelectReminder?(sessionId: string): void;
+	onMarkAllRead?(): void;
 }): ReactNode {
 	const pet = usePet();
 	const [text, setText] = useState("");
+	// Global selection append (Cmd/Ctrl+L, openchamber parity): any
+	// non-composer selection lands here through the shared window event,
+	// exactly like the session Composer's handler.
+	useEffect(() => {
+		const onInsert = (e: Event): void => {
+			const detail = (e as CustomEvent<{ text?: string }>).detail;
+			const insertion = detail?.text;
+			if (!insertion) return;
+			setText(prev => (prev.length === 0 ? insertion : `${prev}\n${insertion}`));
+			requestAnimationFrame(() => taRef.current?.focus());
+		};
+		window.addEventListener("omp-gui-insert-text", onInsert);
+		return () => window.removeEventListener("omp-gui-insert-text", onInsert);
+	}, []);
+	// Cmd/Ctrl+L quote cards (same style as the session Composer): quoted
+	// selections render as cards above the input and are sent as `> …`
+	// markdown in front of the prompt.
+	const [quotes, setQuotes] = useState<string[]>([]);
+	useEffect(() => {
+		const onQuoteAppend = (e: Event): void => {
+			const detail = (e as CustomEvent<{ text?: string }>).detail;
+			const text = detail?.text;
+			if (!text) return;
+			setQuotes(q => (q.includes(text) ? q : [...q, text]));
+			requestAnimationFrame(() => taRef.current?.focus());
+		};
+		window.addEventListener("omp-gui-quote-append", onQuoteAppend);
+		return () => window.removeEventListener("omp-gui-quote-append", onQuoteAppend);
+	}, []);
 	const [attachments, setAttachments] = useState<{ id: number; dataUrl: string; mimeType: string; name: string }[]>(
 		[],
 	);
@@ -105,17 +150,14 @@ export function WelcomeComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const attachId = useRef(0);
-	const [thinking, setThinking] = useState<ThinkingLevel | null>(() => {
-		// Settings → model → default thinking level (incl. auto).
-		try {
-			const v = localStorage.getItem("omp-gui-default-thinking");
-			if (v === "auto" || THINKING_LEVELS.includes(v as (typeof THINKING_LEVELS)[number])) return v as ThinkingLevel;
-			if (v === "") return null;
-		} catch {
-			// storage unavailable
-		}
-		return "medium";
-	});
+	// Thinking preselect: the boot snapshot (modelRoles.default suffix →
+	// defaultThinkingLevel) may arrive after first paint — apply it until the
+	// user touches the selector. undefined = no snapshot yet.
+	const thinkingTouched = useRef(false);
+	const [thinking, setThinking] = useState<ThinkingLevel | null>("medium");
+	useEffect(() => {
+		if (presetThinkingLevel !== undefined && !thinkingTouched.current) setThinking(presetThinkingLevel);
+	}, [presetThinkingLevel]);
 	// Preselect the settings-configured default model when present; the user
 	// can still switch freely before the first prompt.
 	const [modelId, setModelId] = useState<string | null>(() => {
@@ -155,7 +197,7 @@ export function WelcomeComposer({
 	// local branch list for the active project; hidden outside a repo.
 	const [branchInfo, setBranchInfo] = useState<{ current: string | null; branches: string[] } | null>(null);
 	const [branchOpen, setBranchOpen] = useState(false);
-	
+
 	useEffect(() => {
 		if (!rpc || !project) {
 			setBranchInfo(null);
@@ -164,7 +206,9 @@ export function WelcomeComposer({
 		let cancelled = false;
 		const load = (): void => {
 			void rpc
-				.request<{ current: string | null; branches: string[] } | { error: string }>("git.branches", { cwd: project })
+				.request<{ current: string | null; branches: string[] } | { error: string }>("git.branches", {
+					cwd: project,
+				})
 				.then(res => {
 					if (cancelled || !res || "error" in res) {
 						if (!cancelled && (!res || "error" in res)) setBranchInfo(null);
@@ -219,13 +263,34 @@ export function WelcomeComposer({
 		{ key: "suggest debug issue", labelKey: "chip debug issue" },
 		{ key: "suggest review changes", labelKey: "chip review changes" },
 	] as const;
+	// Empty-state placeholder carousel (new-task 空态 hints).
+	const PLACEHOLDER_TIPS = [
+		"ask anything, / for commands, @ for context…",
+		"welcome tip search web",
+		"welcome tip generate image",
+		"welcome tip create board",
+		"welcome tip draw diagram",
+	] as const;
 	const EXTRA_SUGGESTIONS = [
 		{ key: "suggest write tests", labelKey: "chip write tests" },
 		{ key: "suggest refactor", labelKey: "chip refactor" },
 		{ key: "suggest performance", labelKey: "chip performance" },
+		{ key: "suggest web search", labelKey: "chip web search" },
+		{ key: "suggest generate image", labelKey: "chip generate image" },
+		{ key: "suggest create board", labelKey: "chip create board" },
+		{ key: "suggest draw diagram", labelKey: "chip draw diagram" },
 	] as const;
 	const [showMore, setShowMore] = useState(false);
 	const ALL_SUGGESTIONS = [...SUGGESTIONS, ...EXTRA_SUGGESTIONS] as const;
+	// Empty-state placeholder rotates through capability hints (new-task
+	// 空态): keep the base shortcut hint first, then surface the newer
+	// features (web search / images / boards / diagrams) so the empty
+	// composer teaches what the agent can do.
+	const [tipIdx, setTipIdx] = useState(0);
+	useEffect(() => {
+		const id = setInterval(() => setTipIdx(i => (i + 1) % PLACEHOLDER_TIPS.length), 4000);
+		return () => clearInterval(id);
+	}, []);
 	const applySuggestion = (key: TranslationKey): void => {
 		setText(t(key));
 		requestAnimationFrame(() => taRef.current?.focus());
@@ -251,39 +316,92 @@ export function WelcomeComposer({
 	const [slashOpen, setSlashOpen] = useState(false);
 	const [slashQuery, setSlashQuery] = useState("");
 	const [slashCmds, setSlashCmds] = useState<SlashEntry[] | null>(null);
-	const slashIdx = useRef(0);
+	// Selection indexes must be STATE: arrow keys set them inside onKeyDown
+	// and the active-row highlight depends on them — refs never re-render,
+	// so the highlight only moved on unrelated renders (typing/streaming).
+	const [slashIdx, setSlashIdx] = useState(0);
 	const [atOpen, setAtOpen] = useState(false);
 	const [atQuery, setAtQuery] = useState("");
 	const [atEntries, setAtEntries] = useState<{ name: string; path: string; isDir: boolean; depth: number }[] | null>(
 		null,
 	);
-	const atIdx = useRef(0);
+	const [atIdx, setAtIdx] = useState(0);
 	const [hashOpen, setHashOpen] = useState(false);
 	const [hashQuery, setHashQuery] = useState("");
 	const [hashSessions, setHashSessions] = useState<{ id: string; cwd?: string }[] | null>(null);
 	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
-	const hashIdx = useRef(0);
+	const [hashIdx, setHashIdx] = useState(0);
 	const slashFilter =
-		slashCmds?.filter(
-			c =>
-				c.name.includes(slashQuery.toLowerCase()) ||
-				(c.description ?? "").toLowerCase().includes(slashQuery.toLowerCase()),
-		) ?? [];
+		slashCmds?.filter(c => {
+			const q = slashQuery.toLowerCase();
+			// /skill, /skills, /skill: — surface every skill command (the
+			// literal "skills" text never appears in skill:foo names).
+			const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
+			if (isSkillQuery && c.kind === "skill") return true;
+			return c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q);
+		}) ?? [];
 	const atFilter =
 		atEntries?.filter(
 			e =>
 				e.name.toLowerCase().includes(atQuery.toLowerCase()) ||
 				e.path.toLowerCase().includes(atQuery.toLowerCase()),
 		) ?? [];
-	const hashFilter = hashSessions ?? [];
+	// `#` completion filters the session list by query (id / label /
+	// cwd) — same contract as the @ file completion below.
+	const hashFilter = (hashSessions ?? []).filter(s => {
+		const q = hashQuery.trim().toLowerCase();
+		if (!q) return true;
+		const label = hashLabels.get(s.id) ?? "";
+		return (
+			label.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || (s.cwd ?? "").toLowerCase().includes(q)
+		);
+	});
 	const [projOpen, setProjOpen] = useState(false);
+	// Saved workspaces (sidebar 项目 tab parity): every folder the app
+	// knows (omp-gui-projects localStorage — seeded from session cwds and
+	// grown by folder picks), so the workspace picker lists them for
+	// one-tap switching instead of only offering 打开文件夹/远程连接.
+	const [savedProjects, setSavedProjects] = useState<string[]>(() => {
+		try {
+			const raw = localStorage.getItem("omp-gui-projects");
+			const parsed: unknown = raw ? JSON.parse(raw) : [];
+			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+		} catch {
+			return [];
+		}
+	});
+	// Keep the picker list in sync with the sidebar: folder picks dispatch
+	// omp-gui-project-added, and other windows (mini chat) write storage.
+	useEffect(() => {
+		const refresh = (): void => {
+			try {
+				const raw = localStorage.getItem("omp-gui-projects");
+				const parsed: unknown = raw ? JSON.parse(raw) : [];
+				setSavedProjects(Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : []);
+			} catch {
+				setSavedProjects([]);
+			}
+		};
+		window.addEventListener("omp-gui-project-added", refresh);
+		window.addEventListener("storage", refresh);
+		return () => {
+			window.removeEventListener("omp-gui-project-added", refresh);
+			window.removeEventListener("storage", refresh);
+		};
+	}, []);
 	// Focus-within state drives the hero beam (fades in while the composer
 	// has focus, fades out on blur — no static border box).
 	const [beamOn, setBeamOn] = useState(false);
 	// Portaled workspace-picker popup (model/thinking selector parity): the
 	// frosted glass samples real content behind it, and the exit animates.
-	const { anchorRef: projAnchorRef, renderMenu: renderProjMenu } = useFloatingMenu(projOpen, setProjOpen);
-	const { anchorRef: branchAnchorRef, renderMenu: renderBranchMenu } = useFloatingMenu(branchOpen, setBranchOpen);
+	// Single-layer: className carries the visual (gui-proj-menu), the hook
+	// provides portal + position + animation (Pop parity — no nested Pop).
+	const { anchorRef: projAnchorRef, renderMenu: renderProjMenu } = useFloatingMenu(projOpen, setProjOpen, {
+		className: "gui-proj-menu",
+	});
+	const { anchorRef: branchAnchorRef, renderMenu: renderBranchMenu } = useFloatingMenu(branchOpen, setBranchOpen, {
+		className: "gui-proj-menu",
+	});
 	// / @ # completion preview (composer parity): one floating menu for all
 	// three triggers, portaled so the glass samples real content behind it.
 	const compOpen = slashOpen || atOpen || hashOpen;
@@ -293,10 +411,24 @@ export function WelcomeComposer({
 		setAtOpen(false);
 		setHashOpen(false);
 	});
+	// Only one completion menu is mounted at a time (conditional render), so
+	// a single ref tracks whichever is open. The menu scrolls internally
+	// (max-height 300px, overflow-y auto) — keep the active row in view
+	// while arrow-navigating.
+	const completionMenuRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		const menu = completionMenuRef.current;
+		if (!menu) return;
+		const active = menu.querySelector(".gui-slash-row--active, .gui-model-opt--active");
+		active?.scrollIntoView({ block: "nearest" });
+	}, [slashIdx, atIdx, hashIdx, slashOpen, atOpen, hashOpen]);
 
 	const taRef = useRef<HTMLTextAreaElement | null>(null);
 	const formRef = useRef<HTMLFormElement | null>(null);
-	const canSend = text.trim().length > 0 && !busy;
+	// Select-all + delete clears text AND attachments together (consumed
+	// by onChange once the textarea reports the emptied value).
+	const clearAllRef = useRef(false);
+	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy;
 
 	// Completion triggers (composer parity): line-leading / @ # open the
 	// floating preview lists; Enter/click inserts the token.
@@ -306,7 +438,7 @@ export function WelcomeComposer({
 		if (line.startsWith("/") && line.length >= 1) {
 			setSlashQuery(line.length > 1 ? line.slice(1) : "");
 			setSlashOpen(true);
-			slashIdx.current = 0;
+			setSlashIdx(0);
 			if (!slashCmds && rpc) {
 				void rpc
 					.request<SlashEntry[]>("commands.list", {})
@@ -319,7 +451,7 @@ export function WelcomeComposer({
 		if (line.startsWith("@") && line.length >= 1) {
 			setAtQuery(line.length > 1 ? line.slice(1) : "");
 			setAtOpen(true);
-			atIdx.current = 0;
+			setAtIdx(0);
 			if (!atEntries && rpc) {
 				void rpc
 					.request<{
@@ -339,7 +471,7 @@ export function WelcomeComposer({
 		if (line.startsWith("#") && line.length >= 1) {
 			setHashQuery(line.length > 1 ? line.slice(1) : "");
 			setHashOpen(true);
-			hashIdx.current = 0;
+			setHashIdx(0);
 			if (!hashSessions && rpc) {
 				void rpc
 					.request<{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[]>("session.list", {})
@@ -516,27 +648,35 @@ export function WelcomeComposer({
 		};
 	}, []);
 
-	const addImageFiles = (files: File[]): void => {
+	const addImageFiles = async (files: File[]): Promise<void> => {
 		const imgs = files.filter(f => f.type.startsWith("image/"));
 		if (imgs.length === 0) return;
-		for (const f of imgs) {
-			const reader = new FileReader();
-			reader.onload = () => {
-				if (typeof reader.result !== "string") return;
-				setAttachments(prev => [
-					...prev,
-					{ id: attachId.current++, dataUrl: reader.result as string, mimeType: f.type, name: f.name },
-				]);
-			};
-			reader.readAsDataURL(f);
-		}
+		// Front-resize large images (TUI parity, images.autoResize-governed).
+		const autoResize = await readAutoResizeImages(rpc);
+		const entries = await Promise.all(
+			imgs.map(async f => {
+				const dataUrl = await readFileAsDataURL(f);
+				const resized = autoResize ? await resizeImageDataUrl(dataUrl, f.type) : null;
+				return {
+					id: attachId.current++,
+					dataUrl: resized?.dataUrl ?? dataUrl,
+					mimeType: resized?.mimeType ?? f.type,
+					name: f.name,
+				};
+			}),
+		);
+		setAttachments(prev => [...prev, ...entries]);
 	};
 
 	const submit = (e: FormEvent<HTMLFormElement>): void => {
 		e.preventDefault();
 		const trimmed = text.trim();
-		if ((!trimmed && attachments.length === 0) || busy) return;
+		if ((!trimmed && quotes.length === 0 && attachments.length === 0) || busy) return;
+		const quotePrefix =
+			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
+		const payload = quotePrefix ? `${quotePrefix}${trimmed}`.trim() : trimmed;
 		setText("");
+		setQuotes([]);
 		setAttachments([]);
 		sfxFor("first");
 		// Armed modes apply to the session this first prompt creates; the
@@ -544,7 +684,7 @@ export function WelcomeComposer({
 		const applyGoal = goalArmed && trimmed.length > 0;
 		setGoalArmed(false);
 		setPlanArmed(false);
-		void onSubmit(trimmed, {
+		void onSubmit(payload, {
 			thinkingLevel: thinking,
 			modelId,
 			images: attachments.map(a => ({
@@ -600,7 +740,7 @@ export function WelcomeComposer({
 								<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 							</button>
 							{renderProjMenu(
-								<Pop open={projOpen} className="gui-proj-menu">
+								<>
 									{project && (
 										<button
 											type="button"
@@ -611,6 +751,32 @@ export function WelcomeComposer({
 											<span className="min-w-0 flex-1 truncate">{projectName(project)}</span>
 											<Icon name="check" className="h-3 w-3 flex-shrink-0" />
 										</button>
+									)}
+									{/* Saved workspaces (sidebar 项目 tab parity): every folder
+									 * the app knows, one tap to switch. Current project is
+									 * already listed above with the check — skip it here. */}
+									{savedProjects.filter(p => p !== project).length > 0 && (
+										<>
+											<div className="gui-proj-menu-label">{t("saved workspaces")}</div>
+											{savedProjects
+												.filter(p => p !== project)
+												.map(p => (
+													<button
+														key={p}
+														type="button"
+														className="gui-view-opt"
+														title={p}
+														onClick={() => {
+															setProjOpen(false);
+															onProject?.(p);
+														}}
+													>
+														<Icon name="folder" className="h-3.5 w-3.5" />
+														<span className="min-w-0 flex-1 truncate">{projectName(p)}</span>
+													</button>
+												))}
+											<div className="gui-proj-menu-sep" />
+										</>
 									)}
 									<button
 										type="button"
@@ -647,52 +813,54 @@ export function WelcomeComposer({
 											<span>{t("not in a project")}</span>
 										</button>
 									)}
-								</Pop>,
+								</>,
 							)}
 						</div>
-					{branchInfo && (
-						<div className="relative z-20" ref={branchAnchorRef}>
-							<button
-								type="button"
-								className="gui-project-chip"
-								onClick={() => setBranchOpen(v => !v)}
-								aria-label={t("git branch")}
-								title={t("git branch")}
-							>
-								<Icon name="git-branch" className="h-3.5 w-3.5" />
-								<span className="max-w-[160px] truncate">{branchInfo.current ?? "—"}</span>
-								<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-							</button>
-							{renderBranchMenu(
-								<Pop open={branchOpen} className="gui-proj-menu">
-									{branchInfo.branches.map(b => (
-										<button
-											key={b}
-											type="button"
-											className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
-											disabled={switchingBranch}
-											onClick={() => {
-												if (b === branchInfo.current) {
-													setBranchOpen(false);
-													return;
-												}
-												void switchBranch(b);
-											}}
-										>
-											<Icon name="git-branch" className="h-3.5 w-3.5" />
-											<span className="min-w-0 flex-1 truncate">{b}</span>
-											{b === branchInfo.current && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-										</button>
-									))}
-								</Pop>,
-							)}
-						</div>
-					)}
-				</div>
-			)}
-			<form
-				ref={formRef}
-				className="gui-welcome-form relative w-full"
+						{branchInfo && (
+							<div className="relative z-20" ref={branchAnchorRef}>
+								<button
+									type="button"
+									className="gui-project-chip"
+									onClick={() => setBranchOpen(v => !v)}
+									aria-label={t("git branch")}
+									title={t("git branch")}
+								>
+									<Icon name="git-branch" className="h-3.5 w-3.5" />
+									<span className="max-w-[160px] truncate">{branchInfo.current ?? "—"}</span>
+									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+								</button>
+								{renderBranchMenu(
+									<>
+										{branchInfo.branches.map(b => (
+											<button
+												key={b}
+												type="button"
+												className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
+												disabled={switchingBranch}
+												onClick={() => {
+													if (b === branchInfo.current) {
+														setBranchOpen(false);
+														return;
+													}
+													void switchBranch(b);
+												}}
+											>
+												<Icon name="git-branch" className="h-3.5 w-3.5" />
+												<span className="min-w-0 flex-1 truncate">{b}</span>
+												{b === branchInfo.current && (
+													<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+												)}
+											</button>
+										))}
+									</>,
+								)}
+							</div>
+						)}
+					</div>
+				)}
+				<form
+					ref={formRef}
+					className="gui-welcome-form relative w-full"
 					onSubmit={submit}
 					onFocus={() => setBeamOn(true)}
 					onBlur={() => setBeamOn(false)}
@@ -701,6 +869,7 @@ export function WelcomeComposer({
 						className="gui-welcome-input"
 						hero
 						heroActive={beamOn}
+						chatInput
 						flipAnchor="welcome"
 						pet={pet.enabled && pet.mode === "input" ? <PetSprite mood="rest" pet={pet.pet} size={34} /> : null}
 						attachments={attachments}
@@ -716,7 +885,7 @@ export function WelcomeComposer({
 									// to the session it creates.
 									onToggleGoal={() => setGoalArmed(v => !v)}
 									onTogglePlan={() => setPlanArmed(v => !v)}
-									onPickImages={files => addImageFiles(files)}
+									onPickImages={files => void addImageFiles(files)}
 									onInsert={token => {
 										const ta = taRef.current;
 										if (!ta) return;
@@ -747,7 +916,14 @@ export function WelcomeComposer({
 									presetId={presetModelId ?? modelId}
 									onSelect={setModelId}
 								/>
-								<ThinkingSelector value={thinking} onChange={setThinking} efforts={thinkingEfforts} />
+								<ThinkingSelector
+									value={thinking}
+									onChange={v => {
+										thinkingTouched.current = true;
+										setThinking(v);
+									}}
+									efforts={thinkingEfforts}
+								/>
 								{/* Armed mode chips (plan/goal): shown IN the button row
 								 * right of the thinking selector so the armed state is
 								 * visible without opening the attach menu. */}
@@ -787,16 +963,38 @@ export function WelcomeComposer({
 						}
 					>
 						<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
+							{quotes.length > 0 && (
+								<div className="gui-welcome-quotes">
+									{quotes.map((q, i) => (
+										<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
+											<div className="gui-quote-text">{q}</div>
+											<button
+												type="button"
+												className="gui-quote-close"
+												onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
+												title={t("remove quote")}
+												aria-label={t("remove quote")}
+											>
+												<X size={12} />
+											</button>
+										</div>
+									))}
+								</div>
+							)}
 							{renderCompMenu(
-								<div className="gui-slash-menu gui-slash-menu--rich" style={{ minWidth: 300 }}>
+								<div
+									className="gui-slash-menu gui-slash-menu--rich"
+									style={{ minWidth: 300 }}
+									ref={completionMenuRef}
+								>
 									{slashOpen && slashFilter.length > 0 && (
 										<>
 											<div className="gui-slash-rows">
-												{slashFilter.slice(0, 8).map((c, i) => (
+												{slashFilter.map((c, i) => (
 													<SlashRow
 														key={c.name}
 														item={c}
-														active={i === slashIdx.current}
+														active={i === slashIdx}
 														onClick={() => insertCompletion("slash", c.name)}
 													/>
 												))}
@@ -804,39 +1002,35 @@ export function WelcomeComposer({
 											<div className="gui-slash-footer">{t("slash completion hints")}</div>
 										</>
 									)}
-									{atOpen && atFilter.length > 0 && (
-										<>
-											{atFilter.slice(0, 8).map((e, i) => (
-												<button
-													key={e.path}
-													type="button"
-													className={`gui-model-opt${i === atIdx.current ? " gui-model-opt--active" : ""}`}
-													onClick={() => insertCompletion("at", e.path)}
-												>
-													<span className="min-w-0 flex-1 truncate">
-														{e.isDir ? "📁 " : "📄 "}
-														{e.path}
-													</span>
-												</button>
-											))}
-										</>
-									)}
-									{hashOpen && hashFilter.length > 0 && (
-										<>
-											{hashFilter.slice(0, 8).map((s, i) => (
-												<button
-													key={s.id}
-													type="button"
-													className={`gui-model-opt${i === hashIdx.current ? " gui-model-opt--active" : ""}`}
-													onClick={() => insertCompletion("hash", s.id)}
-												>
-													<span className="min-w-0 flex-1 truncate">
-														#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
-													</span>
-												</button>
-											))}
-										</>
-									)}
+									{atOpen &&
+										atFilter.length > 0 &&
+										atFilter.map((e, i) => (
+											<button
+												key={e.path}
+												type="button"
+												className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
+												onClick={() => insertCompletion("at", e.path)}
+											>
+												<span className="min-w-0 flex-1 truncate">
+													{e.isDir ? "📁 " : "📄 "}
+													{e.path}
+												</span>
+											</button>
+										))}
+									{hashOpen &&
+										hashFilter.length > 0 &&
+										hashFilter.map((s, i) => (
+											<button
+												key={s.id}
+												type="button"
+												className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
+												onClick={() => insertCompletion("hash", s.id)}
+											>
+												<span className="min-w-0 flex-1 truncate">
+													#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
+												</span>
+											</button>
+										))}
 								</div>,
 							)}
 							<textarea
@@ -855,18 +1049,22 @@ export function WelcomeComposer({
 										.filter((f): f is File => f !== null);
 									if (files.length > 0) {
 										e.preventDefault();
-										addImageFiles(files);
+										void addImageFiles(files);
 									}
 								}}
 								onDrop={e => {
 									const files = [...e.dataTransfer.files];
 									if (files.some(f => f.type.startsWith("image/"))) {
 										e.preventDefault();
-										addImageFiles(files);
+										void addImageFiles(files);
 									}
 								}}
 								onChange={e => {
 									setText(e.target.value);
+									if (clearAllRef.current) {
+										clearAllRef.current = false;
+										if (e.target.value === "") setAttachments([]);
+									}
 									onCompletionInput(e.target.value);
 									// Initial height equals the content height, so
 									// first lines never resize the card.
@@ -876,47 +1074,66 @@ export function WelcomeComposer({
 									// IME composition: the confirming Enter commits the
 									// candidate text — never submit while composing.
 									if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+									// Attachment keyboard flow (WeChat parity): Backspace/
+									// Delete on an empty input removes the last image chip;
+									// a select-all delete empties attachments too.
+									if (e.key === "Backspace" || e.key === "Delete") {
+										const ta = taRef.current;
+										if (ta) {
+											if (ta.value.length === 0 && attachments.length > 0) {
+												e.preventDefault();
+												setAttachments(prev => prev.slice(0, -1));
+												return;
+											}
+											if (
+												ta.selectionStart === 0 &&
+												ta.selectionEnd === ta.value.length &&
+												ta.value.length > 0
+											) {
+												clearAllRef.current = true;
+											}
+										}
+									}
 									const menus: {
 										open: boolean;
 										list: unknown[];
-										idx: { current: number };
+										idx: number;
+										setIdx: (n: number) => void;
 										insert: () => void;
 									}[] = [
 										{
 											open: slashOpen,
 											list: slashFilter,
 											idx: slashIdx,
+											setIdx: setSlashIdx,
 											insert: () =>
-												slashFilter[slashIdx.current] &&
-												insertCompletion("slash", slashFilter[slashIdx.current]!.name),
+												slashFilter[slashIdx] && insertCompletion("slash", slashFilter[slashIdx]!.name),
 										},
 										{
 											open: atOpen,
 											list: atFilter,
 											idx: atIdx,
-											insert: () =>
-												atFilter[atIdx.current] && insertCompletion("at", atFilter[atIdx.current]!.path),
+											setIdx: setAtIdx,
+											insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
 										},
 										{
 											open: hashOpen,
 											list: hashFilter,
 											idx: hashIdx,
-											insert: () =>
-												hashFilter[hashIdx.current] &&
-												insertCompletion("hash", hashFilter[hashIdx.current]!.id),
+											setIdx: setHashIdx,
+											insert: () => hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
 										},
 									];
 									for (const m of menus) {
 										if (!m.open || m.list.length === 0) continue;
 										if (e.key === "ArrowDown") {
 											e.preventDefault();
-											m.idx.current = (m.idx.current + 1) % Math.min(8, m.list.length);
+											m.setIdx((m.idx + 1) % m.list.length);
 											return;
 										}
 										if (e.key === "ArrowUp") {
 											e.preventDefault();
-											m.idx.current =
-												(m.idx.current - 1 + Math.min(8, m.list.length)) % Math.min(8, m.list.length);
+											m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
 											return;
 										}
 										if (e.key === "Enter" || e.key === "Tab") {
@@ -937,7 +1154,7 @@ export function WelcomeComposer({
 										submit(e as unknown as FormEvent<HTMLFormElement>);
 									}
 								}}
-								placeholder={t("ask anything, / for commands, @ for context…")}
+								placeholder={t(PLACEHOLDER_TIPS[tipIdx]!)}
 								spellCheck={(() => {
 									try {
 										return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
@@ -960,26 +1177,39 @@ export function WelcomeComposer({
 				 * fills the composer; the user hits Enter to send. */}
 				<div className="gui-suggest mt-4">
 					{(showMore ? ALL_SUGGESTIONS : SUGGESTIONS).map(s => (
-						<button
-							key={s.key}
-							type="button"
-							className="gui-suggest-chip"
-							onClick={() => applySuggestion(s.key)}
-						>
+						<button key={s.key} type="button" className="gui-suggest-chip" onClick={() => applySuggestion(s.key)}>
 							{t(s.labelKey)}
 						</button>
 					))}
 					{!showMore && (
-						<button type="button" className="gui-suggest-chip gui-suggest-chip--more" onClick={() => setShowMore(true)}>
+						<button
+							type="button"
+							className="gui-suggest-chip gui-suggest-chip--more"
+							onClick={() => setShowMore(true)}
+						>
 							+
 						</button>
 					)}
 					{showMore && (
-						<button type="button" className="gui-suggest-chip gui-suggest-chip--more" onClick={() => setShowMore(false)}>
+						<button
+							type="button"
+							className="gui-suggest-chip gui-suggest-chip--more"
+							onClick={() => setShowMore(false)}
+						>
 							{t("more suggestions")}
 						</button>
 					)}
 				</div>
+				{/* Real-time reminders (kimi 实时提醒 parity): background-working
+				 * sessions (进行中) + completed-but-unread ones below the empty
+				 * composer; click opens the session, 一键已读 clears unread. */}
+				{reminders && reminders.length > 0 && (
+					<RemindersPanel
+						reminders={reminders}
+						onSelect={onSelectReminder ?? (() => {})}
+						onMarkAllRead={onMarkAllRead ?? (() => {})}
+					/>
+				)}
 			</div>
 		</div>
 	);

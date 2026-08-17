@@ -635,7 +635,7 @@ export function getPuppeteerDir(): string {
 }
 
 /** Get DOCS_RS cache directory () */
-/** Get the browser relay extension install directory (~/.omp/browser-relay). */
+/** Get the browser relay extension install directory (~/.musepi/browser-relay). */
 export function getBrowserRelayDir(): string {
 	return dirs.rootSubdir("browser-relay", "data");
 }

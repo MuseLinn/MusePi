@@ -29,15 +29,21 @@ let activeMenu: { close(): void } | null = null;
 export function useFloatingMenu(
 	open: boolean,
 	onOpenChange?: (open: boolean) => void,
+	options?: { className?: string; align?: "left" | "right"; anchor?: HTMLElement | null },
 ): {
 	anchorRef: (el: HTMLElement | null) => void;
 	renderMenu(children: ReactNode): ReactNode;
 } {
+	const { className = "gui-menu-popup", align = "left", anchor: anchorOption } = options ?? {};
 	const anchorRef = useRef<HTMLElement | null>(null);
 	const setAnchor = (el: HTMLElement | null): void => {
 		anchorRef.current = el;
 	};
-	const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; up: boolean } | null>(null);
+	// Declarative anchor (Pop parity): an element passed straight in beats
+	// the imperative callback ref — read at positioning time so the layout
+	// effect below sees it on the SAME commit the menu opens.
+	const anchorEl = anchorOption ?? anchorRef.current;
+	const [pos, setPos] = useState<{ left?: number; right?: number; top?: number; bottom?: number; up: boolean } | null>(null);
 	const [closing, setClosing] = useState(false);
 	const [entered, setEntered] = useState(false);
 	// Latest close callback without re-running the mutex effect.
@@ -46,7 +52,7 @@ export function useFloatingMenu(
 
 	useLayoutEffect(() => {
 		if (!open) return;
-		const anchor = anchorRef.current;
+		const anchor = anchorOption ?? anchorRef.current;
 		if (!anchor) return;
 		const r = anchor.getBoundingClientRect();
 		const roomAbove = r.top;
@@ -55,11 +61,13 @@ export function useFloatingMenu(
 		setClosing(false);
 		setEntered(false);
 		setPos({
-			left: Math.min(r.left, window.innerWidth - 260),
+			...(align === "right"
+				? { right: Math.max(4, window.innerWidth - r.right) }
+				: { left: Math.min(r.left, window.innerWidth - 260) }),
 			...(!up ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }),
 			up,
 		});
-	}, [open]);
+	}, [open, align]);
 
 	// Two-phase enter: paint at opacity 0, then start the fade next frame so
 	// the frosted backdrop is ready before it becomes visible.
@@ -90,6 +98,39 @@ export function useFloatingMenu(
 		return () => window.removeEventListener("resize", onResize);
 	}, [open]);
 
+	// Unified dismissal (single implementation for every floating menu):
+	// outside mousedown (the anchor toggles itself via its own onClick, so
+	// clicks ON it stay) and Escape both close. Callers previously wrote
+	// per-menu document listeners — some with Escape, some without — so the
+	// behavior drifted; this is the one place it lives now.
+	useEffect(() => {
+		if (!open) return;
+		const close = (): void => onOpenChange?.(false);
+		const onDocDown = (e: MouseEvent): void => {
+			const path = e.composedPath();
+			const el = anchorEl;
+			if (
+				path.some(
+					n =>
+						n instanceof HTMLElement &&
+						(n.classList?.contains("gui-menu-popup") || (el !== null && (n === el || el.contains(n)))),
+				)
+			) {
+				return;
+			}
+			close();
+		};
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") close();
+		};
+		document.addEventListener("mousedown", onDocDown);
+		document.addEventListener("keydown", onKey);
+		return () => {
+			document.removeEventListener("mousedown", onDocDown);
+			document.removeEventListener("keydown", onKey);
+		};
+	}, [open, onOpenChange, anchorEl]);
+
 	// Global mutex: opening this menu closes whatever else is open
 	// (model selector vs thinking selector, slash menu vs insert menu…).
 	useEffect(() => {
@@ -106,12 +147,18 @@ export function useFloatingMenu(
 		if (!pos) return null;
 		return createPortal(
 			<div
-				className={`gui-menu-popup${closing ? " gui-menu-popup--closing" : ""}${!closing && entered ? " gui-menu-popup--entered" : ""}`}
+				data-header-menu=""
+				className={`gui-menu-popup ${className}${closing ? " gui-menu-popup--closing" : ""}${!closing && entered ? " gui-menu-popup--entered" : ""}`}
 				style={{
+					// Inline position wins over the menu-specific classes
+					// (gui-creds-menu etc. declare position:absolute for their
+					// legacy inline mode — the portal container must stay fixed).
+					position: "fixed",
 					left: pos.left,
+					right: pos.right,
 					top: pos.top,
 					bottom: pos.bottom,
-					transformOrigin: pos.up ? "bottom left" : "top left",
+					transformOrigin: align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
 				}}
 			>
 				{children}

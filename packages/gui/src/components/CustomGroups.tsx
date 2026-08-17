@@ -37,6 +37,7 @@ export function CustomGroups({
 	allOverride,
 	onOverrideClear,
 	onAddGroup,
+	onNewSession,
 	onDropSession,
 	onContextMenu,
 	onReorder,
@@ -55,6 +56,8 @@ export function CustomGroups({
 	allOverride?: boolean | null;
 	onOverrideClear?(): void;
 	onAddGroup(): void;
+	/** Empty-group placeholder click starts a new task (label says so). */
+	onNewSession(): void;
 	onDropSession(groupIndex: number, sessionId: string): void;
 	onContextMenu(groupIndex: number, x: number, y: number): void;
 	/** Drag the group header onto another header to reorder. */
@@ -69,7 +72,8 @@ export function CustomGroups({
 	const dropSession = (index: number) => (e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault();
 		const id = e.dataTransfer.getData("text/plain");
-		if (id) onDropSession(index, id);
+		// Group-header drags carry a `group:` payload — never add them as members.
+		if (id && !id.startsWith("group:")) onDropSession(index, id);
 	};
 	return (
 		<div className="gui-groups">
@@ -83,7 +87,6 @@ export function CustomGroups({
 				// Group order is reorderable but names are the display identity — the
 				// index key keeps collapse state stable across renames.
 				<GroupBlock
-					// biome-ignore lint/suspicious/noArrayIndexKey: reorderable group rows
 					key={i}
 					index={i}
 					group={g}
@@ -102,6 +105,7 @@ export function CustomGroups({
 						onContextMenu(i, e.clientX, e.clientY);
 					}}
 					onAddGroup={onAddGroup}
+					onNewSession={onNewSession}
 					onReorder={onReorder}
 					editIndex={editIndex}
 					onEditStart={onEditStart}
@@ -125,6 +129,7 @@ function GroupBlock({
 	onDrop,
 	onContextMenu,
 	onAddGroup,
+	onNewSession,
 	onReorder,
 	editIndex,
 	onEditStart,
@@ -143,6 +148,8 @@ function GroupBlock({
 	onDrop(e: DragEvent<HTMLDivElement>): void;
 	onContextMenu(e: MouseEvent): void;
 	onAddGroup(): void;
+	/** Empty-group placeholder click starts a new task (label says so). */
+	onNewSession(): void;
 	onReorder?(from: number, to: number): void;
 	editIndex?: number | null;
 	onEditStart?(index: number): void;
@@ -169,12 +176,21 @@ function GroupBlock({
 	};
 	return (
 		<div
-			className="gui-group"
+			className={`gui-group${dragOver ? " gui-group--dragover" : ""}`}
 			onDragOver={e => {
 				e.preventDefault();
 				e.dataTransfer.dropEffect = "copy";
+				// Session drags onto the whole block highlight the group (the
+				// head shares the same state) — feedback without hunting the head.
+				if (!e.dataTransfer.getData("text/plain").startsWith("group:")) setDragOver(true);
 			}}
-			onDrop={onDrop}
+			onDragLeave={e => {
+				if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+			}}
+			onDrop={e => {
+				setDragOver(false);
+				onDrop(e);
+			}}
 			onContextMenu={onContextMenu}
 		>
 			<div
@@ -299,7 +315,7 @@ function GroupBlock({
 					</div>
 				)}
 				{memberNodes.length === 0 && (
-					<button type="button" className="gui-group-empty" onClick={onAddGroup}>
+					<button type="button" className="gui-group-empty" onClick={onNewSession}>
 						{t("new task, or drag here")}
 					</button>
 				)}

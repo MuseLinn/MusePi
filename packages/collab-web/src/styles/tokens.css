@@ -1,5 +1,5 @@
-/* Design tokens — omp brand palette: deep-purple surfaces, pink accent, cyan
- * focus ring. Dark is the default; `[data-theme="light"]` / `[data-color-scheme="light"]`
+/* Design tokens — omp brand palette: deep-purple surfaces, emerald accent,
+ * cyan focus ring. Dark is the default; `[data-theme="light"]` / `[data-color-scheme="light"]`
  * and the prefers-color-scheme light fallback flip to light surfaces.
  * The ONLY file allowed to contain raw color values. */
 :root {
@@ -17,16 +17,16 @@
 	--fg-muted: oklch(0.72 0.01 60);
 	--fg-faint: oklch(0.55 0.01 60);
 
-	/* one accent: brand pink (#ed4abf) */
-	--accent: oklch(0.674 0.23 341);
-	--accent-fg: oklch(0.2 0.07 341);
-	--accent-muted: oklch(0.674 0.23 341 / 18%);
+	/* one accent: brand emerald (#34d399) */
+	--accent: oklch(0.72 0.16 162);
+	--accent-fg: oklch(0.25 0.08 162);
+	--accent-muted: oklch(0.72 0.16 162 / 18%);
 	/* hover + border variants of the accent — derived from the same hue. */
-	--accent-hover: oklch(0.74 0.23 341);
-	--accent-bd: oklch(0.674 0.23 341 / 35%);
+	--accent-hover: oklch(0.8 0.16 162);
+	--accent-bd: oklch(0.72 0.16 162 / 35%);
 
 	/* brand lockup */
-	--brand-mark-gradient: linear-gradient(135deg, #ed4abf 0%, #9b4dff 50%, #5ad8e6 100%);
+	--brand-mark-gradient: linear-gradient(135deg, #34d399 0%, #10b981 50%, #2dd4bf 100%);
 
 	/* status — used sparingly */
 	--ok: oklch(0.76 0.14 150);

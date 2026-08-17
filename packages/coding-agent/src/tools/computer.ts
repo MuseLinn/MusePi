@@ -14,7 +14,7 @@ import { callSessionTool } from "../eval/js/tool-bridge";
 import computerDescription from "../prompts/tools/computer.md" with { type: "text" };
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
-import type { ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
+import type { ComputerInputEvent, ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
 import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
 import type { ToolSession } from "./index";
 import { ToolError, throwIfAborted } from "./tool-errors";
@@ -70,6 +70,8 @@ export interface ComputerToolDetails {
 	capturePermission?: string;
 	inputPermission?: string;
 	axPermission?: string;
+	/** Desktop input actions streamed during the run (glow overlay). */
+	inputEvents?: ComputerInputEvent[];
 }
 
 /** Creates the session-scoped controller used by the computer tool. */
@@ -150,7 +152,19 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 			display: this.session.settings.get("computer.display") ?? "all",
 			readOnly: !!params.read_only,
 		};
-		const run = await this.#controller.run(params.code, timeoutSeconds * 1000, snapshot, signal);
+		const run = await this.#controller.run(
+			params.code,
+			timeoutSeconds * 1000,
+			snapshot,
+			signal,
+			(event: ComputerInputEvent): void => {
+				// Stream each desktop input action as a tool update — the
+				// GUI's glow overlay highlights the operation target live.
+				// The partialResult carries only details (no content), so
+				// nothing model-visible is rendered.
+				_onUpdate?.({ content: [], details: { screenshots: [], inputEvents: [event] } });
+			},
+		);
 		throwIfAborted(signal);
 
 		const details: ComputerToolDetails = {

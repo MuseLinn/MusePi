@@ -60,7 +60,11 @@ export function DialogFrame({
 	if (!mounted) return null;
 
 	const backdropCls = `gui-dialog-backdrop${
-		phase === "enter" ? " gui-dialog-backdrop--pending" : phase === "closing" ? " gui-dialog-backdrop--closing" : " gui-dialog-backdrop--entered"
+		phase === "enter"
+			? " gui-dialog-backdrop--pending"
+			: phase === "closing"
+				? " gui-dialog-backdrop--closing"
+				: " gui-dialog-backdrop--entered"
 	}`;
 	const dialogCls = `gui-dialog${className ? ` ${className}` : ""}${
 		phase === "enter" ? " gui-dialog--pending" : phase === "closing" ? " gui-dialog--closing" : " gui-dialog--entered"

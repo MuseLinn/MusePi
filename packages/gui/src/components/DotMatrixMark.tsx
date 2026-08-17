@@ -504,7 +504,7 @@ export function DotMatrixMark({
 		// Only primitives: text/gridGap/dotRadius/mouseRadius/accentChance
 		// (accentColors is the module-level ACCENT_COLORS — stable identity,
 		// deliberately not in the deps).
-	}, [text, gridGap, dotRadius, mouseRadius, accentChance, fontSize]);
+	}, [text, gridGap, dotRadius, mouseRadius, accentChance, fontSize, accentColors.length, accentColors]);
 
 	return <canvas ref={canvasRef} className={`gui-dot-matrix ${className}`} aria-hidden="true" />;
 }

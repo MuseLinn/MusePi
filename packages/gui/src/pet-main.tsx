@@ -1,32 +1,34 @@
 /**
- * Pet window entry (pet.html) — the floating desktop companion (伙伴).
+ * Pet window entry (pet.html) — the floating desktop companion (伙伴),
+ * now in its OWN window, split from the bubbles/panel (双窗口):
  *
- * A frameless transparent always-on-top Electron window that renders the
- * active pet (builtin SVG or Petdex spritesheet) with a mood driven by the
- * main window's session store, plus activity bubbles (completed / error /
- * question / subtask) pushed over IPC.
- *
- * Interaction panel (click the pet to toggle): a live task summary (the
- * agent's current tool + last message), the pending tool-approval card
- * (批准/拒绝 answered through the main window), and a quick-reply box that
- * steers the active session. The panel grows the window (pet-set-panel)
- * so it has room; the compact 320×290 shell is restored on collapse.
+ *   - pet window (pet.html, THIS file): the active pet (builtin SVG or
+ *     Petdex spritesheet) with a mood driven by the main window's session
+ *     store, unread badge, and a drag/hover/dock gesture surface. Fully
+ *     transparent, click-through outside the sprite — the pet floats on
+ *     the desktop.
+ *   - bubble window (bubble.html): activity bubbles + interaction panel
+ *     on a real vibrancy glass surface (bubble-main.tsx).
  *
  * Pointer handling:
  *   - drag beyond 8px moves the OS window (pet-drag delta IPC)
- *   - a click (below threshold) toggles the interaction panel
+ *   - a click (below threshold) toggles the interaction panel — the panel
+ *     lives in the BUBBLE window, so a click routes through the main
+ *     process (pet-toggle-panel → bubble:panel-toggle)
+ *   - a double-click toggles the main window (visible → minimize)
  *   - hover/dragging switch the petdex sprite to rows 1/2 (BitFun parity);
  *     hover is driven by the MAIN process (it knows when the cursor is in
  *     the interactive hitbox, including when the window is click-through)
  *
- * Bubbles form a small stack (max 2, newest on top) with a typewriter
- * reveal per bubble, a dismiss ×, and an 8s auto-dismiss. While the panel
- * is open the bubbles are hidden (the panel shows the same information).
+ * The bubble/panel data (bubbles, approvals, session state, recent
+ * sessions) flows to the bubble window; this window consumes only
+ * mood/scale/unread/theme from pet:activity.
  */
 
 import { setLocale, t } from "@musepi/collab-web";
 import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { initTooltips } from "./lib/tooltips";
 import { PetSprite, usePet } from "./components/PetSprite";
 import { type PetActivity, type PetMood, petScale } from "./lib/pet";
 
@@ -44,50 +46,32 @@ import "./styles/gui.css";
 interface PetBridge {
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
 	onPetHover?(cb: (hovering: boolean) => void): () => void;
-	requestPetState?(): Promise<unknown>;
 	movePetWindowByClient?(clientX: number, clientY: number): Promise<unknown>;
+	petDragArm?(): Promise<unknown>;
 	petDragEnd?(): Promise<unknown>;
 	focusMainWindow?(): Promise<unknown>;
+	/** Pet double-click → toggle the main window (visible → minimize,
+	 *  hidden/minimized → show + focus). */
+	toggleMainWindow?(): Promise<unknown>;
+	/** Pet right-click → native context menu (main process). */
+	petContextMenu?(): Promise<unknown>;
+	/** Single click → toggle the bubble window's interaction panel. */
+	toggleBubblePanel?(): Promise<unknown>;
 	setPetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
-	petReply?(text: string, sessionId?: string): Promise<unknown>;
-	petApprove?(requestId: string, approved: boolean): Promise<unknown>;
-	petSetPanel?(open: boolean): Promise<unknown>;
+	/** Sprite-only rect (without the unread badge) — used by the main
+	 *  process to align the CHARACTER flush to a screen edge on dock. */
+	setPetRect?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	onPetDock?(cb: (side: "left" | "right" | null) => void): () => void;
-	petOpenSession?(sessionId: string): Promise<unknown>;
-	petGetSessionContent?(sessionId: string): Promise<unknown>;
-	onPetSessionContent?(
-		cb: (payload: {
-			sessionId: string;
-			messages: Array<{ role: string; text: string }>;
-			loaded?: boolean;
-		}) => void,
-	): () => void;
+	/** Unread-badge click → mark every session read (main window owns the
+	 *  unread set and pushes bubble dismissals back). */
+	petMarkAllRead?(): Promise<unknown>;
 }
 
 const DRAG_THRESHOLD_PX = 8;
-
-/** Compact relative time for the recent-session rows. */
-function relTimeLabel(ts: number): string {
-	const diff = Date.now() - ts;
-	if (diff < 60_000) return "刚刚";
-	if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-	if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-	return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-const BUBBLE_MS = 8000;
-const MAX_VISIBLE_BUBBLES = 2;
-
-interface Bubble {
-	id: number;
-	kind: string;
-	text: string;
-	visible: string;
-}
-
-interface PendingApproval {
-	requestId: string;
-	tool: string;
-}
+/** Max gap between two clicks on the pet for a double-click (→ toggle the
+ *  main window). Single clicks defer their panel toggle by this window so
+ *  a double click never flashes the panel open/closed. */
+const DOUBLE_CLICK_MS = 300;
 
 function PetApp(): ReactNode {
 	const { enabled, pet } = usePet();
@@ -98,15 +82,9 @@ function PetApp(): ReactNode {
 	// direction walk cycle, so moving the other way must mirror them
 	// (BitFun doesn't — it reads as running backwards on rightward drags).
 	const [flip, setFlip] = useState(false);
-	const [bubbles, setBubbles] = useState<Bubble[]>([]);
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
-	// Interaction panel: live task summary + approval card + quick reply.
-	const [panelOpen, setPanelOpen] = useState(false);
-	const [panelLeaving, setPanelLeaving] = useState(false);
-	const [petState, setPetState] = useState<PetActivity["state"] | null>(null);
-	const [approvals, setApprovals] = useState<PendingApproval[]>([]);
-	const [replyText, setReplyText] = useState("");
-	const [sending, setSending] = useState(false);
+	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
+	const [unreadCount, setUnreadCount] = useState(0);
 	const bridge = (window as unknown as { electronAPI?: PetBridge }).electronAPI;
 	const bumpRef = useRef<HTMLDivElement>(null);
 	// RAF-coalesced drag move: pointermove can fire 120Hz+, and firing one
@@ -116,6 +94,11 @@ function PetApp(): ReactNode {
 	// queueDragMove pattern) keeps the window glued to the cursor.
 	const dragMoveRafRef = useRef<number | null>(null);
 	const pendingMoveRef = useRef<{ clientX: number; clientY: number } | null>(null);
+	// Click-vs-double-click discrimination: the first click's panel toggle
+	// is deferred; if a second click lands within DOUBLE_CLICK_MS it is
+	// cancelled and the main window is toggled instead.
+	const lastClickRef = useRef(0);
+	const clickTimerRef = useRef<number | null>(null);
 
 	// Drag state
 	const dragRef = useRef<{
@@ -129,6 +112,11 @@ function PetApp(): ReactNode {
 		 *  deltas jitter ±1–2px, so flipping on raw deltas makes the pet
 		 *  stutter left/right mid-drag. Only cross a threshold to flip. */
 		dirAcc: number;
+		/** True once travel exceeded the drag threshold. Survives
+		 *  resetDrag (which zeroes lastX/lastY): a drag interrupted by
+		 *  lostpointercapture/blur must still count as a drag, not a
+		 *  click — otherwise moving the pet pops the panel open. */
+		moved: boolean;
 	}>({
 		startX: 0,
 		startY: 0,
@@ -137,41 +125,24 @@ function PetApp(): ReactNode {
 		dragging: false,
 		pressed: false,
 		dirAcc: 0,
+		moved: false,
 	});
 
 	useEffect(() => {
 		if (!bridge?.onPetActivity) return;
-		return bridge.onPetActivity?.(payload => {			if (payload.mood) setMood(payload.mood);
+		return bridge.onPetActivity?.(payload => {
+			if (payload.mood) setMood(payload.mood);
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
-			if (Array.isArray(payload.recentSessions)) setRecentSessions(payload.recentSessions);
 			if (typeof payload.unreadCount === "number") setUnreadCount(payload.unreadCount);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
-			if (payload.state) setPetState(payload.state);
-			if (payload.approval?.requestId) {
-				setApprovals(prev =>
-					prev.some(a => a.requestId === payload.approval!.requestId)
-						? prev
-						: [...prev, { requestId: payload.approval!.requestId, tool: payload.approval!.tool }],
-				);
-			}
-			if (payload.bubble?.text) {
-				const bubble = payload.bubble;
-				const id = Date.now();
-				setBubbles(prev => {
-					const next = [...prev, { id, kind: bubble.kind, text: bubble.text, visible: "" }];
-					return next.length > MAX_VISIBLE_BUBBLES ? next.slice(next.length - MAX_VISIBLE_BUBBLES) : next;
-				});
-				// Completion/error bubbles persist until dismissed or the
-				// session is opened (the unread badge tracks them); transient
-				// kinds auto-dismiss as before.
-				if (bubble.kind === "completed" || bubble.kind === "error") return;
-				window.setTimeout(() => {
-					setBubbles(prev => prev.filter(b => b.id !== id));
-				}, BUBBLE_MS);
+			// Main-window scheme push (the reliable path — storage events
+			// don't fire cross-window under file://).
+			if (payload.theme === "light" || payload.theme === "dark") {
+				document.documentElement.dataset.theme = payload.theme;
+				document.documentElement.dataset.colorScheme = payload.theme;
 			}
 		});
-	// bridge is a window-level constant (preload) — subscribe once.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: bridge stable
+		// bridge is a window-level constant (preload) — subscribe once.
 	}, []);
 
 	// Hover state comes from the main process: it alone knows when the
@@ -180,74 +151,72 @@ function PetApp(): ReactNode {
 	useEffect(() => {
 		if (!bridge?.onPetHover) return;
 		return bridge.onPetHover?.(setHovering);
-	}, [bridge]);
-
-	// Transcript for the session opened from the recent list (asked via
-	// petGetSessionContent; the main-window renderer answers).
-	useEffect(() => {
-		if (!bridge?.onPetSessionContent) return;
-		return bridge.onPetSessionContent?.(payload => {
-			setActiveSession(prev =>
-				prev && prev.id === payload.sessionId
-					? { ...prev, messages: payload.messages, loaded: payload.loaded === true }
-					: prev,
-			);
-		});
-	}, [bridge]);
+	}, []);
 
 	// Dock side after an edge snap (settings → 宠物 → 挂靠左右侧): the
 	// main process pushes it; the edge highlight bar follows.
-	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
-	// Recent-session list + unread badge pushed from the main window.
-	const [recentSessions, setRecentSessions] = useState<{ id: string; label: string; timestamp: number }[]>([]);
-	/** Panel is showing one session's transcript instead of the list. */
-	const [activeSession, setActiveSession] = useState<{
-		id: string;
-		label: string;
-		messages: Array<{ role: string; text: string }>;
-		loaded: boolean;
-	} | null>(null);
-	const [unreadCount, setUnreadCount] = useState(0);
 	useEffect(() => {
 		if (!bridge?.onPetDock) return;
 		return bridge.onPetDock?.(setDockSide);
-	}, [bridge]);
+	}, []);
 
-	// The panel spans from the window top down to just above the pet —
-	// measure the pet rect (size varies with the scale slider) and set the
-	// CSS var so no dead blank shows between panel and pet.
+	// Light/dark scheme: mirror the main app's scheme (local pref +
+	// system default); the main window's petActivity push overrides it.
 	useEffect(() => {
-		if (!panelOpen) return;
-		const petEl = document.querySelector<HTMLElement>(".pet-window__pet");
-		if (!petEl) return;
-		const r = petEl.getBoundingClientRect();
-		const gap = Math.max(10, Math.round(window.innerHeight - r.top + 12));
-		document.documentElement.style.setProperty("--pet-panel-bottom", `${gap}px`);
-	}, [panelOpen, sizeScale, petState]);
+		const doc = document.documentElement;
+		const applyScheme = (): void => {
+			let pref: "system" | "light" | "dark" = "system";
+			try {
+				const v = localStorage.getItem("omp-collab-theme");
+				if (v === "light" || v === "dark" || v === "system") pref = v;
+			} catch {
+				/* storage unavailable — follow the system */
+			}
+			const resolved =
+				pref === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : pref;
+			doc.dataset.theme = resolved;
+			doc.dataset.colorScheme = resolved;
+			doc.style.colorScheme = resolved;
+		};
+		applyScheme();
+		const mq = window.matchMedia("(prefers-color-scheme: dark)");
+		const onMq = (): void => {
+			try {
+				if ((localStorage.getItem("omp-collab-theme") ?? "system") === "system") applyScheme();
+			} catch {
+				applyScheme();
+			}
+		};
+		mq.addEventListener("change", onMq);
+		return () => mq.removeEventListener("change", onMq);
+	}, []);
 
-	// Ask for a fresh snapshot when the window (re)appears.
-	useEffect(() => {
-		void bridge?.requestPetState?.();
-	}, [bridge]);
-
-	// Report the interactive rect (pet + bubbles + panel) whenever the
-	// layout changes (bubble appears/disappears, pet size, panel open).
-	// The MAIN process resizes this window on panel toggle (pet-set-panel);
-	// after the shrink the pet's position shifts and the old rect would
-	// leave the pet click-through (cursor in the pet but outside the stale
-	// hitbox) — re-measure on window resize too.
+	// Report the interactive rect (pet + unread badge) whenever the layout
+	// changes. The MAIN process resizes this window's click-through state;
+	// re-measure on window resize too.
 	useEffect(() => {
 		if (!bridge?.setPetHitbox) return;
 		const report = (): void => {
 			const pet = document.querySelector<HTMLElement>(".pet-window__pet");
-			// .pet-bubble__dismiss overhangs the bubble box by 7px (top/-7
-			// right/-7) — including it keeps the × fully clickable instead
-			// of leaving a dead strip outside the union.
-			const bubbles = document.querySelectorAll<HTMLElement>(".pet-bubble, .pet-bubble__dismiss");
-			const panel = document.querySelector<HTMLElement>(".pet-panel");
+			const badge = document.querySelector<HTMLElement>(".pet-window__badge");
+			// Sprite-only rect: dock alignment snaps the CHARACTER flush to
+			// the edge, not the (larger) window or the hitbox's badge bump.
+			let petRect: { x: number; y: number; width: number; height: number } | null = null;
+			if (pet) {
+				const r = pet.getBoundingClientRect();
+				if (r.width > 0 && r.height > 0) {
+					petRect = {
+						x: Math.round(r.left),
+						y: Math.round(r.top),
+						width: Math.round(r.width),
+						height: Math.round(r.height),
+					};
+				}
+			}
+			void bridge.setPetRect?.(petRect);
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			const union: Record<string, number> = {};
-			for (const el of panelOpen ? [panel, pet] : [pet, ...bubbles]) {
+			for (const el of [pet, badge]) {
 				if (!el) continue;
 				const r = el.getBoundingClientRect();
 				if (r.width <= 0 || r.height <= 0) continue;
@@ -269,26 +238,7 @@ function PetApp(): ReactNode {
 		report();
 		window.addEventListener("resize", report);
 		return () => window.removeEventListener("resize", report);
-	}, [bridge, bubbles, panelOpen]);
-
-	// Typewriter reveal for every bubble (one interval, all bubbles).
-	useEffect(() => {
-		if (bubbles.length === 0 || bubbles.every(b => b.visible === b.text)) return;
-		const timer = window.setInterval(() => {
-			setBubbles(prev => {
-				let changed = false;
-				const next = prev.map(b => {
-					if (b.visible === b.text) return b;
-					const gap = b.text.length - b.visible.length;
-					const step = Math.max(1, Math.floor(gap / 6));
-					changed = true;
-					return { ...b, visible: b.text.slice(0, b.visible.length + step) };
-				});
-				return changed ? next : prev;
-			});
-		}, 28);
-		return () => window.clearInterval(timer);
-	}, [bubbles]);
+	}, []);
 
 	// Mood transition micro-bump (BitFun's stage-bump): replay the one-shot
 	// on the wrapper without remounting the sprite (which would restart the
@@ -299,46 +249,48 @@ function PetApp(): ReactNode {
 		el.classList.remove("gui-pet-bump");
 		void el.offsetWidth; // force reflow so the class re-triggers
 		el.classList.add("gui-pet-bump");
-	}, [mood, hovering, dragging]);
+	}, []);
 
-	if (!enabled) return null;
-
-	const displayMood = dragging ? "dragging" : hovering ? "hover" : mood;
-
-	const togglePanel = (): void => {
-		if (panelOpen) {
-			// Two-phase collapse: play the 140ms fade/blur out, then unmount
-			// and shrink the window (the pet stays put — main restores the
-			// pre-panel position).
-			setPanelLeaving(true);
-			window.setTimeout(() => {
-				setPanelLeaving(false);
-				setPanelOpen(false);
-				void bridge?.petSetPanel?.(false);
-				setApprovals([]);
-			}, 140);
-		} else {
-			setPanelOpen(true);
-			void bridge?.petSetPanel?.(true);
+	const resetDrag = (): void => {
+		if (!dragRef.current.pressed) return;
+		dragRef.current.pressed = false;
+		dragRef.current.dragging = false;
+		dragMoveRafRef.current = null;
+		pendingMoveRef.current = null;
+		if (dragging) {
+			setDragging(false);
 		}
+		// Always disarm: a drag interrupted by lostpointercapture (e.g. the
+		// click-through flip on Windows) must still release the main-process
+		// arm, or the pet window stays interactive forever.
+		void bridge?.petDragEnd?.();
 	};
 
-	const sendReply = (): void => {
-		const text = replyText.trim();
-		if (!text || sending) return;
-		setSending(true);
-		void bridge?.petReply?.(text, activeSession?.id).finally(() => {
-			setSending(false);
-			setReplyText("");
-		});
-	};
-
-	const decide = (requestId: string, approved: boolean): void => {
-		void bridge?.petApprove?.(requestId, approved);
-		setApprovals(prev => prev.filter(a => a.requestId !== requestId));
-	};
+	// Window blur (focus lost mid-drag — e.g. clicking another app while
+	// holding the pet): teardown identical to lostpointercapture, or the
+	// main-process arm stays locked and the pointer stream is dropped.
+	// Same teardown path as the other interrupters, and `moved` survives
+	// resetDrag so an interrupted drag still counts as a drag, not a click.
+	const resetDragRef = useRef(resetDrag);
+	resetDragRef.current = resetDrag;
+	useEffect(() => {
+		const onBlur = (): void => resetDragRef.current();
+		window.addEventListener("blur", onBlur);
+		return () => window.removeEventListener("blur", onBlur);
+	}, []);
 
 	const onPointerDown = (e: ReactPointerEvent): void => {
+		// Right-click opens the native context menu (onContextMenu) — it is
+		// not a drag/click gesture and must not arm one (a right-click
+		// would otherwise pop the panel via the deferred click timer).
+		if (e.button !== 0) return;
+		// A new gesture starts: any deferred single-click toggle from the
+		// previous click is void — otherwise a click followed within the
+		// double-click window by a drag would fire togglePanel() mid-drag.
+		if (clickTimerRef.current !== null) {
+			window.clearTimeout(clickTimerRef.current);
+			clickTimerRef.current = null;
+		}
 		// Drag uses clientX/Y (window-relative logical pixels — unit-stable,
 		// unlike screenX which flips between logical/physical across
 		// down/move on macOS Retina). The main process converts to screen
@@ -350,7 +302,12 @@ function PetApp(): ReactNode {
 		s.lastY = e.clientY;
 		s.dragging = false;
 		s.pressed = true;
+		s.moved = false;
 		e.currentTarget.setPointerCapture(e.pointerId);
+		// Arm the click-through gate: from this point until pointerup the
+		// window must stay interactive (the 120ms poll would otherwise flip
+		// ignore and drop the pointer stream between down and first move).
+		void bridge?.petDragArm?.();
 	};
 	const queueDragMove = (clientX: number, clientY: number): void => {
 		pendingMoveRef.current = { clientX, clientY };
@@ -375,6 +332,7 @@ function PetApp(): ReactNode {
 		const dy = e.clientY - s.startY;
 		if (!s.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
 			s.dragging = true;
+			s.moved = true;
 			setDragging(true);
 		}
 		if (s.dragging) {
@@ -396,250 +354,107 @@ function PetApp(): ReactNode {
 			s.lastY = e.clientY;
 		}
 	};
-	const resetDrag = (): void => {
-		// Idempotent (Clawd's stopDrag guard): pointerup, pointercancel,
-		// lostpointercapture and window blur all funnel here, and any of
-		// them may fire twice (e.g. up after blur).
-		if (!dragRef.current.pressed && !dragRef.current.dragging) return;
-		if (dragMoveRafRef.current !== null) {
-			cancelAnimationFrame(dragMoveRafRef.current);
-			dragMoveRafRef.current = null;
-		}
-		pendingMoveRef.current = null;
+
+	const onPointerUp = (_e: ReactPointerEvent): void => {
 		const s = dragRef.current;
 		s.pressed = false;
 		s.dragging = false;
-		s.lastX = s.startX;
-		s.lastY = s.startY;
-		s.dirAcc = 0;
-		setDragging(false);
-		setFlip(false);
-		// Every path that ends the pointer gesture (up AND cancel) must
-		// clear the main-process drag anchor — a stale petDragLast makes
-		// the next drag's first move jump the window by the old delta.
-		void bridge?.petDragEnd?.();
-	};
-	const onPointerUp = (): void => {
-		const wasDragging = dragRef.current.dragging;
-		resetDrag();
-		if (!wasDragging) {
-			// Click on the pet toggles the interaction panel (focusing the
-			// main window is no longer needed — the panel is interactive).
-			togglePanel();
+		if (s.moved) {
+			// A completed drag is a drag, never a click — the panel must
+			// not pop after moving the pet.
+			s.moved = false;
+			setDragging(false);
+			void bridge?.petDragEnd?.();
+			return;
 		}
+		// Click vs double-click: two clicks within DOUBLE_CLICK_MS toggle
+		// the main window; one click toggles the bubble panel.
+		const now = Date.now();
+		if (now - lastClickRef.current <= DOUBLE_CLICK_MS) {
+			if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
+			clickTimerRef.current = null;
+			lastClickRef.current = 0;
+			void bridge?.toggleMainWindow?.();
+			// Disarm (no drag happened — pointer just went down and up).
+			void bridge?.petDragEnd?.();
+			return;
+		}
+		lastClickRef.current = now;
+		// Defer the single-click panel toggle by the double-click window so
+		// a double click never flashes the panel open then closed.
+		clickTimerRef.current = window.setTimeout(() => {
+			clickTimerRef.current = null;
+			void bridge?.toggleBubblePanel?.();
+			// Disarm after the click's pointer stream ends too.
+			void bridge?.petDragEnd?.();
+		}, DOUBLE_CLICK_MS + 20);
 	};
+
+	if (!enabled) return null;
+
+	const displayMood = dragging ? "dragging" : hovering ? "hover" : mood;
+	// Docked to the left edge the pet faces OUT of the screen (the walk
+	// frames face left) — mirror it so it always faces the workspace.
+	const mirrored = flip || dockSide === "left";
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
-			{bubbles.length > 0 && !panelOpen && (
-				<div className="pet-bubbles" aria-live="polite">
-					{[...bubbles].reverse().map(b => (
-						<div key={b.id} className={`pet-bubble pet-bubble--${b.kind}`}>
-							<button
-								type="button"
-								className="pet-bubble__dismiss"
-								aria-label="dismiss"
-								onClick={() => setBubbles(prev => prev.filter(x => x.id !== b.id))}
-							>
-								×
-							</button>
-							<div className="pet-bubble__text">{b.visible}</div>
-						</div>
-					))}
-				</div>
-			)}
-			{panelOpen && (
-				<div className={`pet-panel${panelLeaving ? " pet-panel--leaving" : ""}`}>
-					<div className="pet-panel__head">
-						<span className="pet-panel__title" title={petState?.sessionTitle ?? undefined}>
-							{petState?.sessionTitle ? petState.sessionTitle : t("MusePi")}
-						</span>
-						<div className="pet-panel__head-actions">
-							{petState && (
-								<button
-									type="button"
-									className="pet-panel__open"
-									aria-label={t("pet open main window")}
-									title={t("pet open main window")}
-									onClick={() => void bridge?.focusMainWindow?.()}
-								>
-									↗
-								</button>
-							)}
-							<button
-								type="button"
-								className="pet-panel__close"
-								aria-label={t("pet close panel")}
-								onClick={togglePanel}
-							>
-								×
-							</button>
-						</div>
+			{/* Stage: centers the sprite AND anchors the unread badge to it —
+			 * a badge anchored to the WINDOW (top/right) floats ~70px right
+			 * of the centered ~104px sprite in the 320px window. The stage
+			 * shrink-wraps the sprite, so the badge's absolute top/right
+			 * tracks the sprite's top-right corner regardless of the pet's
+			 * frame size or the user's scale. pointer-events: none keeps
+			 * only the pet interactive. */}
+			<div className="pet-window__stage">
+				{unreadCount > 0 && (
+					<button
+						type="button"
+						className="pet-window__badge"
+						role="status"
+						aria-label={t("mark all read")}
+						title={t("mark all read")}
+						onClick={() => void bridge?.petMarkAllRead?.()}
+					>
+						{unreadCount > 99 ? "99+" : unreadCount}
+					</button>
+				)}
+				<div
+					ref={bumpRef}
+					className="pet-window__pet"
+					onPointerDown={onPointerDown}
+					onPointerMove={onPointerMove}
+					onPointerUp={onPointerUp}
+					onPointerCancel={resetDrag}
+					onLostPointerCapture={resetDrag}
+					// Hover is driven by the MAIN process (pet:hover): the
+					// renderer's own pointerenter/leave fire spuriously on
+					// click-through flips (the window stops/restarts
+					// receiving mouse events), fighting the main push and
+					// flickering the hover mood row. The main poll knows
+					// the true cursor-vs-hitbox state.
+					onContextMenu={e => {
+						e.preventDefault();
+						void bridge?.petContextMenu?.();
+					}}
+				>
+					<div className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}>
+						<PetSprite
+							mood={displayMood}
+							pet={pet}
+							size={104}
+							scale={sizeScale}
+							frozen={displayMood === "hover"}
+						/>
 					</div>
-					<div className="pet-panel__body">
-						{activeSession ? (
-							<div className="pet-panel__session">
-								<button
-									type="button"
-									className="pet-panel__session-back"
-									onClick={() => setActiveSession(null)}
-								>
-									← {t("back")}
-								</button>
-								<div className="pet-panel__session-title" title={activeSession.label}>
-									{activeSession.label}
-								</div>
-								<div className="pet-panel__session-msgs">
-									{!activeSession.loaded ? (
-										<div className="pet-panel__session-empty">{t("loading…")}</div>
-									) : activeSession.messages.length === 0 ? (
-										<div className="pet-panel__session-empty">{t("no messages yet")}</div>
-									) : (
-										activeSession.messages.map((m, i) => (
-											<div
-												key={i}
-												className={`pet-panel__msg pet-panel__msg--${m.role}`}
-											>
-												{m.text}
-											</div>
-										))
-									)}
-								</div>
-							</div>
-						) : (
-							<>
-						{/* Live task summary */}
-						<div className="pet-panel__status">
-							<div className="pet-panel__status-dot" aria-hidden="true" />
-							{petState?.working ? (
-								<span className="pet-panel__status-text">
-									{petState.toolName
-										? t("pet working · {tool}", { tool: petState.toolName })
-										: t("working")}
-								</span>
-							) : (
-								<span className="pet-panel__status-text">{t("idle")}</span>
-							)}
-						</div>
-						{petState?.lastMessage && (
-							<div className="pet-panel__message">{petState.lastMessage}</div>
-						)}
-						{/* Recent sessions (最近活跃会话): click to open in the
-						 * main window — same source as the sidebar tree. */}
-						{recentSessions.length > 0 && (
-							<div className="pet-panel__recent">
-								<div className="pet-panel__recent-head">{t("recent sessions")}</div>
-								{recentSessions.slice(0, 5).map(rs => (
-									<button
-										key={rs.id}
-										type="button"
-										className="pet-panel__recent-row"
-										title={rs.label}
-										onClick={() => {
-											// Enter the session transcript inside the
-											// panel; the main window keeps its state.
-											setActiveSession({
-												id: rs.id,
-												label: rs.label || t("session"),
-												messages: [],
-												loaded: false,
-											});
-											void bridge?.petGetSessionContent?.(rs.id);
-										}}
-									>
-										<span className="pet-panel__recent-label">{rs.label || t("session")}</span>
-										<span className="pet-panel__recent-time">{relTimeLabel(rs.timestamp)}</span>
-									</button>
-								))}
-							</div>
-						)}
-						{/* Pending approvals */}
-						{approvals.length > 0 && (
-							<div className="pet-panel__approvals">
-								{approvals.map(a => (
-									<div key={a.requestId} className="pet-panel__approval">
-										<div className="pet-panel__approval-tool">{t("pet approval · {tool}", { tool: a.tool })}</div>
-										<div className="pet-panel__approval-actions">
-											<button
-												type="button"
-												className="pet-panel__btn pet-panel__btn--allow"
-												onClick={() => decide(a.requestId, true)}
-											>
-												{t("Approve")}
-											</button>
-											<button
-												type="button"
-												className="pet-panel__btn pet-panel__btn--deny"
-												onClick={() => decide(a.requestId, false)}
-											>
-												{t("Deny")}
-											</button>
-										</div>
-									</div>
-								))}
-							</div>
-						)}
-						{/* Quick reply — always available: with an active session it
-						 * steers that session; without one it creates a new
-						 * session with the text as the first message (same as
-						 * the welcome composer). In the transcript view it
-						 * replies to the session shown. */}
-							</>
-						)}
-						<div className="pet-panel__reply">
-							<input
-								className="pet-panel__input"
-								value={replyText}
-								placeholder={
-									activeSession
-										? t("pet reply placeholder")
-										: petState
-											? t("pet reply placeholder")
-											: t("pet new message placeholder")
-								}
-								onChange={e => setReplyText(e.target.value)}
-								onKeyDown={e => {
-									if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-										e.preventDefault();
-										sendReply();
-									}
-								}}
-							/>
-							<button
-								type="button"
-								className="pet-panel__send"
-								disabled={!replyText.trim() || sending}
-								onClick={sendReply}
-							>
-								{sending ? "…" : "↑"}
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
-			{unreadCount > 0 && (
-				<div className="pet-window__badge" role="status" aria-label={t("unread sessions")}>
-					{unreadCount > 99 ? "99+" : unreadCount}
-				</div>
-			)}
-			<div
-				ref={bumpRef}
-				className="pet-window__pet"
-				onPointerDown={onPointerDown}
-				onPointerMove={onPointerMove}
-				onPointerUp={onPointerUp}
-				onPointerCancel={resetDrag}
-				onLostPointerCapture={resetDrag}
-				onPointerEnter={() => setHovering(true)}
-				onPointerLeave={() => setHovering(false)}
-			>
-				<div className={`pet-window__pet-flip${flip ? " pet-window__pet-flip--mirror" : ""}`}>
-					<PetSprite mood={displayMood} pet={pet} size={104} scale={sizeScale} frozen={displayMood === "hover"} />
 				</div>
 			</div>
 		</div>
 	);
 }
+
+// Unified tooltip layer for this window too (pet controls have titles).
+initTooltips();
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>

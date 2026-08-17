@@ -70,7 +70,16 @@ function handle(msg) {
 					TERM: "xterm-256color",
 					COLORTERM: "truecolor",
 					SHELL: shell,
+					// GUI-spawned daemon hygiene (mirrors server.ts bun-pty path):
+					// strip Electron/node-child artifacts that would leak into
+					// the shell, suppress the macOS dev-tools dialog and git
+					// credential prompts nobody can answer.
+					APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP: "1",
+					GIT_TERMINAL_PROMPT: "0",
 				};
+				for (const k of ["ELECTRON_RUN_AS_NODE", "NODE_CHANNEL_FD", "BASH_ENV", "BASH_XTRACEFD", "ENV", "ARGV0"]) {
+					delete env[k];
+				}
 				if (platform === "win32") {
 					env.LC_ALL = "C.UTF-8";
 					env.LC_CTYPE = "C.UTF-8";

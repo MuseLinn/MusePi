@@ -166,7 +166,7 @@ export async function loadPromptTemplates(options: LoadPromptTemplatesOptions = 
 	const globalPromptsDir = options.agentDir ? path.join(options.agentDir, "prompts") : resolvedAgentDir;
 	templates.push(...(await loadTemplatesFromDir(globalPromptsDir, "user")));
 
-	// 2. Load project templates from cwd/.omp/prompts/
+	// 2. Load project templates from cwd/.musepi/prompts/
 	const projectPromptsDir = getProjectPromptsDir(resolvedCwd);
 	templates.push(...(await loadTemplatesFromDir(projectPromptsDir, "project")));
 

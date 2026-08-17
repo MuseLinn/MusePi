@@ -318,7 +318,7 @@ import { type AdvisorStats, SessionAdvisors, type SessionAdvisorsHost } from "./
 import type { BuildSessionContextOptions, SessionContext } from "./session-context";
 import { getRestorableSessionModels } from "./session-context";
 import { formatSessionDumpText } from "./session-dump-format";
-import type { BranchSummaryEntry, NewSessionOptions } from "./session-entries";
+import type { BranchSummaryEntry, NewSessionOptions, SessionEntry } from "./session-entries";
 import { SessionHandoff, type SessionHandoffHost } from "./session-handoff";
 import {
 	COMPACTION_CHECK_NONE,
@@ -388,6 +388,29 @@ const noOpUIContext: ExtensionUIContext = {
 // ============================================================================
 // AgentSession Class
 // ============================================================================
+
+/**
+ * Resolve a transcript index for a message identified by either id space:
+ * the SDK entry id (generateId hex) or the view's messageKey
+ * ("role:timestamp" / "toolResult:toolCallId"). The two diverge because the
+ * SDK re-ids entries on append (restoreRevert) while the view keeps the
+ * wire message's own identity — so the id lookup falls back to matching the
+ * message's role+timestamp/toolCallId.
+ */
+function sdkMessageIndex(entries: SessionEntry[], messageId: string): number {
+	const idHit = entries.findIndex(e => e.id === messageId);
+	if (idHit >= 0) return idHit;
+	const sep = messageId.indexOf(":");
+	if (sep < 0) return -1;
+	const role = messageId.slice(0, sep);
+	const key = messageId.slice(sep + 1);
+	return entries.findIndex(e => {
+		if (e.type !== "message") return false;
+		const m = e.message as { role?: string; timestamp?: number | string; toolCallId?: string };
+		if (m.role !== role) return false;
+		return role === "toolResult" ? m.toolCallId === key : String(m.timestamp) === key;
+	});
+}
 
 type MessageEndPersistenceSlot = {
 	readonly promise: Promise<void>;
@@ -643,7 +666,7 @@ export class AgentSession {
 		if (mode === "off") return;
 		try {
 			this.#powerAssertion = MacOSPowerAssertion.start({
-				reason: "Oh My Pi agent session",
+				reason: "MusePi agent session",
 				idle: true,
 				display: mode === "display" || mode === "system",
 				system: mode === "system",
@@ -2051,8 +2074,8 @@ export class AgentSession {
 	// Track last assistant message for auto-compaction check
 	#lastAssistantMessage: AssistantMessage | undefined = undefined;
 	/**
-	 * Classifier-refusal turn pruned from active context at settle (#3591).
-	 * Retained until the next run starts so post-settle readers
+ * Classifier-refusal turn pruned from active context at settle (#3591).
+ * Retained until the next run starts so post-settle readers
 	 * ({@link getLastAssistantMessage}: print mode, task executor) still see
 	 * the terminal error instead of a silently successful-looking state.
 	 */
@@ -4106,6 +4129,20 @@ export class AgentSession {
 		return this.agent.state.model;
 	}
 
+	/**
+	 * Side-channel model override (settings.sideChannelModel): empty means
+	 * "follow the session model" — the TUI-parity default for /btw, /omfg,
+	 * idle recap and the ephemeral-ask channel. A configured id resolves
+	 * from the available catalog; unknown ids fall back to the session
+	 * model so a stale config never breaks a side turn.
+	 */
+	#sideChannelModel(): Model | undefined {
+		const id = (this.settings.get as (key: string) => unknown)("sideChannelModel") as string | undefined;
+		if (!id?.trim()) return this.model;
+		const m = this.getAvailableModels().find(m => m.id === id.trim());
+		return m ?? this.model;
+	}
+
 	/** Resolved selector while retry routing is using a fallback model. */
 	get retryFallbackModel(): string | undefined {
 		return this.#recovery.retryFallbackModel;
@@ -6059,7 +6096,10 @@ export class AgentSession {
 	 */
 	async revertTo(messageId: string): Promise<string | null> {
 		const entries = this.sessionManager.getEntries();
-		const index = entries.findIndex(e => e.id === messageId);
+		// The caller (daemon) passes the view's messageKey ("role:timestamp")
+		// which the SDK entry id (generateId hex) never matches — resolve by
+		// message identity instead (see sdkMessageIndex).
+		const index = sdkMessageIndex(entries, messageId);
 		if (index < 0) return null;
 		const entry = entries[index];
 		const msg = (entry as { message?: unknown }).message;
@@ -6086,6 +6126,32 @@ export class AgentSession {
 		this.agent.replaceMessages(sessionContext.messages);
 		this.#advisors.resetSessionState();
 		return text;
+	}
+
+	/**
+	 * Undo a revert (openchamber RevertedMessageDock Restore parity):
+	 * re-append the abandoned tail — the daemon passes the wire entries it
+	 * backed up at revert time (the agent's own tail capture was never
+	 * reliable: the view id space differs from the SDK's) — then replay the
+	 * full context. Returns whether anything was appended.
+	 */
+	async restoreRevert(tail: SessionEntry[]): Promise<boolean> {
+		if (tail.length === 0) return false;
+		let appended = 0;
+		for (const entry of tail) {
+			if (entry.type !== "message") continue;
+			// appendMessage accepts the transcript roles (not the
+			// branch-summary marker etc.) — skip anything else.
+			const role = entry.message.role;
+			if (role !== "user" && role !== "assistant" && role !== "toolResult" && role !== "developer") continue;
+			this.sessionManager.appendMessage(entry.message);
+			appended++;
+		}
+		if (appended === 0) return false;
+		const sessionContext = this.buildDisplaySessionContext();
+		this.agent.replaceMessages(sessionContext.messages);
+		this.#advisors.resetSessionState();
+		return true;
 	}
 
 	async sendUserMessage(
@@ -6314,7 +6380,7 @@ export class AgentSession {
 			this.#modelRegistry,
 			this.settings,
 			this.sessionId,
-			this.model,
+			this.#sideChannelModel(),
 			provider => this.agent.metadataForProvider(provider),
 			this.#titleSystemPrompt,
 			this.#titleGenerationAbortController.signal,
@@ -7326,7 +7392,7 @@ export class AgentSession {
 		signal?: AbortSignal;
 		dedupeReply?: boolean;
 	}): Promise<{ replyText: string; assistantMessage: AssistantMessage }> {
-		const model = this.model;
+		const model = this.#sideChannelModel();
 		if (!model) {
 			throw new Error("No active model on session");
 		}

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { t } from "@musepi/collab-web";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { WEEK_START_KEY } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { Pop } from "./Pop";
-import { WEEK_START_KEY } from "../lib/appearance";
 
 /**
  * Scheduled tasks (定时任务) — openchamber scheduled-task parity.
@@ -52,6 +52,20 @@ interface CronTask {
 	};
 }
 
+/** Non-null fallback for dialog data props during DialogFrame's exit frame
+ *  (draft/deleteTarget are already null then — same pattern as
+ *  SaveImageDialog's `?? ""`). Must be a valid CronTask so CronEditor's
+ *  useState initializers and task.name renders never see null. */
+const EMPTY_TASK: CronTask = {
+	id: "",
+	name: "",
+	enabled: true,
+	schedule: { kind: "cron", cron: "" },
+	prompt: "",
+	cwd: "",
+	state: { createdAt: 0 },
+};
+
 interface CronRun {
 	id: string;
 	taskId: string;
@@ -62,7 +76,15 @@ interface CronRun {
 	sessionId?: string;
 }
 
-const WEEKDAY_KEYS = ["scheduled sun", "scheduled mon", "scheduled tue", "scheduled wed", "scheduled thu", "scheduled fri", "scheduled sat"];
+const WEEKDAY_KEYS = [
+	"scheduled sun",
+	"scheduled mon",
+	"scheduled tue",
+	"scheduled wed",
+	"scheduled thu",
+	"scheduled fri",
+	"scheduled sat",
+];
 
 /** Week start from the settings page (auto → Monday for zh locale),
  *  as a day index (0 = Sunday). Calendar grids and weekday pickers
@@ -80,7 +102,16 @@ function orderedWeekdayKeys(): string[] {
 	return Array.from({ length: 7 }, (_, i) => WEEKDAY_KEYS[(start + i) % 7]!);
 }
 
-const TIMEZONES = ["Asia/Shanghai", "Asia/Tokyo", "Asia/Singapore", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "UTC"];
+const TIMEZONES = [
+	"Asia/Shanghai",
+	"Asia/Tokyo",
+	"Asia/Singapore",
+	"Europe/London",
+	"Europe/Berlin",
+	"America/New_York",
+	"America/Los_Angeles",
+	"UTC",
+];
 
 const CRON_EXAMPLES: Array<{ expr: string; label: string }> = [
 	{ expr: "*/5 * * * *", label: "scheduled cron ex every5" },
@@ -150,6 +181,16 @@ export function ScheduledTasksPage({
 	const [deleteTarget, setDeleteTarget] = useState<CronTask | null>(null);
 	const [busy, setBusy] = useState(false);
 	const aliveRef = useRef(true);
+	// DialogFrame keeps the dialog mounted through its exit animation —
+	// hold the last non-null task so the closing frame still has content
+	// (Pop/DialogFrame parity: host mounts unconditionally, `open` drives
+	// enter/exit; conditional mount would drop the close animation).
+	const draftRef = useRef<CronTask | null>(null);
+	if (draft) draftRef.current = draft;
+	const deleteTargetRef = useRef<CronTask | null>(null);
+	if (deleteTarget) deleteTargetRef.current = deleteTarget;
+	const editorTask = draft ?? draftRef.current;
+	const deleteTask = deleteTarget ?? deleteTargetRef.current;
 
 	const refresh = (): void => {
 		if (!rpc) return;
@@ -175,7 +216,7 @@ export function ScheduledTasksPage({
 			clearInterval(timer);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once refresh
-	}, [rpc]);
+	}, [refresh]);
 
 	// Default selection: first task (openchamber selects the top row).
 	const selected = tasks.find(x => x.id === selectedId) ?? null;
@@ -251,13 +292,11 @@ export function ScheduledTasksPage({
 				}
 			}
 		}
-		void rpc
-			.request("cron.delete", cleanup === "delete" ? { id, cleanup } : { id })
-			.then(res => {
-				const r = res as { tasks?: CronTask[] } | null;
-				if (r?.tasks) setTasks(r.tasks);
-				setDeleteTarget(null);
-			});
+		void rpc.request("cron.delete", cleanup === "delete" ? { id, cleanup } : { id }).then(res => {
+			const r = res as { tasks?: CronTask[] } | null;
+			if (r?.tasks) setTasks(r.tasks);
+			setDeleteTarget(null);
+		});
 	};
 
 	const toggle = (task: CronTask): void => {
@@ -305,7 +344,13 @@ export function ScheduledTasksPage({
 						<Icon name="add" className="h-4 w-4" />
 						<span>{t("scheduled new")}</span>
 					</button>
-					<button type="button" className="gui-btn" onClick={refresh} title={t("board refresh")} aria-label={t("board refresh")}>
+					<button
+						type="button"
+						className="gui-btn"
+						onClick={refresh}
+						title={t("board refresh")}
+						aria-label={t("board refresh")}
+					>
 						<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
 					</button>
 					<button type="button" className="gui-btn" onClick={onBack}>
@@ -347,7 +392,9 @@ export function ScheduledTasksPage({
 							<div key={group.cwd} className="gui-scheduled-ws-block">
 								<div className="gui-scheduled-ws-head">
 									<Icon name="folder-3" className="h-3.5 w-3.5" />
-									<span className="min-w-0 flex-1 truncate">{group.cwd === "~" ? "~" : (group.cwd.split("/").filter(Boolean).at(-1) ?? group.cwd)}</span>
+									<span className="min-w-0 flex-1 truncate">
+										{group.cwd === "~" ? "~" : (group.cwd.split("/").filter(Boolean).at(-1) ?? group.cwd)}
+									</span>
 									<span className="gui-scheduled-ws-count">{group.tasks.length}</span>
 								</div>
 								{group.tasks.map(task => (
@@ -390,7 +437,12 @@ export function ScheduledTasksPage({
 										) : (
 											<span className="gui-scheduled-detail-status-val">—</span>
 										)}
-										{selected.state.lastRunAt ? <span className="gui-scheduled-detail-status-val"> · {fmtRelative(selected.state.lastRunAt)}</span> : null}
+										{selected.state.lastRunAt ? (
+											<span className="gui-scheduled-detail-status-val">
+												{" "}
+												· {fmtRelative(selected.state.lastRunAt)}
+											</span>
+										) : null}
 									</span>
 								</div>
 								<div className="gui-scheduled-detail-enabled">
@@ -405,17 +457,30 @@ export function ScheduledTasksPage({
 									<p className="gui-scheduled-detail-prompt-text">{selected.prompt || "—"}</p>
 								</div>
 								<div className="gui-scheduled-detail-actions">
-									<button type="button" className="gui-btn gui-scheduled-run-now" onClick={() => runNow(selected.id)}>
+									<button
+										type="button"
+										className="gui-btn gui-scheduled-run-now"
+										onClick={() => runNow(selected.id)}
+									>
 										<Icon name="play" className="h-4 w-4 oc-icon-nudge" />
 										<span>{t("scheduled run now")}</span>
 									</button>
 									{onOpenSession && selected.state.lastSessionId ? (
-										<button type="button" className="gui-btn" onClick={() => onOpenSession(selected.state.lastSessionId!)} title={t("scheduled open session")}>
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={() => onOpenSession(selected.state.lastSessionId!)}
+											title={t("scheduled open session")}
+										>
 											<Icon name="external-link" className="h-4 w-4" />
 											<span>{t("scheduled open session")}</span>
 										</button>
 									) : null}
-									<button type="button" className="gui-btn" onClick={() => setDraft({ ...selected, schedule: { ...selected.schedule } })}>
+									<button
+										type="button"
+										className="gui-btn"
+										onClick={() => setDraft({ ...selected, schedule: { ...selected.schedule } })}
+									>
 										<Icon name="pencil" className="h-4 w-4" />
 										<span>{t("board edit")}</span>
 									</button>
@@ -453,16 +518,25 @@ export function ScheduledTasksPage({
 				</div>
 			)}
 
-			{draft && <CronEditor rpc={rpc} task={draft} busy={busy} onCancel={() => setDraft(null)} onSave={save} />}
-			{deleteTarget && (
-				<DeleteConfirmDialog
-					task={deleteTarget}
-					sessionCount={taskSessionIds(deleteTarget).length}
-					busy={busy}
-					onCancel={() => setDeleteTarget(null)}
-					onConfirm={cleanup => remove(deleteTarget.id, cleanup)}
-				/>
-			)}
+		{/* Always mounted — DialogFrame drives enter/exit via `open` (Pop
+		 * parity); data falls back to the last non-null task during the
+		 * exit frame. */}
+		<CronEditor
+			open={draft !== null}
+			rpc={rpc}
+			task={editorTask ?? EMPTY_TASK}
+			busy={busy}
+			onCancel={() => setDraft(null)}
+			onSave={save}
+		/>
+		<DeleteConfirmDialog
+			open={deleteTarget !== null}
+			task={deleteTask ?? EMPTY_TASK}
+			sessionCount={taskSessionIds(deleteTask ?? EMPTY_TASK).length}
+			busy={busy}
+			onCancel={() => setDeleteTarget(null)}
+			onConfirm={cleanup => remove((deleteTask ?? EMPTY_TASK).id, cleanup)}
+		/>
 		</div>
 	);
 }
@@ -481,9 +555,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 			return [];
 		}
 	}, []);
-	const matches = query.trim()
-		? projects.filter(p => p.toLowerCase().includes(query.trim().toLowerCase()))
-		: projects;
+	const matches = query.trim() ? projects.filter(p => p.toLowerCase().includes(query.trim().toLowerCase())) : projects;
 	return (
 		<div className="gui-calendar-wrap">
 			<button
@@ -497,7 +569,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 				<span className="gui-calendar-field-text">{value || t("scheduled cwd placeholder")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
-			<Pop open={open} className="gui-cwd-pop" portal anchor={anchorRef.current} align="left">
+			<Pop open={open} className="gui-cwd-pop" portal anchor={anchorRef.current} align="left" onOpenChange={setOpen}>
 				<input
 					autoFocus
 					className="gui-task-input"
@@ -575,20 +647,34 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("scheduled pick date")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
-			<Pop open={open} className="gui-calendar-pop" portal anchor={anchorRef.current} align="left">
+			<Pop open={open} className="gui-calendar-pop" portal anchor={anchorRef.current} align="left" onOpenChange={setOpen}>
 				<div className="gui-calendar">
 					<div className="gui-calendar-head">
-						<button type="button" className="gui-calendar-nav" onClick={() => setMonth(new Date(year, mon - 1, 1))} aria-label={t("scheduled prev month")}>
+						<button
+							type="button"
+							className="gui-calendar-nav"
+							onClick={() => setMonth(new Date(year, mon - 1, 1))}
+							aria-label={t("scheduled prev month")}
+						>
 							<Icon name="arrow-left-s" className="h-4 w-4" />
 						</button>
-						<span className="gui-calendar-month">{year}年{mon + 1}月</span>
-						<button type="button" className="gui-calendar-nav" onClick={() => setMonth(new Date(year, mon + 1, 1))} aria-label={t("scheduled next month")}>
+						<span className="gui-calendar-month">
+							{year}年{mon + 1}月
+						</span>
+						<button
+							type="button"
+							className="gui-calendar-nav"
+							onClick={() => setMonth(new Date(year, mon + 1, 1))}
+							aria-label={t("scheduled next month")}
+						>
 							<Icon name="arrow-right-s" className="h-4 w-4" />
 						</button>
 					</div>
 					<div className="gui-calendar-grid">
 						{orderedWeekdayKeys().map(k => (
-							<span key={k} className="gui-calendar-dow">{t(k as never)}</span>
+							<span key={k} className="gui-calendar-dow">
+								{t(k as never)}
+							</span>
 						))}
 						{cells.map((c, i) => (
 							<button
@@ -602,7 +688,9 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 						))}
 					</div>
 					<div className="gui-calendar-foot">
-						<button type="button" className="gui-btn" onClick={() => pick(iso(today))}>{t("scheduled today")}</button>
+						<button type="button" className="gui-btn" onClick={() => pick(iso(today))}>
+							{t("scheduled today")}
+						</button>
 						<button
 							type="button"
 							className="gui-btn"
@@ -620,25 +708,35 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 /* ── Editor dialog (openchamber two-column parity) ───────────────── */
 
 function CronEditor({
+	open,
 	rpc,
 	task,
 	busy,
 	onCancel,
 	onSave,
 }: {
+	open: boolean;
 	rpc?: { request(method: string, params?: Record<string, unknown>): Promise<unknown> };
 	task: CronTask;
 	busy: boolean;
 	onCancel(): void;
 	onSave(task: CronTask): void;
 }): ReactNode {
-	const [draft, setDraft] = useState<CronTask>(() => ({ ...task, schedule: { ...task.schedule, times: task.schedule.times ? [...task.schedule.times] : undefined } }));
-	const [models, setModels] = useState<Array<{ id: string; name?: string }>>([]);
+	const [draft, setDraft] = useState<CronTask>(() => ({
+		...task,
+		schedule: { ...task.schedule, times: task.schedule.times ? [...task.schedule.times] : undefined },
+	}));
+	const [models, setModels] = useState<Array<{ id: string; provider: string; name?: string }>>([]);
 	const [cronPreview, setCronPreview] = useState<string[]>([]);
 	const patch = (p: Partial<CronTask>): void => setDraft(prev => ({ ...prev, ...p }));
-	const patchSchedule = (p: Partial<CronSchedule>): void => setDraft(prev => ({ ...prev, schedule: { ...prev.schedule, ...p } }));
+	const patchSchedule = (p: Partial<CronSchedule>): void =>
+		setDraft(prev => ({ ...prev, schedule: { ...prev.schedule, ...p } }));
 	const kind = draft.schedule.kind;
-	const times = draft.schedule.times?.length ? draft.schedule.times : draft.schedule.time ? [draft.schedule.time] : ["09:00"];
+	const times = draft.schedule.times?.length
+		? draft.schedule.times
+		: draft.schedule.time
+			? [draft.schedule.time]
+			: ["09:00"];
 
 	// Model list (models.listAvailable — welcome-composer parity).
 	useEffect(() => {
@@ -647,8 +745,8 @@ function CronEditor({
 		void rpc
 			.request("models.listAvailable")
 			.then(list => {
-				const arr = (list ?? []) as Array<{ id: string; name?: string }>;
-				if (alive) setModels(arr.map(m => ({ id: m.id, name: m.name ?? m.id })));
+				const arr = (list ?? []) as Array<{ id: string; provider?: string; name?: string }>;
+				if (alive) setModels(arr.map(m => ({ id: m.id, provider: m.provider ?? "", name: m.name ?? m.id })));
 			})
 			.catch(() => {});
 		return () => {
@@ -672,182 +770,237 @@ function CronEditor({
 	};
 
 	return (
-		<DialogFrame open label={t("scheduled editor")} onClose={onCancel} className="gui-cron-dialog">
+		<DialogFrame open={open} label={t("scheduled editor")} onClose={onCancel} className="gui-cron-dialog">
 			<div className="gui-cron-form-scroll">
 				<div className="gui-cron-form">
 					<div className="gui-cron-form-grid">
-					<div className="gui-cron-form-col">
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled name")} *</span>
-							<input className="gui-task-input" value={draft.name} onChange={e => patch({ name: e.target.value })} placeholder={t("scheduled name placeholder")} />
-						</div>
-						{kind === "daily" && (
+						<div className="gui-cron-form-col">
 							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled times")}</span>
-								{times.map((tm, i) => (
-									<div key={i} className="gui-cron-time-row">
+								<span className="gui-widget-editor-label">{t("scheduled name")} *</span>
+								<input
+									className="gui-task-input"
+									value={draft.name}
+									onChange={e => patch({ name: e.target.value })}
+									placeholder={t("scheduled name placeholder")}
+								/>
+							</div>
+							{kind === "daily" && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled times")}</span>
+									{times.map((tm, i) => (
+										<div key={i} className="gui-cron-time-row">
+											<input
+												className="gui-task-input"
+												type="time"
+												value={tm}
+												onChange={e => {
+													const next = [...times];
+													next[i] = e.target.value;
+													setTimes(next);
+												}}
+											/>
+											{times.length > 1 && (
+												<button
+													type="button"
+													className="gui-tool-btn"
+													onClick={() => setTimes(times.filter((_, j) => j !== i))}
+													title={t("scheduled remove time")}
+													aria-label={t("scheduled remove time")}
+												>
+													<Icon name="delete-bin" className="h-3.5 w-3.5" />
+												</button>
+											)}
+										</div>
+									))}
+									<button
+										type="button"
+										className="gui-cron-add-time"
+										onClick={() => setTimes([...times, "12:00"])}
+									>
+										<Icon name="add" className="h-3.5 w-3.5" />
+										<span>{t("scheduled add time")}</span>
+									</button>
+								</div>
+							)}
+							{(kind === "weekly" || kind === "monthly") && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled time")}</span>
+									<input
+										className="gui-task-input"
+										type="time"
+										value={draft.schedule.time ?? ""}
+										onChange={e => patchSchedule({ time: e.target.value })}
+									/>
+								</div>
+							)}
+							{kind === "once" && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled time")}</span>
+									<input
+										className="gui-task-input"
+										type="time"
+										value={draft.schedule.time ?? ""}
+										onChange={e => patchSchedule({ time: e.target.value })}
+									/>
+								</div>
+							)}
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled model")}</span>
+								<select
+									className="gui-settings-select"
+									value={draft.model ?? ""}
+									onChange={e => patch({ model: e.target.value || undefined })}
+								>
+									<option value="">{t("scheduled model default")}</option>
+									{models.map(m => (
+										<option key={`${m.provider}/${m.id}`} value={m.id}>
+											{m.name ?? m.id}
+										</option>
+									))}
+								</select>
+							</div>
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled prompt")} *</span>
+								<textarea
+									className="gui-task-input gui-widget-editor-textarea"
+									rows={5}
+									value={draft.prompt}
+									onChange={e => patch({ prompt: e.target.value })}
+									placeholder={t("scheduled prompt placeholder")}
+								/>
+							</div>
+						</div>
+						<div className="gui-cron-form-col">
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled type")}</span>
+								<select
+									className="gui-settings-select"
+									value={kind}
+									onChange={e => patchSchedule({ kind: e.target.value as CronSchedule["kind"] })}
+								>
+									<option value="once">{t("scheduled type once")}</option>
+									<option value="daily">{t("scheduled type daily")}</option>
+									<option value="weekly">{t("scheduled type weekly")}</option>
+									<option value="monthly">{t("scheduled type monthly")}</option>
+									<option value="cron">{t("scheduled type cron")}</option>
+								</select>
+							</div>
+							{kind === "once" && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled date")}</span>
+									<CalendarPicker value={draft.schedule.date} onChange={date => patchSchedule({ date })} />
+								</div>
+							)}
+							{kind === "weekly" && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled weekdays")}</span>
+									<div className="gui-cron-weekdays">
+										{orderedWeekdayKeys().map((key, i) => {
+											const day = (weekStartIndex() + i) % 7;
+											return (
+												<button
+													key={key}
+													type="button"
+													className={`gui-cron-weekday${(draft.schedule.weekdays ?? []).includes(day) ? " gui-cron-weekday--on" : ""}`}
+													onClick={() => {
+														const cur = new Set(draft.schedule.weekdays ?? []);
+														if (cur.has(day)) cur.delete(day);
+														else cur.add(day);
+														patchSchedule({ weekdays: [...cur].sort() });
+													}}
+												>
+													{t(key as never)}
+												</button>
+											);
+										})}
+									</div>
+								</div>
+							)}
+							{kind === "monthly" && (
+								<div className="gui-widget-editor-field">
+									<span className="gui-widget-editor-label">{t("scheduled day of month")}</span>
+									<input
+										className="gui-task-input"
+										type="number"
+										min={1}
+										max={31}
+										value={draft.schedule.dayOfMonth ?? 1}
+										onChange={e => patchSchedule({ dayOfMonth: Number(e.target.value) })}
+									/>
+								</div>
+							)}
+							{kind === "cron" && (
+								<>
+									<div className="gui-widget-editor-field">
+										<span className="gui-widget-editor-label">{t("scheduled cron")} *</span>
 										<input
-											className="gui-task-input"
-											type="time"
-											value={tm}
-											onChange={e => {
-												const next = [...times];
-												next[i] = e.target.value;
-												setTimes(next);
-											}}
+											className="gui-task-input gui-cron-expr"
+											value={draft.schedule.cron ?? ""}
+											onChange={e => patchSchedule({ cron: e.target.value })}
+											placeholder="*/5 * * * *"
 										/>
-										{times.length > 1 && (
-											<button type="button" className="gui-tool-btn" onClick={() => setTimes(times.filter((_, j) => j !== i))} title={t("scheduled remove time")} aria-label={t("scheduled remove time")}>
-												<Icon name="delete-bin" className="h-3.5 w-3.5" />
-											</button>
+										{cronPreview.length > 0 && (
+											<div className="gui-cron-preview">
+												<span className="gui-widget-editor-hint">{t("scheduled next runs")}</span>
+												<div className="gui-cron-preview-list">
+													{cronPreview.map((r, i) => (
+														<span key={i}>{r}</span>
+													))}
+												</div>
+											</div>
 										)}
 									</div>
-								))}
-								<button type="button" className="gui-cron-add-time" onClick={() => setTimes([...times, "12:00"])}>
-									<Icon name="add" className="h-3.5 w-3.5" />
-									<span>{t("scheduled add time")}</span>
-								</button>
-							</div>
-						)}
-						{(kind === "weekly" || kind === "monthly") && (
-							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled time")}</span>
-								<input className="gui-task-input" type="time" value={draft.schedule.time ?? ""} onChange={e => patchSchedule({ time: e.target.value })} />
-							</div>
-						)}
-						{kind === "once" && (
-							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled time")}</span>
-								<input className="gui-task-input" type="time" value={draft.schedule.time ?? ""} onChange={e => patchSchedule({ time: e.target.value })} />
-							</div>
-						)}
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled model")}</span>
-							<select
-								className="gui-settings-select"
-								value={draft.model ?? ""}
-								onChange={e => patch({ model: e.target.value || undefined })}
-							>
-								<option value="">{t("scheduled model default")}</option>
-								{models.map(m => (
-									<option key={m.id} value={m.id}>{m.name ?? m.id}</option>
-								))}
-							</select>
-						</div>
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled prompt")} *</span>
-							<textarea className="gui-task-input gui-widget-editor-textarea" rows={5} value={draft.prompt} onChange={e => patch({ prompt: e.target.value })} placeholder={t("scheduled prompt placeholder")} />
-						</div>
-					</div>
-					<div className="gui-cron-form-col">
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled type")}</span>
-							<select
-								className="gui-settings-select"
-								value={kind}
-								onChange={e => patchSchedule({ kind: e.target.value as CronSchedule["kind"] })}
-							>
-								<option value="once">{t("scheduled type once")}</option>
-								<option value="daily">{t("scheduled type daily")}</option>
-								<option value="weekly">{t("scheduled type weekly")}</option>
-								<option value="monthly">{t("scheduled type monthly")}</option>
-								<option value="cron">{t("scheduled type cron")}</option>
-							</select>
-						</div>
-						{kind === "once" && (
-							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled date")}</span>
-								<CalendarPicker value={draft.schedule.date} onChange={date => patchSchedule({ date })} />
-							</div>
-						)}
-						{kind === "weekly" && (
-							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled weekdays")}</span>
-								<div className="gui-cron-weekdays">
-									{orderedWeekdayKeys().map((key, i) => {
-										const day = (weekStartIndex() + i) % 7;
-										return (
-											<button
-												key={key}
-												type="button"
-												className={`gui-cron-weekday${(draft.schedule.weekdays ?? []).includes(day) ? " gui-cron-weekday--on" : ""}`}
-												onClick={() => {
-													const cur = new Set(draft.schedule.weekdays ?? []);
-													if (cur.has(day)) cur.delete(day);
-													else cur.add(day);
-													patchSchedule({ weekdays: [...cur].sort() });
-												}}
-											>
-												{t(key as never)}
-											</button>
-										);
-									})}
-								</div>
-							</div>
-						)}
-						{kind === "monthly" && (
-							<div className="gui-widget-editor-field">
-								<span className="gui-widget-editor-label">{t("scheduled day of month")}</span>
-								<input className="gui-task-input" type="number" min={1} max={31} value={draft.schedule.dayOfMonth ?? 1} onChange={e => patchSchedule({ dayOfMonth: Number(e.target.value) })} />
-							</div>
-						)}
-						{kind === "cron" && (
-							<>
-								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled cron")} *</span>
-									<input className="gui-task-input gui-cron-expr" value={draft.schedule.cron ?? ""} onChange={e => patchSchedule({ cron: e.target.value })} placeholder="*/5 * * * *" />
-									{cronPreview.length > 0 && (
-										<div className="gui-cron-preview">
-											<span className="gui-widget-editor-hint">{t("scheduled next runs")}</span>
-											<div className="gui-cron-preview-list">{cronPreview.map((r, i) => <span key={i}>{r}</span>)}</div>
+									<div className="gui-widget-editor-field">
+										<span className="gui-widget-editor-label">{t("scheduled cron examples")}</span>
+										<div className="gui-cron-examples">
+											{CRON_EXAMPLES.map(ex => (
+												<button
+													key={ex.expr}
+													type="button"
+													className="gui-cron-example"
+													onClick={() => patchSchedule({ cron: ex.expr })}
+												>
+													<code>{ex.expr}</code>
+													<span>{t(ex.label as never)}</span>
+												</button>
+											))}
 										</div>
-									)}
-								</div>
-								<div className="gui-widget-editor-field">
-									<span className="gui-widget-editor-label">{t("scheduled cron examples")}</span>
-									<div className="gui-cron-examples">
-										{CRON_EXAMPLES.map(ex => (
-											<button
-												key={ex.expr}
-												type="button"
-												className="gui-cron-example"
-												onClick={() => patchSchedule({ cron: ex.expr })}
-											>
-												<code>{ex.expr}</code>
-												<span>{t(ex.label as never)}</span>
-											</button>
-										))}
 									</div>
-								</div>
-							</>
-						)}
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
-							<select className="gui-settings-select" value={draft.schedule.timezone ?? "Asia/Shanghai"} onChange={e => patchSchedule({ timezone: e.target.value })}>
-								{TIMEZONES.map(tz => (
-									<option key={tz} value={tz}>{tz}</option>
-								))}
-							</select>
-						</div>
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled thinking")}</span>
-							<select
-								className="gui-settings-select"
-								value={draft.thinkingLevel ?? "default"}
-								onChange={e => patch({ thinkingLevel: e.target.value as CronTask["thinkingLevel"] })}
-							>
-								<option value="default">{t("scheduled thinking default")}</option>
-								<option value="low">{t("scheduled thinking low")}</option>
-								<option value="medium">{t("scheduled thinking medium")}</option>
-								<option value="high">{t("scheduled thinking high")}</option>
-							</select>
-						</div>
-						<div className="gui-widget-editor-field">
-							<span className="gui-widget-editor-label">{t("scheduled cwd")}</span>
-							<CwdPicker value={draft.cwd} onChange={cwd => patch({ cwd })} />
+								</>
+							)}
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
+								<select
+									className="gui-settings-select"
+									value={draft.schedule.timezone ?? "Asia/Shanghai"}
+									onChange={e => patchSchedule({ timezone: e.target.value })}
+								>
+									{TIMEZONES.map(tz => (
+										<option key={tz} value={tz}>
+											{tz}
+										</option>
+									))}
+								</select>
+							</div>
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled thinking")}</span>
+								<select
+									className="gui-settings-select"
+									value={draft.thinkingLevel ?? "default"}
+									onChange={e => patch({ thinkingLevel: e.target.value as CronTask["thinkingLevel"] })}
+								>
+									<option value="default">{t("scheduled thinking default")}</option>
+									<option value="low">{t("scheduled thinking low")}</option>
+									<option value="medium">{t("scheduled thinking medium")}</option>
+									<option value="high">{t("scheduled thinking high")}</option>
+								</select>
+							</div>
+							<div className="gui-widget-editor-field">
+								<span className="gui-widget-editor-label">{t("scheduled cwd")}</span>
+								<CwdPicker value={draft.cwd} onChange={cwd => patch({ cwd })} />
+							</div>
 						</div>
 					</div>
-				</div>
 				</div>
 			</div>
 			<div className="gui-cron-form-foot">
@@ -856,11 +1009,15 @@ function CronEditor({
 					<span>{t("scheduled enabled")}</span>
 				</label>
 				<div className="gui-cron-form-actions">
-					<button type="button" className="gui-btn" onClick={onCancel}>{t("cancel")}</button>
+					<button type="button" className="gui-btn" onClick={onCancel}>
+						{t("cancel")}
+					</button>
 					<button
 						type="button"
 						className="gui-btn gui-scheduled-new"
-						disabled={busy || !draft.name.trim() || !draft.prompt.trim() || (kind === "once" && !draft.schedule.date)}
+						disabled={
+							busy || !draft.name.trim() || !draft.prompt.trim() || (kind === "once" && !draft.schedule.date)
+						}
 						onClick={() => onSave(draft)}
 					>
 						{t("save")}
@@ -922,12 +1079,14 @@ function nextCronRuns(expr: string, count: number): string[] {
 /* ── Task-delete confirm with session disposition (delete / archive /
  *    keep) — the daemon removes sessions only on "delete". ───────── */
 function DeleteConfirmDialog({
+	open,
 	task,
 	sessionCount,
 	busy,
 	onCancel,
 	onConfirm,
 }: {
+	open: boolean;
 	task: CronTask;
 	sessionCount: number;
 	busy: boolean;
@@ -936,7 +1095,7 @@ function DeleteConfirmDialog({
 }): ReactNode {
 	const [cleanup, setCleanup] = useState<"none" | "archive" | "delete">("none");
 	return (
-		<DialogFrame open label={t("scheduled delete title")} onClose={onCancel} className="gui-cron-delete-dialog">
+		<DialogFrame open={open} label={t("scheduled delete title")} onClose={onCancel} className="gui-cron-delete-dialog">
 			<div className="gui-cron-delete">
 				<p className="gui-cron-delete-desc">
 					{t("scheduled delete desc", { name: task.name || t("scheduled untitled") })}
@@ -946,21 +1105,36 @@ function DeleteConfirmDialog({
 				)}
 				<div className="gui-cron-delete-opts">
 					<label className="gui-cron-delete-opt">
-						<input type="radio" name="cron-delete-cleanup" checked={cleanup === "none"} onChange={() => setCleanup("none")} />
+						<input
+							type="radio"
+							name="cron-delete-cleanup"
+							checked={cleanup === "none"}
+							onChange={() => setCleanup("none")}
+						/>
 						<span>
 							<strong>{t("scheduled delete keep")}</strong>
 							<small>{t("scheduled delete keep desc")}</small>
 						</span>
 					</label>
 					<label className="gui-cron-delete-opt">
-						<input type="radio" name="cron-delete-cleanup" checked={cleanup === "archive"} onChange={() => setCleanup("archive")} />
+						<input
+							type="radio"
+							name="cron-delete-cleanup"
+							checked={cleanup === "archive"}
+							onChange={() => setCleanup("archive")}
+						/>
 						<span>
 							<strong>{t("scheduled delete archive")}</strong>
 							<small>{t("scheduled delete archive desc")}</small>
 						</span>
 					</label>
 					<label className="gui-cron-delete-opt">
-						<input type="radio" name="cron-delete-cleanup" checked={cleanup === "delete"} onChange={() => setCleanup("delete")} />
+						<input
+							type="radio"
+							name="cron-delete-cleanup"
+							checked={cleanup === "delete"}
+							onChange={() => setCleanup("delete")}
+						/>
 						<span>
 							<strong>{t("scheduled delete delete")}</strong>
 							<small>{t("scheduled delete delete desc")}</small>
@@ -968,7 +1142,9 @@ function DeleteConfirmDialog({
 					</label>
 				</div>
 				<div className="gui-cron-form-actions">
-					<button type="button" className="gui-btn" onClick={onCancel}>{t("cancel")}</button>
+					<button type="button" className="gui-btn" onClick={onCancel}>
+						{t("cancel")}
+					</button>
 					<button
 						type="button"
 						className="gui-btn gui-scheduled-del"

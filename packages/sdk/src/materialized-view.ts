@@ -60,6 +60,12 @@ export class MaterializedView {
 	// Extra header fields (user-picked model/thinking/title for history
 	// sessions) survive the round-trip: snapshot() re-emits them.
 	readonly #headerExtra: { title?: string; model?: string; thinkingLevel?: string } = {};
+	/** Completed-round totals: final assistant message ts → duration ms,
+	 *  recorded at agent_end (the round spans the last user message to the
+	 *  run's end — craft-agents completedAt-freeze parity). Survives the
+	 *  persisted-snapshot round-trip, so the GUI recreated on a session
+	 *  switch still shows every completed round's "已工作/用时 X 秒". */
+	#roundDurations = new Map<number, number>();
 
 	constructor(
 		sessionId: string,
@@ -73,10 +79,32 @@ export class MaterializedView {
 		this.#headerExtra = headerExtra ?? {};
 	}
 
-	/** Build a view by replaying journal records (startup / recovery path). */
-	static replay(sessionId: string, cwd: string, events: AgentEvent[], createdAt?: string): MaterializedView {
+	/** Seed completed-round totals into a rebuilt view (truncate/restore
+	 *  rebuild the projection from a journal replay, which never records
+	 *  durations — rounds that predate the operation keep their totals). */
+	seedRoundDurations(pairs: readonly (readonly [number, number])[] | undefined): void {
+		if (!pairs) return;
+		for (const pair of pairs) {
+			if (Array.isArray(pair) && pair.length === 2 && Number.isInteger(pair[0]) && Number.isInteger(pair[1])) {
+				this.#roundDurations.set(pair[0] as number, pair[1] as number);
+			}
+		}
+	}
+
+	/** Build a view by replaying journal records (startup / recovery path).
+	 *  Round durations are NOT recorded during replay: agent_end's wall-clock
+	 *  delta would be computed at replay time (a completed round from hours
+	 *  ago would show a garbage total). Persisted snapshots carry the
+	 *  authoritative durations; a replayed view simply has none. */
+	static replay(
+		sessionId: string,
+		cwd: string,
+		events: AgentEvent[],
+		createdAt?: string,
+		recordRoundDurations = false,
+	): MaterializedView {
 		const view = new MaterializedView(sessionId, cwd, createdAt);
-		for (const event of events) view.apply(event);
+		for (const event of events) view.apply(event, { recordRoundDurations });
 		return view;
 	}
 
@@ -107,11 +135,19 @@ export class MaterializedView {
 			view.#mainAgent = snap.agents[0] as AgentSnapshot;
 		}
 		view.#isStreaming = (snap.state as SessionState | undefined)?.isStreaming ?? false;
+		if (Array.isArray(snap.roundDurations)) {
+			for (const pair of snap.roundDurations) {
+				if (Array.isArray(pair) && pair.length === 2 && Number.isInteger(pair[0]) && Number.isInteger(pair[1])) {
+					view.#roundDurations.set(pair[0] as number, pair[1] as number);
+				}
+			}
+		}
 		return view;
 	}
 
 	/** Incrementally project one wire event. Must be called in journal seq order. */
-	apply(event: AgentEvent): void {
+	apply(event: AgentEvent, options?: { recordRoundDurations?: boolean }): void {
+		const recordRoundDurations = options?.recordRoundDurations !== false;
 		this.#cursor += 1;
 		switch (event.type) {
 			case "message_start":
@@ -186,6 +222,23 @@ export class MaterializedView {
 					this.#mainAgent.status = "idle";
 					this.#mainAgent.lastActivity = Date.now();
 				}
+				// Freeze this run's total (craft-agents completedAt parity): the
+				// round spans the LAST user message (its timestamp is the round
+				// anchor the transcript ticks from) to agent_end; pinned to the
+				// final assistant message so its row shows the frozen total.
+				// Recorded in the view so the daemon persists it and any client
+				// that (re)builds a view from the snapshot gets every total —
+				// including rounds that completed while the GUI was switched away.
+				let userTs: number | undefined;
+				let assistantTs: number | undefined;
+				for (const entry of this.#entries) {
+					if (entry.type !== "message") continue;
+					if (entry.message.role === "user") userTs = entry.message.timestamp;
+					else if (entry.message.role === "assistant") assistantTs = entry.message.timestamp;
+				}
+				if (recordRoundDurations && userTs !== undefined && assistantTs !== undefined) {
+					this.#roundDurations.set(assistantTs, Date.now() - userTs);
+				}
 				break;
 			}
 			case "turn_start": {
@@ -256,6 +309,7 @@ export class MaterializedView {
 			state,
 			agents,
 			cursor: this.#cursor,
+			roundDurations: [...this.#roundDurations],
 		};
 	}
 }

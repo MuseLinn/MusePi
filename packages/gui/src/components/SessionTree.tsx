@@ -1,5 +1,6 @@
 import { t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
+import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { flattenTree } from "./session-tree-shared";
 
@@ -49,6 +50,7 @@ export function SessionTree({
 	onContextMenu,
 	unread,
 	pausedIds,
+	workingIds,
 }: {
 	nodes: GuiTreeNode[];
 	selectedId: string | null;
@@ -60,6 +62,9 @@ export function SessionTree({
 	/** Paused session ids — render a pause chip so frozen sessions are
 	 *  visible in the sidebar (per-session pause, TUI `/pause` parity). */
 	pausedIds?: ReadonlySet<string>;
+	/** Live sessions with a running agent turn (kimi 进行中 parity) —
+	 *  pulsing accent dot on the row. */
+	workingIds?: ReadonlySet<string>;
 }): ReactNode {
 	const flat = flattenTree(nodes);
 	if (flat.length === 0) return null;
@@ -75,7 +80,10 @@ export function SessionTree({
 						<button
 							type="button"
 							className={`gui-session-row${node.entry.id === selectedId ? " gui-session-row-active" : ""}${unread?.has(node.entry.id) ? " gui-session-row--unread" : ""}`}
-							onClick={() => onSelect(node.entry.id)}
+							onClick={() => {
+								tapFeedback();
+								onSelect(node.entry.id);
+							}}
 							onContextMenu={e => {
 								e.preventDefault();
 								onContextMenu?.(node.entry.id, e.clientX, e.clientY);
@@ -99,6 +107,11 @@ export function SessionTree({
 							{pausedIds?.has(node.entry.id) && (
 								<span className="gui-tree-pause" aria-label={t("paused")} title={t("paused")}>
 									<Icon name="pause" className="h-3 w-3" />
+								</span>
+							)}
+							{workingIds?.has(node.entry.id) && (
+								<span className="gui-tree-working" aria-label={t("in progress")} title={t("in progress")}>
+									<span className="gui-tree-working-dot" aria-hidden />
 								</span>
 							)}
 							{parent && (

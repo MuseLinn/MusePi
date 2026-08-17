@@ -352,7 +352,7 @@ export interface CreateAgentSessionOptions {
 	cwd?: string;
 	/** Additional workspace directories beyond cwd (multi-root), absolute or cwd-relative. */
 	additionalDirectories?: string[];
-	/** Global config directory. Default: ~/.omp/agent */
+	/** Global config directory. Default: ~/.musepi/agent */
 	agentDir?: string;
 	/** Spawns to allow. Default: "*" */
 	spawns?: string;
@@ -407,6 +407,9 @@ export interface CreateAgentSessionOptions {
 	customSystemPrompt?: string;
 	/** Already-loaded text appended through the bundled system prompt templates. */
 	appendSystemPrompt?: string;
+	/** Interface label surfaced in the role line ("terminal (TUI)" /
+	 *  "desktop (GUI)") so the agent knows which MusePi frontend it runs in. */
+	interfaceLabel?: string;
 	/**
 	 * Already-loaded title-generation system prompt override (typically
 	 * {@link discoverTitleSystemPromptFile} → {@link resolvePromptInput}). When
@@ -751,7 +754,7 @@ export async function loadSessionExtensions(
  * (`omp bench`, dry-balance) build a bare {@link ModelRegistry} that only knows
  * built-in catalog providers; without this, providers contributed by an
  * extension (e.g. a custom OpenAI-compatible provider under
- * `~/.omp/agent/extensions/`) never reach model resolution. Mirrors the
+ * `~/.musepi/agent/extensions/`) never reach model resolution. Mirrors the
  * session / `omp models` path: drain the queued provider registrations, then
  * `refreshRuntimeProviders` so dynamically-discovered models exist before
  * selectors are resolved.
@@ -861,6 +864,9 @@ export interface BuildSystemPromptOptions {
 	includeWorkspaceTree?: boolean;
 	/** Include the read-only security:// resource inventory entry. Default: false. */
 	securityEnabled?: boolean;
+	/** Interface label surfaced in the role line ("terminal (TUI)" /
+	 *  "desktop (GUI)") so the agent knows which MusePi frontend it runs in. */
+	interfaceLabel?: string;
 }
 
 /**
@@ -870,6 +876,7 @@ export interface BuildSystemPromptOptions {
  * as separate entries so providers can cache prompt prefixes without concatenating blocks.
  */
 export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}): Promise<BuildSystemPromptResult> {
+
 	const toolNames = options.tools?.map(tool => tool.name);
 	const toolMap = options.tools ? new Map(options.tools.map(tool => [tool.name, tool])) : undefined;
 	const promptTools = toolMap
@@ -887,6 +894,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		inlineToolDescriptors: options.inlineToolDescriptors,
 		includeWorkspaceTree: options.includeWorkspaceTree,
 		securityEnabled: options.securityEnabled,
+		interfaceLabel: options.interfaceLabel,
 		toolNames,
 		tools: promptTools,
 	});
@@ -3007,6 +3015,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					? xdevDocsAll(toolSession.xdev, settings.get("tools.xdevDocs"), settings.get("tools.xdevInlineDevices"))
 					: "",
 				resolvedCustomPrompt: options.customSystemPrompt,
+			interfaceLabel: options.interfaceLabel,
 				skills: session?.skills ?? skills,
 				contextFiles,
 				tools: promptTools,

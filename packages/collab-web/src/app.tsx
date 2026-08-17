@@ -216,6 +216,7 @@ function Session({ client, onLeave, onRejoin }: SessionProps): ReactNode {
 								streamDone={snap.streamDone}
 								activeTools={snap.activeTools}
 								working={snap.working}
+								roundDurations={snap.roundDurations}
 								host={toolHost}
 							/>
 						</div>

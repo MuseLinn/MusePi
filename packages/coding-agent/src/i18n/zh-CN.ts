@@ -16,7 +16,7 @@ export const zhCN: TranslationMap = {
 	Extensions: "扩展",
 
 	// ── Setup wizard — splash ────────────────────────────────
-	"OMP-aligned coding agent": "OMP 对齐的编码助手",
+	"OMP-aligned coding agent": "MusePi 对齐的编码助手",
 	"Welcome! Let's get you set up in a few quick steps.": "欢迎！让我们快速完成设置。",
 	"Press any key to begin...": "按任意键开始...",
 
@@ -823,10 +823,10 @@ export const zhCN: TranslationMap = {
 	"Notes (TTSR)": "注释（TTSR）",
 	"Number of concurrent sessions allowed per project": "每个项目允许的并发会话数",
 	"Number of concurrent sessions allowed globally across all projects": "所有项目全局允许的并发会话数",
-	"OMP API key": "OMP API 密钥",
-	"OMP app": "OMP 应用",
-	"OMP endpoint for the collab relay": "协作中继的 OMP 端点",
-	"OMP subscription": "OMP 订阅",
+	"OMP API key": "MusePi API 密钥",
+	"OMP app": "MusePi 应用",
+	"OMP endpoint for the collab relay": "协作中继的 MusePi 端点",
+	"OMP subscription": "MusePi 订阅",
 	Off: "关闭",
 	On: "开启",
 	"Only tool calls": "仅工具调用",
@@ -868,7 +868,7 @@ export const zhCN: TranslationMap = {
 	"Quiet startup": "静默启动",
 	"Rate-limited in-flight request budget per provider": "每个提供商的速率限制进行中请求预算",
 	"Read Target Size": "读取目标大小",
-	"Rebuild OMP": "重建 OMP",
+	"Rebuild OMP": "重建 MusePi",
 	Record: "录制",
 	Redact: "编辑",
 	"Redact messages containing secrets before sharing": "分享前编辑包含秘密的消息",

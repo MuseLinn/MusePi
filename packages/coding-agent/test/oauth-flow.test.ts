@@ -79,7 +79,7 @@ describe("mcp oauth flow", () => {
 		const authUrl = new URL(url);
 
 		expect(registrationPayload).not.toBeNull();
-		expect((registrationPayload as { client_name?: string } | null)?.client_name).toBe("oh-my-pi");
+		expect((registrationPayload as { client_name?: string } | null)?.client_name).toBe("musepi");
 		expect((registrationPayload as { scope?: string } | null)?.scope).toBeUndefined();
 		expect(authUrl.searchParams.get("client_id")).toBe("registered-client-id");
 		expect(authUrl.searchParams.get("state")).toBe("test-state");
@@ -711,7 +711,7 @@ describe("mcp oauth flow", () => {
 				return new Response(
 					JSON.stringify({
 						error: "unapproved_client",
-						error_description: "client_name 'oh-my-pi' is not on the approved list.",
+						error_description: "client_name 'musepi' is not on the approved list.",
 					}),
 					{ status: 403, headers: { "Content-Type": "application/json" } },
 				);

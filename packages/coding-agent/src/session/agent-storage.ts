@@ -524,7 +524,7 @@ FROM model_usage_legacy
 
 	/**
 	 * One-time, non-blocking import of historical request timings from the
-	 * `omp stats` database (`~/.omp/stats.db`) into model_perf. Fire-and-forget:
+	 * `omp stats` database (`~/.musepi/stats.db`) into model_perf. Fire-and-forget:
 	 * the walk runs in bounded chunks with event-loop yields between them
 	 * (bun:sqlite is synchronous — an unbounded scan here froze the TUI for
 	 * ~30s on multi-million-row stats databases), and the persistent meta

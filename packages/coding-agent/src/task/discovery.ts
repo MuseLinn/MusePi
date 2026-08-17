@@ -2,7 +2,7 @@
  * Agent discovery from filesystem.
  *
  * Discovers agent definitions from OMP-native task-agent roots:
- *   - ~/.omp/agent/agents/*.md (user-level)
+ *   - ~/.musepi/agent/agents/*.md (user-level)
  *   - .omp/agents/*.md (project-level)
  *   - <ext>/agents/*.md for every OMP extension package wired through
  *     `listOmpExtensionRoots` (CLI `--extension` roots, `extensions:` in

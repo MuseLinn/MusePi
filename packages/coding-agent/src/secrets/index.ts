@@ -17,7 +17,7 @@ const cachedPlaceholderKeys = new Map<string, string>();
  * and never sent to a provider, so model-visible placeholders cannot be reversed
  * by dictionary-hashing candidate secrets. Stable across sessions so persisted
  * transcripts deobfuscate consistently. Defaults to `getSecretPlaceholderKeyPath()`
- * — `$XDG_STATE_HOME/omp/secret-placeholder.key` (or `~/.omp/agent/secret-placeholder.key`
+ * — `$XDG_STATE_HOME/musepi/secret-placeholder.key` (or `~/.musepi/agent/secret-placeholder.key`
  * without XDG), per docs/secrets.md.
  */
 export async function getSecretPlaceholderKey(keyDir?: string): Promise<string> {

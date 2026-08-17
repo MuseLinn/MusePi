@@ -1,6 +1,7 @@
 import { t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
@@ -75,6 +76,7 @@ export function ThinkingSelector({
 						type="button"
 						className={`gui-model-opt${value == null ? " gui-model-opt--active" : ""}`}
 						onClick={() => {
+							tapFeedback(1);
 							onChange(null);
 							setOpen(false);
 						}}
@@ -86,6 +88,7 @@ export function ThinkingSelector({
 						type="button"
 						className={`gui-model-opt${value === "auto" ? " gui-model-opt--active" : ""}`}
 						onClick={() => {
+							tapFeedback(1);
 							onChange("auto");
 							setOpen(false);
 						}}
@@ -108,6 +111,7 @@ export function ThinkingSelector({
 										title={capped ? t("thinking capped by model") : undefined}
 										onClick={() => {
 											if (capped) return;
+											tapFeedback(1);
 											onChange(level as ThinkingLevel);
 											setOpen(false);
 										}}
@@ -134,6 +138,7 @@ export function ThinkingSelector({
 										title={capped ? t("thinking capped by model") : undefined}
 										onClick={() => {
 											if (capped) return;
+											tapFeedback(1);
 											onChange(level);
 											setOpen(false);
 										}}

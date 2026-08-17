@@ -8,7 +8,7 @@
  * - browser.tabs        list live page targets (title/url)
  * - browser.screenshot  JPEG capture of one tab (attach → capture → detach)
  * - browser.extensions  list extensions present in the shared profile
- * - browser.relayInstall  write the OMP Browser Relay extension files
+ * - browser.relayInstall  write the MusePi Browser Relay extension files
  *                       (chrome.debugger bridge into the user's own Chrome)
  *
  * The CDP client here is intentionally minimal (one request per
@@ -269,8 +269,8 @@ export async function browserExtensions(
 	return { extensions: out, profileDir: ep.profileDir };
 }
 
-/** Write the OMP Browser Relay extension files (chrome.debugger bridge)
- *  and return the install dir — same output as `omp browser-relay install`. */
+/** Write the MusePi Browser Relay extension files (chrome.debugger bridge)
+ *  and return the install dir — same output as `musepi browser-relay install`. */
 export async function browserRelayInstall(): Promise<{ dir: string; ok: boolean }> {
 	const { runBrowserRelayCommand } = await import("../cli/browser-relay-cli");
 	const { getBrowserRelayDir } = await import("@musepi/pi-utils");

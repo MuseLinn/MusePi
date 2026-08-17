@@ -87,4 +87,60 @@ describe("session listing scan cache", () => {
 		expect(await listSessions(SESSION_DIR, storage)).toEqual([]);
 		expect(readSpy).toHaveBeenCalledTimes(1);
 	});
+
+	it("prefers the fixed-width title slot over the session-line title", async () => {
+		const storage = new MemorySessionStorage();
+		const file = `${SESSION_DIR}/slot-title.jsonl`;
+		// First line = the fixed-width title slot (what session-manager writes
+		// on auto-title generation and /rename). It must win over the legacy
+		// session-line title field and the first-message fallback.
+		const slot = JSON.stringify({
+			type: "title",
+			v: 1,
+			title: "Auto Generated Title",
+			source: "auto",
+			updatedAt: "2026-08-10T00:00:00.000Z",
+			pad: "",
+		});
+		storage.writeTextSync(
+			file,
+			[
+				slot,
+				JSON.stringify({
+					type: "session",
+					id: "slot-id",
+					cwd: "/repo",
+					title: "Stale Session Line Title",
+					timestamp: "2026-06-27T00:00:00.000Z",
+				}),
+				JSON.stringify({ type: "message", message: { role: "user", content: "first prompt text" } }),
+				"",
+			].join("\n"),
+		);
+
+		const [session] = await listSessions(SESSION_DIR, storage);
+		expect(session?.title).toBe("Auto Generated Title");
+	});
+
+	it("falls back to the session-line title when no slot exists", async () => {
+		const storage = new MemorySessionStorage();
+		const file = `${SESSION_DIR}/legacy-title.jsonl`;
+		storage.writeTextSync(
+			file,
+			[
+				JSON.stringify({
+					type: "session",
+					id: "legacy-id",
+					cwd: "/repo",
+					title: "Legacy Title",
+					timestamp: "2026-06-27T00:00:00.000Z",
+				}),
+				JSON.stringify({ type: "message", message: { role: "user", content: "first prompt text" } }),
+				"",
+			].join("\n"),
+		);
+
+		const [session] = await listSessions(SESSION_DIR, storage);
+		expect(session?.title).toBe("Legacy Title");
+	});
 });

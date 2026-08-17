@@ -63,6 +63,17 @@ interface Ohlc {
 	v: number;
 }
 
+function isFiniteNum(v: unknown): v is number {
+	return typeof v === "number" && Number.isFinite(v);
+}
+
+/** Rows with finite open/high/low/close are renderable (volume optional). */
+function isValidOhlc(c: unknown): c is Ohlc {
+	if (typeof c !== "object" || c === null) return false;
+	const r = c as Record<string, unknown>;
+	return isFiniteNum(r.o) && isFiniteNum(r.h) && isFiniteNum(r.l) && isFiniteNum(r.c);
+}
+
 /** Deterministic sample candles (kimi K-STATION look without network). */
 function sampleCandles(n: number, start: number, drift = 0.4): Ohlc[] {
 	const out: Ohlc[] = [];
@@ -90,7 +101,12 @@ export function KlineCard({
 	data: Record<string, unknown>;
 	update(patch: Record<string, unknown>): void;
 }): ReactNode {
-	const candles = Array.isArray(data.candles) ? (data.candles as Ohlc[]) : [];
+	// Agent-filled candles can carry a missing/NaN field (the schema only
+	// says `candles: [...]`) — drop rows without finite OHLC and zero-fill
+	// volume so SVG geometry never receives NaN.
+	const candles = (Array.isArray(data.candles) ? data.candles : [])
+		.filter(isValidOhlc)
+		.map(c => (Number.isFinite(c.v) ? c : { ...c, v: 0 }));
 	const stocks = Array.isArray(data.stocks) ? (data.stocks as string[]) : [];
 	const [active, setActive] = useState(0);
 	const price = typeof data.price === "number" ? data.price : 0;
@@ -253,7 +269,9 @@ export function IndextapeCard({
 	update(patch: Record<string, unknown>): void;
 }): ReactNode {
 	const indices = Array.isArray(data.indices) ? (data.indices as string[]) : [];
-	const series = Array.isArray(data.series) ? (data.series as number[]) : [1, 2, 3, 4];
+	// Agent-filled series may carry non-finite entries — keep the geometry
+	// math (min/max/polyline) on finite numbers only.
+	const series = (Array.isArray(data.series) ? (data.series as unknown[]) : [1, 2, 3, 4]).filter(isFiniteNum);
 	const [active, setActive] = useState(0);
 	const value = typeof data.value === "number" ? data.value : 0;
 	const delta = typeof data.delta === "number" ? data.delta : 0;

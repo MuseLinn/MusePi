@@ -103,7 +103,24 @@ export interface ToolResultMessage {
 	timestamp: number;
 }
 
-export type WireMessage = UserMessage | DeveloperMessage | AssistantMessage | ToolResultMessage;
+export interface BashExecutionMessage {
+	role: "bashExecution";
+	command: string;
+	output: string;
+	exitCode: number | undefined;
+	cancelled: boolean;
+	truncated: boolean;
+	timestamp: number;
+	/** True when the "!!" prefix excluded this result from the model context. */
+	excludeFromContext?: boolean;
+}
+
+export type WireMessage =
+	| UserMessage
+	| DeveloperMessage
+	| AssistantMessage
+	| ToolResultMessage
+	| BashExecutionMessage;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Session entries (rendered subset; cast `as SessionEntry` at the JSON

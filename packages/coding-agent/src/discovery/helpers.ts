@@ -821,7 +821,7 @@ export function parseClaudePluginsRegistry(content: string): ClaudePluginsRegist
  */
 export async function resolveActiveProjectRegistryPath(cwd: string): Promise<string | null> {
 	// Pass 1: walk up looking for an existing .omp/ directory (nearest wins).
-	// Stop before os.homedir() — ~/.omp/ is the user-level config dir, not a project root.
+	// Stop before os.homedir() — ~/.musepi/ is the user-level config dir, not a project root.
 	const homeDir = os.homedir();
 	let dir = path.resolve(cwd);
 	while (dir !== homeDir) {
@@ -895,8 +895,8 @@ export function registerPluginCacheInvalidator(invalidator: () => void): void {
 
 /**
  * List all installed Claude Code plugin roots from the plugin cache.
- * Reads ~/.claude/plugins/installed_plugins.json and ~/.omp/plugins/installed_plugins.json,
- * and optionally the nearest project-scoped registry resolved from `cwd`.
+ * Reads ~/.claude/plugins/installed_plugins.json (user) and the nearest project-scoped
+ * `.omp/plugins/installed_plugins.json` (Claude Code layout compat) resolved from `cwd`.
  *
  * Results are cached per home, project registry, and canonical active project.
  */

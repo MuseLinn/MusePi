@@ -1,5 +1,5 @@
 /**
- * Ownership marker for task-isolation sandboxes under `~/.omp/wt/`.
+ * Ownership marker for task-isolation sandboxes under `~/.musepi/wt/`.
  *
  * Each isolation base dir (`ensureIsolation` in {@link ./worktree}) holds a
  * compact `m` mount plus this marker file naming the omp process that created

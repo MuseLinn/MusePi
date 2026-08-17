@@ -301,8 +301,8 @@ function readStoredAccent(): AccentPreference {
 	}
 }
 
-/** Default custom accent = the brand pink, so the picker never opens empty. */
-const DEFAULT_CUSTOM_ACCENT = "#ed4abf";
+/** Default custom accent = the brand emerald, so the picker never opens empty. */
+const DEFAULT_CUSTOM_ACCENT = "#34d399";
 
 function normalizeHex(input: string): string | null {
 	const match = /^#?([0-9a-f]{6})$/i.exec(input.trim());

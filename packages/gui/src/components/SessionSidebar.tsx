@@ -2,6 +2,7 @@ import { t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { CustomGroups } from "./CustomGroups";
@@ -56,11 +57,13 @@ export function SessionSidebar({
 	collapsed,
 	width,
 	onDeleteArchived,
+	unread,
+	onToggleUnread,
 }: {
 	nodes: GuiTreeNode[];
-	/** session.list metadata (cwd/model/paused) keyed by id — archive folder
-	 *  column + sidebar pause chip. */
-	sessionMeta: Map<string, { cwd?: string; model?: string; paused?: boolean }>;
+	/** session.list metadata (cwd/model/status) keyed by id — archive folder
+	 *  column + sidebar pause chip + working/unread derivation. */
+	sessionMeta: Map<string, { cwd?: string; model?: string; paused?: boolean; working?: boolean }>;
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onNewSession(): void;
@@ -92,6 +95,11 @@ export function SessionSidebar({
 	onDeleteArchived(sessionId: string): Promise<boolean>;
 	/** Pane width in px (draggable resize). */
 	width?: number;
+	/** Unread session ids (single source: app-level unread set — pet
+	 *  bubbles, cursor-based derivation, and manual context-menu toggles). */
+	unread?: ReadonlySet<string>;
+	/** Context-menu 标记为已读/未读 toggle. */
+	onToggleUnread?(sessionId: string): void;
 }): ReactNode {
 	const [tab, setTab] = useState<"groups" | "projects">("groups");
 	const [projMenu, setProjMenu] = useState(false);
@@ -104,13 +112,6 @@ export function SessionSidebar({
 			return [];
 		}
 	});
-	const [unread, setUnread] = useState<Set<string>>(() => {
-		try {
-			return new Set(JSON.parse(localStorage.getItem("omp-gui-unread") ?? "[]") as string[]);
-		} catch {
-			return new Set();
-		}
-	});
 	const persistPinned = (next: string[]): void => {
 		setPinned(next);
 		try {
@@ -118,19 +119,6 @@ export function SessionSidebar({
 		} catch {
 			// storage unavailable
 		}
-	};
-	const toggleUnread = (id: string): void => {
-		setUnread(prev => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			try {
-				localStorage.setItem("omp-gui-unread", JSON.stringify([...next]));
-			} catch {
-				// storage unavailable
-			}
-			return next;
-		});
 	};
 	const { prompt } = usePrompt();
 	const { confirm } = useConfirm();
@@ -149,6 +137,7 @@ export function SessionSidebar({
 	};
 	const [viewMenu, setViewMenu] = useState(false);
 	const viewMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+	const projMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
 	const [projView, setProjView] = useState<"project" | "timeline">("project");
 	const [projSort, setProjSort] = useState<"updated" | "created">("updated");
 	const [groups, setGroups] = useState<{ name: string; sessions: string[]; color?: string }[]>(() => {
@@ -173,6 +162,11 @@ export function SessionSidebar({
 		}
 	});
 	const [archivedView, setArchivedView] = useState(false);
+	// Content-boundary feather (transcript parity): the session list scrolls
+	// inside the sidebar — data-top-scroll / data-bottom-scroll flip the
+	// mask-image fade on and off as the list overflows (useScrollShadow).
+	const sessionListRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(sessionListRef);
 	// Persisted project list (projects tab): every folder the app knows —
 	// seeded from session cwds on first load and grown by folder picks
 	// (omp-gui-project-added, dispatched by app.tsx after pickDirectory) so
@@ -202,6 +196,17 @@ export function SessionSidebar({
 	// Paused sessions (per-session freeze) — rendered as a pause chip on rows.
 	const pausedIds = useMemo(
 		() => new Set([...sessionMeta.entries()].filter(([, meta]) => meta.paused === true).map(([id]) => id)),
+		[sessionMeta],
+	);
+	// Live sessions with a running agent turn (kimi 进行中 parity) — a
+	// pulsing accent dot on the row, fed by the app's session.list poll.
+	const workingIds = useMemo(
+		() =>
+			new Set(
+				[...sessionMeta.entries()]
+					.filter(([, meta]) => meta.working === true && meta.paused !== true)
+					.map(([id]) => id),
+			),
 		[sessionMeta],
 	);
 
@@ -264,11 +269,26 @@ export function SessionSidebar({
 	const archivedIds = new Set(archived.map(a => a.sessionId));
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
 	const pinnedNodes = nodes.filter(n => pinned.includes(n.entry.id));
+	// Fixed session search: filter the tree by label (recursively — a node
+	// stays when it matches or any descendant matches). Empty → everything.
+	const [sessionQuery, setSessionQuery] = useState("");
+	const matchTree = useCallback((list: GuiTreeNode[], q: string): GuiTreeNode[] => {
+		if (!q) return list;
+		const needle = q.toLowerCase();
+		const walk = (n: GuiTreeNode): GuiTreeNode | null => {
+			const kids = n.children.map(walk).filter((x): x is GuiTreeNode => x !== null);
+			const self = (n.label ?? n.entry.label ?? "").toLowerCase().includes(needle);
+			if (self || kids.length > 0) return { ...n, children: kids };
+			return null;
+		};
+		return list.map(walk).filter((x): x is GuiTreeNode => x !== null);
+	}, []);
+	const searchedNodes = useMemo(() => matchTree(visibleNodes, sessionQuery.trim()), [matchTree, visibleNodes, sessionQuery]);
 	// Scheduled-task sessions get their own section (定时任务) instead of
 	// cluttering the regular session flow. Pinned wins (pinned section
 	// owns them while pinned).
-	const cronNodes = visibleNodes.filter(n => n.entry.source === "cron" && !pinned.includes(n.entry.id));
-	const regularNodes = visibleNodes.filter(n => n.entry.source !== "cron" && !pinned.includes(n.entry.id));
+	const cronNodes = searchedNodes.filter(n => n.entry.source === "cron" && !pinned.includes(n.entry.id));
+	const regularNodes = searchedNodes.filter(n => n.entry.source !== "cron" && !pinned.includes(n.entry.id));
 	/** Shared 定时任务 section block (used by groups + projects tabs). */
 	const cronSection = (
 		<div className="mb-1.5">
@@ -282,6 +302,7 @@ export function SessionSidebar({
 				onSelect={onSelect}
 				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 				pausedIds={pausedIds}
+				workingIds={workingIds}
 			/>
 		</div>
 	);
@@ -297,7 +318,12 @@ export function SessionSidebar({
 	useEffect(() => {
 		const onArchivedChanged = (): void => {
 			try {
-				setArchived(JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as { sessionId: string; archivedAt: number }[]);
+				setArchived(
+					JSON.parse(localStorage.getItem("omp-gui-archived") ?? "[]") as {
+						sessionId: string;
+						archivedAt: number;
+					}[],
+				);
 			} catch {
 				// ignore malformed storage
 			}
@@ -411,7 +437,7 @@ export function SessionSidebar({
 							aria-label={t("expand or collapse all")}
 							onClick={() => {
 								if (tab === "groups") {
-									setGroupsAll(prev => (prev === false ? true : false));
+									setGroupsAll(prev => prev === false);
 								} else {
 									// Toggle: any collapsed → expand all; all expanded → collapse all.
 									// (Was `length > 0`, which re-collapsed instead of expanding.)
@@ -471,7 +497,7 @@ export function SessionSidebar({
 				 * (not an inline block) so it overlays the tree like the other
 				 * menus. */}
 				{tab === "projects" && (
-					<Pop open={viewMenu} className="gui-view-menu" portal anchor={viewMenuAnchorRef.current} align="right">
+					<Pop open={viewMenu} className="gui-view-menu" portal anchor={viewMenuAnchorRef.current} align="right" onOpenChange={setViewMenu}>
 						<div className="px-2 py-1 text-[13px] font-semibold uppercase tracking-wider text-[var(--color-text-faint)]">
 							{t("view")}
 						</div>
@@ -531,6 +557,27 @@ export function SessionSidebar({
 				{/* Sessions list — custom groups in groups tab; project/timeline in
 				 * projects; archived sessions in the archive view (ZCode). */}
 				<div className="gui-sessions-tab mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
+					<div className="gui-session-search">
+						<Icon name="search" className="h-3.5 w-3.5 flex-none" />
+						<input
+							className="gui-input min-w-0 flex-1"
+							value={sessionQuery}
+							onChange={e => setSessionQuery(e.target.value)}
+							placeholder={t("search sessions…")}
+							aria-label={t("search sessions…")}
+						/>
+						{sessionQuery && (
+							<button
+								type="button"
+								className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+								onClick={() => setSessionQuery("")}
+								title={t("clear")}
+								aria-label={t("clear")}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+						)}
+					</div>
 					<div className="flex items-center justify-end px-4 py-1.5">
 						{archivedView && (
 							<button
@@ -544,7 +591,12 @@ export function SessionSidebar({
 							</button>
 						)}
 					</div>
-					<div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+					<div
+						ref={sessionListRef}
+						className="gui-sessions-list min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
+						data-top-scroll="false"
+						data-bottom-scroll="false"
+					>
 						{archivedView ? (
 							archived.length === 0 ? (
 								<p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">
@@ -595,11 +647,21 @@ export function SessionSidebar({
 								 * timeline default hid it before — ZCode parity: 项目 tab
 								 * always offers 打开文件夹 / 远程连接). */}
 								<div className="relative">
-									<button type="button" className="gui-connect-add" onClick={() => setProjMenu(v => !v)}>
+									<button
+										type="button"
+										className="gui-connect-add"
+										ref={projMenuAnchorRef}
+										onClick={() => setProjMenu(v => !v)}
+									>
 										<Icon name="add-circle" className="h-4 w-4" />
 										<span>{t("add project or remote")}</span>
 									</button>
-									<Pop open={projMenu} className="gui-add-project-menu">
+									<Pop
+										open={projMenu}
+										className="gui-add-project-menu"
+										anchor={projMenuAnchorRef.current}
+										onOpenChange={setProjMenu}
+									>
 										<button
 											type="button"
 											className="gui-view-opt"
@@ -635,6 +697,7 @@ export function SessionSidebar({
 													onSelect={onSelect}
 													onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 													pausedIds={pausedIds}
+													workingIds={workingIds}
 												/>
 											</div>
 										)}
@@ -646,6 +709,7 @@ export function SessionSidebar({
 											onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 											unread={unread}
 											pausedIds={pausedIds}
+											workingIds={workingIds}
 										/>
 									</>
 								) : (
@@ -692,6 +756,7 @@ export function SessionSidebar({
 															onSelect={onSelect}
 															onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 															pausedIds={pausedIds}
+															workingIds={workingIds}
 														/>
 													</div>
 												)}
@@ -764,6 +829,7 @@ export function SessionSidebar({
 																		onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 																		unread={unread}
 																		pausedIds={pausedIds}
+																		workingIds={workingIds}
 																	/>
 																)}
 															</ProjectCollapse>
@@ -786,6 +852,7 @@ export function SessionSidebar({
 															onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 															unread={unread}
 															pausedIds={pausedIds}
+															workingIds={workingIds}
 														/>
 													</div>
 												)}
@@ -807,6 +874,7 @@ export function SessionSidebar({
 											onSelect={onSelect}
 											onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 											pausedIds={pausedIds}
+											workingIds={workingIds}
 										/>
 									</div>
 								)}
@@ -832,6 +900,7 @@ export function SessionSidebar({
 											},
 										])
 									}
+									onNewSession={onNewSession}
 									onDropSession={(i, id) =>
 										setGroups(gs =>
 											gs.map((g, gi) =>
@@ -875,6 +944,7 @@ export function SessionSidebar({
 									onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
 									unread={unread}
 									pausedIds={pausedIds}
+									workingIds={workingIds}
 								/>
 							</>
 						)}
@@ -946,9 +1016,9 @@ export function SessionSidebar({
 									onSelect: () => archiveSession(sessionCtx.id),
 								},
 								{
-									label: unread.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),
+									label: unread?.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),
 									icon: "chat-1",
-									onSelect: () => toggleUnread(sessionCtx.id),
+									onSelect: () => onToggleUnread?.(sessionCtx.id),
 								},
 								{ divider: true },
 								{

@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import { memo } from "react";
 import { t } from "../../i18n/index.js";
+import { electronBridge } from "../../lib/electron-bridge";
 import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
 import { finalArtifacts } from "./file-artifacts.js";
 
@@ -23,8 +24,7 @@ export function openFileInPanel(path: string): void {
 }
 
 export function openFileExternally(path: string): void {
-	const bridge = (window as unknown as { electronAPI?: { openWith?(app: string, path: string): Promise<boolean> } })
-		.electronAPI;
+	const bridge = electronBridge();
 	void bridge?.openWith?.("", path);
 }
 
@@ -68,16 +68,16 @@ export const FileCards = memo(function FileCards({ items }: { items: FileCardIte
 				const badge = extBadge(item.path);
 				return (
 					<div key={item.path} className="tr-file-card" role="listitem">
-						<span className="tr-file-card-badge" aria-hidden="true">
-							{badge || "•"}
-						</span>
-						<span className="tr-file-card-meta">
+						<span className="tr-file-card-top">
+							<span className="tr-file-card-badge" aria-hidden="true">
+								{badge || "•"}
+							</span>
 							<span className="tr-file-card-name" title={item.path}>
 								{baseName(item.path)}
 							</span>
-							<span className="tr-file-card-path" title={item.path}>
-								{item.path}
-							</span>
+						</span>
+						<span className="tr-file-card-path" title={item.path}>
+							{item.path}
 						</span>
 						<span className="tr-file-card-actions">
 							<button

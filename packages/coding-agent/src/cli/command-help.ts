@@ -1,7 +1,7 @@
 import type { CommandMetadata } from "@musepi/pi-utils/cli";
 
 export const acpHelp = {
-	description: "Run Oh My Pi as an ACP (Agent Client Protocol) server over stdio",
+	description: "Run MusePi as an ACP (Agent Client Protocol) server over stdio",
 } satisfies CommandMetadata;
 
 export const agentsHelp = { description: "Manage bundled task agents" } satisfies CommandMetadata;

@@ -19,29 +19,23 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getDashboardStats } from "@musepi/omp-stats";
 import { AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { PROVIDER_REGISTRY } from "@musepi/pi-ai/registry";
+import {
+	validateAnthropicCompatibleApiKey,
+	validateOpenAICompatibleApiKey,
+} from "@musepi/pi-ai/registry/api-key-validation";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import { FileType, type GlobMatch, listWorkspace } from "@musepi/pi-natives";
-import { getAgentDir, getConfigRootDir, getSessionsDir, prompt, VERSION } from "@musepi/pi-utils";
-import type { ConfiguredThinkingLevel } from "../thinking";
-import {
-	createWorkspaceDir,
-	deleteWorkspaceEntry,
-	renameWorkspaceEntry,
-	writeWorkspaceFile,
-} from "./fs-ops.js";
-import type {
-	SessionEntry,
-	SessionHeader,
-	SessionState,
-	WireMessage,
-} from "@musepi/pi-wire";
+import { getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
+import type { AgentEvent, SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
+import { reset as resetCapabilities } from "../capability";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -50,24 +44,37 @@ import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import type { Settings } from "../config/settings";
 import type { SettingPath } from "../config/settings-schema";
+import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
+import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
+import { loadSlashCommands } from "../extensibility/slash-commands";
+import { FileIndexService } from "../file-index";
+import { computeContextBreakdown } from "../modes/utils/context-usage";
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
+import type { CompactMode } from "../session/compact-modes";
+import { SKILL_PROMPT_MESSAGE_TYPE } from "../session/messages";
 import type { SessionInfo } from "../session/session-listing";
+import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
+import { executeAcpBuiltinSlashCommand } from "../slash-commands/acp-builtins";
+import { lookupBuiltinSlashCommand } from "../slash-commands/builtin-registry";
+import { parseSlashCommand } from "../slash-commands/helpers/parse";
 import { resolvePromptInput } from "../system-prompt";
+import { refreshAgentDiscovery } from "../task";
+import type { ConfiguredThinkingLevel } from "../thinking";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
-import { FileIndexService } from "../file-index";
-import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 import {
+	type CronRun,
+	type CronStatus,
+	type CronTask,
 	computeNextRun,
 	loadCronRuns,
 	loadCronTasks,
 	saveCronRuns,
 	saveCronTasks,
 	validateCronTask,
-	type CronRun,
-	type CronStatus,
-	type CronTask,
 } from "./crons";
+import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
+import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -99,6 +106,32 @@ export async function sessionPromptInputs(
 		if (resolved) out.appendSystemPrompt = resolved;
 	}
 	return out;
+}
+
+/** sessionPromptInputs + a desktop-interface note. The daemon serves the
+ *  GUI/browser, so agents here must know which settings are no-ops: any
+ *  `ui.tuiOnly` setting (theme.*, statusLine.*, terminal.*, tui.*, …) only
+ *  affects the terminal UI — editing it in a desktop session changes nothing
+ *  the agent can observe. The list is generated from SETTINGS_SCHEMA (single
+ *  source of truth), so it cannot drift from the settings UI. (display.*
+ *  entries that the desktop transcript consumes — smoothStreaming,
+ *  hideToolActivity, showTokenUsage, collapseCompacted — are NOT flagged,
+ *  so they stay out of this note and the GUI's TUI-only badge.) */
+async function desktopSessionPromptInputs(
+	cwd: string,
+): Promise<{ customSystemPrompt?: string; appendSystemPrompt?: string }> {
+	const base = await sessionPromptInputs(cwd);
+	const { tuiOnlySettingKeys } = await import("../config/settings-schema");
+	const tuiOnly = tuiOnlySettingKeys();
+	if (tuiOnly.length === 0) return base;
+	const note =
+		"当前为桌面界面（GUI）会话。以下设置仅对终端界面（TUI）生效，在本次会话中修改不会影响当前界面：" +
+		tuiOnly.join(", ") +
+		"。";
+	return {
+		...base,
+		appendSystemPrompt: base.appendSystemPrompt ? `${base.appendSystemPrompt}\n\n${note}` : note,
+	};
 }
 
 /**
@@ -339,6 +372,7 @@ import { ModelsConfigFile } from "../config/models-config";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { AgentSession } from "../session/agent-session";
 import type { StoredAuthCredential } from "../session/auth-storage";
+import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
 import { EventBus } from "../utils/event-bus";
 import { openPath } from "../utils/open";
@@ -354,7 +388,14 @@ export interface DaemonOptions {
 	cwd?: string;
 }
 
-const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
+/**
+ * Daemon runtime dir: socket + journal + materialized view store. Defaults
+ * to a shared temp dir, but MUST be isolatable (MUSEPI_DAEMON_DIR) so test
+ * daemons never collide with the user's: two daemons sharing the journal
+ * dir race the materialized.db write lock and the journal compaction .tmp
+ * rename — both crash the process.
+ */
+const SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
 
 /** One skill entry served by skills.list (scan + enablement state). */
 interface SkillListItem {
@@ -374,12 +415,14 @@ interface ModeSessionLike {
 	getGoalModeState?(): { enabled?: boolean; goal?: { objective?: string; status?: string } } | undefined;
 	getPlanModeState?(): { enabled?: boolean } | undefined;
 	getTodoPhases?(): TodoPhase[];
+	isCompacting?: boolean;
 }
 
 /** Goal/plan mode + aggregated todo progress for the GUI badges. */
 function modesOf(session: unknown): {
 	goalMode: { enabled: boolean; objective?: string; status?: string } | null;
 	planMode: boolean;
+	isCompacting: boolean;
 	todo: {
 		name: string;
 		done: number;
@@ -396,6 +439,7 @@ function modesOf(session: unknown): {
 				? { enabled: true, objective: goal.goal.objective, status: goal.goal.status }
 				: null,
 		planMode: s.getPlanModeState?.()?.enabled === true,
+		isCompacting: s.isCompacting === true,
 		todo: phases
 			.filter(p => p.tasks.length > 0)
 			.map(p => ({
@@ -412,6 +456,49 @@ function modesOf(session: unknown): {
 }
 const DEFAULT_SOCKET = path.join(SOCKET_DIR, "daemon.sock");
 const JOURNAL_DIR = path.join(SOCKET_DIR, "journal");
+
+/**
+ * Snapcompact wire-savings estimates are memoized per live session — the
+ * estimate scans the full message history (TUI /context parity), and the
+ * GUI usage ring polls `session.contextUsage` every 3s, so recomputing on
+ * every tick would burn CPU on large sessions. Keyed by the stats
+ * revision (bumps on message/turn changes) + the messages/systemPrompt
+ * array identity + the snapcompact settings; the estimate is gated on the
+ * experimental settings, so the default configuration skips it entirely.
+ */
+const snapcompactEstimateCache = new WeakMap<
+	AgentSession,
+	{
+		messagesRef: readonly unknown[];
+		systemPromptRef: readonly string[];
+		key: string;
+		estimate: SnapcompactSavingsEstimate | null;
+	}
+>();
+
+function estimateSnapcompactSavings(session: AgentSession): SnapcompactSavingsEstimate | null {
+	const renderSystemPrompt = String(session.settings.get("snapcompact.systemPrompt"));
+	const renderToolResults = String(session.settings.get("snapcompact.toolResults"));
+	if (renderSystemPrompt === "none" && renderToolResults === "false") return null;
+	const shape = String(session.settings.get("snapcompact.shape"));
+	const messages = session.messages;
+	const systemPrompt = session.systemPrompt;
+	const key = `${session.contextUsageRevision}|${renderSystemPrompt}|${renderToolResults}|${shape}`;
+	const cached = snapcompactEstimateCache.get(session);
+	if (cached && cached.messagesRef === messages && cached.systemPromptRef === systemPrompt && cached.key === key) {
+		return cached.estimate;
+	}
+	try {
+		const breakdown = computeContextBreakdown(session, { snapcompactSavings: true });
+		const estimate = breakdown.snapcompact ?? null;
+		snapcompactEstimateCache.set(session, { messagesRef: messages, systemPromptRef: systemPrompt, key, estimate });
+		return estimate;
+	} catch (err) {
+		logger.debug("snapcompact savings estimate failed", { err: String(err) });
+		return null;
+	}
+}
+
 /** Live sessions with no activity (send or event) for this long are auto-closed. */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
@@ -461,6 +548,10 @@ interface LiveSession {
 	pauseGate: AgentPauseGate;
 	/** Publish an approval request to all subscribers as an envelope. */
 	publishApproval(record: PendingApproval): void;
+	/** Broadcast a wire event (journal + materialized view + subscribers)
+	 *  without touching agent state — for RPC paths whose side effects are
+	 *  already recorded in the session (see session.bashCommand). */
+	publishWireEvent(event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never): void;
 	dispose: () => void;
 }
 
@@ -468,6 +559,19 @@ interface LiveSession {
 export interface DaemonConnection {
 	readonly id: string;
 	send(message: unknown): void;
+}
+
+/** Backed-up tail of one session.revertTo — restorable by
+ *  session.restoreRevert (openchamber RevertedMessageDock Restore parity):
+ *  the truncated wire entries (re-emitted into journal/view) plus, for
+ *  history sessions, the raw jsonl records cut from the SDK transcript. */
+export interface RevertBackup {
+	wireEntries: SessionEntry[];
+	fileLines: string[];
+	/** Target user-message text (dock display + composer restore). */
+	text: string;
+	/** View entry id of the target user message (per-item restore/fork). */
+	messageId: string;
 }
 
 /**
@@ -504,6 +608,29 @@ export class DaemonSessionHost {
 	 *  never journaled). Refreshed on demand; 10s covers GUI list refreshes
 	 *  without re-scanning the whole session dir per request. */
 	#historyCache: { at: number; rows: SessionInfo[] } | null = null;
+	/** Revert backups (openchamber RevertedMessageDock Restore parity): the
+	 *  wire entries truncated by each session.revertTo, per session, LIFO.
+	 *  session.restoreRevert pops the latest and re-emits them into the
+	 *  journal/view (and, for live sessions, into the agent context via
+	 *  AgentSession.restoreRevert). In-memory: matches the GUI's revert-dock
+	 *  lifetime (both reset on restart). */
+	readonly #revertBackups = new Map<string, RevertBackup[]>();
+
+	/** Per-session revert backups (LIFO — the latest revert is popped first
+	 *  by session.restoreRevert). */
+	revertBackupsFor(sessionId: string): RevertBackup[] {
+		let list = this.#revertBackups.get(sessionId);
+		if (!list) {
+			list = [];
+			this.#revertBackups.set(sessionId, list);
+		}
+		return list;
+	}
+
+	/** Discard the session's revert backups (session.delete path). */
+	clearRevertBackups(sessionId: string): void {
+		this.#revertBackups.delete(sessionId);
+	}
 
 	constructor(options: DaemonOptions = {}) {
 		this.#options = options;
@@ -529,9 +656,10 @@ export class DaemonSessionHost {
 		const result = await createAgentSession({
 			cwd,
 			hasUI: true,
+			interfaceLabel: "desktop (GUI)",
 			eventBus: this.#eventBus,
 			pauseGate,
-			...(await sessionPromptInputs(cwd)),
+			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
 		});
@@ -576,9 +704,10 @@ export class DaemonSessionHost {
 			cwd: resumeCwd,
 			sessionManager: manager,
 			hasUI: true,
+			interfaceLabel: "desktop (GUI)",
 			eventBus: this.#eventBus,
 			pauseGate,
-			...(await sessionPromptInputs(resumeCwd)),
+			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
 		// means the file wasn't the requested session after all.
@@ -682,7 +811,14 @@ export class DaemonSessionHost {
 			// Throttle: high-frequency streaming events coalesce into one write.
 			persistTimer = setTimeout(() => {
 				persistTimer = undefined;
-				this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+				try {
+					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+				} catch (error) {
+					// Persistence is best-effort fire-and-forget: the journal +
+					// SDK file remain authoritative. A transient write failure
+					// (lock contention, disk pressure) must NOT crash the daemon.
+					logger.error(`view-store persist failed: ${String(error)}`);
+				}
 			}, 100);
 		};
 		const live: LiveSession = {
@@ -713,8 +849,29 @@ export class DaemonSessionHost {
 					}
 				}
 			},
+			// Broadcast a wire event (journal + materialized view + subscribers)
+			// without touching agent state. Used by RPC paths whose side effects
+			// are already recorded in the session (e.g. session.bashCommand: the
+			// BashRunner appended the bashExecution message itself; the GUI
+			// transcript still needs the message_start/end events to fold it in).
+			publishWireEvent: (event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never) => {
+				const wireEvent = toWireAgentEvent(event);
+				if (!wireEvent) return;
+				const seq = ++live.seq;
+				live.journal?.append(wireEvent);
+				live.view.apply(wireEvent);
+				schedulePersist();
+				for (const send of live.subscribers.values()) {
+					try {
+						send({ kind: "event", seq, payload: wireEvent });
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
 			dispose: () => {
 				this.#cancelIdleRecap(live);
+				unsubscribeName();
 				unsubscribeProgress();
 				unsubscribeLifecycle();
 				unsubscribePauseGate();
@@ -722,13 +879,18 @@ export class DaemonSessionHost {
 					clearTimeout(persistTimer);
 					persistTimer = undefined;
 				}
-				this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+				try {
+					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+				} catch (error) {
+					// See schedulePersist: best-effort persistence must not
+					// crash the daemon during session teardown either.
+					console.error(`[daemon] view-store persist failed on dispose: ${String(error)}`);
+				}
 				void journal.close();
 				void agentSession.dispose();
 			},
 		};
-		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);
-		live.idleTimer.unref?.();
+		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);		live.idleTimer.unref?.();
 		// Subagent progress/lifecycle (task tool) rides the GUI stream: the
 		// EventBus channels are per-daemon shared, so payloads from any session
 		// are keyed by agent id and fan out to this session's subscribers like
@@ -755,6 +917,22 @@ export class DaemonSessionHost {
 		};
 		const unsubscribeProgress = this.#eventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, onSubagentProgress);
 		const unsubscribeLifecycle = this.#eventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, onSubagentLifecycle);
+		// Auto-generated titles land async after the first user message (TUI
+		// parity, see maybeStartTitleGeneration in session.send). The GUI has
+		// no other way to learn the tree label changed, so broadcast a
+		// lightweight `title` envelope to this session's subscribers.
+		const onSessionNameChanged = (): void => {
+			const title = agentSession.sessionManager.getSessionName() ?? null;
+			const seq = ++live.seq;
+			for (const send of live.subscribers.values()) {
+				try {
+					send({ kind: "title", seq, payload: { title } });
+				} catch {
+					// subscriber socket died; removed on close
+				}
+			}
+		};
+		const unsubscribeName = agentSession.sessionManager.onSessionNameChanged(onSessionNameChanged);
 		agentSession.subscribe(event => {
 			// Only wire-compatible events cross the daemon boundary — the
 			// journal, the live stream and the SDK contract share one format.
@@ -837,7 +1015,12 @@ export class DaemonSessionHost {
 				| undefined;
 			out.push({
 				id: row.sessionId,
-				title: (row.title ?? (this.get(row.sessionId)?.autoTitle !== false ? this.firstUserMessage(row.sessionId) : undefined) ?? undefined)?.slice(0, 80) ?? null,
+				title:
+					(
+						row.title ??
+						(this.get(row.sessionId)?.autoTitle !== false ? this.firstUserMessage(row.sessionId) : undefined) ??
+						undefined
+					)?.slice(0, 80) ?? null,
 				cwd: row.cwd || agentSession?.cwd || null,
 				messageCount: row.messageCount,
 				working: live?.pauseGate.paused === true ? false : (agentSession?.isStreaming ?? false),
@@ -991,6 +1174,9 @@ export class DaemonSessionHost {
 				? (live.view.snapshot().state.cwd ?? this.#options.cwd ?? "")
 				: (this.#options.cwd ?? "");
 			const view = MaterializedView.replay(sessionId, cwd, events);
+			// Rounds that completed before this truncation keep their frozen
+			// totals (the replay itself never records durations).
+			view.seedRoundDurations(this.#store.load(sessionId)?.roundDurations);
 			if (live) live.view = view;
 			this.#store.upsert(sessionId, view.snapshot());
 			return view.cursor;
@@ -1042,7 +1228,6 @@ export class DaemonSessionHost {
 		this.#sessions.delete(sessionId);
 		live.dispose();
 	}
-
 
 	#scanIdle(): void {
 		const now = Date.now();
@@ -1102,7 +1287,11 @@ export class DaemonSessionHost {
 			live.agentSession.sessionManager.getSessionName()?.trim() ||
 			"";
 		const task = nextActionableTask(modeSession.getTodoPhases?.() ?? [])?.content ?? "";
-		const promptText = prompt.render(idleRecapPrompt, { goal, task });
+		// Follow the interface language (settings.locale): zh-CN recaps are
+		// written in Chinese, en-US in English.
+		const locale = this.#settings?.get("settings.locale") as string | undefined;
+		const language = locale === "zh-CN" ? "Chinese (简体中文)" : undefined;
+		const promptText = prompt.render(idleRecapPrompt, { goal, task, language });
 
 		const abort = new AbortController();
 		live.recapAbort = abort;
@@ -1239,8 +1428,16 @@ export class DaemonSessionHost {
 		}
 		const merged = new Map<string, MaterializedRow & { title?: string }>(rows.map(r => [r.sessionId, r]));
 		for (const h of history.rows) {
-			if (merged.has(h.id)) continue;
+			const existing = merged.get(h.id);
 			const first = h.firstMessage && h.firstMessage !== "(no messages)" ? h.firstMessage : undefined;
+			if (existing) {
+				// Store rows carry the snapshot header title only (persisted
+				// before the async auto-title landed, or a create-time title).
+				// Backfill the jsonl title slot when the stored title is empty
+				// so daemon-restarted sessions keep their generated titles.
+				if (!existing.title && h.title) existing.title = h.title;
+				continue;
+			}
 			merged.set(h.id, {
 				sessionId: h.id,
 				cursor: 0,
@@ -1256,10 +1453,24 @@ export class DaemonSessionHost {
 				parentId: h.parentSessionPath
 					? path.basename(h.parentSessionPath, ".jsonl").split("_").slice(1).join("_") || null
 					: null,
-				title: first,
+				// Title = the persisted title slot (auto-generated or /rename)
+				// when present; SDK-transcript fallback is the first user
+				// message. listAllSessions reads the slot now.
+				title: h.title ?? first,
 			});
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+		// Live sessions: the realtime session name wins over the store
+		// snapshot — auto-generated titles land async after the first user
+		// message (jsonl title slot + in-memory sessionName), long before any
+		// snapshot persist would carry them. User /rename titles are the same
+		// field, so they stay authoritative here too.
+		for (const row of all) {
+			const s = this.#sessions.get(row.sessionId);
+			if (!s) continue;
+			const name = s.agentSession.sessionManager.getSessionName();
+			if (name) row.title = name;
+		}
 		// Persisted rows win on cursor (authoritative for history); live-only
 		// sessions (pre-first-persist) fall back to the in-memory view.
 		return all.map(r => ({
@@ -1270,8 +1481,9 @@ export class DaemonSessionHost {
 
 	/**
 	 * Permanently delete a session: closes it if live, then removes the
-	 * journal file (the single source of truth) and the materialized query
-	 * tables. Mirrors the TUI delete — workspace files are never touched.
+	 * journal file (the single source of truth), the materialized query
+	 * tables AND the SDK transcript files. Mirrors the TUI delete —
+	 * workspace files are never touched.
 	 */
 	async deleteSession(sessionId: string): Promise<void> {
 		this.close(sessionId);
@@ -1281,6 +1493,28 @@ export class DaemonSessionHost {
 		} catch (err) {
 			// Journal may already be gone; only surface a real IO failure.
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+		}
+		// SDK transcript files (`<sessionsDir>/<project>/<id>.jsonl`) and
+		// their artifacts dir (`<project>/<id>/` — subagent transcripts,
+		// tool logs) — the file-scan history (session.list / recent
+		// sessions) reads them via listAllSessions, not the journal.
+		// Deleting only the journal would let a deleted session come back
+		// in the history list (jsonl 复活). scanSync returns paths
+		// RELATIVE to the root, so join before unlinking — a bare
+		// relative unlink resolves against the daemon's cwd and fails.
+		const sessionsRoot = getSessionsDir();
+		try {
+			for (const f of new Bun.Glob(`*/*${sessionId}*`).scanSync(sessionsRoot)) {
+				const full = path.join(sessionsRoot, f);
+				const st = await fs.promises.stat(full);
+				if (st.isDirectory()) {
+					await fs.promises.rm(full, { recursive: true, force: true });
+				} else {
+					await fs.promises.unlink(full);
+				}
+			}
+		} catch {
+			// transcript already gone — fine
 		}
 	}
 
@@ -1484,7 +1718,10 @@ class DaemonServer {
 			const { sessionId } = await this.#host.createSession({
 				cwd: task.cwd || undefined,
 				modelPattern: task.model || undefined,
-				thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "default" ? (task.thinkingLevel as unknown as ConfiguredThinkingLevel) : undefined,
+				thinkingLevel:
+					task.thinkingLevel && task.thinkingLevel !== "default"
+						? (task.thinkingLevel as unknown as ConfiguredThinkingLevel)
+						: undefined,
 			});
 			live = this.#host.get(sessionId);
 			if (!live) throw new Error("session not adopted");
@@ -1529,7 +1766,6 @@ class DaemonServer {
 		}
 		saveCronTasks(this.#cronTasks);
 	}
-
 
 	/**
 	 * Outstanding OAuth onPrompt resolvers keyed by provider id. GUI answers
@@ -1680,7 +1916,27 @@ class DaemonServer {
 			SHELL: shell,
 			COLUMNS: String(cols),
 			LINES: String(rows),
+			// GUI-spawned daemons inherit Electron/node-child artifacts that
+			// would leak into every pty shell (openchamber parity):
+			// ELECTRON_RUN_AS_NODE turns `node`/`npx` into Electron's node,
+			// NODE_CHANNEL_FD points at a dead IPC fd, BASH_ENV/ENV silently
+			// alter shell startup. APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP stops
+			// the "install command line developer tools" dialog from a pty
+			// nobody can answer (proma parity); GIT_TERMINAL_PROMPT keeps git
+			// from hanging on credentials.
+			APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP: "1",
+			GIT_TERMINAL_PROMPT: "0",
 		};
+		for (const k of [
+			"ELECTRON_RUN_AS_NODE",
+			"NODE_CHANNEL_FD",
+			"BASH_ENV",
+			"BASH_XTRACEFD",
+			"ENV",
+			"ARGV0",
+		] as const) {
+			delete env[k];
+		}
 		if (platform === "win32") {
 			env.LC_ALL = "C.UTF-8";
 			env.LC_CTYPE = "C.UTF-8";
@@ -1832,27 +2088,88 @@ class DaemonServer {
 		switch (method) {
 			case "system.meta": {
 				// Derived, never hardcoded: MUSEPI_VERSION is baked by the
-				// bundle (bundle-dist.ts) or set by src/musepi.ts; VERSION
-				// resolves the OMP engine version from pi-utils.
+				// bundle (bundle-dist.ts) or set by src/musepi.ts / the
+				// Electron daemon.cjs spawn; VERSION resolves the OMP engine
+				// version from pi-utils. version/musepiVersion/engineVersion
+				// are split so the GUI can show both numbers separately.
 				const musepiVersion = process.env.MUSEPI_VERSION;
 				return {
 					version: musepiVersion ?? VERSION,
+					musepiVersion: musepiVersion ?? null,
+					engineVersion: VERSION,
 					engine: musepiVersion ? `MusePi ${musepiVersion} (OMP ${VERSION})` : `MusePi (OMP ${VERSION})`,
 					dataRoot: getConfigRootDir(),
 					configDir: getAgentDir(),
 					runtime: `Bun ${process.versions.bun} · ${process.platform}/${process.arch}`,
 				};
 			}
+			case "changelog.startup": {
+				// New-version release notes for the GUI announcement panel.
+				// Shares the TUI marker file (agentDir), so whichever surface
+				// runs first consumes the notes and the other skips them —
+				// one source of truth, no double-push. `force` peeks the
+				// three most recent entries WITHOUT advancing the marker
+				// (manual "what's new" re-open).
+				const { parseChangelog, resolveStartupChangelogForDisplay, selectStartupChangelog } =
+					await import("../utils/changelog");
+				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
+				const force = (params as { force?: boolean } | undefined)?.force === true;
+				if (force) {
+					const entries = await parseChangelog(undefined);
+					const sel = selectStartupChangelog(entries, "0.0.0", currentVersion);
+					return sel
+						? { markdown: sel.markdown, latestVersion: sel.latestVersion }
+						: null;
+				}
+				const settings = await this.#settingsForRpc();
+				const mode = String(
+					settings.get("startup.changelogMode") ?? "summary",
+				) as "summary" | "expanded" | "hidden";
+				const changelog = await resolveStartupChangelogForDisplay({
+					mode,
+					currentVersion,
+					agentDir: getAgentDir(),
+				});
+				return changelog
+					? { markdown: changelog.markdown, latestVersion: changelog.latestVersion }
+					: null;
+			}
+			case "updates.check": {
+				// npm-registry latest-version probe (TUI checkForNewVersion
+				// parity). Respects startup.checkUpdate; network failure or
+				// up-to-date resolve to null so the GUI never nags.
+				const settings = await this.#settingsForRpc();
+				if (!settings.get("startup.checkUpdate")) {
+					return { latest: null };
+				}
+				try {
+					const res = await fetch("https://registry.npmjs.org/@musepi/pi-coding-agent/latest", {
+						signal: AbortSignal.timeout(5_000),
+					});
+					if (!res.ok) return { latest: null };
+					const data = (await res.json()) as { version?: unknown };
+					const latest = typeof data.version === "string" ? data.version : undefined;
+					const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
+					return { latest: latest && latest !== currentVersion ? latest : null };
+				} catch {
+					return { latest: null };
+				}
+			}
 			case "system.capabilities":
 				return { protocol: 1, capabilities: { subscribe: true } };
+			case "system.prewarmStatus":
+				// GUI boot splash waits on this (waitForSdkPrewarm in app.tsx)
+				// so the first session op is never cold.
+				return { ready: sdkPrewarmed };
 			case "system.features":
 				return {};
 			case "session.create":
 				return this.#host.createSession((params ?? {}) as { cwd?: string; title?: string; forkOf?: string });
-			case "session.list":
-				{
-					const cronIds = this.#cronSessionIds();
-					return (await this.#host.knownSessions()).map(r => ({
+			case "session.list": {
+				const cronIds = this.#cronSessionIds();
+				return (await this.#host.knownSessions()).map(r => {
+					const live = this.#host.get(r.sessionId);
+					return {
 						id: r.sessionId,
 						parentId: r.parentId,
 						kind: "session",
@@ -1860,7 +2177,16 @@ class DaemonServer {
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
-						paused: this.#host.get(r.sessionId)?.pauseGate.paused ?? false,
+						paused: live?.pauseGate.paused === true,
+						// Real-time status (kimi 实时提醒 parity): `working` = a
+						// live session with a running agent turn (the materialized
+						// view's streaming flag — driven by the same turn_start/
+						// turn_end wire events the GUI store consumes, so it
+						// agrees with the in-chat orb); `live` marks sessions
+						// currently held by the daemon (subscribed or streaming)
+						// so the GUI can tell a warm session from an idle snapshot.
+						working: live?.pauseGate.paused === true ? false : (live?.view.snapshot().state.isStreaming ?? false),
+						live: live !== undefined,
 						source: cronIds.has(r.sessionId) ? "cron" : undefined,
 						// Title = stored auto-title, else the first user message
 						// (session.tree parity; the history viewer shows it).
@@ -1869,14 +2195,79 @@ class DaemonServer {
 							(this.#host.get(r.sessionId)?.autoTitle !== false
 								? this.#host.firstUserMessage(r.sessionId)
 								: undefined),
-					}));
-				}
+					};
+				});
+			}
 			case "history.messages": {
 				// One session's message rows (history viewer right pane) —
 				// straight from the materialized view-store, no session
 				// activation required.
 				const p = (params ?? {}) as { sessionId: string; limit?: number };
 				return this.#host.sessionMessages(p.sessionId, p.limit ?? 500);
+			}
+			case "tray.state": {
+				// Menu-bar tray snapshot (openchamber tray parity): the
+				// session list plus live activity, pending approvals (inline
+				// Allow/Deny in the tray menu) and usage — one round-trip
+				// per 5s poll, so the tray never fans out RPCs.
+				const cronIds = this.#cronSessionIds();
+				const sessions = (await this.#host.knownSessions()).map(r => ({
+					id: r.sessionId,
+					parentId: r.parentId,
+					kind: "session",
+					timestamp: new Date(r.updatedAt).toISOString(),
+					model: r.model ?? undefined,
+					messageCount: r.messageCount,
+					cwd: r.cwd || undefined,
+					paused: this.#host.get(r.sessionId)?.pauseGate.paused ?? false,
+					source: cronIds.has(r.sessionId) ? "cron" : undefined,
+					title:
+						r.title ??
+						(this.#host.get(r.sessionId)?.autoTitle !== false
+							? this.#host.firstUserMessage(r.sessionId)
+							: undefined),
+				}));
+				const approvals: Array<{
+					id: string;
+					sessionId: string;
+					tool: string;
+					prompt: string;
+					sessionTitle: string | null;
+				}> = [];
+				let activeCount = 0;
+				for (const id of this.#host.sessions()) {
+					const live = this.#host.get(id);
+					if (!live) continue;
+					if (live.agentSession.isStreaming) activeCount += 1;
+					const title = live.agentSession.sessionManager.getSessionName() ?? null;
+					for (const [requestId, record] of live.approvals.pending) {
+						approvals.push({
+							id: requestId,
+							sessionId: id,
+							tool: record.tool,
+							prompt: record.prompt,
+							sessionTitle: title,
+						});
+					}
+				}
+				let usage: { totalTokens: number; totalCost: number; topModels: { name: string; cost: number }[] } | null =
+					null;
+				try {
+					const stats = await getDashboardStats(null);
+					const o = stats.overall;
+					usage = {
+						totalTokens:
+							(o.totalInputTokens ?? 0) +
+							(o.totalOutputTokens ?? 0) +
+							(o.totalCacheReadTokens ?? 0) +
+							(o.totalCacheWriteTokens ?? 0),
+						totalCost: o.totalCost ?? 0,
+						topModels: (stats.byModel ?? []).slice(0, 3).map(m => ({ name: m.model, cost: m.totalCost })),
+					};
+				} catch {
+					// stats unavailable (no session files yet) — tray omits Usage
+				}
+				return { sessions, activeCount, approvals, usage };
 			}
 			case "browser.endpoint": {
 				// Shared automation Chromium (same instance the agent drives)
@@ -1922,13 +2313,24 @@ class DaemonServer {
 				const nodes = new Map<
 					string,
 					{
-						entry: { type: string; id: string; parentId: string | null; timestamp: string; label?: string; source?: string };
+						entry: {
+							type: string;
+							id: string;
+							parentId: string | null;
+							timestamp: string;
+							label?: string;
+							source?: string;
+						};
 						children: unknown[];
 					}
 				>();
 				const roots: unknown[] = [];
 				for (const r of rows) {
-					const title = r.title ?? (this.#host.get(r.sessionId)?.autoTitle !== false ? this.#host.firstUserMessage(r.sessionId) : undefined);
+					const title =
+						r.title ??
+						(this.#host.get(r.sessionId)?.autoTitle !== false
+							? this.#host.firstUserMessage(r.sessionId)
+							: undefined);
 					nodes.set(r.sessionId, {
 						entry: {
 							type: "session",
@@ -2301,8 +2703,9 @@ class DaemonServer {
 				saveCronTasks(this.#cronTasks);
 				// Task-scoped session disposal (GUI asks after the delete
 				// confirm dialog): "delete" removes each session the task ever
-				// ran — journal, materialized row AND the SDK transcript file,
-				// so the file-scan history cannot resurrect it.
+				// ran — journal, materialized row AND the SDK transcript file
+				// (deleteSession now removes the transcript too), so the
+				// file-scan history cannot resurrect it.
 				if (cleanup === "delete" && task) {
 					const sessionIds = new Set<string>();
 					if (task.state.lastSessionId) sessionIds.add(task.state.lastSessionId);
@@ -2311,13 +2714,6 @@ class DaemonServer {
 					}
 					for (const sid of sessionIds) {
 						await this.#host.deleteSession(sid);
-						try {
-							for (const f of new Bun.Glob(`*/*${sid}*.jsonl`).scanSync(getSessionsDir())) {
-								await fs.promises.unlink(f);
-							}
-						} catch {
-							// transcript already gone — fine
-						}
 					}
 					this.#cronRuns = this.#cronRuns.filter(r => r.taskId !== task.id);
 					saveCronRuns(this.#cronRuns);
@@ -2329,7 +2725,7 @@ class DaemonServer {
 				const task = this.#cronTasks.find(t => t.id === id);
 				if (!task) throw new Error(`cron.toggle: unknown task "${id}"`);
 				task.enabled = enabled !== false;
-				task.state.nextRunAt = task.enabled ? computeNextRun(task, Date.now()) ?? undefined : undefined;
+				task.state.nextRunAt = task.enabled ? (computeNextRun(task, Date.now()) ?? undefined) : undefined;
 				saveCronTasks(this.#cronTasks);
 				return { tasks: this.#cronTasks };
 			}
@@ -2646,7 +3042,11 @@ class DaemonServer {
 				// froze every session's turn while it hung.
 				const gh = ghPath();
 				if (gh === null) return { error: "gh CLI not installed" };
-				const cwd = this.#host.cwd();
+				// Session cwd when the caller passes it (GUI PR pane) — the
+				// host cwd is the daemon launch dir, which may be a different
+				// repo (git RPC cwd-isolation parity).
+				const p = (params ?? {}) as { cwd?: string };
+				const cwd = p.cwd && p.cwd.trim() !== "" ? path.resolve(p.cwd) : this.#host.cwd();
 				const storedToken = readGhToken();
 				const proc = Bun.spawn({
 					cmd: [
@@ -2939,6 +3339,17 @@ class DaemonServer {
 							]
 						: p.text;
 				this.#host.touch(p.sessionId);
+				// TUI parity: auto-generate the session title from the first
+				// user message (input-controller calls maybeStartTitleGeneration
+				// on first submit). The gate inside is idempotent — a session
+				// that already has a name (or a low-signal first message, or
+				// PI_NO_TITLE) is a no-op — so calling it every send is safe.
+				// The GUI's Settings → 会话 → 自动生成会话标题 toggle gates it.
+				if (live.autoTitle) {
+					const textPart =
+						typeof content === "string" ? content : (content.find(c => c.type === "text")?.text ?? "");
+					if (textPart) live.agentSession.maybeStartTitleGeneration(textPart);
+				}
 				await live.agentSession.sendUserMessage(content, options);
 				return { accepted: true };
 			}
@@ -2953,6 +3364,23 @@ class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string; messageId: string };
 				if (!p.messageId) throw new Error("messageId required");
 				const live = this.#host.get(p.sessionId);
+				// Backup the tail this revert removes (openchamber
+				// RevertedMessageDock Restore parity): every wire entry from
+				// the target user message onward, captured BEFORE any
+				// truncation so session.restoreRevert can re-emit them.
+				let removedTail: SessionEntry[] = [];
+				{
+					const pre = (
+						live ? live.view.snapshot().entries : (await this.#host.snapshot(p.sessionId)).entries
+					) as SessionEntry[];
+					const idx = pre.findIndex(
+						e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === p.messageId,
+					);
+					if (idx >= 0) removedTail = pre.slice(idx);
+				}
+				/** Removed raw jsonl records (history-path revert only) — restored
+				 *  by re-appending to the SDK transcript file. */
+				let removedFileLines: string[] = [];
 				let text: string | null = null;
 				if (live) {
 					// A running turn must stop BEFORE the transcript is cut:
@@ -3003,6 +3431,56 @@ class DaemonServer {
 					if (!msg) throw new Error(`Unknown message: ${p.messageId}`);
 					text = extractSnapshotText(msg.message.content);
 				}
+				// History path (no live agent): truncate the SDK transcript
+				// file itself — keep the header + every record up to
+				// (excluding) the target message. Runs UNCONDITIONALLY for
+				// non-live sessions: even when the journal covers the session
+				// (it idled out), the file is what the next resume re-projects
+				// the view from — leaving it whole silently undoes the revert.
+				let file = "";
+				if (!live) {
+					const { resolveResumableSession } = await import("../session/session-listing");
+					const match = await resolveResumableSession(p.sessionId, this.#host.cwd());
+					if (!match) throw new Error(`Unknown session: ${p.sessionId}`);
+					file = match.session.path;
+					const lines = (await fs.promises.readFile(file, "utf8")).split("\n");
+					let keep = 0;
+					let found = false;
+					for (let i = 1; i < lines.length; i++) {
+						const line = lines[i];
+						if (!line?.trim()) continue;
+						try {
+							const rec = JSON.parse(line) as {
+								type?: string;
+								id?: string;
+								message?: { role?: string; timestamp?: number | string; toolCallId?: string };
+							};
+							if (rec.type === "message") {
+								// Match either the jsonl id (SDK hex) or the view's
+								// messageKey ("role:timestamp") — the GUI always sends
+								// the view key, which jsonl ids never equal.
+								const key =
+									rec.message &&
+									(rec.message.role === "toolResult"
+										? `toolResult:${rec.message.toolCallId}`
+										: `${rec.message.role}:${rec.message.timestamp}`);
+								if (rec.id === p.messageId || key === p.messageId) {
+									found = true;
+									break;
+								}
+							}
+						} catch {
+							// malformed line — treat as content to keep
+						}
+						keep = i;
+					}
+					if (!found) throw new Error(`Unknown message: ${p.messageId}`);
+					await fs.promises.writeFile(file, `${lines.slice(0, keep + 1).join("\n")}\n`);
+					// Keep the removed jsonl records so a later restoreRevert
+					// can re-append them (history sessions have no SDK agent
+					// to re-insert from).
+					removedFileLines = lines.slice(keep + 1).filter(l => l?.trim());
+				}
 				const cursor = await this.#host.truncateSession(p.sessionId, p.messageId);
 				if (cursor < 0) {
 					// The journal locates messages by their view key
@@ -3045,35 +3523,10 @@ class DaemonServer {
 							this.#host.persistSnapshot(p.sessionId, rebuilt.snapshot());
 						}
 					} else {
-						// History path (no live agent): truncate the jsonl
-						// transcript itself — keep the header + every record up
-						// to (excluding) the target message, then let the
-						// snapshot re-project the shortened file.
-						const { resolveResumableSession } = await import("../session/session-listing");
-						const match = await resolveResumableSession(p.sessionId, this.#host.cwd());
-						if (!match) throw new Error(`Unknown session: ${p.sessionId}`);
-						const file = match.session.path;
-						const lines = (await fs.promises.readFile(file, "utf8")).split("\n");
-						let keep = 0;
-						let found = false;
-						for (let i = 1; i < lines.length; i++) {
-							const line = lines[i];
-							if (!line?.trim()) continue;
-							try {
-								const rec = JSON.parse(line) as { type?: string; id?: string };
-								if (rec.type === "message" && rec.id === p.messageId) {
-									found = true;
-									break;
-								}
-							} catch {
-								// malformed line — treat as content to keep
-							}
-							keep = i;
-						}
-						if (!found) throw new Error(`Unknown message: ${p.messageId}`);
-						await fs.promises.writeFile(file, `${lines.slice(0, keep + 1).join("\n")}\n`);
-						// Drop the live view if one was activated meanwhile so the
-						// next snapshot re-projects the truncated transcript.
+						// No journal for this session (CLI-created, never
+						// journaled): the file above was already truncated —
+						// if a view got activated meanwhile (subscribe raced
+						// the revert), re-project it from the shortened file.
 						const activated = this.#host.get(p.sessionId);
 						if (activated) {
 							const projected = await snapshotFromJsonl(file, p.sessionId);
@@ -3105,7 +3558,222 @@ class DaemonServer {
 						}
 					}
 				}
+				// The revert succeeded — keep the backup for restoreRevert.
+				if (removedTail.length > 0) {
+					const backups = this.#host.revertBackupsFor(p.sessionId);
+					backups.push({ wireEntries: removedTail, fileLines: removedFileLines, text: text ?? "", messageId: p.messageId });
+				}
 				return { ok: true, text, cursor };
+			}
+			case "session.restoreRevert": {
+				// Undo session.revertTo (openchamber RevertedMessageDock
+				// Restore parity): put an abandoned tail back — agent context
+				// (live), SDK transcript file (history), journal and view.
+				// {index} restores that single revert (还原单轮),
+				// {all: true} every revert (还原全部); without either, the
+				// latest revert (backward-compatible). Backups are
+				// push-ordered oldest-first; restore newest-first so
+				// re-appending tails reconstructs the pre-revert transcript
+				// in order — overlapping tails (a newer revert truncates
+				// deeper) are deduped by wire message key vs the view.
+				const p = (params ?? {}) as { sessionId: string; index?: number; all?: boolean };
+				const backups = this.#host.revertBackupsFor(p.sessionId);
+				const selected =
+					p.all === true
+						? [...backups].reverse()
+						: p.index !== undefined
+							? backups[p.index] !== undefined
+								? [backups[p.index]]
+								: []
+							: backups.length > 0
+								? [backups[backups.length - 1]]
+								: [];
+				if (selected.length === 0) return { ok: false, reason: "no-revert" };
+				const live = this.#host.get(p.sessionId);
+				// Dedup: never re-insert a message already present in the
+				// view (nested reverts back up overlapping tails).
+				const existingKeys = new Set<string>();
+				{
+					const current = (
+						live ? live.view.snapshot().entries : (await this.#host.snapshot(p.sessionId)).entries
+					) as SessionEntry[];
+					for (const e of current) {
+						if (e.type === "message") existingKeys.add(messageKey(e.message as WireMessage));
+					}
+				}
+				const dedupEntries = (
+					entries: SessionEntry[],
+				): Array<Extract<SessionEntry, { type: "message" }>> =>
+					entries.filter((e): e is Extract<SessionEntry, { type: "message" }> => {
+						if (e.type !== "message") return false;
+						const key = messageKey(e.message as WireMessage);
+						if (existingKeys.has(key)) return false;
+						existingKeys.add(key);
+						return true;
+					});
+				const dedupFileLines = async (lines: string[], file: string): Promise<string[]> => {
+					// Dedup against the CURRENT transcript file, not the wire
+					// entries: the raw records carry the same messages, so
+					// re-appending them must skip records the file already has
+					// (e.g. the file was never truncated — nothing to restore).
+					const present = new Set<string>();
+					try {
+						const cur = (await fs.promises.readFile(file, "utf8")).split("\n");
+						for (const line of cur) {
+							if (!line?.trim()) continue;
+							try {
+								const rec = JSON.parse(line) as {
+									type?: string;
+									message?: { role?: string; timestamp?: number | string; toolCallId?: string };
+								};
+								if (rec.type === "message" && rec.message) {
+									present.add(
+										rec.message.role === "toolResult"
+											? `toolResult:${rec.message.toolCallId}`
+											: `${rec.message.role}:${rec.message.timestamp}`,
+									);
+								}
+							} catch {
+								// malformed existing line — ignore for dedup
+							}
+						}
+					} catch {
+						// file missing — treat as empty
+					}
+					const out: string[] = [];
+					for (const line of lines) {
+						if (!line?.trim()) continue;
+						try {
+							const rec = JSON.parse(line) as {
+								type?: string;
+								message?: { role?: string; timestamp?: number | string; toolCallId?: string };
+							};
+							const key =
+								rec.type === "message" && rec.message
+									? rec.message.role === "toolResult"
+										? `toolResult:${rec.message.toolCallId}`
+										: `${rec.message.role}:${rec.message.timestamp}`
+									: null;
+							if (key && present.has(key)) continue;
+							if (key) present.add(key);
+						} catch {
+							// malformed line — restore it as-is
+						}
+						out.push(line);
+					}
+					return out;
+				};
+				let restored = 0;
+				for (const backup of selected) {
+					const entries = dedupEntries(backup.wireEntries);
+					if (entries.length === 0) continue;
+					if (live) {
+						const agent = live.agentSession as unknown as {
+							restoreRevert?: (tail: SessionEntry[]) => Promise<boolean>;
+						};
+						const ok = await agent.restoreRevert?.(entries);
+						if (!ok) return { ok: false, reason: "no-agent-tail", restored };
+						// Re-emit the removed messages into the journal + view
+						// and fan them out so subscribed GUIs re-render the tail.
+						for (const entry of entries) {
+							const msg = entry.message as WireMessage;
+							for (const wireEvent of [
+								{ type: "message_start", message: msg },
+								{ type: "message_end", message: msg },
+							] as AgentEvent[]) {
+								live.journal?.append(wireEvent as never);
+								live.view.apply(wireEvent as never);
+								const seq = ++live.seq;
+								for (const send of live.subscribers.values()) {
+									try {
+										send({ kind: "event", seq, payload: wireEvent });
+									} catch {
+										// subscriber socket died; removed on close
+									}
+								}
+							}
+						}
+						this.#host.persistSnapshot(p.sessionId, live.view.snapshot());
+						for (const send of live.subscribers.values()) {
+							try {
+								send({ kind: "state", seq: ++live.seq, payload: live.view.snapshot().state });
+							} catch {
+								// subscriber socket died; removed on close
+							}
+						}
+					} else {
+						// History path: restore the SDK transcript file (the
+						// raw records cut by the revert), then rebuild the
+						// journal + view from the restored tail.
+						const { resolveResumableSession } = await import("../session/session-listing");
+						const match = await resolveResumableSession(p.sessionId, this.#host.cwd());
+						if (match) {
+							const file = match.session.path;
+							const fileLines = await dedupFileLines(backup.fileLines, file);
+							if (fileLines.length > 0) {
+								await fs.promises.appendFile(file, `${fileLines.join("\n")}\n`);
+							}
+						}
+						const journal = new AppendJournal(JOURNAL_DIR, p.sessionId);
+						await journal.open();
+						try {
+							for (const entry of entries) {
+								const msg = entry.message as WireMessage;
+								journal.append({ type: "message_start", message: msg } as never);
+								journal.append({ type: "message_end", message: msg } as never);
+							}
+							const { events } = await journal.replaySource();
+							const snapshot = await this.#host.snapshot(p.sessionId);
+							const cwd =
+								typeof snapshot.state === "object" &&
+								snapshot.state !== null &&
+								typeof (snapshot.state as { cwd?: unknown }).cwd === "string"
+									? ((snapshot.state as { cwd: string }).cwd ?? "")
+									: (this.#host.cwd() ?? "");
+							const view = MaterializedView.replay(p.sessionId, cwd, events);
+							// Keep totals of rounds completed before the revert that
+							// produced this backup (replay records none).
+							view.seedRoundDurations(
+								(snapshot as { roundDurations?: [number, number][] }).roundDurations,
+							);
+							this.#host.persistSnapshot(p.sessionId, view.snapshot());
+						} finally {
+							void journal.close();
+						}
+					}
+					restored++;
+				}
+				// Drop the restored backups from the stack.
+				if (p.all === true) {
+					this.#host.clearRevertBackups(p.sessionId);
+				} else if (p.index !== undefined && backups[p.index]) {
+					backups.splice(p.index, 1);
+					if (backups.length === 0) this.#host.clearRevertBackups(p.sessionId);
+				} else if (backups.length > 0) {
+					backups.pop();
+					if (backups.length === 0) this.#host.clearRevertBackups(p.sessionId);
+				}
+				return { ok: true, restored };
+			}
+			case "session.revertList": {
+				// The revert-dock contents (openchamber RevertedMessageDock
+				// parity): one entry per backed-up revert, oldest first — the
+				// daemon is the single source of truth so GUI state never
+				// drifts from what restoreRevert can actually restore.
+				const p = (params ?? {}) as { sessionId: string };
+				const backups = this.#host.revertBackupsFor(p.sessionId);
+				return { items: backups.map((b, i) => ({ index: i, text: b.text, messageId: b.messageId })) };
+			}
+			case "session.discardRevert": {
+				// Drop a revert backup without restoring it (dock 丢弃): the
+				// GUI's local list removal used to drift from the daemon's
+				// stack — now both sides agree through this RPC.
+				const p = (params ?? {}) as { sessionId: string; index?: number };
+				const backups = this.#host.revertBackupsFor(p.sessionId);
+				if (p.index !== undefined && backups[p.index]) backups.splice(p.index, 1);
+				else if (p.index === undefined) backups.splice(0, backups.length);
+				if (backups.length === 0) this.#host.clearRevertBackups(p.sessionId);
+				return { ok: true };
 			}
 			case "session.abort": {
 				const p = (params ?? {}) as { sessionId: string };
@@ -3114,13 +3782,35 @@ class DaemonServer {
 				await live.agentSession.abort({ reason: "interrupted" });
 				return { ok: true };
 			}
+			case "session.ephemeralAsk": {
+				// Throwaway question (CLI --no-session parity): answer a
+				// prompt with the session's model WITHOUT recording anything
+				// to the transcript, journal or SDK file. Backed by
+				// AgentSession.runEphemeralTurn (the idle-recap side
+				// channel), which is explicitly safe to run while the main
+				// turn is mid-tool-call (dedicated provider side-channel
+				// session id). Powers the GUI selection→ask popover.
+				const p = (params ?? {}) as { sessionId: string; promptText: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				if (!p.promptText?.trim()) throw new Error("promptText required");
+				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId));
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const { replyText } = await live.agentSession.runEphemeralTurn({ promptText: p.promptText });
+				return { replyText };
+			}
 			case "session.forkAt": {
 				// Non-destructive fork (GUI 分叉): copy the parent session's
-				// transcript truncated to BEFORE the target message into a new
+				// transcript truncated at the target message into a new
 				// session file (new id, parentSession header). The parent is
 				// untouched — unlike session.revertTo this never mutates the
 				// original. Works for live and history sessions.
-				const p = (params ?? {}) as { sessionId: string; messageId: string };
+				// `includeTarget: true` keeps the target record as the new
+				// session's LAST record (TUI navigateTree parity for non-user
+				// nodes — the leaf lands ON the node, e.g. an assistant reply
+				// or toolResult stays and the user continues from there).
+				// Default (false) truncates BEFORE the target — the user-message
+				// case, whose text is backfilled into the composer to re-answer.
+				const p = (params ?? {}) as { sessionId: string; messageId: string; includeTarget?: boolean };
 				if (!p.messageId) throw new Error("messageId required");
 				const live = this.#host.get(p.sessionId);
 				// Flush a live session's pending writes so the file on disk
@@ -3150,10 +3840,24 @@ class DaemonServer {
 					const line = lines[i];
 					if (!line?.trim()) continue;
 					try {
-						const rec = JSON.parse(line) as { type?: string; id?: string };
-						if (rec.type === "message" && rec.id === p.messageId) {
-							found = true;
-							break;
+						const rec = JSON.parse(line) as {
+							type?: string;
+							id?: string;
+							message?: { role?: string; timestamp?: number | string; toolCallId?: string };
+						};
+						if (rec.type === "message") {
+							// Match the jsonl id (SDK hex) OR the view key
+							// ("role:timestamp") — the GUI sends the latter.
+							const key =
+								rec.message &&
+								(rec.message.role === "toolResult"
+									? `toolResult:${rec.message.toolCallId}`
+									: `${rec.message.role}:${rec.message.timestamp}`);
+							if (rec.id === p.messageId || key === p.messageId) {
+								found = true;
+								if (p.includeTarget === true) keep = i;
+								break;
+							}
 						}
 					} catch {
 						// malformed line — treat as content to keep
@@ -3344,6 +4048,7 @@ class DaemonServer {
 					throw new Error("sessionId required");
 				}
 				await this.#host.deleteSession(p.sessionId);
+				this.#host.clearRevertBackups(p.sessionId);
 				return { ok: true };
 			}
 			case "session.cancel": {
@@ -3479,6 +4184,52 @@ class DaemonServer {
 					})),
 				};
 			}
+			case "agents.kill": {
+				// Desktop parity with the TUI Agent Hub's x key / collab
+				// agent-cmd kill: abort the live session (if any) and release
+				// the registry ref as a tombstone so it reads "aborted".
+				const { AgentRegistry } = await import("../registry/agent-registry");
+				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
+				const id =
+					typeof (params as { agentId?: unknown })?.agentId === "string"
+						? (params as { agentId: string }).agentId
+						: "";
+				if (!id) throw new Error("agents.kill: missing agentId");
+				const ref = AgentRegistry.global().get(id);
+				if (!ref) return { ok: false, error: `agent ${id} not found` };
+				if (ref.status === "running" && ref.session) {
+					await ref.session.abort({ reason: USER_INTERRUPT_LABEL });
+				}
+				await AgentLifecycleManager.global().release(id, ref, { tombstone: true });
+				return { ok: true };
+			}
+			case "agents.revive": {
+				// Desktop parity with the TUI Agent Hub's r key: bring a
+				// parked subagent back to a live session (idempotent when
+				// already running).
+				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
+				const id =
+					typeof (params as { agentId?: unknown })?.agentId === "string"
+						? (params as { agentId: string }).agentId
+						: "";
+				if (!id) throw new Error("agents.revive: missing agentId");
+				const session = await AgentLifecycleManager.global().ensureLive(id);
+				return { ok: true, sessionId: session.sessionId };
+			}
+			case "agents.chat": {
+				// Desktop parity with the collab host's agent-cmd chat: revive
+				// if parked, steer if mid-turn (same semantics as the hub's
+				// submitChatMessage).
+				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
+				const p = (params ?? {}) as { agentId?: unknown; text?: unknown };
+				const id = typeof p.agentId === "string" ? p.agentId : "";
+				const text = typeof p.text === "string" ? p.text.trim() : "";
+				if (!id) throw new Error("agents.chat: missing agentId");
+				if (!text) throw new Error("agents.chat: empty message");
+				const session = await AgentLifecycleManager.global().ensureLive(id);
+				await session.prompt(text, { streamingBehavior: "steer" });
+				return { ok: true, sessionId: session.sessionId };
+			}
 			case "commands.list": {
 				// Slash-command catalog for the GUI composer's / completion
 				// (same source of truth as the TUI's builtin registry, plus the
@@ -3522,6 +4273,238 @@ class DaemonServer {
 				await live.agentSession.sessionManager.setSessionName(p.title.trim(), "user");
 				return { ok: true };
 			}
+			case "session.slashCommand": {
+				// TUI slash-command parity: execute a "/..." invocation
+				// headlessly via the ACP dispatcher (same builtin registry
+				// and handlers the TUI uses; only `handle`-backed commands
+				// run — TUI-only entries like /login are reported).
+				const p = (params ?? {}) as { sessionId: string; text: string };
+				if (typeof p.text !== "string" || !p.text.startsWith("/")) throw new Error("slash command required");
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const session = live.agentSession;
+				const outputs: string[] = [];
+				// Skill command first (ACP parity): /skill:<name> is an
+				// agent-side invocation, not a builtin.
+				if (session.skillsSettings?.enableSkillCommands) {
+					const parsed = parseSkillInvocation(p.text);
+					if (parsed) {
+						const skill = session.skills.find(candidate => candidate.name === parsed.name);
+						if (!skill) {
+							return { consumed: false, reason: "skill-not-found" };
+						}
+						const built = await buildSkillPromptMessage(skill, parsed.args, "user");
+						await session.promptCustomMessage(
+							{
+								customType: SKILL_PROMPT_MESSAGE_TYPE,
+								content: built.message,
+								display: true,
+								details: built.details,
+								attribution: "user",
+							},
+							{ streamingBehavior: "steer" },
+						);
+						return { consumed: true, outputs };
+					}
+				}
+				const builtinResult = await executeAcpBuiltinSlashCommand(p.text, {
+					session,
+					sessionManager: session.sessionManager,
+					settings: session.settings,
+					cwd: session.sessionManager.getCwd(),
+					output: (output: string) => {
+						outputs.push(output);
+					},
+					refreshCommands: () => {},
+					reloadPlugins: async () => {
+						// Mirrors the interactive /reload-plugins and /move
+						// flows (ACP parity): invalidate plugin roots,
+						// refresh discovery/capabilities/skills and the
+						// session's file slash commands.
+						const cwd = session.sessionManager.getCwd();
+						const projectPath = await resolveActiveProjectRegistryPath(cwd);
+						clearPluginRootsAndCaches(projectPath ? [projectPath] : undefined);
+						await refreshAgentDiscovery(cwd);
+						resetCapabilities();
+						await session.refreshSkills();
+						const fileCommands = await loadSlashCommands({ cwd });
+						session.setSlashCommands(fileCommands);
+					},
+					notifyTitleChanged: async () => {},
+					notifyConfigChanged: async () => {},
+				});
+				if (builtinResult === false) {
+					// Distinguish "known but terminal-only" (e.g. /login,
+					// /quit) from "no such command" so the GUI can word the
+					// message correctly.
+					const parsed = parseSlashCommand(p.text);
+					const cmd = parsed ? lookupBuiltinSlashCommand(parsed.name) : undefined;
+					return { consumed: false, reason: cmd && !cmd.handle ? "tui-only" : "unknown" };
+				}
+				return {
+					consumed: true,
+					...(typeof builtinResult === "object" && "prompt" in builtinResult
+						? { prompt: builtinResult.prompt }
+						: {}),
+					outputs,
+				};
+			}
+			case "session.bashCommand": {
+				// TUI !/!! parity: run a shell command headlessly. The result
+				// is appended to the session transcript as a bashExecution
+				// message (visible in the TUI; the GUI surfaces the summary
+				// via the RPC response) and injected into the model context
+				// unless the "!!" prefix excludes it — same semantics as the
+				// TUI input controller and openchamber's shell mode.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					command: string;
+					excludeFromContext?: boolean;
+				};
+				if (typeof p.command !== "string" || !p.command.startsWith("!")) {
+					throw new Error("bash command required");
+				}
+				const excludeFromContext =
+					p.excludeFromContext === true || p.command.startsWith("!!");
+				const command = (excludeFromContext ? p.command.slice(2) : p.command.slice(1)).trim();
+				if (!command) throw new Error("command required");
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const session = live.agentSession;
+				if (session.isBashRunning) {
+					throw new Error("A bash command is already running");
+				}
+				const result = await session.executeBash(command, undefined, {
+					excludeFromContext,
+					useUserShell: true,
+				});
+				// The BashRunner appended the bashExecution message to the
+				// agent state (model context + SDK transcript) but emits no
+				// wire events — the TUI renders it locally, while the GUI
+				// transcript folds message_start/end events into its view.
+				// Broadcast them so the shell card shows up live.
+				const bashMsg = {
+					role: "bashExecution" as const,
+					command,
+					output: result.output,
+					exitCode: result.exitCode,
+					cancelled: result.cancelled,
+					truncated: result.truncated,
+					timestamp: Date.now(),
+					excludeFromContext,
+				};
+				live.publishWireEvent({ type: "message_start", message: bashMsg });
+				live.publishWireEvent({ type: "message_end", message: bashMsg });
+				// The GUI shows a one-line notice; cap the payload at a
+				// tail slice so huge outputs don't bloat the RPC frame.
+				const MAX_OUTPUT = 4000;
+				const long = result.output.length > MAX_OUTPUT;
+				return {
+					command,
+					excludeFromContext,
+					exitCode: result.exitCode ?? null,
+					cancelled: result.cancelled,
+					truncated: result.truncated,
+					totalLines: result.totalLines,
+					outputTruncated: long,
+					output: long ? `…${result.output.slice(-MAX_OUTPUT)}` : result.output,
+				};
+			}
+			case "session.compact": {
+				// TUI /compact parity: manual context compaction. The engine
+				// gates preconditions itself (no summarizer model, nothing to
+				// compact, already compacting) and throws on failure; the GUI
+				// button surfaces the error via the standard RPC error path.
+				const p = (params ?? {}) as { sessionId: string; instructions?: string; mode?: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const result = await live.agentSession.compact(
+					p.instructions?.trim() ? p.instructions.trim() : undefined,
+					p.mode ? { mode: p.mode as CompactMode } : undefined,
+				);
+				return {
+					summary: result.summary,
+					shortSummary: result.shortSummary ?? null,
+					tokensBefore: result.tokensBefore,
+				};
+			}
+			case "session.retry": {
+				// TUI /retry parity: retry the last failed agent turn.
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const didRetry = await live.agentSession.retry();
+				return { ok: didRetry };
+			}
+			case "session.todo": {
+				// TUI /todo parity: mutate the session todo list. Tasks are
+				// matched by exact content (the GUI panel clicks rows, no
+				// fuzzy text matching needed). Persists exactly like the TUI
+				// command — setTodoPhases + a user_todo_edit custom entry so
+				// the transcript round-trips and survives compaction.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					op: "append" | "start" | "done" | "drop" | "rm";
+					content?: string;
+					phase?: string;
+				};
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const { getLatestTodoPhasesFromEntries, USER_TODO_EDIT_CUSTOM_TYPE } = await import("../tools/todo");
+				const manager = live.agentSession.sessionManager;
+				const fromEntries = getLatestTodoPhasesFromEntries(manager.getBranch());
+				const phases: TodoPhase[] = fromEntries.length > 0 ? fromEntries : live.agentSession.getTodoPhases();
+				const content = p.content?.trim();
+				switch (p.op) {
+					case "append": {
+						if (!content) throw new Error("content required");
+						const target = p.phase?.trim();
+						let phase = target !== undefined && target !== "" ? phases.find(x => x.name === target) : phases[0];
+						if (!phase) {
+							phase = { name: target || "Tasks", tasks: [] };
+							phases.push(phase);
+						}
+						phase.tasks.push({ content, status: "pending" });
+						break;
+					}
+					case "start":
+					case "done":
+					case "drop":
+					case "rm": {
+						if (!content) throw new Error("content required");
+						const status: "in_progress" | "completed" | "abandoned" =
+							p.op === "start" ? "in_progress" : p.op === "done" ? "completed" : "abandoned";
+						let found = false;
+						for (const phase of phases) {
+							const task = phase.tasks.find(t => t.content === content);
+							if (!task) continue;
+							if (p.op === "rm") phase.tasks = phase.tasks.filter(t => t.content !== content);
+							else task.status = status;
+							found = true;
+							break;
+						}
+						if (!found) throw new Error(`No such task: ${content}`);
+						break;
+					}
+					default:
+						throw new Error(`Unknown todo op: ${p.op}`);
+				}
+				const cleaned = phases.filter(phase => phase.tasks.length > 0);
+				live.agentSession.setTodoPhases(cleaned);
+				manager.appendCustomEntry(USER_TODO_EDIT_CUSTOM_TYPE, { phases: cleaned });
+				return {
+					todo: cleaned.map(phase => ({
+						name: phase.name,
+						done: phase.tasks.filter(t => t.status === "completed").length,
+						total: phase.tasks.length,
+						tasks: phase.tasks.map(t => ({
+							content: t.content,
+							status: t.status,
+							...(t.blocker ? { blocker: t.blocker } : {}),
+						})),
+					})),
+				};
+			}
 			case "session.thinkingInfo": {
 				// Per-model thinking ceiling (TUI parity: some models cap the
 				// effort ladder). Powers the GUI selector's disabled levels.
@@ -3546,11 +4529,16 @@ class DaemonServer {
 			case "session.contextUsage": {
 				// Live context-window usage (TUI status-line parity): the
 				// stats tracker's estimate feeds the composer's usage ring.
+				// The snapcompact field carries the TUI /context savings
+				// estimate when the experimental settings are enabled.
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const stats = live.agentSession.getSessionStats();
-				return stats.contextUsage ?? null;
+				const usage = stats.contextUsage ?? null;
+				if (!usage) return usage;
+				const snapcompact = estimateSnapcompactSavings(live.agentSession);
+				return snapcompact ? { ...usage, snapcompact } : usage;
 			}
 			case "session.modes": {
 				// Goal / plan mode + todo progress (TUI /goal /plan parity):
@@ -3813,6 +4801,42 @@ class DaemonServer {
 				await registry.refreshProvider(p.providerId, "online");
 				return { ok: true };
 			}
+			case "providers.testConnection": {
+				// One-shot connectivity check against a user-supplied endpoint
+				// (onboarding "test connection" button): validates the key and
+				// the base URL with a minimal chat request, persisting nothing.
+				// OpenAI-compatible and Anthropic-compatible APIs are covered;
+				// other api kinds fall back to the OpenAI shape.
+				const p = (params ?? {}) as {
+					baseUrl: string;
+					apiKey?: string;
+					api?: string;
+					modelId: string;
+				};
+				if (!p.baseUrl?.trim()) throw new Error("baseUrl required");
+				if (!p.modelId?.trim()) throw new Error("modelId required");
+				if (!p.apiKey?.trim()) throw new Error("api key required to test the connection");
+				const api = p.api ?? "openai-completions";
+				const baseUrl = p.baseUrl.trim();
+				const apiKey = p.apiKey.trim();
+				const model = p.modelId.trim();
+				if (api === "anthropic-messages") {
+					await validateAnthropicCompatibleApiKey({
+						provider: "connection-test",
+						baseUrl,
+						apiKey,
+						model,
+					});
+				} else {
+					await validateOpenAICompatibleApiKey({
+						provider: "connection-test",
+						baseUrl,
+						apiKey,
+						model,
+					});
+				}
+				return { ok: true };
+			}
 			case "providers.logout": {
 				// Remove every stored credential for the provider, or exactly
 				// one when credentialId is given (multi-account logout parity
@@ -3876,10 +4900,27 @@ class DaemonServer {
 					const computed = key === "knownRoleIds" || key === "resolvedRoleModels";
 					const hasUiMeta = computed ? false : hasUi(key as Parameters<typeof hasUi>[0]);
 					const legacy =
-						key === "modelRoles" || key === "cycleOrder" || key === "modelTags" || key === "modelProviderOrder";
+						key === "modelRoles" ||
+						key === "cycleOrder" ||
+						key === "modelTags" ||
+						key === "modelProviderOrder" ||
+						key === "sideChannelModel" ||
+						key === "busyEnter";
 					if (!legacy && !hasUiMeta) continue;
 					if (key in SETTINGS_SCHEMA && isCredential(key as Parameters<typeof isCredential>[0])) {
 						out[key] = undefined;
+						continue;
+					}
+					// Only surface explicitly-configured values for keys the GUI
+					// treats as user intent: an unset settings.locale would echo
+					// the schema default (en-US) and flip the desktop UI off the
+					// OS-detected locale; an unset defaultThinkingLevel would
+					// override the composer's neutral preselect. The GUI already
+					// falls back to schema defaults for display (2026-08-11).
+					if (
+						(key === "settings.locale" || key === "defaultThinkingLevel") &&
+						!settings.isConfigured(key as Parameters<Settings["isConfigured"]>[0])
+					) {
 						continue;
 					}
 					out[key] = settings.get(key as Parameters<Settings["get"]>[0]);
@@ -3967,7 +5008,7 @@ class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				const { SETTINGS_SCHEMA, hasUi, isCredential } = await import("../config/settings-schema");
 				const legacy =
-					["modelRoles", "cycleOrder", "modelTags", "modelProviderOrder"].includes(p.key) ||
+					["modelRoles", "cycleOrder", "modelTags", "modelProviderOrder", "sideChannelModel", "busyEnter"].includes(p.key) ||
 					p.key.startsWith("lsp.") ||
 					p.key === "read.toolResultPreview";
 				if (!legacy && !(p.key in SETTINGS_SCHEMA && hasUi(p.key as Parameters<typeof hasUi>[0]))) {
@@ -3990,8 +5031,13 @@ class DaemonServer {
 				// renders from the single source of truth instead of a
 				// hardcoded copy that drifts.
 				const p = (params ?? {}) as { tabs?: string[] };
-				const { getEnumValues, SETTINGS_SCHEMA } = await import("../config/settings-schema");
-				const tabs = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
+				const { getEnumValues, SETTINGS_SCHEMA, SETTING_TABS } = await import("../config/settings-schema");
+				// Whitelist the requested tabs (B-class audit: the schema walk
+				// only knows the TUI's SETTING_TABS). Unknown tab names are
+				// dropped — a client cannot ask for an invented tab, and a
+				// typo'd tab renders nothing instead of a partial page.
+				const requested = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
+				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab));
 				const out: Record<string, unknown[]> = {};
 				for (const tab of tabs) {
 					const items: unknown[] = [];
@@ -4008,6 +5054,15 @@ class DaemonServer {
 							if (values && values.length > 0) {
 								item.ui = { ...ui, options: values.map(v => ({ value: v, label: v })) };
 							}
+						}
+						// `options: "runtime"` (theme.dark/theme.light) — resolve the
+						// runtime list daemon-side so the GUI renders a real select
+						// instead of the TUI's runtime-populated submenu. The TUI
+						// theme registry is fs-backed (builtins + ~/.musepi/themes),
+						// so it enumerates without a terminal.
+						if ((ui as { options?: unknown }).options === "runtime") {
+							const { getAvailableThemes } = await import("../modes/theme/loader");
+							item.runtimeOptions = await getAvailableThemes();
 						}
 						items.push(item);
 					}
@@ -4195,7 +5250,7 @@ class DaemonServer {
 						baseUrl?: string;
 						apiKey?: string;
 						api?: string;
-						models: { id: string; name?: string }[];
+						models: { id: string; name?: string; compactionModel?: string }[];
 					};
 				};
 				const registry = await this.#host.ensureRegistry();
@@ -4223,7 +5278,11 @@ class DaemonServer {
 				const ids = new Set(existing.map(m => m.id));
 				for (const m of p.provider.models) {
 					if (!ids.has(m.id)) {
-						existing.push({ id: m.id, ...(m.name ? { name: m.name } : {}) });
+						existing.push({
+							id: m.id,
+							...(m.name ? { name: m.name } : {}),
+							...(m.compactionModel ? { compactionModel: m.compactionModel } : {}),
+						});
 						ids.add(m.id);
 					}
 				}
@@ -4501,6 +5560,15 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
 
 // ── Server bootstrap ────────────────────────────────────────────────────────
 
+/**
+ * True once the background SDK prewarm (startDaemon) has finished loading
+ * the lazy `../sdk` module graph. The GUI holds its boot splash on
+ * system.prewarmStatus until this flips, so the first session.create /
+ * session.resume never pays the multi-second import cost (splash covers
+ * the prewarm window — 偷偷预热).
+ */
+let sdkPrewarmed = false;
+
 export async function startDaemon(
 	options: DaemonOptions = {},
 ): Promise<{ socketPath: string; wsPort?: number; close: () => Promise<void> }> {
@@ -4514,6 +5582,28 @@ export async function startDaemon(
 
 	const host = new DaemonSessionHost(options);
 	const server = new DaemonServer(host);
+
+	// Prewarm the lazy SDK module graph in the background so the FIRST
+	// session.create / session.resume does not pay the multi-second import
+	// cost (measured ~4s: provider registry, tool registry, catalog,
+	// extensions). The daemon intentionally keeps startup cheap (createAgentSession
+	// is a lazy import), so the cost is shifted here — after daemon boot the
+	// first GUI-initiated session op is already warm. Bun's module cache makes
+	// the later `await import("../sdk")` in createSession resolve instantly.
+	// The GUI holds its boot splash until system.prewarmStatus reports ready
+	// (waitForSdkPrewarm in app.tsx), so the user never hits the un-warmed
+	// window even right after the daemon is spawned.
+	void import("../sdk")
+		.then(() => {
+			sdkPrewarmed = true;
+			logger.debug("sdk prewarmed for daemon session ops");
+		})
+		.catch(err => {
+			logger.warn("sdk prewarm failed (first session op will pay the import cost)", {
+				error: err instanceof Error ? err.message : String(err),
+			});
+		});
+
 	// Process-global freeze state rides to every subscribed GUI (daemon-wide
 	// pause overlay stays in sync across clients regardless of which one
 	// toggled it); per-session pause rides the session stream separately.

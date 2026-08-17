@@ -31,7 +31,7 @@ export async function runAcpMode(createSession: AcpSessionFactory, initialSessio
 		process.stderr.write(
 			"omp acp: ACP server speaking JSON-RPC over stdio.\n" +
 				'This command is meant to be spawned by an ACP client (e.g. Zed\'s "agent_servers" config), not run directly.\n' +
-				"Waiting for protocol frames on stdin; logs: ~/.omp/logs/\n",
+				"Waiting for protocol frames on stdin; logs: ~/.musepi/logs/\n",
 		);
 	}
 	let agent: AcpAgent | undefined;

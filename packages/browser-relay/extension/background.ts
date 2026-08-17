@@ -1,5 +1,5 @@
 /**
- * OMP Browser Relay — MV3 service worker.
+ * MusePi Browser Relay — MV3 service worker.
  *
  * Dumb pipe by design: all CDP orchestration lives in the relay server. This
  * worker (1) keeps a websocket to the relay, (2) executes its RPCs against

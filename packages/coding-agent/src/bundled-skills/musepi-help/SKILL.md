@@ -24,7 +24,7 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 
 - 配置：`~/.musepi/agent/config.yml`；设置：`~/.musepi/agent/settings.json`
 - 技能：`~/.musepi/agent/skills/<name>/SKILL.md`（用户级，设置里可开关）
-- 扩展：`~/.omp/agent/extensions/`（OMP 兼容）；MCP：`.mcp.json`
+- 扩展：`~/.musepi/agent/extensions/<name>/index.ts`（用户级）；MCP：`.mcp.json`
 - 上下文：从 cwd 向上找 `AGENTS.md`（项目约定）
 - 看板数据：`boards.json`（会话数据目录，GUI 看板持久化）
 

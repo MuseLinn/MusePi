@@ -1,5 +1,5 @@
 /**
- * Manual end-to-end smoke for the relay: replicates the omp browser tool's
+ * Manual end-to-end smoke for the relay: replicates the musepi browser tool's
  * connection pattern against a live relay + extension.
  *
  * The tool opens TWO puppeteer connections per driven tab — the supervisor

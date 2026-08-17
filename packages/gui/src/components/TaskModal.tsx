@@ -1,8 +1,9 @@
+import { t } from "@musepi/collab-web/src/i18n/index.js";
+import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { t } from "@musepi/collab-web/src/i18n/index.js";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
-import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
 
 /**
  * Widget task modal (kimi 小组件任务 parity): task status toggle, name,
@@ -19,6 +20,10 @@ export function TaskModal({
 	onClose(): void;
 }): ReactNode {
 	const [closing, setClosing] = useState(false);
+	// Two-phase enter: the frosted scrim paints at opacity 0 first so the
+	// backdrop composites before gui-fade-in (mount-frame animation on a
+	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
+	const enteredCls = useTwoPhaseEnter(true);
 	const close = (): void => {
 		if (closing) return;
 		setClosing(true);
@@ -26,7 +31,7 @@ export function TaskModal({
 	};
 	return (
 		<div
-			className={`gui-task-modal${closing ? " gui-task-modal--closing" : ""}`}
+			className={`gui-task-modal${enteredCls ? " gui-task-modal--entered" : ""}${closing ? " gui-task-modal--closing" : ""}`}
 			role="dialog"
 			aria-modal="true"
 			onClick={close}
@@ -79,7 +84,9 @@ export function TaskModal({
 								<div key={`${run.time}-${i}`} className="gui-task-run">
 									<span className="gui-task-run-time">{run.time}</span>
 									<span className={`gui-task-run-dot${run.success ? "" : " gui-task-run-dot--fail"}`} />
-									<span className="gui-task-run-status">{run.success ? t("widget task success") : t("widget task failed")}</span>
+									<span className="gui-task-run-status">
+										{run.success ? t("widget task success") : t("widget task failed")}
+									</span>
 								</div>
 							))}
 						</div>

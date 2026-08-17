@@ -1,7 +1,7 @@
 /**
  * CDP façade over `chrome.debugger`.
  *
- * Puppeteer clients (the omp browser tool: one supervisor connection plus one
+ * Puppeteer clients (the musepi browser tool: one supervisor connection plus one
  * per tab worker) connect to this bridge as if it were Chrome's browser
  * debugging endpoint. Chrome only allows a single debugger attachment per tab,
  * so the bridge owns ONE `chrome.debugger` attachment per tab (via the
@@ -55,7 +55,7 @@ class CdpConnection {
 	autoAttach = false;
 	/** Minted pseudo-sessions owned by this connection. */
 	readonly sessions = new Map<string, SessionRef>();
-	/** Tabs this connection claimed as drive targets (`OMP.claimTarget` / `Target.createTarget`). */
+	/** Tabs this connection claimed as drive targets (`MusePi.claimTarget` / `Target.createTarget`). */
 	readonly claims = new Set<number>();
 
 	constructor(
@@ -401,7 +401,7 @@ export class RelayBridge {
 		}
 		// Relay-private claim: the omp tab worker marks the page it was spawned
 		// to drive. Never forwarded — real Chrome rejects the unknown method.
-		if (msg.method === "OMP.claimTarget") {
+		if (msg.method === "MusePi.claimTarget") {
 			this.#claimTab(conn, tabId);
 			this.#reply(conn, msg, {});
 			return;
@@ -605,7 +605,7 @@ export class RelayBridge {
 				this.#reply(conn, msg, {});
 				return;
 			case "Target.createBrowserContext":
-				this.#replyError(conn, msg, "Browser contexts are not supported by the omp browser relay");
+				this.#replyError(conn, msg, "Browser contexts are not supported by the musepi browser relay");
 				return;
 			default:
 				this.#replyError(conn, msg, `'${msg.method}' wasn't found`, CDP_ERROR_METHOD_NOT_FOUND);

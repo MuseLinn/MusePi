@@ -712,11 +712,18 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 	// target may be backgrounded, so retain activation for target-correct pixels.
 	const userDriven = browser.kind.kind === "connected" || browser.kind.kind === "relay";
 	const activateForScreenshot = !userDriven || !shouldPreserveConnectedBrowserFocus(opts.target);
-	const page = await pickElectronTarget(browser.browser, {
-		matcher: opts.target,
-		preferVisible: !activateForScreenshot,
-	});
-	const targetId = await targetIdForPage(page);
+	// The GUI managed browser never adopts the user's browsing tab: the bridge
+	// keeps a DEDICATED agent tab (created on first open, badged in the panel)
+	// and returns its page target id on request. User tabs stay untouched.
+	const targetId =
+		browser.kind.kind === "connected" && browser.kind.gui === true
+			? await requestAgentTabTargetId(browser)
+			: await targetIdForPage(
+					await pickElectronTarget(browser.browser, {
+						matcher: opts.target,
+						preferVisible: !activateForScreenshot,
+					}),
+				);
 	return {
 		mode: "attach",
 		browserWSEndpoint,
@@ -728,6 +735,26 @@ async function buildInitPayload(browser: PuppeteerBrowserHandle, opts: AcquireTa
 		timeoutMs: opts.timeoutMs,
 		activateForScreenshot,
 	};
+}
+
+/**
+ * Ask the managed browser bridge (browser.gui) for the agent tab's page
+ * target id, creating the tab on first use. Uses the browser-level CDP
+ * session so no page needs to exist yet; the bridge answers a private
+ * method the same way the relay answers `MusePi.claimTarget`.
+ */
+async function requestAgentTabTargetId(browser: PuppeteerBrowserHandle): Promise<string> {
+	const session = await browser.browser.target().createCDPSession();
+	try {
+		const raw = session as unknown as {
+			send(method: string, params?: Record<string, unknown>): Promise<{ targetId?: string }>;
+		};
+		const result = await raw.send("ManagedBrowser.ensureAgentTab", {});
+		if (!result.targetId) throw new ToolError("The managed browser did not provide an agent tab target");
+		return result.targetId;
+	} finally {
+		await session.detach().catch(() => undefined);
+	}
 }
 
 function handleTabMessage(tab: WorkerTabSession, msg: WorkerOutbound): void {

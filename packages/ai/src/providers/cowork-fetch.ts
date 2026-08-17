@@ -119,7 +119,7 @@ function createResponse(message: IncomingMessage, method: string): Response {
 	if (status === undefined) throw new Error("Cowork transport received a response without an HTTP status.");
 	const hasBody = method !== "HEAD" && status !== 204 && status !== 304;
 	const body = hasBody ? stream.Readable.toWeb(decodedResponseStream(message)) : null;
-	return new Response(body, {
+	return new Response(body as ConstructorParameters<typeof Response>[0], {
 		status,
 		statusText: message.statusMessage,
 		headers: responseHeaders(message),

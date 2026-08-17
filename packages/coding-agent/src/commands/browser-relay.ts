@@ -1,5 +1,5 @@
 /**
- * `omp browser-relay` — drive the user's own Chrome tabs.
+ * `musepi browser-relay` — drive the user's own Chrome tabs.
  */
 import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import {
@@ -24,7 +24,7 @@ export default class BrowserRelay extends Command {
 		port: Flags.integer({ char: "p", description: "Port to listen on", default: DEFAULT_RELAY_PORT }),
 		token: Flags.string({ description: "Require the extension to present this token" }),
 		dir: Flags.string({
-			description: "Extension install directory (install; default ~/.omp/browser-relay/extension)",
+			description: "Extension install directory (install; default ~/.musepi/browser-relay/extension)",
 		}),
 		"no-group": Flags.boolean({
 			description: "Don't gather controllable tabs into an 'omp' tab group",
@@ -34,9 +34,9 @@ export default class BrowserRelay extends Command {
 	};
 
 	static examples = [
-		"omp browser-relay install    # write the Chrome extension to disk + setup steps",
-		"omp browser-relay            # serve the relay on the default port",
-		"omp browser-relay -p 9333 --token s3cret",
+		"musepi browser-relay install    # write the Chrome extension to disk + setup steps",
+		"musepi browser-relay            # serve the relay on the default port",
+		"musepi browser-relay -p 9333 --token s3cret",
 	];
 
 	async run(): Promise<void> {

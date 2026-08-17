@@ -5,6 +5,7 @@ import { messageText } from "../../lib/format";
 import { ToolView } from "../../tool-render/ToolView";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { toolKind } from "./toolcard-shared";
+import { widgetStandaloneEnabled } from "./widget-standalone";
 
 export interface ToolCardProps {
 	toolCallId: string;
@@ -39,6 +40,12 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	const { name, intent, args, result, running, partialResult, host } = props;
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
+	// With the standalone widget display on, the widget's visual lives on
+	// its own card in the message flow — the tool-call card folds to its
+	// summary line (the omp-gui-widget-expanded pref only applies when the
+	// standalone display is off). Board cards keep their own default.
+	const artifactDefaultOpen =
+		name === "widget" && widgetStandaloneEnabled() ? false : widgetDefaultOpen();
 	return (
 		<ToolView
 			name={name}
@@ -51,7 +58,7 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 			host={host}
 			/* ZCode parity: live tools open while they run, fold when done;
 			 * artifacts (widget/board cards) stay open per the user setting. */
-			defaultOpen={isArtifactCard(name) ? widgetDefaultOpen() : running === true}
+			defaultOpen={isArtifactCard(name) ? artifactDefaultOpen : running === true}
 			collapseWhenDone={!isArtifactCard(name)}
 		/>
 	);

@@ -1,9 +1,9 @@
-import { Markdown, highlightToCodeHtml, t } from "@musepi/collab-web";
-import { useChatHighlight } from "../lib/highlight";
-import { File as FileIcon, Folder, RefreshCw, Search } from "lucide-react";
+import { highlightToCodeHtml, Markdown, t } from "@musepi/collab-web";
+import { File as FileIcon, FileCode, FileImage, FileJson, FileText, FileType, Folder, RefreshCw, Search } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
@@ -33,6 +33,8 @@ interface PreviewState {
 	text?: string;
 	/** highlighted text preview (tree-sitter spans) */
 	html?: string;
+	/** live-rendered HTML page (openchamber parity: .html previews render) */
+	htmlLive?: string;
 	/** blob URL for image preview */
 	imageUrl?: string;
 	/** rendered PDF pages as data URLs (inline pdf.js preview) */
@@ -190,6 +192,20 @@ function extOf(name: string): string {
 	return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
+/** Extension-aware file glyph (proma FileTypeIcon parity): code, image,
+ *  JSON and text files get a recognizable icon; the rest keep the plain
+ *  document glyph. */
+function TypeIcon({ name }: { name: string }): ReactElement {
+	const ext = extOf(name);
+	let IconCmp = FileIcon;
+	if (["ts", "tsx", "js", "jsx", "rs", "go", "py", "sh", "css", "html"].includes(ext)) IconCmp = FileCode;
+	else if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(ext)) IconCmp = FileImage;
+	else if (ext === "json") IconCmp = FileJson;
+	else if (["md", "txt", "toml", "yml", "yaml"].includes(ext)) IconCmp = FileText;
+	else if (["ttf", "otf", "woff", "woff2"].includes(ext)) IconCmp = FileType;
+	return <IconCmp size={12} className="gui-filepane-icon" />;
+}
+
 /** Virtual-row index of the inline editor: renames replace their target
  *  row; new entries sit right after the parent dir's last descendant (or
  *  the parent row itself when it is collapsed). */
@@ -220,6 +236,8 @@ export function FilePane({
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
+	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
+	const [htmlLiveMode, setHtmlLiveMode] = useState<"live" | "source">("live");
 	const [ctx, setCtx] = useState<MenuState | null>(null);
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	const [query, setQuery] = useState("");
@@ -228,7 +246,16 @@ export function FilePane({
 	const [editValue, setEditValue] = useState("");
 	const [scrollTop, setScrollTop] = useState(0);
 	const [viewH, setViewH] = useState(400);
+	const [treeW, setTreeW] = useState(() => {
+		try {
+			const v = Number.parseFloat(localStorage.getItem("omp-gui-filepane-tree") ?? "");
+			return Number.isFinite(v) && v >= 0.28 && v <= 0.6 ? v : 0.42;
+		} catch {
+			return 0.42;
+		}
+	});
 	const listRef = useRef<HTMLDivElement | null>(null);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
 	const highlight = useChatHighlight();
 
@@ -267,37 +294,12 @@ export function FilePane({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [entries]);
+	}, []);
 
 	// Focus the inline editor when it mounts.
 	useEffect(() => {
 		if (editing) editRef.current?.focus();
 	}, [editing]);
-
-	// Scroll the inline editor into the virtual window (it may sit outside
-	// the visible slice otherwise and never mount).
-	useEffect(() => {
-		if (!editing) return;
-		const idx = editingIndex(rows, editing);
-		const list = listRef.current;
-		if (list && idx >= 0) {
-			list.scrollTop = Math.max(0, Math.min(idx * ROW_H, list.scrollHeight - list.clientHeight));
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [editing]);
-
-	// External reveal (artifact cards / transcript path clicks): preview
-	// via the same pipeline as a tree click. The path is absolute; the
-	// preview joins cwd + entry.path, so relativize when inside cwd.
-	useEffect(() => {
-		if (!openRequest) return;
-		const abs = openRequest.path;
-		const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
-		const rel = abs.startsWith(prefix) ? abs.slice(prefix.length) : abs;
-		const name = rel.slice(Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\")) + 1);
-		void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [openRequest]);
 
 	// Revoke stale preview blob URLs so large images don't leak memory.
 	useEffect(() => {
@@ -335,10 +337,18 @@ export function FilePane({
 					(TEXT_EXT.has(extOf(entry.name)) && !bytes.subarray(0, 4096).includes(0));
 				if (isText) {
 					const text = new TextDecoder().decode(bytes);
+					// HTML pages render live in a sandboxed iframe (openchamber
+					// parity) — the preview IS the page, not its source.
+					const ext = extOf(entry.name);
+					if (ext === "html" || ext === "htm") {
+						setHtmlLiveMode("live");
+						setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, htmlLive: text });
+						return;
+					}
 					// Markdown previews render through the shared component;
 					// other text files highlight via the tree-sitter bridge.
-					const lang = EXT_LANG[extOf(entry.name)];
-					if (lang && extOf(entry.name) !== "md" && highlight) {
+					const lang = EXT_LANG[ext];
+					if (lang && ext !== "md" && highlight) {
 						try {
 							const hl = await highlight(text, lang);
 							if (hl) {
@@ -401,6 +411,31 @@ export function FilePane({
 		[rpc, cwd, highlight],
 	);
 
+	// Scroll the inline editor into the virtual window (it may sit outside
+	// the visible slice otherwise and never mount). Declared after `rows`.
+	useEffect(() => {
+		if (!editing) return;
+		const idx = editingIndex(rows, editing);
+		const list = listRef.current;
+		if (list && idx >= 0) {
+			list.scrollTop = Math.max(0, Math.min(idx * ROW_H, list.scrollHeight - list.clientHeight));
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [editing, rows]);
+
+	// External reveal (artifact cards / transcript path clicks): preview
+	// via the same pipeline as a tree click. The path is absolute; the
+	// preview joins cwd + entry.path, so relativize when inside cwd.
+	useEffect(() => {
+		if (!openRequest) return;
+		const abs = openRequest.path;
+		const prefix = cwd.endsWith("/") ? cwd : `${cwd}/`;
+		const rel = abs.startsWith(prefix) ? abs.slice(prefix.length) : abs;
+		const name = rel.slice(Math.max(rel.lastIndexOf("/"), rel.lastIndexOf("\\")) + 1);
+		void openPreview({ path: rel, name, size: 0, isDir: false, mtime: 0, depth: 0 });
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [openRequest, openPreview, cwd.endsWith, cwd]);
+
 	const toggleDir = useCallback((path: string): void => {
 		setCollapsed(prev => {
 			const next = new Set(prev);
@@ -421,21 +456,15 @@ export function FilePane({
 		[cwd],
 	);
 
-	const startNewFile = useCallback(
-		(parentDir: string, depth: number): void => {
-			setEditing({ kind: "new-file", parentDir, depth });
-			setEditValue("");
-		},
-		[],
-	);
+	const startNewFile = useCallback((parentDir: string, depth: number): void => {
+		setEditing({ kind: "new-file", parentDir, depth });
+		setEditValue("");
+	}, []);
 
-	const startNewDir = useCallback(
-		(parentDir: string, depth: number): void => {
-			setEditing({ kind: "new-dir", parentDir, depth });
-			setEditValue("");
-		},
-		[],
-	);
+	const startNewDir = useCallback((parentDir: string, depth: number): void => {
+		setEditing({ kind: "new-dir", parentDir, depth });
+		setEditValue("");
+	}, []);
 
 	const startRename = useCallback((entry: WorkspaceEntry, depth: number): void => {
 		setEditing({ kind: "rename", entry, depth });
@@ -454,7 +483,12 @@ export function FilePane({
 			setEditing(null);
 			return;
 		}
-		const parentDir = editing.kind === "rename" ? (target!.path.includes("/") ? target!.path.slice(0, target!.path.lastIndexOf("/")) : "") : editing.parentDir;
+		const parentDir =
+			editing.kind === "rename"
+				? target!.path.includes("/")
+					? target!.path.slice(0, target!.path.lastIndexOf("/"))
+					: ""
+				: editing.parentDir;
 		const rel = parentDir ? `${parentDir}/${name}` : name;
 		setEditing(null);
 		try {
@@ -484,11 +518,23 @@ export function FilePane({
 		if (!ctx) return [];
 		const { entry } = ctx;
 		const depth = entry.depth;
-		const parentDir = entry.isDir ? entry.path : entry.path.includes("/") ? entry.path.slice(0, entry.path.lastIndexOf("/")) : "";
+		const parentDir = entry.isDir
+			? entry.path
+			: entry.path.includes("/")
+				? entry.path.slice(0, entry.path.lastIndexOf("/"))
+				: "";
 		const parentDepth = entry.isDir ? depth : Math.max(1, depth - 1);
 		const items: ContextMenuItem[] = [];
-		items.push({ label: t("new file"), icon: "file-add", onSelect: () => startNewFile(parentDir, parentDepth + (entry.isDir ? 1 : 1)) });
-		items.push({ label: t("new folder"), icon: "folder-add", onSelect: () => startNewDir(parentDir, parentDepth + (entry.isDir ? 1 : 1)) });
+		items.push({
+			label: t("new file"),
+			icon: "file-add",
+			onSelect: () => startNewFile(parentDir, parentDepth + (entry.isDir ? 1 : 1)),
+		});
+		items.push({
+			label: t("new folder"),
+			icon: "folder-add",
+			onSelect: () => startNewDir(parentDir, parentDepth + (entry.isDir ? 1 : 1)),
+		});
 		items.push({ divider: true });
 		if (!entry.isDir) {
 			items.push({ label: t("open preview"), icon: "eye", onSelect: () => void openPreview(entry) });
@@ -551,7 +597,9 @@ export function FilePane({
 		return (
 			<li
 				key={entry.path}
-				className={`gui-filepane-vrow${selected ? " gui-filepane-selected" : ""}`}
+				className={`gui-filepane-vrow${selected ? " gui-filepane-selected" : ""}${
+					!isDir && Date.now() - entry.mtime < 60_000 ? " gui-filepane-recent" : ""
+				}`}
 				style={{ paddingLeft: indent }}
 				role="treeitem"
 			>
@@ -564,7 +612,7 @@ export function FilePane({
 						setCtx({ entry, x: ev.clientX, y: ev.clientY });
 					}}
 				>
-					<FileIcon size={12} className="gui-filepane-icon" />
+					<TypeIcon name={entry.name} />
 					<span
 						className={`gui-filepane-name${entry.name === "AGENTS.md" ? " gui-filepane-agents" : ""}`}
 						title={entry.path}
@@ -622,79 +670,119 @@ export function FilePane({
 					</button>
 				</div>
 			</div>
+			{/* Working-dir breadcrumb (proma/openchamber toolbar parity). */}
+			<div className="gui-filepane-path" title={cwd}>
+				<span className="gui-filepane-path-root">~/</span>
+				<span className="truncate">{cwd.replace(/^\/Users\/[^/]+\//, "")}</span>
+			</div>
 			{error && <p className="gui-error">{error}</p>}
 			{!entries && !error && <p className="gui-filepane-empty">{t("loading…")}</p>}
-			{entries && (
-				<div
-					className="gui-filepane-list"
-					ref={listRef}
-					onScroll={ev => setScrollTop(ev.currentTarget.scrollTop)}
-					role="tree"
-				>
-					<div className="gui-filepane-spacer" style={{ height: total * ROW_H }}>
-						<div style={{ transform: `translateY(${start * ROW_H}px)` }}>
-							{Array.from({ length: end - start }, (_, k) => {
-								const i = start + k;
-								if (editing && i === editIndex) return editingRow;
-								return i < rows.length ? renderRow(rows[i]!) : null;
-							})}
+			<div className="gui-filepane-body" ref={bodyRef}>
+				{entries && (
+					<div
+						className="gui-filepane-list"
+						style={preview ? { flexBasis: `${treeW * 100}%` } : undefined}
+						ref={listRef}
+						onScroll={ev => setScrollTop(ev.currentTarget.scrollTop)}
+						role="tree"
+					>
+						<div className="gui-filepane-spacer" style={{ height: total * ROW_H }}>
+							<div style={{ transform: `translateY(${start * ROW_H}px)` }}>
+								{Array.from({ length: end - start }, (_, k) => {
+									const i = start + k;
+									if (editing && i === editIndex) return editingRow;
+									return i < rows.length ? renderRow(rows[i]!) : null;
+								})}
+							</div>
 						</div>
 					</div>
-				</div>
-			)}
-			{preview && (
-				<div className="gui-filepane-preview">
-					<div className="gui-filepane-preview-head">
-						<span className="gui-filepane-preview-name" title={preview.path}>
-							{preview.name}
-						</span>
-						<button
-							type="button"
-							className="gui-btn gui-btn-icon"
-							title={t("close")}
-							onClick={() => setPreview(null)}
-						>
-							✕
-						</button>
-					</div>
-					<div className="gui-filepane-preview-body">
-						{preview.error && <p className="gui-error">{preview.error}</p>}
-						{preview.html !== undefined && (
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from the tree-sitter highlighter
-							<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
-						)}
-						{preview.text !== undefined && extOf(preview.name) === "md" ? (
-							<div className="gui-filepane-preview-md">
-								<Markdown text={preview.text} basePath={cwd} />
+				)}
+				{preview && (
+					<>
+						{/* Vertical splitter (openchamber parity): drag to resize
+						 * the tree column; persisted per run. */}
+						<div
+							className="gui-filepane-splitter"
+							onPointerDown={e => {
+								e.preventDefault();
+								const startX = e.clientX;
+								const startW = treeW;
+								const move = (ev: PointerEvent): void => {
+									const w = bodyRef.current?.clientWidth ?? 400;
+									const next = Math.min(0.6, Math.max(0.28, startW + (ev.clientX - startX) / w));
+									setTreeW(next);
+								};
+								const up = (): void => {
+									window.removeEventListener("pointermove", move);
+									window.removeEventListener("pointerup", up);
+									try {
+										localStorage.setItem("omp-gui-filepane-tree", String(treeW));
+									} catch {
+										// storage unavailable
+									}
+								};
+								window.addEventListener("pointermove", move);
+								window.addEventListener("pointerup", up);
+							}}
+							aria-hidden
+						/>
+						<div className="gui-filepane-preview">
+							<div className="gui-filepane-preview-head">
+								<span className="gui-filepane-preview-name" title={preview.path}>
+									{preview.name}
+								</span>
+								<button
+									type="button"
+									className="gui-btn gui-btn-icon"
+									title={t("close")}
+									onClick={() => setPreview(null)}
+								>
+									✕
+								</button>
 							</div>
-						) : preview.text !== undefined ? (
-							<pre className="gui-filepane-preview-text">{preview.text}</pre>
-						) : null}
-						{preview.imageUrl && (
-							<div className="gui-filepane-preview-img-wrap">
-								<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
+							<div className="gui-filepane-preview-body">
+								{preview.error && <p className="gui-error">{preview.error}</p>}
+								{preview.htmlLive !== undefined && (
+									<HtmlPreview live={htmlLiveMode === "live"} source={preview.htmlLive} onToggle={setHtmlLiveMode} />
+								)}
+								{preview.html !== undefined && (
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from the tree-sitter highlighter
+									<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
+								)}
+								{preview.text !== undefined && extOf(preview.name) === "md" ? (
+									<div className="gui-filepane-preview-md">
+										<Markdown text={preview.text} basePath={cwd} />
+									</div>
+								) : preview.text !== undefined ? (
+									<pre className="gui-filepane-preview-text">{preview.text}</pre>
+								) : null}
+								{preview.imageUrl && (
+									<div className="gui-filepane-preview-img-wrap">
+										<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
+									</div>
+								)}
+								{preview.pdfPages && (
+									<div className="gui-filepane-preview-img-wrap">
+										{preview.pdfPages.map((page, i) => (
+											<img
+												key={i}
+												className="gui-filepane-preview-img gui-filepane-preview-pdf"
+												src={page}
+												alt={`${preview.name} p${i + 1}`}
+											/>
+										))}
+									</div>
+								)}
+								{preview.external && (
+									<p className="gui-filepane-preview-note">
+										{t("opened in default app")} — {preview.size.toLocaleString()} B
+									</p>
+								)}
 							</div>
-						)}
-						{preview.pdfPages && (
-							<div className="gui-filepane-preview-img-wrap">
-								{preview.pdfPages.map((page, i) => (
-									<img
-										key={i}
-										className="gui-filepane-preview-img gui-filepane-preview-pdf"
-										src={page}
-										alt={`${preview.name} p${i + 1}`}
-									/>
-								))}
-							</div>
-						)}
-						{preview.external && (
-							<p className="gui-filepane-preview-note">
-								{t("opened in default app")} — {preview.size.toLocaleString()} B
-							</p>
-						)}
-					</div>
-				</div>
-			)}
+						</div>
+					</>
+				)}
+			</div>
 			<ContextMenu
 				open={ctx !== null}
 				x={ctx?.x ?? 0}
@@ -702,6 +790,49 @@ export function FilePane({
 				items={menuItems}
 				onClose={() => setCtx(null)}
 			/>
+		</div>
+	);
+}
+
+/** HTML file preview: live page in a sandboxed iframe (openchamber
+ *  parity) with a preview/source toggle. */
+function HtmlPreview({
+	live,
+	source,
+	onToggle,
+}: {
+	live: boolean;
+	source: string;
+	onToggle(mode: "live" | "source"): void;
+}): ReactNode {
+	return (
+		<div className="gui-filepane-preview-html">
+			<div className="gui-filepane-preview-html-bar">
+				<button
+					type="button"
+					className={`gui-seg-btn${live ? " gui-seg-btn--active" : ""}`}
+					onClick={() => onToggle("live")}
+				>
+					{t("page preview")}
+				</button>
+				<button
+					type="button"
+					className={`gui-seg-btn${live ? "" : " gui-seg-btn--active"}`}
+					onClick={() => onToggle("source")}
+				>
+					{t("source code")}
+				</button>
+			</div>
+			{live ? (
+				<iframe
+					className="gui-filepane-preview-html-frame"
+					title={t("preview")}
+					sandbox="allow-scripts"
+					srcDoc={source}
+				/>
+			) : (
+				<pre className="gui-filepane-preview-text">{source}</pre>
+			)}
 		</div>
 	);
 }

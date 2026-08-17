@@ -7,6 +7,7 @@ import type { ToolSession } from "../index";
 import { ToolAbortError, ToolError } from "../tool-errors";
 import {
 	COMPUTER_WORKER_ARG,
+	type ComputerInputEvent,
 	type ComputerRunOk,
 	type ComputerSessionSnapshot,
 	type ComputerWorkerInbound,
@@ -27,6 +28,8 @@ export interface ComputerController {
 		timeoutMs: number,
 		snapshot: ComputerSessionSnapshot,
 		signal?: AbortSignal,
+		/** Streams desktop input actions for UI feedback (glow overlay). */
+		onInput?: (event: ComputerInputEvent) => void,
 	): Promise<ComputerRunOk>;
 	capabilities(): Promise<DesktopCapabilities | undefined>;
 	close(): Promise<void>;
@@ -66,6 +69,7 @@ interface PendingRun {
 	reject(error: unknown): void;
 	signal?: AbortSignal;
 	toolCalls: Map<string, AbortController>;
+	onInput?: (event: ComputerInputEvent) => void;
 }
 
 function wrapWorker(worker: Worker): ComputerWorkerHandle {
@@ -172,6 +176,7 @@ export class ComputerSupervisor implements ComputerController {
 		timeoutMs: number,
 		snapshot: ComputerSessionSnapshot,
 		signal?: AbortSignal,
+		onInput?: (event: ComputerInputEvent) => void,
 	): Promise<ComputerRunOk> {
 		if (this.#closed) throw new ToolError("Computer session is closed");
 		if (signal?.aborted) throw new ToolAbortError();
@@ -180,7 +185,7 @@ export class ComputerSupervisor implements ComputerController {
 
 		const id = `computer-${++this.#nextId}`;
 		const { promise, resolve, reject } = Promise.withResolvers<ComputerRunOk>();
-		const pending: PendingRun = { resolve, reject, signal, toolCalls: new Map() };
+		const pending: PendingRun = { resolve, reject, signal, toolCalls: new Map(), onInput };
 		this.#pending.set(id, pending);
 		const abort = (): void => {
 			this.#safeSend({ type: "abort", id });
@@ -246,6 +251,11 @@ export class ComputerSupervisor implements ComputerController {
 		}
 		if (message.type === "tool-call") {
 			void this.#dispatchToolCall(message);
+			return;
+		}
+		if (message.type === "input") {
+			const pending = this.#pending.get(message.runId);
+			pending?.onInput?.(message.event);
 		}
 	}
 

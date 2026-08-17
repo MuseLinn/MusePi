@@ -1,4 +1,4 @@
-import { AgentsPanel, t } from "@musepi/collab-web";
+import { AgentsPanel, latestWidgetFromEntries, t, WidgetCard } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
@@ -6,7 +6,9 @@ import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import { Icon } from "../vendor/oc-icons";
+import { AgentControls } from "./AgentControls";
 import { FilePane } from "./FilePane";
+import { ManagedBrowserPane } from "./ManagedBrowserPane";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
  *  loadURL/executeJavaScript/etc. at runtime; only the JSX shape is typed. */
@@ -73,14 +75,33 @@ export function ContextPanel({
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
-	const [tab, setTab] = useState<"context" | "files">("files");
+	const [tab, setTab] = useState<"context" | "files" | "widget">("files");
 	const [tool, setTool] = useState<string | null>(null);
+	// Selected subagent (TUI Agent Hub parity): click a roster row to open
+	// its kill/revive/chat controls beneath the panel.
+	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+	const selectedAgent =
+		selectedAgentId !== null ? ((snap?.agents ?? []).find(a => a.id === selectedAgentId) ?? null) : null;
 	// Relay external reveal requests into the FilePane preview.
 	useEffect(() => {
 		if (!openRequest) return;
 		setTool(null);
 		setTab("files");
 	}, [openRequest]);
+	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
+	// browser (browser.gui), surface the browser tool so the user sees the
+	// agent's work without hunting for the panel.
+	const agentBrowserTabRef = useRef<string | null>(null);
+	useEffect(() => {
+		const api = window.electronAPI;
+		if (!api || typeof api.onManagedBrowserState !== "function") return;
+		return api.onManagedBrowserState(next => {
+			if (next.agentActivity === true && next.activeTabId && agentBrowserTabRef.current !== next.activeTabId) {
+				agentBrowserTabRef.current = next.activeTabId;
+				setTool("browser");
+			}
+		});
+	}, []);
 	// Resizable right-pane width (openchamber parity): drag the left edge;
 	// persisted per run.
 	const [width, setWidth] = useState(() => {
@@ -118,27 +139,36 @@ export function ContextPanel({
 		<aside className={panelClass} style={{ width }}>
 			{/* Left-edge drag handle for width (pointer capture on the 4px
 			 * strip; cursor col-resize over it). */}
-			<div
-				className="gui-pane-resize-x"
-				onPointerDown={onResizeStart}
-				aria-hidden
-			/>
+			<div className="gui-pane-resize-x" onPointerDown={onResizeStart} aria-hidden />
 			<div className="flex h-full min-h-0 w-full flex-col">
 				{/* Header: context/files tabs + tool rail (ZCode 打开标签页). */}
 				<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2">
 					<button
 						type="button"
+						title={t("context")}
+						aria-label={t("context")}
 						className={`gui-pane-tab${tab === "context" ? " gui-pane-tab--active" : ""}`}
 						onClick={() => setTab("context")}
 					>
-						{t("context")}
+						<Icon name="donut-chart" className="h-4 w-4" />
 					</button>
 					<button
 						type="button"
+						title={t("files")}
+						aria-label={t("files")}
 						className={`gui-pane-tab${tab === "files" ? " gui-pane-tab--active" : ""}`}
 						onClick={() => setTab("files")}
 					>
-						{t("files")}
+						<Icon name="folder" className="h-4 w-4" />
+					</button>
+					<button
+						type="button"
+						title={t("widget preview")}
+						aria-label={t("widget preview")}
+						className={`gui-pane-tab${tab === "widget" ? " gui-pane-tab--active" : ""}`}
+						onClick={() => setTab("widget")}
+					>
+						<Icon name="sparkling" className="h-4 w-4" />
 					</button>
 					<div className="ml-auto flex items-center gap-0.5">
 						{TOOLS.map(toolDef => (
@@ -176,6 +206,8 @@ export function ContextPanel({
 						</div>
 					) : tab === "files" && cwd ? (
 						<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
+					) : tab === "widget" ? (
+						<WidgetSidebarTab entries={snap?.entries ?? []} />
 					) : tab === "context" ? (
 						<div className="px-1 py-2">
 							<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
@@ -231,16 +263,20 @@ export function ContextPanel({
 							</div>
 							{/* Swarm visual parity (TUI subagent HUD): live agent rows —
 							 * status dot, activity line, token/cost meta — fed from
-							 * the session stream (agent-progress/lifecycle). */}
+							 * the session stream (agent-progress/lifecycle). Click a
+							 * row to open its kill/revive/chat controls. */}
 							<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
 							<div className="px-2">
 								<AgentsPanel
 									agents={snap?.agents ?? []}
 									progress={snap?.progress ?? new Map()}
 									lifecycle={snap?.lifecycle ?? new Map()}
-									selectedId={null}
-									onSelect={() => {}}
+									selectedId={selectedAgentId}
+									onSelect={setSelectedAgentId}
 								/>
+								{selectedAgent && (
+									<AgentControls agent={selectedAgent} rpc={rpc} onClose={() => setSelectedAgentId(null)} />
+								)}
 							</div>
 						</div>
 					) : (
@@ -251,6 +287,26 @@ export function ContextPanel({
 				</div>
 			</div>
 		</aside>
+	);
+}
+
+/** Persistent widget preview tab (常驻标签页): mirrors the latest widget
+ *  the conversation rendered. The last successful widget tool result wins;
+ *  the card stays until a newer widget replaces it. */
+function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNode {
+	const payload = latestWidgetFromEntries(entries);
+	if (!payload) {
+		return (
+			<div className="gui-widget-tab-empty">
+				<Icon name="layout-column" className="h-5 w-5" />
+				<p>{t("widget preview empty")}</p>
+			</div>
+		);
+	}
+	return (
+		<div className="gui-widget-tab">
+			<WidgetCard payload={payload} />
+		</div>
 	);
 }
 
@@ -436,7 +492,10 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			style={noteExpanded ? undefined : { height: noteH }}
 		>
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("project notes")}</span>
+				<span className="flex min-w-0 items-baseline gap-2">
+					<span className="gui-group-label px-2">{t("project notes")}</span>
+					<span className="text-[11px] text-[var(--color-text-faint)]">{text.length}/3000</span>
+				</span>
 				<div className="flex items-center gap-1">
 					<button
 						type="button"
@@ -456,7 +515,7 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				</div>
 			</div>
 			<textarea
-				className="gui-notes-editor min-h-0 flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2.5 font-mono text-[12.5px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
+				className="gui-notes-editor min-h-0 flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2.5 text-[12.5px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
 				value={text}
 				maxLength={3000}
 				disabled={!loaded}
@@ -465,7 +524,6 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				onChange={e => onNoteChange(e.target.value)}
 				onBlur={saveNote}
 			/>
-			<div className="px-1 pb-0.5 text-right text-[11px] text-[var(--color-text-faint)]">{text.length}/3000</div>
 			{/* Drag handle: note pane height (openchamber parity). */}
 			<div className="gui-notes-resize-y" onPointerDown={onNoteResizeStart} aria-hidden />
 			<div className="gui-notes-todos">
@@ -497,33 +555,37 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					</button>
 				</div>
 				{todos.length === 0 ? (
-					<p className="px-1 pt-2 text-[12px] text-[var(--color-text-faint)]">{t("no todos yet")}</p>
+					<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
+						{t("no todos yet")}
+					</p>
 				) : (
-					<ul className="gui-notes-todo-list">
-						{todos.map(todo => (
-							<li key={todo.id} className="gui-notes-todo-row">
-								<button
-									type="button"
-									className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
-									onClick={() => toggleTodo(todo.id)}
-									title={todo.done ? t("mark undone") : t("mark done")}
-								>
-									{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
-								</button>
-								<span className={`gui-notes-todo-text${todo.done ? " gui-notes-todo-text--done" : ""}`}>
-									{todo.text}
-								</span>
-								<button
-									type="button"
-									className="gui-notes-todo-remove"
-									onClick={() => removeTodo(todo.id)}
-									title={t("remove todo")}
-								>
-									✕
-								</button>
-							</li>
-						))}
-					</ul>
+					<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
+						<ul className="gui-notes-todo-list">
+							{todos.map(todo => (
+								<li key={todo.id} className="gui-notes-todo-row">
+									<button
+										type="button"
+										className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
+										onClick={() => toggleTodo(todo.id)}
+										title={todo.done ? t("mark undone") : t("mark done")}
+									>
+										{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
+									</button>
+									<span className={`gui-notes-todo-text${todo.done ? " gui-notes-todo-text--done" : ""}`}>
+										{todo.text}
+									</span>
+									<button
+										type="button"
+										className="gui-notes-todo-remove"
+										onClick={() => removeTodo(todo.id)}
+										title={t("remove todo")}
+									>
+										✕
+									</button>
+								</li>
+							))}
+						</ul>
+					</div>
 				)}
 			</div>
 			<div className="gui-notes-plans">
@@ -557,10 +619,13 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					</div>
 				)}
 				{plans !== null && plans.length === 0 && !planOpen && (
-					<p className="px-1 pt-2 text-[12px] text-[var(--color-text-faint)]">{t("no plans yet")}</p>
+					<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
+						{t("no plans yet")}
+					</p>
 				)}
 				{plans !== null && plans.length > 0 && (
-					<ul className="gui-notes-plan-list">
+					<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
+						<ul className="gui-notes-plan-list">
 						{plans.map(plan => (
 							<li key={plan.id} className="gui-notes-plan-row">
 								<button
@@ -581,7 +646,8 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								</button>
 							</li>
 						))}
-					</ul>
+						</ul>
+					</div>
 				)}
 			</div>
 		</div>
@@ -596,7 +662,7 @@ function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 function parseGraphLine(line: string): { cols: string[]; tail: string | null } {
 	const cols: string[] = [];
 	let i = 0;
-	while (i < line.length && ("*|\\/ ".includes(line[i] ?? ""))) {
+	while (i < line.length && "*|\\/ ".includes(line[i] ?? "")) {
 		cols.push(line[i]!);
 		i++;
 	}
@@ -628,14 +694,32 @@ function GitGraph({ graph }: { graph: string }): ReactNode {
 			if (ch === "*") {
 				segs.push(<circle key={`n${r}-${c}`} cx={x} cy={y0 + ROW_H / 2} r={3.2} fill={color} />);
 			} else if (ch === "|") {
-				segs.push(<line key={`v${r}-${c}`} x1={x} y1={y0} x2={x} y2={y0 + ROW_H} stroke={color} strokeWidth={1.6} />);
+				segs.push(
+					<line key={`v${r}-${c}`} x1={x} y1={y0} x2={x} y2={y0 + ROW_H} stroke={color} strokeWidth={1.6} />,
+				);
 			} else if (ch === "\\") {
 				segs.push(
-					<line key={`b${r}-${c}`} x1={x} y1={y0} x2={x + COLS} y2={y0 + ROW_H} stroke={color} strokeWidth={1.4} />,
+					<line
+						key={`b${r}-${c}`}
+						x1={x}
+						y1={y0}
+						x2={x + COLS}
+						y2={y0 + ROW_H}
+						stroke={color}
+						strokeWidth={1.4}
+					/>,
 				);
 			} else if (ch === "/") {
 				segs.push(
-					<line key={`f${r}-${c}`} x1={x + COLS} y1={y0} x2={x} y2={y0 + ROW_H} stroke={color} strokeWidth={1.4} />,
+					<line
+						key={`f${r}-${c}`}
+						x1={x + COLS}
+						y1={y0}
+						x2={x}
+						y2={y0 + ROW_H}
+						stroke={color}
+						strokeWidth={1.4}
+					/>,
 				);
 			}
 		}
@@ -649,7 +733,9 @@ function GitGraph({ graph }: { graph: string }): ReactNode {
 				{rows.map((row, r) =>
 					row.tail ? (
 						<div key={r} className="flex h-5 items-center gap-1.5 whitespace-nowrap pr-1">
-							<span className="font-mono text-[10.5px] text-[var(--color-text-faint)]">{row.tail.slice(0, 7)}</span>
+							<span className="font-mono text-[10.5px] text-[var(--color-text-faint)]">
+								{row.tail.slice(0, 7)}
+							</span>
 							{(() => {
 								const m = /^\(([^)]*)\)/.exec(row.tail.slice(7).trim());
 								return m ? (
@@ -669,7 +755,9 @@ function GitGraph({ graph }: { graph: string }): ReactNode {
 									</span>
 								) : null;
 							})()}
-							<span className="truncate text-[12px] text-[var(--color-text)]">{row.tail.replace(/^\([^)]*\)\s*/, "")}</span>
+							<span className="truncate text-[12px] text-[var(--color-text)]">
+								{row.tail.replace(/^\([^)]*\)\s*/, "")}
+							</span>
 						</div>
 					) : (
 						<div key={r} className="h-5" />
@@ -706,7 +794,7 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			})
 			.catch(() => {});
 	}, [rpc, cwd]);
-	useEffect(load, [load, cwd]);
+	useEffect(load, [load]);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
@@ -803,6 +891,14 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		() => localStorage.getItem("omp-gui-git-show-ignored") === "1",
 	);
 	const [gitmojiOn, setGitmojiOn] = useState<boolean>(() => localStorage.getItem("omp-gui-gitmoji") !== "0");
+	// Git settings (Git tab) toggles this pref and dispatches
+	// omp-gitmoji-changed (same-window storage events don't fire) — keep
+	// the gitmoji badges in the context panel in sync.
+	useEffect(() => {
+		const sync = (): void => setGitmojiOn(localStorage.getItem("omp-gui-gitmoji") !== "0");
+		window.addEventListener("omp-gitmoji-changed", sync);
+		return () => window.removeEventListener("omp-gitmoji-changed", sync);
+	}, []);
 	const [commitOpen, setCommitOpen] = useState(false);
 	const [commitMsg, setCommitMsg] = useState("");
 	const [committing, setCommitting] = useState(false);
@@ -829,7 +925,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				setLoading(false);
 			});
 	}, [rpc, showIgnored, cwd]);
-	useEffect(load, [load, cwd]);
+	useEffect(load, [load]);
 	const openFile = (path: string): void => {
 		if (openPath === path) {
 			setOpenPath(null);
@@ -1251,7 +1347,7 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		if (!rpc) return;
 		setLoading(true);
 		void rpc
-			.request<{ prs?: typeof prs; error?: string }>("github.prs", {})
+			.request<{ prs?: typeof prs; error?: string }>("github.prs", { cwd })
 			.then(res => {
 				setPrs(res?.prs ?? []);
 				setError(res?.error ?? null);
@@ -1262,7 +1358,7 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				setLoading(false);
 			});
 	}, [rpc]);
-	useEffect(load, [load, cwd]);
+	useEffect(load, [load]);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
@@ -1398,6 +1494,15 @@ interface PickedElement {
 	outerHTML: string;
 }
 
+/** Read the webview page's current text selection (cross-origin safe via
+ *  <webview> executeJavaScript) for the selection→ask popover. */
+const BROWSER_ASK_SELECTION_SCRIPT = `(() => {
+	const sel = window.getSelection();
+	const text = sel && sel.rangeCount > 0 && !sel.isCollapsed ? sel.toString().replace(/\\r\\n?/g, "\\n").trim() : "";
+	if (!text) return null;
+	return { text, title: document.title || "" };
+})()`;
+
 const BROWSER_VIEWPORTS = [
 	{ labelKey: "viewport fit", width: null },
 	{ labelKey: "viewport phone", width: 393 },
@@ -1405,26 +1510,37 @@ const BROWSER_VIEWPORTS = [
 	{ labelKey: "viewport desktop", width: 1440 },
 ] as const;
 
-/** Built-in browser (right-pane tool): Electron <webview> (real Chromium,
- *  cross-origin executeJavaScript for the element picker) with an iframe
- *  fallback for the plain-browser build. URL bar, back/forward history,
- *  quick ports, viewport presets and an element-picker that inserts the
- *  picked element into the chat composer via the omp-gui-insert-text
- *  window event. The "Agent 标签页" strip mirrors the SHARED automation
- *  Chromium (the same instance the agent drives) — click a tab to open its
- *  URL here and see a live screenshot. */
+/**
+ * Browser tool pane: the managed in-app browser (Electron WebContentsView +
+ * local CDP bridge) when the shell exposes it — the SAME browser the agent
+ * drives with `browser.gui`. Plain-browser builds fall back to the legacy
+ * webview/iframe pane.
+ */
+function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
+	const managed = typeof window.electronAPI?.managedBrowserOpen === "function";
+	if (managed) return <ManagedBrowserPane />;
+	return <LegacyBrowserPane rpc={rpc} />;
+}
+
+/** Legacy embedded browser: Electron <webview> (real Chromium, cross-origin
+ *  executeJavaScript for the element picker) with an iframe fallback for the
+ *  plain-browser build. URL bar, back/forward history, quick ports, viewport
+ *  presets and an element-picker that inserts the picked element into the
+ *  chat composer via the omp-gui-insert-text window event. The "Agent 标签页"
+ *  strip mirrors the SHARED automation Chromium (the same instance the agent
+ *  drives) — click a tab to open its URL here and see a live screenshot. */
 interface BrowserTabInfo {
 	targetId: string;
 	title: string;
 	url: string;
 }
 
-function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
+function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 	const [url, setUrl] = useState("http://localhost:5173");
 	const [current, setCurrent] = useState("http://localhost:5173");
 	const [history, setHistory] = useState<string[]>(["http://localhost:5173"]);
 	const [histIndex, setHistIndex] = useState(0);
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
 	const [picking, setPicking] = useState(false);
 	const [viewport, setViewport] = useState<number | null>(null);
 	const [agentTabs, setAgentTabs] = useState<BrowserTabInfo[]>([]);
@@ -1443,9 +1559,7 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 					if (!alive) return;
 					const tabs = res?.tabs ?? [];
 					setAgentTabs(prev =>
-						prev.length === tabs.length && prev.every((t, i) => t.targetId === tabs[i]?.targetId)
-							? prev
-							: tabs,
+						prev.length === tabs.length && prev.every((t, i) => t.targetId === tabs[i]?.targetId) ? prev : tabs,
 					);
 				})
 				.catch(() => {});
@@ -1521,14 +1635,41 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 		setPicking(true);
 		try {
 			const picked = (await wv.executeJavaScript(BROWSER_INSPECT_SCRIPT, true)) as PickedElement | null;
-			if (picked && picked.text) {
+			if (picked?.text) {
 				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })}\n${t("inserted element selector")}: ${picked.selector}`;
 				window.dispatchEvent(new CustomEvent("omp-gui-insert-text", { detail: { text: insertion } }));
 			}
+	} catch {
+		// page not scriptable (about:blank / crashed) — ignore
+	} finally {
+		setPicking(false);
+	}
+};
+	const askSelection = async (): Promise<void> => {
+		if (!electron) return;
+		const wv = webviewRef.current as unknown as {
+			executeJavaScript?(script: string, userGesture: boolean): Promise<unknown>;
+		} | null;
+		if (!wv?.executeJavaScript) return;
+		try {
+			const picked = (await wv.executeJavaScript(BROWSER_ASK_SELECTION_SCRIPT, true)) as {
+				text?: string;
+				title?: string;
+			} | null;
+			if (!picked?.text) return;
+			const rect = webviewRef.current?.getBoundingClientRect();
+			window.dispatchEvent(
+				new CustomEvent("omp-gui-ask", {
+					detail: {
+						text: picked.text,
+						x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2,
+						y: (rect?.top ?? 0) + Math.min((rect?.height ?? 0) / 2, 200),
+						context: picked.title ? `${t("ask browser selection")}: ${picked.title}` : undefined,
+					},
+				}),
+			);
 		} catch {
 			// page not scriptable (about:blank / crashed) — ignore
-		} finally {
-			setPicking(false);
 		}
 	};
 	return (
@@ -1538,9 +1679,7 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			 * capture a screenshot thumbnail. */}
 			{agentTabs.length > 0 && (
 				<div className="flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">
-						{t("agent tabs")}:
-					</span>
+					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{t("agent tabs")}:</span>
 					{agentTabs.map(tab => (
 						<button
 							key={tab.targetId}
@@ -1614,11 +1753,12 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 				<button
 					type="button"
 					className="gui-pane-action !w-auto px-2"
-					aria-label={t("refresh")}
-					title={t("refresh")}
+					aria-label={loading ? t("loading…") : t("refresh")}
+					title={loading ? t("loading…") : t("refresh")}
+					aria-busy={loading ? "true" : undefined}
 					onClick={refresh}
 				>
-					<Icon name="refresh" className="h-3.5 w-3.5" />
+					<Icon name="refresh" className={`h-3.5 w-3.5${loading ? " gui-spin" : ""}`} />
 				</button>
 				<button
 					type="button"
@@ -1640,6 +1780,35 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 						<Icon name="cursor" className="h-3.5 w-3.5" />
 					</button>
 				)}
+				{electron && (
+					<button
+						type="button"
+						className="gui-pane-action !w-auto px-2"
+						aria-label={t("ask about page selection")}
+						title={t("ask about page selection")}
+						onClick={() => void askSelection()}
+					>
+						<Icon name="sparkling" className="h-3.5 w-3.5" />
+					</button>
+				)}
+				{/* Viewport presets (手机/平板/桌面/自适应): the browser pane is
+				 * used for responsive checks — fixed widths wrap the webview. */}
+				<div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] p-0.5">
+					{BROWSER_VIEWPORTS.map(v => (
+						<button
+							key={v.labelKey}
+							type="button"
+							className={`gui-pane-action !w-auto px-1.5 text-[10.5px]${
+								viewport === v.width ? " gui-view-opt--active" : ""
+							}`}
+							aria-label={t(v.labelKey)}
+							title={t(v.labelKey)}
+							onClick={() => setViewport(v.width)}
+						>
+							{t(v.labelKey)}
+						</button>
+					))}
+				</div>
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-white">
 				<div
@@ -1655,6 +1824,10 @@ function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 							webpreferences="contextIsolation=yes, sandbox=yes"
 							className="h-full w-full"
 							style={{ display: "flex" }}
+							{...({
+								onDidStartLoading: () => setLoading(true),
+								onDidStopLoading: () => setLoading(false),
+							} as Record<string, unknown>)}
 						/>
 					) : (
 						<iframe

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { widgetFetch } from "./fetch";
 
 /**
  * "On this day in history" — ported from the kimiwork "历史上的今天" widget
@@ -189,7 +190,7 @@ export function HistoryCard({
 		const trySource = (index: number): Promise<{ rows: HistoryEvent[]; label: string }> => {
 			if (index >= sources.length) return Promise.reject(new Error("all sources unavailable"));
 			const s = sources[index];
-			return fetch(s.url, { cache: "no-store", credentials: "omit" })
+			return widgetFetch(s.url, { cache: "no-store", credentials: "omit" })
 				.then(res => {
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					return res.json();
@@ -243,7 +244,7 @@ export function HistoryCard({
 			// 离线时重新尝试拉取
 			loadRef.current++;
 			setLoading(true);
-			fetch("https://60s.viki.moe/v2/today-in-history", { cache: "no-store" })
+			widgetFetch("https://60s.viki.moe/v2/today-in-history", { cache: "no-store" })
 				.then(r => r.json())
 				.then(p => {
 					const items = (p as { data?: { items?: Array<{ year?: string; description?: string; title?: string }> } })?.data?.items;

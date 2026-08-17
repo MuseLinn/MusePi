@@ -171,11 +171,13 @@
 	},
 	"dependencies": {
 		"sherpa-onnx": "1.13.2",
-		"sherpa-onnx-darwin-arm64": "1.13.3",
 		"sherpa-onnx-node": "1.13.2",
-		"@musepi/pi-utils": "catalog:"
+		"@musepi/pi-utils": "catalog:",
+		"glob": "7.2.3"
 	},
 	"description": "MusePi - AI coding assistant (OMP-based fork)",
 	"version": "0.3.1",
-	"optionalDependencies": {}
+	"optionalDependencies": {
+		"sherpa-onnx-darwin-arm64": "1.13.3"
+	}
 }

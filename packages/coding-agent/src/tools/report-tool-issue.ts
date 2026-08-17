@@ -255,7 +255,7 @@ let cachedDb: Database | null = null;
 
 /**
  * Open (or return the cached handle for) the auto-QA SQLite database at
- * `~/.omp/autoqa.db` (XDG: `$XDG_DATA_HOME/omp/autoqa.db`), creating the
+ * `~/.musepi/autoqa.db` (XDG: `$XDG_DATA_HOME/musepi/autoqa.db`), creating the
  * schema lazily. Returns `null` when the path cannot be resolved or opened.
  */
 export function openAutoQaDb(): Database | null {

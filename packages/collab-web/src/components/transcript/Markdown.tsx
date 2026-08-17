@@ -1,13 +1,17 @@
 import { Marked } from "@musepi/pi-utils/marked";
 import type { Tokens } from "@musepi/pi-utils/marked";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
+import { electronBridge } from "../../lib/electron-bridge";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
-import { mermaidMode, renderMermaidHtml } from "./mermaid";
+import { ensureMermaidFallbackObserver, MERMAID_FALLBACK_DEBOUNCE_MS, mermaidFallbackHtml, mermaidMode, renderMermaidAsyncHtml, renderMermaidHtml } from "./mermaid";
+import { graphemeSpans } from "./reveal";
+import { useStreamingReveal } from "./use-streaming-reveal";
 
 function unescapeHtml(raw: string): string {
 	const parseCodePoint = (value: number): string => {
@@ -269,6 +273,85 @@ function decorateTables(html: string): string {
 	});
 }
 
+/**
+ * Incremental streaming-markdown cache: `blocks` are frozen "\n\n"-bounded
+ * chunks; a later append reuses everything before the cut verbatim.
+ */
+export interface StreamingRenderState {
+	text: string;
+	blocks: Array<{ start: number; html: string }>;
+	/** Code-unit offset where the plain-text tail begins in `text`. */
+	tailStart: number;
+}
+
+/**
+ * Streaming markdown renderer. The settled render (`streaming: false`)
+ * parses the complete text once — the stable final layout (what a reload
+ * shows). While streaming, completed blocks render as markdown (reused
+ * verbatim across frames) and the not-yet-settled TAIL is returned as RAW
+ * TEXT (`tail`) — the caller appends it incrementally as per-character
+ * spans (each new char's entrance animation plays ONCE; a plain tail only
+ * grows, and the full markdown renders once on settle).
+ */
+export function renderStreamingMarkdown(
+	text: string,
+	streaming: boolean,
+	prev: StreamingRenderState | null,
+): { html: string; tail: string | null; state: StreamingRenderState | null } {
+	if (!streaming) {
+		// Settle: the streaming head blocks were parsed at balanced "\n\n"
+		// boundaries and are COMPLETE markdown — reuse them verbatim and
+		// re-parse only the plain-text tail as real markdown (a fence now
+		// closed, a list complete). Avoids the full-message synchronous
+		// md.parse on settle — the user-visible "卡一下才都渲染" stall on
+		// long messages.
+		if (prev && prev.blocks.length > 0 && text.startsWith(prev.text)) {
+			const head = prev.blocks.map(b => b.html).join("");
+			const tailText = text.slice(prev.tailStart);
+			const tailHtml = decorateTables(md.parse(tailText, { async: false }));
+			return { html: head + tailHtml, tail: null, state: null };
+		}
+		return { html: decorateTables(md.parse(text, { async: false })), tail: null, state: null };
+	}
+	try {
+		if (prev && text.length > prev.text.length && text.startsWith(prev.text)) {
+			// Append-only growth: the plain-tail start NEVER advances during
+			// streaming. Re-parsing the region that was shown as plain text
+			// as markdown mid-stream is exactly the structural jump the
+			// plain-tail contract forbids — the region stays plain (kept in
+			// the stable DOM container) until settle re-parses everything.
+			// The frozen markdown head blocks are reused verbatim.
+			return {
+				html: prev.blocks.map(b => b.html).join(""),
+				tail: text.slice(prev.tailStart ?? 0),
+				state: { text, blocks: prev.blocks, tailStart: prev.tailStart ?? 0 },
+			};
+		}
+		// First streaming frame / non-append growth: parse once, split into
+		// frozen "\n\n"-bounded blocks so later appends can reuse everything
+		// before the cut. Everything after the final balanced boundary is an
+		// unfinished tail — returned raw, same as the incremental path, so
+		// an open fence never snaps into a code block on the very first
+		// frame.
+		const blocks: Array<{ start: number; html: string }> = [];
+		let from = 0;
+		for (let i = 0; i < text.length; i++) {
+			if (text[i] === "\n" && text[i + 1] === "\n" && fencesBalanced(text.slice(0, i + 2))) {
+				blocks.push({ start: from, html: decorateTables(md.parse(text.slice(from, i + 2), { async: false })) });
+				from = i + 2;
+				i += 1;
+			}
+		}
+		return {
+			html: blocks.map(b => b.html).join(""),
+			tail: text.slice(from),
+			state: { text, blocks, tailStart: from },
+		};
+	} catch {
+		return { html: "", tail: text, state: null };
+	}
+}
+
 const highlightSource = new Map<string, { code: string; lang?: string }>();
 const highlightHtml = new Map<string, string>();
 
@@ -283,8 +366,7 @@ interface LocalImageBridge {
 	readFileDataUrl?(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 }
 
-const localImageBridge = (): LocalImageBridge | null =>
-	((window as unknown as { electronAPI?: LocalImageBridge }).electronAPI) ?? null;
+const localImageBridge = (): LocalImageBridge | null => electronBridge();
 
 /** `/abs/path.png`, `~/x.png`, `./rel.png`, `../rel.png`, `file://…` — but
  *  never http(s)/data/blob URLs, and never local paths without a known
@@ -335,6 +417,80 @@ export function resolveLocalImages(
 // eviction (Map preserves insertion order) keeps the working set recent —
 // the oldest blocks are exactly the ones that never re-render.
 const HIGHLIGHT_CACHE_MAX = 300;
+
+/** Long-message render budget (chars): past this, Markdown renders only
+ *  the head until the user expands — prevents a 50k-char thinking dump or
+ *  output from paying the full parse/highlight cost on every scroll/remount. */
+const LONG_TEXT_CHARS = 12000;
+
+/**
+ * Fullscreen mermaid preview (image/widget lightbox parity): frosted
+ * overlay (same .tr-img-lb chrome as the image lightbox), the rendered SVG
+ * scaled with CSS zoom, and its own zoom/copy/download controls. Esc or
+ * the floating close button dismisses.
+ */
+function MermaidLightbox({
+	value,
+	zoom,
+	onZoom,
+	onClose,
+}: {
+	value: { html: string; source: string; hash: string };
+	zoom: number;
+	onZoom(next: number): void;
+	onClose(): void;
+}): ReactNode {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+	const step = (dir: 1 | -1): void => {
+		onZoom(Math.min(4, Math.max(0.5, zoom * (dir === 1 ? 1.2 : 1 / 1.2))));
+	};
+	return createPortal(
+		<div className="tr-img-lb tr-mm-lb" onClick={onClose}>
+			<button type="button" className="tr-img-lb-x" aria-label={t("close")} title={t("close")} onClick={onClose}>
+				✕
+			</button>
+			<div className="tr-mm-lb-body" onClick={e => e.stopPropagation()}>
+				<div className="tr-mm-lb-toolbar">
+					<button type="button" className="tr-mm-lb-btn" title={t("zoom out")} onClick={() => step(-1)}>
+						−
+					</button>
+					<span className="tr-mm-lb-zoom">{Math.round(zoom * 100)}%</span>
+					<button type="button" className="tr-mm-lb-btn" title={t("zoom in")} onClick={() => step(1)}>
+						+
+					</button>
+					<button
+						type="button"
+						className="tr-mm-lb-btn"
+						title={t("copy")}
+						onClick={() => {
+							if (value.source) void navigator.clipboard.writeText(value.source).catch(() => {});
+						}}
+					>
+						{t("copy")}
+					</button>
+					<button
+						type="button"
+						className="tr-mm-lb-btn"
+						title={t("download")}
+						onClick={() => downloadBlob("diagram.svg", value.html, "image/svg+xml;charset=utf-8")}
+					>
+						{t("download")}
+					</button>
+				</div>
+				<div className="tr-mm-lb-scroll">
+					<div className="tr-mm-lb-svg" style={{ zoom }} dangerouslySetInnerHTML={{ __html: value.html }} />
+				</div>
+			</div>
+		</div>,
+		document.body,
+	);
+}
 function cacheSet(map: Map<string, unknown>, key: string, value: unknown): void {
 	map.set(key, value);
 	if (map.size > HIGHLIGHT_CACHE_MAX) {
@@ -350,18 +506,66 @@ function applyHighlight(el: HTMLElement, html: string): void {
 }
 
 export const Markdown = memo(function Markdown({
-	text,
+	text: fullText,
 	basePath,
 	streaming = false,
+	smoothStreaming,
 }: {
 	text: string;
 	basePath?: string;
 	/** Live-streaming text — renders a kimi-style blinking caret at the end. */
 	streaming?: boolean;
+	/** display.smoothStreaming parity (TUI): false disables the reveal.
+	 *  Omitted → falls back to the `gui-chat-no-smooth` html class (the
+	 *  desktop chat pref), so guests and the web shell keep their behavior. */
+	smoothStreaming?: boolean;
 }): ReactNode {
 	const highlight = useCodeHighlight();
+	// Long-message budget (craft-agents large-response parity): render only
+	// the first LONG_TEXT_CHARS of an oversized message — the full markdown
+	// parse + highlight of a 50k-char thinking dump is what janks the chat.
+	// "展开完整消息" swaps to the full text; the cap only kicks in past
+	// the threshold so normal messages render exactly as before.
+	const [longExpanded, setLongExpanded] = useState(false);
+	const truncated = !longExpanded && fullText.length > LONG_TEXT_CHARS;
+	// Budget input feeds BOTH the reveal and every downstream consumer
+	// (render/highlight/images/tail), so the truncated view is internally
+	// consistent; expanding re-renders from the full text.
+	const revealInput = truncated ? fullText.slice(0, LONG_TEXT_CHARS) : fullText;
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
+	const [mermaidFull, setMermaidFull] = useState<{ html: string; source: string; hash: string } | null>(null);
+	const [mermaidFsZoom, setMermaidFsZoom] = useState(1);
+	// 平滑流式渲染: character-level reveal (逐字输出). The setting writes
+	// `gui-chat-no-smooth` on <html> when off; guest pages carry no class,
+	// so they default to smooth on. `text` below is the reveal prefix — all
+	// downstream code (streaming fast path, highlight, images) sees the
+	// displayed text, so reveal and rendering stay consistent.
+	const smooth =
+		smoothStreaming !== false &&
+		(typeof document === "undefined" || !document.documentElement.classList.contains("gui-chat-no-smooth"));
+	const text = useStreamingReveal(revealInput, streaming, smooth);
+	// 逐字动效 (settings → 聊天 → 逐字动效): typewriter (default, fade-in
+	// tail + caret) / burst (rainbow-burst entrance) / shimmer (shine
+	// sweep) / glitch (garble) / flip (per-grapheme 3D flip) / ink
+	// (per-grapheme ink bleed) — tail-window effects live in
+	// TAIL_RENDERERS; shimmer is pure CSS hosted on the stable .tr-md
+	// root. Read from localStorage at render; only the block that is
+	// streaming right now applies the effect (see the root className
+	// below), finished blocks always render plain text.
+	const effect =
+		typeof document === "undefined"
+			? "typewriter"
+			: (() => {
+					try {
+						const v = localStorage.getItem("omp-gui-chat-effect");
+						return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink"
+							? v
+							: "typewriter";
+					} catch {
+						return "typewriter";
+					}
+				})();
 	// mermaidMode is read at render so the setting change re-parses
 	// (fences render svg vs ascii) even when the text is unchanged.
 	const mode = mermaidMode();
@@ -371,69 +575,14 @@ export const Markdown = memo(function Markdown({
 	// append-only growth we re-parse only the grown tail instead of the
 	// whole buffer, turning the O(N^2) reveal cost of a long streaming
 	// message into O(N) (measured: 14KB message re-parsed per frame at
-	// 11.5ms/frame → sub-ms with this cache).
-	const streamRef = useRef<{ text: string; blocks: Array<{ start: number; html: string }> } | null>(null);
-	const html = useMemo(() => {
-		try {
-			const prev = streamRef.current;
-			if (prev && text.length > prev.text.length && text.startsWith(prev.text)) {
-				// Largest balanced "\n\n" boundary at/before the previous tail.
-				let cut = prev.text.length;
-				while (cut > 0) {
-					const nl = prev.text.lastIndexOf("\n\n", cut - 1);
-					if (nl < 0) break;
-					const b = nl + 2;
-					if (fencesBalanced(prev.text.slice(0, b))) {
-						cut = b;
-						break;
-					}
-					cut = nl;
-				}
-				if (cut > 0) {
-					// Head blocks lie entirely before the cut (each block ends
-					// at a balanced "\n\n" boundary, so no block straddles it).
-					const head = prev.blocks.filter(b => b.start < cut);
-					if (head.length > 0) {
-						const tailText = text.slice(cut);
-						const tailHtml = decorateTables(md.parse(tailText, { async: false }));
-						// Persist the tail as frozen blocks too — dropping it
-						// would lose everything between the old and new cuts
-						// on the next append.
-						const tailBlocks: Array<{ start: number; html: string }> = [];
-						let from = 0;
-						for (let i = 0; i < tailText.length; i++) {
-							if (tailText[i] === "\n" && tailText[i + 1] === "\n" && fencesBalanced(tailText.slice(0, i + 2))) {
-								tailBlocks.push({ start: cut + from, html: decorateTables(md.parse(tailText.slice(from, i + 2), { async: false })) });
-								from = i + 2;
-								i += 1;
-							}
-						}
-						if (from < tailText.length) tailBlocks.push({ start: cut + from, html: decorateTables(md.parse(tailText.slice(from), { async: false })) });
-						const out = head.map(b => b.html).join("") + tailHtml;
-						streamRef.current = { text, blocks: [...head, ...tailBlocks] };
-						return out;
-					}
-				}
-			}
-			// Full parse, split into frozen "\n\n"-bounded blocks so later
-			// appends can reuse everything before the cut.
-			const out = decorateTables(md.parse(text, { async: false }));
-			const blocks: Array<{ start: number; html: string }> = [];
-			let from = 0;
-			for (let i = 0; i < text.length; i++) {
-				if (text[i] === "\n" && text[i + 1] === "\n" && fencesBalanced(text.slice(0, i + 2))) {
-					blocks.push({ start: from, html: decorateTables(md.parse(text.slice(from, i + 2), { async: false })) });
-					from = i + 2;
-					i += 1;
-				}
-			}
-			if (from < text.length) blocks.push({ start: from, html: decorateTables(md.parse(text.slice(from), { async: false })) });
-			streamRef.current = { text, blocks };
-			return out;
-		} catch {
-			return escapeHtml(text);
-		}
-	}, [text]);
+	// 11.5ms/frame → sub-ms with this cache). The streaming TAIL itself is
+	// never markdown-parsed — see renderStreamingMarkdown.
+	const streamRef = useRef<StreamingRenderState | null>(null);
+	const render = useMemo(() => {
+		const result = renderStreamingMarkdown(text, streaming, streamRef.current);
+		streamRef.current = result.state;
+		return result;
+	}, [text, streaming]);
 
 	// Copy-button delegation: blocks render through dangerouslySetInnerHTML,
 	// so clicks arrive here. Code blocks copy the <code> textContent —
@@ -451,8 +600,7 @@ export const Markdown = memo(function Markdown({
 			const path = pathEl.getAttribute("data-open-path") ?? "";
 			// Desktop GUI: dispatch for right-panel preview (ChatView listens);
 			// fall back to the system default app when no panel handles it.
-			const bridge = (window as unknown as { electronAPI?: { openWith?(app: string, path: string): Promise<boolean> } })
-				.electronAPI;
+			const bridge = electronBridge();
 			const openWith = bridge?.openWith;
 			if (openWith) {
 				let handled = false;
@@ -466,6 +614,40 @@ export const Markdown = memo(function Markdown({
 					if (!handled && path) void openWith("", path);
 				}, 120);
 			}
+			return;
+		}
+		const mermaidZoom = target.closest<HTMLElement>("[data-mermaid-zoom]");
+		if (mermaidZoom) {
+			// P3: scale the rendered SVG with CSS `zoom` (layout scaling —
+			// the wrapper's overflow:auto gains real scrollbars, unlike
+			// transform, which only scales visually and spills). Stored as
+			// a data-zoom fraction so repeated clicks compound 1.2× / ÷1.2.
+			// svg has max-width:100% in CSS, which would pin the zoomed
+			// layout — clear it while zoomed (restored at 1×).
+			const svgWrap = mermaidZoom.closest<HTMLElement>(".tr-mermaid-block")?.querySelector<HTMLElement>(".tr-mermaid");
+			if (!svgWrap) return;
+			const dir = mermaidZoom.dataset.mermaidZoom;
+			const cur = Number.parseFloat(svgWrap.dataset.zoom ?? "1") || 1;
+			const next = Math.min(4, Math.max(0.5, dir === "in" ? cur * 1.2 : cur / 1.2));
+			svgWrap.dataset.zoom = String(next);
+			const svg = svgWrap.querySelector<HTMLElement>("svg");
+			if (svg) {
+				svg.style.zoom = String(next);
+				svg.style.maxWidth = next === 1 ? "" : "none";
+			}
+			return;
+		}
+		const mermaidFs = target.closest<HTMLElement>("[data-mermaid-fullscreen]");
+		if (mermaidFs) {
+			// Fullscreen preview (image/widget lightbox parity): lift the
+			// rendered SVG into a frosted overlay with its own zoom/copy/
+			// download controls.
+			const block = mermaidFs.closest<HTMLElement>(".tr-mermaid-block");
+			const svg = block?.querySelector<SVGElement>(".tr-mermaid svg");
+			if (!svg || !block) return;
+			const src = block.querySelector<HTMLElement>("[data-mermaid-src]")?.getAttribute("data-mermaid-src") ?? "";
+			setMermaidFull({ html: svg.outerHTML, source: src, hash: src });
+			setMermaidFsZoom(1);
 			return;
 		}
 		const mermaidCopy = target.closest<HTMLElement>("[data-mermaid-src]");
@@ -563,6 +745,57 @@ export const Markdown = memo(function Markdown({
 		}
 	}, [text, highlight]);
 
+	// Per-character entrance effect (打字机): the streaming tail lives in a
+	// STABLE ref container (sibling of the markdown innerHTML div — React
+	// never rebuilds it), and each NEW grapheme is appended as its own span
+	// with a one-shot CSS animation class. The span is never rebuilt after
+	// mount, so the animation plays exactly once and the char rests — every
+	// new char animates, not just the last window (the old position-window
+	// pass re-styled only the newest ~10 graphemes every frame, reading as
+	// "每行最后几个字才有动效").
+	//   Append-only streaming: the tail only GROWS (text appends) or is
+	// replaced wholesale when a balanced "\n\n" boundary advances its start
+	// (then the previous tail moved into the frozen markdown head and the
+	// new tail is unrelated text — rebuild once, no animation replay of
+	// already-shown chars).
+	const tailRef = useRef<HTMLDivElement | null>(null);
+	const tailAppendedRef = useRef<string>("");
+	useLayoutEffect(() => {
+		const el = tailRef.current;
+		if (!el) return;
+		const target = render.tail ?? "";
+		const prev = tailAppendedRef.current;
+		if (target === prev) return;
+		if (!target.startsWith(prev)) {
+			// Cut advanced (or a non-append reset): the previous tail moved
+			// into the head, or the stream restarted — drop everything and
+			// re-append the current tail fresh.
+			el.textContent = "";
+			tailAppendedRef.current = "";
+		}
+		const frag = document.createDocumentFragment();
+		const delta = target.slice(tailAppendedRef.current.length);
+		// shimmer is a root-level CSS sweep (no per-char spans); every other
+		// preset animates each new char exactly once via its CSS class.
+		if (effect === "shimmer") {
+			frag.appendChild(document.createTextNode(delta));
+		} else {
+			const effCls = effect === "typewriter" ? "tr-char tr-char--typewriter" : `tr-char tr-char--${effect}`;
+			for (const { word } of graphemeSpans(delta)) {
+				if (word === "\n") {
+					frag.appendChild(document.createTextNode("\n"));
+					continue;
+				}
+				const span = document.createElement("span");
+				span.className = effCls;
+				span.textContent = word;
+				frag.appendChild(span);
+			}
+		}
+		el.appendChild(frag);
+		tailAppendedRef.current = target;
+	}, [render.tail, effect]);
+
 	// Local images: swap raw filesystem srcs for data URLs via the desktop
 	// bridge. Re-runs on each text change (new message content), like the
 	// highlight pass; cache keeps repeated renders instant.
@@ -573,23 +806,60 @@ export const Markdown = memo(function Markdown({
 		resolveLocalImages(root, localImageBridge() ?? {}, localImageCache, basePath);
 	}, [text]);
 
+	// P1/P2: official-mermaid fallback for blocks beautiful-mermaid can't
+	// render synchronously (gantt/pie/timeline/…). A module-level
+	// MutationObserver (ensureMermaidFallbackObserver, idempotent) watches
+	// for .tr-mermaid-async placeholders appearing anywhere in the DOM —
+	// component-lifecycle/timing independent — and fills each with the
+	// debounced official-mermaid render (streaming blocks keep changing
+	// hash → their placeholder is replaced by the next sync render, and
+	// the stale timer's element is no longer connected).
+	useLayoutEffect(() => {
+		ensureMermaidFallbackObserver();
+	}, []);
+
 	// The copy button swaps to a transient "copied" label (same width).
 	const copiedLabel = t("copied");
 	const body =
 		copiedHash == null
-			? html
-			: html.replace(
+			? render.html
+			: render.html.replace(
 					new RegExp(`((?:data-copy-hash|data-math-copy)="${copiedHash}"[^>]*)(>${t("copy")}<)`, "g"),
 					`$1 data-copied>${copiedLabel}<`,
 				);
 
 	// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from escaped marked output
+	// Effect class on the streaming root: typewriter carries one too so
+	// the caret (CSS ::after) can be scoped to the typewriter preset only.
+	const effectCls = streaming ? ` gui-chat-effect-${effect}` : "";
 	return (
-		<div
-			ref={rootRef}
-			className={streaming ? "tr-md tr-md--streaming" : "tr-md"}
-			onClick={onCopy}
-			dangerouslySetInnerHTML={{ __html: body }}
-		/>
+		<>
+			<div
+				ref={rootRef}
+				className={`tr-md${streaming ? " tr-md--streaming" : ""}${effectCls}`}
+				onClick={onCopy}
+			>
+			<div dangerouslySetInnerHTML={{ __html: body }} />
+			{/* Stable streaming-tail container: React never rebuilds this
+			 * element's children — the per-char spans are appended by the
+			 * layout effect above, so each char's entrance animation plays
+			 * exactly once. Absent when settled (the tail is then part of
+			 * the markdown html above). */}
+			{streaming && render.tail !== null && <div ref={tailRef} className="tr-md-streaming-tail" aria-live="polite" />}
+			{mermaidFull && (
+				<MermaidLightbox
+					value={mermaidFull}
+					zoom={mermaidFsZoom}
+					onZoom={setMermaidFsZoom}
+					onClose={() => setMermaidFull(null)}
+				/>
+			)}
+		</div>
+		{truncated && (
+			<button type="button" className="tr-long-expand" onClick={() => setLongExpanded(true)}>
+				{t("expand full message")}（{fullText.length.toLocaleString()}）
+			</button>
+		)}
+	</>
 	);
 });

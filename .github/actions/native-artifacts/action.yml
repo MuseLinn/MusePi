@@ -23,16 +23,14 @@ runs:
 
       - name: Install native addon targets
         shell: bash
-        env:
-           NATIVE_TARGETS: ${{ inputs.targets }}
-           NATIVE_DEST: ${{ inputs.dest }}
         run: |
            set -euo pipefail
-           read -r -a targets <<< "$NATIVE_TARGETS"
+           # 内联展开 inputs（env 传递在 composite action 中曾解析为空）
+           targets=(${{ inputs.targets }})
            if [ "${#targets[@]}" -eq 0 ]; then
              echo "::error::At least one native addon target is required"
              exit 1
            fi
            bun scripts/bazel-natives.ts "${targets[@]}" \
              --source "$RUNNER_TEMP/omp-native-artifacts" \
-             --dest "$NATIVE_DEST"
+             --dest "${{ inputs.dest }}"

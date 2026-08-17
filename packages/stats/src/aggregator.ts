@@ -329,7 +329,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
-type TimeRange = "1h" | "24h" | "7d" | "30d" | "90d" | "all";
+type TimeRange = "1h" | "24h" | "7d" | "30d" | "90d" | "1y" | "all";
 
 interface TimeRangeConfig {
 	timeSeriesHours: number;
@@ -389,6 +389,15 @@ const TIME_RANGE_TO_CONFIG: Record<TimeRange, Omit<TimeRangeConfig, "cutoff">> =
 		modelPerformanceDays: 90,
 		modelPerformanceBucketMs: DAY_MS,
 		costSeriesDays: 90,
+	},
+	"1y": {
+		timeSeriesHours: 24 * 365,
+		timeSeriesBucketMs: DAY_MS,
+		modelSeriesDays: 365,
+		modelSeriesBucketMs: DAY_MS,
+		modelPerformanceDays: 365,
+		modelPerformanceBucketMs: DAY_MS,
+		costSeriesDays: 365,
 	},
 	all: {
 		timeSeriesHours: 24 * 3650,

@@ -1,31 +1,57 @@
 import type { AssistantMessage, ImageContent, SessionEntry, TextContent, ToolResultMessage } from "@musepi/pi-wire";
-import { Check, ChevronRight, Copy, GitBranch, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
-import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
-import { MorphIcon } from "morphicons/react";
 import { play } from "cuelume";
+import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
+import {
+	Check,
+	ChevronRight,
+	Copy,
+	GitFork,
+	ImageDown,
+	MessageSquare,
+	Pencil,
+	RefreshCw,
+	Undo2,
+	Volume2,
+} from "lucide-react";
+import { MorphIcon } from "morphicons/react";
+import { electronBridge } from "../../lib/electron-bridge";
 
 /** Tap the Taptic Engine when the desktop bridge is present (electronAPI
  *  is optional - plain browsers skip it silently). */
 function hapticTap(): void {
 	try {
-		(window as unknown as { electronAPI?: { haptic?(p?: number): Promise<unknown> } }).electronAPI?.haptic?.();
+		electronBridge()?.haptic?.();
 	} catch {
 		// bridge unavailable
 	}
 }
-import { Fragment, type ReactNode } from "react";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+import {
+	Fragment,
+	memo,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtTokens } from "../../lib/format";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
-import { Markdown } from "./Markdown";
+import { ImageLightbox } from "../image-lightbox";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
-import { ToolCard } from "./ToolCard";
 import { FileCards, turnArtifacts } from "./FileCards";
+import { ImageCardStack } from "./image-card-stack";
+import { Markdown } from "./Markdown";
+import { BashCard } from "./bash-card";
+import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
 import { useWorkingNow } from "./use-working-now";
+import { WidgetStandaloneCards } from "./widget-standalone";
 import "./transcript.css";
 
 // Windowed rendering for long sessions: only the tail WINDOW_INITIAL
@@ -38,6 +64,11 @@ import "./transcript.css";
 const WINDOW_INITIAL = 80;
 const WINDOW_STEP = 80;
 const WINDOW_JUMP = 500;
+
+/** Long-thinking budget: only this many sentences render initially; the
+ *  rest mount when the user hits 展开全部 (a giant reasoning block pays
+ *  ~100 Markdown mounts otherwise, even while the body is collapsed). */
+const MAX_THINK_SENTENCES = 80;
 const AVG_ROW_HEIGHT = 44; // px; refined by measurement once rows mount
 
 export interface TranscriptProps {
@@ -46,6 +77,10 @@ export interface TranscriptProps {
 	streamDone: boolean;
 	activeTools: ReadonlyMap<string, ActiveTool>;
 	working: boolean;
+	/** Frozen round durations by final assistant message timestamp (ms),
+	 *  recorded at agent_end — each completed round's total stays visible
+	 *  under its final message (craft-agents TaskActionMenu freeze parity). */
+	roundDurations?: ReadonlyMap<number, number>;
 	compact?: boolean; // dense variant for the agent drawer
 	/** Sub-session drill-down capabilities forwarded to tool renderers. */
 	host?: ToolRenderHost;
@@ -58,12 +93,30 @@ export interface TranscriptProps {
 	/** Long user messages clamp to two lines with an expand toggle
 	 *  (openchamber collapsibleUserMessages parity). */
 	collapseLongUserMessages?: boolean;
+	/** TUI display.smoothStreaming parity: false renders streamed text
+	 *  without the character-level reveal (also applied via the
+	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
+	smoothStreaming?: boolean;
+	/** TUI display.hideToolActivity parity: suppress model-initiated tool
+	 *  call cards and running tail tools from the transcript. */
+	hideToolActivity?: boolean;
+	/** TUI display.showTokenUsage parity: show the per-turn token usage row
+	 *  under settled assistant messages. */
+	showTokenUsage?: boolean;
+	/** TUI display.collapseCompacted parity: fold pre-compaction history
+	 *  behind the first compaction divider. */
+	collapseCompacted?: boolean;
+	/** TUI colorBlindMode parity: diff additions render blue instead of
+	 *  green (root gets `data-colorblind`). */
+	colorBlind?: boolean;
 	/** Quote-a-message into the composer (ZCode 引用回复). */
 	onQuote?(text: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
 	onEdit?(messageId: string, text: string): void;
-	/** Retry: resend the user message (TUI /retry parity). */
-	onRetry?(text: string): void;
+	/** Retry: truncate the session to before the USER message that produced
+	 *  this assistant reply, then re-send it (TUI /retry parity — the old
+	 *  reply goes into the revert backup and is restorable). */
+	onRetry?(messageId: string, text: string): void;
 	/** Revert (撤回): truncate the session to before this user message. */
 	onRevert?(messageId: string, text: string): void;
 	/** Fork (分叉): copy the session truncated to before this user message
@@ -89,8 +142,9 @@ function Row({
 	onSpeak,
 	onSaveImage,
 	quoteText,
+	retryTarget,
 }: {
-	kind: "user" | "assistant" | "custom" | "marker";
+	kind: "user" | "assistant" | "custom" | "marker" | "bash";
 	id?: string;
 	gutter: ReactNode;
 	title?: string;
@@ -98,14 +152,21 @@ function Row({
 	onQuote?(text: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
 	onEdit?(messageId: string, text: string): void;
-	onRetry?(text: string): void;
+	onRetry?(messageId: string, text: string): void;
 	/** Revert (撤回): truncate the session to before this user message. */
 	onRevert?(messageId: string, text: string): void;
 	/** Fork (分叉): copy the session truncated to before this user message
 	 *  into a NEW session (non-destructive — the original is untouched). */
 	onFork?(messageId: string, text: string): void;
 	onSpeak?(text: string): void;
-	onSaveImage?(text: string): void;
+	/** The user message whose reply this row is — retry truncates to it and
+	 *  re-sends it (assistant rows only). */
+	retryTarget?: { id: string; text: string } | null;
+	/** Save-as-image: hands over the rendered message body element so the
+	 *  caller rasterizes the REAL markdown DOM (openchamber toPng parity)
+	 *  instead of re-drawing plain text. May return a promise — the row
+	 *  shows a spinner while it runs, then morphs to a check on success. */
+	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
 	/** Pre-extracted plain text for actions (data-driven, not DOM walk). */
 	quoteText?: string;
 }): ReactNode {
@@ -113,19 +174,45 @@ function Row({
 	const copy = async (): Promise<void> => {
 		if (!quoteText) return;
 		try {
-			await navigator.clipboard.writeText(quoteText);
+			if (kind === "assistant" && bodyRef.current && typeof ClipboardItem !== "undefined") {
+				// Rich clipboard (openchamber copyMarkdownToClipboard parity):
+				// markdown source as text/plain + the LIVE rendered HTML, so
+				// pasting into rich editors keeps headings/bold/code. Tool
+				// and thinking cards are stripped — copy is the answer text.
+				const clone = bodyRef.current.cloneNode(true) as HTMLElement;
+				clone.querySelectorAll<HTMLElement>(".tv-card, .tr-think, .tr-usage").forEach(el => el.remove());
+				const payload: Record<string, Blob> = {
+					"text/plain": new Blob([quoteText], { type: "text/plain" }),
+					"text/html": new Blob([clone.innerHTML], { type: "text/html" }),
+				};
+				if (typeof ClipboardItem.supports === "function" && ClipboardItem.supports("text/markdown")) {
+					payload["text/markdown"] = new Blob([quoteText], { type: "text/markdown" });
+				}
+				await navigator.clipboard.write([new ClipboardItem(payload)]);
+			} else {
+				// User rows copy plain text (openchamber does the same).
+				await navigator.clipboard.writeText(quoteText);
+			}
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
 		} catch {
-			// clipboard unavailable
+			// Rich write unavailable/failed — fall back to plain text.
+			try {
+				await navigator.clipboard.writeText(quoteText);
+			} catch {
+				// clipboard unavailable
+			}
 		}
 	};
+	const bodyRef = useRef<HTMLDivElement | null>(null);
 	return (
 		<div className={`tr-row tr-row--${kind}`}>
 			<div className="tr-gutter" title={title}>
 				{gutter}
 			</div>
-			<div className="tr-body">{children}</div>
+			<div className="tr-body" ref={bodyRef}>
+				{children}
+			</div>
 			{(onQuote || onEdit || onRetry || onRevert || onSpeak || onSaveImage || quoteText) && kind !== "marker" && (
 				<div className="tr-actions">
 					{title && (
@@ -156,7 +243,7 @@ function Row({
 								if (quoteText) onFork(id, quoteText);
 							}}
 						>
-							<GitBranch size={13} />
+							<GitFork size={13} />
 						</button>
 					)}
 					{quoteText && (
@@ -189,14 +276,18 @@ function Row({
 							<Pencil size={13} />
 						</button>
 					)}
-					{onRetry && kind === "assistant" && (
+					{onRetry && kind === "assistant" && retryTarget && (
 						<button
 							type="button"
 							className="tr-action"
 							title={t("retry")}
 							aria-label={t("retry")}
 							onClick={() => {
-								if (quoteText) onRetry(quoteText);
+								// Retry = regenerate THIS reply: truncate to the
+								// user message that produced it and re-send that
+								// user message (NOT this assistant text — sending
+								// the reply back as a new user message was a bug).
+								onRetry(retryTarget.id, retryTarget.text);
 							}}
 						>
 							<RefreshCw size={13} />
@@ -218,6 +309,8 @@ function Row({
 						</button>
 					)}
 					{onSaveImage && kind === "assistant" && (
+						/* Opens the 保存为图片 export dialog (options + preview);
+						 * the dialog's copy button carries the Copy → ✓ morph. */
 						<button
 							type="button"
 							className="tr-action"
@@ -226,7 +319,7 @@ function Row({
 							onClick={() => {
 								play("press");
 								hapticTap();
-								if (quoteText) onSaveImage(quoteText);
+								if (quoteText) onSaveImage(quoteText, bodyRef.current);
 							}}
 						>
 							<ImageDown size={13} />
@@ -253,28 +346,56 @@ function Row({
 	);
 }
 
-function ThinkingBlock({ text, redacted }: { text: string; redacted?: boolean }): ReactNode {
+function ThinkingBlock({
+	text,
+	redacted,
+	streaming = false,
+}: {
+	text: string;
+	redacted?: boolean;
+	/** True while the message is still being produced — sentences that MOUNT
+	 *  during streaming play the fade-in once; settled blocks render plain
+	 *  (no animation, no replay on expand). */
+	streaming?: boolean;
+}): ReactNode {
 	const [open, setOpen] = useState(false);
-	// Expand-only replay tick: increments on every expand so the sentence
-	// keys change (remount → aicss reveal replays). Collapse keeps the keys
-	// stable so the content stays visible while the height shrinks.
-	const [playTick, setPlayTick] = useState(0);
+	// Auto-open while the model is thinking, auto-collapse ~1s after it
+	// finishes (proma Reasoning AUTO_CLOSE_DELAY parity) — but ONLY until
+	// the user touches the toggle: a manual expand/collapse is respected
+	// and never overridden by the auto lifecycle.
+	const userTouchedRef = useRef(false);
+	const autoClosedRef = useRef(false);
 	const toggle = (): void => {
-		setOpen(v => {
-			if (!v) setPlayTick(t => t + 1);
-			return !v;
-		});
+		userTouchedRef.current = true;
+		setOpen(v => !v);
 	};
+	useEffect(() => {
+		if (streaming && !userTouchedRef.current) setOpen(true);
+	}, [streaming]);
+	useEffect(() => {
+		if (streaming || userTouchedRef.current || autoClosedRef.current) return;
+		const timer = setTimeout(() => {
+			autoClosedRef.current = true;
+			setOpen(false);
+		}, 1000);
+		return () => clearTimeout(timer);
+	}, [streaming]);
 	// Body stays mounted so collapse animates too (useCollapseHeight).
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useCollapseHeight(open, bodyRef);
-	// Split into sentences for aicss-style progressive reveal. Fence-aware:
-	// ``` blocks are atomic — a boundary inside a fence (JSON `...`, a
-	// comment ending in ". ") must not split the fence across sentences.
-	const sentences = useMemo(
-		() => (redacted ? [] : splitThinkingSentences(text)),
-		[text, redacted],
-	);
+	// Split into sentences for the progressive reveal while streaming.
+	// Fence-aware: ``` blocks are atomic — a boundary inside a fence (JSON
+	// `...`, a comment ending in ". ") must not split the fence across
+	// sentences. Keys are STABLE indices: sentences already mounted never
+	// remount (no replay on expand); only NEW sentences (mounting while
+	// streaming) animate.
+	const sentences = useMemo(() => (redacted ? [] : splitThinkingSentences(text)), [text, redacted]);
+	// Long-thinking budget: render only the first MAX_THINK_SENTENCES
+	// (a 500-sentence reasoning dump costs 500 Markdown mounts even while
+	// collapsed); 展开全部 swaps in the rest.
+	const [showAll, setShowAll] = useState(false);
+	const shownSentences = showAll ? sentences : sentences.slice(0, MAX_THINK_SENTENCES);
+	const thinkTruncated = !showAll && sentences.length > MAX_THINK_SENTENCES;
 	return (
 		<div className="tr-think">
 			<button type="button" className="tr-think-head" onClick={toggle}>
@@ -282,40 +403,49 @@ function ThinkingBlock({ text, redacted }: { text: string; redacted?: boolean })
 				<span className={redacted ? undefined : "tr-think-label"}>{t("thinking")}</span>
 				{redacted ? t(" · redacted") : ""}
 			</button>
-			<div ref={bodyRef} className={`tr-think-body${open ? "" : " tr-think-body--closed"}`} style={collapseStyle(open)}>
-				{redacted
-					? t("(redacted by provider)")
-					: sentences.length > 1
-						? sentences.map((s, i) => (
-								// Sentences are anonymous text splits — the index is their identity.
-								// biome-ignore lint/suspicious/noArrayIndexKey: split sentences have no stable id
-								// Each sentence renders through Markdown (TUI parity: thinking
-								// supports inline markdown); the div wrapper keeps the reveal
-								// animation outside the markdown tree.
-								<div
-									key={`${playTick}-${i}`}
-									className="tr-think-sentence"
-									style={{ animationDelay: `${i * 220}ms` }}
-								>
-									<Markdown text={s} />
-								</div>
-							))
-						: <Markdown text={text} />}
+			<div
+				ref={bodyRef}
+				className={`tr-think-body${open ? "" : " tr-think-body--closed"}`}
+				style={collapseStyle(open)}
+			>
+				{redacted ? (
+					t("(redacted by provider)")
+				) : shownSentences.length > 1 ? (
+					shownSentences.map((s, i) => (
+						// Sentences are anonymous text splits — the index is their identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: split sentences have no stable id
+						// Each sentence renders through Markdown (TUI parity: thinking
+						// supports inline markdown); the div wrapper keeps the reveal
+						// animation outside the markdown tree.
+						<div key={i} className={`tr-think-sentence${streaming ? " tr-think-sentence--live" : ""}`}>
+							<Markdown text={s} />
+						</div>
+					))
+				) : (
+					<Markdown text={text} />
+				)}
+				{thinkTruncated && (
+					<button type="button" className="tr-think-more" onClick={() => setShowAll(true)}>
+						{t("expand all")}（{sentences.length.toLocaleString()}）
+					</button>
+				)}
 			</div>
 		</div>
 	);
 }
 
-/** Plain text of a message for the quote action. */
-function msgText(msg: { content?: unknown }): string {
+/** Plain text of a message for the quote/copy/edit/fork/retry actions.
+ *  Full length on purpose: the per-message copy button must hand over the
+ *  whole message, and edit-and-resend / fork / TTS / save-image all consume
+ *  the same text (a cap would silently drop content on long messages). */
+export function msgText(msg: { content?: unknown }): string {
 	const c = msg.content;
-	if (typeof c === "string") return c.slice(0, 200);
+	if (typeof c === "string") return c;
 	if (Array.isArray(c)) {
 		return c
 			.filter((b): b is { type: "text"; text: string } => typeof b === "object" && b !== null && b.type === "text")
 			.map(b => b.text)
-			.join(" ")
-			.slice(0, 200);
+			.join(" ");
 	}
 	return "";
 }
@@ -356,7 +486,22 @@ function usageRow(message: AssistantMessage): string {
 	return parts.join(" ");
 }
 
-function MsgContent({ content }: { content: string | readonly (TextContent | ImageContent)[] }): ReactNode {
+function MsgContent({
+	content,
+	onPreviewImage,
+}: {
+	content: string | readonly (TextContent | ImageContent)[];
+	/** Open the full-size image preview lightbox at this message image
+	 *  (all of the message's images form the gallery). */
+	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+}): ReactNode {
+	// All image blocks of this message, in order — the preview gallery.
+	const images = useMemo(() => {
+		if (typeof content === "string") return [];
+		return content
+			.filter((b): b is ImageContent => b.type === "image")
+			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("attachment") }));
+	}, [content]);
 	if (typeof content === "string") {
 		const { content: rest, blocks } = extractCanvasJumpBlocks(content);
 		return (
@@ -389,21 +534,43 @@ function MsgContent({ content }: { content: string | readonly (TextContent | Ima
 							</Fragment>
 						);
 					}
-					case "image":
+					case "image": {
+						// Multiple images collapse into the interactive card
+						// stack (rendered after the blocks); only a lone image
+						// stays a plain clickable thumbnail.
+						if (images.length > 1) return null;
+						const src = `data:${block.mimeType};base64,${block.data}`;
+						const imgIndex = images.findIndex(img => img.src === src);
 						return (
 							<img
 								// Anonymous content blocks have no stable id — index is identity.
 								// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 								key={`img${i}`}
 								className="tr-msg-img"
-								src={`data:${block.mimeType};base64,${block.data}`}
+								src={src}
 								alt={t("attachment")}
+								loading="lazy"
+								decoding="async"
+								role="button"
+								tabIndex={0}
+								title={t("preview image")}
+								onClick={() => onPreviewImage?.(images, imgIndex)}
+								onKeyDown={e => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										onPreviewImage?.(images, imgIndex);
+									}
+								}}
 							/>
 						);
+					}
 					default:
 						return null;
 				}
 			})}
+			{images.length > 1 && (
+				<ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />
+			)}
 		</>
 	);
 }
@@ -431,11 +598,22 @@ function UserMsgContent({
 	content,
 	plain,
 	collapse,
+	onPreviewImage,
 }: {
 	content: string | readonly (TextContent | ImageContent)[];
 	plain: boolean;
 	collapse: boolean;
+	/** Open the full-size image preview lightbox at this message image
+	 *  (all of the message's images form the gallery). */
+	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
 }): ReactNode {
+	// All image blocks of this message, in order — the preview gallery.
+	const images = useMemo(() => {
+		if (typeof content === "string") return [];
+		return content
+			.filter((b): b is ImageContent => b.type === "image")
+			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("attachment") }));
+	}, [content]);
 	if (typeof content === "string") return <UserText text={content} plain={plain} collapse={collapse} />;
 	return (
 		<>
@@ -445,37 +623,78 @@ function UserMsgContent({
 						// Anonymous content blocks have no stable id — index is identity.
 						// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 						return <UserText key={`t${i}`} text={block.text} plain={plain} collapse={collapse} />;
-					case "image":
+					case "image": {
+						// Multiple images collapse into the interactive card
+						// stack (rendered after the blocks); only a lone image
+						// stays a plain clickable thumbnail.
+						if (images.length > 1) return null;
+						const src = `data:${block.mimeType};base64,${block.data}`;
+						const imgIndex = images.findIndex(img => img.src === src);
 						return (
 							<img
 								// Anonymous content blocks have no stable id — index is identity.
 								// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
 								key={`img${i}`}
 								className="tr-msg-img"
-								src={`data:${block.mimeType};base64,${block.data}`}
+								src={src}
 								alt={t("attachment")}
+								loading="lazy"
+								decoding="async"
+								role="button"
+								tabIndex={0}
+								title={t("preview image")}
+								onClick={() => onPreviewImage?.(images, imgIndex)}
+								onKeyDown={e => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault();
+										onPreviewImage?.(images, imgIndex);
+									}
+								}}
 							/>
 						);
+					}
 					default:
 						return null;
 				}
 			})}
+			{images.length > 1 && (
+				<ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />
+			)}
 		</>
 	);
 }
 
-/** ZCode-style live "已工作 X 秒" row under the streaming message: the
- *  shared 1s ticker drives the clock; zero-alloc per render. */
-function WorkingLine(): ReactNode {
-	const startRef = useRef(Date.now());
-	const now = useWorkingNow(true);
-	const seconds = Math.max(0, Math.round((now - startRef.current) / 1000));
+/** ZCode-style live "已工作 X 秒" row under the working message — craft-agents
+ *  ProcessingIndicator parity: the shared 1s ticker derives elapsed from a
+ *  DATA anchor (`start` = the round's last-user-message timestamp), so
+ *  switching sessions and back does NOT restart the count. A completed round
+ *  (`freezeMs` = the frozen round duration recorded at agent_end) renders a
+ *  static total with the spinner dropped — each round's total stays under
+ *  its final message ("每轮单独计时"). */
+function WorkingLine({ start, freezeMs }: { start: number; freezeMs?: number }): ReactNode {
+	const now = useWorkingNow(freezeMs === undefined);
+	const seconds =
+		freezeMs !== undefined
+			? Math.max(0, Math.round(freezeMs / 1000))
+			: Math.max(0, Math.round((now - start) / 1000));
+	const label = freezeMs !== undefined ? t("took {seconds}s", { seconds }) : t("working for {seconds}s", { seconds });
 	return (
 		<div className="tr-working" role="status">
-			<span className="tr-working-spin" aria-hidden="true" />
-			{t("working for {seconds}s", { seconds })}
+			{freezeMs === undefined && <span className="tr-working-spin" aria-hidden="true" />}
+			{label}
 		</div>
 	);
+}
+
+/** Round anchor (craft-agents parity: "Find the last user message timestamp
+ *  for accurate elapsed time"): the timestamp of the last user message — the
+ *  round's start, stable across component remounts. */
+function lastUserMessageTs(entries: readonly SessionEntry[]): number | undefined {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const e = entries[i];
+		if (e.type === "message" && e.message.role === "user") return e.message.timestamp;
+	}
+	return undefined;
 }
 
 /** TUI TtsrNotificationComponent parity: rule violation → stream rewind →
@@ -491,20 +710,20 @@ function TtsrBlock({ rules }: { rules: { name: string; description?: string; con
 					⚠
 				</span>
 				<span className="tr-ttsr-title">{t("rules injected")}</span>
-				<span className="tr-ttsr-names">
-					{rules.map(r => r.name).join("、")}
-				</span>
+				<span className="tr-ttsr-names">{rules.map(r => r.name).join("、")}</span>
 				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
 			</button>
-			<div ref={bodyRef} className={`tr-ttsr-body${open ? "" : " tr-ttsr-body--closed"}`} style={collapseStyle(open)}>
+			<div
+				ref={bodyRef}
+				className={`tr-ttsr-body${open ? "" : " tr-ttsr-body--closed"}`}
+				style={collapseStyle(open)}
+			>
 				<div className="tr-ttsr-desc">{t("rules injected desc")}</div>
 				{rules.map(r => (
 					<div key={r.name} className="tr-ttsr-rule">
 						<span className="tr-ttsr-rule-name">{r.name}</span>
 						{(r.description || r.content) && (
-							<span className="tr-ttsr-rule-desc">
-								{(r.description || (r.content ?? "")).slice(0, 200)}
-							</span>
+							<span className="tr-ttsr-rule-desc">{(r.description || (r.content ?? "")).slice(0, 200)}</span>
 						)}
 					</div>
 				))}
@@ -518,14 +737,31 @@ function AssistantBody({
 	results,
 	active,
 	pending,
+	runStartTs,
+	roundDuration,
 	host,
+	hideToolActivity = false,
+	showTokenUsage = false,
+	smoothStreaming = true,
 }: {
 	message: AssistantMessage;
 	results: ReadonlyMap<string, ToolResultMessage>;
 	active: ReadonlyMap<string, ActiveTool>;
 	/** Still streaming — suppress stop-reason chips on the partial message. */
 	pending: boolean;
+	/** Round start (last user message ts) — the live ticker's anchor so the
+	 *  count spans the whole working period, including tool execution. */
+	runStartTs?: number;
+	/** Frozen round duration (ms, recorded at agent_end) — renders the
+	 *  completed round's total under its final message. */
+	roundDuration?: number;
 	host?: ToolRenderHost;
+	/** display.hideToolActivity parity: drop toolCall cards. */
+	hideToolActivity?: boolean;
+	/** display.showTokenUsage parity: gate the per-turn usage row. */
+	showTokenUsage?: boolean;
+	/** display.smoothStreaming parity: false disables the reveal. */
+	smoothStreaming?: boolean;
 }): ReactNode {
 	// Caret goes on the LAST text block only (not the last block of any
 	// kind — a trailing thinking/tool block must not get the caret).
@@ -556,7 +792,7 @@ function AssistantBody({
 				}
 				// Anonymous content blocks have no stable id — index is identity.
 				// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
-				return <ThinkingBlock key={`k${i}`} text={block.thinking} />;
+				return <ThinkingBlock key={`k${i}`} text={block.thinking} streaming={pending} />;
 			}
 			case "redactedThinking":
 				// biome-ignore lint/suspicious/noArrayIndexKey: anonymous content block
@@ -568,9 +804,11 @@ function AssistantBody({
 						key={`t${i}`}
 						text={block.text}
 						streaming={pending && i === lastTextIdx}
+						smoothStreaming={smoothStreaming}
 					/>
 				);
 			case "toolCall": {
+				if (hideToolActivity) return null;
 				const act = active.get(block.id);
 				const result = results.get(block.id);
 				const args = act?.args ?? block.arguments;
@@ -614,8 +852,18 @@ function AssistantBody({
 				</div>
 			)}
 			{!pending && artifacts.length > 0 && <FileCards items={artifacts} />}
-			{pending && <WorkingLine />}
-			{!pending && !failed && message.duration !== undefined && <div className="tr-usage">{usageRow(message)}</div>}
+			{/* Standalone widget display (config 开启): the visualization
+			 * renders as its own adaptive card in the message flow, like a
+			 * file-preview card — the tool-call card folds to its summary. */}
+			{!pending && <WidgetStandaloneCards content={message.content} results={results} host={host} />}
+			{pending ? (
+				<WorkingLine start={runStartTs ?? message.timestamp} />
+			) : roundDuration !== undefined ? (
+				<WorkingLine start={0} freezeMs={roundDuration} />
+			) : null}
+			{showTokenUsage && !pending && !failed && message.duration !== undefined && (
+				<div className="tr-usage">{usageRow(message)}</div>
+			)}
 		</>
 	);
 }
@@ -629,15 +877,26 @@ interface EntryRowProps {
 	agentGutter?: ReactNode;
 	/** True when this row is the live-streaming assistant message. */
 	streamingLast?: boolean;
+	/** Round start (last user message ts) for the live ticker. */
+	runStartTs?: number;
+	/** Frozen round duration (ms) — the completed round's total. */
+	roundDuration?: number;
 	userPlain?: boolean;
 	collapseLongUserMessages?: boolean;
+	hideToolActivity?: boolean;
+	showTokenUsage?: boolean;
+	smoothStreaming?: boolean;
 	onQuote?(text: string): void;
 	onEdit?(messageId: string, text: string): void;
-	onRetry?(text: string): void;
+	onRetry?(messageId: string, text: string): void;
 	onRevert?(messageId: string, text: string): void;
 	onFork?(messageId: string, text: string): void;
 	onSpeak?(text: string): void;
-	onSaveImage?(text: string): void;
+	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
+	/** Open the full-size image preview lightbox (transcript-level state). */
+	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** The user message whose reply this assistant row is (retry target). */
+	retryTarget?: { id: string; text: string } | null;
 }
 
 /** Re-render only when the entry itself or one of its tool pairings changed. */
@@ -647,13 +906,20 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (
 		prev.userPlain !== next.userPlain ||
 		prev.collapseLongUserMessages !== next.collapseLongUserMessages ||
-		prev.streamingLast !== next.streamingLast
+		prev.streamingLast !== next.streamingLast ||
+		prev.runStartTs !== next.runStartTs ||
+		prev.roundDuration !== next.roundDuration ||
+		prev.hideToolActivity !== next.hideToolActivity ||
+		prev.showTokenUsage !== next.showTokenUsage ||
+		prev.smoothStreaming !== next.smoothStreaming
 	) {
 		return false;
 	}
 	if (prev.onQuote !== next.onQuote || prev.onEdit !== next.onEdit || prev.onRetry !== next.onRetry) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
+	if (prev.retryTarget !== next.retryTarget) return false;
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
+	if (prev.onPreviewImage !== next.onPreviewImage) return false;
 	const e = next.entry;
 	if (e.type !== "message" || e.message.role !== "assistant") return true;
 	for (const block of e.message.content) {
@@ -674,6 +940,11 @@ const EntryRow = memo(function EntryRow({
 	userPlain = false,
 	collapseLongUserMessages = false,
 	streamingLast = false,
+	runStartTs,
+	roundDuration,
+	hideToolActivity = false,
+	showTokenUsage = false,
+	smoothStreaming = true,
 	onQuote,
 	onEdit,
 	onRetry,
@@ -681,6 +952,8 @@ const EntryRow = memo(function EntryRow({
 	onFork,
 	onSpeak,
 	onSaveImage,
+	onPreviewImage,
+	retryTarget,
 }: EntryRowProps): ReactNode {
 	switch (entry.type) {
 		case "message": {
@@ -700,7 +973,12 @@ const EntryRow = memo(function EntryRow({
 							onFork={onFork}
 							quoteText={msgText(msg)}
 						>
-							<UserMsgContent content={msg.content} plain={userPlain} collapse={collapseLongUserMessages} />
+							<UserMsgContent
+								content={msg.content}
+								plain={userPlain}
+								collapse={collapseLongUserMessages}
+								onPreviewImage={onPreviewImage}
+							/>
 						</Row>
 					);
 				case "assistant":
@@ -710,11 +988,32 @@ const EntryRow = memo(function EntryRow({
 							gutter={agentGutter ?? t("agent")}
 							title={entry.timestamp}
 							onQuote={onQuote}
+							onRetry={onRetry}
 							onSpeak={onSpeak}
-									onSaveImage={onSaveImage}
+							onSaveImage={onSaveImage}
 							quoteText={msgText(msg)}
+							retryTarget={retryTarget}
 						>
-							<AssistantBody message={msg} results={results} active={active} pending={streamingLast} host={host} />
+							<AssistantBody
+								message={msg}
+								results={results}
+								active={active}
+								pending={streamingLast}
+								runStartTs={runStartTs}
+								roundDuration={roundDuration}
+								host={host}
+								hideToolActivity={hideToolActivity}
+								showTokenUsage={showTokenUsage}
+								smoothStreaming={smoothStreaming}
+							/>
+						</Row>
+					);
+				case "bashExecution":
+					// User-initiated shell command (! / !! composer parity): the
+					// daemon streams the bashExecution message as a wire entry.
+					return (
+						<Row kind="bash" gutter="&gt;_" title={entry.timestamp}>
+							<BashCard message={msg as import("@musepi/pi-wire").BashExecutionMessage} />
 						</Row>
 					);
 				default:
@@ -733,7 +1032,7 @@ const EntryRow = memo(function EntryRow({
 						: t("guest");
 				return (
 					<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
-						<MsgContent content={entry.content} />
+						<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
 					</Row>
 				);
 			}
@@ -749,15 +1048,12 @@ const EntryRow = memo(function EntryRow({
 				);
 			}
 			if (entry.customType.startsWith("irc:")) {
-				const details = entry.details as
-					| { from?: string; message?: string }
-					| null
-					| undefined;
+				const details = entry.details as { from?: string; message?: string } | null | undefined;
 				const from = details?.from ?? "irc";
 				return (
 					<Row kind="custom" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
 						<div className="tr-irc">
-							<MsgContent content={entry.content} />
+							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
 						</div>
 					</Row>
 				);
@@ -767,7 +1063,7 @@ const EntryRow = memo(function EntryRow({
 				<Row kind="custom" gutter="" title={entry.timestamp}>
 					<div className="tr-custom">
 						<span className="tr-chip">{entry.customType}</span>
-						<MsgContent content={entry.content} />
+						<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
 					</div>
 				</Row>
 			);
@@ -807,12 +1103,18 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		streamDone,
 		activeTools,
 		working,
+		roundDurations,
 		compact,
 		host,
 		userGutter,
 		agentGutter,
 		userPlain = false,
 		collapseLongUserMessages = false,
+		smoothStreaming = true,
+		hideToolActivity = false,
+		showTokenUsage = false,
+		collapseCompacted = false,
+		colorBlind = false,
 		onQuote,
 		onEdit,
 		onRetry,
@@ -831,6 +1133,42 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		}
 		return map;
 	}, [entries]);
+
+	// For every assistant reply, the USER message that produced it — the
+	// retry action truncates to that message and re-sends it. Built over
+	// the FULL entries (not the windowed slice): a reply whose user message
+	// scrolled out of the window still retries correctly.
+	const retryTargets = useMemo(() => {
+		const map = new Map<string, { id: string; text: string }>();
+		let lastUser: { id: string; text: string } | null = null;
+		for (const entry of entries) {
+			if (entry.type !== "message") continue;
+			if (entry.message.role === "user") {
+				lastUser = { id: entry.id, text: msgText(entry.message) };
+			} else if (entry.message.role === "assistant" && lastUser) {
+				map.set(entry.id, lastUser);
+			}
+		}
+		return map;
+	}, [entries]);
+
+	// display.collapseCompacted parity: fold everything before the FIRST
+	// compaction divider behind a toggle row ("show pre-compaction
+	// history"). Applies to the windowed slice — history outside the
+	// window is hidden by the windowing anyway.
+	const [compactedOpen, setCompactedOpen] = useState(false);
+	// Image preview lightbox: full-size view of clicked message images
+	// (all images of the message form the gallery).
+	const [previewImg, setPreviewImg] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
+	const openPreview = useCallback(
+		(images: { src: string; alt: string }[], index: number) => setPreviewImg({ items: images, index }),
+		[],
+	);
+	const firstCompactionIdx = useMemo(
+		() => (collapseCompacted ? entries.findIndex(e => e.type === "compaction") : -1),
+		[entries, collapseCompacted],
+	);
+	const folding = collapseCompacted && !compactedOpen && firstCompactionIdx > 0;
 
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const lockRef = useRef(true);
@@ -912,6 +1250,10 @@ export function Transcript(props: TranscriptProps): ReactNode {
 		});
 		return idx;
 	}, [entries]);
+	// Round anchor for the live ticker: the LAST user message timestamp
+	// (craft-agents parity) — the round's start, data-driven so a session
+	// switch mid-round resumes the count instead of restarting it.
+	const lastUserTs = useMemo(() => lastUserMessageTs(entries), [entries]);
 	useEffect(() => {
 		// followKey is only ever a re-run trigger (the scroll itself is stateless).
 		void followKey;
@@ -949,7 +1291,11 @@ export function Transcript(props: TranscriptProps): ReactNode {
 	}
 
 	return (
-		<div ref={rootRef} className={`tr-root${compact === true ? " tr-root--compact" : ""}`}>
+		<div
+			ref={rootRef}
+			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
+			data-colorblind={colorBlind ? "true" : undefined}
+		>
 			{entries.length === 0 && stream === null && !working && <div className="tr-empty">{t("no activity yet")}</div>}
 			{hidden > 0 && (
 				<div ref={sentinelRef} className="tr-window-more" style={{ height: Math.round(hidden * avgRowH) }}>
@@ -979,7 +1325,30 @@ export function Transcript(props: TranscriptProps): ReactNode {
 					}
 				}
 				return slice.map((entry, i) => {
+					// Folded pre-compaction history: the toggle row replaces the
+					// first compaction divider; everything before it is hidden.
+					if (folding && i === firstCompactionIdx - hidden) {
+						prevIsAssistant = false;
+						return (
+							<button
+								key="compacted-fold"
+								type="button"
+								className="tr-divider tr-compacted-fold"
+								title={t("show pre-compaction history")}
+								onClick={() => setCompactedOpen(true)}
+							>
+								<span>{t("show pre-compaction history ({count})", { count: String(firstCompactionIdx) })}</span>
+							</button>
+						);
+					}
+					if (folding && i < firstCompactionIdx - hidden) return null;
 					const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
+					// Per-round work timer: the live tail row ticks from the
+					// round start (last user message); completed rounds show
+					// their frozen total under the final message.
+					const isTail = isAssistantMessage && i + hidden === lastAssistantIdx;
+					const streamingLast = working && isTail;
+					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
 					const row = (
 						<EntryRow
 							key={entry.id}
@@ -991,14 +1360,21 @@ export function Transcript(props: TranscriptProps): ReactNode {
 							agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
 							userPlain={userPlain}
 							collapseLongUserMessages={collapseLongUserMessages}
-							streamingLast={working && isAssistantMessage && i + hidden === lastAssistantIdx}
+							hideToolActivity={hideToolActivity}
+							showTokenUsage={showTokenUsage}
+							smoothStreaming={smoothStreaming}
+							streamingLast={streamingLast}
+							runStartTs={streamingLast ? lastUserTs : undefined}
+							roundDuration={roundDuration}
 							onQuote={onQuote}
 							onEdit={onEdit}
 							onRetry={onRetry}
 							onRevert={onRevert}
 							onFork={onFork}
 							onSpeak={onSpeak}
-									onSaveImage={onSaveImage}
+							onSaveImage={onSaveImage}
+							onPreviewImage={openPreview}
+							retryTarget={retryTargets.get(entry.id) ?? null}
 						/>
 					);
 					// toolResult entries render no row but continue the turn.
@@ -1020,11 +1396,16 @@ export function Transcript(props: TranscriptProps): ReactNode {
 						results={results}
 						active={activeTools}
 						pending={!streamDone}
+						runStartTs={lastUserTs}
+						roundDuration={roundDurations?.get(stream.timestamp)}
 						host={host}
+						hideToolActivity={hideToolActivity}
+						showTokenUsage={showTokenUsage}
+						smoothStreaming={smoothStreaming}
 					/>
 				</Row>
 			)}
-			{tailTools.length > 0 && (
+			{tailTools.length > 0 && !hideToolActivity && (
 				<Row kind="assistant" gutter={stream === null ? (agentGutter ?? t("agent")) : ""}>
 					{tailTools.map(tool => (
 						<ToolCard
@@ -1043,6 +1424,12 @@ export function Transcript(props: TranscriptProps): ReactNode {
 			{/* The pre-stream thinking state is carried by the input-above
 			    status bar (orb + text) — a transcript row with its own gutter
 			    orb + 思考中 duplicated it (user: 俩 orbs and thinking). */}
+			<ImageLightbox
+				items={previewImg?.items ?? []}
+				index={previewImg?.index ?? null}
+				onClose={() => setPreviewImg(null)}
+				onIndexChange={i => setPreviewImg(prev => (prev ? { ...prev, index: i } : prev))}
+			/>
 		</div>
 	);
 }

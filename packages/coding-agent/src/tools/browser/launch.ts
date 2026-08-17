@@ -124,7 +124,7 @@ async function loadBrowsers(): Promise<typeof BrowsersNs> {
  * Resolve the Chromium executable puppeteer will launch, honoring
  * PUPPETEER_EXECUTABLE_PATH before system browser detection and lazily
  * downloading Chromium otherwise. The browser is cached under
- * ~/.omp/puppeteer (getPuppeteerDir). Returns undefined when platform
+ * ~/.musepi/puppeteer (getPuppeteerDir). Returns undefined when platform
  * detection fails (puppeteer default resolution takes over). Exported so
  * real-browser tests can probe launchability and skip on hosts missing
  * Chrome's system libraries.
@@ -350,6 +350,10 @@ export function buildHeadlessLaunchArgs(viewport: { width: number; height: numbe
 		"--no-sandbox",
 		"--disable-setuid-sandbox",
 		"--disable-blink-features=AutomationControlled",
+		// Deny permission prompts (camera/mic/notifications/…) outright — the
+		// automation browser never needs them and a prompt would hang a page
+		// (Proma 吸收: setPermissionRequestHandler deny-all equivalent).
+		"--deny-permission-prompts",
 		`--window-size=${viewport.width},${viewport.height}`,
 	];
 	const proxy = process.env.PUPPETEER_PROXY;

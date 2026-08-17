@@ -18,12 +18,12 @@
 
 import type {
 	AgentEvent,
-	AgentProgress,
 	AgentSnapshot,
 	SessionEntry,
 	SessionHeader,
 	SessionState,
 	SubagentLifecyclePayload,
+	SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import { Type } from "@sinclair/typebox";
 
@@ -40,6 +40,7 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("global-pause-state"),
 		Type.Literal("stream-end"),
 		Type.Literal("recap"),
+		Type.Literal("title"),
 	]),
 	seq: Type.Integer({ minimum: 0 }),
 	payload: Type.Unknown(),
@@ -56,11 +57,16 @@ export type SessionStreamEvent =
 			payload: { requestId: string; tool: string; args: unknown; scope?: string };
 	  }
 	| { kind: "agent-lifecycle"; seq: number; payload: SubagentLifecyclePayload }
-	| { kind: "agent-progress"; seq: number; payload: AgentProgress }
+	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the
+	// bare AgentProgress — the AgentProgress lives at `payload.progress`.
+	| { kind: "agent-progress"; seq: number; payload: SubagentProgressPayload }
 	| { kind: "pause-state"; seq: number; payload: { paused: boolean; pausedAt: number | null } }
 	| { kind: "global-pause-state"; seq: number; payload: { paused: boolean; pausedAt: number | null } }
 	| { kind: "stream-end"; seq: number; payload: { reason: string } }
-	| { kind: "recap"; seq: number; payload: { text: string; at: number } };
+	| { kind: "recap"; seq: number; payload: { text: string; at: number } }
+	// Session title changed (auto-generated after the first user message, or
+	// a replan refresh) — the GUI refreshes its session tree label on this.
+	| { kind: "title"; seq: number; payload: { title: string | null } };
 
 export type { SessionStreamEnvelope } from "./events-types";
 
@@ -71,6 +77,9 @@ export const sessionSnapshot = Type.Object({
 	agents: Type.Array(Type.Unknown()),
 	/** Opaque cursor = last applied seq; pass to session.resume for catch-up. */
 	cursor: Type.Integer({ minimum: 0 }),
+	/** Completed-round totals: [final assistant msg ts, duration ms] pairs,
+	 *  recorded at agent_end (survive the persisted-snapshot round-trip). */
+	roundDurations: Type.Optional(Type.Array(Type.Tuple([Type.Integer(), Type.Integer()]))),
 });
 
 export type SessionSnapshot = {
@@ -79,4 +88,5 @@ export type SessionSnapshot = {
 	state: SessionState;
 	agents: AgentSnapshot[];
 	cursor: number;
+	roundDurations?: [number, number][];
 };

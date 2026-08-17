@@ -91,3 +91,10 @@ packages/coding-agent/bench/boot-baseline.json
 /.bazelrc.user
 packages/gui/release/
 packages/gui/dist/
+
+# macOS haptic helper (compiled from electron/haptic-helper.m by build:haptic)
+packages/gui/electron/haptic-helper
+musepi-session-*.html
+
+# Compiled daemon binary for packaged GUI (built on Windows; do not commit)
+packages/gui/vendor/

@@ -267,7 +267,7 @@ export class ExtensionDashboard implements Component {
 		if (!sm) return;
 
 		// MCP toggles route through the canonical denylist in
-		// `~/.omp/agent/mcp.json` so `/mcp list`, the MCP runtime, and this
+		// `~/.musepi/agent/mcp.json` so `/mcp list`, the MCP runtime, and this
 		// dashboard agree on every server's enabled state (issue #3827).
 		if (extensionId.startsWith("mcp:")) {
 			void this.#toggleMcpExtension(extensionId, enabled, sm);

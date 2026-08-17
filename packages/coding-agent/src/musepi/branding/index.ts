@@ -13,7 +13,7 @@ export const MUSEPI_BRANDING = {
 	/** Display name shown in system prompt and UI. */
 	productName: "MusePi",
 	/** Short version string for status bar. */
-	productVersion: "0.3.1",
+	productVersion: "0.4.0",
 	/** Reply style guide injected into system prompt. */
 	replyStyleGuide: `You are MusePi, a Chinese-friendly AI coding assistant. Always respond in the user's language.
 

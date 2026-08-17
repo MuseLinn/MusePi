@@ -21,7 +21,7 @@ import { ensureSharedBrowser } from "./shared-daemon";
 export type PuppeteerBrowserKind =
 	| { kind: "headless"; headless: boolean }
 	| { kind: "spawned"; path: string }
-	| { kind: "connected"; cdpUrl: string }
+	| { kind: "connected"; cdpUrl: string; gui?: true }
 	| RelayKind;
 
 export type BrowserKind = PuppeteerBrowserKind | CmuxKind;
@@ -232,8 +232,8 @@ async function openBrowserHandle(kind: BrowserKind, opts: AcquireBrowserOptions)
 			if (err instanceof Error && err.name === "AbortError") throw err;
 			throw new ToolError(
 				autoStarted
-					? `omp browser relay is serving at ${cdpUrl} but its extension never connected. Install it with \`omp browser-relay install\` and check the toolbar badge shows "on".`
-					: `omp browser relay is not reachable at ${cdpUrl}. Start it with \`omp browser-relay\` (or check the endpoint), and make sure the OMP Browser Relay extension is loaded in Chrome.`,
+					? `musepi browser relay is serving at ${cdpUrl} but its extension never connected. Install it with \`musepi browser-relay install\` and check the toolbar badge shows "on".`
+					: `musepi browser relay is not reachable at ${cdpUrl}. Start it with \`musepi browser-relay\` (or check the endpoint), and make sure the MusePi Browser Relay extension is loaded in Chrome.`,
 			);
 		}
 		const puppeteer = await loadPuppeteer();
@@ -411,7 +411,7 @@ async function openSharedHeadlessHandle(
 		});
 		if (!shared) {
 			throw new ToolError(
-				"Shared browser daemon unavailable (broker start or Chromium launch failed); check `hub ps` for omp.browser.* daemons and ~/.omp/logs for details",
+				"Shared browser daemon unavailable (broker start or Chromium launch failed); check `hub ps` for omp.browser.* daemons and ~/.musepi/logs for details",
 			);
 		}
 		const puppeteer = await loadPuppeteer();

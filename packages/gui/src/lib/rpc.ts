@@ -194,10 +194,18 @@ export class RpcClient {
 				for (const handler of this.#extraEvents) handler(event);
 			}
 		});
-		ws.addEventListener("close", () => {
+		ws.addEventListener("close", (ev: CloseEvent) => {
 			this.#ws = null;
 			if (!this.#closedByUser) {
-				for (const { reject } of this.#pending.values()) reject(new Error("connection closed"));
+				// Surface the wire close code so an abnormal drop (1006 = no
+				// status, renderer crash / transport loss) is distinguishable
+				// from a clean server close (1000) in the error banner and
+				// console — the daemon logs its side too (ws-transport).
+				const code = typeof ev.code === "number" ? ev.code : 1006;
+				const detail = code === 1000 ? "" : ` (code ${code}${ev.reason ? `: ${ev.reason}` : ""})`;
+				const message = `connection closed${detail}`;
+				console.error(`[rpc] ${message}`);
+				for (const { reject } of this.#pending.values()) reject(new Error(message));
 				this.#pending.clear();
 				this.#onStatus?.("closed");
 				// Unannounced drop (daemon restart, machine sleep): retry forever.

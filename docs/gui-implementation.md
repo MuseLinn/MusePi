@@ -56,10 +56,10 @@ daemon RPC:
 - **会话默认值组** = 默认模型(`ModelSelector` 无 sessionId → `models.listAvailable`,写 `omp-gui-default-model`——WelcomeComposer 读同 key)+ 默认思考等级(segmented,`omp-gui-default-thinking`)+ 自动标题(`omp-gui-autotitle`)+ 显示删除对话框(`omp-gui-confirm-delete`)。
 - **会话保留组** = 启用自动清理(`omp-gui-autoclean`)+ 保留时长 stepper 1-365 天(`omp-gui-autoclean-days`,默认 30,关闭时行 `gui-settings-row--disabled` 降透明+pointer-events:none)+ 过期动作归档/删除(`omp-gui-autoclean-action`)+ 手动清理(`gui-btn` + 「当前可清理:{0}」)。
 - **候选算法**(openchamber parity):`session.list` 按 timestamp 排序,**排除当前会话 + 最近 5 个活跃**后,`updated < now - N天` 者为候选;执行后已处理 id 进本地 `cleanedRef`(会话内不再提示)。自动模式每小时检查一次、24h 冷却(`lastRunRef`)。
-- **动作语义**:归档 = `session.close`(live 会话转 daemon 快照;**SDK 文件会话 close 报错被吞**——daemon 刻意不碰 workspace 文件);删除 = `session.delete`(删 journal/db 行;**SDK jsonl 文件同样保留**,重启 GUI 后会重新出现在列表——与 TUI 一致,文档化行为)。
+- **动作语义**:归档 = `session.close`(live 会话转 daemon 快照;**SDK 文件会话 close 报错被吞**——daemon 刻意不碰 workspace 文件);删除 = `session.delete`(**2026-08-11 起永久删除**:journal 文件 + materialized.db 物化行 + SDK transcript 主文件(`<sessionsDir>/<project>/<timestamp>_<sid>.jsonl`)+ 同名 artifacts 目录——修复前只删 journal/db 行,jsonl 残留导致 `listAllSessions()` 文件扫描重新列出、历史列表"复活"已删会话)。**已知语义**:`knownSessions` 的 `listAllSessions()` 有 10s TTL 缓存(`#historyCache`)——删除后列表最多延迟 10s 刷新;`session.list` 也可能显示"已删但缓存未过期"的会话,非 bug。**实现坑**:删除 transcript 用 `Bun.Glob.scanSync()` 返回**相对路径**,必须 `path.join(sessionsRoot, f)` 再 unlink/rm——裸相对路径按 daemon cwd 解析 → ENOENT 抛错中断循环。
 - **删除确认统一在 `deleteSession`**(`useConfirm()` 弹窗,Escape/backdrop/取消/确定都可关;GuiHeader 与 SessionSidebar 不再自弹——避免双弹;开关关=直删)。
 
-## 5. 伙伴实现细节(pet.html)
+## 5. 伙伴实现细节(双窗口:pet.html + bubble.html,2026-08-11 更新)
 
 - **Petdex 市场内嵌搜索/预览/安装**(2026-08-06):设置「伙伴」section 底部常驻 **PetMarket**(搜索框 + 结果网格 + 安装)。**数据源逆向**:petdex.dev 是 Next.js 站,CORS 全拒(renderer fetch 必失败)→ 全部走主进程 IPC——`pet-search`(net.fetch `https://petdex.dev/api/pets/search?q=&limit=24&includeMeta=0`,参数集从 JS chunk 逆向:q/kinds/vibes/colors/batches/sort/cursor/limit/includeMeta;响应 pets[]:slug/displayName/description/spritesheetPath/zipUrl/soundUrl/featured/kind/vibes)+ `pet-install-url`(下载 zip → 复用 importPetdexFromZip 解压路径 → dataURL 返回)。**预览**:`<img src=远程 spritesheet>` 是 CORS `*`(assets.petdex.dev 有 ACAO 头——canvas 可读)→ PetMarketCard 里 Image decode → measurePetdex → PetdexSprite 动画;远程测量是异步的(24 卡并行 ~2-5s),meta 未就绪显示 spinner。**安装**:点按钮 → 下载+解压 → measure → savePetdex + 自动选中(pickPet)。**细节**:主进程用 net.fetch 非全局 fetch(走系统代理);zipUrl 校验 `^https://assets\.petdex\.dev/`;搜索 debounce 350ms(清空即时)+ seq guard 防乱序。**同时移除内置 bitfun**(BUILTIN_PETDEX 条目 + public/pets/bitfun.webp,预设 10→9)。
 **市场预览尺寸**(2026-08-06 二修):PetdexSprite 归一化后渲染 ~97px 宽,64px thumb 里被 overflow 裁切(看起来"放大局部")→ 每卡按 `fit = 56 / (frameW × 100/contentH)` 算 scale 传入(56 = thumb 64 − 8px 内边距),**完整显示、不裁切**(帧比例不同所以 per-pack 计算,不能固定系数)。**已安装网格 + Reveal**:`{expanded && …}` 条件渲染改为 `<Reveal open={expanded}>`(useCollapse 240ms + 160ms 淡入,关闭态 aria-hidden+inert、节点保持挂载——与设置其他条件区块同动效语言);市场区常驻不折叠。**spinner 命名坑**:`.gui-pet-market-card__loading` 曾引用不存在的 `@keyframes gui-flow-spinner`(实际叫 `gui-flow-spin`)——远程测量 2-5s 窗口里环是静态的,改后正常旋转。
@@ -72,6 +72,12 @@ daemon RPC:
 - **hitbox 并集必须含 `.pet-bubble__dismiss`**:× 按钮 `top:-7px; right:-7px` 悬出气泡矩形,只并 `.pet-bubble` 会让 × 外圈 7px 成为穿透死区(点击落到底层 app);selectors: `.pet-window__pet, .pet-bubble, .pet-bubble__dismiss`。
 - **已知取舍**:120ms 轮询 = 进入 hitbox 后 ≤120ms 内的快速点击会穿透(与 BitFun 同款间隔,可接受);矩形并集在气泡栈与宠物之间的空隙吞点击;Windows/Linux 未启用 click-through(整窗 320×290 交互会挡桌面点击——darwin 专属是刻意选择,跨平台需实测)。
 - **pet-pos.json 校验**:加载时若持久化位置不完整落在任一 display workArea 内则拒绝回默认位(macOS 会把越界 frame 钳回,导致存储与实际脱钩、click-through 翻转时跳回旧帧)。
+- **双窗口架构**(2026-08-06 拆分):气泡与交互面板迁出 pet 窗口,独立 **bubble 窗口**(`bubble.html` → `src/bubble-main.tsx`,未跟踪新文件)。**窗口尺寸完全内容驱动**——`report()`(RO 观察 `.pet-bubbles`/`.pet-panel` + animationend 补报 + 300ms 延迟补报)→ `bubble-set-size` IPC → `setBubbleSize` → `syncBubbleWindow`(窗口 setSize + 锚定)。**bubble 窗口是全部 6 个 BrowserWindow 中唯一"渲染后报告尺寸"的窗口**(其余:pet/mini 固定、pin widget 创建时预计算、glow/main 全屏)——所有"内容驱动窗口动效"问题都集中在这里。
+- **锚定数学**(`syncBubbleWindow`,main.cjs):锚**角色 sprite**(`petRect`,非窗口——320 窗口比居中 sprite 宽,窗口居中会挂屏外)→ `x = petCx - bubbleW/2`, `y = petCy - bubbleH - 6`,workArea clamp;`petWindow.on("move")` → `watchPetMove` 拖拽跟随。
+- **折叠↔展开宽高双轴 morph**(2026-08-11,修复"宽度跳变"):`stackMorph = { from: {width,height} }`,morph effect 对 width+height 双属性过渡(320ms overshoot);switchStack 捕获 from rect、渲染分支 inline 锁 from、effect lift→测 to→锁回→reflow→过渡。**关键坑**:lift 测量必须 `el.style.width = ""`(清 inline 回 CSS `max-content`),**`"auto"` 对块级元素=撑满包含块**(覆盖 max-content 后 toW 退化为窗口宽→宽度过渡静默跳过);折叠卡禁用 `width: min(240px, 70vw)`(vw 依赖与内容定宽窗口形成收缩振荡)。
+- **面板入场 gating(宽度先行,2026-08-11,修复"先右半再全显")**:面板 mount 时 `opacity:0`,等窗口 resize 事件(120ms 兜底)→ 加 `pet-panel--in`(320ms 入场,`forwards` 保持终态——基础规则已 opacity 0)。根因:面板 316px 在气泡堆宽度(~140px)窗口内渲染,窗口 resize 经 IPC 滞后一帧——先露右半、左半突现;叠加 keyframes 烤的 `translateX(-50%)`(absolute 居中残留)把 flow 定位面板左移半宽。bubble 版用 flat keyframes(`pet-panel-in-flat`,无水平位移)。**通用模式**:内容驱动窗口的入场动效必须等窗口尺寸稳定(`resize` 事件)再播——见 gui-design.md §5c clawd-on-desk 分析。
+- **report 动画尺寸**(2026-08-11,修复面板打开窗口闪烁):report 对进行中 CSS 动画的元素用 `offsetWidth/offsetHeight`(布局盒,不含 transform)——`getBoundingClientRect` 含 scale(0.98) 缩小值,动画中报告会把窗口定小、animationend 后跳变;检测 `el.getAnimations().some(a => a.playState === "running")`。
+- **mount effect dead code**(2026-08-11,biome noUnreachable 报出):`return bridge?.onPetActivity?.(...)` 提前 return 吞掉后续 `requestPetState`——订阅 teardown 用 `const off = ...; void sideEffect(); return off` 模式。
 
 ## 6. CSS 反模式清单(全部踩过坑)
 
@@ -79,13 +85,16 @@ daemon RPC:
 2. **calc 长度×百分比**(`calc(28px * 100%)`)→ 非法,静默回退 0。
 3. **transform 动画 keyframes 替换静态 transform**(`translate(-50%,-50%)` + scale 关键帧)→ 动画期间锚点丢失跳位;纯 opacity 或把完整 transform 写进关键帧。
 4. **backdrop-filter 首帧闪烁** → 两阶段挂载(先 opacity 0 上屏,下一帧加动画类)。
-5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。**
+5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。** **全浮层统一(2026-08-11)**:共享 hook `useTwoPhaseEnter(active)`(gui/src/lib/use-two-phase-enter.ts,两 rAF 后返回 `--entered` 后缀,close 时重置)——接入此前越轨的 5 处:Board 放大/小组件任务/引导遮罩/⌘K 命令面板(改常驻挂载+退出动画)/选区工具条(补入场退场);base `opacity:0` + `--entered` 使 motion-off 自然瞬现。这些点此前是**挂载帧直接播 `gui-fade-in`(纯 opacity,无 scale)**——属本条风险类的轻度变体,未在真实屏幕实测失效,但契约上违反两阶段,统一后消除差异。
 5. **flex 子项缺 `min-width:0`** → 内容撑破/尺寸不一致;flex 子项 `margin-inline:auto` 会击败 stretch。
 6. **popup/浮层被祖先 overflow/transform 裁剪** → portal 到 body。
 7. **rAF 节流闩锁未在帧回调内释放** → 后续事件被吞。
 8. **SVG stroke 渐变必须 `gradientUnits="userSpaceOnUse"`**(2026-08-06 图标渲染实测):`stroke="url(#g)"` 配默认 objectBoundingBox 单位在 Chromium 渲染器(Chrome/Electron headless)整条 stroke **渲染为空白**,同渐变 fill 正常;显式坐标 + userSpaceOnUse 即恢复。涉及 app 图标 SVG 渲染(build/icon.svg)时必踩。
 9. **无层(unlayered)规则压制所有 @layer 规则**(2026-08-06 侧栏 tabstrip 贴边根因):collab-web base.css 的 `*{margin:0}` 是 unlayered,Tailwind v4 utility 全部在 `@layer utilities`——cascade 里 **unlayered 恒胜所有 layer**,于是侧栏 `mx-2.5/mt-3/ml-auto` 等全部 margin utility 静默算成 0px(胶囊贴左边缘、右侧按钮簇紧跟胶囊、`mt-3` 间距消失),而 padding utility 正常(没有 universal padding reset),症状极具迷惑性。修复:reset 移入 `@layer base`,前置空 `@layer theme/base/components/utilities {}` 块钉死顺序(tailwind CLI 会把 `@layer a,b,c;` 语句规范成这种空块形式,构建幂等)。教训:**GUI 里 Tailwind margin utility 不生效先查 unlayered universal margin reset**。
 10. **误截断源文件的恢复路径**(2026-08-06 事故记录):`head -c <N>` 按**字节**截断大 CSS(8251 行 ≈ 370KB),git 无 WIP 提交、无 sourcemap、无 TM 快照时,唯一完整恢复源是**上次 `bun run build` 的 dist 压缩 CSS**(含全部规则):①选择器集合 diff(HEAD vs dist)枚举 WIP 规则;②从 dist 提取每条规则(压缩单行,按 `{` 平衡扫描 + 向前回溯选择器列表起点,合并逗号组合块);③`@media` 内规则记录上下文;④@keyframes 逐一比对(注意 `ag-*/tr-*/tv-*/spin` 等属 collab-web,勿混入 gui.css);⑤格式化重排后追加,带恢复注释。恢复后功能等价,格式/注释丢失。**教训:大文件截断前先 `wc -c`;**给重要 CSS 定期 `git add`(index blob 可救)。
+11. **legacy keyframes 烤静态 transform 在 flow 布局下错位**(2026-08-11):面板 keyframes 烤 `translateX(-50%)`(旧 absolute 居中残留),新布局已 `transform: none`(flow + margin 居中)——动画播放时把元素左移半宽,"先露右半再突现左半"。**教训:改布局定位方式时必须同步审计 keyframes 里的静态 transform;动画与静态布局解耦用 flat keyframes(只动位移/缩放/模糊的相对量)**。
+12. **动画中 `getBoundingClientRect` 含 transform**(2026-08-11):scale(0.98) 入场动画中 rect 是缩小值——内容驱动窗口按它报告会把窗口定小,animationend 后跳变。**内容尺寸报告对动画中元素用 `offsetWidth/offsetHeight`(布局盒)**;检测 `el.getAnimations().some(a => a.playState === "running")`。
+13. **锁宽测量 `width:"auto"` 覆盖 CSS `max-content`**(2026-08-11):morph 测量目标宽度时 `style.width = "auto"` 对块级元素=撑满包含块(覆盖 CSS `width:max-content`),toW 退化为容器宽 → 宽度过渡静默跳过(高度正常,视觉"只缩高不缩宽"再跳变)。**必须 `style.width = ""`(删 inline 声明回 CSS 值)**。
 
 ## 7. macOS 应用图标处理(2026-08-06 查证 + 修复)
 
@@ -103,4 +112,61 @@ daemon RPC:
 - 布局/动画断言:采样 getBoundingClientRect/background-position/getAnimations 帧轨迹;动画平滑度受窗口遮挡影响(后台窗口 rAF 节流),对比要同条件。
 - 视觉确认:`tab.screenshot({selector})` + 视觉模型检查;重建用 `bun run build`(`desktop:run` 不重建,吃旧 dist)。
 - 宠物验证:设置页 CDP attach 断言 10 卡 + 选中态 + 图标 14px;帧循环用 100ms 采样 `backgroundPosition` 枚举所见列(必须 ⊆ 有效列);真实光标用 Swift `CGEvent(mouseMoved/leftMouseDown/leftMouseUp).post(.cghidEventTap)`(AppleScript `set mouse position` 在 macOS 26 报 -2740);`screencapture -l <windowID>` 偶发全空帧是捕获伪影,验证闪烁用 `-R` 区域截图。
+- **气泡/面板逐帧验证**(2026-08-11 套路):主窗口 eval `window.electronAPI.setPetVisible(true)` → `petSetPanel(true)`(创建 bubble 窗口)→ bubble target 内 rAF 推 `{iw, panel.getBoundingClientRect()}` 采样数组 → 主窗口 `toggleBubblePanel()` 触发 → 1.5s 后读采样。断言:面板 mount 帧 `opacity:0`、窗口 resize(事件)后才出现动画、面板 rect 全程在窗口内(`l ≥ -4 && r ≤ iw+4`,排除 scale 动画的微小越界);状态变化压缩打印(相邻相同帧折叠)。面板 toggle 走 `pet-toggle-panel`(发 `pet:panel-toggle` 事件)——`pet-set-panel` 只确保窗口存在,不会开面板。
 - 注意:CDP 附加实例偶发 React onClick 委托失效(按钮无响应、键盘/直接 fiber 调用正常)——判定为环境产物,换键盘路径验证,勿当应用 bug。
+
+## 9. 平台适配(2026-08-11)
+
+- **原则**:跨平台特性按平台实现,不因"当前只有 macOS 实现"就把特性/设置项砍掉;只有**硬件层面 macOS 独有**的才隐藏。
+- **haptic(macOS 唯一真正专属)**:Taptic Engine 是 macOS 硬件能力,Windows/Linux 无对应用层 API——渲染层 `lib/haptic.ts` 先查 `shellPlatform() === "darwin"`(preload 暴露 `platform`,web 构建为空串)再发 IPC;设置「通知与音效」的开关行**非 darwin 直接不渲染**;main.cjs handler 顶部 darwin 守卫。helper:`electron/haptic-helper.m`(clang 编译的常驻 stdin 进程,NSHapticFeedbackManager;JXA 桥对私有类 NSTrackpadHapticFeedbackPerformer 不暴露方法,osascript 方案 100% 失效),`build:haptic` 编译进 `bun run build`,asarUnpack 出包,dev 缺二进制时 main.cjs 懒编译。
+- **keep-awake(跨平台)**:`caffeinate -i`(macOS 二进制)换成 Electron `powerSaveBlocker.start("prevent-app-suspension")`——macOS 映射 `kIOPMAssertionTypePreventUserIdleSystemSleep`(同 caffeinate -i),Windows `ES_SYSTEM_REQUIRED`,Linux ScreenSaver Inhibit;进程退出自动释放,无需杀子进程。
+- **open-in-apps / open-with(跨平台)**:`appName` 统一为**绝对路径**(macOS `open -a` 同时接受显示名与路径),open-with 按平台启动——darwin `open -a <path> <dir>`/默认 `open <dir>`、win32 直接 spawn exe 或 `explorer.exe`、linux spawn 绝对路径或 `xdg-open`。发现列表:darwin 扫 /Applications 的 .app;win32 探测常见安装目录(Code/Cursor/Zed/JetBrains/notepad/wt);linux `which` 探测(nautilus/dolphin/终端/code/cursor/zed/kate/gedit)。空列表走渲染层既有 "no apps" 空态。
+- **vibrancy/玻璃(跨平台)**:CSS 磨砂(backdrop-filter + 半透明 scrim + `--gui-glass-overlay`)全平台生效;原生 under-window 材质是 macOS 增强,别处 `setVibrancy` 静默 no-op——设置项保留。
+
+## 10. 受管浏览器（Proma 吸收，2026-08-11）
+
+右侧 Browser 工具从"独立 webview"升级为**受管浏览器**：Electron 主进程持有 `WebContentsView`（每 tab 一个），agent 的 browser 工具通过本地 CDP 桥**驱动同一个实例**——用户在面板里看到的页面就是 agent 操作的页面，登录状态天然共享（Proma browser-controller 模式）。
+
+### 架构
+- `electron/managed-browser.cjs`：`ManagedBrowserController` —— tab 生命周期（`persist:omp-managed-browser` 持久分区，凭据跨重启留存）、导航/加载状态、**活动账本**（脱敏：不含页面文本/Cookie/脚本全文）、布局投影（renderer 报 slot rect → 乘 zoomFactor → `view.setBounds`）、权限 deny-all、`agentActivity` 事件（agent 驱动隐藏 tab 时自动唤起面板）。
+- **CDP 桥**：loopback HTTP+WS，仿真 Chrome `/json/version` + browser 级 `Target.*`（relay bridge 子集：setDiscoverTargets / setAutoAttach / attachToTarget / createTarget / closeTarget / getTargets）。每个 tab 一个 `webContents.debugger` 会话，puppeteer 多连接复用。WS 帧编解码手写（无 `ws` 依赖）：mask/unmask、分片、ping/pong/close。
+- 桥只暴露受管 tabs（`TAB<n>`/`PAGE<n>` 目标 id），**不暴露 GUI 自身窗口**；upgrade 拒绝带 Origin 的请求（网页无法驱动）。
+- 前端 `ManagedBrowserPane.tsx`：占位 div + `useLayoutEffect` 投影（ResizeObserver + overlay 生命周期 MutationObserver，流式文本不触发 IPC）+ 工具栏/标签条（Agent 徽标）/活动行；`ContextPanel` 监听 `agentActivity` 自动切到浏览器工具。非 Electron 构建回退旧 iframe pane（`LegacyBrowserPane`）。
+- 接线：`main.cjs` whenReady 后 `managedBrowser.start(mainWindow)`；`preload.cjs` 暴露 `managedBrowser*` API；`env.d.ts` 类型。
+
+### 配置（settings-schema + 设置 → 工具 → Grep & Browser）
+- `browser.gui`（默认 false）：agent 浏览器工具改用受管浏览器（`connected` kind → `browser.guiUrl`，默认 `http://127.0.0.1:9230`）；优先级 app.cdp_url/path > relay > cdpUrl > cmux > **gui** > headless。
+- `browser.policy.restrictToPublic`（默认 false）：仅公网 http/https + DNS rebinding 复查（`tools/browser/policy.ts`，Proma browser-policy 移植；默认关——localhost 是核心功能）。启动浏览器加 `--deny-permission-prompts`。
+
+### 踩坑（验证过的）
+1. **about:blank 初始态 debugger 挂死**：对未完成初始加载的 webContents `debugger.attach` 后所有命令永久 pending，导航后才活。修复：`backgroundThrottling: false` + `loadURL("about:blank")` 强制 renderer 启动 + `whenDebuggerReady()`（等 did-finish-load）后再 attach。
+2. **`Target.setAutoAttach`（waitForDebuggerOnStart:true）转发到真实 debugger 会 wedged**：Electron 单会话 debugger 无子 target；page 会话里拦截 setAutoAttach/setDiscoverTargets/runIfWaitingForDebugger 本地应答 `{}`。
+3. **`Page.captureScreenshot` 在 webContents.debugger 上超时**：改拦截 `capturePage()`（Proma 同款）。
+4. **tab 级 attachedToTarget(page) 事件必须带消息级 sessionId**（scope 到 tab 会话），否则 puppeteer 的 `#targetsIdsForInit` 永不完成、`connect()` 死等。
+
+### 验证
+- 单测：`browser-policy.test.ts`（URL/私网/DNS）、`browser-gui-kind.test.ts`（kind 优先级，19 断言全过）。
+- E2E（`/tmp/managed-browser-e2e.cjs`）：隔离实例 `electron . --remote-debugging-port=9229 --user-data-dir=/tmp/...` → renderer IPC 开面板 → puppeteer `connect({browserURL: 9230})` 驱动（goto/evaluate/title）→ 投影布局 → `fromSurface:false` 截图采样确认页面真实渲染（投影区 #EEEEEE=example.com 底色，区域外 GUI 深色主题）。
+
+### 边界项落地（2026-08-12，均 E2E 验证）
+- **agentTabId 分离**：桥维护专用 agent tab（`ManagedBrowser.ensureAgentTab` 浏览器级命令，supervisor 在 gui kind 下经 `browser.target().createCDPSession()` 请求）；agent 永不碰用户标签页，首次 open 自动建 agent tab（`openedByAgent` 徽标 + 自动激活显示）。配套：桥公告 `type:"browser"` 的 browser target（`attached:true`，puppeteer 的 `CdpBrowser.target()` 依赖它）并支持对 `browser` targetId 的 attachToTarget（browser-kind 会话路由到 handleBrowserCommand）；新 tab 的 attach 事件等 `whenDebuggerReady` 后再发（已连接客户端也能收养新建 tab）。
+- **omp-file:// 本地预览协议**：`registerSchemesAsPrivileged`（standard+secure+fetch+stream）+ `ses.protocol.handle` 按 pathname 服务本地文件。**规范形式必须带 host**：`omp-file://localhost<绝对路径>`——空 host 会被 Chromium 规范化成 `omp-file://tmp/x`（首段并入 host），handler 拿不到绝对路径。
+- **风险告知门**：agent 车道（CDP Page.navigate / Target.createTarget）导航到 file://、带凭据或异常 scheme 时先问 renderer（`managed-browser:confirm` + `confirm-result`，30s 超时自动拒绝，一次一问）；http/https/omp-file 直接放行。拒绝时 CDP 回 `Navigation blocked by the user`，agent 立即看到失败。
+- **停止按钮**：账本状态 dispatched→completed/failed/canceled；`managed-browser:stop` → `webContents.stop()` + **关闭 agent tab**（Electron debugger 接受 `Runtime.terminateExecution` 但不中止脚本，关 tab 是唯一可靠硬中止——pending CDP 调用随 target 关闭而拒绝，daemon 工具快速失败）。detach 会让 pending sendCommand resolve 而非 reject，成功标记需在 tab 存活时才写（否则覆盖 canceled）。`Runtime.callFunctionOn` 已映射到 evaluate 活动。
+- 9229 remote-debugging 会把受管 view 也列成 target（agent 默认不会碰到；桥面只暴露受管 tabs）。
+
+### 10.1 最佳实践（使用 + 工程）
+
+**使用（desktop）**
+- 模式选择：看得到 agent 的页面 / 在面板里登录 → `browser.gui`；用自己的 Chrome 登录态/扩展/2FA → `browser.relay`；终端或无 GUI → headless（默认）；本地开发服务器 → 保持 `restrictToPublic` 关。
+- 凭据：**面板登录 = agent 立即可用**（同分区持久）；从 Chrome 一次性迁移 → 设置 → 浏览器数据 → Import Chrome Data；relay = 你 Chrome 真实 profile。所有凭据仅本地（面板恒显"仅本地存储登录状态"）。
+- 登录协作（配额/看板场景）：agent 开登录页 → 面板里手动登录 → agent `waitFor`（URL/元素）或等你说"已登录" → 继续抓数据 → `board` 工具写 `~/.musepi/boards/boards.json`，`data.task` 挂刷新。
+- 坑位：`browser.gui` 开而 GUI 未运行 → connected 连不上会报错（非静默 fallback，属预期）；GUI 端口被占会自动试 9230–9239，daemon 侧 `browser.guiUrl` 需对齐非默认端口；改主进程代码要重启 Electron、改 daemon 源码要重启 daemon。
+
+**工程**
+- **CDP 桥铁律**：① attach 必须等 renderer 就绪（`whenDebuggerReady`/did-finish-load），否则 debugger 永久挂死；② `Target.setAutoAttach`/`setDiscoverTargets`/`Runtime.runIfWaitingForDebugger` 永远本地应答、不转发（单会话 debugger 无子 target）；③ `Page.captureScreenshot` 拦截走 `capturePage()`；④ tab 级 `attachedToTarget`(page) 事件必须带消息级 sessionId（否则 puppeteer `#targetsIdsForInit` 永不完成）。
+- 仿真面以 relay bridge 为基准（browser 级 + tab 级 setAutoAttach 双通道、TAB/PAGE 双 target、createTarget 返回 PAGE id）；升级 puppeteer 版本后先跑 E2E。
+- 状态单一权威在主进程：renderer 只投影/读；layout 用单调 revision 丢晚到；URL/账本脱敏只在 main。
+- 新设置：settings-schema（ui 组 "Grep & Browser"）+ GUI 设置页 + 优先级链注释 + kind 解析测试（`browser-gui-kind.test.ts` 模式）。
+- 验证：单测（policy/kind）→ 隔离实例 E2E（open → puppeteer connect → 驱动 → 投影 → `fromSurface:false` 像素采样：投影区=页面底色、区外=GUI 主题）。
+- i18n：键先进 `zh-CN.ts`（英文 pass-through），`t()` 只在 render 时，状态文案复用已有键。

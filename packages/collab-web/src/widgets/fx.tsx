@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { CharTexture } from "./texture";
 import { CountUp } from "./count-up";
+import { widgetFetch } from "./fetch";
 
 /**
  * Live FX card — ported from the kimiwork "实时汇率" widget
@@ -130,7 +131,7 @@ export function FxCard({
 				const end = new Date();
 				const start = new Date(Date.now() - 30 * 864e5);
 				const url = `https://api.frankfurter.dev/v1/${dstr(start)}..${dstr(end)}?base=CNY&symbols=${pairs.map(p => p.code).join(",")}`;
-				const res = await fetch(url, { cache: "no-store" });
+				const res = await widgetFetch(url, { cache: "no-store" });
 				const data = (await res.json()) as { rates?: Record<string, Record<string, number>> };
 				if (!data?.rates) throw new Error("no history");
 				const days = Object.keys(data.rates).sort();
@@ -157,7 +158,7 @@ export function FxCard({
 			setStatus("刷新中…");
 			setDotCls(" gui-fx-dot--loading");
 			try {
-				const res = await fetch(LIVE_API, { cache: "no-store" });
+				const res = await widgetFetch(LIVE_API, { cache: "no-store" });
 				const data = (await res.json()) as { result?: string; rates?: Record<string, number> };
 				if (!data || data.result !== "success" || !data.rates) throw new Error("bad payload");
 				const vals: Record<string, number> = {};

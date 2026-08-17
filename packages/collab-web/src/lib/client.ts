@@ -61,6 +61,9 @@ export interface GuestSnapshot {
 	activeTools: ReadonlyMap<string, ActiveTool>;
 	/** agent_start..agent_end, reconciled by state.isStreaming. */
 	working: boolean;
+	/** Frozen per-round totals (final assistant msg ts → ms) — each completed
+	 *  round's "已工作 X 秒" stays under its final message. */
+	roundDurations: ReadonlyMap<number, number>;
 	/** True when this guest joined through a read-only (view) link. */
 	readOnly: boolean;
 	/** Multi-session workspace directory (workspace-mode shares). */
@@ -129,6 +132,7 @@ export class GuestClient {
 	#streamDone = false;
 	#activeTools: ReadonlyMap<string, ActiveTool> = new Map();
 	#working = false;
+	#roundDurations: ReadonlyMap<number, number> = new Map();
 	#readOnly = false;
 	#workspace: readonly WorkspaceSessionInfo[] | null = null;
 	#focusedSessionId: string | null = null;
@@ -577,6 +581,27 @@ export class GuestClient {
 				break;
 			case "agent_end":
 				this.#working = false;
+				// Freeze this run's total (craft-agents completedAt parity): the
+				// round spans the last user message to agent_end; pinned to the
+				// final assistant message so its row shows the frozen total.
+				{
+					let userTs: number | undefined;
+					let assistantTs: number | undefined;
+					for (const e of this.#entries) {
+						if (e.type !== "message") continue;
+						if (e.message.role === "user") userTs = e.message.timestamp;
+						else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
+					}
+					// The final message's entry frame can land AFTER agent_end —
+					// the stream ghost still holds it then (cleared once the
+					// entry folds in), so prefer it as the round's last message.
+					if (this.#stream?.role === "assistant") assistantTs = this.#stream.timestamp;
+					if (userTs !== undefined && assistantTs !== undefined) {
+						const next = new Map(this.#roundDurations);
+						next.set(assistantTs, Date.now() - userTs);
+						this.#roundDurations = next;
+					}
+				}
 				break;
 			case "notice":
 				this.#pushNotice(event.level, event.message);
@@ -647,6 +672,7 @@ export class GuestClient {
 			streamDone: this.#streamDone,
 			activeTools: this.#activeTools,
 			working: this.#working,
+			roundDurations: this.#roundDurations,
 			readOnly: this.#readOnly,
 			workspace: this.#workspace,
 			focusedSessionId: this.#focusedSessionId,

@@ -9,6 +9,7 @@ import {
 	openMiniChat,
 	openWith,
 	projectName,
+	shellPlatform,
 } from "../lib/electron";
 import { usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -18,6 +19,13 @@ import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
 import { AgentAvatar } from "./AgentAvatar";
 import { Pop } from "./Pop";
+
+/** "mm:ss" hold time for the paused-state hint (matches the composer's
+ *  pause banner formatting). */
+function formatPauseElapsed(pausedAt: number): string {
+	const seconds = Math.max(0, Math.floor((Date.now() - pausedAt) / 1000));
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 
 /**
  * Window header — the container layer between the session sidebar and the
@@ -120,6 +128,14 @@ export function GuiHeader({
 	);
 	const orb: OrbState = snap?.working ? (snap.streaming ? "composing" : "working") : "listening";
 	const statusText = snap?.working ? (snap.streaming ? t("replying") : t("working")) : t("idle");
+	// Traffic lights are macOS-only. Windows/Linux get a native
+	// titleBarOverlay (top-right ~138px) so the right cluster needs
+	// clearance; macOS keeps the 172px left clearance for the
+	// red/yellow/green buttons; other platforms (web) reclaim both.
+	const isWin = shellPlatform() === "win32";
+	const isLinux = shellPlatform() === "linux";
+	const hasOverlay = isWin || isLinux;
+	const isMac = shellPlatform() === "darwin";
 	const [ceiling, setCeiling] = useState<string | null>(null);
 	const projectLabel = snap?.state?.cwd ? projectName(snap.state.cwd) : store ? t("session") : t("local");
 	// Trigger refs for the portaled popups (global z-order above the chat
@@ -330,7 +346,7 @@ export function GuiHeader({
 	}, [rpc]);
 	useEffect(() => {
 		if (instanceOpen) refreshMeta();
-	}, [rpc, instanceOpen, refreshMeta]);
+	}, [instanceOpen, refreshMeta]);
 
 	const sessionTitle = ((): string => {
 		if (!store) return t("MusePi");
@@ -477,7 +493,10 @@ export function GuiHeader({
 			className={`gui-header flex h-12 flex-shrink-0 items-center gap-2 px-4${
 				store ? " gui-header--session" : " gui-header--welcome"
 			}`}
-			style={sideCollapsed ? { paddingLeft: 172 } : undefined}
+			style={{
+				...(sideCollapsed ? { paddingLeft: isMac ? 172 : 16 } : {}),
+				...(hasOverlay ? { paddingRight: 150 } : {}),
+			}}
 		>
 			{/* TitlebarLeftControls (openchamber): a fixed, HORIZONTAL overlay
 			 * cluster — a CHILD of the drag header so Electron honors
@@ -555,7 +574,7 @@ export function GuiHeader({
 							{t("no dev script")}
 						</div>
 					)}
-					<Pop open={projOpen} className="gui-openin-menu" portal anchor={projBtnRef.current} align="right">
+					<Pop open={projOpen} className="gui-openin-menu" portal anchor={projBtnRef.current} align="right" onOpenChange={setProjOpen}>
 						<button
 							type="button"
 							className="gui-view-opt"
@@ -626,11 +645,14 @@ export function GuiHeader({
 								</span>
 							)}
 						</span>
-						<span className="max-w-full truncate text-[10.5px] text-[var(--color-text-faint)]" title={store ? projectLabel : project ? projectName(project) : t("local")}>
+						<span
+							className="max-w-full truncate text-[10.5px] text-[var(--color-text-faint)]"
+							title={store ? projectLabel : project ? projectName(project) : t("local")}
+						>
 							{store ? projectLabel : project ? projectName(project) : t("local")}
 						</span>
 					</button>
-					<Pop open={switcherOpen} className="gui-header-title-menu" portal anchor={switcherBtnRef.current}>
+					<Pop open={switcherOpen} className="gui-header-title-menu" portal anchor={switcherBtnRef.current} onOpenChange={setSwitcherOpen}>
 						<button
 							type="button"
 							className="gui-header-session-row"
@@ -689,7 +711,7 @@ export function GuiHeader({
 						>
 							<Icon name="more" className="h-3.5 w-3.5" />
 						</button>
-						<Pop open={titleMenuOpen} className="gui-overlay-menu" portal anchor={titleMenuBtnRef.current}>
+						<Pop open={titleMenuOpen} className="gui-overlay-menu" portal anchor={titleMenuBtnRef.current} onOpenChange={setTitleMenuOpen}>
 							<button
 								type="button"
 								className="gui-view-opt"
@@ -778,7 +800,9 @@ export function GuiHeader({
 							pauseDisabled
 								? t("select a session to pause it")
 								: paused
-									? t("resume all agents")
+									? pausedAt
+										? `${t("resume all agents")} · ${formatPauseElapsed(pausedAt)}`
+										: t("resume all agents")
 									: t("pause all agents")
 						}
 						aria-label={
@@ -882,7 +906,7 @@ export function GuiHeader({
 						>
 							<Icon name="arrow-down-s" className="h-3 w-3" />
 						</button>
-						<Pop open={openInOpen} className="gui-openin-menu" portal anchor={openInBtnRef.current} align="right">
+						<Pop open={openInOpen} className="gui-openin-menu" portal anchor={openInBtnRef.current} align="right" onOpenChange={setOpenInOpen}>
 							<button
 								type="button"
 								className="gui-view-opt"
@@ -960,7 +984,7 @@ export function GuiHeader({
 					<span>{t("local")}</span>
 					<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 				</button>
-				<Pop open={instanceOpen} className="gui-instance-menu" portal anchor={instanceBtnRef.current} align="right">
+				<Pop open={instanceOpen} className="gui-instance-menu" portal anchor={instanceBtnRef.current} align="right" onOpenChange={setInstanceOpen}>
 					{/* Current-instance header row (openchamber DesktopHostSwitcher):
 					 * local daemon + manual re-probe. */}
 					<div className="flex items-center gap-2 px-2 py-1.5">

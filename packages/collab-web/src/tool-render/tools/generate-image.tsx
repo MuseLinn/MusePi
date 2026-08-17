@@ -52,7 +52,7 @@ const PROMPT_FIELDS = [
 	["image_size", "size"],
 ] as const;
 
-function Body({ args, result }: ToolRenderProps): ReactNode {
+function Body({ args, result, running }: ToolRenderProps): ReactNode {
 	const changes = Array.isArray(args.changes) ? args.changes : null;
 	const inputs = Array.isArray(args.input) ? args.input : null;
 	const details = detailsRecord(result);
@@ -69,8 +69,26 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const hasImages = resultImagesOf(merged).length > 0;
 	// aicss image-generation: the prompt rides as a caption under the preview.
 	const caption = str(args.subject) ?? str(details?.revisedPrompt) ?? null;
+	const subjectPrompt = str(args.prompt) ?? str(args.subject) ?? null;
+	// aicss image-generation: while the tool runs, show a shimmering canvas
+	// placeholder (prompt riding inside) instead of the args table.
+	const placeholder =
+		running && !hasImages ? (
+			<div
+				className="tr-img-placeholder"
+				style={{ aspectRatio: (str(args.aspect_ratio) ?? "1:1").replace(":", "/") }}
+			>
+				<div className="tr-img-shimmer" aria-hidden="true" />
+				<div className="tr-img-ph-title">{t("generating image")}</div>
+				{subjectPrompt && (
+					<div className="tr-img-ph-prompt">“{subjectPrompt.length > 140 ? `${subjectPrompt.slice(0, 140)}…` : subjectPrompt}”</div>
+				)}
+			</div>
+		) : null;
 	return (
 		<>
+			{placeholder ?? (
+				<>
 			<KvGrid>
 				{PROMPT_FIELDS.map(([arg, label]) => {
 					const value = args[arg];
@@ -135,6 +153,8 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{!hasImages && <ResultText result={result} maxLines={8} />}
+			</>
+			)}
 		</>
 	);
 }

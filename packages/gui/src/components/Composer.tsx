@@ -5,6 +5,8 @@ import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
+import { tapFeedback } from "../lib/haptic";
+import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sessionAccentHex } from "../lib/session-accent";
@@ -13,8 +15,8 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { startDictation } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
+import { ContextRing, type SnapcompactSavingsView } from "./ContextRing";
 import { autosize, MIN_ROWS } from "./composer-autosize";
-import { ContextRing } from "./ContextRing";
 import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
 import type { GuiTreeNode } from "./SessionTree";
@@ -43,13 +45,20 @@ export interface ComposerProps {
 	/** Current model's exact effort ladder (getSupportedEfforts); undefined
 	 *  shows the full fixed ladder. */
 	thinkingEfforts?: readonly string[] | null;
-	/** Quoted message text to prepend (ZCode 引用回复). */
-	pendingQuote?: string | null;
-	onQuoteConsumed?(): void;
+	/** Quoted message texts to prepend (ZCode 引用回复 / Cmd+L 追加引用).
+	 *  Each renders as a card above the input; the list is append-only from
+	 *  the caller's side (quote buttons / global Cmd+L), cards close
+	 *  individually, everything clears on send. */
+	quotes: string[];
+	onQuotesChange(next: string[]): void;
 	/** User-message edit: load text into the composer. */
 	pendingEdit?: string | null;
 	onEditConsumed?(): void;
 	onSetThinking?(level: ThinkingLevel | null): void;
+	/** Model switch inside the composer (session.setModel) — parent re-fetches
+	 *  per-model thinking info (ceiling/ladder) that the wire event can't
+	 *  drive (the session store reference is stable across model changes). */
+	onModelChange?(modelId: string): void;
 	/** Model preselect carried from the welcome composer. */
 	presetModelId?: string | null;
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
@@ -71,14 +80,28 @@ function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: b
 }
 
 /**
- * Prompt-enhancement seam (aicss AI Agent Input parity). The component only
- * depends on this resolving to the improved prompt; wire a real model call
- * here when a backend is available. Without one, the state machine still
- * runs (idle → enhancing → enhanced) so the working states are real.
+ * Prompt-enhancement (aicss AI Agent Input parity): rewrites the draft
+ * via the session's model through the ephemeral side channel (same
+ * runEphemeralTurn path as selection→ask — no transcript/journal write).
+ * Falls back to the original prompt when the daemon is unreachable or
+ * the model returns empty, so the enhance button never destroys input.
  */
-async function enhancePrompt(prompt: string): Promise<string> {
-	await new Promise(resolve => setTimeout(resolve, 1100));
-	return prompt;
+async function enhancePrompt(
+	prompt: string,
+	rpc: RpcClient | null,
+	sessionId: string | null,
+): Promise<string> {
+	if (!rpc || !sessionId) return prompt;
+	try {
+		const res = await rpc.request<{ replyText?: string }>("session.ephemeralAsk", {
+			sessionId,
+			promptText: `你是一个提示词优化助手。请把下面的提示词改写得更清晰、具体、可执行，保留原意，只输出改写后的提示词本身，不要任何解释或前缀后缀：\n\n${prompt}`,
+		});
+		const out = res?.replyText?.trim();
+		return out && out.length > 0 ? out : prompt;
+	} catch {
+		return prompt;
+	}
 }
 
 /** Per-status glyphs for the todo panel rows (TUI todo board parity). */
@@ -95,12 +118,13 @@ const TODO_STATUS_ICONS: Record<string, string> = {
 const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
 /** Agent status line prefs (settings → agent 状态行): the indicator is
- * either the braille spinner or the pulsing orb; the label effect is the
+ * either the braille spinner, the pulsing orb, the aicss-style 3×3
+ * lattice wave, or the 8-dot orbit ring; the label effect is the
  * shimmer sweep, the KITT eye sweep, or plain. The sweep color picks the
  * default tone (text-colored bright stop, shimmer-like) or the accent
  * color — applies to both the shimmer and KITT sweeps. */
 export type AgentStatusEffect = "shimmer" | "kitt" | "plain";
-export type AgentStatusIndicator = "braille" | "orb";
+export type AgentStatusIndicator = "braille" | "orb" | "lattice" | "ring";
 export type SweepColor = "default" | "accent";
 
 export function readStatusPrefs(): {
@@ -115,7 +139,7 @@ export function readStatusPrefs(): {
 		const e = localStorage.getItem("omp-gui-statusbar");
 		if (e === "kitt" || e === "plain" || e === "shimmer") effect = e;
 		const i = localStorage.getItem("omp-gui-statusbar-indicator");
-		if (i === "orb" || i === "braille") indicator = i;
+		if (i === "orb" || i === "braille" || i === "lattice" || i === "ring") indicator = i;
 		const k = localStorage.getItem("omp-gui-statusbar-kitt-color");
 		if (k === "accent" || k === "default") sweepColor = k;
 	} catch {
@@ -183,6 +207,29 @@ function AgentStatusLine({
 		>
 			{indicator === "orb" ? (
 				<span className="gui-agent-status-orb" aria-hidden />
+			) : indicator === "lattice" ? (
+				<span className="gui-agent-status-lattice" aria-hidden>
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+				</span>
+			) : indicator === "ring" ? (
+				<span className="gui-agent-status-ring" aria-hidden>
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+				</span>
 			) : (
 				<span className="gui-agent-status-braille" aria-hidden>
 					{phase === "thinking" ? BRAILLE_FRAMES[braille] : "⠿"}
@@ -207,10 +254,11 @@ export function Composer({
 	cwd,
 	thinkingLevel,
 	onSetThinking,
+	onModelChange,
 	thinkingCeiling,
 	thinkingEfforts,
-	pendingQuote,
-	onQuoteConsumed,
+	quotes,
+	onQuotesChange,
 	pendingEdit,
 	onEditConsumed,
 	presetModelId,
@@ -240,7 +288,10 @@ export function Composer({
 	const [slashOpen, setSlashOpen] = useState(false);
 	const [slashQuery, setSlashQuery] = useState("");
 	const [slashCmds, setSlashCmds] = useState<SlashEntry[] | null>(null);
-	const slashIdx = useRef(0);
+	// Selection index must be STATE: arrow keys set it inside onKeyDown and
+	// the active-row highlight depends on it — a ref never re-renders, so
+	// the highlight only moved on unrelated renders (typing/streaming).
+	const [slashIdx, setSlashIdx] = useState(0);
 	// "@" completion (TUI/ZCode parity): @ = files & folders from the
 	// workspace tree scan (workspace.tree), NOT agents.
 	const [atOpen, setAtOpen] = useState(false);
@@ -248,7 +299,7 @@ export function Composer({
 	const [atEntries, setAtEntries] = useState<{ name: string; path: string; isDir: boolean; depth: number }[] | null>(
 		null,
 	);
-	const atIdx = useRef(0);
+	const [atIdx, setAtIdx] = useState(0);
 	// "#" completion (insert a session reference): lists session.list, with
 	// titles resolved from session.tree labels (fallback: cwd basename).
 	const [hashOpen, setHashOpen] = useState(false);
@@ -257,17 +308,22 @@ export function Composer({
 		{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[] | null
 	>(null);
 	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
-	const hashIdx = useRef(0);
+	const [hashIdx, setHashIdx] = useState(0);
 	const [dictating, setDictating] = useState(false);
 
 	// ── Chat prefs (openchamber parity, shared with the chat settings) ──
-	const draftEnabled = (): boolean => {
+	// Stable identity: the draft RESTORE effect keys on draftEnabled, so a
+	// fresh closure per render would re-run the restore on EVERY render —
+	// deleting the last character (text → "") then resurrects the stale
+	// localStorage draft ("最后一个字删不掉"). useCallback keeps the
+	// restore scoped to sessionId changes.
+	const draftEnabled = useCallback((): boolean => {
 		try {
 			return localStorage.getItem("omp-gui-chat-draft") !== "0";
 		} catch {
 			return true;
 		}
-	};
+	}, []);
 	const spellcheckEnabled = (): boolean => {
 		try {
 			return localStorage.getItem("omp-gui-chat-spellcheck") === "1";
@@ -276,18 +332,29 @@ export function Composer({
 		}
 	};
 	// Draft persistence (persistDraft parity): restore the per-session
-	// draft when the composer mounts (only into an EMPTY box — quote/edit
-	// content must not be clobbered), and save every change; submitting
-	// clears the box, which empties the draft through the same effect.
+	// draft when the composer mounts or the session switches, and save
+	// every change; submitting clears the box, which empties the draft
+	// through the same effect. The composer stays mounted across session
+	// switches (ChatView swaps the store in place), so the box must be
+	// RESET to the incoming session's draft — the old restore only FILLED
+	// empty boxes and never cleared, so text recalled in one session
+	// ("撤回还原") stayed in the box for every later session and the save
+	// effect then wrote it under the new session's draft key.
+	const sessionResetRef = useRef(true);
 	useEffect(() => {
-		if (!draftEnabled()) return;
-		try {
-			const draft = localStorage.getItem(`omp-gui-draft:${sessionId}`);
-			if (draft) setText(prev => (prev.length === 0 ? draft : prev));
-		} catch {
-			// localStorage unavailable — draft stays in memory only
+		// Keyed on sessionId only: re-running on draftEnabled toggles would
+		// clobber in-progress text when the pref flips.
+		sessionResetRef.current = true;
+		let next = "";
+		if (draftEnabled()) {
+			try {
+				next = localStorage.getItem(`omp-gui-draft:${sessionId}`) ?? "";
+			} catch {
+				// localStorage unavailable — start empty
+			}
 		}
-	}, [sessionId]);
+		setText(next);
+	}, [sessionId, draftEnabled]);
 	// Idle-recap editor-draft guard (TUI parity): report the un-sent draft
 	// to the daemon (session.setDraft) so a scheduled idle recap is
 	// suppressed while the user is composing. `true` is debounced (typing
@@ -330,6 +397,14 @@ export function Composer({
 		};
 	}, [rpc, sessionId]);
 	useEffect(() => {
+		if (sessionResetRef.current) {
+			// The text in this commit is either stale (belongs to the
+			// previous session) or was just restored by the reset effect —
+			// skip writing so old-session text can't leak into the new
+			// session's draft key.
+			sessionResetRef.current = false;
+			return;
+		}
 		if (!draftEnabled()) return;
 		try {
 			if (text.length > 0) localStorage.setItem(`omp-gui-draft:${sessionId}`, text);
@@ -337,12 +412,13 @@ export function Composer({
 		} catch {
 			// ignore
 		}
-	}, [text, sessionId]);
+	}, [text, sessionId, draftEnabled]);
 
 	// ── Goal / plan mode + todo progress (TUI /goal /plan parity) ─────────
 	const [modes, setModes] = useState<{
 		goalMode: { enabled: boolean; objective?: string; status?: string } | null;
 		planMode: boolean;
+		isCompacting: boolean;
 		todo: {
 			name: string;
 			done: number;
@@ -351,6 +427,7 @@ export function Composer({
 		}[];
 	} | null>(null);
 	const [todoOpen, setTodoOpen] = useState(false);
+	const [appendText, setAppendText] = useState("");
 	const refreshModes = useCallback((): void => {
 		if (!rpc || !sessionId) return;
 		void rpc
@@ -410,6 +487,22 @@ export function Composer({
 	const todo = modes?.todo ?? [];
 	const todoTotal = todo.reduce((n, p) => n + p.total, 0);
 	const todoDone = todo.reduce((n, p) => n + p.done, 0);
+	// ── Todo mutations (TUI /todo parity) ─────────────────────────────────
+	// The panel is read-only without these; each op round-trips through the
+	// daemon (setTodoPhases + user_todo_edit entry) and swaps the fresh
+	// snapshot into the polled `modes` so the chips/bar update in place.
+	const todoOp = useCallback(
+		(op: "append" | "start" | "done" | "drop" | "rm", content?: string, phase?: string): void => {
+			if (!rpc || !sessionId) return;
+			void rpc
+				.request<{ todo: typeof todo }>("session.todo", { sessionId, op, content, phase })
+				.then(res => {
+					if (res?.todo) setModes(prev => (prev ? { ...prev, todo: res.todo } : prev));
+				})
+				.catch(() => {});
+		},
+		[rpc, sessionId],
+	);
 	const stopDict = useRef<(() => void) | null>(null);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
@@ -417,13 +510,19 @@ export function Composer({
 		tokens: number;
 		contextWindow: number;
 		percent: number;
+		snapcompact?: SnapcompactSavingsView | null;
 	} | null>(null);
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
 		let disposed = false;
 		const tick = (): void => {
 			void rpc
-				.request<{ tokens: number; contextWindow: number; percent: number } | null>("session.contextUsage", {
+				.request<{
+					tokens: number;
+					contextWindow: number;
+					percent: number;
+					snapcompact?: SnapcompactSavingsView | null;
+				} | null>("session.contextUsage", {
 					sessionId,
 				})
 				.then(usage => {
@@ -431,7 +530,11 @@ export function Composer({
 					// Value-compare: skip the setState (and the re-render)
 					// when the ring's numbers did not move.
 					setContextUsage(prev =>
-						usage && prev && prev.tokens === usage.tokens && prev.percent === usage.percent ? prev : usage,
+						usage && prev && prev.tokens === usage.tokens && prev.percent === usage.percent
+							? prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
+								? prev
+								: usage
+							: usage,
 					);
 				})
 				.catch(() => {});
@@ -454,11 +557,89 @@ export function Composer({
 		};
 	}, [rpc, sessionId]);
 
+	// ── Manual context compaction (TUI /compact parity) ────────────────────
+	// The ring shows usage; this is the escape hatch when it fills up. The
+	// engine gates preconditions itself (summarizer model present, context
+	// big enough, not already compacting) and throws otherwise — surface
+	// that via a transient error state instead of swallowing it.
+	const [compactBusy, setCompactBusy] = useState(false);
+	const [compactFailed, setCompactFailed] = useState(false);
+	const compactContext = useCallback((): void => {
+		if (!rpc || !sessionId) return;
+		setCompactBusy(true);
+		void rpc
+			.request<{ summary: string; shortSummary: string | null; tokensBefore: number }>("session.compact", {
+				sessionId,
+			})
+			.then(() => {
+				refreshModes();
+				void rpc
+					.request<{
+						tokens: number;
+						contextWindow: number;
+						percent: number;
+						snapcompact?: SnapcompactSavingsView | null;
+					} | null>("session.contextUsage", {
+						sessionId,
+					})
+					.then(usage => {
+						if (usage) setContextUsage(prev => (prev && prev.tokens === usage.tokens ? prev : usage));
+					})
+					.catch(() => {});
+			})
+			.catch(() => {
+				setCompactFailed(true);
+				window.setTimeout(() => setCompactFailed(false), 3000);
+			})
+			.finally(() => setCompactBusy(false));
+	}, [rpc, sessionId, refreshModes]);
+
+	// ── Retry last failed turn (TUI /retry parity) ─────────────────────────
+	// The engine decides whether there is anything to retry (no failed turn
+	// → false); the button only surfaces the outcome.
+	const [retryBusy, setRetryBusy] = useState(false);
+	const [retryNone, setRetryNone] = useState(false);
+	const retryLastTurn = useCallback((): void => {
+		if (!rpc || !sessionId) return;
+		setRetryBusy(true);
+		void rpc
+			.request<{ ok: boolean }>("session.retry", { sessionId })
+			.then(res => {
+				if (!res.ok) {
+					setRetryNone(true);
+					window.setTimeout(() => setRetryNone(false), 3000);
+				}
+			})
+			.catch(() => {})
+			.finally(() => setRetryBusy(false));
+	}, [rpc, sessionId]);
+
 	// ── Pending-message queue (TUI /queue parity): while the agent works,
 	// sent messages land in the follow-up queue — poll the live count so
 	// the composer can show the "queue N" chip. Idle → nothing to show.
 	const [queued, setQueued] = useState<{ count: number; steering: string[]; followUp: string[] } | null>(null);
 	const [queueOpen, setQueueOpen] = useState(false);
+	// Busy-state plain-Enter behavior (settings.busyEnter, dsh parity):
+	// "steer" (TUI default — insert into the running turn now) or "queue"
+	// (follow-up, delivered after the turn yields). Cmd/Ctrl+Enter flips it.
+	const [busyEnter, setBusyEnter] = useState<"steer" | "queue">("steer");
+	useEffect(() => {
+		if (!rpc) return;
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown> | null>("settings.get", { keys: ["busyEnter"] })
+				.then(v => {
+					const b = v?.busyEnter;
+					if (b === "queue" || b === "steer") setBusyEnter(b);
+				})
+				.catch(() => {});
+		};
+		load();
+		// Re-read when 设置 writes it, so an open composer follows the new
+		// behavior without remounting.
+		window.addEventListener("omp-settings-changed", load);
+		return () => window.removeEventListener("omp-settings-changed", load);
+	}, [rpc]);
 	// 取回: pop the newest queued message back into the editor (TUI Alt+Up
 	// parity) so the user can edit before re-sending.
 	const popQueued = useCallback((): Promise<void> => {
@@ -533,28 +714,39 @@ export function Composer({
 
 	// Image paste/drop (openchamber parity): read files as data URLs for
 	// preview; the base64 payload rides along in session.send.images.
-	const addImageFiles = (files: File[]): void => {
+	// Front-resize large images (TUI parity, images.autoResize-governed)
+	// so multi-MB screenshots don't ship full-size over the socket.
+	const addImageFiles = async (files: File[]): Promise<void> => {
 		const imgs = files.filter(f => f.type.startsWith("image/"));
 		if (imgs.length === 0) return;
-		for (const f of imgs) {
-			const reader = new FileReader();
-			reader.onload = () => {
-				if (typeof reader.result !== "string") return;
-				setAttachments(prev => [
-					...prev,
-					{ id: attachId.current++, dataUrl: reader.result as string, mimeType: f.type, name: f.name },
-				]);
-			};
-			reader.readAsDataURL(f);
-		}
+		const autoResize = await readAutoResizeImages(rpc);
+		const entries = await Promise.all(
+			imgs.map(async f => {
+				const dataUrl = await readFileAsDataURL(f);
+				const resized = autoResize ? await resizeImageDataUrl(dataUrl, f.type) : null;
+				return {
+					id: attachId.current++,
+					dataUrl: resized?.dataUrl ?? dataUrl,
+					mimeType: resized?.mimeType ?? f.type,
+					name: f.name,
+				};
+			}),
+		);
+		setAttachments(prev => [...prev, ...entries]);
 	};
 
 	const slashFilter =
-		slashCmds?.filter(
-			c =>
-				c.name.includes(slashQuery.toLowerCase()) ||
-				(c.description ?? "").toLowerCase().includes(slashQuery.toLowerCase()),
-		) ?? [];
+		slashCmds?.filter(c => {
+			const q = slashQuery.toLowerCase();
+			// /skill, /skills, /skill: — the user's intent is the skill list:
+			// surface every skill command (kind: skill) instead of matching
+			// against literal "skills" text (skill:foo doesn't contain it).
+			const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
+			if (isSkillQuery && c.kind === "skill") return true;
+			return (
+				c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q)
+			);
+		}) ?? [];
 
 	const onSlashInput = (value: string): void => {
 		// Trigger when the current line starts with "/".
@@ -563,7 +755,7 @@ export function Composer({
 		if (line.startsWith("/") && line.length >= 1) {
 			setSlashQuery(line.length > 1 ? line.slice(1) : "");
 			setSlashOpen(true);
-			slashIdx.current = 0;
+			setSlashIdx(0);
 			if (!slashCmds && rpc) {
 				void rpc
 					.request<SlashEntry[]>("commands.list", {})
@@ -595,7 +787,7 @@ export function Composer({
 		if (line.startsWith("@") && line.length >= 1) {
 			setAtQuery(line.length > 1 ? line.slice(1) : "");
 			setAtOpen(true);
-			atIdx.current = 0;
+			setAtIdx(0);
 			if (!atEntries && rpc) {
 				void rpc
 					.request<{
@@ -643,7 +835,7 @@ export function Composer({
 		if (line.startsWith("#") && line.length >= 1) {
 			setHashQuery(line.length > 1 ? line.slice(1) : "");
 			setHashOpen(true);
-			hashIdx.current = 0;
+			setHashIdx(0);
 			if (!hashSessions && rpc) {
 				void rpc
 					.request<{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[]>("session.list", {})
@@ -695,7 +887,10 @@ export function Composer({
 		const lineStart = ta.value.lastIndexOf("\n") + 1;
 		const prefix = ta.value.slice(0, lineStart);
 		const rest = ta.value.slice(lineStart + hashQuery.length + 1);
-		setText(`${prefix}#${id} ${rest}`);
+		// Insert a read-tool-resolvable internal URL (TUI parity: the "#"
+		// GitHub-ref completion rewrites to issue://pr:// URLs). The model
+		// can `read history://<id>` to inspect the referenced session.
+		setText(`${prefix}history://${id} ${rest}`);
 		setHashOpen(false);
 		requestAnimationFrame(() => autosize(taRef.current));
 	};
@@ -707,7 +902,7 @@ export function Composer({
 			.filter((f): f is File => f !== null);
 		if (files.length > 0) {
 			e.preventDefault();
-			addImageFiles(files);
+			void addImageFiles(files);
 		}
 	};
 
@@ -715,11 +910,14 @@ export function Composer({
 		const files = [...e.dataTransfer.files];
 		if (files.some(f => f.type.startsWith("image/"))) {
 			e.preventDefault();
-			addImageFiles(files);
+			void addImageFiles(files);
 		}
 	};
 	const taRef = useRef<HTMLTextAreaElement | null>(null);
 	const composingRef = useRef(false);
+	// Select-all + delete clears text AND attachments together (the flag
+	// is consumed by onChange once the textarea reports the emptied value).
+	const clearAllRef = useRef(false);
 	// The completion menus (@/ #//) share one portaled anchor: the textarea.
 	// Portaling lets the frosted glass sample real content behind the menu
 	// (in-place, the composer frame's own backdrop is all the blur sees).
@@ -732,19 +930,132 @@ export function Composer({
 			setHashOpen(false);
 		},
 	);
+	// Only one completion menu is mounted at a time (conditional render), so
+	// a single ref tracks whichever is open.
+	const completionMenuRef = useRef<HTMLDivElement | null>(null);
+	// Todo panel: portaled the same way (gui-todo-panel used to be an
+	// absolute child of the composer frame — it popped up past the chat
+	// surface's overflow:hidden and got clipped, the panel's lower half
+	// cut off behind the input. The floating menu portals to body with
+	// fixed positioning and flips when the anchor is near the top).
+	const { anchorRef: todoAnchorRef, renderMenu: renderTodoMenu } = useFloatingMenu(todoOpen, setTodoOpen, {
+		className: "gui-todo-popup",
+	});
+	// Pending-queue panel: same overflow clip as the todo panel — portaled.
+	const { anchorRef: queueAnchorRef, renderMenu: renderQueueMenu } = useFloatingMenu(queueOpen, setQueueOpen, {
+		className: "gui-queue-popup",
+	});
+	// Keep the active row in view while arrow-navigating: the menu scrolls
+	// internally (max-height 300px, overflow-y auto), so the highlight can
+	// run out of the visible area without a scroll.
+	useEffect(() => {
+		const menu = completionMenuRef.current;
+		if (!menu) return;
+		const active = menu.querySelector(".gui-slash-row--active, .gui-model-opt--active");
+		active?.scrollIntoView({ block: "nearest" });
+	}, [slashIdx, atIdx, hashIdx, slashOpen, atOpen, hashOpen]);
 
-	const send = useCallback((): void => {
-		const trimmed = text.trim();
-		if (!trimmed && !pendingQuote && attachments.length === 0) return;
-		// Delivery semantics MUST match the TUI:
-		//  - Enter while the agent works → steering (queued as a steer,
-		//    the agent processes it immediately); plain Enter when idle
-		//    is a normal prompt (streamingBehavior: steer covers the race).
-		//  - "/queue <msg>" / "=> <msg>" → followUp (delivered only AFTER
-		//    the current turn yields) — TUI /queue parity. Bare "/queue"
-		//    is a no-op (the queue chip shows the state).
-		let payload = trimmed;
-		let delivery: "steer" | "followUp" | undefined = working ? "steer" : undefined;
+	// ── Slash commands (TUI parity) ──────────────────────────────────────
+	// "/xxx" executes the daemon's builtin registry headlessly; "//xxx"
+	// escapes to literal text (the doubled slash parses to no command, so
+	// the daemon reports consumed:false and we fall through to a normal
+	// send). Output lines surface as a transient note above the input.
+	const [slashNotice, setSlashNotice] = useState<{ level: "info" | "error"; text: string } | null>(null);
+	const slashNoticeTimerRef = useRef<Timer | null>(null);
+	const showSlashNotice = useCallback((level: "info" | "error", text: string): void => {
+		setSlashNotice({ level, text });
+		if (slashNoticeTimerRef.current) clearTimeout(slashNoticeTimerRef.current);
+		slashNoticeTimerRef.current = setTimeout(() => setSlashNotice(null), 6000);
+	}, []);
+	const runSlash = useCallback(
+		(command: string): void => {
+			if (!rpc || !sessionId) return;
+			void rpc
+				.request<{ consumed: boolean; reason?: string; prompt?: string; outputs?: string[] }>(
+					"session.slashCommand",
+					{ sessionId, text: command },
+				)
+				.then(res => {
+					if (!res) return;
+					if (!res.consumed) {
+						showSlashNotice(
+							"error",
+							res.reason === "tui-only"
+								? t("this command only works in the terminal")
+								: res.reason === "skill-not-found"
+									? t("skill not found")
+									: t("unknown slash command"),
+						);
+						return;
+					}
+					setText("");
+					for (const line of res.outputs ?? []) {
+						if (line) showSlashNotice("info", line);
+					}
+					if (res.prompt) {
+						// Residual prompt (e.g. /force <tool> <prompt>): the
+						// command kept the trailing text as a real message.
+						onSend(res.prompt, [], undefined);
+						sfxFor("send");
+					}
+				})
+				.catch(() => showSlashNotice("error", t("slash command failed")));
+		},
+		[rpc, sessionId, onSend, showSlashNotice],
+	);
+
+	const runBash = useCallback(
+		(command: string): void => {
+			if (!rpc || !sessionId) return;
+			void rpc
+				.request<{
+					command: string;
+					excludeFromContext: boolean;
+					exitCode: number | null;
+					cancelled: boolean;
+					totalLines: number;
+					outputTruncated: boolean;
+					output: string;
+				}>("session.bashCommand", { sessionId, command })
+				.then(res => {
+					if (!res) return;
+					setText("");
+					if (res.cancelled) {
+						showSlashNotice("info", t("bash command cancelled"));
+						return;
+					}
+					let summary = t("bash exited with code {code} ({lines} lines)", {
+						code: res.exitCode === null ? "?" : String(res.exitCode),
+						lines: String(res.totalLines),
+					});
+					if (res.excludeFromContext) summary += ` · ${t("bash output excluded from context")}`;
+					showSlashNotice(res.exitCode === 0 ? "info" : "error", summary);
+				})
+				.catch(() => showSlashNotice("error", t("bash command failed")));
+		},
+		[rpc, sessionId, showSlashNotice],
+	);
+
+	const send = useCallback(
+		(accelerated = false): void => {
+			const trimmed = text.trim();
+			if (!trimmed && quotes.length === 0 && attachments.length === 0) return;
+			// Delivery semantics MUST match the TUI:
+			//  - Enter while the agent works → the configured busy behavior
+			//    (busyEnter: steer = insert into the running turn now, TUI
+			//    default; queue = follow-up delivered after the turn yields).
+			//    Cmd/Ctrl+Enter (accelerated) uses the OPPOSITE behavior
+			//    (dsh parity: "Cmd/Ctrl+Enter 使用另一行为").
+			//  - Plain Enter when idle is a normal prompt (streamingBehavior:
+			//    steer covers the race).
+			//  - "/queue <msg>" / "=> <msg>" → followUp explicitly.
+			let payload = trimmed;
+			const effectiveBusy = accelerated ? (busyEnter === "queue" ? "steer" : "queue") : busyEnter;
+			let delivery: "steer" | "followUp" | undefined = working
+				? effectiveBusy === "queue"
+					? "followUp"
+					: "steer"
+				: undefined;
 		const queueMatch = /^\/queue\s+(.+)$/s.exec(trimmed);
 		const arrowMatch = /^=>\s+(.+)$/s.exec(trimmed);
 		if (queueMatch) {
@@ -755,6 +1066,28 @@ export function Composer({
 			delivery = "followUp";
 		} else if (trimmed === "/queue") {
 			setText("");
+			return;
+		} else if (trimmed.startsWith("/") && !trimmed.startsWith("//") && quotes.length === 0 && attachments.length === 0) {
+			// Slash command (TUI parity): execute via the daemon's builtin
+			// registry. "//" escapes to literal text — the doubled slash
+			// parses to no command, the daemon returns consumed:false and
+			// we fall through to a normal send below. Close the completion
+			// menu now — the RPC round-trip takes longer than the menu's
+			// exit animation, and leaving it up reads as "Enter did nothing".
+			setSlashOpen(false);
+			runSlash(trimmed);
+			return;
+		} else if (
+			trimmed.startsWith("!") &&
+			(trimmed.startsWith("!!") ? trimmed.slice(2) : trimmed.slice(1)).trim().length > 0 &&
+			quotes.length === 0 &&
+			attachments.length === 0
+		) {
+			// Bash command (TUI !/!! parity): "!cmd" runs the shell command
+			// with its output kept in the model context; "!!cmd" excludes
+			// it. A bare "!" (or "!!") falls through to a normal send.
+			setSlashOpen(false);
+			runBash(trimmed);
 			return;
 		}
 		if (!payload && attachments.length === 0) return;
@@ -768,22 +1101,25 @@ export function Composer({
 				.catch(() => {});
 			setGoalArmed(false);
 		}
+		const quotePrefix =
+			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 		onSend(
-			pendingQuote ? `> ${pendingQuote.split("\n").join("\n> ")}\n\n${payload}`.trim() : payload,
+			quotePrefix ? `${quotePrefix}${payload}`.trim() : payload,
 			attachments.map(a => ({ type: "image" as const, data: a.dataUrl.split(",")[1] ?? "", mimeType: a.mimeType })),
 			// Working → steer (TUI Enter parity: processed immediately);
 			// "/queue"/"=>" → followUp (after the current turn yields).
 			delivery,
 		);
-		if (pendingQuote) {
-			handledQuoteRef.current = null;
-			onQuoteConsumed?.();
+		if (quotes.length > 0) {
+			handledQuoteCountRef.current = 0;
+			onQuotesChange([]);
 		}
 		setText("");
 		setAttachments([]);
 		setEnhance("idle");
 		sfxFor("send");
-	}, [text, onSend, attachments, working, goalArmed, rpc, sessionId, pendingQuote, onQuoteConsumed]);
+		tapFeedback();
+	}, [text, onSend, attachments, working, goalArmed, rpc, sessionId, quotes, onQuotesChange, busyEnter]);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
 		// IME composition: every key (including the confirming Enter) belongs
@@ -791,21 +1127,36 @@ export function Composer({
 		if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
 			return;
 		}
+		// Attachment keyboard flow (WeChat parity): Backspace/Delete on an
+		// empty input removes the last image chip; a select-all delete marks
+		// the input as being cleared so onChange empties attachments too.
+		if (e.key === "Backspace" || e.key === "Delete") {
+			const ta = taRef.current;
+			if (ta) {
+				if (ta.value.length === 0 && attachments.length > 0) {
+					e.preventDefault();
+					setAttachments(prev => prev.slice(0, -1));
+					return;
+				}
+				if (ta.selectionStart === 0 && ta.selectionEnd === ta.value.length && ta.value.length > 0) {
+					clearAllRef.current = true;
+				}
+			}
+		}
 		if (slashOpen && slashFilter.length > 0) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
-				slashIdx.current = (slashIdx.current + 1) % Math.min(8, slashFilter.length);
+				setSlashIdx(v => (v + 1) % slashFilter.length);
 				return;
 			}
 			if (e.key === "ArrowUp") {
 				e.preventDefault();
-				slashIdx.current =
-					(slashIdx.current - 1 + Math.min(8, slashFilter.length)) % Math.min(8, slashFilter.length);
+				setSlashIdx(v => (v - 1 + slashFilter.length) % slashFilter.length);
 				return;
 			}
 			if (e.key === "Enter") {
 				e.preventDefault();
-				const pick = slashFilter[slashIdx.current];
+				const pick = slashFilter[slashIdx];
 				if (pick) insertSlash(pick.name);
 				return;
 			}
@@ -817,17 +1168,17 @@ export function Composer({
 		if (atOpen && atFilter.length > 0) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
-				atIdx.current = (atIdx.current + 1) % Math.min(8, atFilter.length);
+				setAtIdx(v => (v + 1) % atFilter.length);
 				return;
 			}
 			if (e.key === "ArrowUp") {
 				e.preventDefault();
-				atIdx.current = (atIdx.current - 1 + Math.min(8, atFilter.length)) % Math.min(8, atFilter.length);
+				setAtIdx(v => (v - 1 + atFilter.length) % atFilter.length);
 				return;
 			}
 			if (e.key === "Enter" || e.key === "Tab") {
 				e.preventDefault();
-				const pick = atFilter[atIdx.current];
+				const pick = atFilter[atIdx];
 				if (pick) insertAt(pick.path);
 				return;
 			}
@@ -839,17 +1190,17 @@ export function Composer({
 		if (hashOpen && hashFilter.length > 0) {
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
-				hashIdx.current = (hashIdx.current + 1) % Math.min(8, hashFilter.length);
+				setHashIdx(v => (v + 1) % hashFilter.length);
 				return;
 			}
 			if (e.key === "ArrowUp") {
 				e.preventDefault();
-				hashIdx.current = (hashIdx.current - 1 + Math.min(8, hashFilter.length)) % Math.min(8, hashFilter.length);
+				setHashIdx(v => (v - 1 + hashFilter.length) % hashFilter.length);
 				return;
 			}
 			if (e.key === "Enter" || e.key === "Tab") {
 				e.preventDefault();
-				const pick = hashFilter[hashIdx.current];
+				const pick = hashFilter[hashIdx];
 				if (pick) insertHash(pick.id);
 				return;
 			}
@@ -857,6 +1208,19 @@ export function Composer({
 				setHashOpen(false);
 				return;
 			}
+		}
+		// Cmd/Ctrl+Enter (dsh parity): send with the OPPOSITE busy behavior
+		// of the configured plain-Enter mode.
+		if (
+			e.key === "Enter" &&
+			(e.metaKey || e.ctrlKey) &&
+			!e.shiftKey &&
+			!e.altKey &&
+			!composingRef.current
+		) {
+			e.preventDefault();
+			send(true);
+			return;
 		}
 		if (shouldSubmitOnEnter(e, composingRef.current)) {
 			e.preventDefault();
@@ -869,7 +1233,7 @@ export function Composer({
 	const runEnhance = useCallback((): void => {
 		if (!canSend || enhance === "enhancing") return;
 		setEnhance("enhancing");
-		void enhancePrompt(text)
+		void enhancePrompt(text, rpc, sessionId)
 			.then(enhanced => {
 				setText(enhanced);
 				setEnhance("enhanced");
@@ -885,19 +1249,19 @@ export function Composer({
 		if (enhance === "enhanced") setEnhance("idle");
 	}, [enhance, text.length]);
 
-	// ZCode 引用回复: the quoted text renders as a card above the input
-	// (not raw `> ` text pasted into the box). The ref-guard makes the focus
-	// effect run exactly once per incoming quote; the card stays until the
-	// message is sent or the close button dismisses it.
-	const handledQuoteRef = useRef<string | null>(null);
+	// ZCode 引用回复 / Cmd+L 追加引用: quoted texts render as cards above
+	// the input (not raw `> ` text pasted into the box). The count guard
+	// runs the focus effect exactly once per newly appended quote; cards
+	// stay until the message is sent or closed individually.
+	const handledQuoteCountRef = useRef(0);
 	useEffect(() => {
-		if (pendingQuote == null || handledQuoteRef.current === pendingQuote) return;
-		handledQuoteRef.current = pendingQuote;
+		if (quotes.length === 0 || handledQuoteCountRef.current === quotes.length) return;
+		handledQuoteCountRef.current = quotes.length;
 		requestAnimationFrame(() => {
 			taRef.current?.focus();
 			autosize(taRef.current);
 		});
-	}, [pendingQuote, onQuoteConsumed]);
+	}, [quotes]);
 
 	// User-message edit: replace composer text (TUI /retry-edit parity),
 	// exactly once per incoming edit.
@@ -931,6 +1295,10 @@ export function Composer({
 			<AgentStatusLine working={working} sessionKey={sessionId || undefined} {...readStatusPrefs()} />
 			<ComposerFrame
 				flipAnchor="session"
+				// openchamber parity: the selection-capture module excludes
+				// selections inside the composer (Cmd/Ctrl+L must not re-quote
+				// what is being typed).
+				chatInput
 				pet={
 					pet.enabled && pet.mode === "input" ? (
 						<PetSprite mood={petMood ?? "rest"} pet={pet.pet} size={30} />
@@ -953,6 +1321,7 @@ export function Composer({
 							{todoTotal > 0 && (
 								<button
 									type="button"
+									ref={todoAnchorRef}
 									className={`gui-todo-chip${todoOpen ? " gui-todo-chip--open" : ""}`}
 									title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
 									aria-expanded={todoOpen}
@@ -966,7 +1335,7 @@ export function Composer({
 									</span>
 								</button>
 							)}
-							{todoOpen && (
+							{renderTodoMenu(
 								<div className="gui-todo-panel" role="region" aria-label={t("todo list")}>
 									{todo.map(phase => (
 										<div key={phase.name} className="gui-todo-phase">
@@ -995,19 +1364,97 @@ export function Composer({
 															{task.blocker}
 														</span>
 													)}
+													<span className="gui-todo-task-actions">
+														{task.status === "pending" && (
+															<button
+																type="button"
+																className="gui-todo-act"
+																title={t("mark in progress")}
+																aria-label={t("mark in progress")}
+																onClick={() => todoOp("start", task.content)}
+															>
+																<Icon name="play" className="h-3 w-3" />
+															</button>
+														)}
+														{task.status !== "completed" && (
+															<button
+																type="button"
+																className="gui-todo-act"
+																title={t("mark done")}
+																aria-label={t("mark done")}
+																onClick={() => todoOp("done", task.content)}
+															>
+																<Icon name="check" className="h-3 w-3" />
+															</button>
+														)}
+														{task.status !== "abandoned" && task.status !== "completed" && (
+															<button
+																type="button"
+																className="gui-todo-act"
+																title={t("abandon task")}
+																aria-label={t("abandon task")}
+																onClick={() => todoOp("drop", task.content)}
+															>
+																<Icon name="close" className="h-3 w-3" />
+															</button>
+														)}
+														<button
+															type="button"
+															className="gui-todo-act"
+															title={t("remove task")}
+															aria-label={t("remove task")}
+															onClick={() => todoOp("rm", task.content)}
+														>
+															<Icon name="delete-bin" className="h-3 w-3" />
+														</button>
+													</span>
 												</div>
 											))}
+											<div className="gui-todo-append">
+												<input
+													className="gui-todo-append-input"
+													value={appendText}
+													onChange={e => setAppendText(e.target.value)}
+													onKeyDown={e => {
+														if (e.key === "Enter") {
+															e.preventDefault();
+															if (appendText.trim()) {
+																todoOp("append", appendText.trim(), phase.name);
+																setAppendText("");
+															}
+														}
+													}}
+													placeholder={t("add a task…")}
+													aria-label={t("add a task…")}
+												/>
+												<button
+													type="button"
+													className="gui-todo-act gui-todo-act--add"
+													title={t("add task")}
+													aria-label={t("add task")}
+													disabled={!appendText.trim()}
+													onClick={() => {
+														if (appendText.trim()) {
+															todoOp("append", appendText.trim(), phase.name);
+															setAppendText("");
+														}
+													}}
+												>
+													<Icon name="add" className="h-3 w-3" />
+												</button>
+											</div>
 										</div>
 									))}
-								</div>
-							)}
-							{/* Pending-message queue (TUI /queue parity): editable list
+							</div>
+						)}
+						{/* Pending-message queue (TUI /queue parity): editable list
 							 * above the input — 取回 pops the newest queued message
 							 * back into the editor. */}
 							{working && queued && queued.count > 0 && (
 								<>
 									<button
 										type="button"
+										ref={queueAnchorRef}
 										className={`gui-queue-chip${queueOpen ? " gui-queue-chip--open" : ""}`}
 										aria-expanded={queueOpen}
 										onClick={() => setQueueOpen(v => !v)}
@@ -1015,7 +1462,7 @@ export function Composer({
 										<Icon name="list-unordered" className="h-3 w-3" />
 										<span>{t("queued {count}", { count: String(queued.count) })}</span>
 									</button>
-									{queueOpen && (
+									{renderQueueMenu(
 										<div className="gui-queue-panel" role="region" aria-label={t("queued messages")}>
 											{/* Grouped like the TUI pending display: steering
 											 * (immediate) vs after yield (next-turn). */}
@@ -1079,7 +1526,7 @@ export function Composer({
 							planMode={modes?.planMode === true}
 							onToggleGoal={toggleGoalMode}
 							onTogglePlan={togglePlanMode}
-							onPickImages={files => addImageFiles(files)}
+							onPickImages={files => void addImageFiles(files)}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;
@@ -1119,7 +1566,14 @@ export function Composer({
 								<Icon name="expand-up-down" className="h-3.5 w-3.5" />
 							</button>
 						)}
-						<ModelSelector rpc={rpc} sessionId={sessionId} presetId={presetModelId} />
+						<ModelSelector
+							rpc={rpc}
+							sessionId={sessionId}
+							presetId={presetModelId}
+							onSelect={id => {
+								if (id) onModelChange?.(id);
+							}}
+						/>
 						{onSetThinking && (
 							<ThinkingSelector
 								value={thinkingLevel}
@@ -1202,6 +1656,10 @@ export function Composer({
 								percent={contextUsage.percent}
 								tokens={contextUsage.tokens}
 								contextWindow={contextUsage.contextWindow}
+								onCompact={compactContext}
+								compacting={compactBusy || modes?.isCompacting === true}
+								compactFailed={compactFailed}
+								snapcompact={contextUsage.snapcompact ?? null}
 							/>
 						)}
 						<button
@@ -1234,17 +1692,32 @@ export function Composer({
 							<button
 								type="button"
 								className="gui-composer-ico"
-								onClick={onStop}
+								onClick={() => {
+									tapFeedback(2);
+									onStop();
+								}}
 								title={t("stop the current turn")}
 								aria-label={t("stop the current turn")}
 							>
 								<Square size={11} />
 							</button>
 						)}
+						{!working && (
+							<button
+								type="button"
+								className={`gui-composer-ico${retryNone ? " gui-composer-ico--danger" : ""}`}
+								onClick={retryLastTurn}
+								disabled={retryBusy}
+								title={retryNone ? t("nothing to retry") : t("retry last turn")}
+								aria-label={t("retry last turn")}
+							>
+								<Icon name="arrow-go-back" className="h-3.5 w-3.5" />
+							</button>
+						)}
 						<button
 							type="button"
 							className="gui-composer-send"
-							onClick={canSend && enhance !== "enhancing" ? send : undefined}
+							onClick={canSend && enhance !== "enhancing" ? () => send() : undefined}
 							disabled={!canSend || enhance === "enhancing"}
 							title={working ? t("steer message") : t("send message")}
 							aria-label={working ? t("steer message") : t("send message")}
@@ -1254,15 +1727,28 @@ export function Composer({
 					</>
 				}
 			>
-				{pendingQuote && (
-					<div className="gui-quote-card">
-						<div className="gui-quote-text">{pendingQuote}</div>
+				{slashNotice && (
+					<div
+						className={`gui-composer-slash-note gui-composer-slash-note--${slashNotice.level}`}
+						role="status"
+						aria-live="polite"
+					>
+						<Icon
+							name={slashNotice.level === "error" ? "close-circle" : "information"}
+							className="h-3.5 w-3.5 shrink-0"
+						/>
+						<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{slashNotice.text}</span>
+					</div>
+				)}
+				{quotes.map((q, i) => (
+					<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
+						<div className="gui-quote-text">{q}</div>
 						<button
 							type="button"
 							className="gui-quote-close"
 							onClick={() => {
-								handledQuoteRef.current = null;
-								onQuoteConsumed?.();
+								handledQuoteCountRef.current = 0;
+								onQuotesChange(quotes.filter((_, j) => j !== i));
 							}}
 							title={t("remove quote")}
 							aria-label={t("remove quote")}
@@ -1270,7 +1756,7 @@ export function Composer({
 							<X size={12} />
 						</button>
 					</div>
-				)}
+				))}
 				<textarea
 					ref={el => {
 						taRef.current = el;
@@ -1282,6 +1768,10 @@ export function Composer({
 					onDrop={onDrop}
 					onChange={e => {
 						setText(e.target.value);
+						if (clearAllRef.current) {
+							clearAllRef.current = false;
+							if (e.target.value === "") setAttachments([]);
+						}
 						onSlashInput(e.target.value);
 						onAtInput(e.target.value);
 						onHashInput(e.target.value);
@@ -1309,12 +1799,12 @@ export function Composer({
 				{renderFloatMenu(
 					<>
 						{hashOpen && hashFilter.length > 0 && (
-							<div className="gui-slash-menu">
-								{hashFilter.slice(0, 8).map((e, i) => (
+							<div className="gui-slash-menu" ref={completionMenuRef}>
+								{hashFilter.map((e, i) => (
 									<button
 										key={e.id}
 										type="button"
-										className={`gui-model-opt${i === hashIdx.current ? " gui-model-opt--active" : ""}`}
+										className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
 										onMouseDown={ev => ev.preventDefault()}
 										onClick={() => insertHash(e.id)}
 									>
@@ -1330,13 +1820,13 @@ export function Composer({
 							</div>
 						)}
 						{slashOpen && slashFilter.length > 0 && (
-							<div className="gui-slash-menu gui-slash-menu--rich">
+							<div className="gui-slash-menu gui-slash-menu--rich" ref={completionMenuRef}>
 								<div className="gui-slash-rows">
-									{slashFilter.slice(0, 8).map((c, i) => (
+									{slashFilter.map((c, i) => (
 										<SlashRow
 											key={c.name}
 											item={c}
-											active={i === slashIdx.current}
+											active={i === slashIdx}
 											onClick={() => insertSlash(c.name)}
 										/>
 									))}
@@ -1345,12 +1835,12 @@ export function Composer({
 							</div>
 						)}
 						{atOpen && atFilter.length > 0 && (
-							<div className="gui-slash-menu">
-								{atFilter.slice(0, 8).map((e, i) => (
+							<div className="gui-slash-menu" ref={completionMenuRef}>
+								{atFilter.map((e, i) => (
 									<button
 										key={e.path}
 										type="button"
-										className={`gui-model-opt${i === atIdx.current ? " gui-model-opt--active" : ""}`}
+										className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
 										onMouseDown={ev => ev.preventDefault()}
 										onClick={() => insertAt(e.path)}
 									>

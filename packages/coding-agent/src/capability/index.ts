@@ -96,6 +96,27 @@ export function registerProvider<T>(capabilityId: string, provider: Provider<T>)
 // =============================================================================
 
 /**
+ * Process-level cache for capability loads. The daemon re-activates sessions
+ * against the SAME cwd repeatedly (the GUI's open-session flow), and every
+ * activation re-runs the full provider scan (rules: agents/cursor/windsurf/
+ * cline/builtin/github — measured ~2s on a large repo). Results are
+ * immutable-by-convention within the TTL; callers get a shallow-copied items
+ * array so consumer-side mutations never poison the cache.
+ */
+const CAPABILITY_CACHE_TTL_MS = 5_000;
+interface CapabilityCacheEntry {
+	at: number;
+	result: unknown;
+}
+const capabilityCache = new Map<string, CapabilityCacheEntry>();
+
+function capabilityCacheKey(capabilityId: string, ctx: LoadContext, options: LoadOptions<unknown>): string {
+	const disabled = disabledProviders.size > 0 ? Array.from(disabledProviders).sort().join(",") : "";
+	const ext = Array.isArray(options.disabledExtensions) ? options.disabledExtensions.sort().join(",") : "";
+	return `${capabilityId}|${ctx.cwd}|${ctx.repoRoot ?? ""}|${disabled}|${ext}`;
+}
+
+/**
  * Async loading logic shared by loadCapability().
  */
 async function loadImpl<T>(
@@ -268,7 +289,20 @@ export async function loadCapability<T>(
 	const ctx: LoadContext = { cwd, home, repoRoot };
 	const providers = filterProviders(capability, options);
 
-	return await loadImpl(capability, providers, ctx, options);
+	// TTL cache: skip the full provider scan on repeated loads from the same
+	// workspace (daemon session re-activation). See capabilityCacheKey.
+	const cacheKey = capabilityCacheKey(capabilityId, ctx, options);
+	const cached = capabilityCache.get(cacheKey);
+	if (cached && Date.now() - cached.at < CAPABILITY_CACHE_TTL_MS) {
+		return (cached.result as CapabilityResult<T>) ?? { items: [], all: [], warnings: [], providers: [] };
+	}
+
+	const result = await loadImpl(capability, providers, ctx, options);
+	capabilityCache.set(cacheKey, {
+		at: Date.now(),
+		result: { ...result, items: [...result.items], all: [...result.all], warnings: [...result.warnings] },
+	});
+	return result;
 }
 
 // =============================================================================

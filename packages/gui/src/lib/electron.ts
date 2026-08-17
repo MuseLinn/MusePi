@@ -5,6 +5,8 @@
  */
 
 export interface ElectronAPI {
+	/** Node platform of the desktop shell ("" outside Electron). */
+	platform?: string;
 	probeDaemonPort(): Promise<number | null>;
 	startDaemon(port: number): Promise<void>;
 	restartDaemon(port: number): Promise<number>;
@@ -29,6 +31,14 @@ export interface OpenInApp {
 
 export function isElectron(): boolean {
 	return typeof window !== "undefined" && "electronAPI" in window;
+}
+
+/** Desktop shell platform ("darwin" | "win32" | "linux"), or "" when
+ *  running outside Electron (plain browser / web build). */
+export function shellPlatform(): string {
+	if (!isElectron()) return "";
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return (electronAPI?.platform ?? "").toLowerCase();
 }
 
 /** Native folder picker; null when canceled or running in a browser. */

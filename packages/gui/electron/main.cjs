@@ -13,12 +13,14 @@
  */
 "use strict";
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, net, Notification, screen, session, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, screen, session, shell } = require("electron");
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
 const { probe, restart, start, kill } = require("./daemon.cjs");
+const { createTrayController } = require("./tray.cjs");
 const { checkForUpdates } = require("./updater.cjs");
+const { ManagedBrowserController } = require("./managed-browser.cjs");
 
 // ── Data-root override ────────────────────────────────────────────────────
 // The GUI can relocate the app data root (~/.musepi by default): the picked
@@ -55,7 +57,12 @@ function daemonEnv() {
 // heavy frosted-glass compositing — 24px backdrop blurs, menu overlays —
 // stays GPU-backed). OMP_SOFTWARE_GL=1 opts out for remote/virtualized
 // displays where the GPU compositor misbehaves.
-if (process.env.OMP_SOFTWARE_GL === "1") {
+// Windows: GPU compositing of transparent windows misbehaves there — every
+// translucent surface redraws independently, so the whole app (main window,
+// pet, overlays) flickers per-element at different rates. The GUI is
+// lightweight (chat + settings + pet), so software rendering costs nothing;
+// keep GPU on macOS where the frosted-glass blurs need the compositor.
+if (process.platform === "win32" || process.env.OMP_SOFTWARE_GL === "1") {
 	app.disableHardwareAcceleration();
 } else {
 	app.commandLine.appendSwitch("enable-gpu");
@@ -65,6 +72,22 @@ if (process.env.OMP_SOFTWARE_GL === "1") {
 const DEV = !app.isPackaged;
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
 const ICON_PATH = path.resolve(__dirname, "..", "build", "icon.png");
+
+// Single instance: a second `electron .` (dev:hot relaunch race, double
+// launch) focuses the running window instead of stacking another. The
+// `desktop` flow still works — relaunch-gui.mjs kills the stale instance
+// first, so its lock is released before the fresh one requests it.
+if (!app.requestSingleInstanceLock()) {
+	app.quit();
+	return; // CJS top-level: skip the rest of the module, no window flash
+}
+app.on("second-instance", () => {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		if (mainWindow.isMinimized()) mainWindow.restore();
+		mainWindow.show();
+		mainWindow.focus();
+	}
+});
 // Dev-mode Dock icon: app.dock.setIcon() pastes the image raw into the
 // NSDockTile — it does NOT go through LaunchServices, so macOS never applies
 // the system squircle mask. The full-bleed build/icon.png would therefore
@@ -80,6 +103,10 @@ app.setAppUserModelId("com.musepi.gui");
 
 /** Cached window handle (single-window app). */
 let mainWindow = null;
+/** Debounce timer for main-window bounds persistence. */
+let mainBoundsTimer = null;
+/** Managed in-app browser (right-pane tool): WebContentsView + CDP bridge. */
+const managedBrowser = new ManagedBrowserController();
 
 // ── Agent companion pet window (伙伴, BitFun parity) ────────────────────
 // A frameless, transparent, always-on-top companion window hosting pet.html.
@@ -140,7 +167,16 @@ function createPetWindow() {
 		y: pos.y,
 		title: "MusePi Pet",
 		frame: false,
+		// Pure transparent (no vibrancy): vibrancy + transparent:true
+		// renders the WHOLE window as an opaque glass panel (verified —
+		// the desktop pet became a solid dark rectangle). The bubbles fake
+		// the glass with a translucent surface + highlight edge instead.
 		transparent: true,
+		// Explicit transparent background: on Windows a transparent window
+		// without backgroundColor can composite with an opaque default
+		// (white/black block around the pet); the bubble window already
+		// uses this exact pattern. No-op on macOS.
+		backgroundColor: "#00000000",
 		alwaysOnTop: true,
 		skipTaskbar: true,
 		resizable: false,
@@ -156,6 +192,11 @@ function createPetWindow() {
 	});
 	petWindow.setAlwaysOnTop(true, "floating");
 	petWindow.loadFile(path.join(DIST_DIR, "pet.html"));
+	watchPetMove();
+	// Windows: probe whether setPosition speaks DIP or physical px (see
+	// probeSetPositionSpace) — safeSetPosition multiplies by scaleFactor
+	// when physical, so drag travel matches the cursor at any scaling.
+	void probeSetPositionSpace();
 	// Any renderer navigation (reload, crash-reload) resets the drag
 	// anchor — the fresh renderer starts with no pressed state, so a
 	// stale petDragLast would make its first hover move drag the window
@@ -171,8 +212,9 @@ function createPetWindow() {
 	// timer compares screen.getCursorScreenPoint() against the window
 	// bounds + hitbox, flipping setIgnoreMouseEvents accordingly. No
 	// reliance on the macOS-only `forward` option (verified unreliable on
-	// macOS 26). Non-darwin platforms keep the window fully interactive.
-	if (process.platform === "darwin") {
+	// macOS 26) — the poll works on Windows identically (same coordinate
+	// math, no event forwarding needed).
+	if (process.platform === "darwin" || process.platform === "win32") {
 		petWindow.setIgnoreMouseEvents(true);
 	}
 	petWindow.on("closed", () => {
@@ -186,10 +228,33 @@ function createPetWindow() {
 /** Interactive rect (window-relative) reported by the pet renderer —
  *  null = nothing interactive. */
 let petHitbox = null;
+/** Sprite-only rect (window coords, CSS px). The dock snap aligns the
+ *  CHARACTER flush to the screen edge — the window is ~320px wide while
+ *  the sprite is centered, so window-edge alignment leaves the pet
+ *  visibly ~90px off the edge. */
+let petRect = null;
+/** Sprite left edge in window coords (fallback: hitbox, then window). */
+function petCharLeft() {
+	return petRect ? petRect.x : petHitbox ? petHitbox.x : 0;
+}
+/** Sprite right edge in window coords. */
+function petCharRight() {
+	if (petRect) return petRect.x + petRect.width;
+	if (petHitbox) return petHitbox.x + petHitbox.width;
+	return PET_WINDOW_SIZE.width;
+}
 /** Last ignore state, so the poll only calls setIgnoreMouseEvents on change. */
 let petIgnoreState = null;
 /** Last hover state pushed to the pet window (drives the hover mood row). */
 let petHoverState = null;
+/**
+ * Renderer pointer is DOWN on the pet but no move has been sent yet
+ * (dragRef.pressed, before DRAG_THRESHOLD travel). The click-through poll
+ * must not flip the window ignore state between down and the first
+ * pet-drag-client — the renderer arms on pointerdown and disarms via
+ * pet-drag-end (same channel as petDragLast's drag teardown).
+ */
+let petDragArmed = false;
 
 // Drag anchor for pet-drag-client: the renderer sends window-relative
 // client coords; main converts to screen space with the window position
@@ -206,9 +271,10 @@ let petDragLast = null;
 let petDockEnabled = false;
 /** Current dock side pushed to the pet renderer ("left" | "right" | null). */
 let petDockSide = null;
-/** Position the pet window had before the panel expanded — restored on
- *  collapse so the pet never jumps (the panel may grow upward or down). */
-let petPrePanelPos = null;
+/** Do-not-disturb: hide the pet for a fixed span, then bring it back.
+ *  petDndUntil is the epoch ms the DND ends (null when inactive). */
+let petDndTimer = null;
+let petDndUntil = null;
 /** 8-frame settle animation handle — cancelled if a drag starts mid-bounce. */
 let petSettleTimer = null;
 
@@ -217,6 +283,77 @@ function cancelPetSettle() {
 		clearInterval(petSettleTimer);
 		petSettleTimer = null;
 	}
+}
+
+/** Round a coordinate for setPosition. Math.round can yield -0 from
+ *  fractional inputs (e.g. -0.335 → -0), and gin's int converter rejects
+ *  -0 — and any fraction — with the "conversion failure from" TypeError. */
+function intCoord(v) {
+	const r = Math.round(v);
+	return r === 0 ? 0 : r;
+}
+
+/** The single choke point for pet-window moves. gin only accepts int32:
+ *  NaN, ±Infinity, fractions (Retina .5 DIP positions, e.g. -279.5), -0
+ *  and beyond-±2^31 values (garbage from macOS multi-display coordinate
+ *  flips) all throw the main-process "conversion failure from" dialog.
+ *  Round + normalize here, drop the call when still not int32-safe. */
+//
+// Windows DPI-awareness: whether setPosition() speaks DIP or PHYSICAL
+// pixels is not contractual (per-monitor DPI awareness / virtualized
+// sessions disagree; Electron issue #10862 family). Probe once after the
+// pet window exists: nudge +7px, read back 150ms later (win setPosition is
+// async), restore. read == set+7 → DIP; read ≈ (set+7)×scale → PHYSICAL.
+let petSetPositionIsPhysical = false;
+async function probeSetPositionSpace() {
+	const win = petWindow;
+	if (!win || win.isDestroyed()) return;
+	try {
+		const [bx, by] = win.getPosition();
+		win.setPosition(bx + 7, by);
+		await new Promise(r => setTimeout(r, 150));
+		const [ax] = win.getPosition();
+		win.setPosition(bx, by); // restore
+		const disp = screen.getDisplayMatching(win.getBounds());
+		const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+		petSetPositionIsPhysical = Math.abs(ax - (bx + 7) * scale) < Math.abs(ax - (bx + 7));
+		console.log(
+			"[dpi] setPosition probe: set=", bx + 7, "read=", ax, "scale=", scale,
+			petSetPositionIsPhysical ? "→ PHYSICAL (×scale before set)" : "→ DIP",
+		);
+	} catch (err) {
+		console.error("[dpi] setPosition probe failed:", err?.message || err);
+	}
+}
+function safeSetPosition(win, x, y) {
+	const nx = intCoord(x);
+	const ny = intCoord(y);
+	if (!Number.isFinite(nx) || !Number.isFinite(ny) || Math.abs(nx) > 1e7 || Math.abs(ny) > 1e7) {
+		console.error("[pet] dropped invalid setPosition:", { x, y });
+		return;
+	}
+	// Same-value guard: on Windows setPosition of an identical coordinate
+	// still walks the window (WM_WINDOWPOSCHANGING), which feeds back into
+	// the drag loop — window micro-move → synthetic pointermove in the
+	// renderer → new pet-drag-client frame → setPosition again — reading as
+	// "keeps drifting while I hold the mouse still". Skip the write when
+	// the window is already exactly there.
+	const [cx, cy] = win.getPosition();
+	if (cx === nx && cy === ny) return;
+	// Windows DPI-awareness quirk (probed at startup): setPosition() can
+	// interpret its args as PHYSICAL pixels while getCursorScreenPoint()
+	// returns DIP — dragging then scales the window's travel by 1/scaleFactor
+	// ("lags / overruns at non-100% scaling", observed at 125% on the local
+	// machine). Multiply DIP targets by the window display's scaleFactor.
+	let sx = nx;
+	let sy = ny;
+	if (petSetPositionIsPhysical) {
+		const disp = screen.getDisplayMatching(win.getBounds());
+		const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+		sx = Math.round(nx * scale);
+		sy = Math.round(ny * scale);
+	}
+	win.setPosition(sx, sy);
 }
 
 /** Dock or clamp the pet window inside the work area after a drag. */
@@ -233,11 +370,17 @@ function settlePetWindow() {
 	let side = null;
 	if (petDockEnabled) {
 		const MARGIN = 32;
-		if (wx <= wa.x + MARGIN) {
-			x = wa.x;
+		// Judge and align by the CHARACTER's edge (sprite rect), not the
+		// window's — the 320×290 window is much wider than the centered
+		// sprite, so window-edge tests would snap the window flush while
+		// the pet still floats ~90px off the screen edge.
+		const leftEdge = wx + petCharLeft();
+		const rightEdge = wx + petCharRight();
+		if (leftEdge <= wa.x + MARGIN) {
+			x = wa.x - petCharLeft();
 			side = "left";
-		} else if (wx + w >= wa.x + wa.width - MARGIN) {
-			x = wa.x + wa.width - w;
+		} else if (rightEdge >= wa.x + wa.width - MARGIN) {
+			x = wa.x + wa.width - petCharRight();
 			side = "right";
 		}
 		y = Math.min(Math.max(wy, wa.y), wa.y + wa.height - h);
@@ -247,22 +390,28 @@ function settlePetWindow() {
 	}
 	if (x !== wx || y !== wy) {
 		// Short ease-out bounce to the settle position (180ms, 8 frames).
-		const fromX = wx;
-		const fromY = wy;
-		let frame = 0;
-		petSettleTimer = setInterval(() => {
-			frame += 1;
-			const t = frame / 8;
-			const ease = 1 - Math.pow(1 - t, 3);
-			petWindow.setPosition(
-				Math.round(fromX + (x - fromX) * ease),
-				Math.round(fromY + (y - fromY) * ease),
-			);
-			if (frame >= 8) {
-				clearInterval(petSettleTimer);
-				petSettleTimer = null;
-			}
-		}, 20);
+		// safeSetPosition drops any frame whose value is not int32-safe
+		// (coordinate-flip garbage) instead of crashing the main process.
+		// Windows: no glide — the release slide reads as "keeps moving
+		// after I stopped" (the OS window move is less tight than macOS's,
+		// so the bounce is far more visible); snap to the settle position.
+		if (process.platform === "win32") {
+			safeSetPosition(petWindow, x, y);
+		} else {
+			const fromX = wx;
+			const fromY = wy;
+			let frame = 0;
+			petSettleTimer = setInterval(() => {
+				frame += 1;
+				const t = frame / 8;
+				const ease = 1 - Math.pow(1 - t, 3);
+				safeSetPosition(petWindow, fromX + (x - fromX) * ease, fromY + (y - fromY) * ease);
+				if (frame >= 8) {
+					clearInterval(petSettleTimer);
+					petSettleTimer = null;
+				}
+			}, 20);
+		}
 	}
 	if (side !== petDockSide && !petWindow.isDestroyed()) {
 		petDockSide = side;
@@ -271,24 +420,26 @@ function settlePetWindow() {
 }
 
 function updatePetClickThrough() {
-	if (!petWindow || petWindow.isDestroyed() || !petVisible || process.platform !== "darwin") return;
+	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
+	// darwin + win32: transparent pet window must not block the desktop.
+	// (Linux stays fully interactive — unverified on the same poll path.)
+	if (process.platform !== "darwin" && process.platform !== "win32") return;
 	let ignore = true;
 	// Never click-through mid-drag: pointer capture depends on the window
-	// receiving events. A fast drag lets the cursor outrun the window past
-	// the hitbox edge; flipping ignore would drop the pointerup — the
-	// renderer's resetDrag then never runs and petDragLast goes stale,
-	// making the NEXT drag's first move jump the window by the old delta.
-	if (petDragLast === null) {
-		if (petHitbox) {
-			const cursor = screen.getCursorScreenPoint();
-			const [wx, wy] = petWindow.getPosition();
-			ignore = !(
-				cursor.x >= wx + petHitbox.x &&
-				cursor.x <= wx + petHitbox.x + petHitbox.width &&
-				cursor.y >= wy + petHitbox.y &&
-				cursor.y <= wy + petHitbox.y + petHitbox.height
-			);
-		}
+	// receiving events. petDragArmed covers pointerdown-before-first-move
+	// (the renderer arms on down, disarms via pet-drag-end); petDragLast
+	// covers an in-flight drag (armed on the first pet-drag-client).
+	if (petDragArmed || petDragLast !== null) {
+		ignore = false;
+	} else if (petHitbox) {
+		const cursor = screen.getCursorScreenPoint();
+		const [wx, wy] = petWindow.getPosition();
+		ignore = !(
+			cursor.x >= wx + petHitbox.x &&
+			cursor.x <= wx + petHitbox.x + petHitbox.width &&
+			cursor.y >= wy + petHitbox.y &&
+			cursor.y <= wy + petHitbox.y + petHitbox.height
+		);
 	}
 	if (ignore !== petIgnoreState) {
 		petIgnoreState = ignore;
@@ -307,8 +458,39 @@ function updatePetClickThrough() {
 // BitFun's pointer poll interval; cheap and bounded.
 setInterval(updatePetClickThrough, 120);
 
+/** Clear a pending DND without touching visibility. */
+function clearPetDnd() {
+	if (petDndTimer !== null) {
+		clearTimeout(petDndTimer);
+		petDndTimer = null;
+	}
+	petDndUntil = null;
+}
+
+/** Hide the pet for `minutes`, then restore it automatically. */
+function startPetDnd(minutes) {
+	const ms = Math.max(1, Math.floor(Number(minutes) || 30)) * 60000;
+	clearPetDnd();
+	setPetVisible(false);
+	petDndUntil = Date.now() + ms;
+	petDndTimer = setTimeout(() => {
+		petDndTimer = null;
+		petDndUntil = null;
+		if (!petVisible) setPetVisible(true);
+	}, ms);
+}
+
+/** Cancel an active DND and show the pet again. */
+function cancelPetDnd() {
+	if (petDndTimer === null && petDndUntil === null) return;
+	clearPetDnd();
+	setPetVisible(true);
+}
+
 function setPetVisible(visible) {
 	if (visible) {
+		// A manual show (settings toggle, context menu) also exits DND.
+		clearPetDnd();
 		const win = createPetWindow();
 		win.showInactive();
 		petVisible = true;
@@ -318,6 +500,12 @@ function setPetVisible(visible) {
 		// A hide mid-drag can drop the pointerup; a stale anchor would
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
+	}
+	// The bubble window follows the pet's visibility (and its content is
+	// cleared by the next state push).
+	if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+		if (visible) syncBubbleWindow();
+		else if (bubbleWindow.isVisible()) bubbleWindow.hide();
 	}
 }
 
@@ -339,9 +527,10 @@ function persistPetPos() {
 
 function movePetWindow(dx, dy) {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
+	// safeSetPosition drops NaN/garbage (multi-display coordinate flips)
+	// instead of crashing — the drag simply skips that frame.
 	const [x, y] = petWindow.getPosition();
-	const next = { x: x + Math.round(dx), y: y + Math.round(dy) };
-	petWindow.setPosition(next.x, next.y);
+	safeSetPosition(petWindow, x + Math.round(dx), y + Math.round(dy));
 	const now = Date.now();
 	if (now - petLastPosWrite >= 150) {
 		petLastPosWrite = now;
@@ -367,6 +556,234 @@ function focusMainFromPet() {
 	}
 }
 
+// ── Bubble/panel window (双窗口) ────────────────────────────────────────
+// The activity bubbles + interaction panel live in their OWN window so it
+// can use real vibrancy glass (the pet window must stay transparent —
+// vibrancy + transparent:true renders the whole window as an opaque panel).
+// The bubble window is sized to EXACTLY its content (the renderer reports
+// the content box; see bubble-set-size) and parked above the pet window,
+// following it on every move/snap/settle.
+let bubbleWindow = null;
+let bubbleSize = null;
+/** Last pet:activity payload — replayed to the bubble window when it
+ *  loads (the first bubble can arrive before the window's renderer
+ *  subscribed; without the replay it is silently dropped). */
+let lastPetActivity = null;
+
+function createBubbleWindow() {
+	if (bubbleWindow && !bubbleWindow.isDestroyed()) return bubbleWindow;
+	bubbleWindow = new BrowserWindow({
+		width: 220,
+		height: 120,
+		title: "MusePi Bubbles",
+		frame: false,
+		transparent: true,
+		// NO vibrancy: a vibrancy layer renders the whole window as an
+		// opaque glass panel. The window stays fully transparent and the
+		// frosted look lives on the bubbles/panel cards themselves (self-
+		// drawn glass: translucent surface + top highlight + inner hairline
+		// — backdrop-filter cannot blur the desktop through a transparent
+		// window, so a real blur is unavailable without vibrancy).
+		backgroundColor: "#00000000",
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		resizable: false,
+		fullscreenable: false,
+		// NO window shadow: on a transparent window macOS draws the shadow
+		// around the window RECTANGLE, which reads as a dark border around
+		// the floating card. The cards draw their own rounded shadow
+		// (CSS box-shadow), which follows the card shape.
+		hasShadow: false,
+		show: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.cjs"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: true,
+			backgroundThrottling: false,
+		},
+	});
+	bubbleWindow.setAlwaysOnTop(true, "floating");
+	bubbleWindow.loadFile(path.join(DIST_DIR, "bubble.html"));
+	// Replay the last activity (bubbles/approvals/state/recent) once the
+	// renderer is listening — the window may be created BY an activity
+	// push. webContents.send is dropped when it races the React effect
+	// subscription (module scripts + passive effects run after
+	// did-finish-load), so delay the replay a beat past load.
+	bubbleWindow.webContents.on("did-finish-load", () => {
+		if (!lastPetActivity) return;
+		setTimeout(() => {
+			if (!bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:activity", lastPetActivity);
+		}, 150);
+	});
+	bubbleWindow.on("closed", () => {
+		bubbleWindow = null;
+		bubbleSize = null;
+	});
+	return bubbleWindow;
+}
+
+/** Park the bubble window above the sprite, horizontally centered on it. */
+function syncBubbleWindow() {
+	if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
+	if (!petWindow || petWindow.isDestroyed() || !petVisible || bubbleSize === null) {
+		if (bubbleWindow.isVisible()) bubbleWindow.hide();
+		return;
+	}
+	const [px, py] = petWindow.getPosition();
+	const [bw, bh] = bubbleWindow.getSize();
+	// Anchor on the SPRITE, not the window: the 320×290 window is much
+	// wider than the centered sprite and hangs off-screen when docked —
+	// window-centering would clip the bubble at the screen edge and park
+	// it ~140px above the character's head.
+	const cx = px + (petRect ? petRect.x + petRect.width / 2 : PET_WINDOW_SIZE.width / 2);
+	const cy = py + (petRect ? petRect.y : 0);
+	// The bubble content sits at PAD=24px inside the window (renderer's
+	// .pet-bubble-window margin; bubble-set-size reports content + PAD*2).
+	// Anchor the CONTENT 6px above the sprite, not the window box — with
+	// the margin the window is 48px taller/wider than the card.
+	const BUBBLE_WINDOW_PAD = 24;
+	let x = Math.round(cx - bw / 2);
+	let y = Math.round(cy - bh - 6 + BUBBLE_WINDOW_PAD);
+	// Clamp inside the work area: at a docked edge the bubble is wider
+	// than the sprite, so pure centering would push it off-screen.
+	const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
+	x = Math.min(Math.max(x, wa.x + 4), wa.x + wa.width - bw - 4);
+	y = Math.max(y, wa.y + 4);
+	safeSetPosition(bubbleWindow, x, y);
+	if (!bubbleWindow.isVisible()) bubbleWindow.showInactive();
+}
+
+// Pet window moves must drag the bubble window along (drag, snap, settle).
+function watchPetMove() {
+	if (!petWindow || petWindow.isDestroyed()) return;
+	petWindow.on("move", syncBubbleWindow);
+}
+
+function syncBubbleVisibility() {
+	if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
+	if (petVisible && bubbleSize !== null) syncBubbleWindow();
+	else if (bubbleWindow.isVisible()) bubbleWindow.hide();
+}
+
+// ── Menu-bar tray (openchamber tray parity) ─────────────────────────────
+// Sessions are polled from the daemon (session.list over the daemon
+// WebSocket, same port file the renderer's RPC client uses) so the menu
+// stays live even when the main window is closed. Clicking a row routes
+// through the same pet:open-session bridge the pet panel uses.
+let trayController = null;
+let trayWs = null;
+let trayPollTimer = null;
+let trayClosed = false;
+
+function traySend(method, params) {
+	if (!trayWs || trayWs.readyState !== 1 /* OPEN */) return;
+	trayWs.send(JSON.stringify({ jsonrpc: "2.0", id: "tray", method, params }));
+}
+
+function trayFetchState() {
+	traySend("tray.state", {});
+}
+
+function ensureTray() {
+	if (trayController) return;
+	trayController = createTrayController({
+		onAction: (action) => {
+			switch (action.type) {
+				case "focus-session":
+					if (typeof action.sessionId === "string" && mainWindow && !mainWindow.isDestroyed()) {
+						focusMainFromPet();
+						mainWindow.webContents.send("tray:open-session", action.sessionId);
+					}
+					break;
+				case "respond-approval":
+					// Inline Allow/Deny from the tray menu → the same RPCs the
+					// renderer's approval card uses.
+					if (typeof action.id === "string" && typeof action.sessionId === "string") {
+						traySend(action.approved === true ? "tool.approve" : "tool.deny", {
+							sessionId: action.sessionId,
+							requestId: action.id,
+						});
+					}
+					break;
+				case "new-session":
+					if (mainWindow && !mainWindow.isDestroyed()) {
+						focusMainFromPet();
+						mainWindow.webContents.send("tray:new-session");
+					}
+					break;
+				case "mini-chat":
+					openMiniChatWindow();
+					break;
+				case "show-main-window":
+					if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+					focusMainFromPet();
+					break;
+				case "quit":
+					app.quit();
+					break;
+				default:
+					break;
+			}
+		},
+	});
+	const tick = () => {
+		if (trayClosed) return;
+		const port = probe();
+		if (!port) {
+			trayController.update([]);
+			closeTrayWs();
+			return;
+		}
+		if (!trayWs || trayWs.readyState === 3 /* CLOSED */) {
+			try {
+				trayWs = new WebSocket(`ws://127.0.0.1:${port}`);
+			} catch {
+				trayWs = null;
+			}
+			if (!trayWs) return;
+			trayWs.onopen = () => trayFetchState();
+			trayWs.onmessage = (event) => {
+				try {
+					const frame = JSON.parse(event.data);
+					if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
+						trayController.update(frame.result);
+					}
+				} catch {
+					// transient parse noise; next poll refreshes
+				}
+			};
+			trayWs.onclose = () => {
+				trayWs = null;
+			};
+		} else if (trayWs.readyState === 1) {
+			trayFetchState();
+		}
+	};
+	tick();
+	trayPollTimer = setInterval(tick, 5000);
+}
+
+function closeTrayWs() {
+	if (trayWs) {
+		try {
+			trayWs.close();
+		} catch {
+			// already closed
+		}
+		trayWs = null;
+	}
+}
+
+function destroyTray() {
+	trayClosed = true;
+	if (trayPollTimer) clearInterval(trayPollTimer);
+	trayPollTimer = null;
+	closeTrayWs();
+	if (trayController) trayController.destroy();
+	trayController = null;
+}
+
 ipcMain.handle("pet-toggle", (_event, visible) => {
 	setPetVisible(visible === true);
 	return { ok: true };
@@ -375,20 +792,63 @@ ipcMain.handle("pet-drag", (_event, { dx, dy }) => {
 	movePetWindow(Number(dx) || 0, Number(dy) || 0);
 	return { ok: true };
 });
+// Renderer pointerdown: keep the window interactive (no click-through
+// flip) until the drag ends — the 120ms poll would otherwise drop the
+// pointer stream between down and the first move, or after a click.
+ipcMain.handle("pet-drag-arm", () => {
+	petDragArmed = true;
+	return { ok: true };
+});
 // Drag via window-relative client coords (anchor declared above with the
 // click-through state — the poll reads it every tick).
+//
+// Windows DPI: under a virtualized session (UU remote / RDP) at non-100%
+// scaling, screen.getCursorScreenPoint() can report PHYSICAL pixels while
+// setPosition() talks DIP — the pet then drifts while the mouse holds
+// still (user-observed at 175% scaling). The renderer's clientX is a
+// Chromium window coordinate (always DIP), so winPos + client = screen-DIP
+// is ground truth to probe the cursor API's coordinate space with. Probed
+// once per anchor (window is stationary then, so getPosition is reliable);
+// re-probed on re-anchor, which the 500px coordinate-flip guard triggers.
+let petCursorIsPhysical = false;
+let petCursorScale = 1;
+function probeCursorSpace(clientX) {
+	if (!Number.isFinite(clientX)) return;
+	const raw = screen.getCursorScreenPoint();
+	const disp = screen.getDisplayMatching(petWindow.getBounds());
+	const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+	const winPos = petWindow.getPosition();
+	const expectedDip = winPos[0] + clientX;
+	const errDip = Math.abs(raw.x - expectedDip);
+	const errPhys = Math.abs(raw.x - expectedDip * scale);
+	petCursorIsPhysical = errPhys < errDip;
+	petCursorScale = scale;
+	console.log(
+		"[dpi] raw=", raw.x, raw.y, "scale=", scale,
+		"win=", winPos[0], winPos[1], "client=", clientX,
+		"errDip=", errDip.toFixed(1), "errPhys=", errPhys.toFixed(1),
+		petCursorIsPhysical ? "→ PHYSICAL (÷scale)" : "→ DIP",
+	);
+}
+function petDragCursor() {
+	const raw = screen.getCursorScreenPoint();
+	return petCursorIsPhysical
+		? { x: raw.x / petCursorScale, y: raw.y / petCursorScale }
+		: { x: raw.x, y: raw.y };
+}
 ipcMain.handle("pet-drag-client", (_event, { clientX, clientY }) => {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return { ok: true };
-	// Anchor-based drag (2026-08-06): pin the window to the PHYSICAL
-	// cursor (screen.getCursorScreenPoint), never to window-relative
-	// client coords. Delta math on clientX accumulates error once the
-	// window moves — abs was computed from the MOVED window position but
-	// petDragLast stored the PRE-move one, so the window outran the
-	// cursor by one window-displacement per frame, overshot it, then
-	// oscillated around it (which also flipped the renderer's walk
-	// mirror every frame — the "鬼畜" drag).
-	const cursor = screen.getCursorScreenPoint();
+	// Anchor-based drag: pin the window to the (DPI-normalized) cursor. The
+	// window is set DIRECTLY to anchor-position + cursor-travel, never
+	// diffed against a fresh getPosition() read: on Windows setPosition is
+	// asynchronous, so getPosition() right after returns the OLD position
+	// and dx = next - old repeats the same travel every frame, overrunning
+	// the cursor and making the pet "keep moving after the mouse stops".
 	cancelPetSettle();
+	if (petDragLast === null) {
+		probeCursorSpace(clientX);
+	}
+	const cursor = petDragCursor();
 	if (petDragLast === null) {
 		petDragLast = {
 			cx: cursor.x,
@@ -398,15 +858,48 @@ ipcMain.handle("pet-drag-client", (_event, { clientX, clientY }) => {
 		};
 		return { ok: true };
 	}
-	const [wx, wy] = petWindow.getPosition();
-	const next = {
-		x: petDragLast.wx + (cursor.x - petDragLast.cx),
-		y: petDragLast.wy + (cursor.y - petDragLast.cy),
-	};
-	movePetWindow(next.x - wx, next.y - wy);
+	const deltaX = cursor.x - petDragLast.cx;
+	const deltaY = cursor.y - petDragLast.cy;
+	if (
+		!Number.isFinite(deltaX) ||
+		!Number.isFinite(deltaY) ||
+		!Number.isFinite(petDragLast.wx) ||
+		!Number.isFinite(petDragLast.wy)
+	) {
+		// Coordinate-space glitch (multi-display flip) — drop this frame;
+		// the next move re-anchors on a consistent read.
+		petDragLast = null;
+		return { ok: true };
+	}
+	// A drag moves the window by (roughly) the cursor's travel since the
+	// anchor — at most a few hundred px per frame. A delta far larger
+	// (observed +1680px, a full display width, when the window straddles
+	// two differently-scaled displays) is the coordinate-space flip:
+	// re-anchor instead, preserving the window↔cursor offset so the drag
+	// continues seamlessly.
+	if (Math.abs(deltaX) > 500 || Math.abs(deltaY) > 500) {
+		petDragLast = {
+			cx: cursor.x,
+			cy: cursor.y,
+			wx: petDragLast.wx + deltaX,
+			wy: petDragLast.wy + deltaY,
+		};
+		return { ok: true };
+	}
+	safeSetPosition(petWindow, petDragLast.wx + deltaX, petDragLast.wy + deltaY);
+	// Persist (throttled) — same cadence movePetWindow used.
+	const now = Date.now();
+	if (now - petLastPosWrite >= 150) {
+		petLastPosWrite = now;
+		petPosDirty = false;
+		persistPetPos();
+	} else {
+		petPosDirty = true;
+	}
 	return { ok: true };
 });
 ipcMain.handle("pet-drag-end", () => {
+	petDragArmed = false;
 	petDragLast = null;
 	flushPetPos(); // final position of a throttled drag
 	settlePetWindow();
@@ -414,6 +907,18 @@ ipcMain.handle("pet-drag-end", () => {
 });
 ipcMain.handle("pet-click", () => {
 	focusMainFromPet();
+	return { ok: true };
+});
+// Pet double-click: quick-show/hide of the main window. Visible → minimize;
+// hidden or minimized → restore + show + focus.
+ipcMain.handle("pet-toggle-main", () => {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
+			mainWindow.minimize();
+		} else {
+			focusMainFromPet();
+		}
+	}
 	return { ok: true };
 });
 // Pet panel "recent session" click → open that session in the main window.
@@ -436,9 +941,37 @@ ipcMain.handle("pet-set-hitbox", (_event, rect) => {
 	updatePetClickThrough();
 	return { ok: true };
 });
+// Sprite-only rect (no badge) — drives dock alignment so the CHARACTER
+// lands flush on the screen edge.
+ipcMain.handle("pet-set-rect", (_event, rect) => {
+	if (rect && Number.isFinite(rect.x) && Number.isFinite(rect.y) && Number.isFinite(rect.width) && Number.isFinite(rect.height)) {
+		petRect = rect;
+	} else {
+		petRect = null;
+	}
+	return { ok: true };
+});
 ipcMain.handle("pet-activity", (_event, payload) => {
+	// Cache for bubble-window replay (the window may load after this push).
+	lastPetActivity = payload;
+	// Both windows consume pet:activity: the pet window uses mood/scale/
+	// unread/theme; the bubble window uses bubble/approval/state/recent
+	// sessions/theme.
 	if (petWindow && !petWindow.isDestroyed() && petVisible) {
 		petWindow.webContents.send("pet:activity", payload);
+	}
+	// If the payload carries bubble/panel content, make sure the bubble
+	// window exists — a first bubble arriving before any interaction must
+	// not be dropped.
+	const needsBubble =
+		payload &&
+		typeof payload === "object" &&
+		Boolean(payload.bubble || payload.approval || Array.isArray(payload.recentSessions));
+	if (needsBubble && petWindow && !petWindow.isDestroyed() && petVisible) {
+		createBubbleWindow();
+	}
+	if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+		bubbleWindow.webContents.send("pet:activity", payload);
 	}
 	return { ok: true };
 });
@@ -454,6 +987,187 @@ ipcMain.handle("pet-dock-set", (_event, enabled) => {
 		fs.writeFileSync(f, JSON.stringify({ ...raw, dock: petDockEnabled }));
 	} catch {
 		// best-effort persistence
+	}
+	return { ok: true };
+});
+
+// Pet right-click context menu. Menu labels are Chinese — the main process
+// has no locale state (the renderer does), and musepi's UI is Chinese-first.
+ipcMain.handle("pet-context-menu", () => {
+	if (!petWindow || petWindow.isDestroyed()) return { ok: true };
+	const template = [
+		{
+			label: "打开主窗口",
+			click: () => focusMainFromPet(),
+		},
+		{
+			label: "显示/隐藏面板",
+			click: () => {
+				if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:panel-toggle");
+			},
+		},
+		{ type: "separator" },
+		{
+			label: "挂靠屏幕边缘",
+			type: "checkbox",
+			checked: petDockEnabled,
+			click: (item) => {
+				const enabled = item.checked === true;
+				petDockEnabled = enabled;
+				try {
+					const f = petPosFile();
+					const raw = JSON.parse(fs.readFileSync(f, "utf8"));
+					fs.writeFileSync(f, JSON.stringify({ ...raw, dock: petDockEnabled }));
+				} catch {
+					// best-effort persistence
+				}
+				if (enabled) {
+					// A toggle must visibly do something: snap straight to
+					// the nearer horizontal edge. Align the CHARACTER flush
+					// to the edge (the window is bigger than the sprite);
+					// subsequent drops near an edge keep snapping.
+					const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
+					const [wx, wy] = petWindow.getPosition();
+					const { width: w } = petWindow.getBounds();
+					const leftDist = wx + petCharLeft() - wa.x;
+					const rightDist = wa.x + wa.width - (wx + petCharRight());
+					const toLeft = leftDist <= rightDist;
+					const x = toLeft ? wa.x - petCharLeft() : wa.x + wa.width - petCharRight();
+					safeSetPosition(petWindow, x, wy);
+					const side = toLeft ? "left" : "right";
+					if (side !== petDockSide && !petWindow.isDestroyed()) {
+						petDockSide = side;
+						petWindow.webContents.send("pet:dock", { side });
+					}
+					try {
+						const f = petPosFile();
+						const raw = JSON.parse(fs.readFileSync(f, "utf8"));
+						fs.writeFileSync(f, JSON.stringify({ ...raw, x, y: wy, dock: true }));
+					} catch {
+						// best-effort persistence
+					}
+				} else if (!petWindow.isDestroyed()) {
+					// Disable clears the edge highlight; the position stays
+					// put and the next drop bounces back into the work area.
+					petDockSide = null;
+					petWindow.webContents.send("pet:dock", { side: null });
+				}
+			},
+		},
+		{ type: "separator" },
+		{
+			label: "免打扰",
+			submenu: [
+				{
+					label: "暂时隐藏 30 分钟",
+					click: () => startPetDnd(30),
+				},
+				{
+					label: "暂时隐藏 1 小时",
+					click: () => startPetDnd(60),
+				},
+				{
+					label: "暂时隐藏 2 小时",
+					click: () => startPetDnd(120),
+				},
+				{
+					label: "暂时隐藏 4 小时",
+					click: () => startPetDnd(240),
+				},
+				{ type: "separator" },
+				{
+					label: "取消免打扰",
+					enabled: petDndUntil !== null,
+					click: () => cancelPetDnd(),
+				},
+			],
+		},
+		{ type: "separator" },
+		{
+			label: "隐藏桌宠",
+			click: () => setPetVisible(false),
+		},
+	];
+	Menu.buildFromTemplate(template).popup({ window: petWindow });
+	return { ok: true };
+});
+
+// Computer-use glow overlay: while the agent drives the desktop via the
+// `computer` tool, a transparent click-through overlay rings every
+// display so the user can see the AI is operating the screen. Pure
+// visual layer — mouse events are forwarded to the windows below, so
+// the agent's own background input keeps working.
+let glowWindows = new Set();
+let glowActive = false;
+
+function setComputerGlow(on) {
+	if (on === glowActive) return;
+	glowActive = on;
+	if (on) {
+		for (const d of screen.getAllDisplays()) {
+			const { x, y, width, height } = d.bounds;
+			const w = new BrowserWindow({
+				x,
+				y,
+				width,
+				height,
+				frame: false,
+				transparent: true,
+				backgroundColor: "#00000000",
+				alwaysOnTop: true,
+				skipTaskbar: true,
+				focusable: false,
+				resizable: false,
+				movable: false,
+				minimizable: false,
+				maximizable: false,
+				closable: false,
+				fullscreenable: false,
+				hasShadow: false,
+				show: false,
+				webPreferences: {
+					preload: path.join(__dirname, "glow-preload.cjs"),
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+				},
+			});
+			w.setAlwaysOnTop(true, "screen-saver");
+			w.setIgnoreMouseEvents(true, { forward: true });
+			w.loadFile(path.join(__dirname, "glow.html"));
+			w.showInactive();
+			glowWindows.add(w);
+			w.on("closed", () => glowWindows.delete(w));
+		}
+	} else {
+		for (const w of glowWindows) if (!w.isDestroyed()) w.destroy();
+		glowWindows.clear();
+	}
+}
+
+// Main-window renderer toggles the glow when a computer tool starts/ends.
+ipcMain.handle("computer-glow", (_event, on) => {
+	setComputerGlow(on === true);
+	return { ok: true };
+});
+// Computer input action → the overlay window covering the target display,
+// with coordinates rebased from global screen space to that window's viewport.
+ipcMain.handle("glow-target", (_event, input) => {
+	if (!input || glowWindows.size === 0) return { ok: true };
+	const rect = input.rect;
+	if (!rect || typeof rect.x !== "number") return { ok: true };
+	const cx = rect.x + rect.width / 2;
+	const cy = rect.y + rect.height / 2;
+	for (const w of glowWindows) {
+		const b = w.getBounds();
+		if (cx < b.x || cx >= b.x + b.width || cy < b.y || cy >= b.y + b.height) continue;
+		const local = {
+			...input,
+			rect: { x: rect.x - b.x, y: rect.y - b.y, width: rect.width, height: rect.height },
+			point: input.point ? { x: input.point.x - b.x, y: input.point.y - b.y } : undefined,
+		};
+		w.webContents.send("glow:target", local);
+		break;
 	}
 	return { ok: true };
 });
@@ -474,10 +1188,11 @@ ipcMain.handle("pet-get-session-content", (_event, sessionId) => {
 	}
 	return { ok: true };
 });
-// Main-window renderer → pet window: transcript for the requested session.
+// Main-window renderer → bubble window: transcript for the requested
+// session (the panel lives in the bubble window now).
 ipcMain.handle("pet-session-content", (_event, payload) => {
-	if (petWindow && !petWindow.isDestroyed() && payload && typeof payload.sessionId === "string") {
-		petWindow.webContents.send("pet:session-content", payload);
+	if (bubbleWindow && !bubbleWindow.isDestroyed() && payload && typeof payload.sessionId === "string") {
+		bubbleWindow.webContents.send("pet:session-content", payload);
 	}
 	return { ok: true };
 });
@@ -487,9 +1202,23 @@ ipcMain.handle("pet-approve", (_event, { requestId, approved }) => {
 	}
 	return { ok: true };
 });
-// Panel expand/collapse: the compact pet window (320×290) grows to fit the
-// status + quick-reply + approval panel, then shrinks back.
-const PET_PANEL_SIZE = { width: 340, height: 540 };
+// Pet bubble ×: the user acknowledged that notification — clear the
+// session's unread badge in the main window (it owns the unread set; the
+// bubble itself is already removed by the bubble window).
+ipcMain.handle("pet-mark-read", (_event, sessionId) => {
+	if (mainWindow && !mainWindow.isDestroyed() && typeof sessionId === "string") {
+		mainWindow.webContents.send("pet:command", { type: "mark-read", sessionId });
+	}
+	return { ok: true };
+});
+// Pet badge click: mark every session read (badge + completion/error
+// bubbles — the main window pushes dismissSessions back to the pet).
+ipcMain.handle("pet-mark-all-read", () => {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send("pet:command", { type: "mark-all-read" });
+	}
+	return { ok: true };
+});
 // Pin a board card to the desktop (kimi 固定至桌面 parity): a small
 // always-on-top frameless transparent window rendering the widget itself
 // (pin.html — immersive rounded card, drag strip with hover pin-top /
@@ -650,64 +1379,14 @@ ipcMain.handle("widget-pin-top", (event) => {
 	}
 	return { ok: false };
 });
-/** Expand the pet window to panel size with smart placement: the panel
- *  grows UP by default (window bottom edge fixed → the pet never jumps);
- *  if there is no room above (pet near the screen top), it grows DOWN and
- *  the pet yields. Clamped to the work area either way. */
-function expandPetPanel() {
-	if (!petWindow || petWindow.isDestroyed()) return;
-	const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
-	const [wx, wy] = petWindow.getPosition();
-	const bottomEdge = wy + PET_WINDOW_SIZE.height;
-	const grow = PET_PANEL_SIZE.height - PET_WINDOW_SIZE.height;
-	let y;
-	let height;
-	if (wy - wa.y >= grow) {
-		y = bottomEdge - PET_PANEL_SIZE.height;
-		height = PET_PANEL_SIZE.height;
-	} else if (wa.y + wa.height - bottomEdge >= grow) {
-		y = wy;
-		height = PET_PANEL_SIZE.height;
-	} else {
-		y = Math.max(wa.y, bottomEdge - PET_PANEL_SIZE.height);
-		height = Math.min(PET_PANEL_SIZE.height, bottomEdge - y);
-	}
-	petWindow.setBounds({ x: wx, y, width: PET_PANEL_SIZE.width, height });
-}
-
 ipcMain.handle("pet-set-panel", (_event, open) => {
-	if (petWindow && !petWindow.isDestroyed()) {
-		if (open) {
-			if (petPrePanelPos === null) {
-				const [px, py] = petWindow.getPosition();
-				petPrePanelPos = { x: px, y: py };
-			}
-			expandPetPanel();
-		} else {
-			cancelPetSettle();
-			if (petPrePanelPos !== null) {
-				// Restore the pre-panel spot so the pet doesn't jump back.
-				petWindow.setBounds({
-					x: petPrePanelPos.x,
-					y: petPrePanelPos.y,
-					width: PET_WINDOW_SIZE.width,
-					height: PET_WINDOW_SIZE.height,
-				});
-				petPrePanelPos = null;
-			} else {
-				petWindow.setSize(PET_WINDOW_SIZE.width, PET_WINDOW_SIZE.height);
-			}
-			// Drop any stale dock highlight while collapsed.
-			if (petDockSide !== null && !petWindow.isDestroyed()) {
-				petDockSide = null;
-				petWindow.webContents.send("pet:dock", { side: null });
-			}
-		}
-		// The click-through hitbox must cover the whole panel while open —
-		// the renderer reports the union via pet-set-hitbox as the layout
-		// settles; forcing a poll refresh now keeps it responsive.
-		petIgnoreState = null;
-		updatePetClickThrough();
+	// The panel now lives in the BUBBLE window (双窗口) — this IPC is kept
+	// for the bubble renderer's toggle; the window itself is sized by the
+	// bubble-set-size content reports. Just make sure the bubble window
+	// exists so an open panel is never dropped.
+	if (open === true) {
+		createBubbleWindow();
+		syncBubbleWindow();
 	}
 	return { ok: true };
 });
@@ -719,12 +1398,43 @@ ipcMain.handle("pet-request-state", () => {
 	}
 	return { ok: true };
 });
+// Pet window single click → toggle the BUBBLE window's interaction panel.
+ipcMain.handle("pet-toggle-panel", () => {
+	if (!bubbleWindow || bubbleWindow.isDestroyed()) return { ok: true };
+	if (bubbleWindow.webContents.isLoading()) {
+		// The window is still loading (first click after creation): a send
+		// now would race the React subscription and be dropped. Replay once
+		// it settles — same delay as the activity replay.
+		setTimeout(() => {
+			if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:panel-toggle");
+		}, 200);
+	} else {
+		bubbleWindow.webContents.send("pet:panel-toggle");
+	}
+	return { ok: true };
+});
+// Bubble window reports its content box (CSS px) → size the OS window to
+// exactly that (a glass card), parked above the pet.
+ipcMain.handle("bubble-set-size", (_event, rect) => {
+	if (rect && Number.isFinite(rect.width) && Number.isFinite(rect.height)) {
+		bubbleSize = { width: Math.max(8, Math.round(rect.width)), height: Math.max(8, Math.round(rect.height)) };
+	} else {
+		bubbleSize = null;
+	}
+	if (!bubbleWindow || bubbleWindow.isDestroyed()) return { ok: true };
+	const [bw, bh] = bubbleWindow.getSize();
+	if (bubbleSize && (bw !== bubbleSize.width || bh !== bubbleSize.height)) {
+		bubbleWindow.setSize(bubbleSize.width, bubbleSize.height);
+	}
+	syncBubbleWindow();
+	return { ok: true };
+});
 
 // ── Petdex import (Petdex zip → unpack → pet.json + spritesheet) ────────
 // Unpacks with the system bsdtar (`tar -xf`) which handles zip on macOS,
 // Linux and Windows alike. Returns the package without image dimensions —
 // the renderer decodes the data URL to fill width/height.
-const { execFile, spawn } = require("node:child_process");
+const { execFile, execFileSync, spawn } = require("node:child_process");
 
 async function importPetdexFromZip(zipPath) {
 	const dest = path.join(app.getPath("userData"), "pets", `pet-${Date.now()}`);
@@ -753,21 +1463,20 @@ async function importPetdexFromZip(zipPath) {
 	};
 }
 
-// Keep-awake (settings 常规 → 保持电脑运行): hold a `caffeinate -i`
-// child while enabled so idle system sleep never fires; the user can
-// still sleep manually / close the lid. macOS only — other platforms
-// report ok:false (the toggle still renders, harmlessly inert).
-let keepAwakeChild = null;
+// Keep-awake (settings 常规 → 保持电脑运行): hold a powerSaveBlocker
+// assertion while enabled so idle system sleep never fires; the user can
+// still sleep manually / close the lid. Cross-platform: Electron maps
+// "prevent-app-suspension" to kIOPMAssertionTypePreventUserIdleSystemSleep
+// (same as `caffeinate -i`) on macOS, ES_SYSTEM_REQUIRED on Windows and
+// org.freedesktop.ScreenSaver Inhibit on Linux. Assertions release
+// automatically on process exit.
+let keepAwakeId = null;
 ipcMain.handle("keep-awake-set", (_event, enabled) => {
-	if (process.platform !== "darwin") return { ok: false };
-	if (enabled === true && !keepAwakeChild) {
-		keepAwakeChild = spawn("caffeinate", ["-i"]);
-		keepAwakeChild.on("exit", () => {
-			keepAwakeChild = null;
-		});
-	} else if (enabled !== true && keepAwakeChild) {
-		keepAwakeChild.kill("SIGTERM");
-		keepAwakeChild = null;
+	if (enabled === true && keepAwakeId === null) {
+		keepAwakeId = powerSaveBlocker.start("prevent-app-suspension");
+	} else if (enabled !== true && keepAwakeId !== null) {
+		powerSaveBlocker.stop(keepAwakeId);
+		keepAwakeId = null;
 	}
 	return { ok: true };
 });
@@ -861,11 +1570,37 @@ ipcMain.handle("pet-install-url", async (_event, zipUrl) => {
 });
 
 
+function mainWindowBoundsFile() {
+	return path.join(app.getPath("userData"), "main-window.json");
+}
+
+/** Persisted main-window bounds — restore the user's layout on relaunch
+ *  (same pattern as pet-pos.json / pin positions). Clamped to a display
+ *  work area so an unplugged monitor can't strand the window off-screen. */
+function loadMainWindowBounds() {
+	try {
+		const raw = fs.readFileSync(mainWindowBoundsFile(), "utf8");
+		const b = JSON.parse(raw);
+		if (!Number.isFinite(b?.width) || !Number.isFinite(b?.height)) return null;
+		const wa = screen.getDisplayMatching({ x: b.x || 0, y: b.y || 0, width: b.width, height: b.height }).workArea;
+		const width = Math.max(720, Math.min(b.width, wa.width));
+		const height = Math.max(480, Math.min(b.height, wa.height));
+		const x = Number.isFinite(b.x) ? Math.min(Math.max(b.x, wa.x - width + 80), wa.x + wa.width - 80) : undefined;
+		const y = Number.isFinite(b.y) ? Math.min(Math.max(b.y, wa.y), wa.y + wa.height - 60) : undefined;
+		return { width, height, ...(x !== undefined ? { x } : {}), ...(y !== undefined ? { y } : {}) };
+	} catch {
+		return null; // first run — defaults
+	}
+}
+
 function createWindow() {
+	const saved = loadMainWindowBounds();
 	mainWindow = new BrowserWindow({
 		title: "MusePi",
-		width: 1280,
-		height: 800,
+		width: saved?.width ?? 1280,
+		height: saved?.height ?? 800,
+		...(saved?.x !== undefined ? { x: saved.x } : {}),
+		...(saved?.y !== undefined ? { y: saved.y } : {}),
 		minWidth: 720,
 		minHeight: 480,
 		// Native app icon (macOS Dock uses the bundle/Dock icon; this covers
@@ -877,6 +1612,22 @@ function createWindow() {
 		// {16,17} openchamber uses so they sit level with the header row.
 		titleBarStyle: "hidden",
 		trafficLightPosition: { x: 16, y: 17 },
+		// Windows/Linux: titleBarStyle "hidden" draws NO window controls on
+		// its own (traffic lights are macOS-only) — without an overlay the
+		// user cannot minimize/maximize/close (Alt+F4 only). titleBarOverlay
+		// puts native min/max/close buttons at the top-right; transparent
+		// color lets the page's glass header show through, height matches
+		// the .gui-header row (h-12 = 48px). Ignored on macOS (traffic
+		// lights) and on Linux distros that keep the system title bar.
+		...(process.platform === "win32" || process.platform === "linux"
+			? {
+					titleBarOverlay: {
+						color: "#00000000",
+						symbolColor: "#8a8a92",
+						height: 48,
+					},
+				}
+			: {}),
 		webPreferences: {
 			preload: path.join(__dirname, "preload.cjs"),
 			contextIsolation: true,
@@ -902,8 +1653,56 @@ function createWindow() {
 	if (devServer) mainWindow.loadURL(devServer);
 	else mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
 
+	// Renderer crash (OOM / fatal page error): the WebSocket to the daemon
+	// dies with the renderer, leaving the window dead and the session turn
+	// orphaned ("前后端掉线"). Auto-reload — the app's boot/reconnect path
+	// re-attaches and reopens the active session (rpc onStatus open →
+	// openSession), so a crash recovers without a manual relaunch.
+	mainWindow.webContents.on("render-process-gone", (_event, details) => {
+		if (details.reason === "clean-exit") return;
+		console.error("[main] renderer process gone:", details.reason, "exitCode:", details.exitCode);
+		if (!mainWindow.isDestroyed()) mainWindow.webContents.reload();
+	});
+
 	mainWindow.on("closed", () => {
 		mainWindow = null;
+		// The glow is driven by this window's session store; with the
+		// main window gone there is no one to turn it off.
+		setComputerGlow(false);
+		if (mainBoundsTimer) {
+			clearTimeout(mainBoundsTimer);
+			mainBoundsTimer = null;
+		}
+	});
+
+	// Persist main-window bounds (debounced — drags/resizes fire move/resize
+	// continuously) so a relaunch restores the user's layout.
+	let saveBounds = () => {
+		if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
+		try {
+			fs.writeFileSync(mainWindowBoundsFile(), JSON.stringify(mainWindow.getBounds()));
+		} catch {
+			// non-fatal — bounds restore is best-effort
+		}
+	};
+	if (mainBoundsTimer) clearTimeout(mainBoundsTimer);
+	mainBoundsTimer = setTimeout(() => {
+		mainBoundsTimer = null;
+		saveBounds();
+	}, 300);
+	mainWindow.on("move", () => {
+		if (mainBoundsTimer) return;
+		mainBoundsTimer = setTimeout(() => {
+			mainBoundsTimer = null;
+			saveBounds();
+		}, 300);
+	});
+	mainWindow.on("resize", () => {
+		if (mainBoundsTimer) return;
+		mainBoundsTimer = setTimeout(() => {
+			mainBoundsTimer = null;
+			saveBounds();
+		}, 300);
 	});
 
 	// Webview popups (embedded browser): openchamber-style in-place
@@ -982,25 +1781,77 @@ ipcMain.handle("updater-check", () => checkForUpdates());
 // follow the SYSTEM appearance, which is dark on this machine) — the light
 // scheme's clean white glass is achieved in CSS with a heavier white scrim
 // (see --gui-glass-overlay derivation in gui.css), not the native layer.
-// Haptic feedback (macOS Taptic Engine): NSHapticFeedbackManager via
-// osascript JXA — no native module needed. Patterns: 0 generic, 1
-// alignment, 2 level-change. Throttled (~80ms) so rapid clicks queue one
-// tap instead of spawning an osascript per event.
+// Haptic feedback (macOS Taptic Engine): NSHapticFeedbackManager through a
+// tiny compiled helper (electron/haptic-helper, clang-built from
+// haptic-helper.m — `bun run build` compiles it; dev lazily compiles on
+// first use). NOT osascript/JXA: the JXA ObjC bridge does not expose
+// NSTrackpadHapticFeedbackPerformer's instance methods, so the old
+// performOutputPattern call threw and was silently swallowed — haptics
+// never fired. A compiled binary also starts ~10× faster (~5ms vs
+// ~100ms+), keeping the tap within perception. Patterns: 0 generic,
+// 1 alignment, 2 level-change. Throttled (~80ms) so rapid clicks don't
+// spawn a process per event.
+let hapticHelperPath = null;
+let hapticHelperResolved = false;
+function resolveHapticHelper() {
+	if (hapticHelperResolved) return hapticHelperPath;
+	hapticHelperResolved = true;
+	const dir = __dirname; // electron/
+	const bin = path.join(dir, "haptic-helper");
+	const src = path.join(dir, "haptic-helper.m");
+	try {
+		if (fs.existsSync(bin) && (!fs.existsSync(src) || fs.statSync(bin).mtimeMs >= fs.statSync(src).mtimeMs)) {
+			hapticHelperPath = bin;
+			return bin;
+		}
+		if (fs.existsSync(src)) {
+			execFileSync(
+				"clang",
+				["-fobjc-arc", "-framework", "AppKit", "-framework", "Foundation", "-O2", "-o", bin, src],
+				{ timeout: 20000, stdio: "ignore" },
+			);
+			hapticHelperPath = bin;
+			return bin;
+		}
+	} catch (err) {
+		console.warn("[haptic] helper unavailable:", err?.message || err);
+	}
+	return null;
+}
+let hapticProc = null;
+/** Persistent helper process (stdin daemon): spawn once, keep for the
+ *  session — per-tap is a stdin write. Respawns on exit/error; the stdin
+ *  pipe closing on parent quit exits the child (fgets → EOF). */
+function hapticProcess() {
+	if (hapticProc && hapticProc.exitCode === null) return hapticProc;
+	const helper = resolveHapticHelper();
+	if (!helper) return null;
+	const proc = spawn(helper, [], { stdio: ["pipe", "ignore", "ignore"] });
+	proc.on("error", () => {
+		hapticProc = null;
+	});
+	proc.on("exit", () => {
+		hapticProc = null;
+	});
+	hapticProc = proc;
+	return proc;
+}
 let lastHapticAt = 0;
 ipcMain.handle("haptic", (_event, pattern = 0) => {
+	// macOS Taptic Engine only — no helper on other platforms (build:haptic
+	// skips them); short-circuit so we don't run the resolve dance or log.
+	if (process.platform !== "darwin") return { ok: false, reason: "unsupported" };
 	const now = Date.now();
 	if (now - lastHapticAt < 80) return { ok: true, skipped: true };
 	lastHapticAt = now;
-	execFile(
-		"osascript",
-		[
-			"-l",
-			"JavaScript",
-			"-e",
-			`ObjC.import("AppKit"); $.NSHapticFeedbackManager.defaultPerformer.performOutputPattern(${Number.isInteger(pattern) ? pattern : 0}, 0)`,
-		],
-		() => {},
-	);
+	const proc = hapticProcess();
+	if (!proc) return { ok: false };
+	const p = Number.isInteger(pattern) ? Math.min(Math.max(pattern, 0), 2) : 0;
+	try {
+		proc.stdin.write(`${p}\n`);
+	} catch {
+		// process just died — next tap respawns it
+	}
 	return { ok: true };
 });
 ipcMain.handle("gui-vibrancy", (event, enabled, style) => {	const win = BrowserWindow.fromWebContents(event.sender);
@@ -1182,15 +2033,25 @@ ipcMain.handle("gui-read-file-data-url", async (_event, filePath) => {
 
 ipcMain.handle("open-with", async (_event, payload) => {
 	const data = payload ?? {};
-	const appName = typeof data.app === "string" ? data.app : "";
+	const app = typeof data.app === "string" ? data.app : "";
 	const dirPath = typeof data.path === "string" ? data.path : "";
 	if (!dirPath) return false;
 	const { execFile } = require("node:child_process");
 	try {
-		// No app name → open in the system default application (macOS `open`).
 		await new Promise((resolve, reject) => {
-			const args = appName ? ["-a", appName, dirPath] : [dirPath];
-			execFile("open", args, err => (err ? reject(err) : resolve(null)));
+			if (process.platform === "darwin") {
+				// macOS `open` resolves both app display names and .app
+				// paths, and the default handler when no app is given.
+				execFile("open", app ? ["-a", app, dirPath] : [dirPath], err => (err ? reject(err) : resolve(null)));
+			} else if (app) {
+				// win32/linux: `app` is an absolute exe/binary path (see
+				// open-in-apps discovery) — spawn it with the folder.
+				execFile(app, [dirPath], err => (err ? reject(err) : resolve(null)));
+			} else if (process.platform === "win32") {
+				execFile("explorer.exe", [dirPath], err => (err ? reject(err) : resolve(null)));
+			} else {
+				execFile("xdg-open", [dirPath], err => (err ? reject(err) : resolve(null)));
+			}
 		});
 		return true;
 	} catch {
@@ -1199,11 +2060,17 @@ ipcMain.handle("open-with", async (_event, payload) => {
 });
 
 // ── IPC: discover apps the folder can be opened with (openchamber
-//    OpenInAppButton parity) — scan the standard macOS app locations and
-//    read each app's real .icns via app.getFileIcon (base64 data URL so the
-//    renderer can <img> it without fs access).
+//    OpenInAppButton parity). Per-platform:
+//      darwin — scan standard /Applications locations for .app bundles
+//               (real icons via app.getFileIcon).
+//      win32  — probe common install dirs for editor/terminal EXEs.
+//      linux  — probe PATH (`which`) for common file managers/editors.
+//    The returned appName is an ABSOLUTE path on every platform (macOS
+//    `open -a` accepts both display names and paths), so open-with can
+//    spawn it directly. Empty list → the renderer shows its "no apps"
+//    empty state (graceful on exotic setups).
 
-const OPEN_IN_APP_CANDIDATES = [
+const OPEN_IN_APP_MACOS = [
 	{ id: "finder", appName: "Finder", file: "Finder.app", roots: ["/System/Library/CoreServices"] },
 	{ id: "terminal", appName: "Terminal", file: "Terminal.app", roots: ["/System/Applications", "/Applications"] },
 	{ id: "ghostty", appName: "Ghostty", file: "Ghostty.app", roots: ["/Applications", "/System/Applications", "~/Applications"] },
@@ -1222,27 +2089,76 @@ const OPEN_IN_APP_CANDIDATES = [
 	{ id: "clion", appName: "CLion", file: "CLion.app", roots: ["/Applications", "~/Applications"] },
 ];
 
+const OPEN_IN_APP_WINDOWS = [
+	// explorer needs no path — open-with special-cases it.
+	{ id: "explorer", appName: "File Explorer", exe: "explorer.exe", absolute: false },
+	{ id: "terminal", appName: "Windows Terminal", exe: "wt.exe", absolute: false },
+	{ id: "vscode", appName: "Visual Studio Code", exe: path.join(process.env.LOCALAPPDATA ?? "C:\\Users\\", "Programs\\Microsoft VS Code\\Code.exe"), absolute: true },
+	{ id: "cursor", appName: "Cursor", exe: path.join(process.env.LOCALAPPDATA ?? "C:\\Users\\", "Programs\\cursor\\Cursor.exe"), absolute: true },
+	{ id: "zed", appName: "Zed", exe: path.join(process.env.LOCALAPPDATA ?? "C:\\Users\\", "Programs\\Zed\\zed.exe"), absolute: true },
+	{ id: "intellij", appName: "IntelliJ IDEA", exe: path.join(process.env.PROGRAMFILES ?? "C:\\Program Files", "JetBrains\\IntelliJ IDEA\\bin\\idea64.exe"), absolute: true },
+	{ id: "pycharm", appName: "PyCharm", exe: path.join(process.env.PROGRAMFILES ?? "C:\\Program Files", "JetBrains\\PyCharm\\bin\\pycharm64.exe"), absolute: true },
+	{ id: "notepad", appName: "Notepad", exe: path.join(process.env.WINDIR ?? "C:\\Windows", "notepad.exe"), absolute: true },
+];
+
+const OPEN_IN_APP_LINUX_BINS = [
+	{ id: "nautilus", appName: "Files (Nautilus)", bin: "nautilus" },
+	{ id: "dolphin", appName: "Dolphin", bin: "dolphin" },
+	{ id: "gnome-terminal", appName: "GNOME Terminal", bin: "gnome-terminal" },
+	{ id: "konsole", appName: "Konsole", bin: "konsole" },
+	{ id: "vscode", appName: "Visual Studio Code", bin: "code" },
+	{ id: "cursor", appName: "Cursor", bin: "cursor" },
+	{ id: "zed", appName: "Zed", bin: "zed" },
+	{ id: "kate", appName: "Kate", bin: "kate" },
+	{ id: "gedit", appName: "gedit", bin: "gedit" },
+];
+
 ipcMain.handle("open-in-apps", async () => {
-	if (process.platform !== "darwin") return { apps: [] };
-	const apps = [];
 	const home = os.homedir();
-	for (const cand of OPEN_IN_APP_CANDIDATES) {
-		let appPath = null;
-		for (const root of cand.roots) {
-			const p = path.join(root.replace(/^~/, home), cand.file);
-			if (fs.existsSync(p)) {
-				appPath = p;
-				break;
+	const found = [];
+	if (process.platform === "darwin") {
+		for (const cand of OPEN_IN_APP_MACOS) {
+			let appPath = null;
+			for (const root of cand.roots) {
+				const p = path.join(root.replace(/^~/, home), cand.file);
+				if (fs.existsSync(p)) {
+					appPath = p;
+					break;
+				}
+			}
+			if (appPath) found.push({ id: cand.id, appName: cand.appName, path: appPath });
+		}
+	} else if (process.platform === "win32") {
+		for (const cand of OPEN_IN_APP_WINDOWS) {
+			if (!cand.absolute) {
+				// explorer.exe / wt.exe resolve through the system PATH.
+				found.push({ id: cand.id, appName: cand.appName, path: cand.exe });
+				continue;
+			}
+			if (fs.existsSync(cand.exe)) found.push({ id: cand.id, appName: cand.appName, path: cand.exe });
+		}
+	} else {
+		const { execFileSync } = require("node:child_process");
+		for (const cand of OPEN_IN_APP_LINUX_BINS) {
+			try {
+				// Resolve to an absolute path once (open-with spawns it
+				// directly — avoids any PATH lookup ambiguity).
+				const bin = execFileSync("which", [cand.bin], { encoding: "utf8" }).trim();
+				if (bin) found.push({ id: cand.id, appName: cand.appName, path: bin });
+			} catch {
+				// not installed — skip
 			}
 		}
-		if (!appPath) continue;
+	}
+	const apps = [];
+	for (const cand of found) {
 		let iconDataUrl = "";
 		try {
-			iconDataUrl = (await app.getFileIcon(appPath, { size: "small" })).toDataURL();
+			iconDataUrl = (await app.getFileIcon(cand.path, { size: "small" })).toDataURL();
 		} catch {
 			// icon unavailable — renderer falls back to a letter chip
 		}
-		apps.push({ id: cand.id, label: cand.appName, appName: cand.appName, iconDataUrl });
+		apps.push({ id: cand.id, label: cand.appName, appName: cand.path, iconDataUrl });
 	}
 	return { apps };
 });
@@ -1270,7 +2186,9 @@ ipcMain.handle("clipboard-write", (_event, text) => {
 
 let miniWindow = null;
 
-ipcMain.handle("mini-chat-open", () => {
+/** Open (or focus) the picture-in-picture mini chat window — shared by the
+ *  header button and the tray's 迷你对话 entry. */
+function openMiniChatWindow() {
 	if (miniWindow && !miniWindow.isDestroyed()) {
 		miniWindow.focus();
 		return true;
@@ -1299,7 +2217,9 @@ ipcMain.handle("mini-chat-open", () => {
 		miniWindow = null;
 	});
 	return true;
-});
+}
+
+ipcMain.handle("mini-chat-open", () => openMiniChatWindow());
 
 // ── IPC: native directory picker (ZCode "打开文件夹" project add) ─────────
 
@@ -1330,6 +2250,15 @@ app.whenReady().then(async () => {
 	// file:// resources (the old Tauri webview cached them and confused us).
 	await session.defaultSession.clearCache();
 	createWindow();
+	// Managed in-app browser (right-pane tool): WebContentsView tabs + the
+	// loopback CDP bridge the browser tool attaches to (browser.gui). The
+	// controller needs the main window as its view owner. Async: the CDP
+	// server binds with a port-retry (managed-browser.cjs) — fire and
+	// forget, the renderer learns the bound port from pushed state.
+	void managedBrowser.start(mainWindow);
+	// Menu-bar tray: session quick-switcher (openchamber parity). Lives
+	// past window close on macOS, so create it once at boot.
+	ensureTray();
 
 	// Dev hot-reload: `bun run dev:reload` rebuilds dist/ and touches
 	// .dev-reload-trigger (deliberately outside dist/ — the build's
@@ -1355,7 +2284,10 @@ app.whenReady().then(async () => {
 	restorePinWindows();
 
 	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) createWindow();
+		// Glow overlays are transparent chrome, not app windows — they
+		// must not count toward "a window is open" on re-activate.
+		const real = BrowserWindow.getAllWindows().filter(w => !glowWindows.has(w));
+		if (real.length === 0) createWindow();
 	});
 });
 

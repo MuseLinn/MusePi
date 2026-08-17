@@ -33,7 +33,7 @@ export interface SnapcompactSavingsRecord {
 	savedTokens: number;
 }
 
-/** `~/.omp/.../snapcompact-savings.jsonl`, colocated with stats.db. */
+/** `~/.musepi/.../snapcompact-savings.jsonl`, colocated with stats.db. */
 export function snapcompactSavingsJournalPath(): string {
 	return path.join(path.dirname(getStatsDbPath()), "snapcompact-savings.jsonl");
 }

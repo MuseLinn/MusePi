@@ -3,7 +3,7 @@
  *
  * Discovers agent definitions from:
  *   - Bundled agents (shipped with omp-coding-agent)
- *   - ~/.omp/agent/agents/*.md (user-level)
+ *   - ~/.musepi/agent/agents/*.md (user-level)
  *   - .omp/agents/*.md (project-level)
  *
  * Supports:

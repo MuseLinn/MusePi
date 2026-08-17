@@ -158,7 +158,7 @@ async function handleList(cmd: SSHCommandArgs): Promise<void> {
 	}
 
 	if (hasUser) {
-		process.stdout.write(chalk.bold("User SSH Hosts (~/.omp/agent/ssh.json):\n"));
+		process.stdout.write(chalk.bold("User SSH Hosts (~/.musepi/agent/ssh.json):\n"));
 		printHosts(userHosts);
 	}
 }

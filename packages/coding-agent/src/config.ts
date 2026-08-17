@@ -77,7 +77,7 @@ export function getChangelogPath(): string | undefined {
 
 /**
  * Config directory bases in priority order (highest first).
- * User-level: ~/.omp/agent, ~/.claude, ~/.codex, ~/.gemini
+ * User-level: ~/.musepi/agent, ~/.claude, ~/.codex, ~/.gemini
  * Project-level: .omp, .claude, .codex, .gemini
  */
 const USER_CONFIG_BASES = priorityList.map(({ dir, globalAgentDir }) => ({
@@ -97,7 +97,7 @@ export interface ConfigDirEntry {
 }
 
 export interface GetConfigDirsOptions {
-	/** Include user-level directories (~/.omp/agent/...). Default: true */
+	/** Include user-level directories (~/.musepi/agent/...). Default: true */
 	user?: boolean;
 	/** Include project-level directories (.omp/...). Default: true */
 	project?: boolean;
@@ -117,7 +117,7 @@ export interface GetConfigDirsOptions {
  * @example
  * // Get all command directories
  * getConfigDirs("commands")
- * // → [{ path: "~/.omp/agent/commands", source: ".omp", level: "user" }, ...]
+ * // → [{ path: "~/.musepi/agent/commands", source: ".musepi", level: "user" }, ...]
  *
  * @example
  * // Get only existing project skill directories

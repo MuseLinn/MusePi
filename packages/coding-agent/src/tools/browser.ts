@@ -7,6 +7,7 @@ import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
+import { assertSafeBrowserDestination } from "./browser/policy";
 import {
 	acquireBrowser,
 	type BrowserHandle,
@@ -48,7 +49,7 @@ const DEFAULT_TAB_NAME = "main";
 const appSchema = type({
 	"path?": type("string").describe("binary path to spawn"),
 	"cdp_url?": type("string").describe("existing cdp endpoint"),
-	"relay?": type("boolean").describe("drive the user's own tabs via the omp browser relay"),
+	"relay?": type("boolean").describe("drive the user's own tabs via the musepi browser relay"),
 	"args?": type("string[]").describe("extra cli args"),
 	"target?": type("string").describe("substring to pick a window"),
 });
@@ -89,7 +90,7 @@ export interface BrowserToolDetails {
 	meta?: OutputMeta;
 }
 
-function resolveBrowserKind(params: BrowserParams, session: ToolSession): BrowserKind {
+export function resolveBrowserKind(params: BrowserParams, session: ToolSession): BrowserKind {
 	const app = params.app;
 	if (app?.cdp_url) {
 		return { kind: "connected", cdpUrl: app.cdp_url.replace(/\/+$/, "") };
@@ -125,6 +126,19 @@ function resolveBrowserKind(params: BrowserParams, session: ToolSession): Browse
 	});
 	if (cmuxKind) {
 		return cmuxKind;
+	}
+	// GUI managed browser: the desktop app's right-pane browser (Electron
+	// WebContentsView) exposes a loopback CDP bridge the tool attaches to like
+	// any connected browser. Opt-in via `browser.gui`; wins over headless so
+	// the agent's work is visible in the panel and shares its login state.
+	// The `gui` marker lets the supervisor drive a dedicated agent tab instead
+	// of adopting whatever tab the user is looking at.
+	const guiEnabled = session.settings.get("browser.gui") as boolean | undefined;
+	if (guiEnabled) {
+		const guiUrl = (session.settings.get("browser.guiUrl") as string | undefined)?.trim();
+		if (guiUrl) {
+			return { kind: "connected", cdpUrl: guiUrl.replace(/\/+$/, ""), gui: true };
+		}
 	}
 	const headless = session.settings.get("browser.headless") as boolean;
 	return { kind: "headless", headless };
@@ -264,6 +278,13 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		const kind = resolveBrowserKind(params, this.session);
 		details.browser = kind.kind;
 
+		// Optional public-only navigation policy (browser.policy.restrictToPublic):
+		// scheme + private-network checks plus a DNS re-check before navigating.
+		let openUrl = params.url;
+		if (openUrl && this.session.settings.get("browser.policy.restrictToPublic")) {
+			openUrl = await assertSafeBrowserDestination(openUrl);
+		}
+
 		// If a tab with this name already exists on a different browser kind, fail fast — caller must close first.
 		const existing = getTab(name);
 		if (existing && !sameBrowserKind(existing.browser.kind, kind)) {
@@ -308,7 +329,7 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			try {
 				result = await untilAborted(openSignal, () =>
 					acquireTab(name, browser, {
-						url: params.url,
+						url: openUrl,
 						waitUntil: params.wait_until,
 						viewport: params.viewport
 							? {

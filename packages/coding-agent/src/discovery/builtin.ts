@@ -37,8 +37,8 @@ import {
 } from "./helpers";
 
 const PROVIDER_ID = "native";
-const DISPLAY_NAME = "OMP";
-const DESCRIPTION = "Native OMP configuration from ~/.omp and .omp/";
+const DISPLAY_NAME = "MusePi";
+const DESCRIPTION = "Native MusePi configuration from ~/.musepi/agent and .musepi/";
 const PRIORITY = 100;
 
 const PATHS = SOURCE_PATHS.native;
@@ -63,7 +63,7 @@ async function getConfigDirs(ctx: LoadContext): Promise<Array<{ dir: string; lev
 		result.push({ dir: projectDir, level: "project" });
 	}
 	// Native user config is profile-scoped: getAgentDir() points at the active
-	// profile's agent dir (~/.omp/profiles/<name>/agent), like sessions and MCP.
+	// profile's agent dir (~/.musepi/profiles/<name>/agent), like sessions and MCP.
 	const userDir = await ifNonEmptyDir(getAgentDir());
 	if (userDir) {
 		result.push({ dir: userDir, level: "user" });
@@ -291,7 +291,7 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
 		}),
 	);
 
-	// User-level scan from ~/.omp/agent/skills/
+	// User-level scan from ~/.musepi/agent/skills/
 	const userScan = scanSkillsFromDir(ctx, {
 		dir: path.join(getAgentDir(), "skills"),
 		providerId: PROVIDER_ID,
@@ -331,7 +331,7 @@ registerProvider<Skill>(skillCapability.id, {
 registerProvider<Skill>(skillCapability.id, {
 	id: MANAGED_SKILLS_PROVIDER_ID,
 	displayName: "Managed Skills (auto-learn)",
-	description: "Auto-generated managed skills from ~/.omp/agent/managed-skills",
+	description: "Auto-generated managed skills from ~/.musepi/agent/managed-skills",
 	priority: MANAGED_SKILLS_PRIORITY,
 	load: loadManagedSkills,
 });
@@ -387,7 +387,7 @@ async function loadRules(ctx: LoadContext): Promise<LoadResult<Rule>> {
 	// Top-level RULES.md is a sticky always-apply rule. Documented in
 	// https://omp.sh/docs/context-files as the file that gets "re-injected near
 	// the current turn so they keep hold across long conversations".
-	// User scope:    ~/.omp/agent/RULES.md
+	// User scope:    ~/.musepi/agent/RULES.md
 	// Project scope: nearest .omp/RULES.md walking up from cwd to repoRoot
 	const userRulesFile = path.join(getAgentDir(), "RULES.md");
 	const userRule = await loadStickyRulesFile(userRulesFile, "user");

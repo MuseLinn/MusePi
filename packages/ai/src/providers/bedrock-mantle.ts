@@ -54,7 +54,7 @@ function createSignedFetch(options: BedrockMantleOptions, region: string): Fetch
 		}
 		const response = await baseFetch(
 			url,
-			method === "GET" || method === "HEAD" ? { ...init, method, headers } : { ...init, method, headers, body },
+			method === "GET" || method === "HEAD" ? { ...init, method, headers } : { ...init, method, headers, body: body as ConstructorParameters<typeof Response>[0] },
 		);
 		if (response.status === 401 || response.status === 403) {
 			invalidateAwsCredentialCache({ profile: options.providerOptions?.profile, region });

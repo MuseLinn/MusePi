@@ -1,23 +1,61 @@
 import { t } from "@musepi/collab-web";
+import { CountUp } from "@musepi/collab-web/src/widgets/count-up";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { CountUp } from "@musepi/collab-web/src/widgets/count-up";
+import { Icon } from "../vendor/oc-icons";
+
+/** Snapcompact wire-savings estimate (TUI /context parity) — wire shape
+ *  of `SnapcompactSavingsEstimate` served by session.contextUsage. */
+export interface SnapcompactSavingsView {
+	visionCapable: boolean;
+	systemPrompt?: {
+		applied: boolean;
+		reason?: "empty" | "margin" | "budget";
+		textTokens: number;
+		frames: number;
+		imageTokens: number;
+		savedTokens: number;
+		scope: string;
+	};
+	toolResults?: {
+		total: number;
+		swapped: number;
+		textTokens: number;
+		frames: number;
+		imageTokens: number;
+		savedTokens: number;
+	};
+	savedTokens: number;
+}
 
 /**
  * Context-window usage ring (kimi-code-web / openchamber parity): a
  * conic-gradient donut showing the live session's context percentage,
  * colored by utilization (ok / warn / danger). Hovering or focusing it
- * opens a popover with the exact token breakdown.
+ * opens a popover with the exact token breakdown — and, when the caller
+ * supplies `onCompact`, a compact-context action right in the card.
  */
 export function ContextRing({
 	percent,
 	tokens,
 	contextWindow,
+	onCompact,
+	compacting = false,
+	compactFailed = false,
+	snapcompact = null,
 }: {
 	percent: number | null | undefined;
 	tokens: number | null | undefined;
 	contextWindow: number | null | undefined;
+	/** Shows a "压缩上下文" button in the popover (TUI /compact parity). */
+	onCompact?: () => void;
+	/** Compaction in flight — disables the action and shows progress. */
+	compacting?: boolean;
+	/** Last compaction attempt failed — danger styling, transient. */
+	compactFailed?: boolean;
+	/** Snapcompact estimated wire savings (TUI /context parity); null/undefined hides the block. */
+	snapcompact?: SnapcompactSavingsView | null;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
@@ -88,6 +126,62 @@ export function ContextRing({
 							{Math.round(clamped)}%
 						</span>
 					</div>
+					{snapcompact && (
+						<div className="gui-context-pop-snap">
+							<div className="gui-context-pop-row">
+								<span>{t("snapcompact savings")}</span>
+								<span className="gui-context-pop-val">
+									{snapcompact.visionCapable ? `~${fmtTokens(snapcompact.savedTokens)}` : "—"}
+								</span>
+							</div>
+							{!snapcompact.visionCapable ? (
+								<div className="gui-context-pop-note">{t("model does not support images")}</div>
+							) : (
+								<>
+									{snapcompact.systemPrompt && (
+										<div className="gui-context-pop-note">
+											{snapcompact.systemPrompt.applied
+												? t("system prompt imaged: {text} text → {frames} frames (saves ~{saved})", {
+														text: fmtTokens(snapcompact.systemPrompt.textTokens),
+														frames: String(snapcompact.systemPrompt.frames),
+														saved: fmtTokens(snapcompact.systemPrompt.savedTokens),
+													})
+												: t("system prompt stays text ({reason})", {
+														reason: t(
+															snapcompact.systemPrompt.reason === "empty"
+																? "reason: empty"
+																: snapcompact.systemPrompt.reason === "margin"
+																	? "reason: insufficient savings"
+																	: "reason: image budget",
+														),
+													})}
+										</div>
+									)}
+									{snapcompact.toolResults && snapcompact.toolResults.swapped > 0 && (
+										<div className="gui-context-pop-note">
+											{t("tool results: {imaged} imaged (saves ~{saved})", {
+												imaged: String(snapcompact.toolResults.swapped),
+												saved: fmtTokens(snapcompact.toolResults.savedTokens),
+											})}
+										</div>
+									)}
+								</>
+							)}
+						</div>
+					)}
+					{onCompact && (
+						<button
+							type="button"
+							className={`gui-context-pop-action${compactFailed ? " gui-context-pop-action--danger" : ""}`}
+							onClick={onCompact}
+							disabled={compacting}
+							title={compactFailed ? t("compaction failed") : t("compact context")}
+							aria-label={t("compact context")}
+						>
+							<Icon name="collapse-vertical" className="h-3.5 w-3.5" />
+							<span>{compacting ? t("compacting…") : t("compact context")}</span>
+						</button>
+					)}
 				</div>,
 			)}
 		</div>

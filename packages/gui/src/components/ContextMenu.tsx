@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { MENU_ANIM_MS } from "./Pop";
 
@@ -97,7 +98,6 @@ export function ContextMenu({
 		>
 			{items.map((item, i) => (
 				// Menu rows are static call-site arrays — the index is the identity.
-				// biome-ignore lint/suspicious/noArrayIndexKey: static menu row list
 				<div key={i}>
 					{item.divider && <div className="gui-context-divider" />}
 					<button
@@ -106,6 +106,7 @@ export function ContextMenu({
 						className={`gui-context-item${item.danger ? " gui-context-item--danger" : ""}${item.disabled ? " gui-context-item--disabled" : ""}`}
 						role="menuitem"
 						onClick={() => {
+							tapFeedback();
 							onClose();
 							item.onSelect?.();
 						}}

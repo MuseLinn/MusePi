@@ -38,7 +38,9 @@ async function recordPcm(maxSeconds = 15): Promise<{ pcm: Float32Array; stop(): 
 			stopped = true;
 			node.disconnect();
 			source.disconnect();
-			stream.getTracks().forEach(t => t.stop());
+			stream.getTracks().forEach(t => {
+				t.stop();
+			});
 			void ctx.close();
 		};
 		node.onaudioprocess = e => {

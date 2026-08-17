@@ -44,13 +44,34 @@ widget { type, data, title? }
 | `fx` | `chip`, `title`, `pairs: [{code, unit, note}]` | 实时汇率（60s 自动刷新 + 30 日走势） |
 | `stocks` | `chip`, `title`, `rows: [{code, label, badge, name}]` | 实时 A 股盯盘（腾讯行情 + 30 日 K 线迷你图） |
 | `gauge` | `value`, `status` | 仪表盘读数 |
-| `kline` | `candles: [...]` | K 线图（蜡烛 + 均线） |
+| `kline` | `candles: [{o, h, l, c, v}]` | K 线图（蜡烛 + 均线）：`candles` 每根为 `{o,h,l,c,v}`（开/高/低/收/量），缺 `v` 可省略；`price`/`delta`/`stocks` 可选 |
 | `heatwall` | `tiles: [{name, delta}]` | 涨跌热力墙 |
 | `indextape` | `indices: [...]` | 指数磁带（三市指数） |
-| `html` | `html: string`, `data: object` | 自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.__WIDGET_DATA__`；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用） |
+| `html` | `html: string`, `data: object` | 自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.__WIDGET_DATA__`；当前深浅色经 `window.__WIDGET_THEME__`（"dark"\|"light"）与 `<html class="omp-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用） |
 
 - `data` 可省略字段——缺省值自动补齐（如 `calc` 缺 `mode` 默认 `post`）。
 - `title` 可选，默认组件名。
+
+## 主题自适应（深浅色热切换，html 类型硬性要求）
+
+桌面端支持深浅色主题热切换，自定义 HTML 面必须跟随，**禁止单一固定配色**：
+
+1. 用注入的主题做两套配色：
+   ```css
+   /* 通过 html class 做 CSS 适配（推荐） */
+   .omp-theme-dark  body { background: #17181c; color: #e8e8e8; }
+   .omp-theme-light body { background: #f7f7f5; color: #1a1a1e; }
+   /* 卡片、文字、边框等所有有颜色的元素都要提供两套 */
+   ```
+   或 JS 运行时读取 `window.__WIDGET_THEME__`（"dark" | "light"）动态设色。
+2. **对比度自检**：深色下浅色文字、浅色下深色文字；不要用纯白底+黑字（深色界面刺眼）
+   或透明底+深字（深色界面不可读）。无法两全时默认跟随深色系（与暗色为主的界面一致）。
+3. **凡是设置了背景色的元素/页面，必须同时显式设置文字颜色**（同元素或 body）。
+   宿主只对"未设文字色"的元素兜底（浅色主题深字/深色主题浅字）；iframe 里
+   未设 `color` 的文字默认黑色——深色主题下黑字+深底=整段不可读，这是"字体看不清"
+   最常见的根因。用固定色时确保与背景对比度足够（WCAG AA 约 4.5:1）。
+4. 主题切换时 iframe 会以新主题重建，无需自己监听；但**不要**依赖外部颜色变量
+   （sandbox 内无法读取宿主 CSS）。
 
 ## 铁律
 

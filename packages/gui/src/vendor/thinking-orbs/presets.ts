@@ -74,7 +74,10 @@ export function resolvePreset(state: OrbState, size: OrbSize): Resolved {
   if (hit) return hit;
 
   const mode = STATE_TO_MODE[state];
-  const preset = PRESETS[mode][size];
+  // Defensive: only 20/32/64 are tuned; any other size (a cast slipping
+  // through, a future preset) falls back to the 32 design instead of
+  // crashing on an undefined preset.
+  const preset = PRESETS[mode][size] ?? PRESETS[mode][32];
   let opts: ModeOpts = { ...BASE_PROFILES[mode] };
   if (preset.count !== 1) opts = scaleCounts(opts, preset.count);
   if (preset.size !== 1) opts = scaleRadii(opts, preset.size);

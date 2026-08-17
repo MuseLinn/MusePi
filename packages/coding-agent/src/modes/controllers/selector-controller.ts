@@ -1165,7 +1165,7 @@ export class SelectorController {
 					this.ctx.renderInitialMessages({ clearTerminalHistory: true });
 					this.ctx.editor.setDraft(result.selectedText, result.selectedImages);
 					done();
-					this.ctx.showStatus("Branched to new session");
+					this.ctx.showStatus("Branched to previous message");
 				},
 				() => {
 					done();

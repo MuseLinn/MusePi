@@ -37,15 +37,15 @@ export function useCollapse(open: boolean): (el: HTMLDivElement | null) => void 
 			// From the locked height (0 after a collapse, px mid-flight,
 			// auto after a settled expand) to the measured content height.
 			const from = current === "auto" || current === "" ? 0 : parseFloat(current);
-			inner.style.height = (Number.isFinite(from) ? from : 0) + "px";
+			inner.style.height = `${Number.isFinite(from) ? from : 0}px`;
 		} else {
-			inner.style.height = inner.scrollHeight + "px";
+			inner.style.height = `${inner.scrollHeight}px`;
 		}
 		// Force a reflow so the start value sticks before the transition
 		// is enabled.
 		void inner.offsetHeight;
 		inner.style.transition = `height ${DURATION}ms ${EASING}`;
-		inner.style.height = open ? inner.scrollHeight + "px" : "0px";
+		inner.style.height = open ? `${inner.scrollHeight}px` : "0px";
 
 		const settle = (): void => {
 			// Returning to auto after an expand keeps the block responsive

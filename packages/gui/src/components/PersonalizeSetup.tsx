@@ -1,0 +1,128 @@
+import { type TranslationKey, t } from "@musepi/collab-web";
+import { useEffect, useState, type ReactNode } from "react";
+import { tapFeedback } from "../lib/haptic";
+import { BUILTIN_PETDEX, loadPetdex, petId, type PetdexPackage } from "../lib/pet";
+import type { RpcClient } from "../lib/rpc";
+import { Icon } from "../vendor/oc-icons";
+import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
+
+/**
+ * Onboarding personalization step (post-provider setup): pick the agent
+ * avatar style, the streaming reveal toggle and the desktop-pet theme —
+ * all live-previewed and persisted exactly like the settings rows they
+ * mirror (设置 → 常规 / 伙伴 / display.smoothStreaming).
+ */
+export function PersonalizeSetup({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
+	const [smooth, setSmooth] = useState(true);
+	const [selectedPet, setSelectedPet] = useState<string>(() => {
+		try {
+			return localStorage.getItem("omp-gui-pet-id") ?? "musepi";
+		} catch {
+			return "musepi";
+		}
+	});
+	const [petdex, setPetdex] = useState<PetdexPackage[]>(() => loadPetdex());
+
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<Record<string, unknown> | null>("settings.get", { keys: ["display.smoothStreaming"] })
+			.then(v => {
+				const s = v?.["display.smoothStreaming"];
+				if (typeof s === "boolean") setSmooth(s);
+			})
+			.catch(() => {});
+	}, [rpc]);
+
+	const pickAvatar = (id: string): void => {
+		tapFeedback();
+		setAvatarId(id);
+		try {
+			localStorage.setItem("omp-gui-avatar", id);
+		} catch {
+			// storage unavailable
+		}
+		window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+	};
+
+	const toggleSmooth = (): void => {
+		tapFeedback();
+		setSmooth(v => {
+			const next = !v;
+			void rpc
+				?.request("settings.set", { key: "display.smoothStreaming", value: next })
+				.then(() => window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key: "display.smoothStreaming" } })))
+				.catch(() => {});
+			return next;
+		});
+	};
+
+	const pickPet = (id: string): void => {
+		tapFeedback();
+		setSelectedPet(id);
+		try {
+			localStorage.setItem("omp-gui-pet-id", id);
+		} catch {
+			// storage unavailable
+		}
+		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+	};
+
+	const petOptions = [...BUILTIN_PETDEX, ...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" }))];
+
+	return (
+		<div className="gui-obo-personalize">
+			<div className="gui-obo-pers-section">
+				<div className="gui-obo-pers-label">{t("agent avatar style")}</div>
+				<div className="flex items-center gap-1.5">
+					{AVATAR_PRESETS.map(p => (
+						<button
+							key={p.id}
+							type="button"
+							className={`gui-avatar-opt${avatarId === p.id ? " gui-avatar-opt--active" : ""}`}
+							title={t(p.labelKey as TranslationKey)}
+							aria-pressed={avatarId === p.id}
+							onClick={() => pickAvatar(p.id)}
+						>
+							{p.render("working", 20)}
+						</button>
+					))}
+				</div>
+			</div>
+
+			<div className="gui-obo-pers-section">
+				<div className="gui-obo-pers-label">{t("smooth streaming")}</div>
+				<button
+					type="button"
+					role="switch"
+					aria-checked={smooth}
+					className={`gui-toggle${smooth ? " gui-toggle--on" : ""}`}
+					onClick={toggleSmooth}
+					aria-label={t("smooth streaming")}
+				>
+					<span className="gui-toggle-knob" />
+				</button>
+			</div>
+
+			<div className="gui-obo-pers-section">
+				<div className="gui-obo-pers-label">{t("pet theme")}</div>
+				<div className="gui-obo-pet-grid">
+					{petOptions.map(p => (
+						<button
+							key={p.id}
+							type="button"
+							className={`gui-obo-pet-chip${selectedPet === p.id ? " gui-obo-pet-chip--active" : ""}`}
+							title={p.description || p.displayName}
+							aria-pressed={selectedPet === p.id}
+							onClick={() => pickPet(p.id)}
+						>
+							<Icon name={selectedPet === p.id ? "checkbox-circle" : "checkbox-blank"} className="h-3.5 w-3.5" />
+							<span className="truncate">{p.displayName}</span>
+						</button>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}

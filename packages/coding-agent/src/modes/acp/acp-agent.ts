@@ -497,14 +497,14 @@ export class AcpAgent implements Agent {
 			{
 				id: "agent",
 				name: "Use existing local credentials",
-				description: "Authenticate via the provider keys/OAuth state already configured under ~/.omp.",
+				description: "Authenticate via the provider keys/OAuth state already configured under ~/.musepi.",
 			},
 		];
 		if (params.clientCapabilities?.auth?.terminal === true) {
 			authMethods.push({
 				type: "terminal",
 				id: "terminal",
-				name: "Set up Oh My Pi in terminal",
+				name: "Set up MusePi in terminal",
 				description: "Launch the omp TUI to add provider keys and select models.",
 				args: [ACP_TERMINAL_AUTH_FLAG],
 			});
@@ -512,8 +512,8 @@ export class AcpAgent implements Agent {
 		return {
 			protocolVersion: PROTOCOL_VERSION,
 			agentInfo: {
-				name: "oh-my-pi",
-				title: "Oh My Pi",
+				name: "musepi",
+				title: "MusePi",
 				version: VERSION,
 			},
 			authMethods,

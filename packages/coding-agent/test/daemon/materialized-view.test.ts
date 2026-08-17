@@ -173,10 +173,18 @@ describe("MaterializedView persistence round-trip", () => {
 			{ type: "message_end", message: userMessage({ content: "final" }) },
 			{ type: "turn_end" },
 		];
-		const incremental = new MaterializedView(SESSION, CWD);
-		for (const e of events) incremental.apply(e);
-		const replayed = MaterializedView.replay(SESSION, CWD, events);
-		expect(replayed.snapshot()).toEqual(incremental.snapshot());
+		// agent_start stamps agent.createdAt/lastActivity with Date.now() —
+		// freeze the clock so the incremental and replayed views agree.
+		const realNow = Date.now;
+		Date.now = () => 1_700_000_000_000;
+		try {
+			const incremental = new MaterializedView(SESSION, CWD);
+			for (const e of events) incremental.apply(e);
+			const replayed = MaterializedView.replay(SESSION, CWD, events);
+			expect(replayed.snapshot()).toEqual(incremental.snapshot());
+		} finally {
+			Date.now = realNow;
+		}
 	});
 
 	test("fromSnapshot rejects malformed input", () => {

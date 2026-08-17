@@ -1,34 +1,56 @@
-import { getLocaleSnapshot, LanguageToggle, subscribeLocale, ThemeToggle, t } from "@musepi/collab-web";
+import { getLocaleSnapshot, LanguageToggle, setLocale, subscribeLocale, ThemeToggle, t } from "@musepi/collab-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AccentToggle } from "./components/AccentToggle";
+import { BlurText } from "./components/BlurText";
+import { BoardPage } from "./components/BoardPage";
 import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
-import { BoardPage } from "./components/BoardPage";
-import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
-import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { GuiHeader } from "./components/GuiHeader";
+import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
+import { OnboardingOverlay } from "./components/OnboardingOverlay";
+import type { ReminderRow } from "./components/RemindersPanel";
+import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import { SessionSidebar } from "./components/SessionSidebar";
 import type { GuiTreeNode } from "./components/SessionTree";
 import { SettingsView } from "./components/SettingsView";
+import { ShinyText } from "./components/ShinyText";
+import type { ThinkingLevel } from "./components/ThinkingSelector";
+import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { pickDirectory, restartDaemon } from "./lib/electron";
 import { applyGlassLevel, applyGlassMaterial, readGlassLevel } from "./lib/glass";
-import type { ElectronApi } from "./lib/highlight";
+import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
-import { cleanupCandidates, cleanupDays, cleanupEnabled, cleanupAction, runCleanupOnce } from "./lib/session-cleanup";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { RpcClient, type StreamEvent } from "./lib/rpc";
-import { GuiSessionStore, dispatchPetActivity, type PetBubbleKind } from "./lib/session-store";
-import { dispatchNotification } from "./lib/notify";
+import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
+import { clearRoundDurations, dispatchPetActivity, GuiSessionStore, type PetBubbleKind } from "./lib/session-store";
+import { captureSelectionText } from "./lib/selection-capture";
 import { sfxFor } from "./lib/sfx";
 import logoUrl from "./vendor/logo.png";
+import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 
 const DEFAULT_URL = "ws://127.0.0.1:8300";
+
+/** Transient RPC-error banner: how long a failure stays visible before
+ *  auto-dismissing. Reconnect and the next successful session op clear it
+ *  sooner. Long enough to read, short enough that a stale failure never
+ *  sticks — the daemon usually recovers without a reconnect (the old
+ *  behavior left the red bar until a full reload). */
+const ERROR_BANNER_MS = 8_000;
+
+/** RPC failure → banner text. "Unknown session" is the common stale-tree
+ *  case (a deleted/unresumable row) — the raw message is just a UUID, so
+ *  surface a plain hint instead of id noise. */
+const fmtError = (op: string, err: unknown): string => {
+	const msg = err instanceof Error ? err.message : String(err);
+	return /Unknown session/.test(msg) ? `${op}: ${t("session unavailable")}` : `${op}: ${msg}`;
+};
 
 /** Electron shell environment (has electronAPI daemon bridge). */
 function isElectron(): boolean {
@@ -51,6 +73,43 @@ async function probeDaemonPort(): Promise<number | null> {
 async function startDaemonViaShell(port: number): Promise<number> {
 	const { electronAPI } = window as unknown as { electronAPI: { startDaemon(port: number): Promise<number> } };
 	return await electronAPI.startDaemon(port);
+}
+
+/** Split a modelRoles value (`provider/id:level`) into the bare selector +
+ * thinking level. "off"/known-level suffixes parse; no suffix → level null.
+ * Returns undefined when the value is absent. */
+function splitRoleValue(value: string | undefined): { model: string; level: string | null } | undefined {
+	if (!value) return undefined;
+	const colon = value.lastIndexOf(":");
+	const suffix = colon > 0 ? value.slice(colon + 1) : "";
+	if (suffix === "off" || (THINKING_LEVELS as readonly string[]).includes(suffix)) {
+		return { model: value.slice(0, colon), level: suffix };
+	}
+	return { model: value, level: null };
+}
+
+/** session.list row fields the GUI tracks per session (metadata for the
+ *  archive/sidebar + real-time working/unread status for reminders). */
+interface SessionMetaRow {
+	cwd?: string;
+	model?: string;
+	paused?: boolean;
+	/** Live session with a running agent turn (kimi 进行中 parity). */
+	working?: boolean;
+	/** Session currently held by the daemon (subscribed or streaming). */
+	live?: boolean;
+	messageCount?: number;
+	title?: string;
+	timestamp?: string;
+}
+
+/** Collect every session id in a session tree (drift check for the poll:
+ *  the sidebar tree must show exactly the sessions session.list knows). */
+function collectTreeIds(nodes: GuiTreeNode[], out: Set<string>): void {
+	for (const n of nodes) {
+		out.add(n.entry.id);
+		if (n.children.length > 0) collectTreeIds(n.children, out);
+	}
 }
 
 function AppInner(): ReactNode {
@@ -90,15 +149,24 @@ function AppInner(): ReactNode {
 			};
 			chat("omp-gui-chat-time", "gui-chat-hide-time");
 			chat("omp-gui-chat-rowactions", "gui-chat-hide-row-actions");
-			chat("omp-gui-chat-smooth", "gui-chat-no-smooth");
 			chat("omp-gui-chat-codehl", "gui-chat-plain-code");
 			chat("omp-gui-chat-thinking", "gui-chat-hide-thinking");
 			chat("omp-gui-chat-caret", "gui-chat-no-caret");
+			// gui-chat-no-smooth is NOT mapped here: 平滑流式 is controlled
+			// solely by the daemon display.smoothStreaming setting (外观 →
+			// 显示) since the chat tab merged into 外观 (2026-08-12). ChatView
+			// syncs the class from settings.get, so the old localStorage key
+			// must not re-apply a stale value at startup.
 			// Output style preset (settings → 聊天 → 输出风格): the same key
 			// the segmented picker writes, mirrored onto <html> at startup so
 			// the choice survives relaunches.
 			const outputStyle = localStorage.getItem("omp-gui-chat-output-style");
-			document.documentElement.dataset.outputStyle = outputStyle === "kimi" || outputStyle === "zcode" ? outputStyle : "default";
+			document.documentElement.dataset.outputStyle =
+				outputStyle === "kimi" || outputStyle === "zcode" ? outputStyle : "default";
+			// Typing effect preset (settings → 聊天 → 逐字动效): NOT applied
+			// here — effect classes now live on the streaming block's own
+			// .tr-md root (Markdown.tsx reads the key per render), so finished
+			// and historic messages always render plain text.
 			// Code appearance prefs (settings → 外观 → 代码设置): root classes
 			// for line numbers / long-line wrap; themes + size re-apply below.
 			document.documentElement.classList.toggle(
@@ -110,10 +178,12 @@ function AppInner(): ReactNode {
 			// re-apply at startup so choices survive relaunches.
 			applyAppearancePrefs();
 			// Keep-awake (settings 常规 → 保持电脑运行): re-assert on launch —
-			// the main process holds the caffeinate child only while told to.
+			// the main process holds the powerSaveBlocker assertion only
+			// while told to (cross-platform; no-op safe on any platform).
 			if (localStorage.getItem("omp-gui-keep-awake") === "1") {
-				void (window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } })
-					.electronAPI?.setKeepAwake?.(true);
+				void (
+					window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
+				).electronAPI?.setKeepAwake?.(true);
 			}
 		} catch {
 			// storage unavailable
@@ -121,11 +191,19 @@ function AppInner(): ReactNode {
 	}, []);
 	// The native window material follows the UI theme (light scheme = bright
 	// vibrancy, dark = under-window): re-mirror whenever the theme module
-	// flips the scheme knob on <html>.
+	// flips the scheme knob on <html>. The pet window gets the scheme too —
+	// it has no tokens.css and file:// storage events don't fire cross-
+	// window, so the resolved data-theme is pushed over the pet bridge.
 	useEffect(() => {
 		const root = document.documentElement;
+		const { electronAPI } = window as unknown as {
+			electronAPI?: { petActivity?(payload: unknown): Promise<unknown> };
+		};
 		const observer = new MutationObserver(() => {
 			applyGlassMaterial(localStorage.getItem("omp-gui-glass-enabled") !== "0");
+			void electronAPI?.petActivity?.({
+				theme: root.dataset.theme === "light" ? "light" : "dark",
+			});
 		});
 		observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
 		return () => observer.disconnect();
@@ -148,19 +226,72 @@ function AppInner(): ReactNode {
 		if (error && error !== prevError.current) sfxFor("error");
 		prevError.current = error;
 	}, [error]);
+	// Transient banner: auto-dismiss after a while so a failure that the
+	// daemon recovered from never sticks until reload. A newer error resets
+	// the timer; the manual × and successful session ops clear it sooner.
+	const errorTimerRef = useRef<Timer | null>(null);
+	useEffect(() => {
+		if (!error) return;
+		const id = setTimeout(() => setError(null), ERROR_BANNER_MS);
+		errorTimerRef.current = id;
+		return () => {
+			clearTimeout(id);
+		};
+	}, [error]);
 	const [tree, setTree] = useState<GuiTreeNode[]>([]);
 	// Sessions with an undismissed completion (pet badge + persistent
-	// bubble) — cleared when the user opens the session.
-	const [unreadSessions, setUnreadSessions] = useState<Set<string>>(new Set());
+	// bubble + sidebar 未读 marker + welcome reminders panel) — cleared
+	// when the user opens the session. Seeded from localStorage, grown by
+	// pet completions and the cursor-based derivation (message-count
+	// growth past the last read count, kimi 实时提醒 parity).
+	const [unreadSessions, setUnreadSessions] = useState<Set<string>>(() => {
+		try {
+			return new Set(JSON.parse(localStorage.getItem("omp-gui-unread") ?? "[]") as string[]);
+		} catch {
+			return new Set();
+		}
+	});
 	const unreadSessionsRef = useRef<Set<string>>(new Set());
 	unreadSessionsRef.current = unreadSessions;
+	// Persist the unread set so the sidebar/reminders agree across
+	// relaunches (single source, owned here).
+	useEffect(() => {
+		try {
+			localStorage.setItem("omp-gui-unread", JSON.stringify([...unreadSessions]));
+		} catch {
+			// storage unavailable
+		}
+	}, [unreadSessions]);
 	const treeRef = useRef<GuiTreeNode[]>([]);
 	treeRef.current = tree;
-	/** session.list metadata (cwd/model) keyed by id — folder display in
-	 *  the archive view (ZCode) and future per-row model chips. */
-	const [sessionMeta, setSessionMeta] = useState<Map<string, { cwd?: string; model?: string; paused?: boolean }>>(
-		new Map(),
-	);
+	// refreshSessions 并发守卫: 多个 refresh 同时进行时(发送/删除/打开/标题事件
+	// 交错), 只接受最新一轮的结果 — 否则慢的旧请求后完成会覆盖新状态 (已删会话
+	// 残留在树里, 点击报 Unknown session)。
+	const treeRefreshSeqRef = useRef(0);
+	const metaRefreshSeqRef = useRef(0);
+	/** session.list metadata keyed by id — folder display in the archive
+	 *  view (ZCode), pause chips, and the real-time working/unread status
+	 *  the sidebar + reminders panel derive from (kimi parity). */
+	const [sessionMeta, setSessionMeta] = useState<Map<string, SessionMetaRow>>(new Map());
+	const sessionMetaRef = useRef<Map<string, SessionMetaRow>>(new Map());
+	sessionMetaRef.current = sessionMeta;
+	// Per-session "last seen message count" — the source of truth for the
+	// cursor-based unread derivation: a session whose count grew past the
+	// last count the user had it open at is unread. Persisted so sessions
+	// that completed while the app was closed still surface as reminders.
+	const readCountRef = useRef<Map<string, number>>(new Map());
+	const readCountLoadedRef = useRef(false);
+	const readSeededRef = useRef(false);
+	if (!readCountLoadedRef.current) {
+		readCountLoadedRef.current = true;
+		try {
+			const raw = localStorage.getItem("omp-gui-read-count");
+			if (raw) readCountRef.current = new Map(JSON.parse(raw) as [string, number][]);
+			readSeededRef.current = localStorage.getItem("omp-gui-read-count-seeded") === "1";
+		} catch {
+			// storage unavailable
+		}
+	}
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	/** Process-global freeze (TUI `/pause` parity, daemon-wide): every session's
 	 *  agents park until released. Drives the fullscreen frosted-glass overlay.
@@ -182,6 +313,14 @@ function AppInner(): ReactNode {
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
+	// Session-open loading overlay (React-Bits-style skeleton): armed by
+	// openSession with a 150ms flicker threshold, cleared when the store
+	// lands (or the open fails). MUST sit above the booting/connect early
+	// returns below — a hook after them is skipped by the splash/connect
+	// renders and throws "Rendered more hooks than during the previous
+	// render" on the splash → full-app transition (Rules of Hooks).
+	const [sessionLoading, setSessionLoading] = useState(false);
+	const sessionLoadingTimerRef = useRef<Timer | null>(null);
 	// Panel collapse (ZCode-style): side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("omp-gui-side") === "0");
@@ -232,7 +371,8 @@ function AppInner(): ReactNode {
 			void rpc
 				.request<{ runs?: { id: string; taskId: string; status: string; startedAt: number; error?: string }[] }>(
 					"cron.list",
-					{})
+					{},
+				)
 				.then(res => {
 					if (!alive) return;
 					for (const run of res?.runs ?? []) {
@@ -272,7 +412,7 @@ function AppInner(): ReactNode {
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
 	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "chat" | null>(null);
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const viewSwapRef = useRef((to: "board" | "scheduled" | "chat"): void => {});
+	const viewSwapRef = useRef((_to: "board" | "scheduled" | "chat"): void => {});
 	useEffect(() => {
 		const onOpenBoard = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -307,6 +447,32 @@ function AppInner(): ReactNode {
 	};
 	// Section the settings pane lands on (sidebar 技能 entry preselects).
 	const [settingsSection, setSettingsSection] = useState<"skills" | undefined>(undefined);
+	// Settings open/close rides the same blur transition as the board /
+	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
+	// the settings view (or the workspace) enters with its 300ms blur-in.
+	const [leavingSettings, setLeavingSettings] = useState(false);
+	const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const openSettings = useCallback((): void => {
+		if (settingsOpen) return;
+		// Blur the current surface out first (leavingView keeps it mounted).
+		setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : "chat");
+		clearTimeout(settingsTimerRef.current ?? undefined);
+		settingsTimerRef.current = setTimeout(() => {
+			settingsTimerRef.current = null;
+			setLeavingView(null);
+			setSettingsOpen(true);
+		}, 150);
+	}, [boardOpen, scheduledOpen, settingsOpen]);
+	const closeSettings = useCallback((): void => {
+		if (!settingsOpen || leavingSettings) return;
+		setLeavingSettings(true);
+		clearTimeout(settingsTimerRef.current ?? undefined);
+		settingsTimerRef.current = setTimeout(() => {
+			settingsTimerRef.current = null;
+			setLeavingSettings(false);
+			setSettingsOpen(false);
+		}, 150);
+	}, [settingsOpen, leavingSettings]);
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	// Bottom integrated terminal drawer (ZCode style) — independent of the
@@ -323,6 +489,10 @@ function AppInner(): ReactNode {
 	/** Model chosen in the welcome composer — applied to the new session and
 	 *  reflected in the in-chat selector (preset). */
 	const [presetModelId, setPresetModelId] = useState<string | null>(null);
+	/** Boot snapshot of the session thinking default (modelRoles.default suffix,
+	 *  else settings.defaultThinkingLevel incl. auto) — replaces the old
+	 *  localStorage mirror so the schema keys stay the single source. */
+	const [presetThinkingLevel, setPresetThinkingLevel] = useState<ThinkingLevel | null | undefined>(undefined);
 	const bootRef = useRef(false);
 	const rpcRef = useRef<RpcClient | null>(null);
 	const storeRef = useRef<GuiSessionStore | null>(null);
@@ -341,23 +511,206 @@ function AppInner(): ReactNode {
 	storeRef.current = store;
 
 	// ── Connect to the daemon ──────────────────────────────────────────────
-	const refreshSessions = useCallback(async (client: RpcClient): Promise<void> => {
-		// Session tree (OMP /tree) — non-fatal on daemons without it.
+	/** Persist the per-session read cursors (best-effort; storage can be
+	 *  unavailable in sandboxed contexts). */
+	const persistReadCount = useCallback((): void => {
 		try {
-			const nodes = await client.request<GuiTreeNode[]>("session.tree");
-			setTree(nodes ?? []);
+			localStorage.setItem("omp-gui-read-count", JSON.stringify([...readCountRef.current]));
 		} catch {
-			setTree([]);
-		}
-		// Metadata (cwd/model per session) — powers the archive folder column.
-		try {
-			const rows =
-				await client.request<Array<{ id: string; cwd?: string; model?: string; paused?: boolean }>>("session.list");
-			setSessionMeta(new Map((rows ?? []).map(r => [r.id, { cwd: r.cwd, model: r.model, paused: r.paused }])));
-		} catch {
-			setSessionMeta(new Map());
+			// storage unavailable
 		}
 	}, []);
+	/** Cursor-based unread derivation (kimi 实时提醒 parity): a session is
+	 *  unread once its message count grows past the last count the user had
+	 *  it open at. Seeded on first sight so pre-existing sessions never
+	 *  retroactively unread — only activity AFTER this feature exists marks
+	 *  unread. The selected session is kept read while the user watches it. */
+	const applyReadStatus = useCallback(
+		(rows: ReadonlyArray<{ id: string; messageCount?: number }>): void => {
+			if (!readSeededRef.current) {
+				readCountRef.current = new Map(rows.map(r => [r.id, r.messageCount ?? 0]));
+				readSeededRef.current = true;
+				try {
+					localStorage.setItem("omp-gui-read-count-seeded", "1");
+				} catch {
+					// storage unavailable
+				}
+				persistReadCount();
+				return;
+			}
+			const selected = selectedIdRef.current;
+			const seen = new Set<string>();
+			const grew: string[] = [];
+			for (const r of rows) {
+				seen.add(r.id);
+				const count = r.messageCount ?? 0;
+				const prev = readCountRef.current.get(r.id) ?? 0;
+				if (count <= prev) continue;
+				readCountRef.current.set(r.id, count);
+				if (r.id !== selected) grew.push(r.id);
+			}
+			// Prune read-cursors of deleted sessions.
+			for (const id of [...readCountRef.current.keys()]) {
+				if (!seen.has(id)) readCountRef.current.delete(id);
+			}
+			if (grew.length > 0) {
+				persistReadCount();
+				setUnreadSessions(prev => {
+					if (grew.every(id => prev.has(id))) return prev;
+					const next = new Set(prev);
+					for (const id of grew) next.add(id);
+					return next;
+				});
+			}
+		},
+		[persistReadCount],
+	);
+	/** 一键已读 (reminders panel + pet badge): every session is read up to
+	 *  its current message count; the unread set clears. Also dismisses the
+	 *  pet's completion/error bubbles for those sessions — the badge and
+	 *  the bubbles track the same signal, so clearing one must clear both
+	 *  (read 闭环), or the bubbles linger after 全部已读. */
+	const markAllRead = useCallback((): void => {
+		for (const [id, meta] of sessionMetaRef.current) {
+			if (typeof meta.messageCount === "number") readCountRef.current.set(id, meta.messageCount);
+		}
+		persistReadCount();
+		const ids = [...unreadSessionsRef.current];
+		if (ids.length === 0) return;
+		try {
+			const api = (window as unknown as { electronAPI?: { petActivity?(p: unknown): Promise<unknown> } })
+				.electronAPI;
+			if (petEnabled() && petMode() === "desktop") {
+				void api?.petActivity?.({ dismissSessions: ids });
+			}
+		} catch {
+			// pet bridge unavailable — bubbles just stay until dismissed
+		}
+		setUnreadSessions(new Set());
+	}, [persistReadCount]);
+	/** Sidebar context-menu toggle (标记为已读/未读) — manual override that
+	 *  survives until the session is opened or marked read. */
+	const toggleUnread = useCallback((sessionId: string): void => {
+		setUnreadSessions(prev => {
+			const next = new Set(prev);
+			if (next.has(sessionId)) next.delete(sessionId);
+			else next.add(sessionId);
+			return next;
+		});
+	}, []);
+
+	const refreshSessions = useCallback(
+		async (client: RpcClient): Promise<void> => {
+			// Session tree (OMP /tree) — non-fatal on daemons without it.
+			const tSeq = ++treeRefreshSeqRef.current;
+			try {
+				const nodes = await client.request<GuiTreeNode[]>("session.tree");
+				if (tSeq !== treeRefreshSeqRef.current) return;
+				setTree(nodes ?? []);
+			} catch {
+				if (tSeq !== treeRefreshSeqRef.current) return;
+				setTree([]);
+			}
+			// Metadata (cwd/model/status per session) — powers the archive
+			// folder column, pause chips, and the working/unread derivation.
+			const mSeq = ++metaRefreshSeqRef.current;
+			try {
+				const rows = await client.request<Array<SessionMetaRow & { id: string }>>("session.list");
+				const list = rows ?? [];
+				if (mSeq !== metaRefreshSeqRef.current) return;
+				setSessionMeta(
+					new Map(
+						list.map(r => [
+							r.id,
+							{
+								cwd: r.cwd,
+								model: r.model,
+								paused: r.paused === true,
+								working: r.working === true,
+								live: r.live === true,
+								messageCount: r.messageCount ?? 0,
+								title: r.title,
+								timestamp: r.timestamp,
+							},
+						]),
+					),
+				);
+				applyReadStatus(list);
+			} catch {
+				if (mSeq !== metaRefreshSeqRef.current) return;
+				setSessionMeta(new Map());
+			}
+		},
+		[applyReadStatus],
+	);
+	// Real-time session status (kimi 实时提醒 parity): poll session.list so
+	// the sidebar's 进行中 dot and the welcome reminders panel track sessions
+	// working in the background (streaming turns, cron runs), and the
+	// cursor-based unread derivation catches message growth the pet bubbles
+	// never see (sessions completed while the app was closed). One light RPC
+	// per 5s; sessionMeta only merges when a tracked field actually changed.
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		let lastKey = "";
+		const poll = (): void => {
+			void rpc
+				.request<Array<SessionMetaRow & { id: string }>>("session.list")
+				.then(rows => {
+					if (!alive) return;
+					const list = rows ?? [];
+					const key = JSON.stringify(
+						list.map(r => [r.id, r.working === true, r.live === true, r.messageCount ?? 0, r.paused === true]),
+					);
+					if (key === lastKey) return;
+					lastKey = key;
+					setSessionMeta(prev => {
+						const next = new Map(prev);
+						for (const r of list) {
+							const row = next.get(r.id) ?? {};
+							next.set(r.id, {
+								...row,
+								working: r.working === true,
+								live: r.live === true,
+								messageCount: r.messageCount ?? 0,
+								paused: r.paused === true,
+								title: r.title ?? row.title,
+								timestamp: r.timestamp ?? row.timestamp,
+								cwd: r.cwd ?? row.cwd,
+							});
+						}
+						return next;
+					});
+					applyReadStatus(list);
+					// Tree sync: session.list is the freshest source of which
+					// sessions exist. If its id set drifts from the sidebar
+					// tree's (a session created or deleted outside this window,
+					// or a refresh raced), refresh the tree so it never shows
+					// stale rows the user can click into an error.
+					const ids = new Set<string>();
+					for (const r of list) ids.add(r.id);
+					const treeIds = new Set<string>();
+					collectTreeIds(treeRef.current, treeIds);
+					let drift = ids.size !== treeIds.size;
+					if (!drift) {
+						for (const id of ids) {
+							if (!treeIds.has(id)) {
+								drift = true;
+								break;
+							}
+						}
+					}
+					if (drift) void refreshSessions(rpc);
+				})
+				.catch(() => {});
+		};
+		poll();
+		const timer = setInterval(poll, 5_000);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, applyReadStatus, refreshSessions]);
 
 	const connect = useCallback(
 		async (targetUrl: string): Promise<boolean> => {
@@ -413,6 +766,13 @@ function AppInner(): ReactNode {
 					setProviderEvent(event);
 					return;
 				}
+				// Auto-generated session title landed (async after the first user
+				// message — TUI parity): the session-tree label changed, so the
+				// sidebar/header must refresh to show it.
+				if (event.kind === "title") {
+					void refreshSessions(client);
+					return;
+				}
 				// Desktop notifications (kimi-code/openchamber parity): the
 				// agent turn completing and approval requests. Gated by the
 				// notifications setting (omp-gui-notify).
@@ -448,7 +808,7 @@ function AppInner(): ReactNode {
 				const meta = await client.request<{ version: string; engine: string }>("system.meta");
 				void meta;
 			} catch (err) {
-				setError(`system.meta: ${err instanceof Error ? err.message : String(err)}`);
+				setError(fmtError("system.meta", err));
 			}
 			await refreshSessions(client);
 			// Subscribe to the process-global freeze state (daemon-wide
@@ -463,12 +823,41 @@ function AppInner(): ReactNode {
 			// session.pauseStatus), so the header/banner render correctly for
 			// the selected session; nothing global to fetch here.
 			// Welcome-composer preselect = the TUI default model (modelRoles.default),
-			// so the GUI agrees with the TUI /model panel on new sessions.
+			// so the GUI agrees with the TUI /model panel on new sessions. Same
+			// call also pulls the daemon interface language (settings.locale) and
+			// the thinking default — both are config.yml-backed single sources
+			// (F1/F2 audit fixes, 2026-08-11); the renderer mirrors them locally.
 			try {
-				const res = await client.request<{ modelRoles?: Record<string, string> }>("settings.get", {
-					keys: ["modelRoles"],
+				const res = await client.request<{
+					modelRoles?: Record<string, string>;
+					"settings.locale"?: string;
+					defaultThinkingLevel?: string;
+				}>("settings.get", {
+					keys: ["modelRoles", "settings.locale", "defaultThinkingLevel"],
 				});
-				if (res?.modelRoles?.default) setPresetModelId(res.modelRoles.default);
+				const dflt = res?.defaultThinkingLevel;
+				const dfltLevel =
+					dflt === "auto" || (THINKING_LEVELS as readonly string[]).includes(dflt ?? "")
+						? (dflt as ThinkingLevel)
+						: undefined;
+				if (res?.modelRoles?.default) {
+					const role = splitRoleValue(res.modelRoles.default);
+					// Bare selector for the model preselect; the thinking suffix
+					// feeds the thinking preselect (null → inherit → falls back
+					// to the configured defaultThinkingLevel; "off" → off).
+					if (role) {
+						setPresetModelId(role.model);
+						setPresetThinkingLevel(
+							role.level === null ? dfltLevel : role.level === "off" ? null : (role.level as ThinkingLevel),
+						);
+					} else {
+						setPresetModelId(res.modelRoles.default);
+					}
+				} else {
+					setPresetThinkingLevel(dfltLevel);
+				}
+				const locale = res?.["settings.locale"];
+				if (locale === "zh-CN" || locale === "en-US") setLocale(locale);
 			} catch {
 				// settings RPC unavailable (older daemon) — localStorage fallback stands
 			}
@@ -484,9 +873,40 @@ function AppInner(): ReactNode {
 	const boot = useCallback(async (): Promise<void> => {
 		setBooting(true);
 		setConnectError(null);
+		// Splash hold: the entrance animation (logo settle 620ms + wordmark
+		// blur-in ~330ms ≈ 950ms) should always be seen, and a COLD start
+		// (daemon spawned just now) needs extra cover while the daemon
+		// prewarms the lazy SDK module graph. A WARM start (daemon already
+		// running — the default URL or a probed port connects in ~300ms)
+		// only holds for the animation itself, so relaunches feel instant
+		// instead of a fixed 2s stare (2026-08-11 fixed hold).
+		const t0 = performance.now();
+		let coldStart = false;
+		// The daemon prewarms the lazy SDK module graph in the background
+		// (startDaemon). Hold the splash until it reports ready so the FIRST
+		// session.create / session.resume — right after the daemon was
+		// spawned — never pays the ~4s import cost. Non-fatal: an older
+		// daemon without the RPC (or a failed prewarm) just proceeds and the
+		// first session op pays the cost as before.
+		const waitForPrewarm = async (): Promise<void> => {
+			const client = rpcRef.current;
+			if (!client) return;
+			const deadline = Date.now() + 8_000;
+			for (;;) {
+				try {
+					const st = await client.request<{ ready?: boolean }>("system.prewarmStatus");
+					if (st?.ready === true) return;
+				} catch {
+					return; // older daemon without the RPC — nothing to wait for
+				}
+				if (Date.now() >= deadline) return;
+				await new Promise(resolve => setTimeout(resolve, 300));
+			}
+		};
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
 				await connect(u);
+				await waitForPrewarm();
 				return true;
 			} catch {
 				return false;
@@ -499,6 +919,7 @@ function AppInner(): ReactNode {
 				const port = await probeDaemonPort();
 				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
 				try {
+					coldStart = true;
 					const spawned = await startDaemonViaShell(8300);
 					if (await tryUrl(`ws://127.0.0.1:${spawned}`)) return;
 					// The spawn returned a port but the first WebSocket handshake
@@ -510,6 +931,13 @@ function AppInner(): ReactNode {
 				}
 			}
 		} finally {
+			const holdMs = coldStart ? 2000 : 1100;
+			const elapsed = performance.now() - t0;
+			if (elapsed < holdMs) {
+				const { promise, resolve } = Promise.withResolvers<void>();
+				setTimeout(resolve, holdMs - elapsed);
+				await promise;
+			}
 			setBooting(false);
 		}
 	}, [connect, url]);
@@ -534,112 +962,168 @@ function AppInner(): ReactNode {
 	}, []);
 
 	// ── Session selection → subscribe ──────────────────────────────────────
-	const openSession = useCallback(async (sessionId: string): Promise<void> => {
-		// Session switch sound (page flip) — only when another session was open.
-		if (storeRef.current) sfxFor("switch");
-		const client = rpcRef.current;
-		if (!client) return;
-		// Entering a session leaves the board/scheduled view — but ONLY
-		// after the session data is ready: swapping first would render the
-		// chat frame (welcome or the previous session) until the new store
-		// arrives, flashing an empty intermediate. The swap happens right
-		// before the new store mounts, so the blur transition lands
-		// directly on the session view.
-		// Keep the CURRENT store mounted while the next session loads — a
-		// null intermediate flips ChatView to the welcome scene (empty→chat
-		// animation) on every session switch. Only on failure do we fall
-		// back to the welcome state.
-		const previous = storeRef.current;
-		setSelectedId(sessionId);
-		selectedIdRef.current = sessionId;
-		setUnreadSessions(prev => {
-			if (!prev.has(sessionId)) return prev;
-			const next = new Set(prev);
-			next.delete(sessionId);
-			return next;
-		});
-		// The previous session's pause state must never leak into the new one.
-		setPauseInfo({ sessionId, paused: false, pausedAt: null });
-		try {
-			// Live sessions subscribe (streaming); history sessions resume
-			// (snapshot-only, no live stream). Both return the same snapshot
-			// shape, so one store path serves both.
-			let initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } } | null = null;
-			try {
-				const res = await client.request<{
-					stream: string | null;
-					initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
-				}>("session.subscribe", { sessionId });
-				initial = res.initial;
-			} catch {
-				// Unknown session (history) — fall back to resume.
-				const res = await client.request<{
-					snapshot: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
-				}>("session.resume", { sessionId });
-				initial = res.snapshot;
+	const openSession = useCallback(
+		async (sessionId: string): Promise<void> => {
+			// Session switch sound (page flip) — only when another session was open.
+			if (storeRef.current) sfxFor("switch");
+			const client = rpcRef.current;
+			if (!client) return;
+			// A new user action supersedes any stale failure banner — if this
+			// open fails too, the error below re-surfaces it.
+			setError(null);
+			// Entering a session leaves the board/scheduled view — but ONLY
+			// after the session data is ready: swapping first would render the
+			// chat frame (welcome or the previous session) until the new store
+			// arrives, flashing an empty intermediate. The swap happens right
+			// before the new store mounts, so the blur transition lands
+			// directly on the session view.
+			// Keep the CURRENT store mounted while the next session loads — a
+			// null intermediate flips ChatView to the welcome scene (empty→chat
+			// animation) on every session switch. Only on failure do we fall
+			// back to the welcome state.
+			const previous = storeRef.current;
+			// Cursor-based read markers: the session being left was read up to
+			// its current count at the moment of the switch (otherwise the poll
+			// would mark it unread with a ≤5s-stale cursor); the incoming
+			// session is read by definition.
+			const metaNow = sessionMetaRef.current;
+			const prevId = selectedIdRef.current;
+			if (prevId && prevId !== sessionId) {
+				const prevCount = metaNow.get(prevId)?.messageCount;
+				if (typeof prevCount === "number") readCountRef.current.set(prevId, prevCount);
 			}
-			const cwd =
-				typeof (initial as { header?: { cwd?: unknown } } | null)?.header?.cwd === "string"
-					? (initial as { header: { cwd: string } }).header.cwd
-					: "";
-			// Preselect the session's current model (live: state.model; history:
-			// the persisted header.model choice) so the composer selector shows
-			// what the session actually uses instead of the welcome default.
-			const header = (initial as { header?: { model?: string; title?: string } } | null)?.header;
-			const state = (initial as { state?: { model?: { id?: string; provider?: string } } } | null)?.state;
-			const sessionModel = header?.model ?? (state?.model?.id ? `${state.model.provider}/${state.model.id}` : null);
-			if (sessionModel) setPresetModelId(sessionModel);
-			previous?.dispose();
-			const next = new GuiSessionStore(
-				sessionId,
-				{
-					entries: (initial?.entries ?? []) as never,
-					state: initial?.state as never,
-					cursor: initial?.cursor ?? 0,
-				},
-				cwd,
-			);
-			storeRef.current = next;
-			setStore(next);
-			// View swap deferred to here: the chat frame renders with the
-			// new session content already mounted (no welcome flash).
-			viewSwapRef.current("chat");
-			// Sync this session's freeze state (also subscribes the client to
-			// its pause-state envelopes via the live stream).
-			try {
-				const st = await client.request<{ paused: boolean; pausedAt: number | null }>("session.pauseStatus", {
-					sessionId,
-				});
-				if (st) {
-					setPauseInfo({ sessionId, paused: st.paused === true, pausedAt: st.pausedAt ?? null });
-					setSessionMeta(prev => {
-						const row = prev.get(sessionId) ?? {};
-						const next = new Map(prev);
-						next.set(sessionId, { ...row, paused: st.paused === true });
-						return next;
-					});
+			const openCount = metaNow.get(sessionId)?.messageCount;
+			if (typeof openCount === "number") readCountRef.current.set(sessionId, openCount);
+			persistReadCount();
+			setSelectedId(sessionId);
+			selectedIdRef.current = sessionId;
+			// Session-open loading overlay (React-Bits-style skeleton): history
+			// sessions are reactivated on demand and the RPC can take seconds on
+			// a cold open — show the skeleton only when the wait actually
+			// exceeds the flicker threshold, clear it when the store lands.
+			if (sessionLoadingTimerRef.current !== null) clearTimeout(sessionLoadingTimerRef.current);
+			sessionLoadingTimerRef.current = setTimeout(() => setSessionLoading(true), 150);
+			setUnreadSessions(prev => {
+				if (!prev.has(sessionId)) return prev;
+				const next = new Set(prev);
+				next.delete(sessionId);
+				// Opening the session marks its notifications read — tell the
+				// bubble window to dismiss that session's completion/error
+				// bubbles (they persist until read; this is the read 闭环).
+				try {
+					const api = (window as unknown as { electronAPI?: { petActivity?(p: unknown): Promise<unknown> } })
+						.electronAPI;
+					if (petEnabled() && petMode() === "desktop") {
+						void api?.petActivity?.({ dismissSessions: [sessionId] });
+					}
+				} catch {
+					// pet bridge unavailable — bubbles just stay until dismissed
 				}
-			} catch {
-				// older daemon without pause RPC — header button stays hidden
+				return next;
+			});
+			// The previous session's pause state must never leak into the new one.
+			setPauseInfo({ sessionId, paused: false, pausedAt: null });
+			try {
+				// Live sessions subscribe (streaming); history sessions resume
+				// (snapshot-only, no live stream). Both return the same snapshot
+				// shape, so one store path serves both.
+				let initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } } | null =
+					null;
+				try {
+					const res = await client.request<{
+						stream: string | null;
+						initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
+					}>("session.subscribe", { sessionId });
+					initial = res.initial;
+				} catch {
+					// Unknown session (history) — fall back to resume.
+					const res = await client.request<{
+						snapshot: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } };
+					}>("session.resume", { sessionId });
+					initial = res.snapshot;
+				}
+				const cwd =
+					typeof (initial as { header?: { cwd?: unknown } } | null)?.header?.cwd === "string"
+						? (initial as { header: { cwd: string } }).header.cwd
+						: "";
+				// Preselect the session's current model (live: state.model; history:
+				// the persisted header.model choice) so the composer selector shows
+				// what the session actually uses instead of the welcome default.
+				const header = (initial as { header?: { model?: string; title?: string } } | null)?.header;
+				const state = (initial as { state?: { model?: { id?: string; provider?: string } } } | null)?.state;
+				const sessionModel =
+					header?.model ?? (state?.model?.id ? `${state.model.provider}/${state.model.id}` : null);
+				if (sessionModel) setPresetModelId(sessionModel);
+				previous?.dispose();
+				const next = new GuiSessionStore(
+					sessionId,
+					{
+						entries: (initial?.entries ?? []) as never,
+						state: initial?.state as never,
+						cursor: initial?.cursor ?? 0,
+						roundDurations: (initial as { roundDurations?: [number, number][] } | null)?.roundDurations,
+					},
+					cwd,
+				);
+				storeRef.current = next;
+				setStore(next);
+				// View swap deferred to here: the chat frame renders with the
+				// new session content already mounted (no welcome flash).
+				viewSwapRef.current("chat");
+				// Cold-open skeleton cleared the moment the store mounts.
+				if (sessionLoadingTimerRef.current !== null) {
+					clearTimeout(sessionLoadingTimerRef.current);
+					sessionLoadingTimerRef.current = null;
+				}
+				setSessionLoading(false);
+				// its pause-state envelopes via the live stream).
+				try {
+					const st = await client.request<{ paused: boolean; pausedAt: number | null }>("session.pauseStatus", {
+						sessionId,
+					});
+					if (st) {
+						setPauseInfo({ sessionId, paused: st.paused === true, pausedAt: st.pausedAt ?? null });
+						setSessionMeta(prev => {
+							const row = prev.get(sessionId) ?? {};
+							const next = new Map(prev);
+							next.set(sessionId, { ...row, paused: st.paused === true });
+							return next;
+						});
+					}
+				} catch {
+					// older daemon without pause RPC — header button stays hidden
+				}
+			} catch (err) {
+				// Load failed: dispose the stale store and return to welcome.
+				if (sessionLoadingTimerRef.current !== null) {
+					clearTimeout(sessionLoadingTimerRef.current);
+					sessionLoadingTimerRef.current = null;
+				}
+				setSessionLoading(false);
+				previous?.dispose();
+				storeRef.current = null;
+				setStore(null);
+				setSelectedId(null);
+				selectedIdRef.current = null;
+				// Still leave the board on failure — the error shows in chat.
+				viewSwapRef.current("chat");
+				// The failing session may have been deleted while the tree was
+				// stale — refresh so its row disappears instead of erroring on
+				// every click (the 5s poll would catch it eventually; this is
+				// immediate).
+				void refreshSessions(client);
+				setError(fmtError("session.open", err));
 			}
-		} catch (err) {
-			// Load failed: dispose the stale store and return to welcome.
-			previous?.dispose();
-			storeRef.current = null;
-			setStore(null);
-			setSelectedId(null);
-			selectedIdRef.current = null;
-			// Still leave the board on failure — the error shows in chat.
-			viewSwapRef.current("chat");
-			setError(`session.open: ${err instanceof Error ? err.message : String(err)}`);
-		}
-	}, []);
+		},
+		[persistReadCount, refreshSessions],
+	);
 	openSessionRef.current = openSession;
 
 	const togglePause = useCallback(async (): Promise<void> => {
 		const client = rpcRef.current;
 		const sessionId = selectedIdRef.current;
 		if (!client || !sessionId) return;
+		setError(null);
 		try {
 			if (pauseInfo.paused && pauseInfo.sessionId === sessionId) {
 				const res = await client.request<{ duration: number | null; paused: boolean }>("session.pauseRelease", {
@@ -653,13 +1137,14 @@ function AppInner(): ReactNode {
 				if (res) setPauseInfo({ sessionId, paused: res.paused === true, pausedAt: res.pausedAt ?? null });
 			}
 		} catch (err) {
-			setError(`pause: ${err instanceof Error ? err.message : String(err)}`);
+			setError(fmtError("pause", err));
 		}
 	}, [pauseInfo.paused, pauseInfo.sessionId]);
 
 	const toggleGlobalPause = useCallback(async (): Promise<void> => {
 		const client = rpcRef.current;
 		if (!client) return;
+		setError(null);
 		try {
 			if (globalPause.paused) {
 				const res = await client.request<{ duration: number | null; paused: boolean }>("daemon.pauseRelease");
@@ -669,7 +1154,7 @@ function AppInner(): ReactNode {
 				if (res) setGlobalPause({ paused: res.paused === true, pausedAt: res.pausedAt ?? null });
 			}
 		} catch (err) {
-			setError(`global pause: ${err instanceof Error ? err.message : String(err)}`);
+			setError(fmtError("global pause", err));
 		}
 	}, [globalPause.paused]);
 
@@ -702,6 +1187,7 @@ function AppInner(): ReactNode {
 		}): Promise<string | null> => {
 			const client = rpcRef.current;
 			if (!client) return null;
+			setError(null);
 			try {
 				// The ZCode project picker chooses the workspace folder — it
 				// becomes the session cwd so 按项目 groups by it.}
@@ -740,7 +1226,7 @@ function AppInner(): ReactNode {
 				await openSession(res.sessionId);
 				return res.sessionId;
 			} catch (err) {
-				setError(`session.create: ${err instanceof Error ? err.message : String(err)}`);
+				setError(fmtError("session.create", err));
 				return null;
 			}
 		},
@@ -779,18 +1265,26 @@ function AppInner(): ReactNode {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;
 			if (!client || !id) return;
+			setError(null);
 			try {
-				await client.request("session.send", {
+				// Refresh the tree/metadata right after the daemon ACCEPTS the
+				// message — a first message creates the session, and the sidebar
+				// must show it immediately (the awaited RPC blocks until the
+				// whole turn completes, so hook the refresh to the send ack
+				// instead of after the await, or the row appears only later).
+				const p = client.request("session.send", {
 					sessionId: id,
 					text,
 					...(deliverAs ? { deliverAs } : {}),
 					...(images && images.length > 0 ? { images } : {}),
 				});
+				p.then(() => refreshSessions(client)).catch(() => {});
+				await p;
 			} catch (err) {
-				setError(`session.send: ${err instanceof Error ? err.message : String(err)}`);
+				setError(fmtError("session.send", err));
 			}
 		},
-		[selectedId],
+		[selectedId, refreshSessions],
 	);
 
 	const stop = useCallback(async (): Promise<void> => {
@@ -798,12 +1292,104 @@ function AppInner(): ReactNode {
 		const id = selectedId;
 		if (!client || !id) return;
 		sfxFor("stop");
+		setError(null);
 		try {
 			await client.request("session.abort", { sessionId: id });
 		} catch (err) {
-			setError(`session.abort: ${err instanceof Error ? err.message : String(err)}`);
+			setError(fmtError("session.abort", err));
 		}
 	}, [selectedId]);
+
+	// Welcome-page submission shared by the mini and main views: create the
+	// session, then either send the prompt or — when the text is a slash
+	// command (TUI parity) — execute it headlessly on the fresh session.
+	// Command output surfaces via the pet bubble + desktop notification
+	// (the in-session composer note is the Composer's job).
+	const submitNewSession = useCallback(
+		async (
+			text: string,
+			opts?: {
+				thinkingLevel?: ThinkingLevel | null;
+				modelId?: string | null;
+				images?: { type: "image"; data: string; mimeType: string }[];
+				planMode?: boolean;
+				goalMode?: boolean;
+			},
+		): Promise<void> => {
+			const isSlash = text.startsWith("/") && !text.startsWith("//");
+			const bangBody = text.startsWith("!") ? (text.startsWith("!!") ? text.slice(2) : text.slice(1)).trim() : "";
+			const isBang = text.startsWith("!") && bangBody.length > 0;
+			const client = rpcRef.current;
+			const id = await createSession({
+				thinkingLevel: opts?.thinkingLevel ?? undefined,
+				modelId: opts?.modelId ?? undefined,
+				cwd: project,
+				planMode: opts?.planMode === true,
+				// Slash/bash commands never become goals (the command runs instead).
+				goalMode: opts?.goalMode === true && !isSlash && !isBang ? text : null,
+			});
+			if (!id) return;
+			if (isBang) {
+				// "!cmd" / "!!cmd" (TUI parity): run the shell command on the
+				// fresh session; the daemon appends the result to its
+				// transcript and model context (!! excludes it).
+				if (!client) return;
+				void client
+					.request<{
+						exitCode: number | null;
+						cancelled: boolean;
+						totalLines: number;
+						outputTruncated: boolean;
+						output: string;
+					}>("session.bashCommand", { sessionId: id, command: text })
+					.then(res => {
+						if (!res) return;
+						if (res.cancelled) {
+							dispatchPetActivity("error", t("bash command cancelled"));
+							return;
+						}
+						const summary = t("bash exited with code {code} ({lines} lines)", {
+							code: res.exitCode === null ? "?" : String(res.exitCode),
+							lines: String(res.totalLines),
+						});
+						dispatchPetActivity(res.exitCode === 0 ? "completed" : "error", summary);
+						dispatchNotification("completion", { lastMessage: summary });
+					})
+					.catch(() => dispatchPetActivity("error", t("bash command failed")));
+				return;
+			}
+			if (isSlash) {
+				if (!client) return;
+				void client
+					.request<{ consumed: boolean; reason?: string; prompt?: string; outputs?: string[] }>(
+						"session.slashCommand",
+						{ sessionId: id, text },
+					)
+					.then(res => {
+						if (!res?.consumed) {
+							const msg =
+								res?.reason === "tui-only"
+									? t("this command only works in the terminal")
+									: res?.reason === "skill-not-found"
+										? t("skill not found")
+										: t("unknown slash command");
+							dispatchPetActivity("error", msg);
+							return;
+						}
+						const out = (res.outputs ?? []).filter(Boolean).join("\n");
+						if (out) {
+							dispatchPetActivity("completed", out.slice(0, 200));
+							dispatchNotification("completion", { lastMessage: out.slice(0, 140) });
+						}
+						if (res.prompt) void sendPrompt(res.prompt, undefined, id);
+					})
+					.catch(() => {});
+				return;
+			}
+			await sendPrompt(text, opts?.images, id);
+		},
+		[createSession, project, sendPrompt],
+	);
 
 	/** Persist a user-set session title (daemon session.rename), then
 	 *  refresh the tree so the new label lands everywhere at once. */
@@ -825,11 +1411,12 @@ function AppInner(): ReactNode {
 			const id = selectedId;
 			const current = storeRef.current;
 			if (!client || !id || !current) return;
+			setError(null);
 			try {
 				await client.request(approved ? "tool.approve" : "tool.deny", { sessionId: id, requestId });
 				current.dismissApproval(requestId);
 			} catch (err) {
-				setError(`${approved ? "tool.approve" : "tool.deny"}: ${err instanceof Error ? err.message : String(err)}`);
+				setError(fmtError(approved ? "tool.approve" : "tool.deny", err));
 			}
 		},
 		[selectedId],
@@ -848,6 +1435,8 @@ function AppInner(): ReactNode {
 					if (!ok) return false;
 				}
 				await client.request("session.delete", { sessionId });
+				// Drop the deleted session's frozen round totals.
+				clearRoundDurations(sessionId);
 				// Refresh the tree/metadata views (delete may affect nesting).
 				await refreshSessions(client);
 				if (storeRef.current?.sessionId === sessionId) {
@@ -876,6 +1465,8 @@ function AppInner(): ReactNode {
 					setPetVisible?(visible: boolean): Promise<unknown>;
 					onPetStateRequest?(cb: () => void): () => void;
 					onPetOpenSession?(cb: (sessionId: string) => void): () => void;
+					onTrayOpenSession?(cb: (sessionId: string) => void): () => void;
+					onTrayNewSession?(cb: () => void): () => void;
 					onPetGetSessionContent?(cb: (sessionId: string) => void): () => void;
 					petSessionContent?(payload: unknown): Promise<unknown>;
 					onPetCommand?(
@@ -887,6 +1478,8 @@ function AppInner(): ReactNode {
 							approved?: boolean;
 						}) => void,
 					): () => void;
+					computerGlow?(on: boolean): Promise<unknown>;
+					glowTarget?(input: unknown): Promise<unknown>;
 				};
 			}
 		).electronAPI;
@@ -930,8 +1523,10 @@ function AppInner(): ReactNode {
 					sessionTitle: activeLabelRef.current,
 				},
 				// The pet window cannot read this window's localStorage —
-				// carry the locale so its panel strings match the UI.
+				// carry the locale so its panel strings match the UI, and the
+				// resolved scheme so its chrome follows light/dark.
 				locale: getLocaleSnapshot(),
+				theme: document.documentElement.dataset.theme === "light" ? "light" : "dark",
 			});
 		};
 		const pushMood = (): void => {
@@ -949,23 +1544,84 @@ function AppInner(): ReactNode {
 			}
 		};
 		let unsub: (() => void) | null = null;
+		// Computer-use glow latch — the subscribe callback runs on every
+		// snapshot; only push the IPC when the computer tool's running
+		// state actually flips (the activeTools map changes per tool frame).
+		let glowOn = false;
+		// computer.glow setting (default on) — cached here; the settings
+		// page dispatches "omp-glow-setting" after toggling to force a
+		// re-read on the next snapshot.
+		let glowEnabled = true;
+		let glowFetched = false;
+		// Last computer input event forwarded to the glow overlay (the
+		// subscribe callback fires on every snapshot; dedupe by content).
+		let lastGlowInput: string | null = null;
+		const onGlowSetting = (): void => {
+			glowFetched = false;
+		};
+		window.addEventListener("omp-glow-setting", onGlowSetting);
 		const attach = (): void => {
 			unsub?.();
 			if (store) {
 				unsub = store.subscribe(() => {
 					pushMood();
 					pushState();
+					const snap = store?.getSnapshot();
+					const tools = [...(snap?.activeTools?.values() ?? [])];
+					const hasComputer = tools.some(t => t.toolName === "computer");
+					// Fetch the glow setting once the rpc is up; keep the
+					// latch from showing the overlay when it's disabled.
+					if (!glowFetched) {
+						const r = rpcRef.current;
+						if (r) {
+							glowFetched = true;
+							void r
+								.request<Record<string, unknown>>("settings.get", { keys: ["computer.glow"] })
+								.then(v => {
+									glowEnabled = v?.["computer.glow"] !== false;
+								})
+								.catch(() => {});
+						}
+					}
+					if (glowEnabled && hasComputer !== glowOn) {
+						glowOn = hasComputer;
+						void electronAPI.computerGlow?.(hasComputer);
+					} else if (!glowEnabled && glowOn) {
+						glowOn = false;
+						void electronAPI.computerGlow?.(false);
+					}
+					// Computer input events arrive as tool updates carrying
+					// only details.inputEvents — forward each new one to the
+					// glow overlay so it highlights the operation target.
+					const latest = tools.findLast(t => t.toolName === "computer")?.partialResult as
+						| { details?: { inputEvents?: unknown[] } }
+						| undefined;
+					const input = latest?.details?.inputEvents?.[0];
+					if (input) {
+						const key = JSON.stringify(input);
+						if (key !== lastGlowInput) {
+							lastGlowInput = key;
+							void electronAPI.glowTarget?.(input);
+						}
+					}
 				});
 			}
 		};
 		attach();
 		const onBubble = (e: Event): void => {
 			if (!petEnabled() || petMode() !== "desktop") return;
-			const detail = (e as CustomEvent<{ kind: PetBubbleKind; text: string; requestId?: string; sessionId?: string }>)
-				.detail;
+			const detail = (
+				e as CustomEvent<{ kind: PetBubbleKind; text: string; requestId?: string; sessionId?: string }>
+			).detail;
 			// Completion notifications keep the pet bubble + badge until the
-			// user opens that session (or dismisses the bubble).
-			if ((detail.kind === "completed" || detail.kind === "error") && detail.sessionId) {
+			// user opens that session (or dismisses the bubble). The session
+			// the user is actively reading is never "unread" (kimi parity —
+			// the cursor-based derivation keeps its read cursor current).
+			if (
+				(detail.kind === "completed" || detail.kind === "error") &&
+				detail.sessionId &&
+				detail.sessionId !== selectedIdRef.current
+			) {
 				setUnreadSessions(prev => {
 					if (prev.has(detail.sessionId!)) return prev;
 					const next = new Set(prev);
@@ -974,7 +1630,14 @@ function AppInner(): ReactNode {
 				});
 			}
 			void electronAPI.petActivity?.({
-				bubble: { kind: detail.kind, text: detail.text, requestId: detail.requestId },
+				bubble: {
+					kind: detail.kind,
+					text: detail.text,
+					requestId: detail.requestId,
+					// Carry the session so the bubble click can open it
+					// directly (and the bubble window can dismiss it as read).
+					sessionId: detail.sessionId,
+				},
 				unreadCount: unreadSessionsRef.current.size,
 			});
 			// Question bubbles carry the approval requestId — surface the
@@ -1024,6 +1687,15 @@ function AppInner(): ReactNode {
 			if (typeof sessionId !== "string") return;
 			void openSessionRef.current(sessionId);
 		});
+		// Menu-bar tray (openchamber parity): session row → open it; the
+		// "New Session" item → create one (same path as the welcome button).
+		const unsubTrayOpen = electronAPI.onTrayOpenSession?.(sessionId => {
+			if (typeof sessionId !== "string") return;
+			void openSessionRef.current(sessionId);
+		});
+		const unsubTrayNew = electronAPI.onTrayNewSession?.(() => {
+			void createSession();
+		});
 		window.addEventListener("omp-pet-activity", onBubble);
 		window.addEventListener("omp-pet-changed", onPetChanged);
 		const unsubReq = electronAPI.onPetStateRequest?.(() => {
@@ -1048,6 +1720,25 @@ function AppInner(): ReactNode {
 				}
 			} else if (cmd.type === "approve" && cmd.requestId) {
 				void decideApproval(cmd.requestId, cmd.approved === true);
+			} else if (cmd.type === "mark-read" && typeof cmd.sessionId === "string") {
+				// Pet bubble ×: the user acknowledged that notification —
+				// clear the session's unread badge and advance its read
+				// cursor so the next poll does not immediately re-mark it
+				// (new activity on the session would, correctly, re-add).
+				const id = cmd.sessionId;
+				const meta = sessionMetaRef.current.get(id);
+				if (meta && typeof meta.messageCount === "number") readCountRef.current.set(id, meta.messageCount);
+				persistReadCount();
+				setUnreadSessions(prev => {
+					if (!prev.has(id)) return prev;
+					const next = new Set(prev);
+					next.delete(id);
+					return next;
+				});
+			} else if (cmd.type === "mark-all-read") {
+				// Pet badge click: clear every unread session (badge + the
+				// pet's completion/error bubbles in one action).
+				markAllRead();
 			}
 		});
 		// Pet panel "recent session" click → return that session's transcript
@@ -1099,11 +1790,14 @@ function AppInner(): ReactNode {
 			unsubCmd?.();
 			unsubGetContent?.();
 			unsubPetOpen?.();
+			unsubTrayOpen?.();
+			unsubTrayNew?.();
 			clearInterval(recentTimer);
 			window.removeEventListener("omp-pet-activity", onBubble);
 			window.removeEventListener("omp-pet-changed", onPetChanged);
+			window.removeEventListener("omp-glow-setting", onGlowSetting);
 		};
-	}, [store, sendPrompt, decideApproval, createSession]);
+	}, [store, sendPrompt, decideApproval, createSession, markAllRead, persistReadCount]);
 
 	// ── Window shortcuts (settings → 快捷键 reference). ──────────────────
 	useEffect(() => {
@@ -1118,7 +1812,38 @@ function AppInner(): ReactNode {
 			}
 			const mod = e.metaKey || e.ctrlKey;
 			const k = e.key.toLowerCase();
-			if (mod && k === "k") {
+			if (mod && e.shiftKey && k === "l") {
+				// openchamber selection→ask: pop the ask popover for the
+				// current non-composer selection (interpret/explain it in a
+				// throwaway turn, never touching the transcript).
+				e.preventDefault();
+				const text = captureSelectionText();
+				if (text) {
+					const sel = window.getSelection();
+					const rect = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).getBoundingClientRect() : null;
+					window.dispatchEvent(
+						new CustomEvent("omp-gui-ask", {
+							detail: {
+								text,
+								x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+								y: rect ? rect.top : window.innerHeight / 2,
+							},
+						}),
+					);
+				}
+			} else if (mod && k === "l") {
+				// openchamber Cursor-style Cmd+L: quote the current
+				// selection into the composer — the SAME quote-card style
+				// as the toolbar 引用 button (append-only, stacked cards).
+				// With no selection, focus the composer instead.
+				e.preventDefault();
+				const text = captureSelectionText();
+				if (text) {
+					window.dispatchEvent(new CustomEvent("omp-gui-quote-append", { detail: { text } }));
+				} else {
+					(document.querySelector('[data-chat-input="true"] textarea') as HTMLTextAreaElement | null)?.focus();
+				}
+			} else if (mod && k === "k") {
 				e.preventDefault();
 				setPaletteOpen(v => !v);
 			} else if (mod && k === "o") {
@@ -1145,7 +1870,7 @@ function AppInner(): ReactNode {
 				startNewTask();
 			} else if (mod && k === ",") {
 				e.preventDefault();
-				setSettingsOpen(true);
+				openSettings();
 			} else if (mod && e.shiftKey && k === "e") {
 				// openchamber ⌘⇧E: focus mode (composer fills the surface).
 				e.preventDefault();
@@ -1164,22 +1889,32 @@ function AppInner(): ReactNode {
 
 	// ── Boot / error page (opencode-style: splash while starting, error
 	// only when the local daemon can't be reached at all) ───────────────
-	if (!rpc) {
-		if (booting) {
-			return (
-				<div className="gui-shell">
-					<div className="gui-splash">
-						{/* Launch splash: the app logo pulsing (icon blink), not text. */}
+	// Splash gates on `booting` ALONE — not `!rpc && booting`: rpc connects
+	// in ~150ms on a warm daemon and would unmount the splash mid-hold,
+	// defeating MIN_SPLASH_MS (2026-08-11).
+	if (booting) {
+		return (
+			<div className="gui-shell">
+				<div className="gui-splash">
+					{/* Launch splash (reactbits parity): logo settles with a
+					 * glow bloom, then keeps a slow pulse; the wordmark
+					 * blurs in char-by-char and a shine band sweeps the
+					 * tagline. gui-motion-off kills all of it (static). */}
+					<div className="gui-splash-inner">
 						<img src={logoUrl} alt="MusePi" className="gui-splash-logo" draggable={false} />
-					</div>
-					<div className="gui-connect-toggles">
-						<ThemeToggle />
-						<AccentToggle />
-						<LanguageToggle />
+						<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />
+						<ShinyText
+							text={t("your desktop coding agent")}
+							className="gui-splash-tagline"
+							speed={3.4}
+							shineColor="var(--color-accent)"
+						/>
 					</div>
 				</div>
-			);
-		}
+			</div>
+		);
+	}
+	if (!rpc) {
 		return (
 			<div className="gui-shell">
 				<div className="gui-connect-wrap">
@@ -1253,6 +1988,34 @@ function AppInner(): ReactNode {
 		walk(tree);
 		return rows.sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
 	})();
+	// Welcome-scene reminders (kimi 实时提醒 parity): sessions currently
+	// working in the background (进行中) first, then completed-but-unread
+	// ones. Derived from the polled session.list status + the unread set —
+	// the tree labels lag cron-created sessions, so rows come from
+	// sessionMeta, not the tree. Plain IIFE (like recentSessions): this
+	// sits AFTER the booting/connect early returns, so a hook here would
+	// violate the Rules of Hooks on the first render (splash skips it).
+	// (The session-open loading overlay state used below lives above the
+	// early returns with the other session state — see its declaration.)
+	const reminders = ((): ReminderRow[] => {
+		const rows: ReminderRow[] = [];
+		for (const [id, meta] of sessionMeta) {
+			if (id === selectedId) continue;
+			const working = meta.working === true && meta.paused !== true;
+			const unread = unreadSessions.has(id);
+			if (!working && !unread) continue;
+			rows.push({
+				id,
+				title: meta.title?.trim() || t("untitled session"),
+				timestamp: meta.timestamp ? new Date(meta.timestamp).getTime() : 0,
+				working,
+				unread,
+				project: meta.cwd ? meta.cwd.split(/[\\/]/).filter(Boolean).pop() : undefined,
+			});
+		}
+		rows.sort((a, b) => Number(b.working) - Number(a.working) || b.timestamp - a.timestamp);
+		return rows.slice(0, 20);
+	})();
 	// Tree label of the active session — the header shows it so renames
 	// stick (the message-stream fallback cannot see renamed titles).
 	const activeSessionLabel = ((): string | null => {
@@ -1296,7 +2059,16 @@ function AppInner(): ReactNode {
 			<div className="gui-shell gui-shell--mini">
 				{error && (
 					<div className="gui-error gui-error-bar" role="alert">
-						{error}
+						<span className="gui-error-bar-text">{error}</span>
+						<button
+							type="button"
+							className="gui-error-bar-x"
+							title={t("dismiss")}
+							aria-label={t("dismiss")}
+							onClick={() => setError(null)}
+						>
+							<Icon name="close" className="h-3 w-3" />
+						</button>
 					</div>
 				)}
 				{/* Window chrome: slim draggable strip (traffic lights ride
@@ -1317,6 +2089,7 @@ function AppInner(): ReactNode {
 							await openSession(forkId);
 						}}
 						presetModelId={presetModelId}
+						presetThinkingLevel={presetThinkingLevel}
 						busy={status === "connecting"}
 						paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 						pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
@@ -1325,7 +2098,7 @@ function AppInner(): ReactNode {
 						onProject={action => {
 							if (action === "remote") {
 								setConnectOpen(true);
-							} else {
+							} else if (action === "folder") {
 								void pickDirectory().then(dir => {
 									if (dir) {
 										setProject(dir);
@@ -1333,26 +2106,25 @@ function AppInner(): ReactNode {
 										window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
 									}
 								});
+							} else if (action === "none") {
+								// "不在项目中": clear the workspace chip — never open the picker.
+								setProject(null);
+								localStorage.removeItem("omp-gui-project");
+							} else {
+								// A saved workspace picked from the list — switch to it.
+								setProject(action);
+								localStorage.setItem("omp-gui-project", action);
 							}
 						}}
-						onSubmitNewSession={async (text, opts) => {
-							const id = await createSession({
-								thinkingLevel: opts?.thinkingLevel,
-								modelId: opts?.modelId,
-								cwd: project,
-								// Armed welcome mode chips apply to the session
-								// this first prompt creates (goal: the prompt
-								// text becomes the objective — openchamber
-								// parity, no popup).
-								planMode: opts?.planMode === true,
-								goalMode: opts?.goalMode === true ? text : null,
-							});
-							if (id) await sendPrompt(text, opts?.images, id);
-						}}
+						onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
 						rightPanelOpen={false}
 						terminalOpen={false}
 						focusMode={focusMode}
 						onToggleFocus={() => setFocusMode(v => !v)}
+						reminders={reminders}
+						onSelectReminder={id => void openSession(id)}
+						onMarkAllRead={markAllRead}
+						sessionLoading={sessionLoading}
 					/>
 				</div>
 				<ConnectDialog
@@ -1369,196 +2141,206 @@ function AppInner(): ReactNode {
 		<div className="gui-shell">
 			{error && (
 				<div className="gui-error gui-error-bar" role="alert">
-					{error}
+					<span className="gui-error-bar-text">{error}</span>
+					<button
+						type="button"
+						className="gui-error-bar-x"
+						title={t("dismiss")}
+						aria-label={t("dismiss")}
+						onClick={() => setError(null)}
+					>
+						<Icon name="close" className="h-3 w-3" />
+					</button>
 				</div>
 			)}
 			{settingsOpen ? (
-				/* Full-window settings view replaces the workspace (ZCode). */
-				<SettingsView
-					rpc={rpc}
-					sessionId={store?.sessionId ?? null}
-					providerEvent={providerEvent}
-					initialSection={settingsSection}
-					onBack={() => setSettingsOpen(false)}
-					cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
-					onOpenSession={sessionId => {
-						setSettingsOpen(false);
-						void openSession(sessionId);
-					}}
-				/>
+				/* Full-window settings view replaces the workspace (ZCode),
+				 * with the same blur transition as the view swaps: leave =
+				 * blur-out (closing), enter = blur-in (opening). */
+				<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
+					<SettingsView
+						rpc={rpc}
+						sessionId={store?.sessionId ?? null}
+						providerEvent={providerEvent}
+						initialSection={settingsSection}
+						onBack={closeSettings}
+						cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
+						onOpenSession={sessionId => {
+							closeSettings();
+							void openSession(sessionId);
+						}}
+					/>
+				</div>
 			) : (
 				/* openchamber-style shell: a full-width immersive toolbar riding
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */
-				<>
-					<div className="gui-main relative flex min-h-0 flex-1">
-						{!sideCollapsed && (
-							<div
-								className="gui-resize-x gui-resize-x--side"
-								style={{ left: sideWidth - 3 }}
-								onMouseDown={e => {
-									e.preventDefault();
-									startResize("side", e.clientX, sideWidth, 180, 420);
-								}}
-							/>
-						)}
-						<SessionSidebar
-							nodes={tree}
-							sessionMeta={sessionMeta}
-							selectedId={selectedId}
-							onSelect={id => void openSession(id)}
-							onNewSession={startNewTask}
-							status={status === "open" ? "open" : "closed"}
-							onDisconnect={disconnect}
-							onOpenConnect={() => setConnectOpen(true)}
-							onOpenBoard={() => viewSwapRef.current("board")}
-							boardActive={boardOpen}
-							onOpenScheduled={() => viewSwapRef.current("scheduled")}
-							scheduledActive={scheduledOpen}
-							cronGlow={cronGlow}
-							onOpenSettings={() => setSettingsOpen(true)}
-							onOpenCollab={() => setCollabOpen(true)}
-							onRenameSession={renameSession}
-							onOpenSearch={() => setPaletteOpen(true)}
-							onOpenSkills={() => {
-								setSettingsSection("skills");
-								setSettingsOpen(true);
+				<div className="gui-main relative flex min-h-0 flex-1">
+					{!sideCollapsed && (
+						<div
+							className="gui-resize-x gui-resize-x--side"
+							style={{ left: sideWidth - 3 }}
+							onMouseDown={e => {
+								e.preventDefault();
+								startResize("side", e.clientX, sideWidth, 180, 420);
 							}}
-							onPickFolder={() => {
+						/>
+					)}
+					<SessionSidebar
+						nodes={tree}
+						sessionMeta={sessionMeta}
+						selectedId={selectedId}
+						onSelect={id => void openSession(id)}
+						onNewSession={startNewTask}
+						status={status === "open" ? "open" : "closed"}
+						onDisconnect={disconnect}
+						onOpenConnect={() => setConnectOpen(true)}
+						onOpenBoard={() => viewSwapRef.current("board")}
+						boardActive={boardOpen}
+						onOpenScheduled={() => viewSwapRef.current("scheduled")}
+						scheduledActive={scheduledOpen}
+						cronGlow={cronGlow}
+						onOpenSettings={openSettings}
+						onOpenCollab={() => setCollabOpen(true)}
+						onRenameSession={renameSession}
+						onOpenSearch={() => setPaletteOpen(true)}
+						unread={unreadSessions}
+						onToggleUnread={toggleUnread}
+						onOpenSkills={() => {
+							setSettingsSection("skills");
+							openSettings();
+						}}
+						onPickFolder={() => {
+							void pickDirectory().then(dir => {
+								if (dir) {
+									setProject(dir);
+									localStorage.setItem("omp-gui-project", dir);
+									// Sidebar projects tab contract: surface the picked folder.
+									window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+								}
+							});
+						}}
+						collapsed={sideCollapsed}
+						width={sideWidth}
+						onDeleteArchived={deleteSession}
+					/>
+					<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+						<GuiHeader
+							store={store}
+							rpc={rpc}
+							sideCollapsed={sideCollapsed}
+							onToggleSidebar={() => {
+								setSideCollapsed(v => {
+									localStorage.setItem("omp-gui-side", v ? "1" : "0");
+									return !v;
+								});
+							}}
+							paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
+							pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
+							onTogglePause={() => void togglePause()}
+							pauseDisabled={selectedId === null}
+							globalPaused={globalPause.paused}
+							onToggleGlobalPause={() => void toggleGlobalPause()}
+							onNewSession={startNewTask}
+							onOpenBoard={() => viewSwapRef.current("board")}
+							onOpenSettings={openSettings}
+							terminalOpen={bottomTerminal}
+							onToggleTerminal={() => setBottomTerminal(v => !v)}
+							rightPanelOpen={!rightCollapsed}
+							onToggleRightPanel={() => {
+								setRightCollapsed(v => {
+									localStorage.setItem("omp-gui-right", v ? "1" : "0");
+									return !v;
+								});
+							}}
+							project={project}
+							onOpenFolder={() => {
 								void pickDirectory().then(dir => {
 									if (dir) {
 										setProject(dir);
 										localStorage.setItem("omp-gui-project", dir);
-										// Sidebar projects tab contract: surface the picked folder.
-										window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
 									}
 								});
 							}}
-							collapsed={sideCollapsed}
-							width={sideWidth}
-							onDeleteArchived={deleteSession}
+							sessions={recentSessions}
+							onSelectSession={id => void openSession(id)}
+							onRenameSession={renameSession}
+							sessionLabel={activeSessionLabel}
+							remote={activeSessionRemote}
+							connected={status === "open"}
+							daemonUrl={url}
+							onReconnect={() => void boot()}
+							onRestartDaemon={() => {
+								// Instance menu 重启 daemon: Electron main kills the
+								// current listener and spawns fresh code, then the
+								// boot chain reconnects (the daemon is detached —
+								// GUI relaunch alone never refreshes it).
+								const port = Number(/:(?<p>\d+)$/.exec(url)?.groups?.p) || 8300;
+								void restartDaemon(port).then(ok => {
+									if (ok !== null) void boot();
+								});
+							}}
+							onOpenCollab={() => setCollabOpen(true)}
+							onDeleteSession={deleteSession}
 						/>
-						<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-							<GuiHeader
-								store={store}
-								rpc={rpc}
-								sideCollapsed={sideCollapsed}
-								onToggleSidebar={() => {
-									setSideCollapsed(v => {
-										localStorage.setItem("omp-gui-side", v ? "1" : "0");
-										return !v;
-									});
-								}}
-								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-								onTogglePause={() => void togglePause()}
-								pauseDisabled={selectedId === null}
-								globalPaused={globalPause.paused}
-								onToggleGlobalPause={() => void toggleGlobalPause()}
-								onNewSession={startNewTask}
-								onOpenBoard={() => viewSwapRef.current("board")}
-								onOpenSettings={() => setSettingsOpen(true)}
-								terminalOpen={bottomTerminal}
-								onToggleTerminal={() => setBottomTerminal(v => !v)}
-								rightPanelOpen={!rightCollapsed}
-								onToggleRightPanel={() => {
-									setRightCollapsed(v => {
-										localStorage.setItem("omp-gui-right", v ? "1" : "0");
-										return !v;
-									});
-								}}
-								project={project}
-								onOpenFolder={() => {
-									void pickDirectory().then(dir => {
-										if (dir) {
-											setProject(dir);
-											localStorage.setItem("omp-gui-project", dir);
+						{(() => {
+							const chatSurface = (
+								<ChatView
+									store={store}
+									rpc={rpc}
+									onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
+									onStop={stop}
+									onDecideApproval={decideApproval}
+									onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
+									onForkSession={async forkId => {
+										await refreshSessions(rpc);
+										await openSession(forkId);
+									}}
+									presetModelId={presetModelId}
+									presetThinkingLevel={presetThinkingLevel}
+									busy={status === "connecting"}
+									paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
+									pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
+									onResume={() => void togglePause()}
+									project={project}
+									onProject={action => {
+										if (action === "remote") {
+											setConnectOpen(true);
+										} else if (action === "none") {
+											// "不在项目中": clear the workspace chip — never open the picker.
+											setProject(null);
+											localStorage.removeItem("omp-gui-project");
+										} else if (action === "folder") {
+											void pickDirectory().then(dir => {
+												if (dir) {
+													setProject(dir);
+													localStorage.setItem("omp-gui-project", dir);
+													// Sidebar projects tab contract: surface the picked folder.
+													window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+												}
+											});
+										} else {
+											// A saved workspace picked from the list — switch to it.
+											setProject(action);
+											localStorage.setItem("omp-gui-project", action);
 										}
-									});
-								}}
-								sessions={recentSessions}
-								onSelectSession={id => void openSession(id)}
-								onRenameSession={renameSession}
-								sessionLabel={activeSessionLabel}
-								remote={activeSessionRemote}
-								connected={status === "open"}
-								daemonUrl={url}
-								onReconnect={() => void boot()}
-								onRestartDaemon={() => {
-									// Instance menu 重启 daemon: Electron main kills the
-									// current listener and spawns fresh code, then the
-									// boot chain reconnects (the daemon is detached —
-									// GUI relaunch alone never refreshes it).
-									const port = Number(/:(?<p>\d+)$/.exec(url)?.groups?.p) || 8300;
-									void restartDaemon(port).then(ok => {
-										if (ok !== null) void boot();
-									});
-								}}
-								onOpenCollab={() => setCollabOpen(true)}
-								onDeleteSession={deleteSession}
-							/>
-							{(() => {
-								const chatSurface = (
-							<ChatView
-								store={store}
-								rpc={rpc}
-								onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
-								onStop={stop}
-								onDecideApproval={decideApproval}
-								onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
-								onForkSession={async forkId => {
-									await refreshSessions(rpc);
-									await openSession(forkId);
-								}}
-								presetModelId={presetModelId}
-								busy={status === "connecting"}
-								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-								onResume={() => void togglePause()}
-								project={project}
-								onProject={action => {
-									if (action === "remote") {
-										setConnectOpen(true);
-									} else if (action === "none") {
-										// "不在项目中": clear the workspace chip — never open the picker.
-										setProject(null);
-										localStorage.removeItem("omp-gui-project");
-									} else {
-										void pickDirectory().then(dir => {
-											if (dir) {
-												setProject(dir);
-												localStorage.setItem("omp-gui-project", dir);
-												// Sidebar projects tab contract: surface the picked folder.
-												window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
-											}
-										});
-									}
-								}}
-								onSubmitNewSession={async (text, opts) => {
-									const id = await createSession({
-										thinkingLevel: opts?.thinkingLevel,
-										modelId: opts?.modelId,
-										// ZCode: the workspace chip choice becomes the session cwd.
-										cwd: project,
-										// Armed welcome mode chips apply to the session
-										// this first prompt creates (goal: the prompt
-										// text becomes the objective — openchamber
-										// parity, no popup).
-										planMode: opts?.planMode === true,
-										goalMode: opts?.goalMode === true ? text : null,
-									});
-									if (id) await sendPrompt(text, opts?.images, id);
-								}}
-								rightPanelOpen={!rightCollapsed}
-								onOpenFileInPanel={() => {
-									setRightCollapsed(false);
-								}}
-								terminalOpen={bottomTerminal}
-								focusMode={focusMode}
-								onToggleFocus={() => setFocusMode(v => !v)}
-							/>
-								);
-								return leavingView === "board" ? (
+									}}
+									onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
+									rightPanelOpen={!rightCollapsed}
+									onOpenFileInPanel={() => {
+										setRightCollapsed(false);
+									}}
+									terminalOpen={bottomTerminal}
+									onCloseTerminal={() => setBottomTerminal(false)}
+									focusMode={focusMode}
+									onToggleFocus={() => setFocusMode(v => !v)}
+									reminders={reminders}
+									onSelectReminder={id => void openSession(id)}
+									onMarkAllRead={markAllRead}
+									sessionLoading={sessionLoading}
+								/>
+							);
+							return leavingView === "board" ? (
 								/* Leaving board → chat: the board surface stays
 								 * mounted for its blur-out, then chat enters. */
 								<div className="gui-view-leave">
@@ -1567,6 +2349,7 @@ function AppInner(): ReactNode {
 											<BoardPage
 												onBack={() => viewSwapRef.current("chat")}
 												rpc={rpc}
+												cwd={project ?? undefined}
 												jumpId={boardJumpId}
 												onJumpConsumed={() => setBoardJumpId(null)}
 												onChatCreate={text => {
@@ -1597,6 +2380,7 @@ function AppInner(): ReactNode {
 											<BoardPage
 												onBack={() => viewSwapRef.current("chat")}
 												rpc={rpc}
+												cwd={project ?? undefined}
 												jumpId={boardJumpId}
 												onJumpConsumed={() => setBoardJumpId(null)}
 												onChatCreate={text => {
@@ -1650,10 +2434,9 @@ function AppInner(): ReactNode {
 							) : (
 								<div className="gui-view-enter">{chatSurface}</div>
 							);
-							})()}
-						</div>
+						})()}
 					</div>
-				</>
+				</div>
 			)}
 			<ConnectDialog
 				open={connectOpen}
@@ -1668,40 +2451,40 @@ function AppInner(): ReactNode {
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
 			/>
-			{paletteOpen && (
-				<CommandPalette
-					open={paletteOpen}
-					onClose={() => setPaletteOpen(false)}
-					rpc={rpc}
-					sessions={recentSessions}
-					onNewSession={startNewTask}
-					onOpenWorkspace={() => {
-						void pickDirectory().then(dir => {
-							if (dir) {
-								setProject(dir);
-								localStorage.setItem("omp-gui-project", dir);
-								// Sidebar projects tab contract: surface the picked folder.
-								window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
-							}
-						});
-					}}
-					onSettings={() => setSettingsOpen(true)}
-					onToggleSidebar={() => {
-						setSideCollapsed(v => {
-							localStorage.setItem("omp-gui-side", v ? "1" : "0");
-							return !v;
-						});
-					}}
-					onToggleTerminal={() => setBottomTerminal(v => !v)}
-					onTogglePreview={() => {
-						setRightCollapsed(v => {
-							localStorage.setItem("omp-gui-right", v ? "1" : "0");
-							return !v;
-						});
-					}}
-					onSelectSession={id => void openSession(id)}
-				/>
-			)}
+			{/* Always mounted — CommandPalette self-hides and plays its exit
+			 * animation when `open` flips false (Pop/DialogFrame parity). */}
+			<CommandPalette
+				open={paletteOpen}
+				onClose={() => setPaletteOpen(false)}
+				rpc={rpc}
+				sessions={recentSessions}
+				onNewSession={startNewTask}
+				onOpenWorkspace={() => {
+					void pickDirectory().then(dir => {
+						if (dir) {
+							setProject(dir);
+							localStorage.setItem("omp-gui-project", dir);
+							// Sidebar projects tab contract: surface the picked folder.
+							window.dispatchEvent(new CustomEvent("omp-gui-project-added", { detail: dir }));
+						}
+					});
+				}}
+				onSettings={openSettings}
+				onToggleSidebar={() => {
+					setSideCollapsed(v => {
+						localStorage.setItem("omp-gui-side", v ? "1" : "0");
+						return !v;
+					});
+				}}
+				onToggleTerminal={() => setBottomTerminal(v => !v)}
+				onTogglePreview={() => {
+					setRightCollapsed(v => {
+						localStorage.setItem("omp-gui-right", v ? "1" : "0");
+						return !v;
+					});
+				}}
+				onSelectSession={id => void openSession(id)}
+			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}
 			<GlobalPauseOverlay
@@ -1710,7 +2493,10 @@ function AppInner(): ReactNode {
 				onResume={() => void toggleGlobalPause()}
 			/>
 			{/* First-launch primer (settings footer 引导 reopens it via event). */}
-			<OnboardingOverlay />
+			<OnboardingOverlay rpc={rpc} providerEvent={providerEvent} />
+			{/* What's-new release notes (daemon changelog.startup; settings
+			 * footer 新功能 reopens via omp-open-announcement). */}
+			<AnnouncementOverlay rpc={rpc} />
 		</div>
 	);
 }

@@ -17,7 +17,8 @@
 					"level": "warn",
 					"fix": "none"
 				},
-				"noVoidTypeReturn": "off"
+				"noVoidTypeReturn": "off",
+				"useExhaustiveDependencies": "off"
 			},
 			"style": {
 				"noNonNullAssertion": "off",
@@ -29,7 +30,8 @@
 				"noControlCharactersInRegex": "off",
 				"noEmptyInterface": "off",
 				"noConstEnum": "off",
-				"noConfusingVoidType": "off"
+				"noConfusingVoidType": "off",
+				"noArrayIndexKey": "off"
 			}
 		}
 	},

@@ -89,7 +89,6 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const [rawOpen, setRawOpen] = useState(false);
 	const [collapsedKinds, setCollapsedKinds] = useState<Set<string>>(new Set());
 	const { confirm } = useConfirm();
-	const [loading, setLoading] = useState(false);
 
 	// Poll the unified inventory (5s, same rhythm as the old skills list).
 	useEffect(() => {

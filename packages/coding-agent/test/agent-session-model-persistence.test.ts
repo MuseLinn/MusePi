@@ -469,12 +469,18 @@ describe("AgentSession model persistence", () => {
 
 		const result = await createStartupResumeSession(sessionFile);
 		const messages = result.session.sessionManager.buildSessionContext({ transcript: true }).messages;
-		expect(messages.at(-1)).toMatchObject({
+		const interrupted = messages.at(-1);
+		expect(interrupted).toMatchObject({
 			role: "assistant",
 			content: [],
 			stopReason: "aborted",
-			errorMessage: "Previous OMP process exited before completing the turn.",
 		});
+		// The message names the teardown cause and the recovery path.
+		// `errorMessage` only exists on assistant messages — the union
+		// (which includes BashExecutionMessage) needs a narrowing cast.
+		expect((interrupted as { errorMessage?: string } | undefined)?.errorMessage).toBe(
+			"Previous OMP process exited before completing the turn (process_exit). The turn was interrupted and will not continue automatically; send a new message to continue.",
+		);
 		expect(
 			messages.some(
 				message =>

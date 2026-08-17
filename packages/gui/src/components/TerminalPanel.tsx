@@ -197,12 +197,31 @@ function TerminalTab({
 	return <div ref={hostRef} className="gui-terminal-host" style={{ display: active ? "block" : "none" }} />;
 }
 
-export function TerminalPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+export function TerminalPanel({
+	rpc,
+	cwd,
+	onAllClosed,
+}: {
+	rpc: RpcClient;
+	cwd: string;
+	/** Last tab closed → fold the whole dock (the panel stays mounted, so
+	 *  a fresh tab is re-seeded and survives the toggle). */
+	onAllClosed?: () => void;
+}): ReactNode {
 	const [tabs, setTabs] = useState<TabEntry[]>([{ key: 0, label: baseName(cwd) || "shell" }]);
 	const [active, setActive] = useState(0);
 	const seq = useRef(1);
+	// Live tab count for the "last tab" check (state closures go stale on
+	// rapid successive closes — the ref never does).
+	const tabCountRef = useRef(1);
+	tabCountRef.current = tabs.length;
 
 	const closeTab = (key: number): void => {
+		if (tabCountRef.current <= 1) {
+			// Closing the last tab folds the dock; a fresh tab is seeded so
+			// reopening the panel has a ready terminal.
+			onAllClosed?.();
+		}
 		setTabs(ts => {
 			const next = ts.filter(x => x.key !== key);
 			if (next.length === 0) next.push({ key: seq.current++, label: baseName(cwd) || "shell" });
@@ -230,6 +249,13 @@ export function TerminalPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): Re
 						}`}
 						title={tab.label}
 						onClick={() => setActive(tab.key)}
+						onAuxClick={e => {
+							// Middle-click closes the tab (openchamber sortable-tabs-strip parity).
+							if (e.button === 1) {
+								e.preventDefault();
+								closeTab(tab.key);
+							}
+						}}
 					>
 						<Icon name="terminal-box" className="h-3.5 w-3.5 shrink-0" />
 						<span className="truncate">{tab.label}</span>

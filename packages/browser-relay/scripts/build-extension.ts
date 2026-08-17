@@ -1,9 +1,9 @@
 /**
  * Builds the browser relay extension and its distribution artifacts:
  * - `dist/extension/` — unpacked extension (load via chrome://extensions)
- * - `dist/omp-browser-relay-extension.zip` — packaged extension for GH releases
+ * - `dist/musepi-browser-relay-extension.zip` — packaged extension for GH releases
  * - `../coding-agent/src/tools/browser/relay/extension-assets/*.txt` —
- *   generated text assets embedded into the omp CLI so `omp browser-relay
+ *   generated text assets embedded into the musepi CLI so `musepi browser-relay
  *   install` works from the compiled binary (same committed-generated-output
  *   pattern as tool-views.generated.js). Re-run this script after touching
  *   anything under `extension/` and commit the regenerated assets.
@@ -37,7 +37,7 @@ for (const file of ["manifest.json", "options.html", "options.js"]) {
 	await Bun.write(path.join(distExtension, file), Bun.file(path.join(root, "extension", file)));
 }
 
-const zip = await $`zip -qr ../omp-browser-relay-extension.zip .`.cwd(distExtension).nothrow();
+const zip = await $`zip -qr ../musepi-browser-relay-extension.zip .`.cwd(distExtension).nothrow();
 if (zip.exitCode !== 0) {
 	console.error("zip failed:", zip.stderr.toString());
 	process.exit(1);
@@ -50,5 +50,5 @@ for (const file of ["background.js", "manifest.json", "options.html", "options.j
 
 console.log("built:");
 console.log(`  ${distExtension}`);
-console.log(`  ${path.join(dist, "omp-browser-relay-extension.zip")}`);
+console.log(`  ${path.join(dist, "musepi-browser-relay-extension.zip")}`);
 console.log(`  ${assetsDir} (embedded CLI assets — commit these)`);

@@ -1,18 +1,19 @@
 import { t } from "@musepi/collab-web";
-import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
-import { Icon } from "../vendor/oc-icons";
 import { WidgetErrorBoundary } from "@musepi/collab-web/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/collab-web/src/widgets/fit";
+import { type BoardWidget, widgetDef } from "@musepi/collab-web/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/collab-web/src/widgets/task";
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import { tapFeedback } from "../lib/haptic";
+import { useFloatingMenu } from "../lib/use-floating-menu";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
 import { SpotlightCard } from "./SpotlightCard";
-import { tapFeedback } from "../lib/haptic";
-import { WidgetEditor } from "./WidgetEditor";
 import { TaskModal, widgetHasTask } from "./TaskModal";
-import { useFloatingMenu } from "../lib/use-floating-menu";
-import { WIDGET_REGISTRY, widgetDef, type BoardWidget } from "@musepi/collab-web/src/widgets/registry";
+import { WidgetEditor } from "./WidgetEditor";
 
 /**
  * BoardPage — kimi-work-style widget boards (docs/board-dashboard.md).
@@ -92,12 +93,7 @@ function placeWidget(widgets: BoardWidget[], w: number, h: number): { x: number;
 		for (let x = 0; x <= xLimit; x += SNAP) {
 			let free = true;
 			for (const wg of widgets) {
-				if (
-					x < wg.pos.x + wg.pos.w &&
-					x + w > wg.pos.x &&
-					y < wg.pos.y + wg.pos.h &&
-					y + h > wg.pos.y
-				) {
+				if (x < wg.pos.x + wg.pos.w && x + w > wg.pos.x && y < wg.pos.y + wg.pos.h && y + h > wg.pos.y) {
 					free = false;
 					break;
 				}
@@ -115,7 +111,15 @@ function makeAndPlace(widgets: BoardWidget[], type: string, title?: string, w = 
 
 /** Seed placement: exact row/column on the BASE_W canvas so the example
  *  boards tile the full width (placeWidget is for dynamic adds). */
-function at(widgets: BoardWidget[], type: string, title: string, x: number, y: number, w: number, h: number): BoardWidget {
+function at(
+	_widgets: BoardWidget[],
+	type: string,
+	title: string,
+	x: number,
+	y: number,
+	w: number,
+	h: number,
+): BoardWidget {
 	const wgt = makeWidget(type, title, w, h);
 	return { ...wgt, pos: { x, y, w, h } };
 }
@@ -178,7 +182,10 @@ function seedBoards(): BoardData[] {
 			name: "指标快照更新",
 			desc: "刷新本卡展示的指标快照数据。",
 			schedule: "daily",
-			runs: [{ time: "07/22 19:17", success: true }, { time: "07/22 11:02", success: false }],
+			runs: [
+				{ time: "07/22 19:17", success: true },
+				{ time: "07/22 11:02", success: false },
+			],
 		};
 	}
 	// PROMO REEL cover: title/subtitle/duration until an agent fills url.
@@ -277,6 +284,20 @@ function ensureBuiltinSeeds(boards: BoardData[]): BoardData[] {
 	return missing.length > 0 ? [...boards, ...missing] : boards;
 }
 
+/** External-board merge for periodic refresh (TUI/GUI distribution):
+ *  the local view is authoritative for boards the user is looking at, but
+ *  boards the agent created on the daemon (ids unknown locally) must not
+ *  be clobbered by a stale local snapshot — append them. Deletion stays
+ *  local: a removed board is absent here and the daemon save has already
+ *  flushed it, so it never comes back; builtin seeds are re-injected by
+ *  {@link ensureBuiltinSeeds}. */
+function mergeDaemonBoards(local: BoardData[], daemon: BoardData[]): BoardData[] {
+	const localIds = new Set(local.map(b => b.id));
+	const fresh = daemon.filter(b => !localIds.has(b.id) && b.builtin !== true);
+	if (fresh.length === 0) return local;
+	return [...local, ...fresh.map(markBuiltin)];
+}
+
 function loadBoards(): BoardData[] {
 	try {
 		const raw = localStorage.getItem(BOARDS_KEY);
@@ -368,12 +389,10 @@ function CardMenuButton({
 	onPin,
 	onDelete,
 	onViewTask,
-	align = "right",
 }: {
 	onPin(): void;
 	onDelete(): void;
 	onViewTask?(): void;
-	align?: "left" | "right";
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
@@ -584,12 +603,17 @@ function BoardHome({
 				/>
 			)}
 			{confirmBoard && (
-				<DialogFrame open label={t("board remove")} onClose={() => setConfirmBoard(null)} className="gui-board-remove-dialog">
+				<DialogFrame
+					open
+					label={t("board remove")}
+					onClose={() => setConfirmBoard(null)}
+					className="gui-board-remove-dialog"
+				>
 					<div className="gui-board-remove">
-						<p className="gui-board-remove-desc">
-							{t("board remove confirm", { name: confirmBoard.title })}
+						<p className="gui-board-remove-desc">{t("board remove confirm", { name: confirmBoard.title })}</p>
+						<p className="gui-board-remove-hint">
+							{t("board remove hint", { count: confirmBoard.widgets.length })}
 						</p>
-						<p className="gui-board-remove-hint">{t("board remove hint", { count: confirmBoard.widgets.length })}</p>
 						<div className="gui-cron-form-actions">
 							<button type="button" className="gui-btn" onClick={() => setConfirmBoard(null)}>
 								{t("cancel")}
@@ -645,6 +669,7 @@ export function BoardPage({
 	jumpId,
 	onJumpConsumed,
 	onChatCreate,
+	cwd,
 }: {
 	onBack(): void;
 	rpc?: BoardRpc;
@@ -653,6 +678,8 @@ export function BoardPage({
 	onJumpConsumed?(): void;
 	/** 对话创建: leave the board and open a chat prompt to design boards. */
 	onChatCreate?(text: string): void;
+	/** Session cwd for in-board AI generation (agent's working directory). */
+	cwd?: string;
 }): ReactNode {
 	const [boards, setBoards] = useState<BoardData[]>(() => loadBoards());
 	// Daemon persistence: boards live at ~/.musepi/boards/boards.json (the
@@ -696,6 +723,14 @@ export function BoardPage({
 	// Entering the board view lands on the collection home (kimi: the
 	// sidebar 看板 entry is the collection set, not the last board).
 	const [activeId, setActiveId] = useState<string | null>(null);
+	// In-board AI generation dialog state (kimi prompt-market parity).
+	// MUST sit above the `if (!active)` early return — hooks called after
+	// a conditional return crash React ("Rendered more hooks than the
+	// previous render") the moment a board opens.
+	const [genOpen, setGenOpen] = useState(false);
+	const [genText, setGenText] = useState("");
+	const [genBusy, setGenBusy] = useState(false);
+	const [genError, setGenError] = useState<string | null>(null);
 	const [savedTick, setSavedTick] = useState(false);
 	const [ghost, setGhost] = useState<Ghost | null>(null);
 	const [focusWidget, setFocusWidget] = useState<BoardWidget | null>(null);
@@ -707,7 +742,10 @@ export function BoardPage({
 	// Live drag rect: while a gesture is running the card itself follows
 	// the pointer (ghost keeps predicting the next grid snap) — applied
 	// for real (and persisted) only on pointerup.
-	const [dragRect, setDragRect] = useState<{ id: string; rect: { x: number; y: number; w: number; h: number } } | null>(null);
+	const [dragRect, setDragRect] = useState<{
+		id: string;
+		rect: { x: number; y: number; w: number; h: number };
+	} | null>(null);
 	const dragRectRef = useRef(dragRect);
 	dragRectRef.current = dragRect;
 
@@ -740,7 +778,7 @@ export function BoardPage({
 		const ro = new ResizeObserver(apply);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [active]);
+	}, []);
 	const updateBoard = (id: string, patch: Partial<BoardData>): void => {
 		persist(boards.map(b => (b.id === id ? { ...b, ...patch } : b)));
 	};
@@ -759,6 +797,45 @@ export function BoardPage({
 			if (daemonSaveTimer.current) clearTimeout(daemonSaveTimer.current);
 		};
 	}, [boards, rpc, boardsReady]);
+
+	// Periodic + focus refresh (TUI/GUI distribution): the agent or another
+	// window may have saved boards while this view stayed open. Board-level
+	// merge keeps agent-created boards visible without clobbering local
+	// edits (mergeDaemonBoards); a signature guard skips no-op renders.
+	const boardsRef = useRef<BoardData[]>(boards);
+	boardsRef.current = boards;
+	const mergedSigRef = useRef<string>("");
+	useEffect(() => {
+		if (!rpc || !boardsReady) return;
+		const refresh = (): void => {
+			void rpc
+				.request("board.list")
+				.then(res => {
+					const list = (res as { boards?: BoardData[] } | null)?.boards;
+					if (!Array.isArray(list)) return;
+					const merged = ensureBuiltinSeeds(mergeDaemonBoards(boardsRef.current, list.map(sanitizeBoard)));
+					const sig = JSON.stringify(merged);
+					if (sig === mergedSigRef.current) return;
+					mergedSigRef.current = sig;
+					setBoards(merged);
+					try {
+						localStorage.setItem(BOARDS_KEY, JSON.stringify(merged));
+					} catch {
+						// ignore
+					}
+				})
+				.catch(() => {
+					// daemon down — keep local
+				});
+		};
+		const onFocus = (): void => refresh();
+		window.addEventListener("focus", onFocus);
+		const timer = window.setInterval(refresh, 15000);
+		return () => {
+			window.removeEventListener("focus", onFocus);
+			window.clearInterval(timer);
+		};
+	}, [rpc, boardsReady]);
 
 	// Edit mode: cards become selectable and a config panel edits the
 	// selected widget's title + data fields (agents design cards; this is
@@ -804,7 +881,7 @@ export function BoardPage({
 			onJumpConsumed?.();
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- jump only on arrival
-	}, [jumpId]);
+	}, [jumpId, onJumpConsumed]);
 	// Entering the board view always lands on the collection home — the
 	// sidebar 看板 entry is the collection set, not the last-opened board.
 	const openBoardHome = (): void => {
@@ -841,6 +918,10 @@ export function BoardPage({
 
 	// Maximized-card close: brief blur-out before unmounting.
 	const [focusClosing, setFocusClosing] = useState(false);
+	// Two-phase enter: the frosted scrim paints at opacity 0 first so the
+	// backdrop composites before gui-fade-in (mount-frame animation on a
+	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
+	const focusEnteredCls = useTwoPhaseEnter(focusWidget !== null);
 	const closeFocus = (): void => {
 		if (focusClosing) return;
 		setFocusClosing(true);
@@ -1027,7 +1108,12 @@ export function BoardPage({
 							h: s.from.h,
 						}
 					: s.mode === "resize-w"
-						? { x: s.from.x, y: s.from.y, w: Math.max(MIN_W, Math.min(s.from.w + dx, BASE_W - s.from.x)), h: s.from.h }
+						? {
+								x: s.from.x,
+								y: s.from.y,
+								w: Math.max(MIN_W, Math.min(s.from.w + dx, BASE_W - s.from.x)),
+								h: s.from.h,
+							}
 						: s.mode === "resize-h"
 							? { x: s.from.x, y: s.from.y, w: s.from.w, h: Math.max(MIN_H, Math.min(s.from.h + dy, hCeil)) }
 							: {
@@ -1061,9 +1147,7 @@ export function BoardPage({
 						w: Math.round(g.rect.w),
 						h: Math.round(g.rect.h),
 					};
-					const withMoved = activeRef.current.widgets.map(w =>
-						w.id === s.id ? { ...w, pos: rect } : w,
-					);
+					const withMoved = activeRef.current.widgets.map(w => (w.id === s.id ? { ...w, pos: rect } : w));
 					const resolved = resolveCollisions(withMoved, { ...moved, pos: { ...g.rect } }, s.id);
 					updateBoard(activeRef.current.id, { widgets: resolved });
 				}
@@ -1085,7 +1169,7 @@ export function BoardPage({
 			window.removeEventListener("pointercancel", onUp);
 			window.removeEventListener("blur", onBlur);
 		};
-	}, [active]);
+	}, [pointerToPx, updateBoard, canvasScale]);
 
 	const onPointerDown = (e: React.PointerEvent, w: BoardWidget, mode: "move" | ResizeMode): void => {
 		if (!active) return;
@@ -1105,12 +1189,12 @@ export function BoardPage({
 		return (
 			<div className="gui-board">
 				<BoardHome
-							boards={boards}
-							onOpen={openBoard}
-							onCreate={createBoard}
-							onDelete={removeBoard}
-							onChatCreate={text => onChatCreate?.(text)}
-						/>
+					boards={boards}
+					onOpen={openBoard}
+					onCreate={createBoard}
+					onDelete={removeBoard}
+					onChatCreate={text => onChatCreate?.(text)}
+				/>
 			</div>
 		);
 	}
@@ -1120,7 +1204,8 @@ export function BoardPage({
 		// 固定至桌面 (M5 skeleton): open a small always-on-top Electron
 		// window showing the card. The pin IPC carries the card payload.
 		try {
-			const api = (window as unknown as { electronAPI?: { pinWidget?(payload: unknown): Promise<unknown> } }).electronAPI;
+			const api = (window as unknown as { electronAPI?: { pinWidget?(payload: unknown): Promise<unknown> } })
+				.electronAPI;
 			// Pass the card's board-space size so the pinned window opens at
 			// the same aspect (main scales it down to desktop-card bounds).
 			void api?.pinWidget?.({ title: w.title, type: w.type, data: w.data, w: w.pos.w, h: w.pos.h });
@@ -1143,6 +1228,68 @@ export function BoardPage({
 		updateBoard(active.id, {
 			widgets: active.widgets.map(w => (w.id === id ? { ...w, data: { ...w.data, ...patch } } : w)),
 		});
+	};
+
+	// ── In-board AI generation (kimi prompt-market parity): type a
+	//    description → a background session asks the agent to add cards to
+	//    THIS board via the board tool → we poll board.list until the store
+	//    changes, then refresh. The session stays visible in chat history.
+	const sleep = (ms: number): Promise<void> => {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		setTimeout(resolve, ms);
+		return promise;
+	};
+	const runGenerate = async (): Promise<void> => {
+		const text = genText.trim();
+		if (!text || !rpc || genBusy || !active) return;
+		setGenBusy(true);
+		setGenError(null);
+		// Baseline = what the daemon currently has (poll compares against
+		// this, not the local state — local edits may not have flushed).
+		let baseline = "";
+		try {
+			const pre = (await rpc.request("board.list")) as { boards?: unknown[] } | null;
+			if (Array.isArray(pre?.boards)) baseline = JSON.stringify(pre.boards);
+		} catch {
+			// daemon down — the session.create below will fail loudly
+		}
+		try {
+			const res = (await rpc.request("session.create", { cwd })) as { sessionId: string };
+			const prompt = `${text}。把生成的组件加进当前看板「${active.title}」（board id: ${active.id}）：先 board get 该 id 拿到现有组件列表，在现有组件基础上追加/修改本次生成的，再用 board save 整体写回（保留现有组件，不要新建看板、不要动其他看板）。`;
+			await rpc.request("session.send", { sessionId: res.sessionId, text: prompt });
+			// Poll for the agent's board.save to land (3 min cap).
+			const deadline = Date.now() + 180_000;
+			let changed = false;
+			while (Date.now() < deadline) {
+				await sleep(4000);
+				try {
+					const res2 = (await rpc.request("board.list")) as { boards?: BoardData[] } | null;
+					if (Array.isArray(res2?.boards) && JSON.stringify(res2.boards) !== baseline) {
+						const clean = ensureBuiltinSeeds(restoreBuiltinBoards(res2.boards.map(sanitizeBoard)));
+						setBoards(clean);
+						try {
+							localStorage.setItem(BOARDS_KEY, JSON.stringify(clean));
+						} catch {
+							// ignore
+						}
+						changed = true;
+						break;
+					}
+				} catch {
+					// daemon hiccup — keep polling
+				}
+			}
+			if (!changed) {
+				setGenError(t("board generate timeout"));
+			} else {
+				setGenOpen(false);
+				setGenText("");
+			}
+		} catch (err) {
+			setGenError(t("board generate fail", { error: err instanceof Error ? err.message : String(err) }));
+		} finally {
+			setGenBusy(false);
+		}
 	};
 
 	// Board view JSX (active is non-null here) — rendered for the
@@ -1200,6 +1347,17 @@ export function BoardPage({
 					>
 						<Icon name="refresh" className="h-4 w-4" />
 					</button>
+					<button
+						type="button"
+						className={`gui-btn${genBusy ? " gui-btn--busy" : ""}`}
+						disabled={active.builtin === true || genBusy}
+						title={active.builtin ? t("board builtin") : t("board generate")}
+						aria-label={t("board generate")}
+						onClick={() => setGenOpen(true)}
+					>
+						<Icon name={genBusy ? "loader" : "robot"} className="h-4 w-4" />
+						<span>{t("board generate")}</span>
+					</button>
 					<button type="button" className="gui-btn" onClick={onBack}>
 						{t("back to workspace")}
 					</button>
@@ -1207,100 +1365,144 @@ export function BoardPage({
 			</div>
 			<div className="gui-board-canvas" ref={canvasRef}>
 				<div className="gui-board-surface" style={{ width: BASE_W, transform: `scale(${canvasScale})` }}>
-				{active.widgets.length === 0 && (
-					<div className="gui-board-empty">
-						<div className="gui-board-empty-title">{t("board empty title")}</div>
-						<div className="gui-board-empty-desc">{t("board empty desc")}</div>
-					</div>
-				)}
-				{ghost && (
-					<div
-						className="gui-board-ghost"
-						style={{ left: ghost.rect.x, top: ghost.rect.y, width: ghost.rect.w, height: ghost.rect.h }}
-					/>
-				)}
-				{active.widgets.map(w => {
-					const def = widgetDef(w.type);
-					if (!def) return null;
-					const dimmed = ghost !== null && ghost.id !== w.id;
-					return (
+					{active.widgets.length === 0 && (
+						<div className="gui-board-empty">
+							<div className="gui-board-empty-title">{t("board empty title")}</div>
+							<div className="gui-board-empty-desc">{t("board empty desc")}</div>
+						</div>
+					)}
+					{ghost && (
 						<div
-							key={w.id}
-							className={`gui-board-card${dimmed ? " gui-board-card--dimmed" : ""}${editMode && selectedWidgetId === w.id ? " gui-board-card--selected" : ""}`}
-							data-tone={def.tone ?? "default"}
-							style={{
-								left: dragRect?.id === w.id ? dragRect.rect.x : w.pos.x,
-								top: dragRect?.id === w.id ? dragRect.rect.y : w.pos.y,
-								width: dragRect?.id === w.id ? dragRect.rect.w : w.pos.w,
-								height: dragRect?.id === w.id ? dragRect.rect.h : w.pos.h,
-							}}
-							onClick={editMode ? () => setSelectedWidgetId(w.id) : undefined}
-						>
-							<SpotlightCard className="gui-board-card-inner" spotlightColor="rgba(255, 255, 255, 0.07)">
-								<div className="gui-board-card-head" onPointerDown={e => onPointerDown(e, w, "move")}>
-									<input
-										className="gui-board-card-title"
-										value={w.title}
-										onChange={e => renameWidget(w.id, e.target.value)}
-										aria-label={t("widget title")}
-									/>
-									<div className="gui-board-card-actions">
-										{hasTask(w.data) && (
+							className="gui-board-ghost"
+							style={{ left: ghost.rect.x, top: ghost.rect.y, width: ghost.rect.w, height: ghost.rect.h }}
+						/>
+					)}
+					{active.widgets.map(w => {
+						const def = widgetDef(w.type);
+						if (!def) return null;
+						const dimmed = ghost !== null && ghost.id !== w.id;
+						return (
+							<div
+								key={w.id}
+								className={`gui-board-card${dimmed ? " gui-board-card--dimmed" : ""}${editMode && selectedWidgetId === w.id ? " gui-board-card--selected" : ""}`}
+								data-tone={def.tone ?? "default"}
+								style={{
+									left: dragRect?.id === w.id ? dragRect.rect.x : w.pos.x,
+									top: dragRect?.id === w.id ? dragRect.rect.y : w.pos.y,
+									width: dragRect?.id === w.id ? dragRect.rect.w : w.pos.w,
+									height: dragRect?.id === w.id ? dragRect.rect.h : w.pos.h,
+								}}
+								onClick={editMode ? () => setSelectedWidgetId(w.id) : undefined}
+							>
+								<SpotlightCard className="gui-board-card-inner" spotlightColor="rgba(255, 255, 255, 0.07)">
+									<div className="gui-board-card-head" onPointerDown={e => onPointerDown(e, w, "move")}>
+										<input
+											className="gui-board-card-title"
+											value={w.title}
+											onChange={e => renameWidget(w.id, e.target.value)}
+											aria-label={t("widget title")}
+										/>
+										<div className="gui-board-card-actions">
+											{hasTask(w.data) && (
+												<button
+													type="button"
+													className={`gui-board-card-act${runningId === w.id ? " gui-board-card-act--running" : ""}`}
+													aria-label={t("widget run")}
+													title={t("widget run")}
+													onPointerDown={e => e.stopPropagation()}
+													onClick={() => runTask(w)}
+												>
+													<Icon name={runningId === w.id ? "loader" : "play"} className="h-3.5 w-3.5" />
+												</button>
+											)}
 											<button
 												type="button"
-												className={`gui-board-card-act${runningId === w.id ? " gui-board-card-act--running" : ""}`}
-												aria-label={t("widget run")}
-												title={t("widget run")}
+												className="gui-board-card-act"
+												aria-label={t("widget focus")}
+												title={t("widget focus")}
 												onPointerDown={e => e.stopPropagation()}
-												onClick={() => runTask(w)}
+												onClick={() => setFocusWidget(w)}
 											>
-												<Icon name={runningId === w.id ? "loader" : "play"} className="h-3.5 w-3.5" />
+												<Icon name="fullscreen" className="h-3.5 w-3.5" />
 											</button>
-										)}
-										<button
-											type="button"
-											className="gui-board-card-act"
-											aria-label={t("widget focus")}
-											title={t("widget focus")}
-											onPointerDown={e => e.stopPropagation()}
-											onClick={() => setFocusWidget(w)}
-										>
-											<Icon name="fullscreen" className="h-3.5 w-3.5" />
-										</button>
-										<CardMenuButton
-											onPin={() => pinWidget(w)}
-											onDelete={() => removeWidget(w.id)}
-											onViewTask={widgetHasTask(w.data) ? () => openTaskModal(w) : undefined}
-										/>
+											<CardMenuButton
+												onPin={() => pinWidget(w)}
+												onDelete={() => removeWidget(w.id)}
+												onViewTask={widgetHasTask(w.data) ? () => openTaskModal(w) : undefined}
+											/>
+										</div>
 									</div>
-								</div>
-								<div className="gui-board-card-body">
-									<WidgetFit>
-										<WidgetErrorBoundary>
-											<def.Component data={w.data} update={patch => updateWidgetData(w.id, patch)} />
-										</WidgetErrorBoundary>
-									</WidgetFit>
-								</div>
-								{/* Edge/corner resize: right and bottom edges drag
-								 * independently, the corner both — 8px steps. */}
-								<div className="gui-board-card-resize-e" onPointerDown={e => onPointerDown(e, w, "resize-w")} />
-								<div className="gui-board-card-resize-s" onPointerDown={e => onPointerDown(e, w, "resize-h")} />
-								<div className="gui-board-card-resize" onPointerDown={e => onPointerDown(e, w, "resize")} />
-								<span className="gui-board-card-size">
-									{dragRect?.id === w.id ? dragRect.rect.w : w.pos.w} × {dragRect?.id === w.id ? dragRect.rect.h : w.pos.h}
-								</span>
-							</SpotlightCard>
-						</div>
-					);
-				})}
+									<div className="gui-board-card-body">
+										<WidgetFit>
+											<WidgetErrorBoundary>
+												<def.Component data={w.data} update={patch => updateWidgetData(w.id, patch)} />
+											</WidgetErrorBoundary>
+										</WidgetFit>
+									</div>
+									{/* Edge/corner resize: right and bottom edges drag
+									 * independently, the corner both — 8px steps. */}
+									<div
+										className="gui-board-card-resize-e"
+										onPointerDown={e => onPointerDown(e, w, "resize-w")}
+									/>
+									<div
+										className="gui-board-card-resize-s"
+										onPointerDown={e => onPointerDown(e, w, "resize-h")}
+									/>
+									<div className="gui-board-card-resize" onPointerDown={e => onPointerDown(e, w, "resize")} />
+									<span className="gui-board-card-size">
+										{dragRect?.id === w.id ? dragRect.rect.w : w.pos.w} ×{" "}
+										{dragRect?.id === w.id ? dragRect.rect.h : w.pos.h}
+									</span>
+								</SpotlightCard>
+							</div>
+						);
+					})}
 				</div>
 			</div>
+			{genOpen && !genBusy && (
+				<DialogFrame
+					open
+					label={t("board generate")}
+					onClose={() => setGenOpen(false)}
+					className="gui-board-gen-dialog"
+				>
+					<div className="gui-board-gen">
+						<p className="gui-board-gen-desc">{t("board generate placeholder")}</p>
+						<textarea
+							className="gui-board-gen-input"
+							value={genText}
+							placeholder={t("board generate placeholder")}
+							autoFocus
+							rows={4}
+							onChange={e => setGenText(e.target.value)}
+							onKeyDown={e => {
+								if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runGenerate();
+							}}
+						/>
+						{genError && <p className="gui-board-gen-error">{genError}</p>}
+						<div className="gui-cron-form-actions">
+							<button type="button" className="gui-btn" onClick={() => setGenOpen(false)}>
+								{t("cancel")}
+							</button>
+							<button
+								type="button"
+								className="gui-btn gui-board-gen-send"
+								disabled={!genText.trim()}
+								onClick={() => void runGenerate()}
+							>
+								<Icon name="robot" className="h-4 w-4" />
+								{t("board generate send")}
+							</button>
+						</div>
+					</div>
+				</DialogFrame>
+			)}
 			{editMode && (
 				<WidgetEditor
 					boards={boards}
 					activeId={active.id}
 					selectedId={selectedWidgetId}
-					onSelect={setSelectedWidgetId}
 					onUpdate={(id, patch) => updateWidgetData(id, patch)}
 					onRename={(id, title) => renameWidget(id, title)}
 					onDelete={removeWidget}
@@ -1319,7 +1521,12 @@ export function BoardPage({
 				/>
 			)}
 			{focusWidget && (
-				<div className={`gui-board-focus${focusClosing ? " gui-board-focus--closing" : ""}`} role="dialog" aria-modal="true" onClick={closeFocus}>
+				<div
+					className={`gui-board-focus${focusEnteredCls ? " gui-board-focus--entered" : ""}${focusClosing ? " gui-board-focus--closing" : ""}`}
+					role="dialog"
+					aria-modal="true"
+					onClick={closeFocus}
+				>
 					<div
 						className="gui-board-focus-card"
 						data-tone={widgetDef(focusWidget.type)?.tone ?? "default"}
@@ -1362,12 +1569,7 @@ export function BoardPage({
 									}}
 									onViewTask={widgetHasTask(focusWidget.data) ? () => openTaskModal(focusWidget) : undefined}
 								/>
-								<button
-									type="button"
-									className="gui-tool-btn"
-									onClick={closeFocus}
-									aria-label={t("close")}
-								>
+								<button type="button" className="gui-tool-btn" onClick={closeFocus} aria-label={t("close")}>
 									<Icon name="close" className="h-4 w-4" />
 								</button>
 							</div>
@@ -1416,12 +1618,12 @@ export function BoardPage({
 			<div className="gui-board">
 				<div className="gui-view-leave">
 					<BoardHome
-							boards={boards}
-							onOpen={openBoard}
-							onCreate={createBoard}
-							onDelete={removeBoard}
-							onChatCreate={text => onChatCreate?.(text)}
-						/>
+						boards={boards}
+						onOpen={openBoard}
+						onCreate={createBoard}
+						onDelete={removeBoard}
+						onChatCreate={text => onChatCreate?.(text)}
+					/>
 				</div>
 			</div>
 		);
@@ -1431,12 +1633,12 @@ export function BoardPage({
 			<div className="gui-board">
 				<div className="gui-view-enter">
 					<BoardHome
-							boards={boards}
-							onOpen={openBoard}
-							onCreate={createBoard}
-							onDelete={removeBoard}
-							onChatCreate={text => onChatCreate?.(text)}
-						/>
+						boards={boards}
+						onOpen={openBoard}
+						onCreate={createBoard}
+						onDelete={removeBoard}
+						onChatCreate={text => onChatCreate?.(text)}
+					/>
 				</div>
 			</div>
 		);

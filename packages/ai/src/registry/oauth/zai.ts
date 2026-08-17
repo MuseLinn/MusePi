@@ -25,8 +25,8 @@ const TOKEN_URL = env("ZAI_OAUTH_TOKEN_URL") ?? "https://zcode.z.ai/api/v1/oauth
 const BIZ_BASE = env("ZAI_BIZ_BASE") ?? "https://api.z.ai";
 /** Business-login endpoint: exchanges the OAuth access token for a biz token. */
 const BUSINESS_LOGIN_URL = env("ZAI_BUSINESS_LOGIN_URL") ?? "https://api.z.ai/api/auth/z/login";
-/** OMP's own key name so sign-in never mutates ZCode's `zcode-api-key`. */
-const KEY_NAME = "oh-my-pi";
+/** MusePi's own key name so sign-in never mutates ZCode's `zcode-api-key`. */
+const KEY_NAME = "musepi";
 const CALLBACK_PORT = 54548;
 const CALLBACK_PATH = "/callback";
 /** Durable minted key never expires; matches the perplexity NEVER_EXPIRES sentinel. */

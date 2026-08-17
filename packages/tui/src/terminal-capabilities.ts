@@ -37,7 +37,7 @@ export type TerminalId =
 	| "base"
 	| "trueColor";
 
-const CMUX_NOTIFICATION_TITLE = "Oh My Pi";
+const CMUX_NOTIFICATION_TITLE = "MusePi";
 const CMUX_SURFACE_ID_PATTERN = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu;
 
 /**
@@ -1089,7 +1089,7 @@ function notificationToLine(n: TerminalNotification): string {
 // C0/C1 control characters that are unsafe inside an OSC payload (must base64).
 const OSC99_UNSAFE = /[\x00-\x1f\x7f\x80-\x9f]/u;
 const OSC99_MAX_PAYLOAD_BYTES = 2048;
-const OSC99_APP_NAME = "Oh My Pi";
+const OSC99_APP_NAME = "MusePi";
 let nextOsc99NotificationId = 1;
 
 function base64Utf8(value: string): string {

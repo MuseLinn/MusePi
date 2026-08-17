@@ -86,6 +86,10 @@ export class ViewStore {
 	constructor(dbPath: string) {
 		fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 		this.#db = new Database(dbPath, { create: true });
+		// Multiple daemon processes can share the journal dir (test daemons
+		// alongside the user's) — a transient writer lock must WAIT, not throw
+		// SQLITE_BUSY and crash the daemon from a fire-and-forget persist.
+		this.#db.exec("PRAGMA busy_timeout = 5000");
 		this.#db.run(`
 			CREATE TABLE IF NOT EXISTS materialized_sessions (
 				session_id TEXT PRIMARY KEY,
@@ -199,7 +203,7 @@ export class ViewStore {
 						seq++,
 						msg.role,
 						"model" in msg ? (String((msg as { model?: unknown }).model ?? "") ?? null) : null,
-						contentToText(msg.content),
+						"content" in msg ? contentToText(msg.content) : "",
 						// Mid-stream wire messages carry no timestamp yet; the
 						// entry-level timestamp (message_start time) is the
 						// closest stable value. Coalescing here keeps a

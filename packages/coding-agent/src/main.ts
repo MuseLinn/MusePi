@@ -1548,6 +1548,9 @@ export async function runRootCommand(
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
 	sessionOptions.hasUI = isInteractive || mode === "rpc-ui";
+	// Brand + interface identity: the agent sees which MusePi frontend runs
+	// it. Interactive = terminal (TUI); the daemon injects "desktop (GUI)".
+	sessionOptions.interfaceLabel = isInteractive ? "terminal (TUI)" : undefined;
 	sessionOptions.settings = settingsInstance;
 
 	// OTEL: register global OTLP exporters when an endpoint is configured via

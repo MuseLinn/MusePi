@@ -1,7 +1,7 @@
 /**
  * HTTP + WebSocket server for the browser relay.
  *
- * Impersonates Chrome's CDP discovery endpoint so the omp browser tool (and
+ * Impersonates Chrome's CDP discovery endpoint so the musepi browser tool (and
  * any puppeteer client) can connect with a plain `browserURL`:
  * - `GET /json/version` → 200 with `webSocketDebuggerUrl` once the extension
  *   is connected, 503 before that (clients like `waitForCdp` keep polling).

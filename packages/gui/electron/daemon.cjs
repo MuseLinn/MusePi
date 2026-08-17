@@ -23,6 +23,15 @@ const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
 const PORT_FILE = path.join(SOCKET_DIR, "ws.port");
 const STARTUP_TIMEOUT_MS = 10_000;
 
+/** GUI package version (brand version for the spawned daemon). */
+function guiVersion() {
+	try {
+		return require("../package.json").version ?? "";
+	} catch {
+		return "";
+	}
+}
+
 /** Discover a running daemon's WebSocket port from the ws.port file. */
 function probe() {
 	try {
@@ -50,19 +59,33 @@ function portOpen(port) {
 
 /**
  * Resolve the `musepi serve` launch command. Prefers the `musepi` binary on
- * PATH (installed builds); falls back to the repo checkout under development
- * (`bun packages/coding-agent/src/cli.ts serve`) by walking up from this
- * file's location.
+ * PATH (installed builds); then the daemon binary shipped with the packaged
+ * app (vendor/daemon, unpacked beside app.asar); falls back to the repo
+ * checkout under development (`bun packages/coding-agent/src/cli.ts serve`)
+ * by walking up from this file's location.
  */
 function daemonCommand(port) {
+	const win = process.platform === "win32";
 	const inPath = (process.env.PATH ?? "")
-		.split(":")
-		.some(dir => fs.existsSync(path.join(dir, "musepi")));
+		.split(win ? ";" : ":")
+		.some(dir => fs.existsSync(path.join(dir, win ? "musepi.exe" : "musepi")));
 	if (inPath) {
 		return {
 			program: "musepi",
 			args: ["serve", "--port", String(port)],
 		};
+	}
+	// Packaged app: the compiled daemon binary is asarUnpacked so it can be
+	// spawned directly (asar contents are not executable).
+	const unpacked = path.join(
+		process.resourcesPath ?? "",
+		"app.asar.unpacked",
+		"vendor",
+		"daemon",
+		win ? "musepi.exe" : "musepi",
+	);
+	if (fs.existsSync(unpacked)) {
+		return { program: unpacked, args: ["serve", "--port", String(port)] };
 	}
 	// Dev checkout: electron/ sits at <repo>/packages/gui/electron/.
 	let dir = path.resolve(__dirname);
@@ -87,7 +110,10 @@ async function start(port, env = {}) {
 	const child = spawn(program, args, {
 		detached: true,
 		stdio: "ignore",
-		env: { ...process.env, ...env },
+		// Brand the spawned daemon with the GUI's own version: the daemon
+		// runs from src/cli.ts (not musepi.ts), so without this system.meta
+		// reports the OMP engine version as the MusePi version.
+		env: { ...process.env, MUSEPI_VERSION: guiVersion(), ...env },
 	});
 	child.unref();
 

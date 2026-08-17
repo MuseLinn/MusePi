@@ -487,6 +487,29 @@
 	background: color-mix(in oklch, var(--tv-ok) 45%, transparent);
 }
 
+/* colorBlindMode parity (TUI theme COLORBLIND_ADJUSTMENT): the
+ * transcript root carries data-colorblind="true" when the setting is on
+ * — diff additions shift from green to blue so red/green pairs read for
+ * red-green colorblind users. TUI swaps the theme's toolDiffAdded hue;
+ * here the same semantic (add = blue) replaces every green add tint. */
+.tr-root[data-colorblind] {
+	--tv-diff-add: oklch(0.72 0.14 250);
+}
+.tr-root[data-colorblind] .tv-diff-row--add {
+	background: color-mix(in oklch, var(--tv-diff-add) 11%, transparent);
+	color: color-mix(in oklch, var(--tv-diff-add) 70%, var(--tv-fg));
+}
+.tr-root[data-colorblind] .tv-diff-row--add .tv-diff-sig {
+	color: color-mix(in oklch, var(--tv-diff-add) 80%, var(--tv-fg));
+}
+.tr-root[data-colorblind] .tv-diff-sbs-cell--add {
+	background: color-mix(in oklch, var(--tv-diff-add) 11%, transparent);
+	color: color-mix(in oklch, var(--tv-diff-add) 70%, var(--tv-fg));
+}
+.tr-root[data-colorblind] .tv-diff-word--add {
+	background: color-mix(in oklch, var(--tv-diff-add) 45%, transparent);
+}
+
 .tv-diff-sbs-row--hunk,
 .tv-diff-sbs-row--header {
 	color: var(--tv-faint);
@@ -778,6 +801,16 @@
 
 .tv-widget-body {
 	padding: 12px;
+	/* 内联可读性保底：组件未显式设字号时不低于 13px。 */
+	font-size: 13px;
+}
+
+/* Inline custom-HTML faces: the shared .gui-widget-html iframe is
+ * height:100%, which collapses to the 150px iframe default inside an
+ * auto-height transcript card. Give it a usable floor here — the board
+ * canvas sizes the same class explicitly and is untouched by this. */
+.tv-widget-body .gui-widget-html {
+	min-height: 320px;
 }
 
 /* The shared widgets reference the GUI theme tokens; bridge them here
@@ -958,4 +991,176 @@
 }
 .tv-board-open-arrow {
 	opacity: 0.7;
+}
+
+/* ---- task / swarm card (Kimi SwarmTool parity: overview bar + phase dots
+ *      + per-member accordion) ---- */
+
+.tv-swarm-overview {
+	display: flex;
+	flex-direction: column;
+	margin: 4px 0 6px;
+	padding: 6px 8px;
+	border: 1px solid var(--tv-border);
+	border-radius: 8px;
+	background: var(--tv-inset);
+}
+
+.tv-swarm-line {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.tv-swarm-big {
+	font-weight: 600;
+	font-size: 12px;
+}
+
+.tv-swarm-lbl {
+	color: var(--tv-muted);
+	font-size: 11px;
+}
+
+.tv-swarm-seg {
+	display: flex;
+	gap: 2px;
+	height: 4px;
+	margin: 6px 0 7px;
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.tv-swarm-seg-part {
+	min-width: 2px;
+	flex: 0 0 auto;
+}
+
+.tv-swarm-seg-part.s-ok {
+	background: var(--tv-ok);
+}
+
+.tv-swarm-seg-part.s-run {
+	background: var(--tv-accent);
+}
+
+.tv-swarm-seg-part.s-warn {
+	background: var(--tv-warn);
+}
+
+.tv-swarm-seg-part.s-fail {
+	background: var(--tv-err);
+}
+
+.tv-swarm-seg-part.s-abort {
+	background: color-mix(in srgb, var(--tv-err) 55%, transparent);
+}
+
+.tv-swarm-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px 10px;
+	font-size: 10.5px;
+	color: var(--tv-muted);
+}
+
+.tv-swarm-legend-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.tv-swarm-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex: none;
+	display: inline-block;
+	background: var(--tv-faint);
+}
+
+.tv-swarm-dot.ok,
+.tv-swarm-dot.s-ok {
+	background: var(--tv-ok);
+}
+
+.tv-swarm-dot.run,
+.tv-swarm-dot.s-run {
+	background: var(--tv-accent);
+	animation: tv-swarm-pulse 1.2s ease-in-out infinite;
+}
+
+.tv-swarm-dot.warn,
+.tv-swarm-dot.s-warn {
+	background: var(--tv-warn);
+}
+
+.tv-swarm-dot.err,
+.tv-swarm-dot.s-fail {
+	background: var(--tv-err);
+}
+
+.tv-swarm-dot.s-abort {
+	background: color-mix(in srgb, var(--tv-err) 55%, transparent);
+}
+
+@keyframes tv-swarm-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.tv-swarm-member-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+}
+
+.tv-swarm-member-head .tv-row {
+	flex: 1;
+	min-width: 0;
+	align-items: baseline;
+}
+
+.tv-swarm-chev {
+	flex: none;
+	padding: 2px 4px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--tv-faint);
+	cursor: pointer;
+	line-height: 0;
+	transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tv-swarm-chev:hover {
+	color: var(--tv-fg);
+	background: rgba(128, 128, 128, 0.15);
+}
+
+.tv-swarm-chev-icon {
+	display: inline-block;
+	width: 0;
+	height: 0;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	border-top: 5px solid currentColor;
+	transition: transform 0.15s ease;
+}
+
+.tv-swarm-chev-icon--open {
+	transform: rotate(180deg);
+}
+
+.tv-swarm-member-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 2px 0 4px 14px;
 }

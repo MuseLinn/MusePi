@@ -28,6 +28,7 @@ import {
 } from "../run-scope";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
 import type {
+	ComputerInputEvent,
 	ComputerScreenshot,
 	ComputerSessionSnapshot,
 	ComputerWorkerInbound,
@@ -99,6 +100,15 @@ interface ComputerRunContext {
 	snapshot: ComputerSessionSnapshot;
 	output: RunOutput;
 	screenshots: ComputerScreenshot[];
+	/** Streams a desktop input action to the supervisor for UI feedback
+	 *  (the computer-use glow overlay). No-op in run contexts without a
+	 *  transport (tests). */
+	emitInput: (event: ComputerInputEvent) => void;
+	/** Size of the most recent screenshot PER TARGET ("desktop" or a
+	 *  window id) — click coords are pixels in the target's own last
+	 *  screenshot, so the scaling baseline must follow the target, not
+	 *  the run (interleaved windows would otherwise mis-scale). */
+	shotSizes?: Map<string, { width: number; height: number }>;
 }
 
 type RunContextAccessor = () => ComputerRunContext;
@@ -194,6 +204,11 @@ async function captureScreenshot(
 	);
 	const destination = path.join(os.tmpdir(), `omp-computer-${Snowflake.next()}.png`);
 	await Bun.write(destination, frame.data);
+	// Remember the frame the model saw — click coords are pixels in this
+	// exact frame (scaled or not), scaled onto the window bounds later.
+	// Keyed by target so interleaved window/desktop captures stay correct.
+	context.shotSizes ??= new Map();
+	context.shotSizes.set(frame.target, { width: frame.width, height: frame.height });
 	const scaled = frame.width !== frame.sourceWidth || frame.height !== frame.sourceHeight;
 	context.screenshots.push({
 		path: destination,
@@ -249,9 +264,21 @@ class El {
 		return (await nativeCall(signal, () => this.#session.axNode(this.ref))).value;
 	}
 
+	/** Reports an AX input action with the element's screen frame. */
+	async #emit(kind: ComputerInputEvent["kind"]): Promise<void> {
+		try {
+			const context = this.#getContext();
+			const bounds = await this.bounds();
+			context.emitInput({ kind, ...(bounds ? { rect: bounds } : {}) });
+		} catch {
+			// Input reporting is best-effort — never fail the action on it.
+		}
+	}
+
 	async setValue(value: string): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "setValue");
+		await this.#emit("setValue");
 		await nativeCall(context.signal, () => this.#session.axSetValue(this.ref, value));
 	}
 
@@ -276,24 +303,28 @@ class El {
 	async perform(action: string): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "perform");
+		await this.#emit("perform");
 		await nativeCall(context.signal, () => this.#session.axPerform(this.ref, action));
 	}
 
 	async press(): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "press");
+		await this.#emit("press");
 		await nativeCall(context.signal, () => this.#session.axPerform(this.ref, "press"));
 	}
 
 	async click(options?: DeliveryOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "click");
+		await this.#emit("click");
 		await nativeCall(context.signal, () => this.#session.axClick(this.ref, pointerOptions(options)));
 	}
 
 	async focus(): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "focus");
+		await this.#emit("focus");
 		await nativeCall(context.signal, () => this.#session.axFocus(this.ref));
 	}
 
@@ -332,6 +363,32 @@ class Win {
 		this.focused = window.focused;
 	}
 
+	/** Scales a screenshot-pixel point onto the window's screen frame. */
+	#screenPoint(x: number, y: number): { x: number; y: number } | undefined {
+		const shot = this.#getContext().shotSizes?.get(this.id);
+		if (!shot || shot.width === 0 || shot.height === 0) return undefined;
+		if (this.bounds.width <= 0 || this.bounds.height <= 0) return undefined;
+		return {
+			x: Math.round(this.bounds.x + (x * this.bounds.width) / shot.width),
+			y: Math.round(this.bounds.y + (y * this.bounds.height) / shot.height),
+		};
+	}
+
+	/** Reports an input action to the supervisor (computer-use glow). */
+	#emit(kind: ComputerInputEvent["kind"], point?: { x: number; y: number }): void {
+		const rect =
+			this.bounds.width > 0 && this.bounds.height > 0
+				? { x: this.bounds.x, y: this.bounds.y, width: this.bounds.width, height: this.bounds.height }
+				: undefined;
+		this.#getContext().emitInput({
+			kind,
+			...(this.app ? { app: this.app } : {}),
+			...(this.title ? { title: this.title } : {}),
+			...(rect ? { rect } : {}),
+			...(point ? { point } : {}),
+		});
+	}
+
 	screenshot(options?: ScreenshotOptions): Promise<{ path: string; width: number; height: number }> {
 		return captureScreenshot(this.#session, this.#getContext, this.id, options);
 	}
@@ -339,12 +396,14 @@ class Win {
 	async click(x: number, y: number, options?: ClickOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "click");
+		this.#emit("click", this.#screenPoint(x, y));
 		await nativeCall(context.signal, () => this.#session.click(this.id, x, y, pointerOptions(options)));
 	}
 
 	async doubleClick(x: number, y: number, options?: Omit<ClickOptions, "count">): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "doubleClick");
+		this.#emit("doubleClick", this.#screenPoint(x, y));
 		await nativeCall(context.signal, () =>
 			this.#session.click(this.id, x, y, pointerOptions({ ...options, count: 2 })),
 		);
@@ -353,12 +412,14 @@ class Win {
 	async move(x: number, y: number): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "move");
+		this.#emit("move", this.#screenPoint(x, y));
 		await nativeCall(context.signal, () => this.#session.moveMouse(this.id, x, y));
 	}
 
 	async drag(points: Array<[number, number]>, options?: DragOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "drag");
+		this.#emit("drag");
 		await nativeCall(context.signal, () =>
 			this.#session.drag(
 				this.id,
@@ -371,6 +432,7 @@ class Win {
 	async scroll(x: number, y: number, options: ScrollOptions = {}): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "scroll");
+		this.#emit("scroll", this.#screenPoint(x, y));
 		await nativeCall(context.signal, () =>
 			this.#session.scroll(this.id, x, y, options.dx ?? 0, options.dy ?? 0, pointerOptions(options)),
 		);
@@ -379,12 +441,14 @@ class Win {
 	async type(text: string, options?: DeliveryOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "type");
+		this.#emit("type");
 		await nativeCall(context.signal, () => this.#session.typeText(this.id, text, pointerOptions(options)));
 	}
 
 	async press(chord: string | string[], options?: DeliveryOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "press");
+		this.#emit("press");
 		await nativeCall(context.signal, () =>
 			this.#session.keyChord(this.id, chordKeys(chord), pointerOptions(options)),
 		);
@@ -393,6 +457,7 @@ class Win {
 	async raise(): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "raise");
+		this.#emit("raise");
 		await nativeCall(context.signal, () => this.#session.raiseWindow(this.id));
 	}
 
@@ -506,6 +571,14 @@ export class ComputerWorkerCore {
 			snapshot: message.session,
 			output,
 			screenshots,
+			emitInput: (event: ComputerInputEvent): void => {
+				this.#transport.send({
+					type: "input",
+					id: `computer-in-${message.id}-${crypto.randomUUID()}`,
+					runId: message.id,
+					event,
+				});
+			},
 		};
 		let returnValue: unknown;
 		let failure: { error: unknown } | undefined;
