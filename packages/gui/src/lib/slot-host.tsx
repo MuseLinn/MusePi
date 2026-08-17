@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "./rpc";
 /**
  * Renderer-side component slots (DSH ui-slots analogue): extensions
@@ -44,6 +44,8 @@ export interface SlotComponent {
 	error?: string;
 	/** Component-scoped CSS extracted at compile time (rendered via <style>). */
 	css?: string;
+	/** List-slot render order (ascending; registration order otherwise). */
+	order?: number;
 }
 
 /** Props every extension component receives when mounted. Hosts pass what
@@ -62,71 +64,100 @@ export interface SlotComponentProps {
 	extensionId?: string;
 }
 
-/** Poll extensions.list (daemon caches 10s) and pick compiled components for one slot.
- *  The daemon's extension watcher (HMR) pushes `extensions.changed` — that
- *  triggers an immediate reload instead of waiting for the next poll. */
-export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComponent[] {
-	const [items, setItems] = useState<SlotComponent[]>([]);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			if (document.visibilityState === "hidden") return;
-			void rpc
-				.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
-				.then(res => {
-					if (!alive) return;
-					setItems((res?.components ?? []).filter(c => c.slot === slot && (c.code.length > 0 || c.error)));
-				})
-				.catch(() => alive && setItems([]));
-		};
-		load();
-		const id = setInterval(load, 10_000);
-		const off = rpc.addEventListener(event => {
-			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "extensions.changed") load();
-		});
-		return () => {
-			alive = false;
-			clearInterval(id);
-			off();
-		};
-	}, [rpc, slot]);
-	return items;
+/** ── 全局单例 slot 数据源 ──────────────────────────────────────────
+ * 所有 slot 宿主(右面板/设置页/composer/rail)共享**一个**
+ * extensions.list 轮询 + extensions.changed 即时刷新,而不是每个
+ * 宿主独立轮询(此前 N 个宿主 = N 个 10s 轮询,同一 daemon 同一数据)。
+ * 首个宿主挂载时启动,最后一个卸载时停止。 */
+
+interface SlotStoreState {
+	items: SlotComponent[];
+	timer: Timer | null;
+	refs: number;
+	unlisten?: () => void;
 }
 
-/** Poll extensions.list and pick compiled components for one slot prefix
- *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
-export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
-	const [items, setItems] = useState<SlotComponent[]>([]);
+const slotStores = new WeakMap<RpcClient, SlotStoreState>();
+
+function startSlotStore(rpc: RpcClient, notify: () => void): void {
+	const st = slotStores.get(rpc)!;
+	const load = (): void => {
+		if (document.visibilityState === "hidden") return;
+		void rpc
+			.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
+			.then(res => {
+				const next = res?.components ?? [];
+				// 引用比较即可:daemon 每次返回新数组;内容相同也会换引用,
+				// 但宿主按 slot 过滤后 useMemo 会收敛 —— 只在实际变更时
+				// 触发重渲染的判定由过滤层负责。
+				if (next !== st.items) {
+					st.items = next;
+					notify();
+				}
+			})
+			.catch(() => {
+				// 轮询失败保留上次数据(瞬时断连不闪空)
+			});
+	};
+	load();
+	st.timer = setInterval(load, 10_000);
+	st.unlisten = rpc.addEventListener(event => {
+		const payload = event.payload as { type?: string } | undefined;
+		// HMR:daemon 的 fs.watch 清缓存后广播 extensions.changed,
+		// 立即重拉 —— 不等下一个轮询周期。
+		if (payload?.type === "extensions.changed") load();
+	});
+}
+
+/** 订阅全局 slot 数据(单例)。返回全部组件,宿主自行过滤。 */
+export function useSlotRegistry(rpc: RpcClient | null): SlotComponent[] {
+	const [, setVersion] = useState(0);
 	useEffect(() => {
 		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			if (document.visibilityState === "hidden") return;
-			void rpc
-				.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
-				.then(res => {
-					if (!alive) return;
-					setItems(
-						(res?.components ?? []).filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error)),
-					);
-				})
-				.catch(() => alive && setItems([]));
-		};
-		load();
-		const id = setInterval(load, 10_000);
-		const off = rpc.addEventListener(event => {
-			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "extensions.changed") load();
-		});
+		let st = slotStores.get(rpc);
+		if (!st) {
+			st = { items: [], timer: null, refs: 0 };
+			slotStores.set(rpc, st);
+		}
+		st.refs += 1;
+		const first = st.refs === 1;
+		if (first) startSlotStore(rpc, () => setVersion(v => v + 1));
+		else setVersion(v => v + 1); // 已启动:立即同步当前数据
 		return () => {
-			alive = false;
-			clearInterval(id);
-			off();
+			st!.refs -= 1;
+			if (st!.refs === 0) {
+				if (st!.timer) clearInterval(st!.timer);
+				st!.unlisten?.();
+				st!.items = [];
+			}
 		};
-	}, [rpc, prefix]);
-	return items;
+	}, [rpc]);
+	return rpc ? (slotStores.get(rpc)?.items ?? []) : [];
+}
+
+/** Pick compiled components registered for one exact slot. */
+export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComponent[] {
+	const all = useSlotRegistry(rpc);
+	return useMemo(
+		() =>
+			all
+				.filter(c => c.slot === slot && (c.code.length > 0 || c.error))
+				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+		[all, slot],
+	);
+}
+
+/** Pick compiled components whose slot starts with a namespace prefix
+ *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
+export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
+	const all = useSlotRegistry(rpc);
+	return useMemo(
+		() =>
+			all
+				.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error))
+				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+		[all, prefix],
+	);
 }
 
 /** Mount every extension-contributed component registered for a slot. */
@@ -190,7 +221,7 @@ export function SlotComponentMount({
 			try {
 				// Compiled components bind to the HOST react instance via the
 				// `React` identifier (window.MusePiReact) — see
-				// daemon/extension-components.ts. Inject before import.
+				// daemon/extension-artifact-compiler.ts. Inject before import.
 				(window as unknown as { MusePiReact: unknown }).MusePiReact = React;
 				// Dynamic import: specifier is a runtime blob URL served from
 				// the extension registry — static import is impossible here.

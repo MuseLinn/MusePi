@@ -11,7 +11,7 @@ import {
 	SlotComponentHost,
 	SlotComponentMount,
 	useSlotComponentsByPrefix,
-} from "../lib/slot-components";
+} from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FilePane } from "./FilePane";

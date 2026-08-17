@@ -211,7 +211,7 @@ export function createExtensionManagerTools(
 		): Promise<AgentToolResult<any, typeof extValidateSchema.infer>> {
 			const cwd = ctx.sessionManager.getCwd();
 			const { loadExtensions } = await import("../extensibility/extensions/loader");
-			const { validateExtensionComponents } = await import("./extension-components");
+			const { validateExtensionComponents } = await import("./extension-artifact-compiler");
 			const p = params as { path: string };
 			const result = await loadExtensions([p.path], cwd);
 			const errors = result.errors.map(e => e.error);

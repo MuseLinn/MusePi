@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { RpcClient } from "../lib/rpc";
-import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-components";
+import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { TOOLS } from "./ContextPanel";
 

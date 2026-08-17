@@ -2,7 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
-import { SETTINGS_TAB_SLOT_PREFIX, SlotComponentMount, useSlotComponentsByPrefix } from "../lib/slot-components";
+import { SETTINGS_TAB_SLOT_PREFIX, SlotComponentMount, useSlotComponentsByPrefix } from "../lib/slot-host";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";

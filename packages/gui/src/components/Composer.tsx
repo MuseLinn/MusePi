@@ -14,7 +14,7 @@ import {
 	COMPOSER_RIGHT_SLOT,
 	SlotComponentHost,
 	useSlotComponents,
-} from "../lib/slot-components";
+} from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { startDictation } from "../lib/voice";

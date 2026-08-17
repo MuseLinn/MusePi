@@ -1739,6 +1739,8 @@ export interface ExtensionComponent {
 	moduleUrl: string;
 	/** Display label (settings list, load errors). */
 	label?: string;
+	/** List-slot render order (ascending; registration order otherwise). */
+	order?: number;
 }
 
 /** Result of loading extensions. */

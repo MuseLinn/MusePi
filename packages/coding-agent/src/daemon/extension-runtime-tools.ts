@@ -25,29 +25,29 @@ export const DYNAMIC_TOOL_PREFIX = "extdyn__";
 
 const VM_TIMEOUT_MS = 5_000;
 
-export interface DynamicPackageVersion {
+export interface RuntimePackageVersion {
 	packageId: string;
 	hostCode: string;
 	createdAt: number;
 }
 
-export interface DynamicPluginRun {
+export interface RuntimePluginRun {
 	packageId: string;
 	/** 活动动态工具(注册名 = extdyn__name;全量 reconcile 用)。 */
 	customTools: CustomTool[];
 	startedAt: number;
 }
 
-export interface DynamicPlugin {
+export interface RuntimePlugin {
 	pluginId: string;
 	sessionId: string;
 	name: string;
 	purpose: string;
-	packages: Map<string, DynamicPackageVersion>;
-	activeRun?: DynamicPluginRun;
+	packages: Map<string, RuntimePackageVersion>;
+	activeRun?: RuntimePluginRun;
 }
 
-export interface DynamicPluginSnapshot {
+export interface RuntimePluginSnapshot {
 	pluginId: string;
 	name: string;
 	purpose: string;
@@ -57,8 +57,8 @@ export interface DynamicPluginSnapshot {
 }
 
 /** 会话级动态插件注册表(进程内存;不可变版本 + 单活动 run)。 */
-export class DynamicToolRegistry {
-	readonly #plugins = new Map<string, DynamicPlugin>();
+export class RuntimeToolRegistry {
+	readonly #plugins = new Map<string, RuntimePlugin>();
 	#pluginSeq = 0;
 	#packageSeq = 0;
 
@@ -70,12 +70,12 @@ export class DynamicToolRegistry {
 		return `pkg${String(++this.#packageSeq).padStart(3, "0")}`;
 	}
 
-	get(pluginId: string): DynamicPlugin | undefined {
+	get(pluginId: string): RuntimePlugin | undefined {
 		return this.#plugins.get(pluginId);
 	}
 
-	all(): DynamicPluginSnapshot[] {
-		const out: DynamicPluginSnapshot[] = [];
+	all(): RuntimePluginSnapshot[] {
+		const out: RuntimePluginSnapshot[] = [];
 		for (const plugin of this.#plugins.values()) {
 			out.push(this.#snapshot(plugin));
 		}
@@ -91,7 +91,7 @@ export class DynamicToolRegistry {
 		return out;
 	}
 
-	#snapshot(plugin: DynamicPlugin): DynamicPluginSnapshot {
+	#snapshot(plugin: RuntimePlugin): RuntimePluginSnapshot {
 		return {
 			pluginId: plugin.pluginId,
 			name: plugin.name,
@@ -102,11 +102,11 @@ export class DynamicToolRegistry {
 		};
 	}
 
-	put(plugin: DynamicPlugin): void {
+	put(plugin: RuntimePlugin): void {
 		this.#plugins.set(plugin.pluginId, plugin);
 	}
 
-	delete(pluginId: string): DynamicPlugin | undefined {
+	delete(pluginId: string): RuntimePlugin | undefined {
 		const plugin = this.#plugins.get(pluginId);
 		this.#plugins.delete(pluginId);
 		return plugin;
@@ -132,12 +132,12 @@ interface SimpleParams {
 export type LiveSessionLookup = (sessionId: string) => { agentSession: AgentSession } | undefined;
 
 /**
- * 创建动态插件工具链。`sessionOf(ctx)` 与 extension-manager-tools 同款
+ * 创建动态插件工具链。`sessionOf(ctx)` 与 extension-lifecycle-tools 同款
  * (会话查表由 DaemonSessionHost 注入),每个会话持有独立 registry。
  */
-export function createDynamicExtensionTools(
+export function createExtensionRuntimeTools(
 	sessionOf: (ctx: CustomToolContext) => AgentSession | null,
-	registryFor: (ctx: CustomToolContext) => DynamicToolRegistry,
+	registryFor: (ctx: CustomToolContext) => RuntimeToolRegistry,
 ): Array<CustomTool<any, any>> {
 	const defineSchema = type({
 		name: type("string").describe("插件名(非空)"),

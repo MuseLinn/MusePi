@@ -113,8 +113,8 @@ import {
 	saveCronTasks,
 	validateCronTask,
 } from "./crons";
-import { createDynamicExtensionTools, DynamicToolRegistry } from "./dynamic-extension-tools";
-import { createExtensionManagerTools } from "./extension-manager-tools";
+import { createExtensionManagerTools } from "./extension-lifecycle-tools";
+import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 import {
@@ -1102,7 +1102,7 @@ export class DaemonSessionHost {
 	}
 
 	/** P0 自举:agent 扩展管理工具(extension_* 工具集)——实现见
-	 *  extension-manager-tools.ts(server.ts 不再承载,DSH 模块化惯例)。
+	 *  extension-lifecycle-tools.ts(server.ts 不再承载,DSH 模块化惯例)。
 	 *  注入 createSession/activate 的 customTools,使 agent 能在会话内
 	 *  自举扩展:写文件 → extension_load → 出错 → extension_status 自查 →
 	 *  extension_reload 自修。 */
@@ -1115,12 +1115,12 @@ export class DaemonSessionHost {
 	}
 
 	/** P2 动态自举:会话级动态插件工具链(ext_define/ext_run/ext_stop/
-	 *  ext_undefine/ext_inspect)——实现见 dynamic-extension-tools.ts。
+	 *  ext_undefine/ext_inspect)——实现见 extension-runtime-tools.ts。
 	 *  每会话独立 registry,沙箱(vm)承载 host 半体。 */
-	#dynamicRegistries = new Map<string, DynamicToolRegistry>();
+	#dynamicRegistries = new Map<string, RuntimeToolRegistry>();
 
 	#dynamicExtensionTools(): CustomTool[] {
-		return createDynamicExtensionTools(
+		return createExtensionRuntimeTools(
 			ctx => {
 				const id = ctx.sessionManager.getSessionId();
 				if (!id) return null;
@@ -1130,7 +1130,7 @@ export class DaemonSessionHost {
 				const id = ctx.sessionManager.getSessionId();
 				let registry = this.#dynamicRegistries.get(id);
 				if (!registry) {
-					registry = new DynamicToolRegistry();
+					registry = new RuntimeToolRegistry();
 					this.#dynamicRegistries.set(id, registry);
 				}
 				return registry;
@@ -2775,7 +2775,7 @@ export class DaemonServer {
 			this.#extensionWatcherTimer = null;
 			this.#extensionsCache = null;
 			this.#pluginsCache = null;
-			void import("./extension-components").then(m => m.invalidateExtensionCaches());
+			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
 			const seq = ++this.#globalEventSeq;
 			for (const conn of this.#globalEventTargets) {
 				this.#host.emitEvent(conn, {
@@ -2903,7 +2903,7 @@ export class DaemonServer {
 		if (extensions.length === 0) return;
 		const cwd = this.#host.cwd();
 		const { loadExtensions } = await import("../extensibility/extensions/loader");
-		const { validateExtensionComponents } = await import("./extension-components");
+		const { validateExtensionComponents } = await import("./extension-artifact-compiler");
 		const known = await this.#getExtensions();
 		for (const id of extensions) {
 			const entry = known.find(e => e.id === id);
@@ -3812,7 +3812,7 @@ export class DaemonServer {
 				// Renderer-side slot components (ui-slots analogue): compiled
 				// from active extension-module entries, cached 10s with the
 				// extension scan. The GUI mounts them by slot id.
-				const { collectSlotComponents } = await import("./extension-components");
+				const { collectSlotComponents } = await import("./extension-artifact-compiler");
 				const components = await collectSlotComponents(
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
@@ -3980,7 +3980,7 @@ export class DaemonServer {
 				// Modes v2 §5.5:扩展声明预设(registerMode)合并进列表 ——
 				// 文件 id 冲突时文件优先(用户数据层压扩展代码层),与
 				// resolve 的 extraModes 兜底同一优先级规则。
-				const { collectExtensionModes } = await import("./extension-components");
+				const { collectExtensionModes } = await import("./extension-artifact-compiler");
 				const fileIds = new Set(ids);
 				for (const em of await collectExtensionModes(await this.#getExtensions(), this.#host.cwd())) {
 					if (fileIds.has(em.id)) continue;

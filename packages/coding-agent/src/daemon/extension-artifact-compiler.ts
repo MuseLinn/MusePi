@@ -27,6 +27,8 @@ export interface SlotComponent {
 	/** Component-scoped CSS (extracted from the component's own `import
 	 *  "./x.css"` chains; rendered via a <style> tag by the host). */
 	css?: string;
+	/** List-slot render order (ascending; registration order otherwise). */
+	order?: number;
 }
 
 /** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
@@ -120,6 +122,7 @@ export async function collectSlotComponents(
 					label: component.label,
 					code: compiled.code,
 					...(compiled.css ? { css: compiled.css } : {}),
+					...(component.order !== undefined ? { order: component.order } : {}),
 				});
 			} catch (error) {
 				// A broken component must not fail the whole extensions.list —
@@ -130,6 +133,7 @@ export async function collectSlotComponents(
 					label: component.label ?? component.moduleUrl,
 					code: "",
 					error: String(error),
+					...(component.order !== undefined ? { order: component.order } : {}),
 				});
 			}
 		}

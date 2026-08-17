@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { collectSlotComponents } from "../src/daemon/extension-components.js";
+import { collectSlotComponents } from "../src/daemon/extension-artifact-compiler.js";
 
 const EXAMPLE_EXT = new URL("../examples/extension-component/index.ts", import.meta.url).pathname.replace(
 	/^\/([A-Za-z]:)/,
