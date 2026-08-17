@@ -1,7 +1,7 @@
 /**
  * Read CLI command handler.
  *
- * Handles `omp read` — invokes the `read` agent tool against a path/URL and
+ * Handles `musepi read` — invokes the `read` agent tool against a path/URL and
  * prints the resulting content blocks exactly as the model would receive them
  * (including truncation/limit notices appended by the meta-notice wrapper).
  */

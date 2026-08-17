@@ -34,9 +34,9 @@ export default class Say extends Command {
 	};
 
 	static examples = [
-		'omp say "hello world"',
-		"omp say --file notes.md --voice bm_fable",
-		'omp say "hello world" --out /tmp/hello.wav',
+		'musepi say "hello world"',
+		"musepi say --file notes.md --voice bm_fable",
+		'musepi say "hello world" --out /tmp/hello.wav',
 	];
 
 	async run(): Promise<void> {

@@ -1,5 +1,5 @@
 /**
- * CLI handler for `omp grievances` — view, clean, and manually push reported tool issues.
+ * CLI handler for `musepi grievances` — view, clean, and manually push reported tool issues.
  */
 import chalk from "@musepi/pi-utils/chalk";
 import { Settings } from "../config/settings";
@@ -155,7 +155,7 @@ export async function cleanGrievances(options: CleanGrievancesOptions): Promise<
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Manual push (`omp grievances push`)
+// Manual push (`musepi grievances push`)
 // ───────────────────────────────────────────────────────────────────────────
 
 /**

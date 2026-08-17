@@ -11,7 +11,7 @@ import type { CleanseAgentOutcome, CleanseAssignment, CleanseDiagnosticReport, C
 const DEFAULT_MODEL = "@smol";
 const DISPLAY_FILE_LIMIT = 50;
 
-/** User-facing options for `omp cleanse`. */
+/** User-facing options for `musepi cleanse`. */
 export interface CleanseCommandOptions {
 	maxAgents?: number;
 	model?: string;

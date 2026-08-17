@@ -792,7 +792,7 @@ export async function loadSessionExtensions(
  * built-in catalog providers; without this, providers contributed by an
  * extension (e.g. a custom OpenAI-compatible provider under
  * `~/.musepi/agent/extensions/`) never reach model resolution. Mirrors the
- * session / `omp models` path: drain the queued provider registrations, then
+ * session / `musepi models` path: drain the queued provider registrations, then
  * `refreshRuntimeProviders` so dynamically-discovered models exist before
  * selectors are resolved.
  */
@@ -2402,7 +2402,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Hydrate cached runtime (extension) provider catalogs before model
 		// resolution. Dynamic-only providers have no synchronous registration side
 		// effect, so a cold --model/provider resume must see the same fresh SQLite
-		// cache that `omp models find` uses before the online refresh continues in
+		// cache that `musepi models find` uses before the online refresh continues in
 		// the background.
 		await modelRegistry.refreshRuntimeProviders("offline");
 		// Continue runtime discovery in the background (cache-aware) so startup is
@@ -2806,7 +2806,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				// so on a cache-cold boot the configured default stays unresolved
 				// and `pick` silently degrades to an unrelated authed provider's
 				// default (#6162) or "No models available" (#6114) — even though
-				// `omp models` (which awaits discovery) lists the model. Await one
+				// `musepi models` (which awaits discovery) lists the model. Await one
 				// cache-aware discovery pass and retry when a default role is
 				// configured (must win over `pick`) or nothing resolved at all.
 				// The common path — role already resolved, or a `pick` with no

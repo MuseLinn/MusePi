@@ -122,7 +122,7 @@ export async function describeAuthBrokerStartupError(error: unknown): Promise<st
 	const target = url ? ` at ${url}` : "";
 	return (
 		`Auth broker${target} is unreachable (${error.message}). ` +
-		"omp is configured to use this broker for credentials and will not fall back to local credentials automatically.\n" +
+		"musepi is configured to use this broker for credentials and will not fall back to local credentials automatically.\n" +
 		"Start the broker with `omp auth-broker serve`, or disable it with " +
 		"`omp config reset auth.broker.url` and `omp config reset auth.broker.token` " +
 		"(or unset OMP_AUTH_BROKER_URL / OMP_AUTH_BROKER_TOKEN)."

@@ -1,5 +1,5 @@
 /**
- * `omp compress` — rewrite text files into the dense prompt register.
+ * `musepi compress` — rewrite text files into the dense prompt register.
  *
  * One agent per file, two tools each. The agent submits a draft with `rewrite`; the
  * command answers with that draft, its measured size, and the losses the agent declared,
@@ -27,7 +27,7 @@ const DEFAULT_MAX_ROUNDS = 3;
 const DEFAULT_CONCURRENCY = 4;
 const LOSS_PREVIEW = 200;
 
-/** User-facing options for `omp compress`. */
+/** User-facing options for `musepi compress`. */
 export interface CompressCommandOptions {
 	/** Files and glob patterns to compress. */
 	files: string[];
@@ -268,7 +268,7 @@ function renderReview(input: {
 
 /**
  * Print one file's outcome and declared losses on stderr, so the approved text can own
- * stdout for a single-file run (`omp compress f.md > out.md`).
+ * stdout for a single-file run (`musepi compress f.md > out.md`).
  */
 function reportFile(file: CompressFileResult, emitToStdout: boolean): void {
 	const label = shortenPath(file.path);

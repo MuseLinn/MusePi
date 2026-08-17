@@ -1383,7 +1383,7 @@ export async function startDaemonBrokerFromEnvironment(options: DaemonBrokerStar
 	await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
 	const lease = await acquireBrokerLease(runtimeDir);
 	if (!lease) return;
-	setProcessName("omp daemon broker");
+	setProcessName("musepi daemon broker");
 	const token = (await Bun.file(path.join(runtimeDir, TOKEN_FILE)).text()).trim();
 	if (!token) throw new Error("Daemon broker token is empty");
 	const broker = new DaemonBroker(projectDir, runtimeDir, token, idleGraceMs, restartBackoffBaseMs);

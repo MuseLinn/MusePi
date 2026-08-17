@@ -14,7 +14,7 @@ export interface CleanseProgressReporter {
 	finish(): void;
 }
 
-/** Create the TTY-only worker completion reporter used by `omp cleanse`. */
+/** Create the TTY-only worker completion reporter used by `musepi cleanse`. */
 export function createCleanseProgressReporter(output: CleanseProgressOutput = process.stdout): CleanseProgressReporter {
 	const interactive = output.isTTY === true;
 	let total = 0;

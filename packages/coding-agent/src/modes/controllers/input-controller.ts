@@ -1103,7 +1103,7 @@ export class InputController {
 			// [#3461]). SIGSTOP cannot be caught, blocked, or ignored, so the
 			// kernel stops the process regardless of installed handlers.
 			//
-			// pid=0 (foreground process group, not just our PID): omp is not
+			// pid=0 (foreground process group, not just our PID): musepi is not
 			// always the shell's direct child. Package-manager launchers (`npx`,
 			// `pnpm exec`, `bunx`, …) wait on the real CLI from a parent shim
 			// that shares omp's process group, and a `omp … | tee log` style

@@ -74,7 +74,7 @@ export interface ProfileBootstrapResult {
  * positionals are never stolen (`omp grep --profile <path>` greps for
  * `--profile`; it does not select a profile). `launch` and `acp` are explicit
  * spellings of launch-shaped commands, so `omp launch --profile work` and
- * `omp acp --profile work` still select profile `work`.
+ * `musepi acp --profile work` still select profile `work`.
  *
  * Throws when either flag is supplied without a value.
  */

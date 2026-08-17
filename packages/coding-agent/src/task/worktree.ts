@@ -438,7 +438,7 @@ export async function ensureIsolation(
 		// Claim ownership before the backend materialises `m`. Backends only
 		// create/replace `mergedDir` (and overlay upper/work), never the base
 		// dir, so the marker survives `isoStart` — and a concurrent
-		// `omp worktree clear` never sees this sandbox without a live owner,
+		// `musepi worktree clear` never sees this sandbox without a live owner,
 		// even while a large clone is still in progress.
 		await fs.mkdir(baseDir, { recursive: true });
 		await writeIsolationOwner(baseDir, id);

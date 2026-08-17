@@ -17,9 +17,9 @@ export default class Update extends Command {
 	};
 
 	static examples = [
-		"omp update",
-		"omp update --check",
-		"# If GitHub rate-limits release metadata, set GITHUB_TOKEN or GH_TOKEN\n  GITHUB_TOKEN=... omp update",
+		"musepi update",
+		"musepi update --check",
+		"# If GitHub rate-limits release metadata, set GITHUB_TOKEN or GH_TOKEN\n  GITHUB_TOKEN=... musepi update",
 	];
 
 	async run(): Promise<void> {

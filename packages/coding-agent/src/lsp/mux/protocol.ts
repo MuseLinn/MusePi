@@ -24,11 +24,11 @@ export const LSP_MUX_PROJECT_DIR_ENV = "OMP_LSP_MUX_PROJECT_DIR";
 export const LSP_MUX_DAEMON_NAME = "omp.lsp.mux";
 
 /** Broker readiness regex matched against the banner printed by the worker. */
-export const LSP_MUX_READY_PATTERN = String.raw`omp lsp mux listening on \S+`;
+export const LSP_MUX_READY_PATTERN = String.raw`musepi lsp mux listening on \S+`;
 
 /** Banner printed on stdout once the mux socket accepts connections. */
 export function lspMuxReadyBanner(endpoint: string): string {
-	return `omp lsp mux listening on ${endpoint}`;
+	return `musepi lsp mux listening on ${endpoint}`;
 }
 
 /** Resolve the Unix socket or Windows named pipe for one project scope. */

@@ -23,13 +23,13 @@ export function createAcpConnection(
 
 /** Serves ACP over stdio until the peer disconnects, then awaits session teardown before exit. */
 export async function runAcpMode(createSession: AcpSessionFactory, initialSession?: AgentSession): Promise<void> {
-	// Humans who run `omp acp` by hand see a silent process and assume it is
+	// Humans who run `musepi acp` by hand see a silent process and assume it is
 	// broken (stdout is the JSON-RPC transport, so nothing may be printed
 	// there). When stdin is a TTY no ACP client is attached — say so on stderr
 	// before the transport starts.
 	if (process.stdin.isTTY) {
 		process.stderr.write(
-			"omp acp: ACP server speaking JSON-RPC over stdio.\n" +
+			"musepi acp: ACP server speaking JSON-RPC over stdio.\n" +
 				'This command is meant to be spawned by an ACP client (e.g. Zed\'s "agent_servers" config), not run directly.\n' +
 				"Waiting for protocol frames on stdin; logs: ~/.musepi/logs/\n",
 		);

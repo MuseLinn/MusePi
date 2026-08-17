@@ -283,8 +283,8 @@ function renderAliasBlock(
 	command: ProfileAliasCommand,
 ): { block: string; command: string } {
 	const profiledCommand = `${command.display} --profile=${profile}`;
-	const start = `# >>> omp profile alias: ${aliasName} >>>`;
-	const end = `# <<< omp profile alias: ${aliasName} <<<`;
+	const start = `# >>> musepi profile alias: ${aliasName} >>>`;
+	const end = `# <<< musepi profile alias: ${aliasName} <<<`;
 	let body: string;
 	switch (shell) {
 		case "fish":
@@ -306,8 +306,8 @@ function renderAliasBlock(
 }
 
 function upsertBlock(content: string, aliasName: string, block: string): string {
-	const start = `# >>> omp profile alias: ${aliasName} >>>`;
-	const end = `# <<< omp profile alias: ${aliasName} <<<`;
+	const start = `# >>> musepi profile alias: ${aliasName} >>>`;
+	const end = `# <<< musepi profile alias: ${aliasName} <<<`;
 	const startIndex = content.indexOf(start);
 	if (startIndex !== -1) {
 		const endIndex = content.indexOf(end, startIndex + start.length);

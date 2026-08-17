@@ -1,5 +1,5 @@
 /**
- * Standalone TUI pickers for `omp cleanse`.
+ * Standalone TUI pickers for `musepi cleanse`.
  *
  * Mirrors {@link ./setup-model-picker.ts}: one-shot {@link TUI} instances over a
  * {@link SelectList} or {@link Input}, resolved on select/submit/cancel and torn

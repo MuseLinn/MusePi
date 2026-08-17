@@ -1536,8 +1536,8 @@ export const settings = {
 		"隔离任务变更的集成方式（patch apply 或 branch merge）",
 	"Commit message style for nested repo changes (generic or AI-generated)":
 		"嵌套仓库变更的提交信息风格（generic 或 AI-generated）",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
-		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `omp worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。OMP_WORKTREE_DIR 环境变量可覆盖此设置。",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
+		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `musepi worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。OMP_WORKTREE_DIR 环境变量可覆盖此设置。",
 	"How strongly to push delegating work to subagents": "将工作委托给子代理的倾向程度",
 	"Prompt guidance plus a first-turn delegation reminder": "提示引导及首轮委托提醒",
 	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.":
