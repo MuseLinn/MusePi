@@ -17,7 +17,10 @@
 }
 
 /* 扩展槽位组件错误(fail-loud):编译失败/加载失败在宿主处可见 ——
- * 此前无样式 + 被过滤,静默消失。 */
+ * 此前无样式 + 被过滤,静默消失。max-height 兜底:长错误(编译错误
+ * 含源码上下文)可滚动,不撑爆宿主布局(composer 底栏/面板 tab)。
+ * flex-shrink:0:错误必须可读,不被 flex 行压成窄列(窄列会把 60 字符
+ * 文本折成几十行,顶满 max-height 反而更难读)。 */
 .gui-slot-error {
 	display: flex;
 	align-items: baseline;
@@ -29,6 +32,11 @@
 	line-height: 1.45;
 	color: var(--color-danger);
 	background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+	max-height: 88px;
+	overflow-y: auto;
+	flex-shrink: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 .gui-slot-error strong {
 	font-weight: 600;

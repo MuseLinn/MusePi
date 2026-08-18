@@ -304,6 +304,15 @@ export function SlotComponentMount({
 	useEffect(() => {
 		let alive = true;
 		let url: string | null = null;
+		// Daemon compile failure (item.error set + empty code): the blob
+		// import of "" would fail with a misleading "must export a default
+		// React component" — surface the daemon's real error instead.
+		if (item.error) {
+			setError(item.error);
+			return () => {
+				alive = false;
+			};
+		}
 		void (async () => {
 			try {
 				// Compiled components bind to the HOST react instance via the
