@@ -442,6 +442,7 @@ export const pet = {
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
 		"agent 将停止当前工作;已排队的消息会保留,并在你发送下一条消息时执行(TUI 中 Esc 中断的语义相同)",
 	"message tree": "消息树",
+	"message tree filter": "消息树过滤",
 	"search messages…": "搜索消息…",
 	"tool calls": "工具调用",
 	terminate: "终止",

@@ -1345,6 +1345,12 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+/* 扩展设置卡片(settings.item 槽位组件宿主):一张卡片 = 一个启用扩展。 */
+.gui-ext-settings-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
 
 /* Composer frame morph (welcome ⇄ session): the incoming frame is
  * transformed onto the outgoing rect in the layout phase, then eased back

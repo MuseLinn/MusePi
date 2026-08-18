@@ -13,6 +13,7 @@ import { t } from "@musepi/desktop-web";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { scrollToEntry } from "../lib/transcript-jump";
 import { Icon } from "../vendor/oc-icons";
 
 interface TurnNode {
@@ -20,6 +21,31 @@ interface TurnNode {
 	children: TurnNode[];
 	text: string;
 	kind: "user" | "assistant" | "toolResult";
+}
+
+/** 消息树可见性过滤(TUI tree-selector FilterMode 同款语义,settings-schema
+ *  treeFilterMode 同型;GUI 本地 UI 不读 tuiOnly 设置)。 */
+export type TreeFilterMode = "default" | "no-tools" | "user-only" | "labeled-only" | "all";
+
+/** TUI FilterMode 语义照搬,作用于 turn 树节点可见性:
+ *  - default:常规(全显示 —— GUI 树构建已排除书签/系统条目,等价 TUI default)
+ *  - no-tools:隐藏 toolResult 节点
+ *  - user-only:只显示 user 根节点
+ *  - labeled-only:只显示有可见文本的节点(GUI 无 label 概念,文本非空即"有标签")
+ *  - all:全显示(同 default;保留枚举对齐) */
+function applyTreeFilter(nodes: TurnNode[], mode: TreeFilterMode): TurnNode[] {
+	if (mode === "default" || mode === "all") return nodes;
+	const out: TurnNode[] = [];
+	for (const node of nodes) {
+		if (mode === "user-only" && node.kind !== "user") continue;
+		if (mode === "no-tools" && node.kind === "toolResult") continue;
+		if (mode === "labeled-only" && !node.text.trim()) continue;
+		out.push({
+			...node,
+			children: mode === "user-only" ? [] : applyTreeFilter(node.children, mode),
+		});
+	}
+	return out;
 }
 
 function previewText(entry: SessionEntry): string {
@@ -132,11 +158,12 @@ export function MessageTreeButton({
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [q, setQ] = useState("");
+	const [filterMode, setFilterMode] = useState<TreeFilterMode>("default");
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const toggleRef = useRef<HTMLButtonElement | null>(null);
 	const panelRef = useRef<HTMLDivElement | null>(null);
 	const tree = useMemo(() => buildTurnTree(entries), [entries]);
-	const filtered = useMemo(() => filterTree(tree, q), [tree, q]);
+	const filtered = useMemo(() => filterTree(applyTreeFilter(tree, filterMode), q), [tree, filterMode, q]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -161,15 +188,7 @@ export function MessageTreeButton({
 	}, [open]);
 
 	const jump = (node: TurnNode): void => {
-		const scroller = transcriptRef.current;
-		const el = scroller?.querySelector<HTMLElement>(`[title="${CSS.escape(node.entry.timestamp)}"]`);
-		if (el) {
-			el.scrollIntoView({ block: "start", behavior: "smooth" });
-		} else {
-			// Windowed history: the row isn't mounted — jump to the oldest
-			// mounted row (the spacer top).
-			scroller?.scrollTo({ top: 0, behavior: "smooth" });
-		}
+		scrollToEntry(transcriptRef.current, node.entry.timestamp);
 		setOpen(false);
 	};
 
@@ -241,6 +260,19 @@ export function MessageTreeButton({
 					<button type="button" className="gui-mtree-close" aria-label={t("close")} onClick={() => setOpen(false)}>
 						<Icon name="close" className="h-3 w-3" />
 					</button>
+				</div>
+				{/* TUI treeFilterMode 同款过滤(tuiOnly 设置 GUI 本地不读,默认 default) */}
+				<div className="gui-mtree-filters" role="group" aria-label={t("message tree filter")}>
+					{(["default", "no-tools", "user-only", "labeled-only", "all"] as const).map(mode => (
+						<button
+							key={mode}
+							type="button"
+							className={`gui-mtree-filter${filterMode === mode ? " gui-mtree-filter--active" : ""}`}
+							onClick={() => setFilterMode(mode)}
+						>
+							{mode}
+						</button>
+					))}
 				</div>
 				<div className="gui-mtree-scroll">
 					{filtered.length === 0 ? (

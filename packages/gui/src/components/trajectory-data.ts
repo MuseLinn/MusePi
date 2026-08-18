@@ -11,6 +11,8 @@ export interface TrajectoryEvent {
 	toolCallId?: string;
 	turn: number;
 	timestamp?: string;
+	/** 源 wire entry id — 轨迹行点击跳转 transcript 用。 */
+	entryId?: string;
 }
 
 export interface TrajectoryStats {
@@ -45,7 +47,13 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
-		const entry = raw as { type?: string; message?: Record<string, unknown>; timestamp?: string };
+		const entry = raw as {
+			type?: string;
+			message?: Record<string, unknown>;
+			timestamp?: string;
+			id?: string;
+		};
+		const entryId = typeof entry.id === "string" ? entry.id : undefined;
 		const ts = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
 		if (Number.isFinite(ts)) {
 			if (firstTs === undefined) firstTs = ts;
@@ -91,6 +99,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						title: truncate(text.trim(), 80),
 						turn,
 						timestamp: entry.timestamp,
+						entryId,
 					});
 				continue;
 			}
@@ -118,6 +127,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 							body: stringifyArgs(part.arguments),
 							turn,
 							timestamp: entry.timestamp,
+							entryId,
 						};
 						toolIndex.set(part.id ?? ev.id, ev);
 						events.push(ev);
@@ -132,12 +142,20 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						body: truncate(summary),
 						turn,
 						timestamp: entry.timestamp,
+						entryId,
 					});
 				}
 			}
 		} else if (type === "model_change" || type === "thinking_level_change") {
 			// system 事件:title 用原始类型名,组件层映射 i18n(保持纯逻辑无 i18n 依赖)。
-			events.push({ id: `${type}:${ts}`, kind: "system", title: type, turn, timestamp: entry.timestamp });
+			events.push({
+				id: `${type}:${ts}`,
+				kind: "system",
+				title: type,
+				turn,
+				timestamp: entry.timestamp,
+				entryId,
+			});
 		}
 	}
 
@@ -150,4 +168,31 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 			calls: toolCalls,
 		},
 	};
+}
+
+/** 按 turn 分组的轨迹树(events 已带 turn 字段):折叠节点 = turn 摘要
+ *  (assistant 标题/调用数/首个时间戳),展开 = 该 turn 事件列表。纯逻辑,
+ *  TrajectoryView 与单元测试共用。 */
+export interface TrajectoryTurnGroup {
+	turn: number;
+	events: TrajectoryEvent[];
+	/** 该 turn 首个事件时间戳(折叠行显示;无则 undefined)。 */
+	firstTs?: string;
+}
+
+export function buildTrajectoryTree(entries: readonly unknown[]): {
+	turns: TrajectoryTurnGroup[];
+	stats: TrajectoryStats;
+} {
+	const { events, stats } = buildTrajectory(entries);
+	const turns: TrajectoryTurnGroup[] = [];
+	for (const ev of events) {
+		let group = turns[turns.length - 1];
+		if (!group || group.turn !== ev.turn) {
+			group = { turn: ev.turn, events: [], firstTs: ev.timestamp };
+			turns.push(group);
+		}
+		group.events.push(ev);
+	}
+	return { turns, stats };
 }

@@ -279,6 +279,7 @@ function resolveSpawnItems(params: TaskParams): TaskItem[] {
 	if ("schemaMode" in params) item.schemaMode = params.schemaMode;
 	if ("effort" in params) item.effort = params.effort;
 	if ("isolated" in params) item.isolated = params.isolated;
+	if ("blocking" in params) item.blocking = params.blocking;
 	return [item];
 }
 
@@ -299,6 +300,11 @@ function spawnParamsFor(params: TaskParams, item: TaskItem, defaultAgent: string
 	if ("outputSchema" in item) spawn.outputSchema = item.outputSchema;
 	if ("schemaMode" in item) spawn.schemaMode = item.schemaMode;
 	if ("effort" in item) spawn.effort = item.effort;
+	if (item.blocking !== undefined) {
+		spawn.blocking = item.blocking;
+	} else if ("blocking" in params) {
+		spawn.blocking = params.blocking;
+	}
 	if (item.isolated !== undefined) {
 		spawn.isolated = item.isolated;
 	} else if ("isolated" in params) {
@@ -719,7 +725,12 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			);
 		}
 		const policies = preflights.map(preflight => preflight.policy!);
-		const itemBlocking = policies.map(policy => policy.effectiveAgent.blocking === true);
+		// Per-item blocking: an explicit per-call `blocking` override wins
+		// (true = force inline, false = force background); absent falls back
+		// to the resolved agent's declared blocking.
+		const itemBlocking = spawnItems.map(
+			(item, index) => item.blocking ?? policies[index]!.effectiveAgent.blocking === true,
+		);
 
 		// Execution mode is per item: an item whose agent type declares
 		// `blocking: true` runs inline on this turn (the parent waits on its

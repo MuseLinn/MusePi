@@ -34,6 +34,10 @@ export const RIGHT_RAIL_SLOT = "rail.right";
 export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
 export const SETTINGS_TAB_SLOT_PREFIX = "settings.tab.";
 export const RAIL_SLOT_PREFIX = "rail.";
+/** Keyed settings card slot (DSH settings.plugin.item 派发对齐):每个启用扩展
+ *  注册 `settings.item.<extId>` 组件即自动在设置页"扩展设置"分区获得一张
+ *  卡片,组件经 settingsScope 读写该扩展自己的设置键。 */
+export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
 /** Composer 座位槽(DSH conversation.input.dock/left/right 对齐):
  *  dock = 输入卡上方整行;left/right = 底部工具栏两端。list 语义 ——
  *  多个扩展可同时往同一槽注入组件。 */
@@ -52,7 +56,7 @@ export const GUI_SLOT_HOSTS = {
 		COMPOSER_LEFT_SLOT,
 		COMPOSER_RIGHT_SLOT,
 	],
-	prefixes: [PANEL_TAB_SLOT_PREFIX, SETTINGS_TAB_SLOT_PREFIX, RAIL_SLOT_PREFIX],
+	prefixes: [PANEL_TAB_SLOT_PREFIX, SETTINGS_TAB_SLOT_PREFIX, RAIL_SLOT_PREFIX, SETTINGS_ITEM_SLOT_PREFIX],
 } as const;
 
 export interface SlotComponent {
@@ -125,6 +129,14 @@ export interface SlotComponentProps {
 	slot?: string;
 	/** Extension path that contributed this component. */
 	extensionId?: string;
+	/** Settings read/write proxy bound to this extension's keys
+	 *  (settings.get/settings.set RPC — the daemon gates writes on
+	 *  registerSetting keys). Keyed settings-item components receive it;
+	 *  other hosts pass nothing. */
+	settingsScope?: {
+		get(keys: string[]): Promise<Record<string, unknown>>;
+		set(key: string, value: unknown): Promise<void>;
+	} | null;
 }
 
 /** ── 全局单例 registry 数据源 ─────────────────────────────────────
@@ -268,11 +280,14 @@ export function SlotComponentMount({
 	rpc,
 	sessionId,
 	cwd,
+	settingsScope,
 }: {
 	item: SlotComponent;
 	rpc?: RpcClient | null;
 	sessionId?: string | null;
 	cwd?: string;
+	/** Settings read/write proxy (keyed settings-item hosts inject it). */
+	settingsScope?: SlotComponentProps["settingsScope"];
 }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
 	const [Comp, setComp] = useState<ComponentType<SlotComponentProps> | null>(null);
@@ -334,6 +349,7 @@ export function SlotComponentMount({
 		cwd,
 		slot: item.slot,
 		extensionId: item.extensionId,
+		settingsScope,
 	};
 	return <Comp {...hostProps} />;
 }

@@ -13,5 +13,5 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"composer.left",
 		"composer.right",
 	] as const,
-	prefixes: ["panel.tab.", "settings.tab.", "rail."] as const,
+	prefixes: ["panel.tab.", "settings.tab.", "rail.", "settings.item."] as const,
 } as const;

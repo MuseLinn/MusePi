@@ -2750,6 +2750,7 @@ export const settings = {
 	"trajectory turns": "轮次",
 	"trajectory calls": "工具调用",
 	"trajectory model": "模型",
+	"trajectory jump": "跳转到该消息",
 	"extensions state disabled": "已禁用",
 	"{count} settings": "{count} 项设置",
 	// 空态快捷提示词(与「预设/modes」无关 —— 避免与命名预设混淆,见 docs/modes-plan.md)

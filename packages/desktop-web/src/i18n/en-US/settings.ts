@@ -2865,6 +2865,7 @@ export const settings = {
 	"trajectory turns": "Turns",
 	"trajectory calls": "Tool calls",
 	"trajectory model": "Model",
+	"trajectory jump": "Jump to this message",
 	"extensions state disabled": "Disabled",
 	"{count} settings": "{count} settings",
 	// Welcome-composer starter chips — distinct from named presets (modes), see docs/modes-plan.md

@@ -70,6 +70,7 @@ export function ContextPanel({
 	openRequest = null,
 	tool,
 	onToolChange,
+	onJumpToEntry,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
@@ -88,6 +89,9 @@ export function ContextPanel({
 	 *  (RightRail) and the panel share one selection. */
 	tool: string | null;
 	onToolChange(tool: string | null): void;
+	/** Jump the transcript to an entry id (trajectory rows; provided by
+	 *  ChatView — absent = trajectory rows render without jump action). */
+	onJumpToEntry?(entryId: string): void;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
@@ -291,7 +295,11 @@ export function ContextPanel({
 					) : tab === "widget" ? (
 						<WidgetSidebarTab entries={snap?.entries ?? []} />
 					) : tab === "trajectory" ? (
-						<TrajectoryView entries={snap?.entries ?? []} modelId={snap?.state?.model?.id} />
+						<TrajectoryView
+							entries={snap?.entries ?? []}
+							modelId={snap?.state?.model?.id}
+							onJumpToEntry={onJumpToEntry}
+						/>
 					) : typeof tab === "string" && tab.startsWith("ext:") ? (
 						(() => {
 							const item = extTabs.find(x => `ext:${x.slot}` === tab);

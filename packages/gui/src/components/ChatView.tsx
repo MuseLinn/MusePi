@@ -8,6 +8,7 @@ import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
+import { scrollToEntry } from "../lib/transcript-jump";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -1392,6 +1393,10 @@ export function ChatView({
 									openRequest={openFileReq}
 									tool={contextTool}
 									onToolChange={setContextTool}
+									onJumpToEntry={entryId => {
+										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
+										if (ts) scrollToEntry(transcriptRef.current, ts);
+									}}
 								/>
 								{/* Right-edge 44px icon rail (openchamber ContextPanelRail
 								 * parity): tool icons + panel fold toggle + extension

@@ -3137,6 +3137,33 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 }
 
+/* TUI treeFilterMode 同款过滤条(default/no-tools/user-only/labeled-only/all)。 */
+.gui-mtree-filters {
+	display: flex;
+	gap: 3px;
+	flex-wrap: wrap;
+	padding: 5px 10px 6px;
+	border-bottom: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
+}
+.gui-mtree-filter {
+	padding: 2px 7px;
+	border-radius: 999px;
+	font-size: 10px;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	color: var(--color-text-faint);
+	background: transparent;
+	border: 1px solid transparent;
+	transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.gui-mtree-filter:hover {
+	color: var(--color-text);
+}
+.gui-mtree-filter--active {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-border) 80%, transparent);
+	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
+}
+
 .gui-mtree-close {
 	display: flex;
 	align-items: center;

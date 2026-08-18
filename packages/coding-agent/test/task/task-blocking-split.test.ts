@@ -277,4 +277,56 @@ describe("task per-item blocking split", () => {
 		expect(result.details?.async?.state).toBe("failed");
 		expect(manager.getJob("WorkerThree")).toBeUndefined();
 	});
+
+	it("forces a declared-blocking agent to a background job with blocking: false", async () => {
+		mockDiscovery();
+		const started: string[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			started.push(options.id ?? "?");
+			return makeResult(options.id ?? "?", options.agent.name);
+		});
+
+		const manager = createManager();
+		const tool = await TaskTool.create(createSession({ manager }));
+
+		// scout declares blocking: true, but the per-call override forces the
+		// background path — the call returns a job id, not an inline result.
+		const result = await tool.execute("tc-force-bg", {
+			context: "ctx",
+			tasks: [{ name: "ScoutBg", agent: "scout", task: "Research.", blocking: false }],
+		} as TaskParams);
+
+		const text = firstText(result);
+		expect(text).toContain("Spawned agent `ScoutBg` (job `ScoutBg`)");
+		expect(text).not.toContain("ScoutBg output.");
+		expect(result.details?.results).toHaveLength(0);
+		await manager.getJob("ScoutBg")!.promise;
+		expect(manager.getJob("ScoutBg")?.status).toBe("completed");
+	});
+
+	it("forces a non-blocking agent inline with blocking: true", async () => {
+		mockDiscovery();
+		const executed: string[] = [];
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			executed.push(options.id ?? "?");
+			return makeResult(options.id ?? "?", options.agent.name);
+		});
+
+		const manager = createManager();
+		const tool = await TaskTool.create(createSession({ manager }));
+
+		// task agent declares no blocking (defaults to background under async),
+		// but the per-call override pins it inline — the call waits on its result.
+		const result = await tool.execute("tc-force-inline", {
+			context: "ctx",
+			tasks: [{ name: "WorkerInline", agent: "task", task: "Build.", blocking: true }],
+		} as TaskParams);
+
+		const text = firstText(result);
+		expect(text).toContain('id="WorkerInline"');
+		expect(text).toContain("WorkerInline output.");
+		expect(result.details?.results.map(r => r.id)).toEqual(["WorkerInline"]);
+		expect(result.details?.async).toBeUndefined();
+		expect(manager.getAllJobs()).toHaveLength(0);
+	});
 });

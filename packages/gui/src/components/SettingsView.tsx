@@ -1,8 +1,15 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
-import { SETTINGS_TAB_SLOT_PREFIX, SlotComponentMount, useSlotComponentsByPrefix } from "../lib/slot-host";
+import {
+	SETTINGS_ITEM_SLOT_PREFIX,
+	SETTINGS_TAB_SLOT_PREFIX,
+	type SlotComponent,
+	SlotComponentMount,
+	useExtensionRegistry,
+	useSlotComponentsByPrefix,
+} from "../lib/slot-host";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
@@ -36,7 +43,8 @@ type SectionId =
 	| "history"
 	| "browser"
 	| "suggestions"
-	| "modes";
+	| "modes"
+	| "ext-settings";
 
 /** Conditional settings fields animate in/out per the shared standard —
  * see components/Reveal.tsx (useCollapse px height + outer fade). */
@@ -278,6 +286,7 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 			title: t("agent capabilities"),
 			items: [
 				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
+				{ id: "ext-settings", icon: "plug-2", label: t("extension settings"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
@@ -329,6 +338,65 @@ interface ApiProviderInfo {
 interface CustomProvider {
 	name: string;
 	models: { id: string; name?: string }[];
+}
+
+/** 扩展设置分区(DSH settings.plugin.item 派发对齐):每个启用扩展注册
+ *  `settings.item.<extId>` 组件即获得一张卡片,组件经 settingsScope 读写
+ *  自己的设置键(settings.get/settings.set RPC)。无组件的扩展不显示;
+ *  全部无组件时显示空态。 */
+function ExtensionSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const data = useExtensionRegistry(rpc);
+	// Collect all settings.item.* components once (hooks can't loop) and
+	// group by extensionId — "served ∩ enabled" per extension.
+	const cards = useMemo(() => {
+		// Component extensionId = extension module path (daemon compiles per
+		// path); match against extension items' `path` for the enabled set.
+		const enabled = new Set(
+			(data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path),
+		);
+		const byExt = new Map<string, SlotComponent[]>();
+		for (const c of data?.components ?? []) {
+			if (!c.slot.startsWith(SETTINGS_ITEM_SLOT_PREFIX)) continue;
+			if (!enabled.has(c.extensionId)) continue;
+			const list = byExt.get(c.extensionId) ?? [];
+			list.push(c);
+			byExt.set(c.extensionId, list);
+		}
+		return [...byExt.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+	}, [data]);
+	if (cards.length === 0) {
+		return (
+			<>
+				<h2 className="gui-settings-page-title">{t("extension settings")}</h2>
+				<p className="gui-settings-page-desc">{t("extension settings desc")}</p>
+				<div className="gui-settings-row">{t("no extension settings")}</div>
+			</>
+		);
+	}
+	const scope = rpc
+		? {
+				get: (keys: string[]) => rpc.request<Record<string, unknown>>("settings.get", { keys }),
+				set: (key: string, value: unknown) => rpc.request("settings.set", { key, value }) as Promise<void>,
+			}
+		: null;
+	return (
+		<>
+			<h2 className="gui-settings-page-title">{t("extension settings")}</h2>
+			<p className="gui-settings-page-desc">{t("extension settings desc")}</p>
+			{cards.map(([extId, items]) => (
+				<div key={extId} className="gui-agent-card gui-ext-settings-card">
+					{items.map(item => (
+						<SlotComponentMount
+							key={`${item.slot}:${item.extensionId}`}
+							item={item}
+							rpc={rpc}
+							settingsScope={scope}
+						/>
+					))}
+				</div>
+			))}
+		</>
+	);
 }
 
 /** Thinking levels storable as a role-selector suffix (TUI
@@ -697,6 +765,7 @@ export function SettingsView({
 							{section === "files" && <FilesLspSection rpc={rpc} />}
 							{section === "memory" && <MemorySection rpc={rpc} />}
 							{section === "skills" && <SkillsSection rpc={rpc} />}
+							{section === "ext-settings" && <ExtensionSettingsSection rpc={rpc} />}
 							{section === "suggestions" && <PromptsSection />}
 							{section === "modes" && <ModesSection rpc={rpc} />}
 							{section === "migration" && <MigrationSection rpc={rpc} />}

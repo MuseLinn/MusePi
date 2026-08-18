@@ -451,6 +451,7 @@ export const pet = {
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
 		"The agent will stop current work; queued messages are kept and run when you send your next message (Esc in the TUI interrupts the same way)",
 	"message tree": "Message tree",
+	"message tree filter": "Message tree filter",
 	"search messages…": "Search messages…",
 	"tool calls": "Tool calls",
 	terminate: "Terminate",
