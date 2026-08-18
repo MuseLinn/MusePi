@@ -2,6 +2,7 @@ import { type TranslationKey, t } from "@musepi/desktop-web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
+import { type ExtensionItem, type ProviderInfo, useExtensionRegistry, useUnhostedSlots } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
 
@@ -14,35 +15,12 @@ import { HeightMorph } from "./HeightMorph";
  * raw inspector. Data + mutations come from the daemon extensions.* RPCs,
  * which share the TUI's normalization and persistence (disabledExtensions
  * ids, mcp.json denylist for mcp:, disabledProviders).
+ *
+ * Data source: the shared useExtensionRegistry singleton (slot-host.tsx) —
+ * one 10s poll + extensions.changed instant refresh for the whole GUI.
+ * Mutations flip the daemon cache and broadcast extensions.changed, which
+ * re-pulls this component; no local polling or optimistic shadow state.
  */
-export interface ExtensionItem {
-	id: string;
-	kind: string;
-	name: string;
-	displayName: string;
-	description?: string;
-	trigger?: string;
-	path: string;
-	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
-	state: "active" | "disabled" | "shadowed";
-	disabledReason?: "provider-disabled" | "item-disabled" | "shadowed";
-	shadowedBy?: string;
-	/** 加载失败原因 —— 存在 = 扩展不可用(fail-loud,不静默消失)。 */
-	loadError?: string;
-}
-
-export interface ExtensionTab {
-	id: string;
-	label: string;
-	enabled: boolean;
-	count: number;
-}
-
-export interface ProviderInfo {
-	id: string;
-	displayName: string;
-	enabled: boolean;
-}
 
 function kindLabel(kind: string): string {
 	const key = `ext kind ${kind}`;
@@ -86,9 +64,11 @@ function isGuiKind(e: ExtensionItem): boolean {
 }
 
 export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [extensions, setExtensions] = useState<ExtensionItem[] | null>(null);
-	const [tabs, setTabs] = useState<ExtensionTab[]>([]);
-	const [providers, setProviders] = useState<ProviderInfo[]>([]);
+	const data = useExtensionRegistry(rpc);
+	const extensions = data?.extensions ?? null;
+	const tabs = data?.tabs ?? [];
+	const providers = data?.providers ?? [];
+	const unhosted = useUnhostedSlots(rpc);
 	const [error, setError] = useState<string | null>(null);
 	const [tab, setTab] = useState("all");
 	const [query, setQuery] = useState("");
@@ -98,40 +78,6 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const [rawOpen, setRawOpen] = useState(false);
 	const [collapsedKinds, setCollapsedKinds] = useState<Set<string>>(new Set());
 	const { confirm } = useConfirm();
-
-	// Poll the unified inventory (5s, same rhythm as the old skills list).
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			if (document.visibilityState === "hidden" || !alive) return;
-			void rpc
-				.request<{ extensions: ExtensionItem[]; tabs: ExtensionTab[]; providers: ProviderInfo[] } | null>(
-					"extensions.list",
-					{},
-				)
-				.then(res => {
-					if (!alive) return;
-					setExtensions(res?.extensions ?? []);
-					setTabs(res?.tabs ?? []);
-					setProviders(res?.providers ?? []);
-				})
-				.catch(() => alive && setExtensions(prev => prev ?? []));
-		};
-		load();
-		const id = setInterval(load, 5000);
-		// HMR: the daemon watcher pushes extensions.changed — refresh the
-		// inventory immediately instead of waiting up to 5s for the poll.
-		const off = rpc.addEventListener(event => {
-			const payload = event.payload as { type?: string } | undefined;
-			if (payload?.type === "extensions.changed") load();
-		});
-		return () => {
-			alive = false;
-			clearInterval(id);
-			off();
-		};
-	}, [rpc]);
 
 	const selected = useMemo(() => (extensions ?? []).find(e => e.id === selectedId) ?? null, [extensions, selectedId]);
 
@@ -180,26 +126,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	const toggle = (e: ExtensionItem, next: boolean): void => {
 		if (!rpc) return;
-		const prevState = e.state;
-		setExtensions(
-			prevList =>
-				prevList?.map(x =>
-					x.id === e.id
-						? {
-								...x,
-								state: next ? "active" : ("disabled" as const),
-								disabledReason: next ? undefined : ("item-disabled" as const),
-							}
-						: x,
-				) ?? null,
-		);
+		// daemon 广播 extensions.changed → 单例重拉,不本地乐观更新。
 		void rpc
 			.request("extensions.setEnabled", { id: e.id, enabled: next })
 			.then(() => setError(null))
-			.catch((err: unknown) => {
-				setExtensions(prevList => prevList?.map(x => (x.id === e.id ? { ...x, state: prevState } : x)) ?? null);
-				setError(err instanceof Error ? err.message : String(err));
-			});
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	};
 
 	/** omp 生态智能兼容:shadowed 项显式启用/取消(写 forceEnabledExtensions)。
@@ -207,41 +138,18 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	 *  可强制启用 —— 下次扫描该项存活、原胜者反向 shadow。 */
 	const forceToggle = (e: ExtensionItem, next: boolean): void => {
 		if (!rpc) return;
-		const prevState = e.state;
 		void rpc
 			.request("extensions.setForceEnabled", { id: e.id, enabled: next })
-			.then(() => {
-				setExtensions(
-					prevList =>
-						prevList?.map(x =>
-							x.id === e.id
-								? {
-										...x,
-										state: next ? ("active" as const) : ("shadowed" as const),
-										disabledReason: next ? undefined : ("shadowed" as const),
-									}
-								: x,
-						) ?? null,
-				);
-				setError(null);
-			})
-			.catch((err: unknown) => {
-				setExtensions(prevList => prevList?.map(x => (x.id === e.id ? { ...x, state: prevState } : x)) ?? null);
-				setError(err instanceof Error ? err.message : String(err));
-			});
+			.then(() => setError(null))
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	};
 
 	const toggleProvider = (p: ProviderInfo): void => {
 		if (!rpc) return;
-		const prev = p.enabled;
-		setProviders(list => list.map(x => (x.id === p.id ? { ...x, enabled: !prev } : x)));
 		void rpc
-			.request("extensions.setProviderEnabled", { providerId: p.id, enabled: !prev })
+			.request("extensions.setProviderEnabled", { providerId: p.id, enabled: !p.enabled })
 			.then(() => setError(null))
-			.catch((err: unknown) => {
-				setProviders(list => list.map(x => (x.id === p.id ? { ...x, enabled: prev } : x)));
-				setError(err instanceof Error ? err.message : String(err));
-			});
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	};
 
 	const remove = (e: ExtensionItem): void => {
@@ -251,8 +159,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			void rpc
 				.request("skills.delete", { name: e.name })
 				.then(() => {
-					setExtensions(prevList => prevList?.filter(x => x.id !== e.id) ?? null);
 					if (selectedId === e.id) setSelectedId(null);
+					setError(null);
 				})
 				.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 		});
@@ -614,6 +522,29 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					) : (
 						<div className="gui-ext-detail-empty">{t("select an extension")}</div>
 					)}
+				</div>
+			</div>
+			{/* 槽位注册表(单一权威 collab-proto):daemon 声明 vs 桌面端挂载。
+			 * 差集为空 = 全部有宿主;未来新增槽位时警告自动出现。 */}
+			<div className="gui-ext-slots">
+				<div className="gui-ext-slots-head">
+					<Icon name="layout-column" className="h-3.5 w-3.5 shrink-0 opacity-60" />
+					<span className="text-[12px] font-medium">{t("slot registry")}</span>
+					{unhosted.length > 0 ? (
+						<span className="gui-ext-slots-warn">
+							<Icon name="alert" className="h-3 w-3" />
+							{t("slot unhosted {slot}", { slot: unhosted.join(", ") })}
+						</span>
+					) : (
+						<span className="gui-ext-slots-ok">
+							<Icon name="check" className="h-3 w-3" />
+							{t("all slots hosted")}
+						</span>
+					)}
+				</div>
+				<div className="gui-ext-slots-detail">
+					{t("slot declaration")}:{" "}
+					{[...(data?.slots?.exact ?? []), ...(data?.slots?.prefixes ?? []).map(p => `${p}*`)].join(", ") || "—"}
 				</div>
 			</div>
 			{/* Bottom status bar (CCEC parity). */}

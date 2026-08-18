@@ -1,64 +1,26 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import {
-	tapFeedback,
-} from "../../lib/haptic";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+import { tapFeedback } from "../../lib/haptic";
+import type { RpcClient } from "../../lib/rpc";
+import { useExtensionRegistry } from "../../lib/slot-host";
 import type { McpItem } from "./shared";
 
 /** Settings → 智能体 → MCP 服务器: mcp-kind extensions with enable toggles
- * (extensions.list / extensions.setEnabled — the mcp.json denylist path). */
+ * (extensions.list / extensions.setEnabled — the mcp.json denylist path).
+ * Data comes from the shared registry singleton. */
 export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [mcps, setMcps] = useState<McpItem[] | null>(null);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		const load = (): void => {
-			void rpc
-				.request<{ extensions: McpItem[] }>("extensions.list", {})
-				.then(res => {
-					if (alive) setMcps((res?.extensions ?? []).filter(e => e.kind === "mcp"));
-				})
-				.catch(() => alive && setMcps([]));
-		};
-		load();
-		let id = setInterval(load, 3000);
-		const onVis = (): void => {
-			clearInterval(id);
-			if (document.visibilityState === "visible") {
-				load();
-				id = setInterval(load, 3000);
-			}
-		};
-		document.addEventListener("visibilitychange", onVis);
-		return () => {
-			alive = false;
-			clearInterval(id);
-			document.removeEventListener("visibilitychange", onVis);
-		};
-	}, [rpc]);
+	const data = useExtensionRegistry(rpc);
+	const mcps = useMemo(() => (data?.extensions ?? []).filter(e => e.kind === "mcp"), [data]);
 	const toggle = (e: McpItem, next: boolean): void => {
-		void rpc?.request("extensions.setEnabled", { id: e.id, enabled: next }).then(() => {
-			setMcps(prev => prev?.map(m => (m.id === e.id ? { ...m, state: next ? "active" : "disabled" } : m)) ?? prev);
-		});
+		// daemon 广播 extensions.changed → 单例重拉,不本地乐观更新。
+		void rpc?.request("extensions.setEnabled", { id: e.id, enabled: next });
 	};
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("mcp servers")}</h2>
 			<p className="gui-settings-page-desc">{t("mcp settings")}</p>
-			{mcps === null ? (
-				<div className="text-[13px] text-[var(--color-text-faint)]">…</div>
-			) : mcps.length === 0 ? (
+			{mcps.length === 0 ? (
 				<div className="gui-settings-row">{t("no mcp servers")}</div>
 			) : (
 				mcps.map(m => (

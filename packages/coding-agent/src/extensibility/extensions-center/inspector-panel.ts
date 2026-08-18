@@ -7,9 +7,9 @@
 import * as os from "node:os";
 import { arkToWireSchema, isArkSchema } from "@musepi/pi-ai/utils/schema";
 import { type Component, truncateToWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
-import { t } from "../../../i18n/index.js";
-import { theme } from "../../../modes/theme/theme";
-import { shortenPath } from "../../../tools/render-utils";
+import { t } from "../../i18n/index.js";
+import { theme } from "../../modes/theme/theme";
+import { shortenPath } from "../../tools/render-utils";
 import type { Extension, ExtensionState } from "./types";
 
 export class InspectorPanel implements Component {

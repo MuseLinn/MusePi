@@ -25,13 +25,13 @@ import {
 	visibleWidth,
 } from "@musepi/pi-tui";
 import { getMCPConfigPath, logger } from "@musepi/pi-utils";
-import { Settings } from "../../../config/settings";
-import { t } from "../../../i18n/index.js";
-import { setMcpServerEnabled } from "../../../mcp/config-writer";
-import { getTabBarTheme } from "../../../modes/shared";
-import { theme } from "../../../modes/theme/theme";
-import { matchesAppInterrupt } from "../../../modes/utils/keybinding-matchers";
-import { bottomBorder, divider, row, topBorder } from "../overlay-box";
+import { Settings } from "../../config/settings";
+import { t } from "../../i18n/index.js";
+import { setMcpServerEnabled } from "../../mcp/config-writer";
+import { getTabBarTheme } from "../../modes/shared";
+import { theme } from "../../modes/theme/theme";
+import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
+import { bottomBorder, divider, row, topBorder } from "../../modes/components/overlay-box";
 import { ExtensionList } from "./extension-list";
 import { InspectorPanel } from "./inspector-panel";
 import {

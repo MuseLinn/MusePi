@@ -459,13 +459,13 @@
 			"types": "./src/modes/components/*.ts",
 			"import": "./src/modes/components/*.ts"
 		},
-		"./modes/components/extensions": {
-			"types": "./src/modes/components/extensions/index.ts",
-			"import": "./src/modes/components/extensions/index.ts"
+		"./extensibility/extensions-center": {
+			"types": "./src/extensibility/extensions-center/index.ts",
+			"import": "./src/extensibility/extensions-center/index.ts"
 		},
-		"./modes/components/extensions/*": {
-			"types": "./src/modes/components/extensions/*.ts",
-			"import": "./src/modes/components/extensions/*.ts"
+		"./extensibility/extensions-center/*": {
+			"types": "./src/extensibility/extensions-center/*.ts",
+			"import": "./src/extensibility/extensions-center/*.ts"
 		},
 		"./modes/components/status-line": {
 			"types": "./src/modes/components/status-line/index.ts",

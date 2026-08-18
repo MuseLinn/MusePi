@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { collectSlotComponents } from "../src/daemon/extension-artifact-compiler.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
+import { collectExtensionModes, collectSlotComponents } from "../src/daemon/extension-artifact-compiler.js";
 
 const EXAMPLE_EXT = new URL("../examples/extension-component/index.ts", import.meta.url).pathname.replace(
 	/^\/([A-Za-z]:)/,
@@ -33,4 +36,35 @@ describe("extension slot components", () => {
 		);
 		expect(components).toHaveLength(0);
 	});
+
+	test("collectExtensionModes skips malformed mode entries without throwing", async () => {
+		// A temp extension whose modes array contains a malformed entry
+		// (missing id) plus a valid one — the malformed mode must be
+		// skipped and the valid one collected.
+		const dir = await mkdtemp(path.join(tmpdir(), "ext-modes-def-"));
+		const modPath = `${dir}/modes.ts`;
+		await writeFile(
+			modPath,
+			`import type { ExtensionAPI } from "@musepi/pi-coding-agent";
+export default function (pi: ExtensionAPI): void {
+	// @ts-expect-error malformed mode (missing id) — must be skipped
+	pi.registerMode({ label: "Broken" });
+	pi.registerMode({ id: "valid-mode", label: "Valid", description: "ok" });
+}
+`,
+		);
+		try {
+			const modes = await collectExtensionModes(
+				[{ kind: "extension-module", state: "active", path: modPath }],
+				process.cwd(),
+			);
+			// The malformed literal is filtered by the shape guard; the
+			// valid mode surfaces (or the whole call resolves without
+			// throwing, which is the contract under test).
+			expect(Array.isArray(modes)).toBe(true);
+			expect(modes.some(m => m.id === "valid-mode")).toBe(true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	}, 60_000);
 });

@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { KeybindingsManager } from "@musepi/pi-coding-agent/config/keybindings";
-import { ExtensionList } from "@musepi/pi-coding-agent/modes/components/extensions/extension-list";
-import type { Extension } from "@musepi/pi-coding-agent/modes/components/extensions/types";
+import { ExtensionList } from "@musepi/pi-coding-agent/extensibility/extensions-center/extension-list";
+import type { Extension } from "@musepi/pi-coding-agent/extensibility/extensions-center/types";
 import { HistorySearchComponent } from "@musepi/pi-coding-agent/modes/components/history-search";
 import { SessionSelectorComponent } from "@musepi/pi-coding-agent/modes/components/session-selector";
 import { TreeSelectorComponent } from "@musepi/pi-coding-agent/modes/components/tree-selector";

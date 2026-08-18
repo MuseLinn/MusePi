@@ -9,6 +9,12 @@ import type { RpcClient } from "./rpc";
  * `extensions.list`; this module dynamically imports (blob: URL) and mounts
  * the default export into the slot. Enable/disable takes effect within the
  * 10s poll window — no restart, no rebuild.
+ *
+ * Slot names are a shared contract with the daemon
+ * (@musepi/collab-proto/extension-slots — single authority): `extensions.list`
+ * returns the declared exact/prefix slots, and the diagnostics hook compares
+ * them against GUI_SLOT_HOSTS so a daemon-side slot with no desktop host
+ * shows up in the extension center instead of silently missing.
  */
 
 /** First slot id — the settings page's extension-contributed section. */
@@ -35,6 +41,20 @@ export const COMPOSER_DOCK_SLOT = "composer.dock";
 export const COMPOSER_LEFT_SLOT = "composer.left";
 export const COMPOSER_RIGHT_SLOT = "composer.right";
 
+/** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
+ *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
+export const GUI_SLOT_HOSTS = {
+	exact: [
+		SETTINGS_EXTENSION_SLOT,
+		RIGHT_PANEL_SLOT,
+		RIGHT_RAIL_SLOT,
+		COMPOSER_DOCK_SLOT,
+		COMPOSER_LEFT_SLOT,
+		COMPOSER_RIGHT_SLOT,
+	],
+	prefixes: [PANEL_TAB_SLOT_PREFIX, SETTINGS_TAB_SLOT_PREFIX, RAIL_SLOT_PREFIX],
+} as const;
+
 export interface SlotComponent {
 	slot: string;
 	extensionId: string;
@@ -46,6 +66,49 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+}
+
+/** One normalized capability entry in extensions.list (10 kinds, TUI
+ *  /extensions parity). Type home here so consumers (ExtensionsCenter,
+ *  ExtensionStatusCard, settings-sections) share one shape. */
+export interface ExtensionItem {
+	id: string;
+	kind: string;
+	name: string;
+	displayName: string;
+	description?: string;
+	trigger?: string;
+	path: string;
+	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
+	state: "active" | "disabled" | "shadowed";
+	disabledReason?: "provider-disabled" | "item-disabled" | "shadowed";
+	shadowedBy?: string;
+	/** 加载失败原因 —— 存在 = 扩展不可用(fail-loud,不静默消失)。 */
+	loadError?: string;
+}
+
+export interface ExtensionTab {
+	id: string;
+	label: string;
+	enabled: boolean;
+	count: number;
+}
+
+export interface ProviderInfo {
+	id: string;
+	displayName: string;
+	enabled: boolean;
+}
+
+/** Full extensions.list response — the single registry datum all slot
+ *  hosts and the extension center consume. */
+export interface ExtensionRegistryData {
+	extensions: ExtensionItem[];
+	tabs: ExtensionTab[];
+	providers: ProviderInfo[];
+	components: SlotComponent[];
+	/** Slot contract from the daemon (collab-proto single authority). */
+	slots: { exact: readonly string[]; prefixes: readonly string[] };
 }
 
 /** Props every extension component receives when mounted. Hosts pass what
@@ -64,34 +127,35 @@ export interface SlotComponentProps {
 	extensionId?: string;
 }
 
-/** ── 全局单例 slot 数据源 ──────────────────────────────────────────
- * 所有 slot 宿主(右面板/设置页/composer/rail)共享**一个**
- * extensions.list 轮询 + extensions.changed 即时刷新,而不是每个
- * 宿主独立轮询(此前 N 个宿主 = N 个 10s 轮询,同一 daemon 同一数据)。
- * 首个宿主挂载时启动,最后一个卸载时停止。 */
+/** ── 全局单例 registry 数据源 ─────────────────────────────────────
+ * 所有消费者(右面板/设置页/composer/rail/扩展中心/状态卡/motion 注入)
+ * 共享**一个** extensions.list 轮询 + extensions.changed 即时刷新,而不是
+ * 每个宿主独立轮询(此前 N 个宿主 = N 个轮询,同一 daemon 同一数据)。
+ * 首个宿主挂载时启动,最后一个卸载时停止;失败保留旧数据不闪空。 */
 
-interface SlotStoreState {
-	items: SlotComponent[];
+interface RegistryStoreState {
+	data: ExtensionRegistryData | null;
 	timer: Timer | null;
 	refs: number;
 	unlisten?: () => void;
 }
 
-const slotStores = new WeakMap<RpcClient, SlotStoreState>();
+const registryStores = new WeakMap<RpcClient, RegistryStoreState>();
 
-function startSlotStore(rpc: RpcClient, notify: () => void): void {
-	const st = slotStores.get(rpc)!;
+const POLL_MS = 10_000;
+
+function startRegistryStore(rpc: RpcClient, notify: () => void): void {
+	const st = registryStores.get(rpc)!;
 	const load = (): void => {
 		if (document.visibilityState === "hidden") return;
 		void rpc
-			.request<{ components?: SlotComponent[] } | null>("extensions.list", {})
+			.request<ExtensionRegistryData | null>("extensions.list", {})
 			.then(res => {
-				const next = res?.components ?? [];
-				// 引用比较即可:daemon 每次返回新数组;内容相同也会换引用,
-				// 但宿主按 slot 过滤后 useMemo 会收敛 —— 只在实际变更时
-				// 触发重渲染的判定由过滤层负责。
-				if (next !== st.items) {
-					st.items = next;
+				if (!res) return;
+				// Reference compare: daemon returns a fresh object per call;
+				// consumers filter subsets with useMemo, which converges.
+				if (res !== st.data) {
+					st.data = res;
 					notify();
 				}
 			})
@@ -100,64 +164,72 @@ function startSlotStore(rpc: RpcClient, notify: () => void): void {
 			});
 	};
 	load();
-	st.timer = setInterval(load, 10_000);
+	st.timer = setInterval(load, POLL_MS);
 	st.unlisten = rpc.addEventListener(event => {
 		const payload = event.payload as { type?: string } | undefined;
-		// HMR:daemon 的 fs.watch 清缓存后广播 extensions.changed,
+		// HMR + mutation RPCs:daemon 清缓存后广播 extensions.changed,
 		// 立即重拉 —— 不等下一个轮询周期。
 		if (payload?.type === "extensions.changed") load();
 	});
 }
 
-/** 订阅全局 slot 数据(单例)。返回全部组件,宿主自行过滤。 */
-export function useSlotRegistry(rpc: RpcClient | null): SlotComponent[] {
+/** 订阅全局 registry 数据(单例)。返回完整响应,消费者自行过滤子集。 */
+export function useExtensionRegistry(rpc: RpcClient | null): ExtensionRegistryData | null {
 	const [, setVersion] = useState(0);
 	useEffect(() => {
 		if (!rpc) return;
-		let st = slotStores.get(rpc);
+		let st = registryStores.get(rpc);
 		if (!st) {
-			st = { items: [], timer: null, refs: 0 };
-			slotStores.set(rpc, st);
+			st = { data: null, timer: null, refs: 0 };
+			registryStores.set(rpc, st);
 		}
 		st.refs += 1;
 		const first = st.refs === 1;
-		if (first) startSlotStore(rpc, () => setVersion(v => v + 1));
+		if (first) startRegistryStore(rpc, () => setVersion(v => v + 1));
 		else setVersion(v => v + 1); // 已启动:立即同步当前数据
 		return () => {
 			st!.refs -= 1;
 			if (st!.refs === 0) {
-				if (st!.timer) clearInterval(st!.timer);
+				clearInterval(st!.timer ?? undefined);
 				st!.unlisten?.();
-				st!.items = [];
+				st!.data = null;
 			}
 		};
 	}, [rpc]);
-	return rpc ? (slotStores.get(rpc)?.items ?? []) : [];
+	return rpc ? (registryStores.get(rpc)?.data ?? null) : null;
+}
+
+/** Daemon-declared slots with no desktop mount point (diagnostics: a new
+ *  slot added in collab-proto surfaces here before the GUI implements it). */
+export function useUnhostedSlots(rpc: RpcClient | null): string[] {
+	const data = useExtensionRegistry(rpc);
+	return useMemo(() => {
+		if (!data?.slots) return [];
+		return data.slots.exact.filter(s => !(GUI_SLOT_HOSTS.exact as readonly string[]).includes(s));
+	}, [data]);
 }
 
 /** Pick compiled components registered for one exact slot. */
 export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComponent[] {
-	const all = useSlotRegistry(rpc);
-	return useMemo(
-		() =>
-			all
-				.filter(c => c.slot === slot && (c.code.length > 0 || c.error))
-				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-		[all, slot],
-	);
+	const data = useExtensionRegistry(rpc);
+	return useMemo(() => {
+		const all = data?.components ?? [];
+		return all
+			.filter(c => c.slot === slot && (c.code.length > 0 || c.error))
+			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+	}, [data, slot]);
 }
 
 /** Pick compiled components whose slot starts with a namespace prefix
  *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
 export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
-	const all = useSlotRegistry(rpc);
-	return useMemo(
-		() =>
-			all
-				.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error))
-				.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-		[all, prefix],
-	);
+	const data = useExtensionRegistry(rpc);
+	return useMemo(() => {
+		const all = data?.components ?? [];
+		return all
+			.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error))
+			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+	}, [data, prefix]);
 }
 
 /** Mount every extension-contributed component registered for a slot. */

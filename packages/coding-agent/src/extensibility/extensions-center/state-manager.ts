@@ -5,25 +5,25 @@
 import * as path from "node:path";
 import { fuzzyMatch } from "@musepi/pi-tui";
 import { getMCPConfigPath, logger } from "@musepi/pi-utils";
-import type { ContextFile } from "../../../capability/context-file";
-import type { ExtensionModule } from "../../../capability/extension-module";
-import type { GuiMotion } from "../../../capability/gui-motion";
-import type { Hook } from "../../../capability/hook";
-import type { MCPServer } from "../../../capability/mcp";
-import type { Prompt } from "../../../capability/prompt";
-import type { Rule } from "../../../capability/rule";
-import type { Skill } from "../../../capability/skill";
-import type { SlashCommand } from "../../../capability/slash-command";
-import type { CustomTool } from "../../../capability/tool";
-import type { SourceMeta } from "../../../capability/types";
+import type { ContextFile } from "../../capability/context-file";
+import type { ExtensionModule } from "../../capability/extension-module";
+import type { GuiMotion } from "../../capability/gui-motion";
+import type { Hook } from "../../capability/hook";
+import type { MCPServer } from "../../capability/mcp";
+import type { Prompt } from "../../capability/prompt";
+import type { Rule } from "../../capability/rule";
+import type { Skill } from "../../capability/skill";
+import type { SlashCommand } from "../../capability/slash-command";
+import type { CustomTool } from "../../capability/tool";
+import type { SourceMeta } from "../../capability/types";
 import {
 	disableProvider,
 	enableProvider,
 	getAllProvidersInfo,
 	isProviderEnabled,
 	loadCapability,
-} from "../../../discovery";
-import { readDisabledServers, readEnabledServers } from "../../../mcp/config-writer";
+} from "../../discovery";
+import { readDisabledServers, readEnabledServers } from "../../mcp/config-writer";
 import { builtinExtensionEntries } from "./builtin-registry";
 import type {
 	DashboardState,
@@ -167,7 +167,7 @@ export async function loadAllExtensions(
 	// 失败(语法/registerComponent 槽位校验/顶层抛错)写入 loadError ——
 	// dashboard 与 agent 感知层可见,不再静默消失。禁用项跳过(未启用不加载)。
 	if (cwd) {
-		const { loadExtensions } = await import("../../../extensibility/extensions/loader");
+		const { loadExtensions } = await import("../../extensibility/extensions/loader");
 		await Promise.all(
 			extensions
 				.filter(e => e.kind === "extension-module" && e.state === "active")

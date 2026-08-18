@@ -201,19 +201,26 @@ export async function collectExtensionModes(
 		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
+		// 单模式防御:畸形 mode 项(缺 id/类型错)只跳过该模式,不影响
+		// 同扩展其余模式与整个 modes.list —— 扩展代码层故障不拖垮 UI。
 		for (const mode of extension.modes ?? []) {
-			out.push({
-				id: mode.id,
-				builtin: false,
-				label: mode.label,
-				description: mode.description,
-				extends: [],
-				extensions: mode.extensions,
-				hasPrompt: (mode.prompt?.length ?? 0) > 0,
-				promptComplete: mode.promptComplete === true,
-				settingsKeys: Object.keys(mode.settings ?? {}),
-				source: "extension",
-			});
+			try {
+				if (!mode || typeof mode.id !== "string" || mode.id.length === 0) continue;
+				out.push({
+					id: mode.id,
+					builtin: false,
+					label: mode.label,
+					description: mode.description,
+					extends: [],
+					extensions: mode.extensions,
+					hasPrompt: (mode.prompt?.length ?? 0) > 0,
+					promptComplete: mode.promptComplete === true,
+					settingsKeys: Object.keys(mode.settings ?? {}),
+					source: "extension",
+				});
+			} catch (err) {
+				console.warn(`extension mode skipped (${mode?.id ?? "<unknown>"}):`, err);
+			}
 		}
 	}
 	return out;

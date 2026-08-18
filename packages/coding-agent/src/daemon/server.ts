@@ -19,6 +19,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { getDashboardStats } from "@musepi/omp-stats";
 import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
@@ -458,7 +459,7 @@ interface SkillListItem {
 }
 
 /** Unified extension entry (extension control center, TUI parity). */
-type Extension = import("../modes/components/extensions/types").Extension;
+type Extension = import("../extensibility/extensions-center/types").Extension;
 
 /** Minimal typed view over the live AgentSession's mode state. */
 interface ModeSessionLike {
@@ -2776,20 +2777,27 @@ export class DaemonServer {
 			this.#extensionsCache = null;
 			this.#pluginsCache = null;
 			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
-			const seq = ++this.#globalEventSeq;
-			for (const conn of this.#globalEventTargets) {
-				this.#host.emitEvent(conn, {
-					kind: "event",
-					seq,
-					payload: { type: "extensions.changed", at: Date.now() },
-				});
-			}
+			this.#broadcastExtensionsChanged();
 			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
 			// entry changed on disk. The watcher callback filename is
 			// unreliable (empty/short names on Windows recursive watch), so
 			// the per-entry mtime comparison decides what changed.
 			this.#reloadChangedSessionExtensions();
 		}, 500);
+	}
+
+	/** 广播 extensions.changed(extensions.list 数据变更后调用):GUI 的
+	 *  单例注册表监听此事件即时重拉 —— mutation RPC 清缓存后必须广播,
+	 *  否则 UI 要等下一个轮询周期(10s)才看到翻转。 */
+	#broadcastExtensionsChanged(): void {
+		const seq = ++this.#globalEventSeq;
+		for (const conn of this.#globalEventTargets) {
+			this.#host.emitEvent(conn, {
+				kind: "event",
+				seq,
+				payload: { type: "extensions.changed", at: Date.now() },
+			});
+		}
 	}
 
 	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */
@@ -2873,7 +2881,7 @@ export class DaemonServer {
 
 	async #getExtensions(): Promise<Extension[]> {
 		if (!this.#extensionsCache || Date.now() - this.#extensionsCache.at > 10_000) {
-			const { loadAllExtensions } = await import("../modes/components/extensions/state-manager");
+			const { loadAllExtensions } = await import("../extensibility/extensions-center/state-manager");
 			let settings = this.#host.settings();
 			if (!settings) {
 				await this.#host.ensureRegistry();
@@ -3751,6 +3759,10 @@ export class DaemonServer {
 				const { rm } = await import("node:fs/promises");
 				await rm(skill.filePath, { force: true });
 				this.#skillsCache = null;
+				// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
+				// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
+				this.#extensionsCache = null;
+				this.#broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "skills.read": {
@@ -3801,7 +3813,7 @@ export class DaemonServer {
 						ext.disabledReason = styleSetting === "classic" ? "item-disabled" : undefined;
 					}
 				}
-				const { buildProviderTabs } = await import("../modes/components/extensions/state-manager");
+				const { buildProviderTabs } = await import("../extensibility/extensions-center/state-manager");
 				const tabs = buildProviderTabs(extensions);
 				const { getAllProvidersInfo } = await import("../capability");
 				const providers = getAllProvidersInfo().map(p => ({
@@ -3822,6 +3834,11 @@ export class DaemonServer {
 					tabs,
 					providers,
 					components,
+					// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
+					slots: {
+						exact: [...EXTENSION_SLOT_DECLARATION.exact],
+						prefixes: [...EXTENSION_SLOT_DECLARATION.prefixes],
+					},
 				};
 			}
 			case "extensions.raw": {
@@ -3857,6 +3874,7 @@ export class DaemonServer {
 					);
 					await settings.flush();
 					this.#extensionsCache = null;
+					this.#broadcastExtensionsChanged();
 					return { ok: true };
 				}
 				if (p.id.startsWith("mcp:")) {
@@ -3888,6 +3906,7 @@ export class DaemonServer {
 					await settings.flush();
 				}
 				this.#extensionsCache = null;
+				this.#broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "extensions.setForceEnabled": {
@@ -3909,6 +3928,7 @@ export class DaemonServer {
 				await settings.flush();
 				this.#extensionsCache = null;
 				this.#pluginsCache = null;
+				this.#broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "events.subscribe": {
@@ -3935,6 +3955,7 @@ export class DaemonServer {
 				const settings = this.#host.settings();
 				if (settings) await settings.flush();
 				this.#extensionsCache = null;
+				this.#broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "modes.list": {

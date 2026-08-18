@@ -4,6 +4,7 @@
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { type } from "@musepi/omptype";
 import * as zod from "@musepi/omptype/zod";
 import type { ThinkingLevel } from "@musepi/pi-agent-core";
@@ -446,28 +447,18 @@ export async function loadExtensionFromFactory(
 	return extension;
 }
 
-/** 已知组件槽位前缀(开放命名空间:前缀后任意 id 合法)。与 GUI 侧
- *  slot-components.tsx 的挂载规则一一对应 —— daemon 是校验权威,
- *  GUI 按同样规则挂载。 */
-const KNOWN_SLOT_PREFIXES = ["panel.tab.", "settings.tab.", "rail."] as const;
-/** 已知精确组件槽位(与 GUI 侧常量对应)。 */
-const KNOWN_SLOTS = new Set([
-	"panel.right",
-	"rail.right",
-	"settings.extensions",
-	"composer.dock",
-	"composer.left",
-	"composer.right",
-]);
+/** 已知组件槽位(单一权威 @musepi/collab-proto/extension-slots,与 GUI 侧共用)。
+ *  daemon 是校验权威,GUI 按同样规则挂载。 */
+const KNOWN_SLOTS = new Set<string>(EXTENSION_SLOT_DECLARATION.exact);
 
 /** 校验组件槽位是否在已知命名空间内;未知槽名抛错(fail-loud)。
  *  抛错在 factory 执行路径 → bindExtension 捕获 → 进 load errors,
  *  extension_status 可见,与未声明 slot 静默丢失形成对比。 */
 export function assertKnownComponentSlot(slot: string): void {
 	if (KNOWN_SLOTS.has(slot)) return;
-	if (KNOWN_SLOT_PREFIXES.some(prefix => slot.startsWith(prefix))) return;
+	if (EXTENSION_SLOT_DECLARATION.prefixes.some(prefix => slot.startsWith(prefix))) return;
 	throw new Error(
-		`unknown component slot "${slot}": known slots are ${[...KNOWN_SLOTS].sort().join(", ")} and the namespaces ${KNOWN_SLOT_PREFIXES.join(", ")}`,
+		`unknown component slot "${slot}": known slots are ${[...KNOWN_SLOTS].sort().join(", ")} and the namespaces ${EXTENSION_SLOT_DECLARATION.prefixes.join(", ")}`,
 	);
 }
 

@@ -1308,6 +1308,43 @@
 	color: var(--color-text-faint);
 	flex-shrink: 0;
 }
+/* 槽位注册表(扩展中心底部全宽诊断区块):daemon 声明 vs 桌面端挂载。 */
+.gui-ext-slots {
+	margin-top: 8px;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text-faint) 3%, transparent);
+	flex-shrink: 0;
+}
+.gui-ext-slots-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.gui-ext-slots-ok,
+.gui-ext-slots-warn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+	font-size: 11.5px;
+}
+.gui-ext-slots-ok {
+	color: #34d399;
+}
+.gui-ext-slots-warn {
+	color: var(--color-warning, #fbbf24);
+}
+.gui-ext-slots-detail {
+	margin-top: 3px;
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 
 /* Composer frame morph (welcome ⇄ session): the incoming frame is
  * transformed onto the outgoing rect in the layout phase, then eased back
@@ -1519,4 +1556,64 @@
 	height: 8px;
 	border-bottom: 1px dashed var(--border);
 	margin: 4px 0 2px;
+}
+
+/* ── 轨迹树形化(2026-08-17:turn 折叠节点 + 事件行跳转) ──────────── */
+.traj-turn-group {
+	margin-bottom: 2px;
+}
+.traj-turn-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 5px 2px;
+	text-align: left;
+	color: var(--color-text);
+	border-radius: 6px;
+}
+.traj-turn-head:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+.traj-turn-summary {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.traj-turn-meta {
+	flex-shrink: 0;
+	font-size: 10px;
+	color: var(--color-text-faint);
+}
+.traj-turn-events {
+	padding-left: 8px;
+	border-left: 1px solid var(--border);
+	margin-left: 7px;
+}
+.traj-event-jump {
+	display: flex;
+	align-items: flex-start;
+	width: 100%;
+	text-align: left;
+	border-radius: 6px;
+	padding: 0 2px;
+	color: inherit;
+	background: transparent;
+}
+.traj-event-jump:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+.traj-jump-icon {
+	flex-shrink: 0;
+	margin-top: 6px;
+	opacity: 0;
+	transition: opacity 120ms ease;
+	color: var(--color-accent);
+}
+.traj-event-jump:hover .traj-jump-icon {
+	opacity: 1;
 }

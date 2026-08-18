@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { buildTabBarTabs } from "@musepi/pi-coding-agent/modes/components/extensions/extension-dashboard";
-import { ExtensionList } from "@musepi/pi-coding-agent/modes/components/extensions/extension-list";
-import type { Extension } from "@musepi/pi-coding-agent/modes/components/extensions/types";
+import { buildTabBarTabs } from "@musepi/pi-coding-agent/extensibility/extensions-center/extension-dashboard";
+import { ExtensionList } from "@musepi/pi-coding-agent/extensibility/extensions-center/extension-list";
+import type { Extension } from "@musepi/pi-coding-agent/extensibility/extensions-center/types";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 
 beforeAll(async () => {

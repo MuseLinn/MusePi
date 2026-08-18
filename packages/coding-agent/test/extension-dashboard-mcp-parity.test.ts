@@ -18,7 +18,7 @@ import * as path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { initializeWithSettings, reset as resetDiscoveryCache } from "@musepi/pi-coding-agent/discovery";
 import { readMCPConfigFile, setMcpServerEnabled, setServerDisabled } from "@musepi/pi-coding-agent/mcp/config-writer";
-import { loadAllExtensions } from "@musepi/pi-coding-agent/modes/components/extensions/state-manager";
+import { loadAllExtensions } from "@musepi/pi-coding-agent/extensibility/extensions-center/state-manager";
 import {
 	__resetDirsFromEnvForTests,
 	getMCPConfigPath,
