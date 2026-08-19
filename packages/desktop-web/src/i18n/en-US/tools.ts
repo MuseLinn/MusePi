@@ -282,6 +282,7 @@ export const tools = {
 	"skill warnings": "Skill warnings",
 	"skill filter all": "All",
 	"skill filter builtin": "Built-in",
+	"extension provider": "Extension-declared",
 	"skill filter user": "User",
 	"skill filter project": "Project",
 	"search skills...": "Search skills...",

@@ -44,7 +44,9 @@ import type {
 	ExtensionFactory,
 	ExtensionModeDefinition,
 	ExtensionPromptSection,
+	ExtensionRpcHandler,
 	ExtensionSetting,
+	ExtensionSkillDeclaration,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
@@ -212,6 +214,37 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.extension.components.push(component);
 	}
 
+	registerRpc(method: string, handler: ExtensionRpcHandler): void {
+		if (typeof method !== "string" || method.length === 0) {
+			throw new TypeError("registerRpc: method must be a non-empty string");
+		}
+		if (typeof handler !== "function") {
+			throw new TypeError(`registerRpc: handler for "${method}" must be a function`);
+		}
+		this.extension.rpcs.set(method, handler);
+	}
+
+	registerSkill(skill: ExtensionSkillDeclaration): void {
+		if (!skill || typeof skill.name !== "string" || skill.name.length === 0) {
+			throw new TypeError("registerSkill: skill.name is required");
+		}
+		this.extension.skills.push(skill);
+	}
+
+	registerToolView(tool: string, options: { moduleUrl: string; label?: string }): void {
+		if (typeof tool !== "string" || tool.length === 0) {
+			throw new TypeError("registerToolView: tool name is required");
+		}
+		if (!options?.moduleUrl || typeof options.moduleUrl !== "string") {
+			throw new TypeError(`registerToolView: moduleUrl required for tool "${tool}"`);
+		}
+		this.extension.toolViews.push({
+			tool,
+			moduleUrl: options.moduleUrl,
+			...(options.label ? { label: options.label } : {}),
+		});
+	}
+
 	registerPrompt(section: ExtensionPromptSection): void {
 		this.extension.promptSections.push(section);
 	}
@@ -354,6 +387,9 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		components: [],
 		promptSections: [],
 		modes: [],
+		rpcs: new Map(),
+		skills: [],
+		toolViews: [],
 	};
 }
 

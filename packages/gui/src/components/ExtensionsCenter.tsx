@@ -211,6 +211,31 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					.sort((a, b) => b.count - a.count),
 			});
 		}
+		// 未注册 provider 的条目(扩展声明的技能 provider "extension" 等):
+		// ALL tab 已计数,但 provider 树没有对应节点 —— 补一个合成节点,
+		// 否则条目计数与可见列表不一致(数据在,渲染不出来)。
+		const knownProviderIds = new Set(providers.map(p => p.id));
+		const orphaned = filtered.filter(e => !knownProviderIds.has(e.source.provider));
+		if (orphaned.length > 0) {
+			const kinds = new Map<string, ExtensionItem[]>();
+			for (const it of orphaned) {
+				const list = kinds.get(it.kind) ?? [];
+				list.push(it);
+				kinds.set(it.kind, list);
+			}
+			nodes.push({
+				provider: {
+					id: "extension",
+					displayName: t("extension provider"),
+					enabled: true,
+				},
+				count: orphaned.length,
+				enabled: true,
+				kinds: [...kinds.entries()]
+					.map(([kind, list]) => ({ kind, count: list.length, items: list }))
+					.sort((a, b) => b.count - a.count),
+			});
+		}
 		nodes.sort((a, b) => (a.count === 0 ? 1 : 0) - (b.count === 0 ? 1 : 0) || b.count - a.count);
 		return { nodes, nativeItems };
 	}, [providers, filtered]);

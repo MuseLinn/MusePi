@@ -455,6 +455,9 @@ interface SkillListItem {
 	filePath: string;
 	source: string;
 	hide: boolean;
+	/** Virtual skills declared by extensions (registerSkill) carry their
+	 *  markdown body here instead of a file (filePath === ""). */
+	content?: string;
 	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
 }
 
@@ -2776,6 +2779,9 @@ export class DaemonServer {
 			this.#extensionWatcherTimer = null;
 			this.#extensionsCache = null;
 			this.#pluginsCache = null;
+			// 扩展声明的技能经 #getSkills 合并:扩展源变更时一并失效,
+			// 否则虚拟技能列表最多滞后 10s TTL。
+			this.#skillsCache = null;
 			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
 			this.#broadcastExtensionsChanged();
 			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
@@ -2936,16 +2942,40 @@ export class DaemonServer {
 		if (!this.#skillsCache || Date.now() - this.#skillsCache.at > 10_000) {
 			const { discoverSkills } = await import("../sdk");
 			const { skills, warnings } = await discoverSkills(this.#host.cwd());
+			const scanned = skills.map(s => ({
+				name: s.name,
+				description: s.description,
+				filePath: s.filePath,
+				source: s.source,
+				hide: s.hide === true,
+				_source: s._source,
+			}));
+			// 扩展声明的虚拟技能(registerSkill — DSH ctx.skills.register
+			// 类比):与文件扫描技能合并展示。无 backing 文件(filePath=""),
+			// content 随行携带供 skills.read 直接返回;扩展卸载/禁用后
+			// 自动消失(collectExtensionSkills 按 active 过滤)。
+			const { collectExtensionSkills } = await import("./extension-artifact-compiler");
+			const extSkills = await collectExtensionSkills(
+				(await this.#getExtensions()).map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+				this.#host.cwd(),
+			);
+			const virtual = extSkills.map(s => ({
+				name: s.name,
+				description: s.description,
+				filePath: "",
+				source: "extension",
+				hide: s.hide === true,
+				content: s.content,
+				_source: {
+					provider: "extension",
+					providerName: s.extensionPath,
+					path: s.extensionPath,
+					level: "user" as const,
+				},
+			}));
 			this.#skillsCache = {
 				at: Date.now(),
-				skills: skills.map(s => ({
-					name: s.name,
-					description: s.description,
-					filePath: s.filePath,
-					source: s.source,
-					hide: s.hide === true,
-					_source: s._source,
-				})),
+				skills: [...scanned, ...virtual],
 				warnings: warnings.map(w => `${w.skillPath}: ${w.message}`),
 			};
 		}
@@ -3747,14 +3777,21 @@ export class DaemonServer {
 			}
 			case "skills.delete": {
 				// Remove a user-level skill's SKILL.md. Refuses builtin /
-				// musepi-managed skills (auto-learn) — the GUI mirrors this guard.
+				// musepi-managed skills (auto-learn) and extension-declared
+				// virtual skills — the GUI mirrors this guard.
 				const p = (params ?? {}) as { name: string };
 				const skills = await this.#getSkills();
 				const skill = skills.find(s => s.name === p.name);
 				if (!skill) throw new Error(`unknown skill: ${p.name}`);
 				const src = skill._source;
-				if (src?.level !== "user" || src.provider === MANAGED_SKILLS_PROVIDER_ID || src.provider === "native") {
-					throw new Error("only user-level skills can be deleted");
+				if (
+					skill.filePath === "" ||
+					src?.level !== "user" ||
+					src.provider === MANAGED_SKILLS_PROVIDER_ID ||
+					src.provider === "native" ||
+					src.provider === "extension"
+				) {
+					throw new Error("only user-level file skills can be deleted");
 				}
 				const { rm } = await import("node:fs/promises");
 				await rm(skill.filePath, { force: true });
@@ -3771,6 +3808,15 @@ export class DaemonServer {
 				const skills = await this.#getSkills();
 				const skill = skills.find(s => s.name === p.name);
 				if (!skill) throw new Error(`unknown skill: ${p.name}`);
+				// 扩展声明的虚拟技能:无 backing 文件,content 随行携带。
+				if (skill.filePath === "" && skill.content !== undefined) {
+					const content = skill.content;
+					return {
+						name: skill.name,
+						filePath: "",
+						content: content.length > 64 * 1024 ? `${content.slice(0, 64 * 1024)}\n… (truncated)` : content,
+					};
+				}
 				const { readFile } = await import("node:fs/promises");
 				const content = await readFile(skill.filePath, "utf8");
 				return {
@@ -3824,8 +3870,15 @@ export class DaemonServer {
 				// Renderer-side slot components (ui-slots analogue): compiled
 				// from active extension-module entries, cached 10s with the
 				// extension scan. The GUI mounts them by slot id.
-				const { collectSlotComponents } = await import("./extension-artifact-compiler");
+				const { collectSlotComponents, collectToolViews } = await import("./extension-artifact-compiler");
 				const components = await collectSlotComponents(
+					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+					this.#host.cwd(),
+				);
+				// Renderer-side per-tool views (registerToolView — DSH
+				// tool.call.toolview analogue): the transcript dispatches by
+				// tool name, replacing the built-in renderer.
+				const toolViews = await collectToolViews(
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
 				);
@@ -3834,6 +3887,7 @@ export class DaemonServer {
 					tabs,
 					providers,
 					components,
+					toolViews,
 					// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 					slots: {
 						exact: [...EXTENSION_SLOT_DECLARATION.exact],
@@ -3957,6 +4011,30 @@ export class DaemonServer {
 				this.#extensionsCache = null;
 				this.#broadcastExtensionsChanged();
 				return { ok: true };
+			}
+			case "ext.call": {
+				// 扩展贡献的 daemon 侧 JSON-RPC(registerRpc — DSH
+				// `harness.handle` 类比):GUI 槽位组件经此回调自己的 daemon
+				// 侧逻辑。仅限 active extension-module 条目 —— 与
+				// collectSlotComponents 同源过滤,未知扩展/方法抛 JSON-RPC
+				// 错误给调用方。
+				const p = (params ?? {}) as { extensionId?: string; method?: string; params?: unknown; sessionId?: string };
+				if (typeof p.extensionId !== "string" || p.extensionId.length === 0) {
+					throw new Error("ext.call: extensionId required");
+				}
+				if (typeof p.method !== "string" || p.method.length === 0) {
+					throw new Error("ext.call: method required");
+				}
+				const extensions = await this.#getExtensions();
+				const entry = extensions.find(
+					e => e.kind === "extension-module" && e.state === "active" && e.path === p.extensionId,
+				);
+				if (!entry) throw new Error(`extension not active: ${p.extensionId}`);
+				const { invokeExtensionRpc } = await import("./extension-artifact-compiler");
+				return await invokeExtensionRpc(entry.path, this.#host.cwd(), p.method, p.params ?? {}, {
+					cwd: this.#host.cwd(),
+					sessionId: p.sessionId,
+				});
 			}
 			case "modes.list": {
 				// 预设中心数据源(docs/modes-plan.md §7):摘要列表,含继承链与
@@ -7216,6 +7294,14 @@ export class DaemonServer {
 					if (p.value === "" || p.value === null || p.value === undefined) {
 						return { ok: true };
 					}
+				}
+				// Extension-owned keys: honor the extension's write-time guard
+				// (ExtensionSetting.validate, DSH installSettingsSection
+				// analogue) — a refused write surfaces as an RPC error so the
+				// GUI/TUI shows the reason instead of persisting bad input.
+				if (extKeys.has(p.key)) {
+					const error = this.#host.extensionSettings().get(p.key)?.validate?.(p.value);
+					if (error) throw new Error(`invalid value for ${p.key}: ${error}`);
 				}
 				settings.set(p.key as Parameters<Settings["set"]>[0], p.value as never);
 				await settings.flush();

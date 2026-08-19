@@ -4,7 +4,7 @@
  */
 import * as path from "node:path";
 import { fuzzyMatch } from "@musepi/pi-tui";
-import { getMCPConfigPath, logger } from "@musepi/pi-utils";
+import { getMCPConfigPath, getProjectDir, logger } from "@musepi/pi-utils";
 import type { ContextFile } from "../../capability/context-file";
 import type { ExtensionModule } from "../../capability/extension-module";
 import type { GuiMotion } from "../../capability/gui-motion";
@@ -161,6 +161,39 @@ export async function loadAllExtensions(
 		});
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });
+	}
+
+	// 扩展声明的虚拟技能(registerSkill — DSH ctx.skills.register 类比):
+	// 与文件技能同框展示为 skill 条目(provider "extension"),复用
+	// artifact-compiler 的 load-once 缓存;扩展禁用/卸载后自动消失。
+	// 必须在 extension-module 条目加入 extensions 之后执行。
+	try {
+		const { collectExtensionSkills } = await import("../../daemon/extension-artifact-compiler");
+		const extSkills = await collectExtensionSkills(
+			extensions
+				.filter(e => e.kind === "extension-module")
+				.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+			cwd ?? getProjectDir(),
+		);
+		const extSkillByPath = new Map(extSkills.map(s => [`${s.extensionPath}#skill:${s.name}`, s]));
+		addItems(
+			extSkills.map(s => ({
+				name: s.name,
+				path: `${s.extensionPath}#skill:${s.name}`,
+				_source: {
+					provider: "extension",
+					providerName: s.extensionPath,
+					path: s.extensionPath,
+					level: "user" as const,
+				},
+			})),
+			"skill",
+			{
+				getDescription: item => extSkillByPath.get(item.path)?.description,
+			},
+		);
+	} catch (error) {
+		logger.warn("Failed to merge extension skills", { error: String(error) });
 	}
 
 	// 真实加载校验(fail-loud):active 的扩展模块逐个执行 factory,

@@ -1,3 +1,4 @@
+import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/desktop-web";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -72,6 +73,20 @@ export interface SlotComponent {
 	order?: number;
 }
 
+/** One compiled per-tool view from extensions.list (registerToolView —
+ *  DSH tool.call.toolview analogue). Module default export must be a
+ *  ToolRenderer-shaped object ({ Summary, Body?, Card? }). */
+export interface ToolViewItem {
+	tool: string;
+	extensionId: string;
+	label?: string;
+	/** Self-contained ESM JavaScript (react bundled in). Empty on compile failure. */
+	code: string;
+	error?: string;
+	/** Component-scoped CSS extracted at compile time. */
+	css?: string;
+}
+
 /** One normalized capability entry in extensions.list (10 kinds, TUI
  *  /extensions parity). Type home here so consumers (ExtensionsCenter,
  *  ExtensionStatusCard, settings-sections) share one shape. */
@@ -111,6 +126,10 @@ export interface ExtensionRegistryData {
 	tabs: ExtensionTab[];
 	providers: ProviderInfo[];
 	components: SlotComponent[];
+	/** Per-tool renderer views (registerToolView — DSH tool.call.toolview
+	 *  analogue): compiled modules dispatched by tool name in the
+	 *  transcript. */
+	toolViews: ToolViewItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
 }
@@ -137,6 +156,11 @@ export interface SlotComponentProps {
 		get(keys: string[]): Promise<Record<string, unknown>>;
 		set(key: string, value: unknown): Promise<void>;
 	} | null;
+	/** Daemon-side extension RPC bridge (registerRpc — DSH harness.handle
+	 *  analogue): invoke a JSON-RPC method registered by THIS extension
+	 *  (ext.call RPC). Bound to the component's extensionId; absent when
+	 *  no rpc bridge is available. */
+	extensionCall?: (method: string, params?: unknown) => Promise<unknown>;
 }
 
 /** ── 全局单例 registry 数据源 ─────────────────────────────────────
@@ -359,6 +383,75 @@ export function SlotComponentMount({
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,
+		// 扩展 RPC 桥(registerRpc — DSH harness.handle 类比):绑定当前
+		// 组件的 extensionId,组件直接调自己扩展的 daemon 侧方法。
+		extensionCall:
+			rpc && item.extensionId
+				? (method, params) =>
+						rpc.request("ext.call", {
+							extensionId: item.extensionId,
+							method,
+							params,
+							sessionId: sessionId ?? undefined,
+						})
+				: undefined,
 	};
 	return <Comp {...hostProps} />;
+}
+
+/**
+ * 扩展 per-tool 渲染器注册(registerToolView — DSH tool.call.toolview
+ * 类比):把 extensions.list 的 toolViews(daemon 编译好的 ESM)blob-import
+ * 并注册进 desktop-web 的 tool-render 外部注册表,transcript 按工具名
+ * 分派时扩展渲染器覆盖内置。模块 default export 必须是 ToolRenderer
+ * 形状({ Summary, Body?, Card? })。任何宿主挂载一次即可 ——
+ * registry 是全局单例(desktop-web module 级)。
+ */
+export function useExtensionToolViews(rpc: RpcClient | null): void {
+	const data = useExtensionRegistry(rpc);
+	const toolViews = data?.toolViews ?? [];
+	useEffect(() => {
+		if (toolViews.length === 0) {
+			registerExternalToolRenderers({});
+			return;
+		}
+		let alive = true;
+		const urls: string[] = [];
+		const registered: Record<string, ToolRenderer> = {};
+		void (async () => {
+			for (const item of toolViews) {
+				if (item.error) continue; // 编译失败:回退内置/generic 渲染器
+				try {
+					(window as unknown as { MusePiReact: unknown }).MusePiReact = React;
+					const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
+					urls.push(url);
+					const mod = (await import(url)) as { default?: unknown };
+					if (!alive) return;
+					const exported = mod.default;
+					// 两种合法形状(DSH tool.call.toolview 是组件):
+					// ① default = React 组件 → 作为全卡 Card 渲染;
+					// ② default = ToolRenderer 对象({ Summary, Body?, Card? })
+					// 与 desktop-web 内置注册表同构。
+					let renderer: ToolRenderer | null = null;
+					if (typeof exported === "function") {
+						renderer = { Card: exported as ToolRenderer["Card"] } as ToolRenderer;
+					} else if (exported && typeof exported === "object") {
+						renderer = exported as ToolRenderer;
+					}
+					if (!renderer) {
+						console.warn(`toolview for "${item.tool}" missing default export (component or ToolRenderer)`);
+						continue;
+					}
+					registered[item.tool] = renderer;
+				} catch (e) {
+					console.warn(`toolview "${item.tool}" load failed`, e);
+				}
+			}
+			if (alive) registerExternalToolRenderers(registered);
+		})();
+		return () => {
+			alive = false;
+			for (const url of urls) URL.revokeObjectURL(url);
+		};
+	}, [toolViews]);
 }

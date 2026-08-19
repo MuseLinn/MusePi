@@ -93,5 +93,19 @@ const RENDERERS: Record<string, ToolRenderer> = {
 };
 
 export function resolveToolRenderer(name: string): ToolRenderer {
-	return RENDERERS[name] ?? genericRenderer;
+	return externalRenderers[name] ?? RENDERERS[name] ?? genericRenderer;
+}
+
+/** Extension-contributed per-tool renderers (registerToolView — DSH
+ *  `tool.call.toolview` analogue): keyed by wire tool name, consulted
+ *  BEFORE the built-in registry so an extension renderer replaces the
+ *  built-in one for that tool. Registered by the GUI from extensions.list
+ *  `toolViews` (compiled modules blob-imported at runtime). */
+const externalRenderers: Record<string, ToolRenderer> = {};
+
+/** Replace the extension-contributed renderer map (called by the GUI when
+ *  extensions.list toolViews change). Pass an empty map to clear. */
+export function registerExternalToolRenderers(renderers: Record<string, ToolRenderer>): void {
+	for (const key of Object.keys(externalRenderers)) delete externalRenderers[key];
+	Object.assign(externalRenderers, renderers);
 }

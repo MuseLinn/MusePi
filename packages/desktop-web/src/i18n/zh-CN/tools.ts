@@ -272,6 +272,7 @@ export const tools = {
 	"skill warnings": "技能警告",
 	"skill filter all": "全部",
 	"skill filter builtin": "内置",
+	"extension provider": "扩展声明",
 	"skill filter user": "用户级",
 	"skill filter project": "项目级",
 	"search skills...": "搜索技能...",

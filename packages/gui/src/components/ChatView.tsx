@@ -8,6 +8,7 @@ import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
+import { useExtensionToolViews } from "../lib/slot-host";
 import { scrollToEntry } from "../lib/transcript-jump";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
@@ -312,6 +313,9 @@ export function ChatView({
 		store ? store.subscribe.bind(store) : noopSubscribe,
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
+	// 扩展 per-tool 渲染器(registerToolView — DSH tool.call.toolview):
+	// 注册进 desktop-web tool-render 外部表,transcript 按工具名分派。
+	useExtensionToolViews(rpc);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);

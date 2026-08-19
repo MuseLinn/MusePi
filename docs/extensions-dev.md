@@ -132,7 +132,7 @@ export default function (pi: ExtensionAPI): void {
 
 **数据流**:daemon `bun.build` 把模块编译为自包含 ESM(react 绑定宿主实例)→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob: 动态 import 挂载。**信任模型**:扩展本就在 daemon 进程执行任意代码,渲染其组件不构成新提权。
 
-**设置卡片(settings.item + settingsScope)**:注册 `slot: "settings.item.<extId>"`(extId = 扩展目录名)的组件,会在设置页"扩展设置"分区获得一张卡片(DSH `settings.plugin.item` 派发对齐;扩展未启用则不显示)。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名,建议用 `扩展名.xxx` 前缀**(与 registerSetting 的 `display.taskCardStyle` 同约定)避免与其他扩展冲突;写入只放行 registerSetting 注册过的键,未注册键写会抛 read-only。无任何扩展注册该槽位时分区显示空态文案。
+**设置卡片(settings.item + settingsScope)**:注册 `slot: "settings.item.<extId>"`(extId = 扩展目录名)的组件,会在设置页"扩展设置"分区获得一张卡片(DSH `settings.plugin.item` 派发对齐;扩展未启用则不显示)。组件收到额外 prop `settingsScope = { get(keys: string[]): Promise<Record<string, unknown>>, set(key: string, value: unknown): Promise<void> }` —— 经 daemon `settings.get`/`settings.set` RPC 读写设置。**键名自由命名,建议用 `扩展名.xxx` 前缀**(与 registerSetting 的 `display.taskCardStyle` 同约定)避免与其他扩展冲突;写入只放行 registerSetting 注册过的键,未注册键写会抛 read-only。**写时校验(registerSetting 的 `validate` 字段,DSH `installSettingsSection` validate 对齐)**:扩展可为注册的设置键提供 `validate(value)` 回调——返回错误字符串即拒写(daemon `settings.set` RPC 抛错,GUI 显示原因),返回 `void` 放行。schema 无法表达的约束(端点可达性、跨键一致性、枚举外值)由此在**写入时**拒绝,而非用到时才炸。无任何扩展注册该槽位时分区显示空态文案。
 
 **热插拔(v2,HMR 全量)**:扩展源码/配置变更 → daemon watcher(500ms debounce)① 清缓存并广播 `extensions.changed`(需先 `events.subscribe`)→ GUI 插槽即时重载(~1s),`ExtensionsCenter`/`PluginsSection` 监听同事件即时刷新;② 对每个活跃会话按**入口 mtime 对比**执行 `reloadExtension`(不依赖 fs.watch 的 filename —— Windows 递归 watch 的 filename 不可靠),完成后发会话内事件 `extensions.reloaded`。会话内工具/命令/handlers 下次调用生效。
 
@@ -144,3 +144,76 @@ export default function (pi: ExtensionAPI): void {
 - **MCP 不随扩展关闭**:MCP 连接由配置层启动、`MCPManager` 按 cwd 多会话共享,`SourceMeta` 是配置来源非扩展来源 —— 扩展重载不触碰 MCP server 生命周期;扩展自行管理自有连接。
 
 **参考实现**:`examples/extension-component/`(示例)、`packages/coding-agent/src/daemon/extension-components.ts`(编译/聚合)、`packages/gui/src/lib/slot-components.tsx`(渲染)、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`(v2 会话级重载)、`docs/extension-hmr-v2-plan.md`(设计记录)。
+
+## 7. 扩展 daemon RPC(registerRpc,2026-08-20)
+
+DSH `harness.handle` 类比:扩展向 daemon 注册 JSON-RPC 方法,GUI 槽位组件经 `extensionCall` prop 回调自己的 daemon 侧逻辑 —— 组件从"展示"变成"可交互":
+
+```ts
+import type { ExtensionAPI } from "@musepi/pi-coding-agent";
+
+export default function (pi: ExtensionAPI): void {
+	pi.registerRpc("greet", (params, ctx) => {
+		const { name } = (params ?? {}) as { name?: string };
+		return { greeting: `hello ${name ?? "world"}`, cwd: ctx.cwd, sessionId: ctx.sessionId };
+	});
+	pi.registerComponent({ slot: "panel.tab.rpc-demo", moduleUrl: "./ui/rpc.tsx" });
+}
+```
+
+**调用链**:组件 prop `extensionCall(method, params)` → daemon RPC `ext.call { extensionId, method, params, sessionId }` → daemon 校验扩展为 active extension-module → 调 handler。`extensionCall` 自动绑定当前组件的 `extensionId`,组件无需知道自己是谁:
+
+```tsx
+export default function RpcDemo({ extensionCall }: SlotComponentProps): React.JSX.Element {
+	const [msg, setMsg] = React.useState<string>("");
+	return (
+		<button onClick={() => void extensionCall?.("greet", { name: "musepi" }).then((r: any) => setMsg(r.greeting))}>
+			{msg || "greet"}
+		</button>
+	);
+}
+```
+
+**约束(裸 runtime)**:handler 在 daemon 的扩展加载上下文运行(与槽位组件编译同一次 factory 调用)——`pi.exec`/`pi.logger`/纯计算可用;**会话绑定 actions(sendMessage/setModel/…)不可用**(抛 stub 错误)。需要会话能力时在 handler 里只做计算/IO,把结果返回给组件。
+
+**错误面**:未知扩展(非 active / 不存在)/ 未知方法 / handler 抛错 → JSON-RPC 错误,组件 `extensionCall` promise reject;方法名按扩展隔离,不同扩展可注册同名方法。
+
+## 8. 扩展注册技能(registerSkill,2026-08-20)
+
+DSH `ctx.skills.register` 类比:扩展声明**虚拟技能**(无 backing SKILL.md 文件),与文件扫描技能同框展示:
+
+```ts
+pi.registerSkill({
+	name: "my-skill",
+	description: "技能说明",
+	content: "# My Skill\n\n正文(SKILL.md 风格 markdown)",
+	hide: false,
+});
+```
+
+**展示面**:
+- daemon `skills.list` 合并返回(`_source.provider === "extension"`,`filePath: ""`,content 随行);
+- `skills.read` 直接返回 `content`(无文件读);
+- `skills.delete` 拒绝(仅 user 级文件技能可删);
+- GUI 扩展中心 / TUI /extensions 技能类目下出现,归入"扩展声明" provider 节点;
+- 扩展禁用/卸载 → 技能自动消失(HMR watcher 同时失效 skills 缓存)。
+
+**边界**:虚拟技能**不进 agent 的 loadSkills 自动装载**(那是文件扫描路径)——技能中心可见 + 可读,但不会作为上下文注入 agent;需要注入的扩展请写真实 SKILL.md 文件。
+
+## 9. 扩展 per-tool 渲染器(registerToolView,2026-08-20)
+
+DSH `tool.call.toolview` 类比:扩展为**指定工具名**贡献 transcript 渲染器,替换内置渲染器:
+
+```ts
+pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My Tool View" });
+```
+
+**模块契约**(与 registerComponent 同编译管线,blob import + `window.MusePiReact`):
+- 默认导出两种合法形状之一:
+  - **React 组件**(DSH tool.call.toolview 形状):作为全卡 Card 渲染,收到 `ToolRenderProps` `{ name, args, result, running, host, kind, intent }`;
+  - **ToolRenderer 对象** `{ Summary, Body?, Card? }`(desktop-web 内置注册表同构)。
+- 工具名 = wire 工具名(扩展自己 registerTool 的工具名,或覆盖内置如 `bash`);扩展渲染器**优先于内置**(`resolveToolRenderer` 先查外部表)。
+
+**分派**:daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`(ChatView 挂载)blob-import 并注册进 desktop-web tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`,回退内置/generic 渲染器,不破坏 transcript。
+
+**参考实现**:`packages/desktop-web/src/tool-render/registry.ts`(`registerExternalToolRenderers`)、`packages/gui/src/lib/slot-host.tsx`(`useExtensionToolViews`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectToolViews`)。

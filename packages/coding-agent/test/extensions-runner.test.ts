@@ -3762,6 +3762,9 @@ describe("ExtensionRunner", () => {
 				components: [],
 				promptSections: [],
 				modes: [],
+				rpcs: new Map(),
+				skills: [],
+				toolViews: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);
 		};

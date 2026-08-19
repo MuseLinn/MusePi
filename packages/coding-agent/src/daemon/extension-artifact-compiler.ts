@@ -31,6 +31,31 @@ export interface SlotComponent {
 	order?: number;
 }
 
+/** One compiled per-tool view served to the renderer (registerToolView —
+ *  DSH `tool.call.toolview` analogue). The GUI dispatches by tool name. */
+export interface ToolViewItem {
+	tool: string;
+	extensionId: string;
+	label?: string;
+	/** Self-contained ESM JavaScript (react bundled in). Empty on compile failure. */
+	code: string;
+	/** Compile error message (the renderer falls back to the generic view). */
+	error?: string;
+	/** Component-scoped CSS (extracted like slot components). */
+	css?: string;
+}
+
+/** One virtual skill declared by an active extension (registerSkill),
+ *  merged into the daemon skills.list / extension center. */
+export interface ExtensionSkillItem {
+	name: string;
+	description: string;
+	content: string;
+	hide?: boolean;
+	/** Extension entry path that declared it (identity for _source). */
+	extensionPath: string;
+}
+
 /** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
 const extensionLoadCache = new Map<string, { at: number; extension: Extension }>();
 
@@ -220,6 +245,99 @@ export async function collectExtensionModes(
 				});
 			} catch (err) {
 				console.warn(`extension mode skipped (${mode?.id ?? "<unknown>"}):`, err);
+			}
+		}
+	}
+	return out;
+}
+
+/**
+ * Invoke a daemon-side JSON-RPC method registered by an extension
+ * (registerRpc — DSH `harness.handle` analogue). Loaded through the shared
+ * 10s load-once cache; unknown methods throw so the daemon surfaces a
+ * JSON-RPC error to the GUI caller.
+ */
+export async function invokeExtensionRpc(
+	entryPath: string,
+	cwd: string,
+	method: string,
+	params: unknown,
+	ctx: { cwd: string; sessionId?: string },
+): Promise<unknown> {
+	const extension = await loadExtensionOnce(entryPath, cwd);
+	if (!extension) throw new Error(`extension not loadable: ${entryPath}`);
+	const handler = extension.rpcs.get(method);
+	if (!handler) throw new Error(`unknown extension rpc method "${method}" (extension ${entryPath})`);
+	return await handler(params, ctx);
+}
+
+/**
+ * Collect virtual skills declared by active extension-module entries
+ * (registerSkill — DSH `ctx.skills.register` analogue), for merging into
+ * the daemon skills.list / extension center alongside file-discovered
+ * skills. Shares the 10s load-once cache.
+ */
+export async function collectExtensionSkills(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<ExtensionSkillItem[]> {
+	const out: ExtensionSkillItem[] = [];
+	for (const entry of extensions) {
+		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const skill of extension.skills ?? []) {
+			try {
+				if (!skill || typeof skill.name !== "string" || skill.name.length === 0) continue;
+				out.push({
+					name: skill.name,
+					description: skill.description ?? "",
+					content: skill.content ?? "",
+					...(skill.hide !== undefined ? { hide: skill.hide } : {}),
+					extensionPath: entry.path,
+				});
+			} catch (err) {
+				console.warn(`extension skill skipped (${skill?.name ?? "<unknown>"}):`, err);
+			}
+		}
+	}
+	return out;
+}
+
+/**
+ * Collect compiled per-tool views declared by active extension-module
+ * entries (registerToolView — DSH `tool.call.toolview` analogue), for
+ * extensions.list `toolViews`. A broken view does not fail the whole list —
+ * it carries `error` and the renderer falls back to the generic view.
+ */
+export async function collectToolViews(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<ToolViewItem[]> {
+	const out: ToolViewItem[] = [];
+	for (const entry of extensions) {
+		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const view of extension.toolViews ?? []) {
+			const absPath = path.resolve(extension.resolvedPath, "..", view.moduleUrl);
+			try {
+				const compiled = await compileComponentModule(absPath);
+				out.push({
+					tool: view.tool,
+					extensionId: extension.path,
+					label: view.label,
+					code: compiled.code,
+					...(compiled.css ? { css: compiled.css } : {}),
+				});
+			} catch (error) {
+				out.push({
+					tool: view.tool,
+					extensionId: extension.path,
+					label: view.label ?? view.moduleUrl,
+					code: "",
+					error: String(error),
+				});
 			}
 		}
 	}
