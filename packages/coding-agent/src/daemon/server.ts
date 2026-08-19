@@ -621,8 +621,11 @@ interface LiveSession {
 	 *  MCP manager (project MCP config discovery). */
 	cwd: string;
 	/** Settings contributed by loaded extensions (registerSetting), keyed by
-	 *  setting key — merged into settings.schema for the GUI/TUI panels. */
-	extensionSettings: Map<string, ExtensionSetting>;
+	 *  setting key — merged into settings.schema for the GUI/TUI panels.
+	 *  Value carries the owning extension path so the GUI can group
+	 *  declarative schema cards per extension (DSH settings.plugin.item
+	 *  analogue without a React component). */
+	extensionSettings: Map<string, { setting: ExtensionSetting; extensionPath: string }>;
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
@@ -831,7 +834,7 @@ export class DaemonSessionHost {
 	 *  level so the settings panel shows them even without a live session
 	 *  (the owning extension registers at session creation; the cache
 	 *  survives session close). */
-	readonly #extensionSettings = new Map<string, ExtensionSetting>();
+	readonly #extensionSettings = new Map<string, { setting: ExtensionSetting; extensionPath: string }>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
 	/** Workspace file-content index (settings → 索引库 → 代码库); lazily
@@ -1194,8 +1197,8 @@ export class DaemonSessionHost {
 		// display.taskCardStyle) even after the session closes.
 		for (const ext of result.extensionsResult?.extensions ?? []) {
 			for (const [key, setting] of ext.settings) {
-				live.extensionSettings.set(key, setting);
-				this.#extensionSettings.set(key, setting);
+				live.extensionSettings.set(key, { setting, extensionPath: ext.path });
+				this.#extensionSettings.set(key, { setting, extensionPath: ext.path });
 			}
 		}
 		live.autoTitle = params.autoTitle !== false;
@@ -1603,7 +1606,7 @@ export class DaemonSessionHost {
 
 	/** Extension-contributed settings (registerSetting), host-level cache —
 	 *  populated on session creation, survives session close. */
-	extensionSettings(): ReadonlyMap<string, ExtensionSetting> {
+	extensionSettings(): ReadonlyMap<string, { setting: ExtensionSetting; extensionPath: string }> {
 		return this.#extensionSettings;
 	}
 
@@ -6580,7 +6583,204 @@ export class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				return modesOf(live.agentSession);
+				const base = modesOf(live.agentSession);
+				// 会话模式开关(TUI /fast /computer /vision /prewalk parity):
+				// 只读快照,写入走 session.setFastMode 等。
+				const mc = (live.agentSession as unknown as {
+					isFastModeEnabled?(): boolean;
+					isFastModeActive?(): boolean;
+					inspectImageState?(): { mode: string; active: boolean; model?: string };
+					getPrewalkState?(): { enabled: boolean; target?: { id: string }; thinkingLevel?: string } | undefined;
+					getEnabledToolNames?(): string[];
+				});
+				const computerEnabled =
+					(mc.getEnabledToolNames?.() ?? []).includes("computer") ||
+					this.#host.settings()?.getRaw("computer.enabled") === true;
+				return {
+					...base,
+					fastModeEnabled: mc.isFastModeEnabled?.() ?? false,
+					fastModeActive: mc.isFastModeActive?.() ?? false,
+					computerEnabled,
+					vision: mc.inspectImageState?.() ?? { mode: "auto", active: false },
+					prewalk: mc.getPrewalkState?.() ?? { enabled: false },
+				};
+			}
+			case "session.jobs": {
+				// 后台任务 HUD(TUI /jobs parity):AsyncJobSnapshot 结构化输出
+				// (running/recent/delivery),GUI 面板轮询渲染。
+				const p = (params ?? {}) as { sessionId: string; recentLimit?: number };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				return live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 }) ?? {
+					running: [],
+					recent: [],
+					delivery: { queued: 0, delivering: false },
+				};
+			}
+			case "session.jobsCancel": {
+				// 取消一个后台任务(TUI /jobs parity)。
+				const p = (params ?? {}) as { sessionId: string; jobId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const manager = live.agentSession.asyncJobManager;
+				if (!manager) throw new Error("async jobs unavailable in this session");
+				return { cancelled: manager.cancel(p.jobId) };
+			}
+			case "session.setFastMode": {
+				// TUI /fast parity:优先服务层级开关(持久化 tier.* 设置)。
+				const p = (params ?? {}) as { sessionId: string; enabled: boolean };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const enabled = live.agentSession.setFastMode(p.enabled);
+				return {
+					enabled,
+					active: (live.agentSession as unknown as { isFastModeActive?(): boolean }).isFastModeActive?.() ?? enabled,
+				};
+			}
+			case "session.setComputerEnabled": {
+				// TUI /computer parity:会话内启用/禁用 computer 工具。
+				const p = (params ?? {}) as { sessionId: string; enabled: boolean };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				await live.agentSession.setComputerToolEnabled(p.enabled);
+				return { enabled: p.enabled };
+			}
+			case "session.setVisionMode": {
+				// TUI /vision parity:会话内覆盖 inspect_image 委托模式。
+				const p = (params ?? {}) as { sessionId: string; mode: "auto" | "on" | "off" };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				if (!["auto", "on", "off"].includes(p.mode)) throw new Error(`invalid vision mode: ${p.mode}`);
+				await live.agentSession.setInspectImageMode(p.mode);
+				return live.agentSession.inspectImageState();
+			}
+			case "session.armPrewalk": {
+				// TUI /prewalk parity:武装快速模型预检(下次编辑前)。
+				const p = (params ?? {}) as { sessionId: string; model?: string; thinkingLevel?: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { expandRoleAlias, getModelMatchPreferences, resolveCliModel } = await import("../config/model-resolver");
+				const rolePattern = expandRoleAlias(p.model ?? "@smol", settings);
+				const resolved = resolveCliModel({
+					cliModel: rolePattern,
+					modelRegistry: live.agentSession.modelRegistry,
+					preferences: getModelMatchPreferences(settings),
+				});
+				if (resolved.error || !resolved.model) {
+					throw new Error(resolved.error ?? `Model "${rolePattern}" not found`);
+				}
+				if (!live.agentSession.modelRegistry.hasConfiguredAuth(resolved.model)) {
+					throw new Error(`No API key for ${resolved.model.provider}/${resolved.model.id}`);
+				}
+				const armed = live.agentSession.armPrewalk(resolved.model, p.thinkingLevel as never);
+				return {
+					armed,
+					model: `${resolved.model.provider}/${resolved.model.id}`,
+					prewalk: live.agentSession.getPrewalkState?.() ?? { enabled: armed },
+				};
+			}
+			case "session.advisor": {
+				// TUI /advisor status parity:Advisor 运行时统计快照。
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const a = live.agentSession as unknown as {
+					isAdvisorEnabled?(): boolean;
+					getAdvisorStats?(): unknown;
+					getAdvisorStatusOverview?(): { configured: boolean; advisors: { name: string; status: string }[] };
+				};
+				return {
+					enabled: a.isAdvisorEnabled?.() ?? false,
+					stats: a.getAdvisorStats?.() ?? null,
+					overview: a.getAdvisorStatusOverview?.() ?? { configured: false, advisors: [] },
+				};
+			}
+			case "session.setAdvisorEnabled": {
+				// TUI /advisor on|off parity。
+				const p = (params ?? {}) as { sessionId: string; enabled: boolean };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const a = live.agentSession as unknown as { setAdvisorEnabled?(enabled: boolean): boolean };
+				if (!a.setAdvisorEnabled) throw new Error("advisor unavailable in this session");
+				return { enabled: a.setAdvisorEnabled(p.enabled) };
+			}
+			case "memory.status": {
+				// TUI /memory status parity:MemoryBackendStatus 结构化输出。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				const status = backend.status
+					? await backend.status({ agentDir: getAgentDir(), cwd: this.#host.cwd() })
+					: { backend: backend.id, active: false, writable: false, searchable: false };
+				return { id: backend.id, status };
+			}
+			case "memory.view": {
+				// TUI /memory view parity:developer-instructions markdown。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				const text = await backend.buildDeveloperInstructions(getAgentDir(), settings);
+				return { text: text ?? "(no instructions)" };
+			}
+			case "memory.stats": {
+				// TUI /memory stats parity:markdown 统计。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				return { text: (await backend.stats?.(getAgentDir(), this.#host.cwd())) ?? "(no stats)" };
+			}
+			case "memory.diagnose": {
+				// TUI /memory diagnose parity:markdown 诊断。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				return { text: (await backend.diagnose?.(getAgentDir(), this.#host.cwd())) ?? "(no diagnostics)" };
+			}
+			case "memory.clear": {
+				// TUI /memory clear parity:清空后端持久状态。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				await backend.clear(getAgentDir(), this.#host.cwd());
+				return { ok: true };
+			}
+			case "memory.enqueue": {
+				// TUI /memory enqueue parity:立即强制合并/固化。
+				const settings = this.#host.settings();
+				if (!settings) throw new Error("settings unavailable");
+				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+				const backend = await resolveMemoryBackend(settings);
+				await backend.enqueue(getAgentDir(), this.#host.cwd());
+				return { ok: true };
+			}
+			case "session.shake": {
+				// TUI /shake parity:剥离工具结果/大块/图片释放上下文。
+				const p = (params ?? {}) as { sessionId: string; mode?: "elide" | "images" };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const mode = p.mode === "images" ? "images" : "elide";
+				return await live.agentSession.shake(mode);
+			}
+			case "session.fresh": {
+				// TUI /fresh parity:重置 provider 流状态。
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				return live.agentSession.freshSession() ?? { closedProviderSessions: 0 };
+			}
+			case "session.resetContext": {
+				// TUI /clear parity:原地清空会话上下文(保留会话)。
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				return (await live.agentSession.resetSessionContext()) ?? { droppedCount: 0 };
 			}
 			case "session.setGoal": {
 				// Set or replace the goal with an objective; without one, close
@@ -7300,7 +7500,7 @@ export class DaemonServer {
 				// analogue) — a refused write surfaces as an RPC error so the
 				// GUI/TUI shows the reason instead of persisting bad input.
 				if (extKeys.has(p.key)) {
-					const error = this.#host.extensionSettings().get(p.key)?.validate?.(p.value);
+					const error = this.#host.extensionSettings().get(p.key)?.setting.validate?.(p.value);
 					if (error) throw new Error(`invalid value for ${p.key}: ${error}`);
 				}
 				settings.set(p.key as Parameters<Settings["set"]>[0], p.value as never);
@@ -7322,13 +7522,31 @@ export class DaemonServer {
 				// P1 设置 tab 开放:白名单 = SETTING_TABS ∪ 扩展声明 tab
 				// (registerSetting 的 ui.tab)。扩展 tab 名仍受"客户端不能
 				// 发明任意 tab"约束——只有真实注册过的 tab 才返回,typo 丢弃。
+				// 特殊 tab "extensions":返回**全部**扩展设置(跨声明 tab),
+				// 带 extensionId —— GUI 扩展设置分区据此按扩展渲染
+				// 声明式 schema 卡片(DSH settings.plugin.item 无组件类比)。
 				const extTabs = new Set<string>();
-				for (const setting of extSettings.values()) extTabs.add(setting.ui.tab);
+				for (const { setting } of extSettings.values()) extTabs.add(setting.ui.tab);
 				const requested = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
-				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab));
+				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab) || tab === "extensions");
 				const out: Record<string, unknown[]> = {};
 				for (const tab of tabs) {
 					const items: unknown[] = [];
+					if (tab === "extensions") {
+						// 全部扩展设置(按注册顺序),带 owner 身份供分组。
+						for (const [key, { setting, extensionPath }] of extSettings) {
+							if (items.some(item => (item as { key: string }).key === key)) continue;
+							items.push({
+								key,
+								type: setting.type,
+								default: setting.default,
+								ui: setting.ui,
+								extensionId: extensionPath,
+							});
+						}
+						out[tab] = items;
+						continue;
+					}
 					for (const [key, def] of Object.entries(SETTINGS_SCHEMA)) {
 						const ui = (def as { ui?: { tab?: string; options?: unknown } }).ui;
 						if (!ui || ui.tab !== tab) continue;
@@ -7356,10 +7574,16 @@ export class DaemonServer {
 					}
 					// Merge extension-contributed settings for this tab (they
 					// win over nothing — keys are extension-owned namespaces).
-					for (const [key, setting] of extSettings) {
+					for (const [key, { setting, extensionPath }] of extSettings) {
 						if (setting.ui.tab !== tab) continue;
 						if (items.some(item => (item as { key: string }).key === key)) continue;
-						items.push({ key, type: setting.type, default: setting.default, ui: setting.ui });
+						items.push({
+							key,
+							type: setting.type,
+							default: setting.default,
+							ui: setting.ui,
+							extensionId: extensionPath,
+						});
 					}
 					out[tab] = items;
 				}

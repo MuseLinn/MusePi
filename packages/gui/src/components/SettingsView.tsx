@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import {
+	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	SETTINGS_TAB_SLOT_PREFIX,
 	type SlotComponent,
@@ -14,6 +15,7 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
+import { type SchemaItem, SchemaSettings } from "./SchemaSettings";
 
 type SectionId =
 	| "general"
@@ -44,6 +46,7 @@ type SectionId =
 	| "browser"
 	| "suggestions"
 	| "modes"
+	| "advisor"
 	| "ext-settings";
 
 /** Conditional settings fields animate in/out per the shared standard —
@@ -253,6 +256,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	history: ["历史", "history", "会话", "session", "时间", "time", "保留", "retention", "清理", "clean"],
 	indexes: ["索引", "index", "库", "代码库", "搜索", "search", "扫描", "scan", "cwd", "工作区"],
 	usage: ["统计", "usage", "用量", "成本", "cost", "token", "模型", "model", "月度", "monthly"],
+	advisor: ["顾问", "advisor", "watchdog", "审查", "review", "配置", "configure"],
 };
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
@@ -261,7 +265,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
  * (session.search) and 使用统计 (packages/stats) complete the capability
  * groups. Evaluated at render so the labels follow locale switches (a
  * module-level const would freeze the first locale's strings). */
-function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { title: string; items: SectionDef[] }[] {
+function navGroups(): { title: string; items: SectionDef[] }[] {
 	const groups: { title: string; items: SectionDef[] }[] = [
 		{
 			title: t("basic settings"),
@@ -287,6 +291,7 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 			items: [
 				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
 				{ id: "ext-settings", icon: "plug-2", label: t("extension settings"), enabled: true },
+				{ id: "advisor", icon: "shield-user", label: t("advisor"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
@@ -306,15 +311,9 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 			],
 		},
 	];
-	// 内核级 slot(P1):settings.tab.<id> 槽位组件挂为导航项(智能体组末尾)。
-	for (const c of extTabs) {
-		groups[1]!.items.push({
-			id: `ext:${c.slot}`,
-			icon: "plug",
-			label: c.label ?? c.slot,
-			enabled: true,
-		});
-	}
+	// 内核级 slot(P1):settings.tab.<id> 槽位组件已并入"扩展设置"分区
+	// (ExtensionSettingsSection 内按扩展分组渲染,2026-08-20)——
+	// 不再作为独立导航项,消灭"扩展 tab + 扩展卡片"双入口。
 	return groups;
 }
 
@@ -340,17 +339,22 @@ interface CustomProvider {
 	models: { id: string; name?: string }[];
 }
 
-/** 扩展设置分区(DSH settings.plugin.item 派发对齐):每个启用扩展注册
- *  `settings.item.<extId>` 组件即获得一张卡片,组件经 settingsScope 读写
- *  自己的设置键(settings.get/settings.set RPC)。无组件的扩展不显示;
- *  全部无组件时显示空态。 */
-function ExtensionSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+/** 扩展设置分区(DSH settings.plugin.item 派发对齐):每个启用扩展获得
+ *  一张卡片 —— 卡片内容 = ① `settings.tab.<id>` 整页组件(合并自独立
+ *  导航项,2026-08-20 起并入本分区)② `settings.item.<extId>` 组件
+ *  (扩展作者自绘,settingsScope 读写)+ ③ **registerSetting 声明式 schema
+ *  行**(无需组件,daemon settings.schema tab "extensions" 按扩展分组下发,
+ *  复用 SchemaSettings 渲染)。有任一种即有卡;全无时显示空态。 */
+function ExtensionSettingsSection({
+	rpc,
+	extTabs,
+}: {
+	rpc: RpcClient | null;
+	extTabs: ReadonlyArray<{ slot: string; extensionId: string; label?: string; code: string }>;
+}): ReactNode {
 	const data = useExtensionRegistry(rpc);
-	// Collect all settings.item.* components once (hooks can't loop) and
-	// group by extensionId — "served ∩ enabled" per extension.
-	const cards = useMemo(() => {
-		// Component extensionId = extension module path (daemon compiles per
-		// path); match against extension items' `path` for the enabled set.
+	// Component cards: settings.item.* grouped by extensionId (extension path).
+	const componentCards = useMemo(() => {
 		const enabled = new Set(
 			(data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path),
 		);
@@ -362,9 +366,75 @@ function ExtensionSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 			list.push(c);
 			byExt.set(c.extensionId, list);
 		}
-		return [...byExt.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+		return byExt;
 	}, [data]);
-	if (cards.length === 0) {
+	// Declarative schema cards: settings.schema tab "extensions" returns every
+	// registerSetting key with its owning extensionId (daemon groups them).
+	const [schemaItems, setSchemaItems] = useState<SchemaItem[] | null>(null);
+	const [schemaValues, setSchemaValues] = useState<Record<string, unknown>>({});
+	const [schemaError, setSchemaError] = useState<string | null>(null);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		void rpc
+			.request<Record<string, SchemaItem[]>>("settings.schema", { tabs: ["extensions"] })
+			.then(async res => {
+				if (!alive) return;
+				const items = (res.extensions ?? []) as SchemaItem[];
+				setSchemaItems(items);
+				const vals = await rpc.request<Record<string, unknown>>("settings.get", {
+					keys: items.map(i => i.key),
+				});
+				if (alive) {
+					setSchemaValues(vals ?? {});
+					setSchemaError(null);
+				}
+			})
+			.catch(err => alive && setSchemaError(err instanceof Error ? err.message : String(err)));
+		return () => {
+			alive = false;
+		};
+	}, [rpc]);
+	const schemaCards = useMemo(() => {
+		if (!schemaItems) return new Map<string, SchemaItem[]>();
+		const byExt = new Map<string, SchemaItem[]>();
+		for (const item of schemaItems) {
+			const extId = (item as SchemaItem & { extensionId?: string }).extensionId ?? "unknown";
+			const list = byExt.get(extId) ?? [];
+			list.push(item);
+			byExt.set(extId, list);
+		}
+		return byExt;
+	}, [schemaItems]);
+	const onChange = (key: string, value: unknown): void => {
+		if (!rpc) return;
+		setSchemaValues(prev => ({ ...prev, [key]: value }));
+		void rpc
+			.request("settings.set", { key, value })
+			.then(() => setSchemaError(null))
+			.catch(err => {
+				setSchemaValues(prev => {
+					const next = { ...prev };
+					delete next[key];
+					return next;
+				});
+				setSchemaError(err instanceof Error ? err.message : String(err));
+			});
+	};
+	// Union of extension ids from both card kinds (component + schema) plus
+	// settings.tab.* whole-page components (merged into this section).
+	const extIds = useMemo(() => {
+		const ids = new Set<string>([...componentCards.keys(), ...schemaCards.keys()]);
+		for (const c of extTabs) ids.add(c.extensionId);
+		return [...ids].sort((a, b) => a.localeCompare(b));
+	}, [componentCards, schemaCards, extTabs]);
+	const scope = rpc
+		? {
+				get: (keys: string[]) => rpc.request<Record<string, unknown>>("settings.get", { keys }),
+				set: (key: string, value: unknown) => rpc.request("settings.set", { key, value }) as Promise<void>,
+			}
+		: null;
+	if (extIds.length === 0) {
 		return (
 			<>
 				<h2 className="gui-settings-page-title">{t("extension settings")}</h2>
@@ -373,19 +443,20 @@ function ExtensionSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 			</>
 		);
 	}
-	const scope = rpc
-		? {
-				get: (keys: string[]) => rpc.request<Record<string, unknown>>("settings.get", { keys }),
-				set: (key: string, value: unknown) => rpc.request("settings.set", { key, value }) as Promise<void>,
-			}
-		: null;
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("extension settings")}</h2>
 			<p className="gui-settings-page-desc">{t("extension settings desc")}</p>
-			{cards.map(([extId, items]) => (
+			{schemaError && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{schemaError}</div>}
+			{extIds.map(extId => (
 				<div key={extId} className="gui-agent-card gui-ext-settings-card">
-					{items.map(item => (
+					<div className="gui-ext-settings-card-label">{extId.split("/").pop()}</div>
+					{extTabs.filter(c => c.extensionId === extId).map(item => (
+						<div key={`tab:${item.slot}`} className="gui-ext-settings-tab">
+							<SlotComponentMount item={item} rpc={rpc} />
+						</div>
+					))}
+					{(componentCards.get(extId) ?? []).map(item => (
 						<SlotComponentMount
 							key={`${item.slot}:${item.extensionId}`}
 							item={item}
@@ -393,6 +464,14 @@ function ExtensionSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 							settingsScope={scope}
 						/>
 					))}
+					{(schemaCards.get(extId) ?? []).length > 0 && (
+						<SchemaSettings
+							items={schemaCards.get(extId) ?? []}
+							values={schemaValues}
+							onChange={onChange}
+							error={schemaError}
+						/>
+					)}
 				</div>
 			))}
 		</>
@@ -433,6 +512,8 @@ export function SettingsView({
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献,DSH 同款语义)。
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
+	// 单行偏好槽(DSH settings.action 类比):settings.action.<id> 组件。
+	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
 	// Settings search highlight: with an active query, imperatively mark the
@@ -649,7 +730,7 @@ export function SettingsView({
 						data-top-scroll="false"
 						data-bottom-scroll="false"
 					>
-						{navGroups(extSettingsTabs)
+						{navGroups()
 							.map(group => ({
 								...group,
 								items: settingsQuery.trim()
@@ -715,17 +796,21 @@ export function SettingsView({
 							innerRef={settingsContentRef}
 							className={`gui-settings-content${section === "history" ? " gui-settings-content--fill" : ""}`}
 						>
-							{typeof section === "string" && section.startsWith("ext:")
-								? (() => {
-										const item = extSettingsTabs.find(x => `ext:${x.slot}` === section);
-										return item ? (
-											<div className="px-3 py-2">
-												<SlotComponentMount item={item} rpc={rpc} />
-											</div>
-										) : null;
-									})()
-								: null}
-							{section === "general" && <GeneralSection rpc={rpc} />}
+							{section === "general" && (
+								<>
+									<GeneralSection rpc={rpc} />
+									{/* 单行偏好槽(DSH settings.action 类比):settings.action.<id>
+									 * 组件挂到通用分区末尾 —— 功能插件贡献单行偏好,无需
+									 * 整 tab/整卡。 */}
+									{actionItems.length > 0 && (
+										<div className="gui-settings-row">
+											{actionItems.map(item => (
+												<SlotComponentMount key={`${item.slot}:${item.extensionId}`} item={item} rpc={rpc} />
+											))}
+										</div>
+									)}
+								</>
+							)}
 							{section === "appearance" && (
 								<AppearanceSection
 									rpc={rpc}
@@ -765,7 +850,7 @@ export function SettingsView({
 							{section === "files" && <FilesLspSection rpc={rpc} />}
 							{section === "memory" && <MemorySection rpc={rpc} />}
 							{section === "skills" && <SkillsSection rpc={rpc} />}
-							{section === "ext-settings" && <ExtensionSettingsSection rpc={rpc} />}
+							{section === "ext-settings" && <ExtensionSettingsSection rpc={rpc} extTabs={extSettingsTabs} />}
 							{section === "suggestions" && <PromptsSection />}
 							{section === "modes" && <ModesSection rpc={rpc} />}
 							{section === "migration" && <MigrationSection rpc={rpc} />}
@@ -777,6 +862,7 @@ export function SettingsView({
 							{section === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 							{section === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
 							{section === "usage" && <UsageSection rpc={rpc} />}
+							{section === "advisor" && <AdvisorSection rpc={rpc} sessionId={sessionId} />}
 						</HeightMorph>
 					</div>
 				</div>
@@ -788,6 +874,7 @@ export function SettingsView({
 /** Accent preset → swatch color (display tints readable on both schemes;
  *  the tokens own the real values: brand = emerald #34d399). */
 import {
+	AdvisorSection,
 	AppearanceSection,
 	BrowserSection,
 	CommandsSection,

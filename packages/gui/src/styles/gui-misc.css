@@ -1554,6 +1554,40 @@
 	color: var(--color-text-faint);
 }
 
+/* Advisor lifecycle chip (settings → 顾问 roster): same pill chrome as
+ * goal status, tinted per daemon AdvisorStatus. */
+.gui-advisor-status {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	border: 1px solid var(--border);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+
+.gui-advisor-status--running {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.gui-advisor-status--paused,
+.gui-advisor-status--quota_exhausted {
+	color: var(--color-warning, #f5a524);
+	border-color: color-mix(in oklab, var(--color-warning, #f5a524) 45%, transparent);
+}
+
+.gui-advisor-status--error {
+	color: var(--color-error, #f0453e);
+	border-color: color-mix(in oklab, var(--color-error, #f0453e) 45%, transparent);
+}
+
+.gui-advisor-status--no_model {
+	color: var(--color-text-faint);
+}
+
 .gui-goal-body {
 	display: flex;
 	flex-direction: column;

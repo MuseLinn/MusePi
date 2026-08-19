@@ -178,7 +178,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				`${pending + inProgress} ${t("open")} (${inProgress} ${t("in progress")}, ${completed} ${t("done")})`,
 			);
 		},
-		
+
 		handle: handleTodoAcp,
 		handleTui: async (command, runtime) => {
 			await runtime.ctx.handleTodoCommand(command.args);
@@ -275,7 +275,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				`${snapshot.running.length} ${t("running")}, ${snapshot.recent.length} ${t("recent")}`,
 			);
 		},
-		
+
 		handle: async (_command, runtime) => {
 			const snapshot = runtime.session.getAsyncJobSnapshot({ recentLimit: 5 });
 			if (!snapshot || (snapshot.running.length === 0 && snapshot.recent.length === 0)) {
@@ -353,7 +353,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "stats",
 		description: "Launch the local stats dashboard",
-		inlineHint: "[--port <port>]",
+		inlineHint: "[--port <port>] [--host <host>]",
 		allowArgs: true,
 		handle: async (command, runtime) => {
 			const parsed = parseStatsDashboardArgs(command.args);
@@ -413,7 +413,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				? statusLine("Tools", t("none available"))
 				: statusLine("Tools", `${active} ${t("active")} / ${all} ${t("available")}`);
 		},
-		
+
 		handle: async (_command, runtime) => {
 			const active = runtime.session.getActiveToolNames();
 			const all = runtime.session.getAllToolNames();
@@ -445,7 +445,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				`${Math.round(usage.percent)}% (${formatTokenCount(usage.tokens)}/${formatTokenCount(usage.contextWindow)})`,
 			);
 		},
-		
+
 		handle: async (_command, runtime) => {
 			await runtime.output(buildContextReportText(runtime));
 			return commandConsumed();
@@ -512,7 +512,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 						t("waiting for {0} callback", runtime.ctx.oauthManualInput.pendingProviderId ?? "OAuth"),
 					)
 				: statusLine("Login", t("choose provider")),
-		
+
 		handleTui: (command, runtime) => {
 			const manualInput = runtime.ctx.oauthManualInput;
 			const args = command.args.trim();
@@ -615,6 +615,71 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		handleTui: async (command, runtime) => {
 			runtime.ctx.editor.setText("");
 			await runtime.ctx.handleMCPCommand(command.text);
+		},
+	},
+	{
+		name: "search",
+		description: "Cross-session message search (GUI ⌘K parity)",
+		acpDescription: "Search the query across all sessions' transcripts",
+		acpInputHint: "<query>",
+		allowArgs: true,
+		handle: async (command, runtime) => {
+			const query = command.args.trim();
+			if (!query) {
+				await runtime.output("Usage: /search <query>");
+				return;
+			}
+			const { SessionManager } = await import("../session/session-manager");
+			const all = await SessionManager.listAll();
+			// newest first, bounded to 200 sessions to keep the scan cheap
+			const sorted = all.sort((a, b) => b.modified.getTime() - a.modified.getTime()).slice(0, 200);
+			const lower = query.toLowerCase();
+			const matches: Array<{ id: string; title: string; firstMessage: string; modified: Date }> = [];
+			for (const s of sorted) {
+				if (s.allMessagesText.toLowerCase().includes(lower)) {
+					matches.push({
+						id: s.id,
+						title: s.title ?? s.firstMessage.slice(0, 60),
+						firstMessage: s.firstMessage.slice(0, 120),
+						modified: s.modified,
+					});
+				}
+			}
+			if (matches.length === 0) {
+				await runtime.output(`No sessions match "${query}".`);
+				return;
+			}
+			const lines = [`Cross-session search "${query}": ${matches.length} match(es)`];
+			for (const m of matches) {
+				const ts = m.modified.toISOString().slice(0, 16).replace("T", " ");
+				lines.push(`- ${ts}  ${m.id}  ${m.title}`);
+			}
+			lines.push("", "Open a session to inspect it. (GUI: ⌘K does live search.)");
+			await runtime.output(lines.join("\n"));
+		},
+		handleTui: async (command, runtime) => {
+			const query = command.args.trim();
+			if (!query) {
+				runtime.ctx.showStatus("Usage: /search <query>");
+				return;
+			}
+			runtime.ctx.showStatus(`Searching sessions for "${query}"…`);
+			const { SessionManager } = await import("../session/session-manager");
+			const all = await SessionManager.listAll();
+			const sorted = all.sort((a, b) => b.modified.getTime() - a.modified.getTime()).slice(0, 200);
+			const lower = query.toLowerCase();
+			const matches = sorted.filter(s => s.allMessagesText.toLowerCase().includes(lower));
+			if (matches.length === 0) {
+				runtime.ctx.showStatus(`No sessions match "${query}".`);
+				return;
+			}
+			const lines = [`Cross-session search "${query}": ${matches.length} match(es)`];
+			for (const m of matches.slice(0, 20)) {
+				const ts = m.modified.toISOString().slice(0, 16).replace("T", " ");
+				lines.push(`- ${ts}  ${m.id}  ${m.title ?? m.firstMessage.slice(0, 60)}`);
+			}
+			if (matches.length > 20) lines.push(`… and ${matches.length - 20} more`);
+			runtime.ctx.showStatus(lines.join("\n"));
 		},
 	},
 ];

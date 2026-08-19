@@ -124,11 +124,12 @@ export default function (pi: ExtensionAPI): void {
 
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
 - `panel.tab.<id>` — 右面板动态 tab(图标 + 内容区)
-- `settings.tab.<id>` — 设置页动态分区
+- `settings.tab.<id>` — 设置页动态分区(2026-08-20 起并入"扩展设置"分区内渲染,不再独立导航)
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
 - `panel.right` / `settings.extensions` — 旧保留槽(仍可用)
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17):设置页"扩展设置"分区按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
+- `settings.action.<id>` — 单行偏好槽(2026-08-20,DSH `settings.action` 类比):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
 
 **数据流**:daemon `bun.build` 把模块编译为自包含 ESM(react 绑定宿主实例)→ `extensions.list` 返回 code → GUI `SlotComponentHost` blob: 动态 import 挂载。**信任模型**:扩展本就在 daemon 进程执行任意代码,渲染其组件不构成新提权。
 

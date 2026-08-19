@@ -3168,6 +3168,77 @@ body.gui-resizing {
 	margin-bottom: 8px;
 }
 
+/* ── Settings: memory maintenance card (memory.status + actions) ────── */
+.gui-memory-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-bottom: 8px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+}
+.gui-memory-status-head {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 14px;
+}
+.gui-memory-backend {
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-memory-status-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 6px 18px;
+}
+.gui-memory-status-item {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+.gui-memory-status-label {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+.gui-memory-status-value {
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--color-text);
+	overflow-wrap: anywhere;
+}
+.gui-memory-status-value--mono {
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 11.5px;
+}
+.gui-memory-status-note {
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+}
+.gui-memory-status-note--error {
+	color: var(--color-warning);
+}
+.gui-memory-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+}
+/* Scrollable markdown output (memory.view / stats / diagnose) — the
+ * base .gui-ext-detail-code pre wraps but has no height cap; long
+ * reports must scroll inside the block instead of growing the page. */
+.gui-memory-code {
+	max-height: 320px;
+	overflow-y: auto;
+}
+
 /* Usage-statistics summary card (ZCode parity): vertical layout — the
  * value sits on top in a large mono face, the label (icon + caption) and
  * optional sub-metric (e.g. 占比) bottom row. Fixed min-height keeps all

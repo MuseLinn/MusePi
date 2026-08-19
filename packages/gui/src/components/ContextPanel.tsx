@@ -101,7 +101,7 @@ export function ContextPanel({
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
-	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory" | string>("files");
+	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory" | "jobs" | string>("files");
 	// 内核级 slot(P1):`panel.tab.<id>` 槽位组件自动挂载为右面板 tab ——
 	// 宿主不再硬编码 tab 结构,扩展声明即出现(DSH conversation.view 语义)。
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
@@ -144,6 +144,48 @@ export function ContextPanel({
 	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 	const selectedAgent =
 		selectedAgentId !== null ? ((snap?.agents ?? []).find(a => a.id === selectedAgentId) ?? null) : null;
+	// Session-hygiene actions (会话维护): shake / fresh / reset-context —
+	// each daemon RPC returns counts rendered into a shared status line.
+	// The clear action asks for confirmation first (destructive).
+	const { confirm } = useConfirm();
+	const [maintenanceBusy, setMaintenanceBusy] = useState<"shake" | "fresh" | "clear" | null>(null);
+	const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
+	const runMaintenance = async (op: "shake" | "fresh" | "clear"): Promise<void> => {
+		if (!rpc || !snap?.sessionId || maintenanceBusy) return;
+		if (op === "clear" && !(await confirm(t("confirm clear context")))) return;
+		setMaintenanceBusy(op);
+		setMaintenanceStatus(null);
+		try {
+			if (op === "shake") {
+				const r = await rpc.request<{
+					toolResultsDropped: number;
+					blocksDropped: number;
+					imagesDropped: number;
+					tokensFreed: number;
+				}>("session.shake", { sessionId: snap.sessionId, mode: "elide" });
+				setMaintenanceStatus(
+					t("shake result {dropped} blocks {tokens} tokens", {
+						dropped: r.toolResultsDropped,
+						tokens: r.tokensFreed,
+					}),
+				);
+			} else if (op === "fresh") {
+				const r = await rpc.request<{ closedProviderSessions: number }>("session.fresh", {
+					sessionId: snap.sessionId,
+				});
+				setMaintenanceStatus(t("fresh result {closed} sessions", { closed: r.closedProviderSessions }));
+			} else {
+				const r = await rpc.request<{ droppedCount: number }>("session.resetContext", {
+					sessionId: snap.sessionId,
+				});
+				setMaintenanceStatus(t("clear result {dropped} messages", { dropped: r.droppedCount }));
+			}
+		} catch (err) {
+			setMaintenanceStatus(err instanceof Error ? err.message : String(err));
+		} finally {
+			setMaintenanceBusy(null);
+		}
+	};
 	// Relay external reveal requests into the FilePane preview.
 	useEffect(() => {
 		if (!openRequest) return;
@@ -241,6 +283,15 @@ export function ContextPanel({
 					>
 						<Icon name="list-unordered" className="h-4 w-4" />
 					</button>
+					<button
+						type="button"
+						title={t("jobs")}
+						aria-label={t("jobs")}
+						className={`gui-pane-tab${tab === "jobs" ? " gui-pane-tab--active" : ""}`}
+						onClick={() => setTab("jobs")}
+					>
+						<Icon name="task" className="h-4 w-4" />
+					</button>
 					<div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar">
 						{extTabs.map(item => (
 							<button
@@ -300,6 +351,14 @@ export function ContextPanel({
 							modelId={snap?.state?.model?.id}
 							onJumpToEntry={onJumpToEntry}
 						/>
+					) : tab === "jobs" ? (
+						snap?.sessionId ? (
+							<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+						) : (
+							<p className="px-2 py-5 text-[13px] leading-relaxed text-[var(--color-text-faint)]">
+								{t("select a session")}
+							</p>
+						)
 					) : typeof tab === "string" && tab.startsWith("ext:") ? (
 						(() => {
 							const item = extTabs.find(x => `ext:${x.slot}` === tab);
@@ -403,6 +462,53 @@ export function ContextPanel({
 									<AgentControls agent={selectedAgent} rpc={rpc} onClose={() => setSelectedAgentId(null)} />
 								)}
 							</div>
+							{/* Session hygiene (会话维护): shake context / reset
+							 * provider stream / clear session context — each RPC
+							 * reports counts into the status line below. */}
+							<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
+							<div className="flex flex-col gap-0.5 px-2">
+								<button
+									type="button"
+									className="gui-pane-action"
+									disabled={!snap?.sessionId || maintenanceBusy !== null}
+									onClick={() => void runMaintenance("shake")}
+								>
+									<Icon
+										name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
+										className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
+									/>
+									<span>{t("shake context")}</span>
+								</button>
+								<button
+									type="button"
+									className="gui-pane-action"
+									disabled={!snap?.sessionId || maintenanceBusy !== null}
+									onClick={() => void runMaintenance("fresh")}
+								>
+									<Icon
+										name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
+										className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
+									/>
+									<span>{t("fresh provider")}</span>
+								</button>
+								<button
+									type="button"
+									className="gui-pane-action"
+									disabled={!snap?.sessionId || maintenanceBusy !== null}
+									onClick={() => void runMaintenance("clear")}
+								>
+									<Icon
+										name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
+										className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
+									/>
+									<span>{t("clear session context")}</span>
+								</button>
+							</div>
+							{maintenanceStatus && (
+								<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+									{maintenanceStatus}
+								</p>
+							)}
 						</div>
 					) : (
 						<p className="px-2 py-5 text-[13px] leading-relaxed text-[var(--color-text-faint)]">
@@ -436,6 +542,145 @@ function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNo
 	return (
 		<div className="gui-widget-tab">
 			<WidgetCard payload={payload} />
+		</div>
+	);
+}
+
+/** One async job row from `session.jobs` (daemon wire shape). */
+interface JobItem {
+	id: string;
+	type: string;
+	status: string;
+	label: string;
+	startTime: string;
+}
+
+/** `session.jobs` response: running/recent job lists + delivery counters. */
+interface JobsData {
+	running: JobItem[];
+	recent: JobItem[];
+	delivery: { queued: number; delivering: number; pendingJobIds: string[] };
+}
+
+/** Format a job startTime for the recent list (fallback: raw string). */
+function fmtJobTime(ts: string): string {
+	const d = new Date(ts);
+	if (Number.isNaN(d.getTime())) return ts;
+	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** Jobs HUD (会话任务): running jobs with per-job cancel, recent jobs with
+ *  status + start time, and the async delivery queue counters. Polls
+ *  session.jobs every 5s while mounted; a cancel triggers an immediate
+ *  re-poll (nonce) instead of waiting for the next tick. */
+function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): ReactNode {
+	const [data, setData] = useState<JobsData | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [cancelling, setCancelling] = useState<string | null>(null);
+	const [nonce, setNonce] = useState(0);
+	useEffect(() => {
+		if (!sessionId) return;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<JobsData>("session.jobs", { sessionId })
+				.then(d => {
+					if (!alive) return;
+					setData(d);
+					setError(null);
+				})
+				.catch(err => {
+					if (alive) setError(err instanceof Error ? err.message : String(err));
+				});
+		};
+		poll();
+		const timer = setInterval(poll, 5000);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, sessionId, nonce]);
+
+	const cancelJob = async (jobId: string): Promise<void> => {
+		if (cancelling) return;
+		setCancelling(jobId);
+		try {
+			await rpc.request<{ cancelled: boolean }>("session.jobsCancel", { sessionId, jobId });
+			setNonce(n => n + 1);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setCancelling(null);
+		}
+	};
+
+	const running = data?.running ?? [];
+	const recent = data?.recent ?? [];
+	const delivery = data?.delivery;
+	return (
+		<div className="px-1 py-2">
+			<div className="gui-group-label px-2 pb-1 pt-1">{t("jobs running")}</div>
+			{running.length === 0 ? (
+				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
+			) : (
+				<div className="flex flex-col gap-1 px-2">
+					{running.map(job => (
+						<div key={job.id} className="flex items-center gap-2 text-[13px]">
+							<Icon
+								name="loader-4"
+								className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-[var(--color-accent)]"
+							/>
+							<span className="min-w-0 flex-1 truncate">{job.label || job.type}</span>
+							<button
+								type="button"
+								className="gui-pane-action !w-auto flex-shrink-0 px-1.5 text-[12px]"
+								title={t("jobs cancel")}
+								aria-label={`${t("jobs cancel")}: ${job.label || job.id}`}
+								disabled={cancelling !== null}
+								onClick={() => void cancelJob(job.id)}
+							>
+								{cancelling === job.id ? (
+									<Icon name="loader-4" className="h-3 w-3 animate-spin" />
+								) : (
+									<Icon name="close" className="h-3 w-3" />
+								)}
+								<span>{t("jobs cancel")}</span>
+							</button>
+						</div>
+					))}
+				</div>
+			)}
+			<div className="gui-group-label px-2 pb-1 pt-3">{t("jobs recent")}</div>
+			{recent.length === 0 ? (
+				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
+			) : (
+				<div className="flex flex-col gap-1 px-2">
+					{recent.map(job => (
+						<div key={job.id} className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
+							<span className="min-w-0 flex-1 truncate">{job.label || job.type}</span>
+							<span className="flex-shrink-0">{job.status}</span>
+							<span className="flex-shrink-0 tabular-nums">{fmtJobTime(job.startTime)}</span>
+						</div>
+					))}
+				</div>
+			)}
+			{delivery && (
+				<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 text-[12px] text-[var(--color-text-muted)]">
+					<span className="inline-flex items-center gap-1">
+						<Icon name="inbox-archive" className="h-3.5 w-3.5" />
+						{t("jobs queued")} {delivery.queued}
+					</span>
+					<span className="inline-flex items-center gap-1">
+						{t("jobs delivering")} {delivery.delivering}
+					</span>
+					<span className="inline-flex items-center gap-1">
+						{t("jobs pending")} {delivery.pendingJobIds.length}
+					</span>
+				</div>
+			)}
+			{error && (
+				<div className="px-2 pt-2 text-[12px] leading-relaxed text-[var(--color-danger)]">{error}</div>
+			)}
 		</div>
 	);
 }

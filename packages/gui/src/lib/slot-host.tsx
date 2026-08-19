@@ -39,6 +39,10 @@ export const RAIL_SLOT_PREFIX = "rail.";
  *  注册 `settings.item.<extId>` 组件即自动在设置页"扩展设置"分区获得一张
  *  卡片,组件经 settingsScope 读写该扩展自己的设置键。 */
 export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
+/** 单行偏好槽(DSH settings.action 类比):`settings.action.<id>` 组件
+ *  挂到设置页"通用"分区 —— 功能插件贡献单行偏好(语言/外观/Enter 行为),
+ *  无需整 tab 或整卡。 */
+export const SETTINGS_ACTION_SLOT_PREFIX = "settings.action.";
 /** Composer 座位槽(DSH conversation.input.dock/left/right 对齐):
  *  dock = 输入卡上方整行;left/right = 底部工具栏两端。list 语义 ——
  *  多个扩展可同时往同一槽注入组件。 */
@@ -57,7 +61,13 @@ export const GUI_SLOT_HOSTS = {
 		COMPOSER_LEFT_SLOT,
 		COMPOSER_RIGHT_SLOT,
 	],
-	prefixes: [PANEL_TAB_SLOT_PREFIX, SETTINGS_TAB_SLOT_PREFIX, RAIL_SLOT_PREFIX, SETTINGS_ITEM_SLOT_PREFIX],
+	prefixes: [
+		PANEL_TAB_SLOT_PREFIX,
+		SETTINGS_TAB_SLOT_PREFIX,
+		RAIL_SLOT_PREFIX,
+		SETTINGS_ITEM_SLOT_PREFIX,
+		SETTINGS_ACTION_SLOT_PREFIX,
+	],
 } as const;
 
 export interface SlotComponent {

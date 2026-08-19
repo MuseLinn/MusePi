@@ -34,8 +34,17 @@ function stateLabel(e: ExtensionItem): string {
 	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
 }
 
-function levelLabel(s: ExtensionItem): string {
-	if (
+/** One plugin entry from daemon plugins.list (session-independent extension
+ *  scan: path/label/tools/commands/handlers). */
+interface PluginEntry {
+	path: string;
+	label: string | null;
+	tools: number;
+	commands: number;
+	handlers: number;
+}
+
+function levelLabel(s: ExtensionItem): string {	if (
 		s.source.provider === "native" ||
 		s.source.provider === "musepi-managed" ||
 		s.source.provider === "builtin-defaults"
@@ -78,6 +87,25 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const [rawOpen, setRawOpen] = useState(false);
 	const [collapsedKinds, setCollapsedKinds] = useState<Set<string>>(new Set());
 	const { confirm } = useConfirm();
+	// 插件列表(DSH plugins.tab "all" 类比):daemon plugins.list 是会话无关
+	// 扩展扫描的独立 TTL 缓存 —— 与 extensions.list 分开拉取。
+	const [plugins, setPlugins] = useState<PluginEntry[]>([]);
+	const [pluginsError, setPluginsError] = useState<string | null>(null);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		void rpc
+			.request<{ plugins: PluginEntry[]; errors: Array<{ path: string; error: string }> }>("plugins.list", {})
+			.then(res => {
+				if (!alive) return;
+				setPlugins(res?.plugins ?? []);
+				setPluginsError(res?.errors?.length ? `${res.errors.length} load error(s)` : null);
+			})
+			.catch((e: unknown) => alive && setPluginsError(e instanceof Error ? e.message : String(e)));
+		return () => {
+			alive = false;
+		};
+	}, [rpc]);
 
 	const selected = useMemo(() => (extensions ?? []).find(e => e.id === selectedId) ?? null, [extensions, selectedId]);
 
@@ -279,9 +307,54 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							<span className="gui-ext-tab-count">{tr.count}</span>
 						</button>
 					))}
+				{/* 插件 tab(DSH plugins.tab "all" 类比):daemon plugins.list 的
+				 * 会话无关扩展扫描(path/label/tools/commands/handlers/errors),
+				 * 与扩展中心并排 —— marketplace/plugin 生态的 GUI 面。 */}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "plugins"}
+					className={`gui-ext-tab${tab === "plugins" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setTab("plugins")}
+				>
+					{t("plugins")}
+					<span className="gui-ext-tab-count">{plugins.length}</span>
+				</button>
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
 			<div className="gui-ext-body">
+				{/* 插件 tab:daemon plugins.list 渲染(DSH plugins.tab "all")。
+				 * 独立数据源,不走 provider 树 —— 插件是会话无关扩展扫描。 */}
+				{tab === "plugins" ? (
+					<div className="gui-ext-plugins">
+						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
+						{plugins.length === 0 && !pluginsError ? (
+							<div className="gui-ext-detail-empty">{t("no plugins loaded")}</div>
+						) : (
+							<div className="gui-ext-list-scroll">
+								{plugins.map(p => (
+									<div key={p.path} className="gui-ext-provider">
+										<div className="gui-ext-provider-h">
+											<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
+											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+												{p.label ?? p.path.split("/").pop() ?? p.path}
+											</span>
+											<span className="gui-ext-group-count">
+												{t("plugin counts", {
+													tools: p.tools,
+													commands: p.commands,
+													handlers: p.handlers,
+												})}
+											</span>
+										</div>
+										<div className="gui-ext-plugins-path">{p.path}</div>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				) : (
+				<>
 				{/* Left: search + provider→kind→item tree. */}
 				<div className="gui-ext-list">
 					<div className="gui-ext-search">
@@ -548,6 +621,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						<div className="gui-ext-detail-empty">{t("select an extension")}</div>
 					)}
 				</div>
+				</>
+				)}
 			</div>
 			{/* 槽位注册表(单一权威 collab-proto):daemon 声明 vs 桌面端挂载。
 			 * 差集为空 = 全部有宿主;未来新增槽位时警告自动出现。 */}

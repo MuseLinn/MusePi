@@ -1318,3 +1318,94 @@
 }
 
 /* ── Settings dialog (ZCode/openchamber category tree) ──────────────── */
+
+/* ── Session mode toggles popover (TUI /fast /computer /vision /prewalk
+ * parity): compact action-row cluster. The trigger is a round icon
+ * button (gui-composer-ico); the popover is a glass card rendered through
+ * useFloatingMenu (positioning + enter/exit live on .gui-menu-popup, so
+ * this class only carries the surface + row layout). ──────────────────── */
+.gui-mode-toggles {
+	display: inline-flex;
+	align-items: center;
+}
+
+.gui-mode-toggle-popover {
+	min-width: 230px;
+	padding: 6px;
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
+}
+
+.gui-mode-toggle-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 8px;
+}
+
+.gui-mode-toggle-row:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-mode-toggle-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12.5px;
+	color: var(--color-text);
+	min-width: 0;
+}
+
+.gui-mode-toggle-label svg {
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+}
+
+.gui-mode-toggle-note {
+	padding: 0 8px 6px;
+	margin-top: -2px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+/* Prewalk one-shot arm button: plain chip when unarmed, accent dashed
+ * chip when armed (mirrors .gui-mode-chip--armed semantics). */
+.gui-mode-toggle-arm {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.gui-mode-toggle-arm:hover {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.gui-mode-toggle-arm--armed {
+	border-style: dashed;
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-mode-toggle-arm--armed:hover {
+	border-color: var(--color-accent);
+}

@@ -5,6 +5,7 @@
  *  keeps the original import surface — every public symbol is re-exported
  *  here unchanged. */
 export { AppearanceSection, CodePreviewCard } from "./settings-sections/appearance";
+export { AdvisorSection } from "./settings-sections/advisor";
 export { BrowserSection } from "./settings-sections/browser";
 export {
 	ChatSection,
