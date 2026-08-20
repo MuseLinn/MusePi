@@ -392,6 +392,18 @@ Algorithm:
 
 `custom`, `session_init`, `service_tier_change`, and `ttsr_injection` entries do not inject model context directly.
 
+## Daemon pause state (independent of the session file)
+
+The daemon's per-session pause gate (`AgentPauseGate`) is host-layer state,
+**not** part of the session event stream or the transcript file. It is
+mirrored to a sidecar at `<journal>/<sessionId>.pause.json` (daemon
+`JOURNAL_DIR`, presence = paused) and rehydrated when the session is
+reactivated after idle-archive (>30min) or daemon restart — a paused
+session stays paused across sleep/restart. Deleting the session also
+deletes the sidecar. The process-global pause (`daemon.pause`, TUI
+`/pause` parity) is intentionally in-memory only and does not survive a
+daemon restart. See `gui-implementation.md` §1c for the RPC contract.
+
 ## Persistence Guarantees and Failure Model
 
 ### Persist vs in-memory

@@ -50,11 +50,11 @@ TUI 与核心决策面,同时保留现有更强保障:
 | GUI 面板 tab | `panel.tab.<id>` slot 组件 | `packages/gui/src/lib/slot-host.tsx`(前缀常量 :35-45) |
 | GUI 设置 tab / item / action | `settings.tab.` / `settings.item.` / `settings.action.` | 同上 |
 | GUI rail | `rail.<id>` | 同上 |
-| 扩展装载 | daemon `extension_load/reload/unload` RPC | `server.ts` |
+| 扩展装载 | 会话级 CustomTool `extension_load/reload/status/validate/rollback`(agent 会话内自举;WS 面只有 `extensions.*` 管理 RPC) | `extension-lifecycle-tools.ts` + `server.ts:1170` |
 | 扩展扫描根 | `<agentDir>/extensions` + `<cwd>/.musepi/extensions` | `server.ts:2848` |
 | 沙箱 | `node:vm` realm,async 悬挂宿主竞速 | `extension-sandbox.ts` |
 | 编译 | 扩展源码 → dist bundle | `extension-artifact-compiler.ts` |
-| 回滚 | sha1(入口)12 位 bucket,最近 5 份,`extension_rollback` | `extension-lifecycle-tools.ts` |
+| 回滚 | sha1(入口)12 位 bucket,最近 5 份;`extension_rollback`(会话工具)恢复 + 重载 | `extension-lifecycle-tools.ts` |
 | 审批 | `approval-request` envelope(天然 veto 点) | `approval-bridge.ts` |
 | 设置贡献 | `registerSetting`(扩展合并进 settings.schema) | daemon host 级 |
 

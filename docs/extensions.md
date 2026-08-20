@@ -64,6 +64,24 @@ Important constraint from `loader.ts`:
 - calling action methods like `pi.sendMessage()` during extension load throws `ExtensionRuntimeNotInitializedError`
 - register first; perform runtime behavior from events/commands/tools
 
+## Runtime self-bootstrapping (daemon 会话工具,2026-08-20)
+
+GUI daemon 的每个会话额外注入 5 个**会话级 CustomTool**(`extension-lifecycle-tools.ts`,经 `#extensionManagerTools` 注入 `createSession`/`activate` 的 `customTools`):
+
+- `extension_load <name|path>` — 装载扩展(编译 + 注册 + fail-loud 错误展示)
+- `extension_reload <name>` — 热重载
+- `extension_status <name>` — 状态查询
+- `extension_validate <name>` — 校验(不装载)
+- `extension_rollback <name>` — 恢复最近一次 load/reload 成功的快照并重载会话
+
+语义要点:
+
+- **deferred busy-gate**:会话 streaming 期间调用 load/reload 返回 `{ deferred: true }`,实际在 turn 结束的空闲边界执行——E2E 断言必须两轮(轮 1 接受,轮 2 验证已注册)。
+- **快照回滚**:每次 load/reload 成功即快照到 `~/.musepi/extension-backups/<sha1(入口)12>/<ts>/`,保留最近 5 份;rollback 用最新快照覆盖扩展产物 + 重载会话,是损坏新版本的修复路径。
+- **沙箱**:扩展宿主半体跑在 `node:vm` 受限 realm(`extension-sandbox.ts`;process/require/globalThis 天然缺席,async 悬挂由宿主 `Promise.race` 竞速超时)——行为约束,非安全边界。
+- **注**:这些是 agent 会话工具(由模型调用),**不是** daemon WS RPC。WS 面的扩展管理 RPC 只有 `extensions.list/raw/setEnabled/setForceEnabled/setProviderEnabled` 与 `ext.call`(设置「扩展」tab 用)。
+- 方向文档:核心边界与接缝清单见 `docs/plugin-design.md`。
+
 ## Quick start
 
 ```ts

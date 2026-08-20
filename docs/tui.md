@@ -102,6 +102,8 @@ Then use `isKeyRelease()` / `isKeyRepeat()` if needed.
 
 The coding-agent integration also mounts built-in full-screen surfaces outside `ctx.ui.custom(...)`. [Agent Hub](./agent-hub.html) is the live roster and control surface for subagents. Its file-backed transcript viewer borrows the alternate screen while it is open, then restores the Hub beneath it on close.
 
+`/pause` (modes/components/pause-screen.ts, `runPauseScreen`) mounts a second built-in surface: it engages the process-global `agentPauseGate` (every agent loop parks at its next model/tool boundary), renders a theme-colored freeze mask with a live elapsed timer, and releases on `esc`/`enter`/`space`/`ctrl+c`, leaving the status line in the paused state. The GUI daemon exposes the same gate through `daemon.pause*` RPCs (see `gui-implementation.md` §1c), so the two surfaces share one freeze semantic.
+
 ## Mount points and return contracts
 
 ## 1) Extension UI (`ExtensionUIContext`)

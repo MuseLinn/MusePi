@@ -17,6 +17,33 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 - **GUI**:`session-store.apply` `kind === "recap"` → state.recap;任何后续 wire AgentEvent 清空;`ChatView` 在滚动容器外、JumpToBottomButton 旁渲染 `.gui-recap-row`(`※` + 文本,fixed 不随内容滚动 = TUI 状态行语义)。设置:「通知与音效」tab 底部「空闲回顾」section(rpc 读 `settings.get` recap.enabled/idleSeconds,写 `settings.set`,daemon 自动 flush;与 renderer-local 通知偏好不同,这两项在 config.yml)。`Composer` 通过 `session.setDraft` 上报未发送草稿(daemon 侧 editor-draft guard)。
 - 验证:ws RPC 直连 daemon(idleSeconds=1)→ send → agent_end 后 1s 收 recap envelope;draft=true 期间 agent_end 后无 recap、清空不补排程;resume 历史会话 5s 零事件(不烧钱),send 继续后才正常 recap;GUI CDP 发消息 → `.gui-recap-row` 出现,新消息 → 消失。
 
+## 1c. 暂停(daemon 契约,2026-08-20)
+
+暂停分两级,状态都只活在 daemon 侧,重连/重启 GUI 不丢:
+
+- **会话级**(每会话一个 `AgentPauseGate`,agent loop 在模型调用/工具调用边界轮询):
+  - `session.pause{sessionId}` → `{ engaged, paused, pausedAt }`(已暂停返回 `engaged:false`)
+  - `session.pauseStatus{sessionId}` → `{ paused, pausedAt }`(可激活归档会话)
+  - `session.pauseRelease{sessionId}` → `{ duration, paused }`(duration = now − pausedAt)
+- **全局级**(进程级 `agentPauseGate`,TUI `/pause` 同款语义,跨全部会话):
+  - `daemon.pause` / `daemon.pauseStatus` / `daemon.pauseRelease`(返回形状同上)
+- **订阅流**:会话订阅收到 `{ kind: "pause-state", payload: { paused, pausedAt } }` envelope(server.ts:1644,gate.onChange 驱动)。
+- **持久化**(TUI/GUI 对齐关键):暂停是宿主层状态,不在 agent 事件流里。daemon 把每次 gate 迁移镜像到 per-session sidecar `<journal>/<sessionId>.pause.json`(存在 = 暂停,`{paused:true,pausedAt}`;`release`/`paused:false` 时 unlink = 可逆);`resumeSession`(归档 >30min 或 daemon 重启后的激活路径)读 sidecar rehydrate gate(`AgentPauseGate` 构造 `{paused,pausedAt}`,pausedAt 原样保留,duration 正确)。`deleteSession` 补 unlink,防同名会话复活成暂停。全局暂停是进程内存态,daemon 重启即丢(设计如此,不持久化)。
+- **wire**:`SessionState` 新增可选 `paused` / `pausedAt`(live snapshot 与归档 snapshot 都注入,server.ts:2056-2057);`session.list` rows 也有 `paused` 字段。
+- **心跳配套**:daemon 新增 `system.ping` RPC(无参 → `{pong:true}`),供 WS 客户端 keepalive。
+- 验证:ws RPC 直连 → create → send(落盘 SDK 文件,空会话无文件无法激活)→ pause → 断言 sidecar 存在 → SIGKILL daemon 重启 → pauseStatus 仍 `{paused:true, pausedAt 一致}` → release → sidecar 消失。
+
+## 1d. 连接恢复(2026-08-20,合盖睡眠唤醒冻结修复)
+
+触发:Electron 在系统睡眠时断开 renderer↔daemon 的 WebSocket(electron#19993,localhost 同受);唤醒后必须重连。恢复链三层:
+
+- **renderer keepalive**(`packages/gui/src/lib/rpc.ts`):请求 15s 超时(`REQUEST_TIMEOUT_MS`)防永挂;每 20s 发 `system.ping`(`KEEPALIVE_INTERVAL_MS`),45s(`KEEPALIVE_DEAD_MS`)无任何响应 → `ws.close()` 强制触发重连(浏览器 WS 无 ping 能力,这是标准替代)。
+- **干净恢复路径**(`app.tsx`):`onStatus("closed")` → `recoverFromDrop` = close 旧 client(停退避重试)→ `setBooting(true)` 显示 splash → `boot()` 全新重连(probe/spawn/events.subscribe/pauseStatus/settings 全量初始化)——与「重新连接」按钮同一路径(ce1c9284d 已验证;原自动原地 restore 会冻结 renderer)。`recoveringRef` 防重入。
+- **主动唤醒**:`electron/main.cjs` `powerMonitor.on("resume")`(app ready 后注册,electron#32576)→ 各窗口 `app-power-resume` → renderer 收到即触发恢复(visibilitychange/online 在 macOS 唤醒不保证触发)。
+- **兜底**:App 级 `ErrorBoundary`(components/ErrorBoundary.tsx)渲染崩溃显示「重新连接」页,不再无边界静默卸载根树(冻结特征:CPU 空闲、console 活、点击死)。
+- **服务端心跳**(`ws-transport.ts`):15s PING、3 次 PONG 超时 destroy 连接(清死连接订阅/缓冲区,`teardown` 同步清 interval)。
+- 验证:真实 Electron + CDP 杀 daemon 模拟掉线 → UI 恢复可交互、无 error bar、renderer 日志含恢复路径;暂停状态重连后一致。
+
 ## 2. 扩展控制中心(daemon 契约)
 
 设置「扩展」tab + 侧栏「扩展」入口共用 `components/ExtensionsCenter.tsx`,TUI /extensions parity。UI 形态(见 gui-design.md 无——此处只记契约):顶部 provider tabs(`buildProviderTabs` 排序:ALL → 有内容的 enabled → disabled → 空,disabled 灰显可点)+ 左侧 provider→kind(计数)→item 三级树(provider 级开关走 setProviderEnabled,native/内置节点只读;kind 折叠记忆)+ 右侧详情(名称/类型/描述/触发/来源 via X (等级)/路径/状态/指令内容/raw inspector 折叠)。

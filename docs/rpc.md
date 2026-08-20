@@ -1,5 +1,10 @@
 # RPC Protocol Reference
 
+> **注意**:本文件只覆盖 **CLI stdio RPC mode**(`musepi --mode rpc`,新行分隔 JSON)。
+> daemon 的 **WebSocket RPC**(GUI/桌面会话:`session.pause*`、`daemon.pause*`、
+> `system.ping`、`extensions.*` 等,经 `ws://127.0.0.1:<port>/ws`)契约见
+> `docs/gui-implementation.md`(§1c 暂停、§2 扩展;其余散落各节,实现为准)。
+
 RPC mode runs the coding agent as a newline-delimited JSON protocol over stdio.
 
 - **stdin**: commands (`RpcCommand`), extension UI responses, and host-tool updates/results
