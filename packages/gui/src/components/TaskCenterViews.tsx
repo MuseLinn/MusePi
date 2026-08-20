@@ -176,6 +176,9 @@ export function TaskCalendarView({
 					›
 				</button>
 			</div>
+			{tasks.length === 0 && (
+				<p className="gui-taskcal-empty">{t("task calendar empty")}</p>
+			)}
 			<div className="gui-taskcal-grid">
 				{["日", "一", "二", "三", "四", "五", "六"].map(w => (
 					<div key={w} className="gui-taskcal-weekday">

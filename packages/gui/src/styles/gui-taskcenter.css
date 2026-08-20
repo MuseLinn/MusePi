@@ -712,3 +712,13 @@
 	margin-top: 2px;
 	line-height: 1.4;
 }
+.gui-taskcal-empty {
+	margin: 0;
+	padding: 10px 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--bg-overlay) 55%, transparent);
+	border: 1px dashed var(--border);
+	border-radius: 8px;
+}

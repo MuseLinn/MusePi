@@ -3914,3 +3914,158 @@
 	overflow-wrap: anywhere;
 }
 
+
+/* ── Agents Center (智能体中心 full page) ───────────────────────────── */
+.gui-agents-center {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-agents-center-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+
+.gui-agents-center-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-agents-center-name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--color-text);
+	white-space: nowrap;
+}
+
+.gui-agents-center-count {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+
+.gui-agents-center-live {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-ok);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 22%, transparent);
+	animation: gui-agents-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gui-agents-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.45;
+	}
+}
+
+.gui-agents-center-empty {
+	padding: 48px 16px;
+	text-align: center;
+	color: var(--color-text-muted);
+	font-size: 13px;
+}
+
+.gui-agents-center-table {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 4px 12px 12px;
+}
+
+.gui-agents-row {
+	display: grid;
+	grid-template-columns: 10px minmax(140px, 1.3fr) minmax(160px, 2fr) minmax(110px, 0.9fr) minmax(80px, 0.7fr);
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	text-align: left;
+	background: transparent;
+	border: none;
+	width: 100%;
+}
+
+.gui-agents-row:not(.gui-agents-row--head):hover {
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+}
+
+.gui-agents-row--selected {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-agents-row--head {
+	padding-top: 10px;
+	padding-bottom: 6px;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-text-faint);
+	text-transform: none;
+	letter-spacing: 0.02em;
+}
+
+.gui-agents-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+
+.gui-agents-cell--name {
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-agents-name {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-agents-cell--activity {
+	color: var(--color-text-secondary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-agents-cell--usage {
+	flex-direction: row;
+	align-items: center;
+	gap: 5px;
+	color: var(--color-text-secondary);
+	white-space: nowrap;
+}
+
+.gui-agents-meta-sep {
+	color: var(--color-text-faint);
+}
+
+.gui-agents-muted {
+	color: var(--color-text-faint);
+}
+
+.gui-agents-cell--when {
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}

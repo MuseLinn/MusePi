@@ -339,7 +339,7 @@ export function ScheduledTasksPage({
 							onClick={() => setView(v)}
 						>
 							<Icon name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"} className="h-4 w-4" />
-							<span>{v === "calendar" ? t("task center calendar") : v === "board" ? t("task center board") : t("scheduled tasks")}</span>
+							<span>{v === "calendar" ? t("task center calendar") : v === "board" ? t("task center board") : t("task list")}</span>
 						</button>
 					))}
 				</div>
