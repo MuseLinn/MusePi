@@ -45,12 +45,17 @@ import { type SlashEntry, SlashRow } from "./SlashRow";
 import { TextMorph } from "./TextMorph";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
 
-/** Time-aware greeting (ZCode-style): 早上好 / 下午好 / 晚上好 / 夜深了. */
+/** Time-aware greeting (ZCode-style): seven brackets — 清晨 / 早上 / 中午 /
+ * 下午 / 晚上 / 深夜. Each bracket carries its own tone so the welcome
+ * reads less canned. */
 function greeting(hour: number): string {
 	if (hour < 5) return t("it is late, take care");
+	if (hour < 8) return t("early morning");
 	if (hour < 12) return t("good morning");
+	if (hour < 14) return t("good noon");
 	if (hour < 18) return t("good afternoon");
-	return t("good evening");
+	if (hour < 22) return t("good evening");
+	return t("it is late, take care");
 }
 
 /** Rotating tips shown under the composer (splash/shimmer refresh). Keys are
@@ -67,6 +72,12 @@ const TIP_KEYS = [
 	"annotate images before sending them",
 	"schedule idle-window tasks from the task center",
 	"type /autoresearch to run experiments",
+	"favorite models pin to the top of the model picker",
+	"plan mode makes the agent outline before editing",
+	"goal mode turns your next message into a goal",
+	"paused sessions survive daemon restarts",
+	"pick a preset mode for the new session",
+	"customize the scrollbar skin in appearance settings",
 ] as const;
 
 /** Pick a random tip key, avoiding the current one. */

@@ -1260,6 +1260,16 @@
 	min-height: 100%;
 }
 
+.gui-brand,
+.gui-welcome-greet {
+	/* Decorative welcome chrome: clicks pass through to the composer
+	 * surface and the text is never selectable (BlurText/ShinyText spans
+	 * inherit both). */
+	pointer-events: none;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
 /* ZCode welcome project chip (workspace picker). */
 .gui-project-chip {
 	display: inline-flex;
