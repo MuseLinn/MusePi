@@ -1291,8 +1291,7 @@ export interface ExtensionAPI {
 	 *  mounts it. Enable/disable takes effect on the next slot refresh. */
 	registerComponent(component: ExtensionComponent): void;
 
-	/** Register a daemon-side JSON-RPC method (DSH `harness.handle`
-	 *  analogue). The GUI slot component calls it through the daemon
+	/** Register a daemon-side JSON-RPC method. The GUI slot component calls it through the daemon
 	 *  `ext.call` RPC, giving the component a callback channel into this
 	 *  extension's own daemon-side logic (computation, exec, external
 	 *  services). Handler ctx: `{ cwd, sessionId }`. Runs in the daemon's
@@ -1300,22 +1299,20 @@ export interface ExtensionAPI {
 	 *  available, session-bound actions are not wired there. */
 	registerRpc(method: string, handler: ExtensionRpcHandler): void;
 
-	/** Declare a virtual skill (DSH `ctx.skills.register` analogue): merged
+	/** Declare a virtual skill, merged
 	 *  into the daemon skills.list and the extension center alongside
 	 *  file-discovered skills; skills.read serves `content`. There is no
 	 *  backing SKILL.md file. */
 	registerSkill(skill: ExtensionSkillDeclaration): void;
 
-	/** Contribute a renderer-side per-tool view (DSH `tool.call.toolview`
-	 *  analogue): the daemon compiles `moduleUrl` to ESM and serves it via
+	/** Contribute a renderer-side per-tool view: the daemon compiles `moduleUrl` to ESM and serves it via
 	 *  extensions.list `toolViews`; the GUI transcript dispatches it by
 	 *  tool name, replacing the built-in renderer for that tool. The
 	 *  module default export must be a `ToolRenderer`-shaped object
 	 *  (`{ Summary, Body?, Card? }`). */
 	registerToolView(tool: string, options: { moduleUrl: string; label?: string }): void;
 
-	/** Contribute a named, ordered prompt section (DSH `systemPrompt.section()`
-	 *  analogue). Sections compose into every session prompt the extension
+	/** Contribute a named, ordered prompt section. Sections compose into every session prompt the extension
 	 *  participates in, ordered by `order` against the core template, mode and
 	 *  user sections. Dropped and re-added on extension reload (modes v2 §5.5). */
 	registerPrompt(section: ExtensionPromptSection): void;
@@ -1679,8 +1676,8 @@ export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionAction
 	setServiceTier: SetServiceTierHandler;
 }
 
-/** One prompt section contributed by an extension (registerPrompt — DSH
- *  `systemPrompt.section()` analogue; docs/modes-plan.md §5.5). Composed into
+/** One prompt section contributed by an extension (registerPrompt).
+ *  Composed into
  *  the session prompt alongside mode + user sections by source. */
 export interface ExtensionPromptSection {
 	name: string;
@@ -1732,17 +1729,16 @@ export interface Extension {
 	/** Presets declared by the extension (registerMode), in registration order. */
 	modes: ExtensionModeDefinition[];
 	/** Daemon-side JSON-RPC methods contributed by the extension
-	 *  (registerRpc — DSH `harness.handle` analogue): the GUI invokes them
+	 *  (registerRpc): the GUI invokes them
 	 *  via the `ext.call` daemon RPC, giving slot components a callback
 	 *  channel into their own daemon-side logic. */
 	rpcs: Map<string, ExtensionRpcHandler>;
-	/** Skills declared by the extension (registerSkill — DSH
-	 *  `ctx.skills.register` analogue): virtual skills merged into the
-	 *  daemon skills.list / extensions center alongside file-discovered
-	 *  skills. */
+	/** Skills declared by the extension (registerSkill): virtual skills
+	 *  merged into the daemon skills.list / extensions center alongside
+	 *  file-discovered skills. */
 	skills: ExtensionSkillDeclaration[];
 	/** Renderer-side per-tool views contributed by the extension
-	 *  (registerToolView — DSH `tool.call.toolview` analogue): compiled to
+	 *  (registerToolView): compiled to
 	 *  ESM by the daemon and dispatched by tool name in the transcript. */
 	toolViews: ExtensionToolView[];
 }
@@ -1760,7 +1756,7 @@ export interface ExtensionSetting {
 		description?: string;
 		options?: { value: string; label: string; description?: string }[];
 	};
-	/** Write-time guard (DSH `installSettingsSection` validate analogue):
+	/** Write-time guard :
 	 *  invoked by the daemon `settings.set` RPC before persisting a value for
 	 *  this key. Return an error message to refuse the write; return `void`
 	 *  (or `undefined`) to accept it. Runs on the host side, so constraints
@@ -1770,8 +1766,8 @@ export interface ExtensionSetting {
 }
 
 /**
- * A renderer-side component contributed by an extension (DSH ui-slots
- * analogue): the GUI mounts it into a named slot by dynamically importing
+ * A renderer-side component contributed by an extension: the GUI mounts
+ * it into a named slot by dynamically importing
  * the compiled module. The daemon compiles `moduleUrl` to ESM JavaScript
  * (bun.build) and serves the code through `extensions.list`, so the
  * renderer never touches the extension's source tree.
@@ -1788,7 +1784,7 @@ export interface ExtensionComponent {
 }
 
 /**
- * Daemon-side JSON-RPC handler (DSH `harness.handle(method, fn)` analogue).
+ * Daemon-side JSON-RPC handler.
  * Registered via {@link ExtensionAPI.registerRpc}; the GUI slot component
  * invokes it through the daemon `ext.call` RPC with
  * `{ extensionId, method, params, sessionId }`.
@@ -1803,8 +1799,8 @@ export type ExtensionRpcHandler = (
 	ctx: { cwd: string; sessionId?: string },
 ) => unknown | Promise<unknown>;
 
-/** One virtual skill declared by an extension (DSH `ctx.skills.register`
- *  analogue). Merged into the daemon skills.list alongside file-discovered
+/** One virtual skill declared by an extension (registerSkill). Merged
+ *  into the daemon skills.list alongside file-discovered
  *  skills; there is no backing SKILL.md file. */
 export interface ExtensionSkillDeclaration {
 	name: string;
@@ -1815,8 +1811,8 @@ export interface ExtensionSkillDeclaration {
 	hide?: boolean;
 }
 
-/** One renderer-side per-tool view declared by an extension (DSH
- *  `tool.call.toolview` analogue). The daemon compiles `moduleUrl` to ESM
+/** One renderer-side per-tool view declared by an extension
+ *  (registerToolView). The daemon compiles `moduleUrl` to ESM
  *  (same pipeline as registerComponent) and serves it via extensions.list
  *  `toolViews`; the GUI dispatches by tool name in the transcript. */
 export interface ExtensionToolView {

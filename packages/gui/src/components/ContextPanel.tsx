@@ -103,7 +103,7 @@ export function ContextPanel({
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
 	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory" | "jobs" | string>("files");
 	// 内核级 slot(P1):`panel.tab.<id>` 槽位组件自动挂载为右面板 tab ——
-	// 宿主不再硬编码 tab 结构,扩展声明即出现(DSH conversation.view 语义)。
+	// 宿主不再硬编码 tab 结构,扩展声明即出现。
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header

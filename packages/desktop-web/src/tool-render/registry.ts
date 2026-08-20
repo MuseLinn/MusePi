@@ -96,8 +96,8 @@ export function resolveToolRenderer(name: string): ToolRenderer {
 	return externalRenderers[name] ?? RENDERERS[name] ?? genericRenderer;
 }
 
-/** Extension-contributed per-tool renderers (registerToolView — DSH
- *  `tool.call.toolview` analogue): keyed by wire tool name, consulted
+/** Extension-contributed per-tool renderers (registerToolView): keyed by
+ *  wire tool name, consulted
  *  BEFORE the built-in registry so an extension renderer replaces the
  *  built-in one for that tool. Registered by the GUI from extensions.list
  *  `toolViews` (compiled modules blob-imported at runtime). */

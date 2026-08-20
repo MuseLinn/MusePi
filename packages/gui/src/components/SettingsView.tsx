@@ -306,7 +306,7 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 		},
 	];
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件挂为左侧导航项 ——
-	// 扩展声明一个设置页即出现在导航(DSH settings.section 类比)。
+	// 扩展声明一个设置页即出现在导航。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
 	for (const c of extTabs) {
@@ -374,9 +374,9 @@ export function SettingsView({
 }): ReactNode {
 	const [section, setSection] = useState<SectionId | string>(initialSection ?? "appearance");
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
-	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献,DSH 同款语义)。
+	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
-	// 单行偏好槽(DSH settings.action 类比):settings.action.<id> 组件。
+	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
@@ -663,9 +663,8 @@ export function SettingsView({
 							{section === "general" && (
 								<>
 									<GeneralSection rpc={rpc} />
-									{/* 单行偏好槽(DSH settings.action 类比):settings.action.<id>
-									 * 组件挂到通用分区末尾 —— 功能插件贡献单行偏好,无需
-									 * 整 tab/整卡。 */}
+									{/* 单行偏好槽:settings.action.<id> 组件挂到通用分区末尾 —— 功能插件
+									 * 贡献单行偏好,无需整 tab/整卡。 */}
 									{actionItems.length > 0 && (
 										<div className="gui-settings-row">
 											{actionItems.map(item => (

@@ -163,7 +163,7 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });
 	}
 
-	// 扩展声明的虚拟技能(registerSkill — DSH ctx.skills.register 类比):
+	// 扩展声明的虚拟技能(registerSkill):
 	// 与文件技能同框展示为 skill 条目(provider "extension"),复用
 	// artifact-compiler 的 load-once 缓存;扩展禁用/卸载后自动消失。
 	// 必须在 extension-module 条目加入 extensions 之后执行。

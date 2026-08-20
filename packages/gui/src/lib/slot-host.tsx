@@ -4,7 +4,7 @@ import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "./rpc";
 /**
- * Renderer-side component slots (DSH ui-slots analogue): extensions
+ * Renderer-side component slots: extensions
  * register components via `pi.registerComponent({ slot, moduleUrl })`, the
  * daemon compiles them to self-contained ESM and serves the code through
  * `extensions.list`; this module dynamically imports (blob: URL) and mounts
@@ -27,7 +27,7 @@ export const RIGHT_PANEL_SLOT = "panel.right";
 /** Right-edge 44px icon rail slot (openchamber ContextPanelRail parity):
  *  extension icons mount at the rail's bottom section. */
 export const RIGHT_RAIL_SLOT = "rail.right";
-/** 内核级 slot 命名空间(P1 架构开放,DSH cordis slot 语义):slot 名是开放
+/** 内核级 slot 命名空间(P1 架构开放):slot 名是开放
  *  命名空间,前缀决定挂载位置,GUI 按前缀自动挂载 —— 扩展声明任意
  *  `panel.tab.<id>` / `settings.tab.<id>` / `rail.<id>` 即自动出现为
  *  tab/设置页/rail 图标,宿主不再逐槽位硬编码。保留的旧槽位
@@ -35,15 +35,15 @@ export const RIGHT_RAIL_SLOT = "rail.right";
 export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
 export const SETTINGS_TAB_SLOT_PREFIX = "settings.tab.";
 export const RAIL_SLOT_PREFIX = "rail.";
-/** Keyed settings card slot (DSH settings.plugin.item 派发对齐):每个启用扩展
+/** Keyed settings card slot:每个启用扩展
  *  注册 `settings.item.<extId>` 组件即自动在设置页"扩展设置"分区获得一张
  *  卡片,组件经 settingsScope 读写该扩展自己的设置键。 */
 export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
-/** 单行偏好槽(DSH settings.action 类比):`settings.action.<id>` 组件
+/** 单行偏好槽:`settings.action.<id>` 组件
  *  挂到设置页"通用"分区 —— 功能插件贡献单行偏好(语言/外观/Enter 行为),
  *  无需整 tab 或整卡。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = "settings.action.";
-/** Composer 座位槽(DSH conversation.input.dock/left/right 对齐):
+/** Composer 座位槽:
  *  dock = 输入卡上方整行;left/right = 底部工具栏两端。list 语义 ——
  *  多个扩展可同时往同一槽注入组件。 */
 export const COMPOSER_DOCK_SLOT = "composer.dock";
@@ -84,7 +84,7 @@ export interface SlotComponent {
 }
 
 /** One compiled per-tool view from extensions.list (registerToolView —
- *  DSH tool.call.toolview analogue). Module default export must be a
+ *  ). Module default export must be a
  *  ToolRenderer-shaped object ({ Summary, Body?, Card? }). */
 export interface ToolViewItem {
 	tool: string;
@@ -136,7 +136,7 @@ export interface ExtensionRegistryData {
 	tabs: ExtensionTab[];
 	providers: ProviderInfo[];
 	components: SlotComponent[];
-	/** Per-tool renderer views (registerToolView — DSH tool.call.toolview
+	/** Per-tool renderer views (registerToolView
 	 *  analogue): compiled modules dispatched by tool name in the
 	 *  transcript. */
 	toolViews: ToolViewItem[];
@@ -166,7 +166,7 @@ export interface SlotComponentProps {
 		get(keys: string[]): Promise<Record<string, unknown>>;
 		set(key: string, value: unknown): Promise<void>;
 	} | null;
-	/** Daemon-side extension RPC bridge (registerRpc — DSH harness.handle
+	/** Daemon-side extension RPC bridge (registerRpc
 	 *  analogue): invoke a JSON-RPC method registered by THIS extension
 	 *  (ext.call RPC). Bound to the component's extensionId; absent when
 	 *  no rpc bridge is available. */
@@ -393,7 +393,7 @@ export function SlotComponentMount({
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,
-		// 扩展 RPC 桥(registerRpc — DSH harness.handle 类比):绑定当前
+		// 扩展 RPC 桥(registerRpc):绑定当前
 		// 组件的 extensionId,组件直接调自己扩展的 daemon 侧方法。
 		extensionCall:
 			rpc && item.extensionId
@@ -410,8 +410,8 @@ export function SlotComponentMount({
 }
 
 /**
- * 扩展 per-tool 渲染器注册(registerToolView — DSH tool.call.toolview
- * 类比):把 extensions.list 的 toolViews(daemon 编译好的 ESM)blob-import
+ * 扩展 per-tool 渲染器注册(registerToolView):把 extensions.list 的
+ * toolViews(daemon 编译好的 ESM)blob-import
  * 并注册进 desktop-web 的 tool-render 外部注册表,transcript 按工具名
  * 分派时扩展渲染器覆盖内置。模块 default export 必须是 ToolRenderer
  * 形状({ Summary, Body?, Card? })。任何宿主挂载一次即可 ——
@@ -438,7 +438,7 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 					const mod = (await import(url)) as { default?: unknown };
 					if (!alive) return;
 					const exported = mod.default;
-					// 两种合法形状(DSH tool.call.toolview 是组件):
+					// 两种合法形状:
 					// ① default = React 组件 → 作为全卡 Card 渲染;
 					// ② default = ToolRenderer 对象({ Summary, Body?, Card? })
 					// 与 desktop-web 内置注册表同构。

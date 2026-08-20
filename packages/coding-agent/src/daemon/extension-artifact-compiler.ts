@@ -3,7 +3,7 @@ import { loadExtensions } from "../extensibility/extensions/loader";
 import type { Extension } from "../extensibility/extensions/types";
 
 /**
- * Renderer-side slot components (DSH ui-slots analogue): the daemon
+ * Renderer-side slot components: the daemon
  * compiles each extension-contributed component module to self-contained
  * ESM JavaScript (react bundled in) and serves the code through
  * `extensions.list`. The GUI dynamically imports it (blob: URL) and mounts
@@ -32,7 +32,7 @@ export interface SlotComponent {
 }
 
 /** One compiled per-tool view served to the renderer (registerToolView —
- *  DSH `tool.call.toolview` analogue). The GUI dispatches by tool name. */
+ *  ). The GUI dispatches by tool name. */
 export interface ToolViewItem {
 	tool: string;
 	extensionId: string;
@@ -253,7 +253,7 @@ export async function collectExtensionModes(
 
 /**
  * Invoke a daemon-side JSON-RPC method registered by an extension
- * (registerRpc — DSH `harness.handle` analogue). Loaded through the shared
+ * (registerRpc). Loaded through the shared
  * 10s load-once cache; unknown methods throw so the daemon surfaces a
  * JSON-RPC error to the GUI caller.
  */
@@ -273,7 +273,7 @@ export async function invokeExtensionRpc(
 
 /**
  * Collect virtual skills declared by active extension-module entries
- * (registerSkill — DSH `ctx.skills.register` analogue), for merging into
+ * (registerSkill), for merging into
  * the daemon skills.list / extension center alongside file-discovered
  * skills. Shares the 10s load-once cache.
  */
@@ -306,7 +306,7 @@ export async function collectExtensionSkills(
 
 /**
  * Collect compiled per-tool views declared by active extension-module
- * entries (registerToolView — DSH `tool.call.toolview` analogue), for
+ * entries (registerToolView), for
  * extensions.list `toolViews`. A broken view does not fail the whole list —
  * it carries `error` and the renderer falls back to the generic view.
  */

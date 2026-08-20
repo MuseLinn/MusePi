@@ -570,7 +570,7 @@ const PAIR_PORT = 8301;
 const MAX_LIVE_SESSIONS = 8;
 
 /**
- * Tail-window the initial snapshot (kimi/DSH parity): the GUI opens a
+ * Tail-window the initial snapshot: the GUI opens a
  * session showing the LATEST messages and pages older history up as the
  * user scrolls (session.history) — the full transcript is never shipped
  * (or held) up front. `tail` rides on the returned snapshot: hasMore =
@@ -623,8 +623,7 @@ interface LiveSession {
 	/** Settings contributed by loaded extensions (registerSetting), keyed by
 	 *  setting key — merged into settings.schema for the GUI/TUI panels.
 	 *  Value carries the owning extension path so the GUI can group
-	 *  declarative schema cards per extension (DSH settings.plugin.item
-	 *  analogue without a React component). */
+	 *  declarative schema cards per extension without a React component. */
 	extensionSettings: Map<string, { setting: ExtensionSetting; extensionPath: string }>;
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
@@ -1109,7 +1108,7 @@ export class DaemonSessionHost {
 	}
 
 	/** P0 自举:agent 扩展管理工具(extension_* 工具集)——实现见
-	 *  extension-lifecycle-tools.ts(server.ts 不再承载,DSH 模块化惯例)。
+	 *  extension-lifecycle-tools.ts(server.ts 不再承载)。
 	 *  注入 createSession/activate 的 customTools,使 agent 能在会话内
 	 *  自举扩展:写文件 → extension_load → 出错 → extension_status 自查 →
 	 *  extension_reload 自修。 */
@@ -2909,7 +2908,7 @@ export class DaemonServer {
 	}
 
 	/**
-	 * P0-② 挂载校验(DSH standingKeyFor 参考吸收):mode 引用的每个扩展
+	 * P0-② 挂载校验:mode 引用的每个扩展
 	 * 独立加载(不注册到任何会话)验证加载错误 + 槽位组件可编译。
 	 * schema/环/悬空/扩展存在性由 validateMode/resolveMode 负责,这里只做
 	 * "真实挂载"层面的检查——standingKeyFor 同款语义:不建 agent 跑完整
@@ -2953,8 +2952,8 @@ export class DaemonServer {
 				hide: s.hide === true,
 				_source: s._source,
 			}));
-			// 扩展声明的虚拟技能(registerSkill — DSH ctx.skills.register
-			// 类比):与文件扫描技能合并展示。无 backing 文件(filePath=""),
+			// 扩展声明的虚拟技能(registerSkill):与文件扫描技能合并展示。
+			// 无 backing 文件(filePath=""),
 			// content 随行携带供 skills.read 直接返回;扩展卸载/禁用后
 			// 自动消失(collectExtensionSkills 按 active 过滤)。
 			const { collectExtensionSkills } = await import("./extension-artifact-compiler");
@@ -3878,9 +3877,8 @@ export class DaemonServer {
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
 				);
-				// Renderer-side per-tool views (registerToolView — DSH
-				// tool.call.toolview analogue): the transcript dispatches by
-				// tool name, replacing the built-in renderer.
+				// Renderer-side per-tool views (registerToolView): the
+				// transcript dispatches by tool name, replacing the built-in renderer.
 				const toolViews = await collectToolViews(
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
@@ -4016,9 +4014,9 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "ext.call": {
-				// 扩展贡献的 daemon 侧 JSON-RPC(registerRpc — DSH
-				// `harness.handle` 类比):GUI 槽位组件经此回调自己的 daemon
-				// 侧逻辑。仅限 active extension-module 条目 —— 与
+				// 扩展贡献的 daemon 侧 JSON-RPC(registerRpc):GUI 槽位组件
+				// 经此回调自己的 daemon 侧逻辑。仅限 active extension-module
+				// 条目 —— 与
 				// collectSlotComponents 同源过滤,未知扩展/方法抛 JSON-RPC
 				// 错误给调用方。
 				const p = (params ?? {}) as { extensionId?: string; method?: string; params?: unknown; sessionId?: string };
@@ -4062,8 +4060,8 @@ export class DaemonServer {
 					source?: "extension";
 				}> = ids.map(id => {
 					const def = loadModeFile(dir, id);
-					// 内置模板(work/chat/design/creator)显示名走 i18n(DSH
-					// BUILT_IN_PRESET_KEYS 对齐);用户自定义用文件 label。
+					// 内置模板(work/chat/design/creator)显示名走 i18n(BUILT_IN_PRESET_KEYS
+					// 对齐);用户自定义用文件 label。
 					const builtinName = t(`preset ${id} name` as never);
 					const builtinDesc = t(`preset ${id} description` as never);
 					const isBuiltinLabel = !builtinName.startsWith("preset ");
@@ -4125,7 +4123,7 @@ export class DaemonServer {
 					settings?: Record<string, unknown>;
 				};
 				if (!MODE_ID_PATTERN.test(p.id)) throw new Error(`invalid mode id: ${p.id}`);
-				// 内置预设(work/chat/design/creator)不可被保存覆盖(DSH
+				// 内置预设(work/chat/design/creator)不可被保存覆盖(
 				// system preset 对齐:shipped 预设属于部署,authoring 拒绝写)。
 				// 与 modes.delete 同一 guard;手改磁盘文件仍允许(文件级自由)。
 				if (p.id in BUILTIN_MODE_TEMPLATES) {
@@ -4164,7 +4162,7 @@ export class DaemonServer {
 				);
 				const p = (params ?? {}) as { id: string };
 				if (!MODE_ID_PATTERN.test(p.id)) throw new Error(`invalid mode id: ${p.id}`);
-				// 内置预设(work/chat/design/creator)不可删(DSH built-in roster 对齐)。
+				// 内置预设(work/chat/design/creator)不可删。
 				if (p.id in BUILTIN_MODE_TEMPLATES) throw new Error(`built-in preset "${p.id}" cannot be deleted`);
 				const dir = this.#modesDir();
 				const referencing = listModeIds(dir).filter(
@@ -4194,7 +4192,7 @@ export class DaemonServer {
 					else {
 						errors.push(...validateMode(def as never, { knownExtensions }));
 						resolveMode(p.id, mid => loadModeFile(dir, mid), { knownExtensions });
-						// P0-② 挂载校验(DSH standingKeyFor 参考吸收):白名单扩展
+						// P0-② 挂载校验:白名单扩展
 						// 实际加载 + 槽位组件编译。不建会话(standingKeyFor 即
 						// "真实挂载但不建 agent")。
 						await this.#validateModeMounting(def as never, errors);
@@ -4856,8 +4854,8 @@ export class DaemonServer {
 				return { ok: exit === 0, detail: exit === 0 ? undefined : err.trim() };
 			}
 			case "session.history": {
-				// Bounded paging over the materialized entries (DSH
-				// session.history parity): the GUI folds a long session's
+				// Bounded paging over the materialized entries
+				// (session.history parity): the GUI folds a long session's
 				// oldest region into a marker and pages it back in with this
 				// cursor. beforeId = the oldest entry the client still holds;
 				// returns up to maxMessages entries BEFORE it (oldest→newest)
@@ -7496,7 +7494,7 @@ export class DaemonServer {
 					}
 				}
 				// Extension-owned keys: honor the extension's write-time guard
-				// (ExtensionSetting.validate, DSH installSettingsSection
+				// (ExtensionSetting.validate,
 				// analogue) — a refused write surfaces as an RPC error so the
 				// GUI/TUI shows the reason instead of persisting bad input.
 				if (extKeys.has(p.key)) {

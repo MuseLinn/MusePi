@@ -96,7 +96,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const [rawOpen, setRawOpen] = useState(false);
 	const [collapsedKinds, setCollapsedKinds] = useState<Set<string>>(new Set());
 	const { confirm } = useConfirm();
-	// 插件列表(DSH plugins.tab "all" 类比):daemon plugins.list 是会话无关
+	// 插件列表:daemon plugins.list 是会话无关
 	// 扩展扫描的独立 TTL 缓存 —— 与 extensions.list 分开拉取。
 	const [plugins, setPlugins] = useState<PluginEntry[]>([]);
 	const [pluginsError, setPluginsError] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			alive = false;
 		};
 	}, [rpc]);
-	// 扩展设置卡片(DSH settings.plugin.item):settings.item.<extId> 组件
+	// 扩展设置卡片:settings.item.<extId> 组件
 	// 按扩展分组 —— "served ∩ enabled"(组件 extensionId = 扩展模块路径,
 	// 与扩展中心条目的 path 匹配)。
 	const extSettingCards = useMemo(() => {
@@ -337,7 +337,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							<span className="gui-ext-tab-count">{tr.count}</span>
 						</button>
 					))}
-				{/* 插件 tab(DSH plugins.tab "all" 类比):daemon plugins.list 的
+				{/* 插件 tab:daemon plugins.list 的
 				 * 会话无关扩展扫描(path/label/tools/commands/handlers/errors),
 				 * 与扩展中心并排 —— marketplace/plugin 生态的 GUI 面。 */}
 				<button
@@ -353,7 +353,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
 			<div className="gui-ext-body">
-				{/* 插件 tab:daemon plugins.list 渲染(DSH plugins.tab "all")。
+				{/* 插件 tab:daemon plugins.list 渲染。
 				 * 独立数据源,不走 provider 树 —— 插件是会话无关扩展扫描。 */}
 				{tab === "plugins" ? (
 					<div className="gui-ext-plugins">
@@ -683,7 +683,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{[...(data?.slots?.exact ?? []), ...(data?.slots?.prefixes ?? []).map(p => `${p}*`)].join(", ") || "—"}
 				</div>
 			</div>
-			{/* 扩展设置卡片(DSH settings.plugin.item 类比):`settings.item.<extId>`
+			{/* 扩展设置卡片(`settings.item.<extId>`
 			 * 组件按扩展分组渲染在此 —— 插件的运行时配置随插件 inventory 展示,
 			 * 不设设置页聚合 tab(registerSetting 配置项经 ui.tab 进现有 tab,
 			 * settings.tab.<id> 整页进设置页左侧导航)。 */}

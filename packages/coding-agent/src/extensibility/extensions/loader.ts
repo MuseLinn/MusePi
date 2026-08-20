@@ -206,7 +206,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	registerComponent(component: ExtensionComponent): void {
-		// 槽位声明校验(DSH 实测约束:注册进未声明 slot 抛错进 load 报告):
+		// 槽位声明校验(注册进未声明 slot 抛错进 load 报告):
 		// 未知槽名 → 抛错,扩展整体加载失败且 extension_status 可见 ——
 		// 而不是静默注册、GUI 永不挂载。前缀命名空间保持开放
 		// (panel.tab.<任意 id> 等永远合法),仅兜住拼写错误/未支持槽位。
