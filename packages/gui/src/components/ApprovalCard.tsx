@@ -17,10 +17,13 @@ import { BorderBeam } from "../vendor/border-beam";
 export function ApprovalCard({
 	requestId,
 	tool,
+	prompt,
 	onDecide,
 }: {
 	requestId: string;
 	tool: string;
+	/** Full approval prompt body (Allow tool / Reason / command+args). */
+	prompt?: string;
 	onDecide(requestId: string, approved: boolean): void;
 }): ReactNode {
 	// Notify once per pending card (browser blocks audio before a gesture).
@@ -29,6 +32,15 @@ export function ApprovalCard({
 	useEffect(() => {
 		sfxFor("approval");
 	}, [requestId]);
+	// The prompt's first line ("Allow tool: <name>") duplicates the tool
+	// chip — show the detail lines (Reason / command+args / safety checks).
+	const details = prompt
+		? prompt
+				.split("\n")
+				.slice(1)
+				.filter(l => l.trim().length > 0)
+				.join("\n")
+		: "";
 	return (
 		<div className="gui-approval-wrap">
 			<BorderBeam size="pulse-inner" colorVariant="ocean" theme="auto" borderRadius={14}>
@@ -37,6 +49,7 @@ export function ApprovalCard({
 					<div className="gui-approval-body">
 						<span className="gui-approval-title">{t("Approval required")}</span>
 						<span className="gui-approval-tool">{tool}</span>
+						{details.length > 0 && <pre className="gui-approval-prompt">{details}</pre>}
 					</div>
 					<div className="gui-approval-actions">
 						<button

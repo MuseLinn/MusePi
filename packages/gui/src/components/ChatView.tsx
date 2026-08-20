@@ -1329,6 +1329,7 @@ export function ChatView({
 												key={a.requestId}
 												requestId={a.requestId}
 												tool={a.tool}
+												prompt={a.prompt}
 												onDecide={onDecideApproval}
 											/>
 										))}

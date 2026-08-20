@@ -1350,7 +1350,11 @@ export class DaemonSessionHost {
 						send({
 							kind: "approval-request",
 							seq: ++live.seq,
-							payload: { requestId: record.requestId, tool: record.tool, args: null },
+							// `prompt` = the full formatApprovalPrompt body
+							// (Allow tool / Reason / command+args details) so
+							// GUI cards show what is actually being approved —
+							// tool name alone is not enough to decide.
+							payload: { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt },
 						});
 					} catch {
 						// subscriber socket died; removed on close
@@ -1488,7 +1492,11 @@ export class DaemonSessionHost {
 						send({
 							kind: "approval-request",
 							seq: ++live.seq,
-							payload: { requestId: record.requestId, tool: record.tool, args: null },
+							// `prompt` = the full formatApprovalPrompt body
+							// (Allow tool / Reason / command+args details) so
+							// GUI cards show what is actually being approved —
+							// tool name alone is not enough to decide.
+							payload: { requestId: record.requestId, tool: record.tool, args: null, prompt: record.prompt },
 						});
 					} catch {
 						// subscriber socket died; removed on close

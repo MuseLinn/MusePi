@@ -82,7 +82,7 @@ export type SessionStreamEvent =
 	| {
 			kind: "approval-request";
 			seq: number;
-			payload: { requestId: string; tool: string; args: unknown; scope?: string };
+			payload: { requestId: string; tool: string; args: unknown; scope?: string; prompt?: string };
 	  }
 	// ask tool question / custom input pushed to the GUI (TUI ask parity):
 	// the client answers via session.askAnswer. Single select/input keep the

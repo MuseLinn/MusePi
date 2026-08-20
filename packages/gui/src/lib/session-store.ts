@@ -74,6 +74,9 @@ export interface GuiSessionState {
 export interface ApprovalRequest {
 	requestId: string;
 	tool: string;
+	/** Full approval prompt body (Allow tool / Reason / command+args) —
+	 *  present on daemon >= 2026-08-20; older daemons omit it. */
+	prompt?: string;
 }
 
 // ── Completed-round totals (GUI-lifetime registry) ─────────────────────────
@@ -341,11 +344,12 @@ export class GuiSessionStore {
 		}
 		// Pending tool approvals — the GUI answers via tool.approve / tool.deny.
 		if (event.kind === "approval-request") {
-			const p = event.payload as { requestId?: unknown; tool?: unknown };
+			const p = event.payload as { requestId?: unknown; tool?: unknown; prompt?: unknown };
 			if (typeof p?.requestId === "string") {
 				this.#approvals.set(p.requestId, {
 					requestId: p.requestId,
 					tool: typeof p.tool === "string" ? p.tool : "unknown",
+					prompt: typeof p.prompt === "string" ? p.prompt : undefined,
 				});
 				// The agent is asking the user a question (approval request).
 				dispatchNotification(

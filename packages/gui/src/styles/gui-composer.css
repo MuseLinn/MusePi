@@ -5,7 +5,7 @@
 
 .gui-approval {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 8px;
 	padding: 8px 10px;
 	border-radius: var(--radius-md);
@@ -36,6 +36,19 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.gui-approval-prompt {
+	margin: 4px 0 0;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-secondary);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 96px;
+	overflow-y: auto;
+	flex-shrink: 0;
 }
 
 .gui-approval-actions {
