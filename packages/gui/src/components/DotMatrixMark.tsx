@@ -479,26 +479,46 @@ export function DotMatrixMark({
 		});
 		ro.observe(canvas);
 
+		// Hover halo + click ripples listen on WINDOW (capture) instead of
+		// the canvas: the welcome chrome above (brand logo, greeting) is
+		// pointer-events:none, so a click lands on the wrapper below the
+		// canvas and never reaches it. Coordinates + an interactive-element
+		// filter replace direct-hit targeting: any pointer over the dot
+		// field (that is not an input/button/textarea/select) drives the
+		// halo/ripple — clicking the logo area ripples the backdrop dots.
+		const isInteractive = (t: EventTarget | null): boolean =>
+			t instanceof Element &&
+			!!t.closest("button, input, textarea, select, a, [role='button'], [contenteditable='true']");
+		const inside = (e: { clientX: number; clientY: number }, rect: DOMRect): boolean =>
+			e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
 		const onMove = (e: MouseEvent): void => {
+			if (isInteractive(e.target)) {
+				mouse.x = -9999;
+				mouse.y = -9999;
+				mouse.active = false;
+				return;
+			}
 			const rect = canvas.getBoundingClientRect();
+			if (!inside(e, rect)) {
+				mouse.x = -9999;
+				mouse.y = -9999;
+				mouse.active = false;
+				return;
+			}
 			mouse.x = e.clientX - rect.left;
 			mouse.y = e.clientY - rect.top;
 			mouse.active = true;
 		};
-		const onLeave = (): void => {
-			mouse.x = -9999;
-			mouse.y = -9999;
-			mouse.active = false;
-		};
 		const onDown = (e: PointerEvent): void => {
+			if (isInteractive(e.target)) return;
 			const rect = canvas.getBoundingClientRect();
+			if (!inside(e, rect)) return;
 			ripples.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, start: performance.now() });
 			if (ripples.length > 4) ripples.shift();
 		};
 		window.addEventListener("resize", resize);
-		canvas.addEventListener("mousemove", onMove);
-		canvas.addEventListener("mouseleave", onLeave);
-		canvas.addEventListener("pointerdown", onDown);
+		window.addEventListener("mousemove", onMove, true);
+		window.addEventListener("pointerdown", onDown, true);
 		resize();
 		raf = requestAnimationFrame(frame);
 
@@ -509,9 +529,8 @@ export function DotMatrixMark({
 			ro.disconnect();
 			themeObserver.disconnect();
 			window.removeEventListener("resize", resize);
-			canvas.removeEventListener("mousemove", onMove);
-			canvas.removeEventListener("mouseleave", onLeave);
-			canvas.removeEventListener("pointerdown", onDown);
+			window.removeEventListener("mousemove", onMove, true);
+			window.removeEventListener("pointerdown", onDown, true);
 		};
 		// Only primitives: text/gridGap/dotRadius/mouseRadius/accentChance
 		// (accentColors is the module-level ACCENT_COLORS — stable identity,
