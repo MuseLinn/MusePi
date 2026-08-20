@@ -907,20 +907,7 @@
 	z-index: 50;
 	min-width: 160px;
 	padding: 4px;
-	border-radius: 12px;
-	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
-		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
-		0 6px 6px -3px rgba(0, 0, 0, 0.16),
-		0 12px 32px rgba(0, 0, 0, 0.45);
-	/* openchamber dropdown parity: fade + scale in/out. */
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top right;
 }
@@ -1006,11 +993,7 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 4px;
-	border-radius: 12px;
-	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	box-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
 		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
@@ -1146,20 +1129,7 @@
 	min-width: 180px;
 	max-width: 260px;
 	padding: 4px;
-	border-radius: 12px;
-	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
-		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
-		0 6px 6px -3px rgba(0, 0, 0, 0.16),
-		0 12px 32px rgba(0, 0, 0, 0.45);
-	/* openchamber dropdown parity: fade + scale in/out. */
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top left;
 }
@@ -3605,20 +3575,7 @@ body.gui-resizing .gui-pane-right {
 	min-width: 250px;
 	max-width: 320px;
 	padding: 4px;
-	border-radius: 12px;
-	/* Unified frosted-glass menu (same recipe as the model/thinking menus). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
-		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
-		0 6px 6px -3px rgba(0, 0, 0, 0.16),
-		0 12px 32px rgba(0, 0, 0, 0.45);
-	/* openchamber dropdown parity: fade + scale in/out. */
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top right;
 }

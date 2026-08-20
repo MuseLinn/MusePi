@@ -38,10 +38,14 @@ export function GuiSelect<T extends string>({
 	const btnRef = useRef<HTMLButtonElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 	const [highlight, setHighlight] = useState(0);
+	// Exit timer handle — re-opening inside the 140ms closing window must
+	// cancel it, otherwise the stale timer resets `entered` on the fresh
+	// menu and the listbox stays at opacity 0 (invisible but "open").
+	const closeTimerRef = useRef<number | null>(null);
 
 	const label = options.find(o => o.value === value)?.label ?? String(value);
 
-	// Two-phase enter (frosted backdrop composites before the fade).
+	// Two-phase enter (frosted backdrop composites before the scale).
 	useEffect(() => {
 		if (!open) return;
 		const raf = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)));
@@ -52,9 +56,11 @@ export function GuiSelect<T extends string>({
 		if (!open) return;
 		setClosing(true);
 		setOpen(false);
-		window.setTimeout(() => {
+		if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+		closeTimerRef.current = window.setTimeout(() => {
 			setClosing(false);
 			setEntered(false);
+			closeTimerRef.current = null;
 		}, 140);
 	};
 
@@ -78,7 +84,12 @@ export function GuiSelect<T extends string>({
 		const onDoc = (e: MouseEvent | KeyboardEvent): void => {
 			if (e.type === "keydown" && (e as KeyboardEvent).key !== "Escape") return;
 			const t = e.target as Node | null;
-			if (t instanceof Node && listRef.current?.contains(t)) return;
+			if (!(t instanceof Node)) return;
+			// The trigger toggles via its own onClick — a mousedown here
+			// must NOT close (it runs before the click and would fight the
+			// toggle, leaving the menu in a half-open state).
+			if (btnRef.current?.contains(t)) return;
+			if (listRef.current?.contains(t)) return;
 			close();
 		};
 		const onScroll = (): void => close();

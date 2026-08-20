@@ -1690,11 +1690,9 @@
 	gap: 10px;
 	padding: 12px 14px;
 	border: 1px solid var(--border-strong);
-	border-radius: 12px;
-	background: var(--bg-overlay);
-	backdrop-filter: blur(16px) saturate(140%);
-	-webkit-backdrop-filter: blur(16px) saturate(140%);
-	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
+	/* Frosted surface lives on the .gui-menu-popup shell (single glass
+	 * recipe) — this card previously double-drew its own translucent
+	 * backdrop. */
 	pointer-events: auto;
 }
 
