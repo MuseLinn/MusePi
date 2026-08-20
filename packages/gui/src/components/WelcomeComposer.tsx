@@ -356,6 +356,11 @@ export function WelcomeComposer({
 	// first 8 chips; + expands with a staggered blur-in and morphs into ✕;
 	// a 自定义补充 chip jumps to the settings section.
 	const [suggestions, setSuggestions] = useState<StoredSuggestion[]>(() => loadSuggestions());
+	// Active preset mode: the welcome default is always a real mode ("work",
+	// DSH parity) — there is no "no preset" state anymore, so null never
+	// reaches the UI (chip label / active check / session create all use
+	// this normalized id).
+	const activeModeId = modeId ?? "work";
 	useEffect(() => {
 		const reload = (): void => setSuggestions(loadSuggestions());
 		window.addEventListener(SUGGESTIONS_CHANGED_EVENT, reload);
@@ -386,9 +391,16 @@ export function WelcomeComposer({
 		revealTimerRef.current = setInterval(() => {
 			setRevealCount(c => {
 				const next = c + 1;
+				// Stop WITHOUT advancing past the last chip: a final
+				// revealCount bump past length+1 renders one more frame
+				// whose delta<1 effect skips the settle timer, leaving the
+				// reveal height pinned (overflow:hidden + fixed px) — the
+				// collapse then computes scrollHeight = max(clientHeight,
+				// content) and never shrinks back.
 				if (next > suggestions.length + 1) {
 					if (revealTimerRef.current) clearInterval(revealTimerRef.current);
 					revealTimerRef.current = null;
+					return c;
 				}
 				return next;
 			});
@@ -397,10 +409,23 @@ export function WelcomeComposer({
 	const collapseSuggestions = (): void => {
 		if (!showMore || collapsing) return;
 		setCollapsing(true);
+		if (revealTimerRef.current) {
+			clearInterval(revealTimerRef.current);
+			revealTimerRef.current = null;
+		}
 		window.setTimeout(() => {
 			setCollapsing(false);
 			setShowMore(false);
 			setRevealCount(SUGGESTIONS_COLLAPSED_COUNT);
+			// Belt and braces: release any leftover height pin so the next
+			// layout effect measures the natural collapsed height (an
+			// interrupted expand could have left height + overflow inline).
+			if (suggestRevealRef.current) {
+				const node = suggestRevealRef.current;
+				node.style.height = "auto";
+				node.style.overflow = "";
+				node.style.transition = "";
+			}
 		}, 150);
 	};
 	// Height follows each reveal stage: pin the current height, ease to the
@@ -1048,51 +1073,42 @@ export function WelcomeComposer({
 								</button>
 								{/* 预设(mode)chip:项目按钮旁(DSH hero 对齐),新会话创建时应用。
 								 * 样式与项目选择同款(按钮 + 浮层菜单)。 */}
-								{modes && (
-									<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
-										<button
-											type="button"
-											className="gui-project-chip"
-											onClick={() => setPresetOpen(v => !v)}
-											aria-label={t("modes title")}
-										>
-											<Icon name="stack" className="h-3.5 w-3.5" />
-											<span className="max-w-[160px] truncate">
-												{modeId ? (modes.find(m => m.id === modeId)?.label ?? modeId) : t("modes none")}
-											</span>
-											<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-										</button>
-										{renderPresetMenu(
-											<>
-												<button
-													type="button"
-													className={`gui-view-opt${!modeId ? " gui-view-opt--active" : ""}`}
-													onClick={() => {
-														onModeChange?.(null);
-														setPresetOpen(false);
-													}}
-												>
-													<span className="min-w-0 flex-1 truncate">{t("modes none")}</span>
-													{!modeId && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-												</button>
-												{modes.map(m => (
-													<button
-														key={m.id}
-														type="button"
-														className={`gui-view-opt${modeId === m.id ? " gui-view-opt--active" : ""}`}
-														onClick={() => {
-															onModeChange?.(m.id);
-															setPresetOpen(false);
-														}}
-													>
-														<span className="min-w-0 flex-1 truncate">{m.label}</span>
-														{modeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-													</button>
-												))}
-											</>,
-										)}
-									</div>
-								)}
+									{modes && (
+										<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
+											<button
+												type="button"
+												className="gui-project-chip"
+												onClick={() => setPresetOpen(v => !v)}
+												aria-label={t("modes title")}
+											>
+												<Icon name="stack" className="h-3.5 w-3.5" />
+												<span className="max-w-[160px] truncate">
+													{modes.find(m => m.id === activeModeId)?.label ?? activeModeId}
+												</span>
+												<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+											</button>
+											{renderPresetMenu(
+												<>
+													{/* 无“默认(无预设)”:modeId 恒非 null(默认 work),
+													 * 与 DSH 一致——每次新建都带一个预设。 */}
+													{modes.map(m => (
+														<button
+															key={m.id}
+															type="button"
+															className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}`}
+															onClick={() => {
+																onModeChange?.(m.id);
+																setPresetOpen(false);
+															}}
+														>
+															<span className="min-w-0 flex-1 truncate">{m.label}</span>
+															{activeModeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
+														</button>
+													))}
+												</>,
+											)}
+										</div>
+									)}
 								{renderProjMenu(
 									<>
 										{project && (
