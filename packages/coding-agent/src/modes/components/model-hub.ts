@@ -334,6 +334,10 @@ export class ModelHubComponent implements Component {
 		this.#browser.setRoles(this.#roles);
 		this.#browser.setMruOrder(mruOrder);
 		this.#browser.setPerfStats(storage?.getModelPerf() ?? new Map());
+		const storedFavs = this.#settings.get("modelFavorites");
+		this.#browser.setFavorites(
+			Array.isArray(storedFavs) ? (storedFavs as string[]).filter((s): s is string => typeof s === "string") : [],
+		);
 
 		const bySelector = new Map(this.#availableItems.map(item => [item.selector, item]));
 		this.#recentItems = [];
@@ -1220,6 +1224,24 @@ export class ModelHubComponent implements Component {
 			}
 			return;
 		}
+		// Toggle favorite on the selected model row (GUI favorites parity):
+		// persisted to settings `modelFavorites` (provider/id), pinned to the
+		// top of the unfiltered browser list, starred in rows.
+		if (matchesKey(data, "alt+f")) {
+			const selected = this.#browser.getSelected();
+			if (selected && selected.id !== "separator") {
+				const stored = this.#settings.get("modelFavorites");
+				const favs = Array.isArray(stored)
+					? (stored as string[]).filter((s): s is string => typeof s === "string")
+					: [];
+				const has = favs.includes(selected.selector);
+				const next = has ? favs.filter(s => s !== selected.selector) : [...favs, selected.selector];
+				this.#settings.set("modelFavorites", next);
+				this.#browser.setFavorites(next);
+				this.#tui.requestRender();
+			}
+			return;
+		}
 		this.#browser.handleInput(data);
 	}
 
@@ -1906,7 +1928,7 @@ export class ModelHubComponent implements Component {
 		}
 		const arrows = this.#focus === "scope" ? "↑/↓ providers · → models" : "↑/↓ models · ← providers";
 		const refresh = entry.kind === "provider" ? " · F5 refresh" : "";
-		return `Enter assign roles · ${arrows} · type to search${refresh} · Esc close`;
+		return `Enter assign roles · ${arrows} · type to search · Alt+F favorite${refresh} · Esc close`;
 	}
 
 	/** Footer row: active strip (chips) or the contextual hint line. */

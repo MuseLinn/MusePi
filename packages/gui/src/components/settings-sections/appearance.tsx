@@ -13,22 +13,9 @@ import {
 	useThemePreference,
 	useUiThemePreferences,
 } from "@musepi/desktop-web";
-import {
-	GuiSelect,
-} from "../GuiSelect";
-import {
-	Monitor as MonitorIcon,
-	Moon as MoonIcon,
-	Sun as SunIcon,
-} from "lucide-react";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-	useSyncExternalStore,
-} from "react";
+import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
 	applyCodeSize,
 	applyCodeThemes,
@@ -55,46 +42,25 @@ import {
 	UI_FONT_OPTIONS,
 	WEEK_START_KEY,
 } from "../../lib/appearance";
-import {
-	applyGlassLevel,
-	applyGlassMaterial,
-	GLASS_MAX,
-	GLASS_MIN,
-	readGlassLevel,
-} from "../../lib/glass";
+import { applyGlassLevel, applyGlassMaterial, GLASS_MAX, GLASS_MIN, readGlassLevel } from "../../lib/glass";
+import { nativeHighlight } from "../../lib/highlight";
+import type { RpcClient } from "../../lib/rpc";
 import {
 	readImportedSkins,
 	readScrollbarStyle,
-	saveImportedSkin,
 	SCROLLBAR_STYLE_CHANGED_EVENT,
 	SCROLLBAR_STYLE_KEY,
 	type ScrollbarSkin,
+	saveImportedSkin,
 	validateImportedSkin,
 } from "../../lib/scrollbar-skins";
-import {
-	nativeHighlight,
-} from "../../lib/highlight";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	useFloatingMenu,
-} from "../../lib/use-floating-menu";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
-import {
-	AgentAvatar,
-} from "../AgentAvatar";
-import {
-	ColorPickerPanel,
-} from "../ColorPicker";
-import {
-	AgentStatusLine,
-} from "../Composer";
-import {
-	Reveal,
-} from "../Reveal";
+import { useFloatingMenu } from "../../lib/use-floating-menu";
+import { Icon } from "../../vendor/oc-icons";
+import { AgentAvatar } from "../AgentAvatar";
+import { ColorPickerPanel } from "../ColorPicker";
+import { AgentStatusLine } from "../Composer";
+import { GuiSelect } from "../GuiSelect";
+import { Reveal } from "../Reveal";
 import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
@@ -102,9 +68,9 @@ import {
 	type TurnRailSide,
 	type TurnRailStyle,
 } from "../TurnRail";
-import { NumberStepper } from "./shared";
-import { SchemaTabSection } from "./schema";
 import { ChatSection } from "./chat";
+import { SchemaTabSection } from "./schema";
+import { NumberStepper } from "./shared";
 
 const ACCENT_SWATCH: Record<string, string> = {
 	brand: "#34d399",
@@ -197,8 +163,15 @@ export function AppearanceSection({
 		return v === "accent" ? "accent" : "default";
 	});
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
-	const [fontScale, setFontScale] = useState<number>(() => Number(localStorage.getItem("musepi-gui-font-scale") ?? 15));
-	const [termFont, setTermFont] = useState<number>(() => Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13));
+	const [statusBarInfo, setStatusBarInfo] = useState<boolean>(
+		() => localStorage.getItem("musepi-gui-statusbar-info") === "1",
+	);
+	const [fontScale, setFontScale] = useState<number>(() =>
+		Number(localStorage.getItem("musepi-gui-font-scale") ?? 15),
+	);
+	const [termFont, setTermFont] = useState<number>(() =>
+		Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13),
+	);
 	const [codeFont, setCodeFont] = useState<number>(() => Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13));
 	const [density, setDensity] = useState<number>(() => Number(localStorage.getItem(DENSITY_KEY) ?? 100));
 	const [timeFmt, setTimeFmt] = useState<"auto" | "12h" | "24h">(
@@ -251,9 +224,9 @@ export function AppearanceSection({
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("language")}</div>
 					<GuiSelect
-					className="gui-settings-select"
-					value={locale}
-					onChange={v => {
+						className="gui-settings-select"
+						value={locale}
+						onChange={v => {
 							const next = v;
 							// Renderer mirror updates immediately; the daemon key
 							// (settings.locale, config.yml) is the single source the
@@ -261,34 +234,45 @@ export function AppearanceSection({
 							setLocale(next);
 							if (rpc) void rpc.request("settings.set", { key: "settings.locale", value: next }).catch(() => {});
 						}}
-					options={[{ value: "zh-CN", label: "中文" }, { value: "en-US", label: "English" }]}
-				/>
+						options={[
+							{ value: "zh-CN", label: "中文" },
+							{ value: "en-US", label: "English" },
+						]}
+					/>
 				</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("time format")}</div>
 					<GuiSelect
-					className="gui-settings-select"
-					value={timeFmt}
-					onChange={nv => {
+						className="gui-settings-select"
+						value={timeFmt}
+						onChange={nv => {
 							const v = nv as "auto" | "12h" | "24h";
 							setTimeFmt(v);
 							setPref(TIME_FMT_KEY, v);
 						}}
-					options={[{ value: "auto", label: t("auto") }, { value: "12h", label: t("12-hour") }, { value: "24h", label: t("24-hour") }]}
-				/>
+						options={[
+							{ value: "auto", label: t("auto") },
+							{ value: "12h", label: t("12-hour") },
+							{ value: "24h", label: t("24-hour") },
+						]}
+					/>
 				</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("week starts on")}</div>
 					<GuiSelect
-					className="gui-settings-select"
-					value={weekStart}
-					onChange={nv => {
+						className="gui-settings-select"
+						value={weekStart}
+						onChange={nv => {
 							const v = nv as "auto" | "monday" | "sunday";
 							setWeekStart(v);
 							setPref(WEEK_START_KEY, v);
 						}}
-					options={[{ value: "auto", label: t("auto") }, { value: "monday", label: t("monday") }, { value: "sunday", label: t("sunday") }]}
-				/>
+						options={[
+							{ value: "auto", label: t("auto") },
+							{ value: "monday", label: t("monday") },
+							{ value: "sunday", label: t("sunday") },
+						]}
+					/>
 				</div>
 			</div>
 
@@ -350,11 +334,11 @@ export function AppearanceSection({
 						<div className="gui-settings-field-hint">{t("unified theme description")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
-					className="gui-settings-select"
-					value={unifiedThemeId}
-					onChange={v => setUnifiedTheme(v as UiThemeId)}
-					options={UNIFIED_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
-				/>
+								className="gui-settings-select"
+								value={unifiedThemeId}
+								onChange={v => setUnifiedTheme(v as UiThemeId)}
+								options={UNIFIED_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+							/>
 						</div>
 					</div>
 				</Reveal>
@@ -364,11 +348,11 @@ export function AppearanceSection({
 						<div className="gui-settings-field-hint">{t("light theme description")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
-					className="gui-settings-select"
-					value={lightThemeId}
-					onChange={v => setLightTheme(v as UiThemeId)}
-					options={LIGHT_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
-				/>
+								className="gui-settings-select"
+								value={lightThemeId}
+								onChange={v => setLightTheme(v as UiThemeId)}
+								options={LIGHT_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+							/>
 						</div>
 					</div>
 					<div className="gui-settings-field">
@@ -376,11 +360,11 @@ export function AppearanceSection({
 						<div className="gui-settings-field-hint">{t("dark theme description")}</div>
 						<div className="gui-settings-field-control">
 							<GuiSelect
-					className="gui-settings-select"
-					value={darkThemeId}
-					onChange={v => setDarkTheme(v as UiThemeId)}
-					options={DARK_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
-				/>
+								className="gui-settings-select"
+								value={darkThemeId}
+								onChange={v => setDarkTheme(v as UiThemeId)}
+								options={DARK_THEME_PRESETS.map(p => ({ value: p.id, label: t(`theme preset ${p.id}`) }))}
+							/>
 						</div>
 					</div>
 				</Reveal>
@@ -404,16 +388,16 @@ export function AppearanceSection({
 					<div className="gui-settings-field-label">{t("interface font")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={uiFont}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={uiFont}
+							onChange={nv => {
 								const v = nv;
 								setUiFont(v);
 								setPref(UI_FONT_KEY, v);
 								applyUiFont(v);
 							}}
-					options={UI_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
-				/>
+							options={UI_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
+						/>
 						<button
 							type="button"
 							className="gui-settings-reset"
@@ -452,32 +436,38 @@ export function AppearanceSection({
 					<div className="gui-settings-field-hint">{t("turn rail position hint")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={turnRailSide}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={turnRailSide}
+							onChange={nv => {
 								const v = nv as "right" | "left";
 								setTurnRailSide(v);
 								setPref(TURN_RAIL_SIDE_KEY, v);
 								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
 							}}
-					options={[{ value: "right", label: t("right side") }, { value: "left", label: t("left side") }]}
-				/>
+							options={[
+								{ value: "right", label: t("right side") },
+								{ value: "left", label: t("left side") },
+							]}
+						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("turn rail style")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={turnRailStyle}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={turnRailStyle}
+							onChange={nv => {
 								const v = nv as "burger" | "pacman";
 								setTurnRailStyle(v);
 								setPref(TURN_RAIL_STYLE_KEY, v);
 								window.dispatchEvent(new Event(TURN_RAIL_CHANGED_EVENT));
 							}}
-					options={[{ value: "burger", label: t("burger layers") }, { value: "pacman", label: t("pacman") }]}
-				/>
+							options={[
+								{ value: "burger", label: t("burger layers") },
+								{ value: "pacman", label: t("pacman") },
+							]}
+						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
@@ -485,20 +475,20 @@ export function AppearanceSection({
 					<div className="gui-settings-field-hint">{t("scrollbar style hint")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={scrollbarStyle}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={scrollbarStyle}
+							onChange={nv => {
 								const v = nv as string;
 								setScrollbarStyle(v);
 								setPref(SCROLLBAR_STYLE_KEY, v);
 								window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
 							}}
-					options={[
+							options={[
 								...importedSkins.map(s => ({ value: s.id, label: s.displayName })),
 								{ value: "builtin-gummy", label: t("gummy") },
 								{ value: "builtin-pacman", label: t("pacman") },
 							]}
-				/>
+						/>
 						<div className="flex items-center gap-2 mt-2">
 							<button
 								type="button"
@@ -647,16 +637,16 @@ export function AppearanceSection({
 					<div className="gui-settings-field-hint">{t("light code theme description")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={lightCodeTheme}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={lightCodeTheme}
+							onChange={nv => {
 								const v = nv;
 								setLightCodeTheme(v);
 								setPref(CODE_THEME_LIGHT_KEY, v);
 								applyCodeThemes(v, darkCodeTheme);
 							}}
-					options={LIGHT_CODE_THEMES.map(o => ({ value: o.id, label: o.label }))}
-				/>
+							options={LIGHT_CODE_THEMES.map(o => ({ value: o.id, label: o.label }))}
+						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
@@ -664,16 +654,16 @@ export function AppearanceSection({
 					<div className="gui-settings-field-hint">{t("dark code theme description")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={darkCodeTheme}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={darkCodeTheme}
+							onChange={nv => {
 								const v = nv;
 								setDarkCodeTheme(v);
 								setPref(CODE_THEME_DARK_KEY, v);
 								applyCodeThemes(lightCodeTheme, v);
 							}}
-					options={DARK_CODE_THEMES.map(o => ({ value: o.id, label: o.label }))}
-				/>
+							options={DARK_CODE_THEMES.map(o => ({ value: o.id, label: o.label }))}
+						/>
 					</div>
 				</div>
 				<div className="gui-settings-row">
@@ -739,16 +729,16 @@ export function AppearanceSection({
 					<div className="gui-settings-field-label">{t("code font")}</div>
 					<div className="gui-settings-field-control">
 						<GuiSelect
-					className="gui-settings-select"
-					value={monoFont}
-					onChange={nv => {
+							className="gui-settings-select"
+							value={monoFont}
+							onChange={nv => {
 								const v = nv;
 								setMonoFont(v);
 								setPref(MONO_FONT_KEY, v);
 								applyMonoFont(v);
 							}}
-					options={CODE_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
-				/>
+							options={CODE_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
+						/>
 						<button
 							type="button"
 							className="gui-settings-reset"
@@ -899,6 +889,23 @@ export function AppearanceSection({
 							</div>
 						</Reveal>
 					</div>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("info status bar")}</div>
+						<div className="gui-settings-row-desc">{t("info status bar desc")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={statusBarInfo}
+						className={`gui-toggle${statusBarInfo ? " gui-toggle--on" : ""}`}
+						onClick={() => {
+							const next = !statusBarInfo;
+							setStatusBarInfo(next);
+							localStorage.setItem("musepi-gui-statusbar-info", next ? "1" : "0");
+						}}
+					/>
 				</div>
 				<div className="gui-settings-row">
 					<div>

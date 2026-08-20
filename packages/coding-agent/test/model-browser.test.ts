@@ -104,3 +104,59 @@ describe("ModelBrowser perf display", () => {
 		expect(renderPlain(browser, 120)[2]).not.toContain("t/s");
 	});
 });
+
+describe("ModelBrowser favorites (TUI/GUI parity)", () => {
+	test("favorites pin to the top of the unfiltered list", () => {
+		const browser = makeBrowser(
+			[
+				makeModel("openai", "gpt-5"),
+				makeModel("openai", "gpt-5.5"),
+				makeModel("openai", "gpt-6"),
+			],
+			[],
+		);
+		browser.setFavorites(["openai/gpt-5.5"]);
+		const rows = browser.render(120).map(line => Bun.stripANSI(line));
+		const gpt55 = rows.findIndex(r => r.includes("gpt-5.5"));
+		const gpt5 = rows.findIndex(r => r.includes("gpt-5 "));
+		const gpt6 = rows.findIndex(r => r.includes("gpt-6"));
+		expect(gpt55).toBeGreaterThanOrEqual(0);
+		expect(gpt55).toBeLessThan(gpt5);
+		expect(gpt55).toBeLessThan(gpt6);
+	});
+
+	test("favorited rows render a star; unfavorited do not", () => {
+		const browser = makeBrowser(
+			[
+				makeModel("openai", "gpt-5"),
+				makeModel("openai", "gpt-5.5"),
+			],
+			[],
+		);
+		browser.setFavorites(["openai/gpt-5.5"]);
+		const rows = browser.render(120).map(line => Bun.stripANSI(line));
+		const star = "★";
+		const favRow = rows.find(r => r.includes("gpt-5.5"));
+		const plainRow = rows.find(r => r.includes("gpt-5 "));
+		expect(favRow).toContain(star);
+		expect(plainRow).not.toContain(star);
+	});
+
+	test("search mode does not reorder by favorites (match quality wins)", () => {
+		const browser = makeBrowser(
+			[
+				makeModel("openai", "gpt-5.5"),
+				makeModel("openai", "gpt-6"),
+			],
+			[],
+		);
+		browser.setFavorites(["openai/gpt-6"]);
+		browser.setQuery("gpt-5.5");
+		const rows = browser.render(120).map(line => Bun.stripANSI(line));
+		const joined = rows.join("\n");
+		// The favorited gpt-6 does not match the query, so it must NOT be
+		// force-pinned above the match (favorites only reorder unfiltered).
+		expect(joined).toContain("gpt-5.5");
+		expect(joined).not.toContain("gpt-6");
+	});
+});

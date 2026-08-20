@@ -1475,6 +1475,12 @@
 	word-break: break-word;
 }
 
+.gui-plan-content--edit {
+	width: 100%;
+	resize: vertical;
+	white-space: pre-wrap;
+}
+
 .gui-plan-refine {
 	display: flex;
 	flex-direction: column;

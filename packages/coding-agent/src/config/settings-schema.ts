@@ -527,6 +527,10 @@ export const SETTINGS_SCHEMA = {
 
 	enabledModels: { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** `provider/id` selectors pinned by the model hub (alt+f); favorites
+	 *  sort first in the browser's unfiltered list. */
+	modelFavorites: { type: "array", default: EMPTY_STRING_ARRAY },
+
 	disabledProviders: { type: "array", default: EMPTY_STRING_ARRAY },
 
 	"providers.maxInFlightRequests": {

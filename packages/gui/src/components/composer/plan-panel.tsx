@@ -35,7 +35,8 @@ export function PlanPanel({
 	const [plan, setPlan] = useState<PlanShowResult | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [refineText, setRefineText] = useState("");
-	const [busy, setBusy] = useState<"refine" | "approve" | "exit" | null>(null);
+	const [planText, setPlanText] = useState<string | null>(null);
+	const [busy, setBusy] = useState<"refine" | "approve" | "exit" | "save" | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const refineRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -44,13 +45,18 @@ export function PlanPanel({
 		setLoading(true);
 		void rpc
 			.request<PlanShowResult>("session.plan", { sessionId, op: "show" })
-			.then(setPlan)
+			.then(p => {
+				setPlan(p);
+				// Seed the edit buffer on load; keep user edits when a refresh
+				// (e.g. after refine) returns identical content.
+				setPlanText(prev => (prev === null ? p.content : prev));
+			})
 			.catch(() => {})
 			.finally(() => setLoading(false));
 	};
 	useEffect(fetchPlan, [rpc, sessionId]);
 
-	const run = (op: "refine" | "approve" | "exit", params: Record<string, unknown> = {}): void => {
+	const run = (op: "refine" | "approve" | "exit" | "save", params: Record<string, unknown> = {}): void => {
 		if (!rpc || busy) return;
 		setBusy(op);
 		setError(null);
@@ -85,8 +91,39 @@ export function PlanPanel({
 			) : plan?.content ? (
 				<div className="gui-plan-body">
 					{plan.planFilePath && <div className="gui-plan-path">{plan.planFilePath}</div>}
-					<pre className="gui-plan-content">{plan.content}</pre>
+					<textarea
+						className="gui-plan-content gui-plan-content--edit"
+						value={planText ?? plan.content}
+						rows={12}
+						spellCheck={false}
+						aria-label={t("plan content")}
+						onChange={e => setPlanText(e.target.value)}
+					/>
 					{error && <div className="gui-goal-error">{error}</div>}
+					<div className="gui-goal-actions">
+						<button
+							type="button"
+							className="gui-goal-btn"
+							disabled={busy !== null || planText === null || planText === plan.content}
+							onClick={() => run("save", { content: planText })}
+						>
+							<Icon name="check" className="h-3.5 w-3.5" />
+							{t("plan save")}
+						</button>
+						<button
+							type="button"
+							className="gui-goal-btn gui-goal-btn--primary"
+							disabled={busy !== null}
+							onClick={() => run("approve")}
+						>
+							<Icon name="check" className="h-3.5 w-3.5" />
+							{t("plan approve execute")}
+						</button>
+						<button type="button" className="gui-goal-btn" disabled={busy !== null} onClick={() => run("exit")}>
+							<Icon name="close" className="h-3.5 w-3.5" />
+							{t("plan exit")}
+						</button>
+					</div>
 					<div className="gui-plan-refine">
 						<textarea
 							ref={refineRef}
@@ -108,31 +145,9 @@ export function PlanPanel({
 							{t("plan refine")}
 						</button>
 					</div>
-					<div className="gui-goal-actions">
-						<button
-							type="button"
-							className="gui-goal-btn gui-goal-btn--primary"
-							disabled={busy !== null}
-							onClick={() => run("approve")}
-						>
-							<Icon name="check" className="h-3.5 w-3.5" />
-							{t("plan approve execute")}
-						</button>
-						<button
-							type="button"
-							className="gui-goal-btn"
-							disabled={busy !== null}
-							onClick={() => run("exit")}
-						>
-							<Icon name="close" className="h-3.5 w-3.5" />
-							{t("plan exit")}
-						</button>
-					</div>
 				</div>
 			) : (
-				<div className="gui-quota-note">
-					{plan?.enabled ? t("plan not written yet") : t("plan mode off")}
-				</div>
+				<div className="gui-quota-note">{plan?.enabled ? t("plan not written yet") : t("plan mode off")}</div>
 			)}
 		</div>
 	);

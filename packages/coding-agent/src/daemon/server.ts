@@ -79,7 +79,7 @@ import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
-import { listPlanFiles, readPlanFile } from "../plan-mode/plan-files";
+import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
@@ -5980,10 +5980,15 @@ export class DaemonServer {
 				const p = (params ?? {}) as { audio: number[]; modelKey?: string };
 				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required (16kHz mono floats)");
 				const { sttClient } = await import("../stt/asr-client");
-				const text = await sttClient.transcribe(
-					(p.modelKey as "fast" | "balanced" | "turbo" | "parakeet") ?? "balanced",
-					Float32Array.from(p.audio),
-				);
+				const { resolveSttModelSpec } = await import("../stt/models");
+				// Default follows the user's config (`stt.modelName`, TUI parity)
+				// instead of a hardcoded tier — the GUI mic otherwise silently
+				// uses a different model than the settings panel shows.
+				const { settings: appSettings } = await import("../config/settings");
+				const modelKey = p.modelKey
+					? resolveSttModelSpec(p.modelKey).key
+					: resolveSttModelSpec(appSettings.get("stt.modelName") as string | undefined).key;
+				const text = await sttClient.transcribe(modelKey, Float32Array.from(p.audio));
 				return { text };
 			}
 			case "tts.synthesize": {
@@ -5993,7 +5998,12 @@ export class DaemonServer {
 				if (!p.text?.trim()) throw new Error("text required");
 				const { ttsClient } = await import("../tts/tts-client");
 				const { DEFAULT_TTS_LOCAL_MODEL_KEY } = await import("../tts/models");
-				const audio = await ttsClient.synthesize((p.modelKey as never) ?? DEFAULT_TTS_LOCAL_MODEL_KEY, p.text);
+				// Default follows the user's config (`tts.localModel`, TUI
+				// parity) instead of the hardcoded model key.
+				const { settings: appSettings } = await import("../config/settings");
+				const configured = appSettings.get("tts.localModel") as string | undefined;
+				const modelKey = p.modelKey ?? (configured || DEFAULT_TTS_LOCAL_MODEL_KEY);
+				const audio = await ttsClient.synthesize(modelKey as never, p.text);
 				if (!audio) return { audio: null, sampleRate: 0 };
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };
 			}
@@ -7059,8 +7069,9 @@ export class DaemonServer {
 				// feedback text.
 				const p = (params ?? {}) as {
 					sessionId: string;
-					op: "show" | "approve" | "refine";
+					op: "show" | "approve" | "refine" | "save";
 					feedback?: string | null;
+					content?: string | null;
 				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -7122,6 +7133,17 @@ export class DaemonServer {
 						if (!feedback) throw new Error("Refine feedback is empty.");
 						await g.followUp(feedback, undefined, { synthetic: true });
 						return { ok: true };
+					}
+					case "save": {
+						// In-place plan edit (TUI overlay-edit parity): write the
+						// edited content back to the current plan file so the
+						// approved plan reflects GUI-side changes.
+						const content = (p.content ?? "").trim();
+						if (!content) throw new Error("Plan content is empty.");
+						const planFilePath = await currentPlanPath();
+						if (!planFilePath) throw new Error("No plan file to save.");
+						await writePlanFile(planFilePath, `${content}\n`, { localProtocolOptions, cwd });
+						return { ok: true, planFilePath };
 					}
 				}
 				break;

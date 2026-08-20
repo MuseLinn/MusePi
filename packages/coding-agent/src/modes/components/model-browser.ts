@@ -370,6 +370,9 @@ export class ModelBrowser implements Component {
 	#focused = true;
 	/** `provider/id` of the session's active model; marked in rows and detail. */
 	#currentSelector: string | undefined;
+	/** Favorited `provider/id` selectors (settings `modelFavorites`, GUI
+	 *  favorites parity): pinned to the top of the unfiltered list. */
+	#favorites = new Set<string>();
 
 	/** Enter or click-on-selected. */
 	onActivate?: (item: ModelBrowserItem) => void;
@@ -390,6 +393,17 @@ export class ModelBrowser implements Component {
 	/** Mark `selector` as the session's active model (undefined clears the mark). */
 	setCurrentSelector(selector: string | undefined): void {
 		this.#currentSelector = selector;
+	}
+
+	/** Replace the favorited selector set (settings `modelFavorites`). */
+	setFavorites(selectors: ReadonlyArray<string>): void {
+		this.#favorites = new Set(selectors);
+		this.#applyQuery();
+	}
+
+	/** True when `selector` is favorited (row star + alt+f target). */
+	isFavorite(selector: string): boolean {
+		return this.#favorites.has(selector);
 	}
 
 	/** Replace the scope's base items; the live query re-applies and selection is pinned by selector. */
@@ -601,7 +615,16 @@ export class ModelBrowser implements Component {
 				items = matches;
 			}
 		} else {
-			items = this.#baseItems;
+			// Unfiltered: favorites first (stable sort keeps the provider's
+			// original relative order within each group), then everything
+			// else — the settings-pinned rows stay at the top like the GUI
+			// favorites.
+			items =
+				this.#favorites.size > 0
+					? [...this.#baseItems].sort(
+							(a, b) => Number(this.#favorites.has(b.selector)) - Number(this.#favorites.has(a.selector)),
+						)
+					: this.#baseItems;
 		}
 		this.#visibleItems = this.#insertSeparator(items);
 		this.#selectedIndex = this.#coerceSelectedIndex(Math.min(this.#selectedIndex, this.#visibleItems.length - 1));
@@ -741,10 +764,11 @@ export class ModelBrowser implements Component {
 				: item.id;
 		const currentMark =
 			item.selector === this.#currentSelector ? ` ${theme.fg("success", theme.status.enabled)}` : "";
+		const favMark = this.#favorites.has(item.selector) ? ` ${theme.fg("warning", "★")}` : "";
 		const overLimit = overContext
 			? ` ${theme.status.disabled} context>${formatNumber(item.model.contextWindow ?? 0).toLowerCase()}`
 			: "";
-		let left = `${prefix}${providerPrefix}${name}${currentMark}${overLimit}`;
+		let left = `${prefix}${providerPrefix}${name}${currentMark}${favMark}${overLimit}`;
 
 		// Perf column collapses entirely when no visible row has measurements.
 		const perfCol =
