@@ -1360,6 +1360,15 @@
 	gap: 8px;
 }
 
+/* 扩展中心设置卡片区(DSH settings.plugin.item 类比):底部堆叠,与槽位
+ * 注册表同款间距。 */
+.gui-ext-itemcards {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-top: 4px;
+}
+
 /* Composer frame morph (welcome ⇄ session): the incoming frame is
  * transformed onto the outgoing rect in the layout phase, then eased back
  * to identity — one continuous shape/position animation, no cross-fade. */

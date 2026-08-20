@@ -118,19 +118,8 @@ export interface ComposerProps {
 	onModelChange?(modelId: string): void;
 	/** Model preselect carried from the welcome composer. */
 	presetModelId?: string | null;
-	/** Welcome 预设(mode)chip:仅 welcome 场景传入(modes 列表);会话态不传 → 不渲染。 */
-	modes?: { id: string; label: string }[] | null;
-	modeId?: string | null;
-	onModeChange?(id: string | null): void;
-	/** Modes v2:会话态热切换 —— chip 变为可点,下拉选预设走 session.setMode
-	 *  RPC(welcome 的 onModeChange 只影响新会话创建;本回调作用于当前会话)。 */
-	onSessionModeChange?(id: string | null): void;
-	/** welcome 空态(true 时 modes/modeId/onModeChange 生效;会话态只读 label)。 */
+	/** welcome 空态(会话态不传)。 */
 	welcome?: boolean;
-	/** 会话态当前预设 id(sessionModeLabel 的原始值,热切换 chip 打勾用)。 */
-	sessionModeId?: string | null;
-	/** 会话态只读预设标签(DSH AgentPresetLabel 对齐;welcome 时不显示)。 */
-	sessionModeLabel?: string | null;
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
@@ -149,62 +138,6 @@ export interface ComposerProps {
  * (progress/results) — the frosted card opened from the composer's
  * temporary swarm status chip. Host wires agent-trajectory drill-down.
  */
-/**
- * Modes v2 会话态热切换 chip:点击展开预设列表,选中走 session.setMode RPC
- * (welcome 的 picker 只影响新会话创建;这里作用于当前会话)。样式与 welcome
- * 项目 chip 同款(按钮 + 浮层菜单),复读会话(无 handler)回退只读标签。
- */
-function SessionModeChip({
-	label,
-	modes,
-	currentId,
-	onSelect,
-}: {
-	label: string;
-	modes: { id: string; label: string }[];
-	currentId: string | null;
-	onSelect(id: string | null): void;
-}): ReactNode {
-	const [open, setOpen] = useState(false);
-	return (
-		<div className="relative z-20 flex-shrink-0">
-			<button
-				type="button"
-				className="gui-mode-chip"
-				title={t("modes title")}
-				aria-haspopup="menu"
-				aria-expanded={open}
-				onClick={() => setOpen(v => !v)}
-			>
-				<Icon name="stack" className="h-3 w-3" />
-				<span className="max-w-[160px] truncate">{label}</span>
-				<Icon name="more" className="h-2.5 w-2.5 opacity-60" />
-			</button>
-			{open ? (
-				<>
-					<div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-					<div className="absolute right-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-1 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
-						{modes.map(m => (
-							<button
-								key={m.id}
-								type="button"
-								className={`gui-view-opt${currentId === m.id ? " gui-view-opt--active" : ""}`}
-								onClick={() => {
-									onSelect(m.id);
-									setOpen(false);
-								}}
-							>
-								<span className="min-w-0 flex-1 truncate">{m.label}</span>
-								{currentId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-							</button>
-						))}
-					</div>
-				</>
-			) : null}
-		</div>
-	);
-}
-
 /**
  * Session mode toggles (TUI /fast /computer /vision /prewalk parity): a
  * compact popover in the composer action row. Data comes from the 10s
@@ -376,11 +309,7 @@ export function Composer({
 	onToggleFocus,
 	activeTask,
 	swarmHost,
-	modes: modeOptions,
-	onSessionModeChange,
 	welcome,
-	sessionModeLabel,
-	sessionModeId,
 }: ComposerProps): ReactNode {
 	const pet = usePet();
 	// composer 座位槽(DSH conversation.input.dock/left/right 对齐):
@@ -1643,20 +1572,6 @@ export function Composer({
 						{/* Focus mode sits between the attach menu and the model
 						 * selector (openchamber ComposerFooter order). */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
-						{!welcome &&
-							sessionModeLabel &&
-							(onSessionModeChange && modeOptions ? (
-								<SessionModeChip
-									label={sessionModeLabel}
-									modes={modeOptions}
-									currentId={sessionModeId ?? null}
-									onSelect={onSessionModeChange}
-								/>
-							) : (
-								<span className="gui-mode-label" title={t("modes title")}>
-									{sessionModeLabel}
-								</span>
-							))}
 						<ModelSelector
 							rpc={rpc}
 							sessionId={sessionId}

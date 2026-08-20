@@ -605,19 +605,6 @@ export function ChatView({
 			.request("session.setThinkingLevel", { sessionId: store.sessionId, thinkingLevel: level ?? null })
 			.catch(() => {});
 	};
-	// Modes v2(§8):会话态预设热切换 —— chip 下拉选中后走 session.setMode RPC
-	// (忙会话 daemon 侧 pending,agent_end 补做);null = 清除预设。
-	const handleSessionModeChange = (id: string | null): void => {
-		if (!store) return;
-		void rpc.request("session.setMode", { sessionId: store.sessionId, modeId: id }).catch(() => {});
-	};
-	// 会话态当前预设(来自 daemon 会话快照 modeId;历史会话重开 label 正确显示)。
-	const sessionModeId = (snap?.state as { modeId?: string } | undefined)?.modeId ?? null;
-	// 无预设时显示默认预设 work 的 label(plan 决策 #12:work = 默认全量,
-	// 无 mode 时行为,对应 DSH standard)—— 不是"无预设"。
-	const sessionModeLabel = sessionModeId
-		? (modes?.find(m => m.id === sessionModeId)?.label ?? sessionModeId)
-		: (modes?.find(m => m.id === "work")?.label ?? "work");
 	// Revert history (openchamber RevertedMessageDock parity): the daemon
 	// is the single source of truth — session.revertList returns the
 	// backed-up reverts (one entry per session.revertTo), so the dock can
@@ -1364,13 +1351,7 @@ export function ChatView({
 											thinkingCeiling={thinkingCeiling}
 											thinkingEfforts={thinkingEfforts}
 											presetModelId={presetModelId}
-											modes={modes}
-											modeId={modeId}
 											welcome={showWelcome}
-											sessionModeId={sessionModeId}
-											sessionModeLabel={sessionModeLabel}
-											onModeChange={onModeChange}
-											onSessionModeChange={handleSessionModeChange}
 											quotes={quotes}
 											onQuotesChange={setQuotes}
 											pendingEdit={pendingEdit}

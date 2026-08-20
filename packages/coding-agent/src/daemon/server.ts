@@ -7522,31 +7522,14 @@ export class DaemonServer {
 				// P1 设置 tab 开放:白名单 = SETTING_TABS ∪ 扩展声明 tab
 				// (registerSetting 的 ui.tab)。扩展 tab 名仍受"客户端不能
 				// 发明任意 tab"约束——只有真实注册过的 tab 才返回,typo 丢弃。
-				// 特殊 tab "extensions":返回**全部**扩展设置(跨声明 tab),
-				// 带 extensionId —— GUI 扩展设置分区据此按扩展渲染
-				// 声明式 schema 卡片(DSH settings.plugin.item 无组件类比)。
+				// 扩展设置走各自声明的 ui.tab(插入现有 tab,不设聚合 tab)。
 				const extTabs = new Set<string>();
 				for (const { setting } of extSettings.values()) extTabs.add(setting.ui.tab);
 				const requested = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
-				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab) || tab === "extensions");
+				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab));
 				const out: Record<string, unknown[]> = {};
 				for (const tab of tabs) {
 					const items: unknown[] = [];
-					if (tab === "extensions") {
-						// 全部扩展设置(按注册顺序),带 owner 身份供分组。
-						for (const [key, { setting, extensionPath }] of extSettings) {
-							if (items.some(item => (item as { key: string }).key === key)) continue;
-							items.push({
-								key,
-								type: setting.type,
-								default: setting.default,
-								ui: setting.ui,
-								extensionId: extensionPath,
-							});
-						}
-						out[tab] = items;
-						continue;
-					}
 					for (const [key, def] of Object.entries(SETTINGS_SCHEMA)) {
 						const ui = (def as { ui?: { tab?: string; options?: unknown } }).ui;
 						if (!ui || ui.tab !== tab) continue;

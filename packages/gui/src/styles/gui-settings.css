@@ -2145,9 +2145,15 @@
 	border-radius: 8px;
 }
 
-/* Segmented option selectors (ZCode appearance settings). */
+/* Segmented option selectors (ZCode appearance settings). Two-option
+ * GuiSelect renders as a segmented toggle — buttons must be EQUAL width
+ * regardless of label length ("中文" vs "English"), so the container
+ * stretches to fill its row and segments flex evenly. */
 .gui-segmented {
 	display: inline-flex;
+	width: 100%;
+	min-width: 160px;
+	max-width: 260px;
 	gap: 2px;
 	padding: 2px;
 	border-radius: 10px;
@@ -2155,7 +2161,9 @@
 }
 
 .gui-seg-btn {
-	padding: 4px 12px;
+	flex: 1 1 0;
+	min-width: 0;
+	padding: 4px 8px;
 	border-radius: 8px;
 	border: none;
 	background: transparent;
@@ -2163,6 +2171,9 @@
 	font-size: 12.5px;
 	font-family: inherit;
 	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	transition: background 120ms ease-out, color 120ms ease-out;
 }
 
