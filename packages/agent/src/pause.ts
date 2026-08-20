@@ -45,6 +45,18 @@ export class AgentPauseGate implements PauseGate {
 	#pausedAt = 0;
 	#listeners = new Set<AgentPauseListener>();
 
+	/**
+	 * @param options `paused` restores a persisted freeze state (daemon
+	 *  reactivation after idle-archive): the gate engages immediately with
+	 *  the recorded `pausedAt`, so the pause survives session rehydration.
+	 */
+	constructor(options: { paused?: boolean; pausedAt?: number | null } = {}) {
+		if (options.paused) {
+			this.#gate = Promise.withResolvers<void>();
+			this.#pausedAt = options.pausedAt ?? Date.now();
+		}
+	}
+
 	/** True while the gate is engaged. */
 	get paused(): boolean {
 		return this.#gate !== undefined;

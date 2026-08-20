@@ -1047,6 +1047,7 @@ export const settings = {
 	"welcome tip draw diagram": "Try drawing a flowchart or diagram",
 	attachment: "Attachment",
 	"cannot reach the local daemon": "Cannot reach the local daemon",
+	"interface render error — reconnecting will recover": "Interface render error — reconnect to recover",
 	"choose how to reach the workspace": "Choose how to connect to the workspace",
 	"collab.stop": "collab.stop",
 	connect: "Connect",

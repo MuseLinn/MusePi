@@ -997,6 +997,7 @@ export const settings = {
 	"welcome tip draw diagram": "试试画个流程图或图表",
 	attachment: "附件",
 	"cannot reach the local daemon": "无法连接本地守护进程",
+	"interface render error — reconnecting will recover": "界面渲染出错，重新连接即可恢复",
 	"choose how to reach the workspace": "选择如何连接工作区",
 	"collab.stop": "collab.stop",
 	connect: "连接",

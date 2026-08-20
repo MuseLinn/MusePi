@@ -286,6 +286,10 @@ export interface SessionState {
 	planMode?: boolean;
 	/** Aggregated todo progress per phase (done/total). */
 	todo?: { name: string; done: number; total: number }[];
+	/** Per-session pause gate state (daemon fills for live + archived
+	 *  sessions; persisted across idle-archive/reactivation). */
+	paused?: boolean;
+	pausedAt?: number | null;
 }
 
 export interface AgentSnapshot {

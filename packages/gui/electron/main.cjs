@@ -13,7 +13,7 @@
  */
 "use strict";
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, screen, session, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerMonitor, powerSaveBlocker, screen, session, shell } = require("electron");
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -1699,6 +1699,21 @@ ipcMain.handle("keep-awake-set", (_event, enabled) => {
 		keepAwakeId = null;
 	}
 	return { ok: true };
+});
+
+// Sleep/wake (合盖待机): Electron tears down the renderer's WebSocket on
+// system sleep (electron#19993 — localhost included). On resume, wake the
+// renderer's recovery immediately — visibilitychange/online may not fire
+// on macOS wake, so the renderer would otherwise sit on a dead socket until
+// its keepalive notices (≤45s). The renderer runs the same clean-boot
+// recovery the 重新连接 button uses; pause state lives in the daemon and is
+// re-fetched during that boot, so global/session pauses survive intact.
+app.whenReady().then(() => {
+	powerMonitor.on("resume", () => {
+		for (const win of BrowserWindow.getAllWindows()) {
+			if (!win.isDestroyed()) win.webContents.send("app-power-resume");
+		}
+	});
 });
 ipcMain.handle("pet-import", async () => {
 	const picked = await dialog.showOpenDialog(mainWindow ?? undefined, {

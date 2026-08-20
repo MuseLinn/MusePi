@@ -207,6 +207,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	 *  (cross-platform: caffeinate-equivalent on macOS, ES_SYSTEM_REQUIRED
 	 *  on Windows, ScreenSaver Inhibit on Linux). */
 	setKeepAwake: (enabled) => ipcRenderer.invoke("keep-awake-set", enabled),
+	/** System sleep/wake: main-process powerMonitor "resume" push. The
+	 *  renderer recovers the daemon connection on wake (Electron tears the
+	 *  renderer's WebSocket down on sleep — electron#19993). */
+	onPowerResume: (cb) => {
+		const listener = () => cb();
+		ipcRenderer.on("app-power-resume", listener);
+		return () => ipcRenderer.removeListener("app-power-resume", listener);
+	},
 	/** Import a Petdex zip (dialog + unpack); null when cancelled. */
 	importPetdex: () => ipcRenderer.invoke("pet-import"),
 	/** Search the petdex.dev catalog (main-process fetch — no CORS). */

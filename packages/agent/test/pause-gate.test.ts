@@ -147,6 +147,26 @@ describe("agentPauseGate", () => {
 		expect(transitions).toEqual([true, false]);
 	});
 
+	it("restores a persisted pause from constructor options (daemon rehydration)", () => {
+		// A session archived (idle-close/restart) while paused comes back
+		// frozen: the gate engages immediately with the recorded pausedAt.
+		const restored = new AgentPauseGate({ paused: true, pausedAt: 1234 });
+		expect(restored.paused).toBe(true);
+		expect(restored.pausedAt).toBe(1234);
+		const duration = restored.resume();
+		expect(typeof duration).toBe("number");
+		expect(duration).toBeGreaterThan(0);
+		expect(duration).toBeGreaterThanOrEqual(Date.now() - 1234 - 60_000);
+		expect(restored.paused).toBe(false);
+		// pausedAt defaults to now when the record predates the field.
+		const withoutAt = new AgentPauseGate({ paused: true });
+		expect(withoutAt.paused).toBe(true);
+		expect(withoutAt.pausedAt).toBeGreaterThan(0);
+		// The default constructor stays running (backwards compatible).
+		const fresh = new AgentPauseGate();
+		expect(fresh.paused).toBe(false);
+	});
+
 	it("parks on a config-provided per-scope gate without touching the global gate", async () => {
 		// Multi-scope hosts (the GUI daemon) pass their own gate per session:
 		// engaging it must freeze that run while the process-global gate (and

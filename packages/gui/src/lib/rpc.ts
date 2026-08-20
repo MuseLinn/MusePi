@@ -31,6 +31,17 @@ export interface StreamEvent {
 /** Timer handle as typed by bun-types (browser bundle overrides). */
 type TimerHandle = Timer;
 
+/** A request unanswered this long is rejected (dead socket / hung daemon) —
+ *  without this, a silently-dead connection hangs every caller forever. */
+const REQUEST_TIMEOUT_MS = 15_000;
+/** App-level keepalive cadence. Browsers cannot send WS ping frames, so
+ *  liveness is probed with a lightweight RPC ("system.ping"). */
+const KEEPALIVE_INTERVAL_MS = 20_000;
+/** No response of ANY kind for this long ⇒ the socket is silently dead
+ *  (macOS sleep tears the connection down without a close frame on wake);
+ *  force-close so the close handler's reconnect path takes over. */
+const KEEPALIVE_DEAD_MS = 45_000;
+
 export class RpcClient {
 	readonly #url: string;
 	#ws: WebSocket | null = null;
@@ -48,6 +59,12 @@ export class RpcClient {
 	#reconnectTimer: TimerHandle | null = null;
 	#wakeCleanup: (() => void) | null = null;
 	#failures = 0;
+	// ── Liveness (sleep/wake freeze fix, 2026-08-20): last response time +
+	// a ping loop. The close event does NOT fire for a silently-dead socket
+	// (Electron tears WebSockets down on system sleep; the renderer resumes
+	// with a half-open connection) — without detection the UI hangs forever.
+	#lastPongAt = 0;
+	#pingTimer: TimerHandle | null = null;
 
 	constructor(url: string) {
 		this.#url = url;
@@ -98,8 +115,44 @@ export class RpcClient {
 		this.#wakeCleanup = null;
 	}
 
+	/** Start the liveness ping loop (called on every successful open). */
+	#startKeepalive(): void {
+		this.#stopKeepalive();
+		this.#lastPongAt = Date.now();
+		this.#pingTimer = setInterval(() => {
+			const ws = this.#ws;
+			if (!ws || ws.readyState !== WebSocket.OPEN) return;
+			// No response of any kind within the budget ⇒ silently dead —
+			// force close so the close handler's reconnect path recovers.
+			if (Date.now() - this.#lastPongAt > KEEPALIVE_DEAD_MS) {
+				console.error("[rpc] keepalive: connection unresponsive — closing");
+				ws.close();
+				return;
+			}
+			try {
+				// The ping rides #pending like any request: its response (or
+				// the request timeout) updates #lastPongAt via the message
+				// handler, and a stale entry is cleaned up on timeout/close.
+				const id = this.#nextId++;
+				this.#pending.set(id, {
+					resolve: () => {},
+					reject: () => {},
+				});
+				ws.send(JSON.stringify({ jsonrpc: "2.0", id, method: "system.ping", params: {} }));
+			} catch {
+				// Dead socket — the close event fires and recovery takes over.
+			}
+		}, KEEPALIVE_INTERVAL_MS);
+	}
+
+	#stopKeepalive(): void {
+		clearInterval(this.#pingTimer ?? undefined);
+		this.#pingTimer = null;
+	}
+
 	/** Backoff retry (openchamber scheduleReconnect parity). */
 	#scheduleReconnect(): void {
+		if (this.#closedByUser) return;
 		if (this.#reconnectTimer) return;
 		this.#failures += 1;
 		const slow =
@@ -146,6 +199,7 @@ export class RpcClient {
 	close(): void {
 		this.#closedByUser = true;
 		this.#cancelReconnect();
+		this.#stopKeepalive();
 		this.#ws?.close();
 		this.#ws = null;
 		for (const { reject } of this.#pending.values()) reject(new Error("connection closed"));
@@ -157,9 +211,24 @@ export class RpcClient {
 		if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("not connected"));
 		const id = this.#nextId++;
 		return new Promise<T>((resolve, reject) => {
+			// A request on a silently-dead socket would otherwise hang the
+			// caller forever (no close frame arrives on macOS sleep teardown)
+			// — bound every request so the UI stays responsive and the
+			// keepalive loop decides whether the socket itself is dead.
+			const timer = setTimeout(() => {
+				if (!this.#pending.has(id)) return;
+				this.#pending.delete(id);
+				reject(new Error(`request timeout: ${method}`));
+			}, REQUEST_TIMEOUT_MS);
 			this.#pending.set(id, {
-				resolve: v => resolve(v as T),
-				reject,
+				resolve: v => {
+					clearTimeout(timer);
+					resolve(v as T);
+				},
+				reject: e => {
+					clearTimeout(timer);
+					reject(e);
+				},
 			});
 			ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
 		});
@@ -169,6 +238,7 @@ export class RpcClient {
 	run(): void {
 		const ws = this.#ws;
 		if (!ws) return;
+		this.#startKeepalive();
 		ws.addEventListener("message", (ev: MessageEvent<string>) => {
 			let msg: unknown;
 			try {
@@ -179,7 +249,8 @@ export class RpcClient {
 			if (typeof msg !== "object" || msg === null) return;
 			const m = msg as Record<string, unknown>;
 			if (typeof m.jsonrpc === "string" && typeof m.id === "number") {
-				// JSON-RPC response.
+				// JSON-RPC response — any response proves the socket is alive.
+				this.#lastPongAt = Date.now();
 				const id = m.id as number;
 				const pending = this.#pending.get(id);
 				if (!pending) return;
@@ -213,6 +284,7 @@ export class RpcClient {
 		});
 		ws.addEventListener("close", (ev: CloseEvent) => {
 			this.#ws = null;
+			this.#stopKeepalive();
 			if (!this.#closedByUser) {
 				// Surface the wire close code so an abnormal drop (1006 = no
 				// status, renderer crash / transport loss) is distinguishable

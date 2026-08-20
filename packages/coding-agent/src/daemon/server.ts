@@ -510,6 +510,61 @@ function modesOf(session: unknown): {
 const DEFAULT_SOCKET = path.join(SOCKET_DIR, "daemon.sock");
 const JOURNAL_DIR = path.join(SOCKET_DIR, "journal");
 
+/** Per-session pause sidecar: presence = session currently paused. The
+ *  AgentPauseGate lives only in memory (idle-archive closes the session),
+ *  so the daemon mirrors each transition here and rehydrates the gate on
+ *  reactivation — a paused session stays paused across archive/restart. */
+export function pauseSidecarPath(sessionId: string, dir = JOURNAL_DIR): string {
+	return path.join(dir, `${sessionId}.pause.json`);
+}
+
+export async function readPauseSidecar(
+	sessionId: string,
+	dir = JOURNAL_DIR,
+): Promise<{ paused: boolean; pausedAt: number | null }> {
+	try {
+		const raw = await fs.promises.readFile(pauseSidecarPath(sessionId, dir), "utf8");
+		const parsed = JSON.parse(raw) as { paused?: unknown; pausedAt?: unknown };
+		if (parsed.paused !== true) return { paused: false, pausedAt: null };
+		const pausedAt = typeof parsed.pausedAt === "number" ? parsed.pausedAt : null;
+		return { paused: true, pausedAt };
+	} catch (error) {
+		// Missing/corrupt sidecar = not paused. A read failure must never
+		// block session activation; the gate defaults to running.
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			console.warn(`[daemon] pause sidecar read failed for ${sessionId}: ${String(error)}`);
+		}
+		return { paused: false, pausedAt: null };
+	}
+}
+
+/** Mirror a gate transition to the sidecar. `paused: false` removes the
+ *  file (absence is the non-paused state); failures are best-effort — the
+ *  gate stays authoritative for the live session and only the next
+ *  archive/reactivation could observe a stale pause. */
+export function writePauseSidecar(
+	sessionId: string,
+	paused: boolean,
+	pausedAt: number | null,
+	dir = JOURNAL_DIR,
+): void {
+	const p = pauseSidecarPath(sessionId, dir);
+	void (async () => {
+		try {
+			if (paused) {
+				await fs.promises.mkdir(dir, { recursive: true });
+				await fs.promises.writeFile(p, JSON.stringify({ paused: true, pausedAt }));
+			} else {
+				await fs.promises.unlink(p).catch((error: NodeJS.ErrnoException) => {
+					if (error.code !== "ENOENT") throw error;
+				});
+			}
+		} catch (error) {
+			console.warn(`[daemon] pause sidecar write failed for ${sessionId}: ${String(error)}`);
+		}
+	})();
+}
+
 /**
  * Snapcompact wire-savings estimates are memoized per live session — the
  * estimate scans the full message history (TUI /context parity), and the
@@ -1234,7 +1289,10 @@ export class DaemonSessionHost {
 			suppressBreadcrumb: true,
 		});
 		const { createAgentSession } = await import("../sdk");
-		const pauseGate = new AgentPauseGate();
+		// Rehydrate a persisted pause: a session archived (idle-close/restart)
+		// while paused comes back frozen, so a long sleep never silently
+		// releases the user's pause.
+		const pauseGate = new AgentPauseGate(await readPauseSidecar(sessionId));
 		const resumeCwd = match.session.cwd || cwd;
 		// Same per-(cwd, agentDir) discovery cache as createSession; the
 		// cwd-scoped MCP manager may already exist (or is built here on first
@@ -1578,6 +1636,9 @@ export class DaemonSessionHost {
 		const unsubscribePauseGate = pauseGate.onChange(paused => {
 			const seq = ++live.seq;
 			const payload = { paused, pausedAt: pauseGate.pausedAt ?? null };
+			// Persist the transition so reactivation (idle-archive or daemon
+			// restart) can rehydrate the gate; absence = not paused.
+			writePauseSidecar(live.sessionId, paused, pauseGate.pausedAt ?? null);
 			for (const send of live.subscribers.values()) {
 				try {
 					send({ kind: "pause-state", seq, payload });
@@ -1976,6 +2037,8 @@ export class DaemonSessionHost {
 					isStreaming?: boolean;
 					isCompacting?: boolean;
 					modeId?: string;
+					paused?: boolean;
+					pausedAt?: number | null;
 				};
 			};
 			// Live mode state rides along on the snapshot so the GUI badges
@@ -1988,6 +2051,10 @@ export class DaemonSessionHost {
 			// Compaction state rides along too: the GUI's compaction status
 			// line keys off the live getter (the view has no compaction event).
 			snap.state.isCompacting = modes.isCompacting;
+			// Pause gate state: the GUI badge and status lines key off it
+			// without a separate round-trip.
+			snap.state.paused = live.pauseGate.paused;
+			snap.state.pausedAt = live.pauseGate.pausedAt ?? null;
 			// The view's isStreaming flag is event-driven and can go stale
 			// (abort paths never emit turn_end) — the agent's live getter is
 			// authoritative for what the GUI should show as working.
@@ -2002,10 +2069,15 @@ export class DaemonSessionHost {
 		// Archived sessions are by definition idle: a stored isStreaming=true
 		// (daemon shut down mid-stream) must never make the GUI show a phantom
 		// working turn with an un-stoppable stop button.
+		const archivedPause = await readPauseSidecar(sessionId);
 		const idleHistory = (view: MaterializedView): Static<typeof sessionSnapshot> => {
 			const snap = view.snapshot();
 			snap.state.isStreaming = false;
 			snap.state.queuedMessageCount = 0;
+			// Paused state survives the archive via the sidecar: the GUI/TUI
+			// keep showing the paused badge on archived sessions.
+			snap.state.paused = archivedPause.paused;
+			snap.state.pausedAt = archivedPause.pausedAt;
 			return snap;
 		};
 		const persisted = this.#store.load(sessionId);
@@ -2184,6 +2256,15 @@ export class DaemonSessionHost {
 			await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`));
 		} catch (err) {
 			// Journal may already be gone; only surface a real IO failure.
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+		}
+		// Pause sidecar: a deleted session must not resurrect as paused
+		// (a stale file would freeze a re-created session with the same id).
+		try {
+			await fs.promises.unlink(pauseSidecarPath(sessionId));
+		} catch (err) {
+			// Absence is the non-paused state; a real IO failure still
+			// surfaces so a stuck delete is visible.
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 		}
 		// SDK transcript files (`<sessionsDir>/<project>/<id>.jsonl`) and
@@ -3251,6 +3332,12 @@ export class DaemonServer {
 
 	async handle(method: string, params: unknown, conn: DaemonConnection): Promise<unknown> {
 		switch (method) {
+			case "system.ping": {
+				// Liveness probe for the GUI's app-level keepalive (browsers
+				// cannot send WS ping frames; the renderer pings this RPC to
+				// detect sockets Electron tears down on system sleep).
+				return { pong: Date.now() };
+			}
 			case "system.meta": {
 				// Derived, never hardcoded: MUSEPI_VERSION is baked by the
 				// bundle (bundle-dist.ts) or set by src/musepi.ts / the

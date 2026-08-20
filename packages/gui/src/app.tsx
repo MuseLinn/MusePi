@@ -11,6 +11,7 @@ import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { DialogFrame } from "./components/DialogFrame";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
@@ -851,8 +852,14 @@ function AppInner(): ReactNode {
 			const client = new RpcClient(targetUrl);
 			rpcRef.current = client;
 			client.onStatus = phase => {
-				if (phase === "closed") setStatus("closed");
-				else if (phase === "connecting") setStatus("connecting");
+				if (phase === "closed") {
+					setStatus("closed");
+					// Unannounced drop (daemon restart / machine sleep): the
+					// in-place auto-reconnect restore froze the main-window
+					// renderer (ce1c9284d — CPU idle, clicks dead); recover
+					// through the proven-working boot() path instead.
+					recoverFromDropRef.current();
+				} else if (phase === "connecting") setStatus("connecting");
 				else if (phase === "open") {
 					console.log("[gui] rpc open — restoring");
 					setStatus("open");
@@ -1129,6 +1136,40 @@ function AppInner(): ReactNode {
 		bootRef.current = true;
 		void boot();
 	}, [boot]);
+
+	// ── Unexpected-drop recovery (sleep/wake freeze fix, 2026-08-20) ───────
+	// An unannounced close (daemon restart / machine sleep) MUST NOT be
+	// restored in place — ce1c9284d documented that path freezing the
+	// main-window renderer (CPU idle, console alive, clicks dead). The
+	// proven-working recovery is what the 重新连接 button does: stop the
+	// stale client's backoff retry, show the splash, boot() from a clean
+	// state (fresh client + full init: events.subscribe, daemon.pauseStatus,
+	// settings, session re-open). Pause state lives in the daemon, so a
+	// global or per-session pause survives the reconnect and is re-fetched
+	// during boot + openSession — nothing about pause is lost here.
+	const recoveringRef = useRef(false);
+	const recoverFromDropRef = useRef<() => void>(() => {});
+	recoverFromDropRef.current = (): void => {
+		if (recoveringRef.current) return;
+		recoveringRef.current = true;
+		setBooting(true); // splash first — the main UI never flashes the error page
+		rpcRef.current?.close(); // stop the stale client's backoff retry loop
+		rpcRef.current = null;
+		setRpc(null);
+		void boot().finally(() => {
+			recoveringRef.current = false;
+		});
+	};
+
+	// macOS sleep/wake: Electron tears down the renderer's WebSocket on
+	// system sleep (electron#19993); the main process pushes a resume event
+	// (powerMonitor) that fires reliably on wake where visibilitychange /
+	// online may not. Recover proactively instead of waiting for the
+	// keepalive loop to notice the dead socket.
+	useEffect(() => {
+		if (!window.electronAPI?.onPowerResume) return;
+		return window.electronAPI.onPowerResume(() => recoverFromDropRef.current());
+	}, []);
 
 	const disconnect = useCallback((): void => {
 		storeRef.current?.dispose();
@@ -2867,8 +2908,10 @@ function AppInner(): ReactNode {
 /** PromptProvider wrapper (Electron sandbox has no window.prompt). */
 export function App(): ReactNode {
 	return (
-		<PromptProvider>
-			<AppInner />
-		</PromptProvider>
+		<ErrorBoundary>
+			<PromptProvider>
+				<AppInner />
+			</PromptProvider>
+		</ErrorBoundary>
 	);
 }

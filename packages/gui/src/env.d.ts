@@ -38,6 +38,10 @@ interface Window {
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
 		onManagedBrowserState(cb: (state: ManagedBrowserState) => void): () => void;
 		onManagedBrowserConfirm(cb: (input: ManagedBrowserConfirmRequest) => void): () => void;
+		/** Main-process powerMonitor "resume" (system sleep/wake): fires reliably
+		 *  on wake where renderer visibilitychange/online may not. The renderer
+		 *  uses it to recover the daemon connection proactively. */
+		onPowerResume(cb: () => void): () => void;
 	};
 }
 

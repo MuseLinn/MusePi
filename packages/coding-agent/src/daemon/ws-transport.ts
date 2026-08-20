@@ -24,6 +24,10 @@ import { type DaemonConnection, MAX_REQUEST_BYTES } from "./server";
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 /** Cap on the raw HTTP upgrade header (before the blank line). */
 const MAX_REQUEST_HEADER_BYTES = 16 * 1024;
+/** Server heartbeat cadence: ping each connection every 15s; destroy after
+ *  three missed pongs (~45s) — mirrors the GUI client's keepalive budget. */
+const WS_HEARTBEAT_MS = 15_000;
+const WS_HEARTBEAT_MISSES = 3;
 
 // Frame opcodes (subset of RFC 6455).
 const OP_TEXT = 0x1;
@@ -130,9 +134,34 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 		const frameDecoder = new FrameDecoder();
 		let closed = false;
 		let closeCode: number | null = null;
+		// Heartbeat (sleep/wake fix): the daemon pings every WS_HEARTBEAT_MS and
+		// destroys a connection that misses WS_HEARTBEAT_MISSES pongs — a dead
+		// client (renderer torn down by macOS sleep, crashed process) would
+		// otherwise keep its subscription and socket buffers forever, and the
+		// GUI-side half-open socket never gets its close frame. Browsers answer
+		// PING with PONG at the protocol level, so every compliant client is
+		// covered without any app code.
+		let pongedAt = Date.now();
+		const heartbeat = setInterval(() => {
+			if (socket.destroyed) {
+				clearInterval(heartbeat);
+				return;
+			}
+			if (Date.now() - pongedAt > WS_HEARTBEAT_MISSES * WS_HEARTBEAT_MS) {
+				logger.info("ws heartbeat timeout — destroying connection", { connId: conn.id });
+				socket.destroy();
+				return;
+			}
+			try {
+				socket.write(encodeFrame(OP_PING, new Uint8Array(0)));
+			} catch {
+				// write on a dying socket — the close event will clean up
+			}
+		}, WS_HEARTBEAT_MS);
 		const teardown = (): void => {
 			if (closed) return;
 			closed = true;
+			clearInterval(heartbeat);
 			logger.info("ws connection closed", { connId: conn.id, closeCode });
 			options.onClose(conn.id);
 		};
@@ -142,6 +171,8 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 				for (const frame of frameDecoder.push(new Uint8Array(chunk))) {
 					handleFrame(conn, socket, frame, teardown, code => {
 						closeCode = code;
+					}, () => {
+						pongedAt = Date.now();
 					});
 				}
 			} catch (err) {
@@ -159,6 +190,7 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 		frame: WsFrame,
 		teardown: () => void,
 		onCloseFrame?: (code: number) => void,
+		onPong?: () => void,
 	): void {
 		if (frame.opcode === OP_TEXT) {
 			// Frame-size fence (unix-socket parity): the decoder buffers the
@@ -176,7 +208,10 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 			socket.write(encodeFrame(OP_PONG, frame.payload));
 			return;
 		}
-		if (frame.opcode === OP_PONG) return;
+		if (frame.opcode === OP_PONG) {
+		onPong?.();
+		return;
+	}
 		if (frame.opcode === OP_CLOSE) {
 			const code =
 				frame.payload.byteLength >= 2
