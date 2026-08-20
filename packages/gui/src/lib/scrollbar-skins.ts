@@ -59,9 +59,11 @@ const BUILTIN_PACMAN: ScrollbarSkin = {
 	pacGlyph: null,
 };
 
-const BUILTIN_GUMMY: ScrollbarSkin = {
-	id: "builtin-gummy",
-	displayName: "Gummy",
+/** Snake: the previous gummy colors, reshaped — a rounded head riding a
+ *  segmented body (the 12px pitch reads as snake vertebrae). */
+const BUILTIN_SNAKE: ScrollbarSkin = {
+	id: "builtin-snake",
+	displayName: "Snake",
 	base: "gummy",
 	colors: {
 		accent: "var(--color-accent)",
@@ -72,9 +74,23 @@ const BUILTIN_GUMMY: ScrollbarSkin = {
 	pacGlyph: null,
 };
 
-export const BUILTIN_SCROLLBAR_SKINS: ScrollbarSkin[] = [BUILTIN_GUMMY, BUILTIN_PACMAN];
+/** Gummy Rainbow: the candy capsule, thicker (15px) and multi-color. */
+const BUILTIN_GUMMY_RAINBOW: ScrollbarSkin = {
+	id: "builtin-gummy-rainbow",
+	displayName: "Gummy Rainbow",
+	base: "gummy",
+	colors: {
+		accent: "var(--color-accent)",
+		track: "color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent)",
+		eaten: "transparent",
+	},
+	size: 15,
+	pacGlyph: null,
+};
+
+export const BUILTIN_SCROLLBAR_SKINS: ScrollbarSkin[] = [BUILTIN_SNAKE, BUILTIN_GUMMY_RAINBOW, BUILTIN_PACMAN];
 /** Imported skins first in the picker, built-ins after. */
-export const DEFAULT_SCROLLBAR_SKIN_ID = BUILTIN_GUMMY.id;
+export const DEFAULT_SCROLLBAR_SKIN_ID = BUILTIN_SNAKE.id;
 
 /** Pure shape validation for a main-process unpacked skin zip. */
 export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
@@ -85,7 +101,7 @@ export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
 	if (r.base !== "gummy" && r.base !== "pacman") return null;
 	const colors = (typeof r.colors === "object" && r.colors !== null ? r.colors : {}) as Record<string, unknown>;
 	const accent = typeof colors.accent === "string" && colors.accent ? colors.accent : BUILTIN_PACMAN.colors.accent;
-	const track = typeof colors.track === "string" && colors.track ? colors.track : BUILTIN_GUMMY.colors.track;
+	const track = typeof colors.track === "string" && colors.track ? colors.track : BUILTIN_SNAKE.colors.track;
 	const eaten = typeof colors.eaten === "string" && colors.eaten ? colors.eaten : BUILTIN_PACMAN.colors.eaten;
 	const size = typeof r.size === "number" && Number.isFinite(r.size) ? Math.min(24, Math.max(6, Math.round(r.size))) : 12;
 	const pacGlyph = typeof r.pacGlyph === "string" && r.pacGlyph.startsWith("data:") ? r.pacGlyph : null;
@@ -118,10 +134,10 @@ export function getScrollbarSkins(): ScrollbarSkin[] {
 	return [...readImportedSkins(), ...BUILTIN_SCROLLBAR_SKINS];
 }
 
-/** Resolve a skin by id, falling back to the built-in gummy. */
+/** Resolve a skin by id, falling back to the built-in snake. */
 export function getScrollbarSkin(id: string | null): ScrollbarSkin {
 	const skins = getScrollbarSkins();
-	return skins.find(s => s.id === id) ?? BUILTIN_GUMMY;
+	return skins.find(s => s.id === id) ?? BUILTIN_SNAKE;
 }
 
 /** Persist an imported skin (same id replaces the old one) + notify. */

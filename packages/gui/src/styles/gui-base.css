@@ -197,3 +197,78 @@ html.gui-glass-adaptive {
 	position: relative;
 }
 
+
+/* ── Pac-man chomp animation (vendor/pac-man.tsx) ─────────────────────
+ * The glyph renders a rest sector plus three chomp frames; while
+ * .pac-chomp is present the frames cycle (open → mid → closed) with
+ * steps(1) so each SVG path snaps, never cross-fades. Non-animating
+ * renders show the rest sector and hide the frames. */
+.pac-mouth-f0,
+.pac-mouth-f1,
+.pac-mouth-f2 {
+	opacity: 0;
+}
+
+.pac-chomp.pac-mouth-f0 {
+	animation: pac-frame-0 360ms steps(1, end) infinite;
+}
+.pac-chomp.pac-mouth-f1 {
+	animation: pac-frame-1 360ms steps(1, end) infinite;
+}
+.pac-chomp.pac-mouth-f2 {
+	animation: pac-frame-2 360ms steps(1, end) infinite;
+}
+
+@keyframes pac-frame-0 {
+	0% {
+		opacity: 1;
+	}
+	33.333% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+@keyframes pac-frame-1 {
+	0% {
+		opacity: 0;
+	}
+	33.333% {
+		opacity: 1;
+	}
+	66.667% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+@keyframes pac-frame-2 {
+	0% {
+		opacity: 0;
+	}
+	66.667% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pac-chomp.pac-mouth-f0,
+	.pac-chomp.pac-mouth-f1,
+	.pac-chomp.pac-mouth-f2 {
+		animation: none;
+		opacity: 1;
+	}
+	/* Static mid frame reads as a closed-ish mouth under reduced motion. */
+	.pac-chomp.pac-mouth-f0 {
+		opacity: 1;
+	}
+	.pac-chomp.pac-mouth-f1,
+	.pac-chomp.pac-mouth-f2 {
+		opacity: 0;
+	}
+}

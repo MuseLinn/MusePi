@@ -255,6 +255,9 @@ export const settings = {
 	"burger layers": "Burger layers",
 	pacman: "Pacman",
 	"scrollbar style": "Scrollbar style",
+	"snake": "Snake",
+	"gummy rainbow": "Gummy Rainbow",
+
 	"scrollbar style hint": "Gummy jelly thumb or pac-man bead rail — skins are importable",
 	gummy: "Gummy",
 	"import scrollbar skin": "Import scrollbar skin…",

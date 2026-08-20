@@ -235,6 +235,9 @@ export const settings = {
 	"burger layers": "汉堡叠层",
 	pacman: "吃豆人",
 	"scrollbar style": "滚动条样式",
+	"snake": "贪吃蛇",
+	"gummy rainbow": "彩虹软糖",
+
 	"scrollbar style hint": "橡皮糖果冻胶囊或吃豆人豆豆轨道——支持导入皮肤包",
 	gummy: "橡皮糖",
 	"import scrollbar skin": "导入滚动条皮肤…",

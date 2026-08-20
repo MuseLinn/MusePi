@@ -485,7 +485,8 @@ export function AppearanceSection({
 							}}
 							options={[
 								...importedSkins.map(s => ({ value: s.id, label: s.displayName })),
-								{ value: "builtin-gummy", label: t("gummy") },
+								{ value: "builtin-snake", label: t("snake") },
+								{ value: "builtin-gummy-rainbow", label: t("gummy rainbow") },
 								{ value: "builtin-pacman", label: t("pacman") },
 							]}
 						/>

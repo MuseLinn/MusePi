@@ -154,6 +154,7 @@ export function FloatingScrollbar(): ReactNode {
 			ref={barRef}
 			className="gui-float-scrollbar"
 			data-base={skin.base}
+			data-skin={skin.id}
 			aria-hidden="true"
 			style={
 				{
