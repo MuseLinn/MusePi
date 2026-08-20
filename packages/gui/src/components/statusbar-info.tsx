@@ -20,11 +20,76 @@ function fmtTokens(n: number): string {
 	return String(n);
 }
 
+// ── Segment contract (plugin seam) ───────────────────────────────────────
+// The status bar is a list of named segments; each segment renders a
+// `{ label, title } | null` (null hides it). Built-ins live in this file;
+// extensions contribute via `registerStatusBarSegment` (future
+// `statusbar.seg.<id>` slot — the same registry shape the TUI status-line
+// segments use, GUI form).
+
+export interface StatusBarSegment {
+	/** Unique id (`statusbar.seg.<id>` slot key). */
+	id: string;
+	/** Render the segment for the current session; null hides it. */
+	render(ctx: StatusBarContext): { label: string; title?: string } | null;
+}
+
+export interface StatusBarContext {
+	rpc: RpcClient | null;
+	sessionId: string;
+	state: SessionState | null;
+	/** Context-window usage from the 3s poll (null before the first tick). */
+	usage: { tokens: number; contextWindow: number | null } | null;
+}
+
+/** Extension-contributed segments (appended after built-ins). */
+const extraSegments = new Map<string, StatusBarSegment>();
+
+/** Register a status-bar segment (plugin seam). Returns an unregister fn. */
+export function registerStatusBarSegment(segment: StatusBarSegment): () => void {
+	extraSegments.set(segment.id, segment);
+	return () => extraSegments.delete(segment.id);
+}
+
+const builtinSegments: StatusBarSegment[] = [
+	{
+		id: "statusbar.seg.model",
+		render(ctx) {
+			const model = ctx.state?.model;
+			if (!model) return null;
+			return { label: `${model.provider}/${model.id}`, title: t("current model") };
+		},
+	},
+	{
+		id: "statusbar.seg.mode",
+		render(ctx) {
+			const mode = ctx.state?.goalMode?.enabled ? t("goal") : ctx.state?.planMode ? t("plan") : null;
+			if (!mode) return null;
+			return { label: mode, title: t("goal") };
+		},
+	},
+	{
+		id: "statusbar.seg.context",
+		render(ctx) {
+			const { usage } = ctx;
+			if (!usage) return null;
+			const tokens = usage.tokens > 0 ? fmtTokens(usage.tokens) : "0";
+			const windowSize = usage.contextWindow ? fmtTokens(usage.contextWindow) : "?";
+			return { label: `${tokens} / ${windowSize}`, title: t("context window usage") };
+		},
+	},
+];
+
+function allSegments(): StatusBarSegment[] {
+	return [...builtinSegments, ...extraSegments.values()];
+}
+
 /**
  * Configurable informational status bar (TUI status-line parity, GUI form):
- * model / goal-plan mode / context-window tokens. Renders only when the
- * settings toggle is on. Data sources are the same ones the composer
- * already polls — no new RPC surface.
+ * model / goal-plan mode / context-window tokens, extensible via
+ * `registerStatusBarSegment`. Renders only when the settings toggle is on.
+ * Data sources are the same ones the composer already polls — no new RPC
+ * surface.
  */
 export function SessionStatusBar({
 	rpc,
@@ -65,28 +130,20 @@ export function SessionStatusBar({
 
 	if (!enabled) return null;
 
-	const model = state?.model ? `${state.model.provider}/${state.model.id}` : null;
-	const mode = state?.goalMode?.enabled ? t("goal") : state?.planMode ? t("plan") : null;
-	const tokens = usage?.tokens ? fmtTokens(usage.tokens) : null;
-	const windowSize = usage?.contextWindow ? fmtTokens(usage.contextWindow) : null;
+	const ctx: StatusBarContext = { rpc, sessionId, state, usage };
+	const segs = allSegments()
+		.map(s => s.render(ctx))
+		.filter((r): r is { label: string; title?: string } => r !== null);
+
+	if (segs.length === 0) return null;
 
 	return (
 		<div className="gui-statusbar-info" role="status">
-			{model && (
-				<span className="gui-statusbar-info-seg" title={t("current model")}>
-					{model}
+			{segs.map((seg, i) => (
+				<span key={i} className="gui-statusbar-info-seg" title={seg.title}>
+					{seg.label}
 				</span>
-			)}
-			{mode && (
-				<span className="gui-statusbar-info-seg" title={t("goal")}>
-					{mode}
-				</span>
-			)}
-			{(tokens || windowSize) && (
-				<span className="gui-statusbar-info-seg" title={t("context window usage")}>
-					{tokens ?? "0"} / {windowSize ?? "?"}
-				</span>
-			)}
+			))}
 		</div>
 	);
 }

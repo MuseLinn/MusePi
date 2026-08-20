@@ -67,6 +67,7 @@ DSH 的 13 类接缝映射到 MusePi 目标接缝(新增标 ★,核心观察类�
 | 命令 | slash 命令注册(`discovery.slashCommands`) | 现有(CLI) | 追加命令 | 移除即消失 |
 | 设置 | settings.schema 扩展键 | 现有(GUI) | 追加 schema | 移除即消失 |
 | 状态行 | 状态行组件贡献 | ★ | 追加段 | 移除即消失 |
+| 状态条段 | GUI 信息状态条 `registerStatusBarSegment`(内置 model/mode/context 三段,`statusbar.seg.<id>`) | 现有(2026-08-20 段化) | 追加段 | 移除即消失 |
 | 主题 | theme token 覆盖 | ★(只增 key) | 追加 token | 移除即消失 |
 | 快捷键 | keybindings 追加 | ★ | 追加绑定(不可覆盖内建,冲突拒绝) | 移除即消失 |
 | 面板 | GUI slot 体系 | 现有 | 追加组件 | 卸载即摘 |
@@ -77,6 +78,7 @@ DSH 的 13 类接缝映射到 MusePi 目标接缝(新增标 ★,核心观察类�
 | 技能 | skills 目录 + 扩展 `_source` | 现有 | 追加技能 | 移除即消失 |
 | 服务 | 后台任务/定时器 | ★(隔离域) | 追加任务 | 停止+移除 |
 | 渲染 | 渲染器替换 | **禁止** | — | — |
+| 右键菜单条目 | ContextMenu 条目贡献 | ★(候选) | 追加条目 | 移除即消失 |
 
 ### 决策点契约(核心)
 

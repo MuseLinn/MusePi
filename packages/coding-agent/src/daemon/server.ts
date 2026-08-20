@@ -80,6 +80,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
+import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
@@ -509,61 +510,6 @@ function modesOf(session: unknown): {
 }
 const DEFAULT_SOCKET = path.join(SOCKET_DIR, "daemon.sock");
 const JOURNAL_DIR = path.join(SOCKET_DIR, "journal");
-
-/** Per-session pause sidecar: presence = session currently paused. The
- *  AgentPauseGate lives only in memory (idle-archive closes the session),
- *  so the daemon mirrors each transition here and rehydrates the gate on
- *  reactivation — a paused session stays paused across archive/restart. */
-export function pauseSidecarPath(sessionId: string, dir = JOURNAL_DIR): string {
-	return path.join(dir, `${sessionId}.pause.json`);
-}
-
-export async function readPauseSidecar(
-	sessionId: string,
-	dir = JOURNAL_DIR,
-): Promise<{ paused: boolean; pausedAt: number | null }> {
-	try {
-		const raw = await fs.promises.readFile(pauseSidecarPath(sessionId, dir), "utf8");
-		const parsed = JSON.parse(raw) as { paused?: unknown; pausedAt?: unknown };
-		if (parsed.paused !== true) return { paused: false, pausedAt: null };
-		const pausedAt = typeof parsed.pausedAt === "number" ? parsed.pausedAt : null;
-		return { paused: true, pausedAt };
-	} catch (error) {
-		// Missing/corrupt sidecar = not paused. A read failure must never
-		// block session activation; the gate defaults to running.
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-			console.warn(`[daemon] pause sidecar read failed for ${sessionId}: ${String(error)}`);
-		}
-		return { paused: false, pausedAt: null };
-	}
-}
-
-/** Mirror a gate transition to the sidecar. `paused: false` removes the
- *  file (absence is the non-paused state); failures are best-effort — the
- *  gate stays authoritative for the live session and only the next
- *  archive/reactivation could observe a stale pause. */
-export function writePauseSidecar(
-	sessionId: string,
-	paused: boolean,
-	pausedAt: number | null,
-	dir = JOURNAL_DIR,
-): void {
-	const p = pauseSidecarPath(sessionId, dir);
-	void (async () => {
-		try {
-			if (paused) {
-				await fs.promises.mkdir(dir, { recursive: true });
-				await fs.promises.writeFile(p, JSON.stringify({ paused: true, pausedAt }));
-			} else {
-				await fs.promises.unlink(p).catch((error: NodeJS.ErrnoException) => {
-					if (error.code !== "ENOENT") throw error;
-				});
-			}
-		} catch (error) {
-			console.warn(`[daemon] pause sidecar write failed for ${sessionId}: ${String(error)}`);
-		}
-	})();
-}
 
 /**
  * Snapcompact wire-savings estimates are memoized per live session — the
@@ -1292,7 +1238,7 @@ export class DaemonSessionHost {
 		// Rehydrate a persisted pause: a session archived (idle-close/restart)
 		// while paused comes back frozen, so a long sleep never silently
 		// releases the user's pause.
-		const pauseGate = new AgentPauseGate(await readPauseSidecar(sessionId));
+		const pauseGate = new AgentPauseGate(await readPauseSidecar(sessionId, JOURNAL_DIR));
 		const resumeCwd = match.session.cwd || cwd;
 		// Same per-(cwd, agentDir) discovery cache as createSession; the
 		// cwd-scoped MCP manager may already exist (or is built here on first
@@ -1646,7 +1592,7 @@ export class DaemonSessionHost {
 			const payload = { paused, pausedAt: pauseGate.pausedAt ?? null };
 			// Persist the transition so reactivation (idle-archive or daemon
 			// restart) can rehydrate the gate; absence = not paused.
-			writePauseSidecar(live.sessionId, paused, pauseGate.pausedAt ?? null);
+			writePauseSidecar(live.sessionId, paused, pauseGate.pausedAt ?? null, JOURNAL_DIR);
 			for (const send of live.subscribers.values()) {
 				try {
 					send({ kind: "pause-state", seq, payload });
@@ -2077,7 +2023,7 @@ export class DaemonSessionHost {
 		// Archived sessions are by definition idle: a stored isStreaming=true
 		// (daemon shut down mid-stream) must never make the GUI show a phantom
 		// working turn with an un-stoppable stop button.
-		const archivedPause = await readPauseSidecar(sessionId);
+		const archivedPause = await readPauseSidecar(sessionId, JOURNAL_DIR);
 		const idleHistory = (view: MaterializedView): Static<typeof sessionSnapshot> => {
 			const snap = view.snapshot();
 			snap.state.isStreaming = false;
@@ -2269,7 +2215,7 @@ export class DaemonSessionHost {
 		// Pause sidecar: a deleted session must not resurrect as paused
 		// (a stale file would freeze a re-created session with the same id).
 		try {
-			await fs.promises.unlink(pauseSidecarPath(sessionId));
+			await fs.promises.unlink(pauseSidecarPath(sessionId, JOURNAL_DIR));
 		} catch (err) {
 			// Absence is the non-paused state; a real IO failure still
 			// surfaces so a stuck delete is visible.

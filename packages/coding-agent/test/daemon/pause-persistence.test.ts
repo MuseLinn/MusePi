@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
-import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "../../src/daemon/server";
+import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "../../src/daemon/pause-sidecar";
 
 /**
  * Pause persistence (TUI/GUI parity): the per-session AgentPauseGate lives
