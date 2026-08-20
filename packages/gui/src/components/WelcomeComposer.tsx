@@ -1071,44 +1071,6 @@ export function WelcomeComposer({
 									</span>
 									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 								</button>
-								{/* 预设(mode)chip:项目按钮旁(DSH hero 对齐),新会话创建时应用。
-								 * 样式与项目选择同款(按钮 + 浮层菜单)。 */}
-									{modes && (
-										<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
-											<button
-												type="button"
-												className="gui-project-chip"
-												onClick={() => setPresetOpen(v => !v)}
-												aria-label={t("modes title")}
-											>
-												<Icon name="stack" className="h-3.5 w-3.5" />
-												<span className="max-w-[160px] truncate">
-													{modes.find(m => m.id === activeModeId)?.label ?? activeModeId}
-												</span>
-												<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-											</button>
-											{renderPresetMenu(
-												<>
-													{/* 无“默认(无预设)”:modeId 恒非 null(默认 work),
-													 * 与 DSH 一致——每次新建都带一个预设。 */}
-													{modes.map(m => (
-														<button
-															key={m.id}
-															type="button"
-															className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}`}
-															onClick={() => {
-																onModeChange?.(m.id);
-																setPresetOpen(false);
-															}}
-														>
-															<span className="min-w-0 flex-1 truncate">{m.label}</span>
-															{activeModeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
-														</button>
-													))}
-												</>,
-											)}
-										</div>
-									)}
 								{renderProjMenu(
 									<>
 										{project && (
@@ -1194,9 +1156,47 @@ export function WelcomeComposer({
 												<span>{t("not in a project")}</span>
 											</button>
 										)}
-									</>,
-								)}
+								</>,
+							)}
 							</div>
+							{/* 预设(mode)chip:与项目 chip 并排一行(DSH hero 对齐),
+							 * 新会话创建时应用。样式与项目选择同款(按钮 + 浮层菜单)。 */}
+							{modes && (
+								<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
+									<button
+										type="button"
+										className="gui-project-chip"
+										onClick={() => setPresetOpen(v => !v)}
+										aria-label={t("modes title")}
+									>
+										<Icon name="stack" className="h-3.5 w-3.5" />
+										<span className="max-w-[160px] truncate">
+											{modes.find(m => m.id === activeModeId)?.label ?? activeModeId}
+										</span>
+										<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+									</button>
+									{renderPresetMenu(
+										<>
+											{/* 无“默认(无预设)”:modeId 恒非 null(默认 work),
+											 * 与 DSH 一致——每次新建都带一个预设。 */}
+											{modes.map(m => (
+												<button
+													key={m.id}
+													type="button"
+													className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}`}
+													onClick={() => {
+														onModeChange?.(m.id);
+														setPresetOpen(false);
+													}}
+												>
+													<span className="min-w-0 flex-1 truncate">{m.label}</span>
+													{activeModeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
+												</button>
+											))}
+										</>,
+									)}
+								</div>
+							)}
 							{branchInfo && (
 								<div className="relative z-20" ref={branchAnchorRef}>
 									<button
