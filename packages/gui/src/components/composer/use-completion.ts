@@ -38,6 +38,9 @@ export function useCompletion({
 	slashIdx: number;
 	setSlashIdx(v: (prev: number) => number): void;
 	slashFilter: SlashEntry[];
+	/** Full command registry (commands.list) once fetched — the slash
+	 *  badge tip keys off it. */
+	slashCmds: SlashEntry[] | null;
 	onSlashInput(value: string): void;
 	insertSlash(name: string): void;
 	// "@" completion (TUI/ZCode parity): @ = files & folders from the
@@ -280,6 +283,7 @@ export function useCompletion({
 		slashIdx,
 		setSlashIdx,
 		slashFilter,
+		slashCmds,
 		onSlashInput,
 		insertSlash,
 		atOpen,

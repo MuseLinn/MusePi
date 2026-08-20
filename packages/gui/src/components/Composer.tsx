@@ -37,6 +37,7 @@ import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
+import { SlashCommandTip } from "./composer/slash-command-tip";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
@@ -349,6 +350,7 @@ export function Composer({
 		slashIdx,
 		setSlashIdx,
 		slashFilter,
+		slashCmds,
 		onSlashInput,
 		insertSlash,
 		atOpen,
@@ -1710,6 +1712,7 @@ export function Composer({
 				}
 			>
 				{slashNotice && <SlashNotice level={slashNotice.level} text={slashNotice.text} />}
+				<SlashCommandTip text={text} commands={slashCmds} />
 				{magicKeywords.enabled && (
 					<MagicKeywordTip
 						text={text}

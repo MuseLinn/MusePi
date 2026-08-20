@@ -453,6 +453,23 @@
 	color: var(--color-text-faint);
 }
 
+/* Slash-command badge (TUI command-token accent parity): a filled pill
+ * marks a line-leading command that will actually take effect. */
+.gui-slash-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 42%, transparent);
+	color: var(--color-accent);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	line-height: 1.5;
+}
+
 @keyframes gui-composer-note-in {
 	from {
 		opacity: 0;
