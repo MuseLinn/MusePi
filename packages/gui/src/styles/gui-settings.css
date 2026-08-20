@@ -722,42 +722,25 @@
 	pointer-events: none;
 }
 
-/* ── Context menu (ZCode task/group right-click) ─────────────────────── */
+/* ── Context menu (ZCode task/group right-click) ───────────────────────
+ * Adapter over useFloatingMenu: the .gui-menu-popup wrapper owns
+ * positioning, the two-phase transform-only enter, outside/Escape close
+ * and the frosted surface; this class keeps the menu layout only. */
 
 .gui-context-menu {
-	position: fixed;
-	z-index: 1000;
 	min-width: 190px;
 	max-height: 380px;
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 4px;
-	border-radius: 12px;
-	/* Frosted glass (user): translucent surface + backdrop blur. */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
-		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
-		0 6px 6px -3px rgba(0, 0, 0, 0.16),
-		0 12px 36px rgba(0, 0, 0, 0.45);
-	/* Two-phase enter (ContextMenu.tsx parity with useFloatingMenu): mount
-	 * opaque at opacity 0, then add --entered next frame so the frosted
-	 * backdrop composites BEFORE the fade starts. Animating a freshly
-	 * mounted backdrop-filter element makes Chromium skip its backdrop
-	 * sampling on the real compositor (menu renders as plain translucency
-	 * — content shows straight through, no frost). */
-	opacity: 0;
-	transform-origin: top left;
 }
 
 .gui-context-menu--entered {
-	opacity: 1;
 	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+
+.gui-context-menu.gui-menu-popup--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
 }
 
 /* Context menu nested inside a useFloatingMenu popup (CardMenuButton):

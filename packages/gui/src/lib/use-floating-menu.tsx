@@ -33,10 +33,16 @@ let activeMenu: { close(): void } | null = null;
  * the inner root. Applying the same card class to BOTH layers double-draws
  * the rounded frosted container (nested glass boxes behind the content).
  */
+/** A point anchor (right-click coordinates): a zero-size rect at (x,y). */
+export interface MenuPoint {
+	x: number;
+	y: number;
+}
+
 export function useFloatingMenu(
 	open: boolean,
 	onOpenChange?: (open: boolean) => void,
-	options?: { className?: string; align?: "left" | "right"; anchor?: HTMLElement | null },
+	options?: { className?: string; align?: "left" | "right"; anchor?: HTMLElement | MenuPoint | null },
 ): {
 	anchorRef: (el: HTMLElement | null) => void;
 	renderMenu(children: ReactNode): ReactNode;
@@ -48,8 +54,9 @@ export function useFloatingMenu(
 	};
 	// Declarative anchor (Pop parity): an element passed straight in beats
 	// the imperative callback ref — read at positioning time so the layout
-	// effect below sees it on the SAME commit the menu opens.
-	const anchorEl = anchorOption ?? anchorRef.current;
+	// effect below sees it on the SAME commit the menu opens. A point
+	// anchor (ContextMenu parity) positions at the pointer instead.
+	const anchorEl = anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current;
 	const [pos, setPos] = useState<{ left?: number; right?: number; top?: number; bottom?: number; up: boolean } | null>(null);
 	const [closing, setClosing] = useState(false);
 	const [entered, setEntered] = useState(false);
@@ -61,7 +68,12 @@ export function useFloatingMenu(
 		if (!open) return;
 		const anchor = anchorOption ?? anchorRef.current;
 		if (!anchor) return;
-		const r = anchor.getBoundingClientRect();
+		// Point anchors (right-click menus) are a zero-size rect at (x,y);
+		// element anchors use their layout box.
+		const r =
+			anchor instanceof HTMLElement
+				? anchor.getBoundingClientRect()
+				: { left: anchor.x, top: anchor.y, right: anchor.x, bottom: anchor.y, width: 0, height: 0 };
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
 		const up = roomAbove > roomBelow;

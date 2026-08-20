@@ -1,8 +1,8 @@
 /* ── GuiSelect — frosted dropdown (replaces the native <select> whose
- * option list is system chrome). Trigger keeps the settings-select look
- * with a chevron; the list is a portal-rendered frosted menu at the
- * gui-context-menu glass tier (blur + layered shadow, body portal so no
- * ancestor backdrop-filter can kill the frost). */
+ * option list is system chrome). Adapter over useFloatingMenu: the
+ * .gui-menu-popup wrapper owns the glass surface + enter/exit; this
+ * class keeps the listbox layout. Named gui-select-menu (NOT
+ * gui-select-pop, which the SelectionToolbar chip bar owns). */
 .gui-select-trigger {
 	display: inline-flex;
 	align-items: center;
@@ -35,34 +35,13 @@
 	opacity: 0.6;
 }
 
-.gui-select-pop {
-	position: fixed;
-	z-index: 1000;
-	/* Explicit column: .gui-select-pop is ALSO used by the SelectionToolbar
-	 * (gui-board.css) as a horizontal chip row — rule-level property merge
-	 * would otherwise inherit that display:flex/align-items:center and lay
-	 * the options out sideways. */
+.gui-select-menu {
 	display: flex;
 	flex-direction: column;
 	max-height: 320px;
 	overflow-y: auto;
 	padding: 4px;
-	border-radius: 12px;
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-		0 0 0 1px rgba(0, 0, 0, 0.36),
-		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
-		0 12px 36px rgba(0, 0, 0, 0.45);
-	opacity: 0;
-}
-
-.gui-select-pop--entered {
-	opacity: 1;
-	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 }
 
 .gui-select-opt {
