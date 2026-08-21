@@ -755,6 +755,8 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	const cpuModelPromise = logger.time("getCpuModel", getCpuModel);
 	const gpuPromise = logger.time("getCachedGpu", getCachedGpu);
 
+	// "none" (explicit off — and every subagent) omits the block and skips the file lookup.
+	const bundledPersonality = personality === "none" ? "" : PERSONALITY_SPECS[personality].trim();
 	const [
 		resolvedCustomPrompt,
 		resolvedAppendPrompt,
@@ -765,6 +767,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		activeRepoContext,
 		cpuModel,
 		gpu,
+		personalityOverride,
 	] = await Promise.all([
 		withDeadline(
 			"customPrompt",
@@ -789,6 +792,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		withDeadline("resolveActiveRepoContext", activeRepoContextPromise, prepDefaults.activeRepoContext),
 		withDeadline("getCpuModel", cpuModelPromise, prepDefaults.cpuModel),
 		withDeadline("getCachedGpu", gpuPromise, prepDefaults.gpu),
+		withDeadline("loadPersonalityOverride", loadPersonalityOverride(), bundledPersonality),
 	]);
 	clearTimeout(deadlineTimer);
 	const agentsMdFiles = Array.from(new Set(workspaceTree.agentsMdFiles)).sort().slice(0, AGENTS_MD_LIMIT);
@@ -881,15 +885,6 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	];
 	const injectedAlwaysApplyRules = dedupeAlwaysApplyRules(alwaysApplyRules, promptSources);
 
-	// "none" (explicit off — and every subagent) omits the block and skips the file lookup.
-	const bundledPersonality = personality === "none" ? "" : PERSONALITY_SPECS[personality].trim();
-	const personalityPromise: Promise<string> =
-		personality === "none"
-			? Promise.resolve("")
-			: logger
-					.time("loadPersonalityOverride", loadPersonalityOverride)
-					.then(override => override ?? bundledPersonality);
-
 	const environment = getEnvironmentInfo(cpuModel, gpu);
 	const data = {
 		systemPromptCustomization: effectiveSystemPromptCustomization,
@@ -914,7 +909,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		additionalWorkspaceRoots: additionalWorkspaceRoots.filter(d => path.resolve(d) !== path.resolve(resolvedCwd)),
 		model: includeModelInPrompt ? (model ?? "") : "",
 		useCodexTaskPrompt: usesCodexTaskPrompt(model),
-		personality: await withDeadline("loadPersonalityOverride", personalityPromise, bundledPersonality),
+		personality: personalityOverride,
 		intentTracing: !!intentField,
 		intentField: intentField ?? "",
 		eagerTasks,
