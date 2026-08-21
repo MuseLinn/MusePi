@@ -84,7 +84,6 @@ import { modelsAreEqual } from "@musepi/pi-catalog/models";
 import { MacOSPowerAssertion } from "@musepi/pi-natives";
 import {
 	$env,
-	APP_NAME,
 	escapeXmlText,
 	formatDuration,
 	getAgentDbPath,
@@ -207,6 +206,7 @@ import { ToolError } from "../tools/tool-errors";
 import { parseCommandArgs } from "../utils/command-args";
 import type { EditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import { resumeCommand } from "../utils/resume-command";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import { normalizeModelContextImages } from "../utils/image-loading";
 import type { InspectImageMode } from "../utils/inspect-image-mode";
@@ -1502,7 +1502,7 @@ export class AgentSession {
 			if (!sessionId || !this.sessionManager.getSessionFile()) return undefined;
 			return {
 				label: this.#agentId ?? (this.#agentKind === "main" ? "Main" : "Agent"),
-				command: `${APP_NAME} --resume ${sessionId}`,
+				command: resumeCommand(sessionId),
 			};
 		});
 

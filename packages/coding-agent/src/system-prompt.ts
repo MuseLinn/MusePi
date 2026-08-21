@@ -7,7 +7,7 @@ import * as path from "node:path";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import type { ToolExample, TSchema } from "@musepi/pi-ai";
 import { renderToolInventory } from "@musepi/pi-ai/dialect";
-import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@musepi/pi-utils";
+import { $env, getAgentDir, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@musepi/pi-utils";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { findConfigFile } from "./config";
@@ -37,6 +37,31 @@ const PERSONALITY_SPECS: Record<Exclude<Personality, "none">, string> = {
 	friendly: friendlyPersonality,
 	pragmatic: pragmaticPersonality,
 };
+
+/**
+ * Load the user-level PERSONALITY.md override for the system prompt's
+ * personality block from `<agentDir>/PERSONALITY.md` (`~/.omp/agent` by
+ * default; profile, XDG, and `PI_CODING_AGENT_DIR` aware). Returns null when
+ * the file is absent, empty, or unreadable; callers then render the configured
+ * preset. Read failures other than a missing file warn instead of failing the
+ * build.
+ */
+async function loadPersonalityOverride(): Promise<string | null> {
+	const filePath = path.join(getAgentDir(), "PERSONALITY.md");
+	try {
+		const content = (await Bun.file(filePath).text()).trim();
+		if (content) return content;
+		logger.warn("PERSONALITY.md is empty; using the configured personality preset", { path: filePath });
+	} catch (error) {
+		if (!isEnoent(error)) {
+			logger.warn("Failed to read PERSONALITY.md; using the configured personality preset", {
+				path: filePath,
+				error: String(error),
+			});
+		}
+	}
+	return null;
+}
 
 interface AlwaysApplyRule {
 	name: string;
@@ -856,6 +881,15 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	];
 	const injectedAlwaysApplyRules = dedupeAlwaysApplyRules(alwaysApplyRules, promptSources);
 
+	// "none" (explicit off — and every subagent) omits the block and skips the file lookup.
+	const bundledPersonality = personality === "none" ? "" : PERSONALITY_SPECS[personality].trim();
+	const personalityPromise: Promise<string> =
+		personality === "none"
+			? Promise.resolve("")
+			: logger
+					.time("loadPersonalityOverride", loadPersonalityOverride)
+					.then(override => override ?? bundledPersonality);
+
 	const environment = getEnvironmentInfo(cpuModel, gpu);
 	const data = {
 		systemPromptCustomization: effectiveSystemPromptCustomization,
@@ -880,7 +914,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		additionalWorkspaceRoots: additionalWorkspaceRoots.filter(d => path.resolve(d) !== path.resolve(resolvedCwd)),
 		model: includeModelInPrompt ? (model ?? "") : "",
 		useCodexTaskPrompt: usesCodexTaskPrompt(model),
-		personality: personality === "none" ? "" : PERSONALITY_SPECS[personality].trim(),
+		personality: await withDeadline("loadPersonalityOverride", personalityPromise, bundledPersonality),
 		intentTracing: !!intentField,
 		intentField: intentField ?? "",
 		eagerTasks,

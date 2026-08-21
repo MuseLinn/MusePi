@@ -519,6 +519,11 @@ export function providerImageBudget(provider: string | undefined): number {
 	return (provider !== undefined ? PROVIDER_IMAGE_BUDGETS[provider] : undefined) ?? DEFAULT_PROVIDER_IMAGE_BUDGET;
 }
 
+/** Archive frame cap for `provider`: image budget, never above {@link MAX_FRAMES_DEFAULT}. */
+export function providerFrameBudget(provider: string | undefined): number {
+	return Math.min(providerImageBudget(provider), MAX_FRAMES_DEFAULT);
+}
+
 /** Key under `CompactionEntry.preserveData` holding the frame archive. */
 export const PRESERVE_KEY = "snapcompact";
 
