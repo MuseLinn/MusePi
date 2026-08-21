@@ -396,46 +396,74 @@ export function PetSection(): ReactNode {
 		setImportError(null);
 		try {
 			const raw = await electronAPI.importPetdex();
-			if (!raw) return;
-			if ("error" in raw) {
-				console.error("[pet] import failed:", raw.error);
-				setImportError(t("pet import failed"));
-				return;
-			}
-			// The main process cannot decode image dimensions — measure the
-			// spritesheet here (PetdexSprite needs real frame size + the
-			// per-row valid frame counts to skip empty padding columns).
-			const img = new Image();
-			img.src = raw.spritesheet;
-			const { promise: decoded, resolve: resolveDecoded } = Promise.withResolvers<void>();
-			img.onload = () => resolveDecoded();
-			img.onerror = () => resolveDecoded();
-			await decoded;
-			if (!img.naturalWidth || !img.naturalHeight) {
-				console.error("[pet] spritesheet undecodable");
-				setImportError(t("pet import failed"));
-				return;
-			}
-			const { rows, contentH } = measurePetdex(img);
-			const pkg: PetdexPackage = {
-				id: raw.id,
-				displayName: raw.displayName,
-				description: typeof raw.description === "string" && raw.description ? raw.description : undefined,
-				spritesheet: raw.spritesheet,
-				width: img.naturalWidth,
-				height: img.naturalHeight,
-				rows,
-				contentH,
-				importedAt: Date.now(),
-			};
-			const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
-			savePetdex(next);
-			setPetdex(next);
-			pickPet(pkg.id);
-			setExpanded(true);
+			await applyImportedPet(raw);
 		} finally {
 			setImporting(false);
 		}
+	};
+	const importCodexPet = async (): Promise<void> => {
+		const electronAPI = (
+			window as unknown as {
+				electronAPI?: {
+					importCodexPet?(): Promise<
+						(PetdexPackage & { width?: number; height?: number }) | { error: string } | null
+					>;
+				};
+			}
+		).electronAPI;
+		if (!electronAPI?.importCodexPet) {
+			// Browser/absent bridge — nothing to pick from yet.
+			return;
+		}
+		setImporting(true);
+		setImportError(null);
+		try {
+			const raw = await electronAPI.importCodexPet();
+			await applyImportedPet(raw);
+		} finally {
+			setImporting(false);
+		}
+	};
+	const applyImportedPet = async (
+		raw: (PetdexPackage & { width?: number; height?: number }) | { error: string } | null,
+	): Promise<void> => {
+		if (!raw) return;
+		if ("error" in raw) {
+			console.error("[pet] import failed:", raw.error);
+			setImportError(t("pet import failed"));
+			return;
+		}
+		// The main process cannot decode image dimensions — measure the
+		// spritesheet here (PetdexSprite needs real frame size + the
+		// per-row valid frame counts to skip empty padding columns).
+		const img = new Image();
+		img.src = raw.spritesheet;
+		const { promise: decoded, resolve: resolveDecoded } = Promise.withResolvers<void>();
+		img.onload = () => resolveDecoded();
+		img.onerror = () => resolveDecoded();
+		await decoded;
+		if (!img.naturalWidth || !img.naturalHeight) {
+			console.error("[pet] spritesheet undecodable");
+			setImportError(t("pet import failed"));
+			return;
+		}
+		const { rows, contentH } = measurePetdex(img);
+		const pkg: PetdexPackage = {
+			id: raw.id,
+			displayName: raw.displayName,
+			description: typeof raw.description === "string" && raw.description ? raw.description : undefined,
+			spritesheet: raw.spritesheet,
+			width: img.naturalWidth,
+			height: img.naturalHeight,
+			rows,
+			contentH,
+			importedAt: Date.now(),
+		};
+		const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
+		savePetdex(next);
+		setPetdex(next);
+		pickPet(pkg.id);
+		setExpanded(true);
 	};
 	const removePet = (id: string): void => {
 		const next = petdex.filter(p => p.id !== id);
@@ -608,6 +636,16 @@ export function PetSection(): ReactNode {
 								>
 									<Icon name="add" className="h-3.5 w-3.5" />
 									{importing ? "…" : t("import petdex")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn"
+									onClick={() => void importCodexPet()}
+									disabled={importing || !isDesktopShell}
+									title={isDesktopShell ? t("import codex sprite") : t("desktop pet needs desktop app")}
+								>
+									<Icon name="download" className="h-3.5 w-3.5" />
+									{importing ? "…" : t("import codex sprite")}
 								</button>
 							</div>
 							{importError && (

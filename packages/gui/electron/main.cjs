@@ -1760,6 +1760,39 @@ ipcMain.handle("pet-import", async () => {
 	return importPetdexFromZip(zipPath);
 });
 
+// Import a Codex hatch-pet sprite: read `pet.json` + `spritesheet.webp` from a
+// Codex pets directory (`~/.codex/pets/<name>/`), mirroring open-design's
+// Settings → General → Pets → Import Codex sprite flow. Shares the manifest
+// contract (id/displayName/description/spritesheetPath) with the petdex zip
+// import, so the same PetdexPackage shape is returned for the renderer.
+ipcMain.handle("pet-import-codex", async () => {
+	const picked = await dialog.showOpenDialog(mainWindow ?? undefined, {
+		title: "Import Codex sprite",
+		properties: ["openDirectory"],
+	});
+	const dir = picked.filePaths?.[0];
+	if (!dir) return null;
+	const petJsonPath = path.join(dir, "pet.json");
+	let meta;
+	try {
+		meta = JSON.parse(fs.readFileSync(petJsonPath, "utf8"));
+	} catch {
+		return { error: "invalid-codex" };
+	}
+	const spritesheetRel = typeof meta.spritesheetPath === "string" ? meta.spritesheetPath : "spritesheet.webp";
+	const sheetPath = path.join(dir, spritesheetRel);
+	if (!fs.existsSync(sheetPath)) return { error: "missing-spritesheet" };
+	const ext = path.extname(sheetPath).toLowerCase();
+	const mime = ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/webp";
+	const dataUrl = `data:${mime};base64,${fs.readFileSync(sheetPath).toString("base64")}`;
+	return {
+		id: typeof meta.id === "string" && meta.id ? meta.id : `pet-${Date.now()}`,
+		displayName: typeof meta.displayName === "string" && meta.displayName ? meta.displayName : "Codex pet",
+		description: typeof meta.description === "string" ? meta.description : null,
+		spritesheet: dataUrl,
+	};
+});
+
 // ── Petdex market (内嵌搜索/预览/安装) ───────────────────────────────────
 // The renderer cannot fetch petdex.dev directly (no CORS headers), so the
 // search API and zip downloads go through the main process. net.fetch is

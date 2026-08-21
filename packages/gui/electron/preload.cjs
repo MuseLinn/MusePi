@@ -217,6 +217,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	/** Import a Petdex zip (dialog + unpack); null when cancelled. */
 	importPetdex: () => ipcRenderer.invoke("pet-import"),
+	/** Import a Codex hatch-pet sprite directory (dialog + pet.json); null when cancelled. */
+	importCodexPet: () => ipcRenderer.invoke("pet-import-codex"),
 	/** Search the petdex.dev catalog (main-process fetch — no CORS). */
 	searchPetdex: (query) => ipcRenderer.invoke("pet-search", query),
 	/** Download + install a petdex zip by URL (same unpack path as import). */

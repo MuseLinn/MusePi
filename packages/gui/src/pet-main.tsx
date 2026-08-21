@@ -78,6 +78,10 @@ function PetApp(): ReactNode {
 	const [mood, setMood] = useState<PetMood>("rest");
 	const [hovering, setHovering] = useState(false);
 	const [dragging, setDragging] = useState(false);
+	// Ambient idle choreography: while the pet sits calm at rest, briefly swap
+	// to a livelier idle row (thinking / lingering) so it has a life of its own
+	// instead of breathing in place forever (open-design `pet-overlay` parity).
+	const [ambientMood, setAmbientMood] = useState<PetMood | null>(null);
 	// Horizontal drag direction: the dragging row's frames are a fixed-
 	// direction walk cycle, so moving the other way must mirror them
 	// (BitFun doesn't — it reads as running backwards on rightward drags).
@@ -159,6 +163,54 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetDock) return;
 		return bridge.onPetDock?.(setDockSide);
 	}, []);
+
+	// Ambient idle choreography scheduler (open-design `pet-overlay` parity).
+	// While the pet rests calm and nothing is hovering/dragging, occasionally
+	// play a livelier idle row (thinking / lingering) for a few seconds, then
+	// return to the baseline rest for a longer, randomised rest window. Both
+	// windows are randomised so the rhythm never feels mechanical; the rest
+	// window is deliberately generous so the pet reads calm rather than fidgety.
+	// Any user gesture (hover / drag) cancels the beat via cleanup.
+	useEffect(() => {
+		if (mood !== "rest" || hovering || dragging) {
+			setAmbientMood(null);
+			return;
+		}
+		if (pet.kind !== "petdex") return;
+		const AMBIENT_PLAY_MIN_MS = 1800;
+		const AMBIENT_PLAY_VARIANCE_MS = 1200;
+		const AMBIENT_REST_MIN_MS = 9000;
+		const AMBIENT_REST_VARIANCE_MS = 9000;
+		const AMBIENT_INITIAL_DELAY_MIN_MS = 4000;
+		const AMBIENT_INITIAL_DELAY_VARIANCE_MS = 4000;
+		// Idle-friendly rows that read as "considering / lingering" rather than
+		// task work — swapped in for a beat then released back to rest.
+		const AMBIENT_MOODS: PetMood[] = ["waiting", "analyzing"];
+		let playTimer: number | undefined;
+		let restTimer: number | undefined;
+
+		const playBeat = (): void => {
+			setAmbientMood(AMBIENT_MOODS[Math.floor(Math.random() * AMBIENT_MOODS.length)] ?? "waiting");
+			const playMs =
+				AMBIENT_PLAY_MIN_MS + Math.floor(Math.random() * AMBIENT_PLAY_VARIANCE_MS);
+			playTimer = window.setTimeout(() => {
+				setAmbientMood(null);
+				const restMs =
+					AMBIENT_REST_MIN_MS + Math.floor(Math.random() * AMBIENT_REST_VARIANCE_MS);
+				restTimer = window.setTimeout(playBeat, restMs);
+			}, playMs);
+		};
+
+		const initialDelay =
+			AMBIENT_INITIAL_DELAY_MIN_MS + Math.floor(Math.random() * AMBIENT_INITIAL_DELAY_VARIANCE_MS);
+		restTimer = window.setTimeout(playBeat, initialDelay);
+
+		return () => {
+			if (playTimer !== undefined) window.clearTimeout(playTimer);
+			if (restTimer !== undefined) window.clearTimeout(restTimer);
+			setAmbientMood(null);
+		};
+	}, [mood, hovering, dragging, pet]);
 
 	// Light/dark scheme: mirror the main app's scheme (local pref +
 	// system default); the main window's petActivity push overrides it.
@@ -396,7 +448,7 @@ function PetApp(): ReactNode {
 
 	if (!enabled) return null;
 
-	const displayMood = dragging ? "dragging" : hovering ? "hover" : mood;
+	const displayMood = dragging ? "dragging" : hovering ? "hover" : ambientMood ?? mood;
 	// Docked to the left edge the pet faces OUT of the screen (the walk
 	// frames face left) — mirror it so it always faces the workspace.
 	const mirrored = flip || dockSide === "left";
