@@ -44,6 +44,7 @@
 右栏 ContextPanel「轨迹」tab 的 TrajectoryView 顶部 = **固定 Overview 时间条**(`TimelineOverview.tsx`,不随列表滚动):44px 圆角条带,内嵌 sunken 底 + 1px border;背景 = 时间域(全部 turn 的 [最早 start, 最晚 end]),两端 mono 起止时钟;每 turn 一段(`traj-ov-segment`,accent 26%→hover 42%,agent_end 冻结的回合时长命中时 = 完整回合跨度,否则 = 该轮末条事件),turn 内每个带 tsMs 的事件一落点(`traj-ov-dot`,颜色按 kind;user 点稍低错开)。
 
 **交互契约**(与 DSH Overview 拖拽聚焦对齐,克制节奏):
+- **列对齐契约(2026-08-21 实测)**:事件行内,工具名称/参数/结果/文本全部与条目名称**左对齐**(同列 x 一致,`.traj-content` 内零左缩进);turn 头的 `Turn N` 标签与事件 tag 同宽(`min-width: 62px`),使 **turn 摘要列与事件内容列精确对齐**(实测 x 相等)——新增/改动行排版时保持此契约。
 - 拖拽(pointer capture,位移 ≥3px)= 选中时间区间;区间覆盖层 accent 18% + 左右 1px 强调边;激活 chip(`traj-focus-chip`)显示「聚焦 hh:mm:ss – hh:mm:ss」+ ✕。
 - 单击某 turn 段 = 选中该**整轮**;单击空白 = 清除;Esc 优先清区间、再清选中(与模态键盘契约一致)。
 - 悬停段/点 → 提示(`traj-ov-tip`,`gui-fade-in` 120ms):标题 + 起止/精确时刻 + 时长;离开 140ms 延时隐藏,便于在提示间滑移。**时长口语化**:0.8s / 12.3s / 1m 23s / 1h 02m(`durationText`,状态栏同语感)。

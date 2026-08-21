@@ -1486,6 +1486,12 @@
 	border: 1px solid var(--border);
 	border-radius: 5px;
 	padding: 1px 5px;
+	/* 与事件行 tag 同宽(62px),使 turn 摘要列与事件内容列对齐。 */
+	min-width: 62px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
 }
 
 .traj-user-text {

@@ -601,7 +601,7 @@ export const SETTINGS_SCHEMA = {
 	// Theme
 	"theme.dark": {
 		type: "string",
-		default: "titanium",
+		default: "musepi",
 		ui: {
 			tab: "appearance",
 			tuiOnly: true,
@@ -614,7 +614,7 @@ export const SETTINGS_SCHEMA = {
 
 	"theme.light": {
 		type: "string",
-		default: "light",
+		default: "musepi-light",
 		ui: {
 			tab: "appearance",
 			tuiOnly: true,

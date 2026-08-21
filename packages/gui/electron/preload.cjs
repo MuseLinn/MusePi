@@ -244,6 +244,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserGoBack: () => ipcRenderer.invoke("managed-browser:go-back"),
 	managedBrowserGoForward: () => ipcRenderer.invoke("managed-browser:go-forward"),
 	managedBrowserReload: () => ipcRenderer.invoke("managed-browser:reload"),
+	/** Bypass-cache reload of the active tab. */
+	managedBrowserHardReload: () => ipcRenderer.invoke("managed-browser:reload-hard"),
+	/** Clear managed-browser cookies ("cookies") or all data ("all"). */
+	managedBrowserClearData: (mode) => ipcRenderer.invoke("managed-browser:clear-data", { mode }),
+	/** Open a URL in the user's default system browser. */
+	managedBrowserOpenExternal: (url) => ipcRenderer.invoke("managed-browser:open-external", { url }),
 	managedBrowserPickElement: () => ipcRenderer.invoke("managed-browser:pick-element"),
 	managedBrowserNewTab: () => ipcRenderer.invoke("managed-browser:new-tab"),
 	managedBrowserSelectTab: (tabId) => ipcRenderer.invoke("managed-browser:select-tab", tabId),

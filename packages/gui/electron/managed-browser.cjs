@@ -25,7 +25,7 @@
  */
 "use strict";
 
-const { BrowserWindow, ipcMain, net, protocol, session: electronSession, WebContentsView } = require("electron");
+const { BrowserWindow, ipcMain, net, protocol, session: electronSession, shell, WebContentsView } = require("electron");
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -460,6 +460,14 @@ class ManagedTab {
 		this.view.webContents.reload();
 	}
 
+	/** Hard reload: bypass caches (ReloadIgnoringCache). */
+	async hardReload() {
+		const wc = this.view.webContents;
+		if (wc.isDestroyed()) return;
+		if (wc.reloadIgnoringCache) wc.reloadIgnoringCache();
+		else wc.reload();
+	}
+
 	/**
 	 * Element picker: inject a capture-mode script (hover highlight + click
 	 * to select + Esc to cancel). resolve with the unique CSS selector, or
@@ -715,7 +723,11 @@ class ManagedBrowserController {
 		if (!tab) return;
 		const width = Number(bounds?.width) || 0;
 		const height = Number(bounds?.height) || 0;
-		const show = visible && width > 4 && height > 4 && this.owner && !this.owner.isDestroyed() && this.owner.isVisible();
+		// Blank tabs (about:blank, no URL yet) render a React start page in
+		// the slot; hiding the native view lets it show through. Real pages
+		// project normally.
+		const isBlank = !tab.url || tab.url === "about:blank";
+		const show = !isBlank && visible && width > 4 && height > 4 && this.owner && !this.owner.isDestroyed() && this.owner.isVisible();
 		const zoom = this.owner?.webContents.getZoomFactor() ?? 1;
 		const adjusted = {
 			x: Math.round((Number(bounds?.x) || 0) * zoom),
@@ -864,6 +876,36 @@ class ManagedBrowserController {
 		this.markOpStatus(String(tab.id), "canceled");
 		this.emitState({});
 		return this.state();
+	}
+
+	/**
+	 * Clear managed-browser browsing data for the shared partition.
+	 * `mode: "cookies"` clears cookies/storage; `"all"` also wipes cache.
+	 * Returns `{ ok: boolean }`.
+	 */
+	async clearBrowserData(mode) {
+		try {
+			const ses = electronSession.fromPartition(PARTITION);
+			if (mode === "all") {
+				await ses.clearCache();
+				await ses.clearStorageData();
+			} else {
+				await ses.clearStorageData({
+					storages: ["cookies", "localstorage", "indexdb", "serviceworkers", "cachestorage"],
+				});
+			}
+			return { ok: true };
+		} catch {
+			return { ok: false };
+		}
+	}
+
+	/** Open a URL in the user's default system browser (shell.openExternal). */
+	openExternal(url) {
+		const target = String(url || "").trim();
+		if (!/^https?:/i.test(target)) return { ok: false };
+		void shell.openExternal(target).catch(() => {});
+		return { ok: true };
 	}
 
 	// ── CDP lifecycle announcements ──────────────────────────────────────
@@ -1503,6 +1545,17 @@ class ManagedBrowserController {
 			if (tab) await tab.reload();
 			return {};
 		});
+		ipcMain.handle("managed-browser:reload-hard", async () => {
+			const tab = this.tabs.get(this.activeTabId);
+			if (tab) await tab.hardReload();
+			return {};
+		});
+		ipcMain.handle("managed-browser:clear-data", (_e, input) =>
+			this.clearBrowserData(input?.mode),
+		);
+		ipcMain.handle("managed-browser:open-external", (_e, input) =>
+			this.openExternal(input?.url),
+		);
 		ipcMain.handle("managed-browser:pick-element", async () => {
 			const tab = this.tabs.get(this.activeTabId);
 			if (!tab) return { cancelled: true };

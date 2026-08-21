@@ -96,6 +96,8 @@ import porcelain from "./porcelain.json" with { type: "json" };
 import quartz from "./quartz.json" with { type: "json" };
 import sandstone from "./sandstone.json" with { type: "json" };
 import titanium from "./titanium.json" with { type: "json" };
+import musepi from "./musepi.json" with { type: "json" };
+import musepi_light from "./musepi-light.json" with { type: "json" };
 
 export const defaultThemes = {
 	alabaster: alabaster,
@@ -196,4 +198,6 @@ export const defaultThemes = {
 	quartz: quartz,
 	sandstone: sandstone,
 	titanium: titanium,
+	musepi: musepi,
+	"musepi-light": musepi_light,
 };

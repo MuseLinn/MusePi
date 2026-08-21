@@ -3547,3 +3547,580 @@ body.gui-resizing {
 }
 
 /* ── Terminal pane (xterm.js host) ──────────────────────────────────── */
+
+/* ── Managed browser pane (open-design DesignBrowserPanel UI/UX 吸收) ─
+ * Chrome bar + address omnibox + start page (quick links / recent visits)
+ * + suggestions + overflow menu + viewport presets. Token-only: uses the
+ * shared --color-* / --border / --radius families. */
+.gui-browser-chrome {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border);
+	min-width: 0;
+	position: relative;
+	z-index: 500;
+}
+.gui-browser-nav,
+.gui-browser-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+.gui-browser-actions {
+	position: relative;
+	gap: 4px;
+}
+.gui-browser-icon-btn {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text-muted);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.gui-browser-icon-btn:hover:not(:disabled) {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-browser-icon-btn:active:not(:disabled) {
+	transform: scale(0.93);
+}
+.gui-browser-icon-btn:disabled {
+	cursor: default;
+	opacity: 0.34;
+}
+.gui-browser-icon-btn--active {
+	border-color: color-mix(in oklab, var(--color-accent) 36%, var(--border));
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+.gui-browser-icon-btn--spinning svg {
+	animation: gui-browser-spin 900ms linear infinite;
+}
+@keyframes gui-browser-spin {
+	to { transform: rotate(360deg); }
+}
+/* ---- Address omnibox ---- */
+.gui-browser-address {
+	position: relative;
+	height: 30px;
+	flex: 1 1 auto;
+	min-width: 0;
+	border: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+	border-radius: var(--radius);
+	background: var(--color-surface-sunken);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0 9px;
+	transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.gui-browser-address:focus-within {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	background: var(--color-surface);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 15%, transparent);
+}
+.gui-browser-address-icon {
+	width: 16px;
+	height: 16px;
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--color-text-faint);
+	overflow: hidden;
+}
+.gui-browser-address-field {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+.gui-browser-address-field input {
+	position: relative;
+	z-index: 1;
+	width: 100%;
+	min-width: 0;
+	height: 100%;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+}
+.gui-browser-address-field input::placeholder {
+	color: var(--color-text-faint);
+}
+.gui-browser-address-display {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	overflow: hidden;
+	pointer-events: none;
+	font-size: var(--ui-font-size-sm);
+	white-space: nowrap;
+}
+.gui-browser-address-url,
+.gui-browser-address-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-browser-address-url {
+	color: var(--color-text);
+	flex: 0 1 auto;
+}
+.gui-browser-address-sep,
+.gui-browser-address-title {
+	color: var(--color-text-faint);
+}
+.gui-browser-address-title {
+	flex: 1 1 auto;
+}
+/* ---- Suggestions dropdown ---- */
+.gui-browser-suggestions {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	right: 0;
+	max-height: min(340px, calc(100vh - 160px));
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--color-surface-raised);
+	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+	overflow-y: auto;
+	z-index: 220;
+	animation: gui-browser-pop 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes gui-browser-pop {
+	from { opacity: 0; transform: translateY(-5px) scale(0.99); }
+	to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.gui-browser-suggestions button {
+	width: 100%;
+	min-height: 40px;
+	display: grid;
+	grid-template-columns: 26px minmax(0, 1fr);
+	align-items: center;
+	gap: 9px;
+	border: 0;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text);
+	padding: 6px 8px;
+	cursor: pointer;
+	text-align: left;
+	transition: background 120ms ease;
+}
+.gui-browser-suggestions button:hover {
+	background: var(--color-surface-sunken);
+}
+.gui-browser-suggestion-icon {
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.gui-browser-suggestion-copy {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.gui-browser-suggestion-copy span,
+.gui-browser-suggestion-copy small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-browser-suggestion-copy span {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+}
+.gui-browser-suggestion-copy small {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+/* ---- Overflow menu ---- */
+.gui-browser-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	width: 236px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--color-surface-raised);
+	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+	z-index: 720;
+	animation: gui-browser-pop 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.gui-browser-menu button {
+	width: 100%;
+	min-height: 32px;
+	display: grid;
+	grid-template-columns: 20px minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+	border: 0;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text);
+	padding: 6px 8px;
+	text-align: left;
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-browser-menu button svg {
+	color: var(--color-text-muted);
+	transition: color 120ms ease;
+}
+.gui-browser-menu button:hover:not(:disabled) {
+	background: var(--color-surface-sunken);
+}
+.gui-browser-menu button:hover:not(:disabled) svg {
+	color: var(--color-text);
+}
+.gui-browser-menu button:disabled {
+	color: var(--color-text-faint);
+	cursor: default;
+}
+.gui-browser-menu button:disabled svg {
+	color: var(--color-text-faint);
+}
+.gui-browser-menu-label {
+	display: block;
+	padding: 5px 8px 4px;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+.gui-browser-menu-viewports {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	padding: 0 8px 6px;
+}
+.gui-browser-menu-viewports button {
+	grid-template-columns: minmax(0, 1fr);
+	min-height: 24px;
+	padding: 4px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	white-space: nowrap;
+}
+.gui-browser-menu-viewports button.gui-browser-menu-chip--active {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+.gui-browser-menu-sep {
+	display: block;
+	height: 1px;
+	margin: 5px 4px;
+	background: color-mix(in oklab, var(--border) 70%, transparent);
+}
+/* ---- Tab strip ---- */
+.gui-browser-tab {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+.gui-browser-tab--active {
+	background: var(--color-surface-raised);
+	border-color: var(--border);
+}
+.gui-browser-tab-main {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	white-space: nowrap;
+	max-width: 150px;
+}
+.gui-browser-tab--active .gui-browser-tab-main {
+	color: var(--color-text);
+}
+.gui-browser-tab-badge {
+	border-radius: var(--radius);
+	padding: 0 4px;
+	font-size: 9px;
+	font-weight: 550;
+	background: color-mix(in oklab, var(--color-accent) 15%, transparent);
+	color: var(--color-accent);
+}
+.gui-browser-tab-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	margin-right: 3px;
+	opacity: 0;
+	transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.gui-browser-tab:hover .gui-browser-tab-close,
+.gui-browser-tab--active .gui-browser-tab-close {
+	opacity: 1;
+}
+.gui-browser-tab-close:hover {
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+}
+/* ---- Content surface ---- */
+.gui-browser-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	min-width: 0;
+	position: relative;
+	z-index: 0;
+	display: flex;
+	background: var(--color-surface-sunken);
+}
+.gui-browser-viewport-wrap {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	justify-content: center;
+	margin-inline: auto;
+	width: 100%;
+}
+.gui-browser-slot {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	background: #fff;
+}
+/* ---- Start page (quick links + recent visits) ---- */
+.gui-browser-start {
+	flex: 1 1 auto;
+	width: 100%;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 18px 22px 24px;
+	background:
+		radial-gradient(120% 78% at 50% -12%, color-mix(in oklab, var(--color-accent) 7%, transparent) 0%, transparent 56%),
+		linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-sunken) 100%);
+}
+.gui-browser-start-hero {
+	flex: 0 0 auto;
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 12px 4px 16px;
+}
+.gui-browser-start-kicker {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--color-accent);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 650;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+.gui-browser-start-kicker::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: var(--radius);
+	background: var(--color-accent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+.gui-browser-start h2 {
+	max-width: 720px;
+	margin: 8px 0 0;
+	color: var(--color-text);
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 1.08;
+	letter-spacing: -0.02em;
+}
+.gui-browser-start-sub {
+	max-width: 560px;
+	margin: 8px 0 0;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+}
+.gui-browser-start-section {
+	flex: 0 0 auto;
+	max-width: 720px;
+	width: 100%;
+	margin: 0 auto;
+	padding: 8px 4px 0;
+}
+.gui-browser-start-section-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 8px 2px 8px;
+}
+.gui-browser-start-section-head span {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+.gui-browser-start-section-head small {
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+.gui-browser-quick-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	gap: 8px;
+}
+.gui-browser-quick-card {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 550;
+	white-space: nowrap;
+	transition: border-color 130ms ease, background 130ms ease, transform 130ms ease;
+}
+.gui-browser-quick-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	color: var(--color-accent);
+	transform: translateY(-1px);
+}
+.gui-browser-recent-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.gui-browser-recent-item {
+	display: grid;
+	grid-template-columns: 28px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text);
+	cursor: pointer;
+	text-align: left;
+	transition: background 120ms ease, border-color 120ms ease;
+}
+.gui-browser-recent-item:hover {
+	background: var(--color-surface-raised);
+	border-color: var(--border);
+}
+.gui-browser-recent-icon {
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.gui-browser-recent-copy {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.gui-browser-recent-copy span,
+.gui-browser-recent-copy small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-browser-recent-copy span {
+	font-size: var(--ui-font-size-sm);
+}
+.gui-browser-recent-copy small {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+.gui-browser-recent-open {
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+.gui-browser-start-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 22px 12px;
+	text-align: center;
+}
+.gui-browser-start-empty p {
+	margin: 0;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-sm);
+}
+.gui-browser-start-address {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	padding: 8px 16px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--color-surface-raised);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	transition: border-color 130ms ease, color 130ms ease;
+}
+.gui-browser-start-address:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	color: var(--color-accent);
+}

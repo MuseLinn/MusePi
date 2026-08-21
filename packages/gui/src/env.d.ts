@@ -30,6 +30,9 @@ interface Window {
 		managedBrowserGoBack(): Promise<unknown>;
 		managedBrowserGoForward(): Promise<unknown>;
 		managedBrowserReload(): Promise<unknown>;
+		managedBrowserHardReload(): Promise<unknown>;
+		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean }>;
+		managedBrowserOpenExternal(url: string): Promise<{ ok: boolean }>;
 		managedBrowserPickElement(): Promise<{ selector: string | null; cancelled?: boolean }>;
 		managedBrowserNewTab(): Promise<ManagedBrowserState>;
 		managedBrowserSelectTab(tabId: string): Promise<ManagedBrowserState | null>;

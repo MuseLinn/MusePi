@@ -324,26 +324,31 @@ export function ContextPanel({
 						))}
 					</div>
 				</div>
-				<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
-					{tool === "notes" ? (
-						<NotesPane rpc={rpc} cwd={cwd} />
-					) : tool === "diff" ? (
-						<DiffPane rpc={rpc} cwd={cwd} />
-					) : tool === "git" ? (
-						<GitLogPane rpc={rpc} cwd={cwd} />
-					) : tool === "pr" ? (
-						<PrPane rpc={rpc} cwd={cwd} />
-					) : tool === "browser" ? (
-						<BrowserPane rpc={rpc} />
-					) : tool ? (
-						<div className="gui-tool-placeholder">
-							<Icon name={TOOLS.find(x => x.id === tool)?.icon as never} className="h-5 w-5" />
-							<div className="text-[13px] font-medium">{TOOLS.find(x => x.id === tool)?.label}</div>
-							<p className="text-[12px] leading-relaxed text-[var(--color-text-faint)]">
-								{t("tool needs a daemon backend — coming with the desktop release")}
-							</p>
-						</div>
-					) : tab === "files" && cwd ? (
+				{tool === "browser" ? (
+					/* Browser pane renders OUTSIDE the feather-scroll container:
+					 * the native WebContentsView projects the slot's exact CSS
+					 * rect — a padded/scrollable wrapper breaks the height chain
+					 * and clips the projection. */
+					<BrowserPane rpc={rpc} />
+				) : (
+					<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
+						{tool === "notes" ? (
+							<NotesPane rpc={rpc} cwd={cwd} />
+						) : tool === "diff" ? (
+							<DiffPane rpc={rpc} cwd={cwd} />
+						) : tool === "git" ? (
+							<GitLogPane rpc={rpc} cwd={cwd} />
+						) : tool === "pr" ? (
+							<PrPane rpc={rpc} cwd={cwd} />
+						) : tool ? (
+							<div className="gui-tool-placeholder">
+								<Icon name={TOOLS.find(x => x.id === tool)?.icon as never} className="h-5 w-5" />
+								<div className="text-[13px] font-medium">{TOOLS.find(x => x.id === tool)?.label}</div>
+								<p className="text-[12px] leading-relaxed text-[var(--color-text-faint)]">
+									{t("tool needs a daemon backend — coming with the desktop release")}
+								</p>
+							</div>
+						) : tab === "files" && cwd ? (
 						<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
 					) : tab === "widget" ? (
 						<WidgetSidebarTab entries={snap?.entries ?? []} />
@@ -523,7 +528,8 @@ export function ContextPanel({
 					<div className="gui-pane-extension px-2 pt-3">
 						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
 					</div>
-				</FadeScroll>
+					</FadeScroll>
+				)}
 			</div>
 		</aside>
 	);

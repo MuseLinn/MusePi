@@ -12,7 +12,7 @@
 		"dev:reload": "bun run build && touch .dev-reload-trigger",
 		"tailwind": "bunx @tailwindcss/cli -i ./src/styles/tailwind.css -o ./src/styles/tailwind.out.css",
 		"build:tailwind": "bun run tailwind",
-		"build:bundle": "rm -rf dist && bun build ./index.html ./pet.html ./bubble.html ./pin.html ./tray-menu.html --outdir=dist --production --entry-naming=[hash].[ext] --chunk-naming=[hash].[ext] --asset-naming=[hash].[ext]",
+		"build:bundle": "rm -rf dist && bun build ./index.html ./pet.html ./bubble.html ./pin.html ./tray-menu.html --outdir=dist --production --chunk-naming=[hash].[ext] --asset-naming=[hash].[ext]",
 		"build:pdf": "cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs dist/pdf.worker.min.mjs",
 		"build:fix": "bun scripts/fix-dist-html.mjs",
 		"build:haptic": "bun scripts/build-haptic.mjs",
