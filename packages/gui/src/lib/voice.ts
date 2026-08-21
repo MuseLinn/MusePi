@@ -212,13 +212,19 @@ export function speak(
 			.request<{ audio: number[] | null; sampleRate: number }>("tts.synthesize", {
 				text: clean,
 				...(options?.voice ? { voice: options.voice } : {}),
-				...(options?.rate ? { rate: options.rate } : {}),
 			})
 			.then(res => {
 				if (stopped || !res?.audio || res.audio.length === 0) return;
 				const wav = pcmToWav(res.audio, res.sampleRate || 24000);
 				audio = new Audio(URL.createObjectURL(new Blob([wav.buffer as ArrayBuffer], { type: "audio/wav" })));
 				audio.volume = 1;
+				// Rate is a playback-side concern: HTMLMediaElement time-stretches
+				// with pitch preservation (Chromium), so the daemon's Kokoro PCM
+				// needs no resampling — the slider just works.
+				if (options?.rate) {
+					audio.playbackRate = options.rate;
+					audio.preservesPitch = true;
+				}
 				audio.onended = () => { onState?.({ phase: "done" }); activeTts = null; };
 				audio.onerror = () => onState?.({ phase: "error", message: "tts playback failed" });
 				onState?.({ phase: "speaking" });

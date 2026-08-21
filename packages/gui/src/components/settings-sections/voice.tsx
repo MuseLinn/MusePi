@@ -249,7 +249,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 
 				<div className="gui-settings-row">
-					<div><div className="gui-settings-row-label">{t("voice output rate")}</div><div className="gui-settings-row-desc">0.5× – 2.0×，读书/演示场景常用 0.8×（当前引擎暂不支持调速，仅保存偏好）</div></div>
+					<div><div className="gui-settings-row-label">{t("voice output rate")}</div><div className="gui-settings-row-desc">0.5× – 2.0×，读书/演示场景常用 0.8×（播放端变速，音高不变）</div></div>
 					<input type="range" min={0.5} max={2} step={0.1} value={ttsRate} aria-label={`${t("voice output rate")}（0.5×–2.0×）`}
 						onChange={e => { const v = Number(e.target.value); setTtsRate(v); set("tts.rate", v); }} />
 				</div>

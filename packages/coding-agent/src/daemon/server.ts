@@ -5972,7 +5972,7 @@ export class DaemonServer {
 			case "tts.synthesize": {
 				// TUI-parity speech synthesis: Kokoro-82M local model via the
 				// same tts-client worker the TUI uses.
-				const p = (params ?? {}) as { text: string; modelKey?: string; voice?: string; rate?: number };
+				const p = (params ?? {}) as { text: string; modelKey?: string; voice?: string };
 				if (!p.text?.trim()) throw new Error("text required");
 				const { ttsClient } = await import("../tts/tts-client");
 				const { DEFAULT_TTS_LOCAL_MODEL_KEY } = await import("../tts/models");
@@ -5983,7 +5983,6 @@ export class DaemonServer {
 				const modelKey = p.modelKey ?? (configured || DEFAULT_TTS_LOCAL_MODEL_KEY);
 				const audio = await ttsClient.synthesize(modelKey as never, p.text, {
 					...(p.voice ? { voice: p.voice } : {}),
-					...(p.rate ? { rate: p.rate } : {}),
 				});
 				if (!audio) return { audio: null, sampleRate: 0 };
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };

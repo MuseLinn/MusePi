@@ -357,6 +357,7 @@ export function ChatView({
 						"display.collapseCompacted",
 						"display.taskCardStyle",
 						"tts.autoRead",
+						"tts.rate",
 					],
 				})
 				.then(v => {
@@ -405,15 +406,20 @@ export function ChatView({
 		if (!lastId || lastId === lastAutoReadIdRef.current) return;
 		lastAutoReadIdRef.current = lastId;
 		if (!lastText.trim()) return;
-		stopSpeakRef.current = speak(lastText, rpc, undefined, activity => {
-			if (activity.phase === "speaking") setSpeakingId(lastId);
-			else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
-				stopSpeakRef.current = null;
-				setSpeakingId(prev => (prev === lastId ? null : prev));
-			}
-		});
+		stopSpeakRef.current = speak(
+			lastText,
+			rpc,
+			{ rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined },
+			activity => {
+				if (activity.phase === "speaking") setSpeakingId(lastId);
+				else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
+					stopSpeakRef.current = null;
+					setSpeakingId(prev => (prev === lastId ? null : prev));
+				}
+			},
+		);
 		setSpeakingId(lastId);
-	}, [snap, displaySettings["tts.autoRead"], rpc]);
+	}, [snap, displaySettings["tts.autoRead"], displaySettings["tts.rate"], rpc]);
 	// One container, two scenes, BIDIRECTIONAL transition: the incoming
 	// scene mounts (fade/zoom in) while the outgoing one lingers 420ms
 	// with a fade-out before unmounting.
@@ -1113,17 +1119,22 @@ export function ChatView({
 																return;
 															}
 															const entryId = id ?? null;
-															stopSpeakRef.current = speak(text, rpc, undefined, activity => {
-																if (activity.phase === "speaking") setSpeakingId(entryId);
-																else if (
-																	activity.phase === "done" ||
-																	activity.phase === "stopped" ||
-																	activity.phase === "error"
-																) {
-																	stopSpeakRef.current = null;
-																	setSpeakingId(prev => (prev === entryId ? null : prev));
-																}
-															});
+															stopSpeakRef.current = speak(
+																text,
+																rpc,
+																{ rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined },
+																activity => {
+																	if (activity.phase === "speaking") setSpeakingId(entryId);
+																	else if (
+																		activity.phase === "done" ||
+																		activity.phase === "stopped" ||
+																		activity.phase === "error"
+																	) {
+																		stopSpeakRef.current = null;
+																		setSpeakingId(prev => (prev === entryId ? null : prev));
+																	}
+																},
+															);
 															setSpeakingId(entryId);
 														}}
 														speakingId={speakingId}

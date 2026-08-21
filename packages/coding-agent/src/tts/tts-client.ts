@@ -29,7 +29,6 @@ type PendingRequest =
 
 export interface TtsSynthesizeOptions {
 	voice?: string;
-	rate?: number;
 	signal?: AbortSignal;
 }
 
@@ -40,7 +39,6 @@ export interface TtsDownloadOptions {
 
 export interface TtsStreamOptions {
 	voice?: string;
-	rate?: number;
 	signal?: AbortSignal;
 }
 
@@ -228,7 +226,6 @@ export class TtsClient {
 					modelKey,
 					text,
 					...(options.voice ? { voice: options.voice } : {}),
-					...(options.rate ? { rate: options.rate } : {}),
 				};
 				worker.send(request);
 				return await promise;
@@ -295,7 +292,6 @@ export class TtsClient {
 			id,
 			modelKey,
 			...(options.voice ? { voice: options.voice } : {}),
-			...(options.rate ? { rate: options.rate } : {}),
 		};
 		worker.send(start);
 
