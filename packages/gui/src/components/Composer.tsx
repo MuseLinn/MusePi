@@ -17,7 +17,7 @@ import {
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { startDictation } from "../lib/voice";
+import { evaluateSubmitTrigger, startDictation, type SttSubmitTrigger } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
@@ -813,6 +813,25 @@ export function Composer({
 		load();
 		// Re-read when 设置 writes it, so an open composer follows the new
 		// behavior without remounting.
+		window.addEventListener("omp-settings-changed", load);
+		return () => window.removeEventListener("omp-settings-changed", load);
+	}, [rpc]);
+	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity):
+	// whether finishing a dictation auto-sends the transcript instead of
+	// leaving it in the draft box.
+	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
+	useEffect(() => {
+		if (!rpc) return;
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger"] })
+				.then(v => {
+					const t = v?.["stt.submitTrigger"];
+					if (typeof t === "string" && t !== "never") setSttSubmitTrigger(t as SttSubmitTrigger);
+				})
+				.catch(() => {});
+		};
+		load();
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
@@ -1665,8 +1684,16 @@ export function Composer({
 								}
 								const stop = startDictation(
 									transcript => {
-										setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-										requestAnimationFrame(() => autosize(taRef.current));
+										const { submit, trimTrailing } = evaluateSubmitTrigger(transcript, sttSubmitTrigger);
+										if (submit) {
+											// TUI stt.submitTrigger parity: auto-send the
+											// utterance (minus a stripped "submit" tail)
+											// instead of leaving it in the draft box.
+											onSend(transcript.slice(0, transcript.length - trimTrailing));
+										} else {
+											setText(prev => (prev ? `${prev} ${transcript}` : transcript));
+											requestAnimationFrame(() => autosize(taRef.current));
+										}
 										setDictating(false);
 										setTranscribing(false);
 									},

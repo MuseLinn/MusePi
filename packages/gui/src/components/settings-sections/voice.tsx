@@ -9,7 +9,14 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
-import { enumerateMicDevices, speak, startDictationOpts, type VoiceActivity } from "../../lib/voice";
+import {
+	STT_SUBMIT_TRIGGERS,
+	enumerateMicDevices,
+	speak,
+	startDictationOpts,
+	type SttSubmitTrigger,
+	type VoiceActivity,
+} from "../../lib/voice";
 
 /* ── 本地态（非 schema）────────────────────────────────────────── */
 interface MicDevice { deviceId: string; label: string }
@@ -68,7 +75,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [sttVad, setSttVad] = useState(true);
 	const [sttVadMs, setSttVadMs] = useState(700);
 	const [sttSens, setSttSens] = useState(5);
-	const [sttSubmit, setSttSubmit] = useState<"draft" | "send">("draft");
+	const [sttSubmit, setSttSubmit] = useState<SttSubmitTrigger>("never");
 
 	const [autoRead, setAutoRead] = useState(false);   // tts.autoRead（修正：不再写 speech.enabled）
 	const [ttsProvider, setTtsProvider] = useState("kokoro");
@@ -86,6 +93,20 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	useEffect(() => { enumerateMicDevices().then(setDevices).catch(() => setDevices([])); }, []);
 	useEffect(() => () => dictRef.current?.(), []);
+	// Seed the dictation-submit select from the daemon schema key the
+	// composer actually reads (stt.submitTrigger, TUI parity).
+	useEffect(() => {
+		if (!rpc) return;
+		void rpc
+			.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger"] })
+			.then(v => {
+				const t = v?.["stt.submitTrigger"];
+				if (typeof t === "string" && (STT_SUBMIT_TRIGGERS as readonly string[]).includes(t)) {
+					setSttSubmit(t as SttSubmitTrigger);
+				}
+			})
+			.catch(() => {});
+	}, [rpc]);
 
 	/* 把枚举的设备标签转成 GuiSelect options */
 	const micOptions = useMemo(
@@ -174,11 +195,16 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 
 				<div className="gui-settings-row">
-					<div><div className="gui-settings-row-label">{t("voice input submit")}</div><div className="gui-settings-row-desc">口述结束后：当前仅插入草稿（"立即发送"需 composer 接线，暂未生效）</div></div>
-					<GuiSelect className="gui-input max-w-[180px]" value={sttSubmit} onChange={v => setSttSubmit(v as typeof sttSubmit)}
+					<div><div className="gui-settings-row-label">{t("voice input submit")}</div><div className="gui-settings-row-desc">口述结束后：插入草稿，或按条件自动发送（与终端 stt.submitTrigger 同步）</div></div>
+					<GuiSelect
+						className="gui-input max-w-[180px]"
+						value={sttSubmit}
+						onChange={v => { setSttSubmit(v as SttSubmitTrigger); set("stt.submitTrigger", v); }}
 						options={[
-							{ value: "draft", label: "仅插入草稿" },
-							{ value: "send", label: "立即发送（暂未生效）" },
+							{ value: "never", label: "仅插入草稿" },
+							{ value: "release", label: "说完即发（≥2 词）" },
+							{ value: "release-complete", label: "完整句末标点才发" },
+							{ value: "say-submit", label: "说 \"submit\" 才发" },
 						]} />
 				</div>
 

@@ -261,6 +261,33 @@ export function voiceAvailable(): boolean {
 
 export function stopAllTtsAndResume(): void { activeTts?.resume(); activeTts = null; }
 
+/* ── 口述提交判定（TUI stt.submitTrigger parity）────────────────
+ * Renderer-side copy of packages/coding-agent/src/stt/submit-trigger.ts —
+ * the GUI cannot import from @musepi/coding-agent (no dependency edge),
+ * so keep this in lockstep with the daemon original when changing it. */
+export const STT_SUBMIT_TRIGGERS = ["never", "release", "release-complete", "say-submit"] as const;
+export type SttSubmitTrigger = (typeof STT_SUBMIT_TRIGGERS)[number];
+
+export function evaluateSubmitTrigger(
+	utterance: string,
+	trigger: SttSubmitTrigger,
+): { submit: boolean; trimTrailing: number } {
+	const trimmed = utterance.trim();
+	if (!trimmed || trigger === "never") return { submit: false, trimTrailing: 0 };
+	if (trigger === "release") {
+		return { submit: trimmed.split(/\s+/).filter(Boolean).length >= 2, trimTrailing: 0 };
+	}
+	if (trigger === "release-complete") {
+		return { submit: /[.?!…。？！]\s*$/.test(trimmed), trimTrailing: 0 };
+	}
+	// say-submit: a trailing word containing "submit" is stripped before sending.
+	const match = utterance.match(/(?:^|\s+)(\S*submit\S*)[.?!…。？！]*\s*$/i);
+	if (match && match.index !== undefined) {
+		return { submit: true, trimTrailing: utterance.length - match.index };
+	}
+	return { submit: false, trimTrailing: 0 };
+}
+
 /* ── 净化/摘要（OpenChamber 模式；摘要走 tts 净化的稳定子集） ─────── */
 function sanitize(text: string, mode: "raw" | "sanitize" | "summarize"): string {
 	let s = text
