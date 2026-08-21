@@ -60,6 +60,7 @@ import type {
 	Message,
 	Model,
 	OAuthAccountIdentity,
+	ProviderResponseMetadata,
 	ProviderSessionState,
 	ResetCreditAccountStatus,
 	ResetCreditRedeemOutcome,
@@ -660,6 +661,7 @@ export class AgentSession {
 	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
 	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
 	#onResponse: SimpleStreamOptions["onResponse"] | undefined;
+	#lazyContextRefreshed = new Set<string>();
 	#onSseEvent: SimpleStreamOptions["onSseEvent"] | undefined;
 	#sideStreamFn: StreamFn;
 	#preferWebsockets: boolean | undefined;
@@ -1237,10 +1239,12 @@ export class AgentSession {
 					this.rawSseDebugBuffer.recordResponse(response, model);
 					this.#stats.ingestProviderUsageHeaders(response, model);
 					await configuredOnResponse(response, model);
+					return this.#maybeRefreshLazyLocalContext(response, model);
 				}
 			: (response, model) => {
 					this.rawSseDebugBuffer.recordResponse(response, model);
 					this.#stats.ingestProviderUsageHeaders(response, model);
+					return this.#maybeRefreshLazyLocalContext(response, model);
 				};
 		const configuredOnSseEvent = config.onSseEvent;
 		this.#onSseEvent = configuredOnSseEvent
@@ -7561,6 +7565,44 @@ export class AgentSession {
 	 * skip provider-session resets (`modelsAreEqual` sees no change), so this
 	 * only refreshes metadata consumers (compaction thresholds, context display).
 	 */
+	/**
+	 * Refresh a lazy-loaded local model's runtime context window after its first
+	 * real inference. llama.cpp's `meta.n_ctx` and LM Studio's
+	 * `loaded_context_length` only appear once the model is actually loaded;
+	 * discovery snapshots the architecture maximum, so patch it to what the
+	 * backend serves (#3310/#3311/#9001).
+	 *
+	 * Returns `void` synchronously when nothing is due — the common case — so the
+	 * no-callback `#onResponse` fast path stays allocation-free.
+	 */
+	#maybeRefreshLazyLocalContext(response: ProviderResponseMetadata, model: Model | undefined): void | Promise<void> {
+		if (!model || response.status < 200 || response.status >= 300) return;
+		const key = `${model.provider}/${model.id}`;
+		if (this.#lazyContextRefreshed.has(key)) return;
+		if (!this.#modelRegistry.hasLazyRuntimeMetadata(model.provider)) return;
+		this.#lazyContextRefreshed.add(key);
+		return this.#refreshLazyLocalContext(model);
+	}
+
+	async #refreshLazyLocalContext(model: Model): Promise<void> {
+		try {
+			const refreshed = await this.#modelRegistry.refreshSelectedModelMetadata(model);
+			const current = this.model;
+			// Skip if the user switched models mid-stream, or the runtime window
+			// matches what the session already holds.
+			if (!current || !modelsAreEqual(current, refreshed) || refreshed.contextWindow === current.contextWindow) {
+				return;
+			}
+			await this.#setModelWithProviderSessionReset(refreshed);
+		} catch (error) {
+			logger.debug("Lazy local model context refresh failed", {
+				provider: model.provider,
+				model: model.id,
+				error,
+			});
+		}
+	}
+
 	async #reapplyExtendedContextPolicy(): Promise<void> {
 		try {
 			await this.#modelRegistry.reapplyModelPolicies();

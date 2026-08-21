@@ -188,6 +188,13 @@ type LlamaCppDiscoveredModelRuntimeMetadata = {
 	input?: ("text" | "image")[];
 };
 
+/** Runtime metadata re-probed after a lazy local model loads (lm-studio). */
+type DiscoveredModelRuntimeMetadata = {
+	contextWindow?: number;
+	maxTokens?: number;
+	input?: ("text" | "image")[];
+};
+
 type LlamaCppModelListEntry = {
 	id: string;
 	input?: ("text" | "image")[];
@@ -778,6 +785,48 @@ export async function discoverLlamaCppModelRuntimeMetadata(
 			contextWindow,
 			maxTokens: resolveLlamaCppMaxTokens(contextWindow, serverMetadata?.maxTokens),
 			...(input !== undefined ? { input } : {}),
+		};
+	};
+	try {
+		const apiKey = await ctx.getBearerApiKeyResolver(model.provider);
+		return apiKey
+			? await withAuth(apiKey, key => attempt({ ...baseHeaders, Authorization: `Bearer ${key}` }))
+			: await attempt(baseHeaders);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Re-probe a LM Studio model's native runtime metadata once it JIT-loads on the
+ * first inference (#9001). Discovery snapshots `contextWindow` from a cold
+ * probe that returns only the architecture max; this re-reads the actual
+ * `loaded_context_length` so the context bar matches what the backend serves.
+ */
+export async function discoverLmStudioModelRuntimeMetadata(
+	model: Pick<Model<Api>, "provider" | "id" | "baseUrl" | "headers" | "maxTokens">,
+	ctx: DiscoveryContext,
+	customTimeoutMs?: number,
+): Promise<DiscoveredModelRuntimeMetadata | undefined> {
+	const baseUrl = normalizeOpenAIModelsListBaseUrl(model.baseUrl);
+	const timeoutMs = customTimeoutMs ?? 10_000;
+	const baseHeaders: Record<string, string> = { ...(model.headers ?? {}) };
+	const attempt = async (headers: Record<string, string>) => {
+		const metadata = await withTimeoutSignal(timeoutMs, signal =>
+			fetchLmStudioNativeModelMetadata(baseUrl, ctx.fetch, { headers, signal }),
+		);
+		const entry = metadata?.get(model.id);
+		if (!entry) {
+			return undefined;
+		}
+		const contextWindow = entry.contextWindow;
+		if (contextWindow === undefined) {
+			return entry.input === undefined ? undefined : { input: entry.input };
+		}
+		return {
+			contextWindow,
+			...(typeof model.maxTokens === "number" ? { maxTokens: model.maxTokens } : {}),
+			...(entry.input !== undefined ? { input: entry.input } : {}),
 		};
 	};
 	try {

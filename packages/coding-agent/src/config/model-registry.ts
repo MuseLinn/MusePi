@@ -60,6 +60,7 @@ import {
 	type DiscoveryContext,
 	type DiscoveryProviderConfig,
 	discoverLlamaCppModelRuntimeMetadata,
+	discoverLmStudioModelRuntimeMetadata,
 	discoverModelsByProviderType,
 	getImplicitOllamaBaseUrl,
 	getOllamaContextLengthOverride,
@@ -368,21 +369,51 @@ export class ModelRegistry {
 	}
 
 	/**
+	 * Whether this provider's models can present runtime metadata only after a
+	 * lazy load — llama.cpp's `meta.n_ctx` once a cold instance spins up
+	 * (#3310/#3311), LM Studio's `loaded_context_length` once it JIT-loads the
+	 * model on the first inference (#9001). Callers use this to decide whether a
+	 * post-first-response refresh is worth a native probe.
+	 */
+	hasLazyRuntimeMetadata(provider: string): boolean {
+		return this.#findLazyRuntimeDiscovery(provider) !== undefined;
+	}
+
+	#findLazyRuntimeDiscovery(provider: string): DiscoveryProviderConfig | undefined {
+		return this.#discoverableProviders.find(
+			providerConfig =>
+				providerConfig.provider === provider &&
+				(providerConfig.discovery.type === "llama.cpp" || providerConfig.discovery.type === "lm-studio"),
+		);
+	}
+
+	/**
 	 * Refresh dynamic metadata that can appear only after a local model loads.
+	 *
+	 * llama.cpp exposes `meta.n_ctx` once a lazy-loaded instance is up
+	 * (#3310/#3311); LM Studio exposes `loaded_context_length` once it JIT-loads
+	 * the model on first inference (#9001). Both are captured only as a snapshot
+	 * at discovery time, so re-probe the selected model's native runtime metadata
+	 * and patch its context window to what the backend actually serves.
 	 */
 	async refreshSelectedModelMetadata(model: Model<Api>): Promise<Model<Api>> {
-		const llamaCppDiscoveryConfig = this.#discoverableProviders.find(
-			providerConfig => providerConfig.provider === model.provider && providerConfig.discovery.type === "llama.cpp",
-		);
-		if (!llamaCppDiscoveryConfig) {
+		const discoveryConfig = this.#findLazyRuntimeDiscovery(model.provider);
+		if (!discoveryConfig) {
 			return model;
 		}
 		this.#ensureFullSnapshot();
-		const runtimeMetadata = await discoverLlamaCppModelRuntimeMetadata(
-			model,
-			this.#nonResolvingDiscoveryContext(),
-			llamaCppDiscoveryConfig.discovery.timeoutMs,
-		);
+		const runtimeMetadata =
+			discoveryConfig.discovery.type === "lm-studio"
+				? await discoverLmStudioModelRuntimeMetadata(
+						model,
+						this.#nonResolvingDiscoveryContext(),
+						discoveryConfig.discovery.timeoutMs,
+					)
+				: await discoverLlamaCppModelRuntimeMetadata(
+						model,
+						this.#nonResolvingDiscoveryContext(),
+						discoveryConfig.discovery.timeoutMs,
+					);
 		if (runtimeMetadata === undefined) {
 			return this.find(model.provider, model.id) ?? model;
 		}

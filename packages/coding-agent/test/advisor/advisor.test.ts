@@ -440,23 +440,32 @@ describe("advisor", () => {
 			expect(onAdvice).toHaveBeenNthCalledWith(3, note, "blocker");
 		});
 
-		it("withholds non-blockers for in-progress updates without consuming dedupe state", async () => {
+		it("defers non-blockers during in-progress updates and flushes them on the next completed update", async () => {
 			const onAdvice = vi.fn();
 			const tool = new AdviseTool(onAdvice);
 			const note = "The result still needs a focused regression test.";
 
 			tool.beginUpdate(true);
-			await tool.execute("tc-1", { note, severity: "concern" });
+			const deferred = await tool.execute("tc-1", { note, severity: "concern" });
 			await tool.execute("tc-2", { note: "Minor naming cleanup.", severity: "nit" });
 			await tool.execute("tc-3", { note: "A destructive command is running.", severity: "blocker" });
 
+			// Deferred notes are NOT delivered mid-turn; blocker still goes through.
 			expect(onAdvice).toHaveBeenCalledTimes(1);
 			expect(onAdvice).toHaveBeenCalledWith("A destructive command is running.", "blocker");
+			// The tool tells the advisor the note is deferred, not silently "Recorded.".
+			expect(JSON.stringify(deferred.content)).toContain("Deferred");
 
+			// Completing the turn deterministically flushes both withheld notes,
+			// oldest first — no reliance on the advisor model re-raising them.
 			tool.beginUpdate(false);
+			expect(onAdvice).toHaveBeenCalledTimes(3);
+			expect(onAdvice).toHaveBeenNthCalledWith(2, note, "concern");
+			expect(onAdvice).toHaveBeenNthCalledWith(3, "Minor naming cleanup.", "nit");
+
+			// A later explicit re-raise of the same note is deduped (already delivered).
 			await tool.execute("tc-4", { note, severity: "concern" });
-			expect(onAdvice).toHaveBeenCalledTimes(2);
-			expect(onAdvice).toHaveBeenLastCalledWith(note, "concern");
+			expect(onAdvice).toHaveBeenCalledTimes(3);
 		});
 
 		it("validates parameters using ArkType", () => {
