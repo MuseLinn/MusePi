@@ -123,6 +123,23 @@ function collectTreeIds(nodes: SessionListNode[], out: Set<string>): void {
 	}
 }
 
+/** Shared chrome for a surface-replacing view (board / scheduled / agents):
+ *  the blur transition wrapper + the fixed chat-column + surface shell, with
+ *  the view's page injected as children. The `<ChatView>` "chatSurface" is NOT
+ *  routed through here (it already owns the chat-column); use this only for
+ *  page views that replace the chat surface. */
+function ChatSurfaceShell({ leave, children }: { leave?: boolean; children: ReactNode }) {
+	return (
+		<div className={leave ? "gui-view-leave" : "gui-view-enter"}>
+			<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+				<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+					{children}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function AppInner(): ReactNode {
 	// Re-render the whole tree when the locale flips (i18n toggle parity —
 	// t() reads the module-level locale, so without a subscription the
@@ -1496,6 +1513,18 @@ function AppInner(): ReactNode {
 		[createSession],
 	);
 
+	/** Pick a folder and register it as the workspace/project. Sidebar projects
+	 *  tab contract: surface the picked folder via the project-added event. */
+	const pickProjectFolder = useCallback((): void => {
+		void pickDirectory().then(dir => {
+			if (dir) {
+				setProject(dir);
+				localStorage.setItem("musepi-gui-project", dir);
+				window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
+			}
+		});
+	}, []);
+
 	const sendPrompt = useCallback(
 		async (
 			text: string,
@@ -2138,14 +2167,7 @@ function AppInner(): ReactNode {
 				setPaletteOpen(v => !v);
 			} else if (mod && k === "o") {
 				e.preventDefault();
-				void pickDirectory().then(dir => {
-					if (dir) {
-						setProject(dir);
-						localStorage.setItem("musepi-gui-project", dir);
-						// Sidebar projects tab contract: surface the picked folder.
-						window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-					}
-				});
+				pickProjectFolder();
 			} else if (mod && k === "b") {
 				e.preventDefault();
 				setSideCollapsed(v => {
@@ -2396,13 +2418,7 @@ function AppInner(): ReactNode {
 							} else if (action === "new") {
 								setNewProjectOpen(true);
 							} else if (action === "folder") {
-								void pickDirectory().then(dir => {
-									if (dir) {
-										setProject(dir);
-										localStorage.setItem("musepi-gui-project", dir);
-										window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-									}
-								});
+								pickProjectFolder();
 							} else if (action === "none") {
 								// "不在项目中": clear the workspace chip — never open the picker.
 								setProject(null);
@@ -2512,14 +2528,7 @@ function AppInner(): ReactNode {
 							openSettings();
 						}}
 						onPickFolder={() => {
-							void pickDirectory().then(dir => {
-								if (dir) {
-									setProject(dir);
-									localStorage.setItem("musepi-gui-project", dir);
-									// Sidebar projects tab contract: surface the picked folder.
-									window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-								}
-							});
+							pickProjectFolder();
 						}}
 						onCreateProject={() => setNewProjectOpen(true)}
 						onImportSessions={() => setImportOpen(true)}
@@ -2610,16 +2619,7 @@ function AppInner(): ReactNode {
 											setProject(null);
 											localStorage.removeItem("musepi-gui-project");
 										} else if (action === "folder") {
-											void pickDirectory().then(dir => {
-												if (dir) {
-													setProject(dir);
-													localStorage.setItem("musepi-gui-project", dir);
-													// Sidebar projects tab contract: surface the picked folder.
-													window.dispatchEvent(
-														new CustomEvent("musepi-gui-project-added", { detail: dir }),
-													);
-												}
-											});
+											pickProjectFolder();
 										} else {
 											// A saved workspace picked from the list — switch to it.
 											setProject(action);
@@ -2687,78 +2687,58 @@ function AppInner(): ReactNode {
 							) : boardOpen ? (
 								/* Board view replaces the chat surface only — the
 								 * sidebar stays (kimi Work tab parity). */
-								<div className="gui-view-enter">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<BoardPage
-												onBack={() => viewSwapRef.current("chat")}
-												rpc={rpc}
-												cwd={project ?? undefined}
-												jumpId={boardJumpId}
-												onJumpConsumed={() => setBoardJumpId(null)}
-												onChatCreate={text => {
-													// 对话创建 (kimi parity): leave the board and prompt the
-													// agent to design boards; with text, create a session and
-													// send it right away.
-													viewSwapRef.current("chat");
-													const trimmed = text.trim();
-													if (!trimmed) {
-														startNewTask();
-														return;
-													}
-													const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-													void createSession({ cwd: project }).then(id => {
-														if (id) void sendPrompt(prompt, undefined, id);
-													});
-												}}
-											/>
-										</div>
-									</div>
-								</div>
+								<ChatSurfaceShell>
+									<BoardPage
+										onBack={() => viewSwapRef.current("chat")}
+										rpc={rpc}
+										cwd={project ?? undefined}
+										jumpId={boardJumpId}
+										onJumpConsumed={() => setBoardJumpId(null)}
+										onChatCreate={text => {
+											// 对话创建 (kimi parity): leave the board and prompt the
+											// agent to design boards; with text, create a session and
+											// send it right away.
+											viewSwapRef.current("chat");
+											const trimmed = text.trim();
+											if (!trimmed) {
+												startNewTask();
+												return;
+											}
+											const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+											void createSession({ cwd: project }).then(id => {
+												if (id) void sendPrompt(prompt, undefined, id);
+											});
+										}}
+									/>
+								</ChatSurfaceShell>
 							) : leavingView === "scheduled" ? (
 								/* Leaving scheduled → chat/board: scheduled blurs out first. */
-								<div className="gui-view-leave">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<ScheduledTasksPage
-												rpc={rpc}
-												onBack={() => viewSwapRef.current("chat")}
-												onOpenSession={id => void openSession(id)}
-											/>
-										</div>
-									</div>
-								</div>
+								<ChatSurfaceShell leave>
+									<ScheduledTasksPage
+										rpc={rpc}
+										onBack={() => viewSwapRef.current("chat")}
+										onOpenSession={id => void openSession(id)}
+									/>
+								</ChatSurfaceShell>
 							) : scheduledOpen ? (
 								/* Scheduled tasks view (kimi cron page parity). */
-								<div className="gui-view-enter">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<ScheduledTasksPage
-												rpc={rpc}
-												onBack={() => viewSwapRef.current("chat")}
-												onOpenSession={id => void openSession(id)}
-											/>
-										</div>
-									</div>
-								</div>
+								<ChatSurfaceShell>
+									<ScheduledTasksPage
+										rpc={rpc}
+										onBack={() => viewSwapRef.current("chat")}
+										onOpenSession={id => void openSession(id)}
+									/>
+								</ChatSurfaceShell>
 							) : leavingView === "agents" ? (
 								/* Leaving agents → chat/board: agents blurs out first. */
-								<div className="gui-view-leave">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
-										</div>
-									</div>
-								</div>
+								<ChatSurfaceShell leave>
+									<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
+								</ChatSurfaceShell>
 							) : agentsOpen ? (
 								/* Agents center view (live subagent roster). */
-								<div className="gui-view-enter">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
-										</div>
-									</div>
-								</div>
+								<ChatSurfaceShell>
+									<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
+								</ChatSurfaceShell>
 							) : leavingView === "chat" ? (
 								/* Leaving chat → board: chat blurs out first. */
 								<div className="gui-view-leave">{chatSurface}</div>
@@ -2866,14 +2846,7 @@ function AppInner(): ReactNode {
 				sessions={recentSessions}
 				onNewSession={startNewTask}
 				onOpenWorkspace={() => {
-					void pickDirectory().then(dir => {
-						if (dir) {
-							setProject(dir);
-							localStorage.setItem("musepi-gui-project", dir);
-							// Sidebar projects tab contract: surface the picked folder.
-							window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-						}
-					});
+					pickProjectFolder();
 				}}
 				onSettings={openSettings}
 				onToggleSidebar={() => {

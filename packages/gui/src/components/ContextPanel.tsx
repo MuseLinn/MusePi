@@ -349,185 +349,193 @@ export function ContextPanel({
 								</p>
 							</div>
 						) : tab === "files" && cwd ? (
-						<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
-					) : tab === "widget" ? (
-						<WidgetSidebarTab entries={snap?.entries ?? []} />
-					) : tab === "trajectory" ? (
-						<TrajectoryView
-							entries={snap?.entries ?? []}
-							modelId={snap?.state?.model?.id}
-							roundDurations={snap?.roundDurations}
-							onJumpToEntry={onJumpToEntry}
-						/>
-					) : tab === "jobs" ? (
-						snap?.sessionId ? (
-							<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+							<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
+						) : tab === "widget" ? (
+							<WidgetSidebarTab entries={snap?.entries ?? []} />
+						) : tab === "trajectory" ? (
+							<TrajectoryView
+								entries={snap?.entries ?? []}
+								modelId={snap?.state?.model?.id}
+								roundDurations={snap?.roundDurations}
+								onJumpToEntry={onJumpToEntry}
+							/>
+						) : tab === "jobs" ? (
+							snap?.sessionId ? (
+								<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+							) : (
+								<div className="gui-pane-tab-empty">
+									<span className="gui-pane-tab-empty-icon">
+										<Icon name="inbox-archive" />
+									</span>
+									<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
+									<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
+								</div>
+							)
+						) : typeof tab === "string" && tab.startsWith("ext:") ? (
+							(() => {
+								const item = extTabs.find(x => `ext:${x.slot}` === tab);
+								return item ? (
+									<FadeScroll className="h-full overflow-y-auto">
+										<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
+									</FadeScroll>
+								) : null;
+							})()
+						) : tab === "context" ? (
+							<div className="px-1 py-2">
+								<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
+								<div className="flex flex-col gap-1 px-2 text-[13px]">
+									<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+										<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
+										<span className="truncate">{cwd || t("no folder")}</span>
+									</div>
+									{snap?.state?.model?.id && (
+										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+											<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
+											<span className="truncate">{snap.state.model.id}</span>
+										</div>
+									)}
+									{modes && (
+										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+											<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
+											<span className="truncate">
+												{modes.goalMode?.enabled === true
+													? `${t("goal mode")}: ${modes.goalMode.objective ?? ""}`
+													: modes.planMode === true
+														? t("plan mode")
+														: t("default mode")}
+											</span>
+										</div>
+									)}
+								</div>
+								{/* Session stats (openchamber context-drawer parity): message
+								 * count and run time at a glance. */}
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
+								<div className="grid grid-cols-2 gap-1.5 px-2">
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v">{messageCount}</div>
+										<div className="gui-ctx-stat-l">{t("messages")}</div>
+									</div>
+									<div className="gui-ctx-stat">
+										<div className="gui-ctx-stat-v">{runMinutes}</div>
+										<div className="gui-ctx-stat-l">{t("minutes")}</div>
+									</div>
+								</div>
+								{/* Context-window usage: live tokens/capacity bar (product
+								 * parity with the header ring — same RPC). */}
+								{ctxUsage && (
+									<>
+										<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
+										<div className="px-2">
+											<div className="gui-ctx-usage-row">
+												<span className="text-[12px] tabular-nums opacity-80">
+													{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
+													{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
+												</span>
+												<span className="text-[12px] tabular-nums opacity-70">
+													{Math.round(ctxUsage.percent)}%
+												</span>
+											</div>
+											<div className="gui-ctx-usage-track">
+												<div
+													className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+													style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+												/>
+											</div>
+										</div>
+									</>
+								)}
+								{/* Reusable context quick actions: copy the workspace path. */}
+								<div className="mt-2 flex flex-col gap-0.5 px-2">
+									<button
+										type="button"
+										className="gui-pane-action"
+										onClick={() => {
+											if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
+										}}
+									>
+										<Icon name="clipboard" className="h-3.5 w-3.5" />
+										<span>{t("copy workspace path")}</span>
+									</button>
+								</div>
+								{/* Swarm visual parity (TUI subagent HUD): live agent rows —
+								 * status dot, activity line, token/cost meta — fed from
+								 * the session stream (agent-progress/lifecycle). Click a
+								 * row to open its kill/revive/chat controls. */}
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
+								<div className="px-2">
+									<AgentsPanel
+										agents={snap?.agents ?? []}
+										progress={snap?.progress ?? new Map()}
+										lifecycle={snap?.lifecycle ?? new Map()}
+										selectedId={selectedAgentId}
+										onSelect={setSelectedAgentId}
+									/>
+									{selectedAgent && (
+										<AgentControls agent={selectedAgent} rpc={rpc} onClose={() => setSelectedAgentId(null)} />
+									)}
+								</div>
+								{/* Session hygiene (会话维护): shake context / reset
+								 * provider stream / clear session context — each RPC
+								 * reports counts into the status line below. */}
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
+								<div className="flex flex-col gap-0.5 px-2">
+									<button
+										type="button"
+										className="gui-pane-action"
+										disabled={!snap?.sessionId || maintenanceBusy !== null}
+										onClick={() => void runMaintenance("shake")}
+									>
+										<Icon
+											name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
+											className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
+										/>
+										<span>{t("shake context")}</span>
+									</button>
+									<button
+										type="button"
+										className="gui-pane-action"
+										disabled={!snap?.sessionId || maintenanceBusy !== null}
+										onClick={() => void runMaintenance("fresh")}
+									>
+										<Icon
+											name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
+											className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
+										/>
+										<span>{t("fresh provider")}</span>
+									</button>
+									<button
+										type="button"
+										className="gui-pane-action"
+										disabled={!snap?.sessionId || maintenanceBusy !== null}
+										onClick={() => void runMaintenance("clear")}
+									>
+										<Icon
+											name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
+											className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
+										/>
+										<span>{t("clear session context")}</span>
+									</button>
+								</div>
+								{maintenanceStatus && (
+									<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+										{maintenanceStatus}
+									</p>
+								)}
+							</div>
 						) : (
-							<p className="px-2 py-5 text-[13px] leading-relaxed text-[var(--color-text-faint)]">
-								{t("select a session")}
-							</p>
-						)
-					) : typeof tab === "string" && tab.startsWith("ext:") ? (
-						(() => {
-							const item = extTabs.find(x => `ext:${x.slot}` === tab);
-							return item ? (
-								<FadeScroll className="h-full overflow-y-auto">
-									<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
-								</FadeScroll>
-							) : null;
-						})()
-					) : tab === "context" ? (
-						<div className="px-1 py-2">
-							<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
-							<div className="flex flex-col gap-1 px-2 text-[13px]">
-								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-									<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-									<span className="truncate">{cwd || t("no folder")}</span>
-								</div>
-								{snap?.state?.model?.id && (
-									<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-										<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
-										<span className="truncate">{snap.state.model.id}</span>
-									</div>
-								)}
-								{modes && (
-									<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-										<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-										<span className="truncate">
-											{modes.goalMode?.enabled === true
-												? `${t("goal mode")}: ${modes.goalMode.objective ?? ""}`
-												: modes.planMode === true
-													? t("plan mode")
-													: t("default mode")}
-										</span>
-									</div>
-								)}
+							<div className="gui-pane-tab-empty">
+								<span className="gui-pane-tab-empty-icon">
+									<Icon name="folder" />
+								</span>
+								<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
+								<p className="gui-pane-tab-empty-hint">{t("context empty hint")}</p>
 							</div>
-							{/* Session stats (openchamber context-drawer parity): message
-							 * count and run time at a glance. */}
-							<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
-							<div className="grid grid-cols-2 gap-1.5 px-2">
-								<div className="gui-ctx-stat">
-									<div className="gui-ctx-stat-v">{messageCount}</div>
-									<div className="gui-ctx-stat-l">{t("messages")}</div>
-								</div>
-								<div className="gui-ctx-stat">
-									<div className="gui-ctx-stat-v">{runMinutes}</div>
-									<div className="gui-ctx-stat-l">{t("minutes")}</div>
-								</div>
-							</div>
-							{/* Context-window usage: live tokens/capacity bar (product
-							 * parity with the header ring — same RPC). */}
-							{ctxUsage && (
-								<>
-									<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
-									<div className="px-2">
-										<div className="gui-ctx-usage-row">
-											<span className="text-[12px] tabular-nums opacity-80">
-												{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
-												{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
-											</span>
-											<span className="text-[12px] tabular-nums opacity-70">
-												{Math.round(ctxUsage.percent)}%
-											</span>
-										</div>
-										<div className="gui-ctx-usage-track">
-											<div
-												className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
-												style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
-											/>
-										</div>
-									</div>
-								</>
-							)}
-							{/* Reusable context quick actions: copy the workspace path. */}
-							<div className="mt-2 flex flex-col gap-0.5 px-2">
-								<button
-									type="button"
-									className="gui-pane-action"
-									onClick={() => {
-										if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
-									}}
-								>
-									<Icon name="clipboard" className="h-3.5 w-3.5" />
-									<span>{t("copy workspace path")}</span>
-								</button>
-							</div>
-							{/* Swarm visual parity (TUI subagent HUD): live agent rows —
-							 * status dot, activity line, token/cost meta — fed from
-							 * the session stream (agent-progress/lifecycle). Click a
-							 * row to open its kill/revive/chat controls. */}
-							<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
-							<div className="px-2">
-								<AgentsPanel
-									agents={snap?.agents ?? []}
-									progress={snap?.progress ?? new Map()}
-									lifecycle={snap?.lifecycle ?? new Map()}
-									selectedId={selectedAgentId}
-									onSelect={setSelectedAgentId}
-								/>
-								{selectedAgent && (
-									<AgentControls agent={selectedAgent} rpc={rpc} onClose={() => setSelectedAgentId(null)} />
-								)}
-							</div>
-							{/* Session hygiene (会话维护): shake context / reset
-							 * provider stream / clear session context — each RPC
-							 * reports counts into the status line below. */}
-							<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
-							<div className="flex flex-col gap-0.5 px-2">
-								<button
-									type="button"
-									className="gui-pane-action"
-									disabled={!snap?.sessionId || maintenanceBusy !== null}
-									onClick={() => void runMaintenance("shake")}
-								>
-									<Icon
-										name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
-										className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
-									/>
-									<span>{t("shake context")}</span>
-								</button>
-								<button
-									type="button"
-									className="gui-pane-action"
-									disabled={!snap?.sessionId || maintenanceBusy !== null}
-									onClick={() => void runMaintenance("fresh")}
-								>
-									<Icon
-										name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
-										className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
-									/>
-									<span>{t("fresh provider")}</span>
-								</button>
-								<button
-									type="button"
-									className="gui-pane-action"
-									disabled={!snap?.sessionId || maintenanceBusy !== null}
-									onClick={() => void runMaintenance("clear")}
-								>
-									<Icon
-										name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
-										className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
-									/>
-									<span>{t("clear session context")}</span>
-								</button>
-							</div>
-							{maintenanceStatus && (
-								<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-									{maintenanceStatus}
-								</p>
-							)}
+						)}
+						{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
+						 * 挂内容区末尾,随面板滚动。 */}
+						<div className="gui-pane-extension px-2 pt-3">
+							<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
 						</div>
-					) : (
-						<p className="px-2 py-5 text-[13px] leading-relaxed text-[var(--color-text-faint)]">
-							{t("select a session")}
-						</p>
-					)}
-					{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
-					 * 挂内容区末尾,随面板滚动。 */}
-					<div className="gui-pane-extension px-2 pt-3">
-						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
-					</div>
 					</FadeScroll>
 				)}
 			</div>

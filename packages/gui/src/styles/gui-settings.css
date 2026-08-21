@@ -2818,6 +2818,46 @@ body.gui-resizing {
 	margin: 0;
 }
 
+/* Generic right-pane empty state: icon + title + optional hint. */
+.gui-pane-tab-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	padding: 30px 14px;
+	text-align: center;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.6;
+	color: var(--color-text-faint);
+}
+
+.gui-pane-tab-empty .gui-pane-tab-empty-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text-muted);
+	margin-bottom: 2px;
+}
+
+.gui-pane-tab-empty .gui-pane-tab-empty-icon svg {
+	width: 17px;
+	height: 17px;
+}
+
+.gui-pane-tab-empty-title {
+	color: var(--color-text-muted);
+	margin: 0;
+}
+
+.gui-pane-tab-empty-hint {
+	margin: 0;
+	max-width: 21em;
+}
+
 .gui-pane-tool {
 	display: inline-flex;
 	align-items: center;
