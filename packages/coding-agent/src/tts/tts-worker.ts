@@ -259,6 +259,10 @@ async function synthesize(
 	voice: string | undefined,
 ): Promise<{ pcm: Float32Array; sampleRate: number }> {
 	const synthesizer = await loadModel(modelKey, transport, requestId);
+	// `rate` is carried in the wire protocol (tts.synthesize request) for
+	// future use, but Kokoro's generate() has no rate parameter and we do not
+	// resample/strech here yet — so it is silently ignored (backend-rpc.md §6
+	// graceful degradation). Apply only when the engine supports it.
 	const output = await synthesizer.generate(text, { voice: resolveTtsVoice(modelKey, voice) });
 	const spec = getTtsLocalModelSpec(modelKey);
 	const audio = Array.isArray(output.audio) ? output.audio[0] : output.audio;
@@ -333,6 +337,9 @@ async function runStreamSession(transport: TtsTransport, id: string, session: St
 				await promise;
 				continue;
 			}
+			// `rate` from stream-start is accepted by the protocol but not yet
+			// applied — Kokoro has no rate parameter, no resample here. Mirror
+			// the batch synthesize comment (backend-rpc.md §6).
 			const output = await synthesizer.generate(segment, { voice });
 			if (session.cancelled) break;
 			const audio = Array.isArray(output.audio) ? output.audio[0] : output.audio;

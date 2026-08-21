@@ -26,7 +26,7 @@ function useSetting(rpc: RpcClient | null) {
 }
 
 /** 语音输出播放态卡（loading → speaking → done / stopped / error）。 */
-function TtsTestCard({ rpc, voice, rate }: { rpc: RpcClient | null; voice: string; rate: number }): ReactNode {
+function TtsTestCard({ rpc, voice, rate, mode }: { rpc: RpcClient | null; voice: string; rate: number; mode: "raw" | "sanitize" | "summarize" }): ReactNode {
 	const [state, setState] = useState<"idle" | "loading" | "speaking" | "ok" | "error">("idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
@@ -34,7 +34,7 @@ function TtsTestCard({ rpc, voice, rate }: { rpc: RpcClient | null; voice: strin
 	const toggle = (): void => {
 		if (state === "speaking" || state === "loading") { stopRef.current?.(); setState("idle"); return; }
 		setState("loading"); setErr("");
-		stopRef.current = speak(t("voice output sample"), rpc, { voice, rate }, (a: VoiceActivity) => {
+		stopRef.current = speak(t("voice output sample"), rpc, { voice, rate, mode }, (a: VoiceActivity) => {
 			if (a.phase === "speaking") setState("speaking");
 			else if (a.phase === "done") setState("ok");
 			else if (a.phase === "stopped") setState("idle");
@@ -174,11 +174,11 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 
 				<div className="gui-settings-row">
-					<div><div className="gui-settings-row-label">{t("voice input submit")}</div><div className="gui-settings-row-desc">口述结束后：进入草稿供你修改，或直接发送</div></div>
+					<div><div className="gui-settings-row-label">{t("voice input submit")}</div><div className="gui-settings-row-desc">口述结束后：当前仅插入草稿（"立即发送"需 composer 接线，暂未生效）</div></div>
 					<GuiSelect className="gui-input max-w-[180px]" value={sttSubmit} onChange={v => setSttSubmit(v as typeof sttSubmit)}
 						options={[
 							{ value: "draft", label: "仅插入草稿" },
-							{ value: "send", label: "立即发送" },
+							{ value: "send", label: "立即发送（暂未生效）" },
 						]} />
 				</div>
 
@@ -223,14 +223,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 
 				<div className="gui-settings-row">
-					<div><div className="gui-settings-row-label">{t("voice output rate")}</div><div className="gui-settings-row-desc">0.5× – 2.0×，读书/演示场景常用 0.8×</div></div>
+					<div><div className="gui-settings-row-label">{t("voice output rate")}</div><div className="gui-settings-row-desc">0.5× – 2.0×，读书/演示场景常用 0.8×（当前引擎暂不支持调速，仅保存偏好）</div></div>
 					<input type="range" min={0.5} max={2} step={0.1} value={ttsRate} aria-label={`${t("voice output rate")}（0.5×–2.0×）`}
 						onChange={e => { const v = Number(e.target.value); setTtsRate(v); set("tts.rate", v); }} />
 				</div>
 
 				<div className="gui-settings-row">
 					<div><div className="gui-settings-row-label">{t("voice output mode")}</div><div className="gui-settings-row-desc">长回复建议“摘要+净化”</div></div>
-					<GuiSelect className="gui-input max-w-[180px]" value={ttsMode} onChange={v => setTtsMode(v as typeof ttsMode)}
+					<GuiSelect className="gui-input max-w-[180px]" value={ttsMode} onChange={v => { setTtsMode(v as typeof ttsMode); set("tts.inputMode", v); }}
 						options={[
 							{ value: "sanitize", label: "净化" },
 							{ value: "summarize", label: "摘要+净化" },
@@ -240,14 +240,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 				<div className="gui-settings-row">
 					<div><div className="gui-settings-row-label">{t("voice output barge in")}</div><div className="gui-settings-row-desc">朗读时开始口述，自动播放音量降到 25% 或暂停</div></div>
-					<GuiSelect className="gui-input max-w-[180px]" value={ttsBarge} onChange={v => setTtsBarge(v as typeof ttsBarge)}
+					<GuiSelect className="gui-input max-w-[180px]" value={ttsBarge} onChange={v => { setTtsBarge(v as typeof ttsBarge); set("tts.bargeIn", v); }}
 						options={[
 							{ value: "duck", label: "暂时压低" },
 							{ value: "pause", label: "暂停" },
 						]} />
 				</div>
 
-				<TtsTestCard rpc={rpc} voice={ttsVoice} rate={ttsRate} />
+				<TtsTestCard rpc={rpc} voice={ttsVoice} rate={ttsRate} mode={ttsMode} />
 			</div>
 		</>
 	);
