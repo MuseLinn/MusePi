@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentMessage, AgentTool } from "@musepi/pi-agent-core";
 import { generateHandoff, generateHandoffFromContext, renderHandoffPrompt } from "@musepi/pi-agent-core/compaction";
 import { ThinkingLevel } from "@musepi/pi-agent-core/thinking";

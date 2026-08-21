@@ -558,7 +558,7 @@ export const Markdown = memo(function Markdown({
 			? "typewriter"
 			: (() => {
 					try {
-						const v = localStorage.getItem("omp-gui-chat-effect");
+						const v = localStorage.getItem("musepi-gui-chat-effect");
 						return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink"
 							? v
 							: "typewriter";

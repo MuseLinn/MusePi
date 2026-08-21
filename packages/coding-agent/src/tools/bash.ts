@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type {
 	AgentTool,
 	AgentToolContext,

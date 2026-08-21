@@ -2,7 +2,7 @@ import { AgentsPanel, latestWidgetFromEntries, t, WidgetCard } from "@musepi/des
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
-import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import {
@@ -14,8 +14,10 @@ import {
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
+import { FadeScroll } from "./FadeScroll";
 import { FilePane } from "./FilePane";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
+import { NotesPane } from "./notes-pane";
 import { TrajectoryView } from "./TrajectoryView";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
@@ -45,7 +47,7 @@ export const TOOLS: { id: string; icon: string; label: string }[] = [
 	{ id: "git", icon: "git-branch", label: t("git graph") },
 	{ id: "pr", icon: "git-pull-request", label: t("pull requests") },
 	{ id: "diff", icon: "file", label: t("workspace changes") },
-	{ id: "notes", icon: "book", label: t("project notes") },
+	{ id: "notes", icon: "book", label: t("project knowledge") },
 	{ id: "browser", icon: "global", label: t("browser") },
 ];
 
@@ -322,7 +324,7 @@ export function ContextPanel({
 						))}
 					</div>
 				</div>
-				<div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
+				<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 					{tool === "notes" ? (
 						<NotesPane rpc={rpc} cwd={cwd} />
 					) : tool === "diff" ? (
@@ -349,6 +351,7 @@ export function ContextPanel({
 						<TrajectoryView
 							entries={snap?.entries ?? []}
 							modelId={snap?.state?.model?.id}
+							roundDurations={snap?.roundDurations}
 							onJumpToEntry={onJumpToEntry}
 						/>
 					) : tab === "jobs" ? (
@@ -363,9 +366,9 @@ export function ContextPanel({
 						(() => {
 							const item = extTabs.find(x => `ext:${x.slot}` === tab);
 							return item ? (
-								<div className="h-full overflow-y-auto">
+								<FadeScroll className="h-full overflow-y-auto">
 									<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
-								</div>
+								</FadeScroll>
 							) : null;
 						})()
 					) : tab === "context" ? (
@@ -520,7 +523,7 @@ export function ContextPanel({
 					<div className="gui-pane-extension px-2 pt-3">
 						<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
 					</div>
-				</div>
+				</FadeScroll>
 			</div>
 		</aside>
 	);
@@ -678,353 +681,7 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 					</span>
 				</div>
 			)}
-			{error && (
-				<div className="px-2 pt-2 text-[12px] leading-relaxed text-[var(--color-danger)]">{error}</div>
-			)}
-		</div>
-	);
-}
-
-interface TodoItem {
-	id: string;
-	text: string;
-	done: boolean;
-	createdAt: number;
-}
-
-interface PlanFile {
-	id: string;
-	title: string;
-	createdAt: string;
-}
-
-const TODO_STORAGE_PREFIX = "musepi-gui-todos:";
-const TODO_TEXT_MAX = 120;
-
-function loadTodos(cwd: string): TodoItem[] {
-	try {
-		const raw = localStorage.getItem(`${TODO_STORAGE_PREFIX}${cwd}`);
-		const parsed = raw ? (JSON.parse(raw) as TodoItem[]) : [];
-		return parsed.map(t => ({ id: t.id, text: t.text, done: t.done, createdAt: t.createdAt ?? Date.now() }));
-	} catch {
-		return [];
-	}
-}
-
-/** Project notes (right-panel 项目笔记): quick note (daemon notes.get/set,
- *  400ms debounce autosave + blur flush) + per-workspace todo list
- *  (localStorage) + saved plan files (daemon plans.*). openchamber parity. */
-function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
-	const { prompt } = usePrompt();
-	const { confirm } = useConfirm();
-	const [text, setText] = useState("");
-	const [loaded, setLoaded] = useState(false);
-	const [saved, setSaved] = useState(false);
-	const [todos, setTodos] = useState<TodoItem[]>(() => loadTodos(cwd));
-	const [todoInput, setTodoInput] = useState("");
-	const [plans, setPlans] = useState<PlanFile[] | null>(null);
-	const [planOpen, setPlanOpen] = useState<{ id: string; title: string; body: string } | null>(null);
-	const saveNote = (): void => {
-		if (!loaded) return;
-		void rpc.request("notes.set", { cwd, text }).then(() => {
-			setSaved(true);
-			setTimeout(() => setSaved(false), 1200);
-		});
-	};
-	// openchamber-style 400ms debounce autosave; blur flushes immediately.
-	const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const onNoteChange = (value: string): void => {
-		setText(value);
-		if (saveTimer.current) clearTimeout(saveTimer.current);
-		saveTimer.current = setTimeout(() => {
-			saveTimer.current = null;
-			saveNote();
-		}, 400);
-	};
-	useEffect(() => {
-		let alive = true;
-		setLoaded(false);
-		void rpc
-			.request<{ text: string }>("notes.get", { cwd })
-			.then(res => {
-				if (!alive) return;
-				setText(res?.text ?? "");
-				setLoaded(true);
-			})
-			.catch(() => {
-				if (alive) {
-					setText("");
-					setLoaded(true);
-				}
-			});
-		return () => {
-			alive = false;
-		};
-	}, [rpc, cwd]);
-	const persistTodos = (next: TodoItem[]): void => {
-		setTodos(next);
-		try {
-			localStorage.setItem(`${TODO_STORAGE_PREFIX}${cwd}`, JSON.stringify(next));
-		} catch {
-			// storage unavailable
-		}
-	};
-	const addTodo = (): void => {
-		const value = todoInput.trim().slice(0, TODO_TEXT_MAX);
-		if (!value) return;
-		// openchamber: insert before the first completed item.
-		const firstDone = todos.findIndex(t => t.done);
-		const next = [...todos];
-		next.splice(firstDone === -1 ? next.length : firstDone, 0, {
-			id: crypto.randomUUID(),
-			text: value,
-			done: false,
-			createdAt: Date.now(),
-		});
-		persistTodos(next);
-		setTodoInput("");
-	};
-	const toggleTodo = (id: string): void => {
-		// openchamber: completing moves the item to the end (completed-last).
-		const target = todos.find(t => t.id === id);
-		if (!target) return;
-		const rest = todos.filter(t => t.id !== id);
-		const next = target.done ? [...rest, { ...target, done: false }] : [...rest, { ...target, done: true }];
-		persistTodos(next);
-	};
-	const removeTodo = (id: string): void => {
-		persistTodos(todos.filter(t => t.id !== id));
-	};
-	const clearDone = (): void => {
-		persistTodos(todos.filter(t => !t.done));
-	};
-	const doneCount = todos.filter(t => t.done).length;
-	// Note pane height (openchamber parity): compact by default with a
-	// drag handle on the bottom edge; the expand button fills the pane.
-	const [noteH, setNoteH] = useState(180);
-	const [noteExpanded, setNoteExpanded] = useState(false);
-	const noteResizeRef = useRef<{ startY: number; startH: number } | null>(null);
-	const onNoteResizeStart = (e: React.PointerEvent<HTMLDivElement>): void => {
-		noteResizeRef.current = { startY: e.clientY, startH: noteH };
-		const move = (ev: PointerEvent): void => {
-			const s = noteResizeRef.current;
-			if (!s) return;
-			setNoteH(Math.min(640, Math.max(100, s.startH + (ev.clientY - s.startY))));
-		};
-		const up = (): void => {
-			noteResizeRef.current = null;
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", up);
-		};
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", up);
-	};
-	// ── Saved plans (daemon plans.*) ──────────────────────────────────────
-	const loadPlans = useCallback((): void => {
-		void rpc
-			.request<{ plans?: PlanFile[] }>("plans.list", { cwd })
-			.then(res => setPlans(res.plans ?? []))
-			.catch(() => setPlans([]));
-	}, [rpc, cwd]);
-	useEffect(() => {
-		loadPlans();
-	}, [loadPlans]);
-	const createPlan = async (): Promise<void> => {
-		const title = await prompt({ title: t("new plan title") });
-		if (!title) return;
-		const body = await prompt({ title: t("new plan body") });
-		if (body === null) return;
-		try {
-			await rpc.request("plans.save", { cwd, title, body });
-		} catch {
-			// daemon rejected — keep list as-is
-		}
-		loadPlans();
-	};
-	const openPlan = async (id: string): Promise<void> => {
-		try {
-			const res = await rpc.request<{ title?: string; body?: string; error?: string }>("plans.get", { cwd, id });
-			if (res.error || !res.body) return;
-			setPlanOpen({ id, title: res.title ?? id, body: res.body });
-		} catch {
-			// not found — ignore
-		}
-	};
-	const deletePlan = async (id: string): Promise<void> => {
-		const ok = await confirm(t("confirm delete plan"));
-		if (!ok) return;
-		try {
-			await rpc.request("plans.delete", { cwd, id });
-		} catch {
-			// daemon rejected
-		}
-		if (planOpen?.id === id) setPlanOpen(null);
-		loadPlans();
-	};
-	return (
-		<div
-			className={`flex min-h-0 flex-col${noteExpanded ? " flex-1" : ""}`}
-			style={noteExpanded ? undefined : { height: noteH }}
-		>
-			<div className="flex items-center justify-between px-1 pb-1 pt-1">
-				<span className="flex min-w-0 items-baseline gap-2">
-					<span className="gui-group-label px-2">{t("project notes")}</span>
-					<span className="text-[11px] text-[var(--color-text-faint)]">{text.length}/3000</span>
-				</span>
-				<div className="flex items-center gap-1">
-					<button
-						type="button"
-						className="gui-pane-action !w-auto px-2"
-						onClick={() => {
-							setNoteExpanded(v => !v);
-						}}
-						title={noteExpanded ? t("restore") : t("expand")}
-						aria-label={noteExpanded ? t("restore") : t("expand")}
-					>
-						<Icon name={noteExpanded ? "fullscreen-exit" : "fullscreen"} className="h-3.5 w-3.5" />
-					</button>
-					<button type="button" className="gui-pane-action !w-auto px-2" onClick={saveNote} disabled={!loaded}>
-						<Icon name={saved ? "check" : "download"} className="h-3.5 w-3.5" />
-						<span>{saved ? t("saved") : t("save")}</span>
-					</button>
-				</div>
-			</div>
-			<textarea
-				className="gui-notes-editor min-h-0 flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2.5 text-[12.5px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
-				value={text}
-				maxLength={3000}
-				disabled={!loaded}
-				placeholder={t("notes placeholder")}
-				spellCheck={false}
-				onChange={e => onNoteChange(e.target.value)}
-				onBlur={saveNote}
-			/>
-			{/* Drag handle: note pane height (openchamber parity). */}
-			<div className="gui-notes-resize-y" onPointerDown={onNoteResizeStart} aria-hidden />
-			<div className="gui-notes-todos">
-				<div className="flex items-center justify-between px-1 pt-2">
-					<span className="gui-group-label px-2">{t("todo count items", { count: todos.length })}</span>
-					<button
-						type="button"
-						className="gui-link text-[11.5px]"
-						disabled={doneCount === 0}
-						onClick={clearDone}
-						title={doneCount === 0 ? t("clear done disabled") : t("clear done")}
-					>
-						{t("clear done")}
-					</button>
-				</div>
-				<div className="flex items-center gap-1 px-1 pt-1">
-					<input
-						className="gui-input min-w-0 flex-1 !px-2 !py-1 text-[12px]"
-						value={todoInput}
-						maxLength={TODO_TEXT_MAX}
-						placeholder={t("add todo placeholder")}
-						onChange={e => setTodoInput(e.target.value)}
-						onKeyDown={e => {
-							if (e.key === "Enter") addTodo();
-						}}
-					/>
-					<button type="button" className="gui-btn gui-btn-icon" onClick={addTodo} title={t("add todo")}>
-						<Icon name="add" className="h-3.5 w-3.5" />
-					</button>
-				</div>
-				{todos.length === 0 ? (
-					<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
-						{t("no todos yet")}
-					</p>
-				) : (
-					<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
-						<ul className="gui-notes-todo-list">
-							{todos.map(todo => (
-								<li key={todo.id} className="gui-notes-todo-row">
-									<button
-										type="button"
-										className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
-										onClick={() => toggleTodo(todo.id)}
-										title={todo.done ? t("mark undone") : t("mark done")}
-									>
-										{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
-									</button>
-									<span className={`gui-notes-todo-text${todo.done ? " gui-notes-todo-text--done" : ""}`}>
-										{todo.text}
-									</span>
-									<button
-										type="button"
-										className="gui-notes-todo-remove"
-										onClick={() => removeTodo(todo.id)}
-										title={t("remove todo")}
-									>
-										✕
-									</button>
-								</li>
-							))}
-						</ul>
-					</div>
-				)}
-			</div>
-			<div className="gui-notes-plans">
-				<div className="flex items-center justify-between px-1 pt-2">
-					<span className="gui-group-label px-2">{t("plan count files", { count: plans?.length ?? 0 })}</span>
-					<button
-						type="button"
-						className="gui-btn gui-btn-icon"
-						onClick={() => void createPlan()}
-						title={t("new plan")}
-					>
-						<Icon name="add" className="h-3.5 w-3.5" />
-					</button>
-				</div>
-				{planOpen && (
-					<div className="gui-notes-plan-open">
-						<div className="flex items-center justify-between gap-2">
-							<span className="gui-notes-plan-open-title" title={planOpen.title}>
-								{planOpen.title}
-							</span>
-							<button
-								type="button"
-								className="gui-btn gui-btn-icon"
-								title={t("close")}
-								onClick={() => setPlanOpen(null)}
-							>
-								✕
-							</button>
-						</div>
-						<pre className="gui-notes-plan-open-body">{planOpen.body}</pre>
-					</div>
-				)}
-				{plans !== null && plans.length === 0 && !planOpen && (
-					<p className="rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40 px-3 py-3 text-[12px] text-[var(--color-text-faint)]">
-						{t("no plans yet")}
-					</p>
-				)}
-				{plans !== null && plans.length > 0 && (
-					<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
-						<ul className="gui-notes-plan-list">
-							{plans.map(plan => (
-								<li key={plan.id} className="gui-notes-plan-row">
-									<button
-										type="button"
-										className="gui-notes-plan-open-btn"
-										onClick={() => void openPlan(plan.id)}
-									>
-										<span className="gui-notes-plan-title">{plan.title}</span>
-										<span className="gui-notes-plan-date">{plan.createdAt}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-notes-todo-remove"
-										onClick={() => void deletePlan(plan.id)}
-										title={t("delete plan")}
-									>
-										✕
-									</button>
-								</li>
-							))}
-						</ul>
-					</div>
-				)}
-			</div>
+			{error && <div className="px-2 pt-2 text-[12px] leading-relaxed text-[var(--color-danger)]">{error}</div>}
 		</div>
 	);
 }
@@ -1191,7 +848,7 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					)}
 				</div>
 			)}
-			<div className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2">
+			<FadeScroll className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2">
 				{error ? (
 					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{error}</div>
 				) : graph === null ? (
@@ -1201,7 +858,7 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				) : (
 					<GitGraph graph={graph} />
 				)}
-			</div>
+			</FadeScroll>
 		</div>
 	);
 }
@@ -1658,7 +1315,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			{total === 0 && !showIgnored ? (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
 			) : (
-				<div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
+				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
 					{status.staged.length > 0 && (
 						<>
 							<div className="gui-group-label px-2 pb-0.5 pt-1">
@@ -1694,7 +1351,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 					{total === 0 && (status.ignored?.length ?? 0) === 0 && (
 						<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
 					)}
-				</div>
+				</FadeScroll>
 			)}
 		</div>
 	);
@@ -1748,7 +1405,7 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			) : loading ? (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("loading…")}</div>
 			) : prs && prs.length > 0 ? (
-				<div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
+				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
 					{prs.map(pr => (
 						<button
 							key={pr.number}
@@ -1774,7 +1431,7 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							</span>
 						</button>
 					))}
-				</div>
+				</FadeScroll>
 			) : (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open pull requests")}</div>
 			)}

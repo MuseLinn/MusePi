@@ -5,8 +5,8 @@ import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import { type } from "@musepi/omptype";
-import * as zod from "@musepi/omptype/zod";
+import { type } from "@musepi/musepi-type";
+import * as zod from "@musepi/musepi-type/zod";
 import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import type {
 	ImageContent,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type as arkType } from "@musepi/omptype";
+import { type as arkType } from "@musepi/musepi-type";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { ComputerTool, computerApproval, type ToolSession } from "@musepi/pi-coding-agent/tools";
 import type {

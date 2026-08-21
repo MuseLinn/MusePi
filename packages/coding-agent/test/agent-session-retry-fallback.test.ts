@@ -4,6 +4,7 @@ import { scheduler } from "node:timers/promises";
 import { type } from "@musepi/omptype";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import {
+	type Api,
 	type AssistantMessage,
 	Effort,
 	type Model,
@@ -12,6 +13,7 @@ import {
 } from "@musepi/pi-ai";
 import * as AIError from "@musepi/pi-ai/error";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";
+import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { writeModelCache } from "@musepi/pi-catalog/model-cache";
 import { getBundledModel } from "@musepi/pi-catalog/models";
@@ -86,6 +88,63 @@ function createFallbackAgent(
 			return mock.stream(model, context, options);
 		},
 	});
+}
+
+function emptyUsage(): AssistantMessage["usage"] {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	};
+}
+
+/** A stream that terminates with a `ThinkingLoop`-flagged error, exactly as the
+ *  loop guard aborts a repetitive reasoning stream (issue #8760). */
+function thinkingLoopErrorStream(model: Model<Api>): AssistantMessageEventStream {
+	const stream = new AssistantMessageEventStream();
+	queueMicrotask(() => {
+		const partial: AssistantMessage = {
+			role: "assistant",
+			content: [],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: emptyUsage(),
+			stopReason: "error",
+			errorMessage:
+				"Thinking loop detected: the model repeated near-identical content (4 near-identical segments within the last 16). Treating as a stream stall and retrying.",
+			errorId: AIError.create(AIError.Flag.ThinkingLoop),
+			timestamp: Date.now(),
+		};
+		stream.push({ type: "error", reason: "error", error: partial });
+	});
+	return stream;
+}
+
+/** A stream that completes normally with a single text block. */
+function recoveredTextStream(model: Model<Api>, text: string): AssistantMessageEventStream {
+	const stream = new AssistantMessageEventStream();
+	queueMicrotask(() => {
+		const partial: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "text", text }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: emptyUsage(),
+			stopReason: "stop",
+			timestamp: Date.now(),
+		};
+		stream.push({ type: "start", partial });
+		stream.push({ type: "text_start", contentIndex: 0, partial });
+		stream.push({ type: "text_delta", contentIndex: 0, delta: text, partial });
+		stream.push({ type: "text_end", contentIndex: 0, content: text, partial });
+		stream.push({ type: "done", reason: "stop", message: partial });
+	});
+	return stream;
 }
 
 describe("AgentSession retry fallback", () => {
@@ -1882,6 +1941,165 @@ describe("AgentSession retry fallback", () => {
 			},
 		]);
 		expect(session.model?.provider).toBe(fallbackModel.provider);
+		expect(getLastAssistantMessage(session).stopReason).toBe("stop");
+	});
+	it("surfaces immutable Anthropic thinking errors without retry fallback", async () => {
+		const primaryModel = getBundledModel("anthropic", "claude-sonnet-4-5");
+		const fallbackModel = getBundledModel("anthropic", "claude-opus-4-1");
+		if (!primaryModel || !fallbackModel) {
+			throw new Error("Expected bundled Anthropic test models to exist");
+		}
+
+		const immutableThinkingError =
+			"400 invalid_request_error: messages.1.content.5: `thinking` or `redacted_thinking` blocks in the latest assistant message cannot be modified";
+		const mock = createMockModel();
+		const requestedModels: string[] = [];
+		const fallbackAppliedEvents: Array<Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>> = [];
+		let requestCount = 0;
+		const agent = new Agent({
+			getApiKey: model => `${model.provider}-test-key`,
+			initialState: {
+				model: primaryModel,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [],
+			},
+			streamFn: (model, context, options) => {
+				requestCount++;
+				requestedModels.push(`${model.provider}/${model.id}`);
+				if (requestCount === 1) {
+					mock.push({
+						content: [
+							{ type: "thinking", thinking: "Signed Sonnet reasoning.", thinkingSignature: "sonnet-signature" },
+							"Seeded turn",
+						],
+					});
+				} else {
+					mock.push({ throw: immutableThinkingError });
+				}
+				return mock.stream(model, context, options);
+			},
+		});
+
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"retry.fallbackChains": {
+				"anthropic/*": [`${fallbackModel.provider}/${fallbackModel.id}`],
+			},
+		});
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+		});
+		const { retryStartEvents } = trackRetryEvents(session);
+		session.subscribe(event => {
+			if (event.type === "retry_fallback_applied") {
+				fallbackAppliedEvents.push(event);
+			}
+		});
+
+		await session.prompt("Seed signed thinking");
+		await session.waitForIdle();
+		await session.prompt("Continue");
+		await session.waitForIdle();
+
+		expect(requestedModels).toEqual([
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+		]);
+		expect(fallbackAppliedEvents).toEqual([]);
+		expect(retryStartEvents).toEqual([]);
+		expect(session.model?.id).toBe(primaryModel.id);
+		expect(getLastAssistantMessage(session)).toMatchObject({
+			stopReason: "error",
+			errorMessage: immutableThinkingError,
+		});
+	});
+
+	it("keeps signed Anthropic thinking on its source model during transient retry", async () => {
+		const primaryModel = getBundledModel("anthropic", "claude-sonnet-4-5");
+		const fallbackModel = getBundledModel("anthropic", "claude-opus-4-1");
+		if (!primaryModel || !fallbackModel) {
+			throw new Error("Expected bundled Anthropic test models to exist");
+		}
+
+		const mock = createMockModel();
+		const requestedModels: string[] = [];
+		const fallbackAppliedEvents: Array<Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>> = [];
+		let requestCount = 0;
+		const agent = new Agent({
+			getApiKey: model => `${model.provider}-test-key`,
+			initialState: {
+				model: primaryModel,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [],
+			},
+			streamFn: (model, context, options) => {
+				requestCount++;
+				requestedModels.push(`${model.provider}/${model.id}`);
+				if (requestCount === 1) {
+					mock.push({
+						content: [
+							{ type: "thinking", thinking: "Signed Sonnet reasoning.", thinkingSignature: "sonnet-signature" },
+							"Seeded turn",
+						],
+					});
+				} else if (requestCount === 2) {
+					mock.push({ throw: "503 overloaded_error: provider returned error" });
+				} else {
+					mock.push({ content: ["Recovered on Sonnet"] });
+				}
+				return mock.stream(model, context, options);
+			},
+		});
+
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"retry.baseDelayMs": 1,
+			"retry.maxRetries": 1,
+			"retry.fallbackChains": {
+				"anthropic/*": [`${fallbackModel.provider}/${fallbackModel.id}`],
+			},
+		});
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+		});
+		const { retryStartEvents, retryEndEvents } = trackRetryEvents(session);
+		session.subscribe(event => {
+			if (event.type === "retry_fallback_applied") {
+				fallbackAppliedEvents.push(event);
+			}
+		});
+
+		await session.prompt("Seed signed thinking");
+		await session.waitForIdle();
+		const seededAssistant = agent.state.messages.findLast(
+			(message): message is AssistantMessage => message.role === "assistant",
+		);
+		if (!seededAssistant) throw new Error("Expected seeded assistant message");
+		seededAssistant.api = primaryModel.api;
+		seededAssistant.provider = primaryModel.provider;
+		seededAssistant.model = primaryModel.id;
+		await session.prompt("Retry a transient failure");
+		await session.waitForIdle();
+
+		expect(requestedModels).toEqual([
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+			`${primaryModel.provider}/${primaryModel.id}`,
+		]);
+		expect(fallbackAppliedEvents).toEqual([]);
+		expect(retryStartEvents).toHaveLength(1);
+		expect(retryEndEvents).toEqual([expect.objectContaining({ success: true })]);
+		expect(session.model?.id).toBe(primaryModel.id);
 		expect(getLastAssistantMessage(session).stopReason).toBe("stop");
 	});
 
@@ -3716,7 +3934,7 @@ describe("AgentSession retry fallback", () => {
 
 		const settings = Settings.isolated({
 			"compaction.enabled": true,
-			"compaction.strategy": "context-full",
+			"compaction.methodOrder": ["soft"],
 			"compaction.thresholdPercent": 80,
 			"compaction.thresholdTokens": -1,
 			"contextPromotion.enabled": true,
@@ -3832,7 +4050,7 @@ describe("AgentSession retry fallback", () => {
 
 		const settings = Settings.isolated({
 			"compaction.enabled": true,
-			"compaction.strategy": "context-full",
+			"compaction.methodOrder": ["soft"],
 			"compaction.thresholdPercent": 80,
 			"compaction.thresholdTokens": -1,
 			"contextPromotion.enabled": true,
@@ -4778,5 +4996,73 @@ describe("AgentSession retry fallback", () => {
 			selector: `${fallbackModel.provider}/${fallbackModel.id}`,
 			isFallback: true,
 		});
+	});
+
+	// A thinking-loop abort is a same-model resample signal (the guard pairs it
+	// with a `thinking-loop-redirect` notice), not a provider failure. It must
+	// not walk `retry.fallbackChains` or park the current selector on a cooldown,
+	// or a healthy planning turn gets replaced by another family (issue #8760).
+	it("retries the same model on a thinking-loop error instead of switching via fallback", async () => {
+		const primaryModel = getBundledModel("anthropic", "claude-sonnet-4-5");
+		const fallbackModel = getBundledModel("openai", "gpt-4o-mini");
+		if (!primaryModel || !fallbackModel) {
+			throw new Error("Expected bundled test models to exist");
+		}
+		const primarySelector = `${primaryModel.provider}/${primaryModel.id}`;
+		const fallbackSelector = `${fallbackModel.provider}/${fallbackModel.id}`;
+
+		const requestedModels: string[] = [];
+		const agent = new Agent({
+			getApiKey: model => `${model.provider}-test-key`,
+			initialState: { model: primaryModel, systemPrompt: ["Test"], tools: [], messages: [] },
+			streamFn: model => {
+				requestedModels.push(`${model.provider}/${model.id}`);
+				return requestedModels.length === 1
+					? thinkingLoopErrorStream(model)
+					: recoveredTextStream(model, "Recovered on the same model.");
+			},
+		});
+
+		const settings = Settings.isolated({
+			"compaction.enabled": false,
+			"retry.baseDelayMs": 0,
+			"retry.maxRetries": 2,
+			"retry.modelFallback": true,
+			"retry.fallbackChains": { default: [fallbackSelector] },
+			"model.loopGuard.enabled": true,
+		});
+		settings.setModelRole("default", primarySelector);
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings,
+			modelRegistry,
+		});
+
+		const fallbackAppliedEvents: Array<Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>> = [];
+		const retryStartEvents: AutoRetryStartEvent[] = [];
+		session.subscribe(event => {
+			if (event.type === "retry_fallback_applied") fallbackAppliedEvents.push(event);
+			if (event.type === "auto_retry_start") retryStartEvents.push(event);
+		});
+		vi.spyOn(scheduler, "wait").mockResolvedValue(undefined);
+
+		await session.prompt("Plan the ticket, then act");
+		await session.waitForIdle();
+
+		// The fallback chain lists a different family, but the thinking-loop abort
+		// re-samples the SAME model: no chain consult, no model switch.
+		expect(requestedModels).toEqual([primarySelector, primarySelector]);
+		expect(session.model?.provider).toBe(primaryModel.provider);
+		expect(session.model?.id).toBe(primaryModel.id);
+		expect(fallbackAppliedEvents).toHaveLength(0);
+		// The abort is a thinking-loop, and the retry stayed on the same model.
+		expect(retryStartEvents).toHaveLength(1);
+		expect(AIError.is(retryStartEvents[0].errorId, AIError.Flag.ThinkingLoop)).toBe(true);
+		// The selector must not be parked on a fallback cooldown by the abort.
+		expect(modelRegistry.isSelectorSuppressed(primarySelector)).toBe(false);
+		const finalAssistant = getLastAssistantMessage(session);
+		expect(finalAssistant.content).toEqual([{ type: "text", text: "Recovered on the same model." }]);
 	});
 });

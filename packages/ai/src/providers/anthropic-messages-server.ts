@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Effort } from "@musepi/pi-catalog/effort";
 import { logger } from "@musepi/pi-utils";
 import { captureRequestHeaders, resolvePromptCacheKey } from "../auth-gateway/http";

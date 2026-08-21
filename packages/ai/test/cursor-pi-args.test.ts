@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { omitUndefinedArgs, piGrepSkip } from "../src/providers/cursor-pi-args";
 import type { Tool } from "../src/types";
 import { validateToolArguments } from "../src/utils/validation";

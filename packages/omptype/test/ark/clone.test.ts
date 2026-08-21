@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { type } from "@musepi/omptype/ark";
+import { type } from "@musepi/musepi-type/ark";
 
 it("preserves the original references if no morphs are present", () => {
 	const T = type({ foo: "string" });

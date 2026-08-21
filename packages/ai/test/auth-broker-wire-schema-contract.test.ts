@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Type, type } from "@musepi/omptype";
+import { Type, type } from "@musepi/musepi-type";
 import * as wireSchemas from "@musepi/pi-ai/auth-broker/wire-schemas";
 
 const REFRESHER = {

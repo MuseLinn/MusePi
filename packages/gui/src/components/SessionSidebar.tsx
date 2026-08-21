@@ -7,10 +7,10 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { CustomGroups } from "./CustomGroups";
-import { GroupedSessionTree } from "./GroupedSessionTree";
+import { GroupedSessionList } from "./GroupedSessionList";
 import { Pop } from "./Pop";
 import { Reveal } from "./Reveal";
-import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 /**
  * Left pane — ZCode-style: menu (new/search/scheduled/skills), a group/
@@ -65,7 +65,7 @@ export function SessionSidebar({
 	onToggleUnread,
 	onImportSessions,
 }: {
-	nodes: GuiTreeNode[];
+	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
 	 *  column + sidebar pause chip + working/unread derivation + status color. */
 	sessionMeta: Map<
@@ -330,16 +330,16 @@ export function SessionSidebar({
 	// Fixed session search: filter the tree by label (recursively — a node
 	// stays when it matches or any descendant matches). Empty → everything.
 	const [sessionQuery, setSessionQuery] = useState("");
-	const matchTree = useCallback((list: GuiTreeNode[], q: string): GuiTreeNode[] => {
+	const matchTree = useCallback((list: SessionListNode[], q: string): SessionListNode[] => {
 		if (!q) return list;
 		const needle = q.toLowerCase();
-		const walk = (n: GuiTreeNode): GuiTreeNode | null => {
-			const kids = n.children.map(walk).filter((x): x is GuiTreeNode => x !== null);
+		const walk = (n: SessionListNode): SessionListNode | null => {
+			const kids = n.children.map(walk).filter((x): x is SessionListNode => x !== null);
 			const self = (n.label ?? n.entry.label ?? "").toLowerCase().includes(needle);
 			if (self || kids.length > 0) return { ...n, children: kids };
 			return null;
 		};
-		return list.map(walk).filter((x): x is GuiTreeNode => x !== null);
+		return list.map(walk).filter((x): x is SessionListNode => x !== null);
 	}, []);
 	const searchedNodes = useMemo(
 		() => matchTree(visibleNodes, sessionQuery.trim()),
@@ -357,7 +357,7 @@ export function SessionSidebar({
 				<Icon name="calendar-schedule" className="h-3.5 w-3.5" />
 				{t("scheduled tasks")}
 			</div>
-			<SessionTree
+			<SessionList
 				nodes={cronNodes}
 				selectedId={selectedId}
 				onSelect={onSelect}
@@ -794,7 +794,7 @@ export function SessionSidebar({
 										{pinnedNodes.length > 0 && (
 											<div className="mb-1.5">
 												<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
-												<SessionTree
+												<SessionList
 													nodes={pinnedNodes}
 													selectedId={selectedId}
 													onSelect={onSelect}
@@ -807,7 +807,7 @@ export function SessionSidebar({
 											</div>
 										)}
 										{cronNodes.length > 0 && cronSection}
-										<GroupedSessionTree
+										<GroupedSessionList
 											nodes={regularNodes}
 											selectedId={selectedId}
 											onSelect={onSelect}
@@ -825,8 +825,8 @@ export function SessionSidebar({
 										// collapsible block. Sessions group by exact cwd; folders
 										// without sessions still show (empty state) so a freshly
 										// picked 打开文件夹 appears immediately.
-										const byCwd = new Map<string, GuiTreeNode[]>();
-										const noFolder: GuiTreeNode[] = [];
+										const byCwd = new Map<string, SessionListNode[]>();
+										const noFolder: SessionListNode[] = [];
 										for (const n of regularNodes) {
 											const cwd = sessionMeta.get(n.entry.id)?.cwd;
 											if (cwd) {
@@ -857,7 +857,7 @@ export function SessionSidebar({
 												{pinnedNodes.length > 0 && (
 													<div className="mb-1.5">
 														<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
-														<SessionTree
+														<SessionList
 															nodes={pinnedNodes}
 															selectedId={selectedId}
 															onSelect={onSelect}
@@ -931,7 +931,7 @@ export function SessionSidebar({
 																{list.length === 0 ? (
 																	<p className="gui-project-empty">{t("no sessions")}</p>
 																) : (
-																	<SessionTree
+																	<SessionList
 																		nodes={list}
 																		selectedId={selectedId}
 																		onSelect={onSelect}
@@ -956,7 +956,7 @@ export function SessionSidebar({
 																{noFolder.length}
 															</span>
 														</div>
-														<SessionTree
+														<SessionList
 															nodes={noFolder}
 															selectedId={selectedId}
 															onSelect={onSelect}
@@ -981,7 +981,7 @@ export function SessionSidebar({
 								{pinnedNodes.length > 0 && (
 									<div className="mb-1.5">
 										<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
-										<SessionTree
+										<SessionList
 											nodes={pinnedNodes}
 											selectedId={selectedId}
 											onSelect={onSelect}
@@ -1057,7 +1057,7 @@ export function SessionSidebar({
 									manualTags={manualTags}
 								/>
 								{cronNodes.length > 0 && cronSection}
-								<GroupedSessionTree
+								<GroupedSessionList
 									nodes={regularNodes}
 									selectedId={selectedId}
 									onSelect={onSelect}
@@ -1074,7 +1074,7 @@ export function SessionSidebar({
 				</div>
 				{/* User footer: daemon status + settings (theme/language moved into
 				 * the settings dialog, ZCode-style). */}
-				<div className="flex items-center gap-1.5 border-t border-[var(--border)] px-3 py-2">
+				<div className="gui-sidebar-footer flex items-center gap-1.5 border-t border-[var(--border)] px-3 py-2">
 					<div className="flex flex-1 items-center gap-1.5 text-[13px] text-[var(--color-text-muted)]">
 						<span className={`gui-dot gui-dot-${status}`} />
 						<span>{status === "open" ? t("local daemon") : t("disconnected")}</span>

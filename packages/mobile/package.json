@@ -1,8 +1,8 @@
 {
 	"name": "@musepi/mobile",
 	"private": true,
-	"version": "0.4.1",
-	"description": "MusePi mobile companion — Capacitor shell around desktop-web (join a desktop daemon from a phone/tablet)",
+	"version": "0.4.2",
+	"description": "MusePi mobile companion \u2014 Capacitor shell around desktop-web (join a desktop daemon from a phone/tablet)",
 	"type": "module",
 	"scripts": {
 		"build": "bun run --cwd ../desktop-web build && bun run build:assets",

@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentToolResult, CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import type { AgentSession } from "../session/agent-session";
 

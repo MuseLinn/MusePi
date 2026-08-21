@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { AuthStorage, REMOTE_REFRESH_SENTINEL, SqliteAuthCredentialStore } from "@musepi/pi-ai";
 import {
 	AuthBrokerClient,

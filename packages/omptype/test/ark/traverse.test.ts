@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { scope, type } from "@musepi/omptype/ark";
+import { scope, type } from "@musepi/musepi-type/ark";
 
 it("divisible", () => {
 	const T = type("number%2");

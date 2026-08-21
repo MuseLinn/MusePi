@@ -321,7 +321,7 @@ Example `.musepi/dap.json`:
 
 ## Notes
 - `packages/coding-agent/src/prompts/tools/debug.md` tells the model only one active root session is supported. Adapter-requested child sessions belong to that root tree.
-- The default JavaScript/TypeScript adapter runs vscode-js-debug's `dapDebugServer.js` over TCP. Install it one of these ways; the first and last are auto-discovered by `resolveJsDebugServerPath()` in `packages/coding-agent/src/dap/config.ts`. (Don't try `npm i -g js-debug-adapter` — it 404s; `js-debug-adapter` is the omp adapter id, not an npm package.)
+- The default JavaScript/TypeScript adapter runs vscode-js-debug's `dapDebugServer.js` over TCP. Install it one of these ways; the first and last are auto-discovered by `resolveJsDebugServerPath()` in `packages/coding-agent/src/dap/config.ts`. (Don't try `npm i -g js-debug-adapter` — it 404s; `js-debug-adapter` is the musepi adapter id, not an npm package.)
   - Release tarball, extracted so `dapDebugServer.js` lands at `~/.local/opt/js-debug/src/dapDebugServer.js`:
     ```sh
     curl -sL -o js-debug-dap.tar.gz \
@@ -331,7 +331,7 @@ Example `.musepi/dap.json`:
     Replace `v1.117.0` with the latest tag from the [releases page](https://github.com/microsoft/vscode-js-debug/releases).
   - Any other location via `JS_DEBUG_DAP_SERVER=<path-to-dapDebugServer.js>`.
   - Neovim users with Mason: `:MasonInstall js-debug-adapter` → discovered at `~/.local/share/nvim/mason/packages/js-debug-adapter/js-debug/src/dapDebugServer.js`.
-- The adapter runs under `node` if on `PATH`, otherwise under the omp host (Bun); `resolveDefaultJsDebugAdapter()` falls back to `process.execPath`, so a Bun-only setup is supported.
+- The adapter runs under `node` if on `PATH`, otherwise under the musepi host (Bun); `resolveDefaultJsDebugAdapter()` falls back to `process.execPath`, so a Bun-only setup is supported.
 - `configurationDone` is sent automatically during root and child launch/attach handshakes and lazily before later requests if the initial handshake did not complete.
 - `startDebugging` reverse requests create recursive child sessions on the same TCP server; a stopped child becomes the target for thread-level actions.
 - `output` exposes the active session’s merged `output` event stream only; the tool does not distinguish stdout, stderr, and console categories.

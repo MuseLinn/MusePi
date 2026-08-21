@@ -86,7 +86,7 @@ async function showHelp(config: CliConfig<CommandMetadata>): Promise<void> {
  * tarball installs all exercise it on every CI run.
  */
 async function runSmokeTest(): Promise<void> {
-	const { smokeTestSyncWorker, startServer } = await import("@musepi/omp-stats");
+	const { smokeTestSyncWorker, startServer } = await import("@musepi/musepi-stats");
 	const { smokeTestTinyTitleWorker } = await import("./tiny/title-client");
 	const { smokeTestSttWorker } = await import("./stt/asr-client");
 	const { smokeTestTtsWorker } = await import("./tts/tts-client");
@@ -151,7 +151,7 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 			pending.push(event);
 		};
 		scope.onmessage = buffer;
-		await import("@musepi/omp-stats/sync-worker");
+		await import("@musepi/musepi-stats/sync-worker");
 		const handler = scope.onmessage;
 		if (handler && handler !== buffer) {
 			for (const event of pending) handler.call(scope, event);
@@ -409,7 +409,7 @@ export async function runCli(argv: string[]): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	const displayVersion = process.env.MUSEPI_VERSION ? `${process.env.MUSEPI_VERSION} (OMP ${VERSION})` : VERSION;
+	const displayVersion = process.env.MUSEPI_VERSION ?? VERSION;
 	return run({ bin: APP_NAME, version: displayVersion, argv: resolved.argv, commands, metadataHelp: showHelp });
 }
 

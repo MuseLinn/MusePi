@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { Model } from "@musepi/pi-ai";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { AcpAgent } from "@musepi/pi-coding-agent/modes/acp/acp-agent";

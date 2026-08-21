@@ -35,7 +35,7 @@ test("getEnabledPlugins caches repeated discovery for the same cwd and home unti
 	await fs.mkdir(path.dirname(pluginPackageJson), { recursive: true });
 	await fs.mkdir(cwd, { recursive: true });
 	await writeJson(path.join(pluginsDir, "package.json"), { dependencies: { "omp-cache-repro": "1.0.0" } });
-	await writeJson(path.join(pluginsDir, "omp-plugins.lock.json"), {
+	await writeJson(path.join(pluginsDir, "musepi-plugins.lock.json"), {
 		plugins: { "omp-cache-repro": { version: "1.0.0", enabled: true, enabledFeatures: null } },
 		settings: {},
 	});

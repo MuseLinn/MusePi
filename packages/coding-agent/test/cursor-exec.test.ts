@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { create, fromBinary } from "@bufbuild/protobuf";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentEvent, AgentTool, AgentToolContext } from "@musepi/pi-agent-core";
 import { type BlockState, handleServerMessage, type ToolCallState } from "@musepi/pi-ai/providers/cursor";
 import { buildPiLsResult, piTruncation } from "@musepi/pi-ai/providers/cursor/exec-modern";

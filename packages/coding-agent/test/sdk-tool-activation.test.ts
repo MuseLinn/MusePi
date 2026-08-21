@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:te
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, StreamFn } from "@musepi/pi-agent-core";
 import type { Model, ToolResultMessage } from "@musepi/pi-ai";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";

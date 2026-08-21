@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { parseKnownModel, semverEqual } from "../identity/classify";
 import { resolveOpenAIDaybreakStandardCost } from "../openai-pricing";
 import type { FetchImpl, ModelSpec } from "../types";
@@ -9,13 +9,19 @@ const DEFAULT_MODEL_LIST_PATHS = ["/codex/models", "/models"] as const;
 const DEFAULT_CONTEXT_WINDOW = 272_000;
 const DEFAULT_MAX_TOKENS = 128_000;
 /**
- * GPT-5.6 luna/sol/terra hard context capacity. Codex discovery omits
- * `context_window` for these SKUs, so the generic {@link DEFAULT_CONTEXT_WINDOW}
- * (272000) would understate the real window — OpenAI's Codex model registry
- * declares context_window = max_context_window = 372000 (#5705). Used as the
- * fallback only when upstream reports no value.
+ * Fallback for GPT-5.6-family SKUs when upstream omits `context_window`: the
+ * generic {@link DEFAULT_CONTEXT_WINDOW} (272000) understates the registry's
+ * former 372000 hard capacity (#5705).
  */
 const GPT_5_6_CONTEXT_WINDOW = 372_000;
+/**
+ * OpenAI enabled a 1M-token window for subscription Codex on GPT-5.6
+ * luna/sol/terra (2026-08-16), but the Codex model registry still reports the
+ * stale 272000 — so the reported value must be floored, not just defaulted
+ * (openai/codex#38917; Codex CLI override `model_context_window = 1000000`).
+ */
+const GPT_5_6_1M_CONTEXT_WINDOW = 1_000_000;
+const CODEX_GPT_5_6_1M_SLUGS: ReadonlySet<string> = new Set(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]);
 const CODEX_REMOTE_COMPACTION = {
 	enabled: true,
 	api: "openai-codex-responses",
@@ -224,14 +230,18 @@ function normalizeCodexModelEntry(entry: unknown, baseUrl: string): NormalizedCo
 	}
 
 	const name = toNonEmptyString(payload.display_name) ?? slug;
-	// Codex discovery omits `context_window` for GPT-5.6 luna/sol/terra; the
-	// generic 272000 fallback understates their real 372000 window (#5705).
+	// Codex discovery historically omitted `context_window` for GPT-5.6-family
+	// SKUs (#5705); luna/sol/terra additionally floor the reported value because
+	// the registry still declares the pre-1M 272000 window.
 	const parsed = parseKnownModel(slug);
 	const fallbackContextWindow =
 		parsed.family === "openai" && semverEqual(parsed.version, "5.6")
 			? GPT_5_6_CONTEXT_WINDOW
 			: DEFAULT_CONTEXT_WINDOW;
-	const contextWindow = toPositiveInt(payload.context_window) ?? fallbackContextWindow;
+	const reportedContextWindow = toPositiveInt(payload.context_window) ?? fallbackContextWindow;
+	const contextWindow = CODEX_GPT_5_6_1M_SLUGS.has(slug)
+		? Math.max(reportedContextWindow, GPT_5_6_1M_CONTEXT_WINDOW)
+		: reportedContextWindow;
 	const maxTokens = Math.min(DEFAULT_MAX_TOKENS, contextWindow);
 	const reasoning = supportsReasoning(payload.default_reasoning_level, payload.supported_reasoning_levels);
 	const input = normalizeInputModalities(payload.input_modalities);

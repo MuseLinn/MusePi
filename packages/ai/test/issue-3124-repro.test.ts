@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { streamBedrock } from "@musepi/pi-ai/providers/amazon-bedrock";
 import { crc32 } from "@musepi/pi-ai/providers/aws-eventstream";
 import type { Context, FetchImpl, Model, Tool } from "@musepi/pi-ai/types";

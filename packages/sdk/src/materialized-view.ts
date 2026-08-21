@@ -275,7 +275,10 @@ export class MaterializedView {
 		const entry: MessageEntry = {
 			type: "message",
 			id: key,
-			parentId: null,
+			// 向前兼容:wire message 携带 parentId(会话内条目树,/tree 语义)时
+			// 原样保留;今天的 live 事件不含该字段 → null(历史快照/旧版
+			// transcript 路径已带真实 parentId,从快照恢复时原样保留)。
+			parentId: message.parentId ?? null,
 			timestamp: new Date(message.timestamp).toISOString(),
 			message,
 		};

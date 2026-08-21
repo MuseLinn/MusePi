@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { type ApiKey, type FetchImpl, getEnvApiKey, getOpenRouterHeaders, type Model, withAuth } from "@musepi/pi-ai";
 import { ProviderHttpError } from "@musepi/pi-ai/error";
 import {

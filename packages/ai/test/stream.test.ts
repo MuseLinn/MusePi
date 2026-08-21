@@ -3,7 +3,7 @@ import { type ChildProcess, execSync, spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Effort } from "@musepi/pi-ai";
 import { __resetVertexTokenCache } from "@musepi/pi-ai/providers/google-auth";
 import { complete, getEnvApiKey, stream } from "@musepi/pi-ai/stream";

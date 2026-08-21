@@ -1,5 +1,5 @@
 import { spyOn } from "bun:test";
-import * as arktype from "@musepi/omptype";
+import * as arktype from "@musepi/musepi-type";
 
 declare global {
 	var __computerSchemaConstructionCount: number;

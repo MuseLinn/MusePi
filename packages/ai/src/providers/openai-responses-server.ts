@@ -9,7 +9,7 @@
  * Inverse direction (source-of-truth for item shapes): ../../providers/openai-responses.ts
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { logger, structuredCloneJSON } from "@musepi/pi-utils";
 import { resolvePromptCacheKey } from "../auth-gateway/http";
 import type { AuthGatewayStreamControl, AuthGatewayParsedRequest as ParsedRequest } from "../auth-gateway/types";

@@ -2231,7 +2231,7 @@ function buildGitLabMcpToolDefinition(tool: Tool): GitLabMcpToolDefinition {
 	return {
 		name: tool.name,
 		originalToolName: tool.name,
-		serverName: "omp",
+		serverName: "musepi",
 		description: tool.description || "",
 		inputSchema: JSON.stringify(
 			schema && typeof schema === "object" ? schema : { type: "object", properties: {}, required: [] },

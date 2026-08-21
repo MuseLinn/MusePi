@@ -425,14 +425,12 @@
 	min-width:0;
 }
 .gui-pane-side,
-.gui-pane-side--immersive,
 .gui-pane-right--inner,
 .gui-header:before
 {
 	box-shadow:none;
 	background:0 0;
 }
-.gui-pane-side--collapsed>*,
 .gui-pane-right--collapsed>*
 {
 	opacity:0;
@@ -541,12 +539,6 @@
 .gui-resize-x:hover:after
 {
 	background:var(--color-accent-bd);
-}
-.gui-role-row>.gui-btn,
-.gui-role-row>.gui-model,
-.gui-role-row>select
-{
-	flex-shrink:0;
 }
 .gui-session-row--unread .gui-session-title:after
 {

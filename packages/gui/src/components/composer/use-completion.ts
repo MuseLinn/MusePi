@@ -3,7 +3,7 @@ import { t } from "../../i18n/index.js";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
 import { autosize } from "../composer-autosize";
-import type { GuiTreeNode } from "../SessionTree";
+import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
 import type { AtCompletionEntry, HashCompletionEntry } from "./completion-menus";
 
@@ -225,10 +225,10 @@ export function useCompletion({
 				// Titles come from the session tree (renames/首条消息 labels);
 				// fetch alongside the list so rows show names, not raw ids.
 				void rpc
-					.request<GuiTreeNode[]>("session.tree", {})
+					.request<SessionListNode[]>("session.tree", {})
 					.then(nodes => {
 						const labels = new Map<string, string>();
-						const walk = (ns: GuiTreeNode[]): void => {
+						const walk = (ns: SessionListNode[]): void => {
 							for (const n of ns) {
 								const label = n.entry.label ?? n.label;
 								if (label) labels.set(n.entry.id, label);

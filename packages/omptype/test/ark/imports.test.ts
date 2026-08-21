@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type BoundModule, type Module, scope, type Type, type } from "@musepi/omptype/ark";
+import { type BoundModule, type Module, scope, type Type, type } from "@musepi/musepi-type/ark";
 import type { Eq } from "./type-assert";
 
 describe("threeSixtyNoScope", () => {

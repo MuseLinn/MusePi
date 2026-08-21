@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { formatHashlineHeader } from "@musepi/hashline";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type {
 	AgentTool,
 	AgentToolContext,

@@ -6,7 +6,7 @@
  * `/v1/healthz` require a bearer token.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { readSseEvents } from "@musepi/pi-utils";
 import type { AuthCredential, DisabledCredentialSummary } from "../auth-storage";
 import type {

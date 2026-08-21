@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 
 export const commitTypeSchema = type(
 	"'feat' | 'fix' | 'refactor' | 'perf' | 'docs' | 'test' | 'build' | 'ci' | 'chore' | 'style' | 'revert'",

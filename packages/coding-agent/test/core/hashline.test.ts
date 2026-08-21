@@ -7,7 +7,7 @@ import {
 	formatHashlineHeader,
 	MismatchError as HashlineMismatchError,
 } from "@musepi/hashline";
-import { type Type, type } from "@musepi/omptype";
+import { type Type, type } from "@musepi/musepi-type";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import {
 	canonicalSnapshotKey,

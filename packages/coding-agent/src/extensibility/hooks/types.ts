@@ -1,6 +1,6 @@
-import type { type as ArkType } from "@musepi/omptype";
-import type * as TypeBox from "@musepi/omptype/typebox";
-import type * as zod from "@musepi/omptype/zod";
+import type { type as ArkType } from "@musepi/musepi-type";
+import type * as TypeBox from "@musepi/musepi-type/typebox";
+import type * as zod from "@musepi/musepi-type/zod";
 import type { ImageContent, Message, Model, TextContent } from "@musepi/pi-ai";
 import type { Component, TUI } from "@musepi/pi-tui";
 import type { logger as PiLogger } from "@musepi/pi-utils";

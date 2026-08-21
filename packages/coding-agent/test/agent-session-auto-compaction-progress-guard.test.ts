@@ -1,19 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as fs from "node:fs";
-import * as path from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Agent } from "@musepi/pi-agent-core";
 import * as compactionModule from "@musepi/pi-agent-core/compaction";
-import { resolveThresholdTokens, shouldCompact } from "@musepi/pi-agent-core/compaction";
+import { type CompactionPreparation, resolveThresholdTokens, shouldCompact } from "@musepi/pi-agent-core/compaction";
+import type { AssistantMessage } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { loadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
-import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import type { CompactionEntry } from "@musepi/pi-coding-agent/session/session-entries";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
+
+it("clamps a reserve exceeding the window for small-window threshold recovery bands", () => {
+	const settings = {
+		enabled: true,
+		strategy: "context-full" as const,
+		thresholdTokens: -1,
+		thresholdPercent: -1,
+		reserveTokens: 16384,
+		keepRecentTokens: 10000,
+		autoContinue: true,
+	};
+	const threshold = resolveThresholdTokens(4096, settings);
+
+	expect(threshold).toBe(3482);
+	expect(Math.floor(threshold * 0.8)).toBe(2785);
+	expect(shouldCompact(3600, 4096, settings)).toBe(true);
+});
 
 /**
  * Regression test for the auto-compaction thrash loop.
@@ -31,57 +44,47 @@ import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
  * post-maintenance headroom check; with no headroom it pauses and emits a single
  * warning notice instead of looping.
  */
+
 describe("AgentSession auto-compaction progress guard", () => {
-	let tempDir: TempDir;
 	let session: AgentSession;
 	let sessionManager: SessionManager;
 	let authStorage: AuthStorage;
 	let modelRegistry: ModelRegistry;
+	let compactHookEnabled = true;
 
 	const NOTICE_SOURCE = "compaction";
 	const NO_PROGRESS_FRAGMENT = "Compaction freed too little context to make progress";
 
-	beforeEach(async () => {
-		tempDir = TempDir.createSync("@pi-auto-compaction-progress-");
-
-		// Short-circuit the actual summarization so the test makes no LLM call: the
-		// hook supplies the compaction result, then the production tail (events,
-		// progress guard, continuation scheduling) runs exactly as in a real pass.
-		const extensionsDir = path.join(getProjectAgentDir(tempDir.path()), "extensions");
-		fs.mkdirSync(extensionsDir, { recursive: true });
-		const extensionPath = path.join(extensionsDir, "compaction-short-circuit.ts");
-		fs.writeFileSync(
-			extensionPath,
-			[
-				"export default function(pi) {",
-				'\tpi.on("session_before_compact", async (event) => {',
-				"\t\treturn {",
-				"\t\t\tcompaction: {",
-				'\t\t\t\tsummary: "compacted",',
-				"\t\t\t\tshortSummary: undefined,",
-				"\t\t\t\tfirstKeptEntryId: event.preparation.firstKeptEntryId,",
-				"\t\t\t\ttokensBefore: event.preparation.tokensBefore,",
-				"\t\t\t\tdetails: {},",
-				"\t\t\t},",
-				"\t\t};",
-				"\t});",
-				"}",
-			].join("\n"),
-		);
-
-		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
+	beforeAll(async () => {
+		authStorage = await AuthStorage.create(":memory:");
 		authStorage.setRuntimeApiKey("anthropic", "test-key");
 		modelRegistry = new ModelRegistry(authStorage);
-		sessionManager = SessionManager.create(tempDir.path(), tempDir.path());
+	});
 
-		const extensionsResult = await loadExtensions([extensionPath], tempDir.path());
-		const extensionRunner = new ExtensionRunner(
-			extensionsResult.extensions,
-			extensionsResult.runtime,
-			tempDir.path(),
-			sessionManager,
-			modelRegistry,
-		);
+	beforeEach(() => {
+		compactHookEnabled = true;
+		sessionManager = SessionManager.inMemory();
+
+		// The progress-guard tests exercise AgentSession's post-compaction state
+		// transitions, not extension discovery. Keep the production hook boundary
+		// while returning the same short-circuit result without compiling a
+		// temporary extension for every test.
+		const extensionRunner = {
+			hasHandlers: (type: string) => compactHookEnabled && type === "session_before_compact",
+			emit: async (event: { type: string; preparation?: CompactionPreparation }) => {
+				if (event.type !== "session_before_compact" || !event.preparation) return undefined;
+				return {
+					compaction: {
+						summary: "compacted",
+						shortSummary: undefined,
+						firstKeptEntryId: event.preparation.firstKeptEntryId,
+						tokensBefore: event.preparation.tokensBefore,
+						details: {},
+					},
+				};
+			},
+			emitBeforeAgentStart: async () => undefined,
+		};
 
 		const bundled = getBundledModel("anthropic", "claude-sonnet-4-5");
 		if (!bundled) {
@@ -116,18 +119,17 @@ describe("AgentSession auto-compaction progress guard", () => {
 				"compaction.autoContinue": true,
 			}),
 			modelRegistry,
-			extensionRunner,
+			extensionRunner: extensionRunner as never,
 		});
 	});
 
 	afterEach(async () => {
-		try {
-			await session?.dispose();
-		} finally {
-			authStorage?.close();
-			await tempDir?.remove();
-			vi.restoreAllMocks();
-		}
+		await session?.dispose();
+		vi.restoreAllMocks();
+	});
+
+	afterAll(() => {
+		authStorage?.close();
 	});
 
 	/** Build a threshold-tripping assistant turn (contextWindow 200k, ~80% threshold). */
@@ -251,23 +253,6 @@ describe("AgentSession auto-compaction progress guard", () => {
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(1);
 		expect(noProgress[0].level).toBe("warning");
-	});
-
-	it("clamps a reserve exceeding the window for small-window threshold recovery bands", () => {
-		const settings = {
-			enabled: true,
-			strategy: "context-full" as const,
-			thresholdTokens: -1,
-			thresholdPercent: -1,
-			reserveTokens: 16384,
-			keepRecentTokens: 10000,
-			autoContinue: true,
-		};
-		const threshold = resolveThresholdTokens(4096, settings);
-
-		expect(threshold).toBe(3482);
-		expect(Math.floor(threshold * 0.8)).toBe(2785);
-		expect(shouldCompact(3600, 4096, settings)).toBe(true);
 	});
 
 	it("blocks todo continuations after no-headroom compaction when auto-continue is disabled", async () => {
@@ -522,6 +507,75 @@ describe("AgentSession auto-compaction progress guard", () => {
 		expect(continueSpy).not.toHaveBeenCalled();
 		const noProgress = notices.filter(n => n.source === NOTICE_SOURCE && n.message.includes(NO_PROGRESS_FRAGMENT));
 		expect(noProgress.length).toBe(0);
+	});
+
+	it("rejects a stale pre-compaction anchor that lands past the rebase cutoff", async () => {
+		// Regression (#8887): after a mid-run compaction rebases the in-flight
+		// snapshot, an in-flight provider response whose request was assembled
+		// BEFORE the compaction lands past the rebase cutoff carrying
+		// pre-compaction usage. getContextBreakdown used message position as a
+		// freshness proxy (anchorIndex >= cutoffCount), so that stale anchor
+		// out-ranked the rebased estimate and reported a ~2.6x phantom overflow —
+		// tripping the "freed too little context" guard / frame-rescue path.
+		seedPriorTurns();
+		activateOngoingGoal("stale-anchor");
+		const gate = Promise.withResolvers<void>();
+		const firstPromptCall = Promise.withResolvers<void>();
+		vi.spyOn(session.agent, "prompt").mockImplementation(() => {
+			firstPromptCall.resolve();
+			return gate.promise as never;
+		});
+		vi.spyOn(session.agent, "continue").mockResolvedValue();
+
+		const { promise: compactionDone, resolve: onCompactionDone } = Promise.withResolvers<void>();
+		session.subscribe(event => {
+			if (event.type === "auto_compaction_end") onCompactionDone();
+		});
+
+		// Hold a request in flight so the pending snapshot survives the compaction.
+		const inFlight = session.prompt("x".repeat(600_000));
+		await firstPromptCall.promise;
+
+		// Mid-run compaction fires and rebases the pending snapshot to the summary.
+		const trigger = highUsageAssistant();
+		session.agent.emitExternalEvent({ type: "message_end", message: trigger });
+		session.agent.emitExternalEvent({ type: "agent_end", messages: [trigger] });
+		await compactionDone;
+
+		const rebasedTokens = session.getContextBreakdown()?.usedTokens ?? 0;
+		expect(rebasedTokens).toBeLessThan(50_000);
+		// The trigger was persisted before the compaction, so its snapshot carries
+		// the pre-compaction epoch — the exact stamp a real in-flight response has.
+		const preCompactionEpoch = (trigger as AssistantMessage).contextSnapshot?.compactionEpoch ?? 0;
+
+		const staleAnchor = {
+			role: "assistant",
+			content: [{ type: "text", text: "stale in-flight response" }],
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet-4-5",
+			stopReason: "stop",
+			usage: {
+				input: 360000,
+				output: 500,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 360500,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			contextSnapshot: { promptTokens: 360000, nonMessageTokens: 100, compactionEpoch: preCompactionEpoch },
+			timestamp: Date.now() + 1,
+		} as AssistantMessage;
+		sessionManager.appendMessage(staleAnchor);
+		session.agent.replaceMessages([...session.agent.state.messages, staleAnchor]);
+
+		// Freshness marker rejects the stale anchor: usage tracks the rebased
+		// estimate, not the ~360k pre-compaction figure.
+		expect(session.getContextBreakdown()?.usedTokens ?? 0).toBeLessThan(50_000);
+
+		gate.resolve();
+		await inFlight.catch(() => {});
+		await session.waitForIdle();
 	});
 	/**
 	 * Seed several large prior turns into the session branch so `prepareCompaction`
@@ -806,12 +860,34 @@ describe("AgentSession auto-compaction progress guard", () => {
 		);
 	});
 
-	it("does not restore a length stop after handoff recovery commits", async () => {
-		session.settings.set("compaction.strategy", "handoff");
+	it("drops a length stop and retries after handoff recovery commits", async () => {
+		session.settings.set("compaction.methodOrder", ["handoff", "soft"]);
+		session.settings.set("compaction.enabled", true);
+		session.settings.set("compaction.keepRecentTokens", 1);
+		compactHookEnabled = false;
+		sessionManager.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "completed seed" }],
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet-4-5",
+			stopReason: "stop",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 2,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now(),
+		});
 		session.settings.set("contextPromotion.enabled", false);
 		const promptSpy = vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
 		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
-		const handoffSpy = vi.spyOn(session, "handoff").mockResolvedValue({ document: "handoff document" });
+		const generateHandoffSpy = vi
+			.spyOn(compactionModule, "generateHandoffFromContext")
+			.mockResolvedValue("handoff document");
 
 		const { promise: compactionDone, resolve: onCompactionDone } = Promise.withResolvers<void>();
 		session.subscribe(event => {
@@ -835,15 +911,20 @@ describe("AgentSession auto-compaction progress guard", () => {
 			},
 			timestamp: Date.now(),
 		};
+		sessionManager.appendMessage(assistantMsg);
 		session.agent.emitExternalEvent({ type: "message_end", message: assistantMsg });
 		session.agent.emitExternalEvent({ type: "agent_end", messages: [assistantMsg] });
 
 		await compactionDone;
 		await session.waitForIdle();
 
-		expect(promptSpy).toHaveBeenCalledTimes(1);
-		expect(handoffSpy).toHaveBeenCalledTimes(1);
-		expect(continueSpy).not.toHaveBeenCalled();
+		expect(promptSpy).not.toHaveBeenCalled();
+		expect(generateHandoffSpy).toHaveBeenCalledTimes(1);
+		expect(continueSpy).toHaveBeenCalledTimes(1);
+		expect(sessionManager.getBranch().at(-1)).toMatchObject({
+			type: "compaction",
+			summary: "handoff document",
+		});
 		expect(sessionManager.getBranch()).not.toContainEqual(
 			expect.objectContaining({
 				type: "message",
@@ -1111,7 +1192,7 @@ describe("AgentSession auto-compaction progress guard", () => {
 		// Pin the threshold so the recovery band is exact: floor(76384 * 0.8) = 61107.
 		session.settings.set("compaction.thresholdTokens", 76384);
 		session.settings.set("compaction.thresholdPercent", -1);
-		session.settings.set("compaction.strategy", "context-full");
+		session.settings.set("compaction.methodOrder", ["soft"]);
 		session.settings.set("compaction.dropUseless", true);
 		session.settings.set("compaction.supersedeReads", true);
 		session.settings.set("compaction.keepRecentTokens", 10000);

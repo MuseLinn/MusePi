@@ -10,7 +10,7 @@
  * the server only checks a bearer token against an allow-list per request.
  */
 
-import { type Type, type } from "@musepi/omptype";
+import { type Type, type } from "@musepi/musepi-type";
 import { logger } from "@musepi/pi-utils";
 import type { AuthStorage, StoredCredentialBlock } from "../auth-storage";
 import { parseBind } from "../utils/parse-bind";

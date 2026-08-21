@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { OmpErrors, type Type } from "@musepi/omptype";
+import { OmpErrors, type Type } from "@musepi/musepi-type";
 import { getAgentDir, isEnoent, logger } from "@musepi/pi-utils";
 import { JSONC, YAML } from "bun";
 

@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { splitAddressableFileLines } from "@musepi/hashline";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type {
 	AgentTool,
 	AgentToolContext,

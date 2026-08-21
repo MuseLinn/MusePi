@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, AgentBusyError, type AgentEvent, type AgentTool, ThinkingLevel } from "@musepi/pi-agent-core";
 import type { SimpleStreamOptions, ToolResultMessage } from "@musepi/pi-ai";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";

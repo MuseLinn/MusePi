@@ -18,7 +18,7 @@ import { Database } from "bun:sqlite";
  *   bun scripts/bench-title-models.ts --count 30 --seed 42
  *   bun scripts/bench-title-models.ts --models lfm2-350m,gemma-270m
  *   bun scripts/bench-title-models.ts --ollama-url http://spark.internal:11434 --ollama-models llama3.2:3b,lfm2:2.6b
- *   bun scripts/bench-title-models.ts --db ~/.omp/agent/history.db --out bench.json
+ *   bun scripts/bench-title-models.ts --db ~/.musepi/agent/history.db --out bench.json
  */
 import * as os from "node:os";
 import * as path from "node:path";

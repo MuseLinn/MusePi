@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
-import type * as TypeBox from "@musepi/omptype/typebox";
-import * as zod from "@musepi/omptype/zod";
+import { type } from "@musepi/musepi-type";
+import type * as TypeBox from "@musepi/musepi-type/typebox";
+import * as zod from "@musepi/musepi-type/zod";
 import * as piCodingAgent from "@musepi/pi-coding-agent";
 import { GreenCommand } from "@musepi/pi-coding-agent/extensibility/custom-commands/bundled/ci-green";
 import type { CustomCommandAPI } from "@musepi/pi-coding-agent/extensibility/custom-commands/types";

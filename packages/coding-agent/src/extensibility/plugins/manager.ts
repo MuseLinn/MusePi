@@ -173,7 +173,7 @@ export class PluginManager {
 					pkgJsonPath,
 					JSON.stringify(
 						{
-							name: "omp-plugins",
+							name: "musepi-plugins",
 							private: true,
 							dependencies: {},
 						},

@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { scope, type } from "@musepi/omptype/ark";
+import { scope, type } from "@musepi/musepi-type/ark";
 
 it("2 literal branches", () => {
 	// should not use a switch with <=2 branches to avoid needless convolution

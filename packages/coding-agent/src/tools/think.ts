@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import type { Model } from "@musepi/pi-ai";
 import { type Component, Markdown } from "@musepi/pi-tui";

@@ -6,7 +6,7 @@
  * lifecycle hook dispatch.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { agentLoop } from "@musepi/pi-agent-core/agent-loop";
 import {
 	type AgentTelemetryConfig,

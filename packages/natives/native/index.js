@@ -67,6 +67,7 @@ export const matchesKey = nativeBindings.matchesKey;
 export const matchesKittySequence = nativeBindings.matchesKittySequence;
 export const matchesLegacySequence = nativeBindings.matchesLegacySequence;
 export const mmrRerankIndices = nativeBindings.mmrRerankIndices;
+export const nodeChainAt = nativeBindings.nodeChainAt;
 export const parseKey = nativeBindings.parseKey;
 export const parseKittySequence = nativeBindings.parseKittySequence;
 export const pdfToMarkdown = nativeBindings.pdfToMarkdown;
@@ -101,6 +102,14 @@ export const Ellipsis = {
 export const Encoding = {
 	O200kBase: "O200kBase",
 	Cl100kBase: "Cl100kBase",
+	ClaudeV3: "ClaudeV3",
+	ClaudeV47: "ClaudeV47",
+	ClaudeV5: "ClaudeV5",
+	ClaudeV5Sonnet: "ClaudeV5Sonnet",
+	Qwen3: "Qwen3",
+	DeepSeekV3: "DeepSeekV3",
+	KimiK2: "KimiK2",
+	Glm5: "Glm5",
 };
 export const FileType = {
 	File: 1,

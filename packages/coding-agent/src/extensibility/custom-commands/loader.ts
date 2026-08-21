@@ -6,8 +6,8 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
-import * as zod from "@musepi/omptype/zod";
+import { type } from "@musepi/musepi-type";
+import * as zod from "@musepi/musepi-type/zod";
 import { getAgentDir, getProjectDir, isEnoent, logger } from "@musepi/pi-utils";
 import { getConfigDirs } from "../../config";
 

@@ -11,7 +11,7 @@
  * stacked, each showing its tool calls and streamed text as it works.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";

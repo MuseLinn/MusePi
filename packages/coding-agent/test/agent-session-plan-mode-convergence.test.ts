@@ -11,7 +11,7 @@
  *      user), and either decision tool resets the counter.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentTool, type StreamFn } from "@musepi/pi-agent-core";
 import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";
 import { getBundledModel } from "@musepi/pi-catalog/models";

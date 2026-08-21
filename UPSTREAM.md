@@ -5,6 +5,40 @@
 > 此后 oh-my-pi / Pi / DSH / opencode 等一律视为**参考吸收来源**（按需吸收 bugfix
 > 与 feature，无版本对齐义务）；MusePi 自己的版本、行为与文档即权威。
 
+## 参考吸收记录（oh-my-pi 17.4.0,2026-08-21 三轮完成）
+
+> **决策（用户拍板）**：17.4.0 吸收为三轮——① 3 个 bugfix + extendedContext ② 投机式压缩 + #8887 epoch 集群(含 natives tokenizer 重建) ③ xAI Responses API 路由。版本线已独立为 **0.4.2**(21 包统一,不再镜像上游 17.x),MusePi 为独立产品。
+
+### 第一轮(2026-08-21):版本 0.4.2 + 3 bugfix + extendedContext
+
+- **版本 0.4.2**:21 个 workspace 包统一(原 17.3.4 线 + 杂散线 collab-proto 17.2.8/desktop-web 16.3.6/tool-select 17.2.2/sdk 0.3.1 全对齐);root workspaces.catalog + Cargo.toml + MUSEPI_VERSION + gui/update-manifest + mobile + branding/productVersion;cli.ts:412/main.ts:1227 显示去 `(OMP …)` 后缀→`musepi/0.4.2`;依赖字面 pin 同步(sdk/collab-proto)
+- **6 个 update-cli 测试修复**(品牌漂移非环境):fixture URL can1357/oh-my-pi→MuseLinn/MusePi;错误消息按 launcher 基名;updateViaShimTakeover 从 shimPath 基名推导 exe/shim 名(兼容旧 omp.* 与 musepi.*);installerHint 改 npm 通道;sarif informationUri 改仓库。update-cli 69/69
+- **#8899** commit 拆分二进制补丁:parseFileDiffs split 改 `/^(?=diff --git )/m`(commit/git/diff.ts),commit 77/77
+- **#8891** `omp update --cwd` 崩溃:resolveCliArgv + LAUNCH_FLAG_COMMANDS{launch,acp} + stripLaunchGlobalFlags(cli-commands.ts)
+- **#8955** after_provider_response 模型串线:runner.ts emitAfterProviderResponse(response, model) → createContext(model) + 专测移植 86/86
+- **extendedContext**(5 文件+测试):settings-schema(boolean,tab context,默认 true)+ settings.ts SettingSignal("extendedContext") + onExtendedContextChanged + model-registry isExtendedContextEnabledFromSettings + reapplyModelPolicies(mtime 置 null + refresh("offline")) + #applyHardcodedModelPolicies 按 longContext.inputThreshold 钳制 + agent-session #reapplyExtendedContextPolicy + builtin-modes /extended-context 命令。测试用 settings.override()(fork overrides 层遮蔽 global);gpt-5.6-sol openai 272K / openai-codex 372K 无 tier / terra 1050K。model-registry+available-commands 94/94
+
+### 第二轮(2026-08-21):投机式压缩 + #8887 epoch 集群(~45 TS + natives)
+
+- **compaction 8 文件 + tokenizer.ts 全重写(Tokenizer 类 + tokenizerEncodingForModel) + transcript-tokens.ts 新文件**:compaction.ts 630 行核心 + entries/messages/message-cache/openai/branch-summarization/pruning/shake/utils
+- **session-stats.ts 272 行重写**(锚点算术,get compactionEpoch())、session-maintenance.ts 17.4.0(2973 行 diff)、compaction-methods/speculation-lead.ts 新文件、context-usage、turn-recovery(17.4.0 + 重放 fork cursor-exec 守卫)、session-context、session-entries(重加 modeId)、session-manager(重加 truncateToIndex)、settings-schema(compaction.methodOrder/asyncEnabled 替换 strategy/remoteEnabled,整段替换)、settings.ts(strategy→methodOrder 迁移)、compact-modes、agent-session(epoch 接线 + compactionSpeculation getter + generateHandoffDocument host)、legacy-shim(estimateTokens 用 legacyTokenizer 包装)、sdk/session-loader 等 API 漂移 + 15+ 测试文件 17.4.0 化
+- **natives 重建(最大坑)**:utok 模块(4963 行 Rust)+ tokens.rs 10 编码 + data/ 权重表 + Cargo.toml(heapless 0.9/xutf 1.4/zstd 0.13/fancy-regex 0.16,**必须放 [workspace.dependencies] 段**)+ BUILD.bazel LINKEDIT。**bazel crate_universe 在 stable cargo 编译 xutf 挂**(nightly feature)→ 先 `cargo generate-lockfile` 更新 Cargo.lock 再走本地 napi 构建(rustup nightly-2026-07-28)。**hash 门控坑**:native/.source-hash 匹配时跳过真实构建留下 2.5KB 占位 .node("slice is not valid mach-o")——rm -f .source-hash 强制重建(15m55s)。构建后手动 `bun scripts/gen-enums.ts` 重生成 index.js Encoding 枚举(10 成员)
+- agent 493/493;natives 137MB Mach-O 有效
+
+### 第三轮(2026-08-21):xAI Responses API 路由 + 仓库兼容
+
+- openai-responses/completions/shared 17.4.0 化(shouldDropAutoToolChoiceForReasoning、flattenExclusiveRequiredRootUnion、reasoningSummary 用 model.compat.supportsReasoningSummary)、ai/utils/schema/{wire,strict-tool-validation}.ts、compat/openai.ts + identity/family.ts(qwenTemplateReasoningEffort)、models.json xai/xai-oauth 段整体替换(含 grok supportsReasoningSummary/supportsPenaltyAndStopParams)、opencode-go 路由器完整替换(OPENCODE_GO_API_ID_OVERRIDES/OPENCODE_ZEN_API_ID_OVERRIDES + fallbackApi 从 sibling gateway 借 routes + dropCachedModelIdsOnStaticMismatch)、types.ts 加 qwenTemplateReasoningEffort
+- 测试修复:issue-931(用 buildModel 构造)、gitlab serverName "omp"→"musepi"、openai-compat-user-agent 正则 `^omp\/`→`^musepi\/`;**openai-completions-cache-affinity.test.ts 移除 fork 定制 xAI 块**(grok-code-fast-1 已改走 openai-responses,openai-completions x-grok-conv-id 路径死)+ 顶层模型改 openAI56CompletionsModel
+- **agent-session.handoff() 漏接修复**:fork 保留了 17.3.4 的 #handoff.handoff(生成+切新会话),上游 17.4.0 为 #maintenance.handoff(文档作为 in-place compaction entry 提交)——已改接 maintenance,handoff 测试 33/35(剩 2 个上游也挂的预存在超时)
+- ai 3876/0(clean run;codex 流式 2 测试套件并行下 5s 超时为负载 flake,单跑 37/37 过);catalog 593/1(**issue-887 qwen3.7-max 上游 17.4.0 本身也失败,已实测**);agent 493/0
+
+### 已知缺口(如实记录)
+
+1. **2 个 progress-guard 回归测试**(agent-session-auto-compaction-progress-guard 27/29):代码链(agent.continue/scheduleAgentContinue/scheduleCompactionContinuation/isTerminalTextAssistantAnswer/findLastAssistantMessage/emitExternalEvent)与上游字节一致,仅 fork 的 session.prompt 为 17.3.4 版(上游 17.4.0 重构为 #promptWithMessage + dispatched 流程)导致续跑触发路径差异;session.prompt 重构是 daemon 耦合大改动,留作单独任务
+2. **issue-887 catalog 测试失败**:上游 17.4.0 本身同样失败,非移植问题
+3. **codex 流式 2 测试并行 flake**:5s 超时,单跑全过,非回归
+4. 候选未做:registerFileWriteFallback/DeleteFallback(17.3.6)、/cleanse 17.4.0 增强、`omp ps`、statusLine.contextLine、composer.shape、Anthropic map-reduce withRetry→retryTransientCompletion(2 文件小改)
+
 ## 同步状态（历史记录，截至归档）
 
 - 数据源：本地 oh-my-pi 仓库（`/Users/muselinn/harness-engineering/oh-my-pi`），已 fetch 全部 tags

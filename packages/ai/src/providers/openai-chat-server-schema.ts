@@ -7,7 +7,7 @@
  * `stream_options.include_obfuscation`) — does not trip 400s on shapes we simply ignore.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type {
 	ChatCompletionContentPart,
 	ChatCompletionCreateParams,

@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, ToolTier } from "@musepi/pi-agent-core";
 import securityScanDescription from "../prompts/tools/security-scan.md" with { type: "text" };
 import { selectSecurityAccount } from "../security/auth";

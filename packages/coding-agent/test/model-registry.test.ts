@@ -7,7 +7,7 @@ import { Effort, type FetchImpl, type Model, type OpenAICompat, type ThinkingCon
 import { buildModel } from "@musepi/pi-catalog/build";
 import { writeModelCache } from "@musepi/pi-catalog/model-cache";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resetSettingsForTest, settings, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 
@@ -2372,6 +2372,35 @@ describe("ModelRegistry", () => {
 			expect(suppressible.isSelectorSuppressed("google-antigravity/gemini-3-pro")).toBe(true);
 			expect(suppressible.isSelectorSuppressed("google-antigravity/gemini-3-pro-low")).toBe(true);
 			expect(suppressible.isSelectorSuppressed("google-antigravity/gemini-2.5-pro")).toBe(false);
+		});
+	});
+	describe("extended context", () => {
+		test("off caps premium long-context models at the standard-pricing threshold", async () => {
+			await Settings.init({ inMemory: true, overrides: { extendedContext: false } });
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+
+			// GPT-5.6 bills 2x input above 272K (API tier); the Codex variant has
+			// its own 372K window with no long-context tier, so it never clamps.
+			expect(registry.find("openai", "gpt-5.6-sol")?.contextWindow).toBe(272_000);
+			expect(registry.find("openai-codex", "gpt-5.6-sol")?.contextWindow).toBe(372_000);
+			// Standard-priced 1M models (no long-context tier) keep their window.
+			expect(registry.find("anthropic", "claude-opus-4-8")?.contextWindow).toBe(1_000_000);
+		});
+
+		test("reapplyModelPolicies re-clamps and restores premium windows on toggle", async () => {
+			await Settings.init({ inMemory: true, overrides: { extendedContext: true } });
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
+
+			settings.override("extendedContext", false);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(272_000);
+
+			settings.override("extendedContext", true);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
+			// The Codex variant is a 372K model without a long-context tier.
+			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(372_000);
 		});
 	});
 });

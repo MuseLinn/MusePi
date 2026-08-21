@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { AgentPauseGate, agentLoop, agentPauseGate } from "@musepi/pi-agent-core";
 import type { AgentContext, AgentLoopConfig, AgentMessage, AgentTool } from "@musepi/pi-agent-core/types";
 import type { Message } from "@musepi/pi-ai";

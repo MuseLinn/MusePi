@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { renderToolInventory } from "../src/dialect/inventory";
 import type { InbandTool } from "../src/dialect/types";
 

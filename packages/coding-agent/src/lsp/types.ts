@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { TOOL_TIMEOUTS } from "../tools/tool-timeouts";
 
 // =============================================================================

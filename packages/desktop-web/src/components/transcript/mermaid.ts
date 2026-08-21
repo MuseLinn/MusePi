@@ -7,7 +7,7 @@ export type MermaidMode = "svg" | "ascii";
 /** Chat-settings pref (Settings → 聊天 → Mermaid 渲染), default SVG. */
 export function mermaidMode(): MermaidMode {
 	try {
-		return localStorage.getItem("omp-gui-chat-mermaid") === "ascii" ? "ascii" : "svg";
+		return localStorage.getItem("musepi-gui-chat-mermaid") === "ascii" ? "ascii" : "svg";
 	} catch {
 		return "svg";
 	}

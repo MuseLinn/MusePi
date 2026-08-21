@@ -16,34 +16,31 @@
  * again; the settings footer button reopens it on demand.
  */
 
-import {
-	setLocale,
-	t,
-	type TranslationKey,
-	useAccentPreference,
-	useThemePreference,
-} from "@musepi/desktop-web";
+import { setLocale, type TranslationKey, t, useAccentPreference, useThemePreference } from "@musepi/desktop-web";
 import { Download, KeyRound, Languages, MessagesSquare, Palette, Settings2, Sparkles, SquareTerminal } from "lucide";
-import { GuiSelect } from "./GuiSelect";
 import { MorphIcon } from "morphicons/react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
+import { DialogFrame } from "./DialogFrame";
+import { FadeScroll } from "./FadeScroll";
+import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { Pop } from "./Pop";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 200;
+
+import { petForId } from "../lib/pet";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { PersonalizeSetup } from "./PersonalizeSetup";
 import { PetSprite } from "./PetSprite";
-import { petForId } from "../lib/pet";
 
 const STEPS = [
 	{ icon: Languages, key: "onboarding step1" },
@@ -331,6 +328,8 @@ const EMPTY_FORM = {
 	api: "openai-completions",
 	modelId: "",
 	modelName: "",
+	// Models adopted from the "fetch available models" interrogation.
+	adopted: [] as { id: string; name?: string }[],
 };
 
 /** Step 4 — provider setup: builtin OAuth/API-key rows + custom
@@ -350,6 +349,13 @@ function ProviderSetup({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [added, setAdded] = useState<{ name: string } | null>(null);
+	// "Fetch available models" interrogation (settings custom-provider
+	// parity): candidates the user adopts into the form, never config
+	// written behind their back.
+	const [candidates, setCandidates] = useState<{ id: string; name?: string }[] | null>(null);
+	const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+	const [fetchingModels, setFetchingModels] = useState(false);
+	const [fetchError, setFetchError] = useState<string | null>(null);
 	// Connection test.
 	const [testing, setTesting] = useState(false);
 	const [testOk, setTestOk] = useState(false);
@@ -411,10 +417,7 @@ function ProviderSetup({
 			setApiProviders(api);
 			// Multi-account menus: fetch per-provider credentials for
 			// everything logged-in / configured.
-			const ids = [
-				...oauth.filter(p => p.loggedIn).map(p => p.id),
-				...api.filter(p => p.configured).map(p => p.id),
-			];
+			const ids = [...oauth.filter(p => p.loggedIn).map(p => p.id), ...api.filter(p => p.configured).map(p => p.id)];
 			const entries = await Promise.all(
 				ids.map(async id => {
 					try {
@@ -576,14 +579,68 @@ function ProviderSetup({
 		}
 	};
 
+	/** Ask the endpoint the form currently shows which models it serves. The
+	 *  draft — including a key typed but not yet saved — is sent as-is; the
+	 *  reply is candidates the user picks from, never configuration written
+	 *  behind them. A protocol with no readable listing or a dead endpoint
+	 *  is not a dead end: the failure shows next to the form's rows. */
+	const fetchModels = async (): Promise<void> => {
+		if (!rpc) return;
+		setFetchError(null);
+		setFetchingModels(true);
+		try {
+			const result = await rpc.request<{ models?: { id: string; name?: string }[] }>("models.discover", {
+				baseUrl: form.baseUrl,
+				api: form.api,
+				provider: form.name,
+				...(form.apiKey ? { apiKey: form.apiKey } : {}),
+			});
+			const models = result?.models ?? [];
+			if (models.length === 0) {
+				setFetchError(t("no models found at this endpoint"));
+				return;
+			}
+			setCandidates(models);
+			setPicked(new Set(models.map(m => m.id)));
+		} catch (err) {
+			setFetchError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setFetchingModels(false);
+		}
+	};
+
+	/** Adopt the checked candidates into the form's model list. */
+	const adoptSelected = (): void => {
+		if (!candidates) return;
+		const ids = new Set(form.adopted.map(m => m.id));
+		const next = [...form.adopted];
+		for (const candidate of candidates) {
+			if (picked.has(candidate.id) && !ids.has(candidate.id)) {
+				next.push({ id: candidate.id, ...(candidate.name ? { name: candidate.name } : {}) });
+			}
+		}
+		setForm(v => ({ ...v, adopted: next }));
+		setCandidates(null);
+		setPicked(new Set());
+	};
+
+	/** Drop one adopted model row from the form. */
+	const removeAdopted = (id: string): void => {
+		setForm(v => ({ ...v, adopted: v.adopted.filter(m => m.id !== id) }));
+	};
+
 	const submit = async (): Promise<void> => {
 		setError(null);
 		if (!rpc) {
 			setError(t("not connected"));
 			return;
 		}
-		if (!form.name.trim() || !form.baseUrl.trim() || !form.modelId.trim()) {
-			setError(t("provider name, base URL and model id are required"));
+		if (
+			!form.name.trim() ||
+			!form.baseUrl.trim() ||
+			(form.modelId.trim().length === 0 && form.adopted.length === 0)
+		) {
+			setError(t("provider name, base URL and at least one model are required"));
 			return;
 		}
 		setBusy(true);
@@ -594,7 +651,12 @@ function ProviderSetup({
 					baseUrl: form.baseUrl.trim(),
 					...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
 					...(form.api !== "openai-completions" ? { api: form.api } : {}),
-					models: [{ id: form.modelId.trim(), ...(form.modelName.trim() ? { name: form.modelName.trim() } : {}) }],
+					models: [
+						...form.adopted.map(m => ({ id: m.id, ...(m.name ? { name: m.name } : {}) })),
+						...(form.modelId.trim()
+							? [{ id: form.modelId.trim(), ...(form.modelName.trim() ? { name: form.modelName.trim() } : {}) }]
+							: []),
+					],
 				},
 			});
 			setAdded({ name: form.name.trim() });
@@ -685,9 +747,7 @@ function ProviderSetup({
 					<div key={c.id} className="gui-creds-row">
 						<div className="min-w-0 flex-1">
 							<div className="truncate text-[13px] text-[var(--color-text)]">{c.accountLabel}</div>
-							{c.note && (
-								<div className="truncate text-[12px] text-[var(--color-text-faint)]">{c.note}</div>
-							)}
+							{c.note && <div className="truncate text-[12px] text-[var(--color-text-faint)]">{c.note}</div>}
 						</div>
 						<button
 							type="button"
@@ -735,12 +795,8 @@ function ProviderSetup({
 	const matchQ = (name: string): boolean => !q || name.toLowerCase().includes(q);
 	const visibleBuiltins = (builtins ?? [])
 		.filter(p => matchQ(p.name))
-		.sort(
-			(a, b) => Number(b.loggedIn) - Number(a.loggedIn) || a.name.localeCompare(b.name, "zh"),
-		);
-	const visibleImportable = importable
-		.filter(p => matchQ(p.name))
-		.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+		.sort((a, b) => Number(b.loggedIn) - Number(a.loggedIn) || a.name.localeCompare(b.name, "zh"));
+	const visibleImportable = importable.filter(p => matchQ(p.name)).sort((a, b) => a.name.localeCompare(b.name, "zh"));
 
 	return (
 		<div className="gui-obo-provider-form">
@@ -914,6 +970,43 @@ function ProviderSetup({
 						value={form.apiKey}
 						onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
 					/>
+					{/* Fetch available models: interrogates the endpoint the form
+					 * currently shows (including an unsaved key), and offers the
+					 * reply as adoptable candidates. */}
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							className="gui-btn"
+							disabled={!form.baseUrl || fetchingModels || busy}
+							title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
+							onClick={() => void fetchModels()}
+						>
+							{fetchingModels ? t("fetching models…") : t("fetch available models")}
+						</button>
+						{form.adopted.length > 0 && (
+							<span className="text-[12px] text-[var(--color-text-faint)]">
+								{t("adopted models")}: {form.adopted.length}
+							</span>
+						)}
+					</div>
+					{fetchError && <div className="gui-obo-provider-error">{fetchError}</div>}
+					{form.adopted.length > 0 && (
+						<div className="flex flex-col gap-1">
+							{form.adopted.map(m => (
+								<div key={m.id} className="flex items-center gap-2">
+									<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+									<button
+										type="button"
+										className="gui-btn"
+										aria-label={`${t("delete")} ${m.id}`}
+										onClick={() => removeAdopted(m.id)}
+									>
+										<Icon name="delete-bin" className="h-3.5 w-3.5" />
+									</button>
+								</div>
+							))}
+						</div>
+					)}
 					<div className="flex gap-2">
 						<input
 							className="gui-input flex-1"
@@ -929,11 +1022,16 @@ function ProviderSetup({
 						/>
 					</div>
 					<GuiSelect
-					className="gui-input"
-					value={form.api}
-					onChange={nv => setForm(v => ({ ...v, api: nv }))}
-					options={[{ value: "openai-completions", label: "openai" }, { value: "openai-responses", label: "openai responses" }, { value: "anthropic-messages", label: "anthropic" }, { value: "google-generative-ai", label: "google" }]}
-				/>
+						className="gui-input"
+						value={form.api}
+						onChange={nv => setForm(v => ({ ...v, api: nv }))}
+						options={[
+							{ value: "openai-completions", label: "openai" },
+							{ value: "openai-responses", label: "openai responses" },
+							{ value: "anthropic-messages", label: "anthropic" },
+							{ value: "google-generative-ai", label: "google" },
+						]}
+					/>
 					{error && <div className="gui-obo-provider-error">{error}</div>}
 					<div className="flex gap-2">
 						<button
@@ -961,6 +1059,66 @@ function ProviderSetup({
 					</div>
 				</div>
 			)}
+
+			{/* Candidate picker for "fetch available models": the endpoint's
+			 * reply as a checkbox list the user adopts from. Nothing here
+			 * writes configuration — adopted rows land in the form only. */}
+			<DialogFrame
+				open={candidates !== null}
+				onClose={() => {
+					setCandidates(null);
+					setPicked(new Set());
+				}}
+				className="gui-dialog--confirm"
+				label={t("available models")}
+			>
+				<div className="gui-dialog-head">
+					<div className="text-[14px] font-medium">{t("available models")}</div>
+					<button type="button" className="gui-btn" onClick={() => void adoptSelected()}>
+						{t("adopt selected")}
+					</button>
+				</div>
+				<div className="p-3">
+					<div className="mb-2 flex items-center justify-between">
+						<span className="text-[13px] text-[var(--color-text-faint)]">{t("select models to add")}</span>
+						<button
+							type="button"
+							className="text-[12px] text-[var(--color-accent)]"
+							onClick={() => {
+								if (candidates && picked.size === candidates.length) {
+									setPicked(new Set());
+								} else if (candidates) {
+									setPicked(new Set(candidates.map(m => m.id)));
+								}
+							}}
+						>
+							{picked.size > 0 && candidates && picked.size === candidates.length
+								? t("deselect all")
+								: t("select all")}
+						</button>
+					</div>
+					<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
+						{(candidates ?? []).map(m => (
+							<label key={m.id} className="flex cursor-pointer items-center gap-2">
+								<input
+									type="checkbox"
+									checked={picked.has(m.id)}
+									onChange={() => {
+										const next = new Set(picked);
+										if (next.has(m.id)) next.delete(m.id);
+										else next.add(m.id);
+										setPicked(next);
+									}}
+								/>
+								<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+								{m.name && m.name !== m.id && (
+									<span className="truncate text-[12px] text-[var(--color-text-faint)]">{m.name}</span>
+								)}
+							</label>
+						))}
+					</FadeScroll>
+				</div>
+			</DialogFrame>
 
 			{loginState && (
 				<div className="gui-obo-login" role="dialog">
@@ -1173,7 +1331,11 @@ function AppearanceSetup(): ReactNode {
 				</div>
 			</div>
 			{renderAccentMenu(
-				<ColorPickerPanel value={pickerPreview ?? customAccent} onChange={setPickerPreview} onApply={applyCustomAccent} />,
+				<ColorPickerPanel
+					value={pickerPreview ?? customAccent}
+					onChange={setPickerPreview}
+					onApply={applyCustomAccent}
+				/>,
 			)}
 		</div>
 	);
@@ -1330,7 +1492,9 @@ export function OnboardingOverlay({
 							{step === 1 && <AppearanceSetup />}
 							{step === 5 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
 							{step === 6 && <ImportSessionsSetup rpc={rpc} />}
-							{step === 7 && <PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />}
+							{step === 7 && (
+								<PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />
+							)}
 						</div>
 						<div className="gui-onboarding-dots">
 							{STEPS.map((s, i) => (

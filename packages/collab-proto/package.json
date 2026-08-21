@@ -1,7 +1,7 @@
 {
 	"name": "@musepi/collab-proto",
-	"version": "17.2.8",
-	"description": "Collab live-session wire transport: AES-GCM sealing, link format, envelope, relay WebSocket client. Pure transport — no agent/session dependencies, browser-safe (zero Buffer).",
+	"version": "0.4.2",
+	"description": "Collab live-session wire transport: AES-GCM sealing, link format, envelope, relay WebSocket client. Pure transport \u2014 no agent/session dependencies, browser-safe (zero Buffer).",
 	"type": "module",
 	"main": "./src/index.ts",
 	"types": "./src/index.ts",

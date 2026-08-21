@@ -343,19 +343,23 @@ describe("update-cli package manager commands", () => {
 });
 
 describe("update-cli npm rename contract", () => {
-	it("parses a well-formed omp.rename pointer and rejects malformed ones", () => {
-		expect(resolveReleaseRename({ omp: { rename: { package: "@new/omp", natives: "@new/natives" } } })).toEqual({
-			pkg: "@new/omp",
-			natives: "@new/natives",
+	it("parses the musepi.rename pointer and rejects malformed ones", () => {
+		expect(resolveReleaseRename({ musepi: { rename: { package: "@new/musepi", natives: "@new/musepi-natives" } } })).toEqual({
+			pkg: "@new/musepi",
+			natives: "@new/musepi-natives",
 		});
-		expect(resolveReleaseRename({ omp: { rename: { package: "@new/omp" } } })).toEqual({
-			pkg: "@new/omp",
+		expect(resolveReleaseRename({ musepi: { rename: { package: "@new/musepi" } } })).toEqual({
+			pkg: "@new/musepi",
 			natives: undefined,
 		});
-		expect(resolveReleaseRename({ omp: { rename: { package: "" } } })).toBeUndefined();
-		expect(resolveReleaseRename({ omp: { rename: "@new/omp" } })).toBeUndefined();
-		expect(resolveReleaseRename({ omp: {} })).toBeUndefined();
+		expect(resolveReleaseRename({ musepi: { rename: { package: "" } } })).toBeUndefined();
+		expect(resolveReleaseRename({ musepi: { rename: "@new/musepi" } })).toBeUndefined();
+		expect(resolveReleaseRename({ musepi: {} })).toBeUndefined();
 		expect(resolveReleaseRename(undefined)).toBeUndefined();
+		expect(resolveReleaseDist({ musepi: { dist: "binary" } })).toBe("binary");
+		expect(resolveReleaseDist({ musepi: { dist: "npm" } })).toBe("npm");
+		expect(resolveReleaseDist({ musepi: { dist: "unknown-future-value" } })).toBe("binary");
+		expect(resolveReleaseDist({})).toBeUndefined();
 	});
 
 	it("installs renamed package names in lock-step, with no old-name leftovers in the argv", () => {
@@ -1004,13 +1008,13 @@ describe("update-cli stale update artifact sweep", () => {
 });
 
 describe("update-cli binary-only release gating", () => {
-	it("honors an explicit omp.dist field from the registry manifest", () => {
-		expect(resolveReleaseDist({ omp: { dist: "binary" } })).toBe("binary");
-		expect(resolveReleaseDist({ omp: { dist: "npm" } })).toBe("npm");
+	it("honors an explicit musepi.dist field from the registry manifest", () => {
+		expect(resolveReleaseDist({ musepi: { dist: "binary" } })).toBe("binary");
+		expect(resolveReleaseDist({ musepi: { dist: "npm" } })).toBe("npm");
 	});
 
 	it("treats unknown dist values as binary-only", () => {
-		expect(resolveReleaseDist({ omp: { dist: "cargo" } })).toBe("binary");
+		expect(resolveReleaseDist({ musepi: { dist: "cargo" } })).toBe("binary");
 	});
 
 	it("returns undefined when the manifest carries no dist field", () => {
@@ -1041,7 +1045,7 @@ describe("update-cli binary-only release gating", () => {
 describe("update-cli script-shim takeover", () => {
 	const version = "18.0.0";
 	const binaryName = "omp-windows-x64.exe";
-	const url = `https://github.com/can1357/oh-my-pi/releases/download/v${version}/${binaryName}`;
+	const url = `https://github.com/MuseLinn/MusePi/releases/download/v${version}/${binaryName}`;
 
 	function makeFetch(content: string): (input: string | URL | Request) => Promise<Response> {
 		const digest = `sha256:${createHash("sha256").update(content).digest("hex")}`;
@@ -1186,7 +1190,7 @@ describe("update-cli script-shim takeover", () => {
 describe("update-cli concurrent binary updates", () => {
 	const version = "999.0.0";
 	const binaryName = "omp-linux-x64";
-	const url = `https://github.com/can1357/oh-my-pi/releases/download/v${version}/${binaryName}`;
+	const url = `https://github.com/MuseLinn/MusePi/releases/download/v${version}/${binaryName}`;
 	const payload = Buffer.alloc(2048, 0x41);
 	const digest = `sha256:${createHash("sha256").update(payload).digest("hex")}`;
 

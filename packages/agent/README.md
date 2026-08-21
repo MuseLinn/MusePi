@@ -282,7 +282,7 @@ const agent = new Agent({
 Define tools using `AgentTool` with an omptype parameter schema.
 
 ```typescript
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 
 const readFileTool: AgentTool = {
 	name: "read_file",

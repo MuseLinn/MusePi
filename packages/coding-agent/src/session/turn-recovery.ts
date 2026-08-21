@@ -74,6 +74,11 @@ const EMPTY_STOP_MAX_RETRIES = 3;
 const SIBLING_UNBLOCK_BUFFER_MS = 1_000;
 const NON_WHITESPACE_RE = /\S/;
 const USAGE_PREFLIGHT_BLOCKED_PREFIX = "Usage preflight blocked:";
+const STREAM_STALL_ERROR_RE = /stream stall/i;
+const HTTP2_STREAM_RESET_ERROR_RE =
+	/stream closed with error code\s+nghttp2_(?:internal_error|refused_stream)|nghttp2_(?:internal_error|refused_stream)|HTTP2(?:StreamReset|RefusedStream)/i;
+const IMMUTABLE_ANTHROPIC_THINKING_ERROR_PATTERN =
+	/messages\.\d+\.content\.\d+.*\b(?:thinking|redacted_thinking)\b.*\blatest assistant message cannot be modified\b/is;
 
 function hasNonWhitespace(value: string): boolean {
 	return NON_WHITESPACE_RE.test(value);
@@ -404,8 +409,8 @@ export class TurnRecovery {
 		return this.#handleUnexpectedAssistantStop(message);
 	}
 
-	/** Removes a persisted failed assistant turn after its persistence slot settles. */
-	dropPersistedAssistantTurn(message: AssistantMessage): Promise<void> {
+	/** Removes a persisted failed assistant turn after its persistence slot settles; returns the dropped branch entry id. */
+	dropPersistedAssistantTurn(message: AssistantMessage): Promise<string | undefined> {
 		return this.#dropPersistedAssistantTurn(message);
 	}
 
@@ -677,15 +682,33 @@ export class TurnRecovery {
 		this.#emptyStopRetryCount++;
 		if (this.#emptyStopRetryCount > EMPTY_STOP_MAX_RETRIES) {
 			const attempts = this.#emptyStopRetryCount - 1;
-			const finalError = providerEmptyOutput
-				? "Assistant returned no final output after retry cap; try switching models"
-				: "Assistant returned empty stop after retry cap; try switching models or `/shake images` to remove archived frames";
+			const outputTokens = assistantMessage.usage.output;
+			const outputTokensExcludingKnownReasoning = Math.max(
+				0,
+				outputTokens - (assistantMessage.usage.reasoningTokens ?? 0),
+			);
+			let finalError: string;
+			if (providerEmptyOutput) {
+				finalError = "Assistant returned no final output after retry cap; try switching models";
+			} else if (outputTokensExcludingKnownReasoning > 0 && assistantMessage.content.length === 0) {
+				// Billed non-reasoning output on a truly zero-block stop means content was
+				// generated and then dropped downstream (a filter/refusal flattened to
+				// `finish_reason: "stop"` by a proxy, or a lossy API translation) — the
+				// context/`/shake images` hint is wrong here, so name the billed output
+				// instead. Known reasoning-only usage is not evidence that deliverable
+				// content was dropped, and thinking-only stops retain a thinking block.
+				finalError = `Assistant returned an empty stop after retry cap, but the provider billed ${outputTokens} output token${outputTokens === 1 ? "" : "s"} for it; content was generated and then dropped before delivery, which usually points to a provider-side content filter or a lossy API translation rather than a context problem`;
+			} else {
+				finalError =
+					"Assistant returned empty stop after retry cap; try switching models or `/shake images` to remove archived frames";
+			}
 			assistantMessage.errorMessage = finalError;
 			if (providerEmptyOutput) assistantMessage.errorId = AIError.create();
 			logger.warn(finalError, {
 				attempts,
 				model: assistantMessage.model,
 				provider: assistantMessage.provider,
+				outputTokens,
 			});
 			await this.#host.emitSessionEvent({
 				type: "auto_retry_end",
@@ -700,10 +723,14 @@ export class TurnRecovery {
 			// provider usage can anchor the next prompt at the full failed-request size
 			// and re-trigger compaction at the same boundary. Remove every capped
 			// empty output; toolUse orphans still need this for Anthropic history.
-			await this.dropPersistedAssistantTurn(assistantMessage);
+			await this.#dropAssistantTurnDurably(assistantMessage);
 			return "terminal";
 		}
-		this.discardAssistantTurn(assistantMessage);
+		// The reparented leaf must be durably persisted before the retry continues:
+		// the loader rebuilds the active branch from the last physical entry, so an
+		// in-memory-only reparent lets the empty stop resurface on reload or after
+		// a mid-retry process kill.
+		await this.#dropAssistantTurnDurably(assistantMessage);
 		this.#host.agent.appendMessage({
 			role: "developer",
 			content: [{ type: "text", text: this.#emptyStopRetryReminder() }],
@@ -826,9 +853,19 @@ export class TurnRecovery {
 	 * replays the failed turn, while no-recovery paths leave the persisted entry
 	 * (and the user-visible transcript line) in place.
 	 */
-	async #dropPersistedAssistantTurn(assistantMessage: AssistantMessage): Promise<void> {
+	async #dropPersistedAssistantTurn(assistantMessage: AssistantMessage): Promise<string | undefined> {
 		await this.#host.waitForSessionMessagePersistence(assistantMessage);
-		this.discardAssistantTurn(assistantMessage);
+		return this.discardAssistantTurn(assistantMessage);
+	}
+
+	/**
+	 * Drop the failed turn from active context and the persisted branch, then
+	 * durably persist the reparented leaf so the empty stop cannot resurface on
+	 * reload or after a mid-retry process kill.
+	 */
+	async #dropAssistantTurnDurably(assistantMessage: AssistantMessage): Promise<void> {
+		const droppedEntryId = await this.#dropPersistedAssistantTurn(assistantMessage);
+		if (droppedEntryId) await this.#host.sessionManager.discardEntryDurably(droppedEntryId);
 	}
 
 	/**
@@ -920,7 +957,7 @@ export class TurnRecovery {
 	 * the Gemini header-runaway interrupt, which must not replay a partial,
 	 * loop-fueling thinking block.
 	 */
-	discardAssistantTurn(assistantMessage: AssistantMessage): void {
+	discardAssistantTurn(assistantMessage: AssistantMessage): string | undefined {
 		this.removeAssistantMessageFromActiveContext(assistantMessage);
 
 		const branch = this.#host.sessionManager.getBranch();
@@ -942,7 +979,7 @@ export class TurnRecovery {
 						this.#isSameAssistantMessage(entry.message as AssistantMessage, assistantMessage),
 				);
 		if (!branchEntry) {
-			return;
+			return undefined;
 		}
 		this.#host.withBashBranchTransition(() => {
 			if (branchEntry.parentId === null) {
@@ -951,6 +988,7 @@ export class TurnRecovery {
 				this.#host.sessionManager.branch(branchEntry.parentId);
 			}
 		});
+		return branchEntry.id;
 	}
 
 	#isSameAssistantMessage(left: AssistantMessage, right: AssistantMessage): boolean {
@@ -1033,6 +1071,14 @@ export class TurnRecovery {
 	isRetryableError(message: AssistantMessage): boolean {
 		if (message.stopReason !== "error") return false;
 		if (this.#isUsagePreflightBlocked(message)) return false;
+		const model = this.#host.model();
+		const immutableAnthropicThinkingError =
+			model?.api === "anthropic-messages" &&
+			(message.errorStatus === 400 ||
+				message.errorId === 400 ||
+				message.errorMessage?.startsWith("400 ") === true) &&
+			IMMUTABLE_ANTHROPIC_THINKING_ERROR_PATTERN.test(message.errorMessage ?? "");
+		if (immutableAnthropicThinkingError) return false;
 
 		const id = this.#classifyRetryMessage(message);
 		// Context overflow is handled by compaction, not retry.
@@ -1106,10 +1152,10 @@ export class TurnRecovery {
 	}
 
 	/**
-	 * Classify a reasonless abort or stream stall whose emitted tool calls all
-	 * have results. The failed assistant/tool-result pair stays in context so
-	 * continuation cannot replay completed side effects; synthetic results tell
-	 * the next turn that an unexecuted call must be reissued.
+	 * Classify a reasonless abort, idle stream stall, or HTTP/2 stream reset whose
+	 * emitted tool calls all have results. The failed assistant/tool-result pair
+	 * stays in context so continuation cannot replay completed side effects;
+	 * synthetic results tell the next turn that an unexecuted call must be reissued.
 	 */
 	classifyResolvedInterruptedToolTurn(message: AssistantMessage): "reasonless-abort" | "stream-stall" | undefined {
 		const id = this.#classifyRetryMessage(message);
@@ -1121,29 +1167,37 @@ export class TurnRecovery {
 			!this.#host.isDisposed() &&
 			!this.#host.streamingEditAbortTriggered() &&
 			((message.stopReason === "aborted" && AIError.is(id, AIError.Flag.Abort)) || genericAbort);
+		const errorMessage = message.errorMessage ?? "";
 		const streamStall =
+			message.stopReason === "error" && STREAM_STALL_ERROR_RE.test(errorMessage) && AIError.retriable(id);
+		const transportReset =
 			message.stopReason === "error" &&
-			message.errorMessage?.toLowerCase().includes("stream stall") === true &&
-			AIError.retriable(id);
-		if (!reasonlessAbort && !streamStall) return undefined;
+			HTTP2_STREAM_RESET_ERROR_RE.test(errorMessage) &&
+			AIError.retriable(id) &&
+			!this.#host.abortInProgress() &&
+			!this.#host.isDisposed() &&
+			!this.#host.streamingEditAbortTriggered();
+		if (!reasonlessAbort && !streamStall && !transportReset) return undefined;
 		if (reasonlessAbort && genericAbort) message.errorId = AIError.create(AIError.Flag.Abort);
 
-		// The Cursor server-execution marker gate applies only to the stream-stall
-		// path: an unmarked/unresolved Cursor block there means the server has not
-		// finished executing, so resuming would race it. A reasonless abort instead
-		// ends the turn and the agent loop pairs every un-run call (Cursor's unmarked
-		// `todo`/MCP blocks included) with a synthetic `executed: false` result, so
-		// the tool-result reconciliation below is the safety gate and the marker is
-		// irrelevant.
+		// Idle stall and HTTP/2 RST both close the Cursor Connect stream:
+		// the lazy watchdog aborts the request signal, and cursor.ts then
+		// calls `h2Request.close()`. There is no in-flight server exec to
+		// race, so unmarked MCP/todo blocks can continue once every emitted
+		// call has a matching result. A reasonless abort ends the turn and
+		// the agent loop pairs leftover calls with `executed: false`.
 		const resolvedToolCallIds: string[] = [];
 		for (const block of message.content) {
 			if (block.type !== "toolCall") continue;
+			// Fork customization: during a cursor stream stall the lazy watchdog
+			// aborts the request signal and cursor.ts calls `h2Request.close()` —
+			// unmarked server-side execs are not resolved yet and must not count.
 			if (
 				streamStall &&
 				message.provider === "cursor" &&
 				(!(kCursorExecResolved in block) || block[kCursorExecResolved] !== true)
 			) {
-				return undefined;
+				continue;
 			}
 			resolvedToolCallIds.push(block.id);
 		}
@@ -1539,11 +1593,32 @@ export class TurnRecovery {
 		if (!role) return false;
 
 		const ceiling = this.#host.thinkingLevelCeiling();
+		const latestAssistant = this.#host.agent.state.messages.findLast(
+			(message): message is AssistantMessage => message.role === "assistant" && message !== failedMessage,
+		);
 		for (const selector of this.findRetryFallbackCandidates(role, currentSelector)) {
 			if (this.isRetryFallbackSelectorSuppressed(selector)) continue;
 			const resolved = resolveModelOverride([selector.raw], this.#host.modelRegistry, this.#host.settings);
 			const candidate = resolved.model ?? this.#host.modelRegistry.find(selector.provider, selector.id);
 			if (!candidate) continue;
+			// Anthropic signatures and redacted blocks are model-bound, while the
+			// latest assistant response must remain byte-identical. A same-provider
+			// model switch can satisfy neither constraint, so keep retrying the
+			// source model or consider a later cross-provider candidate whose
+			// message transform can safely demote the foreign thinking.
+			if (
+				candidate.api === "anthropic-messages" &&
+				latestAssistant?.api === "anthropic-messages" &&
+				latestAssistant.provider === candidate.provider &&
+				latestAssistant.model !== candidate.id &&
+				latestAssistant.content.some(
+					block =>
+						(block.type === "thinking" && Boolean(block.thinkingSignature?.trim())) ||
+						block.type === "redactedThinking",
+				)
+			) {
+				continue;
+			}
 			// A candidate whose effort floor exceeds the per-spawn ceiling would be
 			// clamped UP past the cap by its model floor — skip it entirely.
 			if (ceiling !== undefined && !modelSupportsEffortCeiling(candidate, ceiling)) continue;
@@ -1588,6 +1663,9 @@ export class TurnRecovery {
 		if (AIError.isContextOverflow(message, model.contextWindow ?? 0)) return false;
 		if (AIError.is(id, AIError.Flag.UsageLimit)) return false;
 		if (AIError.is(id, AIError.Flag.AuthFailed)) return false;
+		// A thinking loop is a same-model resample signal, not a router fault, so a
+		// base-model swap would abandon the loop-guard redirect (issue #8760).
+		if (AIError.is(id, AIError.Flag.ThinkingLoop)) return false;
 		return this.#host.modelRegistry.find("fireworks", toFireworksBaseModelId(model.id)) !== undefined;
 	}
 
@@ -1606,6 +1684,13 @@ export class TurnRecovery {
 		if (this.#isUsagePreflightBlocked(message)) return false;
 		const model = this.#host.model();
 		if (!model) return false;
+		const immutableAnthropicThinkingError =
+			model.api === "anthropic-messages" &&
+			(message.errorStatus === 400 ||
+				message.errorId === 400 ||
+				message.errorMessage?.startsWith("400 ") === true) &&
+			IMMUTABLE_ANTHROPIC_THINKING_ERROR_PATTERN.test(message.errorMessage ?? "");
+		if (immutableAnthropicThinkingError) return false;
 		const retrySettings = this.#host.settings.getGroup("retry");
 		if (!retrySettings.enabled || !retrySettings.modelFallback) return false;
 		if (this.isClassifierRefusal(message)) return false;
@@ -1890,10 +1975,23 @@ export class TurnRecovery {
 			);
 			if (switchedCredential) delayMs = 0;
 		}
+		// A thinking-loop abort is not a provider failure — it is the loop guard
+		// asking for a same-model resample, paired with a hidden
+		// `thinking-loop-redirect` notice that only makes sense on the model that
+		// looped. Walking `fallbackChains` (or parking the selector on a cooldown)
+		// would swap a healthy planning turn to another family based on chain
+		// contents, not model health (issue #8760). Keep it on the same model; the
+		// retry budget still bounds a genuinely stuck stream.
+		const thinkingLoop = AIError.is(id, AIError.Flag.ThinkingLoop);
 		if (!staleOpenAIResponsesReplayError && !switchedCredential && currentSelector) {
 			// A refusal chain stops at the retry budget: the exhausted-attempt
 			// last resort is for provider failures, not classifier decisions.
-			if (allowModelFallback && retrySettings.modelFallback && !(retryBudgetExhausted && classifierRefusal)) {
+			if (
+				allowModelFallback &&
+				retrySettings.modelFallback &&
+				!thinkingLoop &&
+				!(retryBudgetExhausted && classifierRefusal)
+			) {
 				if (!classifierRefusal) {
 					this.noteRetryFallbackCooldown(currentSelector, parsedRetryAfterMs, errorMessage);
 				}
@@ -2173,7 +2271,7 @@ export class TurnRecovery {
 		const deadline = Date.now() + 30_000;
 		for (;;) {
 			try {
-				await this.#host.agent.prompt(messages, options);
+				await this.#host.agent.prompt(messages, { ...options, preEmittedMessages: options?.preEmittedMessages });
 				return;
 			} catch (err) {
 				if (!(err instanceof AgentBusyError)) {

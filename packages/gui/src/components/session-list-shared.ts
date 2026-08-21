@@ -1,7 +1,7 @@
-import type { GuiTreeNode } from "./SessionTree";
+import type { SessionListNode } from "./SessionList";
 
 interface FlatNode {
-	node: GuiTreeNode;
+	node: SessionListNode;
 	indent: number;
 	showConnector: boolean;
 	isLast: boolean;
@@ -15,9 +15,9 @@ interface FlatNode {
  * - indent 2+: single-child chains stay flat, +1 only when a parent branches
  * Connectors (├─/└─) show only when a node is a branched child.
  */
-export function flattenTree(roots: GuiTreeNode[]): FlatNode[] {
+export function flattenTree(roots: SessionListNode[]): FlatNode[] {
 	const result: FlatNode[] = [];
-	type StackItem = [GuiTreeNode, number, boolean, boolean, boolean];
+	type StackItem = [SessionListNode, number, boolean, boolean, boolean];
 	const stack: StackItem[] = [];
 	for (let i = roots.length - 1; i >= 0; i--) {
 		const isLast = i === roots.length - 1;

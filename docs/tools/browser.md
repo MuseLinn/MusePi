@@ -163,7 +163,7 @@ The tool returns one result per call; no streaming partial output is emitted fro
   - `close` — release one tab or all tabs.
   - `run` — execute JS inside the tab worker.
 - **Browser kind**
-  - **Headless**: attaches to one project-shared Chromium supervised by the daemon broker (`omp.browser.headless` / `omp.browser.headed` in `hub ps`), applies stealth patches, and creates a fresh page per tab. The daemon stops with the last omp client in the project. Non-CLI hosts launch a private local Chromium instead.
+  - **Headless**: attaches to one project-shared Chromium supervised by the daemon broker (`omp.browser.headless` / `omp.browser.headed` in `hub ps`), applies stealth patches, and creates a fresh page per tab. The daemon stops with the last musepi client in the project. Non-CLI hosts launch a private local Chromium instead.
   - **Spawned app (`app.path`)**: reuses an existing CDP-enabled process for that executable when possible; otherwise kills same-path processes, spawns the executable with remote debugging enabled, then attaches. No stealth patches are injected.
   - **Connected browser (`app.cdp_url`, or the `browser.cdpUrl` setting when the call carries no `app`)**: attaches to an already-running CDP endpoint. No process ownership; close only disconnects.
   - **Cmux surface (`browser.cmux`)**: with no `app` and a cmux socket available (`CMUX_SOCKET_PATH`, enabled by the `browser.cmux` setting / `PI_BROWSER_CMUX` override), drives a cmux WKWebView surface over a unix-socket JSON-RPC client instead of Puppeteer. No Bun worker and no stealth patches; `open` opens a split (owning that surface), `run` executes via `runCmuxCode()`, and `close` issues `surface.close` for surfaces it owns (leaving the workspace's last surface open).

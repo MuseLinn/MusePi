@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { CommitAgentState } from "../../../commit/agentic/state";
 import { CHANGELOG_CATEGORIES, type ChangelogCategory } from "../../../commit/types";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";

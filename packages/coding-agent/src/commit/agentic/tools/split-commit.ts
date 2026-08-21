@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { CommitAgentState, SplitCommitGroup, SplitCommitPlan } from "../../../commit/agentic/state";
 import { computeDependencyOrder } from "../../../commit/agentic/topo-sort";
 import {

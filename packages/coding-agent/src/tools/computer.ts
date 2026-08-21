@@ -1,4 +1,4 @@
-import { type Type, type } from "@musepi/omptype";
+import { type Type, type } from "@musepi/musepi-type";
 import type {
 	AgentTool,
 	AgentToolContext,

@@ -212,7 +212,7 @@ providers:
         maxTokens: 32000
 ```
 
-Run `omp models spark` to verify discovery. Then run `omp setup` and choose the model in the default-model step, or open `/model` in a session and assign it to the `default` role.
+Run `musepi models spark` to verify discovery. Then run `musepi setup` and choose the model in the default-model step, or open `/model` in a session and assign it to the `default` role.
 
 To preconfigure the default without the picker, add the selector to `~/.omp/agent/config.yml`:
 
@@ -337,7 +337,7 @@ Inside `pi-natives`, the per-module breakdown (glue and tests omitted):
 
 ## Four entry points: _interactive_, _one-shot_, RPC, and ACP.
 
-Same engine, four wrappers. `omp` runs the TUI. `omp -p` answers a single prompt and exits. The Node SDK embeds the session in your process. `omp --mode rpc` and `omp acp` hand the wheel to another program over stdio.
+Same engine, four wrappers. `musepi` runs the TUI. `musepi -p` answers a single prompt and exits. The Node SDK embeds the session in your process. `musepi --mode rpc` and `musepi acp` hand the wheel to another program over stdio.
 
 ### Interactive — when in doubt, the agent asks
 

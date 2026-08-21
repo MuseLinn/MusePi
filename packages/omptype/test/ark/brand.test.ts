@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { type Brand, type } from "@musepi/omptype/ark";
+import { type Brand, type } from "@musepi/musepi-type/ark";
 import type { Eq } from "./type-assert";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

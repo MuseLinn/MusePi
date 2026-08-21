@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { AppendOnlyContextManager, AppendOnlyLog, StablePrefix } from "@musepi/pi-agent-core/append-only-context";
 import type { AgentContext, AgentTool } from "@musepi/pi-agent-core/types";
 import type { Message, Tool, ToolExample } from "@musepi/pi-ai";

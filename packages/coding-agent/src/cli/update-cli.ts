@@ -104,28 +104,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Parse the `omp.dist` field from a published package manifest.
+ * Parse the distribution-mode field from a published package manifest.
  *
  * Forward-compatibility contract with future releases: a release that is not
  * installable as an npm package (e.g. a native rewrite) publishes
- * `"omp": { "dist": "binary" }` in its package.json. Any value other than
+ * `"musepi": { "dist": "binary" }` in its package.json. Any value other than
  * "npm" — including values this updater does not know yet — maps to "binary"
  * so already-deployed updaters never run a package-manager install against a
  * release that no longer supports it.
  */
 export function resolveReleaseDist(manifest: unknown): ReleaseDist | undefined {
-	if (!isRecord(manifest) || !isRecord(manifest.omp)) return undefined;
-	const dist = manifest.omp.dist;
+	if (!isRecord(manifest) || !isRecord(manifest.musepi)) return undefined;
+	const dist = manifest.musepi.dist;
 	if (dist === undefined) return undefined;
 	return dist === "npm" ? "npm" : "binary";
 }
 
 /**
- * Parse the `omp.rename` pointer from a published package manifest.
+ * Parse the package-rename pointer from a published package manifest.
  *
  * Forward-compatibility contract for renaming the npm package: the final
  * version published under an old name is a stub whose manifest carries
- * `"omp": { "rename": { "package": "<new-agent-pkg>", "natives": "<new-natives-pkg>" }, "dist": "binary" }`.
+ * `"musepi": { "rename": { "package": "<new-agent-pkg>", "natives": "<new-natives-pkg>" }, "dist": "binary" }`.
  * Updaters that understand `rename` follow the pointer and resolve the
  * release from the renamed package instead ({@link getLatestRelease});
  * older deployed updaters ignore it and take the `dist: "binary"` escape
@@ -138,8 +138,8 @@ export function resolveReleaseDist(manifest: unknown): ReleaseDist | undefined {
  * "already up to date" against the running build).
  */
 export function resolveReleaseRename(manifest: unknown): ReleaseRename | undefined {
-	if (!isRecord(manifest) || !isRecord(manifest.omp)) return undefined;
-	const rename = manifest.omp.rename;
+	if (!isRecord(manifest) || !isRecord(manifest.musepi)) return undefined;
+	const rename = manifest.musepi.rename;
 	if (!isRecord(rename) || typeof rename.package !== "string" || rename.package.length === 0) return undefined;
 	const natives = rename.natives;
 	return {
@@ -156,7 +156,7 @@ function majorVersion(version: string): number {
 /**
  * Whether the update must bypass bun/npm and install the release binary.
  *
- * An explicit `omp.dist` wins in both directions. Without one, a release with
+ \* An explicit `musepi.dist` (legacy: `omp.dist`) wins in both directions. Without one, a release with
  * a higher major than the running build is assumed not npm-installable: the
  * runtime may have changed out from under the package layout, and the pinned
  * `@musepi/pi-natives*` companions ({@link buildBunInstallArgs}) may not
@@ -1515,18 +1515,28 @@ export async function updateViaBinaryAt(
 
 /**
  * In-place forwarder bodies, by shim extension, for launchers that cannot be
- * renamed aside during a script-shim takeover; each execs the sibling
- * `omp.exe`. Rewriting matters for the shims that outrank `.exe` at command
- * resolution: PowerShell prefers `.ps1` and Git Bash resolves the
+ * renamed aside during a script-shim takeover; each execs the sibling exe.
+ * The exe name follows the launcher's base name (`omp.cmd` → `omp.exe`), so
+ * the takeover works for both legacy `omp.*` installs and current
+ * `musepi.*` ones. Rewriting matters for the shims that outrank `.exe` at
+ * command resolution: PowerShell prefers `.ps1` and Git Bash resolves the
  * extensionless sh shim first, so leaving the old body behind would keep
  * launching the replaced install.
  */
-const SHIM_FORWARDERS: Record<string, string> = {
-	"": `#!/bin/sh\nexec "$(dirname "$0")/${APP_NAME}.exe" "$@"\n`,
-	".cmd": `@"%~dp0${APP_NAME}.exe" %*\r\n`,
-	".bat": `@"%~dp0${APP_NAME}.exe" %*\r\n`,
-	".ps1": `& "$PSScriptRoot\\${APP_NAME}.exe" @args\nexit $LASTEXITCODE\n`,
-};
+function shimForwarderBody(ext: string, launcherBase: string): string {
+	const exe = `${launcherBase}.exe`;
+	switch (ext) {
+		case "":
+			return `#!/bin/sh\nexec "$(dirname "$0")/${exe}" "$@"\n`;
+		case ".cmd":
+		case ".bat":
+			return `@"%~dp0${exe}" %*\r\n`;
+		case ".ps1":
+			return `& "$PSScriptRoot\\${exe}" @args\nexit $LASTEXITCODE\n`;
+		default:
+			throw new Error(`No shim forwarder for extension ${ext}`);
+	}
+}
 
 /**
  * Take over a Windows script-launcher install for a binary-only release.
@@ -1554,7 +1564,11 @@ export async function updateViaShimTakeover(
 ): Promise<void> {
 	const binaryName = options.binaryName ?? getBinaryName();
 	const launcherDir = path.dirname(shimPath);
-	const exePath = path.join(launcherDir, `${APP_NAME}.exe`);
+	// Follow the launcher's base name (omp.cmd → omp.exe) so the takeover works
+	// for both legacy `omp.*` installs and current `musepi.*` ones: after the
+	// shims retire, the old command must still resolve to the new exe.
+	const launcherBase = path.basename(shimPath, path.extname(shimPath));
+	const exePath = path.join(launcherDir, `${launcherBase}.exe`);
 	const attempt = `${Date.now()}.${process.pid}.${updateAttemptSeq++}`;
 	const tempPath = `${exePath}.${attempt}.new`;
 	const asset = await getReleaseBinaryAsset(expectedVersion, binaryName, options.fetchImpl, options.githubToken);
@@ -1573,7 +1587,7 @@ export async function updateViaShimTakeover(
 	// never retire the same shims or reclaim a live run's backup before its
 	// verification can roll it back.
 	await withFileLock(exePath, async () => {
-		console.log(chalk.dim(`Installing ${APP_NAME}.exe beside the script launcher...`));
+		console.log(chalk.dim(`Installing ${launcherBase}.exe beside the script launcher...`));
 		await fs.promises.rename(tempPath, exePath);
 		// Retire the shims so PATH resolution lands on the new exe. Renamed, not
 		// deleted: restorable on verification failure, and Windows permits
@@ -1584,7 +1598,7 @@ export async function updateViaShimTakeover(
 		const backupSuffix = `${attempt}.bak`;
 		const retired: Array<{ launcher: string; backup: string }> = [];
 		for (const ext of ["", ".cmd", ".ps1", ".bat"]) {
-			const launcher = path.join(launcherDir, `${APP_NAME}${ext}`);
+			const launcher = path.join(launcherDir, `${launcherBase}${ext}`);
 			const backup = `${launcher}.${backupSuffix}`;
 			try {
 				await fs.promises.rename(launcher, backup);
@@ -1593,7 +1607,7 @@ export async function updateViaShimTakeover(
 				if (isEnoent(err)) continue;
 				try {
 					const original = await Bun.file(launcher).text();
-					await Bun.write(launcher, SHIM_FORWARDERS[ext]);
+					await Bun.write(launcher, shimForwarderBody(ext, launcherBase));
 					forwarded.push({ launcher, original });
 				} catch {
 					stuck.push(launcher);
@@ -1619,7 +1633,7 @@ export async function updateViaShimTakeover(
 			}
 			await unlinkIfExists(exePath);
 			throw new Error(
-				`${formatVerificationFailure(verification, expectedVersion)}; restored previous ${APP_NAME} launcher`,
+				`${formatVerificationFailure(verification, expectedVersion)}; restored previous ${launcherBase} launcher`,
 			);
 		}
 		for (const { backup } of retired) {
@@ -1627,7 +1641,7 @@ export async function updateViaShimTakeover(
 		}
 		// Reclaim exe backups and retired-shim leftovers from earlier attempts.
 		for (const ext of [".exe", "", ".cmd", ".ps1", ".bat"]) {
-			await sweepStaleUpdateArtifacts(path.join(launcherDir, `${APP_NAME}${ext}`));
+			await sweepStaleUpdateArtifacts(path.join(launcherDir, `${launcherBase}${ext}`));
 		}
 	});
 	for (const { launcher } of forwarded) {
@@ -1652,9 +1666,13 @@ export async function updateViaShimTakeover(
  * a user recovering from a binary-only release straight back through bun.
  */
 function installerHint(): string {
+	// npm is the only distribution channel that is guaranteed reachable (the
+	// GitHub repository / installer script is the same identity but requires
+	// the public repo to be published). The -g reinstall keeps the PATH entry
+	// and installs the current musepi bin.
 	return process.platform === "win32"
-		? "& ([scriptblock]::Create((irm https://omp.sh/install.ps1))) -Binary"
-		: "curl -fsSL https://omp.sh/install | sh -s -- --binary";
+		? "bun install -g @musepi/pi-coding-agent"
+		: "bun install -g @musepi/pi-coding-agent";
 }
 
 /**

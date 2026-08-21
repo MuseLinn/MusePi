@@ -23,16 +23,16 @@ section() {
 }
 
 smoke_cli() {
-   local omp_bin="$1"
+   local musepi_bin="$1"
    local runtime_dir
    runtime_dir="$(mktemp -d "$WORK_DIR/compiled-runtime.XXXXXX")"
-   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$omp_bin" --version
-   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$omp_bin" --help >/dev/null
-   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$omp_bin" stats --summary >/dev/null
+   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$musepi_bin" --version
+   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$musepi_bin" --help >/dev/null
+   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$musepi_bin" stats --summary >/dev/null
    # Spawns bundled workers and serves the stats dashboard once. Regression
    # probe for #1011/#1027 worker loading and for npm/compiled distributions
    # missing the dashboard assets that `stats --summary` never touches.
-   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$omp_bin" --smoke-test
+   XDG_DATA_HOME="$runtime_dir/xdg" HOME="$runtime_dir/home" "$musepi_bin" --smoke-test
 }
 
 find_tarball() {
@@ -90,8 +90,8 @@ bun --cwd=packages/coding-agent run build
 
 BINARY_DIR="$WORK_DIR/binary-bin"
 mkdir -p "$BINARY_DIR"
-cp packages/coding-agent/dist/omp "$BINARY_DIR/omp"
-smoke_cli "$BINARY_DIR/omp"
+cp packages/coding-agent/dist/musepi "$BINARY_DIR/musepi"
+smoke_cli "$BINARY_DIR/musepi"
 
 section "Source install smoke"
 SOURCE_BUN_HOME="$WORK_DIR/bun-source"
@@ -99,7 +99,7 @@ SOURCE_BUN_HOME="$WORK_DIR/bun-source"
    export BUN_INSTALL="$SOURCE_BUN_HOME"
    export PATH="$BUN_INSTALL/bin:$PATH"
    bun --cwd="$ROOT_DIR/packages/coding-agent" link
-   smoke_cli "$BUN_INSTALL/bin/omp"
+   smoke_cli "$BUN_INSTALL/bin/musepi"
 )
 
 section "Tarball install smoke"
@@ -143,7 +143,7 @@ for pkg in utils wire hashline catalog ai mnemopi snapcompact agent tui stats co
 done
 
 # 4. Pack the coding agent with its *published* manifest: release swaps
-#    `bin.omp` from `src/cli.ts` to the prepack bundle `dist/cli.js`. The repo
+#    `bin.musepi` from `src/cli.ts` to the prepack bundle `dist/cli.js`. The repo
 #    manifest keeps pointing at source so `bun link`/`install.sh --source`
 #    work without a build, so the swap must be reproduced here for the smoke
 #    to exercise the bundled worker-host entry the published package ships.
@@ -158,20 +158,20 @@ agent_rc=0
 cp "$agent_pkg_backup" "$ROOT_DIR/packages/coding-agent/package.json"
 [ "$agent_rc" -eq 0 ] || exit "$agent_rc"
 
-utils_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-utils-*.tgz)"
-wire_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-wire-*.tgz)"
-natives_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-natives-[0-9]*.tgz)"
-natives_leaf_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-natives-"$host_tag"-*.tgz)"
-hashline_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-hashline-*.tgz)"
-catalog_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-catalog-*.tgz)"
-ai_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-ai-*.tgz)"
-mnemopi_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-mnemopi-*.tgz)"
-snapcompact_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-snapcompact-*.tgz)"
-agent_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-agent-core-*.tgz)"
-tui_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-tui-*.tgz)"
-stats_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-omp-stats-*.tgz)"
-coding_agent_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-pi-coding-agent-*.tgz)"
-collab_web_tgz="$(find_tarball "$TARBALL_DIR"/oh-my-pi-collab-web-*.tgz)"
+utils_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-utils-*.tgz)"
+wire_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-wire-*.tgz)"
+natives_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-natives-[0-9]*.tgz)"
+natives_leaf_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-natives-"$host_tag"-*.tgz)"
+hashline_tgz="$(find_tarball "$TARBALL_DIR"/musepi-hashline-*.tgz)"
+catalog_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-catalog-*.tgz)"
+ai_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-ai-*.tgz)"
+mnemopi_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-mnemopi-*.tgz)"
+snapcompact_tgz="$(find_tarball "$TARBALL_DIR"/musepi-snapcompact-*.tgz)"
+agent_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-agent-core-*.tgz)"
+tui_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-tui-*.tgz)"
+stats_tgz="$(find_tarball "$TARBALL_DIR"/musepi-musepi-stats-*.tgz)"
+coding_agent_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-coding-agent-*.tgz)"
+collab_web_tgz="$(find_tarball "$TARBALL_DIR"/musepi-collab-web-*.tgz)"
 
 TARBALL_APP_DIR="$WORK_DIR/tarball-install"
 mkdir -p "$TARBALL_APP_DIR"
@@ -195,7 +195,7 @@ mkdir -p "$TARBALL_APP_DIR"
 			'@musepi/snapcompact': '$snapcompact_tgz',
 			'@musepi/pi-agent-core': '$agent_tgz',
 			'@musepi/pi-tui': '$tui_tgz',
-			'@musepi/omp-stats': '$stats_tgz',
+			'@musepi/musepi-stats': '$stats_tgz',
 			'@musepi/pi-coding-agent': '$coding_agent_tgz',
 			'@musepi/collab-web': '$collab_web_tgz'
 		};
@@ -217,20 +217,22 @@ mkdir -p "$TARBALL_APP_DIR"
       exit 1
    }
    omptype_probe="$(bun -e '
-      import { type } from "@musepi/omptype";
-      import { Type } from "@musepi/omptype/typebox";
+      import { type } from "@musepi/musepi-type";
+      import { Type } from "@musepi/musepi-type/typebox";
       const root = type({ name: "string", enabled: "boolean = false" }).assert({ name: "omp" });
       const typebox = Type.Object({ name: Type.String() }).assert({ name: "tb" });
       process.stdout.write(`${root.name}:${root.enabled}:${typebox.name}`);
    ')"
    [ "$omptype_probe" = "omp:false:tb" ] || {
-      echo "Unexpected @musepi/omptype probe result: $omptype_probe"
+      echo "Unexpected @musepi/musepi-type probe result: $omptype_probe"
       exit 1
-   }   [ -f "node_modules/@musepi/collab-web/dist/index.html" ] || {
+   }
+
+   [ -f "node_modules/@musepi/collab-web/dist/index.html" ] || {
       echo "Collab web tarball did not install built dist/index.html"
       exit 1
    }
-   smoke_cli ./node_modules/.bin/omp
+   smoke_cli ./node_modules/.bin/musepi
 )
 
 echo ""

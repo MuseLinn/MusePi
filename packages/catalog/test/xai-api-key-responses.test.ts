@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { resolveProviderModels } from "@musepi/pi-catalog/model-manager";
 import { getBundledModels } from "@musepi/pi-catalog/models";
-import { CATALOG_PROVIDERS } from "@musepi/pi-catalog/provider-models/descriptors";
+import { CATALOG_PROVIDERS, DEFAULT_MODEL_PER_PROVIDER } from "@musepi/pi-catalog/provider-models/descriptors";
 import { xaiModelManagerOptions } from "@musepi/pi-catalog/provider-models/openai-compat";
 import type { ModelSpec } from "@musepi/pi-catalog/types";
 
@@ -37,13 +37,18 @@ describe("paid xai (XAI_API_KEY) Responses contract", () => {
 	it("registers xai on the catalog Responses discovery path", () => {
 		const entry = CATALOG_PROVIDERS.find(provider => provider.id === "xai");
 		expect(entry, "xai catalog descriptor").toBeDefined();
-		expect(entry!.defaultModel).toBe("grok-4.5");
+		expect(entry!.defaultModel).toBe("grok-4.6");
+		expect(DEFAULT_MODEL_PER_PROVIDER.xai).toBe("grok-4.6");
+		expect(
+			getBundledModels("xai").find(model => model.id === "grok-4.6"),
+			"xai/grok-4.6 must be bundled for the default",
+		).toBeDefined();
 		expect(entry!.envVars).toContain("XAI_API_KEY");
 		const options = xaiModelManagerOptions({ apiKey: "test-key" });
 		expect(options.providerId).toBe("xai");
 		expect(options.fetchDynamicModels, "live /v1/models overlay").toBeTypeOf("function");
 		expect(options.dropCachedModelIdsOnStaticMismatch).toEqual(getBundledModels("xai").map(model => model.id));
-		expect(options.dropCachedModelIdsOnStaticMismatch).toContain("grok-4.5");
+		expect(options.dropCachedModelIdsOnStaticMismatch).toContain("grok-4.6");
 	});
 
 	it("bundles every paid xai chat model on openai-responses", () => {

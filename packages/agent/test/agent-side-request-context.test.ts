@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AssistantMessage, Context } from "@musepi/pi-ai";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";

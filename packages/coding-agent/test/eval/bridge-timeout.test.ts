@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { Settings } from "../../src/config/settings";
 import {

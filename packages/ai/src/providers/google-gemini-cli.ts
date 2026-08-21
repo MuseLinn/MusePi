@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { scheduler } from "node:timers/promises";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { calculateCost } from "@musepi/pi-catalog/models";
 import {
 	getAntigravityModelWireProfile,

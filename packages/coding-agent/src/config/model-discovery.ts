@@ -413,6 +413,72 @@ export function discoverModelsByProviderType(
 	}
 }
 
+/**
+ * A draft OpenAI-compatible provider endpoint a configuration surface is
+ * editing but has not stored yet. The discovery answers "which models can
+ * this endpoint serve?" from the live wire instead of the registry, so the
+ * surface can offer candidates for adoption before anything is written.
+ *
+ * The credential is used for this one interrogation only and is never
+ * stored. Only the two OpenAI-compatible protocols can be read — the only
+ * shape a gateway, a self-hosted server, and the official endpoints agree
+ * on; every other protocol reports that it cannot be interrogated so the
+ * surface falls back to hand-entry rather than guessing a response shape.
+ */
+export interface DraftDiscoveryRequest {
+	/** Route the surface is drafting; names the profile when one exists. */
+	provider: string;
+	/** Wire protocol the endpoint speaks (openai-completions /
+	 *  openai-responses are the interrogable ones). */
+	api: string;
+	/** Endpoint base URL, as the form currently shows it. */
+	baseUrl: string;
+	/** Credential for this interrogation alone; the harness never stores it. */
+	apiKey?: string;
+}
+
+/**
+ * Interrogate one draft OpenAI-compatible endpoint for the models it
+ * advertises, without touching models.yml or any cache.
+ *
+ * The OpenAI-compatible model manager is reused as-is (same normalization,
+ * bearer auth, bundled-reference enrichment, and timeouts the registry's own
+ * `openai-models-list` discovery uses), so the draft answer matches what a
+ * stored provider would discover. Only `id`/`name` are returned: a
+ * configuration surface adopts ids and keeps the capacities its adapter
+ * requires.
+ *
+ * @param request - the draft endpoint facts, as the form currently shows them.
+ * @param fetchImpl - fetch implementation for this interrogation (tests stub
+ *   this; defaults to the global fetch).
+ * @returns the advertised models, in endpoint order, id + display name.
+ * @throws Error when the protocol has no readable listing, the endpoint
+ *   refuses or fails the request, or the reply is not a model listing.
+ */
+export async function discoverDraftModels(
+	request: DraftDiscoveryRequest,
+	fetchImpl: FetchImpl = globalThis.fetch,
+): Promise<{ id: string; name: string }[]> {
+	if (request.api !== "openai-completions" && request.api !== "openai-responses") {
+		throw new Error(
+			`protocol "${request.api}" has no model listing this build can read; enter this provider's models by hand`,
+		);
+	}
+	const discovered = await discoverOpenAIModelsList(
+		{
+			provider: request.provider,
+			api: request.api as Api,
+			baseUrl: request.baseUrl,
+			discovery: { type: "openai-models-list" },
+		},
+		{
+			fetch: fetchImpl,
+			getBearerApiKeyResolver: async () => request.apiKey,
+		},
+	);
+	return discovered.map(model => ({ id: model.id, name: model.name }));
+}
+
 async function discoverOllamaModelMetadata(
 	ctx: DiscoveryContext,
 	endpoint: string,

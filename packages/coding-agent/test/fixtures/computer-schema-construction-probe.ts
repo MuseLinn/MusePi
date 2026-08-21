@@ -1,4 +1,4 @@
-import { type as arkType } from "@musepi/omptype";
+import { type as arkType } from "@musepi/musepi-type";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { BUILTIN_TOOLS, ComputerTool, createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
 

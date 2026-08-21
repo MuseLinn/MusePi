@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { type Api, Effort, type Model } from "@musepi/pi-ai";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";

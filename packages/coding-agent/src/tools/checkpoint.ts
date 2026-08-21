@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import { prompt } from "@musepi/pi-utils";
 import checkpointDescription from "../prompts/tools/checkpoint.md" with { type: "text" };

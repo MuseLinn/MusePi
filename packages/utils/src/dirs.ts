@@ -29,8 +29,8 @@ export const MAIN_CONFIG_FILENAMES = ["config.yml", "config.yaml"] as const;
 /** Version (e.g. "1.0.0") */
 export const VERSION: string = version;
 
-/** Default User-Agent header string (e.g. "omp/17.2.12") */
-export const USER_AGENT = `omp/${VERSION}`;
+/** Default User-Agent header string (e.g. "musepi/0.4.2") */
+export const USER_AGENT = `musepi/${VERSION}`;
 
 /** Minimum Bun version */
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
@@ -555,9 +555,9 @@ export function getPluginsPackageJson(home?: string): string {
 	return path.join(getPluginsDir(home), "package.json");
 }
 
-/** Plugin lock file (~/.musepi/plugins/omp-plugins.lock.json). */
+/** Plugin lock file (~/.musepi/plugins/musepi-plugins.lock.json). */
 export function getPluginsLockfile(home?: string): string {
-	return path.join(getPluginsDir(home), "omp-plugins.lock.json");
+	return path.join(getPluginsDir(home), "musepi-plugins.lock.json");
 }
 
 /** Get the remote mount directory (~/.musepi/remote). */

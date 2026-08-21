@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { closeDb, getOverallStats, getRecentRequests, initDb, insertMessageStats } from "@musepi/omp-stats/db";
-import type { MessageStats } from "@musepi/omp-stats/types";
+import { closeDb, getOverallStats, getRecentRequests, initDb, insertMessageStats } from "@musepi/musepi-stats/db";
+import type { MessageStats } from "@musepi/musepi-stats/types";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { getStatsDbPath } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { complete } from "@musepi/pi-ai/stream";
 import type { Api, Context, Model, OptionsForApi, Tool } from "@musepi/pi-ai/types";
 import { getBundledModel } from "@musepi/pi-catalog/models";

@@ -1,11 +1,11 @@
-# omptype Guide (schema authoring in this repo)
+# musepi-type Guide (schema authoring in this repo)
 
-Internal schemas use **`@musepi/omptype`** — an ArkType-compatible validator
-with a lazy JIT runtime (`packages/omptype`). Author types with
-`import { type } from "@musepi/omptype"`.
+Internal schemas use **`@musepi/musepi-type`** — an ArkType-compatible validator
+with a lazy JIT runtime (`packages/omptype` — source directory keeps its historical name). Author types with
+`import { type } from "@musepi/musepi-type"`.
 
 
-## Why omptype (perf contract)
+## Why musepi-type (perf contract)
 
 - `type()` construction is ~100x cheaper than arktype (no eager codegen, no node interning).
 - The first two calls run an interpreter; the third call JIT-compiles a specialized
@@ -18,7 +18,7 @@ with a lazy JIT runtime (`packages/omptype`). Author types with
 
 `packages/ai/src/utils/schema/wire.ts` distinguishes two schema kinds:
 
-- **omptype** = a callable function with `.toJsonSchema` and `.assert` methods (`isArkSchema`).
+- **musepi-type** = a callable function with `.toJsonSchema` and `.assert` methods (`isArkSchema`).
 - **JSON Schema** = a plain object.
 
 At the provider boundary, `toolWireSchema()` calls `toJsonSchema()`, prunes
@@ -48,7 +48,7 @@ validate locally but degrade to their base schema on the wire.
 ## Validating (same as arktype)
 
 ```ts
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 const out = schema(value);
 if (out instanceof type.errors) {
   // out.summary → human message; entries have .path (array) and .problem
@@ -78,15 +78,15 @@ object-literal operands degrade — wrap them with `type({...})` first.
 
 ## Adapters
 
-TypeBox-style and Zod-style authoring are backed by the omptype runtime:
+TypeBox-style and Zod-style authoring are backed by the musepi-type runtime:
 
 ```ts
-import { Type, type Static } from "@musepi/omptype/typebox";
-import { z } from "@musepi/omptype/zod";
+import { Type, type Static } from "@musepi/musepi-type/typebox";
+import { z } from "@musepi/musepi-type/zod";
 
 const User = z.object({ name: z.string() });
 type User = z.infer<typeof User>;
 ```
 
-These produce real omptype schemas with JIT validation and `toJsonSchema`.
+These produce real musepi-type schemas with JIT validation and `toJsonSchema`.
 Internal code authors the string DSL directly.

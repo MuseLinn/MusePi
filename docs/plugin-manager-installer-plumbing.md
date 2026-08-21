@@ -1,6 +1,6 @@
 # Plugin manager and installer plumbing
 
-This document describes how `musepi plugin` npm/git/link and marketplace operations mutate plugin state on disk and become runtime capabilities. Marketplace installs keep their own registries and cache, then register the cached plugin through the same `node_modules` and `omp-plugins.lock.json` runtime surfaces used by npm/git/link installs; see `docs/marketplace.md`.
+This document describes how `musepi plugin` npm/git/link and marketplace operations mutate plugin state on disk and become runtime capabilities. Marketplace installs keep their own registries and cache, then register the cached plugin through the same `node_modules` and `musepi-plugins.lock.json` runtime surfaces used by npm/git/link installs; see `docs/marketplace.md`.
 
 ## Scope and architecture
 
@@ -20,7 +20,7 @@ musepi plugin <npm/link action> ...
   -> src/commands/plugin.ts
   -> runPluginCommand(...) in src/cli/plugin-cli.ts
   -> PluginManager method (install/list/uninstall/link/...)
-  -> mutate ~/.musepi/plugins/{package.json,node_modules,omp-plugins.lock.json}
+  -> mutate ~/.musepi/plugins/{package.json,node_modules,musepi-plugins.lock.json}
   -> runtime discovery: discoverAndLoadCustomTools(...) and discoverAndLoadExtensions(...)
   -> getAllPluginToolPaths(cwd) / getAllPluginExtensionPaths(cwd)
   -> custom tool loader imports tool modules; extension loader imports extension modules
@@ -28,7 +28,7 @@ musepi plugin <npm/link action> ...
 musepi plugin install name@marketplace / musepi install name@marketplace
   -> MarketplaceManager
   -> mutate marketplace registries and cache
-  -> symlink the cached package into the scope's node_modules and update omp-plugins.lock.json
+  -> symlink the cached package into the scope's node_modules and update musepi-plugins.lock.json
   -> plugin-root discovery loads skills/commands/etc.; runtime loaders import tools and extensions
 ```
 
@@ -46,7 +46,7 @@ Global plugin state lives under `~/.musepi/plugins`:
 
 - `package.json` — dependency manifest used by `bun install`/`bun uninstall` for npm-installed plugins
 - `node_modules/` — installed npm packages plus link and marketplace-cache symlinks
-- `omp-plugins.lock.json` — runtime state for npm/link/marketplace plugins:
+- `musepi-plugins.lock.json` — runtime state for npm/link/marketplace plugins:
   - enabled/disabled per plugin
   - selected feature set per plugin
   - persisted plugin settings
@@ -64,7 +64,7 @@ Marketplace installs add registry and cache state alongside those runtime entrie
 - `<cwd>/.musepi/plugins/installed_plugins.json` — project-scoped marketplace installs when available
 - `~/.musepi/plugins/cache/{marketplaces,plugins}/` — cached catalogs and plugin directories
 - `<scope>/plugins/node_modules/<package>` — symlink to the cached plugin, allowing its `package.json` `omp.extensions` and tools to load
-- `<scope>/plugins/omp-plugins.lock.json` — enablement and feature state shared with the runtime plugin loader
+- `<scope>/plugins/musepi-plugins.lock.json` — enablement and feature state shared with the runtime plugin loader
 
 ## Plugin spec parsing and metadata interpretation
 

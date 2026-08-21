@@ -6,6 +6,8 @@ import { usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
+import { DialogFrame } from "../DialogFrame";
+import { FadeScroll } from "../FadeScroll";
 import { GuiSelect } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
 import { ModelSelector } from "../ModelSelector";
@@ -95,6 +97,16 @@ interface CredentialInfo {
 	accountLabel: string;
 	note?: string | null;
 }
+const EMPTY_FORM = {
+	name: "",
+	baseUrl: "",
+	apiKey: "",
+	api: "openai-completions",
+	modelId: "",
+	modelName: "",
+	compactionModel: "",
+	adopted: [] as { id: string; name?: string }[],
+};
 
 export function ModelSection({
 	providers,
@@ -130,21 +142,27 @@ export function ModelSection({
 	rpc: RpcClient | null;
 	sessionId: string | null;
 }): ReactNode {
-	const [form, setForm] = useState({
-		name: "",
-		baseUrl: "",
-		apiKey: "",
-		api: "openai-completions",
-		modelId: "",
-		modelName: "",
-		compactionModel: "",
-	});
+	const [form, setForm] = useState(EMPTY_FORM);
+	// Candidate models an endpoint reported, while the picker dialog is open.
+	const [candidates, setCandidates] = useState<{ id: string; name?: string }[] | null>(null);
+	// Model ids checked in the candidate picker.
+	const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+	// "Fetch available models" in flight, and its failure reason (shown next
+	// to the form so the user can still fill models in by hand).
+	const [fetchingModels, setFetchingModels] = useState(false);
+	const [fetchError, setFetchError] = useState<string | null>(null);
 	// Section collapse (bitfun parity): show the first few cards, expand on
 	// demand — 70 login providers + the full catalog is too much for a grid.
 	const [showAll, setShowAll] = useState(false);
 	const [providerQuery, setProviderQuery] = useState("");
 	const [formBusy, setFormBusy] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
+	// Custom-provider add dialog: the config form lives in a DialogFrame
+	// opened from the "custom providers" tab (not a separate tab — user
+	// report: 添加自定义供应商应是有设计规范的弹窗). `addedName` is the
+	// transient success feedback after a save.
+	const [addOpen, setAddOpen] = useState(false);
+	const [addedName, setAddedName] = useState<string | null>(null);
 	const [inputValue, setInputValue] = useState("");
 	const [copied, setCopied] = useState(false);
 	// Per-role model presets (TUI /model parity): role -> model selector.
@@ -323,11 +341,65 @@ export function ModelSection({
 	// Role whose fallback-chain editor is open (inline ModelSelector).
 	const [fallbackEditor, setFallbackEditor] = useState<string | null>(null);
 
+	/**
+	 * Ask the endpoint the form currently shows which models it serves. The
+	 * draft — including a key typed but not yet saved — is sent as-is; the
+	 * reply is candidates the user picks from, never configuration written
+	 * behind them. A protocol with no readable listing or a dead endpoint is
+	 * not a dead end: the failure shows next to the form's rows.
+	 */
+	const fetchModels = async (): Promise<void> => {
+		if (!rpc) return;
+		setFetchError(null);
+		setFetchingModels(true);
+		try {
+			const result = await rpc.request<{ models?: { id: string; name?: string }[] }>("models.discover", {
+				baseUrl: form.baseUrl,
+				api: form.api,
+				provider: form.name,
+				...(form.apiKey ? { apiKey: form.apiKey } : {}),
+			});
+			const models = result?.models ?? [];
+			if (models.length === 0) {
+				setFetchError(t("no models found at this endpoint"));
+				return;
+			}
+			setCandidates(models);
+			setPicked(new Set(models.map(m => m.id)));
+		} catch (err) {
+			setFetchError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setFetchingModels(false);
+		}
+	};
+
+	/** Adopt the checked candidates into the form's model list. */
+	const adoptSelected = (): void => {
+		if (!candidates) return;
+		const ids = new Set(form.adopted.map(m => m.id));
+		const next = [...form.adopted];
+		for (const candidate of candidates) {
+			if (picked.has(candidate.id) && !ids.has(candidate.id)) {
+				next.push({ id: candidate.id, ...(candidate.name ? { name: candidate.name } : {}) });
+			}
+		}
+		setForm(v => ({ ...v, adopted: next }));
+		setCandidates(null);
+		setPicked(new Set());
+	};
+
+	/** Drop one adopted model row from the form. */
+	const removeAdopted = (id: string): void => {
+		setForm(v => ({ ...v, adopted: v.adopted.filter(m => m.id !== id) }));
+	};
+
 	const submitModel = async (): Promise<void> => {
 		setFormError(null);
 		if (!rpc || !sessionId) return;
-		if (!form.name || !form.baseUrl || !form.modelId) {
-			setFormError(t("provider name, base URL and model id are required"));
+		// A provider needs at least one model: either the hand-typed single
+		// row or rows adopted from the endpoint interrogation.
+		if (!form.name || !form.baseUrl || (form.modelId.length === 0 && form.adopted.length === 0)) {
+			setFormError(t("provider name, base URL and at least one model are required"));
 			return;
 		}
 		setFormBusy(true);
@@ -340,23 +412,26 @@ export function ModelSection({
 					...(form.apiKey ? { apiKey: form.apiKey } : {}),
 					...(form.api !== "openai" ? { api: form.api } : {}),
 					models: [
-						{
-							id: form.modelId,
-							...(form.modelName ? { name: form.modelName } : {}),
-							...(form.compactionModel.trim() ? { compactionModel: form.compactionModel.trim() } : {}),
-						},
+						...form.adopted.map(m => ({ id: m.id, ...(m.name ? { name: m.name } : {}) })),
+						...(form.modelId
+							? [
+									{
+										id: form.modelId,
+										...(form.modelName ? { name: form.modelName } : {}),
+										...(form.compactionModel.trim() ? { compactionModel: form.compactionModel.trim() } : {}),
+									},
+								]
+							: []),
 					],
 				},
 			});
-			setForm({
-				name: "",
-				baseUrl: "",
-				apiKey: "",
-				api: "openai-completions",
-				modelId: "",
-				modelName: "",
-				compactionModel: "",
-			});
+			setForm(EMPTY_FORM);
+			// Success feedback: close the dialog and show "provider added"
+			// inline where the open button was (the dialog itself can't hold
+			// state after closing). The chip fades after a beat.
+			setAddOpen(false);
+			setAddedName(form.name);
+			window.setTimeout(() => setAddedName(null), 2500);
 			onChanged();
 		} catch (err) {
 			setFormError(err instanceof Error ? err.message : String(err));
@@ -494,7 +569,6 @@ export function ModelSection({
 		{ id: "behavior", label: t("model behavior") },
 		{ id: "providers", label: t("providers") },
 		{ id: "custom", label: t("custom providers") },
-		{ id: "add", label: t("add custom provider") },
 	] as const;
 
 	// One role row (TUI /model roles-panel parity): tag + assignment state,
@@ -530,7 +604,7 @@ export function ModelSection({
 						<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("auto selection applies")}</div>
 					)}
 				</div>
-				<div className="flex items-center gap-1.5">
+				<div className="gui-role-actions flex items-center gap-1.5">
 					{/* Per-role thinking level (rides the selector suffix, TUI
 					 * formatModelSelectorValue parity). */}
 					<GuiSelect
@@ -1428,82 +1502,216 @@ export function ModelSection({
 									</div>
 								))
 							)}
-							{/* Explicit entry to the add-form tab — the only custom-config
-							 * entry point now (the old dashed card inside the providers
-							 * tab duplicated this tab). */}
-							<button type="button" className="gui-connect-add" onClick={() => setActiveTab("add")}>
-								<Icon name="add-circle" className="h-4 w-4" />
-								<span>{t("add custom provider")}</span>
-							</button>
+							{addedName ? (
+								<div className="mt-2 flex items-center gap-2 text-[13px] text-[var(--color-accent)]">
+									<Icon name="check" className="h-3.5 w-3.5" />
+									<span>{t("provider added")}</span>
+								</div>
+							) : (
+								<button
+									type="button"
+									className="gui-connect-add"
+									onClick={() => {
+										setAddOpen(true);
+										setFormError(null);
+									}}
+								>
+									<Icon name="add-circle" className="h-4 w-4" />
+									<span>{t("add custom provider")}</span>
+								</button>
+							)}
 						</div>
 					)}
 
-					{activeTab === "add" && (
-						<div className="gui-settings-section">
-							<div className="gui-settings-section-title">{t("add custom provider")}</div>
-							<div className="flex flex-col gap-2">
-								<input
-									className="gui-input"
-									placeholder={t("provider name")}
-									value={form.name}
-									onChange={e => setForm(v => ({ ...v, name: e.target.value }))}
-								/>
-								<input
-									className="gui-input"
-									placeholder="https://api.example.com/v1"
-									value={form.baseUrl}
-									onChange={e => setForm(v => ({ ...v, baseUrl: e.target.value }))}
-								/>
-								<input
-									className="gui-input"
-									placeholder={t("api key (optional)")}
-									type="password"
-									value={form.apiKey}
-									onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
-								/>
-								<div className="flex gap-2">
-									<input
-										className="gui-input flex-1"
-										placeholder={t("model id")}
-										value={form.modelId}
-										onChange={e => setForm(v => ({ ...v, modelId: e.target.value }))}
-									/>
-									<input
-										className="gui-input flex-1"
-										placeholder={t("model name (optional)")}
-										value={form.modelName}
-										onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
-									/>
-								</div>
-								<input
-									className="gui-input"
-									placeholder={t("compaction model id (optional)")}
-									value={form.compactionModel}
-									onChange={e => setForm(v => ({ ...v, compactionModel: e.target.value }))}
-								/>
-								<GuiSelect
-									className="gui-input"
-									value={form.api}
-									onChange={nv => setForm(v => ({ ...v, api: nv }))}
-									options={[
-										{ value: "openai-completions", label: "openai" },
-										{ value: "openai-responses", label: "openai responses" },
-										{ value: "anthropic-messages", label: "anthropic" },
-										{ value: "google-generative-ai", label: "google" },
-									]}
-								/>
-								{formError && <div className="text-[13px] text-[var(--color-error)]">{formError}</div>}
+					{/* Custom-provider add dialog (规范弹窗, not a tab — user report:
+					 * 添加自定义供应商应是有设计规范的弹窗). The form is the same
+					 * state as the old add-tab; the candidates DialogFrame nests
+					 * inside it (no conflict — both are portal-to-body). Because
+					 * both DialogFrames listen for Escape on document (capture),
+					 * closing this one must first (and only) dismiss the nested
+					 * candidate picker — otherwise one Escape would nuke a filled
+					 * form. On close without candidates, reset the form. */}
+					<DialogFrame
+						open={addOpen}
+						onClose={() => {
+							if (candidates !== null) {
+								setCandidates(null);
+								setPicked(new Set());
+								return;
+							}
+							setAddOpen(false);
+							setFormError(null);
+							setForm(EMPTY_FORM);
+							setFetchError(null);
+						}}
+						className="gui-dialog--settings"
+						label={t("add custom provider")}
+					>
+						<div className="gui-dialog-head">
+							<div className="text-[14px] font-medium">{t("add custom provider")}</div>
+						</div>
+						<div className="flex flex-col gap-2 p-4">
+							<input
+								className="gui-input"
+								placeholder={t("provider name")}
+								value={form.name}
+								onChange={e => setForm(v => ({ ...v, name: e.target.value }))}
+							/>
+							<input
+								className="gui-input"
+								placeholder="https://api.example.com/v1"
+								value={form.baseUrl}
+								onChange={e => setForm(v => ({ ...v, baseUrl: e.target.value }))}
+							/>
+							<input
+								className="gui-input"
+								placeholder={t("api key (optional)")}
+								type="password"
+								value={form.apiKey}
+								onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
+							/>
+							{/* Fetch available models: interrogates the endpoint the
+							 * form currently shows (including an unsaved key), and
+							 * offers the reply as adoptable candidates. */}
+							<div className="flex items-center gap-2">
 								<button
 									type="button"
-									className="gui-btn gui-btn-approve"
-									disabled={formBusy}
-									onClick={() => void submitModel()}
+									className="gui-btn"
+									disabled={!form.baseUrl || fetchingModels || formBusy}
+									title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
+									onClick={() => void fetchModels()}
 								>
-									{formBusy ? `${t("saving")}…` : t("add provider")}
+									{fetchingModels ? t("fetching models…") : t("fetch available models")}
+								</button>
+								{form.adopted.length > 0 && (
+									<span className="text-[12px] text-[var(--color-text-faint)]">
+										{t("adopted models")}: {form.adopted.length}
+									</span>
+								)}
+							</div>
+							{fetchError && <div className="text-[13px] text-[var(--color-error)]">{fetchError}</div>}
+							{form.adopted.length > 0 && (
+								<div className="flex flex-col gap-1">
+									{form.adopted.map(m => (
+										<div key={m.id} className="flex items-center gap-2">
+											<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+											<button
+												type="button"
+												className="gui-btn"
+												aria-label={`${t("delete")} ${m.id}`}
+												onClick={() => removeAdopted(m.id)}
+											>
+												<Icon name="delete-bin" className="h-3.5 w-3.5" />
+											</button>
+										</div>
+									))}
+								</div>
+							)}
+							<div className="flex gap-2">
+								<input
+									className="gui-input flex-1"
+									placeholder={t("model id")}
+									value={form.modelId}
+									onChange={e => setForm(v => ({ ...v, modelId: e.target.value }))}
+								/>
+								<input
+									className="gui-input flex-1"
+									placeholder={t("model name (optional)")}
+									value={form.modelName}
+									onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
+								/>
+							</div>
+							<input
+								className="gui-input"
+								placeholder={t("compaction model id (optional)")}
+								value={form.compactionModel}
+								onChange={e => setForm(v => ({ ...v, compactionModel: e.target.value }))}
+							/>
+							<GuiSelect
+								className="gui-input"
+								value={form.api}
+								onChange={nv => setForm(v => ({ ...v, api: nv }))}
+								options={[
+									{ value: "openai-completions", label: "openai" },
+									{ value: "openai-responses", label: "openai responses" },
+									{ value: "anthropic-messages", label: "anthropic" },
+									{ value: "google-generative-ai", label: "google" },
+								]}
+							/>
+							{formError && <div className="text-[13px] text-[var(--color-error)]">{formError}</div>}
+							<button
+								type="button"
+								className="gui-btn gui-btn-approve"
+								disabled={formBusy}
+								onClick={() => void submitModel()}
+							>
+								{formBusy ? `${t("saving")}…` : t("add provider")}
+							</button>
+						</div>
+						{/* Candidate picker for "fetch available models": the endpoint's
+						 * reply as a checkbox list the user adopts from. Rendered
+						 * inside the dialog frame so it portals to body independently. */}
+						<DialogFrame
+							open={candidates !== null}
+							onClose={() => {
+								setCandidates(null);
+								setPicked(new Set());
+							}}
+							className="gui-dialog--confirm"
+							label={t("available models")}
+						>
+							<div className="gui-dialog-head">
+								<div className="text-[14px] font-medium">{t("available models")}</div>
+								<button type="button" className="gui-btn" onClick={() => void adoptSelected()}>
+									{t("adopt selected")}
 								</button>
 							</div>
-						</div>
-					)}
+							<div className="p-3">
+								<div className="mb-2 flex items-center justify-between">
+									<span className="text-[13px] text-[var(--color-text-faint)]">
+										{t("select models to add")}
+									</span>
+									<button
+										type="button"
+										className="text-[12px] text-[var(--color-accent)]"
+										onClick={() => {
+											if (candidates && picked.size === candidates.length) {
+												setPicked(new Set());
+											} else if (candidates) {
+												setPicked(new Set(candidates.map(m => m.id)));
+											}
+										}}
+									>
+										{picked.size > 0 && candidates && picked.size === candidates.length
+											? t("deselect all")
+											: t("select all")}
+									</button>
+								</div>
+								<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
+									{(candidates ?? []).map(m => (
+										<label key={m.id} className="flex cursor-pointer items-center gap-2">
+											<input
+												type="checkbox"
+												checked={picked.has(m.id)}
+												onChange={() => {
+													const next = new Set(picked);
+													if (next.has(m.id)) next.delete(m.id);
+													else next.add(m.id);
+													setPicked(next);
+												}}
+											/>
+											<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+											{m.name && m.name !== m.id && (
+												<span className="truncate text-[12px] text-[var(--color-text-faint)]">
+													{m.name}
+												</span>
+											)}
+										</label>
+									))}
+								</FadeScroll>
+							</div>
+						</DialogFrame>
+					</DialogFrame>
 				</HeightMorph>
 			</div>
 		</>

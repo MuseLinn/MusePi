@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { initDb, insertMessageStats } from "@musepi/omp-stats/db";
-import { dedupeProjects, getGainDashboardStats, normalizeProjectPath } from "@musepi/omp-stats/gain-aggregator";
-import type { MessageStats } from "@musepi/omp-stats/types";
+import { initDb, insertMessageStats } from "@musepi/musepi-stats/db";
+import { dedupeProjects, getGainDashboardStats, normalizeProjectPath } from "@musepi/musepi-stats/gain-aggregator";
+import type { MessageStats } from "@musepi/musepi-stats/types";
 import { getStatsDbPath } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

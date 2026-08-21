@@ -12,7 +12,7 @@
  * in, text (or, with `schema`, a structured object) out.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { instrumentedCompleteSimple, resolveTelemetry } from "@musepi/pi-agent-core";
 import { type Api, Effort, type Model, type Tool } from "@musepi/pi-ai";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";

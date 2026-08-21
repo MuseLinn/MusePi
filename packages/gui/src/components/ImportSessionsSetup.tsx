@@ -2,6 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
+import { FadeScroll } from "./FadeScroll";
 
 interface AgentSource {
 	source: string;
@@ -187,7 +188,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 					{agents.length === 0 && (
 						<div className="text-[12px] text-[var(--color-text-faint)]">{t("no agents")}</div>
 					)}
-					<div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+					<FadeScroll className="flex max-h-48 flex-col gap-1 overflow-y-auto">
 						{agents.map(agent => (
 							<label key={agent.source} className="flex cursor-pointer items-center gap-2">
 								<input
@@ -198,7 +199,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 								<span className="text-[13px]">{agent.name}</span>
 							</label>
 						))}
-					</div>
+					</FadeScroll>
 					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
 					<button
 						type="button"
@@ -216,7 +217,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 							{t("no sessions found in selected agents")}
 						</div>
 					)}
-					<div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+					<FadeScroll className="flex max-h-64 flex-col gap-2 overflow-y-auto">
 						{scanned.map(src => (
 							<div key={src.source} className="rounded-lg border border-[var(--border)] p-2">
 								<div className="flex items-center justify-between">
@@ -275,7 +276,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 								</div>
 							</div>
 						))}
-					</div>
+					</FadeScroll>
 					{scanError && <div className="text-[12px] text-[var(--color-danger)]">{scanError}</div>}
 					{done && (
 						<div className="text-[12px] text-[var(--color-text-faint)]">

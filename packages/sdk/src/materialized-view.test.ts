@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { MaterializedView } from "./materialized-view";
 import type { AgentEvent, SessionEntry } from "@musepi/pi-wire";
+import { MaterializedView } from "./materialized-view";
 
 function userMsg(ts: number, text = `m${ts}`): AgentEvent {
 	return {
@@ -51,14 +51,56 @@ describe("MaterializedView lazy backfill", () => {
 		const first = entries[0];
 		expect(first.type).toBe("message");
 		if (first.type === "message") {
-			expect(first.message.content).toBe("updated");
+			// first.message 是 WireMessage 联合(含无 content 的 BashExecutionMessage),
+			// 取 content 需显式收窄到有 content 的成员形状。
+			expect((first.message as { content?: unknown }).content).toBe("updated");
 		}
 	});
 
 	test("empty prepend is a no-op", () => {
 		const view = MaterializedView.replay("s1", "/tmp", []);
 		view.apply(userMsg(1));
-		view.prependEntries([], 0);
+		view.prependEntries([]);
 		expect(view.snapshot().entries.length).toBe(1);
+	});
+});
+
+describe("MaterializedView parentId 保留(/tree 消息树数据契约)", () => {
+	test("message 携带 parentId 时投影保留(向前兼容 live 发射端打标)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		// 模拟未来 live 发射端打标:message 自带 parentId(父 = 上一条消息)。
+		view.apply({
+			type: "message_start",
+			message: { role: "user", content: "第一问", timestamp: 1 },
+		});
+		view.apply({
+			type: "message_start",
+			message: { role: "user", content: "追问", timestamp: 2, parentId: "user:1" },
+		});
+		const entries = view.snapshot().entries;
+		expect(entries).toHaveLength(2);
+		expect(entries[0]).toMatchObject({ id: "user:1", parentId: null });
+		expect(entries[1]).toMatchObject({ id: "user:2", parentId: "user:1" });
+	});
+
+	test("message 无 parentId 时退化为 null(当前 live 事件行为不变)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply({ type: "message_start", message: { role: "user", content: "x", timestamp: 5 } });
+		expect(view.snapshot().entries[0]).toMatchObject({ parentId: null });
+	});
+
+	test("从快照恢复保留既有 parentId(历史/持久化路径)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		for (let i = 1; i <= 2; i++) view.apply(userMsg(i));
+		const snap = view.snapshot();
+
+		// 老版 transcript/历史快照的 entries 自带 parentId。
+		const old = snap.entries.map((e, i) => ({
+			...e,
+			id: `msg-${i + 1}`,
+			parentId: i === 0 ? null : `msg-${i}`,
+		}));
+		const restored = MaterializedView.fromSnapshot("s1", "/tmp", { ...snap, entries: old });
+		expect(restored?.snapshot().entries.map(e => e.parentId)).toEqual([null, "msg-1"]);
 	});
 });

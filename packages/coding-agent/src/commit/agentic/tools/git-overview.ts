@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { CommitAgentState, GitOverviewSnapshot } from "../../../commit/agentic/state";
 import { extractScopeCandidates } from "../../../commit/analysis/scope";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";

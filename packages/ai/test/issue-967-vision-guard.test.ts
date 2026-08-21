@@ -3,7 +3,10 @@ import { convertAnthropicMessages } from "@musepi/pi-ai/providers/anthropic";
 import { convertMessages as convertGoogleMessages } from "@musepi/pi-ai/providers/google-shared";
 import { convertCodexResponsesMessages } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { convertMessages as convertOpenAICompletionsMessages } from "@musepi/pi-ai/providers/openai-completions";
-import { appendResponsesToolResultMessages, convertResponsesInputContent } from "@musepi/pi-ai/providers/openai-shared";
+import {
+	appendResponsesToolResultMessages,
+	convertResponsesInputContent,
+} from "@musepi/pi-ai/providers/openai-shared";
 import { NON_VISION_IMAGE_PLACEHOLDER } from "@musepi/pi-ai/providers/vision-guard";
 import type { Api, AssistantMessage, Context, Model, ModelSpec, ToolResultMessage, Usage } from "@musepi/pi-ai/types";
 import { buildModel } from "@musepi/pi-catalog/build";
@@ -24,8 +27,8 @@ const compat: ResolvedOpenAICompat = {
 	supportsMultipleSystemMessages: true,
 	supportsReasoningEffort: true,
 	supportsReasoningParams: true,
-	supportsPenaltyAndStopParams: true,
 	supportsSamplingParams: true,
+	supportsPenaltyAndStopParams: true,
 	alwaysSendMaxTokens: false,
 	isOpenRouterHost: false,
 	isVercelGatewayHost: false,
@@ -52,6 +55,7 @@ const compat: ResolvedOpenAICompat = {
 	allowsSyntheticReasoningContentForToolCalls: true,
 	replayReasoningContent: false,
 	qwenPreserveThinking: false,
+	qwenTemplateReasoningEffort: false,
 	requiresAssistantContentForToolCalls: false,
 	openRouterRouting: {},
 	vercelGatewayRouting: {},

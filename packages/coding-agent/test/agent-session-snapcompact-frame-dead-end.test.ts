@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Agent, RESCUE_SHAKE_CONFIG } from "@musepi/pi-agent-core";
@@ -38,6 +38,12 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 	let authStorage: AuthStorage;
 	let modelRegistry: ModelRegistry;
 
+	beforeAll(async () => {
+		authStorage = await AuthStorage.create(":memory:");
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		modelRegistry = new ModelRegistry(authStorage);
+	});
+
 	const NOTICE_SOURCE = "compaction";
 	const NO_PROGRESS_FRAGMENT = "Compaction freed too little context to make progress";
 	const SEEDED_FRAME_COUNT = 16;
@@ -75,10 +81,7 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 		preArchiveKeptText?: string;
 	}): Promise<void> {
 		tempDir = TempDir.createSync("@pi-snapcompact-frame-dead-end-");
-		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
-		authStorage.setRuntimeApiKey("anthropic", "test-key");
-		modelRegistry = new ModelRegistry(authStorage);
-		sessionManager = SessionManager.create(tempDir.path(), tempDir.path());
+		sessionManager = SessionManager.inMemory(tempDir.path());
 
 		let extensionRunner: ExtensionRunner | undefined;
 		if (options.hookArchiveFrames !== undefined) {
@@ -157,9 +160,10 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 				"stale snapcompact archive",
 				userEntryId,
 				150_000,
-				{ readFiles: ["src/a.ts"], modifiedFiles: ["src/b.ts"] },
-				false,
-				makeArchivePreserveData(options.frameCount),
+				{
+					details: { readFiles: ["src/a.ts"], modifiedFiles: ["src/b.ts"] },
+					preserveData: makeArchivePreserveData(options.frameCount),
+				},
 			);
 		}
 
@@ -177,7 +181,7 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 			sessionManager,
 			settings: Settings.isolated({
 				"compaction.autoContinue": true,
-				"compaction.strategy": "snapcompact",
+				"compaction.methodOrder": ["snapcompact", "soft"],
 				// Fixed trigger so the rescue's threshold-derived frame budget is
 				// deterministic: band 0.8 × 60k = 48k minus base/edge reserves
 				// yields well under 16 frames — the rebuild must shrink.
@@ -192,10 +196,13 @@ describe("AgentSession snapcompact frame dead-end rescue", () => {
 		try {
 			await session?.dispose();
 		} finally {
-			authStorage?.close();
 			await tempDir?.remove();
 			vi.restoreAllMocks();
 		}
+	});
+
+	afterAll(() => {
+		authStorage.close();
 	});
 
 	function collectNotices() {

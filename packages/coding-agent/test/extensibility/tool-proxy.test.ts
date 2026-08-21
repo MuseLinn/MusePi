@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { isArkSchema } from "@musepi/pi-ai/utils/schema";
 import { applyToolProxy } from "../../src/extensibility/tool-proxy";
 

@@ -94,7 +94,7 @@ export const statsUsage = {
 	method: "stats.usage",
 	auth: "local",
 	params: Type.Object({ range: Type.Optional(Type.String()) }),
-	result: Type.Any({ description: "Usage/cost rows (@musepi/omp-stats data)" }),
+	result: Type.Any({ description: "Usage/cost rows (@musepi/musepi-stats data)" }),
 	impl: "omp-stats aggregator",
 } satisfies MethodEntry;
 

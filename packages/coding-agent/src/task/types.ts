@@ -1,4 +1,4 @@
-import { type BaseType, type } from "@musepi/omptype";
+import { type BaseType, type } from "@musepi/musepi-type";
 import type { Usage } from "@musepi/pi-ai";
 import { $env } from "@musepi/pi-utils";
 import type { AgentSessionEvent } from "../session/agent-session";

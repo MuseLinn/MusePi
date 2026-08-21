@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { declare, type Out, type } from "@musepi/omptype/ark";
+import { declare, type Out, type } from "@musepi/musepi-type/ark";
 import type { Eq } from "./type-assert";
 
 it("shallow", () => {

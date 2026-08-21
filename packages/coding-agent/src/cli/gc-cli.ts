@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { withStatsSyncLock } from "@musepi/omp-stats/aggregator";
+import { withStatsSyncLock } from "@musepi/musepi-stats/aggregator";
 import {
 	getAgentDir,
 	getBlobsDir,

@@ -6,7 +6,7 @@
  * / `write xd://<tool>`).
  */
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { CustomToolAdapter } from "@musepi/pi-coding-agent/extensibility/custom-tools/wrapper";
 import type { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions/runner";

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool, ThinkingLevel } from "@musepi/pi-agent-core";
 import { type Api, Effort, type Model } from "@musepi/pi-ai";
 import { createMockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";

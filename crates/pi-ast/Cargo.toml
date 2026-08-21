@@ -73,3 +73,4 @@ tree-sitter-vue.workspace = true
 tree-sitter-xml.workspace = true
 tree-sitter-yaml.workspace = true
 tree-sitter-zig.workspace = true
+xxhash-rust.workspace = true

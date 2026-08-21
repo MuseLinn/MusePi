@@ -39,12 +39,14 @@ pub mod grep;
 pub mod highlight;
 pub mod html;
 pub mod iofs;
+pub mod js;
 pub mod keys;
 pub mod live;
 /// PDF inspection and Markdown conversion.
 pub mod pdf;
 pub mod sixel;
 pub mod snapcompact;
+pub mod utok;
 pub use pi_ast::language;
 
 pub mod power;
@@ -257,7 +259,7 @@ fn create_windows_napi_tokio_runtime() -> Option<tokio::runtime::Runtime> {
 /// MUST stay in sync with `VERSION_SENTINEL_EXPORT` in
 /// `packages/natives/native/index.js` (which derives the name from
 /// `package.json#version`).
-#[napi(js_name = "__piNativesV17_3_4")]
+#[napi(js_name = "__piNativesV17_4_0")]
 pub const fn pi_natives_version_sentinel() {}
 
 /// Native module entry point: install crash diagnostics before any tool can

@@ -77,7 +77,7 @@ describe("PluginManager.install load validation", () => {
 		vi.spyOn(piUtils, "getPluginsDir").mockReturnValue(pluginsDir);
 		vi.spyOn(piUtils, "getPluginsNodeModules").mockReturnValue(pluginsNodeModules);
 		vi.spyOn(piUtils, "getPluginsPackageJson").mockReturnValue(pluginsPkgJson);
-		vi.spyOn(piUtils, "getPluginsLockfile").mockReturnValue(path.join(tmpRoot, "omp-plugins.lock.json"));
+		vi.spyOn(piUtils, "getPluginsLockfile").mockReturnValue(path.join(tmpRoot, "musepi-plugins.lock.json"));
 		vi.spyOn(piUtils, "getProjectDir").mockReturnValue(tmpRoot);
 		vi.spyOn(piUtils, "getProjectPluginOverridesPath").mockReturnValue(path.join(tmpRoot, "plugin-overrides.json"));
 	});
@@ -202,7 +202,7 @@ describe("PluginManager.install load validation", () => {
 		const pluginsPackage = await Bun.file(pluginsPkgJson).json();
 		expect(pluginsPackage.dependencies ?? {}).toEqual({});
 		expect(await Bun.file(path.join(pluginsNodeModules, "broken-plugin", "package.json")).exists()).toBe(false);
-		expect(await Bun.file(path.join(tmpRoot, "omp-plugins.lock.json")).exists()).toBe(false);
+		expect(await Bun.file(path.join(tmpRoot, "musepi-plugins.lock.json")).exists()).toBe(false);
 	});
 
 	test("restores the previous package tree when reinstall validation fails", async () => {
@@ -211,7 +211,7 @@ describe("PluginManager.install load validation", () => {
 			JSON.stringify({ name: "omp-plugins", private: true, dependencies: { "broken-plugin": "1.0.0" } }, null, 2),
 		);
 		await Bun.write(
-			path.join(tmpRoot, "omp-plugins.lock.json"),
+			path.join(tmpRoot, "musepi-plugins.lock.json"),
 			JSON.stringify(
 				{ plugins: { "broken-plugin": { version: "1.0.0", enabledFeatures: null, enabled: true } }, settings: {} },
 				null,
@@ -262,7 +262,7 @@ describe("PluginManager.install load validation", () => {
 		).text();
 		expect(restoredExtension).toContain("old-ok");
 		expect(restoredExtension).not.toContain("missing-peer");
-		const lock = await Bun.file(path.join(tmpRoot, "omp-plugins.lock.json")).json();
+		const lock = await Bun.file(path.join(tmpRoot, "musepi-plugins.lock.json")).json();
 		expect(lock.plugins["broken-plugin"]).toEqual({ version: "1.0.0", enabledFeatures: null, enabled: true });
 	});
 
@@ -276,7 +276,7 @@ describe("PluginManager.install load validation", () => {
 			),
 		);
 		await Bun.write(
-			path.join(tmpRoot, "omp-plugins.lock.json"),
+			path.join(tmpRoot, "musepi-plugins.lock.json"),
 			JSON.stringify(
 				{ plugins: { "git-plugin": { version: "1.0.0", enabledFeatures: null, enabled: true } }, settings: {} },
 				null,
@@ -340,7 +340,7 @@ describe("PluginManager.install load validation", () => {
 		).text();
 		expect(restoredExtension).toContain("git-old-ok");
 		expect(restoredExtension).not.toContain("missing-peer");
-		const lock = await Bun.file(path.join(tmpRoot, "omp-plugins.lock.json")).json();
+		const lock = await Bun.file(path.join(tmpRoot, "musepi-plugins.lock.json")).json();
 		expect(lock.plugins["git-plugin"]).toEqual({ version: "1.0.0", enabledFeatures: null, enabled: true });
 	});
 
@@ -390,7 +390,7 @@ describe("PluginManager.install load validation", () => {
 		const pluginsPackage = await Bun.file(pluginsPkgJson).json();
 		expect(pluginsPackage.dependencies ?? {}).toEqual({});
 		expect(await Bun.file(path.join(pluginsNodeModules, "partial-plugin", "package.json")).exists()).toBe(false);
-		expect(await Bun.file(path.join(tmpRoot, "omp-plugins.lock.json")).exists()).toBe(false);
+		expect(await Bun.file(path.join(tmpRoot, "musepi-plugins.lock.json")).exists()).toBe(false);
 	});
 
 	test("restores bun.lock when a git reinstall fails validation (#3069 follow-up)", async () => {
@@ -412,7 +412,7 @@ describe("PluginManager.install load validation", () => {
 		const ORIGINAL_LOCK = '# bun.lock\n"git-plugin": "github:org/plugin#sha-v1"\n';
 		await Bun.write(bunLockPath, ORIGINAL_LOCK);
 		await Bun.write(
-			path.join(tmpRoot, "omp-plugins.lock.json"),
+			path.join(tmpRoot, "musepi-plugins.lock.json"),
 			JSON.stringify(
 				{ plugins: { "git-plugin": { version: "1.0.0", enabledFeatures: null, enabled: true } }, settings: {} },
 				null,

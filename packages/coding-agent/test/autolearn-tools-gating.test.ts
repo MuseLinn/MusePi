@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { getManagedSkillsDir } from "@musepi/pi-coding-agent/autolearn/managed-skills";
 import { type SettingPath, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { resetActiveSkillsForTests, type Skill, setActiveSkills } from "@musepi/pi-coding-agent/extensibility/skills";

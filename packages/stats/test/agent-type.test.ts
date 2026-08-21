@@ -2,10 +2,10 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getOverviewStats } from "@musepi/omp-stats/aggregator";
-import { getStatsByAgentType, initDb, insertMessageStats } from "@musepi/omp-stats/db";
-import { classifyAgentType } from "@musepi/omp-stats/parser";
-import type { AgentType, MessageStats } from "@musepi/omp-stats/types";
+import { getOverviewStats } from "@musepi/musepi-stats/aggregator";
+import { getStatsByAgentType, initDb, insertMessageStats } from "@musepi/musepi-stats/db";
+import { classifyAgentType } from "@musepi/musepi-stats/parser";
+import type { AgentType, MessageStats } from "@musepi/musepi-stats/types";
 import { getConfigRootDir, getSessionsDir, getStatsDbPath } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

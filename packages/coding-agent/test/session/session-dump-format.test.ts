@@ -8,7 +8,7 @@
  * previous `<parameter>`-per-key JSON Schema dump dropped entirely.
  */
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { Model, Usage } from "@musepi/pi-ai";
 import { formatSessionDumpText } from "@musepi/pi-coding-agent/session/session-dump-format";
 import { INTENT_FIELD } from "@musepi/pi-wire";

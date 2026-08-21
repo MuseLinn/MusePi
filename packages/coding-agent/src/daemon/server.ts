@@ -20,7 +20,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import { getDashboardStats } from "@musepi/omp-stats";
+import { getDashboardStats } from "@musepi/musepi-stats";
 import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
 import type { AuthStorage, DisabledCredentialSummary, UsageReport } from "@musepi/pi-ai";
@@ -33,7 +33,7 @@ import {
 } from "@musepi/pi-ai/registry/api-key-validation";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
-import { FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
+import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
 import type { AgentEvent, SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
@@ -80,7 +80,6 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
-import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
@@ -118,6 +117,7 @@ import {
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
+import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 import {
 	collectStoredAccounts,
@@ -168,6 +168,19 @@ export async function sessionPromptInputs(
  *  entries that the desktop transcript consumes — smoothStreaming,
  *  hideToolActivity, showTokenUsage, collapseCompacted — are NOT flagged,
  *  so they stay out of this note and the GUI's TUI-only badge.) */
+
+/** Lazy native desktop session singleton: `computer.capabilities` RPC reads
+ *  macOS Screen Recording / Accessibility / Input permissions without
+ *  spinning a new worker thread per call. The first call initializes the
+ *  backend (worker thread stays resident for the daemon lifetime). */
+let desktopCapabilitiesSession: DesktopSession | undefined;
+async function getDesktopCapabilities() {
+	if (!desktopCapabilitiesSession) {
+		desktopCapabilitiesSession = new DesktopSession();
+		await desktopCapabilitiesSession.listDisplays().catch(() => {});
+	}
+	return desktopCapabilitiesSession.capabilities;
+}
 async function desktopSessionPromptInputs(
 	cwd: string,
 ): Promise<{ customSystemPrompt?: string; appendSystemPrompt?: string }> {
@@ -1562,6 +1575,23 @@ export class DaemonSessionHost {
 			if (event.type === "agent_end") {
 				this.#scheduleIdleRecap(live);
 				this.onAgentEnd?.(live);
+			}
+			// Live 消息树 seam(/tree 语义,2026-08-21):wire 事件在消息发射时尚未入树
+			// (agent.appendMessage 先发事件、sessionManager.appendMessage 后插入),此
+			// 刻 sessionManager.leafId() 即该消息的父节点——打标后 wire 事件携带
+			// parentId 直达 GUI(MaterializedView 保留 message.parentId),GUI 侧
+			// lib/message-tree.ts 即可重建会话内条目树。旧/持久化消息自带 parentId
+			// 时原样保留(??= 只补缺省)。
+			if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
+				const m = event.message as { role?: string; parentId?: string | null } | null;
+				if (
+					m !== null &&
+					typeof m === "object" &&
+					(m.role === "user" || m.role === "assistant" || m.role === "toolResult") &&
+					m.parentId === undefined
+				) {
+					m.parentId = agentSession.sessionManager.getLeafId() ?? null;
+				}
 			}
 			const seq = ++live.seq;
 			const wireEvent = toWireAgentEvent(event);
@@ -3723,18 +3753,18 @@ export class DaemonServer {
 				// Usage-stats sync (CLI `musepi stats` parity): incrementally
 				// scan every session file (mtime/offset skip) into the shared
 				// SQLite stats db. GUI settings → 数据与统计 → 使用统计.
-				const { syncAllSessions } = await import("@musepi/omp-stats");
+				const { syncAllSessions } = await import("@musepi/musepi-stats");
 				return await syncAllSessions();
 			}
 			case "stats.dashboard": {
 				// Aggregated usage dashboard (model/folder/time-series/cost).
-				const { getDashboardStats } = await import("@musepi/omp-stats");
+				const { getDashboardStats } = await import("@musepi/musepi-stats");
 				const { range } = (params ?? {}) as { range?: string };
 				return await getDashboardStats(typeof range === "string" && range ? range : null);
 			}
 			case "stats.tools": {
 				// Tool-usage dashboard (calls per tool, by model).
-				const { getToolDashboardStats } = await import("@musepi/omp-stats");
+				const { getToolDashboardStats } = await import("@musepi/musepi-stats");
 				return await getToolDashboardStats();
 			}
 			case "session.pauseStatus": {
@@ -6635,13 +6665,13 @@ export class DaemonServer {
 				const base = modesOf(live.agentSession);
 				// 会话模式开关(TUI /fast /computer /vision /prewalk parity):
 				// 只读快照,写入走 session.setFastMode 等。
-				const mc = (live.agentSession as unknown as {
+				const mc = live.agentSession as unknown as {
 					isFastModeEnabled?(): boolean;
 					isFastModeActive?(): boolean;
 					inspectImageState?(): { mode: string; active: boolean; model?: string };
 					getPrewalkState?(): { enabled: boolean; target?: { id: string }; thinkingLevel?: string } | undefined;
 					getEnabledToolNames?(): string[];
-				});
+				};
 				const computerEnabled =
 					(mc.getEnabledToolNames?.() ?? []).includes("computer") ||
 					this.#host.settings()?.getRaw("computer.enabled") === true;
@@ -6660,11 +6690,13 @@ export class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string; recentLimit?: number };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				return live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 }) ?? {
-					running: [],
-					recent: [],
-					delivery: { queued: 0, delivering: false },
-				};
+				return (
+					live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 }) ?? {
+						running: [],
+						recent: [],
+						delivery: { queued: 0, delivering: false },
+					}
+				);
 			}
 			case "session.jobsCancel": {
 				// 取消一个后台任务(TUI /jobs parity)。
@@ -6683,7 +6715,8 @@ export class DaemonServer {
 				const enabled = live.agentSession.setFastMode(p.enabled);
 				return {
 					enabled,
-					active: (live.agentSession as unknown as { isFastModeActive?(): boolean }).isFastModeActive?.() ?? enabled,
+					active:
+						(live.agentSession as unknown as { isFastModeActive?(): boolean }).isFastModeActive?.() ?? enabled,
 				};
 			}
 			case "session.setComputerEnabled": {
@@ -6693,6 +6726,12 @@ export class DaemonServer {
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				await live.agentSession.setComputerToolEnabled(p.enabled);
 				return { enabled: p.enabled };
+			}
+			case "computer.capabilities": {
+				// macOS 权限检测(屏幕录制/辅助功能/输入):返回 DesktopCapabilities。
+				// 不依赖特定会话;native 会话单例懒加载(worker 线程常驻,避免
+				// 每次 RPC 新建泄漏线程)。未启动时 listDisplays 触发初始化。
+				return await getDesktopCapabilities();
 			}
 			case "session.setVisionMode": {
 				// TUI /vision parity:会话内覆盖 inspect_image 委托模式。
@@ -6710,7 +6749,9 @@ export class DaemonServer {
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const settings = this.#host.settings();
 				if (!settings) throw new Error("settings unavailable");
-				const { expandRoleAlias, getModelMatchPreferences, resolveCliModel } = await import("../config/model-resolver");
+				const { expandRoleAlias, getModelMatchPreferences, resolveCliModel } = await import(
+					"../config/model-resolver"
+				);
 				const rolePattern = expandRoleAlias(p.model ?? "@smol", settings);
 				const resolved = resolveCliModel({
 					cliModel: rolePattern,
@@ -7384,6 +7425,33 @@ export class DaemonServer {
 					return { providers: {} };
 				}
 			}
+			case "models.discover": {
+				// Interrogate one DRAFT endpoint for the models it advertises —
+				// the GUI's "fetch available models" button. Nothing is stored:
+				// the request carries the endpoint, protocol, and one-shot
+				// credential the form currently shows, and the reply is
+				// candidates a surface may offer for adoption. Failures are the
+				// user's next move (a wrong endpoint, a rejected key, a protocol
+				// with no readable listing all end at hand-entry), so they
+				// surface as the RPC error message instead of a stored state.
+				const p = (params ?? {}) as {
+					baseUrl?: string;
+					api?: string;
+					apiKey?: string;
+					provider?: string;
+				};
+				if (!p.baseUrl || p.baseUrl.length === 0) {
+					throw new Error("baseUrl is required to fetch models");
+				}
+				const { discoverDraftModels } = await import("../config/model-discovery");
+				const models = await discoverDraftModels({
+					provider: p.provider ?? "custom",
+					api: p.api ?? "openai-completions",
+					baseUrl: p.baseUrl,
+					...(p.apiKey && p.apiKey.length > 0 ? { apiKey: p.apiKey } : {}),
+				});
+				return { models };
+			}
 			case "settings.get": {
 				// Global settings snapshot (session-less): the GUI reads
 				// defaults/roles here instead of per-session state.
@@ -7693,28 +7761,93 @@ export class DaemonServer {
 				if (!sent) throw new Error("Queued message not found");
 				return { sent: true };
 			}
-			case "notes.get": {
-				// Project notes (right-panel 项目笔记): one markdown file per
-				// workspace, stored under the agent dir (never touches the
-				// user's project). Returns "" when no note exists yet.
+			case "notes.list": {
+				// Project notes (right-panel 项目知识, openchamber v1.19 parity):
+				// one markdown file per note under agentDir/notes/<cwdHash>/,
+				// never touching the user's project. The legacy single-blob
+				// note (<slug>.md) migrates into the per-project dir on first
+				// list, then the old file is removed.
 				const p = (params ?? {}) as { cwd?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				const slug = await hashProjectPath(cwd);
-				const file = path.join(getAgentDir(), "notes", `${slug}.md`);
+				const dir = path.join(getAgentDir(), "notes", slug);
+				// Legacy migration: old single-note file → first note.
+				const legacy = path.join(getAgentDir(), "notes", `${slug}.md`);
 				try {
-					return { text: await fs.promises.readFile(file, "utf8") };
+					const legacyText = await fs.promises.readFile(legacy, "utf8");
+					if (legacyText.trim()) {
+						await fs.promises.mkdir(dir, { recursive: true });
+						const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+						await fs.promises.writeFile(path.join(dir, `${stamp}-note.md`), legacyText, "utf8");
+					}
+					await fs.promises.rm(legacy, { force: true });
 				} catch {
-					return { text: "" };
+					// no legacy file
+				}
+				let files: string[] = [];
+				try {
+					files = (await fs.promises.readdir(dir)).filter(f => f.endsWith(".md"));
+				} catch {
+					// no notes yet
+				}
+				const notes = [];
+				for (const f of files.sort()) {
+					const id = f.slice(0, -3);
+					let createdAt = f.slice(0, 15);
+					let updatedAt = createdAt;
+					try {
+						const st = await fs.promises.stat(path.join(dir, f));
+						updatedAt = st.mtime.toISOString().replace(/[:.]/g, "-").slice(0, 19);
+						if (createdAt.length < 14) createdAt = st.mtime.toISOString().slice(0, 10);
+					} catch {
+						// keep filename date
+					}
+					const body = await fs.promises.readFile(path.join(dir, f), "utf8");
+					notes.push({ id, body, createdAt, updatedAt });
+				}
+				return { notes: notes.reverse() };
+			}
+			case "notes.create": {
+				// Create one note. A blank body is a rejected write, not a
+				// delete (openchamber v1.19 invariant).
+				const p = (params ?? {}) as { cwd?: string; body?: string };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				const body = (p.body ?? "").trim();
+				if (!body) return { error: "blank note body" };
+				const slug = await hashProjectPath(cwd);
+				const dir = path.join(getAgentDir(), "notes", slug);
+				await fs.promises.mkdir(dir, { recursive: true });
+				const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+				const id = `${stamp}-note`;
+				await fs.promises.writeFile(path.join(dir, `${id}.md`), body, "utf8");
+				return { id, createdAt: stamp };
+			}
+			case "notes.update": {
+				const p = (params ?? {}) as { cwd?: string; id?: string; body?: string };
+				const cwd = p.cwd?.trim() || this.#host.cwd();
+				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid note id" };
+				const body = p.body ?? "";
+				if (!body.trim()) return { error: "blank note body" };
+				const slug = await hashProjectPath(cwd);
+				const file = path.join(getAgentDir(), "notes", slug, `${p.id}.md`);
+				try {
+					await fs.promises.writeFile(file, body, "utf8");
+					return { ok: true };
+				} catch {
+					return { error: "note not found" };
 				}
 			}
-			case "notes.set": {
-				const p = (params ?? {}) as { cwd?: string; text?: string };
+			case "notes.delete": {
+				const p = (params ?? {}) as { cwd?: string; id?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
+				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid note id" };
 				const slug = await hashProjectPath(cwd);
-				const dir = path.join(getAgentDir(), "notes");
-				await fs.promises.mkdir(dir, { recursive: true });
-				await fs.promises.writeFile(path.join(dir, `${slug}.md`), p.text ?? "", "utf8");
-				return { ok: true };
+				try {
+					await fs.promises.unlink(path.join(getAgentDir(), "notes", slug, `${p.id}.md`));
+					return { ok: true };
+				} catch {
+					return { error: "note not found" };
+				}
 			}
 			case "plans.list": {
 				// Saved plan files (right-panel 计划, openchamber parity): one

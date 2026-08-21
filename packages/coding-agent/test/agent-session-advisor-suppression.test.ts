@@ -18,7 +18,7 @@
  *     follow-up stays queued for the next explicit resume rather than auto-running.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
 import type { ToolCall } from "@musepi/pi-ai";
 import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { Effort } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";

@@ -1,15 +1,15 @@
-import { type } from "@musepi/omptype";
-import { IR_BRAND } from "@musepi/omptype/ir";
+import { type } from "@musepi/musepi-type";
+import { IR_BRAND } from "@musepi/musepi-type/ir";
 import {
 	type AnySchema,
 	type ObjectOpts,
 	Type as OmpType,
 	type TypeBuilder as OmpTypeBuilder,
 	type TUnsafe,
-} from "@musepi/omptype/typebox";
+} from "@musepi/musepi-type/typebox";
 import { upgradeJsonSchemaTo202012, validateJsonSchemaValue } from "@musepi/pi-ai/utils/schema";
 
-export * from "@musepi/omptype/typebox";
+export * from "@musepi/musepi-type/typebox";
 
 const VALIDATION_FAILURE = Symbol("pi.typebox.validationFailure");
 

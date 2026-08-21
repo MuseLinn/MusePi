@@ -259,6 +259,7 @@ export interface OpenAICompat {
 	 * Non-Qwen templates ignore the flag, so the auto-detection is safe.
 	 */
 	qwenPreserveThinking?: boolean;
+	qwenTemplateReasoningEffort?: boolean;
 	/** Whether assistant tool-call messages must include non-empty content. Default: false. */
 	requiresAssistantContentForToolCalls?: boolean;
 	/** Whether the provider supports the `tool_choice` parameter. Default: true. */
@@ -580,6 +581,7 @@ type ResolvedToolStrictMode = NonNullable<OpenAICompat["toolStrictMode"]> | "mix
  */
 export interface ResolvedOpenAISharedCompat {
 	supportsDeveloperRole: boolean;
+	qwenTemplateReasoningEffort?: boolean;
 	supportsStrictMode: boolean;
 	supportsReasoningEffort: boolean;
 	reasoningEffortMap: Partial<Record<Effort, string>>;
@@ -847,6 +849,21 @@ export interface ModelCost extends TokenCost {
 	longContext?: LongContextTokenCost;
 }
 
+/**
+ * Native tokenizer families keyed by model generation. Some models share a
+ * tokenizer across generations rather than providers: DeepSeek V3 through V4 share
+ * `"deepseek-v3"`; Kimi K2 through K3 share `"kimi-k2"`.
+ */
+export type ModelTokenizer =
+	| "claude-v3"
+	| "claude-v47"
+	| "claude-v5"
+	| "claude-v5-sonnet"
+	| "qwen3"
+	| "deepseek-v3"
+	| "kimi-k2"
+	| "glm5";
+
 // Model interface for the unified model system
 export interface Model<TApi extends Api = Api> {
 	id: string;
@@ -871,6 +888,12 @@ export interface Model<TApi extends Api = Api> {
 	provider: Provider;
 	baseUrl: string;
 	reasoning: boolean;
+	/**
+	 * Native tokenizer family for local token counting, when set
+	 * explicitly by a catalog/discovery source. Absent leaves local counting to
+	 * the consumer's fallback policy.
+	 */
+	tokenizer?: ModelTokenizer;
 	input: ("text" | "image")[];
 	/**
 	 * Decoder family used for image inputs when it has narrower format support

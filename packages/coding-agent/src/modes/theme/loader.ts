@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { adjustHsv, getCustomThemesDir, isEnoent } from "@musepi/pi-utils";
 import { detectColorMode, resolveThemeColors } from "./color";
 import darkThemeJson from "./dark.json" with { type: "json" };

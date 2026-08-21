@@ -1,10 +1,13 @@
 import { Markdown, t } from "@musepi/desktop-web";
 import { Sparkles, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { onboardingPending } from "../lib/onboarding";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+
+/** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
+const ANNOUNCEMENT_EXIT_MS = 200;
 
 /**
  * Release-notes announcement panel (what's-new push for future features).
@@ -23,6 +26,16 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [markdown, setMarkdown] = useState<string | null>(null);
 	const [latest, setLatest] = useState<string | null>(null);
 	const enteredCls = useTwoPhaseEnter(open);
+	// Stay mounted through the exit so the fade-out plays instead of cutting.
+	const [closing, setClosing] = useState(false);
+
+	const requestClose = useCallback((): void => {
+		setClosing(true);
+		setTimeout(() => {
+			setOpen(false);
+			setClosing(false);
+		}, ANNOUNCEMENT_EXIT_MS);
+	}, []);
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -92,17 +105,17 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 			if (e.key === "Escape") {
 				e.preventDefault();
 				e.stopPropagation();
-				setOpen(false);
+				requestClose();
 			}
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [open, markdown]);
+	}, [open, markdown, requestClose]);
 
 	if (!open || !markdown) return null;
 	return (
-		<div className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}`}>
-			<div className="gui-onboarding-card gui-announcement-card">
+		<div className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}>
+			<div className={`gui-onboarding-card gui-announcement-card${closing ? " gui-onboarding-card--closing" : ""}`}>
 				<div className="gui-onboarding-topbar">
 					<div className="gui-onboarding-badge">
 						<Sparkles size={14} />
@@ -111,7 +124,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					<button
 						className="gui-btn gui-btn-icon"
 						type="button"
-						onClick={() => setOpen(false)}
+						onClick={requestClose}
 						aria-label={t("close")}
 					>
 						<X size={16} />
@@ -129,7 +142,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					<Markdown text={markdown} />
 				</div>
 				<div className="gui-onboarding-actions">
-					<button className="gui-btn gui-btn-primary" type="button" onClick={() => setOpen(false)}>
+					<button className="gui-btn gui-btn-primary" type="button" onClick={requestClose}>
 						{t("got it")}
 					</button>
 				</div>

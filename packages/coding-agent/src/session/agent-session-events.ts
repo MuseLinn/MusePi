@@ -18,11 +18,11 @@ export type AgentSessionEvent =
 	| {
 			type: "auto_compaction_start";
 			reason: "threshold" | "overflow" | "idle" | "incomplete";
-			action: "context-full" | "handoff" | "shake" | "snapcompact";
+			action: "context-full" | "remote" | "handoff" | "shake" | "snapcompact";
 	  }
 	| {
 			type: "auto_compaction_end";
-			action: "context-full" | "handoff" | "shake" | "snapcompact";
+			action: "context-full" | "remote" | "handoff" | "shake" | "snapcompact";
 			result: CompactionResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;

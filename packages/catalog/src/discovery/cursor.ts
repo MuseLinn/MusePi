@@ -1,6 +1,6 @@
 import * as http2 from "node:http2";
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { isKimiK3ModelId } from "../identity";
 import { bareModelId, parseGlmModel, semverGte } from "../identity/classify";
 import { getBundledModels } from "../models";

@@ -1224,7 +1224,7 @@ export async function runRootCommand(
 	const notifs: (InteractiveModeNotify | null)[] = [];
 
 	if (parsedArgs.version) {
-		const displayVersion = process.env.MUSEPI_VERSION ? `${process.env.MUSEPI_VERSION} (OMP ${VERSION})` : VERSION;
+		const displayVersion = process.env.MUSEPI_VERSION ?? VERSION;
 		writeStartupNotice(parsedArgs, `${displayVersion}\n`);
 		process.exit(0);
 	}

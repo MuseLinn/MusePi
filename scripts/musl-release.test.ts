@@ -46,10 +46,10 @@ describe("musl release artifacts", () => {
 
 		expect(result.exitCode, result.stderr).toBe(0);
 		expect(result.stdout).toContain(
-			"Bun.build target=bun-linux-x64-musl-baseline outfile=packages/coding-agent/binaries/omp-linux-musl-x64",
+			"Bun.build target=bun-linux-x64-musl-baseline outfile=packages/coding-agent/binaries/musepi-linux-musl-x64",
 		);
 		expect(result.stdout).toContain(
-			"Bun.build target=bun-linux-arm64-musl outfile=packages/coding-agent/binaries/omp-linux-musl-arm64",
+			"Bun.build target=bun-linux-arm64-musl outfile=packages/coding-agent/binaries/musepi-linux-musl-arm64",
 		);
 	});
 

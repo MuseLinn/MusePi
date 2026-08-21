@@ -87,8 +87,9 @@
 	position: relative;
 	filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
 	pointer-events: auto;
-	transition:		transform 160ms ease,
-		filter 160ms ease;
+	transition:
+		transform 160ms var(--spring, ease),
+		filter 160ms var(--spring, ease);
 }
 
 .pet-window__pet:hover {
@@ -156,8 +157,9 @@
 		inset 0 1px 0 color-mix(in oklab, var(--color-text) 14%, transparent),
 		0 4px 20px rgba(0, 0, 0, 0.45);
 	pointer-events: auto;
-	/* Blur/fade transitions for the collapse morph. */
-	transition: filter 160ms ease, opacity 160ms ease;
+	/* Blur/fade transitions for the collapse morph — spring easing
+	 * (--spring) for a natural settle instead of the default ease. */
+	transition: filter 160ms var(--spring, ease), opacity 160ms var(--spring, ease);
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the

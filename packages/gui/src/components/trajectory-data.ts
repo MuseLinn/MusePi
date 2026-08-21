@@ -13,6 +13,23 @@ export interface TrajectoryEvent {
 	timestamp?: string;
 	/** 源 wire entry id — 轨迹行点击跳转 transcript 用。 */
 	entryId?: string;
+	/** 数值化时间戳(Overview 时间轴投影与区间判定用;无则 undefined)。 */
+	tsMs?: number;
+	/** assistant 消息自带用量(wire AssistantMessage.usage,settled 回合才有)。 */
+	usage?: TrajectoryUsage;
+	/** 该轮模型请求耗时 ms(wire AssistantMessage.duration,settled 才有)。 */
+	durationMs?: number;
+	/** 首字节延迟 ms(wire AssistantMessage.ttft,settled 才有)。 */
+	ttftMs?: number;
+}
+
+/** WireUsage 的展示子集(与 usage-row.ts 同源字段)。 */
+export interface TrajectoryUsage {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	totalTokens?: number;
 }
 
 export interface TrajectoryStats {
@@ -55,9 +72,10 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 		};
 		const entryId = typeof entry.id === "string" ? entry.id : undefined;
 		const ts = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
-		if (Number.isFinite(ts)) {
-			if (firstTs === undefined) firstTs = ts;
-			lastTs = ts;
+		const tsMs = Number.isFinite(ts) ? ts : undefined;
+		if (tsMs !== undefined) {
+			if (firstTs === undefined) firstTs = tsMs;
+			lastTs = tsMs;
 		}
 		const type = entry.type ?? "";
 		const msg = entry.message as
@@ -68,6 +86,10 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 					name?: string;
 					arguments?: unknown;
 					result?: unknown;
+					/** wire AssistantMessage 自带字段(settled 回合才有)。 */
+					usage?: TrajectoryUsage;
+					duration?: number;
+					ttft?: number;
 			  }
 			| undefined;
 
@@ -100,6 +122,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						turn,
 						timestamp: entry.timestamp,
 						entryId,
+						tsMs,
 					});
 				continue;
 			}
@@ -128,6 +151,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 							turn,
 							timestamp: entry.timestamp,
 							entryId,
+							tsMs,
 						};
 						toolIndex.set(part.id ?? ev.id, ev);
 						events.push(ev);
@@ -143,6 +167,11 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						turn,
 						timestamp: entry.timestamp,
 						entryId,
+						tsMs,
+						// settled 回合的模型请求统计(wire AssistantMessage 原样携带)。
+						usage: msg.usage,
+						durationMs: msg.duration,
+						ttftMs: msg.ttft,
 					});
 				}
 			}
@@ -155,6 +184,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				turn,
 				timestamp: entry.timestamp,
 				entryId,
+				tsMs,
 			});
 		}
 	}
@@ -178,21 +208,71 @@ export interface TrajectoryTurnGroup {
 	events: TrajectoryEvent[];
 	/** 该 turn 首个事件时间戳(折叠行显示;无则 undefined)。 */
 	firstTs?: string;
+	/** 该 turn 首个事件数值时间戳(Overview 时间轴投影锚)。 */
+	startMs?: number;
+	/** 该 turn 末端(最后一个事件;roundDurations 命中时 = start+duration)。 */
+	endMs?: number;
+	/** 该 turn 完整回合时长(agent_end 冻结值,仅已完成回合有)。 */
+	roundDurationMs?: number;
 }
 
-export function buildTrajectoryTree(entries: readonly unknown[]): {
+/**
+ * 归一化 roundDurations(daemon agent_end 冻结的整轮用时,键 = 末条
+ * assistant 消息时间戳 ms → 时长 ms)。GUI store 以 Map 形态暴露,持久化
+ * 快照/测试以 [number, number][] 形态出现。
+ */
+export type RoundDurationMap = ReadonlyMap<number, number> | readonly (readonly [number, number])[];
+
+function roundDurationsOf(src: RoundDurationMap | undefined): ReadonlyMap<number, number> {
+	if (!src) return new Map();
+	if (src instanceof Map) return src;
+	const m = new Map<number, number>();
+	for (const pair of src) {
+		if (Array.isArray(pair) && pair.length === 2 && Number.isInteger(pair[0]) && Number.isInteger(pair[1])) {
+			m.set(pair[0] as number, pair[1] as number);
+		}
+	}
+	return m;
+}
+
+export function buildTrajectoryTree(
+	entries: readonly unknown[],
+	roundDurations?: RoundDurationMap,
+): {
 	turns: TrajectoryTurnGroup[];
 	stats: TrajectoryStats;
 } {
 	const { events, stats } = buildTrajectory(entries);
+	const durations = roundDurationsOf(roundDurations);
 	const turns: TrajectoryTurnGroup[] = [];
 	for (const ev of events) {
 		let group = turns[turns.length - 1];
 		if (!group || group.turn !== ev.turn) {
-			group = { turn: ev.turn, events: [], firstTs: ev.timestamp };
+			group = { turn: ev.turn, events: [], firstTs: ev.timestamp, startMs: ev.tsMs };
 			turns.push(group);
 		}
 		group.events.push(ev);
+		// 末端时间 = 组内最后一条带 tsMs 的事件(组内有序,直接覆盖)。
+		if (ev.tsMs !== undefined) group.endMs = ev.tsMs;
+	}
+	// roundDurations 命中:回合锚 = 该 turn 的 assistant 事件 tsMs(agent_end
+	// 冻结语义,与 session-store 同源);完整回合闭合 = start + duration。
+	for (const group of turns) {
+		if (group.startMs === undefined) continue;
+		const assistant = group.events.find(e => e.kind === "assistant" && e.tsMs !== undefined);
+		const anchor = assistant?.tsMs;
+		const duration = anchor !== undefined ? durations.get(anchor) : undefined;
+		if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+			group.roundDurationMs = duration;
+			group.endMs = group.startMs + duration;
+		}
 	}
 	return { turns, stats };
+}
+
+/** 事件是否落在 [startMs, endMs] 区间内(Overview 拖拽聚焦的高亮/置灰判定)。
+ *  无 tsMs 的事件视为不在区间(区间模式从不误亮未知时刻)。纯逻辑,组件复用。 */
+export function isTrajectoryEventInRange(ev: TrajectoryEvent, startMs: number, endMs: number): boolean {
+	if (ev.tsMs === undefined) return false;
+	return ev.tsMs >= startMs && ev.tsMs <= endMs;
 }

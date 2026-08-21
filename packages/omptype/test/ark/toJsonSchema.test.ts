@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype/ark";
+import { type } from "@musepi/musepi-type/ark";
 
 describe("target option", () => {
 	it("omits the dialect until a target is requested", () => {

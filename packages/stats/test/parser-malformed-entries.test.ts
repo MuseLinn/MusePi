@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { initDb, insertMessageStats, insertToolCalls } from "@musepi/omp-stats/db";
-import { parseSessionFile } from "@musepi/omp-stats/parser";
+import { initDb, insertMessageStats, insertToolCalls } from "@musepi/musepi-stats/db";
+import { parseSessionFile } from "@musepi/musepi-stats/parser";
 import { getSessionsDir } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

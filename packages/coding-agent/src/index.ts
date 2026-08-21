@@ -2,8 +2,8 @@ import { HookEditorComponent, HookInputComponent, HookSelectorComponent } from "
 
 // Core session management
 
-export * as zod from "@musepi/omptype/zod";
-export { z } from "@musepi/omptype/zod";
+export * as zod from "@musepi/musepi-type/zod";
+export { z } from "@musepi/musepi-type/zod";
 // Re-export TUI components for custom tool rendering
 export { Container, Markdown, Spacer, Text } from "@musepi/pi-tui";
 // Logging

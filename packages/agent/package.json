@@ -1,79 +1,79 @@
 {
-  "type": "module",
-  "name": "@musepi/pi-agent-core",
-  "version": "17.3.4",
-  "description": "General-purpose agent with transport abstraction, state management, and attachment support",
-  "homepage": "https://github.com/MuseLinn/MusePi",
-  "author": "MuseLinn",
-  "contributors": [
-    "Mario Zechner"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/MuseLinn/MusePi.git",
-    "directory": "packages/agent"
-  },
-  "bugs": {
-    "url": "https://github.com/MuseLinn/MusePi/issues"
-  },
-  "keywords": [
-    "ai",
-    "agent",
-    "llm",
-    "transport",
-    "state-management"
-  ],
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "scripts": {
-    "check": "biome check . && bun run check:types",
-    "check:types": "tsgo -p tsconfig.json --noEmit",
-    "lint": "biome lint .",
-    "test": "bun test --parallel",
-    "fix": "biome check --write --unsafe .",
-    "fmt": "biome format --write ."
-  },
-  "dependencies": {
-    "@musepi/pi-ai": "catalog:",
-    "@musepi/pi-catalog": "catalog:",
-    "@musepi/pi-natives": "catalog:",
-    "@musepi/pi-utils": "catalog:",
-    "@musepi/pi-wire": "catalog:",
-    "@musepi/snapcompact": "catalog:",
-    "@opentelemetry/api": "catalog:"
-  },
-  "devDependencies": {
-    "@musepi/omptype": "catalog:",
-    "@opentelemetry/context-async-hooks": "catalog:",
-    "@opentelemetry/sdk-trace-base": "catalog:",
-    "@types/bun": "catalog:"
-  },
-  "engines": {
-    "bun": ">=1.3.14"
-  },
-  "files": [
-    "src",
-    "README.md",
-    "CHANGELOG.md"
-  ],
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
-    "./compaction": {
-      "types": "./src/compaction.ts",
-      "import": "./src/compaction.ts"
-    },
-    "./compaction/*": {
-      "types": "./src/compaction/*.ts",
-      "import": "./src/compaction/*.ts"
-    },
-    "./*": {
-      "types": "./src/*.ts",
-      "import": "./src/*.ts"
-    }
-  },
-  "optionalDependencies": {}
+	"type": "module",
+	"name": "@musepi/pi-agent-core",
+	"version": "0.4.2",
+	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
+	"homepage": "https://github.com/MuseLinn/MusePi",
+	"author": "MuseLinn",
+	"contributors": [
+		"Mario Zechner"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/MuseLinn/MusePi.git",
+		"directory": "packages/agent"
+	},
+	"bugs": {
+		"url": "https://github.com/MuseLinn/MusePi/issues"
+	},
+	"keywords": [
+		"ai",
+		"agent",
+		"llm",
+		"transport",
+		"state-management"
+	],
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"scripts": {
+		"check": "biome check . && bun run check:types",
+		"check:types": "tsgo -p tsconfig.json --noEmit",
+		"lint": "biome lint .",
+		"test": "bun test --parallel",
+		"fix": "biome check --write --unsafe .",
+		"fmt": "biome format --write ."
+	},
+	"dependencies": {
+		"@musepi/pi-ai": "catalog:",
+		"@musepi/pi-catalog": "catalog:",
+		"@musepi/pi-natives": "catalog:",
+		"@musepi/pi-utils": "catalog:",
+		"@musepi/pi-wire": "catalog:",
+		"@musepi/snapcompact": "catalog:",
+		"@opentelemetry/api": "catalog:"
+	},
+	"devDependencies": {
+		"@musepi/musepi-type": "catalog:",
+		"@opentelemetry/context-async-hooks": "catalog:",
+		"@opentelemetry/sdk-trace-base": "catalog:",
+		"@types/bun": "catalog:"
+	},
+	"engines": {
+		"bun": ">=1.3.14"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"CHANGELOG.md"
+	],
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"import": "./src/index.ts"
+		},
+		"./compaction": {
+			"types": "./src/compaction.ts",
+			"import": "./src/compaction.ts"
+		},
+		"./compaction/*": {
+			"types": "./src/compaction/*.ts",
+			"import": "./src/compaction/*.ts"
+		},
+		"./*": {
+			"types": "./src/*.ts",
+			"import": "./src/*.ts"
+		}
+	},
+	"optionalDependencies": {}
 }

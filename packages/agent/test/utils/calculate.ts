@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core/types";
 
 export interface CalculateResult extends AgentToolResult<undefined> {

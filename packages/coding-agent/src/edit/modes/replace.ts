@@ -5,7 +5,7 @@
  * fallback strategies for finding text in files.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentToolResult } from "@musepi/pi-agent-core";
 import type { FileDiagnosticsResult, WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
 import type { ToolSession } from "../../tools";

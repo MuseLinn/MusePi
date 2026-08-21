@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
 import { getBundledModel } from "@musepi/pi-catalog/models";

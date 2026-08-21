@@ -48,8 +48,8 @@ gui-settings-view          ← flex:1 铺满 shell(flex ROW),尺寸不随 tab �
 ## 5. 磨砂玻璃
 
 - 玻璃配方:`color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(N% * var(--gui-glass-alpha, 1))), transparent)`(N = 40/55/88)。
-- `--gui-glass-alpha` = 透明度滑杆(30-90%,`omp-gui-glass`)。
-- **窗口透明度开关**(`omp-gui-glass-enabled`):关闭时设置 `--gui-glass-overlay: 100%` 使所有玻璃面不透明,并隐藏滑杆;开启时移除该变量。
+- `--gui-glass-alpha` = 透明度滑杆(30-90%,`musepi-gui-glass`)。
+- **窗口透明度开关**(`musepi-gui-glass-enabled`):关闭时设置 `--gui-glass-overlay: 100%` 使所有玻璃面不透明,并隐藏滑杆;开启时移除该变量。
 - **原生窗口玻璃**(2026-08-04):桌面窗口 `vibrancy: "under-window"` + `backgroundColor: "#00000000"`(无需 `transparent: true`),桌面壁纸透过窗口显示;`base.css` 的 `body { background: var(--bg) }` 由 gui.css 的 `html body` 覆盖为透明(浏览器访客不受影响);`.gui-shell` 透明,侧栏/导航轨/详情面板用 `color-mix(…, transparent)` 半透明蒙层,聊天卡片/设置卡片保持不透明。开关同时通过 `gui-vibrancy` IPC 调用 `setVibrancy`/`setBackgroundColor`(`BrowserWindow.fromWebContents(event.sender)` — 不能直接用 `event.sender`,那是 WebContents)。
 - 桌面运行环境:**Electron 43.2.0**(Node 24.18,2026-08-04 从 37 升级;37 已 EOL)。natives loader 的 `import.meta.dir ?? import.meta.dirname` 回退在 Node 24 下无需但无害。
 

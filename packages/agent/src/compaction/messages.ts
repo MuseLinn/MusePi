@@ -49,6 +49,10 @@ export interface CompactionSummaryMessage {
 	summary: string;
 	shortSummary?: string;
 	tokensBefore: number;
+	/** Estimated context tokens after the rewrite (display metadata). */
+	tokensAfter?: number;
+	/** Harness compaction method that produced this summary (display metadata). */
+	method?: string;
 	providerPayload?: ProviderPayload;
 	/** Runtime-only ordered archive blocks for snapcompact: old text region,
 	 *  imaged middle, then new text region. When present, `summary` is already
@@ -99,16 +103,26 @@ export function createBranchSummaryMessage(summary: string, fromId: string, time
 	};
 }
 
+/** Optional metadata for {@link createCompactionSummaryMessage}. */
+export interface CompactionSummaryMessageOptions {
+	shortSummary?: string;
+	providerPayload?: ProviderPayload;
+	images?: ImageContent[];
+	blocks?: (TextContent | ImageContent)[];
+	warning?: string;
+	/** Harness compaction method that produced this summary (e.g. "remote", "soft", "handoff"). */
+	method?: string;
+	/** Estimated context tokens after the rewrite, for display alongside `tokensBefore`. */
+	tokensAfter?: number;
+}
+
 export function createCompactionSummaryMessage(
 	summary: string,
 	tokensBefore: number,
 	timestamp: string,
-	shortSummary?: string,
-	providerPayload?: ProviderPayload,
-	images?: ImageContent[],
-	blocks?: (TextContent | ImageContent)[],
-	warning?: string,
+	options: CompactionSummaryMessageOptions = {},
 ): CompactionSummaryMessage {
+	const { shortSummary, providerPayload, images, blocks, warning, method, tokensAfter } = options;
 	const imageBlocks =
 		blocks?.filter((block): block is ImageContent => block.type === "image") ??
 		(images && images.length > 0 ? images : undefined);
@@ -117,6 +131,8 @@ export function createCompactionSummaryMessage(
 		summary,
 		shortSummary,
 		tokensBefore,
+		tokensAfter,
+		method,
 		providerPayload,
 		blocks: blocks && blocks.length > 0 ? blocks : undefined,
 		images: imageBlocks && imageBlocks.length > 0 ? imageBlocks : undefined,

@@ -1171,14 +1171,11 @@ export function ChatView({
 												onCopy={text => void navigator.clipboard.writeText(text)}
 												onNewSession={text => onSubmitNewSession(text)}
 												onAddNote={text => {
+													// v1.19 parity: each "add to notes" becomes its own
+													// note (notes.create), never appended to the blob.
 													const cwd = store.cwd;
 													void rpc
-														.request<{ text: string }>("notes.get", { cwd })
-														.then(res => {
-															const existing = res?.text ?? "";
-															const next = existing ? `${existing}\n\n> ${text}` : `> ${text}`;
-															return rpc.request("notes.set", { cwd, text: next });
-														})
+														.request("notes.create", { cwd, body: `> ${text}` })
 														.catch(() => {});
 												}}
 											/>

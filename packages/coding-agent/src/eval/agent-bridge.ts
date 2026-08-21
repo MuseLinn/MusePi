@@ -1,7 +1,7 @@
 /**
  * Host-side handler for the eval `agent()` helper.
  */
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import {
 	buildStructuredSubagentRecoveryHint,
 	runStructuredSubagent,

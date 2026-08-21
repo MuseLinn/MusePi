@@ -3,7 +3,7 @@ import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { Reveal } from "./Reveal";
-import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 export interface CustomGroup {
 	name: string;
@@ -53,7 +53,7 @@ export function CustomGroups({
 }: {
 	groups: CustomGroup[];
 	/** Session tree for rendering each group's members. */
-	nodes: GuiTreeNode[];
+	nodes: SessionListNode[];
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onSessionContextMenu?(sessionId: string, x: number, y: number): void;
@@ -112,7 +112,7 @@ export function CustomGroups({
 					onUserToggle={onOverrideClear}
 					memberNodes={g.sessions
 						.map(id => nodes.find(n => n.entry.id === id))
-						.filter((n): n is GuiTreeNode => n !== undefined)
+						.filter((n): n is SessionListNode => n !== undefined)
 						.sort((a, b) => statusRank(b.entry.id) - statusRank(a.entry.id))}
 					selectedId={selectedId}
 					onSelect={onSelect}
@@ -167,7 +167,7 @@ function GroupBlock({
 }: {
 	group: CustomGroup;
 	index: number;
-	memberNodes: GuiTreeNode[];
+	memberNodes: SessionListNode[];
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onSessionContextMenu?(sessionId: string, x: number, y: number): void;
@@ -348,7 +348,7 @@ function GroupBlock({
 							onReorderMember(index, id, to);
 						}}
 					>
-						<SessionTree
+						<SessionList
 							nodes={memberNodes}
 							selectedId={selectedId}
 							onSelect={onSelect}

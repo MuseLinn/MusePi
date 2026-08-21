@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { usageReportSchema } from "@musepi/pi-ai";
 import { usageResponseSchema } from "@musepi/pi-ai/auth-broker/wire-schemas";
 

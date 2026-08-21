@@ -113,6 +113,166 @@ export class SessionHandoff {
 	 * @param options Handoff execution options
 	 * @returns The handoff document text, or undefined if cancelled/failed
 	 */
+
+	/**
+	 * Generate a handoff document without starting a new session. Used by
+	 * speculative/in-place compaction maintenance, which splices the document
+	 * into the current context instead of forking. Mirrors {@link handoff}'s
+	 * generation pipeline.
+	 */
+	async generateDocument(
+		customInstructions?: string,
+		options?: SessionHandoffOptions,
+	): Promise<HandoffResult | undefined> {
+		this.#host.setSkipPostTurnMaintenance(undefined);
+
+		this.#handoffAbortController = new AbortController();
+		const handoffAbortController = this.#handoffAbortController;
+		const handoffSignal = handoffAbortController.signal;
+		const sourceSignal = options?.signal;
+		const onSourceAbort = () => {
+			if (!handoffSignal.aborted) {
+				handoffAbortController.abort(sourceSignal?.reason);
+			}
+		};
+		if (sourceSignal) {
+			sourceSignal.addEventListener("abort", onSourceAbort, { once: true });
+			if (sourceSignal.aborted) {
+				onSourceAbort();
+			}
+		}
+
+		let advisorRecordersDetached = false;
+		let sessionTransitioned = false;
+		try {
+			throwIfHandoffAborted(handoffSignal);
+
+			const model = this.#host.model();
+			if (!model) {
+				throw new Error("No model selected for handoff");
+			}
+			const apiKey = await this.#host.modelRegistry.getApiKey(model, this.#host.sessionId());
+			if (!apiKey) {
+				throw new Error(`No API key for ${model.provider}`);
+			}
+
+			// Build the handoff request through the SAME pipeline a live turn uses
+			// (`runEphemeralTurn` / `/btw` share it) so the oneshot reads the
+			// provider prompt cache the main turn populated instead of cold-missing
+			// the whole prefix: identical system prompt, normalized tools, and
+			// transform-/obfuscation-matched message history via
+			// `convertMessagesToLlm` + `buildSideRequestContext`, plus the live turn's
+			// effective provider cache key with a unique side `sessionId` so
+			// OpenAI/Codex append-only state never mixes with the live turn.
+			const cacheSessionId = this.#host.sessionId();
+			// The loop sends `promptCacheKey` (providerPromptCacheKey) and falls back to
+			// the provider session id; providers route on `promptCacheKey ?? sessionId`.
+			// Both can diverge from this.#host.sessionId() (tan/subagent/shared sessions), so
+			// mirror exactly what the live turn populated the cache under.
+			const handoffPromptCacheKey = this.#host.agent.promptCacheKey ?? this.#host.agent.sessionId;
+			const handoffPromptText = renderHandoffPrompt(this.#host.obfuscateTextForProvider(customInstructions));
+			const handoffSnapshot: AgentMessage[] = [
+				...this.#host.agent.state.messages,
+				{
+					role: "user",
+					content: [{ type: "text", text: handoffPromptText }],
+					attribution: "agent",
+					timestamp: Date.now(),
+				},
+			];
+			const handoffLlmMessages = await this.#host.convertMessagesToLlm(handoffSnapshot, handoffSignal);
+			// Base system prompt, not a per-turn `before_agent_start` hook override —
+			// the handoff seeds a fresh session and must not carry prompt-specific
+			// hook state. Matches the prompt the old handoff path sent.
+			const handoffContext = await this.#host.agent.buildSideRequestContext(
+				handoffLlmMessages,
+				this.#host.baseSystemPrompt(),
+			);
+			const handoffStreamOptions = this.#host.prepareSimpleStreamOptions(
+				{
+					apiKey: this.#host.modelRegistry.resolver(model, cacheSessionId),
+					sessionId: `${cacheSessionId}:side:${Snowflake.next()}`,
+					promptCacheKey: handoffPromptCacheKey,
+					preferWebsockets: false,
+					serviceTier: this.#host.effectiveServiceTier(model),
+					hideThinkingSummary: this.#host.agent.hideThinkingSummary,
+					initiatorOverride: "agent",
+					signal: handoffSignal,
+				},
+				model.provider,
+			);
+			const rawHandoffText = await generateHandoffFromContext(
+				obfuscateProviderContext(this.#host.obfuscator, handoffContext),
+				model,
+				{
+					streamOptions: handoffStreamOptions,
+					completeImpl: async (requestModel, requestContext, requestOptions) => {
+						const stream = await this.#host.sideStreamFn(requestModel, requestContext, requestOptions);
+						return stream.result();
+					},
+					telemetry: resolveTelemetry(this.#host.agent.telemetry, this.#host.sessionId()),
+					// Honor the user's /model thinking selection on the handoff path.
+					// Clamped per-model inside generateHandoffFromContext via
+					// resolveCompactionEffort so unsupported-effort models don't trip
+					// requireSupportedEffort.
+					thinkingLevel: this.#host.thinkingLevel(),
+				},
+			);
+			const handoffText = this.#host.deobfuscateFromProvider(rawHandoffText);
+
+			throwIfHandoffAborted(handoffSignal);
+			if (!handoffText || handoffText.trim().length === 0) {
+				// Empty/whitespace-only generation is a real failure, not a user
+				// cancellation. #7904 stopped masking provider errors as "Handoff
+				// cancelled"; an empty document is the remaining path that produced the
+				// same misleading, undebuggable message (#7993).
+				logger.warn("Handoff generation produced no content", {
+					sessionId: this.#host.sessionId(),
+					autoTriggered: options?.autoTriggered ?? false,
+				});
+				// Auto-handoff is best-effort: returning undefined lets maintenance fall
+				// back to context-full compaction. A user-initiated handoff must surface
+				// the failure instead of a silent, misleading "cancelled".
+				if (options?.autoTriggered) {
+					return undefined;
+				}
+				throw new Error("Handoff generation produced no content");
+			}
+
+			// Save to disk when configured; the in-place commit happens in
+			// SessionMaintenance, not here.
+			let savedPath: string | undefined;
+			if (options?.autoTriggered && this.#host.settings.get("compaction.handoffSaveToDisk")) {
+				const artifactsDir = this.#host.sessionManager.getArtifactsDir();
+				if (artifactsDir) {
+					const handoffFilePath = path.join(artifactsDir, createHandoffFileName());
+					try {
+						await Bun.write(handoffFilePath, `${handoffText}\n`);
+						savedPath = handoffFilePath;
+					} catch (error) {
+						logger.warn("Failed to save handoff document to disk", {
+							path: handoffFilePath,
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+				} else {
+					logger.debug("Skipping handoff document save because session is not persisted");
+				}
+			}
+
+			return { document: handoffText, savedPath };
+		} catch (error) {
+			// Only a genuine cancellation (user Esc or an unreasoned source-signal
+			// abort) maps to "Handoff cancelled". A harness-provided abort reason and
+			// provider failures surface verbatim.
+			throwIfHandoffAborted(handoffSignal);
+			throw error;
+		} finally {
+			sourceSignal?.removeEventListener("abort", onSourceAbort);
+			this.#handoffAbortController = undefined;
+		}
+	}
+
 	async handoff(customInstructions?: string, options?: SessionHandoffOptions): Promise<HandoffResult | undefined> {
 		this.#host.assertVibeSessionTransitionAllowed("handoff to a new session");
 		const entries = this.#host.sessionManager.getBranch();

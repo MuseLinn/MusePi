@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Text } from "@musepi/pi-tui";
 import { formatBytes } from "@musepi/pi-utils";
 import { executeBash } from "../../exec/bash-executor";

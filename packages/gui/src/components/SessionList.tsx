@@ -2,15 +2,22 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
-import { flattenTree } from "./session-tree-shared";
+import { flattenTree } from "./session-list-shared";
 
 /**
- * Session tree node — mirrors the OMP `/tree` SessionTreeNode contract
- * (entry id/parentId hierarchy, children, optional label).
+ * 会话列表节点(命名来源:本组件渲染的是左侧栏的**会话列表** — 每个节点
+ * 是一个会话记录,可按 分组/项目/日期 聚合,行上带生命周期状态/置顶/工作脉动)。
+ *
+ * ⚠️ 命名陷阱:这里的 "SessionList" 与 TUI 的 `/tree`(**会话内消息树**:
+ * entry id/parentId 层级、分支导航)是**两个不同的概念**。本组件仅在"会话
+ * 由另一会话 fork 而来"时借用 /tree 的父子结构画分支标记(见 fork 标记处),
+ * 它本身不是消息树。消息树的 GUI 侧载体见 `lib/message-tree.ts`(buildMessageTree),
+ * 对应 TUI `/tree` / 未来 `/trace`。
  */
-export interface GuiTreeEntry {
+export interface SessionListEntry {
 	type: string;
 	id: string;
+	/** 会话级父会话 id(fork 来源;消息树场景对应 entry 父节点,见 message-tree)。 */
 	parentId: string | null;
 	timestamp: string;
 	label?: string;
@@ -52,9 +59,9 @@ function rowTime(ts: string): string {
 		: d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export interface GuiTreeNode {
-	entry: GuiTreeEntry;
-	children: GuiTreeNode[];
+export interface SessionListNode {
+	entry: SessionListEntry;
+	children: SessionListNode[];
 	label?: string;
 }
 
@@ -66,7 +73,7 @@ function treePrefix(indent: number, showConnector: boolean, isLast: boolean): st
 	return prefix;
 }
 
-export function SessionTree({
+export function SessionList({
 	nodes,
 	selectedId,
 	onSelect,
@@ -78,7 +85,7 @@ export function SessionTree({
 	manualTags,
 	sort = "statusTime",
 }: {
-	nodes: GuiTreeNode[];
+	nodes: SessionListNode[];
 	selectedId: string | null;
 	onSelect(id: string): void;
 	/** Right-click a session row (ZCode task menu). */
@@ -114,8 +121,10 @@ export function SessionTree({
 				Date.parse(b.node.entry.timestamp) - Date.parse(a.node.entry.timestamp),
 		);
 	}
-	// Parent lookup for fork markers (OMP /tree parity: sessions forked from
-	// another session show a branch glyph + the parent's label on hover).
+	// Parent lookup for fork markers **at the SESSION level** (a session forked
+	// from another session shows a branch glyph + the parent's label on hover).
+	// Note: this is cross-session fork structure, NOT the within-session message
+	// tree that TUI `/tree` navigates (see lib/message-tree.ts).
 	const byId = new Map(flat.map(f => [f.node.entry.id, f.node]));
 	return (
 		<ul className="gui-session-list">

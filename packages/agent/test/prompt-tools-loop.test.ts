@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { agentLoop } from "@musepi/pi-agent-core/agent-loop";
 import type { AgentContext, AgentLoopConfig, AgentMessage, AgentTool } from "@musepi/pi-agent-core/types";
 import type { AssistantMessage, Context, Message, TextContent, ToolResultMessage } from "@musepi/pi-ai";

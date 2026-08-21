@@ -18,10 +18,9 @@
  * result instead of falling back to the LLM summarizer.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as path from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Agent } from "@musepi/pi-agent-core";
-import { effectiveReserveTokens, estimateTokens, prepareCompaction } from "@musepi/pi-agent-core/compaction";
+import { effectiveReserveTokens, prepareCompaction } from "@musepi/pi-agent-core/compaction";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
@@ -30,23 +29,22 @@ import { computeNonMessageTokens } from "@musepi/pi-coding-agent/modes/utils/con
 import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
-import { TempDir } from "@musepi/pi-utils";
 import * as snapcompact from "@musepi/snapcompact";
 
 describe("AgentSession snapcompact frame-budget sizing", () => {
-	let tempDir: TempDir;
 	let session: AgentSession;
 	let sessionManager: SessionManager;
 	let authStorage: AuthStorage;
 	let modelRegistry: ModelRegistry;
 
-	beforeEach(async () => {
-		tempDir = TempDir.createSync("@pi-snapcompact-budget-");
-
-		authStorage = await AuthStorage.create(path.join(tempDir.path(), "testauth.db"));
+	beforeAll(async () => {
+		authStorage = await AuthStorage.create(":memory:");
 		authStorage.setRuntimeApiKey("anthropic", "test-key");
 		modelRegistry = new ModelRegistry(authStorage);
-		sessionManager = SessionManager.create(tempDir.path(), tempDir.path());
+	});
+
+	beforeEach(() => {
+		sessionManager = SessionManager.inMemory();
 
 		const bundled = getBundledModel("anthropic", "claude-sonnet-4-5");
 		if (!bundled) throw new Error("Expected bundled claude-sonnet-4-5 model");
@@ -93,7 +91,7 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 			agent,
 			sessionManager,
 			settings: Settings.isolated({
-				"compaction.strategy": "snapcompact",
+				"compaction.methodOrder": ["snapcompact", "soft"],
 				"compaction.autoContinue": false,
 				// Force a small kept-recent window so the seeded conversation
 				// definitely splits into discard + kept and prepareCompaction()
@@ -105,13 +103,12 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 	});
 
 	afterEach(async () => {
-		try {
-			await session?.dispose();
-		} finally {
-			authStorage?.close();
-			await tempDir?.remove();
-			vi.restoreAllMocks();
-		}
+		await session?.dispose();
+		vi.restoreAllMocks();
+	});
+
+	afterAll(() => {
+		authStorage.close();
 	});
 
 	it("passes a maxFrames whose full projection (frames + text edges + base) fits the budget", async () => {
@@ -173,10 +170,8 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 		// numFrames × FRAME_TOKEN_ESTIMATE + non-message + kept-recent.
 		const preparation = prepareCompaction(branchEntries, settings);
 		if (!preparation) throw new Error("Expected non-empty preparation");
-		let baseTokens = computeNonMessageTokens(session);
-		for (const message of preparation.recentMessages) {
-			baseTokens += estimateTokens(message);
-		}
+		let baseTokens = computeNonMessageTokens(session, session.agent.tokenizer);
+		baseTokens += session.agent.tokenizer.countMessages(preparation.recentMessages);
 		const shape = snapcompact.resolveShape(model);
 		const edgeCap = snapcompact.geometry(shape).capacity;
 		// Worst-case `textHead + textTail` tokenized at the cl100k 4-chars/token
@@ -246,25 +241,7 @@ describe("AgentSession snapcompact frame-budget sizing", () => {
 	it("applies the frame byte cap when the model context window is unknown", async () => {
 		const model = session.model;
 		if (!model) throw new Error("Expected model");
-		await session.dispose();
-		// dispose() released the manager's in-memory transcript; reopen the
-		// persisted file for the replacement session, as revival paths do.
-		const sessionFile = sessionManager.getSessionFile();
-		if (!sessionFile) throw new Error("Expected a persisted session file");
-		sessionManager = await SessionManager.open(sessionFile, tempDir.path());
-		const unknownWindowModel = { ...model, contextWindow: 0 };
-		session = new AgentSession({
-			agent: new Agent({
-				initialState: { model: unknownWindowModel, systemPrompt: ["Test"], tools: [], messages: [] },
-			}),
-			sessionManager,
-			settings: Settings.isolated({
-				"compaction.strategy": "snapcompact",
-				"compaction.autoContinue": false,
-				"compaction.keepRecentTokens": 4000,
-			}),
-			modelRegistry,
-		});
+		session.agent.setModel({ ...model, contextWindow: 0 });
 
 		const branchEntries = sessionManager.getBranch();
 		const lastEntry = branchEntries[branchEntries.length - 1];

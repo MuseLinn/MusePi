@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { buildModel } from "@musepi/pi-catalog/build";

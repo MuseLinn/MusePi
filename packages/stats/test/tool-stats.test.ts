@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { getToolDashboardStats, syncAllSessions } from "@musepi/omp-stats/aggregator";
-import { getToolStats, getToolStatsByModel } from "@musepi/omp-stats/db";
-import type { ToolUsageStats } from "@musepi/omp-stats/types";
+import { getToolDashboardStats, syncAllSessions } from "@musepi/musepi-stats/aggregator";
+import { getToolStats, getToolStatsByModel } from "@musepi/musepi-stats/db";
+import type { ToolUsageStats } from "@musepi/musepi-stats/types";
 import { getSessionsDir } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

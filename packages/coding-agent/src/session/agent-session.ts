@@ -50,7 +50,6 @@ import {
 	type CompactionResult,
 	calculatePromptTokens,
 	collectEntriesForBranchSummary,
-	estimateTokens,
 	generateBranchSummary,
 	type ShakeConfig,
 } from "@musepi/pi-agent-core/compaction";
@@ -107,7 +106,7 @@ import type { ResolvedModelRoleValue } from "../config/model-resolver";
 import { expandPromptTemplate, type PromptTemplate } from "../config/prompt-templates";
 import { buildServiceTierByFamily } from "../config/service-tier";
 import type { Settings, SkillsSettings } from "../config/settings";
-import { onAppendOnlyModeChanged, onModelRolesChanged } from "../config/settings";
+import { onAppendOnlyModeChanged, onExtendedContextChanged, onModelRolesChanged } from "../config/settings";
 import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { getFileSnapshotStore } from "../edit/file-snapshot-store";
 import type { PythonResult } from "../eval/py/executor";
@@ -509,6 +508,7 @@ export class AgentSession {
 	#exitRecorded = false;
 	#unsubscribeAppendOnly?: () => void;
 	#unsubscribeModelRoles?: () => void;
+	#unsubscribeExtendedContext?: () => void;
 	/** Last (enable, providerId) tuple resolved by `#syncAppendOnlyContext` — used to skip no-op invalidations. */
 	#lastAppendOnlyResolution?: { enable: boolean; providerId: string | undefined };
 	#eventListeners: AgentSessionEventListener[] = [];
@@ -1610,7 +1610,8 @@ export class AgentSession {
 			getContextUsage: options => this.getContextUsage(options),
 			shake: (mode, options) => this.shake(mode, options),
 			dropImages: () => this.dropImages(),
-			runHandoff: (customInstructions, options) => this.handoff(customInstructions, options),
+			generateHandoffDocument: (customInstructions, options) =>
+				this.#handoff.generateDocument(customInstructions, options),
 			removeAssistantMessageFromActiveContext: message =>
 				this.#recovery.removeAssistantMessageFromActiveContext(message),
 			dropPersistedAssistantTurn: message => this.#recovery.dropPersistedAssistantTurn(message),
@@ -1682,6 +1683,10 @@ export class AgentSession {
 		// Re-evaluate append-only context mode when the setting changes at runtime.
 		this.#unsubscribeAppendOnly = onAppendOnlyModeChanged(_value => this.#syncAppendOnlyContext(this.model));
 		this.#unsubscribeModelRoles = onModelRolesChanged(() => this.#advisors.onModelRolesChanged());
+		// extended-context setting flips at runtime: the registry re-clamps (or
+		// restores) premium long-context windows, and the live model object must
+		// follow so compaction thresholds and context display react immediately.
+		this.#unsubscribeExtendedContext = onExtendedContextChanged(() => void this.#reapplyExtendedContextPolicy());
 	}
 	/** Model registry for API key resolution and model discovery */
 	get modelRegistry(): ModelRegistry {
@@ -2411,7 +2416,9 @@ export class AgentSession {
 			if (assistantMsg.stopReason !== "aborted" && assistantMsg.stopReason !== "error" && assistantMsg.usage) {
 				assistantMsg.contextSnapshot = {
 					promptTokens: calculatePromptTokens(assistantMsg.usage),
-					nonMessageTokens: this.#stats.pendingNonMessageTokens ?? computeNonMessageTokens(this),
+					nonMessageTokens:
+						this.#stats.pendingNonMessageTokens ?? computeNonMessageTokens(this, this.agent.tokenizer),
+					compactionEpoch: this.#stats.compactionEpoch,
 				};
 			}
 		}
@@ -3186,7 +3193,7 @@ export class AgentSession {
 	#scheduleAgentContinue(options?: ScheduledAgentContinueOptions): void {
 		this.#schedulePostPromptTask(
 			async signal => {
-				// Defense in depth: if compaction/handoff slipped onto the post-prompt queue
+						// Defense in depth: if compaction/handoff slipped onto the post-prompt queue
 				// alongside us (e.g. via a scheduler we don't own), refuse to start a fresh
 				// streaming turn — agent.continue() here would race the handoff's session
 				// reset. The first-class fix is in #checkCompaction/the agent_end handler,
@@ -4066,6 +4073,10 @@ export class AgentSession {
 			this.#unsubscribeModelRoles();
 			this.#unsubscribeModelRoles = undefined;
 		}
+		if (this.#unsubscribeExtendedContext) {
+			this.#unsubscribeExtendedContext();
+			this.#unsubscribeExtendedContext = undefined;
+		}
 		this.#eventListeners = [];
 		this.#runStateListeners.clear();
 		this.#sessionChangeCallbacks.clear();
@@ -4894,6 +4905,11 @@ export class AgentSession {
 	/** Whether auto-compaction is currently running */
 	get isCompacting(): boolean {
 		return this.#maintenance.isCompacting;
+	}
+
+	/** Background speculative-compaction state, for UI indicators. */
+	get compactionSpeculation(): "idle" | "running" | "armed" {
+		return this.#maintenance.speculationState;
 	}
 
 	/** Strip image content from the current branch and persist the rewrite. */
@@ -5917,14 +5933,14 @@ export class AgentSession {
 			}
 
 			const agentPromptOptions = options?.toolChoice ? { toolChoice: options.toolChoice } : undefined;
-			const nonMessageTokens = computeNonMessageTokens(this);
+			const nonMessageTokens = computeNonMessageTokens(this, this.agent.tokenizer);
 			const contextWindow = this.model?.contextWindow ?? 0;
 			const breakdown = this.getContextBreakdown({ contextWindow, pendingMessages: messages });
 			const promptTokens =
 				breakdown?.usedTokens ??
 				nonMessageTokens +
-					this.messages.reduce((sum, msg) => sum + estimateTokens(msg), 0) +
-					messages.reduce((sum, msg) => sum + estimateTokens(msg), 0);
+					this.agent.tokenizer.countMessages(this.messages) +
+					this.agent.tokenizer.countMessages(messages);
 			this.#stats.setPendingSnapshot({
 				promptTokens,
 				nonMessageTokens,
@@ -7329,14 +7345,16 @@ export class AgentSession {
 	}
 
 	/**
-	 * Generate a handoff document with a oneshot LLM call, then start a new session with it.
+	 * Generate a handoff document with a oneshot LLM call and commit it as a
+	 * compaction entry on the current session (the document becomes the summary;
+	 * recent history is kept).
 	 *
 	 * @param customInstructions Optional focus for the handoff document
 	 * @param options Handoff execution options
 	 * @returns The handoff document text, or undefined if cancelled/failed
 	 */
 	handoff(customInstructions?: string, options?: SessionHandoffOptions): Promise<HandoffResult | undefined> {
-		return this.#handoff.handoff(customInstructions, options);
+		return this.#maintenance.handoff(customInstructions, options);
 	}
 
 	#isTerminalYieldToolResult(event: { toolName: string; isError?: boolean; result?: { details?: unknown } }): boolean {
@@ -7535,6 +7553,26 @@ export class AgentSession {
 			onSkip: () => this.#toolChoiceQueue.removeByLabel("plan-mode-decision"),
 		});
 		return true;
+	}
+
+	/**
+	 * Rebuild the model catalog after an `extendedContext` toggle and rebind the
+	 * active model when its effective context window changed. Same-model rebinds
+	 * skip provider-session resets (`modelsAreEqual` sees no change), so this
+	 * only refreshes metadata consumers (compaction thresholds, context display).
+	 */
+	async #reapplyExtendedContextPolicy(): Promise<void> {
+		try {
+			await this.#modelRegistry.reapplyModelPolicies();
+			const currentModel = this.model;
+			if (!currentModel || this.#isDisposed) return;
+			const updated = this.#modelRegistry.find(currentModel.provider, currentModel.id);
+			if (updated && updated.contextWindow !== currentModel.contextWindow) {
+				await this.#setModelWithProviderSessionReset(updated);
+			}
+		} catch (error) {
+			logger.warn("extended-context reapply failed", { error: String(error) });
+		}
 	}
 
 	async #setModelWithProviderSessionReset(model: Model): Promise<void> {

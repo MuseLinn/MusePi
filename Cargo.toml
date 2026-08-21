@@ -16,7 +16,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "17.3.4"
+version = "0.4.2"
 edition = "2024"
 license = "MIT"
 authors = ["Can Boluk"]
@@ -183,6 +183,10 @@ too_many_arguments = "allow" # Argument count is rarely the real complexity sign
 too_many_lines = "allow"     # Arbitrary limits don't account for necessary complexity
 
 [workspace.dependencies]
+heapless = "0.9"
+xutf = "1.4"
+zstd = "0.13"
+fancy-regex = "0.16"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Internal Libraries
@@ -232,8 +236,6 @@ clap = { version = "4", features = ["derive"] }
 pdf-inspector = "1"
 regex = "1"
 similar = "3.1.0"
-unicode-segmentation = "1.13"
-unicode-width = "0.2"
 fontdue = { version = "0.9", default-features = false }
 
 # ──────────────────────────────────────────────────────────────────────────────

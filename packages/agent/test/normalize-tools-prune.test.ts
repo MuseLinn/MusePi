@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { normalizeTools } from "@musepi/pi-agent-core/agent-loop";
 import type { AgentTool } from "@musepi/pi-agent-core/types";
 import { INTENT_FIELD } from "@musepi/pi-wire";

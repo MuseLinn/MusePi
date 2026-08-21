@@ -507,13 +507,13 @@ export const CATALOG_PROVIDERS = [
 	},
 	{
 		id: "xai",
-		defaultModel: "grok-4.5",
+		defaultModel: "grok-4.6",
 		envVars: ["XAI_API_KEY"],
 		createModelManagerOptions: (config: ModelManagerConfig) => xaiModelManagerOptions(config),
 	},
 	{
 		id: "xai-oauth",
-		defaultModel: "grok-4.5",
+		defaultModel: "grok-4.6",
 		envVars: ["XAI_OAUTH_TOKEN", "XAI_API_KEY"],
 		createModelManagerOptions: (config: ModelManagerConfig) => xaiOAuthModelManagerOptions(config),
 		catalogDiscovery: {

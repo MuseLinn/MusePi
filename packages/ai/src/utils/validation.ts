@@ -11,7 +11,7 @@
  * massage shapes the LLM almost got right.
  */
 
-import { type Type, type } from "@musepi/omptype";
+import { type Type, type } from "@musepi/musepi-type";
 import { structuredCloneJSON } from "@musepi/pi-utils";
 import * as AIError from "../error";
 import type { Tool, ToolCall } from "../types";

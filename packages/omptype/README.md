@@ -1,4 +1,6 @@
-# @musepi/omptype
+# @musepi/musepi-type
+
+> Source directory keeps its historical name `packages/omptype`; the package is published as `@musepi/musepi-type`.
 
 Fast, ArkType-compatible schema validation for JavaScript and TypeScript.
 Schemas start with a small interpreter and lazily compile after repeated use,
@@ -7,9 +9,9 @@ keeping construction cheap without giving up hot-path validation speed.
 ## Installation
 
 ```sh
-npm install @musepi/omptype
+npm install @musepi/musepi-type
 # or
-bun add @musepi/omptype
+bun add @musepi/musepi-type
 ```
 
 Runs on Node 20+ (published as compiled ESM with bundled type declarations)
@@ -19,7 +21,7 @@ export condition). No runtime dependencies.
 ## Usage
 
 ```ts
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 
 const Config = type({
   name: "string",
@@ -74,8 +76,8 @@ options.
 TypeBox-style and Zod-style builders produce native omptype schemas:
 
 ```ts
-import { Type, type Static } from "@musepi/omptype/typebox";
-import { z } from "@musepi/omptype/zod";
+import { Type, type Static } from "@musepi/musepi-type/typebox";
+import { z } from "@musepi/musepi-type/zod";
 
 const TypeBoxUser = Type.Object({ name: Type.String() });
 type TypeBoxUser = Static<typeof TypeBoxUser>;
@@ -84,7 +86,7 @@ const ZodUser = z.object({ name: z.string() });
 const user = ZodUser.parse({ name: "Ada" });
 ```
 
-`@musepi/omptype/ark` provides the repository's ArkType compatibility facade
+`@musepi/musepi-type/ark` provides the repository's ArkType compatibility facade
 and re-exports the same `type` and `scope` implementations.
 
 ## Performance

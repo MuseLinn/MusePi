@@ -1,6 +1,6 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
-import { type GuiTreeNode, type SessionStatus, SessionTree } from "./SessionTree";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 /** Bucket a timestamp into a date-group label (ZCode groups tab). */
 function dateGroup(ts: string): string {
@@ -18,11 +18,15 @@ function dateGroup(ts: string): string {
 const GROUP_ORDER = ["today", "yesterday", "last 7 days", "earlier"];
 
 /**
- * Date-grouped session list (ZCode groups tab): sessions bucketed into
+ * Date-grouped **会话列表**(ZCode groups tab):sessions bucketed into
  * today / yesterday / last 7 days / earlier, each with a section header.
- * Each group renders the shared SessionTree for its roots.
+ * Each group renders the shared SessionList for its roots.
+ *
+ * ⚠️ 命名:这是会话列表按日期分组,**不是消息树**(TUI `/tree` 语义)。
+ * 会话内消息树的构建与载体是 `lib/message-tree.ts`(buildMessageTree)——
+ * 轨迹面板未来的「时间线/分支树」切换与 TUI `/trace` 共用它。
  */
-export function GroupedSessionTree({
+export function GroupedSessionList({
 	nodes,
 	selectedId,
 	onSelect,
@@ -33,7 +37,7 @@ export function GroupedSessionTree({
 	statuses,
 	manualTags,
 }: {
-	nodes: GuiTreeNode[];
+	nodes: SessionListNode[];
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
@@ -45,7 +49,7 @@ export function GroupedSessionTree({
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
 }): ReactNode {
-	const groups = new Map<string, GuiTreeNode[]>();
+	const groups = new Map<string, SessionListNode[]>();
 	for (const n of nodes) {
 		const g = dateGroup(n.entry.timestamp) || "earlier";
 		const list = groups.get(g) ?? [];
@@ -65,7 +69,7 @@ export function GroupedSessionTree({
 					{/* ZCode group header: sentence case, low-contrast, generous
 					 * spacing — no uppercase, no bright text. */}
 					<div className="gui-group-label px-2 pb-1 pt-2.5">{g}</div>
-					<SessionTree
+					<SessionList
 						nodes={groups.get(g)!}
 						selectedId={selectedId}
 						onSelect={onSelect}

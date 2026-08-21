@@ -15,7 +15,7 @@
  *   - Questions may time out and auto-select the recommended option (configurable, disabled in plan mode)
  */
 
-import { type as arkType } from "@musepi/omptype";
+import { type as arkType } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import {

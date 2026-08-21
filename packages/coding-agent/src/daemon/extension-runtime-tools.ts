@@ -15,7 +15,7 @@
  * 工具冲突;同一会话内工具全量 reconcile —— 会话间注册表独立。
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentToolResult, CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import type { AgentSession } from "../session/agent-session";
 import { createSandbox, evaluateHostCode, precheckCode, type SandboxToolDefinition } from "./extension-sandbox";

@@ -19,8 +19,8 @@ import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
+import type { SessionListNode } from "./components/SessionList";
 import { SessionSidebar } from "./components/SessionSidebar";
-import type { GuiTreeNode } from "./components/SessionTree";
 import { SettingsView } from "./components/SettingsView";
 import { ShinyText } from "./components/ShinyText";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
@@ -116,7 +116,7 @@ interface SessionMetaRow {
 
 /** Collect every session id in a session tree (drift check for the poll:
  *  the sidebar tree must show exactly the sessions session.list knows). */
-function collectTreeIds(nodes: GuiTreeNode[], out: Set<string>): void {
+function collectTreeIds(nodes: SessionListNode[], out: Set<string>): void {
 	for (const n of nodes) {
 		out.add(n.entry.id);
 		if (n.children.length > 0) collectTreeIds(n.children, out);
@@ -231,14 +231,6 @@ function AppInner(): ReactNode {
 		// Last successful connection wins (connect() persists it): a daemon on
 		// a non-default port keeps working across app restarts.
 		try {
-			// 迁移兼容:旧 omp-gui-url 键一次性迁移到 musepi-gui-url(旧键优先,
-			// 因为首次 boot 可能已把默认 8300 写进新键);迁移后删除旧键,避免
-			// 每次 boot 用旧值覆盖用户后来改的新键。
-			const legacyUrl = localStorage.getItem("omp-gui-url");
-			if (legacyUrl) {
-				localStorage.setItem("musepi-gui-url", legacyUrl);
-				localStorage.removeItem("omp-gui-url");
-			}
 			return localStorage.getItem("musepi-gui-url") ?? DEFAULT_URL;
 		} catch {
 			return DEFAULT_URL;
@@ -269,7 +261,7 @@ function AppInner(): ReactNode {
 			clearTimeout(id);
 		};
 	}, [error]);
-	const [tree, setTree] = useState<GuiTreeNode[]>([]);
+	const [tree, setTree] = useState<SessionListNode[]>([]);
 	// Sessions with an undismissed completion (pet badge + persistent
 	// bubble + sidebar 未读 marker + welcome reminders panel) — cleared
 	// when the user opens the session. Seeded from localStorage, grown by
@@ -293,7 +285,7 @@ function AppInner(): ReactNode {
 			// storage unavailable
 		}
 	}, [unreadSessions]);
-	const treeRef = useRef<GuiTreeNode[]>([]);
+	const treeRef = useRef<SessionListNode[]>([]);
 	treeRef.current = tree;
 	// refreshSessions 并发守卫: 多个 refresh 同时进行时(发送/删除/打开/标题事件
 	// 交错), 只接受最新一轮的结果 — 否则慢的旧请求后完成会覆盖新状态 (已删会话
@@ -735,7 +727,7 @@ function AppInner(): ReactNode {
 			// Session tree (OMP /tree) — non-fatal on daemons without it.
 			const tSeq = ++treeRefreshSeqRef.current;
 			try {
-				const nodes = await client.request<GuiTreeNode[]>("session.tree");
+				const nodes = await client.request<SessionListNode[]>("session.tree");
 				if (tSeq !== treeRefreshSeqRef.current) return;
 				setTree(nodes ?? []);
 			} catch {
@@ -1932,12 +1924,16 @@ function AppInner(): ReactNode {
 				// window cannot hear localStorage writes from this window).
 				void electronAPI.petActivity?.({ scale: petScale() });
 			}
+			syncRecentPoll();
 		};
 		// Recent-session list for the pet panel: derive from the tree (top 6
-		// by timestamp) and push on tree change + a light 15s poll.
+		// by timestamp) and push on tree change + a light 15s poll. The poll
+		// only runs while the pet is enabled AND in desktop mode — an
+		// always-on 15s interval would wake the renderer even on machines
+		// that never enable the pet.
 		const pushRecent = (): void => {
 			if (!petEnabled() || petMode() !== "desktop") return;
-			const walk = (nodes: GuiTreeNode[]): { id: string; label: string; timestamp: number }[] => {
+			const walk = (nodes: SessionListNode[]): { id: string; label: string; timestamp: number }[] => {
 				const rows: { id: string; label: string; timestamp: number }[] = [];
 				for (const n of nodes) {
 					rows.push({
@@ -1954,8 +1950,18 @@ function AppInner(): ReactNode {
 				.slice(0, 6);
 			void electronAPI.petActivity?.({ recentSessions: rows, unreadCount: unreadSessionsRef.current.size });
 		};
-		pushRecent();
-		const recentTimer = setInterval(pushRecent, 15_000);
+		let recentTimer: ReturnType<typeof setInterval> | null = null;
+		const syncRecentPoll = (): void => {
+			const want = petEnabled() && petMode() === "desktop";
+			if (want && recentTimer === null) {
+				pushRecent();
+				recentTimer = setInterval(pushRecent, 15_000);
+			} else if (!want && recentTimer !== null) {
+				clearInterval(recentTimer);
+				recentTimer = null;
+			}
+		};
+		syncRecentPoll();
 		// Pet panel "recent session" click → open it here.
 		const unsubPetOpen = electronAPI.onPetOpenSession?.(sessionId => {
 			if (typeof sessionId !== "string") return;
@@ -2074,7 +2080,7 @@ function AppInner(): ReactNode {
 			unsubPetOpen?.();
 			unsubTrayOpen?.();
 			unsubTrayNew?.();
-			clearInterval(recentTimer);
+			if (recentTimer !== null) clearInterval(recentTimer);
 			window.removeEventListener("omp-pet-activity", onBubble);
 			window.removeEventListener("omp-pet-changed", onPetChanged);
 			window.removeEventListener("musepi-gui-default-model-changed", onDefaultModelChanged);
@@ -2260,7 +2266,7 @@ function AppInner(): ReactNode {
 	// SessionSwitcherDropdown parity), newest first.
 	const recentSessions = ((): { id: string; label: string; timestamp: number }[] => {
 		const rows: { id: string; label: string; timestamp: number }[] = [];
-		const walk = (nodes: GuiTreeNode[]): void => {
+		const walk = (nodes: SessionListNode[]): void => {
 			for (const n of nodes) {
 				rows.push({
 					id: n.entry.id,
@@ -2305,7 +2311,7 @@ function AppInner(): ReactNode {
 	// stick (the message-stream fallback cannot see renamed titles).
 	const activeSessionLabel = ((): string | null => {
 		if (!selectedId) return null;
-		const find = (nodes: GuiTreeNode[]): string | null => {
+		const find = (nodes: SessionListNode[]): string | null => {
 			for (const n of nodes) {
 				if (n.entry.id === selectedId) return n.entry.label ?? n.label ?? null;
 				const hit = find(n.children);

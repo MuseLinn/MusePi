@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { agentLoop, agentLoopDetailed } from "@musepi/pi-agent-core/agent-loop";
 import {
 	type AgentRunSummary,

@@ -24,8 +24,10 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use napi::bindgen_prelude::*;
+use napi::{JsString, bindgen_prelude::*};
 use napi_derive::napi;
+
+use crate::js;
 
 /// UTF-16 code unit for `\n`.
 const LF: u16 = 0x000a;
@@ -333,8 +335,10 @@ fn concat_tokens(tokens: &[&[u16]]) -> Vec<u16> {
 /// options). Change values keep line terminators, and common runs are joined
 /// from the new text.
 #[napi]
-pub fn diff_lines(old_text: Utf16String, new_text: Utf16String) -> Vec<DiffChange> {
-	diff_lines_impl(&old_text, &new_text)
+pub fn diff_lines(old_text: JsString, new_text: JsString) -> Result<Vec<DiffChange>> {
+	let old_text = js::utf16(old_text)?;
+	let new_text = js::utf16(new_text)?;
+	Ok(diff_lines_impl(&old_text, &new_text))
 }
 
 fn diff_lines_impl(old_text: &[u16], new_text: &[u16]) -> Vec<DiffChange> {
@@ -351,8 +355,10 @@ fn diff_lines_impl(old_text: &[u16], new_text: &[u16]) -> Vec<DiffChange> {
 /// Callers that map line numbers — like hashline recovery — need the counts,
 /// not another copy of the text.
 #[napi]
-pub fn diff_line_runs(old_text: Utf16String, new_text: Utf16String) -> Vec<DiffRun> {
-	diff_line_runs_impl(&old_text, &new_text)
+pub fn diff_line_runs(old_text: JsString, new_text: JsString) -> Result<Vec<DiffRun>> {
+	let old_text = js::utf16(old_text)?;
+	let new_text = js::utf16(new_text)?;
+	Ok(diff_line_runs_impl(&old_text, &new_text))
 }
 
 fn diff_line_runs_impl(old_text: &[u16], new_text: &[u16]) -> Vec<DiffRun> {
@@ -387,11 +393,13 @@ fn no_newline_marker() -> Vec<u16> {
 /// semantics. `context` defaults to 4 like jsdiff.
 #[napi]
 pub fn structured_patch_hunks(
-	old_text: Utf16String,
-	new_text: Utf16String,
+	old_text: JsString,
+	new_text: JsString,
 	context: Option<u32>,
-) -> Vec<PatchHunk> {
-	structured_patch_hunks_impl(&old_text, &new_text, context)
+) -> Result<Vec<PatchHunk>> {
+	let old_text = js::utf16(old_text)?;
+	let new_text = js::utf16(new_text)?;
+	Ok(structured_patch_hunks_impl(&old_text, &new_text, context))
 }
 
 fn structured_patch_hunks_impl(
@@ -894,8 +902,10 @@ fn word_post_process(changes: &mut [DiffChange]) {
 /// Tokens carry surrounding whitespace, equality ignores it, and the
 /// post-pass dedupes whitespace across change boundaries.
 #[napi]
-pub fn diff_words(old_text: Utf16String, new_text: Utf16String) -> Vec<DiffChange> {
-	diff_words_impl(&old_text, &new_text)
+pub fn diff_words(old_text: JsString, new_text: JsString) -> Result<Vec<DiffChange>> {
+	let old_text = js::utf16(old_text)?;
+	let new_text = js::utf16(new_text)?;
+	Ok(diff_words_impl(&old_text, &new_text))
 }
 
 fn diff_words_impl(old_text: &[u16], new_text: &[u16]) -> Vec<DiffChange> {

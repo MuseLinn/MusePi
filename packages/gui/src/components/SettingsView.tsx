@@ -41,8 +41,7 @@ type SectionId =
 	| "history"
 	| "browser"
 	| "suggestions"
-	| "modes"
-	| "advisor";
+	| "modes";
 
 /** Conditional settings fields animate in/out per the shared standard —
  * see components/Reveal.tsx (useCollapse px height + outer fade). */
@@ -251,7 +250,6 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	history: ["历史", "history", "会话", "session", "时间", "time", "保留", "retention", "清理", "clean"],
 	indexes: ["索引", "index", "库", "代码库", "搜索", "search", "扫描", "scan", "cwd", "工作区"],
 	usage: ["统计", "usage", "用量", "成本", "cost", "token", "模型", "model", "月度", "monthly"],
-	advisor: ["顾问", "advisor", "watchdog", "审查", "review", "配置", "configure"],
 };
 
 /** ZCode-style grouped navigation: 基础设置 / 智能体 / 数据与统计. The
@@ -285,7 +283,6 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 			title: t("agent capabilities"),
 			items: [
 				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
-				{ id: "advisor", icon: "shield-user", label: t("advisor"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("commands"), enabled: true },
@@ -658,7 +655,9 @@ export function SettingsView({
 						<HeightMorph
 							morphKey={section}
 							innerRef={settingsContentRef}
-							className={`gui-settings-content${section === "history" ? " gui-settings-content--fill" : ""}`}
+							className={`gui-settings-content${
+								section === "history" || section === "model" ? " gui-settings-content--fill" : ""
+							}`}
 						>
 							{section === "general" && (
 								<>
@@ -738,7 +737,6 @@ export function SettingsView({
 							{section === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
 							{section === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
 							{section === "usage" && <UsageSection rpc={rpc} />}
-							{section === "advisor" && <AdvisorSection rpc={rpc} sessionId={sessionId} />}
 						</HeightMorph>
 					</div>
 				</div>
@@ -750,7 +748,6 @@ export function SettingsView({
 /** Accent preset → swatch color (display tints readable on both schemes;
  *  the tokens own the real values: brand = emerald #34d399). */
 import {
-	AdvisorSection,
 	AppearanceSection,
 	BrowserSection,
 	CommandsSection,

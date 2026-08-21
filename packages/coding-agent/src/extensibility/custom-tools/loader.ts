@@ -5,8 +5,8 @@
  * directories do not depend on workspace module resolution.
  */
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
-import * as zod from "@musepi/omptype/zod";
+import { type } from "@musepi/musepi-type";
+import * as zod from "@musepi/musepi-type/zod";
 import type { AgentToolResult } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { toolCapability } from "../../capability/tool";

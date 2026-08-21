@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { TraversalError, type Type, type } from "@musepi/omptype/ark";
+import { TraversalError, type Type, type } from "@musepi/musepi-type/ark";
 
 import assert = require("node:assert/strict");
 

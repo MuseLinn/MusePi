@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { Tokenizer } from "@musepi/pi-agent-core";
 import {
 	type CompactionPreparation,
 	compact,
@@ -365,6 +366,45 @@ function toolResultFor(callId: string, custom = false): ToolResultMessage {
 	};
 }
 
+describe("buildOpenAiNativeHistory interleaved assistant message (#8789)", () => {
+	test("hoists a trailing text block before its tool-call batch", () => {
+		// deepseek-v4-flash on opencode-go streamed [thinking, 2 tool calls,
+		// trailing "</thinking" text]; the compaction history builder must not
+		// wedge the demoted text between the calls and their outputs.
+		const model = makeOpenAiModel({
+			id: "deepseek-v4-flash",
+			provider: "opencode-go",
+			baseUrl: "https://opencode.ai/zen/go/v1",
+		});
+		const assistant: AssistantMessage = {
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "planning" },
+				{ type: "toolCall", id: "call_a|fc_call_a", name: "read", arguments: { path: "a" } },
+				{ type: "toolCall", id: "call_b|fc_call_b", name: "read", arguments: { path: "b" } },
+				{ type: "text", text: "<think>\n</thinking\n</think>" },
+			],
+			timestamp: Date.now(),
+			provider: "opencode-go",
+			model: "deepseek-v4-flash",
+			api: "openai-responses",
+			usage: ZERO_USAGE,
+			stopReason: "toolUse",
+		};
+
+		const items = buildOpenAiNativeHistory([assistant, toolResultFor("call_a"), toolResultFor("call_b")], model);
+
+		expect(items.map(item => item.type)).toEqual([
+			"message",
+			"function_call",
+			"function_call",
+			"function_call_output",
+			"function_call_output",
+		]);
+		expect(JSON.stringify(items[0]?.content)).toContain("</thinking");
+	});
+});
+
 describe("buildOpenAiNativeHistory call-id tracking", () => {
 	test("registers function_call ids carried in providerPayload so later tool results are emitted", () => {
 		const items = buildOpenAiNativeHistory(
@@ -591,7 +631,7 @@ describe("remote compaction input forwarding", () => {
 			{ fetch: fetchMock },
 		);
 
-		const trimmed = trimRemoteCompactionInputToContextWindow(nativeInput, 1_000, "compact");
+		const trimmed = trimRemoteCompactionInputToContextWindow(nativeInput, new Tokenizer(), 1_000, "compact");
 		expect(trimmed.estimatedTokensAfter).toBeLessThanOrEqual(1_000);
 		expect(requestInput?.some(item => item.type === "custom_tool_call")).toBe(true);
 		expect(requestInput?.find(item => item.type === "custom_tool_call_output")?.output).toBe(
@@ -607,7 +647,7 @@ describe("remote compaction input forwarding", () => {
 			{ type: "function_call_output", call_id: "call_2", output: "b".repeat(8_000) },
 		];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 1_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 1_000, "compact");
 
 		expect(result.rewrittenOutputs).toBe(2);
 		expect(result.input.slice(0, 2)).toEqual(input.slice(0, 2));
@@ -627,7 +667,7 @@ describe("remote compaction input forwarding", () => {
 			{ type: "function_call_output", call_id: "call_2", output: "useful latest result" },
 		];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 1_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 1_000, "compact");
 
 		expect(result.rewrittenOutputs).toBe(0);
 		expect(result.input).toEqual(input);
@@ -647,7 +687,7 @@ describe("remote compaction input forwarding", () => {
 			{ type: "function_call_output", call_id: "call_1", output: "useful result" },
 		];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 15_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 15_000, "compact");
 
 		expect(result.rewrittenOutputs).toBe(0);
 		expect(result.input).toEqual(input);
@@ -659,7 +699,7 @@ describe("remote compaction input forwarding", () => {
 		const output = Array.from({ length: 1_000 }, (_, index) => index.toString(16).padStart(8, "0")).join("");
 		const input = [{ type: "function_call_output", call_id: "call_1", output }];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 3_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 3_000, "compact");
 
 		expect(result.estimatedTokensBefore).toBeGreaterThan(3_000);
 		expect(result.rewrittenOutputs).toBe(1);
@@ -681,7 +721,7 @@ describe("remote compaction input forwarding", () => {
 			attachment,
 		];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 15_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 15_000, "compact");
 
 		expect(result.rewrittenOutputs).toBe(1);
 		expect(result.input[0].output).toBe(CONTEXT_WINDOW_TRUNCATED_OUTPUT_MESSAGE);
@@ -701,7 +741,7 @@ describe("remote compaction input forwarding", () => {
 			{ type: "function_call_output", call_id: "call_1", output: "useful result".repeat(2_000) },
 		];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 15_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 15_000, "compact");
 
 		expect(result.estimatedTokensBefore).toBeGreaterThan(15_000);
 		expect(result.rewrittenOutputs).toBe(1);
@@ -711,7 +751,7 @@ describe("remote compaction input forwarding", () => {
 	test("returns semantically unchanged input when it already fits", () => {
 		const input = [{ type: "function_call_output", call_id: "call_1", output: "small" }];
 
-		const result = trimRemoteCompactionInputToContextWindow(input, 1_000, "compact");
+		const result = trimRemoteCompactionInputToContextWindow(input, new Tokenizer(), 1_000, "compact");
 
 		expect(result.rewrittenOutputs).toBe(0);
 		expect(result.input).toEqual(input);

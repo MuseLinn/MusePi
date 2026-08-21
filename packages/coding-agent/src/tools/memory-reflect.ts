@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { logger, untilAborted } from "@musepi/pi-utils";
 import { ensureBankExists } from "../hindsight/bank";

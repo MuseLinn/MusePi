@@ -1,4 +1,4 @@
-import { countTokens } from "@musepi/pi-agent-core";
+import { Tokenizer } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { estimateToolSchemaTokens } from "@musepi/pi-coding-agent/modes/utils/context-usage";
 import { buildSystemPrompt } from "@musepi/pi-coding-agent/system-prompt";
@@ -22,6 +22,7 @@ const session: ToolSession = {
 	settings,
 } as ToolSession;
 
+const tokenizer = new Tokenizer(undefined);
 const tools = await createTools(session);
 const toolsMap = new Map<string, Tool>(tools.map(t => [t.name, t]));
 
@@ -29,14 +30,14 @@ console.log(`active tools (${tools.length}): ${tools.map(t => t.name).join(", ")
 
 const rows: Array<{ name: string; descBytes: number; tok: number; schemaTok: number }> = [];
 for (const t of tools) {
-	const tok = estimateToolSchemaTokens([t as never]);
+	const tok = estimateToolSchemaTokens([t as never], tokenizer);
 	const descBytes = bytes(t.description ?? "");
 	const descTok = est(t.description ?? "");
 	rows.push({ name: t.name, descBytes, tok, schemaTok: tok - descTok });
 }
 rows.sort((a, b) => b.tok - a.tok);
 
-const totalTok = estimateToolSchemaTokens(tools as never);
+const totalTok = estimateToolSchemaTokens(tools as never, tokenizer);
 console.log("per-tool tokens (sorted): name | total tok | desc bytes | ~schema tok");
 for (const r of rows) {
 	console.log(
@@ -59,5 +60,5 @@ const parts = built.systemPrompt;
 const part0 = parts[0] ?? "";
 const rest = parts.slice(1).join("\n");
 console.log(`system prompt parts: ${parts.length}`);
-console.log(`SYSTEM PROMPT tokens (part0, no skills): ${countTokens(part0)}  (bytes=${bytes(part0)})`);
-console.log(`SYSTEM CONTEXT tokens (parts[1..]): ${countTokens(rest)}  (bytes=${bytes(rest)})`);
+console.log(`SYSTEM PROMPT tokens (part0, no skills): ${new Tokenizer(undefined).countTokens(part0)}  (bytes=${bytes(part0)})`);
+console.log(`SYSTEM CONTEXT tokens (parts[1..]): ${new Tokenizer(undefined).countTokens(rest)}  (bytes=${bytes(rest)})`);

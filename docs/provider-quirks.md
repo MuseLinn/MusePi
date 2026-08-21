@@ -555,7 +555,7 @@ GitLab Duo is integrated via two distinct providers in OMP: **GitLab Duo Non-Age
 - **Catalog Generation Rules**: `scripts/generate-models.ts` excludes `gitlab-duo-agent` from static generation discovery to prevent bundling single-account namespace models into static catalogs, bundling only `buildGitLabDuoWorkflowFallbackModel` as a generic fallback seed.
 
 ## Pi Native
-Pi Native is a lossless internal server/client transport protocol used when a pi-ai client (such as containerized `omp` or a sidecar agent slot) delegates request execution to an `omp auth-gateway` holding real provider credentials. Activated when a `Model` sets `transport: "pi-native"`, `streamSimple` in `packages/ai/src/stream.ts` short-circuits local provider resolution and POSTs the canonical `Context` directly to `/v1/pi/stream`. Primary entry modules are `packages/ai/src/providers/pi-native-client.ts` (`streamPiNative`) on the client side, `packages/ai/src/providers/pi-native-server.ts` (`parseRequest`, `encodeStream`, `formatError`) on the wire framing side, and `packages/ai/src/auth-gateway/server.ts` (`POST /v1/pi/stream` route handler) on the server side.
+Pi Native is a lossless internal server/client transport protocol used when a pi-ai client (such as containerized `musepi` or a sidecar agent slot) delegates request execution to a `musepi auth-gateway` holding real provider credentials. Activated when a `Model` sets `transport: "pi-native"`, `streamSimple` in `packages/ai/src/stream.ts` short-circuits local provider resolution and POSTs the canonical `Context` directly to `/v1/pi/stream`. Primary entry modules are `packages/ai/src/providers/pi-native-client.ts` (`streamPiNative`) on the client side, `packages/ai/src/providers/pi-native-server.ts` (`parseRequest`, `encodeStream`, `formatError`) on the wire framing side, and `packages/ai/src/auth-gateway/server.ts` (`POST /v1/pi/stream` route handler) on the server side.
 
 ### Special casings
 - **Lossless Pass-through & Dialect Absence**: Unlike OpenAI/Anthropic routes, `pi-native` is not a textual tool-call dialect (`docs/toolconv/pi-native.md`). Tool calls remain canonical pi-ai `ToolCall` content blocks inside `Context` and `AssistantMessageEvent`. It preserves first-class pi-ai fields (service tier, cache markers, thinking budgets, tool-choice variants, image blocks, tool-call IDs) without foreign-wire quantization.
@@ -1071,7 +1071,7 @@ MiniMax provides foundation models (including MiniMax-M3 and M2 generation) acce
 ### Auth & usage
 - **Auth keys**: Uses `MINIMAX_API_KEY` (`minimax`), `MINIMAX_CODE_API_KEY` (`minimax-code`), and `MINIMAX_CODE_CN_API_KEY` (`minimax-code-cn`) declared in `packages/catalog/src/provider-models/descriptors.ts`.
 - **Token Plan login**: `loginMiniMaxCode` and `loginMiniMaxCodeCn` in `packages/ai/src/registry/oauth/minimax-code.ts` drive browser login flows to `platform.minimax.io` (international) and `platform.minimaxi.com` (China) to prompt and validate API key setup against model `MiniMax-M3`.
-- **Usage quota**: `minimaxCodeUsageProvider` in `packages/ai/src/usage/minimax-code.ts` polls `GET /v1/token_plan/remains` at `https://api.minimax.io` (or China equivalent), parsing rolling interval and weekly usage windows per plan bucket into remaining percentages for `omp usage`.
+- **Usage quota**: `minimaxCodeUsageProvider` in `packages/ai/src/usage/minimax-code.ts` polls `GET /v1/token_plan/remains` at `https://api.minimax.io` (or China equivalent), parsing rolling interval and weekly usage windows per plan bucket into remaining percentages for `musepi usage`.
 
 ### Catalog model handling
 - **Default model**: `MiniMax-M3` set in `packages/catalog/src/provider-models/descriptors.ts` (`minimax`, `minimax-code`, `minimax-code-cn`).
@@ -1079,7 +1079,7 @@ MiniMax provides foundation models (including MiniMax-M3 and M2 generation) acce
 - **OpenAI completions flags**: `openAiCompletionsDescriptor` in `packages/catalog/src/provider-models/openai-compat.ts` configures `supportsStore: false`, `supportsDeveloperRole: false`, `supportsReasoningEffort: false`, and `reasoningContentField: "reasoning_content"`.
 
 ## MiniMax Token Plan (`minimax-code`)
-The MiniMax Token Plan provider (`minimax-code`, alongside its mainland China regional variant `minimax-code-cn`) provides access to MiniMax subscription models such as `MiniMax-M3` and `MiniMax-M2.5` using the OpenAI Chat Completions transport over HTTP POST SSE (`https://api.minimax.io/v1` for international, `https://api.minimaxi.com/v1` for China). In contrast to plain `minimax` (which routes over the Anthropic Messages transport using standard static API key authentication), `minimax-code` uses an interactive subscription login flow and features token plan quota monitoring via `omp usage`.
+The MiniMax Token Plan provider (`minimax-code`, alongside its mainland China regional variant `minimax-code-cn`) provides access to MiniMax subscription models such as `MiniMax-M3` and `MiniMax-M2.5` using the OpenAI Chat Completions transport over HTTP POST SSE (`https://api.minimax.io/v1` for international, `https://api.minimaxi.com/v1` for China). In contrast to plain `minimax` (which routes over the Anthropic Messages transport using standard static API key authentication), `minimax-code` uses an interactive subscription login flow and features token plan quota monitoring via `musepi usage`.
 
 ### Special casings
 - **Transport Difference from Plain `minimax`**: Plain `minimax` (`minimax` / `minimax-cn`) communicates over the `anthropic-messages` transport (`https://api.minimax.io/anthropic`), whereas `minimax-code` (`minimax-code` / `minimax-code-cn`) targets the `openai-completions` transport (`/v1/chat/completions`).
@@ -1497,7 +1497,7 @@ vLLM is an open-source high-throughput LLM serving engine running local or self-
 - **Dynamic-Only Catalog Exclusion**: Included in `DISCOVERY_ONLY_PROVIDERS` (`scripts/generate-models.ts`) and `LOCAL_ONLY_PROVIDERS` (`test/models-json-no-local-endpoints.test.ts`). Local vLLM models are excluded from static catalog generation so machine-specific endpoints are never committed to `models.json`.
 
 ### Auth & usage
-- **Credential Resolution & Defaults**: Managed via `loginVllm` (`createApiKeyLogin` in `packages/ai/src/registry/vllm.ts`). Reads optional API keys from the `VLLM_API_KEY` environment variable or credentials stored via `omp auth-broker login vllm`.
+- **Credential Resolution & Defaults**: Managed via `loginVllm` (`createApiKeyLogin` in `packages/ai/src/registry/vllm.ts`). Reads optional API keys from the `VLLM_API_KEY` environment variable or credentials stored via `musepi auth-broker login vllm`.
 - **Unauthenticated Local Mode**: Defaults to base URL `http://127.0.0.1:8000/v1` and placeholder token `"vllm-local"` (`DEFAULT_LOCAL_TOKEN`) when no key is supplied (`emptyKeyFallback: "vllm-local"`). Descriptor settings specify `catalogDiscovery: { label: "vLLM", allowUnauthenticated: true }`.
 - **Documentation & Endpoint Setup**: The login helper points to `https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html` for configuring local vLLM OpenAI-compatible server endpoints.
 
@@ -1600,7 +1600,7 @@ Xiaomi MiMo delivers Xiaomi's proprietary MiMo model family (such as `mimo-v2.5`
 - **Host Matching**: `modelMatchesHost` (`packages/catalog/src/hosts.ts`) matches `xiaomi` provider IDs, `xiaomi-token-plan-` provider prefixes, and `xiaomimimo.com` URL markers to the `xiaomi` host class.
 
 ## Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`)
-Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`) provides regional access to Xiaomi's MiMo model family (such as `mimo-v2.5` and `mimo-v2-omni`) via Xiaomi's European Token Plan gateway (`https://token-plan-ams.xiaomimimo.com/v1`). It uses the OpenAI Chat Completions transport (`api: "openai-completions"`). This regional provider allows CLI login (`omp login`) and dynamic model lookup to store and validate `tp-` API keys against the European cluster without falling back across regions.
+Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`) provides regional access to Xiaomi's MiMo model family (such as `mimo-v2.5` and `mimo-v2-omni`) via Xiaomi's European Token Plan gateway (`https://token-plan-ams.xiaomimimo.com/v1`). It uses the OpenAI Chat Completions transport (`api: "openai-completions"`). This regional provider allows CLI login (`musepi login`) and dynamic model lookup to store and validate `tp-` API keys against the European cluster without falling back across regions.
 
 ### Special casings
 - **Host Matching & Extended Idle Timeout**: Matched under host class `xiaomi` via `providerPrefixes: ["xiaomi-token-plan-"]` in `packages/catalog/src/hosts.ts`. In `packages/catalog/src/compat/openai.ts`, `isXiaomiHost` matches, enabling `isXiaomiMimo` which configures `XIAOMI_MIMO_STREAM_IDLE_TIMEOUT_MS = 300_000` (5-minute stream idle watchdog) to accommodate initial response stalls on MiMo models.

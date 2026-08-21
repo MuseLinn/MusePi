@@ -3,7 +3,7 @@
 // backend (Kokoro-82M via kokoro-js on the shared ONNX worker) is layered on behind
 // the `providers.tts` switch.
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentToolResult } from "@musepi/pi-agent-core";
 import { type ApiKey, withAuth } from "@musepi/pi-ai";
 import { ProviderHttpError } from "@musepi/pi-ai/error";

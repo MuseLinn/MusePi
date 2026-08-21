@@ -192,7 +192,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	}, [rpc]);
 	const daemonUrl = (() => {
 		try {
-			return localStorage.getItem("musepi-gui-url") ?? localStorage.getItem("omp-gui-url") ?? "ws://127.0.0.1:8300";
+			return localStorage.getItem("musepi-gui-url") ?? "ws://127.0.0.1:8300";
 		} catch {
 			return "ws://127.0.0.1:8300";
 		}
@@ -294,7 +294,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						const next = !dotMatrixOn;
 						setDotMatrixOn(next);
 						localStorage.setItem("musepi-gui-dotmatrix", next ? "1" : "0");
-						window.dispatchEvent(new CustomEvent("omp-dotmatrix-changed"));
+						window.dispatchEvent(new CustomEvent("musepi-dotmatrix-changed"));
 					}}
 					aria-label={t("dot matrix background")}
 				>
@@ -315,7 +315,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								const v = e.target.value;
 								setDotMatrixText(v);
 								localStorage.setItem("musepi-gui-dotmatrix-text", v);
-								window.dispatchEvent(new CustomEvent("omp-dotmatrix-changed"));
+								window.dispatchEvent(new CustomEvent("musepi-dotmatrix-changed"));
 							}}
 							aria-label={t("dot matrix text")}
 						/>

@@ -117,7 +117,7 @@ const localOnlyWorkspacePackages = ["packages/mnemopi"];
 // Repo-level script tests. CI's `workspace` bucket only runs the merge gates:
 // the concurrency regression (the GHA-config guard) and the .d.ts extension
 // rewrite (guards published-type resolution; hermetic temp-dir suite). A local
-// full run also exercises the release-notes and link-omp tests. (A
+// full run also exercises the release-notes tests. (A
 // `ci-test-ts.test.ts` entry used to sit here but the file never existed — bun
 // silently ignores unmatched filters when at least one other filter matches.)
 const repoScriptTests = [
@@ -126,7 +126,6 @@ const repoScriptTests = [
 	"./scripts/ci-release-notes.test.ts",
 	"./scripts/ci-release-publish.test.ts",
 	"./scripts/fix-dts-extensions.test.ts",
-	"./scripts/link-omp.test.ts",
 ];
 
 const codingAgentNativePathPatterns = [

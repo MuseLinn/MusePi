@@ -6,7 +6,7 @@
  * pipeline renders as a living card. Text stays in the response; the
  * visual goes in the widget.
  */
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";

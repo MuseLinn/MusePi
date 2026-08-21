@@ -98,7 +98,7 @@ function mockPluginManagerPaths(root: string) {
 		spyOn(piUtils, "getPluginsDir").mockReturnValue(root),
 		spyOn(piUtils, "getPluginsNodeModules").mockReturnValue(path.join(root, "node_modules")),
 		spyOn(piUtils, "getPluginsPackageJson").mockReturnValue(path.join(root, "package.json")),
-		spyOn(piUtils, "getPluginsLockfile").mockReturnValue(path.join(root, "omp-plugins.lock.json")),
+		spyOn(piUtils, "getPluginsLockfile").mockReturnValue(path.join(root, "musepi-plugins.lock.json")),
 		spyOn(piUtils, "getProjectPluginOverridesPath").mockReturnValue(path.join(root, "plugin-overrides.json")),
 	];
 }
@@ -200,7 +200,7 @@ describe("MarketplaceManager", () => {
 		const linkPath = path.join(ctx.tmpDir, "node_modules", "hello-plugin");
 		expect(fs.realpathSync(linkPath)).toBe(fs.realpathSync(instEntry.installPath));
 
-		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "omp-plugins.lock.json")).json();
+		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "musepi-plugins.lock.json")).json();
 		expect(runtimeConfig.plugins["hello-plugin"]).toEqual({
 			version: "1.0.0",
 			enabledFeatures: null,
@@ -391,7 +391,7 @@ describe("MarketplaceManager", () => {
 			expect(fs.realpathSync(projectLink)).toBe(
 				fs.realpathSync(path.join(userPluginsDir, "cache", "plugins", "test-marketplace___hello-plugin___1.0.0")),
 			);
-			const projectLock = await Bun.file(path.join(projectPluginsDir, "omp-plugins.lock.json")).json();
+			const projectLock = await Bun.file(path.join(projectPluginsDir, "musepi-plugins.lock.json")).json();
 			expect(projectLock.plugins["hello-plugin"]).toEqual({
 				version: "1.0.0",
 				enabledFeatures: null,
@@ -400,7 +400,7 @@ describe("MarketplaceManager", () => {
 
 			// User-scope tree stays untouched.
 			expect(fs.existsSync(path.join(userPluginsDir, "node_modules", "hello-plugin"))).toBe(false);
-			expect(fs.existsSync(path.join(userPluginsDir, "omp-plugins.lock.json"))).toBe(false);
+			expect(fs.existsSync(path.join(userPluginsDir, "musepi-plugins.lock.json"))).toBe(false);
 		} finally {
 			fs.rmSync(tmpHome, { recursive: true, force: true });
 			fs.rmSync(projectAnchor, { recursive: true, force: true });
@@ -580,7 +580,7 @@ describe("MarketplaceManager", () => {
 		expect(second.installPath).toBe(first.installPath);
 		expect(fs.existsSync(second.installPath)).toBe(true);
 
-		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "omp-plugins.lock.json")).json();
+		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "musepi-plugins.lock.json")).json();
 		expect(runtimeConfig.plugins["hello-plugin"].enabled).toBe(false);
 
 		const installed = await ctx.manager.listInstalledPlugins();
@@ -611,7 +611,7 @@ describe("MarketplaceManager", () => {
 		expect(fs.existsSync(instEntry.installPath)).toBe(false);
 		expect(fs.existsSync(path.join(ctx.tmpDir, "node_modules", "hello-plugin"))).toBe(false);
 
-		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "omp-plugins.lock.json")).json();
+		const runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "musepi-plugins.lock.json")).json();
 		expect(runtimeConfig.plugins["hello-plugin"]).toBeUndefined();
 
 		const installed = await ctx.manager.listInstalledPlugins();
@@ -636,12 +636,12 @@ describe("MarketplaceManager", () => {
 
 		const installed = await ctx.manager.listInstalledPlugins();
 		expect(installed[0].entries[0].enabled).toBe(false);
-		let runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "omp-plugins.lock.json")).json();
+		let runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "musepi-plugins.lock.json")).json();
 		expect(runtimeConfig.plugins["hello-plugin"].enabled).toBe(false);
 
 		await ctx.manager.setPluginEnabled("hello-plugin@test-marketplace", true);
 		const updated = await ctx.manager.listInstalledPlugins();
-		runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "omp-plugins.lock.json")).json();
+		runtimeConfig = await Bun.file(path.join(ctx.tmpDir, "musepi-plugins.lock.json")).json();
 		expect(runtimeConfig.plugins["hello-plugin"].enabled).toBe(true);
 		expect(updated[0].entries[0].enabled).toBe(true);
 	});

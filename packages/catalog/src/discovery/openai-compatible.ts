@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { Api, FetchImpl, ModelSpec, Provider } from "../types";
 import { discoveryFetch } from "../utils";
 

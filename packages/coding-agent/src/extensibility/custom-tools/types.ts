@@ -4,9 +4,9 @@
  * Custom tools are TypeScript modules that define additional tools for the agent.
  * They can provide custom rendering for tool calls and results in the TUI.
  */
-import type { type as ArkType } from "@musepi/omptype";
-import type * as TypeBox from "@musepi/omptype/typebox";
-import type * as zod from "@musepi/omptype/zod";
+import type { type as ArkType } from "@musepi/musepi-type";
+import type * as TypeBox from "@musepi/musepi-type/typebox";
+import type * as zod from "@musepi/musepi-type/zod";
 
 import type {
 	AgentToolResult,
@@ -126,11 +126,11 @@ export type CustomToolSessionEvent =
 	| {
 			reason: "auto_compaction_start";
 			trigger: "threshold" | "overflow" | "idle" | "incomplete";
-			action: "context-full" | "handoff" | "shake" | "snapcompact";
+			action: "context-full" | "remote" | "handoff" | "shake" | "snapcompact";
 	  }
 	| {
 			reason: "auto_compaction_end";
-			action: "context-full" | "handoff" | "shake" | "snapcompact";
+			action: "context-full" | "remote" | "handoff" | "shake" | "snapcompact";
 			result: CompactionResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;

@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { type ApiKey, type FetchImpl, getEnvApiKey, withAuth } from "@musepi/pi-ai";
 import { prompt, untilAborted } from "@musepi/pi-utils";
 import type { CustomTool } from "../extensibility/custom-tools/types";

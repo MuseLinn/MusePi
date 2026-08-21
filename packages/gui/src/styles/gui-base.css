@@ -137,6 +137,15 @@ html body {
 	--gui-glass-overlay: clamp(58%, calc(85% - 30% * var(--gui-glass-alpha, 0.55)), 76%);
 }
 
+/* macOS light: the bright "light" vibrancy material (gui-vibrancy IPC maps
+ * style "light" → vibrancy "light", NOT under-window) does NOT dim the
+ * backdrop — the heavy 58–76% scrim above was only needed to mask the
+ * grey under-window caused. With the bright material a thin scrim reads
+ * as real frosted glass (user report: 顶栏/左侧面板 不磨砂、像不透明纯色). */
+[data-platform="darwin"][data-theme="light"] {
+	--gui-glass-overlay: clamp(22%, calc(58% * (1 - var(--gui-glass-alpha, 0.55))), 58%);
+}
+
 /* Adaptive text on glass panes at high transparency. Blended from the raw
  * --fg tokens (never from --color-text: a custom property referencing
  * itself is guaranteed-invalid at computed-value time and would nuke every

@@ -2439,6 +2439,59 @@ function openCodeBaseUrlForApi(api: Api, basePath: string): string {
 	return api === "anthropic-messages" ? basePath : `${basePath}/v1`;
 }
 
+const OPENCODE_ZEN_API_ID_OVERRIDES: Readonly<Record<string, Api>> = {
+	"minimax-m3": "openai-completions",
+	"minimax-m3-free": "openai-completions",
+};
+// OpenCode Go: models.dev declares minimax-m2.7 / qwen3.5-plus / qwen3.6-plus
+// (and now also minimax-m3) with `provider.npm = "@ai-sdk/anthropic"`, but
+// the OpenCode Go gateway only serves them at
+// `https://opencode.ai/zen/go/v1/chat/completions` (verified against
+// https://opencode.ai/zen/go/v1/models and the upstream endpoint table at
+// https://opencode.ai/docs/go/#endpoints — minimax-m2.5 works the same way
+// and lacks an `npm` field on models.dev so it already falls through to the
+// openai-completions default). Without this override the resolver would POST
+// anthropic-style requests to /v1/messages and the gateway would return its
+// `Page Not Found` HTML (issue #887 for the qwen/m2.7 entries; minimax-m3
+// and minimax-m3-free added under #1617 for the same root cause).
+//
+// deepseek-v4-flash is the inverse case: it falls through to
+// openai-completions by default, but the Go gateway's
+// /zen/go/v1/chat/completions route does not work for this model while
+// /zen/go/v1/responses does (user-verified against the live gateway,
+// 2026-08-08; Flash only — deepseek-v4-pro serves fine on chat completions).
+//
+// muse-spark-1.2 / muse-spark-1.2-contributor are the same inverse case, but
+// worse: models.dev does not list them under opencode-go at all, so they have
+// no bundled reference and only exist via live gateway discovery. Without the
+// discovery-side pin they default to openai-completions even though the
+// gateway only serves them at /zen/go/v1/responses (@ai-sdk/openai per
+// https://opencode.ai/docs/go/#endpoints). The completions parser then closes
+// the stream with no finish_reason on every tool-call turn (#8957).
+const OPENCODE_GO_API_ID_OVERRIDES: Readonly<Record<string, Api>> = {
+	"deepseek-v4-flash": "openai-responses",
+	"muse-spark-1.2": "openai-responses",
+	"muse-spark-1.2-contributor": "openai-responses",
+	"minimax-m2.7": "openai-completions",
+	"minimax-m3": "openai-completions",
+	"minimax-m3-free": "openai-completions",
+	"qwen3.5-plus": "openai-completions",
+	"qwen3.6-plus": "openai-completions",
+};
+
+// Billing-variant suffixes the OpenCode gateways append to a base model id
+// without changing its transport (`deepseek-v4-flash-free`,
+// `muse-spark-1.2-contributor`).
+const OPENCODE_VARIANT_SUFFIXES = ["-contributor", "-free"] as const;
+
+/** Strips a billing-variant suffix; null when `id` is not a variant. */
+function openCodeBaseModelId(id: string): string | null {
+	for (const suffix of OPENCODE_VARIANT_SUFFIXES) {
+		if (id.endsWith(suffix) && id.length > suffix.length) return id.slice(0, -suffix.length);
+	}
+	return null;
+}
+
 function openCodeModelManagerOptions(
 	providerId: "opencode-go" | "opencode-zen",
 	config?: OpenCodeModelManagerConfig,
@@ -2449,10 +2502,38 @@ function openCodeModelManagerOptions(
 	const basePath = normalizeOpenCodeBasePath(config?.baseUrl, defaultBasePath);
 	const discoveryBaseUrl = openCodeBaseUrlForApi("openai-completions", basePath);
 	const references = createBundledReferenceMap<Api>(providerId);
+	// Both gateways share one operator with identical endpoint semantics, so
+	// the sibling's bundled catalog is a routing hint for ids models.dev has
+	// not picked up under this gateway yet.
+	const siblingReferences = createBundledReferenceMap<Api>(
+		providerId === "opencode-go" ? "opencode-zen" : "opencode-go",
+	);
+	const apiOverrides = providerId === "opencode-go" ? OPENCODE_GO_API_ID_OVERRIDES : OPENCODE_ZEN_API_ID_OVERRIDES;
+	// Routes a discovered id with no same-provider metadata. models.dev lags
+	// the gateway (muse-spark-1.2[-contributor] shipped gateway-first, #8957),
+	// so borrow the openai-responses route from the sibling gateway or the
+	// billing-variant base id. Responses ONLY: openai-completions is already
+	// the default, and anthropic-messages transports genuinely diverge across
+	// gateways (e.g. minimax-m2.5), so borrowing them would import upstream
+	// metadata noise as hard routing errors.
+	const fallbackApi = (id: string, base: string | null): Api | undefined => {
+		const hints = [
+			siblingReferences.get(id)?.api,
+			base ? references.get(base)?.api : undefined,
+			base ? siblingReferences.get(base)?.api : undefined,
+		];
+		return hints.includes("openai-responses") ? "openai-responses" : undefined;
+	};
 	return {
 		providerId,
 		cacheProviderId: resolveModelCacheProviderId(providerId, { apiKey, baseUrl: discoveryBaseUrl }),
 		dynamicModelsAuthoritative: true,
+		// The per-id API pins are cache identity: without this, rows cached
+		// before a pin was added keep the wrong endpoint until TTL expiry
+		// (#8957 — 17.3.7 caches held muse-spark-1.2[-contributor] on chat
+		// completions after the pin shipped). Sibling-catalog drift is bounded
+		// by the 2h cache TTL instead.
+		dropCachedModelIdsOnStaticMismatch: Object.keys(apiOverrides),
 		...(apiKey && {
 			fetchDynamicModels: () =>
 				fetchOpenAICompatibleModels<Api>({
@@ -2463,17 +2544,26 @@ function openCodeModelManagerOptions(
 					mapModel: (entry, defaults) => {
 						const reference = references.get(defaults.id);
 						const name = toModelName(entry.name, reference?.name ?? defaults.name);
+						const base = openCodeBaseModelId(defaults.id);
+						// Pins win over bundled references (stale bundled routes
+						// must not stick), and a base-id pin covers its billing
+						// variants; the responses fallback covers gateway-first ids.
+						const api =
+							apiOverrides[defaults.id] ??
+							(base ? apiOverrides[base] : undefined) ??
+							reference?.api ??
+							fallbackApi(defaults.id, base) ??
+							defaults.api;
+						const baseUrl = openCodeBaseUrlForApi(api, basePath);
 						if (!reference) {
-							return {
-								...defaults,
-								name,
-							};
+							return { ...defaults, name, api, baseUrl };
 						}
 						return {
 							...reference,
 							id: defaults.id,
 							name,
-							baseUrl: openCodeBaseUrlForApi(reference.api, basePath),
+							api,
+							baseUrl,
 							contextWindow: toPositiveNumber(entry.context_length, reference.contextWindow),
 							maxTokens: toPositiveNumber(entry.max_completion_tokens, reference.maxTokens),
 						};
@@ -4282,8 +4372,8 @@ export const AGNES_GLOBAL_STATIC_MODELS: readonly ModelSpec<"openai-completions"
 /**
  * StepFun Step Plan documented chat catalog (CN + global), bundled for the
  * same reason as the Agnes seeds above. step-3.7-flash is documented at
- * 256,000 context with vision input; pricing is left as $0 pending live
- * billing metadata.
+ * 256k (262,144 tokens) context with vision input; pricing is left as $0
+ * pending live billing metadata.
  */
 export const STEPFUN_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] = [
 	createBundledStaticModel(
@@ -4292,7 +4382,7 @@ export const STEPFUN_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] =
 		"step-3.7-flash",
 		"Step 3.7 Flash",
 		{ input: 0, output: 0 },
-		256_000,
+		262_144,
 		["text", "image"],
 	),
 ];
@@ -4303,7 +4393,7 @@ export const STEPFUN_GLOBAL_STATIC_MODELS: readonly ModelSpec<"openai-completion
 		"step-3.7-flash",
 		"Step 3.7 Flash",
 		{ input: 0, output: 0 },
-		256_000,
+		262_144,
 		["text", "image"],
 	),
 ];

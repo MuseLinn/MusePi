@@ -11,9 +11,8 @@
  */
 
 import type { TextContent, ToolResultMessage } from "@musepi/pi-ai";
-import { countTokens } from "../tokenizer";
+import type { Tokenizer } from "../tokenizer";
 import type { AgentMessage } from "../types";
-import { estimateTokens } from "./compaction";
 import type { CustomMessageEntry, SessionEntry, SessionMessageEntry } from "./entries";
 import { invalidateMessageCache } from "./message-cache";
 import {
@@ -123,15 +122,15 @@ function toolResultText(message: ToolResultMessage): string {
 }
 
 /** Estimate the token contribution of an entry for the protect-recent window. */
-function entryTokens(entry: SessionEntry): number {
+function entryTokens(entry: SessionEntry, tokenizer: Tokenizer): number {
 	if (entry.type === "message") {
-		return estimateTokens(entry.message);
+		return tokenizer.countMessage(entry.message);
 	}
 	if (entry.type === "custom_message") {
 		const content = entry.content;
-		if (typeof content === "string") return content.length === 0 ? 0 : countTokens(content);
+		if (typeof content === "string") return content.length === 0 ? 0 : tokenizer.countTokens(content);
 		const fragments = content.filter((block): block is TextContent => block.type === "text").map(block => block.text);
-		return fragments.length === 0 ? 0 : countTokens(fragments);
+		return fragments.length === 0 ? 0 : tokenizer.countTokens(fragments);
 	}
 	return 0;
 }
@@ -222,6 +221,7 @@ function pushBlockRegions(
 	entry: SessionMessageEntry | CustomMessageEntry,
 	blockIndex: number,
 	text: string,
+	tokenizer: Tokenizer,
 	config: ShakeConfig,
 	label: string,
 	out: ShakeRegion[],
@@ -229,7 +229,7 @@ function pushBlockRegions(
 	for (const range of scanTextForBlockRanges(text)) {
 		const slice = text.slice(range.start, range.end);
 		if (slice.length === 0) continue;
-		const tokens = countTokens(slice);
+		const tokens = tokenizer.countTokens(slice);
 		if (tokens < config.fenceMinTokens) continue;
 		out.push({
 			kind: "block",
@@ -246,6 +246,7 @@ function pushBlockRegions(
 
 function collectBlockRegions(
 	entry: SessionMessageEntry | CustomMessageEntry,
+	tokenizer: Tokenizer,
 	config: ShakeConfig,
 	out: ShakeRegion[],
 ): void {
@@ -254,34 +255,35 @@ function collectBlockRegions(
 		if (message.role === "assistant") {
 			for (let bi = 0; bi < message.content.length; bi++) {
 				const block = message.content[bi];
-				if (block.type === "text") pushBlockRegions(entry, bi, block.text, config, "assistant", out);
+				if (block.type === "text") pushBlockRegions(entry, bi, block.text, tokenizer, config, "assistant", out);
 			}
 			return;
 		}
 		if (message.role === "user" || message.role === "developer") {
-			scanContentBlocks(entry, message.content, config, message.role, out);
+			scanContentBlocks(entry, message.content, tokenizer, config, message.role, out);
 		}
 		return;
 	}
 	// custom_message
-	scanContentBlocks(entry, entry.content, config, entry.customType, out);
+	scanContentBlocks(entry, entry.content, tokenizer, config, entry.customType, out);
 }
 
 function scanContentBlocks(
 	entry: SessionMessageEntry | CustomMessageEntry,
 	content: string | Array<{ type: string; text?: string }>,
+	tokenizer: Tokenizer,
 	config: ShakeConfig,
 	label: string,
 	out: ShakeRegion[],
 ): void {
 	if (typeof content === "string") {
-		pushBlockRegions(entry, -1, content, config, label, out);
+		pushBlockRegions(entry, -1, content, tokenizer, config, label, out);
 		return;
 	}
 	for (let bi = 0; bi < content.length; bi++) {
 		const block = content[bi];
 		if (block.type === "text" && typeof block.text === "string") {
-			pushBlockRegions(entry, bi, block.text, config, label, out);
+			pushBlockRegions(entry, bi, block.text, tokenizer, config, label, out);
 		}
 	}
 }
@@ -300,7 +302,7 @@ function scanContentBlocks(
  * and regions never span a message boundary. When the combined estimated
  * savings is below `minSavings`, returns `[]` (no-op).
  */
-export function collectShakeRegions(entries: SessionEntry[], config: ShakeConfig): ShakeRegion[] {
+export function collectShakeRegions(entries: SessionEntry[], tokenizer: Tokenizer, config: ShakeConfig): ShakeRegion[] {
 	const n = entries.length;
 	if (n === 0) return [];
 
@@ -309,7 +311,7 @@ export function collectShakeRegions(entries: SessionEntry[], config: ShakeConfig
 	let acc = 0;
 	for (let i = n - 1; i >= 0; i--) {
 		accumulatedAfter[i] = acc;
-		acc += entryTokens(entries[i]);
+		acc += entryTokens(entries[i], tokenizer);
 	}
 
 	const toolCallsById = collectToolCallsById(entries);
@@ -342,7 +344,7 @@ export function collectShakeRegions(entries: SessionEntry[], config: ShakeConfig
 			regions.push({
 				kind: "toolResult",
 				entry: entry as SessionMessageEntry,
-				tokens: estimateTokens(toolResult as AgentMessage),
+				tokens: tokenizer.countMessage(toolResult as AgentMessage),
 				originalText: text,
 				label: toolResult.toolName,
 			});
@@ -350,7 +352,7 @@ export function collectShakeRegions(entries: SessionEntry[], config: ShakeConfig
 		}
 
 		if (entry.type === "message" || entry.type === "custom_message") {
-			collectBlockRegions(entry as SessionMessageEntry | CustomMessageEntry, config, regions);
+			collectBlockRegions(entry as SessionMessageEntry | CustomMessageEntry, tokenizer, config, regions);
 		}
 	}
 

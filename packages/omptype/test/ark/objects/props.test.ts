@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { type } from "@musepi/omptype/ark";
+import { type } from "@musepi/musepi-type/ark";
 import type { Eq } from "../type-assert";
 
 // by default because of the toJSON method, it wouldn't be clear

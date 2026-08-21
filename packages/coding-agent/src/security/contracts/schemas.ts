@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { once } from "@musepi/pi-utils";
 
 export const getSecurityContractSchemas = once(() => {

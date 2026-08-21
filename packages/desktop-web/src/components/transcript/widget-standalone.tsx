@@ -3,7 +3,7 @@
  * in the transcript flow (and mirrored into the GUI right-panel widget
  * tab), instead of being buried inside the collapsed tool-call card.
  *
- * - `omp-gui-widget-standalone` (localStorage, default ON) gates the
+ * - `musepi-gui-widget-standalone` (localStorage, default ON) gates the
  *   standalone card; when ON the tool-call card defaults to collapsed.
  * - `WidgetStandaloneCards` renders the deduped successful widget payloads
  *   of one assistant message, file-preview-card style (user request:
@@ -22,7 +22,7 @@ import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
 
 /** localStorage key for the standalone widget display. */
-export const WIDGET_STANDALONE_KEY = "omp-gui-widget-standalone";
+export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
 
 /** True when the standalone widget display is enabled (default ON). */
 export function widgetStandaloneEnabled(): boolean {

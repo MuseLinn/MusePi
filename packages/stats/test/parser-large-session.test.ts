@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { parseSessionFile } from "@musepi/omp-stats/parser";
+import { parseSessionFile } from "@musepi/musepi-stats/parser";
 import { getSessionsDir } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

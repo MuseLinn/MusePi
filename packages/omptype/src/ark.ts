@@ -1,10 +1,10 @@
 /**
- * ArkType compatibility facade — `@musepi/omptype/ark`.
+ * ArkType compatibility facade — `@musepi/musepi-type/ark`.
  *
  * Lets code written against arktype keep its imports and names while running
  * on the omptype lazy-JIT runtime: swap `from "arktype"` for
- * `from "@musepi/omptype/ark"` and nothing else changes. New code should
- * import `@musepi/omptype` directly.
+ * `from "@musepi/musepi-type/ark"` and nothing else changes. New code should
+ * import `@musepi/musepi-type` directly.
  *
  * Compatibility affordance: `ArkError` / `ArkErrors` alias `OmpError` /
  * `OmpErrors`. All schema builders, including recursive `scope()`, are

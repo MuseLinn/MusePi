@@ -7,7 +7,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { AssistantMessage, Context, Message, TextContent } from "@musepi/pi-ai";
 import {

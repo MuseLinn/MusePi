@@ -7,7 +7,7 @@ use std::{
 	borrow::Cow,
 	ffi::{OsStr, OsString},
 	fs::File,
-	io::{self, BufWriter, Read, Write},
+	io::{self, Read, Write},
 	path::{Path, PathBuf},
 };
 
@@ -1274,7 +1274,7 @@ fn execute_search<M: Matcher>(
 	max_count: Option<u64>,
 ) -> i32 {
 	let mut searcher = build_searcher(cli, opts, max_count);
-	let mut out = BufWriter::new(host.stdout_clone());
+	let mut out = host.stdout_writer();
 	let mut any_match = false;
 	let mut had_error = false;
 	let mut processed_operand = false;
@@ -1523,12 +1523,99 @@ pub(crate) fn grep_builtin<SE: ShellExtensions>() -> Registration<SE> {
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		io::{self, Read, Write},
+		sync::Arc,
+	};
+
+	use parking_lot::Mutex;
+
 	use super::*;
-	use crate::host::{Host, run_util};
+	use brush_core::openfiles;
+	use crate::host::{Host, run_caught, run_util};
+
+	struct SnapshottingStdin {
+		pos:      usize,
+		snapped:  bool,
+		stdout:   Arc<Mutex<Option<Arc<Mutex<Vec<u8>>>>>>,
+		snapshot: Arc<Mutex<Vec<u8>>>,
+	}
+
+	const SNAPSHOT_INPUT: &[u8] = b"hit\nmiss\n";
+
+	impl Read for SnapshottingStdin {
+		fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+			if self.pos < SNAPSHOT_INPUT.len() {
+				let n = buf.len().min(SNAPSHOT_INPUT.len() - self.pos);
+				buf[..n].copy_from_slice(&SNAPSHOT_INPUT[self.pos..self.pos + n]);
+				self.pos += n;
+				return Ok(n);
+			}
+			// Input exhausted: grep is back asking for more. Whatever it has
+			// already flushed to stdout is what a live consumer would see now.
+			if !self.snapped {
+				let stdout = self.stdout.lock().clone().expect("stdout buffer is initialized");
+				*self.snapshot.lock() = stdout.lock().clone();
+				self.snapped = true;
+			}
+			Ok(0)
+		}
+	}
+
+	impl Write for SnapshottingStdin {
+		fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> io::Result<()> {
+			Ok(())
+		}
+	}
+
+	impl openfiles::Stream for SnapshottingStdin {
+		fn clone_box(&self) -> Box<dyn openfiles::Stream> {
+			Box::new(Self {
+				pos:      self.pos,
+				snapped:  self.snapped,
+				stdout:   Arc::clone(&self.stdout),
+				snapshot: Arc::clone(&self.snapshot),
+			})
+		}
+
+		#[cfg(unix)]
+		fn try_clone_to_owned(&self) -> Result<std::os::fd::OwnedFd, brush_core::Error> {
+			Err(brush_core::error::ErrorKind::CannotConvertToNativeFd.into())
+		}
+
+		#[cfg(unix)]
+		fn try_borrow_as_fd(&self) -> Result<std::os::fd::BorrowedFd<'_>, brush_core::Error> {
+			Err(brush_core::error::ErrorKind::CannotConvertToNativeFd.into())
+		}
+	}
 
 	fn run(args: &[&str], stdin: &str) -> (i32, String, String) {
 		let (code, capture) = run_util::<Grep>(args, stdin, "/");
 		(code, capture.out(), capture.err())
+	}
+
+	#[test]
+	fn stdin_matches_are_visible_before_eof() {
+		let stdout = Arc::new(Mutex::new(None));
+		let snapshot = Arc::new(Mutex::new(Vec::new()));
+		let stdin = Box::new(SnapshottingStdin {
+			pos: 0,
+			snapped: false,
+			stdout: Arc::clone(&stdout),
+			snapshot: Arc::clone(&snapshot),
+		});
+		let (mut host, capture) = Host::for_test_with_stdin("grep", stdin, "/");
+		*stdout.lock() = Some(capture.stdout_buffer());
+
+		let parsed = Grep::try_parse_from(["grep", "hit", "-"]).unwrap();
+		assert_eq!(run_caught(parsed, &mut host), 0, "{}", capture.err());
+
+		// A regression re-buffering grep's output makes matches invisible until EOF.
+		assert_eq!(snapshot.lock().as_slice(), b"hit\n");
 	}
 
 	#[test]

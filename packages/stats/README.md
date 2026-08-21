@@ -1,4 +1,4 @@
-# @musepi/omp-stats
+# @musepi/musepi-stats
 
 Local observability dashboard for AI usage statistics.
 
@@ -42,7 +42,7 @@ omp stats --json
 ### Programmatic
 
 ```typescript
-import { getDashboardStats, syncAllSessions } from "@musepi/omp-stats";
+import { getDashboardStats, syncAllSessions } from "@musepi/musepi-stats";
 
 // Sync session logs to database
 const { processed, files } = await syncAllSessions();

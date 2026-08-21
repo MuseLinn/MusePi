@@ -5,7 +5,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { Type } from "@musepi/omptype/typebox";
+import { Type } from "@musepi/musepi-type/typebox";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { HookRunner, type LoadedHook } from "@musepi/pi-coding-agent/extensibility/hooks";

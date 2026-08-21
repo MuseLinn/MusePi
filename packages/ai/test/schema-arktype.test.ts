@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { Tool } from "@musepi/pi-ai/types";
 import { isArkSchema, toolWireSchema } from "@musepi/pi-ai/utils/schema";
 import { validateToolArguments } from "@musepi/pi-ai/utils/validation";

@@ -5,7 +5,7 @@
  * providers with provider-specific parameters exposed conditionally.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { AuthStorage } from "@musepi/pi-ai";
 import { prompt } from "@musepi/pi-utils";

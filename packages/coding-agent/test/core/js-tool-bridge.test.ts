@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { callSessionTool } from "@musepi/pi-coding-agent/eval/js/tool-bridge";

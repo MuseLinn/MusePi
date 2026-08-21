@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { streamOpenAICompletions } from "@musepi/pi-ai/providers/openai-completions";
 import type { Context, Model, ModelSpec, Tool } from "@musepi/pi-ai/types";
 import { buildModel } from "@musepi/pi-catalog/build";

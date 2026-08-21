@@ -15,7 +15,7 @@
  * when the agent has nothing else to do.
  */
 
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type {
 	AgentTool,
 	AgentToolContext,

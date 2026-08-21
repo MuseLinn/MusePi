@@ -2467,6 +2467,13 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 10px;
 	animation: gui-focus-zoom 220ms var(--spring);
 }
+/* Exit: brief scale-down + blur before unmount. */
+.gui-widget-editor--closing {
+	animation: gui-focus-out 150ms ease-in forwards;
+}
+.gui-motion-off .gui-widget-editor--closing {
+	animation: none;
+}
 
 .gui-widget-editor-head {
 	display: flex;

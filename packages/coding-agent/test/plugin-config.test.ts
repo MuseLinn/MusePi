@@ -14,7 +14,7 @@ describe("plugin config", () => {
 	beforeEach(async () => {
 		tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-plugin-config-"));
 		pluginsDir = path.join(tmpRoot, "plugins");
-		lockfile = path.join(pluginsDir, "omp-plugins.lock.json");
+		lockfile = path.join(pluginsDir, "musepi-plugins.lock.json");
 
 		spyOn(piUtils, "getPluginsDir").mockReturnValue(pluginsDir);
 		spyOn(piUtils, "getPluginsLockfile").mockReturnValue(lockfile);

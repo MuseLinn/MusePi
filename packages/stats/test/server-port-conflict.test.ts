@@ -4,6 +4,7 @@ import { connect, type Subprocess } from "bun";
 import {
 	STATS_DASHBOARD_HEADER,
 	STATS_DASHBOARD_HOSTNAME,
+	STATS_DASHBOARD_HOSTNAME_HEADER,
 	STATS_DASHBOARD_SECURITY_VERSION,
 } from "../src/port-conflict";
 import { startServer } from "../src/server";
@@ -40,7 +41,7 @@ async function startBunHolder(responseExpr: string, options?: { hostname?: strin
 
 	const source = `Bun.serve({ port: ${port}, hostname: "${hostname}", fetch: () => ${responseExpr} }); process.stdout.write("ready"); await Promise.withResolvers().promise;`;
 	const args = [process.execPath, "-e", source];
-	if (options?.statsOwned) args.push("omp-stats");
+	if (options?.statsOwned) args.push("musepi-stats");
 	const child = Bun.spawn(args, {
 		stdin: "ignore",
 		stdout: "pipe",
@@ -110,7 +111,12 @@ describe("startServer port conflicts", () => {
 			hostname: STATS_DASHBOARD_HOSTNAME,
 			fetch: request =>
 				new URL(request.url).pathname === "/api/stats/models"
-					? Response.json([], { headers: { [STATS_DASHBOARD_HEADER]: STATS_DASHBOARD_SECURITY_VERSION } })
+					? Response.json([], {
+							headers: {
+								[STATS_DASHBOARD_HEADER]: STATS_DASHBOARD_SECURITY_VERSION,
+								[STATS_DASHBOARD_HOSTNAME_HEADER]: STATS_DASHBOARD_HOSTNAME,
+							},
+						})
 					: new Response("dashboard"),
 		});
 
@@ -163,7 +169,7 @@ describe("startServer port conflicts", () => {
 	it("refuses to stop a foreign 200 responder", async () => {
 		const holder = await startBunHolder('Response.json({ app: "spa" })');
 
-		await expect(startServer(holder.port)).rejects.toThrow("not identifiable as an omp stats dashboard");
+		await expect(startServer(holder.port)).rejects.toThrow("not identifiable as a musepi stats dashboard");
 		expect(holder.child.exitCode).toBeNull();
 		const response = await fetch(`http://${STATS_DASHBOARD_HOSTNAME}:${holder.port}/api/stats/models`);
 		expect(await response.json()).toEqual({ app: "spa" });
@@ -172,7 +178,7 @@ describe("startServer port conflicts", () => {
 	it("refuses to stop an unrelated Bun listener that fails the probe", async () => {
 		const holder = await startBunHolder('new Response("foreign", { status: 404 })');
 
-		await expect(startServer(holder.port)).rejects.toThrow("not identifiable as an omp stats dashboard");
+		await expect(startServer(holder.port)).rejects.toThrow("not identifiable as a musepi stats dashboard");
 		expect(holder.child.exitCode).toBeNull();
 	});
 

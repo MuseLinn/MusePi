@@ -503,10 +503,10 @@ export function WelcomeComposer({
 			setDotMatrixOn(localStorage.getItem("musepi-gui-dotmatrix") !== "0");
 			setDotMatrixText(localStorage.getItem("musepi-gui-dotmatrix-text") || "MusePi");
 		};
-		window.addEventListener("omp-dotmatrix-changed", on);
+		window.addEventListener("musepi-dotmatrix-changed", on);
 		window.addEventListener("storage", on);
 		return () => {
-			window.removeEventListener("omp-dotmatrix-changed", on);
+			window.removeEventListener("musepi-dotmatrix-changed", on);
 			window.removeEventListener("storage", on);
 		};
 	}, []);

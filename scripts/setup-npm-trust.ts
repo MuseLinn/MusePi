@@ -284,7 +284,7 @@ function placeholderReadme(name: string, target: NativeLeafTarget): string {
 }
 
 async function publishNativeLeafPlaceholder(name: string, target: NativeLeafTarget, repo: string): Promise<boolean> {
-	const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-native-placeholder-"));
+	const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-native-placeholder-"));
 	try {
 		await Bun.write(
 			path.join(tmpDir, "package.json"),

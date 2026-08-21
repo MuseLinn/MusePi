@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { getDashboardStats } from "@musepi/omp-stats/aggregator";
-import { initDb, insertMessageStats } from "@musepi/omp-stats/db";
-import type { MessageStats } from "@musepi/omp-stats/types";
+import { getDashboardStats } from "@musepi/musepi-stats/aggregator";
+import { initDb, insertMessageStats } from "@musepi/musepi-stats/db";
+import type { MessageStats } from "@musepi/musepi-stats/types";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 
 installStatsTestIsolation("@pi-stats-db-range-");

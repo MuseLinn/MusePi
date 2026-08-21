@@ -466,6 +466,24 @@ export const tools = {
 	"advisor configure hint": "通过 TUI 的 /advisor configure 编辑顾问清单",
 	"quota exhausted": "额度耗尽",
 	"no model assigned": "未分配模型",
+	// ── Computer permissions ────────────────────────────────────────────
+	"screen recording": "屏幕录制",
+	"accessibility": "辅助功能",
+	"input monitoring": "输入监控",
+	"granted": "已授权",
+	"authorize": "授权",
+	"computer permissions": "Computer 权限",
+	"computer permissions hint": "开启以下权限,让 MusePi 在电脑上为你提供帮助",
+	"permission screen recording description": "用于支持屏幕截图和视觉上下文",
+	"permission accessibility description": "用于支持键盘快捷键和情景感知功能",
+	"permission input description": "用于支持输入监控",
+	"refresh permissions": "刷新",
+	"computer permissions overlay title": "Computer 使用需要权限",
+	"computer permissions overlay description": "MusePi 需要以下权限才能使用 Computer 功能。已授权的不再提示。",
+	"overlay authorize": "去授权",
+	"overlay later": "稍后再说",
+	"computer permissions missing": "权限不足,Computer 功能不可用",
+	"computer permissions later hint": "稍后可在「设置 → 工具 → Computer 权限」中操作",
 } as const;
 
 /** Key union for the tools domain (source of truth). */

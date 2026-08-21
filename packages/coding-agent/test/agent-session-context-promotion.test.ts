@@ -1,5 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
+import { scheduler } from "node:timers/promises";
 import { Agent } from "@musepi/pi-agent-core";
 import * as compactionModule from "@musepi/pi-agent-core/compaction";
 import type { AssistantMessage, Model, ProviderSessionState } from "@musepi/pi-ai";
@@ -9,6 +10,8 @@ import { AgentSession, type AgentSessionEvent } from "@musepi/pi-coding-agent/se
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
+
+const originalSchedulerWait = scheduler.wait.bind(scheduler);
 
 describe("AgentSession context promotion", () => {
 	let tempDir: TempDir;
@@ -52,6 +55,12 @@ describe("AgentSession context promotion", () => {
 	afterAll(() => {
 		authStorage.close();
 		tempDir.removeSync();
+	});
+
+	beforeEach(() => {
+		// Promotion retries deliberately settle for 100ms in production. These
+		// tests assert the continuation and state transition, not elapsed time.
+		vi.spyOn(scheduler, "wait").mockImplementation((_delayMs, options) => originalSchedulerWait(0, options));
 	});
 
 	afterEach(async () => {
@@ -479,7 +488,7 @@ describe("AgentSession context promotion", () => {
 		}
 		const settings = Settings.isolated({
 			"compaction.enabled": true,
-			"compaction.strategy": "snapcompact",
+			"compaction.methodOrder": ["snapcompact", "soft"],
 			"compaction.keepRecentTokens": 1,
 			"compaction.thresholdPercent": -1,
 			"contextPromotion.enabled": false,

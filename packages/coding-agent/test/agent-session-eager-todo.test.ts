@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
 import type { AssistantMessage, TextContent, ToolCall } from "@musepi/pi-ai";
 import * as ai from "@musepi/pi-ai";

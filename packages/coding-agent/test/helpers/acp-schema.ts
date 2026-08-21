@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import { type as arkType, type Type } from "@musepi/omptype";
+import { type as arkType, type Type } from "@musepi/musepi-type";
 
 function formatIssues(error: unknown): string {
 	if (error instanceof Error) {

@@ -1,6 +1,6 @@
 {
 	"_comment": "MusePi OTA manifest (Electron updater.cjs + daemon updates.check read this). The repo is private, so anonymous raw access 404s until this file is mirrored to a public URL — update manifestUrl in gui/package.json and this file's version/url at each release (url = direct download of the packaged app).",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"url": "",
 	"notes": ""
 }

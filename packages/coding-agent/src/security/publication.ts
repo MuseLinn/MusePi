@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { ToolDefinition } from "../extensibility/extensions";
 import securityPublishDescription from "../prompts/tools/security-publish.md" with { type: "text" };
 import type {

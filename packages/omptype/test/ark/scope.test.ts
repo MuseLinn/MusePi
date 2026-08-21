@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type ArkErrors, type Module, type Scope, scope, type } from "@musepi/omptype/ark";
+import { type ArkErrors, type Module, type Scope, scope, type } from "@musepi/musepi-type/ark";
 import type { Eq } from "./type-assert";
 
 it("base definition", () => {

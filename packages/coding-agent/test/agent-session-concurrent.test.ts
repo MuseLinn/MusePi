@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, AgentBusyError, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
 import type { AssistantMessage, Message, ToolCall } from "@musepi/pi-ai";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";

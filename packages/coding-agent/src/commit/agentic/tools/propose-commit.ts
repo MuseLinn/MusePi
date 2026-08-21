@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { CommitAgentState } from "../../../commit/agentic/state";
 import {
 	capDetails,

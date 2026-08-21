@@ -45,7 +45,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"@demo/plugin": "1.0.0",
@@ -102,7 +102,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"legacy-pi-plugin": "1.0.0",
@@ -165,7 +165,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"package-import-plugin": "1.0.0",
@@ -224,7 +224,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"conditional-import-plugin": "1.0.0",
@@ -285,7 +285,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"json-import-plugin": "1.0.0",
@@ -334,7 +334,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"null-exact-import-plugin": "1.0.0",
@@ -384,7 +384,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"null-conditional-import-plugin": "1.0.0",
@@ -436,7 +436,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"side-effect-plugin": "1.0.0",
@@ -516,7 +516,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"dir-entry-plugin": "1.0.0",
@@ -562,7 +562,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"subdir-entry-plugin": "1.0.0",
@@ -609,7 +609,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"nested-manifest-plugin": "1.0.0",
@@ -667,7 +667,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"missing-decl-plugin": "1.0.0",
@@ -713,7 +713,7 @@ describe("plugin extension discovery", () => {
 		fs.writeFileSync(
 			path.join(pluginsDir, "package.json"),
 			JSON.stringify({
-				name: "omp-plugins",
+				name: "musepi-plugins",
 				private: true,
 				dependencies: {
 					"dts-plugin": "1.0.0",

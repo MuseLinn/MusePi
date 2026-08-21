@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentTool } from "@musepi/pi-agent-core";
 import type { ThinkingContent } from "@musepi/pi-ai";
 import { createMockModel, type MockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";

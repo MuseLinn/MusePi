@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
+import { FadeScroll } from "./FadeScroll";
 
 interface RemoteHostEntry {
 	name: string;
@@ -368,7 +369,7 @@ export function ConnectDialog({
 									{hosts.length === 0 ? (
 										<p className="mb-3 text-[13px] text-[var(--color-text-muted)]">{t("no saved hosts")}</p>
 									) : (
-										<div className="max-h-56 min-h-0 overflow-y-auto pr-1">
+										<FadeScroll className="max-h-56 min-h-0 overflow-y-auto pr-1">
 											{hosts.map(h => (
 												<button
 													key={h.name}
@@ -394,7 +395,7 @@ export function ConnectDialog({
 													</span>
 												</button>
 											))}
-										</div>
+										</FadeScroll>
 									)}
 									<button
 										type="button"
@@ -488,7 +489,7 @@ export function ConnectDialog({
 									{browseError}
 								</div>
 							)}
-							<div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)]">
+							<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)]">
 								{browseBusy && browse === null ? (
 									<div className="flex h-32 items-center justify-center">
 										<Icon name="loader" className="h-6 w-6 animate-spin" />
@@ -534,7 +535,7 @@ export function ConnectDialog({
 										</button>
 									))
 								)}
-							</div>
+							</FadeScroll>
 						</>
 					)}
 					<div className="mt-auto flex justify-end gap-2 pt-4">

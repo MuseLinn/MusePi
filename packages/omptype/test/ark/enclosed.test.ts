@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { type Out, type Type, type } from "@musepi/omptype/ark";
+import { type Out, type Type, type } from "@musepi/musepi-type/ark";
 import type { Eq } from "./type-assert";
 
 type RegexExecArray<captures extends readonly string[], groups extends object, input extends string> = captures & {

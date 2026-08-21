@@ -6,7 +6,7 @@
  * behavior they have in the TUI.
  */
 import { afterEach, beforeEach, expect, it, spyOn } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import { createMockModel, type MockModelOptions } from "@musepi/pi-ai/providers/mock";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentMessage, type AgentOptions, type AgentTool } from "@musepi/pi-agent-core";
 import type { AssistantMessage, FetchImpl, Model, ProviderSessionState, Usage } from "@musepi/pi-ai";
 import { streamGoogle } from "@musepi/pi-ai/providers/google";

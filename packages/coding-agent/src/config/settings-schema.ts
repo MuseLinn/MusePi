@@ -1,6 +1,11 @@
 import { THINKING_EFFORTS } from "@musepi/pi-ai";
 import { DEFAULT_SHARE_URL } from "@musepi/pi-wire";
 import { SHAPE_VARIANT_NAMES } from "@musepi/snapcompact";
+import {
+	COMPACTION_METHOD_CHOICES,
+	type CompactionMethod,
+	DEFAULT_COMPACTION_METHOD_ORDER,
+} from "../session/compaction-methods";
 import { DEFAULT_RELAY_URL } from "../collab/protocol";
 import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
 import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS, STT_MODEL_VALUES } from "../stt/models";
@@ -2213,6 +2218,21 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// Premium long-context tiers (OpenAI GPT-5.6 bills 2x input / 1.5x output
+	// above 272K input tokens). Off caps affected models at the threshold so
+	// compaction kicks in before any request crosses into premium billing.
+	extendedContext: {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "General",
+			label: "Extended Context",
+			description:
+				"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window",
+		},
+	},
+
 	// Compaction
 	"compaction.enabled": {
 		type: "boolean",
@@ -2236,39 +2256,17 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	"compaction.strategy": {
-		type: "enum",
-		values: ["context-full", "handoff", "shake", "snapcompact", "off"] as const,
-		default: "snapcompact",
+	"compaction.methodOrder": {
+		type: "array",
+		default: [...DEFAULT_COMPACTION_METHOD_ORDER],
 		ui: {
 			tab: "context",
 			group: "Compaction",
-			label: "Compaction Strategy",
+			label: "Compaction Method Order",
 			description:
-				"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
-			options: [
-				{
-					value: "context-full",
-					label: "Context-full",
-					description: "Summarize in-place and keep the current session",
-				},
-				{ value: "handoff", label: "Handoff", description: "Generate handoff and continue in a new session" },
-				{
-					value: "shake",
-					label: "Shake",
-					description: "Drop heavy content (tool results + large blocks) in place; recover via artifact",
-				},
-				{
-					value: "snapcompact",
-					label: "Snapcompact",
-					description: "Archive history onto dense bitmap images the model reads back; no LLM call",
-				},
-				{
-					value: "off",
-					label: "Off",
-					description: "Disable automatic context maintenance (same behavior as Auto-compact off)",
-				},
-			],
+				"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",
+			options: COMPACTION_METHOD_CHOICES,
+			ordered: true,
 		},
 	},
 
@@ -2329,17 +2327,6 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	"compaction.remoteEnabled": {
-		type: "boolean",
-		default: true,
-		ui: {
-			tab: "context",
-			group: "Compaction",
-			label: "Remote Compaction",
-			description: "Use remote compaction endpoints when available instead of local summarization",
-		},
-	},
-
 	"compaction.remoteStreamingV2Enabled": {
 		type: "boolean",
 		default: true,
@@ -2348,6 +2335,18 @@ export const SETTINGS_SCHEMA = {
 			group: "Compaction",
 			label: "Remote Compaction V2",
 			description: "Use Responses streaming compaction for compatible remote compaction models",
+		},
+	},
+
+	"compaction.asyncEnabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "Compaction",
+			label: "Async Compaction",
+			description:
+				"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
 		},
 	},
 
@@ -5866,15 +5865,15 @@ export type Personality = SettingValue<"personality">;
 
 export interface CompactionSettings {
 	enabled: boolean;
-	strategy: "context-full" | "handoff" | "shake" | "snapcompact" | "off";
+	methodOrder: CompactionMethod[];
 	thresholdPercent: number;
 	thresholdTokens: number;
 	reserveTokens: number | undefined;
 	keepRecentTokens: number;
 	midTurnEnabled: boolean;
+	asyncEnabled: boolean;
 	handoffSaveToDisk: boolean;
 	autoContinue: boolean;
-	remoteEnabled: boolean;
 	remoteEndpoint: string | undefined;
 	remoteStreamingV2Enabled: boolean;
 	v2RetainedMessageBudget: number;

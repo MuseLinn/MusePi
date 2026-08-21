@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
+import { FadeScroll } from "../FadeScroll";
 
 /** Settings → 智能体 → 预设:命名预设(工具集 + 提示词 + settings 覆盖)卡片面板
  *  + 完整编辑器(modes-plan §8/§9:ModesCenter)。数据源 daemon modes.list/
@@ -323,7 +324,7 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
 					onClick={() => setViewDef(null)}
 				>
-					<div
+					<FadeScroll
 						className="max-h-[70vh] w-[520px] overflow-auto rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-4 shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
 						onClick={e => e.stopPropagation()}
 					>
@@ -340,7 +341,7 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-[var(--color-surface-2)] p-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
 							{JSON.stringify(viewDef, null, 2)}
 						</pre>
-					</div>
+					</FadeScroll>
 				</div>
 			)}
 			{/* 复制弹窗:输入新 id → 复制为自定义预设 */}

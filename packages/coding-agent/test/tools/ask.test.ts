@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type {

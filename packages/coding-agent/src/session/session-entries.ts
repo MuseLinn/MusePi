@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import type { ImageContent, MessageAttribution, ServiceTierByFamily, TextContent } from "@musepi/pi-ai";
 import type { StructuredSubagentSchemaMode } from "../task/types";
+import type { CompactionMethod } from "./compaction-methods";
 
 export const CURRENT_SESSION_VERSION = 3;
 
@@ -32,6 +33,7 @@ export interface SessionHeader {
 	titleSource?: SessionTitleSource;
 	timestamp: string;
 	cwd: string;
+	modeId?: string;
 	/**
 	 * Additional workspace directories beyond `cwd` (multi-root workspace).
 	 * Absolute, normalized, deduplicated. Absent on legacy single-cwd sessions.
@@ -43,11 +45,10 @@ export interface SessionHeader {
 	previousSessionFiles?: string[];
 	/** Provider prompt-cache identity inherited by exact-route full forks. */
 	providerPromptCacheKey?: string;
-	/** 会话预设(mode)id(Modes v1;docs/modes-plan.md §6.1)。 */
-	modeId?: string;
 }
 
 export interface NewSessionOptions {
+	modeId?: string;
 	parentSession?: string;
 	/** Provider prompt-cache identity to seed on the new session header. */
 	providerPromptCacheKey?: string;
@@ -55,8 +56,6 @@ export interface NewSessionOptions {
 	drop?: boolean;
 	/** Additional workspace directories to seed on the new session. */
 	additionalDirectories?: string[];
-	/** 会话预设(mode)id(Modes v1)。 */
-	modeId?: string;
 }
 
 export interface SessionEntryBase {
@@ -103,6 +102,10 @@ export interface CompactionEntry<T = unknown> extends SessionEntryBase {
 	shortSummary?: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;
+	/** Estimated context tokens after the rewrite (display metadata). */
+	tokensAfter?: number;
+	/** Method that produced this entry; absent on legacy sessions and extension-provided compactions. */
+	method?: CompactionMethod;
 	/** Extension-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
 	details?: T;
 	/** Hook-provided data to persist across compaction */
@@ -175,7 +178,6 @@ declare module "@musepi/pi-agent-core/compaction/entries" {
 	interface CustomCompactionSessionEntries {
 		titleChange: TitleChangeEntry;
 		credentialPin: CredentialPinEntry;
-		resetBoundary: ResetBoundaryEntry;
 	}
 }
 

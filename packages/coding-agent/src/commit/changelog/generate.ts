@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { ThinkingLevel } from "@musepi/pi-agent-core";
 import type { Api, ApiKey, AssistantMessage, Model } from "@musepi/pi-ai";
 import { completeSimple, validateToolCall } from "@musepi/pi-ai";

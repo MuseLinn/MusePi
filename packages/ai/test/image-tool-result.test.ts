@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { Api, Context, Model, Tool, ToolResultMessage } from "@musepi/pi-ai";
 import { complete } from "@musepi/pi-ai";
 import type { OptionsForApi } from "@musepi/pi-ai/types";

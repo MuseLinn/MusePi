@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { streamAzureOpenAIResponses } from "@musepi/pi-ai/providers/azure-openai-responses";
 import { streamOpenAICodexResponses } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { streamOpenAICompletions } from "@musepi/pi-ai/providers/openai-completions";

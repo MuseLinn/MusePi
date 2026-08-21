@@ -6,7 +6,7 @@
  * positions), or query the widget schema (types/fields/defaults/tones)
  * before authoring widgets.
  */
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import boardDescription from "../prompts/tools/board.md" with { type: "text" };
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";

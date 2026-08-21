@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as tls from "node:tls";
-import { type as arkType } from "@musepi/omptype";
+import { type as arkType } from "@musepi/musepi-type";
 import { Effort } from "@musepi/pi-ai";
 import {
 	applyClaudeToolPrefix,

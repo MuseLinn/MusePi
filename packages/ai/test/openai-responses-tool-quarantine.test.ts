@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { buildParams, convertTools } from "@musepi/pi-ai/providers/openai-responses";
 import type { Context, Model, ModelSpec, Tool } from "@musepi/pi-ai/types";
 import { findStrictToolSchemaViolation } from "@musepi/pi-ai/utils/schema";

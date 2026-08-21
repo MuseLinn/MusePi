@@ -910,6 +910,13 @@
 	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top right;
+	/* The header strip behind these menus is page-transparent (native
+	 * vibrancy shows through), so the backdrop-filter has nothing to blur
+	 * and the recipe's translucent tint alone reads as "completely
+	 * transparent" against a bright desktop. A self-drawn base keeps the
+	 * menu a legible panel in that region while the blur still applies
+	 * wherever page content IS behind it (user report). */
+	background-color: color-mix(in oklab, var(--color-bg) 74%, transparent);
 }
 
 .gui-openin-menu.gui-menu-popup--closing,
@@ -1004,6 +1011,9 @@
 		0 12px 32px rgba(0, 0, 0, 0.45);
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top left;
+	/* Legibility floor over the page-transparent header strip (same reason
+	 * as .gui-openin-menu — the backdrop has nothing to blur there). */
+	background-color: color-mix(in oklab, var(--color-bg) 74%, transparent);
 }
 
 .gui-header-title-menu.gui-menu-popup--closing {
@@ -1132,6 +1142,8 @@
 	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 	transform-origin: top left;
+	/* Legibility floor over the page-transparent header strip. */
+	background-color: color-mix(in oklab, var(--color-bg) 74%, transparent);
 }
 
 .gui-overlay-menu.gui-menu-popup--closing {
@@ -1252,7 +1264,7 @@ body.gui-resizing .gui-pane-right {
 
 /* ── Round 4: projects tab collapsible project blocks ───────────────── */
 /* One block per persisted project (full cwd path); header toggles the
- * SessionTree body, chevron rotates when collapsed. */
+ * SessionList body, chevron rotates when collapsed. */
 .gui-project-block {
 	display: flex;
 	align-items: center;
@@ -1491,6 +1503,50 @@ body.gui-resizing .gui-pane-right {
 
 .gui-settings-content--fill .gui-ext-body {
 	grid-template-rows: minmax(0, 1fr);
+}
+
+/* Model pane fill (设置 → 模型与供应商): the pane card fills the settings
+ * viewport; the roles tab's rail wrap takes the remaining body height with
+ * BOTH columns scrolling internally (rail + rail body), while the
+ * non-rail tabs (behavior/providers/custom/add) scroll the pane body. */
+.gui-settings-content--fill .gui-model-pane {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-settings-content--fill .gui-model-tabs {
+	flex-shrink: 0;
+}
+
+.gui-settings-content--fill .gui-model-pane-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+}
+
+/* Children keep their natural height so the pane body can scroll instead
+ * of flex-squeezing them (behavior/providers/custom tabs). */
+.gui-settings-content--fill .gui-model-pane-body > * {
+	flex: 0 0 auto;
+}
+
+.gui-settings-content--fill .gui-model-pane-body > .gui-model-rail-wrap {
+	flex: 1 1 0;
+	min-height: 0;
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.gui-settings-content--fill .gui-model-rail {
+	max-height: none;
+}
+
+.gui-settings-content--fill .gui-model-rail-body {
+	min-height: 0;
+	overflow-y: auto;
 }
 
 /* Dot-matrix brand backdrop preview (设置 → 常规): a small live DotMatrixMark
@@ -2092,13 +2148,45 @@ body.gui-resizing .gui-pane-right {
 /* ── Model roles (TUI /model roles-panel parity) ── */
 .gui-role-row {
 	align-items: flex-start;
-	flex-wrap: wrap;
+	/* Single line at any sane width: flex-wrap would decide line breaks on
+	 * each item's UN-shrunk hypothetical size (label 132 + 438px action
+	 * cluster never fits together), so the cluster would drop below the tag
+	 * and the row would double in height. nowrap lets flex-shrink actually
+	 * resolve — the model button truncates first, the tag keeps its width. */
+	flex-wrap: nowrap;
+	justify-content: flex-end;
+	gap: 6px 20px;
 }
 
-.gui-role-row > .gui-btn,
-.gui-role-row > .gui-model,
-.gui-role-row > select {
-	flex-shrink: 0;
+/* The right-hand action cluster (thinking level, fallback/cycle toggles,
+ * model picker, clear): shrinks ahead of the label column — the model
+ * button truncates first so the tag keeps a readable width; its own items
+ * wrap right-aligned when the pane is too narrow for the whole cluster. */
+.gui-role-row > .gui-role-actions {
+	flex: 0 1 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	min-width: 0;
+}
+
+.gui-role-row > .min-w-0 {
+	min-width: 96px;
+}
+
+.gui-role-row .gui-role-actions .gui-model {
+	flex-shrink: 2;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.gui-role-row .gui-role-actions .gui-model-btn {
+	max-width: 100%;
+}
+
+/* Full-width sub-blocks (fallback chain editor) keep their own line in the
+ * nowrap row via flex-basis 100% instead of wrap. */
+.gui-role-row > .gui-role-fallbacks {
+	flex: 0 0 100%;
 }
 
 .gui-role-tag {
@@ -2119,7 +2207,7 @@ body.gui-resizing .gui-pane-right {
 	vertical-align: 1px;
 }
 
-.gui-role-thinking {
+.gui-select-trigger.gui-role-thinking {
 	width: auto;
 	min-width: 96px;
 	padding: 4px 6px;
@@ -2671,10 +2759,19 @@ body.gui-resizing .gui-pane-right {
  * regions against the card gaps, and the inset hairlines drew a visible
  * line between the sidebar and the header. */
 .gui-pane-side,
-.gui-pane-side--immersive,
 .gui-pane-right--inner,
 .gui-header::before {
 	background: transparent;
+	box-shadow: none;
+}
+
+/* Sidebar surface tint: the sidebar reads as the glass's left region,
+ * separated from the chat surface by a subtle surface tint instead of a
+ * hairline. Pure color mix — no translucency, no backdrop-filter — so
+ * it holds on all platforms (the tint is always on top of the glass,
+ * never dependent on blur). */
+.gui-pane-side--immersive {
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, var(--color-surface));
 	box-shadow: none;
 }
 
@@ -3340,6 +3437,27 @@ body.gui-resizing .gui-pane-right {
 	mask-image: linear-gradient(to top, transparent 0, #000 24px);
 }
 
+/* ── 通用内容边界羽化(2026-08-21:FadeScroll 组件载体)─────────────
+ * 用于无专用 class 的泛化滚动容器(右栏 tab 体/轨迹列表/git-diff-pr
+ * 面板/向导/引导/导入列表)。与 transcript/会话列表同配方,柔带 20-24px。 */
+.gui-fade-scroll[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 20px,
+		#000 calc(100% - 24px),
+		transparent 100%
+	);
+}
+
+.gui-fade-scroll[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 20px);
+}
+
+.gui-fade-scroll[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 24px);
+}
+
 .gui-jump-bottom.gui-jump-bottom {
 	position: absolute;
 	left: 50%;
@@ -3620,3 +3738,128 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Goal / plan mode badges + todo progress (TUI /goal /plan parity) ── */
+
+/* ── Computer permissions (macOS computer-use permission rows + Kimi-style
+ *    onboarding dialog; Settings → 工具 and first-enable overlay) ── */
+
+.gui-permission-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 0;
+	border-top: 1px solid var(--border);
+}
+
+.gui-permission-row:first-child {
+	border-top: none;
+}
+
+.gui-permission-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	flex-shrink: 0;
+	color: var(--color-text);
+}
+
+.gui-permission-icon.capture {
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+	color: var(--color-danger);
+}
+
+.gui-permission-icon.ax {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-permission-icon.input {
+	background: color-mix(in oklab, var(--color-text-muted) 12%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-permission-copy {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-permission-name {
+	font-size: var(--ui-font-size);
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
+.gui-permission-description {
+	font-size: 12.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+.gui-permission-granted {
+	font-size: 13px;
+	color: var(--color-text-muted);
+	flex-shrink: 0;
+}
+
+.gui-permission-authorize {
+	flex-shrink: 0;
+	font-size: 13px;
+	font-weight: 500;
+	padding: 5px 14px;
+	border-radius: 8px;
+	background: var(--color-text);
+	color: var(--color-surface);
+	cursor: pointer;
+	border: none;
+}
+
+.gui-permission-authorize:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Kimi-style onboarding dialog body. */
+.gui-permissions-dialog {
+	padding: 6px 2px 2px;
+}
+
+.gui-permissions-dialog-title {
+	font-size: 17px;
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--color-text);
+	margin: 0 0 6px;
+}
+
+.gui-permissions-dialog-desc {
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	margin: 0 0 14px;
+}
+
+.gui-permissions-dialog-loading {
+	padding: 24px 0;
+	text-align: center;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.gui-permissions-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.gui-permissions-dialog-footer {
+	margin-top: 12px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}

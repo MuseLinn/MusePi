@@ -10,7 +10,13 @@
  */
 import type { CommandEntry } from "@musepi/pi-utils/cli";
 import * as commandHelp from "./cli/command-help";
-import { flagConsumesValue } from "./cli/flag-tables";
+import {
+	EXTENSION_SHADOWABLE_STRING_FLAGS,
+	flagConsumesValue,
+	OPTIONAL_VALUE_FLAGS,
+	STRING_VALUE_FLAGS,
+	VALUELESS_FLAGS,
+} from "./cli/flag-tables";
 import { launchHelp } from "./commands/launch-help";
 
 export const commands: CommandEntry[] = [
@@ -303,12 +309,60 @@ export function resolveCliArgv(argv: string[]): ResolvedCliArgv {
 	if (isSubcommand(first)) return { argv };
 	// A subcommand can hide behind leading global option flags
 	// (`musepi --approval-mode=yolo acp`). `run` dispatches strictly on argv[0], so
-	// hoist the subcommand to the front and keep the leading flags as its own
-	// argv; the command's parser then applies them. Genuine launch prompts (no
-	// trailing subcommand) are untouched.
+	// hoist the subcommand to the front. Launch-shaped commands share the launch
+	// flag surface, so their leading flags are forwarded and applied; every other
+	// subcommand parses only its own flags, so launch-global flags placed before
+	// it (`musepi --cwd <dir> update`) are stripped rather than forwarded into a
+	// crash (upstream #8891). Genuine launch prompts (no trailing subcommand) are
+	// untouched.
 	const subIndex = leadingSubcommandIndex(argv);
 	if (subIndex >= 0) {
-		return { argv: [argv[subIndex], ...argv.slice(0, subIndex), ...argv.slice(subIndex + 1)] };
+		const sub = argv[subIndex];
+		const leading = argv.slice(0, subIndex);
+		const trailing = argv.slice(subIndex + 1);
+		const forwardedLeading = LAUNCH_FLAG_COMMANDS[sub] === true ? leading : stripLaunchGlobalFlags(leading);
+		return { argv: [sub, ...forwardedLeading, ...trailing] };
 	}
 	return { argv: ["launch", ...argv] };
+}
+
+/**
+ * Subcommands that share the launch flag surface, so leading global flags
+ * (`--cwd`, `--model`, `--approval-mode`, …) placed before them are meaningful
+ * and must be forwarded ({@link resolveCliArgv}, upstream #2970). Every other
+ * subcommand parses only its own flags.
+ */
+const LAUNCH_FLAG_COMMANDS: Record<string, true> = { launch: true, acp: true };
+
+/** Whether `arg` names a flag from the launch surface (bare or `--flag=value`). */
+function isLaunchGlobalFlag(arg: string): boolean {
+	const eq = arg.indexOf("=");
+	const name = arg.startsWith("--") && eq !== -1 ? arg.slice(0, eq) : arg;
+	return (
+		STRING_VALUE_FLAGS.has(name) ||
+		OPTIONAL_VALUE_FLAGS.has(name) ||
+		VALUELESS_FLAGS.has(name) ||
+		EXTENSION_SHADOWABLE_STRING_FLAGS.has(name)
+	);
+}
+
+/**
+ * Drop recognized launch-global flags (and any value they consume) from the
+ * leading segment before a hoisted non-launch subcommand. `--cwd` and friends
+ * belong to the launch surface and mean nothing to a subcommand like `update`,
+ * whose strict parser would otherwise reject them with a cryptic
+ * `node:util.parseArgs` error (#8891). Tokens the launch tables don't recognize
+ * are kept, so a subcommand's own leading flags still reach it.
+ */
+function stripLaunchGlobalFlags(leading: readonly string[]): string[] {
+	const kept: string[] = [];
+	for (let index = 0; index < leading.length; index += 1) {
+		const arg = leading[index];
+		if (isLaunchGlobalFlag(arg)) {
+			if (flagConsumesValue(arg, leading[index + 1])) index += 1;
+			continue;
+		}
+		kept.push(arg);
+	}
+	return kept;
 }

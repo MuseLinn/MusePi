@@ -25,6 +25,7 @@ import {
 import type { Dialect } from "@musepi/pi-ai/dialect";
 import type { HarmonyAuditEvent } from "@musepi/pi-ai/utils/harmony-leak";
 import { getBundledModel } from "@musepi/pi-catalog/models";
+import { Tokenizer, tokenizerEncodingForModel } from "./tokenizer";
 import { logger } from "@musepi/pi-utils";
 import {
 	abortReasonText,
@@ -365,6 +366,7 @@ interface CursorToolResultEntry {
 }
 
 export class Agent {
+	#tokenizer = new Tokenizer(getBundledModel("google", "gemini-2.5-flash-lite-preview-06-17"));
 	#state: AgentState = {
 		systemPrompt: [],
 		model: getBundledModel("google", "gemini-2.5-flash-lite-preview-06-17"),
@@ -471,6 +473,7 @@ export class Agent {
 
 	constructor(opts: AgentOptions = {}) {
 		this.#state = { ...this.#state, ...opts.initialState };
+		this.#syncTokenizer(this.#state.model);
 		if (opts.initialState?.messages) this.#state.messages = opts.initialState.messages.slice();
 		if (opts.initialState?.pendingToolCalls)
 			this.#state.pendingToolCalls = new Set(opts.initialState.pendingToolCalls);
@@ -737,6 +740,20 @@ export class Agent {
 		this.#maxRetryDelayMs = value;
 	}
 
+	get tokenizer(): Tokenizer {
+		return this.#tokenizer;
+	}
+
+	/**
+	 * Swap the tokenizer only when the encoding actually changes, so the warm
+	 * per-message memo survives same-encoding model switches.
+	 */
+	#syncTokenizer(model: Model | null | undefined): void {
+		if (tokenizerEncodingForModel(model) !== this.#tokenizer.encoding) {
+			this.#tokenizer = new Tokenizer(model);
+		}
+	}
+
 	get state(): AgentState {
 		return this.#state;
 	}
@@ -928,8 +945,9 @@ export class Agent {
 		this.#state.systemPrompt = typeof v === "string" ? [v] : v;
 	}
 
-	setModel(m: Model) {
-		this.#state.model = m;
+	setModel(model: Model) {
+		this.#state.model = model;
+		this.#syncTokenizer(model);
 	}
 
 	setThinkingLevel(l: Effort | undefined) {

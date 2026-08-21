@@ -1599,12 +1599,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	const sessionManager =
 		options.sessionManager ??
 		logger.time("sessionManager", () =>
-			SessionManager.create(
-				cwd,
-				SessionManager.getDefaultSessionDir(cwd, agentDir),
-				undefined,
-				modeRuntime.resolved?.id,
-			),
+			SessionManager.create(cwd, SessionManager.getDefaultSessionDir(cwd, agentDir)),
 		);
 	const configuredDirs = options.additionalDirectories
 		? options.additionalDirectories

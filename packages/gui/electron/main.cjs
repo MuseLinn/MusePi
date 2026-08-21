@@ -244,6 +244,7 @@ function createPetWindow() {
 		petWindow = null;
 		petVisible = false;
 		petDragLast = null;
+		stopPetClickThroughPoll();
 	});
 	return petWindow;
 }
@@ -478,8 +479,23 @@ function updatePetClickThrough() {
 	}
 }
 
-// BitFun's pointer poll interval; cheap and bounded.
-setInterval(updatePetClickThrough, 120);
+// BitFun's pointer poll interval; cheap and bounded. Runs ONLY while the
+// pet is visible — an always-on 120ms interval would wake the main process
+// (and hit screen.getCursorScreenPoint) even on machines that never enable
+// the pet. Started by setPetVisible(true), stopped on hide/close.
+let petClickThroughTimer = null;
+
+function startPetClickThroughPoll() {
+	if (petClickThroughTimer !== null) return;
+	petClickThroughTimer = setInterval(updatePetClickThrough, 120);
+}
+
+function stopPetClickThroughPoll() {
+	if (petClickThroughTimer !== null) {
+		clearInterval(petClickThroughTimer);
+		petClickThroughTimer = null;
+	}
+}
 
 /** Clear a pending DND without touching visibility. */
 function clearPetDnd() {
@@ -517,9 +533,11 @@ function setPetVisible(visible) {
 		const win = createPetWindow();
 		win.showInactive();
 		petVisible = true;
+		startPetClickThroughPoll();
 	} else if (petWindow && !petWindow.isDestroyed()) {
 		petWindow.hide();
 		petVisible = false;
+		stopPetClickThroughPoll();
 		// A hide mid-drag can drop the pointerup; a stale anchor would
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
@@ -611,7 +629,17 @@ function createTrayMenuWindow() {
 		height: TRAY_MENU_HEIGHT,
 		title: "MusePi",
 		frame: false,
-		transparent: !(process.platform === "win32" && IS_WIN11),
+		// Self-drawn frosted menu surface (tray.cjs routes BOTH win32 and
+		// darwin here — macOS switched off the native Menu on 2026-08-17):
+		// - macOS: system "popover" vibrancy (the menu-bar material) on a
+		//   NON-transparent window — transparent + vibrancy renders an
+		//   opaque panel (pet window lesson). Without vibrancy the window
+		//   was fully transparent and the menu floated bare on the desktop.
+		// - Windows 11: DWM Acrylic (backgroundMaterial, opaque window).
+		// - Windows 10 / Linux: transparent per-pixel window; the renderer
+		//   self-draws the glass surface (.gui-tray-menu background).
+		transparent: !(process.platform === "darwin" || (process.platform === "win32" && IS_WIN11)),
+		...(process.platform === "darwin" ? { vibrancy: "popover" } : {}),
 		...(process.platform === "win32" && IS_WIN11 ? { backgroundMaterial: "acrylic" } : {}),
 		backgroundColor: "#00000000",
 		alwaysOnTop: true,
@@ -937,6 +965,12 @@ function ensureTray() {
 	});
 	const tick = async () => {
 		if (trayClosed) return;
+		// WS already open = the daemon is alive; skip the TCP probes and
+		// just refresh state (the probes are only a reconnection concern).
+		if (trayWs && trayWs.readyState === 1) {
+			trayFetchState();
+			return;
+		}
 		let port = probe();
 		// ws.port can be STALE — a previous daemon's port that no longer
 		// listens (a daemon that fails its writeFile leaves the old value;
@@ -2178,7 +2212,12 @@ ipcMain.handle("gui-vibrancy", (event, enabled, style) => {	const win = BrowserW
 		return;
 	}
 	if (enabled) {
-		win.setVibrancy("under-window");
+		// Light theme on macOS needs a bright vibrancy material (e.g. "light")
+		// — under-window dims the backdrop, turning a light translucent
+		// scrim into dirty grey, which forced the CSS overlay to 58–76%
+		// (almost opaque). Using the theme-appropriate material lets the
+		// scrim stay thin and the glass look transparent.
+		win.setVibrancy(style === "light" ? "light" : "under-window");
 		win.setBackgroundColor("#00000000");
 	} else {
 		win.setVibrancy(null);
@@ -2507,7 +2546,8 @@ ipcMain.handle("open-in-apps", async () => {
 // ── IPC: open a URL in the default browser (project-actions preview) ────
 
 ipcMain.handle("open-external", async (_event, url) => {
-	if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return false;
+	// https/http 外网 + macOS 系统设置深链(权限面板授权跳转)。
+	if (typeof url !== "string" || !/^(https?:\/\/|x-apple\.systempreferences:)/i.test(url)) return false;
 	try {
 		await shell.openExternal(url);
 		return true;

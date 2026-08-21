@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { type } from "@musepi/omptype/ark";
+import { type } from "@musepi/musepi-type/ark";
 
 it("no shallow default in tuple expression", () => {
 	expect(() => type(["string?", "|", "number"])).toThrow();

@@ -25,7 +25,7 @@ title: Documentation
 
 - [providers.md](providers.html) · [models.md](models.html) · [adding-a-provider.md](adding-a-provider.html) · [local-models.md](local-models.html)
 - [provider-compat-reference.md](provider-compat-reference.html) · [provider-endpoint-constraints.md](provider-endpoint-constraints.html) · [provider-quirks.md](provider-quirks.html) · [provider-streaming-internals.md](provider-streaming-internals.html)
-- [ai-schema-normalize.md](ai-schema-normalize.html) · [arktype-guide.md](arktype-guide.html) · [omptype-guide.md](omptype-guide.html) · [gemini-manifest-extensions.md](gemini-manifest-extensions.html)
+- [ai-schema-normalize.md](ai-schema-normalize.html) · [arktype-guide.md](arktype-guide.html) · [musepi-type-guide.md](musepi-type-guide.html) · [gemini-manifest-extensions.md](gemini-manifest-extensions.html)
 
 ## Tools & Runtimes
 

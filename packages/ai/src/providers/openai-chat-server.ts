@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { resolvePromptCacheKey } from "../auth-gateway/http";
 /**
  * Parsed inbound OpenAI chat-completions request, ready to feed into pi-ai

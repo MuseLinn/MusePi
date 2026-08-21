@@ -8,9 +8,9 @@
  * - Interact with the user via UI primitives
  */
 
-import type { type as ArkType } from "@musepi/omptype";
-import type * as TypeBox from "@musepi/omptype/typebox";
-import type * as zod from "@musepi/omptype/zod";
+import type { type as ArkType } from "@musepi/musepi-type";
+import type * as TypeBox from "@musepi/musepi-type/typebox";
+import type * as zod from "@musepi/musepi-type/zod";
 import type {
 	AgentMessage,
 	AgentToolResult,

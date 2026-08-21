@@ -70,12 +70,16 @@ export interface UserMessage {
 	synthetic?: boolean;
 	/** Unix timestamp in milliseconds. */
 	timestamp: number;
+	/** 会话内条目树父节点 id(/tree 语义;live 事件暂缺,live 消息树需发射端打标)。 */
+	parentId?: string | null;
 }
 
 export interface DeveloperMessage {
 	role: "developer";
 	content: string | (TextContent | ImageContent)[];
 	timestamp: number;
+	/** 会话内条目树父节点 id(/tree 语义)。 */
+	parentId?: string | null;
 }
 
 export interface AssistantMessage {
@@ -91,6 +95,8 @@ export interface AssistantMessage {
 	 *  final message of a turn). */
 	duration?: number;
 	ttft?: number;
+	/** 会话内条目树父节点 id(/tree 语义)。 */
+	parentId?: string | null;
 }
 
 export interface ToolResultMessage {
@@ -101,6 +107,8 @@ export interface ToolResultMessage {
 	details?: unknown;
 	isError: boolean;
 	timestamp: number;
+	/** 会话内条目树父节点 id(/tree 语义)。 */
+	parentId?: string | null;
 }
 
 export interface BashExecutionMessage {
@@ -113,14 +121,11 @@ export interface BashExecutionMessage {
 	timestamp: number;
 	/** True when the "!!" prefix excluded this result from the model context. */
 	excludeFromContext?: boolean;
+	/** 会话内条目树父节点 id(/tree 语义)。 */
+	parentId?: string | null;
 }
 
-export type WireMessage =
-	| UserMessage
-	| DeveloperMessage
-	| AssistantMessage
-	| ToolResultMessage
-	| BashExecutionMessage;
+export type WireMessage = UserMessage | DeveloperMessage | AssistantMessage | ToolResultMessage | BashExecutionMessage;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Session entries (rendered subset; cast `as SessionEntry` at the JSON

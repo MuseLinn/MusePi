@@ -17,7 +17,7 @@
 | `packages/coding-agent/src/ssh/sshfs-mount.ts` | `mountRemote(host, remotePath)` / `unmountRemote` / `hasSshfs()` / `isMounted()`；挂载点约定 `~/.musepi/remote/<host>/...`（`getRemoteDir()`） |
 | `packages/coding-agent/src/ssh/file-transfer.ts` | scp 传输 |
 | `packages/coding-agent/src/ssh/config-writer.ts` | SSH config 读写（原子写） |
-| `packages/coding-agent/src/cli/ssh-cli.ts` + `commands/ssh.ts` | `omp ssh add/remove/list` 管理主机 |
+| `packages/coding-agent/src/cli/ssh-cli.ts` + `commands/ssh.ts` | `musepi ssh add/remove/list` 管理主机 |
 | `tools/read.ts` | 远程挂载路径跳过模糊匹配（防挂起） |
 | `tools/glob.ts` | 明确拒绝 `ssh://`（提示用 read）——sshfs 挂载后不需要 |
 
@@ -48,7 +48,7 @@ opencode/openchamber 都是"远程跑一个 agent server"模式（远程部署�
 
 ```
 GUI ConnectDialog ──remote.* RPC──▶ daemon
-                                      ├─ remote.hosts       （列出 omp ssh 保存的主机）
+                                      ├─ remote.hosts       （列出 musepi ssh 保存的主机）
                                       ├─ remote.connect     （测试连接 + probe OS + 挂载 sshfs）
                                       ├─ remote.browse      （挂载后列远程目录，选工作区路径）
                                       ├─ remote.openWorkspace（绑定会话 cwd = 挂载路径，会话标 remote）
@@ -56,13 +56,13 @@ GUI ConnectDialog ──remote.* RPC──▶ daemon
 ```
 
 ### M1 daemon RPC（基础）
-- `remote.hosts`：读 `omp ssh list` 的主机配置（name/host/user/key/port）
+- `remote.hosts`：读 `musepi ssh list` 的主机配置（name/host/user/key/port）
 - `remote.connect {host}`：`ensureHostInfo`（OS/shell 探测）→ `hasSshfs()` 检查（无 sshfs 返回明确错误，Windows 提示装 WinFsp）→ `mountRemote` → 返回挂载点 + 远程 OS
 - `remote.disconnect {host}`：`unmountRemote` + 关闭关联会话
 
 ### M2 ConnectDialog 真实化
 - step 0：SSH（现有）+ Docker 卡（**先标"规划中"禁用**，或移除——无容器后端）
-- step 1：主机下拉（remote.hosts）+ 新增主机入口（调 `omp ssh add` 的 RPC 包装）
+- step 1：主机下拉（remote.hosts）+ 新增主机入口（调 `musepi ssh add` 的 RPC 包装）
 - step 2：真实连接（分阶段状态：probe → sshfs 检查 → 挂载 → 成功/失败原因展示）
 - step 3：**远程目录浏览**（remote.browse 列表，选目录 → openWorkspace）
 - 失败路径：认证失败、ControlMaster 拒绝、sshfs 缺失、挂载失败——各自明确文案

@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { DiffHunk, FileHunks } from "../../../commit/types";
 import type { CustomTool } from "../../../extensibility/custom-tools/types";
 import * as git from "../../../utils/git";

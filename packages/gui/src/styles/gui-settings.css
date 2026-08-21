@@ -2,6 +2,7 @@
 .gui-dialog--settings {
 	width: min(640px, 92vw);
 	height: min(440px, 84vh);
+	overflow-y: auto;
 }
 
 .gui-settings-nav {
@@ -1012,6 +1013,125 @@
 /* Notes editor: same UA :focus-outline override as the composers. */
 .gui-notes-editor {
 	outline: none;
+}
+
+/* Project-knowledge section nav (openchamber v1.19 parity): content left,
+ * sections right with a drag-to-resize edge — the same arrangement the
+ * files surface uses. */
+.gui-knowledge-nav {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex-shrink: 0;
+	border-left: 1px solid var(--border);
+	padding: 6px 4px;
+	overflow-y: auto;
+}
+
+.gui-knowledge-nav-resize {
+	position: absolute;
+	left: -2px;
+	top: 0;
+	z-index: 20;
+	width: 4px;
+	height: 100%;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.gui-knowledge-nav-resize:hover {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.gui-knowledge-nav-entry {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 5px 7px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+
+.gui-knowledge-nav-entry:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-knowledge-nav-entry--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+
+.gui-knowledge-nav-label {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-knowledge-nav-count {
+	flex: none;
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	background: color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	color: var(--color-text-muted);
+}
+
+/* Knowledge entry card (openchamber v1.19 KnowledgeCard parity): collapsed
+ * opens on a click anywhere, expanded closes only via its collapse action. */
+.gui-knowledge-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	padding: 7px 9px;
+	transition:
+		border-color 120ms ease,
+		background 120ms ease;
+}
+
+.gui-knowledge-card--collapsed {
+	cursor: pointer;
+}
+
+.gui-knowledge-card--collapsed:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--border));
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+}
+
+/* Content-boundary feather on the note editor (openchamber Textarea
+ * useScrollShadow parity): fades the text edges while the editor actually
+ * overflows and is scrolled away. 10px matches the p-2.5 padding. */
+.gui-notes-editor[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 10px,
+		#000 calc(100% - 10px),
+		transparent 100%
+	);
+}
+
+.gui-notes-editor[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
+}
+
+.gui-notes-editor[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 10px);
 }
 
 /* Todo list (项目笔记 待办, openchamber parity). */

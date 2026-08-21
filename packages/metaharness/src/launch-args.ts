@@ -38,7 +38,7 @@ export interface LaunchRequest {
 	note?: string;
 	/** Experiment goal; upserted for the run's experiment (job-name prefix). */
 	goal?: string;
-	/** Use prebuilt dist/omp-linux-* binaries instead of the default source mount. */
+	/** Use prebuilt dist/musepi-linux-* binaries instead of the default source mount. */
 	prebuiltBinaries?: boolean;
 	/** Extra raw runner args, appended verbatim. */
 	extraArgs?: string[];

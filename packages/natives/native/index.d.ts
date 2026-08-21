@@ -853,7 +853,23 @@ export declare enum Encoding {
   /** GPT-4o / o1 / GPT-5 (default). */
   O200kBase = 'O200kBase',
   /** GPT-3.5 / GPT-4 / older. */
-  Cl100kBase = 'Cl100kBase'
+  Cl100kBase = 'Cl100kBase',
+  /** Claude 3 … Opus 4.6 (ctok v3 reconstruction). */
+  ClaudeV3 = 'ClaudeV3',
+  /** Claude Opus 4.7–4.9 (ctok v4.7 reconstruction). */
+  ClaudeV47 = 'ClaudeV47',
+  /** Claude Opus 5+ (ctok v5 reconstruction). */
+  ClaudeV5 = 'ClaudeV5',
+  /** Claude Sonnet/Fable 5+ (live-measured non-opus v5 frame). */
+  ClaudeV5Sonnet = 'ClaudeV5Sonnet',
+  /** Qwen 3.5 / 3.6 / 3.8 (248k vocabulary). */
+  Qwen3 = 'Qwen3',
+  /** `DeepSeek` V3 … V4 (identical base BPE). */
+  DeepSeekV3 = 'DeepSeekV3',
+  /** Kimi K2 … K3. */
+  KimiK2 = 'KimiK2',
+  /** GLM-5.x exact; GLM-4.x near-exact. */
+  Glm5 = 'Glm5'
 }
 
 /**
@@ -1532,6 +1548,36 @@ export interface MinimizerResult {
  * unless a text mixes U+FFFD words with lone-surrogate words.
  */
 export declare function mmrRerankIndices(contents: Array<string>, scores: Float64Array, lambdaParam: number, topK: number): Uint32Array
+
+/** Parsed Kitty keyboard protocol sequence result for a Kitty input sequence. */
+export interface ParsedKittyResult {
+  /** Primary codepoint associated with the key. */
+  codepoint: number
+  /** Optional shifted key codepoint from the sequence. */
+  shiftedKey?: number
+  /** Optional base layout key codepoint from the sequence. */
+  baseLayoutKey?: number
+  /** Modifier bitmask (shift/alt/ctrl), excluding lock bits. */
+  modifier: number
+  /** Optional event type (1 = press, 2 = repeat, 3 = release). */
+  eventType?: KeyEventType
+}
+
+/**
+ * Parse terminal input and return a normalized key identifier.
+ *
+ * Returns a key id like "escape" or "ctrl+c", or None if unrecognized.
+ */
+export declare function nodeChainAt(options: BlockRangeOptions): Array<NodeSpan> | null
+
+export interface NodeSpan {
+  /** 1-indexed inclusive first line of the node. */
+  startLine: number
+  /** 1-indexed inclusive last content line of the node. */
+  endLine: number
+  /** Tree-sitter grammar node kind (e.g. `attribute_item`, `function_item`). */
+  kind: string
+}
 
 /** Parsed Kitty keyboard protocol sequence result for a Kitty input sequence. */
 export interface ParsedKittyResult {

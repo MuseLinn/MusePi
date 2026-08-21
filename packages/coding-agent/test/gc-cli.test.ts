@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { withStatsSyncLock } from "@musepi/omp-stats/aggregator";
+import { withStatsSyncLock } from "@musepi/musepi-stats/aggregator";
 import { type GcResult, runGcCommand } from "@musepi/pi-coding-agent/cli/gc-cli";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import {

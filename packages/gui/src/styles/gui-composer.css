@@ -1319,7 +1319,9 @@
 
 /* Collapsed panes: width animates to 0 (DOM stays mounted for the
  * transition), contents clip. Toggle buttons live in the session
- * toolbar, which is always visible. */
+ * toolbar, which is always visible. The SIDE pane fades per-region via
+ * the cascade rules below; only the right pane keeps the whole-pane
+ * fade. */
 .gui-pane-side--collapsed,
 .gui-pane-right--collapsed {
 	width: 0 !important;
@@ -1328,10 +1330,42 @@
 	overflow: hidden;
 }
 
-.gui-pane-side--collapsed > *,
 .gui-pane-right--collapsed > * {
 	opacity: 0;
 	transition: opacity 120ms ease-out;
+}
+
+/* ── Sidebar collapse cascade (Open Design entry-rail parity) ──────────
+ * On collapse each region fades + lifts out top-to-bottom in sequence
+ * (side-menu → tabstrip → session list); the user footer stays opaque
+ * and slides out left (it reads as a card, not a row). The pane width
+ * still animates via --gui-pane-transition (220ms spring) alongside.
+ * Expand reverses immediately — no cascade delay — so reopening stays
+ * snappy. */
+.gui-pane-side--immersive .gui-side-menu,
+.gui-pane-side--immersive .gui-tabstrip,
+.gui-pane-side--immersive .gui-sessions-tab {
+	transition:
+		opacity 160ms ease-out,
+		transform 160ms ease-out;
+}
+.gui-pane-side--collapsed .gui-side-menu,
+.gui-pane-side--collapsed .gui-tabstrip,
+.gui-pane-side--collapsed .gui-sessions-tab {
+	opacity: 0;
+	transform: translateY(-4px);
+}
+.gui-pane-side--collapsed .gui-tabstrip {
+	transition-delay: 25ms;
+}
+.gui-pane-side--collapsed .gui-sessions-tab {
+	transition-delay: 50ms;
+}
+.gui-sidebar-footer {
+	transition: transform 160ms ease-out;
+}
+.gui-pane-side--collapsed .gui-sidebar-footer {
+	transform: translateX(-36px);
 }
 
 /* ── Settings dialog (ZCode/openchamber category tree) ──────────────── */

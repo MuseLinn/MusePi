@@ -2,9 +2,9 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { syncAllSessions } from "@musepi/omp-stats/aggregator";
-import { closeDb, getOverallStats, getRecentRequests } from "@musepi/omp-stats/db";
-import { parseSessionFile } from "@musepi/omp-stats/parser";
+import { syncAllSessions } from "@musepi/musepi-stats/aggregator";
+import { closeDb, getOverallStats, getRecentRequests } from "@musepi/musepi-stats/db";
+import { parseSessionFile } from "@musepi/musepi-stats/parser";
 import { getSessionsDir, getStatsDbPath } from "@musepi/pi-utils";
 import { installStatsTestIsolation } from "./helpers/temp-agent";
 

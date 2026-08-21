@@ -2,7 +2,7 @@ import { t } from "@musepi/desktop-web/src/i18n/index.js";
 import { GuiSelect } from "./GuiSelect";
 import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -40,14 +40,19 @@ export function WidgetEditor({
 	onAdd(type: string): void;
 	onClose(): void;
 }): ReactNode {
+	const [closing, setClosing] = useState(false);
+	const handleClose = useCallback((): void => {
+		setClosing(true);
+		setTimeout(() => onClose(), 150);
+	}, [onClose]);
 	const active = boards.find(b => b.id === activeId);
 	const widget = active?.widgets.find(w => w.id === selectedId) ?? null;
 	const def = widget ? widgetDef(widget.type) : undefined;
 	return (
-		<div className="gui-widget-editor" role="dialog" aria-label={t("board edit")}>
+		<div className={`gui-widget-editor${closing ? " gui-widget-editor--closing" : ""}`} role="dialog" aria-label={t("board edit")}>
 			<div className="gui-widget-editor-head">
 				<span className="gui-widget-editor-title">{t("board edit")}</span>
-				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
+				<button type="button" className="gui-tool-btn" onClick={handleClose} aria-label={t("close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>

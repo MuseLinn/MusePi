@@ -4,6 +4,16 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="light dark" />
+		<!-- Renderer CSP: silences the Electron "no CSP / unsafe-eval" dev
+		 * warning and hardens the page. No unsafe-eval (no eval in src);
+		 * 'unsafe-inline' scripts stay for the pre-React theme bootstrap,
+		 * styles are inline by design. ws/wss/http/https cover the daemon
+		 * socket, provider streams and remote images; the browser tool runs
+		 * in a <webview> guest (own context, exempt from this policy). -->
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self' file:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http: file:; font-src 'self' data: file: https: http:; connect-src 'self' ws: wss: http: https: file:; media-src 'self' blob: data: https: http: file:; worker-src 'self' blob: file:; object-src 'none'; frame-src 'self' https: http: file: data:; child-src 'self' https: http: file: blob:"
+		/>
 		<title>MusePi</title>
 	</head>
 	<body>

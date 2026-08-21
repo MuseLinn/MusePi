@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { isEnoent, logger } from "@musepi/pi-utils";
 import { YAML } from "bun";
 import { expandAtImports } from "../discovery/at-imports";

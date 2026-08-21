@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { TaskTool, taskSchema } from "@musepi/pi-coding-agent/task";
 import * as discoveryModule from "@musepi/pi-coding-agent/task/discovery";

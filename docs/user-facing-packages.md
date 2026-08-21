@@ -15,7 +15,7 @@ This page indexes README-only user-facing package CLIs and features that need ro
 
 Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages/stats/package.json`](../packages/stats/package.json), [`packages/coding-agent/src/cli/stats-cli.ts`](../packages/coding-agent/src/cli/stats-cli.ts).
 
-- Package: `@musepi/omp-stats`; bin: `omp-stats`; main user path: `musepi stats`.
+- Package: `@musepi/musepi-stats`; bin: `musepi-stats`; main user path: `musepi stats`.
 - Feature: local observability dashboard for AI usage statistics from session JSONL logs.
 - CLI modes: `musepi stats` starts the dashboard server, opens `http://localhost:3847`, and keeps running; `musepi stats --port <port>` changes the port; `musepi stats --summary` prints a console summary; `musepi stats --json` prints JSON and exits.
 - Programmatic API: exports helpers such as `syncAllSessions()` and `getDashboardStats()` for embedding.
@@ -23,13 +23,13 @@ Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages
 - Outputs: dashboard metrics and API endpoints including `/api/stats`, `/api/stats/models`, `/api/stats/folders`, `/api/stats/timeseries`, and `/api/sync`.
 - Side effects/limits: syncs session files before output; long-running dashboard stops on `Ctrl+C` and closes the stats database.
 
-### `packages/omptype` — schema validation library
+### `packages/omptype` — schema validation library (package `@musepi/musepi-type`)
 
-Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`packages/omptype/package.json`](../packages/omptype/package.json), and the repository [omptype authoring guide](./omptype-guide.html).
+Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`packages/omptype/package.json`](../packages/omptype/package.json), and the repository [musepi-type authoring guide](./musepi-type-guide.html).
 
-- Package: public `@musepi/omptype`; install with `bun add @musepi/omptype`; requires Bun 1.3.14 or newer.
+- Package: public `@musepi/musepi-type`; install with `bun add @musepi/musepi-type`; requires Bun 1.3.14 or newer.
 - Feature: callable ArkType-compatible schemas with cheap interpreted startup, lazy hot-path compilation, validation errors, defaults and morphs, and JSON Schema emission.
-- Public surfaces: `@musepi/omptype` for native authoring, `/typebox` and `/zod` for compatibility builders, and `/ark` for the alias-free ArkType compatibility facade.
+- Public surfaces: `@musepi/musepi-type` for native authoring, `/typebox` and `/zod` for compatibility builders, and `/ark` for the alias-free ArkType compatibility facade.
 - Runtime behavior: schema calls return the validated value or `type.errors`; `.assert()` returns the value or throws; `.allows()` performs a boolean check.
 - Limits: this is an intentionally focused compatibility surface rather than a complete implementation of every ArkType, TypeBox, or Zod API.
 

@@ -1462,8 +1462,12 @@
 
 /* ── 会话轨迹视图(DSH Trajectory 参考吸收) ─────────────────────────── */
 .traj-row {
-	display: flex;
-	flex-direction: column;
+	/* 1fr(事件行) + auto(跳转小按钮):行点击选中检视、箭头点击跳转,
+	 * 结构上避免按钮包裹整行导致的 flex 塌缩/点击吞并(2026-08-21 实测)。 */
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: flex-start;
+	gap: 2px;
 }
 
 .traj-turn {
@@ -1499,6 +1503,9 @@
 	align-items: flex-start;
 	gap: 6px;
 	padding: 3px 2px;
+	/* 在 .traj-event-jump(grid 1fr)内是 1fr 网格项,填满即可;
+	 * min-width:0 让 traj-content(flex:1)能真正收缩/撑开。 */
+	min-width: 0;
 }
 
 .traj-tag {
@@ -1618,25 +1625,262 @@
 	margin-left: 7px;
 }
 .traj-event-jump {
-	display: flex;
-	align-items: flex-start;
-	width: 100%;
-	text-align: left;
-	border-radius: 6px;
-	padding: 0 2px;
-	color: inherit;
+	/* 独立跳转小按钮(hover 显现):不包裹整行,避免单击被吞成跳转。 */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	margin-top: 6px;
+	margin-left: 2px;
+	flex-shrink: 0;
+	border-radius: 5px;
+	color: var(--color-text-muted);
+	opacity: 0;
+	transition: opacity 140ms var(--gui-ease-out, ease), background 140ms var(--gui-ease-out, ease);
 	background: transparent;
 }
+.traj-row:hover .traj-event-jump {
+	opacity: 1;
+}
 .traj-event-jump:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+	opacity: 1 !important;
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
 }
 .traj-jump-icon {
-	flex-shrink: 0;
-	margin-top: 6px;
-	opacity: 0;
-	transition: opacity 120ms ease;
 	color: var(--color-accent);
 }
-.traj-event-jump:hover .traj-jump-icon {
-	opacity: 1;
+
+/* ── 轨迹选中/聚焦态(2026-08-21:Overview 时间轴 + 选择检视) ────── */
+.traj-event--selected {
+	outline: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+.traj-event--dim {
+	opacity: 0.35;
+	filter: saturate(0.6);
+}
+.traj-turn-group--dim {
+	opacity: 0.45;
+}
+
+.traj-tag--user {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+/* ── Overview 时间轴(DSH Trajectory Overview parity) ─────────── */
+.traj-ov-wrap {
+	position: relative;
+}
+.traj-ov-track {
+	position: relative;
+	height: 44px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--color-surface-sunken, color-mix(in oklab, var(--color-text-faint) 5%, transparent));
+	cursor: crosshair;
+	touch-action: none;
+	user-select: none;
+	overflow: hidden;
+}
+.traj-ov-edge {
+	position: absolute;
+	top: 2px;
+	font-size: 9px;
+	line-height: 1;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+	pointer-events: none;
+	white-space: nowrap;
+}
+.traj-ov-edge--start {
+	left: 6px;
+}
+.traj-ov-edge--end {
+	right: 6px;
+}
+.traj-ov-segment {
+	position: absolute;
+	top: 16px;
+	height: 12px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 26%, transparent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
+	transition: background 140ms var(--gui-ease-out, ease), border-color 140ms var(--gui-ease-out, ease);
+	min-width: 3px;
+}
+.traj-ov-segment:hover {
+	background: color-mix(in oklab, var(--color-accent) 42%, transparent);
+}
+.traj-ov-segment--active {
+	background: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	border-color: var(--color-accent);
+}
+.traj-ov-dot {
+	position: absolute;
+	top: -3px;
+	width: 4px;
+	height: 4px;
+	border-radius: 999px;
+	pointer-events: auto;
+	transform: translateX(-50%);
+	box-shadow: 0 0 0 1px var(--color-surface, transparent);
+}
+.traj-ov-dot--user {
+	top: 19px;
+}
+.traj-ov-draft,
+.traj-ov-range {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	pointer-events: none;
+}
+.traj-ov-draft {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	outline: 1px dashed color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+.traj-ov-range {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	border-left: 1px solid var(--color-accent);
+	border-right: 1px solid var(--color-accent);
+}
+.traj-ov-tip {
+	position: absolute;
+	/* 悬浮于时间条正上方(提示在 wrap 层,避开 track 的 overflow:hidden)。 */
+	bottom: calc(100% + 6px);
+	transform: translateX(-50%);
+	pointer-events: none;
+	z-index: 5;
+	background: var(--color-surface-raised, var(--color-bg));
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	padding: 4px 8px;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
+	white-space: nowrap;
+	animation: gui-fade-in 120ms ease;
+}
+.traj-ov-tip-title {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.traj-ov-tip-time,
+.traj-ov-tip-dur {
+	font-size: 9.5px;
+	color: var(--color-text-muted);
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* ── 聚焦 chip 与检视面板 ─────────────────────────────────────── */
+.traj-focus-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	border-radius: 7px;
+	padding: 3px 6px;
+	font-size: 10.5px;
+	color: var(--color-text);
+}
+.traj-focus-time {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+.traj-focus-clear {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+	color: var(--color-text-muted);
+	background: transparent;
+	flex-shrink: 0;
+}
+.traj-focus-clear:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+
+.traj-inspector {
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--color-surface-raised, var(--color-bg));
+	padding: 8px 9px;
+}
+.traj-inspector-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.traj-inspector-title {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.traj-inspector-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+	border-radius: 5px;
+	color: var(--color-text-muted);
+	background: transparent;
+}
+.traj-inspector-close:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+.traj-inspector-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+	margin-top: 8px;
+}
+.traj-inspector-value {
+	font-size: 11px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.traj-inspector-block {
+	margin-top: 8px;
+}
+.traj-inspector-block-label {
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	color: var(--color-text-faint);
+	margin-bottom: 3px;
+}
+.traj-inspector-pre {
+	margin: 0;
+	max-height: 132px;
+	overflow-y: auto;
+	font-size: 10.5px;
+	line-height: 1.55;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-muted);
+	white-space: pre-wrap;
+	word-break: break-all;
+	background: transparent;
 }

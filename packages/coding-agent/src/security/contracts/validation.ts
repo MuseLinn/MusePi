@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { getSecurityContractSchemas } from "./schemas";
 import type { SecurityFinding, SecurityScan, SecurityScanBundle, SecurityScanPlan } from "./types";
 

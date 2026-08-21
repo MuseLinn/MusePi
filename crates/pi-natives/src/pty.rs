@@ -13,6 +13,7 @@ use std::{
 };
 
 use napi::{
+	JsString,
 	bindgen_prelude::*,
 	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
 };
@@ -20,7 +21,7 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, PtySize, native_pty_system};
 
-use crate::{ps, task};
+use crate::{js::into_string, ps, task};
 
 /// Options for running a command in a PTY session.
 #[napi(object)]
@@ -178,8 +179,8 @@ impl PtySession {
 
 	/// Write raw input bytes to PTY stdin.
 	#[napi]
-	pub fn write(&self, data: String) -> Result<()> {
-		self.send_control(ControlMessage::Input(data))
+	pub fn write(&self, data: JsString) -> Result<()> {
+		self.send_control(ControlMessage::Input(into_string(data)?))
 	}
 
 	/// Resize the active PTY.
