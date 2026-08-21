@@ -30,7 +30,7 @@ function SpeechTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			return;
 		}
 		setTtsState("playing");
-		stopRef.current = speak(t("speech test phrase"), rpc, activity => {
+		stopRef.current = speak(t("speech test phrase"), rpc, undefined, activity => {
 			if (activity.phase === "done") setTtsState("ok");
 			else if (activity.phase === "error") setTtsState("error");
 			else if (activity.phase === "stopped") setTtsState("idle");

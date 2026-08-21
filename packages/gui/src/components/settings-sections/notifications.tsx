@@ -8,10 +8,6 @@ import type {
 import {
 	GuiSelect,
 } from "../GuiSelect";
-import {
-	speak,
-	startDictation,
-} from "../../lib/voice";
 import type {
 	ReactNode,
 } from "react";
@@ -125,30 +121,6 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 	});
 	const [templates, setTemplates] = useState<NotifyTemplates>(() => loadNotifyTemplates());
 	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("musepi-gui-sound") !== "0");
-	// Voice I/O settings (daemon-persisted, TUI parity: sherpa-ONNX ASR +
-	// Kokoro TTS — local models, no network).
-	const [sttEnabled, setSttEnabled] = useState<boolean>(false);
-	const [sttModel, setSttModel] = useState<string>("parakeet");
-	const [speechEnabled, setSpeechEnabled] = useState<boolean>(false);
-	const [dictationText, setDictationText] = useState<string | null>(null);
-	const [dictating, setDictating] = useState(false);
-	const [ttsTest, setTtsTest] = useState<string | null>(null);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		void rpc
-			.request<Record<string, unknown>>("settings.get", { keys: ["stt.enabled", "stt.modelName", "speech.enabled"] })
-			.then(res => {
-				if (!alive) return;
-				if (typeof res?.["stt.enabled"] === "boolean") setSttEnabled(res["stt.enabled"]);
-				if (typeof res?.["stt.modelName"] === "string") setSttModel(res["stt.modelName"]);
-				if (typeof res?.["speech.enabled"] === "boolean") setSpeechEnabled(res["speech.enabled"]);
-			})
-			.catch(() => {});
-		return () => {
-			alive = false;
-		};
-	}, [rpc]);
 	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-haptic") !== "0");
 	const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
 	// Idle recap (daemon recap.enabled / recap.idleSeconds — TUI parity).
@@ -398,128 +370,6 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						);
 					})}
 				</div>
-			</div>
-			{/* Voice I/O (语音输入输出): local models via the daemon's
-			 * stt/tts RPCs (sherpa-ONNX ASR + Kokoro-82M TTS) — TUI parity,
-			 * no network dependency. */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("voice input output")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("voice input")}</div>
-						<div className="gui-settings-row-desc">{t("voice input description")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={sttEnabled}
-						className={`gui-toggle${sttEnabled ? " gui-toggle--on" : ""}`}
-						onClick={() => {
-							const next = !sttEnabled;
-							setSttEnabled(next);
-							void rpc?.request("settings.set", { key: "stt.enabled", value: next }).catch(() => {});
-						}}
-						aria-label={t("voice input")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<Reveal open={sttEnabled}>
-					<div className="gui-settings-row">
-						<div>
-							<div className="gui-settings-row-label">{t("voice input model")}</div>
-							<div className="gui-settings-row-desc">{t("voice input model description")}</div>
-						</div>
-						<GuiSelect
-							className="gui-input max-w-[220px]"
-							value={sttModel}
-							onChange={v => {
-								setSttModel(v);
-								void rpc?.request("settings.set", { key: "stt.modelName", value: v }).catch(() => {});
-							}}
-							options={[
-								{ value: "parakeet", label: "Parakeet (SoTA)" },
-								{ value: "balanced", label: "Balanced" },
-								{ value: "fast", label: "Fast" },
-								{ value: "turbo", label: "Turbo" },
-							]}
-						/>
-					</div>
-					<div className="gui-settings-row">
-						<div>
-							<div className="gui-settings-row-label">{t("voice input test")}</div>
-							<div className="gui-settings-row-desc">
-								{dictationText ?? t("voice input test description")}
-							</div>
-						</div>
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={dictating}
-							onClick={() => {
-								if (dictating) {
-									setDictating(false);
-									return;
-								}
-								setDictationText(null);
-								setDictating(true);
-								startDictation(
-									text => {
-										setDictationText(text);
-										setDictating(false);
-									},
-									() => setDictating(false),
-									rpc as never,
-								);
-							}}
-						>
-							<Icon name="mic" className="h-3.5 w-3.5" />
-							{dictating ? t("recording…") : t("voice input test")}
-						</button>
-					</div>
-				</Reveal>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("voice output")}</div>
-						<div className="gui-settings-row-desc">{t("voice output description")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={speechEnabled}
-						className={`gui-toggle${speechEnabled ? " gui-toggle--on" : ""}`}
-						onClick={() => {
-							const next = !speechEnabled;
-							setSpeechEnabled(next);
-							void rpc?.request("settings.set", { key: "speech.enabled", value: next }).catch(() => {});
-						}}
-						aria-label={t("voice output")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<Reveal open={speechEnabled}>
-					<div className="gui-settings-row">
-						<div>
-							<div className="gui-settings-row-label">{t("voice output test")}</div>
-							<div className="gui-settings-row-desc">
-								{ttsTest ?? t("voice output test description")}
-							</div>
-						</div>
-						<button
-							type="button"
-							className="gui-btn"
-							onClick={() => {
-								setTtsTest(t("voice output testing…"));
-								void speak(t("voice output sample"), rpc as never);
-								setTtsTest(t("voice output played"));
-							}}
-						>
-							<Icon name="play" className="h-3.5 w-3.5" />
-							{t("voice output test")}
-						</button>
-					</div>
-				</Reveal>
 			</div>
 			{/* Idle recap (TUI 通知组 parity): daemon-side, persisted to
 			 * config.yml — the same recap.enabled / recap.idleSeconds keys

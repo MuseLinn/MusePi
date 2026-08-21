@@ -1,17 +1,24 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { RpcClient } from "../lib/rpc";
+import { Icon, type IconName } from "../vendor/oc-icons";
+import {
+	readSurfaceOrder,
+	readSurfaceWidth,
+	surfaceById,
+	surfaceVisible,
+	writeSurfaceOrder,
+	writeSurfaceWidth,
+	SURFACES,
+	type SurfaceProps,
+} from "../lib/surfaces/registry";
 import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
-import { Icon } from "../vendor/oc-icons";
-import { TOOLS } from "./ContextPanel";
 
 /**
- * Right-edge 44px icon rail (openchamber ContextPanelRail parity): a slim
- * vertical column of the ContextPanel tool icons, always visible regardless
- * of panel collapse, plus the panel fold toggle and the extension rail slot
- * (rail.right) at the bottom.
- *
- * Placement: sibling of ContextPanel inside the chat-scene row, so it sits
- * at the surface's right edge while the panel animates its width beside it.
+ * RightRail — the right-edge 44px icon rail, driven by the surface registry:
+ * ① toolbar from the registry; ② has-content items hidden when empty;
+ * ③ draggable reorder persisted to localStorage; ④ width starts from
+ * defaultWidthFraction and persists. Keyboard (Mod+1..N / Mod+E / Mod+Shift+E)
+ * stays in App/ChatView, not duplicated here.
  */
 export function RightRail({
 	rpc,
@@ -23,31 +30,74 @@ export function RightRail({
 	onToggleRightPanel,
 }: {
 	rpc: RpcClient | null;
-	/** Active session id (passed through to extension rail components). */
 	sessionId?: string | null;
-	/** Session working directory (passed through to extension components). */
 	cwd?: string;
-	/** Currently active ContextPanel tool (shared selection). */
 	tool: string | null;
 	rightPanelOpen: boolean;
 	onSelect(tool: string): void;
-	/** Panel fold toggle; absent (mini window) renders the button inert. */
 	onToggleRightPanel?(): void;
 }): ReactNode {
+	// 顺序（目录级）+ 面板宽（目录级）
+	const [order, setOrder] = useState<string[]>(() => readSurfaceOrder(cwd));
+	const [width, setWidth] = useState<number>(() => readSurfaceWidth(cwd));
+	const ctx: SurfaceProps = useMemo(() => ({ rpc, sessionId, cwd }), [rpc, sessionId, cwd]);
+
+	// 注册表顺序 → 渲染项（过滤 has-content 不可见；未知/扩展追加在尾）
+	const items = useMemo(() => {
+		const ordered: Array<{ id: string; s: import("../lib/surfaces/registry").SurfaceDescriptor }> = [];
+		for (const id of order) {
+			const s = surfaceById(id);
+			if (!s) continue;
+			if (!surfaceVisible(s, ctx)) continue;
+			ordered.push({ id, s });
+		}
+		return ordered;
+	}, [order, ctx]);
+
+	const persist = useCallback((next: string[]) => { setOrder(next); writeSurfaceOrder(next, cwd); }, [cwd]);
+
+	// 拖拽重排（原生 HTML5 drag）
+	const [dragId, setDragId] = useState<string | null>(null);
+	const onDrop = (targetId: string): void => {
+		if (!dragId || dragId === targetId) return;
+		const ids = order.filter(id => id !== dragId);
+		const ti = ids.indexOf(targetId);
+		ids.splice(ti < 0 ? ids.length : ti, 0, dragId);
+		persist(ids);
+		setDragId(null);
+	};
+
+	useEffect(() => {
+		const apply = (id: string): void => {
+			const s = surfaceById(id);
+			if (!s) return;
+			setWidth(w => {
+				const next = Math.max(200, Math.min(560, Math.round((s.defaultWidthFraction ?? 0.5) * 560)));
+				writeSurfaceWidth(next, cwd);
+				return w === 0 || w === 300 ? next : w; // 首次用默认占比，之后保持用户拖拽
+			});
+		};
+		if (tool) apply(tool);
+	}, [tool, cwd]);
+
 	return (
 		<aside className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
 			<div className="gui-right-rail-group">
-				{TOOLS.map(toolDef => (
+				{items.map(({ id, s }) => (
 					<button
-						key={toolDef.id}
+						key={id}
 						type="button"
-						className={`gui-right-rail-btn${tool === toolDef.id ? " gui-right-rail-btn--active" : ""}`}
-						title={toolDef.label}
-						aria-label={toolDef.label}
-						aria-pressed={tool === toolDef.id}
-						onClick={() => onSelect(toolDef.id)}
+						draggable
+						onDragStart={() => setDragId(id)}
+						onDragOver={e => e.preventDefault()}
+						onDrop={() => onDrop(id)}
+						className={`gui-right-rail-btn${tool === id ? " gui-right-rail-btn--active" : ""}`}
+						title={s.label}
+						aria-label={s.label}
+						aria-pressed={tool === id}
+						onClick={() => onSelect(id)}
 					>
-						<Icon name={toolDef.icon as never} className="h-4 w-4" />
+						<Icon name={s.icon as IconName} className="h-4 w-4" />
 					</button>
 				))}
 			</div>
@@ -62,7 +112,6 @@ export function RightRail({
 				>
 					<Icon name={rightPanelOpen ? "arrow-right" : "arrow-left"} className="h-4 w-4" />
 				</button>
-				{/* Extension-contributed rail icons (modes v2 右面板 Phase 0-2). */}
 				<SlotComponentHost rpc={rpc} slot={RIGHT_RAIL_SLOT} sessionId={sessionId} cwd={cwd} />
 			</div>
 		</aside>

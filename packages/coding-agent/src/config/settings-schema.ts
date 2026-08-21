@@ -2174,6 +2174,16 @@ export const SETTINGS_SCHEMA = {
 		type: "string",
 		default: "en",
 	},
+	"stt.vadEndMs": {
+		type: "number",
+		default: 700,
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Silence threshold (ms)",
+			description: "How long of a pause counts as the end of dictation.",
+		},
+	},
 
 	"stt.modelName": {
 		type: "enum",
@@ -5233,6 +5243,38 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Auto-read new replies",
 			description: "Automatically read aloud new assistant replies via the local TTS engine",
+		},
+	},
+	"tts.rate": {
+		type: "number",
+		default: 1,
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Speech rate (0.5–2)",
+			description: "Playback rate for local TTS — 0.8× is common for reading aloud.",
+		},
+	},
+	"tts.inputMode": {
+		type: "enum",
+		values: ["raw", "sanitize", "summarize"],
+		default: "sanitize",
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Read content",
+			description: "How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+		},
+	},
+	"tts.bargeIn": {
+		type: "enum",
+		values: ["duck", "pause"],
+		default: "duck",
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Dictation barge-in",
+			description: "What happens to playback when dictation starts: duck (drop volume) or pause.",
 		},
 	},
 	"speech.enabled": {

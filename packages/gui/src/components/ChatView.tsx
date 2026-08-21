@@ -405,7 +405,7 @@ export function ChatView({
 		if (!lastId || lastId === lastAutoReadIdRef.current) return;
 		lastAutoReadIdRef.current = lastId;
 		if (!lastText.trim()) return;
-		stopSpeakRef.current = speak(lastText, rpc, activity => {
+		stopSpeakRef.current = speak(lastText, rpc, undefined, activity => {
 			if (activity.phase === "speaking") setSpeakingId(lastId);
 			else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
 				stopSpeakRef.current = null;
@@ -1113,7 +1113,7 @@ export function ChatView({
 																return;
 															}
 															const entryId = id ?? null;
-															stopSpeakRef.current = speak(text, rpc, activity => {
+															stopSpeakRef.current = speak(text, rpc, undefined, activity => {
 																if (activity.phase === "speaking") setSpeakingId(entryId);
 																else if (
 																	activity.phase === "done" ||

@@ -25,6 +25,7 @@ type SectionId =
 	| "git"
 	| "shortcuts"
 	| "interaction"
+	| "voice"
 	| "context"
 	| "shell"
 	| "tools"
@@ -272,6 +273,7 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 				{ id: "shortcuts", icon: "command", label: t("shortcuts"), enabled: true },
 				{ id: "model", icon: "ai-agent", label: t("model settings"), enabled: true },
 				{ id: "interaction", icon: "shuffle", label: t("interaction"), enabled: true },
+				{ id: "voice", icon: "mic", label: t("voice"), enabled: true },
 				{ id: "context", icon: "stack", label: t("context"), enabled: true },
 				{ id: "shell", icon: "terminal-window", label: t("shell"), enabled: true },
 				{ id: "tools", icon: "plug-2", label: t("tools"), enabled: true },
@@ -710,6 +712,7 @@ export function SettingsView({
 							{section === "git" && <GitSection rpc={rpc} />}
 							{section === "shortcuts" && <ShortcutsSection />}
 							{section === "interaction" && <InteractionSection rpc={rpc} />}
+							{section === "voice" && <VoiceSection rpc={rpc} />}
 							{section === "context" && <ContextSection rpc={rpc} />}
 							{section === "shell" && <ShellSection rpc={rpc} />}
 							{section === "tools" && <ToolsSection rpc={rpc} />}
@@ -759,6 +762,7 @@ import {
 	HooksSection,
 	IndexesSection,
 	InteractionSection,
+	VoiceSection,
 	McpSection,
 	MemorySection,
 	ModelSection,

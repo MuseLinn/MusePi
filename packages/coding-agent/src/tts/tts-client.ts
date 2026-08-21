@@ -29,6 +29,7 @@ type PendingRequest =
 
 export interface TtsSynthesizeOptions {
 	voice?: string;
+	rate?: number;
 	signal?: AbortSignal;
 }
 
@@ -39,6 +40,7 @@ export interface TtsDownloadOptions {
 
 export interface TtsStreamOptions {
 	voice?: string;
+	rate?: number;
 	signal?: AbortSignal;
 }
 
@@ -220,9 +222,14 @@ export class TtsClient {
 			};
 			options.signal?.addEventListener("abort", abort, { once: true });
 			try {
-				const request: TtsWorkerInbound = options.voice
-					? { type: "synthesize", id, modelKey, text, voice: options.voice }
-					: { type: "synthesize", id, modelKey, text };
+				const request: TtsWorkerInbound = {
+					type: "synthesize",
+					id,
+					modelKey,
+					text,
+					...(options.voice ? { voice: options.voice } : {}),
+					...(options.rate ? { rate: options.rate } : {}),
+				};
 				worker.send(request);
 				return await promise;
 			} finally {
@@ -283,9 +290,13 @@ export class TtsClient {
 		this.#addPending(id, { kind: "stream", modelKey, channel });
 		signal?.addEventListener("abort", abort, { once: true });
 
-		const start: TtsWorkerInbound = options.voice
-			? { type: "stream-start", id, modelKey, voice: options.voice }
-			: { type: "stream-start", id, modelKey };
+		const start: TtsWorkerInbound = {
+			type: "stream-start",
+			id,
+			modelKey,
+			...(options.voice ? { voice: options.voice } : {}),
+			...(options.rate ? { rate: options.rate } : {}),
+		};
 		worker.send(start);
 
 		return {

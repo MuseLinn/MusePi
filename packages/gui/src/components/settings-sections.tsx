@@ -22,6 +22,7 @@ export { HistorySection } from "./settings-sections/history";
 export { HooksSection } from "./settings-sections/hooks";
 export { IndexesSection } from "./settings-sections/indexes";
 export { InteractionSection } from "./settings-sections/interaction";
+export { VoiceSection } from "./settings-sections/voice";
 export { McpSection } from "./settings-sections/mcp";
 export { MemorySection } from "./settings-sections/memory";
 export { ModelSection } from "./settings-sections/model";

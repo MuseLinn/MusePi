@@ -5953,7 +5953,7 @@ export class DaemonServer {
 			case "stt.transcribe": {
 				// TUI-parity speech-to-text: same asr-client + local worker
 				// (sherpa-ONNX) the TUI uses — not Google's web service.
-				const p = (params ?? {}) as { audio: number[]; modelKey?: string };
+				const p = (params ?? {}) as { audio: number[]; modelKey?: string; language?: string };
 				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required (16kHz mono floats)");
 				const { sttClient } = await import("../stt/asr-client");
 				const { resolveSttModelSpec } = await import("../stt/models");
@@ -5964,13 +5964,15 @@ export class DaemonServer {
 				const modelKey = p.modelKey
 					? resolveSttModelSpec(p.modelKey).key
 					: resolveSttModelSpec(appSettings.get("stt.modelName") as string | undefined).key;
-				const text = await sttClient.transcribe(modelKey, Float32Array.from(p.audio));
+				const text = await sttClient.transcribe(modelKey, Float32Array.from(p.audio), {
+					...(p.language ? { language: p.language } : {}),
+				});
 				return { text };
 			}
 			case "tts.synthesize": {
 				// TUI-parity speech synthesis: Kokoro-82M local model via the
 				// same tts-client worker the TUI uses.
-				const p = (params ?? {}) as { text: string; modelKey?: string };
+				const p = (params ?? {}) as { text: string; modelKey?: string; voice?: string; rate?: number };
 				if (!p.text?.trim()) throw new Error("text required");
 				const { ttsClient } = await import("../tts/tts-client");
 				const { DEFAULT_TTS_LOCAL_MODEL_KEY } = await import("../tts/models");
@@ -5979,7 +5981,10 @@ export class DaemonServer {
 				const { settings: appSettings } = await import("../config/settings");
 				const configured = appSettings.get("tts.localModel") as string | undefined;
 				const modelKey = p.modelKey ?? (configured || DEFAULT_TTS_LOCAL_MODEL_KEY);
-				const audio = await ttsClient.synthesize(modelKey as never, p.text);
+				const audio = await ttsClient.synthesize(modelKey as never, p.text, {
+					...(p.voice ? { voice: p.voice } : {}),
+					...(p.rate ? { rate: p.rate } : {}),
+				});
 				if (!audio) return { audio: null, sampleRate: 0 };
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };
 			}
