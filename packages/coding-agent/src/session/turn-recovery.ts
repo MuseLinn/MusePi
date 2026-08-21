@@ -1320,8 +1320,38 @@ export class TurnRecovery {
 			this.#getRetryFallbackResolutionContext(),
 			currentSelector,
 			currentModel,
-			roleHint,
+			roleHint ?? this.#liveRetryRoleHint(currentModel),
 		);
+	}
+
+	/** Live session role for chain lookup, provided its assignment still matches the active model. */
+	#liveRetryRoleHint(currentModel: Model | null | undefined): string | undefined {
+		const role = this.#host.sessionManager?.getLastModelChangeRole?.();
+		if (!role || role === EPHEMERAL_MODEL_CHANGE_ROLE || !currentModel) return undefined;
+		const configured = this.#host.settings.getModelRole(role);
+		if (!configured) return undefined;
+		const resolved = resolveModelOverride([configured], this.#host.modelRegistry, this.#host.settings);
+		return resolved.model && modelsAreEqual(resolved.model, currentModel) ? role : undefined;
+	}
+
+	/**
+	 * Chain keys to consult for the active model, most specific walk first: the
+	 * chain that owns the current fallback walk, then the chain the CURRENT model
+	 * resolves to. The second key is what makes a chain reachable from the end of
+	 * another one — a session that lands on the last entry of one chain has no
+	 * fallback of its own, but when that entry is itself a chain key with its own
+	 * fallbacks configured, the second key finds them (PRs #8984/#9000). Two keys
+	 * is the whole walk per attempt. Stale role hints are dropped upstream.
+	 */
+	retryFallbackChainKeys(
+		currentSelector: string,
+		currentModel: Model | null | undefined = this.#host.model(),
+		options?: { pinnedRole?: string; roleHint?: string },
+	): string[] {
+		const pinned = options?.pinnedRole ?? this.#activeRetryFallback?.role;
+		const current = this.resolveRetryFallbackRole(currentSelector, currentModel, options?.roleHint);
+		if (!pinned) return current ? [current] : [];
+		return current && current !== pinned ? [pinned, current] : [pinned];
 	}
 
 	/** Finds fallback candidates that follow the active selector. */
@@ -1399,62 +1429,64 @@ export class TurnRecovery {
 		}
 		if (!this.#host.settings.get("retry.modelFallback")) return false;
 
-		const role = this.#activeRetryFallback?.role ?? this.resolveRetryFallbackRole(currentSelector, currentModel);
-		if (!role) return false;
-		let fallback: { selector: RetryFallbackSelector; apiKey: string } | undefined;
+		let fallback: { role: string; selector: RetryFallbackSelector; apiKey: string } | undefined;
 		const ceiling = this.#host.thinkingLevelCeiling();
-		for (const candidate of this.findRetryFallbackCandidates(role, currentSelector, currentModel)) {
-			if (this.isRetryFallbackSelectorSuppressed(candidate)) continue;
-			const resolved = resolveModelOverride([candidate.raw], this.#host.modelRegistry, this.#host.settings);
-			const candidateModel = resolved.model ?? this.#host.modelRegistry.find(candidate.provider, candidate.id);
-			if (!candidateModel || !this.#host.modelRegistry.hasConfiguredAuth(candidateModel)) continue;
-			if (ceiling !== undefined && !modelSupportsEffortCeiling(candidateModel, ceiling)) continue;
-			// A usage fallback must also fit: skip a candidate whose window cannot
-			// hold the live context so we never switch onto an oversized request
-			// (issue #8065).
-			if (!this.#host.contextFitsModel(candidateModel)) continue;
-			try {
-				const candidateHealth = await this.#host.modelRegistry.authStorage.getModelUsageHealth(
-					candidateModel.provider,
-					{
-						modelId: candidateModel.id,
-						sessionId: this.#host.sessionId(),
-						baseUrl: candidateModel.baseUrl,
-						reserveFraction: this.#host.settings.get("retry.usageReservePct") / 100,
-						signal,
-					},
-				);
-				if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
-				if (candidateHealth.state === "depleted" || candidateHealth.state === "reserve") continue;
-				if (candidateHealth.state === "healthy") {
-					const selected = candidateHealth.accounts.find(account => account.selected);
-					if (
-						selected &&
-						selected.state !== "healthy" &&
-						candidateHealth.accounts.some(account => account.state === "healthy")
-					) {
-						this.#host.modelRegistry.authStorage.releaseSessionCredentialForReselection(
-							candidateModel.provider,
-							this.#host.sessionId(),
-						);
+		const chainKeys = this.retryFallbackChainKeys(currentSelector, currentModel);
+		for (const role of chainKeys) {
+			for (const candidate of this.findRetryFallbackCandidates(role, currentSelector, currentModel)) {
+				if (this.isRetryFallbackSelectorSuppressed(candidate)) continue;
+				const resolved = resolveModelOverride([candidate.raw], this.#host.modelRegistry, this.#host.settings);
+				const candidateModel = resolved.model ?? this.#host.modelRegistry.find(candidate.provider, candidate.id);
+				if (!candidateModel || !this.#host.modelRegistry.hasConfiguredAuth(candidateModel)) continue;
+				if (ceiling !== undefined && !modelSupportsEffortCeiling(candidateModel, ceiling)) continue;
+				// A usage fallback must also fit: skip a candidate whose window cannot
+				// hold the live context so we never switch onto an oversized request
+				// (issue #8065).
+				if (!this.#host.contextFitsModel(candidateModel)) continue;
+				try {
+					const candidateHealth = await this.#host.modelRegistry.authStorage.getModelUsageHealth(
+						candidateModel.provider,
+						{
+							modelId: candidateModel.id,
+							sessionId: this.#host.sessionId(),
+							baseUrl: candidateModel.baseUrl,
+							reserveFraction: this.#host.settings.get("retry.usageReservePct") / 100,
+							signal,
+						},
+					);
+					if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
+					if (candidateHealth.state === "depleted" || candidateHealth.state === "reserve") continue;
+					if (candidateHealth.state === "healthy") {
+						const selected = candidateHealth.accounts.find(account => account.selected);
+						if (
+							selected &&
+							selected.state !== "healthy" &&
+							candidateHealth.accounts.some(account => account.state === "healthy")
+						) {
+							this.#host.modelRegistry.authStorage.releaseSessionCredentialForReselection(
+								candidateModel.provider,
+								this.#host.sessionId(),
+							);
+						}
 					}
+				} catch {
+					if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
+					// Unknown usage fails open for an otherwise valid fallback.
 				}
-			} catch {
 				if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
-				// Unknown usage fails open for an otherwise valid fallback.
-			}
-			if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
-			let apiKey: string | undefined;
-			try {
-				apiKey = await this.#host.modelRegistry.getApiKey(candidateModel, this.#host.sessionId(), { signal });
-			} catch {
+				let apiKey: string | undefined;
+				try {
+					apiKey = await this.#host.modelRegistry.getApiKey(candidateModel, this.#host.sessionId(), { signal });
+				} catch {
+					if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
+					continue;
+				}
 				if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
-				continue;
+				if (!apiKey) continue;
+				fallback = { role, selector: candidate, apiKey };
+				break;
 			}
-			if (signal.aborted || !modelsAreEqual(this.#host.model(), currentModel)) return false;
-			if (!apiKey) continue;
-			fallback = { selector: candidate, apiKey };
-			break;
+			if (fallback) break;
 		}
 		if (!fallback) return false;
 
@@ -1482,7 +1514,7 @@ export class TurnRecovery {
 			return false;
 		}
 		this.#usageReserveApprovedSelector = undefined;
-		return this.applyRetryFallbackCandidate(role, fallback.selector, currentSelector, {
+		return this.applyRetryFallbackCandidate(fallback.role, fallback.selector, currentSelector, {
 			pinFallback: true,
 			apiKey: fallback.apiKey,
 			signal,
@@ -1589,46 +1621,45 @@ export class TurnRecovery {
 		failedMessage: AssistantMessage,
 		options?: { pinFallback?: boolean },
 	): Promise<boolean> {
-		const role = this.#activeRetryFallback?.role ?? this.resolveRetryFallbackRole(currentSelector);
-		if (!role) return false;
-
 		const ceiling = this.#host.thinkingLevelCeiling();
 		const latestAssistant = this.#host.agent.state.messages.findLast(
 			(message): message is AssistantMessage => message.role === "assistant" && message !== failedMessage,
 		);
-		for (const selector of this.findRetryFallbackCandidates(role, currentSelector)) {
-			if (this.isRetryFallbackSelectorSuppressed(selector)) continue;
-			const resolved = resolveModelOverride([selector.raw], this.#host.modelRegistry, this.#host.settings);
-			const candidate = resolved.model ?? this.#host.modelRegistry.find(selector.provider, selector.id);
-			if (!candidate) continue;
-			// Anthropic signatures and redacted blocks are model-bound, while the
-			// latest assistant response must remain byte-identical. A same-provider
-			// model switch can satisfy neither constraint, so keep retrying the
-			// source model or consider a later cross-provider candidate whose
-			// message transform can safely demote the foreign thinking.
-			if (
-				candidate.api === "anthropic-messages" &&
-				latestAssistant?.api === "anthropic-messages" &&
-				latestAssistant.provider === candidate.provider &&
-				latestAssistant.model !== candidate.id &&
-				latestAssistant.content.some(
-					block =>
-						(block.type === "thinking" && Boolean(block.thinkingSignature?.trim())) ||
-						block.type === "redactedThinking",
-				)
-			) {
-				continue;
+		for (const role of this.retryFallbackChainKeys(currentSelector)) {
+			for (const selector of this.findRetryFallbackCandidates(role, currentSelector)) {
+				if (this.isRetryFallbackSelectorSuppressed(selector)) continue;
+				const resolved = resolveModelOverride([selector.raw], this.#host.modelRegistry, this.#host.settings);
+				const candidate = resolved.model ?? this.#host.modelRegistry.find(selector.provider, selector.id);
+				if (!candidate) continue;
+				// Anthropic signatures and redacted blocks are model-bound, while the
+				// latest assistant response must remain byte-identical. A same-provider
+				// model switch can satisfy neither constraint, so keep retrying the
+				// source model or consider a later cross-provider candidate whose
+				// message transform can safely demote the foreign thinking.
+				if (
+					candidate.api === "anthropic-messages" &&
+					latestAssistant?.api === "anthropic-messages" &&
+					latestAssistant.provider === candidate.provider &&
+					latestAssistant.model !== candidate.id &&
+					latestAssistant.content.some(
+						block =>
+							(block.type === "thinking" && Boolean(block.thinkingSignature?.trim())) ||
+							block.type === "redactedThinking",
+					)
+				) {
+					continue;
+				}
+				// A candidate whose effort floor exceeds the per-spawn ceiling would be
+				// clamped UP past the cap by its model floor — skip it entirely.
+				if (ceiling !== undefined && !modelSupportsEffortCeiling(candidate, ceiling)) continue;
+				// Skip a candidate whose window cannot hold the retry context. The
+				// failed assistant is removed before continue(), so exclude it here to
+				// judge the request that will actually be sent (issue #8065).
+				if (!this.#host.contextFitsModel(candidate, failedMessage)) continue;
+				const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
+				if (!apiKey) continue;
+				return this.applyRetryFallbackCandidate(role, selector, currentSelector, options);
 			}
-			// A candidate whose effort floor exceeds the per-spawn ceiling would be
-			// clamped UP past the cap by its model floor — skip it entirely.
-			if (ceiling !== undefined && !modelSupportsEffortCeiling(candidate, ceiling)) continue;
-			// Skip a candidate whose window cannot hold the retry context. The
-			// failed assistant is removed before continue(), so exclude it here to
-			// judge the request that will actually be sent (issue #8065).
-			if (!this.#host.contextFitsModel(candidate, failedMessage)) continue;
-			const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
-			if (!apiKey) continue;
-			return this.applyRetryFallbackCandidate(role, selector, currentSelector, options);
 		}
 
 		return false;
@@ -1699,9 +1730,9 @@ export class TurnRecovery {
 		if (AIError.isContextOverflow(message, model.contextWindow ?? 0)) return false;
 		if (this.#hasReplayUnsafeOutput(message)) return false;
 		const currentSelector = formatRetryFallbackSelector(model, this.#host.thinkingLevel());
-		const role = this.#activeRetryFallback?.role ?? this.resolveRetryFallbackRole(currentSelector);
-		if (!role) return false;
-		return this.findRetryFallbackCandidates(role, currentSelector).length > 0;
+		return this.retryFallbackChainKeys(currentSelector).some(
+			role => this.findRetryFallbackCandidates(role, currentSelector).length > 0,
+		);
 	}
 
 	/**
