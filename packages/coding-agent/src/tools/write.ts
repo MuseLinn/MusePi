@@ -13,7 +13,14 @@ import type {
 } from "@musepi/pi-agent-core";
 import { type Component, Text } from "@musepi/pi-tui";
 import { isEnoent, isRecord, prompt, untilAborted } from "@musepi/pi-utils";
-
+import {
+	type ArchiveMemberContent,
+	archiveFormatFromPath,
+	isWritableArchiveFormat,
+	parseArchivePathCandidates,
+	readArchiveEntries,
+	writeArchive,
+} from "@musepi/pi-utils/ar";
 import { canonicalSnapshotKey, getFileSnapshotStore } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
@@ -28,13 +35,6 @@ import writeDescription from "../prompts/tools/write.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import { fileHyperlink, framedBlock, renderStatusLine } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import {
-	type ArchiveMemberContent,
-	archiveFormatFromPath,
-	parseArchivePathCandidates,
-	readArchiveEntries,
-	writeArchive,
-} from "../utils/zip";
 import { routeWriteThroughBridge } from "./acp-bridge";
 import { resolveToolTier, truncateForPrompt } from "./approval";
 import { assertEditableFile } from "./auto-generated-guard";
@@ -646,7 +646,11 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 		// A realpath swap can land on a name without an archive extension; a
 		// whole-archive rewrite then defaults to an uncompressed tar, matching the
 		// previous `isZip`/`isGzip`/else fallthrough.
-		const format = archiveFormatFromPath(finalPath) ?? "tar";
+		const inferredFormat = archiveFormatFromPath(finalPath);
+		const format = inferredFormat ?? "tar";
+		if (!isWritableArchiveFormat(format)) {
+			throw new ToolError(`Writing entries inside ${format} archives is not supported (read-only format).`);
+		}
 		// Rewrites are whole-archive: write to a temp file and rename so a
 		// crash/disk-full mid-write can't destroy the original archive.
 		const tmpPath = `${finalPath}.tmp-${process.pid}`;

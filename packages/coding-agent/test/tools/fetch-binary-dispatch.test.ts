@@ -7,10 +7,10 @@ import type { ImageContent, TextContent } from "@musepi/pi-ai";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
-import { zip } from "@musepi/pi-coding-agent/utils/zip";
 import * as scrapers from "@musepi/pi-coding-agent/web/scrapers/types";
 import * as scraperUtils from "@musepi/pi-coding-agent/web/scrapers/utils";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
+import { encodeZip } from "@musepi/pi-utils/ar";
 
 function makeSession(testDir: string): ToolSession {
 	const sessionFile = path.join(testDir, "session.jsonl");
@@ -112,10 +112,12 @@ describe("read URL binary dispatch", () => {
 	});
 
 	it("lists a remote zip instead of dumping decoded bytes", async () => {
-		const zipBytes = zip({
-			"root.txt": Buffer.from("root file\n"),
-			"nested/data.txt": Buffer.from("nested file\n"),
-		});
+		const zipBytes = await encodeZip(
+			Object.entries({
+				"root.txt": Buffer.from("root file\n"),
+				"nested/data.txt": Buffer.from("nested file\n"),
+			}),
+		);
 		const url = uniqueUrl("archive", ".zip");
 		stubUrlBytes(zipBytes, "application/octet-stream");
 

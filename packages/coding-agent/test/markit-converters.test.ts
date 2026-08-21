@@ -12,14 +12,15 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { convertBufferWithMarkit, convertFileWithMarkit } from "@musepi/pi-coding-agent/utils/markit";
-import { zip } from "@musepi/pi-coding-agent/utils/zip";
 import { removeWithRetries } from "@musepi/pi-utils";
+import { encodeZip } from "@musepi/pi-utils/ar";
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+const zip = (obj: Record<string, Uint8Array>): Promise<Uint8Array> => encodeZip(Object.entries(obj));
 const WML = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const cliEntry = path.join(repoRoot, "packages", "coding-agent", "src", "cli.ts");
-function makeDocx(bodyXml: string): Uint8Array {
+async function makeDocx(bodyXml: string): Promise<Uint8Array> {
 	return zip({
 		"[Content_Types].xml": enc(
 			`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
@@ -35,7 +36,7 @@ function makeDocx(bodyXml: string): Uint8Array {
 
 describe("markit converters", () => {
 	it("converts docx paragraphs to markdown", async () => {
-		const docx = makeDocx(
+		const docx = await makeDocx(
 			`<w:p><w:r><w:t>First paragraph.</w:t></w:r></w:p><w:p><w:r><w:t>Second paragraph.</w:t></w:r></w:p>`,
 		);
 		const result = await convertBufferWithMarkit(docx, ".docx");
@@ -44,7 +45,7 @@ describe("markit converters", () => {
 	});
 
 	it("converts xlsx sheets to markdown tables", async () => {
-		const xlsx = zip({
+		const xlsx = await zip({
 			"xl/workbook.xml": enc(
 				`<?xml version="1.0"?><workbook xmlns:r="r"><sheets><sheet name="People" sheetId="1" r:id="rId1"/></sheets></workbook>`,
 			),
@@ -64,7 +65,7 @@ describe("markit converters", () => {
 	});
 
 	it("reads an xlsx worksheet through an absolute (/-prefixed) rel target", async () => {
-		const xlsx = zip({
+		const xlsx = await zip({
 			"xl/workbook.xml": enc(
 				`<?xml version="1.0"?><workbook xmlns:r="r"><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`,
 			),
@@ -82,7 +83,7 @@ describe("markit converters", () => {
 	});
 
 	it("converts pptx slides with a title heading and body text", async () => {
-		const pptx = zip({
+		const pptx = await zip({
 			"ppt/presentation.xml": enc(
 				`<?xml version="1.0"?><p:presentation xmlns:p="p" xmlns:r="r"><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst></p:presentation>`,
 			),
@@ -102,7 +103,7 @@ describe("markit converters", () => {
 	it("extracts a pptx image through a ../media relative rel target into imageDir", async () => {
 		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "markit-pptx-"));
 		try {
-			const pptx = zip({
+			const pptx = await zip({
 				"ppt/presentation.xml": enc(
 					`<?xml version="1.0"?><p:presentation xmlns:p="p" xmlns:r="r"><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst></p:presentation>`,
 				),
@@ -131,7 +132,7 @@ describe("markit converters", () => {
 	});
 
 	it("converts epub spine, normalizes HTML tables, and resolves a non-root OPF basePath", async () => {
-		const epub = zip({
+		const epub = await zip({
 			"META-INF/container.xml": enc(
 				`<?xml version="1.0"?><container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>`,
 			),

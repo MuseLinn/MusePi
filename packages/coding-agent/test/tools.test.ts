@@ -15,8 +15,8 @@ import { wrapToolWithMetaNotice } from "@musepi/pi-coding-agent/tools/output-met
 import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
 import * as toolTimeouts from "@musepi/pi-coding-agent/tools/tool-timeouts";
 import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
-import { openArchive, readArchiveEntries, unzip } from "@musepi/pi-coding-agent/utils/zip";
 import { $which, removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
+import { openArchive, readArchiveEntries } from "@musepi/pi-utils/ar";
 import { GlobTool } from "../src/tools/glob";
 import { DEFAULT_FILE_LIMIT, GrepTool, MULTI_FILE_PER_FILE_MATCHES } from "../src/tools/grep";
 import { HubTool } from "../src/tools/hub";
@@ -1066,8 +1066,6 @@ describe("Coding Agent Tools", () => {
 				path: `${archivePath}:pkg/current-b`,
 			});
 			expect(getTextOutput(directoryResult)).toContain("extra.js");
-
-			await expect(readArchiveEntries(archivePath)).rejects.toThrow(/cannot be materialized/);
 		});
 
 		it("should resolve file symlinks routed through directory symlinks", async () => {
@@ -1346,16 +1344,21 @@ describe("Coding Agent Tools", () => {
 			);
 		});
 
-		it("should reject a gzip payload that is not a tar archive", async () => {
-			// `sniffArchiveFormat` classifies any gzip magic as tar.gz, so a plain
-			// `.txt.gz` (decompressed payload shorter than one 512-byte tar block)
-			// must raise a catchable error instead of listing an empty directory.
-			const archivePath = path.join(testDir, "note.tar.gz");
+		it("should expose a non-tar gzip payload as a single stem-named member", async () => {
+			// `sniffArchiveFormat` classifies any gzip magic as tar.gz; when the
+			// decompressed stream is not a tar it must surface as a one-member
+			// pseudo-archive named after the file stem, not an error or an
+			// empty directory.
+			const archivePath = path.join(testDir, "note.txt.gz");
 			fs.writeFileSync(archivePath, zlib.gzipSync(Buffer.from("hello world\n")));
 
-			await expect(readTool.execute("test-call-gzip-non-tar", { path: archivePath })).rejects.toThrow(
-				/not a valid tar archive/i,
-			);
+			const listing = await readTool.execute("test-call-gzip-non-tar", { path: archivePath });
+			expect(getTextOutput(listing)).toContain("note.txt");
+
+			const member = await readTool.execute("test-call-gzip-non-tar-member", {
+				path: `${archivePath}:note.txt`,
+			});
+			expect(getTextOutput(member)).toContain("hello world");
 		});
 
 		it("should list archive subdirectories", async () => {
@@ -1656,9 +1659,12 @@ describe("Coding Agent Tools", () => {
 				`Successfully wrote ${content.length} bytes to ${path.basename(archivePath)}:pkg/README.md`,
 			);
 
-			const unzipped = unzip(new Uint8Array(fs.readFileSync(archivePath)));
-			expect(new TextDecoder().decode(unzipped["pkg/README.md"])).toBe(content);
-			expect(new TextDecoder().decode(unzipped["pkg/src/index.ts"])).toBe("export const archiveValue = 1;\n");
+			const unzipped = await readArchiveEntries({
+				bytes: new Uint8Array(fs.readFileSync(archivePath)),
+				format: "zip",
+			});
+			expect(new TextDecoder().decode(unzipped.get("pkg/README.md"))).toBe(content);
+			expect(new TextDecoder().decode(unzipped.get("pkg/src/index.ts"))).toBe("export const archiveValue = 1;\n");
 		});
 
 		it("should create a new archive when writing to an archive subpath", async () => {

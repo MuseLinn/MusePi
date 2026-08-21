@@ -14,6 +14,12 @@ import { type GrepMatch, GrepOutputMode, type GrepResult, grep } from "@musepi/p
 import type { Component } from "@musepi/pi-tui";
 import { Text } from "@musepi/pi-tui";
 import { prompt, untilAborted } from "@musepi/pi-utils";
+import {
+	type ArchiveReader,
+	type ExtractedArchiveFile,
+	openArchive,
+	parseArchivePathCandidates,
+} from "@musepi/pi-utils/ar";
 import { recordFileSnapshot, recordSeenLinesFromBody } from "../edit/file-snapshot-store";
 import type { RenderResultOptions } from "../extensibility/custom-tools/types";
 import type { LocalProtocolOptions } from "../internal-urls/local-protocol";
@@ -35,7 +41,6 @@ import {
 	uriHyperlink,
 } from "../tui";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import { type ArchiveReader, type ExtractedArchiveFile, openArchive, parseArchivePathCandidates } from "../utils/zip";
 import type { ToolSession } from ".";
 import { materializeReadUrlToFile, parseReadUrlTarget } from "./fetch";
 import { createFileRecorder, formatResultPath } from "./file-recorder";
