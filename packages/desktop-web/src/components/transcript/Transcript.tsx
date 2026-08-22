@@ -794,6 +794,9 @@ function AssistantBody({
 	/** Session thinking level — rendered as `model · level` beside the work
 	 *  timer (auto-thinking transparency). */
 	thinkingLevel,
+	/** Open the transcript full-size image preview (lightbox) for this turn's
+	 *  hoisted tool-result media. */
+	onPreviewImage,
 }: {
 	message: AssistantMessage;
 	results: ReadonlyMap<string, ToolResultMessage>;
@@ -821,6 +824,9 @@ function AssistantBody({
 	/** Session thinking level — rendered as `model · level` beside the work
 	 *  timer (auto-thinking transparency). */
 	thinkingLevel?: string;
+	/** Open the transcript full-size image preview (lightbox) for this turn's
+	 *  hoisted tool-result media. */
+	onPreviewImage?: (images: { src: string; alt: string }[], index: number) => void;
 }): ReactNode {
 	// Caret goes on the LAST text block only (not the last block of any
 	// kind — a trailing thinking/tool block must not get the caret).
@@ -879,6 +885,7 @@ function AssistantBody({
 						running={!result && (act !== undefined || pending)}
 						partialResult={act?.partialResult}
 						taskCardStyle={taskCardStyle}
+						onPreviewImage={onPreviewImage}
 					/>
 				);
 			}
@@ -1080,6 +1087,7 @@ const EntryRow = memo(function EntryRow({
 								taskCardStyle={taskCardStyle}
 								artifacts={artifacts}
 								thinkingLevel={thinkingLevel}
+								onPreviewImage={onPreviewImage}
 							/>
 						</Row>
 					);
@@ -1600,6 +1608,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						smoothStreaming={smoothStreaming}
 						taskCardStyle={taskCardStyle}
 						thinkingLevel={thinkingLevel}
+						onPreviewImage={openPreview}
 					/>
 				</Row>
 			)}
@@ -1616,6 +1625,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							partialResult={tool.partialResult}
 							host={host}
 							taskCardStyle={taskCardStyle}
+							onPreviewImage={openPreview}
 						/>
 					))}
 				</Row>
