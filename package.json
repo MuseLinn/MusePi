@@ -189,6 +189,7 @@
 		"@biomejs/biome": "catalog:",
 		"@types/bun": "catalog:",
 		"@typescript/native-preview": "catalog:",
+		"glob": "^7.2.3",
 		"lint-staged": "catalog:",
 		"morphicons": "^1.7.0",
 		"prettier": "catalog:",
