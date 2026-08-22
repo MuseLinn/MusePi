@@ -1,5 +1,6 @@
 import { buildModel } from "./build";
 import MODELS from "./models.json" with { type: "json" };
+import MODELS_DEV_REF from "./models-dev-ref.json" with { type: "json" };
 import type { Api, KnownProvider, Model, ModelSpec, TokenCost, Usage } from "./types";
 
 /**
@@ -41,6 +42,43 @@ export function getBundledProviders(): KnownProvider[] {
 export function getBundledModels(provider: GeneratedProvider): Model<Api>[] {
 	const models = getProviderModels(provider);
 	return models ? (Array.from(models.values()) as Model<Api>[]) : [];
+}
+
+/**
+ * Build the bundled models.dev "gap" reference table — ids that are NOT in
+ * the bundled `models.json` but ARE declared on models.dev (stencil.so).
+ * Used as an offline/race-safe fallback for custom providers whose model ids
+ * are gateway-first (e.g. `deepseek-v4-flash-vision-exp`): when the live
+ * stencil.so fetch is not yet cached (startup race) or offline, custom-model
+ * hydration degrades to a flat 128K / `reasoning:false` / text-only. Seeding
+ * from this table restores contextWindow / reasoning / input modalities.
+ *
+ * LIVE-FIRST: callers must prefer the live stencil.so catalog when available;
+ * this snapshot is only the fallback (live arrival overrides it).
+ */
+export function getBundledModelsDevCapabilities(): Map<string, Model<Api>> {
+	const capabilities = new Map<string, Model<Api>>();
+	for (const [id, row] of Object.entries(MODELS_DEV_REF)) {
+		const input = (Array.isArray(row.input) && row.input.length > 0
+			? row.input
+			: ["text"]) as ("text" | "image" | "video")[];
+		capabilities.set(
+			id,
+			buildModel({
+				id,
+				name: row.name || id,
+				api: "openai-completions",
+				provider: "custom",
+				baseUrl: "custom://models-dev",
+				reasoning: row.reasoning === true,
+				input,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: typeof row.context === "number" ? row.context : null,
+				...(typeof row.output === "number" ? { maxTokens: row.output } : {}),
+			} as ModelSpec<Api>),
+		);
+	}
+	return capabilities;
 }
 function resolveTokenCost(cost: Model["cost"], promptInputTokens: number): TokenCost {
 	const longContext = cost.longContext;
