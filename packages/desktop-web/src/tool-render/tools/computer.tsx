@@ -1,7 +1,10 @@
 /**
- * `computer` — desktop control (TUI computer-renderer parity): screenshots
- * grid + the executed action code + permission/read-only status. Screenshots
- * arrive as data URLs (or file paths); each opens in the lightbox.
+ * `computer` — desktop control (TUI computer-renderer parity): the executed
+ * action code + permission/read-only status. Screenshots arrive as data
+ * URLs (or file paths) in `details.screenshots`; the transcript's ToolCard
+ * hoists them inline below the card (craft-agents media parity), blanking
+ * them out of the card result with a `screenshotCount` fallback so this
+ * summary stays truthful. Standalone views (HTML exports) keep the grid.
  */
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
@@ -35,10 +38,14 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 	const parts: string[] = [];
 	if (details?.readOnly === true || args?.read_only === true) parts.push(t("computer read-only"));
 	if (typeof details?.backend === "string" && details.backend) parts.push(details.backend);
-	parts.push(
+	const shotCount =
 		shots.length > 0
-			? t("computer screenshots {count}", { count: String(shots.length) })
-			: t("computer no screenshots"),
+			? shots.length
+			: typeof details?.screenshotCount === "number" && details.screenshotCount > 0
+				? details.screenshotCount
+				: 0;
+	parts.push(
+		shotCount > 0 ? t("computer screenshots {count}", { count: String(shotCount) }) : t("computer no screenshots"),
 	);
 	const code = typeof args?.code === "string" ? args.code : typeof details?.code === "string" ? details.code : "";
 	return (

@@ -234,7 +234,7 @@ export const tools = {
 	"mode toggles": "Session modes",
 	"fast mode": "Fast mode",
 	"fast mode unavailable": "Fast mode unavailable for this model",
-	"computer tool": "Computer tool",
+	"computer tool": "Computer Use",
 	"vision mode": "Vision mode",
 	"vision auto": "Auto",
 	"vision on": "On",

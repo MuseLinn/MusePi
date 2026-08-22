@@ -8,7 +8,7 @@ export const composer = {
 	"waiting for session…": "Waiting for session…",
 	"submit response": "Submit response",
 	"send (Enter)": "Send (Enter)",
-	"thinking active": "Thinking",
+	"working active": "Working",
 	"stop turn": "Stop",
 	"stop the current turn": "Stop the current turn",
 	"compact context": "Compact context",

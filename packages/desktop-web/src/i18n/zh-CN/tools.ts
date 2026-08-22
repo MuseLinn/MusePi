@@ -226,7 +226,7 @@ export const tools = {
 	"mode toggles": "会话模式",
 	"fast mode": "快速模式",
 	"fast mode unavailable": "当前模型不支持快速模式",
-	"computer tool": "桌面工具",
+	"computer tool": "Computer Use",
 	"vision mode": "视觉模式",
 	"vision auto": "自动",
 	"vision on": "开启",

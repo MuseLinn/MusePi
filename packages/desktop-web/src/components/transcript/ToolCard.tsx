@@ -5,7 +5,7 @@ import { t } from "../../i18n/index.js";
 import { messageText } from "../../lib/format";
 import { ToolView } from "../../tool-render/ToolView";
 import type { ToolRenderHost, ToolResultImage } from "../../tool-render/types";
-import { resultImagesOf } from "../../tool-render/util";
+import { computerShotsOf, detailsRecord, resultImagesOf } from "../../tool-render/util";
 import { ImageCardStack } from "./image-card-stack";
 import { toolKind } from "./toolcard-shared";
 import { widgetStandaloneEnabled } from "./widget-standalone";
@@ -82,16 +82,29 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// card content so the fold never re-hides them, and render them inline.
 	const isArtifact = isArtifactCard(name);
 	const { images, cardResult } = hoistToolMedia(result, isArtifact);
-	const mediaItems = images.map((img, i) => ({
-		src: `data:${img.mimeType};base64,${img.data}`,
-		alt: t("tool result {count}", { count: String(i + 1) }),
-	}));
+	// Computer screenshots live in `details.screenshots` (not content
+	// blocks), so the generic image-block hoist misses them — pull them out
+	// here too, and blank them from the card result (with a screenshotCount
+	// fallback for the summary badge) so the folded body never duplicates.
+	const shotSrcs = !isArtifact && name === "computer" ? computerShotsOf(result) : [];
+	let mediaResult = cardResult;
+	if (shotSrcs.length > 0 && mediaResult) {
+		const details = detailsRecord(mediaResult);
+		mediaResult = { ...mediaResult, details: { ...details, screenshots: [], screenshotCount: shotSrcs.length } };
+	}
+	const mediaItems = [
+		...images.map((img, i) => ({
+			src: `data:${img.mimeType};base64,${img.data}`,
+			alt: t("tool result {count}", { count: String(i + 1) }),
+		})),
+		...shotSrcs.map((src, i) => ({ src, alt: t("computer screenshot {count}", { count: String(i + 1) }) })),
+	];
 	return (
 		<>
 			<ToolView
 				name={name}
 				args={args}
-				result={cardResult}
+				result={mediaResult}
 				running={running}
 				intent={intent}
 				kind={toolKind(name, intent)}

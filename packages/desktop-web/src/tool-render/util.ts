@@ -168,6 +168,25 @@ export function resultImagesOf(result: ToolResultLike | undefined): ToolResultIm
 	return images;
 }
 
+/** `computer` tool screenshots (`details.screenshots`, data URLs or file
+ *  paths) — the transcript's ToolCard hoists these inline in the message
+ *  flow exactly like content image blocks. */
+export function computerShotsOf(result: unknown): string[] {
+	const details = detailsRecord(result as ToolResultLike | undefined);
+	const raw = details?.screenshots;
+	if (!Array.isArray(raw)) return [];
+	const srcs: string[] = [];
+	for (const shot of raw) {
+		if (!shot || typeof shot !== "object") continue;
+		const rec = shot as Record<string, unknown>;
+		const target = typeof rec.target === "string" ? rec.target : "";
+		if (target.startsWith("data:")) srcs.push(target);
+		else if (typeof rec.path === "string" && rec.path.length > 0) srcs.push(`file://${rec.path}`);
+		else if (target) srcs.push(target);
+	}
+	return srcs;
+}
+
 /** `result.details` when it is a plain object; renderers narrow field-by-field. */
 export function detailsRecord(result: ToolResultLike | undefined): Record<string, unknown> | null {
 	return result && isRecord(result.details) ? result.details : null;

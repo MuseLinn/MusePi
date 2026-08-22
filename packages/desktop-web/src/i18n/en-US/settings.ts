@@ -369,6 +369,15 @@ export const settings = {
 	"adopted models": "Adopted models",
 	"provider name, base URL and at least one model are required":
 		"Provider name, base URL, and at least one model are required",
+	"edit custom provider": "Edit custom provider",
+	"save changes": "Save changes",
+	"provider saved": "Provider saved",
+	"model capabilities": "Model capabilities",
+	"restore to auto": "Restore to auto",
+	"restore capabilities to auto":
+		"Clear manual capability overrides and fall back to the bundled / models.dev auto-fitted values",
+	"context window (optional)": "Context window (optional)",
+	"max output tokens (optional)": "Max output tokens (optional)",
 	"general settings": "General settings",
 	"appearance settings": "Appearance settings",
 	"add context": "Add context",
@@ -500,6 +509,8 @@ export const settings = {
 	"checking…": "Checking…",
 	check: "Check",
 	"check for updates": "Check for updates",
+	"go to download": "Download",
+	"skip this version": "Skip this version",
 	"choose light, dark or follow the system": "Choose light, dark, or follow the system theme.",
 	"glass opacity": "Frosted glass opacity",
 	"window transparency": "Window transparency",
@@ -555,7 +566,7 @@ export const settings = {
 	"show line numbers": "Show line numbers",
 	"show line numbers description": "Show line numbers in code content and diff views.",
 	"wrap long lines": "Wrap long lines",
-	"wrap long lines description": "Wrap long lines in code content automatically.",
+	"wrap long lines description": "Wrap long lines in code and diff content automatically; off = horizontal scroll.",
 	"code font size": "Code font size",
 	"code font size description":
 		"Adjust the default font size for code in file previews and diff views (transcript code blocks follow the message font size).",
@@ -1936,11 +1947,13 @@ export const settings = {
 	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
 		"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
 	"Task Card Style": "Task Card Style",
-	"Render style for the task/swarm tool card. Swarm shows the Kimi-parity member grid with per-agent avatars, progress bars and accordion outputs; classic uses the plain tool-call card":
-		"Render style for the task/swarm tool card. Swarm shows the Kimi-parity member grid with per-agent avatars, progress bars and accordion outputs; classic uses the plain tool-call card",
-	"Kimi-parity member grid: avatars, progress bars, per-member accordions":
-		"Kimi-parity member grid: avatars, progress bars, per-member accordions",
-	"Plain tool-call card with summary chips": "Plain tool-call card with summary chips",
+	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card":
+		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card",
+	"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
+		"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
+	"Plain tool-call card only — no swarm member grid": "Plain tool-call card only — no swarm member grid",
+	"MusePi Swarm": "MusePi Swarm",
+	"OMP original (Classic)": "OMP original (Classic)",
 	"Swarm Task Card": "Swarm Task Card",
 	"Color-Blind Mode": "Color-Blind Mode",
 	"Combine diffs and git apply": "Combine diffs and git apply",
