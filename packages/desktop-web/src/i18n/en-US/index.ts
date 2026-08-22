@@ -3,7 +3,8 @@ import { collab } from "./collab.js";
 import { composer } from "./composer.js";
 import { context } from "./context.js";
 import { guest } from "./guest.js";
-import { pet } from "./pet.js";
+import { companion } from "./companion.js";
+import { general } from "./general.js";
 import { sessions } from "./sessions.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";
@@ -27,7 +28,8 @@ export const enUS = {
 	...settings,
 	...agents,
 	...tools,
-	...pet,
+	...companion,
+	...general,
 	...guest,
 } as const;
 
@@ -43,7 +45,8 @@ export const enUS = {
 		settings,
 		agents,
 		tools,
-		pet,
+		companion,
+		general,
 		guest,
 	};
 	const seen = new Map<string, string>();
