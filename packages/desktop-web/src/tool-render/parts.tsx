@@ -520,13 +520,20 @@ const EXT_HIGHLIGHT_LANG: Record<string, string> = {
 };
 
 const DIFF_HEADER_RE = /^(?:---|\+\+\+) (?:a\/|b\/)?(.+)$/;
+const DIFF_GIT_RE = /^diff --git a\/(.+?) b\//;
 
-/** Language id for a unified diff, inferred from its `---`/`+++` file headers. */
+/** Language id for a unified diff, inferred from its file headers. Strips the
+ *  trailing unified-diff timestamp (`--- a/foo.ts\t2026-…`) and also accepts
+ *  a bare `diff --git a/<file> b/<file>` header (some tool diffs omit the
+ *  `---`/`+++` pair), so the per-line highlighter runs instead of plain text. */
 function diffLangOf(diff: string): string | null {
 	for (const rawLine of diff.split("\n")) {
-		const m = DIFF_HEADER_RE.exec(rawLine.trim());
+		const header = rawLine.trim();
+		const m = DIFF_HEADER_RE.exec(header) ?? DIFF_GIT_RE.exec(header);
 		if (!m) continue;
-		const name = m[1].trim().split(/[\\/]/).pop() ?? "";
+		// Unified-diff file headers append "YYYY-MM-DD HH:MM:SS" after the path.
+		let name = (m[1] ?? "").trim().split(/[\\/]/).pop() ?? "";
+		name = name.split(/\s+/)[0] ?? "";
 		const dot = name.lastIndexOf(".");
 		if (dot <= 0) continue; // no extension — try the next header
 		const lang = EXT_HIGHLIGHT_LANG[name.slice(dot + 1).toLowerCase()];
