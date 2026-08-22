@@ -563,26 +563,27 @@ function WidgetSidebarTab({ entries }: { entries: readonly unknown[] }): ReactNo
 	);
 }
 
-/** One async job row from `session.jobs` (daemon wire shape). */
+/** One async job row from `session.jobs` (daemon wire shape). startTime is
+ *  an epoch-ms number from the job manager; tolerate strings for robustness. */
 interface JobItem {
 	id: string;
 	type: string;
 	status: string;
 	label: string;
-	startTime: string;
+	startTime: number | string;
 }
 
 /** `session.jobs` response: running/recent job lists + delivery counters. */
 interface JobsData {
 	running: JobItem[];
 	recent: JobItem[];
-	delivery: { queued: number; delivering: number; pendingJobIds: string[] };
+	delivery?: { queued?: number; delivering?: boolean | number; pendingJobIds?: string[] };
 }
 
-/** Format a job startTime for the recent list (fallback: raw string). */
-function fmtJobTime(ts: string): string {
+/** Format a job startTime for the recent list (fallback: raw value). */
+function fmtJobTime(ts: number | string): string {
 	const d = new Date(ts);
-	if (Number.isNaN(d.getTime())) return ts;
+	if (Number.isNaN(d.getTime())) return String(ts);
 	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
@@ -685,13 +686,13 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 				<div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 text-[12px] text-[var(--color-text-muted)]">
 					<span className="inline-flex items-center gap-1">
 						<Icon name="inbox-archive" className="h-3.5 w-3.5" />
-						{t("jobs queued")} {delivery.queued}
+						{t("jobs queued")} {delivery.queued ?? 0}
 					</span>
 					<span className="inline-flex items-center gap-1">
-						{t("jobs delivering")} {delivery.delivering}
+						{t("jobs delivering")} {delivery.delivering ? "✓" : "—"}
 					</span>
 					<span className="inline-flex items-center gap-1">
-						{t("jobs pending")} {delivery.pendingJobIds.length}
+						{t("jobs pending")} {delivery.pendingJobIds?.length ?? 0}
 					</span>
 				</div>
 			)}

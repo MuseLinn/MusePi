@@ -5015,7 +5015,18 @@ export class DaemonServer {
 						typeof content === "string" ? content : (content.find(c => c.type === "text")?.text ?? "");
 					if (textPart) live.agentSession.maybeStartTitleGeneration(textPart);
 				}
-				await live.agentSession.sendUserMessage(content, options);
+				// Fire-and-forget: prompt()'s promise only settles at end-of-turn
+				// (minutes for a long run), while the GUI client enforces a hard
+				// 15s RPC timeout — awaiting the turn here always surfaced a false
+				// "request timeout: session.send" banner while the agent kept
+				// working. Turn progress and errors already flow to clients via
+				// the session event stream; log background failures instead.
+				void live.agentSession.sendUserMessage(content, options).catch(err => {
+					logger.warn("session.send background delivery failed", {
+						sessionId: p.sessionId,
+						error: err instanceof Error ? err.message : String(err),
+					});
+				});
 				return { accepted: true };
 			}
 			case "session.revertTo": {
@@ -6777,7 +6788,11 @@ export class DaemonServer {
 					live.agentSession.getAsyncJobSnapshot({ recentLimit: p.recentLimit ?? 8 }) ?? {
 						running: [],
 						recent: [],
-						delivery: { queued: 0, delivering: false },
+						// Must match AsyncJobDeliveryState — the GUI reads
+						// delivery.pendingJobIds.length, and a missing field here
+						// crashes (ErrorBoundary) the jobs pane for sessions
+						// without an async job manager.
+						delivery: { queued: 0, delivering: false, pendingJobIds: [] },
 					}
 				);
 			}
