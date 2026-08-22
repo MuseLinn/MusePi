@@ -2488,6 +2488,10 @@ export class DaemonServer {
 	 *  session) daemon events such as extensions.changed (HMR). */
 	readonly #globalEventTargets = new Set<DaemonConnection>();
 	#globalEventSeq = 0;
+	/** Speech-model downloads currently running (keyed by model tier key).
+	 *  Guards against two windows (or a double-click race) starting parallel
+	 *  fetches into the same cache directory. */
+	readonly #sttDownloads = new Map<string, Promise<void>>();
 
 	/** Drop a connection from the global-event targets (called on close —
 	 *  the host's disconnect handles the session subscription side). */
@@ -5953,54 +5957,76 @@ export class DaemonServer {
 			case "stt.modelStatus": {
 				// GUI voice page: which speech models are already on disk, so
 				// the panel can show "ready" vs "needs download" per option.
+				// `downloads` lists tiers mid-fetch so a freshly-mounted window
+				// renders its progress row immediately, not after the next tick.
 				const { isSttModelCached } = await import("../stt/downloader");
 				const { STT_MODELS } = await import("../stt/models");
 				const models = await Promise.all(
 					STT_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isSttModelCached(m.key) })),
 				);
-				return { models };
+				return { models, downloads: [...this.#sttDownloads.keys()] };
 			}
 			case "stt.modelDownload": {
 				// Kick off a speech-model download WITHOUT awaiting it: the
 				// RPC client times out at 15s but Whisper tiers are GB-scale,
-				// so the request must return immediately. Progress AND the
-				// terminal result both ride the global event stream
-				// (`stt.downloadProgress` / `stt.downloadError`) — same
-				// channel as extensions.changed.
+				// so the request must return immediately. Progress AND both
+				// terminal outcomes (stt.downloadDone / stt.downloadError)
+				// ride the global event stream — same channel as
+				// extensions.changed — so every open window stays in sync.
 				const p = (params ?? {}) as { modelKey?: string };
 				if (!p.modelKey) throw new Error("modelKey required");
+				const { isSttModelKey } = await import("../stt/models");
+				// Reject unknown keys explicitly: resolveSttModelSpec silently
+				// falls back to the default tier, which would download a
+				// GB-scale model the user never asked for.
+				if (!isSttModelKey(p.modelKey)) throw new Error(`unknown speech model: ${p.modelKey}`);
 				const modelKey = p.modelKey;
-				const { downloadSttModel } = await import("../stt/downloader");
-				void downloadSttModel(modelKey, progress => {
-					const seq = ++this.#globalEventSeq;
-					for (const conn of this.#globalEventTargets) {
-						this.#host.emitEvent(conn, {
-							kind: "event",
-							seq,
-							payload: {
-								type: "stt.downloadProgress",
-								modelKey,
-								percent: progress.percent,
-								loaded: progress.loaded,
-								total: progress.total,
-								label: progress.label,
-							},
-						});
-					}
-				}).catch(err => {
-					const seq = ++this.#globalEventSeq;
-					for (const conn of this.#globalEventTargets) {
-						this.#host.emitEvent(conn, {
-							kind: "event",
-							seq,
-							payload: {
+				// Idempotent re-trigger: a second window (or a double-click
+				// race) must reuse the running fetch, not start a parallel one
+				// into the same cache directory. Reserve the slot SYNCHRONOUSLY
+				// so a second RPC racing the dynamic import below can't slip
+				// past the guard; it is replaced by the real promise right after.
+				if (this.#sttDownloads.has(modelKey)) return { ok: true, alreadyRunning: true };
+				this.#sttDownloads.set(modelKey, Promise.resolve());
+				try {
+					const { downloadSttModel } = await import("../stt/downloader");
+					const emitSttEvent = (payload: Record<string, unknown>): void => {
+						const seq = ++this.#globalEventSeq;
+						for (const conn of this.#globalEventTargets) {
+							this.#host.emitEvent(conn, { kind: "event", seq, payload });
+						}
+					};
+					// Exactly one run per key lives in #sttDownloads at a time,
+					// so the finally can drop it unconditionally.
+					const run = (async (): Promise<void> => {
+						try {
+							await downloadSttModel(modelKey, progress => {
+								emitSttEvent({
+									type: "stt.downloadProgress",
+									modelKey,
+									percent: progress.percent,
+									loaded: progress.loaded,
+									total: progress.total,
+									label: progress.label,
+								});
+							});
+							emitSttEvent({ type: "stt.downloadDone", modelKey });
+						} catch (err) {
+							emitSttEvent({
 								type: "stt.downloadError",
 								modelKey,
 								message: err instanceof Error ? err.message : String(err),
-							},
-						});
-					}
-				});
+							});
+						} finally {
+							this.#sttDownloads.delete(modelKey);
+						}
+					})();
+					this.#sttDownloads.set(modelKey, run);
+				} catch (err) {
+					// Setup failed (import/dispatch): release the reservation.
+					this.#sttDownloads.delete(modelKey);
+					throw err;
+				}
 				return { ok: true };
 			}
 			case "stt.transcribe": {

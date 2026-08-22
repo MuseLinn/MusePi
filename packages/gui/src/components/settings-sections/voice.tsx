@@ -10,13 +10,25 @@
 import { t } from "@musepi/desktop-web";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { enumerateMicDevices, speak, startDictation, type VoiceActivity } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
 import { SchemaTabSection } from "./schema";
-import { enumerateMicDevices, speak, startDictation, type VoiceActivity } from "../../lib/voice";
 
 /* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ── */
-interface SttModelRow { key: string; label: string; cached: boolean }
-interface DownloadProgressEvent {
+interface SttModelRow {
+	key: string;
+	label: string;
+	cached: boolean;
+}
+/** stt.modelStatus payload; `downloads` lists tiers mid-fetch so a window
+ *  mounted mid-download renders its progress row immediately. */
+interface SttStatusResponse {
+	models: SttModelRow[];
+	downloads?: string[];
+}
+/** Events broadcast by the daemon on the global stream: live progress plus
+ *  BOTH terminal outcomes (done / error), each carrying the tier key. */
+interface SttStreamEvent {
 	type: string;
 	modelKey?: string;
 	percent?: number;
@@ -24,6 +36,13 @@ interface DownloadProgressEvent {
 	total?: number;
 	label?: string;
 	message?: string;
+}
+interface ActiveDownload {
+	modelKey: string;
+	percent: number;
+	loaded: number;
+	total: number;
+	label: string;
 }
 
 function formatBytes(n: number): string {
@@ -34,81 +53,112 @@ function formatBytes(n: number): string {
 }
 
 /** Per-model row: label + 已就绪 badge or a download button with a live
- * progress bar while the daemon fetches. Progress rides the global event
- * stream (`stt.downloadProgress`), so it survives page remounts and shows
- * in every open window. */
+ * progress bar while the daemon fetches. Progress AND both terminal
+ * outcomes ride the global event stream (`stt.downloadProgress` /
+ * `stt.downloadDone` / `stt.downloadError`), so state survives page
+ * remounts and stays in sync across every open window. */
 function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [models, setModels] = useState<SttModelRow[] | null>(null);
-	const [active, setActive] = useState<{ modelKey: string; percent: number; loaded: number; total: number; label: string } | null>(null);
-	const [error, setError] = useState<string | null>(null);
+	const [active, setActive] = useState<ActiveDownload | null>(null);
+	const [error, setError] = useState<{ modelKey: string; message: string } | null>(null);
+	// Single settlement timer: cleared before rescheduling and on unmount,
+	// so stacked terminal events can never fire stale refreshes.
+	const settleTimer = useRef<number | null>(null);
 
 	const refresh = useCallback(() => {
 		void rpc
-			?.request<{ models: SttModelRow[] }>("stt.modelStatus", {})
-			.then(res => setModels(res.models))
+			?.request<SttStatusResponse>("stt.modelStatus", {})
+			.then(res => {
+				setModels(res.models);
+				// Window mounted mid-download: seed a 0% row from the daemon's
+				// in-flight list instead of showing an enabled download button
+				// until the next progress tick arrives.
+				setActive(
+					prev =>
+						prev ??
+						(res.downloads?.[0]
+							? { modelKey: res.downloads[0], percent: 0, loaded: 0, total: 0, label: "" }
+							: null),
+				);
+			})
 			.catch(() => setModels([]));
 	}, [rpc]);
 
 	useEffect(() => {
 		refresh();
 		if (!rpc) return;
-		// Daemon broadcasts stt.downloadProgress on the global event stream.
 		const off = rpc.addEventListener(event => {
-			const p = event.payload as DownloadProgressEvent | undefined;
-			if (!p || p.type !== "stt.downloadProgress") return;
-			if (p.percent === undefined) return;
-			setActive({
-				modelKey: p.modelKey ?? "",
-				percent: p.percent,
-				loaded: p.loaded ?? 0,
-				total: p.total ?? 0,
-				label: p.label ?? "",
-			});
-			if (p.percent >= 100) {
-				// Let the bar paint 100% briefly, then clear + re-check cache.
-				window.setTimeout(() => { setActive(null); refresh(); }, 1200);
+			const p = event.payload as SttStreamEvent | undefined;
+			if (!p?.type.startsWith("stt.download")) return;
+			if (p.type === "stt.downloadProgress") {
+				if (typeof p.percent !== "number") return;
+				setActive({
+					modelKey: p.modelKey ?? "",
+					percent: p.percent,
+					loaded: p.loaded ?? 0,
+					total: p.total ?? 0,
+					label: p.label ?? "",
+				});
+				return;
 			}
-			return;
+			if (p.type === "stt.downloadDone") {
+				// Let the bar paint 100% briefly, then clear + re-check cache.
+				if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+				settleTimer.current = window.setTimeout(() => {
+					settleTimer.current = null;
+					setActive(null);
+					refresh();
+				}, 1200);
+				return;
+			}
+			if (p.type === "stt.downloadError") {
+				// Fire-and-forget request means the RPC itself never rejects —
+				// the failure only arrives here. Keep the tier key so the row
+				// can be named; other models' UI state is untouched.
+				setError({ modelKey: p.modelKey ?? "", message: p.message ?? "download failed" });
+				refresh();
+			}
 		});
-		// A failed download surfaces via stt.downloadError (fire-and-forget
-		// request means the RPC itself never rejects).
-		const offError = rpc.addEventListener(event => {
-			const p = event.payload as DownloadProgressEvent | undefined;
-			if (!p || p.type !== "stt.downloadError") return;
-			setActive(null);
-			setError(p.message ?? "download failed");
-			refresh();
-		});
-		return () => { off(); offError(); };
+		return () => {
+			off();
+			if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+		};
 	}, [rpc, refresh]);
 
 	const download = (modelKey: string): void => {
 		setError(null);
 		setActive({ modelKey, percent: 0, loaded: 0, total: 0, label: "" });
-		void rpc
-			?.request("stt.modelDownload", { modelKey })
-			.catch(err => { setActive(null); setError(err instanceof Error ? err.message : String(err)); });
+		void rpc?.request("stt.modelDownload", { modelKey }).catch(err => {
+			// Only reachable for immediate rejections (bad key, daemon offline).
+			setActive(null);
+			setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
+		});
 	};
+
+	const errorLabel = error ? models?.find(m => m.key === error.modelKey)?.label : undefined;
 
 	return (
 		<div className="gui-settings-section">
 			<div className="gui-settings-section-title">{t("speech models")}</div>
 			{models === null ? (
-				<div className="gui-settings-row"><div className="gui-settings-row-desc">…</div></div>
+				<div className="gui-settings-row">
+					<div className="gui-settings-row-desc">…</div>
+				</div>
 			) : (
 				models.map(m => {
-					const isActive = active?.modelKey === m.key && active.percent < 100;
+					const isActive = active?.modelKey === m.key;
 					return (
 						<div key={m.key} className="gui-settings-row">
 							<div>
 								<div className="gui-settings-row-label">{m.label}</div>
 								{isActive ? (
 									<div className="gui-settings-row-desc" aria-live="polite">
-										{active.label} {formatBytes(active.loaded)}{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+										{active.label} {formatBytes(active.loaded)}
+										{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
 									</div>
-								) : (
-									m.cached ? <div className="gui-settings-row-desc">{t("model ready offline")}</div> : null
-								)}
+								) : m.cached ? (
+									<div className="gui-settings-row-desc">{t("model ready offline")}</div>
+								) : null}
 							</div>
 							{isActive ? (
 								<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -116,10 +166,18 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									<span>{active.percent}%</span>
 								</div>
 							) : m.cached ? (
-								<span title={t("model ready offline")} aria-label={t("model ready offline")}>✓</span>
+								<span title={t("model ready offline")} aria-label={t("model ready offline")}>
+									✓
+								</span>
 							) : (
-								<button type="button" className="gui-btn" disabled={!rpc || active !== null} onClick={() => download(m.key)}>
-									<Icon name="download" className="h-3.5 w-3.5" />{t("download")}
+								<button
+									type="button"
+									className="gui-btn"
+									disabled={!rpc || active !== null}
+									onClick={() => download(m.key)}
+								>
+									<Icon name="download" className="h-3.5 w-3.5" />
+									{t("download")}
 								</button>
 							)}
 						</div>
@@ -127,7 +185,15 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				})
 			)}
 			{error && (
-				<div className="gui-settings-row"><div className="gui-settings-row-desc">{error}</div></div>
+				<div className="gui-settings-row">
+					<div className="gui-settings-row-desc" role="alert">
+						{errorLabel ? `${errorLabel}: ` : ""}
+						{error.message}
+					</div>
+					<button type="button" className="gui-btn" aria-label="dismiss" onClick={() => setError(null)}>
+						✕
+					</button>
+				</div>
 			)}
 		</div>
 	);
@@ -142,38 +208,64 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const stopRef = useRef<(() => void) | null>(null);
 	useEffect(() => () => stopRef.current?.(), []);
 	const toggle = (): void => {
-		if (state === "speaking" || state === "loading") { stopRef.current?.(); setState("idle"); return; }
-		setState("loading"); setErr("");
+		if (state === "speaking" || state === "loading") {
+			stopRef.current?.();
+			setState("idle");
+			return;
+		}
+		setState("loading");
+		setErr("");
 		void rpc
 			?.request<Record<string, unknown>>("settings.get", { keys: ["tts.localVoice", "tts.rate", "tts.inputMode"] })
-			.then(v =>
-				new Promise<void>(resolve => {
-					stopRef.current = speak(t("voice output sample"), rpc, {
-						voice: typeof v["tts.localVoice"] === "string" ? (v["tts.localVoice"] as string) : undefined,
-						rate: typeof v["tts.rate"] === "number" ? (v["tts.rate"] as number) : undefined,
-						mode: typeof v["tts.inputMode"] === "string" ? (v["tts.inputMode"] as "raw" | "sanitize" | "summarize") : undefined,
-					}, (a: VoiceActivity) => {
-						if (a.phase === "speaking") setState("speaking");
-						else if (a.phase === "done") setState("ok");
-						else if (a.phase === "stopped") setState("idle");
-						else if (a.phase === "error") { setState("error"); setErr(a.message); }
-						if (a.phase === "done" || a.phase === "stopped" || a.phase === "error") resolve();
-					});
-				}),
+			.then(
+				v =>
+					new Promise<void>(resolve => {
+						stopRef.current = speak(
+							t("voice output sample"),
+							rpc,
+							{
+								voice: typeof v["tts.localVoice"] === "string" ? (v["tts.localVoice"] as string) : undefined,
+								rate: typeof v["tts.rate"] === "number" ? (v["tts.rate"] as number) : undefined,
+								mode:
+									typeof v["tts.inputMode"] === "string"
+										? (v["tts.inputMode"] as "raw" | "sanitize" | "summarize")
+										: undefined,
+							},
+							(a: VoiceActivity) => {
+								if (a.phase === "speaking") setState("speaking");
+								else if (a.phase === "done") setState("ok");
+								else if (a.phase === "stopped") setState("idle");
+								else if (a.phase === "error") {
+									setState("error");
+									setErr(a.message);
+								}
+								if (a.phase === "done" || a.phase === "stopped" || a.phase === "error") resolve();
+							},
+						);
+					}),
 			)
 			.catch(() => {})
-			.finally(() => { /* state driven by activity callback */ });
+			.finally(() => {
+				/* state driven by activity callback */
+			});
 	};
 	return (
 		<div className="gui-settings-row">
 			<div>
 				<div className="gui-settings-row-label">{t("voice output test")}</div>
 				<div className="gui-settings-row-desc" aria-live="polite">
-					{state === "ok" ? t("voice output played") : state === "error" ? err : t("voice output test description")}
+					{state === "ok"
+						? t("voice output played")
+						: state === "error"
+							? err
+							: t("voice output test description")}
 				</div>
 			</div>
 			<button type="button" className="gui-btn" disabled={!rpc} onClick={toggle}>
-				<Icon name={state === "loading" ? "download" : state === "speaking" ? "stop" : "play"} className="h-3.5 w-3.5" />
+				<Icon
+					name={state === "loading" ? "download" : state === "speaking" ? "stop" : "play"}
+					className="h-3.5 w-3.5"
+				/>
 				{state === "speaking" || state === "loading" ? t("stop") : t("voice output test")}
 			</button>
 		</div>
@@ -190,15 +282,25 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const stopRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
-		void enumerateMicDevices().then(setDevices).catch(() => setDevices([]));
+		void enumerateMicDevices()
+			.then(setDevices)
+			.catch(() => setDevices([]));
 		return () => stopRef.current?.();
 	}, []);
 
 	const toggleDictation = (): void => {
-		if (dictating) { stopRef.current?.(); setDictating(false); return; }
-		setDictated(null); setDictating(true);
+		if (dictating) {
+			stopRef.current?.();
+			setDictating(false);
+			return;
+		}
+		setDictated(null);
+		setDictating(true);
 		stopRef.current = startDictation(
-			(text: string) => { setDictated(text); setDictating(false); },
+			(text: string) => {
+				setDictated(text);
+				setDictating(false);
+			},
 			() => setDictating(false),
 			rpc,
 		);
@@ -228,10 +330,13 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("voice input test")}</div>
-						<div className="gui-settings-row-desc" aria-live="polite">{dictated ?? t("voice input test description")}</div>
+						<div className="gui-settings-row-desc" aria-live="polite">
+							{dictated ?? t("voice input test description")}
+						</div>
 					</div>
 					<button type="button" className="gui-btn" disabled={!rpc} onClick={toggleDictation}>
-						<Icon name="mic" className="h-3.5 w-3.5" />{dictating ? t("recording…") : t("voice input test")}
+						<Icon name="mic" className="h-3.5 w-3.5" />
+						{dictating ? t("recording…") : t("voice input test")}
 					</button>
 				</div>
 			</div>
