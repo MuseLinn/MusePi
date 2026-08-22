@@ -9,6 +9,9 @@ import {
 	opencodeGoModelManagerOptions,
 	opencodeZenModelManagerOptions,
 } from "@musepi/pi-catalog/provider-models/openai-compat";
+import type { FetchImpl } from "@musepi/pi-catalog/types";
+
+const MODELS_DEV_URL = "https://catalog.stencil.so/models.json.zstd";
 
 const LIVE_FREE_MODEL_IDS = [
 	"deepseek-v4-flash-free",
@@ -25,6 +28,57 @@ function modelListResponse(ids: readonly string[]): Response {
 		object: "list",
 		data: ids.map(id => ({ id, object: "model", owned_by: "opencode" })),
 	});
+}
+
+// A stencil.so payload carrying gateway-first vision ids that the bundled
+// models.json does not cover. These rows declare their true modalities/limits
+// on models.dev — exactly what the discovery mapper must hydrate on a bare
+// `/v1/models` row.
+function stencilOpenCodePayload(): Record<string, unknown> {
+	return {
+		"opencode-go": {
+			models: {
+				"deepseek-v4-flash-vision-exp": {
+					id: "deepseek-v4-flash-vision-exp",
+					name: "DeepSeek V4 Flash Vision (exp)",
+					tool_call: true,
+					reasoning: true,
+					modalities: { input: ["text", "image"], output: ["text"] },
+					limit: { context: 1000000, output: 384000 },
+				},
+				"ox-alpha-free": {
+					id: "ox-alpha-free",
+					name: "Ox Alpha Free",
+					tool_call: true,
+					reasoning: true,
+					modalities: { input: ["text", "image", "video"], output: ["text"] },
+					limit: { context: 1000000, output: 131072 },
+				},
+			},
+		},
+	};
+}
+
+function inputUrl(input: string | URL | Request): string {
+	if (typeof input === "string") return input;
+	if (input instanceof URL) return input.toString();
+	return input.url;
+}
+
+// Stub fetch: answer the stencil.so catalog with the vision payload but route
+// the gateway /v1/models to the bare live rows. Stubbing MODELS_DEV_URL is the
+// established convention (see issue-2883-moonshot-china.test.ts).
+function openCodeStubbedFetch(): FetchImpl {
+	return (async (input: string | URL | Request) => {
+		const url = inputUrl(input);
+		if (url === MODELS_DEV_URL) {
+			return Response.json(stencilOpenCodePayload());
+		}
+		if (url === "https://opencode.ai/zen/go/v1/models") {
+			return modelListResponse(["deepseek-v4-flash-vision-exp", "ox-alpha-free"]);
+		}
+		return new Response("", { status: 404 });
+	}) as FetchImpl;
 }
 
 describe("OpenCode provider discovery", () => {
@@ -54,16 +108,48 @@ describe("OpenCode provider discovery", () => {
 		});
 	});
 
+	test("hydrates vision/context for gateway-first ids from models.dev", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-catalog-opencode-vision-"));
+		try {
+			const options = opencodeGoModelManagerOptions({
+				apiKey: "vision-account-key",
+				fetch: openCodeStubbedFetch(),
+			});
+			const result = await resolveProviderModels(
+				{ ...options, cacheDbPath: path.join(tempDir, "models.db") },
+				"online",
+			);
+
+			const vision = result.models.find(model => model.id === "deepseek-v4-flash-vision-exp");
+			expect(vision).toBeDefined();
+			expect(vision?.input).toEqual(["text", "image"]);
+			expect(vision?.contextWindow).toBe(1000000);
+			expect(vision?.maxTokens).toBe(384000);
+			expect(vision?.reasoning).toBe(true);
+			// oxid-alpha-free declares video input; musepi's vocabulary is text|image,
+			// so it collapses to the image-capable set.
+			const alpha = result.models.find(model => model.id === "ox-alpha-free");
+			expect(alpha).toBeDefined();
+			expect(alpha?.input).toEqual(["text", "image"]);
+			expect(alpha?.contextWindow).toBe(1000000);
+			expect(alpha?.maxTokens).toBe(131072);
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	test("replaces stale bundled Zen models with each credential's live endpoint list", async () => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-catalog-opencode-zen-"));
 		try {
 			let freeFetches = 0;
 			const freeOptions = opencodeZenModelManagerOptions({
 				apiKey: "free-account-key",
-				fetch: async () => {
+				fetch: (async (input: string | URL | Request) => {
+					const url = inputUrl(input);
+					if (url === MODELS_DEV_URL) return Response.json({});
 					freeFetches++;
 					return modelListResponse(LIVE_FREE_MODEL_IDS);
-				},
+				}) as FetchImpl,
 			});
 			const freeResult = await resolveProviderModels(
 				{ ...freeOptions, cacheDbPath: path.join(tempDir, "models.db") },
@@ -73,10 +159,12 @@ describe("OpenCode provider discovery", () => {
 			let paidFetches = 0;
 			const paidOptions = opencodeZenModelManagerOptions({
 				apiKey: "paid-account-key",
-				fetch: async () => {
+				fetch: (async (input: string | URL | Request) => {
+					const url = inputUrl(input);
+					if (url === MODELS_DEV_URL) return Response.json({});
 					paidFetches++;
 					return modelListResponse(LIVE_PAID_MODEL_IDS);
-				},
+				}) as FetchImpl,
 			});
 			const paidResult = await resolveProviderModels(
 				{ ...paidOptions, cacheDbPath: path.join(tempDir, "models.db") },

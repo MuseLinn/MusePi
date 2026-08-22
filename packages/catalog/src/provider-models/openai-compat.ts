@@ -1738,6 +1738,37 @@ async function loadSiliconFlowModelsDevReferences(
 	}
 }
 
+// OpenCode gateways serve a bare `{id}` catalog from `/v1/models`, but the
+// capabilities those rows lack (input modalities, context window, output cap)
+// are declared on models.dev. The bundled `models.json` only covers ids that
+// were baked at build time, so gateway-first ids (e.g. deepseek-v4-flash-vision-exp,
+// ox-alpha-free) would otherwise be pinned at `input:["text"]` / `contextWindow:null`
+// forever — exactly the shape that makes inspect_image reject them as
+// non-vision. Hydrate from models.dev when a discovered id has no bundled row.
+const OPENCODE_MODELS_DEV_REFERENCE_TIMEOUT_MS = 5_000;
+
+async function loadOpenCodeModelsDevReferences(
+	providerId: "opencode-go" | "opencode-zen",
+	fetchImpl?: FetchImpl,
+): Promise<Map<string, ModelSpec<Api>>> {
+	const descriptor = MODELS_DEV_PROVIDER_DESCRIPTORS.find(d => d.providerId === providerId);
+	if (!descriptor) {
+		return new Map();
+	}
+	try {
+		// Bounded: this enrichment is optional, so a stalled models.dev must not
+		// hold back the authoritative gateway /v1/models request that runs after it.
+		const payload = await withCatalogDiscoveryTimeout(OPENCODE_MODELS_DEV_REFERENCE_TIMEOUT_MS, signal =>
+			fetchWellKnownModels(fetchImpl, signal),
+		);
+		return createModelsDevReferenceMap<Api>(
+			mapModelsDevToModels(payload as Record<string, unknown>, [descriptor]),
+		);
+	} catch {
+		return new Map();
+	}
+}
+
 function createSiliconFlowModelManagerOptions(
 	providerId: "siliconflow" | "siliconflow-cn",
 	defaultBaseUrl: string,
@@ -2535,8 +2566,9 @@ function openCodeModelManagerOptions(
 		// by the 2h cache TTL instead.
 		dropCachedModelIdsOnStaticMismatch: Object.keys(apiOverrides),
 		...(apiKey && {
-			fetchDynamicModels: () =>
-				fetchOpenAICompatibleModels<Api>({
+			fetchDynamicModels: async () => {
+				const modelsDevReferences = await loadOpenCodeModelsDevReferences(providerId, config?.fetch);
+				return fetchOpenAICompatibleModels<Api>({
 					api: "openai-completions",
 					provider: providerId,
 					baseUrl: discoveryBaseUrl,
@@ -2556,6 +2588,22 @@ function openCodeModelManagerOptions(
 							defaults.api;
 						const baseUrl = openCodeBaseUrlForApi(api, basePath);
 						if (!reference) {
+							// No bundled row: hydrate capabilities from models.dev so
+							// gateway-first ids keep their true modality/context metadata
+							// instead of defaulting to text-only / unknown context.
+							const modelsDevReference = modelsDevReferences.get(defaults.id);
+							if (modelsDevReference) {
+								return {
+									...defaults,
+									name,
+									api,
+									baseUrl,
+									contextWindow: modelsDevReference.contextWindow ?? defaults.contextWindow,
+									maxTokens: modelsDevReference.maxTokens ?? defaults.maxTokens,
+									input: modelsDevReference.input,
+									reasoning: modelsDevReference.reasoning,
+								};
+							}
 							return { ...defaults, name, api, baseUrl };
 						}
 						return {
@@ -2569,7 +2617,8 @@ function openCodeModelManagerOptions(
 						};
 					},
 					fetch: config?.fetch,
-				}),
+				});
+			},
 		}),
 	};
 }
