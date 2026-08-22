@@ -132,6 +132,8 @@ export const pet = {
 	"clear role model": "Clear this role's model config and restore automatic selection",
 	"role thinking level": "Role thinking level",
 	"role scope toggle": "Switch which storage layer this role writes to (project/global)",
+	"role scope shadowed": "Current value lives in another layer; editing creates an override in the selected one",
+	"role scope source": "Layer of the current value",
 	"scope project": "Project",
 	"scope global": "Global",
 	inherit: "Inherit",

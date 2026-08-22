@@ -7590,6 +7590,22 @@ export class DaemonServer {
 					}
 					out.resolvedRoleModels = resolved;
 				}
+				if (keys.includes("modelRoleSources")) {
+					// openchamber-style provenance echo: which layer actually
+					// supplies each role (full merge precedence: runtime →
+					// overlay → project → global → default). The GUI badges the
+					// role cards' scope toggle with it so a write never lands in
+					// an unexpected layer.
+					const roleNames = new Set([
+						...Object.keys((settings.get("modelRoles") as Record<string, string> | undefined) ?? {}),
+						...((out.knownRoleIds as string[] | undefined) ?? []),
+					]);
+					const sources: Record<string, string> = {};
+					for (const role of roleNames) {
+						sources[role] = settings.getModelRoleProvenance(role);
+					}
+					out.modelRoleSources = sources;
+				}
 				return out;
 			}
 			case "settings.set": {

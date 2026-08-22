@@ -124,6 +124,8 @@ export const pet = {
 	"clear role model": "清除该角色的模型配置，恢复自动选择",
 	"role thinking level": "角色思考等级",
 	"role scope toggle": "切换该角色写入的存储层（项目/全局）",
+	"role scope shadowed": "当前值来自其他层，修改将在所选层新建覆盖",
+	"role scope source": "当前值所在层",
 	"scope project": "项目",
 	"scope global": "全局",
 	inherit: "继承",

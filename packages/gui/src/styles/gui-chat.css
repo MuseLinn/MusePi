@@ -2226,6 +2226,16 @@ body.gui-resizing .gui-pane-right {
 .gui-role-tag {
 	font-weight: 600;
 }
+.gui-role-scope-dot {
+	color: var(--color-accent);
+	font-size: 7px;
+	line-height: 1;
+}
+
+.gui-role-scope-badge--warn {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	color: var(--color-accent);
+}
 .gui-role-scope-badge {
 	padding: 0 6px;
 	border: 1px solid var(--border);

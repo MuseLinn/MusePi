@@ -179,6 +179,11 @@ export function ModelSection({
 	const [roleStorage, setRoleStorage] = useState<"global" | "project">("global");
 	// Per-role write target while roleStorage=project ("global" | "project").
 	const [roleScope, setRoleScope] = useState<Record<string, "global" | "project">>({});
+	// Per-role provenance from the daemon (settings.getModelRoleProvenance):
+	// which layer actually supplies each role (runtime/overlay/project/
+	// global/default). Badges the scope toggle so a write never lands in an
+	// unexpected layer (openchamber "Configured in:" parity).
+	const [roleSources, setRoleSources] = useState<Record<string, string>>({});
 	const { prompt } = usePrompt();
 	// Stored credentials per provider (multi-account logout dropdown).
 	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
@@ -500,8 +505,17 @@ export function ModelSection({
 				resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
 				"retry.fallbackChains"?: Record<string, string[]>;
 				modelRoleStorage?: "global" | "project";
+				modelRoleSources?: Record<string, "runtime" | "overlay" | "project" | "global" | "default">;
 			}>("settings.get", {
-				keys: ["modelRoles", "cycleOrder", "knownRoleIds", "resolvedRoleModels", "retry.fallbackChains", "modelRoleStorage"],
+				keys: [
+					"modelRoles",
+					"cycleOrder",
+					"knownRoleIds",
+					"resolvedRoleModels",
+					"retry.fallbackChains",
+					"modelRoleStorage",
+					"modelRoleSources",
+				],
 			})
 			.then(res => {
 				setRoleModels(res?.modelRoles ?? {});
@@ -510,6 +524,7 @@ export function ModelSection({
 				setResolvedRoleModels(res?.resolvedRoleModels ?? {});
 				setFallbackChains(res?.["retry.fallbackChains"] ?? {});
 				if (res?.modelRoleStorage === "project") setRoleStorage("project");
+				setRoleSources(res?.modelRoleSources ?? {});
 			})
 			.catch(() => {
 				setRoleModels({});
@@ -630,22 +645,49 @@ export function ModelSection({
 								⟳{cycleIndex + 1}
 							</span>
 						)}
-						{roleStorage === "project" && (
-							<button
-								type="button"
-								className="gui-role-scope-badge"
-								title={t("role scope toggle")}
-								aria-label={t("role scope toggle")}
-								onClick={() =>
-									setRoleScope(prev => ({
-										...prev,
-										[role]: prev[role] === "global" ? "project" : "global",
-									}))
-								}
-							>
-								{(roleScope[role] ?? "project") === "project" ? t("scope project") : t("scope global")}
-							</button>
-						)}
+						{roleStorage === "project" &&
+							(() => {
+								// openchamber provenance parity: the badge shows the
+								// layer the CURRENT value lives in (dot marker) plus
+								// the next write target (label). When they differ —
+								// e.g. value inherited from global while the target
+								// is project — editing would silently shadow the
+								// source, so title spells that out.
+								const target = roleScope[role] ?? "project";
+								const source = roleSources[role] ?? "default";
+								const sourceLabel =
+									source === "project"
+										? t("scope project")
+										: source === "global" || source === "overlay" || source === "runtime"
+											? t("scope global")
+											: null;
+								const shadows = sourceLabel !== null && sourceLabel !== target;
+								return (
+									<button
+										type="button"
+										className={`gui-role-scope-badge${shadows ? " gui-role-scope-badge--warn" : ""}`}
+										title={
+											shadows
+												? `${t("role scope shadowed")} (${sourceLabel} → ${target === "project" ? t("scope project") : t("scope global")})`
+												: t("role scope toggle")
+										}
+										aria-label={t("role scope toggle")}
+										onClick={() =>
+											setRoleScope(prev => ({
+												...prev,
+												[role]: prev[role] === "global" ? "project" : "global",
+											}))
+										}
+									>
+										{sourceLabel && (
+											<span className="gui-role-scope-dot" aria-hidden="true">
+												●
+											</span>
+										)}
+										{target === "project" ? t("scope project") : t("scope global")}
+									</button>
+								);
+							})()}
 					</div>
 					{model ? (
 						<div className="truncate text-[12px] text-[var(--color-text-faint)]" title={model}>
