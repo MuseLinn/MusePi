@@ -8,11 +8,130 @@
  * dictation test, and the TTS test card.
  */
 import { t } from "@musepi/desktop-web";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { SchemaTabSection } from "./schema";
 import { enumerateMicDevices, speak, startDictation, type VoiceActivity } from "../../lib/voice";
+
+/* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ── */
+interface SttModelRow { key: string; label: string; cached: boolean }
+interface DownloadProgressEvent {
+	type: string;
+	modelKey?: string;
+	percent?: number;
+	loaded?: number;
+	total?: number;
+	label?: string;
+	message?: string;
+}
+
+function formatBytes(n: number): string {
+	if (n >= 1 << 30) return `${(n / (1 << 30)).toFixed(1)} GB`;
+	if (n >= 1 << 20) return `${(n / (1 << 20)).toFixed(0)} MB`;
+	if (n >= 1 << 10) return `${(n / (1 << 10)).toFixed(0)} KB`;
+	return `${n} B`;
+}
+
+/** Per-model row: label + 已就绪 badge or a download button with a live
+ * progress bar while the daemon fetches. Progress rides the global event
+ * stream (`stt.downloadProgress`), so it survives page remounts and shows
+ * in every open window. */
+function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const [models, setModels] = useState<SttModelRow[] | null>(null);
+	const [active, setActive] = useState<{ modelKey: string; percent: number; loaded: number; total: number; label: string } | null>(null);
+	const [error, setError] = useState<string | null>(null);
+
+	const refresh = useCallback(() => {
+		void rpc
+			?.request<{ models: SttModelRow[] }>("stt.modelStatus", {})
+			.then(res => setModels(res.models))
+			.catch(() => setModels([]));
+	}, [rpc]);
+
+	useEffect(() => {
+		refresh();
+		if (!rpc) return;
+		// Daemon broadcasts stt.downloadProgress on the global event stream.
+		const off = rpc.addEventListener(event => {
+			const p = event.payload as DownloadProgressEvent | undefined;
+			if (!p || p.type !== "stt.downloadProgress") return;
+			if (p.percent === undefined) return;
+			setActive({
+				modelKey: p.modelKey ?? "",
+				percent: p.percent,
+				loaded: p.loaded ?? 0,
+				total: p.total ?? 0,
+				label: p.label ?? "",
+			});
+			if (p.percent >= 100) {
+				// Let the bar paint 100% briefly, then clear + re-check cache.
+				window.setTimeout(() => { setActive(null); refresh(); }, 1200);
+			}
+			return;
+		});
+		// A failed download surfaces via stt.downloadError (fire-and-forget
+		// request means the RPC itself never rejects).
+		const offError = rpc.addEventListener(event => {
+			const p = event.payload as DownloadProgressEvent | undefined;
+			if (!p || p.type !== "stt.downloadError") return;
+			setActive(null);
+			setError(p.message ?? "download failed");
+			refresh();
+		});
+		return () => { off(); offError(); };
+	}, [rpc, refresh]);
+
+	const download = (modelKey: string): void => {
+		setError(null);
+		setActive({ modelKey, percent: 0, loaded: 0, total: 0, label: "" });
+		void rpc
+			?.request("stt.modelDownload", { modelKey })
+			.catch(err => { setActive(null); setError(err instanceof Error ? err.message : String(err)); });
+	};
+
+	return (
+		<div className="gui-settings-section">
+			<div className="gui-settings-section-title">{t("speech models")}</div>
+			{models === null ? (
+				<div className="gui-settings-row"><div className="gui-settings-row-desc">…</div></div>
+			) : (
+				models.map(m => {
+					const isActive = active?.modelKey === m.key && active.percent < 100;
+					return (
+						<div key={m.key} className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{m.label}</div>
+								{isActive ? (
+									<div className="gui-settings-row-desc" aria-live="polite">
+										{active.label} {formatBytes(active.loaded)}{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+									</div>
+								) : (
+									m.cached ? <div className="gui-settings-row-desc">{t("model ready offline")}</div> : null
+								)}
+							</div>
+							{isActive ? (
+								<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+									<progress max={100} value={active.percent} aria-label={`${m.label} ${active.percent}%`} />
+									<span>{active.percent}%</span>
+								</div>
+							) : m.cached ? (
+								<span title={t("model ready offline")} aria-label={t("model ready offline")}>✓</span>
+							) : (
+								<button type="button" className="gui-btn" disabled={!rpc || active !== null} onClick={() => download(m.key)}>
+									<Icon name="download" className="h-3.5 w-3.5" />{t("download")}
+								</button>
+							)}
+						</div>
+					);
+				})
+			)}
+			{error && (
+				<div className="gui-settings-row"><div className="gui-settings-row-desc">{error}</div></div>
+			)}
+		</div>
+	);
+}
 
 /** TTS test card: synthesizes the sample phrase with the CURRENT schema
  * values (read live from settings.get, so the test always matches what
@@ -93,6 +212,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			 * "Speech" group, NOT the whole tab (the rest of the interaction
 			 * groups live on 交互; duplicating them here was the old bug). */}
 			<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Speech"]} />
+			<ModelDownloadCard rpc={rpc} />
 
 			{/* Live device + dictation test: not expressible in schema. */}
 			<div className="gui-settings-section">

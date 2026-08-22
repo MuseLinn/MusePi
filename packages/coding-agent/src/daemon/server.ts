@@ -5950,6 +5950,59 @@ export class DaemonServer {
 				}
 				return { ok: true, persisted: true };
 			}
+			case "stt.modelStatus": {
+				// GUI voice page: which speech models are already on disk, so
+				// the panel can show "ready" vs "needs download" per option.
+				const { isSttModelCached } = await import("../stt/downloader");
+				const { STT_MODELS } = await import("../stt/models");
+				const models = await Promise.all(
+					STT_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isSttModelCached(m.key) })),
+				);
+				return { models };
+			}
+			case "stt.modelDownload": {
+				// Kick off a speech-model download WITHOUT awaiting it: the
+				// RPC client times out at 15s but Whisper tiers are GB-scale,
+				// so the request must return immediately. Progress AND the
+				// terminal result both ride the global event stream
+				// (`stt.downloadProgress` / `stt.downloadError`) — same
+				// channel as extensions.changed.
+				const p = (params ?? {}) as { modelKey?: string };
+				if (!p.modelKey) throw new Error("modelKey required");
+				const modelKey = p.modelKey;
+				const { downloadSttModel } = await import("../stt/downloader");
+				void downloadSttModel(modelKey, progress => {
+					const seq = ++this.#globalEventSeq;
+					for (const conn of this.#globalEventTargets) {
+						this.#host.emitEvent(conn, {
+							kind: "event",
+							seq,
+							payload: {
+								type: "stt.downloadProgress",
+								modelKey,
+								percent: progress.percent,
+								loaded: progress.loaded,
+								total: progress.total,
+								label: progress.label,
+							},
+						});
+					}
+				}).catch(err => {
+					const seq = ++this.#globalEventSeq;
+					for (const conn of this.#globalEventTargets) {
+						this.#host.emitEvent(conn, {
+							kind: "event",
+							seq,
+							payload: {
+								type: "stt.downloadError",
+								modelKey,
+								message: err instanceof Error ? err.message : String(err),
+							},
+						});
+					}
+				});
+				return { ok: true };
+			}
 			case "stt.transcribe": {
 				// TUI-parity speech-to-text: same asr-client + local worker
 				// (sherpa-ONNX) the TUI uses — not Google's web service.

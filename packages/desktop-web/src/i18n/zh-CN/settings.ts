@@ -2849,6 +2849,10 @@ export const settings = {
 	// 空态快捷提示词(与「预设/modes」无关 —— 避免与命名预设混淆,见 docs/modes-plan.md)
 	"starter prompts": "快捷提示词",
 	"starter prompts hint": "管理空态输入框下方的快捷提示词：点击填入输入框，修改即时生效。",
+
+	// 语音模型下载状态(语音设置页)
+	"speech models": "语音识别模型",
+	"model ready offline": "已就绪 · 本地可用",
 } as const;
 
 /** Key union for the settings domain (source of truth). */

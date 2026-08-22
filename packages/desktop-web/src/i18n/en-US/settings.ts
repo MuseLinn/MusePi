@@ -2966,4 +2966,8 @@ export const settings = {
 	"starter prompts": "Starter prompts",
 	"starter prompts hint":
 		"Manage the quick prompt chips below the empty-state composer: click to fill, edits apply immediately.",
+
+	// Speech-model download state (voice settings page)
+	"speech models": "Speech recognition models",
+	"model ready offline": "Ready · available offline",
 } as const satisfies Record<SettingsKey, string>;
