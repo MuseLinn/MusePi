@@ -77,16 +77,19 @@ const BUILTIN_ROLE_TAGS: Record<string, string> = {
 const ROLE_THINK_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 /** Split `provider/model:id:level` into the bare selector + thinking level
- * (or null when no known level suffix is present). */
+ * (or null when no known level suffix is present). Mirrors the daemon's
+ * splitThinkingSuffix whitelist (off/minimal..max; `inherit` is accepted
+ * for round-tripping but never persisted — joinRoleValue strips it). */
 function splitRoleValue(value: string): { model: string; level: string | null } {
 	const colon = value.lastIndexOf(":");
-	if (colon > 0 && (ROLE_THINK_LEVELS as readonly string[]).includes(value.slice(colon + 1))) {
+	if (colon > 0 && [...ROLE_THINK_LEVELS, "inherit"].includes(value.slice(colon + 1))) {
 		return { model: value.slice(0, colon), level: value.slice(colon + 1) };
 	}
 	return { model: value, level: null };
 }
 
-/** Rebuild the selector with a thinking suffix ("inherit" strips it). */
+/** Rebuild the selector with a thinking suffix ("inherit" strips it —
+ * TUI formatModelSelectorValue parity: only concrete levels persist). */
 function joinRoleValue(model: string, level: string | null): string {
 	return level && level !== "inherit" ? `${model}:${level}` : model;
 }
@@ -340,6 +343,30 @@ export function ModelSection({
 			)
 			.catch(() => {});
 	};
+	// TUI #assignRole parity: when a role's resolved model changes, drop a
+	// stored concrete thinking level the new model doesn't support (off is
+	// exempt — disabling reasoning is valid for every model; inherit has no
+	// suffix to clamp). The daemon clamps at read time too; this keeps the
+	// card's select from showing a rung the model would silently downgrade.
+	const modelClampKey = JSON.stringify(
+		Object.entries(resolvedRoleModels).map(([k, v]) => [k, v?.id ?? null, roleModels?.[k] ?? null]),
+	);
+	useEffect(() => {
+		if (!roleModels || !rpc) return;
+		let changed: Record<string, string> | null = null;
+		for (const [roleKey, resolved] of Object.entries(resolvedRoleModels)) {
+			if (!resolved) continue;
+			const raw = roleModels[roleKey];
+			if (!raw) continue;
+			const { model: bareModel, level } = splitRoleValue(raw);
+			if (!level || level === "off" || level === "inherit") continue;
+			if (!resolved.efforts.includes(level)) {
+				changed = { ...(changed ?? {}), [roleKey]: joinRoleValue(bareModel, "inherit") };
+			}
+		}
+		if (changed) applyRoleModels({ ...roleModels, ...changed });
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- re-clamps only when a resolution or value actually changes
+	}, [modelClampKey]);
 	// Retry fallback chains (TUI /model `f` parity, settings
 	// "retry.fallbackChains"): role -> ordered model selectors tried after
 	// the assigned model fails.
@@ -733,11 +760,20 @@ export function ModelSection({
 						}}
 						ariaLabel={t("role thinking level")}
 						options={(() => {
-							const efforts = resolvedRoleModels[role]?.efforts;
-							return (efforts && efforts.length > 0 ? efforts : []).map(lv => ({
-								value: lv,
-								label: t(`thinking ${lv}` as TranslationKey),
-							}));
+							// TUI #thinkingOptionsFor parity: inherit + off always
+							// present, then the resolved role model's real effort
+							// rungs. `auto` is session-scoped in the TUI and has no
+							// per-role selector encoding, so it lives only in the
+							// behavior tab's defaultThinkingLevel setting here.
+							const efforts = resolvedRoleModels[role]?.efforts ?? [];
+							return [
+								{ value: "inherit", label: t("inherit") },
+								{ value: "off", label: t("thinking off") },
+								...efforts.map(lv => ({
+									value: lv,
+									label: t(`thinking ${lv}` as TranslationKey),
+								})),
+							];
 						})()}
 					/>
 					{/* Fallback chain editor toggle (TUI `f` parity) — always
