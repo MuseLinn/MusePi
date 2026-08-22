@@ -877,6 +877,44 @@ describe("Settings", () => {
 		});
 	});
 
+
+	describe("project override ledger", () => {
+		it("lists only keys the project layer owns with effective + global values", async () => {
+			await writeSettings({ shellPath: "/bin/bash", modelRoles: { default: "global/default" } });
+			const projectConfigPath = path.join(getProjectAgentDir(projectDir), "config.yml");
+			await Bun.write(
+				projectConfigPath,
+				YAML.stringify({ modelRoles: { smol: "project/smol:high" }, custom: { keep: true } }, null, 2),
+			);
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+
+			const entries = settings.getProjectOverrideEntries();
+			const paths = entries.map(e => e.path).sort();
+			expect(paths).toEqual(["custom.keep", "modelRoles.smol"]);
+
+			const smol = entries.find(e => e.path === "modelRoles.smol");
+			expect(smol?.value).toBe("project/smol:high");
+			expect(smol?.effective).toBe("project/smol:high");
+
+			const globalFlat = settings.getGlobalLayerFlat();
+			expect(globalFlat["shellPath"]).toBe("/bin/bash");
+			expect(globalFlat["modelRoles.default"]).toBe("global/default");
+			// Project-owned keys are NOT in the global layer.
+			expect(globalFlat["modelRoles.smol"]).toBeUndefined();
+		});
+
+		it("reflects a cleared project role as no longer owned", async () => {
+			await writeSettings({});
+			const settings = await Settings.init({ cwd: projectDir, agentDir });
+			settings.setProjectModelRole("smol", "project/smol");
+			await settings.flush();
+			expect(settings.getProjectOverrideEntries().some(e => e.path === "modelRoles.smol")).toBe(true);
+
+			settings.clearProjectModelRole("smol");
+			await settings.flush();
+			expect(settings.getProjectOverrideEntries().some(e => e.path === "modelRoles.smol")).toBe(false);
+		});
+	});
 	describe("migrations", () => {
 		it("consolidates legacy Exa suite toggles onto exa.enabled", async () => {
 			await writeSettings({

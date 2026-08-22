@@ -1034,15 +1034,18 @@ export class Settings {
 	 * (GUI "项目覆盖" ledger): each entry carries the raw project value and
 	 * the effective merged value so the panel can show what the override
 	 * changes. Only keys the project layer OWNS appear — inherited values
-	 * are not overrides.
+	 * are not overrides, and `null` entries are clear-tombstones (a cleared
+	 * role falls back to the global layer), not overrides.
 	 */
 	getProjectOverrideEntries(): { path: string; value: unknown; effective: unknown }[] {
 		const projectFlat = flattenRawSettings(this.#project);
-		return Object.entries(projectFlat).map(([path, value]) => ({
-			path,
-			value,
-			effective: getByPath(this.#merged, path.split(".")),
-		}));
+		return Object.entries(projectFlat)
+			.filter(([, value]) => value !== null && value !== undefined)
+			.map(([path, value]) => ({
+				path,
+				value,
+				effective: getByPath(this.#merged, path.split(".")),
+			}));
 	}
 
 	/**
