@@ -2,7 +2,7 @@
 	"type": "module",
 	"private": true,
 	"name": "@musepi/typescript-edit-benchmark",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Edit benchmark suite using TypeScript source code mutations",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

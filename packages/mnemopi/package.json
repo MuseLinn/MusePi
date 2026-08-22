@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-mnemopi",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Local SQLite memory engine for Oh My Pi agents",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

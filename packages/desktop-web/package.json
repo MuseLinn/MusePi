@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/desktop-web",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"private": true,
 	"description": "Browser guest client and local relay tools for omp collab live sessions",
 	"homepage": "https://github.com/MuseLinn/MusePi",
@@ -61,7 +61,7 @@
 		"@capacitor-mlkit/barcode-scanning": "^8.1.0",
 		"@capacitor/local-notifications": "^8.1.1",
 		"@capacitor/status-bar": "^8.0.0",
-		"@musepi/collab-proto": "0.4.2",
+		"@musepi/collab-proto": "0.4.3",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "workspace:*",
 		"beautiful-mermaid": "^1.1.3",

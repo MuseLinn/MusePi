@@ -29,7 +29,7 @@ export const MAIN_CONFIG_FILENAMES = ["config.yml", "config.yaml"] as const;
 /** Version (e.g. "1.0.0") */
 export const VERSION: string = version;
 
-/** Default User-Agent header string (e.g. "musepi/0.4.2") */
+/** Default User-Agent header string (e.g. "musepi/0.4.3") */
 export const USER_AGENT = `musepi/${VERSION}`;
 
 /** Minimum Bun version */

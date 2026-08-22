@@ -300,3 +300,36 @@ daemon RPC:
 - `Markdown.tsx` `renderStreamingMarkdown`:流式时,已闭合的 `\n\n` 边界块立即渲染成 markdown(跨帧复用),**未定稿的尾块以 RAW TEXT 逐字累积**(单次入场动画);`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。
 - 思考块按句过 `Markdown`(`tr-think-sentence--live` 入场)。
 - DSH(`deepseek-harness`)同款增量:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
+
+## 17. OTA 更新渠道 + 三合一按钮 run 级 working 语义（2026-08-22）
+
+### OTA 更新渠道（GitHub release 资产重定向，bitfun parity）
+
+三处同源，统一走 `/releases/latest/download/update-manifest.json`（302 到最新 release 资产，无 api.github.com 限流）：
+
+| 位置 | 用途 | 默认值 |
+|---|---|---|
+| `gui/electron/updater.cjs` | 主进程 OTA 检查（`checkForUpdates`） | `RELEASE_MANIFEST_URL` 常量 |
+| `gui/package.json` `update.manifestUrl` | 打包时覆盖默认 | 同 URL |
+| `daemon/server.ts` `updates.check` | GUI `AnnouncementOverlay` 新版探测 | 同 URL（硬编码） |
+
+- **解析顺序**（updater.cjs `manifestUrl()`）：`OMP_UPDATE_MANIFEST_URL` env → `package.json update.manifestUrl` → `RELEASE_MANIFEST_URL` 默认。
+- **404 优雅降级**：repo 公开前 `releases/latest` 404 → `{enabled:false, reason:"no-update-source"}`，设置页显示「尚未发布公开更新源（发布后可用）」；`updates.check` 返回 `{latest:null}`，公告面板不弹。
+- **发版契约**：`update-manifest.json`（`{version,url,notes}`）作为名为 `update-manifest.json` 的资产随每个 GitHub release 上传——`/releases/latest/download/<asset>` 自动重定向到最新拷贝，无需改分支。**url 填 dmg 直链、notes 填新功能说明、version 与 package.json 一致**。
+- **初始化不能写死 raw.githubusercontent**：旧渠道 `raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json` 在 repo 私有时必 404（等于死链），已全部切到 release 资产。
+
+### 三合一发送/停止按钮：run 级 working（turn 级边界陷阱）
+
+`SendOrStopButton`（`gui/src/components/composer/action-buttons.tsx`）idle 显示发送箭头，working 态变胶囊 + 点阵 bloom + 两标签（「工作中」/「停止」，hover 互换）。**关键陷阱**：
+
+- **`turn_end` 是每工具批次发一次，不是 run 结束**（`agent-loop.ts` `pushTurnEnd` 每个 tool batch 一次；`types.ts`: "a turn is one assistant response + any tool calls/results"）。若用 `turn_end` 清 working，**轮间 provider 准备期按钮会闪回发送箭头**（用户报告 2026-08-22）。
+- **正确定界**（`gui/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
+- **`#buildSnapshot` 的 OR 陷阱**：旧代码 `working: this.#working || snap.state.isStreaming`——view 的 turn 级 `isStreaming` 在无 turn_end 的中止路径会卡 `true`，把已复位的标志 OR 回去，stop 胶囊永不熄灭。**已改为 store 单一事实源** `working: this.#working`，构造时用 resume snapshot `state.isStreaming` 播种（中途加入正在工作的会话也正确显示）。
+- **测试**：`packages/gui/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
+
+### 更新提示 toast（bitfun DailyAppUpdateGate parity）
+
+- 主进程 `main.cjs` 启动后 12s 静默检查，`checkForUpdates()` 得 `newer` 则 `webContents.send("update-available", result)`。
+- 渲染端 `UpdateToast.tsx`（`gui/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「前往下载」/「跳过此版本」。
+- **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`，弹窗读 `CHANGELOG.musepi.md`，发版两处都要填。
+- 桥接统一走 `gui/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。

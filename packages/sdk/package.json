@@ -1,6 +1,6 @@
 {
 	"name": "@musepi/sdk",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "MusePi daemon protocol contract: JSON-RPC method table + TypeBox schemas (single source of truth for GUI/TUI/remote clients).",
 	"type": "module",
 	"main": "./src/index.ts",
@@ -23,6 +23,6 @@
 	},
 	"dependencies": {
 		"@sinclair/typebox": "^0.34.0",
-		"@musepi/pi-wire": "0.4.2"
+		"@musepi/pi-wire": "0.4.3"
 	}
 }

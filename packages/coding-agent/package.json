@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-coding-agent",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",
@@ -50,7 +50,7 @@
 	},
 	"dependencies": {
 		"@babel/parser": "catalog:",
-		"@musepi/collab-proto": "0.4.2",
+		"@musepi/collab-proto": "0.4.3",
 		"@musepi/hashline": "catalog:",
 		"@musepi/musepi-stats": "catalog:",
 		"@musepi/pi-agent-core": "catalog:",
@@ -61,7 +61,7 @@
 		"@musepi/pi-tui": "catalog:",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "catalog:",
-		"@musepi/sdk": "0.4.2",
+		"@musepi/sdk": "0.4.3",
 		"@musepi/snapcompact": "catalog:",
 		"@opentelemetry/api": "catalog:",
 		"@opentelemetry/api-logs": "catalog:",
