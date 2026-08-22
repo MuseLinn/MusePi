@@ -117,6 +117,8 @@ export interface InteractiveModeContext {
 	modelCycleContainer: Container;
 	deferredCommandContainer: Container;
 	editor: CustomEditor;
+	/** Owns Esc for every `/mcp test` that is active or whose cancellation hint may still be visible. */
+	mcpTestEscapeHandlers: Set<() => void>;
 	editorContainer: Container;
 	hookWidgetContainerAbove: Container;
 	hookWidgetContainerBelow: Container;

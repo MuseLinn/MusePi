@@ -683,7 +683,10 @@ export function markdownToPhases(md: string): { phases: TodoPhase[]; errors: str
 			continue;
 		}
 
-		const taskMatch = /^[-*+]\s*\[(.?)\]\s+(.+?)\s*$/.exec(trimmed);
+		// Tolerate backslash-escaped brackets (`- \[x\]`): some editors and
+		// markdown serializers escape `[` (and `]`) when round-tripping, yet the
+		// line still renders as a normal `[x]` checkbox. Accept either form.
+		const taskMatch = /^[-*+]\s*\\?\[(.?)\\?\]\s+(.+?)\s*$/.exec(trimmed);
 		if (taskMatch) {
 			if (!currentPhase) {
 				currentPhase = { name: "Todos", tasks: [] };

@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { CompactionCancelledError } from "@musepi/pi-agent-core/compaction";
 import { setProjectDir } from "@musepi/pi-utils";
 import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { t } from "../i18n/index.js";
@@ -151,24 +152,41 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 		handle: async (command, runtime) => {
 			const parsed = parseCompactArgs(command.args);
 			if ("error" in parsed) return usage(parsed.error, runtime);
-			const before = runtime.session.getContextUsage?.();
-			const beforeTokens = before?.tokens;
-			try {
-				await runtime.session.compact(parsed.instructions, parsed.mode ? { mode: parsed.mode } : undefined);
-			} catch (err) {
-				// Compaction precondition failures (no model, already compacted, too
-				// small) and provider errors propagate as plain Errors; surface them
-				// via runtime.output so they don't fail the ACP prompt turn.
-				return usage(`Compaction failed: ${errorMessage(err)}`, runtime);
+			// Provider-backed: background-dispatch under RPC so the serialized command
+			// queue stays free for `abort` (SlashCommandRuntime.runCommandInBackground).
+			// ACP/TUI have no such hook and keep the inline await.
+			const runCompact = async (): Promise<void> => {
+				const before = runtime.session.getContextUsage?.();
+				const beforeTokens = before?.tokens;
+				try {
+					await runtime.session.compact(parsed.instructions, parsed.mode ? { mode: parsed.mode } : undefined);
+				} catch (err) {
+					// A user interrupt (RPC `abort`, ACP `session/cancel`) aborts the
+					// in-flight compaction, surfacing as CompactionCancelledError. The
+					// client already saw the interrupt it sent; emitting anything here
+					// would append an out-of-turn chunk, so stay silent — mirroring
+					// /handoff's USER_INTERRUPT_LABEL path.
+					if (err instanceof CompactionCancelledError) return;
+					// Compaction precondition failures (no model, already compacted, too
+					// small) and provider errors propagate as plain Errors; surface them
+					// via runtime.output so they don't fail the ACP prompt turn.
+					await runtime.output(`Compaction failed: ${errorMessage(err)}`);
+					return;
+				}
+				const after = runtime.session.getContextUsage?.();
+				const afterTokens = after?.tokens;
+				if (beforeTokens != null && afterTokens != null) {
+					const saved = beforeTokens - afterTokens;
+					await runtime.output(`Compaction complete. Tokens: ${beforeTokens} -> ${afterTokens} (saved ${saved}).`);
+				} else {
+					await runtime.output("Compaction complete.");
+				}
+			};
+			if (runtime.runCommandInBackground) {
+				runtime.runCommandInBackground(runCompact);
+				return commandConsumed();
 			}
-			const after = runtime.session.getContextUsage?.();
-			const afterTokens = after?.tokens;
-			if (beforeTokens != null && afterTokens != null) {
-				const saved = beforeTokens - afterTokens;
-				await runtime.output(`Compaction complete. Tokens: ${beforeTokens} -> ${afterTokens} (saved ${saved}).`);
-			} else {
-				await runtime.output("Compaction complete.");
-			}
+			await runCompact();
 			return commandConsumed();
 		},
 		handleTui: async (command, runtime) => {

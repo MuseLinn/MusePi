@@ -1890,6 +1890,23 @@ export class Settings {
 			delete raw["advisor.subagents"];
 		}
 
+		// Early per-agent toggles were persisted as booleans even though the
+		// runtime record contract is "on"/"off"/model pattern. Normalize each
+		// layer before merging so project-level false still overrides global true.
+		{
+			const taskObj = isRecord(raw.task) ? raw.task : undefined;
+			if (taskObj) {
+				for (const key of ["agentPrewalk", "agentAdvisor"]) {
+					const overrides = isRecord(taskObj[key]) ? taskObj[key] : undefined;
+					if (!overrides) continue;
+					for (const agentName in overrides) {
+						const value = overrides[agentName];
+						if (typeof value === "boolean") overrides[agentName] = value ? "on" : "off";
+					}
+				}
+			}
+		}
+
 		// v17 renames that used to nest under a boolean parent path:
 		//   dev.autoqa.consent -> dev.autoqaConsent
 		//   todo.reminders.max -> todo.remindersMax

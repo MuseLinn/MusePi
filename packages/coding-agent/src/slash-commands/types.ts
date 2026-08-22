@@ -72,6 +72,12 @@ export interface SlashCommandRuntime {
 	reloadPlugins: () => Promise<void>;
 	notifyTitleChanged?: () => Promise<void> | void;
 	notifyConfigChanged?: () => Promise<void> | void;
+	/**
+	 * Background-dispatch a provider-backed slash command so the host's
+	 * serialized command queue stays free for a follow-up `abort` (RPC). When
+	 * absent (ACP/TUI), callers keep the inline await.
+	 */
+	runCommandInBackground?: (task: () => Promise<void>) => void;
 }
 
 /**

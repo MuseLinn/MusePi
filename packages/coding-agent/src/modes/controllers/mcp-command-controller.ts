@@ -155,6 +155,8 @@ async function claimMCPOAuthFlow(owner: object, cancel: (reason: string) => void
  * dropped and the user can widen and reflow.
  */
 const MCP_AUTH_MIN_WRAP_WIDTH = 16;
+/** Keeps a finished `/mcp test` owning Esc briefly so the dismissal keypress is absorbed. */
+const MCP_TEST_ESCAPE_GRACE_MS = 5_000;
 
 /**
  * Wrap `url` into rows that each fit inside `width`. When the label + URL fit
@@ -1564,11 +1566,17 @@ export class MCPCommandController {
 			return;
 		}
 
-		const originalOnEscape = this.ctx.editor.onEscape;
 		const abortController = new AbortController();
-		this.ctx.editor.onEscape = () => {
-			abortController.abort();
-		};
+		const handleEscape = (): void => abortController.abort();
+
+		// Claim Esc before the first await: a slow #resolveServerForAuth() (e.g.
+		// config on a network filesystem) must not let Esc fall through to the
+		// agent-turn abort while the command is already running.
+		this.ctx.mcpTestEscapeHandlers.add(handleEscape);
+		// The grace window only applies once the "(esc to cancel)" hint is on
+		// screen; a pre-hint failure must release Esc immediately so it is not
+		// swallowed for a prompt the user never saw.
+		let hintShown = false;
 
 		let connection: MCPServerConnection | undefined;
 		try {
@@ -1586,10 +1594,10 @@ export class MCPCommandController {
 				this.ctx.showError(`Server "${name}" is disabled. Run /mcp enable ${name} first.`);
 				return;
 			}
-
 			this.#showMessage(
 				["", theme.fg("muted", `Testing connection to "${name}"... (esc to cancel)`), ""].join("\n"),
 			);
+			hintShown = true;
 
 			// Resolve auth config if needed
 			let resolvedConfig: MCPServerConfig;
@@ -1651,7 +1659,16 @@ export class MCPCommandController {
 
 			this.ctx.showError(`Failed to connect to "${name}": ${errorMsg}${helpText}`);
 		} finally {
-			this.ctx.editor.onEscape = originalOnEscape;
+			if (this.ctx.mcpTestEscapeHandlers.has(handleEscape)) {
+				if (hintShown) {
+					const timer = setTimeout(() => {
+						this.ctx.mcpTestEscapeHandlers.delete(handleEscape);
+					}, MCP_TEST_ESCAPE_GRACE_MS);
+					timer.unref();
+				} else {
+					this.ctx.mcpTestEscapeHandlers.delete(handleEscape);
+				}
+			}
 			if (connection) {
 				// Best-effort: don't block UI on cleanup.
 				void disconnectServer(connection);

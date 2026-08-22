@@ -1103,12 +1103,6 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 	};
 
 	const requestAbort = (reason: AbortReason) => {
-		if (reason === "timeout") {
-			runtimeLimitExceeded = true;
-		}
-		if (reason === "budget") {
-			budgetLimitExceeded = true;
-		}
 		if (abortSent) {
 			// Shutdown is a superseding external abort: a process teardown that
 			// races a self-inflicted budget hard-abort must still follow the
@@ -1130,6 +1124,19 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 			return;
 		}
 		if (resolved) return;
+		// Limit flags must stay below the abortSent/resolved guards, next to the
+		// abortReason they mirror. The wall-clock timer can fire during teardown —
+		// after a budget hard-abort or a committed yield has already settled the
+		// run — and resolveAbortReasonText/finalizeRunResult read these flags
+		// (not abortReason), so a post-commitment timeout must not set them or it
+		// rewrites the real outcome (budget kill mislabeled, completed yield tagged
+		// aborted).
+		if (reason === "timeout") {
+			runtimeLimitExceeded = true;
+		}
+		if (reason === "budget") {
+			budgetLimitExceeded = true;
+		}
 		abortSent = true;
 		abortReason = reason;
 		abortController.abort();
