@@ -2146,15 +2146,24 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Model roles (TUI /model roles-panel parity) ──
- * Two cards side by side (gui-provider-grid material parity: auto-fill
- * columns, 10px gap, surface background). Every card has the SAME three
- * bands — head (tag + badges + resolved model), a dedicated full-width
- * model-picker row, and a toolbar row — so all cards in a row share one
- * height regardless of which toggles each has active. */
+ * Deterministic two cards side by side (same split idiom as
+ * .gui-model-rail-wrap), collapsing to one column only when the roles
+ * column itself is too narrow (container query, not auto-fill guessing).
+ * Every card has the SAME three bands — head (tag + badges + resolved
+ * model), a dedicated full-width model-picker row, and a bottom-pinned
+ * toolbar row — so all cards in a row share one height regardless of
+ * which toggles or fallback chains each has. */
 .gui-role-grid {
+	container-type: inline-size;
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 10px;
+}
+
+@container (max-width: 519px) {
+	.gui-role-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .gui-role-card {
@@ -2181,8 +2190,10 @@ body.gui-resizing .gui-pane-right {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 12px;
+	flex-shrink: 0;
 	min-width: 0;
 }
+
 
 /* Dedicated picker band: the ModelSelector owns its full row so the
  * ~280px card width never squeezes it into truncation. */
@@ -2192,25 +2203,20 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 
-.gui-role-model-row .gui-model {
-	min-width: 0;
-	max-width: 100%;
-	flex: 1 1 auto;
-}
-
-.gui-role-model-row .gui-model-btn {
-	width: 100%;
-	max-width: 100%;
-}
-
-/* Toolbar band: fixed-height single line. Thinking select + fallback +
- * cycle sit left; clear/remove are pushed to the far right edge via the
- * trailing spacer so every card's toolbar is exactly one row tall. */
+/* Toolbar band: fixed-height single line, pinned to the card's bottom
+ * edge (margin-top:auto) so stretch space lands between it and the
+ * fallback list — every card in a row keeps its controls on one baseline.
+ * Thinking select + fallback + cycle sit left; clear/remove are pushed
+ * to the far right via the trailing spacer. */
 .gui-role-card > .gui-role-actions {
 	flex-wrap: nowrap;
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
+}
+
+.gui-role-card > .gui-role-actions--pin {
+	margin-top: auto;
 }
 
 .gui-role-card > .gui-role-actions > .gui-role-spacer {

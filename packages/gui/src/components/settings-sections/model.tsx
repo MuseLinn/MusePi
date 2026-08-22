@@ -665,7 +665,62 @@ export function ModelSection({
 						}}
 					/>
 				</div>
-				<div className="gui-role-actions">
+				{(chain.length > 0 || editingFallback) && (
+					<div className="gui-role-fallbacks">
+						{chain.length > 0 && (
+							<div className="gui-role-fallbacks-title">
+								<Icon name="git-branch" className="h-3 w-3" />
+								<span>{t("fallback chain")}</span>
+							</div>
+						)}
+						{chain.map((selector, i) => (
+							<div key={selector} className="gui-role-fallback-row">
+								<span className="gui-role-fallback-arrow">↳</span>
+								<span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
+									{selector}
+								</span>
+								<button
+									type="button"
+									className="gui-btn gui-btn--icon"
+									title={t("remove fallback")}
+									aria-label={t("remove fallback")}
+									onClick={() => {
+										const nextChain = chain.filter((_, idx) => idx !== i);
+										const next = { ...fallbackChains };
+										if (nextChain.length > 0) next[role] = nextChain;
+										else delete next[role];
+										setFallbackChains(next);
+										void rpc
+											.request("settings.set", { key: "retry.fallbackChains", value: next })
+											.catch(() => {});
+									}}
+								>
+									<Icon name="delete-bin" className="h-3 w-3" />
+								</button>
+							</div>
+						))}
+						{editingFallback && (
+							<div className="gui-role-fallback-add">
+								<ModelSelector
+									rpc={rpc}
+									sessionId={null}
+									onSelect={(id, provider) => {
+										setFallbackEditor(null);
+										if (!id || !provider) return;
+										const selector = `${provider}/${id}`;
+										const nextChain = chain.includes(selector) ? chain : [...chain, selector];
+										const next = { ...fallbackChains, [role]: nextChain };
+										setFallbackChains(next);
+										void rpc
+											.request("settings.set", { key: "retry.fallbackChains", value: next })
+											.catch(() => {});
+									}}
+								/>
+							</div>
+						)}
+					</div>
+				)}
+				<div className="gui-role-actions gui-role-actions--pin">
 					{/* Per-role thinking level (rides the selector suffix, TUI
 					 * formatModelSelectorValue parity). */}
 					<GuiSelect
@@ -746,61 +801,6 @@ export function ModelSection({
 						</button>
 					)}
 				</div>
-				{(chain.length > 0 || editingFallback) && (
-					<div className="gui-role-fallbacks">
-						{chain.length > 0 && (
-							<div className="gui-role-fallbacks-title">
-								<Icon name="git-branch" className="h-3 w-3" />
-								<span>{t("fallback chain")}</span>
-							</div>
-						)}
-						{chain.map((selector, i) => (
-							<div key={selector} className="gui-role-fallback-row">
-								<span className="gui-role-fallback-arrow">↳</span>
-								<span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
-									{selector}
-								</span>
-								<button
-									type="button"
-									className="gui-btn gui-btn--icon"
-									title={t("remove fallback")}
-									aria-label={t("remove fallback")}
-									onClick={() => {
-										const nextChain = chain.filter((_, idx) => idx !== i);
-										const next = { ...fallbackChains };
-										if (nextChain.length > 0) next[role] = nextChain;
-										else delete next[role];
-										setFallbackChains(next);
-										void rpc
-											.request("settings.set", { key: "retry.fallbackChains", value: next })
-											.catch(() => {});
-									}}
-								>
-									<Icon name="delete-bin" className="h-3 w-3" />
-								</button>
-							</div>
-						))}
-						{editingFallback && (
-							<div className="gui-role-fallback-add">
-								<ModelSelector
-									rpc={rpc}
-									sessionId={null}
-									onSelect={(id, provider) => {
-										setFallbackEditor(null);
-										if (!id || !provider) return;
-										const selector = `${provider}/${id}`;
-										const nextChain = chain.includes(selector) ? chain : [...chain, selector];
-										const next = { ...fallbackChains, [role]: nextChain };
-										setFallbackChains(next);
-										void rpc
-											.request("settings.set", { key: "retry.fallbackChains", value: next })
-											.catch(() => {});
-									}}
-								/>
-							</div>
-						)}
-					</div>
-				)}
 			</div>
 		);
 	};
