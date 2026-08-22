@@ -440,17 +440,17 @@
 }
 
 /* Side-by-side diff (chat settings → 差异布局): two aligned columns,
- * removed left / added right; hunk/header/gap rows span the width.
- * ONE shared track pair (subgrid): every row's left/right split lands on
- * the same x — per-row `1fr 1fr` grids let long lines shift each row's
- * column boundary (the 错位 bug). Tracks size to the column's max-content
- * with a 1fr cap, so narrow diffs fill the card evenly and wide ones
- * overflow into the container's own horizontal scroll (bounded by the
- * card — never clips past the chat surface). */
+ * removed left / added right (GitHub/VSCode convention); hunk/header/gap
+ * rows span the width.
+ * ONE fixed 50/50 track pair (subgrid): every row's left/right split lands
+ * on the same x. Without wrap each pane scrolls ITS OWN long lines
+ * horizontally (per-cell overflow-x) — the container itself never scrolls,
+ * so the two panes stay independent instead of the whole grid scrolling.
+ * (Wrap mode — .gui-code-wrap, default ON — soft-wraps each pane instead.) */
 .tv-diff--sbs {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(max-content, 1fr));
-	overflow-x: auto;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	overflow-x: hidden;
 }
 
 .tv-diff-sbs-row {
@@ -466,12 +466,30 @@
 	min-width: 0;
 }
 
+/* Subgrid fallback (engines without `subgrid`, e.g. pre-Chromium-117
+ * webviews): a row with an unsupported `subgrid` declaration collapses to
+ * one implicit track and its two cells stack onto separate visual rows —
+ * left/right number gutters end up on different lines. Degrade to a plain
+ * flex row with two equal panes (x stays consistent across rows). */
+@supports not (grid-template-columns: subgrid) {
+	.tv-diff-sbs-row {
+		display: flex;
+	}
+	.tv-diff-sbs-cell {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+}
+
 .tv-diff-sbs-cell {
 	padding: 0 9px;
 	white-space: pre;
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	/* Each pane scrolls its own long lines horizontally (no container-wide
+	 * scroll, no ellipsis truncation). */
+	overflow-x: auto;
+	overflow-y: hidden;
+	text-overflow: clip;
 }
 
 /* 长内容自动换行 setting (gui-code-wrap on <html>): soft-wrap diff lines

@@ -1,4 +1,5 @@
 import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/desktop-web";
+import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { AgentsCenterPage } from "./components/AgentsCenterPage";
@@ -25,6 +26,7 @@ import { SettingsView } from "./components/SettingsView";
 import { ShinyText } from "./components/ShinyText";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
+import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { pickDirectory } from "./lib/electron";
 import { applyGlassLevel, applyGlassMaterial, readGlassLevel } from "./lib/glass";
@@ -208,7 +210,9 @@ function AppInner(): ReactNode {
 			);
 			document.documentElement.classList.toggle(
 				"gui-code-wrap",
-				localStorage.getItem("musepi-gui-code-wrap") === "1",
+				// Long-line wrap default ON (user direction): only an explicit
+				// "0" disables it.
+				localStorage.getItem("musepi-gui-code-wrap") !== "0",
 			);
 			// Font picks (--font-ui / --font-mono) + spacing density (--gui-density):
 			// re-apply at startup so choices survive relaunches.
@@ -2891,6 +2895,9 @@ function AppInner(): ReactNode {
 			{/* What's-new release notes (daemon changelog.startup; settings
 			 * footer 新功能 reopens via omp-open-announcement). */}
 			<AnnouncementOverlay rpc={rpc} />
+			{/* Auto-checked update notice (BitFun parity toast; main.cjs
+			 * pushes update-available ~12s after boot). */}
+			<UpdateToast />
 			{/* Floating pac-man scroll indicator (fixed overlay — system
 			 * scrollbars are hidden; see FloatingScrollbar.tsx). */}
 			<FloatingScrollbar />

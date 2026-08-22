@@ -58,7 +58,7 @@ import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { Icon } from "../../vendor/oc-icons";
 import { AgentAvatar } from "../AgentAvatar";
 import { ColorPickerPanel } from "../ColorPicker";
-import { AgentStatusLine } from "../Composer";
+
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
 import {
@@ -150,18 +150,6 @@ export function AppearanceSection({
 	const [motion, setMotion] = useState<"full" | "reduced" | "off">(
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
-	const [statusBarEffect, setStatusBarEffect] = useState<"shimmer" | "kitt" | "plain">(() => {
-		const v = localStorage.getItem("musepi-gui-statusbar");
-		return v === "kitt" || v === "plain" ? v : "shimmer";
-	});
-	const [statusBarIndicator, setStatusBarIndicator] = useState<"braille" | "orb" | "lattice" | "ring">(() => {
-		const v = localStorage.getItem("musepi-gui-statusbar-indicator");
-		return v === "orb" || v === "lattice" || v === "ring" ? v : "braille";
-	});
-	const [sweepColor, setSweepColor] = useState<"default" | "accent">(() => {
-		const v = localStorage.getItem("musepi-gui-statusbar-kitt-color");
-		return v === "accent" ? "accent" : "default";
-	});
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
 	const [statusBarInfo, setStatusBarInfo] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-statusbar-info") === "1",
@@ -203,7 +191,7 @@ export function AppearanceSection({
 		() => localStorage.getItem(CODE_THEME_DARK_KEY) ?? DEFAULT_DARK_CODE_THEME.id,
 	);
 	const [codeLines, setCodeLines] = useState<boolean>(() => localStorage.getItem(CODE_LINES_KEY) !== "0");
-	const [codeWrap, setCodeWrap] = useState<boolean>(() => localStorage.getItem(CODE_WRAP_KEY) === "1");
+	const [codeWrap, setCodeWrap] = useState<boolean>(() => localStorage.getItem(CODE_WRAP_KEY) !== "0");
 	const lightTheme: CodeTheme = LIGHT_CODE_THEMES.find(o => o.id === lightCodeTheme) ?? DEFAULT_LIGHT_CODE_THEME;
 	const darkTheme: CodeTheme = DARK_CODE_THEMES.find(o => o.id === darkCodeTheme) ?? DEFAULT_DARK_CODE_THEME;
 	const setPref = (key: string, value: string | number): void => {
@@ -821,78 +809,6 @@ export function AppearanceSection({
 				</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("agent status line")}</div>
-						<div className="gui-settings-row-desc">
-							{t("choose the spinner and the label effect shown above the input while the agent works")}
-						</div>
-					</div>
-					<div className="flex flex-col items-end gap-2">
-						<div className="flex items-center gap-2">
-							<span className="text-[12px] text-[var(--color-text-muted)]">{t("indicator")}</span>
-							<div className="gui-segmented">
-								{(["braille", "orb", "lattice", "ring"] as const).map(s => (
-									<button
-										key={s}
-										type="button"
-										className={`gui-seg-btn${statusBarIndicator === s ? " gui-seg-btn--active" : ""}`}
-										onClick={() => {
-											setStatusBarIndicator(s);
-											localStorage.setItem("musepi-gui-statusbar-indicator", s);
-										}}
-									>
-										{s === "braille"
-											? t("braille")
-											: s === "orb"
-												? t("orb")
-												: s === "lattice"
-													? t("lattice")
-													: t("ring")}
-									</button>
-								))}
-							</div>
-						</div>
-						<div className="flex items-center gap-2">
-							<span className="text-[12px] text-[var(--color-text-muted)]">{t("effect")}</span>
-							<div className="gui-segmented">
-								{(["shimmer", "kitt", "plain"] as const).map(s => (
-									<button
-										key={s}
-										type="button"
-										className={`gui-seg-btn${statusBarEffect === s ? " gui-seg-btn--active" : ""}`}
-										onClick={() => {
-											setStatusBarEffect(s);
-											localStorage.setItem("musepi-gui-statusbar", s);
-										}}
-									>
-										{s === "shimmer" ? t("shimmer") : s === "kitt" ? t("kitt") : t("plain")}
-									</button>
-								))}
-							</div>
-						</div>
-						<Reveal open={statusBarEffect === "kitt" || statusBarEffect === "shimmer"}>
-							<div className="flex items-center gap-2">
-								<span className="text-[12px] text-[var(--color-text-muted)]">{t("sweep color")}</span>
-								<div className="gui-segmented">
-									{(["default", "accent"] as const).map(k => (
-										<button
-											key={k}
-											type="button"
-											className={`gui-seg-btn${sweepColor === k ? " gui-seg-btn--active" : ""}`}
-											onClick={() => {
-												setSweepColor(k);
-												localStorage.setItem("musepi-gui-statusbar-kitt-color", k);
-											}}
-										>
-											{k === "default" ? t("default tone") : t("accent color")}
-										</button>
-									))}
-								</div>
-							</div>
-						</Reveal>
-					</div>
-				</div>
-				<div className="gui-settings-row">
-					<div>
 						<div className="gui-settings-row-label">{t("info status bar")}</div>
 						<div className="gui-settings-row-desc">{t("info status bar desc")}</div>
 					</div>
@@ -951,9 +867,9 @@ export function AppearanceSection({
 
 			{/* ── 效果预览 — one mock scene for the whole effects block (code
 			 * preview parity): transcript rows reuse the REAL tr-* classes
-			 * so bubbles and avatars match the chat surface, the live
-			 * status line hangs above a mock input card — the same
-			 * arrangement as the actual composer column. */}
+			 * so bubbles and avatars match the chat surface, above a mock
+			 * input card — the same arrangement as the actual composer
+			 * column (agent working state now lives in the send button). */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("effects preview")}</div>
 				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
@@ -970,12 +886,6 @@ export function AppearanceSection({
 							<div className="tr-md">{t("preview user message")}</div>
 						</div>
 					</div>
-					<AgentStatusLine
-						working={true}
-						effect={statusBarEffect}
-						indicator={statusBarIndicator}
-						sweepColor={sweepColor}
-					/>
 					<div className="gui-effect-preview-composer">
 						<div className="gui-effect-preview-input">{t("ask anything, / for commands, @ for context…")}</div>
 						<span className="gui-effect-preview-send" aria-hidden>
