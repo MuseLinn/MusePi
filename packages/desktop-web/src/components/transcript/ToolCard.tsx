@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { memo } from "react";
 import { messageText } from "../../lib/format";
 import { ToolView } from "../../tool-render/ToolView";
+import { resultImagesOf } from "../../tool-render/util";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { toolKind } from "./toolcard-shared";
 import { widgetStandaloneEnabled } from "./widget-standalone";
@@ -49,6 +50,11 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// standalone display is off). Board cards keep their own default.
 	const artifactDefaultOpen =
 		name === "widget" && widgetStandaloneEnabled() ? false : widgetDefaultOpen();
+	// An image-carrying result is a visualization, not a process trace: the
+	// card must stay open so the media is visible inline in the message flow
+	// (craft-agents parity) instead of folding behind the tool summary.
+	const hasResultImages = resultImagesOf(result).length > 0;
+	const alwaysOpen = isArtifactCard(name) || hasResultImages;
 	return (
 		<ToolView
 			name={name}
@@ -61,9 +67,10 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 			host={host}
 			taskCardStyle={taskCardStyle}
 			/* ZCode parity: live tools open while they run, fold when done;
-			 * artifacts (widget/board cards) stay open per the user setting. */
-			defaultOpen={isArtifactCard(name) ? artifactDefaultOpen : running === true}
-			collapseWhenDone={!isArtifactCard(name)}
+			 * artifacts (widget/board cards) and image results stay open.
+			 * Widgets respect the user pref; image cards open unconditionally. */
+			defaultOpen={isArtifactCard(name) ? artifactDefaultOpen : hasResultImages ? true : running === true}
+			collapseWhenDone={!alwaysOpen}
 		/>
 	);
 });
