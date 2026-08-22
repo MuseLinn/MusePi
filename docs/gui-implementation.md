@@ -280,3 +280,23 @@ daemon RPC:
   - `MaterializedView.#upsertMessage`:`parentId: message.parentId ?? null`(带即保留,缺即 null)。
   - `packages/gui/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
 - **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/tui-trace-plan.md`。
+
+## 16. 转录自定义消息渲染 + 流式 markdown 契约(2026-08-22)
+
+`desktop-web` `components/transcript/Transcript.tsx` 的 `custom_message` 分支按 `entry.customType` 分派,已处理:
+
+| customType | 渲染 | 数据来源 |
+|---|---|---|
+| `collab-prompt` | 用户行 + 来源 badge | `details.from` |
+| `ttsr` | `TtsrBlock`(警告折叠) | `details.rules[]` |
+| `irc:*` | `tr-irc` 行 | `details.message/body` |
+| `async-result` | `.tr-async-result` 卡片(每 job 一行「✓ 后台任务已完成 [type] id (耗时)」) | `details.jobs[]` |
+| `advisor` | `AdvisorBlock`(severity 色 rail + badge、blocker 计数、>3 条折叠) | `details.notes[]` |
+| 其他 | 默认 `tr-custom`(chip `customType` + `content` markdown) | — |
+
+**铁律**:模型-facing 模板(`<system-notice>`、`<advisory severity=…>`)只存在于 `content`(给 LLM 的 payload),GUI 渲染器**只读 `details.*` 干净文本,绝不把模板正文渲染给用户**——`async-result`/`advisor` 都是 2026-08-22 补上 GUI 渲染(此前落入默认 `tr-custom`,把 `<system-notice>`/`<advisory>` XML 原样显示,与 TUI 的 `buildAsyncResultBlock`/`createAdvisorMessageCard` 不对齐)。
+
+**流式 markdown 时机**(答「是不是结束后才渲染」——**不是**):
+- `Markdown.tsx` `renderStreamingMarkdown`:流式时,已闭合的 `\n\n` 边界块立即渲染成 markdown(跨帧复用),**未定稿的尾块以 RAW TEXT 逐字累积**(单次入场动画);`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。
+- 思考块按句过 `Markdown`(`tr-think-sentence--live` 入场)。
+- DSH(`deepseek-harness`)同款增量:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
