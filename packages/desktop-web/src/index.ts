@@ -16,6 +16,7 @@ export { LanguageToggle } from "./components/shell/LanguageToggle";
 export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
+export { DiffBlock, type DiffLayout } from "./tool-render/parts";
 export { Markdown } from "./components/transcript/Markdown";
 export { type MermaidMode, mermaidMode, renderMermaidHtml } from "./components/transcript/mermaid";
 export {

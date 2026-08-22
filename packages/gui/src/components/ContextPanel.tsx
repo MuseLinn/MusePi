@@ -1,7 +1,15 @@
-import { AgentsPanel, latestWidgetFromEntries, t, WidgetCard } from "@musepi/desktop-web";
+import {
+	AgentsPanel,
+	CodeHighlightProvider,
+	DiffBlock,
+	latestWidgetFromEntries,
+	t,
+	WidgetCard,
+} from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { useChatHighlight } from "../lib/highlight";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
@@ -929,6 +937,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [openPath, setOpenPath] = useState<string | null>(null);
 	const [fileDiff, setFileDiff] = useState<{ staged: string; unstaged: string } | null>(null);
 	const [diffLoading, setDiffLoading] = useState(false);
+	const highlight = useChatHighlight();
 	// openchamber GitSettings parity: flat/tree view, show-gitignored and
 	// gitmoji picker — localStorage keys shared with the settings Git tab.
 	const [view, setView] = useState<"flat" | "tree">(() =>
@@ -1026,54 +1035,6 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		}
 	};
 
-	const hunks = (text: string): ReactNode[] => {
-		const lines = text.split("\n");
-		const out: ReactNode[] = [];
-		let inHunk = false;
-		for (const line of lines) {
-			if (line.startsWith("diff --git")) {
-				out.push(
-					<div key={`f${out.length}`} className="gui-diff-file">
-						{line.replace("diff --git ", "").replace(/^a\//, "").split(" b/")[0] ?? line}
-					</div>,
-				);
-				inHunk = true;
-				continue;
-			}
-			if (line.startsWith("@@")) {
-				out.push(
-					<div key={`h${out.length}`} className="gui-diff-hunk">
-						{line}
-					</div>,
-				);
-				continue;
-			}
-			if (line.startsWith("+") && !line.startsWith("+++")) {
-				out.push(
-					<div key={`a${out.length}`} className="gui-diff-line gui-diff-line--add">
-						{line}
-					</div>,
-				);
-				continue;
-			}
-			if (line.startsWith("-") && !line.startsWith("---")) {
-				out.push(
-					<div key={`d${out.length}`} className="gui-diff-line gui-diff-line--del">
-						{line}
-					</div>,
-				);
-				continue;
-			}
-			if (inHunk && line.trim() !== "") {
-				out.push(
-					<div key={`c${out.length}`} className="gui-diff-line">
-						{line}
-					</div>,
-				);
-			}
-		}
-		return out;
-	};
 	const statusBadge = (code: string): string => {
 		const m: Record<string, string> = { M: "M", A: "A", D: "D", R: "R", C: "C", "??": "?", "!!": "!" };
 		return m[code] ?? code;
@@ -1139,13 +1100,15 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						{diffLoading ? (
 							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("loading…")}</div>
 						) : (
-							<>
-								{hunks(fileDiff?.staged ?? "")}
-								{hunks(fileDiff?.unstaged ?? "")}
-								{!fileDiff?.staged && !fileDiff?.unstaged && (
-									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no changes")}</div>
-								)}
-							</>
+							<CodeHighlightProvider highlight={highlight}>
+								<>
+									{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
+									{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
+									{!fileDiff?.staged && !fileDiff?.unstaged && (
+										<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+									)}
+								</>
+							</CodeHighlightProvider>
 						)}
 					</div>
 				)}

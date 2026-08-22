@@ -75,28 +75,50 @@ const TEXT_EXT = new Set([
 	"conf",
 ]);
 
-/** Extension → tree-sitter language name for the preview highlighter. */
+/** Extension → tree-sitter language name for the preview highlighter.
+ *  Mirrors the transcript diff set (tool-render parts.tsx EXT_HIGHLIGHT_LANG)
+ *  so previews and diffs highlight the same languages consistently. */
 const EXT_LANG: Record<string, string> = {
 	ts: "typescript",
-	tsx: "typescript",
+	mts: "typescript",
+	cts: "typescript",
+	tsx: "tsx",
 	js: "javascript",
+	mjs: "javascript",
+	cjs: "javascript",
 	jsx: "javascript",
 	json: "json",
 	md: "markdown",
+	markdown: "markdown",
 	toml: "toml",
 	yaml: "yaml",
 	yml: "yaml",
 	css: "css",
+	scss: "scss",
 	html: "html",
+	htm: "html",
 	xml: "xml",
 	c: "c",
 	h: "c",
+	cpp: "cpp",
+	cc: "cpp",
+	cxx: "cpp",
+	hpp: "cpp",
+	hh: "cpp",
 	rs: "rust",
 	py: "python",
+	pyi: "python",
+	rb: "ruby",
 	go: "go",
 	sh: "bash",
 	zsh: "bash",
 	bash: "bash",
+	java: "java",
+	kt: "kotlin",
+	kts: "kotlin",
+	swift: "swift",
+	php: "php",
+	sql: "sql",
 };
 
 /** Fixed virtual-row height (px); keep in sync with .gui-filepane-vrow CSS. */
