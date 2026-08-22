@@ -2192,6 +2192,21 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 
+/* Inside a ~340px card the model picker is the flexible item: it shrinks
+ * first (its button label truncates) so thinking/fallback/cycle toggles
+ * keep their footprints, and takes a full row on its own when the card
+ * gets too narrow for anything beside it. */
+.gui-role-card .gui-role-actions .gui-model {
+	flex: 1 1 auto;
+	flex-shrink: 2;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.gui-role-card .gui-role-actions .gui-model-btn {
+	max-width: 100%;
+}
+
 .gui-role-tag {
 	font-weight: 600;
 }
