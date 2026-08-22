@@ -17,7 +17,18 @@ import { TaskCardStylePreview } from "./general";
 /** Schema-driven settings tab: fetches settings.schema + current values
  *  from the daemon and renders every item via {@link SchemaSettings}.
  *  Changes are optimistic settings.set calls (reverted on failure). */
-export function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: string[] }): ReactNode {
+export function SchemaTabSection({
+	rpc,
+	tabs,
+	groups,
+}: {
+	rpc: RpcClient | null;
+	tabs: string[];
+	/** Optional ui.group filter: when set, only items in these groups
+	 * render (e.g. the voice page shows the interaction tab's "Speech"
+	 * group without duplicating the whole tab). */
+	groups?: readonly string[];
+}): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
 	const [error, setError] = useState<string | null>(null);
@@ -28,7 +39,8 @@ export function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: s
 			.request<Record<string, SchemaItem[]>>("settings.schema", { tabs })
 			.then(async res => {
 				if (!alive) return;
-				const items = (res[tabs[0] ?? ""] ?? []) as SchemaItem[];
+				const all = (res[tabs[0] ?? ""] ?? []) as SchemaItem[];
+				const items = groups ? all.filter(i => i.ui?.group !== undefined && groups.includes(i.ui.group)) : all;
 				setSchema(items);
 				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: items.map(i => i.key) });
 				if (alive) {
@@ -40,7 +52,7 @@ export function SchemaTabSection({ rpc, tabs }: { rpc: RpcClient | null; tabs: s
 		return () => {
 			alive = false;
 		};
-	}, [rpc, tabs]);
+	}, [rpc, tabs, groups]);
 	const onChange = (key: string, value: unknown): void => {
 		if (!rpc) return;
 		// Optimistic flip; revert on failure.

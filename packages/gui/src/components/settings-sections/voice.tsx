@@ -89,9 +89,10 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		<>
 			<h2 className="gui-settings-page-title">{t("voice")}</h2>
 
-			{/* Schema-driven stt.* / tts.* rows (tab "interaction", group
-			 * "Speech") — the single home for those keys. */}
-			<SchemaTabSection rpc={rpc} tabs={["interaction"]} />
+			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
+			 * "Speech" group, NOT the whole tab (the rest of the interaction
+			 * groups live on 交互; duplicating them here was the old bug). */}
+			<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Speech"]} />
 
 			{/* Live device + dictation test: not expressible in schema. */}
 			<div className="gui-settings-section">
