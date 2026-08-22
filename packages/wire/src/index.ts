@@ -344,6 +344,8 @@ export interface SubagentProgressPayload {
 	assignment?: string;
 	progress: AgentProgress;
 	sessionFile?: string;
+	/** Owning daemon session id (routing metadata; absent on legacy emitters). */
+	sessionId?: string;
 }
 
 export interface SubagentLifecyclePayload {
@@ -354,6 +356,8 @@ export interface SubagentLifecyclePayload {
 	sessionFile?: string;
 	parentToolCallId?: string;
 	index: number;
+	/** Owning daemon session id (routing metadata; absent on legacy emitters). */
+	sessionId?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

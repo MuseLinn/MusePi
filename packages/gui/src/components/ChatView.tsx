@@ -846,6 +846,13 @@ export function ChatView({
 	// swarm-card member row or the right rail slides the panel out over the
 	// chat column; the selected agent resolves against the live snapshot.
 	const [panelAgentId, setPanelAgentId] = useState<string | null>(null);
+	// Session switch: the drawer belongs to the session whose member row
+	// opened it — a stale id must never resolve against another session's
+	// agent list. (The store is disposed+recreated per openSession, so
+	// without this reset the panel would linger across sessions.)
+	useEffect(() => {
+		setPanelAgentId(null);
+	}, [store]);
 	const panelAgent = panelAgentId !== null ? (snap?.agents.find(a => a.id === panelAgentId) ?? null) : null;
 	const panelProgress = panelAgentId !== null ? (snap?.progress.get(panelAgentId)?.progress ?? null) : null;
 	const host = {

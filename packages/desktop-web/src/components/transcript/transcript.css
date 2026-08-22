@@ -1144,6 +1144,15 @@
 	padding: 3px 0;
 }
 
+/* Compact density must NOT override the ZCode mirrored placement: user
+ * rows explicitly pin the body to column 1 and the gutter to column 2
+ * (see .tr-row--user below). Keeping the 52px 1fr columns here squeezes
+ * the host/user bubble into a 52px column — one character per line, the
+ * vertical text seen in the agent drawer. */
+.tr-root--compact .tr-row--user {
+	grid-template-columns: minmax(0, 1fr) 28px;
+}
+
 .tr-root--compact .tr-gutter {
 	font-size: 9px;
 }

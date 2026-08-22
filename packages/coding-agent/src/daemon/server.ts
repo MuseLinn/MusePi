@@ -437,7 +437,12 @@ import type { ExtensionSetting, ExtensionUIContext } from "../extensibility/exte
 import type { AgentSession } from "../session/agent-session";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
-import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
+import {
+	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
+	TASK_SUBAGENT_PROGRESS_CHANNEL,
+	type SubagentLifecyclePayload,
+	type SubagentProgressPayload,
+} from "../task/types";
 import { EventBus } from "../utils/event-bus";
 import { openPath } from "../utils/open";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
@@ -649,6 +654,67 @@ interface RpcRequest {
 	params?: unknown;
 }
 
+/** A tool call currently executing in a live session, retained so a GUI
+ *  (re)subscribe can hydrate the composer's running-tool visuals — the
+ *  live `tool_execution_*` envelopes are stream-only and never replay. */
+interface ActiveToolCall {
+	toolCallId: string;
+	toolName: string;
+	args: unknown;
+	intent?: string;
+	partialResult?: unknown;
+	/** Wall-clock ms — mirrors the GUI ActiveTool.startedAt contract. */
+	startedAt: number;
+}
+
+/** Runtime-narrowed read of a task-subagent payload's ownership tag.
+ *  `undefined` = untagged (legacy/unknown emitter). */
+function taggedSessionIdOf(data: unknown): string | undefined {
+	if (data !== null && typeof data === "object" && "sessionId" in data) {
+		return typeof data.sessionId === "string" ? data.sessionId : undefined;
+	}
+	return undefined;
+}
+
+/** Per-session view of the shared daemon EventBus: task-subagent channel
+ *  payloads emitted by THIS session get stamped with its id, so the
+ *  per-session stream fan-out can route frames to the owning session's
+ *  subscribers only (the bus itself is process-global — without the tag,
+ *  session A's swarm visuals leak into session B's stream). */
+class SessionScopedEventBus extends EventBus {
+	#parent: EventBus;
+	#sessionId: string;
+	constructor(parent: EventBus, sessionId: string) {
+		super();
+		this.#parent = parent;
+		this.#sessionId = sessionId;
+	}
+	/** Bind the owning session id. For `session.create` the id is minted
+	 *  inside createAgentSession (so it's unknown at construction time) —
+	 *  the daemon calls this right after adopting the live session. */
+	setSessionId(sessionId: string): void {
+		this.#sessionId = sessionId;
+	}
+	override emit(channel: string, data: unknown): void {
+		if (
+			(channel === TASK_SUBAGENT_PROGRESS_CHANNEL || channel === TASK_SUBAGENT_LIFECYCLE_CHANNEL) &&
+			taggedSessionIdOf(data) === undefined
+		) {
+			this.#parent.emit(channel, { ...(data as Record<string, unknown>), sessionId: this.#sessionId });
+			return;
+		}
+		this.#parent.emit(channel, data);
+	}
+	override on(channel: string, handler: (data: unknown) => void): () => void {
+		// Listeners live on the parent so this view also receives traffic
+		// from other emitters; nothing registers locally.
+		return this.#parent.on(channel, handler);
+	}
+	override clear(): void {
+		// Clearing must never nuke the shared bus's listeners.
+	}
+}
+
 // ── Session host ────────────────────────────────────────────────────────────
 
 interface LiveSession {
@@ -672,6 +738,14 @@ interface LiveSession {
 	journal: AppendJournal | null;
 	view: MaterializedView;
 	subscribers: Map<string, (event: SessionStreamEvent) => void>;
+	/** Currently-executing tool calls (subscribe-time hydration of the GUI
+	 *  composer's running-tool visuals — see ActiveToolCall). */
+	activeToolCalls: Map<string, ActiveToolCall>;
+	/** Latest progress payload per running subagent owned by THIS session
+	 *  (subscribe-time hydration of the swarm visuals — the agent frames
+	 *  are stream-only, so a re-subscribing client would otherwise start
+	 *  blank until the next frame arrives). */
+	subagentProgress: Map<string, SubagentProgressPayload>;
 	/** Last activity (send or event) — drives the idle auto-dispose. */
 	lastActivity: number;
 	/** Idle timer; cleared on close/dispose. */
@@ -1205,12 +1279,15 @@ export class DaemonSessionHost {
 		// for its project's MCP config.
 		const discovery = await this.#discoveryFor(cwd, getAgentDir());
 		const mcpManager = await this.#ensureMcpManager(cwd, discovery);
+		// Owned subagent frames must be tagged with this session's id so the
+		// per-session stream fan-out routes them here only. session.create
+		// mints the id inside createAgentSession, so bind it after adoption.
+		const sessionBus = new SessionScopedEventBus(this.#eventBus, "");
 		const result = await createAgentSession({
 			cwd,
 			hasUI: true,
 			interfaceLabel: "desktop (GUI)",
-			eventBus: this.#eventBus,
-			pauseGate,
+			eventBus: sessionBus,
 			settings: discovery.settings,
 			modelRegistry: discovery.modelRegistry,
 			contextFiles: discovery.contextFiles,
@@ -1227,6 +1304,7 @@ export class DaemonSessionHost {
 			...(params.modeId ? { modeId: params.modeId } : {}),
 		});
 		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
+		sessionBus.setSessionId(live.sessionId);
 		// Extension-contributed settings (registerSetting): merge every loaded
 		// extension's settings into the host-level cache AND the live session
 		// so settings.schema surfaces them (the swarm style extension's
@@ -1286,7 +1364,7 @@ export class DaemonSessionHost {
 			sessionManager: manager,
 			hasUI: true,
 			interfaceLabel: "desktop (GUI)",
-			eventBus: this.#eventBus,
+			eventBus: new SessionScopedEventBus(this.#eventBus, sessionId),
 			pauseGate,
 			settings: discovery.settings,
 			modelRegistry: discovery.modelRegistry,
@@ -1441,6 +1519,8 @@ export class DaemonSessionHost {
 			journal,
 			view: viewFinal,
 			subscribers: new Map(),
+			activeToolCalls: new Map(),
+			subagentProgress: new Map(),
 			lastActivity: Date.now(),
 			idleTimer: null,
 			recapTimer: null,
@@ -1473,6 +1553,7 @@ export class DaemonSessionHost {
 			publishWireEvent: (
 				event: Parameters<typeof AgentSession.prototype.subscribe>[0] extends (e: infer E) => void ? E : never,
 			) => {
+				trackActiveToolCall(event);
 				const wireEvent = toWireAgentEvent(event);
 				if (!wireEvent) return;
 				const seq = ++live.seq;
@@ -1513,27 +1594,80 @@ export class DaemonSessionHost {
 				});
 			},
 		};
+		// Subscribe-time hydration ledger: retain currently-executing tool
+		// calls so a GUI re-subscribe can restore the composer's running-tool
+		// visuals (the tool_execution_* envelopes are stream-only — a fresh
+		// client store would otherwise start blank until the next tool fires).
+		const trackActiveToolCall = (event: {
+			type?: string;
+			toolCallId?: unknown;
+			toolName?: unknown;
+			args?: unknown;
+			intent?: unknown;
+			partialResult?: unknown;
+		}): void => {
+			switch (event.type) {
+				case "tool_execution_start":
+					if (typeof event.toolCallId === "string") {
+						live.activeToolCalls.set(event.toolCallId, {
+							toolCallId: event.toolCallId,
+							toolName: typeof event.toolName === "string" ? event.toolName : "unknown",
+							args: event.args,
+							intent: typeof event.intent === "string" ? event.intent : undefined,
+							startedAt: Date.now(),
+						});
+					}
+					break;
+				case "tool_execution_update": {
+					if (typeof event.toolCallId !== "string") break;
+					const tracked = live.activeToolCalls.get(event.toolCallId);
+					if (tracked) tracked.partialResult = event.partialResult;
+					break;
+				}
+				case "tool_execution_end":
+					if (typeof event.toolCallId === "string") live.activeToolCalls.delete(event.toolCallId);
+					break;
+			}
+		};
 		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);
 		live.idleTimer.unref?.();
-		// Subagent progress/lifecycle (task tool) rides the GUI stream: the
-		// EventBus channels are per-daemon shared, so payloads from any session
-		// are keyed by agent id and fan out to this session's subscribers like
-		// the wire events below. Unsubscribed on session close.
-		const onSubagentProgress = (payload: unknown): void => {
+		// Subagent progress/lifecycle (task tool) rides the GUI stream. The
+		// EventBus channels are per-daemon shared: session-scoped emitters
+		// tag payloads with the owning session id (SessionScopedEventBus), so
+		// each LiveSession forwards ONLY its own frames — without the filter,
+		// session A's swarm visuals leak into session B's stream (the
+		// subscriber wrapper stamps every envelope with the SUBSCRIBED
+		// session id, so the client-side guard cannot catch these). Untagged
+		// payloads keep the legacy broadcast behavior. Latest progress frames
+		// are retained per agent for subscribe-time hydration.
+		const ownsSubagentPayload = (payload: unknown): boolean => {
+			const tagged = taggedSessionIdOf(payload);
+			return tagged === undefined || tagged === sessionId;
+		};
+		const onSubagentProgress = (raw: unknown): void => {
+			if (!ownsSubagentPayload(raw)) return;
+			const payload = raw as SubagentProgressPayload;
+			const progressId = payload.progress?.id;
+			if (typeof progressId === "string") live.subagentProgress.set(progressId, payload);
 			const seq = ++live.seq;
 			for (const send of live.subscribers.values()) {
 				try {
-					send({ kind: "agent-progress", seq, payload: payload as never });
+					send({ kind: "agent-progress", seq, payload });
 				} catch {
 					// subscriber socket died; removed on close
 				}
 			}
 		};
-		const onSubagentLifecycle = (payload: unknown): void => {
+		const onSubagentLifecycle = (raw: unknown): void => {
+			if (!ownsSubagentPayload(raw)) return;
+			const payload = raw as SubagentLifecyclePayload;
+			// Terminal lifecycle: drop the retained progress so a later
+			// re-subscribe hydrates only still-running agents.
+			if (payload.status !== "started") live.subagentProgress.delete(payload.id);
 			const seq = ++live.seq;
 			for (const send of live.subscribers.values()) {
 				try {
-					send({ kind: "agent-lifecycle", seq, payload: payload as never });
+					send({ kind: "agent-lifecycle", seq, payload });
 				} catch {
 					// subscriber socket died; removed on close
 				}
@@ -1561,6 +1695,7 @@ export class DaemonSessionHost {
 			// Only wire-compatible events cross the daemon boundary — the
 			// journal, the live stream and the SDK contract share one format.
 			if (!isWireAgentEvent(event)) return;
+			trackActiveToolCall(event);
 			// New activity cancels the idle recap (TUI parity: a fresh turn,
 			// user message or compaction supersedes it). Passive frames —
 			// streaming updates, tool progress, notices, retries — do NOT,
@@ -3733,7 +3868,24 @@ export class DaemonServer {
 			case "session.subscribe": {
 				const p = (params ?? {}) as { sessionId: string };
 				await this.#host.subscribe(p.sessionId, conn);
-				return { stream: conn.id, initial: tailSnapshot(await this.#host.snapshot(p.sessionId)) };
+				// Hydrate the stream-only visuals on (re)subscribe: running tool
+				// calls + owned subagent progress never replay from the
+				// snapshot, so a client switching back to a working session
+				// would render a blank composer dock / swarm card until the
+				// next live frame happens to arrive.
+				const live = this.#host.get(p.sessionId);
+				return {
+					stream: conn.id,
+					initial: {
+						...tailSnapshot(await this.#host.snapshot(p.sessionId)),
+						...(live
+							? {
+									activeTools: [...live.activeToolCalls.values()],
+									agentsProgress: [...live.subagentProgress.values()],
+								}
+							: {}),
+					},
+				};
 			}
 			case "session.getSystemPrompt": {
 				// Modes v1 E2E/诊断:读会话当前 systemPrompt(composer 注入后)。只读,不激活。

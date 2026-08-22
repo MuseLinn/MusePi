@@ -73,6 +73,10 @@ export interface SubagentProgressPayload {
 	parentToolCallId?: string;
 	assignment?: string;
 	progress: AgentProgress;
+	/** Owning daemon session id — stamped by the session-scoped event-bus
+	 *  wrapper so per-session stream fan-out can route frames to the right
+	 *  session's subscribers only (multi-session daemons leak otherwise). */
+	sessionId?: string;
 	sessionFile?: string;
 	/** See {@link SubagentLifecyclePayload.detached}. */
 	detached?: boolean;
@@ -94,6 +98,8 @@ export interface SubagentLifecyclePayload {
 	sessionFile?: string;
 	parentToolCallId?: string;
 	index: number;
+	/** See {@link SubagentProgressPayload.sessionId}. */
+	sessionId?: string;
 	/**
 	 * Spawn runs as a detached background job: the parent turn keeps working
 	 * while this agent runs. Sync task spawns (parent blocked on the call) and

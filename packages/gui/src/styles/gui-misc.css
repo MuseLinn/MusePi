@@ -2729,3 +2729,17 @@
 		animation: none;
 	}
 }
+
+/* ── Subagent trajectory drawer (ag-drawer) — desktop shell parity ──────
+ * The shared collab chrome anchors it to the window top edge (fixed
+ * top:0), which overlaps the GUI header (h-12 = 48px) and the floating
+ * surface's 8px inset. Re-anchor the drawer to the chat surface card:
+ * header 48 + surface margin 8 = top 56px, inset 8px right/bottom, same
+ * rounded-2xl radius as the surface. Collab-web keeps the full-height
+ * default (this override lives in the GUI-only stylesheet). */
+.ag-drawer {
+	top: 56px;
+	right: 8px;
+	bottom: 8px;
+	border-radius: 16px;
+}

@@ -88,8 +88,56 @@ describe("GuiSessionStore frame coalescing", () => {
 		await new Promise(r => setTimeout(r, 0));
 		expect(store.getSnapshot().working).toBe(true);
 
+		// Run-level contract (user direction): turn_end fires per tool batch
+		// INSIDE one run — only agent_end retires the stop capsule. A mid-run
+		// boundary must NOT flip the button back to send during provider
+		// prep between rounds.
 		store.apply({ kind: "event", payload: { type: "turn_end", message: {}, toolResults: [] } } as never);
 		await new Promise(r => setTimeout(r, 0));
+		expect(store.getSnapshot().working).toBe(true);
+
+		store.apply({ kind: "event", payload: { type: "agent_end", messages: [] } } as never);
+		await new Promise(r => setTimeout(r, 0));
 		expect(store.getSnapshot().working).toBe(false);
+	});
+});
+
+describe("GuiSessionStore subagent hydration + ownership", () => {
+	function progressWrapper(id: string, status: string, sessionId: string) {
+		return {
+			index: 0,
+			agent: "scout",
+			task: "do a thing",
+			progress: { id, status, agent: "scout", task: "do a thing", toolCount: 1, requests: 1, tokens: 1000, cost: 0.01, durationMs: 100 },
+			sessionId,
+		} as never;
+	}
+
+	test("constructor seeds running tool calls + subagent progress from the subscribe snapshot", () => {
+		const store = new GuiSessionStore(
+			"s1",
+			{
+				...emptySnapshot(),
+				activeTools: [{ toolCallId: "t1", toolName: "task", args: {}, startedAt: 100 }],
+				agentsProgress: [progressWrapper("a1", "running", "s1")],
+			},
+			"/work",
+		);
+		const snap = store.getSnapshot();
+		expect(snap.activeTools.get("t1")?.toolName).toBe("task");
+		expect(snap.agents.some(a => a.id === "a1" && a.status === "running")).toBe(true);
+		expect(snap.progress.get("a1")?.progress.id).toBe("a1");
+	});
+
+	test("agent-progress tagged for another session is dropped; own session lands", async () => {
+		const store = new GuiSessionStore("s2", emptySnapshot(), "/work");
+		// Cross-session frame must never paint this session's swarm visuals.
+		store.apply({ kind: "agent-progress", payload: progressWrapper("a1", "running", "other-session") } as never);
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.getSnapshot().agents).toHaveLength(0);
+
+		store.apply({ kind: "agent-progress", payload: progressWrapper("a1", "running", "s2") } as never);
+		await new Promise(r => setTimeout(r, 0));
+		expect(store.getSnapshot().agents.some(a => a.id === "a1")).toBe(true);
 	});
 });

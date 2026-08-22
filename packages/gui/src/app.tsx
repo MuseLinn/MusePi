@@ -1256,9 +1256,18 @@ function AppInner(): ReactNode {
 			try {
 				// Live sessions subscribe (streaming); history sessions resume
 				// (snapshot-only, no live stream). Both return the same snapshot
-				// shape, so one store path serves both.
-				let initial: { entries: unknown[]; state?: unknown; cursor: number; header?: { cwd?: string } } | null =
-					null;
+				// shape, so one store path serves both. Live sessions additionally
+				// carry stream-only visual hydration (running tool calls + owned
+				// subagent progress) so switching back restores the composer
+				// dock / swarm card immediately instead of waiting for a frame.
+				let initial: {
+					entries: unknown[];
+					state?: unknown;
+					cursor: number;
+					header?: { cwd?: string };
+					activeTools?: { toolCallId: string; toolName: string; args: unknown; intent?: string; partialResult?: unknown; startedAt: number }[];
+					agentsProgress?: SubagentProgressPayload[];
+				} | null = null;
 				try {
 					const res = await client.request<{
 						stream: string | null;
@@ -1268,6 +1277,8 @@ function AppInner(): ReactNode {
 							cursor: number;
 							header?: { cwd?: string };
 							tail?: { hasMore: boolean; beforeId: string | null };
+							activeTools?: { toolCallId: string; toolName: string; args: unknown; intent?: string; partialResult?: unknown; startedAt: number }[];
+							agentsProgress?: SubagentProgressPayload[];
 						};
 					}>("session.subscribe", { sessionId });
 					initial = res.initial;
@@ -1305,6 +1316,8 @@ function AppInner(): ReactNode {
 						cursor: initial?.cursor ?? 0,
 						roundDurations: (initial as { roundDurations?: [number, number][] } | null)?.roundDurations,
 						tail: (initial as { tail?: { hasMore: boolean; beforeId: string | null } } | null)?.tail,
+						activeTools: initial?.activeTools,
+						agentsProgress: initial?.agentsProgress,
 					},
 					cwd,
 				);

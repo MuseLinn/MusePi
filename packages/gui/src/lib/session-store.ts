@@ -153,6 +153,12 @@ export class GuiSessionStore {
 			/** Tail-window info from the daemon's initial snapshot: older
 			 *  history exists beyond the loaded tail (kimi/DSH lazy paging). */
 			tail?: { hasMore: boolean; beforeId: string | null };
+			/** Subscribe-time hydration (daemon: running tool calls + owned
+			 *  subagent progress) — stream-only visuals that never replay
+			 *  from entries, so a session switch would otherwise blank the
+			 *  composer dock / swarm card until the next live frame. */
+			activeTools?: ActiveTool[];
+			agentsProgress?: SubagentProgressPayload[];
 		},
 		cwd: string,
 	) {
@@ -167,6 +173,19 @@ export class GuiSessionStore {
 		this.#roundDurations = merged;
 		this.#hasMore = snapshot.tail?.hasMore === true;
 		this.#beforeId = snapshot.tail?.beforeId ?? null;
+		// Mid-run join (resume while the agent works): the daemon snapshot's
+		// authoritative isStreaming seeds the run flag — live turn events
+		// maintain it and state frames correct it.
+		this.#working = snapshot.state?.isStreaming === true;
+		// Hydration seeds (see snapshot type): same projection the live
+		// agent-progress / tool_execution envelopes use, applied directly so
+		// no notifications or sound effects fire on re-subscribe.
+		for (const tool of snapshot.activeTools ?? []) {
+			this.#activeTools.set(tool.toolCallId, { ...tool });
+		}
+		for (const wrapper of snapshot.agentsProgress ?? []) {
+			this.#upsertSubagentProgress(wrapper);
+		}
 		this.#snapshot = this.#buildSnapshot();
 	}
 
@@ -325,6 +344,44 @@ export class GuiSessionStore {
 		this.#emit();
 	}
 
+	/** Project one SubagentProgressPayload into #progress + #agents (the
+	 *  live agent-progress path AND the subscribe-time hydration seed share
+	 *  it). Returns false when the payload is malformed. No notifications,
+	 *  no snapshot rebuild — callers own both. */
+	#upsertSubagentProgress(wrapper: SubagentProgressPayload): boolean {
+		const p = wrapper?.progress as AgentProgress | undefined;
+		if (!wrapper || !p || typeof p.id !== "string") return false;
+		this.#progress.set(p.id, wrapper);
+		// The daemon attaches the subagent's session file to the progress
+		// envelope (task/executor emits it with every frame); hasSessionFile
+		// gates the SubagentPanel transcript polling, so it must land on the
+		// snapshot. Upgrade-only on existing rows: a session file, once
+		// created, never goes away.
+		const hasSessionFile = wrapper.sessionFile != null;
+		const existing = this.#agents.get(p.id);
+		if (existing) {
+			existing.status = p.status === "running" ? "running" : "idle";
+			existing.lastActivity = Date.now();
+			if (hasSessionFile) existing.hasSessionFile = true;
+			this.#agents.set(p.id, existing);
+		} else {
+			// First sight of a subagent: synthesize its AgentSnapshot (the
+			// daemon stream carries progress but no per-subagent start
+			// envelope, so the row appears from the first progress frame).
+			this.#agents.set(p.id, {
+				id: p.id,
+				displayName: p.agent,
+				kind: "sub",
+				parentId: undefined,
+				status: p.status === "running" ? "running" : "idle",
+				hasSessionFile,
+				createdAt: Date.now(),
+				lastActivity: Date.now(),
+			});
+		}
+		return true;
+	}
+
 	/** Core envelope handling: state mutations + materialized view fold. */
 	#applyNow(event: StreamEvent): void {
 		// Authoritative state frames (daemon rebroadcast after revert/abort
@@ -369,6 +426,10 @@ export class GuiSessionStore {
 		}
 		if (event.kind === "agent-lifecycle") {
 			const p = event.payload as SubagentLifecyclePayload;
+			// Cross-session guard (client half of the daemon's ownership
+			// routing): a frame tagged for another session must never paint
+			// this session's swarm visuals.
+			if (p.sessionId !== undefined && p.sessionId !== this.#sessionId) return;
 			if (p.status === "completed") {
 				// Sub-agent finished — notify before the frames are dropped.
 				dispatchNotification(
@@ -408,38 +469,10 @@ export class GuiSessionStore {
 			// the AgentProgress lives inside it. AgentsPanel consumes the
 			// wrapper shape, keyed by the subagent id.
 			const wrapper = event.payload as SubagentProgressPayload;
-			const p = wrapper?.progress as AgentProgress | undefined;
-			if (!wrapper || !p || typeof p.id !== "string") {
+			if (wrapper.sessionId !== undefined && wrapper.sessionId !== this.#sessionId) return;
+			if (!this.#upsertSubagentProgress(wrapper)) {
 				this.#emit();
 				return;
-			}
-			this.#progress.set(p.id, wrapper);
-			// The daemon attaches the subagent's session file to the progress
-			// envelope (task/executor emits it with every frame); hasSessionFile
-			// gates the SubagentPanel transcript polling, so it must land on the
-			// snapshot. Upgrade-only on existing rows: a session file, once
-			// created, never goes away.
-			const hasSessionFile = wrapper.sessionFile != null;
-			const existing = this.#agents.get(p.id);
-			if (existing) {
-				existing.status = p.status === "running" ? "running" : "idle";
-				existing.lastActivity = Date.now();
-				if (hasSessionFile) existing.hasSessionFile = true;
-				this.#agents.set(p.id, existing);
-			} else {
-				// First sight of a subagent: synthesize its AgentSnapshot (the
-				// daemon stream carries progress but no per-subagent start
-				// envelope, so the row appears from the first progress frame).
-				this.#agents.set(p.id, {
-					id: p.id,
-					displayName: p.agent,
-					kind: "sub",
-					parentId: undefined,
-					status: p.status === "running" ? "running" : "idle",
-					hasSessionFile,
-					createdAt: Date.now(),
-					lastActivity: Date.now(),
-				});
 			}
 			this.#snapshot = this.#buildSnapshot();
 			this.#emit();
