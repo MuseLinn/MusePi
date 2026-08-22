@@ -3,14 +3,32 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
-import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useFloatingMenu } from "../lib/use-floating-menu";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 
 export interface WireModel {
 	id: string;
 	name: string;
 	provider: string;
+	contextWindow?: number | null;
+	maxTokens?: number | null;
+	reasoning?: boolean;
+	vision?: boolean;
+}
+
+/** Compact context-window label ("128K", "1M", "200K") for the row chip. */
+function formatContextWindow(n?: number | null): string | null {
+	if (n == null || n <= 0) return null;
+	if (n >= 1_000_000) {
+		const m = n / 1_000_000;
+		return `${Number.isInteger(m) ? m : m.toFixed(1).replace(/\.0$/, "")}M`;
+	}
+	if (n >= 1_000) {
+		const k = n / 1_000;
+		return `${Number.isInteger(k) ? k : k.toFixed(1).replace(/\.0$/, "")}K`;
+	}
+	return String(n);
 }
 
 // ── Favorite models (GUI-local pins) ──────────────────────────────────────
@@ -150,6 +168,22 @@ export function ModelSelector({
 		};
 	}, [rpc, allowSetDefault]);
 
+	// Registry mutations (models.add / models.remove) broadcast models.changed:
+	// re-fetch so an ALREADY-MOUNTED selector picks up new/removed custom
+	// providers without a session switch. The empty-state composer re-mounts
+	// naturally and always looked fresh; the in-session one stays mounted and
+	// used to keep its stale list until the user left and re-entered.
+	const [catalogSeq, setCatalogSeq] = useState(0);
+	useEffect(() => {
+		if (!rpc) return;
+		return rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "models.changed") setCatalogSeq(s => s + 1);
+		});
+	}, [rpc]);
+
+	// Refresh the catalog only (no seeding): session mode lists the session's
+	// available models, welcome mode the shared registry catalog.
 	useEffect(() => {
 		let alive = true;
 		const method = sessionId ? "models.list" : "models.listAvailable";
@@ -159,33 +193,34 @@ export function ModelSelector({
 			.then(list => {
 				if (!alive) return;
 				setModels(list ?? []);
-				const items = list ?? [];
-				// Seeding chain: user pick → the session's live model
-				// (authoritative: survives /switch, model_downshift, and a
-				// stale global preselect from another session) → explicit
-				// preselect (welcome carry-in / history header) → the
-				// DEFAULT-role model → first listed. presetId may be a bare
-				// id (daemon snapshot) or a provider/id composite —
-				// normalize to the composite so the check highlight never
-				// lights two providers of the same id.
-				setModelId(prev => {
-					if (userPicked.current) return prev;
-					const candidate = sessionId
-						? currentModelId || presetId || defaultRoleModel
-						: presetId || defaultRoleModel;
-					const match = candidate
-						? items.find(m => m.id === candidate || `${m.provider}/${m.id}` === candidate)
-						: undefined;
-					if (match) return `${match.provider}/${match.id}`;
-					const first = items[0];
-					return first ? `${first.provider}/${first.id}` : "";
-				});
 			})
 			.catch(() => {});
 		return () => {
 			alive = false;
 		};
-	}, [rpc, sessionId, presetId, currentModelId, defaultRoleModel]);
+	}, [rpc, sessionId, catalogSeq]);
+
+	// Seeding chain: user pick → the session's live model (authoritative:
+	// survives /switch, model_downshift, and a stale global preselect from
+	// another session) → explicit preselect (welcome carry-in / history
+	// header) → the DEFAULT-role model → first listed. presetId may be a bare
+	// id (daemon snapshot) or a provider/id composite — normalize to the
+	// composite so the check highlight never lights two providers of the same
+	// id. Re-runs after a catalog refresh (models.changed may have added or
+	// removed an entry) but the user-pick lock keeps a made selection intact.
+	useEffect(() => {
+		const items = models;
+		const candidate = sessionId ? currentModelId || presetId || defaultRoleModel : presetId || defaultRoleModel;
+		setModelId(prev => {
+			if (userPicked.current) return prev;
+			const match = candidate
+				? items.find(m => m.id === candidate || `${m.provider}/${m.id}` === candidate)
+				: undefined;
+			if (match) return `${match.provider}/${match.id}`;
+			const first = items[0];
+			return first ? `${first.provider}/${first.id}` : "";
+		});
+	}, [models, sessionId, currentModelId, presetId, defaultRoleModel]);
 
 	// Dismissal is unified in useFloatingMenu (outside mousedown + Escape).
 
@@ -240,15 +275,19 @@ export function ModelSelector({
 		return 0;
 	});
 
-	const select = (id: string): void => {
-		const selected = models.find(m => m.id === id);
+	const select = (m: WireModel): void => {
+		// The clicked row IS the model — never re-resolve by bare id: two
+		// providers serve the same id (opencode-go vs b-ai
+		// deepseek-v4-flash-vision-exp) and a bare-id find would pick the
+		// first favorite-ranked one, silently switching providers.
+		const selected = m;
 		tapFeedback(1);
 		// Lock the seeding chain: a real pick always wins from now on.
 		userPicked.current = true;
 		// Selection state is the provider/id composite: two providers serving
 		// the same bare id (opencode-go vs opencode-zen both offer
 		// deepseek-v4-flash) must highlight only the picked row.
-		setModelId(selected ? `${selected.provider}/${selected.id}` : id);
+		setModelId(`${selected.provider}/${selected.id}`);
 		setOpen(false);
 		if (sessionId) {
 			// Notify AFTER the daemon switched the model — consumers re-fetch
@@ -257,11 +296,11 @@ export function ModelSelector({
 			// rides along so the daemon resolves the exact model, not the first
 			// provider that happens to serve the same id.
 			void rpc
-				.request("session.setModel", { sessionId, model: { id, provider: selected?.provider } })
-				.then(() => onSelect?.(id, selected?.provider))
+				.request("session.setModel", { sessionId, model: { id: selected.id, provider: selected.provider } })
+				.then(() => onSelect?.(selected.id, selected.provider))
 				.catch(() => {});
 		} else {
-			onSelect?.(id, selected?.provider);
+			onSelect?.(selected.id, selected.provider);
 		}
 	};
 
@@ -275,7 +314,9 @@ export function ModelSelector({
 				aria-label={t("select model")}
 			>
 				<Icon name="ai-agent" className="h-3.5 w-3.5" />
-				<span className="truncate" style={{ maxWidth: maxLabelWidth }}>{label}</span>
+				<span className="truncate" style={{ maxWidth: maxLabelWidth }}>
+					{label}
+				</span>
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			{renderMenu(
@@ -291,63 +332,84 @@ export function ModelSelector({
 						/>
 					</div>
 					<div className="gui-model-list" ref={listRef}>
-					{filtered.length === 0 && <div className="gui-model-empty">{t("no matching models")}</div>}
-					{sorted.map(m => {
-						const favKey = favKeyOf(m);
-						const fav = favs.includes(favKey) || favs.includes(m.id);
-						return (
-							// Row is a div (role=button) so the favorite star can be a
-							// real <button> inside it — nested buttons are invalid HTML.
-							<div
-								key={`${m.provider}/${m.id}`}
-								role="button"
-								tabIndex={0}
-								className={`gui-model-opt${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
-								onClick={() => select(m.id)}
-								onKeyDown={e => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										select(m.id);
-									}
-								}}
-							>
-								<span className="flex min-w-0 flex-1 items-center gap-2">
-									<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
-									<span className="gui-provider-chip">{m.provider}</span>
-								</span>
-								<button
-									type="button"
-									className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
-									title={fav ? t("unfavorite model") : t("favorite model")}
-									aria-label={fav ? t("unfavorite model") : t("favorite model")}
-									onClick={e => {
-										e.stopPropagation();
-										toggleFavModel(m.id, m.provider);
+						{filtered.length === 0 && <div className="gui-model-empty">{t("no matching models")}</div>}
+						{sorted.map(m => {
+							const favKey = favKeyOf(m);
+							const fav = favs.includes(favKey) || favs.includes(m.id);
+							return (
+								// Row is a div (role=button) so the favorite star can be a
+								// real <button> inside it — nested buttons are invalid HTML.
+								<div
+									key={`${m.provider}/${m.id}`}
+									role="button"
+									tabIndex={0}
+									className={`gui-model-opt${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
+									onClick={() => select(m)}
+									onKeyDown={e => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											select(m);
+										}
 									}}
 								>
-									<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
-								</button>
-								{allowSetDefault && (
+									<span className="flex min-w-0 flex-1 items-center gap-2">
+										<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
+										<span className="gui-model-cap" title={m.reasoning ? "reasoning" : undefined}>
+											{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
+											{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
+											{formatContextWindow(m.contextWindow) && (
+												<span className="gui-model-ctx">{formatContextWindow(m.contextWindow)}</span>
+											)}
+										</span>
+										<span className="gui-provider-chip">{m.provider}</span>
+									</span>
 									<button
 										type="button"
-										className={`gui-model-fav${`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? " gui-model-fav--on" : ""}`}
-										title={`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? t("default model") : t("set as default model")}
-										aria-label={`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? t("default model") : t("set as default model")}
+										className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
+										title={fav ? t("unfavorite model") : t("favorite model")}
+										aria-label={fav ? t("unfavorite model") : t("favorite model")}
 										onClick={e => {
 											e.stopPropagation();
-											setAsDefault(m.id, m.provider);
+											toggleFavModel(m.id, m.provider);
 										}}
 									>
-										<Icon
-											name={`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? "target-fill" : "target"}
-											className="h-3.5 w-3.5"
-										/>
+										<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
 									</button>
-								)}
-						{`${m.provider}/${m.id}` === modelId && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}
-						</div>
-					);
-					})}
+									{allowSetDefault && (
+										<button
+											type="button"
+											className={`gui-model-fav${`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? " gui-model-fav--on" : ""}`}
+											title={
+												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
+													? t("default model")
+													: t("set as default model")
+											}
+											aria-label={
+												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
+													? t("default model")
+													: t("set as default model")
+											}
+											onClick={e => {
+												e.stopPropagation();
+												setAsDefault(m.id, m.provider);
+											}}
+										>
+											<Icon
+												name={
+													`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
+														? "target-fill"
+														: "target"
+												}
+												className="h-3.5 w-3.5"
+											/>
+										</button>
+									)}
+									{`${m.provider}/${m.id}` === modelId && (
+										<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
+									)}
+								</div>
+							);
+						})}
 					</div>
 				</div>,
 			)}

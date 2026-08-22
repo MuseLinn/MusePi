@@ -409,6 +409,7 @@ export const general = {
 	"take back newest": "取回最新一条",
 	"take back the newest queued message": "把最新一条排队消息取回输入框",
 	"clear queue": "清空队列",
+	"take back": "取回",
 	// Session-control round: terminate confirm + revert history.
 	"terminate current turn?": "终止当前回合?",
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
@@ -454,7 +455,6 @@ export const general = {
 	"delete override": "删除此覆盖，回退继承值",
 	"override read only": "项目文件中的手工配置，请在配置目录编辑",
 	"read only": "只读",
-
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

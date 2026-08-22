@@ -378,6 +378,18 @@ export class GuiSessionStore {
 				dispatchPetActivity("subtask", p.description ?? p.agent);
 			}
 			this.#lifecycle.set(p.id, p);
+			// The lifecycle envelope carries the authoritative session file —
+			// upgrade the row's hasSessionFile so the SubagentPanel can fetch
+			// the transcript even when the agent's progress frames never
+			// carried one (or the file exists from the start). Terminal frame
+			// cleanup below drops progress/lifecycle; the #agents row and its
+			// hasSessionFile flag survive so the completed-subagent drawer
+			// still reads the transcript.
+			const lifecycleRow = this.#agents.get(p.id);
+			if (lifecycleRow && p.sessionFile != null) {
+				lifecycleRow.hasSessionFile = true;
+				this.#agents.set(p.id, lifecycleRow);
+			}
 			// Terminal lifecycle: the progress/lifecycle frames are process
 			// data for live visuals — without this, long sessions keep one
 			// entry per finished subagent forever. The #agents row stays
@@ -402,10 +414,17 @@ export class GuiSessionStore {
 				return;
 			}
 			this.#progress.set(p.id, wrapper);
+			// The daemon attaches the subagent's session file to the progress
+			// envelope (task/executor emits it with every frame); hasSessionFile
+			// gates the SubagentPanel transcript polling, so it must land on the
+			// snapshot. Upgrade-only on existing rows: a session file, once
+			// created, never goes away.
+			const hasSessionFile = wrapper.sessionFile != null;
 			const existing = this.#agents.get(p.id);
 			if (existing) {
 				existing.status = p.status === "running" ? "running" : "idle";
 				existing.lastActivity = Date.now();
+				if (hasSessionFile) existing.hasSessionFile = true;
 				this.#agents.set(p.id, existing);
 			} else {
 				// First sight of a subagent: synthesize its AgentSnapshot (the
@@ -417,7 +436,7 @@ export class GuiSessionStore {
 					kind: "sub",
 					parentId: undefined,
 					status: p.status === "running" ? "running" : "idle",
-					hasSessionFile: false,
+					hasSessionFile,
 					createdAt: Date.now(),
 					lastActivity: Date.now(),
 				});

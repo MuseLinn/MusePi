@@ -226,7 +226,7 @@ export function SessionSidebar({
 	const sessionListRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(sessionListRef);
 	// Persisted project list (projects tab): every folder the app knows —
-	// seeded from session cwds on first load and grown by folder picks
+	// seeded from session cwds (effect below) and grown by folder picks
 	// (musepi-gui-project-added, dispatched by app.tsx after pickDirectory) so
 	// empty folders show up even before any session exists. Full paths.
 	const [projects, setProjects] = useState<string[]>(() => {
@@ -242,6 +242,18 @@ export function SessionSidebar({
 	const [collapsedProjects, setCollapsedProjects] = useState<string[]>(() => {
 		try {
 			const raw = localStorage.getItem("musepi-gui-projects-collapsed");
+			const parsed: unknown = raw ? JSON.parse(raw) : [];
+			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+		} catch {
+			return [];
+		}
+	});
+	// Tombstones for the session-cwd seeding below: a project the user
+	// explicitly removed must not be silently resurrected just because its
+	// sessions still exist.
+	const [dismissedProjects, setDismissedProjects] = useState<string[]>(() => {
+		try {
+			const raw = localStorage.getItem("musepi-gui-projects-dismissed");
 			const parsed: unknown = raw ? JSON.parse(raw) : [];
 			return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
 		} catch {
@@ -300,17 +312,45 @@ export function SessionSidebar({
 			// storage unavailable
 		}
 	}, [collapsedProjects]);
+	useEffect(() => {
+		try {
+			localStorage.setItem("musepi-gui-projects-dismissed", JSON.stringify(dismissedProjects));
+		} catch {
+			// storage unavailable
+		}
+	}, [dismissedProjects]);
 	// Folders the app picks (打开文件夹 menu, ⌘O, welcome composer) announce
-	// themselves here — add them so empty projects appear immediately.
+	// themselves here — add them so empty projects appear immediately, and
+	// clear any dismissal tombstone: an explicit re-add wins.
 	useEffect(() => {
 		const onProjectAdded = (e: Event): void => {
 			const path = (e as CustomEvent<string>).detail;
 			if (typeof path !== "string" || !path) return;
 			setProjects(prev => (prev.includes(path) ? prev : [...prev, path]));
+			setDismissedProjects(prev => (prev.includes(path) ? prev.filter(p => p !== path) : prev));
 		};
 		window.addEventListener("musepi-gui-project-added", onProjectAdded);
 		return () => window.removeEventListener("musepi-gui-project-added", onProjectAdded);
 	}, []);
+	// Seed the project list from session cwds — the behavior the storage-key
+	// comment always promised but that was never implemented. The welcome
+	// chip reads `musepi-gui-project` (current workspace) while this tab read
+	// only the explicitly-added `musepi-gui-projects` list, so a project the
+	// user opened via the header showed in the chip but left the tab blank.
+	// Every folder with at least one session now shows as a block. Remote-
+	// session mirrors (~/.musepi/remote/…) stay out — they belong to
+	// 远程连接, not the local workspace list.
+	useEffect(() => {
+		const cwds = new Set<string>();
+		for (const [, meta] of sessionMeta) {
+			if (meta.cwd && !/(^|[\\/])\.musepi[\\/]remote[\\/]/.test(meta.cwd)) cwds.add(meta.cwd);
+		}
+		if (cwds.size === 0) return;
+		setProjects(prev => {
+			const missing = [...cwds].filter(c => !prev.includes(c) && !dismissedProjects.includes(c));
+			return missing.length === 0 ? prev : [...prev, ...missing];
+		});
+	}, [sessionMeta, dismissedProjects]);
 	// The header's session ⋯ menu can archive the active session — re-read
 	// the shared archive list so this component's in-memory copy follows.
 	useEffect(() => {
@@ -406,6 +446,9 @@ export function SessionSidebar({
 			if (!ok) return;
 			setProjects(prev => prev.filter(p => p !== path));
 			setCollapsedProjects(prev => prev.filter(p => p !== path));
+			// Keep the seeder honest: remember the explicit removal so the
+			// session-cwd seed doesn't resurrect the block on the next poll.
+			setDismissedProjects(prev => (prev.includes(path) ? prev : [...prev, path]));
 		});
 	};
 	// Collapse/expand every project at once (tab-row quick toggle).

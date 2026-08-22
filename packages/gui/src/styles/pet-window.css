@@ -111,9 +111,10 @@
 /* Bubble stack above the pet — iOS Notification-Center style. Collapsed:
  * only the newest bubble (a frosted card with an "N more" count chip);
  * clicked → the full list expands (scrolls inside the window instead of
- * clipping past the top edge). Glass recipe matches the main window
- * (.gui-main: translucent surface + blur(24px) saturate(180%)), and the
- * pet window's own vibrancy layer supplies the real backdrop to blur. */
+ * clipped past the top edge). Glass recipe matches the main window
+ * (.gui-main: translucent surface + blur(24px) saturate(180%)).
+ * The card self-draws its frosted-sheen (translucent tint + highlight
+ * + hairline) on the transparent window body. */
 .pet-bubbles {
 	position: absolute;
 	/* bottom:174px puts the stack's bottom EDGE at y=116 (290−174) — 20px
@@ -145,11 +146,11 @@
 	padding: 8px 12px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
 	border-radius: 16px;
-	/* Glass-look surface. Fallback (Win/Linux transparent window): a
-	 * translucent tint + top highlight gradient + inner hairline fake the
-	 * frosted sheen (no vibrancy available). macOS: the window carries
-	 * native vibrancy and .pet-glass-native adds the real backdrop blur
-	 * on top of this same tint. */
+	/* Glass-look surface: a translucent tint + top highlight gradient +
+	 * inner hairline fake the frosted sheen. The window is fully
+	 * transparent (per-pixel alpha), so the body behind the card is
+	 * desktop — no native vibrancy layer to blur; the self-drawn
+	 * recipe is the one and only glass path on every platform. */
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
 		var(--pet-surface);
@@ -344,9 +345,10 @@
 }
 
 /* ── Bubble window (bubble.html, 双窗口) ─────────────────────────────────
- * The bubbles/panel live in their OWN window (real vibrancy glass, sized
- * to exactly its content). The window content is the glass card; the
- * panel inside it is flow-positioned so its box drives the reported size. */
+ * The bubbles/panel live in their OWN window (fully transparent
+ * per-pixel window on every platform, sized to exactly its content).
+ * The window body stays transparent so only the rounded glass cards
+ * are visible — no native vibrancy, no window-wide "底色" band. */
 .pet-bubble-window {
 	position: relative;
 	width: 100vw;
@@ -387,24 +389,10 @@
 	min-height: 0;
 }
 
-/* ── Real frosted glass (macOS) ────────────────────────────────────────
- * The bubble window carries native under-window vibrancy on macOS
- * (main.cjs — the main window's recipe, .pet-glass-native set by
- * bubble-main.tsx), so the cards blur the desktop through it — same
- * numbers as the main window's .gui-main glass (blur(24px)
- * saturate(180%)). Win/Linux keep the self-drawn translucent recipe
- * above (vibrancy unavailable there). */
-.pet-glass-native .pet-bubble,
-.pet-glass-native .pet-bubble__head,
-.pet-glass-native .pet-bubble__more,
-.pet-glass-native .pet-panel {
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
-}
-
 /* ── Interaction panel (click the pet to toggle) ─────────────────────────
  * In the pet window (legacy positioning) the panel was absolute over the
  * pet; now it renders in the bubble window only. */
+
 .pet-panel {
 	position: absolute;
 	top: 10px;
@@ -418,13 +406,10 @@
 	box-sizing: border-box;
 	border-radius: 14px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
-	/* Self-drawn glass (same recipe as .pet-bubble) on the fallback
-	 * (transparent) window: backdrop-filter cannot blur the desktop
-	 * through a transparent window — the translucent tint + top highlight
-	 * + inner hairline fake the frosted sheen, and the backdrop-filter
-	 * stays as a best-effort for content layered behind the panel. On
-	 * macOS the window carries native vibrancy and .pet-glass-native
-	 * overrides this with the real blur (blur(24px) saturate(180%)). */
+	/* Self-drawn glass (same recipe as .pet-bubble): translucent tint +
+	 * top highlight + inner hairline fake the frosted sheen. The window
+	 * is fully transparent (no vibrancy) so backdrop-filter is a
+	 * best-effort for in-window content layered behind the panel. */
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
 		var(--pet-panel-bg);

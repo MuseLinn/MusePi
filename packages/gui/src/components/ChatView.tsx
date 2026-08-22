@@ -409,7 +409,9 @@ export function ChatView({
 		stopSpeakRef.current = speak(
 			lastText,
 			rpc,
-			{ rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined },
+			{
+				rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined,
+			},
 			activity => {
 				if (activity.phase === "speaking") setSpeakingId(lastId);
 				else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
@@ -661,13 +663,16 @@ export function ChatView({
 	// this reply, then re-send it — the turn replays from the user node.
 	// The old reply (and any later tail) lands in the revert backup, so
 	// the 撤回 dock can restore it. NOT "send the assistant text back".
+	// deliverAs is OMITTED on purpose: an explicit "followUp"/"steer" only
+	// QUEUES the message without starting a turn when the session is idle
+	// (AgentSession.sendUserMessage) — retry must start a fresh turn.
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
 		if (!store) return;
 		try {
 			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
 			await onReloadSession?.();
 			await refreshReverts();
-			onSend(text, undefined, "followUp");
+			onSend(text);
 		} catch {
 			// daemon rejected — keep the transcript as-is
 		}
@@ -711,8 +716,13 @@ export function ChatView({
 			// daemon rejected — keep the list as-is
 		}
 	};
+	// 撤回 dock 的「重新发送」: re-send the reverted text as a NEW user
+	// prompt. deliverAs is OMITTED on purpose — an explicit "followUp" only
+	// queues the message without starting a turn when idle, so the button
+	// would look dead. Omitting it starts a turn when idle (steers while
+	// streaming), which is the actual "resend" semantic.
 	const resendReverted = (text: string): void => {
-		onSend(text, undefined, "followUp");
+		onSend(text);
 	};
 	const discardReverted = async (index: number): Promise<void> => {
 		if (!store) return;
@@ -1104,6 +1114,11 @@ export function ChatView({
 														colorBlind={displaySettings.colorBlindMode === true}
 														onQuote={text => appendQuote(text)}
 														onRevert={(id, text) => void revertToMessage(id, text, false)}
+														/* 编辑并重发 (Transcript onEdit, previously unwired):
+														 * backfill the composer with the message text for
+														 * re-editing — same pendingEdit path as the revert
+														 * dock's 恢复到输入框 and the fork flow. */
+														onEdit={(_id, text) => setPendingEdit(text)}
 														onFork={(id, text, includeTarget) =>
 															void forkFromMessage(id, text, includeTarget)
 														}
@@ -1122,7 +1137,12 @@ export function ChatView({
 															stopSpeakRef.current = speak(
 																text,
 																rpc,
-																{ rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined },
+																{
+																	rate:
+																		typeof displaySettings["tts.rate"] === "number"
+																			? (displaySettings["tts.rate"] as number)
+																			: undefined,
+																},
 																activity => {
 																	if (activity.phase === "speaking") setSpeakingId(entryId);
 																	else if (
@@ -1167,6 +1187,7 @@ export function ChatView({
 												onFork={(entry, text, includeTarget) =>
 													void forkFromMessage(entry.id, text, includeTarget)
 												}
+												onRevertTo={entry => void revertToMessage(entry.id, "", false)}
 											/>
 											{/* In-message text selection actions (openchamber parity):
 											 * quote a snippet (not the whole message), copy, start a
@@ -1185,9 +1206,7 @@ export function ChatView({
 													// v1.19 parity: each "add to notes" becomes its own
 													// note (notes.create), never appended to the blob.
 													const cwd = store.cwd;
-													void rpc
-														.request("notes.create", { cwd, body: `> ${text}` })
-														.catch(() => {});
+													void rpc.request("notes.create", { cwd, body: `> ${text}` }).catch(() => {});
 												}}
 											/>
 											{/* Idle recap (TUI `※ recap:` status-line parity): the daemon

@@ -2245,12 +2245,18 @@ a.tr-tool-search-title:hover {
 	padding: 0 10px 9px;
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
+	/* 标准折叠动效(useCollapseHeight 驱动 --h):与 .tr-think-body /
+	 * .tv-body 同款 —— 高度+内边距随 --spring 过渡,不再类切换硬跳。 */
+	box-sizing: content-box;
+	height: var(--h, 0px);
+	overflow: hidden;
+	transition:
+		height 220ms var(--spring),
+		padding 220ms var(--spring);
 }
 
 .tr-ttsr-body--closed {
-	height: 0;
-	overflow: hidden;
-	padding: 0 10px;
+	padding: 0;
 }
 
 .tr-ttsr-desc {

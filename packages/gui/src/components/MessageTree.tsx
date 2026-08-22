@@ -147,6 +147,7 @@ export function MessageTreeButton({
 	entries,
 	transcriptRef,
 	onFork,
+	onRevertTo,
 }: {
 	entries: readonly SessionEntry[];
 	transcriptRef: RefObject<HTMLDivElement | null>;
@@ -155,6 +156,9 @@ export function MessageTreeButton({
 	 *  its text (re-answer); assistant/toolResult nodes keep the node as the
 	 *  new session's last record (continue from there). */
 	onFork?(entry: SessionEntry, text: string | undefined, includeTarget: boolean): void;
+	/** 撤回到此消息(TUI /tree 切换的 GUI 对应原语):user 节点截断该消息
+	 *  之后的会话尾部(daemon 备份,撤回 dock 可还原)。 */
+	onRevertTo?(entry: SessionEntry): void;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [q, setQ] = useState("");
@@ -164,6 +168,17 @@ export function MessageTreeButton({
 	const panelRef = useRef<HTMLDivElement | null>(null);
 	const tree = useMemo(() => buildTurnTree(entries), [entries]);
 	const filtered = useMemo(() => filterTree(applyTreeFilter(tree, filterMode), q), [tree, filterMode, q]);
+	// 当前位置链(TUI currentLeafId/activePath parity):从最后一个根节点一路
+	// 取末子节点——即 transcript 尾部所在的节点链,行上高亮显示"你在哪"。
+	const currentIds = useMemo(() => {
+		const ids = new Set<string>();
+		let node: TurnNode | undefined = tree[tree.length - 1];
+		while (node) {
+			ids.add(node.entry.id);
+			node = node.children[node.children.length - 1];
+		}
+		return ids;
+	}, [tree]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -194,7 +209,10 @@ export function MessageTreeButton({
 
 	const renderNode = (node: TurnNode, depth: number): ReactNode => (
 		<div key={node.entry.id}>
-			<div className="gui-mtree-row" style={{ paddingLeft: 8 + depth * 14 }}>
+			<div
+				className={`gui-mtree-row${currentIds.has(node.entry.id) ? " gui-mtree-row--current" : ""}`}
+				style={{ paddingLeft: 8 + depth * 14 }}
+			>
 				<button type="button" className="gui-mtree-row-btn" onClick={() => jump(node)} title={node.entry.timestamp}>
 					{node.kind === "user" ? (
 						<Icon name="user" className="h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--user" />
@@ -207,6 +225,17 @@ export function MessageTreeButton({
 						{node.text || "…"}
 					</span>
 				</button>
+				{onRevertTo && node.kind === "user" && (
+					<button
+						type="button"
+						className="gui-mtree-fork"
+						title={t("revert message")}
+						aria-label={t("revert message")}
+						onClick={() => onRevertTo(node.entry)}
+					>
+						<Icon name="arrow-go-back" className="h-3 w-3" />
+					</button>
+				)}
 				{onFork && (
 					<button
 						type="button"

@@ -67,39 +67,59 @@
 	margin-left: 2px;
 }
 
-/* ── Error bar ────────────────────────────────────────────────────────
- * Transient failure banner (session.open/send, stale sessions): a toast
- * pinned over the shell top. The shell is a ROW flex, so an in-flow child
- * would collapse into a vertical red strip on the LEFT edge — absolute
- * keeps it a full-width bar above the panes. Auto-dismisses (app.tsx
- * ERROR_BANNER_MS) and offers a manual × so a stale failure never sticks. */
+/* ── Error toast ──────────────────────────────────────────────────────
+ * Transient failure card (session.open/send, stale sessions): a compact
+ * floating toast docked bottom-right, so it never covers the title bar,
+ * header controls, or any other interactive chrome — clicks pass around
+ * it everywhere else. Auto-dismisses (app.tsx ERROR_BANNER_MS) and
+ * offers a manual × so a stale failure never sticks. */
 
-.gui-error-bar {
+.gui-error-toast {
 	position: absolute;
-	top: 8px;
-	left: 14px;
-	right: 14px;
+	top: auto;
+	right: 16px;
+	bottom: 16px;
+	left: auto;
 	z-index: 150; /* above the header/pane popups, below modal backdrops */
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	max-width: min(420px, calc(100% - 32px));
 	margin: 0;
-	padding: 6px 10px;
-	border-radius: var(--radius-md);
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
 	background: var(--color-danger-soft);
 	border: 1px solid var(--color-danger-bd);
 	font-size: var(--ui-font-size-xs);
 	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
 	-webkit-app-region: no-drag;
+	animation: gui-error-toast-in 220ms var(--spring) both;
 }
 
-.gui-error-bar-text {
+@keyframes gui-error-toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+}
+
+.gui-motion-off .gui-error-toast {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-error-toast {
+		animation: none;
+	}
+}
+
+.gui-error-toast-text {
 	flex: 1;
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
 
-.gui-error-bar-x {
+.gui-error-toast-x {
 	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
@@ -112,7 +132,7 @@
 	cursor: pointer;
 }
 
-.gui-error-bar-x:hover {
+.gui-error-toast-x:hover {
 	opacity: 1;
 	background: color-mix(in oklab, var(--color-danger) 15%, transparent);
 }

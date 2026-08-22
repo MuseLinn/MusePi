@@ -751,17 +751,17 @@ export function ModelSection({
 								);
 							})()}
 					</div>
-					{model ? (
-						<div className="truncate text-[12px] text-[var(--color-text-faint)]" title={model}>
-							{model}
-						</div>
-					) : resolved ? (
-						<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-							{t("auto selection")}: {resolved.name || resolved.id}
-						</div>
-					) : (
-						<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("auto selection applies")}</div>
-					)}
+					<div className="gui-role-status" title={model}>
+						{model ? (
+							<div className="truncate">{resolved?.name || model}</div>
+						) : resolved ? (
+							<div className="truncate">
+								{t("auto selection")}: {resolved.name || resolved.id}
+							</div>
+						) : (
+							<div className="italic">{t("auto selection applies")}</div>
+						)}
+					</div>
 				</div>
 				<div className="gui-role-model-row">
 					<ModelSelector
@@ -1328,7 +1328,8 @@ export function ModelSection({
 															))}
 														</div>
 													)}
-													{roleStorage === "project" && projectOverrides.length > 0 &&
+													{roleStorage === "project" &&
+														projectOverrides.length > 0 &&
 														(() => {
 															// Count only REAL overrides — a project key whose
 															// value equals the global value is a no-op echo,
@@ -1338,46 +1339,53 @@ export function ModelSection({
 															);
 															if (real.length === 0) return null;
 															return (
-														<div className="gui-project-overrides">
-															<div className="gui-project-overrides-title">
-																<span>{t("project overrides")}</span>
-																<span className="text-[12px] text-[var(--color-text-faint)]">
-																	{t("overrides count {count}", { count: String(real.length) })}
-																</span>
-															</div>
-															{real.map(entry => (
-																<div key={entry.path} className="gui-project-override-row">
-																	<code className="gui-project-override-path">{entry.path}</code>
-																	<span className="gui-project-override-value" title={entry.projectValue}>
-																		{entry.projectValue}
-																	</span>
-																	{entry.globalValue != null && entry.globalValue !== entry.projectValue && (
-																		<s className="gui-project-override-global" title={String(entry.globalValue)}>
-																			{entry.globalValue}
-																		</s>
-																	)}
-																	{entry.path.startsWith("modelRoles.") ? (
-																		<button
-																			type="button"
-																			className="gui-btn gui-btn--icon"
-																			title={t("delete override")}
-																			aria-label={t("delete override")}
-																			onClick={() => deleteProjectOverride(entry.path)}
-																		>
-																			<Icon name="delete-bin" className="h-3.5 w-3.5" />
-																		</button>
-																	) : (
-																		<span
-																			className="text-[11px] text-[var(--color-text-faint)]"
-																			title={t("override read only")}
-																		>
-																			{t("read only")}
+																<div className="gui-project-overrides">
+																	<div className="gui-project-overrides-title">
+																		<span>{t("project overrides")}</span>
+																		<span className="text-[12px] text-[var(--color-text-faint)]">
+																			{t("overrides count {count}", { count: String(real.length) })}
 																		</span>
-																	)}
+																	</div>
+																	{real.map(entry => (
+																		<div key={entry.path} className="gui-project-override-row">
+																			<code className="gui-project-override-path">{entry.path}</code>
+																			<span
+																				className="gui-project-override-value"
+																				title={entry.projectValue}
+																			>
+																				{entry.projectValue}
+																			</span>
+																			{entry.globalValue != null &&
+																				entry.globalValue !== entry.projectValue && (
+																					<s
+																						className="gui-project-override-global"
+																						title={String(entry.globalValue)}
+																					>
+																						{entry.globalValue}
+																					</s>
+																				)}
+																			{entry.path.startsWith("modelRoles.") ? (
+																				<button
+																					type="button"
+																					className="gui-btn gui-btn--icon"
+																					title={t("delete override")}
+																					aria-label={t("delete override")}
+																					onClick={() => deleteProjectOverride(entry.path)}
+																				>
+																					<Icon name="delete-bin" className="h-3.5 w-3.5" />
+																				</button>
+																			) : (
+																				<span
+																					className="text-[11px] text-[var(--color-text-faint)]"
+																					title={t("override read only")}
+																				>
+																					{t("read only")}
+																				</span>
+																			)}
+																		</div>
+																	))}
 																</div>
-															))}
-														</div>
-														);
+															);
 														})()}
 												</>
 											)}

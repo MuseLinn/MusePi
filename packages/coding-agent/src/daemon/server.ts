@@ -60,7 +60,7 @@ import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveProviderModelReference } from "../config/model-resolver";
 import type { PromptTemplate } from "../config/prompt-templates";
-import { type Settings, isSensitiveSettingPath } from "../config/settings";
+import { isSensitiveSettingPath, type Settings } from "../config/settings";
 import type { SettingPath } from "../config/settings-schema";
 // TUI /debug selector parity (desktop adaptation): the same pure helpers the
 // TUI debug menu uses, exposed as debug.* RPCs so the GUI can render its own
@@ -440,7 +440,7 @@ import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
 import { EventBus } from "../utils/event-bus";
 import { openPath } from "../utils/open";
-import { type ApprovalBridge, createApprovalBridge, type PendingApproval } from "./approval-bridge";
+import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal } from "./journal";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
@@ -613,6 +613,29 @@ export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 /** Journal catch-up pages: flush + yield every N records so a huge replay
  *  (long idle gap) interleaves with other traffic instead of flooding. */
 const CATCHUP_PAGE_SIZE = 500;
+/** Wire payload for an `ask-request` push (ask card, TUI ask parity):
+ *  multi-question dialogs carry the questions array; single select/input
+ *  keep the flat title/options shape. Shared by the live broadcast and the
+ *  subscribe-time replay so both surfaces stay in sync. */
+function askRequestPayload(record: PendingAsk):
+	| {
+			requestId: string;
+			title: string;
+			options: string[] | null;
+			multi: boolean;
+			mode: "select" | "input";
+	  }
+	| { requestId: string; title: string; mode: "dialog"; questions: PendingAsk["questions"] } {
+	return record.mode === "dialog"
+		? { requestId: record.requestId, title: record.title, mode: "dialog", questions: record.questions }
+		: {
+				requestId: record.requestId,
+				title: record.title,
+				options: record.options,
+				multi: record.multi,
+				mode: record.mode,
+			};
+}
 /** Idle-recap delay bounds (TUI event-controller parity). */
 const IDLE_RECAP_MIN_SECONDS = 1;
 const IDLE_RECAP_MAX_SECONDS = 3600;
@@ -1323,30 +1346,10 @@ export class DaemonSessionHost {
 			record => {
 				// ask tool questions / custom input (TUI ask parity): push the
 				// question card to every GUI subscriber; they answer via
-				// session.askAnswer. Multi-question dialogs (mode "dialog")
-				// carry the questions array; single select/input keep the
-				// flat title/options shape.
+				// session.askAnswer.
 				for (const send of live.subscribers.values()) {
 					try {
-						send({
-							kind: "ask-request",
-							seq: ++live.seq,
-							payload:
-								record.mode === "dialog"
-									? {
-											requestId: record.requestId,
-											title: record.title,
-											mode: "dialog",
-											questions: record.questions,
-										}
-									: {
-											requestId: record.requestId,
-											title: record.title,
-											options: record.options,
-											multi: record.multi,
-											mode: record.mode,
-										},
-						});
+						send({ kind: "ask-request", seq: ++live.seq, payload: askRequestPayload(record) });
 					} catch {
 						// subscriber socket died; removed on close
 					}
@@ -2381,6 +2384,13 @@ export class DaemonSessionHost {
 		// subscription contract (one current store, daemon pushes only the
 		// selected session) is replaced by per-session routing on the client.
 		live.subscribers.set(conn.id, event => this.emitEvent(conn, { ...event, sessionId }));
+		// Replay still-unanswered ask questions to THIS connection: the ask
+		// card lives in app-level state (not the per-session journal), so a
+		// question raised while another session was displayed would otherwise
+		// never surface when the user switches here.
+		for (const record of live.approvals.pendingAsks.values()) {
+			this.emitEvent(conn, { kind: "ask-request", seq: ++live.seq, sessionId, payload: askRequestPayload(record) });
+		}
 		return { seq: live.seq };
 	}
 
@@ -2890,6 +2900,18 @@ export class DaemonServer {
 				kind: "event",
 				seq,
 				payload: { type: "modes.changed", at: Date.now() },
+			});
+		}
+	}
+	/** 广播 models.changed(models.add/models.remove 后 GUI 模型选择器即时
+	 *  重拉 —— 会话内的选择器常驻挂载,没有这个事件它永远停在旧列表)。 */
+	#broadcastModelsChanged(): void {
+		const seq = ++this.#globalEventSeq;
+		for (const conn of this.#globalEventTargets) {
+			this.#host.emitEvent(conn, {
+				kind: "event",
+				seq,
+				payload: { type: "models.changed", at: Date.now() },
 			});
 		}
 	}
@@ -5901,11 +5923,13 @@ export class DaemonServer {
 					// setModelTemporary resolves the model by id from the registry.
 					// Same bare id can be served by several providers (opencode-go
 					// vs opencode-zen both offering deepseek-v4-flash) — the
-					// provider qualifier picks the exact one.
+					// provider qualifier picks the exact one. The resolver is
+					// case-insensitive and handles alias/variant forms; it returns
+					// undefined on no match, so a stale provider throws below
+					// instead of silently landing on another provider's model.
 					const models = live.agentSession.getAvailableModels();
 					const model = p.model.provider
-						? (models.find(m => m.provider === p.model.provider && m.id === p.model.id) ??
-							models.find(m => m.id === p.model.id))
+						? resolveProviderModelReference(p.model.provider, p.model.id, models)
 						: models.find(m => m.id === p.model.id);
 					if (!model) throw new Error(`Unknown model: ${p.model.id}`);
 					await live.agentSession.setModelTemporary(model);
@@ -5913,8 +5937,16 @@ export class DaemonServer {
 				}
 				// History session: persist the choice on the snapshot header — it
 				// applies when the session is next continued (resume picks it up).
+				// Provider qualifier must win: opencode-go and b-ai both serve
+				// "deepseek-v4-flash-vision-exp", so a bare-id find would persist
+				// whichever provider lists first and the resumed session would
+				// silently switch providers. Only fall back to bare id when the
+				// caller sent no provider.
 				const registry = await this.#host.ensureRegistry();
-				const model = registry?.getAvailable().find(m => m.id === p.model.id);
+				const available = registry?.getAvailable() ?? [];
+				const model = p.model.provider
+					? resolveProviderModelReference(p.model.provider, p.model.id, available)
+					: available.find(m => m.id === p.model.id);
 				if (!model) throw new Error(`Unknown model: ${p.model.id}`);
 				if (!this.#host.persistHeaderPatch(p.sessionId, { model: `${model.provider}/${model.id}` })) {
 					throw new Error(`Unknown session: ${p.sessionId}`);
@@ -6714,7 +6746,12 @@ export class DaemonServer {
 				// aggregate, but the breakdown is already computed server-side.
 				const breakdown =
 					live.agentSession.getContextBreakdown({ contextWindow: usage.contextWindow }) ?? undefined;
-				const modelId = live.agentSession.model?.id ?? undefined;
+				const m = live.agentSession.model;
+				// Provider-qualified reference ("provider/id"): the model selector
+				// highlights by exact row, so a bare id would match the FIRST
+				// same-id model (opencode-go vs b-ai deepseek-v4-flash-vision-exp)
+				// and the check would light the wrong provider's row.
+				const modelRef = m ? (m.provider ? `${m.provider}/${m.id}` : m.id) : undefined;
 				// Autocompact buffer + free tokens (TUI /context panel parity):
 				// the buffer is the reserve the compaction strategy keeps below
 				// the threshold; free is what's left after used + buffer.
@@ -6738,10 +6775,10 @@ export class DaemonServer {
 					autoCompactBufferTokens = Math.min(autoCompactBufferTokens, Math.max(0, cw - used));
 					freeTokens = Math.max(0, cw - used - autoCompactBufferTokens);
 				}
-				return snapcompact || breakdown || modelId || autoCompactBufferTokens > 0
+				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0
 					? {
 							...usage,
-							...(modelId ? { model: modelId } : {}),
+							...(modelRef ? { model: modelRef } : {}),
 							...(snapcompact ? { snapcompact } : {}),
 							...(breakdown ? { breakdown } : {}),
 							autoCompactBufferTokens,
@@ -7894,17 +7931,26 @@ export class DaemonServer {
 				};
 			}
 			case "session.queuedPop": {
-				// Pull the newest queued user message back into the editor
-				// (TUI Alt+Up dequeue parity): the GUI "取回" action.
-				const p = (params ?? {}) as { sessionId: string };
+				// Pull a queued user message back into the editor (TUI Alt+Up
+				// dequeue parity): the GUI "取回" action. With group+text it
+				// pops THAT message (per-item 取回 in the queue panel);
+				// without, the newest one (legacy single-action behavior).
+				const p = (params ?? {}) as { sessionId: string; group?: "steering" | "followUp"; text?: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const agent = live.agentSession as unknown as {
 					popLastQueuedMessage():
 						| { text: string; images?: { type: string; data: string; mimeType: string }[] }
 						| undefined;
+					popQueuedMessage(
+						group: "steering" | "followUp",
+						text: string,
+					): { text: string; images?: { type: string; data: string; mimeType: string }[] } | undefined;
 				};
-				const popped = agent.popLastQueuedMessage();
+				const popped =
+					p.group && typeof p.text === "string"
+						? agent.popQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text)
+						: agent.popLastQueuedMessage();
 				return popped ? { text: popped.text, images: popped.images ?? null } : null;
 			}
 			case "session.queuedClear": {
@@ -8223,6 +8269,7 @@ export class DaemonServer {
 				fs.writeFileSync(filePath, YAML.stringify({ providers }, null, 2));
 				// mtime changed → registry reloads the custom models on refresh().
 				await registry.refresh();
+				this.#broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "models.remove": {
@@ -8251,6 +8298,7 @@ export class DaemonServer {
 				}
 				fs.writeFileSync(filePath, YAML.stringify({ providers }, null, 2));
 				await registry.refresh();
+				this.#broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "tool.approve": {

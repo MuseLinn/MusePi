@@ -27,6 +27,14 @@ const KIND_COLOR: Record<string, string> = {
 	system: "var(--color-text-faint)",
 };
 
+/** 泳道投影(DSH laneFor parity):system/user → 上道,message(assistant)
+ *  → 中道,tool → 下道。三道分开后密集会话的点不再互相叠压。 */
+function laneFor(kind: string): number {
+	if (kind === "tool") return 2;
+	if (kind === "assistant") return 1;
+	return 0;
+}
+
 function clock(ms: number): string {
 	return new Date(ms).toLocaleTimeString(undefined, {
 		hour12: false,
@@ -131,128 +139,166 @@ export function TimelineOverview({
 
 	return (
 		<div className="traj-ov-wrap" role="img" aria-label={t("trajectory timeline")}>
-			<div
-				ref={trackRef}
-				className="traj-ov-track"
-				onPointerDown={e => {
-					if (e.button !== 0) return;
-					dragAnchor.current = { ms: msAtClientX(e.clientX), x: e.clientX };
-					movedRef.current = 0;
-					e.currentTarget.setPointerCapture(e.pointerId);
-				}}
-				onPointerMove={e => {
-					if (dragAnchor.current) {
-						movedRef.current += Math.abs(e.clientX - dragAnchor.current.x);
-						dragAnchor.current.x = e.clientX;
-						const ms = msAtClientX(e.clientX);
-						const a = dragAnchor.current.ms;
-						const start = Math.min(a, ms);
-						const end = Math.max(a, ms);
-						setDraft(end - start >= 1 ? { startMs: start, endMs: end } : null);
-					}
-				}}
-				onPointerUp={e => {
-					const anchor = dragAnchor.current;
-					if (!anchor) return;
-					dragAnchor.current = null;
-					const moved = movedRef.current;
-					const target = e.target;
-					// 单击段 = 选中该整轮;单击空白 = 清除;拖动(>3px)= 区间。
-					if (moved < 3) {
-						const seg = target instanceof Element ? target.closest<HTMLElement>(".traj-ov-segment") : null;
-						if (seg) {
-							const turn = seg.dataset.turn;
-							const group = turns.find(g => String(g.turn) === turn);
-							if (group?.startMs !== undefined && group.endMs !== undefined) {
-								commitRange(group.startMs, group.endMs);
-							}
-						} else {
-							onSelectionChange(null);
+			{/* 时钟行在绘图区之外(DSH 标签列 parity 的变体):起止时刻 + 总时长
+			 * 不再 absolute 进 track 内部——旧布局里起点附近的条/点被时钟文字
+			 * 盖住,投影域也被迫横跨含文字的全宽。 */}
+			<div className="traj-ov-clocks" aria-hidden="true">
+				<span>{clock(domain.min)}</span>
+				<span className="traj-ov-clocks-span">{durationText(domain.span)}</span>
+				<span>{clock(domain.max)}</span>
+			</div>
+			<div className="traj-ov-body">
+				{/* 泳道标签列(DSH 44px labels 列 parity):色点 + 短词。 */}
+				<div className="traj-ov-labels" aria-hidden="true">
+					<span style={{ top: 6 }}>
+						<i style={{ background: KIND_COLOR.user }} />
+						{t("trajectory lane users")}
+					</span>
+					<span style={{ top: 20 }}>
+						<i style={{ background: KIND_COLOR.assistant }} />
+						{t("trajectory lane replies")}
+					</span>
+					<span style={{ top: 34 }}>
+						<i style={{ background: KIND_COLOR.tool }} />
+						{t("trajectory lane tools")}
+					</span>
+				</div>
+				<div
+					ref={trackRef}
+					className="traj-ov-track"
+					onPointerDown={e => {
+						if (e.button !== 0) return;
+						dragAnchor.current = { ms: msAtClientX(e.clientX), x: e.clientX };
+						movedRef.current = 0;
+						e.currentTarget.setPointerCapture(e.pointerId);
+					}}
+					onPointerMove={e => {
+						if (dragAnchor.current) {
+							movedRef.current += Math.abs(e.clientX - dragAnchor.current.x);
+							dragAnchor.current.x = e.clientX;
+							const ms = msAtClientX(e.clientX);
+							const a = dragAnchor.current.ms;
+							const start = Math.min(a, ms);
+							const end = Math.max(a, ms);
+							setDraft(end - start >= 1 ? { startMs: start, endMs: end } : null);
 						}
+					}}
+					onPointerUp={e => {
+						const anchor = dragAnchor.current;
+						if (!anchor) return;
+						dragAnchor.current = null;
+						const moved = movedRef.current;
+						const target = e.target;
+						// 单击段 = 选中该整轮;单击空白 = 清除;拖动(>3px)= 区间。
+						if (moved < 3) {
+							const seg = target instanceof Element ? target.closest<HTMLElement>(".traj-ov-segment") : null;
+							if (seg) {
+								const turn = seg.dataset.turn;
+								const group = turns.find(g => String(g.turn) === turn);
+								if (group?.startMs !== undefined && group.endMs !== undefined) {
+									commitRange(group.startMs, group.endMs);
+								}
+							} else {
+								onSelectionChange(null);
+							}
+							setDraft(null);
+							return;
+						}
+						const ms = msAtClientX(e.clientX);
+						commitRange(anchor.ms, ms);
 						setDraft(null);
-						return;
-					}
-					const ms = msAtClientX(e.clientX);
-					commitRange(anchor.ms, ms);
-					setDraft(null);
-				}}
-				onPointerLeave={() => hideHover()}
-			>
-				{/* 时间域刻度:起止时钟(两端淡字,单行不换行)。 */}
-				<span className="traj-ov-edge traj-ov-edge--start">{clock(domain.min)}</span>
-				<span className="traj-ov-edge traj-ov-edge--end">{clock(domain.max)}</span>
-				{turns.map(group => {
-					if (group.startMs === undefined) return null;
-					// 闭包内属性收窄会失效(TS 不把对象属性收窄带进箭头函数),
-					// 提前拷成局部常量供事件处理器使用。
-					const start = group.startMs;
-					const end = group.endMs ?? start;
-					const left = pctOf(start);
-					const width = Math.max(pctOf(end) - left, MIN_SEGMENT_PX);
-					const active =
-						selection !== null && start <= selection.endMs && (group.endMs ?? start) >= selection.startMs;
-					return (
+					}}
+					onPointerLeave={() => hideHover()}
+				>
+					{/* Turn 分界竖线(DSH turnBoundary parity):相邻回合不再糊成一条。 */}
+					{turns.map(group =>
+						group.startMs === undefined || group.turn === 0 ? null : (
+							<div
+								key={`bd-${group.turn}`}
+								className="traj-ov-boundary"
+								style={{ left: `${pctOf(group.startMs)}%` }}
+							/>
+						),
+					)}
+					{turns.map(group => {
+						if (group.startMs === undefined) return null;
+						// 闭包内属性收窄会失效(TS 不把对象属性收窄带进箭头函数),
+						// 提前拷成局部常量供事件处理器使用。
+						const start = group.startMs;
+						const end = group.endMs ?? start;
+						const left = pctOf(start);
+						const width = Math.max(pctOf(end) - left, MIN_SEGMENT_PX);
+						const active =
+							selection !== null && start <= selection.endMs && (group.endMs ?? start) >= selection.startMs;
+						return (
+							<div
+								key={group.turn}
+								className={`traj-ov-segment${active ? " traj-ov-segment--active" : ""}`}
+								data-turn={group.turn}
+								style={{ left: `${left}%`, width: `${width}%` }}
+								onPointerEnter={() => {
+									showHover({
+										leftPct: Math.min(98, left + width / 2),
+										title: `Turn ${group.turn}`,
+										time: `${clock(start)} → ${clock(end)}`,
+										duration: durationText(group.endMs !== undefined ? group.endMs - start : 0),
+									});
+								}}
+							/>
+						);
+					})}
+					{/* 记录条:每条带 tsMs 的事件按泳道落位(DSH span parity)——
+					 * 三道分行后 user/回复/工具各自成排,密集会话可读。 */}
+					{turns.map(group =>
+						group.events.map(ev => {
+							if (ev.tsMs === undefined) return null;
+							const t = ev.tsMs;
+							const dl = pctOf(t);
+							const lane = laneFor(ev.kind);
+							return (
+								<span
+									key={ev.id}
+									className="traj-ov-dot"
+									data-kind={ev.kind}
+									data-turn={group.turn}
+									style={{
+										left: `${dl}%`,
+										top: 5 + lane * 14,
+										background: KIND_COLOR[ev.kind] ?? "var(--color-text-faint)",
+									}}
+									onPointerEnter={() => {
+										showHover({
+											leftPct: Math.min(98, dl),
+											title: ev.title,
+											time: clockDetail(t),
+											duration: durationText(0),
+										});
+									}}
+								/>
+							);
+						}),
+					)}
+					{/* 拖拽中的区间覆盖层。 */}
+					{draft && (
 						<div
-							key={group.turn}
-							className={`traj-ov-segment${active ? " traj-ov-segment--active" : ""}`}
-							data-turn={group.turn}
-							style={{ left: `${left}%`, width: `${width}%` }}
-							onPointerEnter={() => {
-								showHover({
-									leftPct: Math.min(98, left + width / 2),
-									title: `Turn ${group.turn}`,
-									time: `${clock(start)} → ${clock(end)}`,
-									duration: durationText(group.endMs !== undefined ? group.endMs - start : 0),
-								});
+							className="traj-ov-draft"
+							style={{
+								left: `${pctOf(draft.startMs)}%`,
+								width: `${Math.max(pctOf(draft.endMs) - pctOf(draft.startMs), 0.5)}%`,
 							}}
-						>
-							{/* 记录点:每个带 tsMs 的事件一落点,颜色按 kind。 */}
-							{group.events.map(ev => {
-								if (ev.tsMs === undefined) return null;
-								const t = ev.tsMs;
-								const dl = pctOf(t);
-								return (
-									<span
-										key={ev.id}
-										className={`traj-ov-dot traj-ov-dot--${ev.kind}`}
-										style={{
-											left: `${dl}%`,
-											background: KIND_COLOR[ev.kind] ?? "var(--color-text-faint)",
-										}}
-										onPointerEnter={() => {
-											showHover({
-												leftPct: Math.min(98, dl),
-												title: ev.title,
-												time: clockDetail(t),
-												duration: durationText(0),
-											});
-										}}
-									/>
-								);
-							})}
-						</div>
-					);
-				})}
-				{/* 拖拽中的区间覆盖层。 */}
-				{draft && (
-					<div
-						className="traj-ov-draft"
-						style={{
-							left: `${pctOf(draft.startMs)}%`,
-							width: `${Math.max(pctOf(draft.endMs) - pctOf(draft.startMs), 0.5)}%`,
-						}}
-					/>
-				)}
-				{/* 已提交区间覆盖层。 */}
-				{selection && (
-					<div
-						className="traj-ov-range"
-						style={{
-							left: `${pctOf(selection.startMs)}%`,
-							width: `${Math.max(pctOf(selection.endMs) - pctOf(selection.startMs), 0.5)}%`,
-						}}
-					/>
-				)}
+						/>
+					)}
+					{/* 已提交区间覆盖层。 */}
+					{selection && (
+						<div
+							className="traj-ov-range"
+							style={{
+								left: `${pctOf(selection.startMs)}%`,
+								width: `${Math.max(pctOf(selection.endMs) - pctOf(selection.startMs), 0.5)}%`,
+							}}
+						/>
+					)}
+				</div>
 			</div>
 			{/* 悬停提示放到 wrap(track 是 overflow:hidden,提示在 track 内会被
 			 * 顶部裁掉 — 2026-08-21 实测 stripped)。wrap 同宽同坐标空间。 */}

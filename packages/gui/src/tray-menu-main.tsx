@@ -334,6 +334,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 				<button type="button" onClick={() => trayApi?.action("new-session")}>
 					{t("new session")}
 				</button>
+				<button type="button" onClick={() => trayApi?.action("mini-chat")}>
+					{t("mini chat")}
+				</button>
 				<button type="button" onClick={() => trayApi?.action("show-main-window")}>
 					{t("show main window")}
 				</button>

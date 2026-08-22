@@ -54,14 +54,19 @@ export function AgentStatusLine({
 	indicator,
 	sweepColor = "default",
 	sessionKey,
+	suppressThinking = false,
 }: {
 	working: boolean;
 	effect: AgentStatusEffect;
 	indicator: AgentStatusIndicator;
 	sweepColor?: SweepColor;
 	/** Session id/name — derives the TUI-style per-session accent that
-	 * colors the spinner/orb; absent (settings preview) → theme accent. */
+	 *  colors the spinner/orb; absent (settings preview) → theme accent. */
 	sessionKey?: string;
+	/** 三合一 consolidation (user direction): while the agent works the
+	 *  send button carries the live state, so the line stays hidden and
+	 *  only the transient 思考完毕 ack surfaces when the turn ends. */
+	suppressThinking?: boolean;
 }): ReactNode {
 	const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
 	const [braille, setBraille] = useState(0);
@@ -88,7 +93,7 @@ export function AgentStatusLine({
 		const id = window.setInterval(() => setBraille(i => (i + 1) % BRAILLE_FRAMES.length), 80);
 		return () => clearInterval(id);
 	}, [phase]);
-	if (phase === "idle") return null;
+	if (suppressThinking && phase === "thinking") return null;
 	const accent = sessionKey ? sessionAccentHex(sessionKey) : null;
 	return (
 		<div

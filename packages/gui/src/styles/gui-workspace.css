@@ -1683,7 +1683,7 @@
 }
 .traj-ov-track {
 	position: relative;
-	height: 44px;
+	height: 54px;
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	background: var(--color-surface-sunken, color-mix(in oklab, var(--color-text-faint) 5%, transparent));
@@ -1692,51 +1692,85 @@
 	user-select: none;
 	overflow: hidden;
 }
-.traj-ov-edge {
-	position: absolute;
-	top: 2px;
+/* 时钟行:起止时刻 + 总时长,在绘图区之外(旧布局 absolute 在 track 内,
+ * 起点附近的条/点被时钟文字盖住)。 */
+.traj-ov-clocks {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 0 2px 3px;
 	font-size: 9px;
 	line-height: 1;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text-faint);
-	pointer-events: none;
 	white-space: nowrap;
 }
-.traj-ov-edge--start {
-	left: 6px;
+.traj-ov-clocks-span {
+	color: var(--color-text-muted);
 }
-.traj-ov-edge--end {
-	right: 6px;
+/* 泳道体:44px 标签列(DSH labels 列 parity)+ 1fr 绘图区。 */
+.traj-ov-body {
+	display: grid;
+	grid-template-columns: 44px minmax(0, 1fr);
+	align-items: stretch;
+}
+.traj-ov-labels {
+	position: relative;
+	border-right: 1px solid var(--border);
+	margin-right: 6px;
+}
+.traj-ov-labels span {
+	position: absolute;
+	right: 0;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	height: 10px;
+	font-size: 9px;
+	line-height: 1;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+}
+.traj-ov-labels i {
+	flex-shrink: 0;
+	width: 5px;
+	height: 5px;
+	border-radius: 999px;
+}
+/* Turn 分界竖线(DSH turnBoundary parity)。 */
+.traj-ov-boundary {
+	position: absolute;
+	top: 2px;
+	bottom: 2px;
+	width: 1px;
+	background: color-mix(in oklab, var(--color-text-faint) 30%, transparent);
+	pointer-events: none;
 }
 .traj-ov-segment {
 	position: absolute;
-	top: 16px;
-	height: 12px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-accent) 26%, transparent);
-	border: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
-	transition: background 140ms var(--gui-ease-out, ease), border-color 140ms var(--gui-ease-out, ease);
+	top: 4px;
+	height: 46px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+	transition: background 140ms var(--gui-ease-out, ease);
 	min-width: 3px;
 }
 .traj-ov-segment:hover {
-	background: color-mix(in oklab, var(--color-accent) 42%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
 .traj-ov-segment--active {
-	background: color-mix(in oklab, var(--color-accent) 55%, transparent);
-	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+	outline: 1px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
 }
 .traj-ov-dot {
 	position: absolute;
-	top: -3px;
-	width: 4px;
-	height: 4px;
+	width: 5px;
+	height: 5px;
 	border-radius: 999px;
 	pointer-events: auto;
-	transform: translateX(-50%);
+	transform: translate(-50%, -50%);
 	box-shadow: 0 0 0 1px var(--color-surface, transparent);
-}
-.traj-ov-dot--user {
-	top: 19px;
 }
 .traj-ov-draft,
 .traj-ov-range {

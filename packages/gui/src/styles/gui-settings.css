@@ -797,6 +797,32 @@
 	color: var(--color-text-faint);
 }
 
+/* Settings warn note (数据迁移凭据提示等): tokenized warning callout —
+ * theme-adaptive via --color-warning (the old hardcoded amber literals
+ * washed out on the light scheme). Icon tinted, body text muted. */
+.gui-settings-warn-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--color-warning) 40%, var(--border));
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-warning) 9%, var(--color-surface));
+	font-size: 12px;
+	line-height: 1.55;
+	color: var(--color-text-muted);
+}
+
+.gui-settings-warn-note-icon {
+	flex-shrink: 0;
+	color: var(--color-warning);
+}
+
+.gui-settings-warn-note strong {
+	color: var(--color-warning);
+	font-weight: 600;
+}
+
 .gui-context-divider {
 	height: 1px;
 	margin: 4px 6px;
@@ -947,6 +973,28 @@
 	line-height: 16px;
 	color: var(--color-text-faint);
 	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	white-space: nowrap;
+}
+
+/* Capability strip in the model row (openchamber oc-icons parity): inline
+ * reasoning/vision glyphs + a compact context-window chip. Icons inherit
+ * the row's muted tone; the context chip is a tighter capsule than the
+ * provider chip so the row reads name → cap → vendor left-to-right. */
+.gui-model-cap {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+
+.gui-model-ctx {
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 10px;
+	line-height: 16px;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	white-space: nowrap;
 }
 

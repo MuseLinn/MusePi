@@ -412,6 +412,7 @@ export const general = {
 	"take back newest": "Take back the newest",
 	"take back the newest queued message": "Bring the newest queued message back into the input box",
 	"clear queue": "Clear queue",
+	"take back": "Take back",
 	// Session-control round: terminate confirm + revert history.
 	"terminate current turn?": "Terminate the current turn?",
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":

@@ -158,6 +158,26 @@ describe("AgentSession steer idle drain", () => {
 		expect(session.getQueuedMessages().steering).toEqual([]);
 	});
 
+	it("popQueuedMessage removes one specific queued message without re-injecting", async () => {
+		await createSession([{ role: "user", content: "hello", timestamp: Date.now() }, createAssistantMessage()]);
+		session.agent.steer({ role: "user", content: "first", timestamp: 1 });
+		session.agent.steer({ role: "user", content: "second", timestamp: 2 });
+		session.agent.followUp({ role: "user", content: "later", timestamp: 3 });
+
+		// Per-item 取回 (GUI queue panel): pop by group+text, editor restore shape.
+		const popped = session.popQueuedMessage("steering", "first");
+		expect(popped?.text).toBe("first");
+		expect(session.getQueuedMessages().steering).toEqual(["second"]);
+		// Sibling group untouched; unlike sendQueuedMessage there is no re-inject.
+		expect(session.getQueuedMessages().followUp).toEqual(["later"]);
+
+		// Unknown text or wrong-group text: no match, queues untouched.
+		expect(session.popQueuedMessage("followUp", "not queued")).toBeUndefined();
+		expect(session.popQueuedMessage("steering", "later")).toBeUndefined();
+		expect(session.getQueuedMessages().steering).toEqual(["second"]);
+		expect(session.getQueuedMessages().followUp).toEqual(["later"]);
+	});
+
 	it("round-trips queued images through clearQueue for editor restoration", async () => {
 		// A steer queued mid-stream stays in the queue (the idle drain stands down while
 		// streaming), so clearQueue round-trips session.steer's normalized image payload

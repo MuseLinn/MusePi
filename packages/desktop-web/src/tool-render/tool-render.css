@@ -440,17 +440,23 @@
 }
 
 /* Side-by-side diff (chat settings → 差异布局): two aligned columns,
- * removed left / added right; hunk/header/gap rows span the width. */
+ * removed left / added right; hunk/header/gap rows span the width.
+ * ONE shared track pair (subgrid): every row's left/right split lands on
+ * the same x — per-row `1fr 1fr` grids let long lines shift each row's
+ * column boundary (the 错位 bug). Tracks size to the column's max-content
+ * with a 1fr cap, so narrow diffs fill the card evenly and wide ones
+ * overflow into the container's own horizontal scroll (bounded by the
+ * card — never clips past the chat surface). */
 .tv-diff--sbs {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(max-content, 1fr));
 	overflow-x: auto;
 }
 
 .tv-diff-sbs-row {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	min-width: max-content;
+	grid-template-columns: subgrid;
+	grid-column: 1 / -1;
 }
 
 .tv-diff-sbs-row--hunk,
@@ -466,6 +472,28 @@
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* 长内容自动换行 setting (gui-code-wrap on <html>): soft-wrap diff lines
+ * inside their pane instead of horizontal scrolling — the wrap toggle now
+ * governs the whole diff surface, both layouts. Side-by-side drops to
+ * bounded halves so each pane wraps within its column (subgrid keeps the
+ * split aligned); inline rows wrap in place; scrolling is disabled since
+ * nothing overflows anymore. */
+.gui-code-wrap .tv-diff--sbs {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	overflow-x: hidden;
+}
+
+.gui-code-wrap .tv-diff-sbs-cell {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+}
+
+.gui-code-wrap .tv-diff-row {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 /* Side-by-side cell tints — applied via explicit cell classes (JS), so a

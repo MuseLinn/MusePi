@@ -5,14 +5,17 @@
  *   - pet window (pet.html): the companion sprite, fully transparent,
  *     click-through outside the sprite — floats on the desktop.
  *   - bubble window (bubble.html, THIS file): the activity bubbles (iOS
- *     Notification-Center stack) and the interaction panel, on a REAL
- *     vibrancy glass surface — a transparent + vibrancy window sized to
- *     exactly its content, positioned above the pet.
+ *     Notification-Center stack) and the interaction panel, on a fully
+ *     transparent window sized to exactly its content, positioned above
+ *     the pet. The cards self-draw their frosted-glass surface (the
+ *     window itself stays transparent — no native vibrancy, so the only
+ *     "base" on screen is the rounded card, not a window-wide tint).
  *
  * Splitting the windows lets each one use its ideal material: the pet
- * stays a transparent sprite (vibrancy would render the whole window as
- * an opaque glass panel), while the bubbles/panel get native frosted
- * glass without a giant glass rectangle behind the pet.
+ * stays a transparent sprite, while the bubbles/panel are rounded glass
+ * cards on a transparent window (a vibrancy window would render the
+ * whole rect as one opaque glass panel — the "frosted rectangle behind
+ * the pet" this split was created to avoid).
  *
  * State flows over IPC from the main process (which forwards the main
  * window's pet:activity pushes to BOTH windows): bubbles, approvals,
@@ -33,9 +36,6 @@ import "./styles/pet-window.css";
 import "./styles/gui.css";
 
 interface BubbleBridge {
-	/** Node platform of the desktop shell ("darwin" | "win32" | "linux") —
-	 *  gates the native vibrancy glass path (preload exposes it). */
-	platform?: string;
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
 	onPetPanelToggle?(cb: () => void): () => void;
 	petSetPanel?(open: boolean): Promise<unknown>;
@@ -60,15 +60,6 @@ interface BubbleBridge {
 
 const BUBBLE_MS = 8000;
 const MAX_VISIBLE_BUBBLES = 5;
-
-// macOS: the bubble window carries native under-window vibrancy
-// (main.cjs — the main window's recipe), and the glass cards blur it via
-// CSS backdrop-filter (.pet-glass-native in pet-window.css) for REAL
-// frosted glass. Win/Linux keep the transparent-window self-drawn recipe
-// (vibrancy unavailable there). Set BEFORE first paint (module scope),
-// not in an effect — otherwise the cards flash non-frosted on open.
-const electronAPI = (window as unknown as { electronAPI?: BubbleBridge }).electronAPI;
-if (electronAPI?.platform === "darwin") document.documentElement.classList.add("pet-glass-native");
 
 interface Bubble {
 	id: number;

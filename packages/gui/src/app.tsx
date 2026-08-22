@@ -213,14 +213,6 @@ function AppInner(): ReactNode {
 			// Font picks (--font-ui / --font-mono) + spacing density (--gui-density):
 			// re-apply at startup so choices survive relaunches.
 			applyAppearancePrefs();
-			// Keep-awake (settings 常规 → 保持电脑运行): re-assert on launch —
-			// the main process holds the powerSaveBlocker assertion only
-			// while told to (cross-platform; no-op safe on any platform).
-			if (localStorage.getItem("musepi-gui-keep-awake") === "1") {
-				void (
-					window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
-				).electronAPI?.setKeepAwake?.(true);
-			}
 		} catch {
 			// storage unavailable
 		}
@@ -403,11 +395,14 @@ function AppInner(): ReactNode {
 	const [newProjectError, setNewProjectError] = useState<string | null>(null);
 	// Pending ask question (TUI ask parity): the agent asked mid-run and the
 	// daemon pushed an ask-request envelope — the AskCard answers it via
-	// session.askAnswer.
-	const [pendingAsk, setPendingAsk] = useState<AskRequest | null>(null);
+	// session.askAnswer. Tagged with the OWNING session: asks raised in
+	// other sessions are recorded too (the cross-session guard drops every
+	// other envelope kind), but the card only shows for the session it
+	// belongs to.
+	const [pendingAsk, setPendingAsk] = useState<(AskRequest & { sessionId?: string }) | null>(null);
 	// answerAsk is memoized on selectedId only — the ref keeps the current
 	// envelope reachable without rebuilding the callback.
-	const pendingAskRef = useRef<AskRequest | null>(null);
+	const pendingAskRef = useRef<(AskRequest & { sessionId?: string }) | null>(null);
 	pendingAskRef.current = pendingAsk;
 	// mkdir the blank project under the chosen parent (daemon fs.mkdir is
 	// cwd-scoped, so the parent rides as cwd + the name as relative path),
@@ -890,6 +885,15 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// Ask card FIRST: an ask raised in a background session must be
+				// recorded with its owning session even while another session
+				// is displayed — the 窜台 guard below drops every other
+				// cross-session envelope, and the subscribe-time daemon replay
+				// re-delivers it when the user switches over anyway.
+				if (event.kind === "ask-request") {
+					setPendingAsk({ ...(event.payload as AskRequest), sessionId: event.sessionId });
+					return;
+				}
 				// B1: envelopes carry the subscribing sessionId. The daemon
 				// allows multi-subscription per connection now, so switching
 				// sessions leaves the old subscription attached — drop events
@@ -941,12 +945,6 @@ function AppInner(): ReactNode {
 					| undefined;
 				if (event.kind === "approval-request") {
 					storeRef.current?.apply(event);
-					return;
-				}
-				if (event.kind === "ask-request") {
-					// Ask card (TUI ask parity): surface the question; the card
-					// answers via session.askAnswer.
-					setPendingAsk(event.payload as AskRequest);
 					return;
 				}
 				if (payload?.type === "turn_end") {
@@ -1714,6 +1712,12 @@ function AppInner(): ReactNode {
 		[selectedId],
 	);
 
+	/** The ask card renders only for the session it belongs to — an ask
+	 *  raised in a background session stays recorded (the daemon replays it
+	 *  on subscribe) but must not surface over the displayed one. */
+	const activeAsk =
+		pendingAsk && (pendingAsk.sessionId === undefined || pendingAsk.sessionId === selectedId) ? pendingAsk : null;
+
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
 	 *  confirm dialog honors the settings toggle (musepi-gui-confirm-delete). */
@@ -2371,11 +2375,11 @@ function AppInner(): ReactNode {
 		return (
 			<div className="gui-shell gui-shell--mini">
 				{error && (
-					<div className="gui-error gui-error-bar" role="alert">
-						<span className="gui-error-bar-text">{error}</span>
+					<div className="gui-error gui-error-toast" role="alert">
+						<span className="gui-error-toast-text">{error}</span>
 						<button
 							type="button"
-							className="gui-error-bar-x"
+							className="gui-error-toast-x"
 							title={t("dismiss")}
 							aria-label={t("dismiss")}
 							onClick={() => setError(null)}
@@ -2438,7 +2442,7 @@ function AppInner(): ReactNode {
 						onSelectReminder={id => void openSession(id)}
 						onMarkAllRead={markAllRead}
 						sessionLoading={sessionLoading}
-						ask={pendingAsk}
+						ask={activeAsk}
 						onAskAnswer={answerAsk}
 					/>
 				</div>
@@ -2455,11 +2459,11 @@ function AppInner(): ReactNode {
 	return (
 		<div className="gui-shell">
 			{error && (
-				<div className="gui-error gui-error-bar" role="alert">
-					<span className="gui-error-bar-text">{error}</span>
+				<div className="gui-error gui-error-toast" role="alert">
+					<span className="gui-error-toast-text">{error}</span>
 					<button
 						type="button"
-						className="gui-error-bar-x"
+						className="gui-error-toast-x"
 						title={t("dismiss")}
 						aria-label={t("dismiss")}
 						onClick={() => setError(null)}
@@ -2566,14 +2570,11 @@ function AppInner(): ReactNode {
 								});
 							}}
 							project={project}
-							onOpenFolder={() => {
-								void pickDirectory().then(dir => {
-									if (dir) {
-										setProject(dir);
-										localStorage.setItem("musepi-gui-project", dir);
-									}
-								});
-							}}
+							// Reuse pickProjectFolder: a bare pickDirectory here updated
+							// musepi-gui-project (welcome chip) but never announced the
+							// workspace, so the sidebar 项目 tab stayed empty — the two
+							// surfaces disagreed on what "added" means.
+							onOpenFolder={pickProjectFolder}
 							sessions={recentSessions}
 							onSelectSession={id => void openSession(id)}
 							onRenameSession={renameSession}
@@ -2649,7 +2650,7 @@ function AppInner(): ReactNode {
 									onSelectReminder={id => void openSession(id)}
 									onMarkAllRead={markAllRead}
 									sessionLoading={sessionLoading}
-									ask={pendingAsk}
+									ask={activeAsk}
 									onAskAnswer={answerAsk}
 								/>
 							);

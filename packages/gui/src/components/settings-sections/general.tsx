@@ -13,6 +13,7 @@ import {
 } from "../avatar-presets";
 import { DotMatrixMark } from "../DotMatrixMark";
 import { GuiSelect } from "../GuiSelect";
+import { SchemaTabSection } from "./schema";
 
 /** Preview of the two task-card styles (display.taskCardStyle settings
  *  row): Swarm = the classic chat-message task tool-call card with the
@@ -158,7 +159,6 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [dotMatrixText, setDotMatrixText] = useState(
 		() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi",
 	);
-	const [keepAwake, setKeepAwake] = useState(() => localStorage.getItem("musepi-gui-keep-awake") === "1");
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
@@ -201,6 +201,12 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		<>
 			<h2 className="gui-settings-page-title">{t("general")}</h2>
 			<p className="gui-settings-page-desc">{t("general settings")}</p>
+			{/* Schema-driven settings on the general tab (settings.schema
+			 * ui.tab = "general", e.g. power.sleepPrevention). Rendered here
+			 * so the daemon's single source of truth drives the panel; the
+			 * old hand-written "保持电脑运行" toggle was replaced by this
+			 * four-level Sleep Prevention enum. */}
+			<SchemaTabSection rpc={rpc} tabs={["general"]} />
 			<div className="gui-settings-row">
 				<div>
 					<div className="gui-settings-row-label">{t("busy enter behavior")}</div>
@@ -325,29 +331,6 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</div>
 				</div>
 			)}
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("keep computer awake")}</div>
-					<div className="gui-settings-row-desc">{t("keep computer awake description")}</div>
-				</div>
-				<button
-					type="button"
-					role="switch"
-					aria-checked={keepAwake}
-					className={`gui-toggle${keepAwake ? " gui-toggle--on" : ""}`}
-					onClick={() => {
-						const next = !keepAwake;
-						setKeepAwake(next);
-						localStorage.setItem("musepi-gui-keep-awake", next ? "1" : "0");
-						void (
-							window as unknown as { electronAPI?: { setKeepAwake?(v: boolean): Promise<unknown> } }
-						).electronAPI?.setKeepAwake?.(next);
-					}}
-					aria-label={t("keep computer awake")}
-				>
-					<span className="gui-toggle-knob" />
-				</button>
-			</div>
 			<div className="gui-settings-row">
 				<div>
 					<div className="gui-settings-row-label">{t("daemon")}</div>

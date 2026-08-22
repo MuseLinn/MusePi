@@ -6,13 +6,13 @@ import {
 	type BlobDestinationMetadata,
 	BUILTIN_BLOB_DESTINATIONS,
 } from "../blob-broker/destinations";
+import { DEFAULT_RELAY_URL } from "../collab/protocol";
+import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
 import {
 	COMPACTION_METHOD_CHOICES,
 	type CompactionMethod,
 	DEFAULT_COMPACTION_METHOD_ORDER,
 } from "../session/compaction-methods";
-import { DEFAULT_RELAY_URL } from "../collab/protocol";
-import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
 import { DEFAULT_STT_MODEL_KEY, STT_MODEL_OPTIONS, STT_MODEL_VALUES } from "../stt/models";
 import { STT_SUBMIT_TRIGGER_OPTIONS, STT_SUBMIT_TRIGGER_VALUES } from "../stt/submit-trigger";
 import { AUTO_THINKING, getConfiguredThinkingLevelMetadata, getThinkingLevelMetadata } from "../thinking";
@@ -109,7 +109,8 @@ export type SettingTab =
 	| "shell"
 	| "tools"
 	| "tasks"
-	| "providers";
+	| "providers"
+	| "general";
 
 /** Tab display metadata - icon is resolved via theme.symbol() */
 export type TabMetadata = { label: string; icon: `tab.${string}` };
@@ -126,6 +127,7 @@ export const SETTING_TABS: SettingTab[] = [
 	"tools",
 	"tasks",
 	"providers",
+	"general",
 ];
 
 /** Tab display metadata - icon is a symbol key from theme.ts (tab.*) */
@@ -140,6 +142,7 @@ export const TAB_METADATA: Record<SettingTab, { label: string; icon: `tab.${stri
 	tools: { label: "Tools", icon: "tab.tools" },
 	tasks: { label: "Tasks", icon: "tab.tasks" },
 	providers: { label: "Providers", icon: "tab.providers" },
+	general: { label: "General", icon: "tab.general" },
 };
 
 /**
@@ -158,7 +161,6 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 		"Collab",
 		"Magic Keywords",
 		"Startup & Updates",
-		"Power (macOS)",
 		"Agent",
 		"Language",
 		"Git",
@@ -181,6 +183,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 	],
 	tasks: ["Modes", "Subagents", "Isolation", "Commands & Skills"],
 	providers: ["Services", "Fireworks", "Tiny Model", "Protocol", "Timeouts", "Privacy"],
+	general: ["Power (macOS)"],
 };
 
 /** Status line segment identifiers */
@@ -449,7 +452,7 @@ export const SETTINGS_SCHEMA = {
 		values: ["off", "idle", "display", "system"] as const,
 		default: "idle",
 		ui: {
-			tab: "interaction",
+			tab: "general",
 			group: "Power (macOS)",
 			label: "Sleep Prevention",
 			description:
@@ -5385,7 +5388,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "interaction",
 			group: "Speech",
 			label: "Read content",
-			description: "How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+			description:
+				"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
 		},
 	},
 	"tts.bargeIn": {

@@ -13,7 +13,7 @@
  */
 "use strict";
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerMonitor, powerSaveBlocker, screen, session, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, session, shell } = require("electron");
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -598,9 +598,9 @@ function focusMainFromPet() {
 }
 
 // ── Bubble/panel window (双窗口) ────────────────────────────────────────
-// The activity bubbles + interaction panel live in their OWN window so it
-// can use real vibrancy glass (the pet window must stay transparent —
-// vibrancy + transparent:true renders the whole window as an opaque panel).
+// The activity bubbles + interaction panel live in their OWN window so the
+// pet window can stay a fully transparent sprite (vibrancy + transparent
+// would render the whole window as an opaque glass panel).
 // The bubble window is sized to EXACTLY its content (the renderer reports
 // the content box; see bubble-set-size) and parked above the pet window,
 // following it on every move/snap/settle.
@@ -788,31 +788,33 @@ function createBubbleWindow() {
 		height: 120,
 		title: "MusePi Bubbles",
 		frame: false,
-		// Platform-native frosted glass for the bubble/panel surface:
-		// - macOS: under-window vibrancy + transparent background, the main
-		//   window's recipe (transparent + vibrancy would render the whole
-		//   window as an opaque panel instead).
-		// - Windows/Linux: TRANSPARENT per-pixel window — the panel/bubbles
-		//   are rounded shapes, and DWM Acrylic (backgroundMaterial) only
-		//   works on opaque windows, which would paint a full RECTANGLE of
-		//   frosted glass around the rounded cards (observed: visible glass
-		//   band outside the panel corners). The cards self-draw their glass
-		//   (.pet-glass-native: translucent surface + highlight edge, the
-		//   clawd-on-desk double-layer pattern) so the window shape hugs the
-		//   content exactly and everything outside stays transparent.
-		transparent: process.platform !== "darwin",
-		...(process.platform === "darwin" ? { vibrancy: "under-window" } : {}),
+		// TRANSPARENT per-pixel window on every platform. The window body
+		// must stay fully transparent (no base color) — only the rounded
+		// panel/bubble cards paint their own surface:
+		// - macOS: native under-window vibrancy would paint the WHOLE
+		//   window rect as a frosted glass rectangle (a visible base tint
+		//   around the panel corners and in the transparent margin room —
+		//   the exact "window body has a background" complaint). vibrancy
+		//   + transparent:true renders the whole window as an opaque panel
+		//   instead, so neither combination works here.
+		// - Win/Linux: DWM Acrylic (backgroundMaterial) only works on
+		//   opaque windows, which would paint a full RECTANGLE of frosted
+		//   glass around the rounded cards (observed: visible glass band
+		//   outside the panel corners).
+		// The cards self-draw their glass (translucent surface + highlight
+		// edge + hairline, the clawd-on-desk double-layer pattern) so the
+		// window shape hugs the content exactly and everything outside
+		// stays transparent.
+		transparent: true,
 		backgroundColor: "#00000000",
 		alwaysOnTop: true,
 		skipTaskbar: true,
 		resizable: false,
 		fullscreenable: false,
-		// Window shadow: on a transparent window (Win/Linux) macOS-style
-		// rectangle shadows are unavailable/ugly — the cards draw their own
-		// rounded shadow (CSS box-shadow). On the macOS vibrancy window the
-		// native shadow follows the rounded glass rect and gives the card
-		// its float depth, so enable it there.
-		hasShadow: process.platform === "darwin",
+		// Window shadow: on a transparent window macOS-style rectangle
+		// shadows are unavailable/ugly — the cards draw their own rounded
+		// shadow (CSS box-shadow).
+		hasShadow: false,
 		show: false,
 		webPreferences: {
 			preload: path.join(__dirname, "preload.cjs"),
@@ -1717,24 +1719,6 @@ async function importPetdexFromZip(zipPath) {
 	};
 }
 
-// Keep-awake (settings 常规 → 保持电脑运行): hold a powerSaveBlocker
-// assertion while enabled so idle system sleep never fires; the user can
-// still sleep manually / close the lid. Cross-platform: Electron maps
-// "prevent-app-suspension" to kIOPMAssertionTypePreventUserIdleSystemSleep
-// (same as `caffeinate -i`) on macOS, ES_SYSTEM_REQUIRED on Windows and
-// org.freedesktop.ScreenSaver Inhibit on Linux. Assertions release
-// automatically on process exit.
-let keepAwakeId = null;
-ipcMain.handle("keep-awake-set", (_event, enabled) => {
-	if (enabled === true && keepAwakeId === null) {
-		keepAwakeId = powerSaveBlocker.start("prevent-app-suspension");
-	} else if (enabled !== true && keepAwakeId !== null) {
-		powerSaveBlocker.stop(keepAwakeId);
-		keepAwakeId = null;
-	}
-	return { ok: true };
-});
-
 // Sleep/wake (合盖待机): Electron tears down the renderer's WebSocket on
 // system sleep (electron#19993 — localhost included). On resume, wake the
 // renderer's recovery immediately — visibilitychange/online may not fire
@@ -2625,6 +2609,21 @@ function openMiniChatWindow() {
 		resizable: true,
 		titleBarStyle: "hidden",
 		trafficLightPosition: { x: 16, y: 17 },
+		// Windows/Linux: titleBarStyle "hidden" draws no window controls on
+		// its own (traffic lights are macOS-only) — the same problem as the
+		// main window. titleBarOverlay puts native min/max/close at the
+		// top-right; transparent color lets the page's glass show through,
+		// height matches the .gui-mini-drag strip (28px). Ignored on macOS
+		// (traffic lights) and on Linux distros that keep the system bar.
+		...(process.platform === "win32" || process.platform === "linux"
+			? {
+					titleBarOverlay: {
+						color: "#00000000",
+						symbolColor: "#8a8a92",
+						height: 28,
+					},
+				}
+			: {}),
 		// Native window glass, same as the main window: transparent
 		// background + under-window vibrancy, otherwise the rounded chat
 		// container corners paint black against an opaque background.

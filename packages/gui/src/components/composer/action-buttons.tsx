@@ -1,7 +1,7 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 
@@ -125,6 +125,134 @@ export function SendButton({
 	);
 }
 
+/** Opencode opendesign's 5×5 dot-matrix "cross expand" glyph (desktop-web parity).
+ *  Self-contained inline SVG with SMIL opacity animation — no dangerouslySetInnerHTML.
+ *  Uses currentColor so it adapts to the button's accent tint. */
+function MatrixLoader({ className }: { className?: string }): ReactNode {
+	return (
+		<svg className={className} viewBox="0 0 92 92" width="18" height="18" aria-hidden="true" focusable="false">
+			<defs>
+				<filter id="od-matrix-bloom" x="-100%" y="-100%" width="300%" height="300%">
+					<feComponentTransfer in="SourceGraphic" result="bright">
+						<feFuncR type="linear" slope={3.9} intercept={-3.51} />
+						<feFuncG type="linear" slope={3.9} intercept={-3.51} />
+						<feFuncB type="linear" slope={3.9} intercept={-3.51} />
+					</feComponentTransfer>
+					<feGaussianBlur in="bright" stdDeviation={9.5} result="bloomSmall" />
+					<feGaussianBlur in="bright" stdDeviation={19} result="bloomLarge" />
+					<feMerge result="bloomMerge">
+						<feMergeNode in="bloomLarge" />
+						<feMergeNode in="bloomSmall" />
+					</feMerge>
+					<feBlend in="SourceGraphic" in2="bloomMerge" mode="screen" />
+				</filter>
+			</defs>
+			{/* Off-cell placeholders (invisible, occupy space for consistent layout) */}
+			<g opacity="0">
+				{[0, 1, 2, 3, 4].map(ri =>
+					[0, 1, 2, 3, 4].map(ci => (
+						<circle key={`off-${ri}-${ci}`} cx={8 + ci * 19} cy={8 + ri * 19} r={8} fill="currentColor" />
+					)),
+				)}
+			</g>
+			{/* Animated on-cells: Manhattan-distance bloom from center (2,2) */}
+			<g filter="url(#od-matrix-bloom)">
+				{[0, 1, 2, 3, 4].map(ri =>
+					[0, 1, 2, 3, 4].map(ci => {
+						const d = Math.abs(ri - 2) + Math.abs(ci - 2);
+						// Corner cells (d=4) are always off; center (d=0) always on.
+						// The SMIL values mirror opendesign's 24-stop cycle.
+						const hide = d === 4;
+						const alwaysOn = d === 0;
+						if (hide)
+							return (
+								<circle
+									key={`on-${ri}-${ci}`}
+									cx={8 + ci * 19}
+									cy={8 + ri * 19}
+									r={8}
+									fill="currentColor"
+									opacity={0}
+								/>
+							);
+						if (alwaysOn)
+							return (
+								<circle key={`on-${ri}-${ci}`} cx={8 + ci * 19} cy={8 + ri * 19} r={8} fill="currentColor" />
+							);
+						return (
+							<circle key={`on-${ri}-${ci}`} cx={8 + ci * 19} cy={8 + ri * 19} r={8} fill="currentColor">
+								<animate
+									attributeName="opacity"
+									values="0.15;1;0.15"
+									dur="1.333s"
+									begin={`${d * 220}ms`}
+									repeatCount="indefinite"
+								/>
+							</circle>
+						);
+					}),
+				)}
+			</g>
+		</svg>
+	);
+}
+
+/**
+ * 三合一 send control (user direction, opendesign parity): idle renders the
+ * plain send button; while the agent works the SAME button becomes the live
+ * state display — a capsule with the dot-matrix bloom + a two-label stack
+ * ("思考中" at rest, "停止" on hover/focus). Click aborts the turn.
+ */
+export function SendOrStopButton({
+	canSend,
+	busy,
+	working,
+	onPress,
+	onStop,
+	accent,
+}: {
+	canSend: boolean;
+	busy: boolean;
+	working: boolean;
+	onPress(): void;
+	onStop(): void;
+	/** Session accent hex (TUI-style per-session color); null → theme accent. */
+	accent?: string | null;
+}): ReactNode {
+	if (!working) {
+		return (
+			<button
+				type="button"
+				className="gui-composer-send"
+				onClick={canSend && !busy ? onPress : undefined}
+				disabled={!canSend || busy}
+				title={t("send message")}
+				aria-label={t("send message")}
+			>
+				<SendHorizontal size={14} />
+			</button>
+		);
+	}
+	return (
+		<button
+			type="button"
+			className="gui-composer-send gui-composer-send--working"
+			style={accent ? ({ "--gui-send-accent": accent } as CSSProperties) : undefined}
+			onClick={onStop}
+			title={t("stop the current turn")}
+			aria-label={t("stop the current turn")}
+		>
+			<span className="gui-send-work">
+				<MatrixLoader className="gui-send-matrix" />
+				<span className="gui-send-labels">
+					<span className="gui-send-label gui-send-label--thinking">{t("thinking active")}</span>
+					<span className="gui-send-label gui-send-label--stop">{t("stop turn")}</span>
+				</span>
+			</span>
+		</button>
+	);
+}
+
 /** Focus mode toggle (openchamber ⌘⇧E): the composer fills the surface. */
 export function FocusButton({ focused, onPress }: { focused: boolean; onPress(): void }): ReactNode {
 	return (
@@ -137,17 +265,6 @@ export function FocusButton({ focused, onPress }: { focused: boolean; onPress():
 			aria-pressed={focused}
 		>
 			<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-		</button>
-	);
-}
-
-/** Pending-message queue chip (TUI /queue parity) — informational, shown
- *  while the agent works and messages are queued behind the current turn. */
-export function QueueChip({ count, title }: { count: number; title: string }): ReactNode {
-	return (
-		<button type="button" className="gui-queue-chip" title={title} aria-label={t("queued messages")}>
-			<Icon name="list-unordered" className="h-3 w-3" />
-			<span>{t("queued {count}", { count: String(count) })}</span>
 		</button>
 	);
 }

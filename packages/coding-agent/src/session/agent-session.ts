@@ -206,10 +206,10 @@ import { ToolError } from "../tools/tool-errors";
 import { parseCommandArgs } from "../utils/command-args";
 import type { EditMode } from "../utils/edit-mode";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
-import { resumeCommand } from "../utils/resume-command";
 import { extractFileMentions, generateFileMentionMessages } from "../utils/file-mentions";
 import { normalizeModelContextImages } from "../utils/image-loading";
 import type { InspectImageMode } from "../utils/inspect-image-mode";
+import { resumeCommand } from "../utils/resume-command";
 import { generateSessionTitle } from "../utils/title-generator";
 import { buildNamedToolChoice, isToolChoiceActive } from "../utils/tool-choice";
 import type { VibeModeState } from "../vibe/state";
@@ -3197,7 +3197,7 @@ export class AgentSession {
 	#scheduleAgentContinue(options?: ScheduledAgentContinueOptions): void {
 		this.#schedulePostPromptTask(
 			async signal => {
-						// Defense in depth: if compaction/handoff slipped onto the post-prompt queue
+				// Defense in depth: if compaction/handoff slipped onto the post-prompt queue
 				// alongside us (e.g. via a scheduler we don't own), refuse to start a fresh
 				// streaming turn — agent.continue() here would race the handoff's session
 				// reset. The first-class fix is in #checkCompaction/the agent_end handler,
@@ -6763,6 +6763,36 @@ export class AgentSession {
 			return toRestoredQueuedMessage(removed);
 		}
 		return undefined;
+	}
+
+	/**
+	 * Pop a SPECIFIC queued user message (GUI per-item 取回/编辑 parity):
+	 * text-matched like sendQueuedMessage (first match wins); hidden
+	 * companions queued directly before it are dropped with it. Returns
+	 * undefined when no matching user message is queued in that group.
+	 */
+	popQueuedMessage(group: "steering" | "followUp", text: string): RestoredQueuedMessage | undefined {
+		const steering = this.agent.peekSteeringQueue();
+		const followUp = this.agent.peekFollowUpQueue();
+		const queue = group === "steering" ? steering : followUp;
+		let index = -1;
+		for (let i = 0; i < queue.length; i++) {
+			if (isUserQueuedMessage(queue[i]) && queueChipText(queue[i]) === text) {
+				index = i;
+				break;
+			}
+		}
+		if (index < 0) return undefined;
+		// Same companion rule as popLastQueuedMessage: notices/companions
+		// queue immediately before their user message.
+		let start = index;
+		while (start > 0 && isHiddenUserCompanion(queue[start - 1])) start--;
+		const next = queue.slice();
+		next.splice(start, index - start + 1);
+		if (group === "steering") this.agent.replaceQueues(next, followUp.slice());
+		else this.agent.replaceQueues(steering.slice(), next);
+		this.#reconcileQueuedMessageDrain();
+		return toRestoredQueuedMessage(queue[index]);
 	}
 
 	get skillsSettings(): SkillsSettings | undefined {

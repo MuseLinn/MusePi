@@ -7,8 +7,9 @@
  *     store, unread badge, and a drag/hover/dock gesture surface. Fully
  *     transparent, click-through outside the sprite — the pet floats on
  *     the desktop.
- *   - bubble window (bubble.html): activity bubbles + interaction panel
- *     on a real vibrancy glass surface (bubble-main.tsx).
+ *   - bubble window (bubble.html): activity bubbles + interaction panel,
+ *     in a fully transparent per-pixel window — the cards self-draw
+ *     their frosted-glass surface (bubble-main.tsx).
  *
  * Pointer handling:
  *   - drag beyond 8px moves the OS window (pet-drag delta IPC)

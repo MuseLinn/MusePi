@@ -202,11 +202,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("pet:command", listener);
 		return () => ipcRenderer.removeListener("pet:command", listener);
 	},
-	/** Keep the machine from idle-sleeping (settings 常规 → 保持电脑运行).
-	 *  Main process holds a powerSaveBlocker assertion while enabled
-	 *  (cross-platform: caffeinate-equivalent on macOS, ES_SYSTEM_REQUIRED
-	 *  on Windows, ScreenSaver Inhibit on Linux). */
-	setKeepAwake: (enabled) => ipcRenderer.invoke("keep-awake-set", enabled),
 	/** System sleep/wake: main-process powerMonitor "resume" push. The
 	 *  renderer recovers the daemon connection on wake (Electron tears the
 	 *  renderer's WebSocket down on sleep — electron#19993). */

@@ -21,7 +21,7 @@ export function QueuePanel({
 }: {
 	queued: QueueSnapshot;
 	onSend(group: "steering" | "followUp", text: string, index: number): void;
-	onPop(): void;
+	onPop(group?: "steering" | "followUp", text?: string): void;
 	onClear(): void;
 }): ReactNode {
 	return (
@@ -37,11 +37,22 @@ export function QueuePanel({
 					 * send-now button would pull the message out only to
 					 * re-inject it as a steer (count unchanged, UI flicker on
 					 * the 3s poll reconcile). They can still be taken back. */}
+					{/* Per-item 撤回/编辑: pulls THAT message back into the
+					 * editor (daemon pops the matched entry, companions too). */}
 					{queued.steering.map((msg, i) => (
 						<div key={`s-${i}-${msg.slice(0, 12)}`} className="gui-queue-item">
 							<span className="gui-queue-item-text" title={msg}>
 								{msg}
 							</span>
+							<button
+								type="button"
+								className="gui-queue-send"
+								title={t("take back")}
+								aria-label={t("take back")}
+								onClick={() => onPop("steering", msg)}
+							>
+								<Icon name="arrow-go-back" className="h-3 w-3" />
+							</button>
 						</div>
 					))}
 				</>
@@ -59,6 +70,15 @@ export function QueuePanel({
 							<button
 								type="button"
 								className="gui-queue-send"
+								title={t("take back")}
+								aria-label={t("take back")}
+								onClick={() => onPop("followUp", msg)}
+							>
+								<Icon name="arrow-go-back" className="h-3 w-3" />
+							</button>
+							<button
+								type="button"
+								className="gui-queue-send"
 								title={t("send now")}
 								aria-label={t("send now")}
 								onClick={() => onSend("followUp", msg, i)}
@@ -70,19 +90,11 @@ export function QueuePanel({
 				</>
 			)}
 			<div className="gui-queue-panel-actions">
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-2"
-					onClick={() => void onPop()}
-				>
+				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onPop()}>
 					<Icon name="arrow-go-back" className="h-3 w-3" />
 					<span>{t("take back newest")}</span>
 				</button>
-				<button
-					type="button"
-					className="gui-pane-action !w-auto px-2"
-					onClick={() => void onClear()}
-				>
+				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => void onClear()}>
 					<Icon name="delete-bin" className="h-3 w-3" />
 					<span>{t("clear queue")}</span>
 				</button>

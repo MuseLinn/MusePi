@@ -553,6 +553,98 @@
 	cursor: default;
 }
 
+/* 三合一 send control (working state, opendesign capsule parity):
+ * expands into a pill showing the dot-matrix bloom + a two-label grid
+ * (思考中 / 停止). Hover/focus swaps visibility so the button size
+ * stays constant — same as opendesign's `.composer-send.stop` pattern. */
+.gui-composer-send--working {
+	width: auto;
+	min-width: 72px;
+	padding: 0 12px;
+	gap: 6px;
+	/* Dark pill background matches opendesign's `--text-strong` fill. */
+	background: var(--gui-send-accent, var(--color-accent));
+	color: var(--color-bg);
+	border-color: var(--gui-send-accent, var(--color-accent));
+	border-radius: 999px;
+	transition:
+		background-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+		border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+		box-shadow 140ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+		opacity 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.gui-composer-send--working:hover {
+	background: color-mix(in srgb, var(--gui-send-accent, var(--color-accent)) 86%, #fff);
+	border-color: transparent;
+	color: var(--color-bg);
+}
+
+.gui-send-work {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+	z-index: 1;
+}
+
+/* Label stack — grid-area overlap keeps button width fixed across states. */
+.gui-send-labels {
+	display: inline-grid;
+	justify-items: center;
+	grid-template-areas: "label";
+}
+.gui-send-label {
+	display: inline;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.2;
+	white-space: nowrap;
+	grid-area: 1 / 1;
+}
+.gui-send-label--stop {
+	visibility: hidden;
+}
+.gui-composer-send--working:hover .gui-send-label--thinking,
+.gui-composer-send--working:focus-visible .gui-send-label--thinking {
+	visibility: hidden;
+}
+.gui-composer-send--working:hover .gui-send-label--stop,
+.gui-composer-send--working:focus-visible .gui-send-label--stop {
+	visibility: visible;
+}
+
+.gui-send-matrix {
+	/* opendesign's 5×5 dot-matrix bloom: inline SVG. The bloom filter
+	 * region is 300%, so the SVG root must NOT clip it — overflow: visible
+	 * lets the soft glow halo spill past the 18px box. (The pill's own
+	 * border-radius is rounded, not a clip, so only this SVG internal
+	 * crop could kill the bloom.) */
+	display: block;
+	flex: 0 0 18px;
+	width: 18px;
+	height: 18px;
+	overflow: visible;
+	pointer-events: none;
+}
+/* Chip row hanging ABOVE the input card (todo/queue/extension dock):
+ * outside the framed surface — horizontal padding matches the card's
+ * inner rhythm so chips visually align with the input content. */
+.gui-composer-above {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	/* horizontal margin mirrors the frame's inner padding (8px 10px 8px) so
+	 * chips sit flush with the textarea content edge rather than floating in */
+	margin: 0 10px 8px;
+}
+
+
+.gui-composer-above .gui-composer-dock {
+	padding: 0;
+}
+
 .gui-spin {
 	animation: gui-spin 900ms linear infinite;
 }

@@ -18,7 +18,7 @@ export function ComposerFrame({
 	attachments,
 	onRemoveAttachment,
 	onAnnotated,
-	statusRow,
+	aboveRow,
 	footerLeft,
 	footerRight,
 	hero = false,
@@ -36,26 +36,29 @@ export function ComposerFrame({
 	/** Annotation text from the attachment lightbox (open-science parity):
 	 *  pins + notes formatted for the composer/agent. */
 	onAnnotated?(text: string): void;
-	/** Chips row above the footer (goal/plan modes) — session only. */
-	statusRow?: ReactNode;
+	/** Row(s) hanging ABOVE the input card, outside the framed surface —
+	 *  todo/queue chips and the agent status line live here so the input
+	 *  box itself stays clean (user direction: status belongs above the
+	 *  input, not inside it). */
+	aboveRow?: ReactNode;
 	footerLeft: ReactNode;
 	footerRight: ReactNode;
 	/** Border-beam hero glow (welcome scene). */
 	hero?: boolean;
 	/** Drive the beam's active state — focus-triggered: the beam fades in
-	 * while the composer has focus and fades out on blur (never a static
-	 * box). Only meaningful with hero. */
+	 *  while the composer has focus and fades out on blur (never a static
+	 *  box). Only meaningful with hero. */
 	heroActive?: boolean;
 	/** data-enhancing marker (session). */
 	enhancing?: boolean;
 	flipAnchor?: "welcome" | "session";
 	/** Companion pet, docked outside the input's top edge, right-aligned
-	 * (input mode). Rendered absolutely against the frame so welcome and
-	 * session scenes share one placement. */
+	 *  (input mode). Rendered absolutely against the frame so welcome and
+	 *  session scenes share one placement. */
 	pet?: ReactNode;
 	/** Mark the frame as the chat-input host ([data-chat-input="true"],
-	 * openchamber parity) so global selection capture never re-quotes
-	 * what is being typed. */
+	 *  openchamber parity) so global selection capture never re-quotes
+	 *  what is being typed. */
 	chatInput?: boolean;
 }): ReactNode {
 	// Click-to-preview lightbox for attachment thumbnails (before send;
@@ -112,7 +115,6 @@ export function ComposerFrame({
 					))}
 				</div>
 			)}
-			{statusRow}
 			<div className="gui-composer-row px-4 pb-3">
 				<div className="gui-composer-left">{footerLeft}</div>
 				<div className="gui-composer-right">{footerRight}</div>
@@ -136,6 +138,7 @@ export function ComposerFrame({
 	if (hero)
 		return (
 			<>
+				{aboveRow}
 				<BorderBeam
 					className={`gui-border-beam${pet ? " gui-border-beam--pet" : ""}`}
 					// The scene-switch FLIP morph transforms this wrapper (not
@@ -158,6 +161,7 @@ export function ComposerFrame({
 		);
 	return (
 		<>
+			{aboveRow}
 			{frame}
 			{lightbox}
 		</>

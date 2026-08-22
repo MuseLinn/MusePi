@@ -6,6 +6,8 @@ export const composer = {
 	"waiting for session…": "等待会话…",
 	"submit response": "提交回复",
 	"send (Enter)": "发送（回车）",
+	"thinking active": "思考中",
+	"stop turn": "停止",
 	"stop the current turn": "停止当前回合",
 	"compact context": "压缩上下文",
 	"compacting…": "压缩中…",

@@ -2266,6 +2266,30 @@ body.gui-resizing .gui-pane-right {
 	vertical-align: 1px;
 }
 
+/* ── Role status indicators (head right-side badge) ── */
+.gui-role-status {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	flex-shrink: 1;
+	font-size: 12px;
+	line-height: 1.4;
+	min-width: 0;
+	max-width: 200px;
+	color: var(--color-text-muted);
+}
+
+.gui-role-status .truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-role-status .italic {
+	font-style: italic;
+	opacity: 0.75;
+}
+
 /* ── Project-override ledger ("项目覆盖") ──
  * Card-styled list of keys the current project layer owns: dotted path,
  * project value, struck-through global fallback, and a delete button that
@@ -2951,10 +2975,13 @@ body.gui-resizing .gui-pane-right {
 	-webkit-user-select: none;
 }
 
-/* Windows/Linux: no traffic lights — the drag strip content starts at the edge. */
+/* Windows/Linux: no traffic lights — the drag strip content starts at the
+ * edge; right padding clears the titleBarOverlay native min/max/close
+ * buttons at the window's top-right so the title ellipsizes before them. */
 :root[data-platform="win32"] .gui-mini-drag,
 :root[data-platform="linux"] .gui-mini-drag {
 	padding-left: 16px;
+	padding-right: 130px;
 }
 
 .gui-mini-title {
@@ -3401,6 +3428,14 @@ body.gui-resizing .gui-pane-right {
 
 .gui-mtree-row-btn:hover {
 	background: var(--color-hover);
+}
+
+/* 当前位置链(TUI currentLeafId/activePath parity):transcript 尾部所在
+ * 节点行常亮 accent 左条,回答"你在哪"。 */
+.gui-mtree-row--current .gui-mtree-row-btn {
+	box-shadow: inset 2px 0 0 var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+	border-radius: 6px;
 }
 
 /* Fork-into-new-session action (TUI navigateTree parity: start a

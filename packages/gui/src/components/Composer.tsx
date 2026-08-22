@@ -7,6 +7,7 @@ import { type ContextBreakdownView, isContextCommand } from "../lib/context-comm
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
+import { sessionAccentHex } from "../lib/session-accent";
 import { sfxFor } from "../lib/sfx";
 import {
 	COMPOSER_DOCK_SLOT,
@@ -17,7 +18,7 @@ import {
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { evaluateSubmitTrigger, startDictation, type SttSubmitTrigger } from "../lib/voice";
+import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
@@ -26,22 +27,20 @@ import {
 	EnhanceButton,
 	type EnhanceState,
 	FocusButton,
-	QueueChip,
 	RetryButton,
-	SendButton,
-	StopButton,
+	SendOrStopButton,
 	VoiceButton,
 } from "./composer/action-buttons";
-import { AgentStatusLine, CompactionStatusLine, readStatusPrefs } from "./composer/agent-status-line";
+import { CompactionStatusLine } from "./composer/agent-status-line";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
-import { SlashCommandTip } from "./composer/slash-command-tip";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
 import { QuoteCards } from "./composer/quote-cards";
+import { SlashCommandTip } from "./composer/slash-command-tip";
 import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
 import { TodoPanel } from "./composer/todo-panel";
 import type {
@@ -56,6 +55,7 @@ import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
 import { useAttachments } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
+import { useInputHistory } from "./composer/use-input-history";
 import { useModeToggles } from "./composer/use-mode-toggles";
 import { useModes } from "./composer/use-modes";
 import { autosize, MIN_ROWS } from "./composer-autosize";
@@ -317,8 +317,6 @@ export function Composer({
 	// dock = 输入卡上方行;left/right = 底部工具栏两端。list 语义 ——
 	// 扩展声明 composer.dock/left/right 槽位即注入组件。
 	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
-	const composerLeftItems = useSlotComponents(rpc, COMPOSER_LEFT_SLOT);
-	const composerRightItems = useSlotComponents(rpc, COMPOSER_RIGHT_SLOT);
 	const [text, setText] = useState("");
 	// Element picker (browser tool) inserts picked-page text into the draft.
 	useEffect(() => {
@@ -370,6 +368,7 @@ export function Composer({
 		insertHash,
 	} = useCompletion({ rpc, cwd, setText });
 	useDraftPersistence({ sessionId, rpc, text, setText });
+	const { history, historyIndex, draftBackupRef, setHistoryIndex, pushHistory } = useInputHistory(cwd);
 	const spellcheckEnabled = (): boolean => {
 		try {
 			return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
@@ -861,31 +860,45 @@ export function Composer({
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
-	// 取回: pop the newest queued message back into the editor (TUI Alt+Up
-	// parity) so the user can edit before re-sending.
-	const popQueued = useCallback((): Promise<void> => {
-		if (!rpc || !sessionId) return Promise.resolve();
-		return rpc
-			.request<{ text: string; images?: { type: string; data: string; mimeType: string }[] } | null>(
-				"session.queuedPop",
-				{
-					sessionId,
-				},
-			)
-			.then(res => {
-				if (res?.text) {
-					setText(prev => {
-						const merged = prev.trim() ? `${prev.trim()}\n${res.text}` : res.text;
-						requestAnimationFrame(() => autosize(taRef.current));
-						return merged;
-					});
-					taRef.current?.focus();
-				}
-				// Optimistic count decrement — the next 3s poll confirms.
-				setQueued(prev => (prev && prev.count > 0 ? { ...prev, count: prev.count - 1 } : prev));
-			})
-			.catch(() => {});
-	}, [rpc, sessionId]);
+	// 取回: pop a queued message back into the editor (TUI Alt+Up parity)
+	// so the user can edit before re-sending. With group+text it pops THAT
+	// item (queue panel per-item 撤回/编辑); without, the newest one.
+	const popQueued = useCallback(
+		(group?: "steering" | "followUp", text?: string): Promise<void> => {
+			if (!rpc || !sessionId) return Promise.resolve();
+			return rpc
+				.request<{ text: string; images?: { type: string; data: string; mimeType: string }[] } | null>(
+					"session.queuedPop",
+					{ sessionId, group, text },
+				)
+				.then(res => {
+					if (res?.text) {
+						setText(prev => {
+							const merged = prev.trim() ? `${prev.trim()}\n${res.text}` : res.text;
+							requestAnimationFrame(() => autosize(taRef.current));
+							return merged;
+						});
+						taRef.current?.focus();
+					}
+					// Optimistic removal — the next poll confirms.
+					if (group && text) {
+						setQueued(prev =>
+							prev
+								? {
+										...prev,
+										count: Math.max(0, prev.count - 1),
+										[group]: prev[group].filter(m => m !== text),
+									}
+								: prev,
+						);
+					} else {
+						setQueued(prev => (prev && prev.count > 0 ? { ...prev, count: prev.count - 1 } : prev));
+					}
+				})
+				.catch(() => {});
+		},
+		[rpc, sessionId],
+	);
 	const clearQueued = useCallback((): Promise<void> => {
 		if (!rpc || !sessionId) return Promise.resolve();
 		return rpc
@@ -919,6 +932,25 @@ export function Composer({
 		},
 		[rpc, sessionId],
 	);
+	// Immediate snapshot refresh — called right after a busy-time send so an
+	// enqueued message shows in the chip/panel NOW instead of on the next
+	// 3s poll tick.
+	const refreshQueued = useCallback((): void => {
+		if (!rpc || !sessionId) return;
+		void rpc
+			.request<{ count: number; steering: string[]; followUp: string[] }>("session.queued", { sessionId })
+			.then(res => {
+				setQueued(prev =>
+					prev &&
+					prev.count === res?.count &&
+					prev.steering.length === res?.steering.length &&
+					prev.followUp.length === res?.followUp.length
+						? prev
+						: (res ?? prev),
+				);
+			})
+			.catch(() => {});
+	}, [rpc, sessionId]);
 	useEffect(() => {
 		if (!rpc || !sessionId || !working) return;
 		let disposed = false;
@@ -1180,8 +1212,13 @@ export function Composer({
 			}
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
+			const finalMsg = quotePrefix ? `${quotePrefix}${payload}`.trim() : payload;
+			// Record the submitted prompt in the recall ring (TUI history
+			// parity): the exact message that lands on the wire, so ArrowUp
+			// recovers it verbatim. Consecutive repeats are deduped.
+			pushHistory(finalMsg);
 			onSend(
-				quotePrefix ? `${quotePrefix}${payload}`.trim() : payload,
+				finalMsg,
 				attachments.map(a => ({
 					type: "image" as const,
 					data: a.dataUrl.split(",")[1] ?? "",
@@ -1194,6 +1231,13 @@ export function Composer({
 			if (quotes.length > 0) {
 				handledQuoteCountRef.current = 0;
 				onQuotesChange([]);
+			}
+			// Busy-time send just enqueued (steer/followUp) — surface it in the
+			// queue chip/panel immediately instead of waiting for the next
+			// poll tick; the delayed re-check settles daemon-side async.
+			if (working || delivery) {
+				refreshQueued();
+				setTimeout(refreshQueued, 400);
 			}
 			setText("");
 			setAttachments([]);
@@ -1219,6 +1263,8 @@ export function Composer({
 			busyEnter,
 			openUsagePanel,
 			openContextPanel,
+			refreshQueued,
+			pushHistory,
 		],
 	);
 
@@ -1309,6 +1355,44 @@ export function Composer({
 				setHashOpen(false);
 				return;
 			}
+		}
+		// Input-history navigation (TUI editor parity): with the completion
+		// menus closed, ArrowUp recalls older submissions when the caret is at
+		// the start (or the box is empty); ArrowDown walks back toward the
+		// present, restoring the in-progress draft at the end. The menus above
+		// return early, so Arrow keys there never reach the history ring.
+		if (e.key === "ArrowUp") {
+			const ta = taRef.current;
+			const atStart = !ta || (ta.selectionStart === 0 && ta.selectionEnd === 0) || text.length === 0;
+			if (historyIndex === null) {
+				if (atStart && history.length > 0) {
+					if (text !== "") draftBackupRef.current = text;
+					setHistoryIndex(0);
+					setText(history[0] ?? "");
+					e.preventDefault();
+					requestAnimationFrame(() => autosize(taRef.current));
+					return;
+				}
+			} else if (historyIndex < history.length - 1) {
+				setHistoryIndex(historyIndex + 1);
+				setText(history[historyIndex + 1] ?? "");
+				e.preventDefault();
+				requestAnimationFrame(() => autosize(taRef.current));
+				return;
+			}
+		} else if (e.key === "ArrowDown" && historyIndex !== null) {
+			if (historyIndex === 0) {
+				setHistoryIndex(null);
+				setText(draftBackupRef.current);
+				e.preventDefault();
+				requestAnimationFrame(() => autosize(taRef.current));
+				return;
+			}
+			setHistoryIndex(historyIndex - 1);
+			setText(history[historyIndex - 1] ?? "");
+			e.preventDefault();
+			requestAnimationFrame(() => autosize(taRef.current));
+			return;
 		}
 		// Cmd/Ctrl+Enter (dsh parity): send with the OPPOSITE busy behavior
 		// of the configured plain-Enter mode.
@@ -1439,19 +1523,9 @@ export function Composer({
 						/>,
 					)
 				: null}
-			{/* Agent status line — hangs ABOVE the input card, outside the
-			 * frame (user: the thinking state belongs here, not inside
-			 * the input, not duplicated in the transcript): braille
-			 * spinner or orb + label on one line. Shows 思考中… while
-			 * working and briefly 思考完毕 when the turn ends. While the
-			 * context is being compacted it is replaced by the compaction
-			 * line (spinner + 停止 button) — compaction runs between
-			 * turns, so the two never overlap. */}
-			{compacting ? (
-				<CompactionStatusLine onCancel={cancelCompaction} />
-			) : (
-				<AgentStatusLine working={working} sessionKey={sessionId || undefined} {...readStatusPrefs()} />
-			)}
+			{/* Agent status is carried by the send button itself (三合一). The separate
+			 * status line is gone; only the compaction spinner remains while compacting. */}
+			{compacting && <CompactionStatusLine onCancel={cancelCompaction} />}
 			<ComposerFrame
 				flipAnchor="session"
 				onAnnotated={text => {
@@ -1474,81 +1548,87 @@ export function Composer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-				// Status row ABOVE the input (kimi-code parity): todo progress
-				// and the editable pending-queue live here — plan/goal mode
-				// chips sit in the button row next to the thinking selector.
-				// Renders whenever ANY of them is present.
-				statusRow={
-					composerDockItems.length > 0 ||
-					(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
-					activeTask ? (
-						<div className="gui-composer-dock">
-							{composerDockItems.length > 0 && (
-								<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
-							)}
-							{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) || activeTask) && (
-								<div className="gui-mode-row gui-mode-row--status">
-									{activeTask && (
-										<SwarmChip
-											open={swarmOpen}
-											onToggle={() => setSwarmOpen(v => !v)}
-											anchorRef={swarmAnchorRef}
-											menu={renderSwarmMenu(
-												<div className="gui-swarm-popup-card" role="region" aria-label={t("swarm members")}>
-													<SwarmCardPreview
-														details={
-															(activeTask.partialResult as { details?: unknown } | null | undefined)
-																?.details
-														}
-														host={swarmHost}
-													/>
-												</div>,
-											)}
-										/>
-									)}
-									{todoTotal > 0 && (
-										<TodoChip
-											open={todoOpen}
-											onToggle={() => setTodoOpen(v => !v)}
-											anchorRef={todoAnchorRef}
-											done={todoDone}
-											total={todoTotal}
-											title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
-										/>
-									)}
-									{renderTodoMenu(
-										<TodoPanel
-											phases={todo}
-											onOp={todoOp}
-											appendText={appendText}
-											onAppendChange={setAppendText}
-										/>,
-									)}
-									{/* Pending-message queue (TUI /queue parity): editable list
-									 * above the input — 取回 pops the newest queued message
-									 * back into the editor. */}
-									{working && queued && queued.count > 0 && (
-										<>
-											<QueueToggleChip
-												open={queueOpen}
-												onToggle={() => setQueueOpen(v => !v)}
-												anchorRef={queueAnchorRef}
-												count={queued.count}
+				// Todo/queue chips + extension dock hang ABOVE the input card
+				// (user direction: the status row belongs above the input,
+				// not inside the framed box).
+				aboveRow={
+					<div className="gui-composer-above">
+						{composerDockItems.length > 0 ||
+						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+						activeTask ? (
+							<div className="gui-composer-dock">
+								{composerDockItems.length > 0 && (
+									<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
+								)}
+								{((modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+									activeTask) && (
+									<div className="gui-mode-row gui-mode-row--status">
+										{activeTask && (
+											<SwarmChip
+												open={swarmOpen}
+												onToggle={() => setSwarmOpen(v => !v)}
+												anchorRef={swarmAnchorRef}
+												menu={renderSwarmMenu(
+													<div
+														className="gui-swarm-popup-card"
+														role="region"
+														aria-label={t("swarm members")}
+													>
+														<SwarmCardPreview
+															details={
+																(activeTask.partialResult as { details?: unknown } | null | undefined)
+																	?.details
+															}
+															host={swarmHost}
+														/>
+													</div>,
+												)}
 											/>
-											{renderQueueMenu(
-												<QueuePanel
-													queued={queued}
-													onSend={sendQueued}
-													onPop={popQueued}
-													onClear={clearQueued}
-												/>,
-											)}
-										</>
-									)}
-								</div>
-							)}
-						</div>
-					) : null
+										)}
+										{todoTotal > 0 && (
+											<TodoChip
+												open={todoOpen}
+												onToggle={() => setTodoOpen(v => !v)}
+												anchorRef={todoAnchorRef}
+												done={todoDone}
+												total={todoTotal}
+												title={todo.map(p => `${p.name} ${p.done}/${p.total}`).join(" · ")}
+											/>
+										)}
+										{renderTodoMenu(
+											<TodoPanel
+												phases={todo}
+												onOp={todoOp}
+												appendText={appendText}
+												onAppendChange={setAppendText}
+											/>,
+										)}
+										{/* Pending-message queue (TUI /queue parity): editable list
+										 * above the input — 取回 pops the newest queued message
+										 * back into the editor. */}
+										{working && queued && queued.count > 0 && (
+											<>
+												<QueueToggleChip
+													open={queueOpen}
+													onToggle={() => setQueueOpen(v => !v)}
+													anchorRef={queueAnchorRef}
+													count={queued.count}
+												/>
+												{renderQueueMenu(
+													<QueuePanel
+														queued={queued}
+														onSend={sendQueued}
+														onPop={popQueued}
+														onClear={clearQueued}
+													/>,
+												)}
+											</>
+										)}
+									</div>
+								)}
+							</div>
+						) : null}
+					</div>
 				}
 				footerLeft={
 					<>
@@ -1584,12 +1664,9 @@ export function Composer({
 						{/* 会话扩展状态卡(DSH Cordis Plugin 卡片参考吸收):运行中扩展数 +
 						 * 浮窗状态列表。 */}
 						{!welcome && <ExtensionStatusCard rpc={rpc} />}
-						{/* Pending-message queue chip (TUI /queue parity): visible
-						 * while the agent works and messages are queued behind
-						 * the current turn; hover shows the queued texts. */}
-						{working && queued && queued.count > 0 && (
-							<QueueChip count={queued.count} title={[...queued.steering, ...queued.followUp].join("\n")} />
-						)}
+						{/* (The interactive 队列 toggle chip lives in the status dock
+						 * above — the old informational toolbar chip was a duplicate
+						 * badge and is gone.) */}
 						{/* Focus mode sits between the attach menu and the model
 						 * selector (openchamber ComposerFooter order). */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
@@ -1720,20 +1797,21 @@ export function Composer({
 								}
 							}}
 						/>
-						{working && (
-							<StopButton
-								onPress={() => {
-									tapFeedback(2);
-									onStop();
-								}}
-							/>
-						)}
+						{/* 三合一 send control (user direction, opendesign parity):
+						 * idle → send; working → the button itself displays the
+						 * live agent state (braille + accent shimmer), hover
+						 * reveals the stop glyph and click aborts the turn. */}
 						{!working && <RetryButton busy={retryBusy} none={retryNone} onPress={retryLastTurn} />}
-						<SendButton
+						<SendOrStopButton
 							canSend={canSend}
 							busy={enhance === "enhancing"}
 							working={working}
 							onPress={() => send()}
+							onStop={() => {
+								tapFeedback(2);
+								onStop();
+							}}
+							accent={sessionId ? sessionAccentHex(sessionId) : null}
 						/>
 					</>
 				}
@@ -1770,6 +1848,10 @@ export function Composer({
 					onDrop={onDrop}
 					onChange={e => {
 						setText(e.target.value);
+						// A genuine keystroke that edits the box exits input-history
+						// browsing (programmatic history recall sets state, never
+						// fires onChange — so browse stays until the user edits).
+						if (historyIndex !== null) setHistoryIndex(null);
 						if (clearAllRef.current) {
 							clearAllRef.current = false;
 							if (e.target.value === "") setAttachments([]);
