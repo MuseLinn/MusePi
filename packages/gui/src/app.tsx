@@ -61,6 +61,16 @@ const fmtError = (op: string, err: unknown): string => {
 	return /Unknown session/.test(msg) ? `${op}: ${t("session unavailable")}` : `${op}: ${msg}`;
 };
 
+/** Builtin mode presets used to seed the welcome preset chip when the daemon
+ *  modes.list RPC fails/returns empty — the chip must never vanish. Real
+ *  localized labels come from the daemon when it responds. */
+const WELCOME_MODES_FALLBACK: { id: string; label: string }[] = [
+	{ id: "work", label: "Work" },
+	{ id: "chat", label: "Chat" },
+	{ id: "creator", label: "Creator" },
+	{ id: "design", label: "Design" },
+];
+
 /** Electron shell environment (has electronAPI daemon bridge). */
 function isElectron(): boolean {
 	return typeof window !== "undefined" && "electronAPI" in window;
@@ -496,15 +506,27 @@ function AppInner(): ReactNode {
 			if (cronGlowTimerRef.current) clearTimeout(cronGlowTimerRef.current);
 		};
 	}, [rpc]);
-	// Welcome 预设 chip 选项:modes.list 一次拉取 + modes.changed 即时刷新。
+	// Welcome 预设 chip 选项:modes.list 一次拉取 + modes.changed 即时刷新.
+	// Fallback: if modes.list fails/returns empty the preset chip must still
+	// render (the builtin 4 are always valid) instead of vanishing — the load
+	// error is surfaced to the console so the real cause stays visible.
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
 		const load = (): void => {
 			void rpc
 				.request<{ modes: { id: string; label: string }[] } | null>("modes.list", {})
-				.then(res => alive && setWelcomeModes(res?.modes ?? null))
-				.catch(() => alive && setWelcomeModes(null));
+				.then(res => {
+					if (!alive) return;
+					const modes = res?.modes;
+					setWelcomeModes(
+						Array.isArray(modes) && modes.length > 0 ? modes : WELCOME_MODES_FALLBACK,
+					);
+				})
+				.catch(err => {
+					console.warn("[gui] modes.list failed; falling back to builtin modes", err);
+					if (alive) setWelcomeModes(WELCOME_MODES_FALLBACK);
+				});
 		};
 		load();
 		const off = rpc.addEventListener(event => {
