@@ -42,38 +42,18 @@ export function GuiSelect<T extends string>({
 
 	const label = options.find(o => o.value === value)?.label ?? String(value);
 
-	// Two options → a segmented toggle instead of a dropdown (the listbox
-	// chrome is overkill for a binary choice; the trigger width was the
-	// only constraint — inline segments read fine beside the label). Three
-	// or more options keep the list. Reuses the existing .gui-segmented
-	// visual language (ZCode appearance settings).
-	if (options.length === 2) {
-		return (
-			<div className={`gui-segmented${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
-				{options.map(o => (
-					<button
-						type="button"
-						key={o.value}
-						role="tab"
-						aria-selected={o.value === value}
-						className={`gui-seg-btn${o.value === value ? " gui-seg-btn--active" : ""}`}
-						onClick={() => onChange(o.value)}
-					>
-						{o.label}
-					</button>
-				))}
-			</div>
-		);
-	}
-
+	// Keyboard navigation on the open listbox: ↑/↓ move the highlight,
+	// Enter commits the highlighted option. Opening happens on the trigger
+	// (Enter/↑/↓ via its onKeyDown); Escape closes via useFloatingMenu.
+	// Declared before the segmented-toggle early return below: hooks must
+	// run unconditionally, and this selector's option count legitimately
+	// flips 2↔N at runtime (role thinking ladder loads) — a conditional
+	// hook here was crashing React #300 on the roles tab.
 	const commit = (opt: SelectOption<T>): void => {
 		onChange(opt.value);
 		setOpen(false);
 	};
 
-	// Keyboard navigation on the open listbox: ↑/↓ move the highlight,
-	// Enter commits the highlighted option. Opening happens on the trigger
-	// (Enter/↑/↓ via its onKeyDown); Escape closes via useFloatingMenu.
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (e: KeyboardEvent): void => {
@@ -97,6 +77,30 @@ export function GuiSelect<T extends string>({
 		return () => document.removeEventListener("keydown", onKey);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open, highlight, options]);
+
+	// Two options → a segmented toggle instead of a dropdown (the listbox
+	// chrome is overkill for a binary choice; the trigger width was the
+	// only constraint — inline segments read fine beside the label). Three
+	// or more options keep the list. Reuses the existing .gui-segmented
+	// visual language (ZCode appearance settings).
+	if (options.length === 2) {
+		return (
+			<div className={`gui-segmented${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
+				{options.map(o => (
+					<button
+						type="button"
+						key={o.value}
+						role="tab"
+						aria-selected={o.value === value}
+						className={`gui-seg-btn${o.value === value ? " gui-seg-btn--active" : ""}`}
+						onClick={() => onChange(o.value)}
+					>
+						{o.label}
+					</button>
+				))}
+			</div>
+		);
+	}
 
 	return (
 		<>
