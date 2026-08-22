@@ -455,6 +455,19 @@ export const general = {
 	"delete override": "删除此覆盖，回退继承值",
 	"override read only": "项目文件中的手工配置，请在配置目录编辑",
 	"read only": "只读",
+	// Model capability icons in the model picker (ModelSelector).
+	"text input": "文本输入",
+	"image understanding": "图片理解",
+	"video understanding": "视频理解",
+	"image generation": "图像生成",
+	"video generation": "视频生成",
+	reasoning: "推理",
+	// Async-result custom message (background bash/task job completion).
+	"Background job completed": "后台任务已完成",
+	// Advisor notes card (TUI createAdvisorMessageCard parity).
+	"advisor notes": "{count} 条提醒",
+	"advisor blockers": "{count} 条阻塞",
+	"advisor more": "+{count} 条",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

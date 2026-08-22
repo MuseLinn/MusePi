@@ -458,4 +458,17 @@ export const general = {
 	"delete override": "Delete this override and fall back to the inherited value",
 	"override read only": "Hand-edited project config — edit it in the config directory",
 	"read only": "Read-only",
+	// Model capability icons in the model picker (ModelSelector).
+	"text input": "Text input",
+	"image understanding": "Image understanding",
+	"video understanding": "Video understanding",
+	"image generation": "Image generation",
+	"video generation": "Video generation",
+	reasoning: "Reasoning",
+	// Async-result custom message (background bash/task job completion).
+	"Background job completed": "Background job completed",
+	// Advisor notes card (TUI createAdvisorMessageCard parity).
+	"advisor notes": "{count} note(s)",
+	"advisor blockers": "{count} blocker(s)",
+	"advisor more": "+{count} more",
 } as const satisfies Record<GeneralKey, string>;

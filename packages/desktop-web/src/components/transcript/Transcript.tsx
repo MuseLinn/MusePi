@@ -28,7 +28,7 @@ import {
 } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
-import { fmtTokens } from "../../lib/format";
+import { fmtDuration, fmtTokens } from "../../lib/format";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
@@ -776,6 +776,53 @@ function TtsrBlock({ rules }: { rules: { name: string; description?: string; con
 	);
 }
 
+/** TUI createAdvisorMessageCard parity: batched advisor notes rendered as a
+ *  distinct voice — severity-tinted rail + badge, blocker count in the meta,
+ *  collapse past 3 notes. Reads `details.notes[]` (clean note text), NEVER the
+ *  model-facing `<advisory>` content template. */
+type AdvisorNote = { note?: string; severity?: string; advisor?: string };
+function AdvisorBlock({ notes }: { notes: AdvisorNote[] }): ReactNode {
+	const [open, setOpen] = useState(false);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	useCollapseHeight(open, bodyRef);
+	const blockers = notes.filter(n => n.severity === "blocker").length;
+	const shown = open ? notes : notes.slice(0, 3);
+	const hidden = notes.length - shown.length;
+	return (
+		<div className="tr-advisor" role="status">
+			<button type="button" className="tr-advisor-head" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+				<span className="tr-advisor-tag">{t("advisor")}</span>
+				<span className="tr-advisor-meta">
+					{t("advisor notes", { count: notes.length })}
+					{blockers > 0 ? ` · ${t("advisor blockers", { count: blockers })}` : ""}
+				</span>
+				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
+			</button>
+			<div
+				ref={bodyRef}
+				className={`tr-advisor-body${open ? "" : " tr-advisor-body--closed"}`}
+				style={collapseStyle(open)}
+			>
+				{shown.map((note, i) => (
+					<div key={i} className={`tr-advisor-note${note.severity ? ` tr-advisor-note--${note.severity}` : ""}`}>
+						<span className="tr-advisor-rail" aria-hidden />
+						<div className="tr-advisor-main">
+							<div className="tr-advisor-notehead">
+								{note.severity ? <span className="tr-advisor-badge">{note.severity}</span> : null}
+								{note.advisor && note.advisor !== "default" ? (
+									<span className="tr-advisor-who">[{note.advisor}]</span>
+								) : null}
+							</div>
+							<div className="tr-advisor-notebody">{note.note}</div>
+						</div>
+					</div>
+				))}
+				{hidden > 0 ? <div className="tr-advisor-more">{t("advisor more", { count: hidden })}</div> : null}
+			</div>
+		</div>
+	);
+}
+
 function AssistantBody({
 	message,
 	results,
@@ -1127,6 +1174,70 @@ const EntryRow = memo(function EntryRow({
 				return (
 					<Row kind="custom" gutter="" title={entry.timestamp}>
 						<TtsrBlock rules={details?.rules ?? []} />
+					</Row>
+				);
+			}
+			if (entry.customType === "advisor") {
+				// Advisor notes (customType "advisor", display:true): renders the
+				// details.notes[] as a distinct-voice card (severity rail + badge).
+				// The message content is the model-facing `<advisory>` XML — never
+				// surface it; only the clean note text from details.
+				const details = entry.details as { notes?: AdvisorNote[] } | null | undefined;
+				return (
+					<Row kind="custom" gutter="" title={entry.timestamp}>
+						<AdvisorBlock notes={details?.notes ?? []} />
+					</Row>
+				);
+			}
+			if (entry.customType === "async-result") {
+				// Background job completion (async-result custom message) —
+				// renders as compact "Background job completed" rows, NOT the
+				// raw `<system-notice>` content template (the LLM-facing
+				// prompt text must never surface to the user). Mirrors the TUI
+				// buildAsyncResultBlock: one row per job with id + duration.
+				const details = entry.details as
+					| {
+							jobId?: string;
+							type?: "bash" | "task" | "agnes-video";
+							label?: string;
+							durationMs?: number;
+							jobs?: Array<{
+								jobId?: string;
+								type?: "bash" | "task" | "agnes-video";
+								label?: string;
+								durationMs?: number;
+							}>;
+					  }
+					| null
+					| undefined;
+				const jobs =
+					details?.jobs && details.jobs.length > 0
+						? details.jobs
+						: [
+								{
+									jobId: details?.jobId,
+									type: details?.type,
+									label: details?.label,
+									durationMs: details?.durationMs,
+								},
+							];
+				return (
+					<Row kind="custom" gutter="" title={entry.timestamp}>
+						<div className="tr-async-result" role="status">
+							{jobs.map((job, i) => (
+								<div key={i} className="tr-async-result-row">
+									<span className="tr-async-result-done" aria-hidden>
+										✓
+									</span>
+									<span className="tr-async-result-text">{t("Background job completed")}</span>
+									{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
+									<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
+									{typeof job.durationMs === "number" ? (
+										<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
+									) : null}
+								</div>
+							))}
+						</div>
 					</Row>
 				);
 			}

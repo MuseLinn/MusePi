@@ -189,6 +189,197 @@
 	gap: 4px;
 }
 
+/* ---- async-result (background job completion) ---- */
+/* Design-system card mirroring .tr-bash chrome; the completed line uses
+ * --success (same token .tr-bash-badge--ok). Content stays the model-facing
+ * <system-notice> template — only details.jobs is rendered here. */
+
+.tr-async-result {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 3px;
+	max-width: 100%;
+	padding: 8px 10px;
+	border: 0.5px solid color-mix(in oklab, var(--fg) 14%, transparent);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+}
+
+.tr-async-result-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.tr-async-result-done {
+	flex: none;
+	color: var(--success, #3fb950);
+	font-size: 12px;
+	line-height: 1;
+}
+
+.tr-async-result-text {
+	color: var(--fg);
+}
+
+.tr-async-result-tag {
+	color: var(--fg-faint);
+}
+
+.tr-async-result-id {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--accent);
+}
+
+.tr-async-result-dur {
+	color: var(--fg-faint);
+}
+
+/* ---- advisor notes (TUI createAdvisorMessageCard parity) ---- */
+/* Distinct voice so notes never blend into thinking output: a header tag, a
+ * severity-tinted rail per note, and the clean note body. Content stays the
+ * model-facing <advisory> XML — only details.note text is rendered here. */
+
+.tr-advisor {
+	display: flex;
+	flex-direction: column;
+	max-width: 100%;
+	border: 0.5px solid color-mix(in oklab, var(--fg) 14%, transparent);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+}
+
+.tr-advisor-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 7px 10px;
+	border: none;
+	background: none;
+	color: var(--fg);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tr-advisor-head .tr-chev {
+	margin-left: auto;
+	flex: none;
+}
+
+.tr-advisor-tag {
+	color: var(--accent);
+	font-weight: 600;
+	font-size: var(--ui-font-size-sm);
+}
+
+.tr-advisor-meta {
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+
+/* collapse: header stays mounted; body animates via useCollapseHeight --h */
+.tr-advisor-body {
+	height: var(--h, 0px);
+	overflow: hidden;
+	box-sizing: content-box;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	padding: 0 10px 7px;
+	transition: height 220ms var(--spring), padding 220ms var(--spring);
+}
+
+.tr-advisor-body--closed {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+.tr-advisor-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.tr-advisor-rail {
+	flex: none;
+	width: 3px;
+	align-self: stretch;
+	border-radius: 2px;
+	background: color-mix(in oklab, var(--fg) 30%, transparent);
+}
+
+.tr-advisor-note--blocker .tr-advisor-rail {
+	background: var(--err, #f85149);
+}
+
+.tr-advisor-note--concern .tr-advisor-rail {
+	background: var(--warn, #d29922);
+}
+
+.tr-advisor-main {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tr-advisor-notehead {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.tr-advisor-badge {
+	padding: 0 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 15px;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.tr-advisor-note--blocker .tr-advisor-badge {
+	color: var(--err, #f85149);
+	border-color: color-mix(in oklab, var(--err, #f85149) 50%, var(--border));
+	background: color-mix(in oklab, var(--err, #f85149) 10%, transparent);
+}
+
+.tr-advisor-note--concern .tr-advisor-badge {
+	color: var(--warn, #d29922);
+	border-color: color-mix(in oklab, var(--warn, #d29922) 50%, var(--border));
+	background: color-mix(in oklab, var(--warn, #d29922) 10%, transparent);
+}
+
+.tr-advisor-who {
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+.tr-advisor-notebody {
+	color: var(--fg);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tr-advisor-more {
+	color: var(--fg-faint);
+	font-size: 11px;
+}
+
 /* ---- chips & badges ---- */
 
 .tr-badge {
