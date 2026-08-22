@@ -1630,6 +1630,18 @@ function clampResponsesImageDetail(
 	return resolved === "original" && !supportsImageDetailOriginal ? "auto" : resolved;
 }
 
+function convertResponsesInputImage(image: ImageContent, supportsImageDetailOriginal: boolean): ResponseInputImage {
+	const detail = clampResponsesImageDetail(image.detail, supportsImageDetailOriginal);
+	if (image.providerFile?.provider === "openai" && image.providerFile.id) {
+		return { type: "input_image", detail, file_id: image.providerFile.id };
+	}
+	return {
+		type: "input_image",
+		detail,
+		image_url: image.url ?? `data:${image.mimeType};base64,${image.data}`,
+	};
+}
+
 export function convertResponsesInputContent(
 	content: string | Array<TextContent | ImageContent>,
 	supportsImages: boolean,
@@ -1659,11 +1671,7 @@ export function convertResponsesInputContent(
 		} satisfies ResponseInputText);
 	}
 	for (const item of imageBlocks) {
-		normalizedContent.push({
-			type: "input_image",
-			detail: clampResponsesImageDetail(item.detail, supportsImageDetailOriginal),
-			image_url: `data:${item.mimeType};base64,${item.data}`,
-		} satisfies ResponseInputImage);
+		normalizedContent.push(convertResponsesInputImage(item, supportsImageDetailOriginal));
 	}
 	if (omittedImages) {
 		normalizedContent.push({
@@ -2338,11 +2346,7 @@ export function appendResponsesToolResultMessages<TApi extends Api>(
 	];
 	for (const block of toolResult.content) {
 		if (block.type === "image") {
-			contentParts.push({
-				type: "input_image",
-				detail: clampResponsesImageDetail(block.detail, supportsImageDetailOriginal),
-				image_url: `data:${block.mimeType};base64,${block.data}`,
-			} satisfies ResponseInputImage);
+			contentParts.push(convertResponsesInputImage(block, supportsImageDetailOriginal));
 		}
 	}
 	const imageMessage = { role: "user", content: contentParts } satisfies ResponseInput[number];

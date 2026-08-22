@@ -166,6 +166,15 @@ function isGemini3Model(modelId: string): boolean {
 	return modelId.includes("gemini-3");
 }
 
+function convertGoogleImagePart(image: ImageContent): Part {
+	if (image.providerFile?.provider === "google" && image.providerFile.uri) {
+		return { fileData: { fileUri: image.providerFile.uri, mimeType: image.mimeType } };
+	}
+	return image.url
+		? { fileData: { fileUri: image.url, mimeType: image.mimeType } }
+		: { inlineData: { mimeType: image.mimeType, data: image.data } };
+}
+
 /**
  * Convert internal messages to Gemini Content[] format.
  */
@@ -210,12 +219,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 						if (text.trim().length === 0) continue;
 						parts.push({ text });
 					} else if (supportsImages) {
-						parts.push({
-							inlineData: {
-								mimeType: item.mimeType,
-								data: item.data,
-							},
-						});
+						parts.push(convertGoogleImagePart(item));
 					} else {
 						omittedImages = true;
 					}
@@ -314,12 +318,7 @@ export function convertMessages<T extends GoogleApiType>(model: Model<T>, contex
 						? "(see attached image)"
 						: "";
 
-			const imageParts: Part[] = imageContent.map(imageBlock => ({
-				inlineData: {
-					mimeType: imageBlock.mimeType,
-					data: imageBlock.data,
-				},
-			}));
+			const imageParts: Part[] = imageContent.map(imageBlock => convertGoogleImagePart(imageBlock));
 
 			const includeId = supportsFunctionPartId(model);
 			const emittedName = emittedToolCallNames.get(msg.toolCallId);

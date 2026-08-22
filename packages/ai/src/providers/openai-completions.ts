@@ -1950,7 +1950,7 @@ export function convertMessages(
 						content.push({
 							type: "image_url",
 							image_url: {
-								url: `data:${item.mimeType};base64,${item.data}`,
+								url: item.url ?? `data:${item.mimeType};base64,${item.data}`,
 								// Chat Completions has no "original"; omit it (provider default).
 								...(item.detail && item.detail !== "original" ? { detail: item.detail } : {}),
 							},
@@ -2257,7 +2257,7 @@ export function convertMessages(
 							imageBlocks.push({
 								type: "image_url",
 								image_url: {
-									url: `data:${block.mimeType};base64,${block.data}`,
+									url: block.url ?? `data:${block.mimeType};base64,${block.data}`,
 								},
 							});
 						}

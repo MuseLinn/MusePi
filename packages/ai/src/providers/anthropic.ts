@@ -914,7 +914,15 @@ async function resizeAnthropicManyImageContent(
 	let changed = false;
 	const next = await Promise.all(
 		content.map(async block => {
-			if (block.type !== "image") return block;
+			// Remote images (URL-sourced or provider-file) can't be locally
+			// resized — and resizing would desync fallback bytes from the
+			// advertised remote image, so treat them as already-finished.
+			if (
+				block.type !== "image" ||
+				block.url ||
+				(block.providerFile?.provider === "anthropic" && block.providerFile.id)
+			)
+				return block;
 			let resized = anthropicManyImageResizeCache.get(block);
 			if (resized === undefined) {
 				resized = await limit(() => resizeAnthropicManyImageBlock(block));
@@ -971,19 +979,14 @@ async function prepareAnthropicManyImageContext(context: Context, supportsImages
 	return { ...context, messages };
 }
 
+type AnthropicImageSource =
+	| { type: "base64"; media_type: AnthropicImageMediaType; data: string }
+	| { type: "url"; url: string }
+	| { type: "file"; file_id: string };
+
 type AnthropicToolResultContent =
 	| string
-	| Array<
-			| { type: "text"; text: string }
-			| {
-					type: "image";
-					source: {
-						type: "base64";
-						media_type: AnthropicImageMediaType;
-						data: string;
-					};
-			  }
-	  >;
+	| Array<{ type: "text"; text: string } | { type: "image"; source: AnthropicImageSource }>;
 
 /**
  * Convert content blocks to Anthropic API format
@@ -992,17 +995,7 @@ function convertContentBlocks(
 	content: (TextContent | ImageContent)[],
 	supportsImages = true,
 ): AnthropicToolResultContent {
-	const blocks: Array<
-		| { type: "text"; text: string }
-		| {
-				type: "image";
-				source: {
-					type: "base64";
-					media_type: AnthropicImageMediaType;
-					data: string;
-				};
-		  }
-	> = [];
+	const blocks: Array<{ type: "text"; text: string } | { type: "image"; source: AnthropicImageSource }> = [];
 	let sawText = false;
 	let sawImage = false;
 
@@ -1020,21 +1013,22 @@ function convertContentBlocks(
 			continue;
 		}
 
-		const mediaType = normalizeAnthropicImageMediaType(block.mimeType);
-		if (!mediaType) {
-			blocks.push({ type: "text", text: `[unsupported image: ${block.mimeType}]` });
-			continue;
+		let source: AnthropicImageSource;
+		if (block.providerFile?.provider === "anthropic" && block.providerFile.id) {
+			source = { type: "file", file_id: block.providerFile.id };
+		} else if (block.url) {
+			source = { type: "url", url: block.url };
+		} else {
+			const mediaType = normalizeAnthropicImageMediaType(block.mimeType);
+			if (!mediaType) {
+				blocks.push({ type: "text", text: `[unsupported image: ${block.mimeType}]` });
+				continue;
+			}
+			source = { type: "base64", media_type: mediaType, data: block.data };
 		}
 
 		sawImage = true;
-		blocks.push({
-			type: "image",
-			source: {
-				type: "base64",
-				media_type: mediaType,
-				data: block.data,
-			},
-		});
+		blocks.push({ type: "image", source });
 	}
 
 	if (!supportsImages) {
@@ -2646,6 +2640,8 @@ const streamAnthropicOnce = (
 						} else if (event.type === "message_stop") {
 							sawTerminalEnvelope = true;
 							sawMessageStop = true;
+							// The protocol is complete even if a broken keep-alive leaves the HTTP body open.
+							break;
 						}
 					}
 

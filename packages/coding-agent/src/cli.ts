@@ -34,6 +34,7 @@ import type { WorkerInbound as JsWorkerInbound, WorkerOutbound as JsWorkerOutbou
 import { DAEMON_BROKER_WORKER_ARG } from "./launch/protocol";
 import { TERMINAL_OUTPUT_WORKER_ARG } from "./launch/terminal-output-worker-protocol";
 import { LSP_MUX_WORKER_ARG } from "./lsp/mux/protocol";
+import { BLOB_BROKER_WORKER_ARG } from "./blob-broker/protocol";
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
 import { smokeTestComputerWorker } from "./tools/computer/supervisor";
 import { startComputerWorker } from "./tools/computer/worker-entry";
@@ -95,6 +96,7 @@ async function runSmokeTest(): Promise<void> {
 	// Other smoke dependencies stay lazy so normal CLI startup does not load their worker clients.
 	const { smokeTestDaemonBroker } = await import("./launch/client");
 	const { smokeTestLspMux } = await import("./lsp/mux/daemon");
+	const { smokeTestBlobBroker } = await import("./blob-broker/daemon");
 	const { smokeTestTerminalOutputWorker } = await import("./launch/terminal-output-worker-client");
 	await smokeTestSyncWorker();
 
@@ -117,6 +119,7 @@ async function runSmokeTest(): Promise<void> {
 	await smokeTestTtsWorker();
 	await smokeTestMnemopiEmbedWorker();
 	await smokeTestDaemonBroker();
+	await smokeTestBlobBroker();
 	await smokeTestLspMux();
 	await smokeTestTerminalOutputWorker();
 	process.stdout.write("smoke-test: ok\n");
@@ -220,6 +223,11 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === LSP_MUX_WORKER_ARG) {
 		const { startLspMuxFromEnvironment } = await import("./lsp/mux/server");
 		await startLspMuxFromEnvironment();
+		return true;
+	}
+	if (arg === BLOB_BROKER_WORKER_ARG) {
+		const { startBlobBrokerFromEnvironment } = await import("./blob-broker/server");
+		await startBlobBrokerFromEnvironment();
 		return true;
 	}
 	return false;
