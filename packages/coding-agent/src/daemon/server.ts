@@ -7684,21 +7684,6 @@ export class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				if (!this.#host.cwd()) return { overrides: [] };
 
-				const flatten = (raw: unknown): Record<string, unknown> => {
-					const out: Record<string, unknown> = {};
-					const walk = (node: unknown, prefix: string): void => {
-						if (!node || typeof node !== "object" || Array.isArray(node)) {
-							if (prefix) out[prefix] = node;
-							return;
-						}
-						for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-							walk(v, prefix ? `${prefix}.${k}` : k);
-						}
-					};
-					walk(raw, "");
-					return out;
-				};
-
 				if (p.action === "delete" && p.path) {
 					const segments = p.path.split(".");
 					// Currently only modelRoles.<role> leaves are writable in
@@ -7714,8 +7699,7 @@ export class DaemonServer {
 				}
 
 				const projectKeys = settings.getProjectOverrideEntries();
-				const globalRaw = settings.getGlobalLayerSnapshot();
-				const globalFlat = flatten(globalRaw);
+				const globalFlat = settings.getGlobalLayerFlat();
 				const overrides = projectKeys.map(entry => ({
 					path: entry.path,
 					projectValue: entry.value,

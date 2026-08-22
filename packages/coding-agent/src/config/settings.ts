@@ -1046,11 +1046,11 @@ export class Settings {
 	}
 
 	/**
-	 * Snapshot of the global layer (raw, pre-merge) — the fallback column
-	 * for the project-override ledger.
+	 * Snapshot of the global layer flattened to dotted `path → leaf value`
+	 * — the fallback column for the project-override ledger.
 	 */
-	getGlobalLayerSnapshot(): RawSettings {
-		return structuredClone(this.#global);
+	getGlobalLayerFlat(): Record<string, unknown> {
+		return flattenRawSettings(this.#global);
 	}
 
 	/**
