@@ -1,3 +1,4 @@
+import { Markdown } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { t } from "../../i18n/index.js";
@@ -25,9 +26,13 @@ export interface HashCompletionEntry {
 export function SlashNotice({
 	level,
 	text,
+	markdown = false,
 }: {
 	level: "info" | "error";
 	text: string;
+	/** Slash-command outputs (e.g. /btw) are prose — render as markdown;
+	 *  bash / !command output stays pre-wrap plain text. */
+	markdown?: boolean;
 }): ReactNode {
 	return (
 		<div
@@ -39,7 +44,13 @@ export function SlashNotice({
 				name={level === "error" ? "close-circle" : "information"}
 				className="h-3.5 w-3.5 shrink-0"
 			/>
-			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			{markdown ? (
+				<div className="min-w-0 flex-1 gui-composer-slash-note-md">
+					<Markdown text={text} />
+				</div>
+			) : (
+				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			)}
 		</div>
 	);
 }

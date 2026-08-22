@@ -406,6 +406,26 @@
 	color: var(--color-text);
 }
 
+/* Markdown-rendered slash-command output (e.g. /btw answer): the .tr-md
+ * typography already carries line-height/size; keep it tight inside the
+ * note and avoid vertical gaps from Markdown's default paragraph margins. */
+.gui-composer-slash-note-md {
+	min-width: 0;
+}
+
+.gui-composer-slash-note-md .tr-md {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+}
+
+.gui-composer-slash-note-md .tr-md p {
+	margin: 0 0 4px;
+}
+
+.gui-composer-slash-note-md .tr-md p:last-child {
+	margin-bottom: 0;
+}
+
 /* Magic-keyword affordance tip (TUI rainbow-highlight parity): a passive
  * prose hint above the textarea when the draft contains an enabled magic
  * keyword (ultrathink / orchestrate / workflowz). Dashed border reads as
@@ -555,7 +575,7 @@
 
 /* 三合一 send control (working state, opendesign capsule parity):
  * expands into a pill showing the dot-matrix bloom + a two-label grid
- * (思考中 / 停止). Hover/focus swaps visibility so the button size
+ * (工作中 / 停止). Hover/focus swaps visibility so the button size
  * stays constant — same as opendesign's `.composer-send.stop` pattern. */
 .gui-composer-send--working {
 	width: auto;
@@ -585,6 +605,7 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	gap: 6px;
 	position: relative;
 	z-index: 1;
 }
@@ -606,8 +627,8 @@
 .gui-send-label--stop {
 	visibility: hidden;
 }
-.gui-composer-send--working:hover .gui-send-label--thinking,
-.gui-composer-send--working:focus-visible .gui-send-label--thinking {
+.gui-composer-send--working:hover .gui-send-label--working,
+.gui-composer-send--working:focus-visible .gui-send-label--working {
 	visibility: hidden;
 }
 .gui-composer-send--working:hover .gui-send-label--stop,

@@ -65,10 +65,6 @@ import { ModelSelector } from "./ModelSelector";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
 
-export type { AgentStatusEffect, AgentStatusIndicator, SweepColor } from "./composer/agent-status-line";
-// Public surface — re-exported for existing importers (ChatView,
-// WelcomeComposer, SettingsView, settings-sections).
-export { AgentStatusLine, readStatusPrefs } from "./composer/agent-status-line";
 export type {
 	UsageActiveAccountView,
 	UsageAmountView,
@@ -1032,10 +1028,12 @@ export function Composer({
 	// escapes to literal text (the doubled slash parses to no command, so
 	// the daemon reports consumed:false and we fall through to a normal
 	// send). Output lines surface as a transient note above the input.
-	const [slashNotice, setSlashNotice] = useState<{ level: "info" | "error"; text: string } | null>(null);
+	const [slashNotice, setSlashNotice] = useState<{ level: "info" | "error"; text: string; markdown?: boolean } | null>(
+		null,
+	);
 	const slashNoticeTimerRef = useRef<Timer | null>(null);
-	const showSlashNotice = useCallback((level: "info" | "error", text: string): void => {
-		setSlashNotice({ level, text });
+	const showSlashNotice = useCallback((level: "info" | "error", text: string, markdown = false): void => {
+		setSlashNotice({ level, text, markdown });
 		if (slashNoticeTimerRef.current) clearTimeout(slashNoticeTimerRef.current);
 		slashNoticeTimerRef.current = setTimeout(() => setSlashNotice(null), 6000);
 	}, []);
@@ -1062,7 +1060,7 @@ export function Composer({
 					}
 					setText("");
 					for (const line of res.outputs ?? []) {
-						if (line) showSlashNotice("info", line);
+						if (line) showSlashNotice("info", line, true);
 					}
 					if (res.prompt) {
 						// Residual prompt (e.g. /force <tool> <prompt>): the
@@ -1816,7 +1814,9 @@ export function Composer({
 					</>
 				}
 			>
-				{slashNotice && <SlashNotice level={slashNotice.level} text={slashNotice.text} />}
+				{slashNotice && (
+					<SlashNotice level={slashNotice.level} text={slashNotice.text} markdown={slashNotice.markdown} />
+				)}
 				<SlashCommandTip text={text} commands={slashCmds} />
 				{magicKeywords.enabled && (
 					<MagicKeywordTip

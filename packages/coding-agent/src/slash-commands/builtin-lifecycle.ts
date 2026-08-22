@@ -1,10 +1,11 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { CompactionCancelledError } from "@musepi/pi-agent-core/compaction";
-import { setProjectDir } from "@musepi/pi-utils";
+import { prompt, setProjectDir } from "@musepi/pi-utils";
 import { applyProviderGlobalsFromSettings } from "../config/provider-globals";
 import { t } from "../i18n/index.js";
 import { memoryStatsUnavailableMessage, resolveMemoryBackend } from "../memory-backend";
+import btwUserPrompt from "../prompts/system/btw-user.md" with { type: "text" };
 import type { FreshSessionResult } from "../session/agent-session";
 import { COMPACT_MODES, parseCompactArgs } from "../session/compact-modes";
 import { resolveResumableSession } from "../session/session-listing";
@@ -272,6 +273,25 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 		description: "Ask an ephemeral side question using the current session context",
 		inlineHint: "<question>",
 		allowArgs: true,
+		handle: async (command, runtime) => {
+			// Headless /btw (GUI/ACP): run an ephemeral side turn via
+			// runEphemeralTurn (same prompt + side-channel the TUI panel uses,
+			// no transcript write) and surface the answer as the command
+			// output — the GUI shows it as a transient markdown notice above
+			// the composer, never polluting the conversation.
+			const question = command.args.trim();
+			if (!question) {
+				await runtime.output("Usage: /btw <question>");
+				return;
+			}
+			if (!runtime.session.model) {
+				await runtime.output("No active model available for /btw.");
+				return;
+			}
+			const promptText = prompt.render(btwUserPrompt, { question });
+			const { replyText } = await runtime.session.runEphemeralTurn({ promptText });
+			if (replyText) await runtime.output(replyText);
+		},
 		handleTui: async (command, runtime) => {
 			const question = command.text.slice(`/${command.name}`.length).trim();
 			runtime.ctx.editor.setText("");

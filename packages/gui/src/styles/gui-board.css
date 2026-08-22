@@ -393,6 +393,23 @@
 	font-size: var(--ui-font-size-xs);
 }
 
+/* Markdown-rendered reply (replaces the bare <pre>): keeps the pre's scroll
+ * cap + sunken surface so long answers scroll instead of stretching the
+ * popover; the .tr-md typography color follows the popover text. */
+.gui-ask-pop-markdown {
+	max-height: 220px;
+	overflow-y: auto;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--color-surface-sunken);
+}
+
+.gui-ask-pop-markdown .tr-md {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.55;
+}
+
 .gui-ask-pop-actions {
 	display: flex;
 	gap: 6px;

@@ -1,3 +1,4 @@
+import { Markdown } from "@musepi/desktop-web";
 import { t } from "../i18n/index.js";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import type { RpcClient } from "../lib/rpc";
@@ -116,7 +117,13 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 			{pop.context && <div className="gui-ask-pop-context">{pop.context}</div>}
 			{phase === "done" ? (
 				<div className="gui-ask-pop-reply">
-					{error ? <div className="gui-ask-pop-error">{error}</div> : <pre>{reply || "…"}</pre>}
+					{error ? (
+						<div className="gui-ask-pop-error">{error}</div>
+					) : (
+						<div className="gui-ask-pop-markdown">
+							<Markdown text={reply || "…"} />
+						</div>
+					)}
 					<div className="gui-ask-pop-actions">
 						<button
 							type="button"
