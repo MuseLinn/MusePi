@@ -292,6 +292,18 @@ function flattenRawSettings(raw: RawSettings): Record<string, unknown> {
 	return out;
 }
 
+/** Path-shape test for secret-looking settings keys. Capability discovery
+ * (e.g. .claude/settings.json) and hand-edited project config.yml can carry
+ * credentials the SETTINGS_SCHEMA never declares, so the project-override
+ * ledger guards by path shape — these values are never echoed to clients. */
+export function isSensitiveSettingPath(path: string): boolean {
+	// Substring match inside the leaf segment so camelCase/snake_case fold
+	// in (llmApiKey, basicPassword, api_token, …); `env` additionally
+	// matches as a whole segment for environment-variable blocks.
+	const leaf = path.split(".").pop() ?? "";
+	return /key|secret|password|passwd|token|credential/i.test(leaf) || /(^|\.)env($|\.)/i.test(path);
+}
+
 type EditVariantEntry = {
 	patternLower: string;
 	mode: EditMode;

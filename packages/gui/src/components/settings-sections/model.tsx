@@ -1328,15 +1328,24 @@ export function ModelSection({
 															))}
 														</div>
 													)}
-													{roleStorage === "project" && projectOverrides.length > 0 && (
+													{roleStorage === "project" && projectOverrides.length > 0 &&
+														(() => {
+															// Count only REAL overrides — a project key whose
+															// value equals the global value is a no-op echo,
+															// not an override.
+															const real = projectOverrides.filter(
+																e => e.globalValue == null || e.globalValue !== e.projectValue,
+															);
+															if (real.length === 0) return null;
+															return (
 														<div className="gui-project-overrides">
 															<div className="gui-project-overrides-title">
 																<span>{t("project overrides")}</span>
 																<span className="text-[12px] text-[var(--color-text-faint)]">
-																	{t("overrides count {count}", { count: String(projectOverrides.length) })}
+																	{t("overrides count {count}", { count: String(real.length) })}
 																</span>
 															</div>
-															{projectOverrides.map(entry => (
+															{real.map(entry => (
 																<div key={entry.path} className="gui-project-override-row">
 																	<code className="gui-project-override-path">{entry.path}</code>
 																	<span className="gui-project-override-value" title={entry.projectValue}>
@@ -1368,7 +1377,8 @@ export function ModelSection({
 																</div>
 															))}
 														</div>
-													)}
+														);
+														})()}
 												</>
 											)}
 										</>

@@ -60,7 +60,7 @@ import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveProviderModelReference } from "../config/model-resolver";
 import type { PromptTemplate } from "../config/prompt-templates";
-import type { Settings } from "../config/settings";
+import { type Settings, isSensitiveSettingPath } from "../config/settings";
 import type { SettingPath } from "../config/settings-schema";
 // TUI /debug selector parity (desktop adaptation): the same pure helpers the
 // TUI debug menu uses, exposed as debug.* RPCs so the GUI can render its own
@@ -7698,14 +7698,22 @@ export class DaemonServer {
 					return { ok: true };
 				}
 
-				const projectKeys = settings.getProjectOverrideEntries();
+				// Redact at the source: capability discovery (e.g.
+				// .claude/settings.json) and hand-edited project config.yml can
+				// carry secrets the schema never sees, so path-shape filtering
+				// is the only guard — never echo those values to any client.
+				// The count only covers REAL overrides (project value differs
+				// from the inherited global value).
 				const globalFlat = settings.getGlobalLayerFlat();
-				const overrides = projectKeys.map(entry => ({
-					path: entry.path,
-					projectValue: entry.value,
-					effectiveValue: entry.effective,
-					globalValue: globalFlat[entry.path],
-				}));
+				const overrides = settings
+					.getProjectOverrideEntries()
+					.filter(e => !isSensitiveSettingPath(e.path))
+					.map(entry => ({
+						path: entry.path,
+						projectValue: entry.value,
+						effectiveValue: entry.effective,
+						globalValue: globalFlat[entry.path],
+					}));
 				return { cwd: this.#host.cwd(), overrides };
 			}
 			case "settings.schema": {

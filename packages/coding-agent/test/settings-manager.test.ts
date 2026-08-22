@@ -12,6 +12,7 @@ import {
 	resetSettingsForTest,
 	type SettingPath,
 	Settings,
+	isSensitiveSettingPath,
 } from "@musepi/pi-coding-agent/config/settings";
 import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { AUTO_IMAGE_PROVIDER_ORDER } from "@musepi/pi-coding-agent/tools/image-providers";
@@ -913,6 +914,26 @@ describe("Settings", () => {
 			settings.clearProjectModelRole("smol");
 			await settings.flush();
 			expect(settings.getProjectOverrideEntries().some(e => e.path === "modelRoles.smol")).toBe(false);
+		});
+
+		it("isSensitiveSettingPath flags secret-shaped leaves without false positives", () => {
+			for (const p of [
+				"env.FOO",
+				"env",
+				"auth.broker.token",
+				"providers.x.apiKey",
+				"mnemopi.llmApiKey",
+				"searxng.basicPassword",
+				"my.secret",
+				"images.urls.credentials",
+				"hindsight.apiToken",
+				"openai_api_key",
+			]) {
+				expect(isSensitiveSettingPath(p)).toBe(true);
+			}
+			for (const p of ["modelRoles.smol", "shellPath", "theme.dark", "retry.fallbackChains", "setupVersion"]) {
+				expect(isSensitiveSettingPath(p)).toBe(false);
+			}
 		});
 	});
 	describe("migrations", () => {
