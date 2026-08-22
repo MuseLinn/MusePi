@@ -170,6 +170,12 @@ export function ModelSection({
 	// Default model for new sessions (daemon settings "model" key).
 	// Role cycle order (TUI ctrl+p cycleOrder) — roles render in this order.
 	const [cycleOrder, setCycleOrder] = useState<string[] | null>(null);
+	// Role assignment storage layer (settings.modelRoleStorage, TUI model-hub
+	// parity): when "project", assignments can target the project's
+	// .musepi/config.yml; the per-role picker below picks the layer.
+	const [roleStorage, setRoleStorage] = useState<"global" | "project">("global");
+	// Per-role write target while roleStorage=project ("global" | "project").
+	const [roleScope, setRoleScope] = useState<Record<string, "global" | "project">>({});
 	const { prompt } = usePrompt();
 	// Stored credentials per provider (multi-account logout dropdown).
 	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
@@ -320,11 +326,11 @@ export function ModelSection({
 	// resolution. The "自动选择" lines (SMOL/SLOW/VISION/…) derive from the
 	// DEFAULT model — without the re-fetch they keep showing the OLD model
 	// until the settings pane remounts.
-	const applyRoleModels = (next: Record<string, string>): void => {
+	const applyRoleModels = (next: Record<string, string>, scope?: "global" | "project"): void => {
 		setRoleModels(next);
 		if (!rpc) return;
 		void rpc
-			.request("settings.set", { key: "modelRoles", value: next })
+			.request("settings.set", { key: "modelRoles", value: next, ...(scope ? { scope } : {}) })
 			.then(() =>
 				rpc
 					.request<{
@@ -466,8 +472,9 @@ export function ModelSection({
 				knownRoleIds?: string[];
 				resolvedRoleModels?: Record<string, { id: string; name: string; efforts: string[] } | null>;
 				"retry.fallbackChains"?: Record<string, string[]>;
+				modelRoleStorage?: "global" | "project";
 			}>("settings.get", {
-				keys: ["modelRoles", "cycleOrder", "knownRoleIds", "resolvedRoleModels", "retry.fallbackChains"],
+				keys: ["modelRoles", "cycleOrder", "knownRoleIds", "resolvedRoleModels", "retry.fallbackChains", "modelRoleStorage"],
 			})
 			.then(res => {
 				setRoleModels(res?.modelRoles ?? {});
@@ -475,6 +482,7 @@ export function ModelSection({
 				setKnownRoleIds(res?.knownRoleIds ?? null);
 				setResolvedRoleModels(res?.resolvedRoleModels ?? {});
 				setFallbackChains(res?.["retry.fallbackChains"] ?? {});
+				if (res?.modelRoleStorage === "project") setRoleStorage("project");
 			})
 			.catch(() => {
 				setRoleModels({});
@@ -583,9 +591,11 @@ export function ModelSection({
 		const chain = fallbackChains[role] ?? [];
 		const cycleIndex = cycleOrder?.indexOf(role) ?? -1;
 		const editingFallback = fallbackEditor === role;
+		const apply = (next: Record<string, string>): void =>
+			applyRoleModels(next, roleStorage === "project" ? (roleScope[role] ?? "project") : undefined);
 		return (
-			<div key={role} className="gui-settings-row gui-role-row">
-				<div className="min-w-0 flex-1">
+			<div key={role} className="gui-role-card">
+				<div className="gui-role-card-head">
 					<div className="gui-settings-row-label">
 						<span className="gui-role-tag">{BUILTIN_ROLE_TAGS[role] ?? role}</span>
 						{cycleIndex >= 0 && (
@@ -593,9 +603,27 @@ export function ModelSection({
 								⟳{cycleIndex + 1}
 							</span>
 						)}
+						{roleStorage === "project" && (
+							<button
+								type="button"
+								className="gui-role-scope-badge"
+								title={t("role scope toggle")}
+								aria-label={t("role scope toggle")}
+								onClick={() =>
+									setRoleScope(prev => ({
+										...prev,
+										[role]: prev[role] === "global" ? "project" : "global",
+									}))
+								}
+							>
+								{(roleScope[role] ?? "project") === "project" ? t("scope project") : t("scope global")}
+							</button>
+						)}
 					</div>
 					{model ? (
-						<div className="truncate text-[12px] text-[var(--color-text-faint)]">{model}</div>
+						<div className="truncate text-[12px] text-[var(--color-text-faint)]" title={model}>
+							{model}
+						</div>
 					) : resolved ? (
 						<div className="truncate text-[12px] text-[var(--color-text-faint)]">
 							{t("auto selection")}: {resolved.name || resolved.id}
@@ -604,7 +632,7 @@ export function ModelSection({
 						<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("auto selection applies")}</div>
 					)}
 				</div>
-				<div className="gui-role-actions flex items-center gap-1.5">
+				<div className="gui-role-actions">
 					{/* Per-role thinking level (rides the selector suffix, TUI
 					 * formatModelSelectorValue parity). */}
 					<GuiSelect
@@ -613,7 +641,7 @@ export function ModelSection({
 						onChange={v => {
 							const nextLevel = v;
 							const next = { ...roleModels, [role]: joinRoleValue(model, nextLevel) };
-							applyRoleModels(next);
+							apply(next);
 						}}
 						ariaLabel={t("role thinking level")}
 						options={(() => {
@@ -681,7 +709,7 @@ export function ModelSection({
 							// Keep the role's thinking suffix when the model
 							// changes (TUI assign preserves the level).
 							const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
-							applyRoleModels(next);
+							apply(next);
 						}}
 					/>
 					{model && (
@@ -693,7 +721,7 @@ export function ModelSection({
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
-								applyRoleModels(next);
+								apply(next);
 							}}
 						>
 							<Icon name="refresh" className="h-3.5 w-3.5" />
@@ -708,7 +736,7 @@ export function ModelSection({
 							onClick={() => {
 								const next = { ...roleModels };
 								delete next[role];
-								applyRoleModels(next);
+								apply(next);
 							}}
 						>
 							<Icon name="delete-bin" className="h-3.5 w-3.5" />

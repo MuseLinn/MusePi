@@ -2145,52 +2145,54 @@ body.gui-resizing .gui-pane-right {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 }
 
-/* ── Model roles (TUI /model roles-panel parity) ── */
-.gui-role-row {
-	align-items: flex-start;
-	/* Single line at any sane width: flex-wrap would decide line breaks on
-	 * each item's UN-shrunk hypothetical size (label 132 + 438px action
-	 * cluster never fits together), so the cluster would drop below the tag
-	 * and the row would double in height. nowrap lets flex-shrink actually
-	 * resolve — the model button truncates first, the tag keeps its width. */
-	flex-wrap: nowrap;
-	justify-content: flex-end;
-	gap: 6px 20px;
+/* ── Model roles (TUI /model roles-panel parity) ──
+ * One card per role: a head line (tag + cycle badge + resolved model) and
+ * a full-width actions row (thinking / fallback / cycle / picker). Cards
+ * wrap gracefully at any pane width — no more cramped single-line rows. */
+.gui-role-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--color-bg) 40%, transparent);
 }
 
-/* The right-hand action cluster (thinking level, fallback/cycle toggles,
- * model picker, clear): shrinks ahead of the label column — the model
- * button truncates first so the tag keeps a readable width; its own items
- * wrap right-aligned when the pane is too narrow for the whole cluster. */
-.gui-role-row > .gui-role-actions {
-	flex: 0 1 auto;
+.gui-role-card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	min-width: 0;
+}
+
+/* The actions row (thinking level, fallback/cycle toggles, model picker,
+ * clear/remove): wraps right-aligned when the pane is narrow — each control
+ * keeps its own footprint instead of the whole cluster dropping below. */
+.gui-role-card > .gui-role-actions {
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	min-width: 0;
 }
 
-.gui-role-row > .min-w-0 {
-	min-width: 96px;
-}
-
-.gui-role-row .gui-role-actions .gui-model {
-	flex-shrink: 2;
-	min-width: 0;
-	max-width: 100%;
-}
-
-.gui-role-row .gui-role-actions .gui-model-btn {
-	max-width: 100%;
-}
-
-/* Full-width sub-blocks (fallback chain editor) keep their own line in the
- * nowrap row via flex-basis 100% instead of wrap. */
-.gui-role-row > .gui-role-fallbacks {
-	flex: 0 0 100%;
-}
-
 .gui-role-tag {
 	font-weight: 600;
+}
+.gui-role-scope-badge {
+	padding: 0 6px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	background: transparent;
+}
+
+.gui-role-scope-badge:hover {
+	color: var(--color-accent);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 }
 
 .gui-role-cycle-badge {

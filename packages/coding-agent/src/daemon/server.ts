@@ -7636,7 +7636,20 @@ export class DaemonServer {
 					const error = this.#host.extensionSettings().get(p.key)?.setting.validate?.(p.value);
 					if (error) throw new Error(`invalid value for ${p.key}: ${error}`);
 				}
-				settings.set(p.key as Parameters<Settings["set"]>[0], p.value as never);
+				// Scope-aware role writes (TUI model-hub parity): when
+				// modelRoleStorage=project, the roles panel can target the
+				// project layer (.musepi/config.yml). `modelRoles` honors
+				// scope; cycleOrder and everything else stay global (the
+				// TUI persists the cycle order globally too).
+				const scope = (p as { scope?: "global" | "project" }).scope;
+				if (scope === "project" && p.key === "modelRoles") {
+					if (!this.#host.cwd()) throw new Error("no project open — project-scope roles need a workspace");
+					for (const [role, value] of Object.entries(p.value as Record<string, string>)) {
+						settings.setProjectModelRole(role, value);
+					}
+				} else {
+					settings.set(p.key as Parameters<Settings["set"]>[0], p.value as never);
+				}
 				await settings.flush();
 				return { ok: true };
 			}
