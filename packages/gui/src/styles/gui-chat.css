@@ -2146,13 +2146,14 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Model roles (TUI /model roles-panel parity) ──
- * Two-per-row responsive card grid (gui-provider-grid material parity:
- * auto-fill columns, 10px gap, surface background). Each card holds a head
- * line (tag + cycle badge + scope toggle + resolved model) and a full-width
- * actions row that wraps right-aligned at narrow widths. */
+ * Two cards side by side (gui-provider-grid material parity: auto-fill
+ * columns, 10px gap, surface background). Every card has the SAME three
+ * bands — head (tag + badges + resolved model), a dedicated full-width
+ * model-picker row, and a toolbar row — so all cards in a row share one
+ * height regardless of which toggles each has active. */
 .gui-role-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 	gap: 10px;
 }
 
@@ -2183,28 +2184,37 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 
-/* The actions row (thinking level, fallback/cycle toggles, model picker,
- * clear/remove): wraps right-aligned when the card is narrow — each control
- * keeps its own footprint instead of the whole cluster dropping below. */
-.gui-role-card > .gui-role-actions {
-	flex-wrap: wrap;
-	justify-content: flex-start;
+/* Dedicated picker band: the ModelSelector owns its full row so the
+ * ~280px card width never squeezes it into truncation. */
+.gui-role-model-row {
+	display: flex;
+	align-items: center;
 	min-width: 0;
 }
 
-/* Inside a ~340px card the model picker is the flexible item: it shrinks
- * first (its button label truncates) so thinking/fallback/cycle toggles
- * keep their footprints, and takes a full row on its own when the card
- * gets too narrow for anything beside it. */
-.gui-role-card .gui-role-actions .gui-model {
+.gui-role-model-row .gui-model {
+	min-width: 0;
+	max-width: 100%;
 	flex: 1 1 auto;
-	flex-shrink: 2;
-	min-width: 0;
+}
+
+.gui-role-model-row .gui-model-btn {
+	width: 100%;
 	max-width: 100%;
 }
 
-.gui-role-card .gui-role-actions .gui-model-btn {
-	max-width: 100%;
+/* Toolbar band: fixed-height single line. Thinking select + fallback +
+ * cycle sit left; clear/remove are pushed to the far right edge via the
+ * trailing spacer so every card's toolbar is exactly one row tall. */
+.gui-role-card > .gui-role-actions {
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-role-card > .gui-role-actions > .gui-role-spacer {
+	flex: 1 1 auto;
 }
 
 .gui-role-tag {

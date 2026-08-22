@@ -632,6 +632,39 @@ export function ModelSection({
 						<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("auto selection applies")}</div>
 					)}
 				</div>
+				<div className="gui-role-model-row">
+					<ModelSelector
+						rpc={rpc}
+						sessionId={null}
+						presetId={model || undefined}
+						maxLabelWidth="230px"
+						onSelect={(id, provider) => {
+							if (!id) return;
+							// Store the provider-qualified reference: the daemon
+							// resolves "provider/id" exactly, so assigning
+							// opencode-go's deepseek-v4-flash never leaks onto
+							// opencode-zen's same-id model.
+							const ref = provider ? `${provider}/${id}` : id;
+							if (role === "default") {
+								// The DEFAULT role IS the default model for new
+								// sessions — keep the welcome-composer preselect
+								// in sync with the role assignment. The bare ref
+								// (no :level suffix) mirrors the daemon's
+								// modelRoles.default value.
+								try {
+									localStorage.setItem("musepi-gui-default-model", ref);
+								} catch {
+									// storage unavailable
+								}
+								window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
+							}
+							// Keep the role's thinking suffix when the model
+							// changes (TUI assign preserves the level).
+							const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
+							apply(next);
+						}}
+					/>
+				</div>
 				<div className="gui-role-actions">
 					{/* Per-role thinking level (rides the selector suffix, TUI
 					 * formatModelSelectorValue parity). */}
@@ -681,37 +714,7 @@ export function ModelSection({
 					>
 						<Icon name="loop-right-ai" className="h-3.5 w-3.5" />
 					</button>
-					<ModelSelector
-						rpc={rpc}
-						sessionId={null}
-						presetId={model || undefined}
-						maxLabelWidth="230px"
-						onSelect={(id, provider) => {
-							if (!id) return;
-							// Store the provider-qualified reference: the daemon
-							// resolves "provider/id" exactly, so assigning
-							// opencode-go's deepseek-v4-flash never leaks onto
-							// opencode-zen's same-id model.
-							const ref = provider ? `${provider}/${id}` : id;
-							if (role === "default") {
-								// The DEFAULT role IS the default model for new
-								// sessions — keep the welcome-composer preselect
-								// in sync with the role assignment. The bare ref
-								// (no :level suffix) mirrors the daemon's
-								// modelRoles.default value.
-								try {
-									localStorage.setItem("musepi-gui-default-model", ref);
-								} catch {
-									// storage unavailable
-								}
-								window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
-							}
-							// Keep the role's thinking suffix when the model
-							// changes (TUI assign preserves the level).
-							const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
-							apply(next);
-						}}
-					/>
+					<span className="gui-role-spacer" aria-hidden="true" />
 					{model && (
 						<button
 							type="button"
