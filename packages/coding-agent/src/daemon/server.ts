@@ -1288,6 +1288,7 @@ export class DaemonSessionHost {
 			hasUI: true,
 			interfaceLabel: "desktop (GUI)",
 			eventBus: sessionBus,
+			pauseGate,
 			settings: discovery.settings,
 			modelRegistry: discovery.modelRegistry,
 			contextFiles: discovery.contextFiles,
