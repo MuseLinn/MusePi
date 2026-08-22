@@ -388,7 +388,7 @@ function pickModelDisplayName(model: CursorModelDetailsValue, fallbackId: string
  * native catalogs accept images, everything else stays text-only. Mirrors
  * `inferInputFromGeminiId` in ./gemini.ts.
  */
-function inferInputFromCursorId(id: string): ("text" | "image")[] {
+function inferInputFromCursorId(id: string): ("text" | "image" | "video")[] {
 	if (CURSOR_MULTIMODAL_ID_PATTERN.test(id.toLowerCase())) {
 		return ["text", "image"];
 	}

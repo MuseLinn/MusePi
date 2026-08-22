@@ -495,9 +495,21 @@ function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamic
 	const endpointChanged = existingModel.baseUrl !== dynamicModel.baseUrl;
 	const dynamicInputAuthoritative =
 		endpointChanged || (existingModel.provider === "github-copilot" && dynamicModel.provider === "github-copilot");
-	const supportsImage = dynamicInputAuthoritative
-		? dynamicModel.input.includes("image")
-		: existingModel.input.includes("image") || dynamicModel.input.includes("image");
+	// Union input modalities so a discovery row that adds video (e.g. a
+	// gateway declaring `input: ["text","image","video"]`) never drops it back
+	// to image-only, while an authoritative dynamic row still wins when it
+	// explicitly omits a capability. Keeps the canonical text→image→video
+	// ordering consumers render against.
+	const dynamicInput = dynamicModel.input;
+	const existingInput = existingModel.input;
+	const mergedInput: ("text" | "image" | "video")[] = [];
+	for (const modality of ["text", "image", "video"] as const) {
+		const inDynamic = dynamicInput.includes(modality);
+		const inExisting = existingInput.includes(modality);
+		if (dynamicInputAuthoritative ? inDynamic : inDynamic || inExisting) {
+			mergedInput.push(modality);
+		}
+	}
 	// Synthetic's discovery is authoritative (`dynamicModelsAuthoritative`) and
 	// its per-model `reasoning_parameters.efforts` vocabulary is the route's
 	// whole truth: when the wire advertises only the `none` off-state the
@@ -518,7 +530,7 @@ function mergeDynamicModel<TApi extends Api>(existingModel: Model<TApi>, dynamic
 		...dynamicModel,
 		name: preferDiscoveryName(dynamicModel.name, existingModel.name, dynamicModel.id),
 		reasoning,
-		input: supportsImage ? ["text", "image"] : ["text"],
+		input: mergedInput,
 		cost: {
 			input: preferDiscoveryCost(dynamicModel.cost.input, existingModel.cost.input),
 			output: preferDiscoveryCost(dynamicModel.cost.output, existingModel.cost.output),
@@ -629,13 +641,13 @@ function isModelLike(value: unknown): value is ModelSpec<Api> {
 	return true;
 }
 
-function isModelInputArray(value: unknown): value is ("text" | "image")[] {
+function isModelInputArray(value: unknown): value is ("text" | "image" | "video")[] {
 	if (!Array.isArray(value) || value.length === 0) {
 		return false;
 	}
 	for (let i = 0; i < value.length; i++) {
 		const item = value[i];
-		if (item !== "text" && item !== "image") {
+		if (item !== "text" && item !== "image" && item !== "video") {
 			return false;
 		}
 	}

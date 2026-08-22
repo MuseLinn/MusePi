@@ -894,7 +894,7 @@ export interface Model<TApi extends Api = Api> {
 	 * the consumer's fallback policy.
 	 */
 	tokenizer?: ModelTokenizer;
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	/**
 	 * Decoder family used for image inputs when it has narrower format support
 	 * than OMP's general image pipeline. `stb` local backends reject WebP.

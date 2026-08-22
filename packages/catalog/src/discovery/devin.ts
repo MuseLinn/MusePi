@@ -131,7 +131,7 @@ function normalizeDevinModels(
 		if (!id) {
 			continue;
 		}
-		const input: ("text" | "image")[] = config.supportsImages ? ["text", "image"] : ["text"];
+		const input: ("text" | "image" | "video")[] = config.supportsImages ? ["text", "image"] : ["text"];
 		const contextWindow = config.maxTokens > 0 ? config.maxTokens : DEFAULT_CONTEXT_WINDOW;
 		byId.set(id, {
 			id,

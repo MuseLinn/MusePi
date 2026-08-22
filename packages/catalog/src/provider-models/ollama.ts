@@ -22,6 +22,15 @@ type OllamaShowResponse = {
 	model_info?: Record<string, unknown>;
 };
 
+/** Map Ollama capability names to the canonical input-modality array. */
+function capabilityInputOf(capabilities: readonly string[]): ("text" | "image" | "video")[] {
+	const caps = new Set(capabilities.map(cap => cap.toLowerCase()));
+	const input: ("text" | "image" | "video")[] = ["text"];
+	if (caps.has("image") || caps.has("vision")) input.push("image");
+	if (caps.has("video")) input.push("video");
+	return input;
+}
+
 const OLLAMA_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 /**
  * Output-token ceiling that Ollama Cloud enforces for the DeepSeek V4 Pro/Flash
@@ -171,10 +180,11 @@ export function ollamaCloudModelManagerOptions(
 					const reasoning = capabilities ? capabilities.includes("thinking") : (reference?.reasoning ?? false);
 					const thinking = capabilities ? getThinkingConfig(id, capabilities) : reference?.thinking;
 					const input = capabilities
-						? capabilities.includes("vision")
-							? (["text", "image"] as Array<"text" | "image">)
+						? capabilities.includes("vision") || capabilities.includes("video") || capabilities.includes("image")
+							? capabilityInputOf(capabilities)
 							: (["text"] as Array<"text">)
-						: ((reference?.input as Array<"text" | "image"> | undefined) ?? (["text"] as Array<"text">));
+						: ((reference?.input as Array<"text" | "image" | "video"> | undefined) ??
+							(["text"] as Array<"text">));
 					const resolvedName = entry.name && entry.name !== id ? entry.name : (reference?.name ?? id);
 					return {
 						id,

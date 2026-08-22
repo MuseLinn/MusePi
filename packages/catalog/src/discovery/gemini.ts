@@ -251,7 +251,7 @@ function inferReasoningFromGeminiId(id: string): boolean {
 	return false;
 }
 
-function inferInputFromGeminiId(id: string): ("text" | "image")[] {
+function inferInputFromGeminiId(id: string): ("text" | "image" | "video")[] {
 	const normalized = id.toLowerCase();
 	if (normalized.includes("vision") || normalized.includes("image") || normalized.includes("gemini")) {
 		return ["text", "image"];

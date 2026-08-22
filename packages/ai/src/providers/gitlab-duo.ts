@@ -23,7 +23,7 @@ export type GitLabModelMapping = {
 	openaiApiType?: GitLabOpenAIApiType;
 	name: string;
 	reasoning: boolean;
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
 	contextWindow: number;
 	maxTokens: number;

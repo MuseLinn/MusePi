@@ -126,11 +126,11 @@ describe("OpenCode provider discovery", () => {
 			expect(vision?.contextWindow).toBe(1000000);
 			expect(vision?.maxTokens).toBe(384000);
 			expect(vision?.reasoning).toBe(true);
-			// oxid-alpha-free declares video input; musepi's vocabulary is text|image,
-			// so it collapses to the image-capable set.
+			// ox-alpha-free declares video input; musepi's canonical vocabulary
+			// preserves every modality the gateway advertises.
 			const alpha = result.models.find(model => model.id === "ox-alpha-free");
 			expect(alpha).toBeDefined();
-			expect(alpha?.input).toEqual(["text", "image"]);
+			expect(alpha?.input).toEqual(["text", "image", "video"]);
 			expect(alpha?.contextWindow).toBe(1000000);
 			expect(alpha?.maxTokens).toBe(131072);
 		} finally {

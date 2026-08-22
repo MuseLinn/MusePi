@@ -103,12 +103,16 @@ function toModelName(value: unknown, fallback: string): string {
 	return trimmed.length > 0 ? trimmed : fallback;
 }
 
-function toInputCapabilities(value: unknown): ("text" | "image")[] {
+function toInputCapabilities(value: unknown): ("text" | "image" | "video")[] {
 	if (!Array.isArray(value)) {
 		return ["text"];
 	}
 	const supportsImage = value.some(item => item === "image");
-	return supportsImage ? ["text", "image"] : ["text"];
+	const supportsVideo = value.some(item => item === "video");
+	const caps: ("text" | "image" | "video")[] = ["text"];
+	if (supportsImage) caps.push("image");
+	if (supportsVideo) caps.push("video");
+	return caps;
 }
 
 /**
@@ -143,6 +147,20 @@ export function fetchWellKnownModels(fetchImpl?: FetchImpl, signal?: AbortSignal
 		});
 	}
 	return catalogSession.inflight;
+}
+
+/**
+ * Synchronous view of the in-process models.dev catalog payload (stencil.so),
+ * when it has already been fetched this process. Returns undefined before the
+ * first (async) `fetchWellKnownModels` completes — never triggers a fetch.
+ * Custom-model capability fallback uses this so a models.yml model that is
+ * absent from the bundled index can still inherit contextWindow/input from the
+ * same id declared anywhere on models.dev (e.g. opencode-go's
+ * deepseek-v4-flash-vision-exp → 1M window + image input) without blocking
+ * config load on the network.
+ */
+export function getCachedModelsDevPayload(): unknown {
+	return catalogSession.hasPayload ? catalogSession.payload : undefined;
 }
 
 async function fetchCatalogPayload(fetchImpl: FetchImpl, signal?: AbortSignal): Promise<unknown> {
@@ -417,7 +435,7 @@ interface OllamaResolvedMetadata {
 	capabilities?: string[];
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 interface OllamaShowMetadata {
@@ -426,7 +444,7 @@ interface OllamaShowMetadata {
 	capabilities?: string[];
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 function getOllamaContextWindow(modelInfo: Record<string, unknown> | undefined): number | undefined {
@@ -1304,7 +1322,7 @@ interface XAICuratedModel {
 	 * overrides `fetchOpenAICompatibleModels`' default of `["text"]` (which
 	 * otherwise strips image capability on every online refresh).
 	 */
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 }
 
 // Source of truth for the xai-oauth chat picker. Top of list = headline.
@@ -1761,9 +1779,7 @@ async function loadOpenCodeModelsDevReferences(
 		const payload = await withCatalogDiscoveryTimeout(OPENCODE_MODELS_DEV_REFERENCE_TIMEOUT_MS, signal =>
 			fetchWellKnownModels(fetchImpl, signal),
 		);
-		return createModelsDevReferenceMap<Api>(
-			mapModelsDevToModels(payload as Record<string, unknown>, [descriptor]),
-		);
+		return createModelsDevReferenceMap<Api>(mapModelsDevToModels(payload as Record<string, unknown>, [descriptor]));
 	} catch {
 		return new Map();
 	}
@@ -3428,7 +3444,7 @@ export function kimiCodeModelManagerOptions(
 
 /** Native LM Studio metadata keyed by model id from `/api/v0/models`. */
 export interface LmStudioNativeModelMetadata {
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	contextWindow?: number;
 }
 
@@ -3453,10 +3469,13 @@ function getLmStudioCapabilityNames(value: unknown): string[] {
 	return value.flatMap(item => (typeof item === "string" ? [item.toLowerCase()] : []));
 }
 
-function getLmStudioNativeInput(entry: Record<string, unknown>): ("text" | "image")[] {
+function getLmStudioNativeInput(entry: Record<string, unknown>): ("text" | "image" | "video")[] {
 	const modelType = typeof entry.type === "string" ? entry.type.toLowerCase() : "";
 	const capabilities = getLmStudioCapabilityNames(entry.capabilities);
 	const supportsImage = modelType === "vlm" || capabilities.includes("vision") || capabilities.includes("image");
+	if (capabilities.includes("video")) {
+		return ["text", "image", "video"];
+	}
 	return supportsImage ? ["text", "image"] : ["text"];
 }
 
