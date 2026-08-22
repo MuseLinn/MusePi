@@ -42,7 +42,7 @@ interface ApiProviderInfo {
 
 interface CustomProvider {
 	name: string;
-	models: { id: string; name?: string }[];
+	models: { id: string; name?: string; input?: string[]; contextWindow?: number; maxTokens?: number }[];
 }
 
 /** Wire shape of one models.catalog row (TUI model-hub sidebar parity):
@@ -108,7 +108,16 @@ const EMPTY_FORM = {
 	modelId: "",
 	modelName: "",
 	compactionModel: "",
-	adopted: [] as { id: string; name?: string }[],
+	modelInput: undefined as string[] | undefined,
+	modelContextWindow: null as number | null,
+	modelMaxTokens: null as number | null,
+	adopted: [] as {
+		id: string;
+		name?: string;
+		input?: string[] | null;
+		contextWindow?: number | null;
+		maxTokens?: number | null;
+	}[],
 };
 
 export function ModelSection({
@@ -160,12 +169,19 @@ export function ModelSection({
 	const [providerQuery, setProviderQuery] = useState("");
 	const [formBusy, setFormBusy] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
+	// Adopted-model capability editor: which adopted row's capability
+	// override strip is expanded (null = none).
+	const [expandedCaps, setExpandedCaps] = useState<string | null>(null);
 	// Custom-provider add dialog: the config form lives in a DialogFrame
 	// opened from the "custom providers" tab (not a separate tab — user
 	// report: 添加自定义供应商应是有设计规范的弹窗). `addedName` is the
 	// transient success feedback after a save.
 	const [addOpen, setAddOpen] = useState(false);
 	const [addedName, setAddedName] = useState<string | null>(null);
+	// When non-null, the dialog is editing this EXISTING custom provider:
+	// the form is seeded from its models.yml row and submit merges back via
+	// models.add (same RPC — daemon merges by provider name).
+	const [editingProvider, setEditingProvider] = useState<string | null>(null);
 	const [inputValue, setInputValue] = useState("");
 	const [copied, setCopied] = useState(false);
 	// Per-role model presets (TUI /model parity): role -> model selector.
@@ -437,6 +453,17 @@ export function ModelSection({
 		setForm(v => ({ ...v, adopted: v.adopted.filter(m => m.id !== id) }));
 	};
 
+	/** Patch capability overrides on one adopted model row. */
+	const patchAdopted = (
+		id: string,
+		patch: Partial<{ input: string[] | null; contextWindow: number | null; maxTokens: number | null }>,
+	): void => {
+		setForm(v => ({
+			...v,
+			adopted: v.adopted.map(m => (m.id === id ? { ...m, ...patch } : m)),
+		}));
+	};
+
 	const submitModel = async (): Promise<void> => {
 		setFormError(null);
 		if (!rpc || !sessionId) return;
@@ -456,13 +483,36 @@ export function ModelSection({
 					...(form.apiKey ? { apiKey: form.apiKey } : {}),
 					...(form.api !== "openai" ? { api: form.api } : {}),
 					models: [
-						...form.adopted.map(m => ({ id: m.id, ...(m.name ? { name: m.name } : {}) })),
+						...form.adopted.map(m => ({
+							id: m.id,
+							...(m.name ? { name: m.name } : {}),
+							// input: explicit []/null → restore-to-auto (null deletes
+							// the models.yml override); non-empty array writes it;
+							// untouched (undefined) omits the field.
+							...(Array.isArray(m.input)
+								? { input: m.input.length > 0 ? m.input : null }
+								: m.input === null
+									? { input: null }
+									: {}),
+							...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
+							...(m.maxTokens !== undefined ? { maxTokens: m.maxTokens } : {}),
+						})),
 						...(form.modelId
 							? [
 									{
 										id: form.modelId,
 										...(form.modelName ? { name: form.modelName } : {}),
 										...(form.compactionModel.trim() ? { compactionModel: form.compactionModel.trim() } : {}),
+										// Capability fields: untouched (undefined) → omit
+										// (inherit/keep); "restore to auto" ([]) → null to
+										// delete the override; checked → write the array.
+										...(form.modelInput !== undefined
+											? { input: form.modelInput.length > 0 ? form.modelInput : null }
+											: {}),
+										...(form.modelContextWindow !== undefined
+											? { contextWindow: form.modelContextWindow }
+											: {}),
+										...(form.modelMaxTokens !== undefined ? { maxTokens: form.modelMaxTokens } : {}),
 									},
 								]
 							: []),
@@ -470,11 +520,13 @@ export function ModelSection({
 				},
 			});
 			setForm(EMPTY_FORM);
-			// Success feedback: close the dialog and show "provider added"
+			// Success feedback: close the dialog and show "provider added / saved"
 			// inline where the open button was (the dialog itself can't hold
 			// state after closing). The chip fades after a beat.
+			const wasEditing = editingProvider !== null;
+			setEditingProvider(null);
 			setAddOpen(false);
-			setAddedName(form.name);
+			setAddedName(wasEditing ? `${t("provider saved")} ${form.name}` : form.name);
 			window.setTimeout(() => setAddedName(null), 2500);
 			onChanged();
 		} catch (err) {
@@ -489,6 +541,56 @@ export function ModelSection({
 		try {
 			await rpc.request("models.remove", { sessionId, providerName: name });
 			onChanged();
+		} catch {
+			// keep the row; the daemon error is non-fatal for the list
+		}
+	};
+
+	/**
+	 * Load one custom provider back into the add/edit form (models.yml row →
+	 * form), then open the dialog in edit mode. The API key is intentionally
+	 * not echoed back (daemon never returns it on read paths); leaving the
+	 * field empty on submit keeps the stored key untouched.
+	 */
+	const editProvider = async (name: string): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const cfg = await rpc.request<{
+				providers?: Record<
+					string,
+					{
+						baseUrl?: string;
+						api?: string;
+						models?: {
+							id: string;
+							name?: string;
+							input?: string[];
+							contextWindow?: number;
+							maxTokens?: number;
+						}[];
+					}
+				>;
+			}>("models.listCustom", {});
+			const row = cfg?.providers?.[name];
+			const models = Array.isArray(row?.models) ? row.models : [];
+			const hand = models[models.length - 1];
+			setForm({
+				name,
+				baseUrl: row?.baseUrl ?? "",
+				apiKey: "",
+				api: row?.api ?? "openai-completions",
+				modelId: hand?.id ?? "",
+				modelName: hand?.name ?? "",
+				compactionModel: "",
+				modelInput: hand?.input && hand.input.length > 0 ? hand.input : undefined,
+				modelContextWindow: hand?.contextWindow ?? null,
+				modelMaxTokens: hand?.maxTokens ?? null,
+				adopted: models.slice(0, models.length - 1),
+			});
+			setEditingProvider(name);
+			setAddOpen(true);
+			setFormError(null);
+			setFetchError(null);
 		} catch {
 			// keep the row; the daemon error is non-fatal for the list
 		}
@@ -1728,6 +1830,15 @@ export function ModelSection({
 												{c.models.map(m => m.id).join(", ")}
 											</div>
 										</div>
+										<button
+											type="button"
+											className="gui-btn"
+											title={t("edit custom provider")}
+											aria-label={t("edit custom provider")}
+											onClick={() => void editProvider(c.name)}
+										>
+											<Icon name="edit-2" className="h-3.5 w-3.5" />
+										</button>
 										<button type="button" className="gui-btn" onClick={() => void removeProvider(c.name)}>
 											<Icon name="delete-bin" className="h-3.5 w-3.5" />
 										</button>
@@ -1772,15 +1883,18 @@ export function ModelSection({
 								return;
 							}
 							setAddOpen(false);
+							setEditingProvider(null);
 							setFormError(null);
 							setForm(EMPTY_FORM);
 							setFetchError(null);
 						}}
 						className="gui-dialog--settings"
-						label={t("add custom provider")}
+						label={editingProvider ? t("edit custom provider") : t("add custom provider")}
 					>
 						<div className="gui-dialog-head">
-							<div className="text-[14px] font-medium">{t("add custom provider")}</div>
+							<div className="text-[14px] font-medium">
+								{editingProvider ? t("edit custom provider") : t("add custom provider")}
+							</div>
 						</div>
 						<div className="flex flex-col gap-2 p-4">
 							<input
@@ -1824,19 +1938,100 @@ export function ModelSection({
 							{fetchError && <div className="text-[13px] text-[var(--color-error)]">{fetchError}</div>}
 							{form.adopted.length > 0 && (
 								<div className="flex flex-col gap-1">
-									{form.adopted.map(m => (
-										<div key={m.id} className="flex items-center gap-2">
-											<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
-											<button
-												type="button"
-												className="gui-btn"
-												aria-label={`${t("delete")} ${m.id}`}
-												onClick={() => removeAdopted(m.id)}
-											>
-												<Icon name="delete-bin" className="h-3.5 w-3.5" />
-											</button>
-										</div>
-									))}
+									{form.adopted.map(m => {
+										const capsOpen = expandedCaps === m.id;
+										return (
+											<div key={m.id} className="flex flex-col gap-1">
+												<div className="flex items-center gap-2">
+													<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+													<button
+														type="button"
+														className="gui-btn"
+														title={t("model capabilities")}
+														aria-label={`${t("model capabilities")} ${m.id}`}
+														onClick={() => setExpandedCaps(capsOpen ? null : m.id)}
+													>
+														<Icon name="settings-3" className="h-3.5 w-3.5" />
+													</button>
+													<button
+														type="button"
+														className="gui-btn"
+														aria-label={`${t("delete")} ${m.id}`}
+														onClick={() => removeAdopted(m.id)}
+													>
+														<Icon name="delete-bin" className="h-3.5 w-3.5" />
+													</button>
+												</div>
+												{capsOpen && (
+													<div className="flex flex-col gap-1 rounded-lg border border-[var(--border-strong)] p-2">
+														<div className="flex items-center justify-between">
+															<div className="text-[12px] font-medium text-[var(--color-text-muted)]">
+																{t("model capabilities")}
+															</div>
+															<button
+																type="button"
+																className="text-[12px] text-[var(--color-accent)]"
+																title={t("restore capabilities to auto")}
+																onClick={() =>
+																	patchAdopted(m.id, {
+																		input: null,
+																		contextWindow: null,
+																		maxTokens: null,
+																	})
+																}
+															>
+																{t("restore to auto")}
+															</button>
+														</div>
+														<div className="flex items-center gap-3">
+															{(["text", "image", "video"] as const).map(modality => (
+																<label key={modality} className="flex items-center gap-1 text-[12px]">
+																	<input
+																		type="checkbox"
+																		checked={(m.input ?? []).includes(modality)}
+																		onChange={() =>
+																			patchAdopted(m.id, {
+																				input: (m.input ?? []).includes(modality)
+																					? (m.input ?? []).filter(x => x !== modality)
+																					: [...(m.input ?? []), modality],
+																			})
+																		}
+																	/>
+																	{modality}
+																</label>
+															))}
+														</div>
+														<div className="flex gap-2">
+															<input
+																className="gui-input flex-1"
+																placeholder={t("context window (optional)")}
+																type="number"
+																min={0}
+																value={m.contextWindow ?? ""}
+																onChange={e =>
+																	patchAdopted(m.id, {
+																		contextWindow: e.target.value ? Number(e.target.value) : null,
+																	})
+																}
+															/>
+															<input
+																className="gui-input flex-1"
+																placeholder={t("max output tokens (optional)")}
+																type="number"
+																min={0}
+																value={m.maxTokens ?? ""}
+																onChange={e =>
+																	patchAdopted(m.id, {
+																		maxTokens: e.target.value ? Number(e.target.value) : null,
+																	})
+																}
+															/>
+														</div>
+													</div>
+												)}
+											</div>
+										);
+									})}
 								</div>
 							)}
 							<div className="flex gap-2">
@@ -1870,6 +2065,83 @@ export function ModelSection({
 									{ value: "google-generative-ai", label: "google" },
 								]}
 							/>
+							{/* Per-model capability overrides for the hand-typed row:
+							 * input modalities (text/image/video) plus context window
+							 * and max output tokens. These fill models.yml fields that
+							 * otherwise inherit from the models.dev/bundled fallback —
+							 * the escape hatch when the fallback is wrong or unknown.
+							 * "Restore to auto" clears every override so the model
+							 * goes back to the auto-fitted capabilities again. */}
+							<div className="flex flex-col gap-1 rounded-lg border border-[var(--border-strong)] p-2">
+								<div className="flex items-center justify-between">
+									<div className="text-[12px] font-medium text-[var(--color-text-muted)]">
+										{t("model capabilities")}
+									</div>
+									<button
+										type="button"
+										className="text-[12px] text-[var(--color-accent)]"
+										title={t("restore capabilities to auto")}
+										onClick={() =>
+											setForm(v => ({
+												...v,
+												modelInput: [],
+												modelContextWindow: null,
+												modelMaxTokens: null,
+											}))
+										}
+									>
+										{t("restore to auto")}
+									</button>
+								</div>
+								<div className="flex items-center gap-3">
+									{(["text", "image", "video"] as const).map(modality => (
+										<label key={modality} className="flex items-center gap-1 text-[12px]">
+											<input
+												type="checkbox"
+												checked={(form.modelInput ?? []).includes(modality)}
+												onChange={() =>
+													setForm(v => {
+														const current = v.modelInput ?? [];
+														const next = current.includes(modality)
+															? current.filter(m => m !== modality)
+															: [...current, modality];
+														return { ...v, modelInput: next };
+													})
+												}
+											/>
+											{modality}
+										</label>
+									))}
+								</div>
+								<div className="flex gap-2">
+									<input
+										className="gui-input flex-1"
+										placeholder={t("context window (optional)")}
+										type="number"
+										min={0}
+										value={form.modelContextWindow ?? ""}
+										onChange={e =>
+											setForm(v => ({
+												...v,
+												modelContextWindow: e.target.value ? Number(e.target.value) : null,
+											}))
+										}
+									/>
+									<input
+										className="gui-input flex-1"
+										placeholder={t("max output tokens (optional)")}
+										type="number"
+										min={0}
+										value={form.modelMaxTokens ?? ""}
+										onChange={e =>
+											setForm(v => ({
+												...v,
+												modelMaxTokens: e.target.value ? Number(e.target.value) : null,
+											}))
+										}
+									/>
+								</div>
+							</div>
 							{formError && <div className="text-[13px] text-[var(--color-error)]">{formError}</div>}
 							<button
 								type="button"
@@ -1877,7 +2149,7 @@ export function ModelSection({
 								disabled={formBusy}
 								onClick={() => void submitModel()}
 							>
-								{formBusy ? `${t("saving")}…` : t("add provider")}
+								{formBusy ? `${t("saving")}…` : editingProvider ? t("save changes") : t("add provider")}
 							</button>
 						</div>
 						{/* Candidate picker for "fetch available models": the endpoint's

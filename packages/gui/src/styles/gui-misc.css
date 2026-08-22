@@ -2048,16 +2048,21 @@
 }
 
 /* ── Task card style preview (display.taskCardStyle settings row) ────── */
+/* The preview cards are the REAL transcript rendering (ToolView +
+ * taskRenderer.SwarmCard over a shared fixture), so each option gets the
+ * full settings-row width and the two options stack vertically. */
 .gui-taskstyle-preview {
 	display: flex;
+	flex-direction: column;
 	gap: 10px;
 	margin-top: 8px;
 	width: 100%;
 }
 
 .gui-taskstyle-preview-option {
-	flex: 1;
+	flex: none;
 	min-width: 0;
+	width: 100%;
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
@@ -2087,8 +2092,8 @@
 	text-align: center;
 }
 
-/* Stacked mock: the classic chat-message card above, the floating member
- * grid card below it (Swarm style = native card + floating card). */
+/* Stacked preview: the native chat tool card above, the floating member
+ * grid below it (Swarm style = native card + floating SwarmCard). */
 .gui-taskstyle-preview-stack {
 	display: flex;
 	flex-direction: column;
@@ -2096,18 +2101,9 @@
 	min-width: 0;
 }
 
-.gui-taskstyle-preview-chat {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	padding: 7px;
-	background: var(--surface);
-}
-
-/* Frosted floating card mock (composer chip → member grid): subtle blur +
- * shadow to read as a card floating over the transcript. */
+/* Frosted floating card (composer chip → member grid): subtle blur +
+ * shadow to read as a card floating over the transcript. The real
+ * SwarmCard renders inside. */
 .gui-taskstyle-preview-float {
 	display: flex;
 	flex-direction: column;
@@ -2118,100 +2114,6 @@
 	background: color-mix(in oklab, var(--surface) 82%, transparent);
 	backdrop-filter: blur(6px);
 	box-shadow: 0 6px 18px oklch(0 0 0 / 0.25);
-}
-
-.gui-taskstyle-preview-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-width: 0;
-}
-
-.gui-taskstyle-preview-title {
-	flex: 1;
-	min-width: 0;
-	font-size: var(--ui-font-size-xs);
-	font-weight: 600;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.gui-taskstyle-preview-tool {
-	font-family: var(--font-mono);
-	font-size: 10.5px;
-	font-weight: 600;
-	color: var(--fg-muted);
-}
-
-.gui-taskstyle-preview-chip {
-	flex: none;
-	font-size: 10px;
-	padding: 0 5px;
-	border-radius: 6px;
-	background: var(--accent-muted);
-	color: var(--accent);
-	font-family: var(--font-mono);
-}
-
-.gui-taskstyle-preview-grid {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 5px;
-}
-
-.gui-taskstyle-preview-member {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	min-width: 0;
-}
-
-.gui-taskstyle-preview-avatar {
-	flex: none;
-	width: 18px;
-	height: 18px;
-	border-radius: 5px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	font-family: var(--font-mono);
-	font-size: 8.5px;
-	font-weight: 700;
-}
-
-.gui-taskstyle-preview-avatar--ok {
-	background: color-mix(in oklab, #4caf7d 18%, transparent);
-	color: #4caf7d;
-}
-
-.gui-taskstyle-preview-avatar--err {
-	background: color-mix(in oklab, #e5484d 18%, transparent);
-	color: #e5484d;
-}
-
-.gui-taskstyle-preview-bar {
-	flex: 1;
-	height: 4px;
-	border-radius: 2px;
-	background: color-mix(in oklab, var(--fg) 10%, transparent);
-	overflow: hidden;
-}
-
-.gui-taskstyle-preview-fill {
-	display: block;
-	height: 100%;
-	border-radius: 2px;
-}
-
-.gui-taskstyle-preview-fill--ok {
-	width: 100%;
-	background: #4caf7d;
-}
-
-.gui-taskstyle-preview-fill--err {
-	width: 60%;
-	background: #e5484d;
 }
 
 /* ── Autoresearch panel (desktop adaptation of the TUI widget) ───────── */

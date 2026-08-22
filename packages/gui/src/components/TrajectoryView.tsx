@@ -314,7 +314,7 @@ export function TrajectoryView({
 					/>
 				</div>
 			)}
-			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
+			<FadeScroll className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3">
 				{turns.length === 0 ? (
 					<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
 						{t("trajectory empty")}

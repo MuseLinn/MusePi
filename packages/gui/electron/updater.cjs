@@ -2,12 +2,15 @@
  * OTA updater — checks a version manifest and hands the renderer the
  * download URL when a newer release exists.
  *
- * The manifest is a tiny JSON at UPDATE_MANIFEST_URL:
- *   { "version": "0.1.1", "url": "https://…/MusePi-0.1.1.dmg", "notes": "…" }
+ * The manifest is a tiny JSON attached as an ASSET to each GitHub release
+ * (BitFun parity): /releases/latest/download/<asset> 302s to the newest
+ * release's copy — no api.github.com rate limits, works anonymously once
+ * the repo is public.
+ *   { "version": "0.4.3", "url": "https://…/MusePi-0.4.3.dmg", "notes": "…" }
  *
  * Resolution order: OMP_UPDATE_MANIFEST_URL env → package.json
- * "update" → disabled (null). Auto-check on startup can be silenced with
- * OMP_NO_AUTO_UPDATE=1.
+ * "update" → the MusePi releases-latest asset default. Auto-check on
+ * startup can be silenced with OMP_NO_AUTO_UPDATE=1.
  */
 "use strict";
 
@@ -23,10 +26,14 @@ try {
 	// package.json missing — env-only mode
 }
 
+/** Default channel: the update-manifest.json asset on the latest GitHub release. */
+const RELEASE_MANIFEST_URL =
+	"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+
 function manifestUrl() {
 	if (process.env.OMP_UPDATE_MANIFEST_URL) return process.env.OMP_UPDATE_MANIFEST_URL;
 	if (pkg.update?.manifestUrl) return pkg.update.manifestUrl;
-	return null;
+	return RELEASE_MANIFEST_URL;
 }
 
 /** Fetch + compare the remote version. Returns null when up to date or disabled. */

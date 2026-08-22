@@ -63,7 +63,7 @@
 		"src"
 	],
 	"update": {
-		"manifestUrl": "https://raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json"
+		"manifestUrl": "https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json"
 	},
 	"build": {
 		"appId": "com.musepi.gui",

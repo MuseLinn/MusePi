@@ -4069,3 +4069,101 @@
 	color: var(--color-text-muted);
 	white-space: nowrap;
 }
+
+/* Update toast (BitFun update-available dialog parity): bottom-right
+ * frosted card pushed by main.cjs's silent launch check. */
+.gui-update-toast {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 900;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 320px;
+	padding: 14px 16px;
+	border-radius: 14px;
+	border: 1px solid var(--border);
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--accent) 6%, transparent), transparent 120px),
+		var(--bg-raised);
+	box-shadow: 0 12px 40px rgb(0 0 0 / 22%);
+	animation: gui-update-toast-in 260ms var(--spring) both;
+}
+@keyframes gui-update-toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+.gui-update-toast-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+.gui-update-toast-title {
+	font-size: 13.5px;
+	font-weight: 650;
+	color: var(--fg);
+}
+.gui-update-toast-versions {
+	flex: 1;
+	min-width: 0;
+	font-size: 11.5px;
+	color: var(--accent);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-update-toast-close {
+	align-self: flex-start;
+	border: none;
+	background: none;
+	padding: 0 2px;
+	font-size: 15px;
+	line-height: 1;
+	color: var(--fg-muted);
+	cursor: pointer;
+}
+.gui-update-toast-close:hover {
+	color: var(--fg);
+}
+.gui-update-toast-notes {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	overflow: hidden;
+	font-size: 12.5px;
+	line-height: 1.55;
+	color: var(--fg-muted);
+}
+.gui-update-toast-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 2px;
+}
+
+/* Settings → general 检查更新 richer result: notes snippet + explicit
+ * download button (replaces the old auto window.open popup). */
+.gui-update-result {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	margin-top: 8px;
+}
+.gui-update-result-notes {
+	max-width: 520px;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 5;
+	overflow: hidden;
+	font-size: 12.5px;
+	line-height: 1.6;
+	color: var(--color-text-muted);
+}

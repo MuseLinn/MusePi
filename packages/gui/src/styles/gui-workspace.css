@@ -1462,10 +1462,12 @@
 
 /* ── 会话轨迹视图(DSH Trajectory 参考吸收) ─────────────────────────── */
 .traj-row {
-	/* 1fr(事件行) + auto(跳转小按钮):行点击选中检视、箭头点击跳转,
-	 * 结构上避免按钮包裹整行导致的 flex 塌缩/点击吞并(2026-08-21 实测)。 */
+	/* minmax(0,1fr)(事件行) + auto(跳转小按钮):行点击选中检视、箭头点击跳转,
+	 * 结构上避免按钮包裹整行导致的 flex 塌缩/点击吞并(2026-08-21 实测)。
+	 * minmax(0,1fr) 让事件列可被 pre-wrap+break-all 的内容压到容器宽度以内,
+	 * 否则长工具参数/结果会把整条垂直列表撑出水平滚动(2026-08-22 实测)。 */
 	display: grid;
-	grid-template-columns: 1fr auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: flex-start;
 	gap: 2px;
 }

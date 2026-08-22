@@ -267,7 +267,12 @@ export class GuiSessionStore {
 			state: snap.state,
 			streaming: this.#streaming,
 			activeTools: this.#activeTools,
-			working: this.#working || snap.state.isStreaming,
+			// Single source of truth: #working spans the WHOLE run
+			// (agent_start→agent_end, seeded from resume snapshots,
+			// corrected by authoritative state frames). Never OR in the
+			// view's turn-level isStreaming — it can go stale on an abort
+			// without turn_end and would pin the stop capsule on forever.
+			working: this.#working,
 			cursor: snap.cursor,
 			agents: [...this.#agents.values()],
 			progress: this.#progress,
@@ -582,10 +587,17 @@ export class GuiSessionStore {
 				break;
 			}
 			case "turn_start":
+			case "agent_start":
+				// A run is live from its first model call until agent_end.
+				// turn_end fires per tool batch INSIDE one run — clearing
+				// #working there flipped the composer's stop capsule back
+				// to the send arrow during provider prep between rounds
+				// (user report). Only agent_end / authoritative state
+				// frames end a run.
 				this.#working = true;
 				break;
 			case "turn_end":
-				this.#working = false;
+				// Mid-run boundary: streaming pauses, the run does not.
 				this.#streaming = false;
 				break;
 			case "agent_end": {
@@ -593,6 +605,10 @@ export class GuiSessionStore {
 				// "ready" cue — once per run, NOT per model-call turn
 				// (turn_end fires per tool batch inside one run). Aborted
 				// runs get the stop cue instead; errors have their own.
+				// Run truly over — this (not turn_end) retires the stop
+				// capsule; aborted runs rely on the stopReason frame below.
+				this.#working = false;
+				this.#streaming = false;
 				const t = ev as { type: "agent_end"; messages?: Array<{ role?: string; stopReason?: string }> };
 				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
 				const stopReason = last?.stopReason;

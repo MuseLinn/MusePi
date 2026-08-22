@@ -445,10 +445,9 @@ export function SettingsView({
 				setProviders(Array.isArray(raw?.oauth) ? (raw.oauth as ProviderInfo[]) : []);
 				setApiProviders(Array.isArray(raw?.api) ? (raw.api as ApiProviderInfo[]) : []);
 			}
-			const cfg = await rpc.request<{ providers?: Record<string, { models?: { id: string; name?: string }[] }> }>(
-				"models.listCustom",
-				{ sessionId: sessionId ?? undefined },
-			);
+			const cfg = await rpc.request<{
+			providers?: Record<string, { models?: { id: string; name?: string; input?: string[]; contextWindow?: number; maxTokens?: number }[] }>;
+		}>("models.listCustom", { sessionId: sessionId ?? undefined });
 			setCustom(
 				Object.entries(cfg?.providers ?? {}).map(([name, v]) => ({
 					name,

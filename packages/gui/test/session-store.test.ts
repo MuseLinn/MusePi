@@ -83,3 +83,59 @@ describe("GuiSessionStore subagent transcript availability", () => {
 		expect(row?.hasSessionFile).toBe(true);
 	});
 });
+
+/** Agent-event frame as the daemon forwards it ({ kind: "event" }). */
+function agentEvent(type: string, extra: Record<string, unknown> = {}) {
+	return { kind: "event", seq: 0, payload: { type, ...extra } };
+}
+
+describe("GuiSessionStore working-state machine (stop capsule)", () => {
+	it("keeps working through mid-run turn boundaries and retires only at agent_end", async () => {
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
+
+		// User message lands → capsule on immediately.
+		store.apply(
+			agentEvent("message_start", {
+				message: { role: "user", content: [], timestamp: Date.now() },
+			}),
+		);
+		await settle();
+		expect(store.getSnapshot().working).toBe(true);
+
+		// Round 1 ends (assistant reply carried tool calls). turn_end fires
+		// per tool batch INSIDE the run — the capsule must NOT flip back to
+		// send while the next round's provider prep is in flight.
+		store.apply(
+			agentEvent("turn_end", {
+				message: { role: "assistant", content: [], timestamp: Date.now() },
+				toolResults: [],
+			}),
+		);
+		await settle();
+		expect(store.getSnapshot().working).toBe(true);
+
+		// Round 2 opens, then the run finishes for real.
+		store.apply(agentEvent("turn_start"));
+		await settle();
+		expect(store.getSnapshot().working).toBe(true);
+
+		store.apply(
+			agentEvent("agent_end", {
+				messages: [{ role: "assistant", stopReason: "stop", timestamp: Date.now() }],
+			}),
+		);
+		await settle();
+		expect(store.getSnapshot().working).toBe(false);
+	});
+
+	it("still honors authoritative state frames after an abort without turn_end", async () => {
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
+		store.apply(agentEvent("turn_start"));
+		await settle();
+		expect(store.getSnapshot().working).toBe(true);
+
+		store.apply({ kind: "state", seq: 0, payload: { isStreaming: false } });
+		await settle();
+		expect(store.getSnapshot().working).toBe(false);
+	});
+});

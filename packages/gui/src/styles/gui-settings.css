@@ -346,6 +346,31 @@
 	text-align: left;
 }
 
+/* Two-line model row (ModelSelector `--stack`): line 1 = name + capability
+ * icons + fav/default/check, line 2 = provider chip + context badge. Splitting
+ * keeps the name readable and lets each affordance occupy its own lane. */
+.gui-model-opt--stack {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 3px;
+}
+
+.gui-model-opt-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-model-opt-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding-left: 2px;
+}
+
 .gui-model-opt:hover {
 	background: var(--color-surface-raised);
 	color: var(--color-text);
@@ -2003,185 +2028,17 @@
 	border-top: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
 }
 
-/* Agent status line — hangs ABOVE the input card (outside the frame;
- * user: the thinking state belongs here, not inside the input box,
- * not duplicated in the transcript). Single row: braille spinner or
- * pulsing orb (settings → indicator) + label. The label defaults to the
- * shimmer sweep; the KITT scanner bar (Knight Rider) replaces it in kitt
- * mode; 'plain' disables both. */
-.gui-agent-status {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	padding: 4px 14px;
-	margin-bottom: 8px;
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	background: var(--color-surface-sunken);
-	width: fit-content;
-}
-
-/* Braille spinner: JS cycles the 10 frames; monospace + fixed cell keep
- * the glyph from jittering between frames (braille chars vary in width
- * in proportional fonts). Color: the TUI-style per-session accent
- * (--gui-status-accent set by the component), theme accent as fallback
- * (settings preview has no session). */
+/* Braille spinner (compaction status line): JS cycles the 10 frames;
+ * monospace + fixed cell keep the glyph from jittering between frames
+ * (braille chars vary in width in proportional fonts). */
 .gui-agent-status-braille {
 	flex-shrink: 0;
 	min-width: 13px;
 	text-align: center;
 	font-size: var(--ui-font-size-sm);
 	line-height: 1;
-	color: var(--gui-status-accent, var(--color-accent));
+	color: var(--color-accent);
 	font-family: ui-monospace, "SF Mono", "Maple Mono NF CN", monospace;
-}
-
-/* Pulsing orb — the alternative indicator (settings → agent 状态行). */
-.gui-agent-status-orb {
-	width: 10px;
-	height: 10px;
-	flex-shrink: 0;
-	border-radius: 50%;
-	background: var(--gui-status-accent, var(--color-accent));
-	box-shadow: 0 0 0 3px color-mix(in oklab, var(--gui-status-accent, var(--color-accent)) 18%, transparent);
-	animation: gui-orb-pulse 1.6s ease-in-out infinite;
-}
-
-/* aicss-style indicators (settings → agent 状态行): a 3×3 lattice whose
- * cells pulse on a radial wavefront (aicss S1: hypot delay from centre),
- * and an 8-dot ring sweeping a comet around the circle (C-series). */
-.gui-agent-status-lattice {
-	display: grid;
-	grid-template-columns: repeat(3, 3.5px);
-	grid-template-rows: repeat(3, 3.5px);
-	gap: 2px;
-	flex-shrink: 0;
-	color: var(--gui-status-accent, var(--color-accent));
-}
-.gui-agent-status-lattice i {
-	width: 3.5px;
-	height: 3.5px;
-	border-radius: 999px;
-	background: currentColor;
-	animation: gui-lattice-wave 1300ms ease-in-out infinite;
-}
-/* S1 delays (ms): hypot(dx,dy)*700, centre −180. Negative delays seed the
- * cells mid-cycle so the whole wave starts lit. */
-.gui-agent-status-lattice i:nth-child(1) { animation-delay: -990ms; }
-.gui-agent-status-lattice i:nth-child(2) { animation-delay: -700ms; }
-.gui-agent-status-lattice i:nth-child(3) { animation-delay: -990ms; }
-.gui-agent-status-lattice i:nth-child(4) { animation-delay: -700ms; }
-.gui-agent-status-lattice i:nth-child(5) { animation-delay: -180ms; }
-.gui-agent-status-lattice i:nth-child(6) { animation-delay: -700ms; }
-.gui-agent-status-lattice i:nth-child(7) { animation-delay: -990ms; }
-.gui-agent-status-lattice i:nth-child(8) { animation-delay: -700ms; }
-.gui-agent-status-lattice i:nth-child(9) { animation-delay: -990ms; }
-@keyframes gui-lattice-wave {
-	0%, 100% { opacity: 0.25; transform: scale(0.7); }
-	50% { opacity: 1; transform: scale(1); }
-}
-.gui-agent-status-ring {
-	position: relative;
-	width: 16px;
-	height: 16px;
-	flex-shrink: 0;
-	color: var(--gui-status-accent, var(--color-accent));
-}
-.gui-agent-status-ring i {
-	position: absolute;
-	width: 3px;
-	height: 3px;
-	border-radius: 999px;
-	background: currentColor;
-	animation: gui-ring-sweep 1100ms linear infinite;
-}
-/* 8 dots, r=5.5 on a 16px stage centred at (8,8): angle k*45°, delay
- * −k/8×1100ms — one comet chasing itself around the ring. */
-.gui-agent-status-ring i:nth-child(1) { left: 12px; top: 6.5px; animation-delay: 0ms; }
-.gui-agent-status-ring i:nth-child(2) { left: 10.4px; top: 2.6px; animation-delay: -137ms; }
-.gui-agent-status-ring i:nth-child(3) { left: 6.5px; top: 1px; animation-delay: -275ms; }
-.gui-agent-status-ring i:nth-child(4) { left: 2.6px; top: 2.6px; animation-delay: -412ms; }
-.gui-agent-status-ring i:nth-child(5) { left: 1px; top: 6.5px; animation-delay: -550ms; }
-.gui-agent-status-ring i:nth-child(6) { left: 2.6px; top: 10.4px; animation-delay: -687ms; }
-.gui-agent-status-ring i:nth-child(7) { left: 6.5px; top: 12px; animation-delay: -825ms; }
-.gui-agent-status-ring i:nth-child(8) { left: 10.4px; top: 10.4px; animation-delay: -962ms; }
-@keyframes gui-ring-sweep {
-	0% { opacity: 1; transform: scale(1.3); }
-	100% { opacity: 0.15; transform: scale(0.6); }
-}
-
-/* Label effect variants (settings → agent 状态行): the pill carries
- * gui-agent-status--shimmer | --kitt | --plain. The shimmer gradient is
- * the default; --kitt swaps the gradient for a KITT eye — an accent band
- * bouncing left↔right with the KITT easing (text-clipped, no separate
- * bar); --plain is a plain label with neither. */
-.gui-agent-status--plain .gui-agent-status-text {
-	background: none;
-	-webkit-background-clip: initial;
-	background-clip: initial;
-	color: var(--color-text-muted);
-	animation: none;
-}
-
-/* KITT label effect: background-size 200% maps element x to image x/2 +
- * position/200, so the accent band crosses the full text width as the
- * position goes 0%→100% and stays in frame for the whole bounce. The eye
- * uses the same --gui-sweep-bright stop as the shimmer (default tone =
- * text-colored band; gui-agent-status--sweep-accent = accent). */
-.gui-agent-status--kitt .gui-agent-status-text {
-	background-image: linear-gradient(
-		90deg,
-		var(--color-text-muted) 0%,
-		var(--color-text-muted) 40%,
-		var(--gui-sweep-bright) 50%,
-		var(--color-text-muted) 60%,
-		var(--color-text-muted) 100%
-	);
-	animation: gui-status-kitt 1.7s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
-}
-
-.gui-agent-status--sweep-accent .gui-agent-status-text {
-	--gui-sweep-bright: var(--color-accent);
-}
-
-@keyframes gui-status-kitt {
-	0% { background-position: 0% 0; }
-	100% { background-position: 100% 0; }
-}
-
-.gui-agent-status-text {
-	/* Bright sweep stop: default tone = text color (shimmer-like); the
-	 * pill's gui-agent-status--sweep-accent modifier swaps it to accent —
-	 * applies to both the shimmer and KITT gradients below. */
-	--gui-sweep-bright: var(--color-text);
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-	background: linear-gradient(
-		90deg,
-		var(--color-text-muted) 0%,
-		var(--gui-sweep-bright) 25%,
-		var(--color-text-muted) 50%,
-		var(--gui-sweep-bright) 75%,
-		var(--color-text-muted) 100%
-	);
-	background-size: 200% 100%;
-	-webkit-background-clip: text;
-	background-clip: text;
-	color: transparent;
-	animation: gui-status-shimmer 2.4s linear infinite;
-}
-
-.gui-agent-status--plain .gui-agent-status-text {
-	background: none;
-	-webkit-background-clip: initial;
-	background-clip: initial;
-	color: var(--color-text-muted);
-	animation: none;
-}
-
-@keyframes gui-status-shimmer {
-	0% { background-position: 200% 0; }
-	100% { background-position: -200% 0; }
 }
 
 /* ── Compaction status line ────────────────────────────────────────────
@@ -2223,11 +2080,6 @@
 
 .gui-compact-line-stop:hover {
 	background: color-mix(in oklab, var(--color-danger) 26%, transparent);
-}
-
-@keyframes gui-orb-pulse {
-	0%, 100% { opacity: 1; transform: scale(1); }
-	50% { opacity: 0.55; transform: scale(0.85); }
 }
 
 /* Status-row variant of the mode row: sits above the input (kimi-code

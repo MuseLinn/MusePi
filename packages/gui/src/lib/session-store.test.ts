@@ -76,7 +76,7 @@ describe("GuiSessionStore frame coalescing", () => {
 		// DSH/craft/proma parity: the working indicator must start the moment
 		// the user's own message is visible (optimistic emit), not when
 		// agent_start / turn_start finally lands after auto-thinking + provider
-		// prep (measured ~3.2s gap). turn_end resets it.
+		// prep (measured ~3.2s gap).
 		const store = new GuiSessionStore("s4", emptySnapshot(), "/work");
 		store.apply({
 			kind: "event",

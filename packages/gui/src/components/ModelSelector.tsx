@@ -15,6 +15,10 @@ export interface WireModel {
 	maxTokens?: number | null;
 	reasoning?: boolean;
 	vision?: boolean;
+	video?: boolean;
+	imageGen?: boolean;
+	videoGen?: boolean;
+	text?: boolean;
 }
 
 /** Compact context-window label ("128K", "1M", "200K") for the row chip. */
@@ -336,6 +340,17 @@ export function ModelSelector({
 						{sorted.map(m => {
 							const favKey = favKeyOf(m);
 							const fav = favs.includes(favKey) || favs.includes(m.id);
+							const isDefault = `${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
+							const capTitle = [
+								m.text !== false ? t("text input") : null,
+								m.vision ? t("image understanding") : null,
+								m.video ? t("video understanding") : null,
+								m.imageGen ? t("image generation") : null,
+								m.videoGen ? t("video generation") : null,
+								m.reasoning ? t("reasoning") : null,
+							]
+								.filter((label): label is string => label !== null)
+								.join(" · ");
 							return (
 								// Row is a div (role=button) so the favorite star can be a
 								// real <button> inside it — nested buttons are invalid HTML.
@@ -343,7 +358,7 @@ export function ModelSelector({
 									key={`${m.provider}/${m.id}`}
 									role="button"
 									tabIndex={0}
-									className={`gui-model-opt${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
+									className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
 									onClick={() => select(m)}
 									onKeyDown={e => {
 										if (e.key === "Enter" || e.key === " ") {
@@ -352,61 +367,56 @@ export function ModelSelector({
 										}
 									}}
 								>
-									<span className="flex min-w-0 flex-1 items-center gap-2">
+									<span className="gui-model-opt-line">
 										<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
-										<span className="gui-model-cap" title={m.reasoning ? "reasoning" : undefined}>
-											{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
+										<span
+											className="gui-model-cap"
+											title={capTitle || undefined}
+											aria-label={capTitle || undefined}
+										>
+											{m.text !== false && <Icon name="text" className="h-3.5 w-3.5" />}
 											{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
-											{formatContextWindow(m.contextWindow) && (
-												<span className="gui-model-ctx">{formatContextWindow(m.contextWindow)}</span>
-											)}
+											{m.video && <Icon name="file-video" className="h-3.5 w-3.5" />}
+											{m.imageGen && <Icon name="palette" className="h-3.5 w-3.5" />}
+											{m.videoGen && <Icon name="record-circle" className="h-3.5 w-3.5" />}
+											{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
 										</span>
-										<span className="gui-provider-chip">{m.provider}</span>
-									</span>
-									<button
-										type="button"
-										className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
-										title={fav ? t("unfavorite model") : t("favorite model")}
-										aria-label={fav ? t("unfavorite model") : t("favorite model")}
-										onClick={e => {
-											e.stopPropagation();
-											toggleFavModel(m.id, m.provider);
-										}}
-									>
-										<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
-									</button>
-									{allowSetDefault && (
 										<button
 											type="button"
-											className={`gui-model-fav${`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? " gui-model-fav--on" : ""}`}
-											title={
-												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-													? t("default model")
-													: t("set as default model")
-											}
-											aria-label={
-												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-													? t("default model")
-													: t("set as default model")
-											}
+											className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
+											title={fav ? t("unfavorite model") : t("favorite model")}
+											aria-label={fav ? t("unfavorite model") : t("favorite model")}
 											onClick={e => {
 												e.stopPropagation();
-												setAsDefault(m.id, m.provider);
+												toggleFavModel(m.id, m.provider);
 											}}
 										>
-											<Icon
-												name={
-													`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-														? "target-fill"
-														: "target"
-												}
-												className="h-3.5 w-3.5"
-											/>
+											<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
 										</button>
-									)}
-									{`${m.provider}/${m.id}` === modelId && (
-										<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
-									)}
+										{allowSetDefault && (
+											<button
+												type="button"
+												className={`gui-model-fav${isDefault ? " gui-model-fav--on" : ""}`}
+												title={isDefault ? t("default model") : t("set as default model")}
+												aria-label={isDefault ? t("default model") : t("set as default model")}
+												onClick={e => {
+													e.stopPropagation();
+													setAsDefault(m.id, m.provider);
+												}}
+											>
+												<Icon name={isDefault ? "target-fill" : "target"} className="h-3.5 w-3.5" />
+											</button>
+										)}
+										{`${m.provider}/${m.id}` === modelId && (
+											<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
+										)}
+									</span>
+									<span className="gui-model-opt-meta">
+										<span className="gui-provider-chip">{m.provider}</span>
+										{formatContextWindow(m.contextWindow) && (
+											<span className="gui-model-ctx">{formatContextWindow(m.contextWindow)}</span>
+										)}
+									</span>
 								</div>
 							);
 						})}

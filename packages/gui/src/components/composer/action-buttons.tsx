@@ -201,7 +201,7 @@ function MatrixLoader({ className }: { className?: string }): ReactNode {
  * 三合一 send control (user direction, opendesign parity): idle renders the
  * plain send button; while the agent works the SAME button becomes the live
  * state display — a capsule with the dot-matrix bloom + a two-label stack
- * ("思考中" at rest, "停止" on hover/focus). Click aborts the turn.
+ * ("工作中" at rest, "停止" on hover/focus). Click aborts the turn.
  */
 export function SendOrStopButton({
 	canSend,
@@ -245,7 +245,7 @@ export function SendOrStopButton({
 			<span className="gui-send-work">
 				<MatrixLoader className="gui-send-matrix" />
 				<span className="gui-send-labels">
-					<span className="gui-send-label gui-send-label--thinking">{t("thinking active")}</span>
+					<span className="gui-send-label gui-send-label--working">{t("working active")}</span>
 					<span className="gui-send-label gui-send-label--stop">{t("stop turn")}</span>
 				</span>
 			</span>

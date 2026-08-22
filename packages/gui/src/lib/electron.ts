@@ -16,8 +16,11 @@ export interface ElectronAPI {
 	openWith(app: string, path: string): Promise<boolean>;
 	listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
 	openExternal(url: string): Promise<boolean>;
-	/** Local image file → data URL; { dataUrl } or { error }. */
 	readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
+	/** OTA probe (updater.cjs manifest compare); null result = disabled. */
+	checkUpdates(): Promise<UpdateCheckResult | null>;
+	/** Startup auto-check notice; returns the unsubscribe function. */
+	onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void;
 }
 
 /** An app the current folder can be opened with (openchamber open-in). */
@@ -27,6 +30,19 @@ export interface OpenInApp {
 	appName: string;
 	/** base64 PNG data URL of the app's real icon (empty when unavailable). */
 	iconDataUrl: string;
+}
+
+/** Result of an update check (updater.cjs → renderer contract). */
+export interface UpdateCheckResult {
+	enabled?: boolean;
+	newer?: boolean;
+	current?: string;
+	latest?: string;
+	/** Direct download URL from the release manifest (may be empty). */
+	url?: string;
+	notes?: string | null;
+	error?: string;
+	reason?: string;
 }
 
 export function isElectron(): boolean {
@@ -125,6 +141,23 @@ export async function openExternalUrl(url: string): Promise<boolean> {
 	}
 	window.open(url, "_blank", "noopener");
 	return true;
+}
+/** Manual check from settings (GeneralSection 检查更新). */
+export function checkAppUpdates(): Promise<UpdateCheckResult | null> {
+	if (!isElectron()) return Promise.resolve(null);
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.checkUpdates();
+}
+
+/**
+ * Subscribe to the launch auto-check notice (main.cjs pushes
+ * "update-available" ~12s after boot). Outside Electron this is a no-op
+ * subscription so useEffect can return it directly.
+ */
+export function onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void {
+	if (!isElectron()) return () => {};
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.onUpdateAvailable(cb);
 }
 
 /** Open a directory with a specific app (Finder, VS Code, …). */

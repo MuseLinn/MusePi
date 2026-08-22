@@ -10,21 +10,10 @@ import {
 	TAIL_RENDERERS,
 	t,
 } from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import {
-	tapFeedback,
-} from "../../lib/haptic";
-import {
-	useChatHighlight,
-} from "../../lib/highlight";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { tapFeedback } from "../../lib/haptic";
+import { useChatHighlight } from "../../lib/highlight";
 import { NumberStepper } from "./shared";
 
 /** Small persisted toggle with a settings-row label (shared by the new tabs). */
@@ -479,15 +468,20 @@ const MERMAID_SAMPLE = `graph TD
   C --> F[回复用户]
   E --> F`;
 
-const DIFF_SAMPLE = `--- a/src/hello.ts
-+++ b/src/hello.ts
-@@ -1,3 +1,5 @@
+const DIFF_SAMPLE = `--- a/src/greet.ts
++++ b/src/greet.ts
+@@ -1,5 +1,6 @@
  export function greet(name: string): string {
--  return \`Hello, \${name}!\`;
+   const greeting = "Hello";
+-  return greeting + ", " + name + "!";
 +  const prefix = name ? "Hello" : "Hi";
 +  return \`\${prefix}, \${name}!\`;
  }
-+export const version = "1.2.0";`;
++export const version = "1.2.0";
+@@ -14,3 +14,3 @@
+ function formatList(items: string[]): string {
+   return items.join(", ");
+ }`;
 
 /**
  * Looping typewriter demo for the output-style preview — driven by the SAME
