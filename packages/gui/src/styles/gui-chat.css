@@ -2266,6 +2266,74 @@ body.gui-resizing .gui-pane-right {
 	vertical-align: 1px;
 }
 
+/* ── Project-override ledger ("项目覆盖") ──
+ * Card-styled list of keys the current project layer owns: dotted path,
+ * project value, struck-through global fallback, and a delete button that
+ * reverts the key to the inherited layer. */
+.gui-project-overrides {
+	margin-top: 12px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-project-overrides-title {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-project-override-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 4px 0;
+	border-top: 1px solid var(--border);
+}
+
+.gui-project-override-path {
+	flex-shrink: 0;
+	max-width: 40%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-project-override-value {
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+}
+
+.gui-project-override-global {
+	flex-shrink: 0;
+	max-width: 25%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-project-override-row .gui-btn {
+	flex-shrink: 0;
+}
+
 .gui-select-trigger.gui-role-thinking {
 	width: auto;
 	min-width: 96px;

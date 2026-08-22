@@ -7669,6 +7669,61 @@ export class DaemonServer {
 				await settings.flush();
 				return { ok: true };
 			}
+			case "settings.projectOverrides": {
+				// Project-override ledger (GUI "项目覆盖" section): every key
+				// the current project layer actually owns, with its raw
+				// project value, the effective merged value and the global
+				// fallback — plus a delete action so one click reverts a key
+				// to the inherited layer. Read-only when no workspace is open.
+				const p = (params ?? {}) as { action?: "list" | "delete"; path?: string };
+				let settings = this.#host.settings();
+				if (!settings) {
+					await this.#host.ensureRegistry();
+					settings = this.#host.settings();
+				}
+				if (!settings) throw new Error("settings unavailable");
+				if (!this.#host.cwd()) return { overrides: [] };
+
+				const flatten = (raw: unknown): Record<string, unknown> => {
+					const out: Record<string, unknown> = {};
+					const walk = (node: unknown, prefix: string): void => {
+						if (!node || typeof node !== "object" || Array.isArray(node)) {
+							if (prefix) out[prefix] = node;
+							return;
+						}
+						for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+							walk(v, prefix ? `${prefix}.${k}` : k);
+						}
+					};
+					walk(raw, "");
+					return out;
+				};
+
+				if (p.action === "delete" && p.path) {
+					const segments = p.path.split(".");
+					// Currently only modelRoles.<role> leaves are writable in
+					// the project layer (setProjectModelRole is the sole
+					// project-write API); anything else is read-only here.
+					if (segments.length === 2 && segments[0] === "modelRoles") {
+						settings.clearProjectModelRole(segments[1]);
+						await settings.flush();
+					} else {
+						throw new Error(`project override ${p.path} is not deletable from the panel`);
+					}
+					return { ok: true };
+				}
+
+				const projectKeys = settings.getProjectOverrideEntries();
+				const globalRaw = settings.getGlobalLayerSnapshot();
+				const globalFlat = flatten(globalRaw);
+				const overrides = projectKeys.map(entry => ({
+					path: entry.path,
+					projectValue: entry.value,
+					effectiveValue: entry.effective,
+					globalValue: globalFlat[entry.path],
+				}));
+				return { cwd: this.#host.cwd(), overrides };
+			}
 			case "settings.schema": {
 				// UI metadata for the settings panel (TUI parity): every
 				// setting with ui metadata on the requested tabs, so the GUI

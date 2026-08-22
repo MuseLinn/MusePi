@@ -449,6 +449,11 @@ export const general = {
 	"fork session from this message": "从此消息分叉新会话",
 	"continue from this point in a new session": "从此处在新会话中继续",
 	"forked from {name}": "分叉自 {name}",
+	"project overrides": "项目覆盖",
+	"overrides count {count}": "{count} 项覆盖",
+	"delete override": "删除此覆盖，回退继承值",
+	"override read only": "项目文件中的手工配置，请在配置目录编辑",
+	"read only": "只读",
 
 } as const;
 

@@ -452,4 +452,9 @@ export const general = {
 	"fork session from this message": "Fork a new session from this message",
 	"continue from this point in a new session": "Continue from this point in a new session",
 	"forked from {name}": "Forked from {name}",
+	"project overrides": "Project overrides",
+	"overrides count {count}": "{count} override(s)",
+	"delete override": "Delete this override and fall back to the inherited value",
+	"override read only": "Hand-edited project config — edit it in the config directory",
+	"read only": "Read-only",
 } as const satisfies Record<GeneralKey, string>;

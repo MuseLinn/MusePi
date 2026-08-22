@@ -274,6 +274,24 @@ function modelRoleValueFromUnknown(value: unknown): string | undefined {
 	return entries.length === value.length ? entries.join(",") : undefined;
 }
 
+/** Flatten a raw settings layer into dotted `path → leaf value` entries
+ * (objects recurse; arrays and primitives are leaves). Used by the
+ * project-override ledger to diff layers key-by-key. */
+function flattenRawSettings(raw: RawSettings): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	const walk = (node: unknown, prefix: string): void => {
+		if (node && typeof node === "object" && !Array.isArray(node)) {
+			for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+				walk(value, prefix ? `${prefix}.${key}` : key);
+			}
+			return;
+		}
+		if (prefix) out[prefix] = node;
+	};
+	walk(raw, "");
+	return out;
+}
+
 type EditVariantEntry = {
 	patternLower: string;
 	mode: EditMode;
@@ -1009,6 +1027,30 @@ export class Settings {
 		if (this.getProjectModelRole(role)) return "project";
 		if (this.getGlobalModelRole(role)) return "global";
 		return "default";
+	}
+
+	/**
+	 * Flatten the current project layer into dotted `path → value` entries
+	 * (GUI "项目覆盖" ledger): each entry carries the raw project value and
+	 * the effective merged value so the panel can show what the override
+	 * changes. Only keys the project layer OWNS appear — inherited values
+	 * are not overrides.
+	 */
+	getProjectOverrideEntries(): { path: string; value: unknown; effective: unknown }[] {
+		const projectFlat = flattenRawSettings(this.#project);
+		return Object.entries(projectFlat).map(([path, value]) => ({
+			path,
+			value,
+			effective: getByPath(this.#merged, path.split(".")),
+		}));
+	}
+
+	/**
+	 * Snapshot of the global layer (raw, pre-merge) — the fallback column
+	 * for the project-override ledger.
+	 */
+	getGlobalLayerSnapshot(): RawSettings {
+		return structuredClone(this.#global);
 	}
 
 	/**

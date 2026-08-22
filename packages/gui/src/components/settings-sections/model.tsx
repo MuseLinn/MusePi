@@ -184,6 +184,12 @@ export function ModelSection({
 	// global/default). Badges the scope toggle so a write never lands in an
 	// unexpected layer (openchamber "Configured in:" parity).
 	const [roleSources, setRoleSources] = useState<Record<string, string>>({});
+	// Project-override ledger (settings.projectOverrides): keys the current
+	// project layer owns, with the global fallback for comparison. Only
+	// meaningful when a workspace is open.
+	const [projectOverrides, setProjectOverrides] = useState<
+		{ path: string; projectValue: string; effectiveValue?: string; globalValue?: string | null }[]
+	>([]);
 	const { prompt } = usePrompt();
 	// Stored credentials per provider (multi-account logout dropdown).
 	const [credentialsByProvider, setCredentialsByProvider] = useState<Record<string, CredentialInfo[]>>({});
@@ -534,6 +540,62 @@ export function ModelSection({
 				setFallbackChains({});
 			});
 	}, [rpc]);
+
+	// Load the project-override ledger; a no-workspace daemon returns an
+	// empty list, which simply hides the section.
+	const loadProjectOverrides = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const res = await rpc.request<{
+				overrides?: { path: string; projectValue: unknown; globalValue?: unknown }[];
+			}>("settings.projectOverrides", { action: "list" });
+			setProjectOverrides(
+				(res?.overrides ?? []).map(entry => ({
+					path: entry.path,
+					projectValue: String(entry.projectValue),
+					globalValue: entry.globalValue == null ? null : String(entry.globalValue),
+				})),
+			);
+		} catch {
+			setProjectOverrides([]);
+		}
+	}, [rpc]);
+
+	// Revert one key to its inherited layer (only modelRoles.<role> leaves
+	// are deletable — the rest of the project file is hand-edited config).
+	const deleteProjectOverride = useCallback(
+		async (overridePath: string): Promise<void> => {
+			if (!rpc) return;
+			try {
+				await rpc.request("settings.projectOverrides", { action: "delete", path: overridePath });
+				if (overridePath.startsWith("modelRoles.")) {
+					const role = overridePath.slice("modelRoles.".length);
+					setRoleModels(prev => {
+						const next = { ...prev };
+						delete next[role];
+						return next;
+					});
+				}
+				await loadProjectOverrides();
+				void rpc
+					.request<{ resolvedRoleModels?: typeof resolvedRoleModels }>("settings.get", {
+						keys: ["resolvedRoleModels", "modelRoleSources"],
+					})
+					.then(res => {
+						if (res?.resolvedRoleModels) setResolvedRoleModels(res.resolvedRoleModels);
+						setRoleSources((res as { modelRoleSources?: Record<string, string> } | null)?.modelRoleSources ?? {});
+					})
+					.catch(() => {});
+			} catch {
+				// keep the row; the daemon error is non-fatal for the list
+			}
+		},
+		[rpc, loadProjectOverrides],
+	);
+
+	useEffect(() => {
+		void loadProjectOverrides();
+	}, [loadProjectOverrides]);
 
 	// Stored credentials per logged-in provider — powers the multi-account
 	// logout dropdown and the logged-in count. Covers both lists: OAuth
@@ -1263,6 +1325,47 @@ export function ModelSection({
 																<span key={role} className="gui-role-cycle-chip">
 																	{BUILTIN_ROLE_TAGS[role] ?? role}
 																</span>
+															))}
+														</div>
+													)}
+													{roleStorage === "project" && projectOverrides.length > 0 && (
+														<div className="gui-project-overrides">
+															<div className="gui-project-overrides-title">
+																<span>{t("project overrides")}</span>
+																<span className="text-[12px] text-[var(--color-text-faint)]">
+																	{t("overrides count {count}", { count: String(projectOverrides.length) })}
+																</span>
+															</div>
+															{projectOverrides.map(entry => (
+																<div key={entry.path} className="gui-project-override-row">
+																	<code className="gui-project-override-path">{entry.path}</code>
+																	<span className="gui-project-override-value" title={entry.projectValue}>
+																		{entry.projectValue}
+																	</span>
+																	{entry.globalValue != null && entry.globalValue !== entry.projectValue && (
+																		<s className="gui-project-override-global" title={String(entry.globalValue)}>
+																			{entry.globalValue}
+																		</s>
+																	)}
+																	{entry.path.startsWith("modelRoles.") ? (
+																		<button
+																			type="button"
+																			className="gui-btn gui-btn--icon"
+																			title={t("delete override")}
+																			aria-label={t("delete override")}
+																			onClick={() => deleteProjectOverride(entry.path)}
+																		>
+																			<Icon name="delete-bin" className="h-3.5 w-3.5" />
+																		</button>
+																	) : (
+																		<span
+																			className="text-[11px] text-[var(--color-text-faint)]"
+																			title={t("override read only")}
+																		>
+																			{t("read only")}
+																		</span>
+																	)}
+																</div>
 															))}
 														</div>
 													)}
