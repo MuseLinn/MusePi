@@ -172,32 +172,32 @@ export interface DiscoveryContext {
 
 type OllamaDiscoveredModelMetadata = {
 	reasoning: boolean;
-	input: ("text" | "image")[];
+	input: ("text" | "image" | "video")[];
 	contextWindow?: number;
 };
 
 type LlamaCppDiscoveredServerMetadata = {
 	contextWindow?: number;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 	maxTokens?: "contextWindow";
 };
 
 type LlamaCppDiscoveredModelRuntimeMetadata = {
 	contextWindow?: number;
 	maxTokens?: number;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 };
 
 /** Runtime metadata re-probed after a lazy local model loads (lm-studio). */
 type DiscoveredModelRuntimeMetadata = {
 	contextWindow?: number;
 	maxTokens?: number;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 };
 
 type LlamaCppModelListEntry = {
 	id: string;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 	runtimeContextWindow?: number;
 	/**
 	 * `--ctx-size` extracted from the entry's `status.args` (rendered CLI arg
@@ -316,7 +316,9 @@ function extractLlamaCppModelContextWindows(
 	};
 }
 
-function extractLlamaCppModelInputCapabilities(item: Record<string, unknown>): ("text" | "image")[] | undefined {
+function extractLlamaCppModelInputCapabilities(
+	item: Record<string, unknown>,
+): ("text" | "image" | "video")[] | undefined {
 	const architecture = item.architecture;
 	if (!isRecord(architecture) || !Array.isArray(architecture.input_modalities)) {
 		return undefined;
@@ -327,7 +329,11 @@ function extractLlamaCppModelInputCapabilities(item: Record<string, unknown>): (
 			modalities.add(modality.toLowerCase());
 		}
 	}
-	return modalities.has("image") ? ["text", "image"] : ["text"];
+	const imageCap = modalities.has("image") ? (["image"] as const) : [];
+	const videoCap = modalities.has("video") ? (["video"] as const) : [];
+	return imageCap.length > 0 || videoCap.length > 0
+		? (["text"] as ("text" | "image" | "video")[]).concat(imageCap, videoCap)
+		: ["text"];
 }
 
 function parseLlamaCppModelList(payload: unknown): LlamaCppModelListEntry[] {
@@ -393,7 +399,9 @@ function extractLlamaCppConfiguredContextWindow(item: Record<string, unknown>): 
 	return extractLlamaCppCtxSizeFromIni(status.preset);
 }
 
-function extractLlamaCppInputCapabilities(payload: Record<string, unknown>): ("text" | "image")[] | undefined {
+function extractLlamaCppInputCapabilities(
+	payload: Record<string, unknown>,
+): ("text" | "image" | "video")[] | undefined {
 	const modalities = payload.modalities;
 	if (!isRecord(modalities)) {
 		return undefined;
@@ -849,7 +857,7 @@ function extractOpenAIModelsListInputCapabilities(item: {
 	input?: unknown;
 	input_modalities?: unknown;
 	architecture?: unknown;
-}): ("text" | "image")[] | undefined {
+}): ("text" | "image" | "video")[] | undefined {
 	const modalities = new Set<string>();
 	const collect = (value: unknown): void => {
 		if (!Array.isArray(value)) return;
@@ -861,7 +869,11 @@ function extractOpenAIModelsListInputCapabilities(item: {
 	collect(item.input_modalities);
 	if (isRecord(item.architecture)) collect(item.architecture.input_modalities);
 	if (modalities.size === 0) return undefined;
-	return modalities.has("image") ? ["text", "image"] : ["text"];
+	const imageCap = modalities.has("image") ? (["image"] as const) : [];
+	const videoCap = modalities.has("video") ? (["video"] as const) : [];
+	return imageCap.length > 0 || videoCap.length > 0
+		? (["text"] as ("text" | "image" | "video")[]).concat(imageCap, videoCap)
+		: ["text"];
 }
 
 export async function discoverOpenAIModelsList(

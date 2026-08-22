@@ -215,6 +215,7 @@ class TaskCardWidgetController {
 	start(members: TaskMemberView[]): void {
 		this.members = members;
 		this.settled = false;
+		this.completedAt.clear();
 		this.lastWidth = process.stdout.columns ?? 120;
 		this.paint();
 		this.frameTimer = setInterval(() => this.#tick(), FRAME_INTERVAL_MS) as unknown as SwarmTimerId;
@@ -459,17 +460,18 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 				group: "Display",
 				label: "Task Card Style",
 				description:
-					"Render style for the task/swarm tool card. Swarm shows the Kimi-parity member grid with per-agent avatars, progress bars and accordion outputs; classic uses the plain tool-call card",
+					"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card",
 				options: [
 					{
 						value: "swarm",
-						label: "Swarm",
-						description: "Kimi-parity member grid: avatars, progress bars, per-member accordions",
+						label: "MusePi Swarm",
+						description:
+							"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 					},
 					{
 						value: "classic",
-						label: "Classic",
-						description: "Plain tool-call card with summary chips",
+						label: "OMP original (Classic)",
+						description: "Plain tool-call card only — no swarm member grid",
 					},
 				],
 			},
@@ -521,6 +523,23 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 			const members = taskMembersFromDetails(details);
 			if (members) widget.settle(members);
 			else widget.stop();
+		});
+
+		// Fallback cleanup: an interrupted/aborted `task` run may never send a
+		// `tool_execution_end` (cursor.ts only synthesizes one for server
+		// tools), which would leave the widget pinned above the editor after
+		// the run. agent_end/session_shutdown are the reliable teardown
+		// boundaries — drop the widget unconditionally there.
+		const dropWidget = (): void => {
+			if (widget === null) return;
+			widget.stop();
+			widget = null;
+		};
+		api.on("agent_end", () => {
+			dropWidget();
+		});
+		api.on("session_shutdown", () => {
+			dropWidget();
 		});
 	};
 }

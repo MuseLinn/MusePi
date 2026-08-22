@@ -31,6 +31,7 @@ import {
 	resolveModelCacheProviderId,
 	resolveOllamaModelCacheProviderId,
 } from "@musepi/pi-catalog/provider-models";
+import { fetchWellKnownModels as fetchWellKnownModelsFromCatalog } from "@musepi/pi-catalog/provider-models/openai-compat";
 import { collapseBuiltModelVariants } from "@musepi/pi-catalog/variant-collapse";
 import { getAgentDir, isBunTestRuntime, logger, wrapFetchForExtraCa } from "@musepi/pi-utils";
 import { resolveProviderModelReference } from "../config/model-resolver";
@@ -188,6 +189,7 @@ export class ModelRegistry {
 	#suppressedSelectors: Map<string, number> = new Map();
 	#backgroundRefresh?: Promise<void>;
 	#policyReapply?: Promise<void>;
+	#modelsDevPrimed = false;
 	#lastDiscoveryWarnings: Map<string, string> = new Map();
 	// Runtime extension model overlays — persist across refresh() cycles so that
 	// models registered by extensions survive the model selector's offline reload.
@@ -282,7 +284,22 @@ export class ModelRegistry {
 	async refresh(strategy: ModelRefreshStrategy = "online-if-uncached"): Promise<void> {
 		this.#reloadStaticModels();
 		this.#suppressedSelectors.clear();
+		// Warm the models.dev catalog once per process (best-effort, offline-safe):
+		// custom models.yml entries inherit contextWindow/input from it when the id
+		// is absent from the bundled models.json (gateway-first ids like
+		// deepseek-v4-flash-vision-exp). Known dynamic providers fetch it during
+		// discovery anyway; this guarantees the sync `getCachedModelsDevPayload`
+		// fallback sees a populated index before the GUI lists custom models.
+		this.#primeModelsDevCatalog().catch(() => {});
 		await this.#refreshRuntimeDiscoveries(strategy);
+	}
+
+	/** Fire once: fetch models.dev (stencil.so) into the process catalog cache. */
+	async #primeModelsDevCatalog(): Promise<void> {
+		if (!this.#modelsDevPrimed) {
+			this.#modelsDevPrimed = true;
+			await fetchWellKnownModelsFromCatalog();
+		}
 	}
 
 	/**
@@ -2271,7 +2288,7 @@ export interface ProviderConfigInput {
 		baseUrl?: string;
 		reasoning: boolean;
 		thinking?: ThinkingConfig;
-		input: ("text" | "image")[];
+		input: ("text" | "image" | "video")[];
 		supportsTools?: boolean;
 		cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
 		contextWindow: number;

@@ -31,6 +31,7 @@ import {
 	validateAnthropicCompatibleApiKey,
 	validateOpenAICompatibleApiKey,
 } from "@musepi/pi-ai/registry/api-key-validation";
+import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
@@ -3531,18 +3532,19 @@ export class DaemonServer {
 				return changelog ? { markdown: changelog.markdown, latestVersion: changelog.latestVersion } : null;
 			}
 			case "updates.check": {
-				// Version manifest probe (Electron updater.cjs parity — same
-				// raw.githubusercontent manifest the GUI OTA checks). Respects
-				// startup.checkUpdate; network failure or up-to-date resolve
-				// to null so the GUI never nags.
+				// Version probe (Electron updater.cjs parity — the same
+				// update-manifest.json asset on the latest GitHub release,
+				// resolved via the /releases/latest/download redirect).
+				// Respects startup.checkUpdate; network failure or
+				// up-to-date resolve to null so the GUI never nags.
 				const settings = await this.#settingsForRpc();
 				if (!settings.get("startup.checkUpdate")) {
 					return { latest: null };
 				}
 				try {
 					const res = await fetch(
-						"https://raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json",
-						{ signal: AbortSignal.timeout(5_000) },
+						"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
+						{ signal: AbortSignal.timeout(8_000) },
 					);
 					if (!res.ok) return { latest: null };
 					const data = (await res.json()) as { version?: unknown };
@@ -8374,13 +8376,26 @@ export class DaemonServer {
 				// Append an OpenAI-compatible custom provider to models.yml
 				// (the same config the TUI `/login` + custom-model docs target),
 				// then reload the registry so the model is selectable at once.
+				//
+				// Editing an existing provider reuses this RPC: models.yml rows
+				// are merged by provider name, so passing the same name with
+				// updated per-model capability fields (input/contextWindow/
+				// maxTokens) rewrites those rows in place. The GUI edit dialog
+				// round-trips models.listCustom → form → models.add.
 				const p = (params ?? {}) as {
 					provider: {
 						name: string;
 						baseUrl?: string;
 						apiKey?: string;
 						api?: string;
-						models: { id: string; name?: string; compactionModel?: string }[];
+						models: {
+							id: string;
+							name?: string;
+							compactionModel?: string;
+							input?: string[] | null;
+							contextWindow?: number | null;
+							maxTokens?: number | null;
+						}[];
 					};
 				};
 				const registry = await this.#host.ensureRegistry();
@@ -8404,19 +8419,28 @@ export class DaemonServer {
 				if (p.provider.apiKey) entry.apiKey = p.provider.apiKey;
 				const api = p.provider.api ?? "openai-completions";
 				entry.api = api;
-				const existing = Array.isArray(entry.models) ? (entry.models as { id: string }[]) : [];
-				const ids = new Set(existing.map(m => m.id));
+				// Merge model rows by id: new ids are appended, existing ids get
+				// their editable capability fields (input/contextWindow/maxTokens)
+				// and name overwritten from the payload. An explicit `null`
+				// capability removes the override (restore-to-auto: the model
+				// falls back to bundled / models.dev / id-inferred capabilities);
+				// an absent field keeps the stored value, so a zoom-level-only
+				// edit does not blank other fields.
+				const existing = Array.isArray(entry.models) ? (entry.models as Record<string, unknown>[]) : [];
+				const byId = new Map(existing.map(m => [m.id as string, m]));
 				for (const m of p.provider.models) {
-					if (!ids.has(m.id)) {
-						existing.push({
-							id: m.id,
-							...(m.name ? { name: m.name } : {}),
-							...(m.compactionModel ? { compactionModel: m.compactionModel } : {}),
-						});
-						ids.add(m.id);
-					}
+					const row: Record<string, unknown> = { ...(byId.get(m.id) ?? {}), id: m.id };
+					if (m.name) row.name = m.name;
+					if (m.compactionModel) row.compactionModel = m.compactionModel;
+					if (m.input === null) delete row.input;
+					else if (Array.isArray(m.input) && m.input.length > 0) row.input = m.input;
+					if (m.contextWindow === null) delete row.contextWindow;
+					else if (m.contextWindow !== undefined && m.contextWindow !== null) row.contextWindow = m.contextWindow;
+					if (m.maxTokens === null) delete row.maxTokens;
+					else if (m.maxTokens !== undefined && m.maxTokens !== null) row.maxTokens = m.maxTokens;
+					byId.set(m.id, row);
 				}
-				entry.models = existing;
+				entry.models = [...byId.values()];
 				providers[p.provider.name] = entry;
 				fs.mkdirSync(path.dirname(filePath), { recursive: true });
 				fs.writeFileSync(filePath, YAML.stringify({ providers }, null, 2));
@@ -8721,9 +8745,14 @@ function modelDetailRow(model: {
 	costInput: number;
 	costOutput: number;
 	reasoning: boolean;
+	text: boolean;
 	vision: boolean;
+	video: boolean;
+	imageGen: boolean;
+	videoGen: boolean;
 	efforts: string[];
 } {
+	const capabilities = resolveModelCapabilities(model.id, model.input);
 	return {
 		id: model.id,
 		name: model.name ?? model.id,
@@ -8733,7 +8762,11 @@ function modelDetailRow(model: {
 		costInput: model.cost?.input ?? 0,
 		costOutput: model.cost?.output ?? 0,
 		reasoning: model.reasoning === true,
-		vision: Array.isArray(model.input) ? model.input.includes("image") : false,
+		text: capabilities.text,
+		vision: capabilities.image,
+		video: capabilities.video,
+		imageGen: capabilities.imageGen,
+		videoGen: capabilities.videoGen,
 		efforts: getSupportedEfforts(model as never).map(e => String(e)),
 	};
 }

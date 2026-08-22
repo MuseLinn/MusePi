@@ -182,7 +182,7 @@ export interface ModelPatch {
 	name?: string;
 	reasoning?: boolean;
 	thinking?: ThinkingConfig;
-	input?: ("text" | "image")[];
+	input?: ("text" | "image" | "video")[];
 	imageInputDecoder?: Model<Api>["imageInputDecoder"];
 	supportsTools?: boolean;
 	cost?: Partial<Model<Api>["cost"]>;
