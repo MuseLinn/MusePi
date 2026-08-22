@@ -2146,17 +2146,33 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Model roles (TUI /model roles-panel parity) ──
- * One card per role: a head line (tag + cycle badge + resolved model) and
- * a full-width actions row (thinking / fallback / cycle / picker). Cards
- * wrap gracefully at any pane width — no more cramped single-line rows. */
+ * Two-per-row responsive card grid (gui-provider-grid material parity:
+ * auto-fill columns, 10px gap, surface background). Each card holds a head
+ * line (tag + cycle badge + scope toggle + resolved model) and a full-width
+ * actions row that wraps right-aligned at narrow widths. */
+.gui-role-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+	gap: 10px;
+}
+
 .gui-role-card {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	padding: 10px 12px;
+	min-width: 0;
+	padding: 12px;
 	border: 1px solid var(--border);
 	border-radius: 12px;
-	background: color-mix(in oklab, var(--color-bg) 40%, transparent);
+	background: var(--color-surface);
+	transition:
+		border-color 120ms ease,
+		background-color 120ms ease;
+}
+
+.gui-role-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	background: color-mix(in oklab, var(--color-surface) 96%, var(--color-accent));
 }
 
 .gui-role-card-head {
@@ -2168,11 +2184,11 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* The actions row (thinking level, fallback/cycle toggles, model picker,
- * clear/remove): wraps right-aligned when the pane is narrow — each control
+ * clear/remove): wraps right-aligned when the card is narrow — each control
  * keeps its own footprint instead of the whole cluster dropping below. */
 .gui-role-card > .gui-role-actions {
 	flex-wrap: wrap;
-	justify-content: flex-end;
+	justify-content: flex-start;
 	min-width: 0;
 }
 

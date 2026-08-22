@@ -1154,9 +1154,11 @@ export function ModelSection({
 												<div className="text-[13px] text-[var(--color-text-faint)]">{t("loading")}…</div>
 											) : (
 												<>
-													{rolesOrder.map(role =>
-														renderRoleRow(role, BUILTIN_ROLE_TAGS[role] === undefined),
-													)}
+													<div className="gui-role-grid">
+														{rolesOrder.map(role =>
+															renderRoleRow(role, BUILTIN_ROLE_TAGS[role] === undefined),
+														)}
+													</div>
 													<button
 														type="button"
 														className="gui-connect-add"
