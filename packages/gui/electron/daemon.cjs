@@ -111,6 +111,10 @@ async function start(port, env = {}) {
 	const child = spawn(program, args, {
 		detached: true,
 		stdio: "ignore",
+		// Windows: without this the spawned daemon opens a visible console
+		// window every GUI launch (same fix proma/opencode/kimi apply to
+		// every child spawn from Electron main).
+		windowsHide: true,
 		// Brand the spawned daemon with the GUI's own version: the daemon
 		// runs from src/cli.ts (not musepi.ts), so without this system.meta
 		// reports the OMP engine version as the MusePi version.

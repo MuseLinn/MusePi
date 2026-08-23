@@ -2186,7 +2186,7 @@ function hapticProcess() {
 	if (hapticProc && hapticProc.exitCode === null) return hapticProc;
 	const helper = resolveHapticHelper();
 	if (!helper) return null;
-	const proc = spawn(helper, [], { stdio: ["pipe", "ignore", "ignore"] });
+	const proc = spawn(helper, [], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
 	proc.on("error", () => {
 		hapticProc = null;
 	});
@@ -2257,6 +2257,7 @@ function getHlWorker() {
 	if (hlWorker) return hlWorker;
 	hlWorker = fork(path.join(__dirname, "highlight-worker.cjs"), [], {
 		stdio: ["ignore", "inherit", "inherit", "ipc"],
+		windowsHide: true,
 	});
 	hlWorker.on("message", msg => {
 		if (!msg || typeof msg.id !== "number") return;

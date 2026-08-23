@@ -59,9 +59,25 @@ function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<voi
 	return next;
 }
 
+/**
+ * Rename error codes worth retrying. On Windows, renaming over a file held
+ * open by another handle (or transiently scanned by AV/Defender) fails with
+ * EPERM/EACCES/EBUSY; on POSIX those codes are real permission errors and
+ * only EBUSY is transient. Mirrors proma's fs-retry platform split.
+ */
+const RETRYABLE_RENAME_CODES = new Set(
+	process.platform === "win32" ? ["EPERM", "EACCES", "EBUSY"] : ["EBUSY"],
+);
+
 export class AppendJournal {
 	readonly filePath: string;
 	#fd: fs.promises.FileHandle | null = null;
+	/** Resolves to the current append fd once open (re-resolved after a
+	 *  rewrite's close→rename→reopen). Appends chain on this so a write
+	 *  landing in the rewrite window is queued, not silently dropped. */
+	#fdReady: Promise<fs.promises.FileHandle | null> = Promise.resolve(null);
+	/** Resolver for the in-flight #replaceFile reopen (null when idle). */
+	#reopenReady: ((fd: fs.promises.FileHandle | null) => void) | null = null;
 	#seq = 0;
 
 	constructor(dir: string, sessionId: string) {
@@ -71,6 +87,7 @@ export class AppendJournal {
 	async open(): Promise<void> {
 		await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
 		this.#fd = await fs.promises.open(this.filePath, "a");
+		this.#fdReady = Promise.resolve(this.#fd);
 	}
 
 	/** Append a wire event; returns its journal seq. Shrinks payloads so a
@@ -83,9 +100,11 @@ export class AppendJournal {
 			this.#writtenBytes += line.length;
 			// Writes are queued on a chain: fire-and-forget at the call site,
 			// but every reader (readAll/compact/close) flushes first so a
-			// high-frequency event burst can never lose its tail.
+			// high-frequency event burst can never lose its tail. The chain
+			// awaits #fdReady so an append landing during a rewrite's
+			// close→rename→reopen window is written to the reopened fd.
 			const prev = this.#pendingWrite ?? Promise.resolve();
-			this.#pendingWrite = prev.then(() => this.#fd!.write(line)).then(() => {});
+			this.#pendingWrite = prev.then(() => this.#fdReady).then(fd => fd?.write(line)).then(() => {});
 		}
 		return seq;
 	}
@@ -164,7 +183,7 @@ export class AppendJournal {
 				keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
 				"utf8",
 			);
-			await fs.promises.rename(tmpJournal, this.filePath);
+			await this.#replaceFile(tmpJournal);
 			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
 		});
 	}
@@ -191,7 +210,7 @@ export class AppendJournal {
 			await fs.promises.rename(tmpCkpt, this.checkpointPath());
 			const tmpJournal = `${this.filePath}.tmp`;
 			await fs.promises.writeFile(tmpJournal, "", "utf8");
-			await fs.promises.rename(tmpJournal, this.filePath);
+			await this.#replaceFile(tmpJournal);
 			this.#writtenBytes = 0;
 		});
 	}
@@ -215,7 +234,7 @@ export class AppendJournal {
 				keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
 				"utf8",
 			);
-			await fs.promises.rename(tmpJournal, this.filePath);
+			await this.#replaceFile(tmpJournal);
 			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
 			try {
 				await fs.promises.unlink(this.checkpointPath());
@@ -223,6 +242,51 @@ export class AppendJournal {
 				// no checkpoint — nothing to drop
 			}
 		});
+	}
+
+	/**
+	 * Windows-safe atomic journal replacement: close the append fd, rename
+	 * the temp file over the journal (bounded retry for transient locks),
+	 * reopen. POSIX allows rename-over-open but leaves the old fd pointing
+	 * at the unlinked inode — later appends would silently vanish; Windows
+	 * rejects the rename outright with EPERM while the fd holds the target.
+	 * Both platforms need the same close→rename→reopen sequence.
+	 */
+	async #replaceFile(tmpPath: string): Promise<void> {
+		await this.flush();
+		if (this.#fd !== null) {
+			await this.#fd.close();
+			this.#fd = null;
+		}
+		this.#fdReady = new Promise(resolve => {
+			// resolve when reopened below; a same-tick append waits for it
+			this.#reopenReady = resolve;
+		});
+		let lastErr: unknown;
+		try {
+			for (let attempt = 1; ; attempt++) {
+				try {
+					await fs.promises.rename(tmpPath, this.filePath);
+					return;
+				} catch (err) {
+					lastErr = err;
+					const code = (err as NodeJS.ErrnoException)?.code;
+					if (!code || !RETRYABLE_RENAME_CODES.has(code) || attempt >= 4) throw err;
+					await new Promise(r => setTimeout(r, 50 * 2 ** (attempt - 1)));
+				}
+			}
+		} finally {
+			// Reopen regardless of rename outcome so the journal stays
+			// appendable; failure keeps fd null (append skips, as pre-open).
+			try {
+				this.#fd = await fs.promises.open(this.filePath, "a");
+			} catch {
+				this.#fd = null;
+			}
+			this.#reopenReady?.(this.#fd);
+			this.#reopenReady = null;
+			this.#fdReady = Promise.resolve(this.#fd);
+		}
 	}
 
 	/** Replay source: checkpoint + journal increments. Returns the checkpoint

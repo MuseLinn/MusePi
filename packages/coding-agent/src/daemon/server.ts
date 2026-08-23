@@ -1745,9 +1745,23 @@ export class DaemonSessionHost {
 			eventsSinceCompactionCheck += 1;
 			if (eventsSinceCompactionCheck >= 200 && live.journal) {
 				eventsSinceCompactionCheck = 0;
-				void live.journal.shouldCompact().then(needed => {
-					if (needed && live.journal) void live.journal.compact(live.view.cursor, live.view.snapshot());
-				});
+				void live.journal
+					.shouldCompact()
+					.then(needed => {
+						if (needed && live.journal)
+							return live.journal.compact(live.view.cursor, live.view.snapshot());
+					})
+					.catch(err => {
+						// A failed compaction (e.g. transient Windows EPERM on
+						// journal replace) must never bubble into the process
+						// unhandledRejection postmortem — that kills the daemon
+						// and drops every live session. Log and move on; the
+						// next 200-event check retries.
+						logger.error("journal compaction failed", {
+							sessionId: live.sessionId,
+							error: err instanceof Error ? err.message : String(err),
+						});
+					});
 			}
 			for (const send of live.subscribers.values()) {
 				try {

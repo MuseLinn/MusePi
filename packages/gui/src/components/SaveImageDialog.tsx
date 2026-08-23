@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { DialogFrame } from "./DialogFrame";
 import { Icon } from "../vendor/oc-icons";
+import { dataUrlToBlob } from "../lib/image-resize";
 
 /**
  * 保存为图片 export dialog: a LIVE preview of the message card with three

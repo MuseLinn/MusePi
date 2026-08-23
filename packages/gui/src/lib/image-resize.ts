@@ -34,6 +34,21 @@ const dataUrlByteLength = (d: string): number => {
 };
 
 /**
+ * Decode a data URL to a Blob without fetch(). fetch(dataUrl) is blocked by
+ * the app CSP (connect-src has no data:) and adds a full network-stack
+ * round-trip; base64 decode is direct and CSP-immune.
+ */
+export function dataUrlToBlob(dataUrl: string): Blob {
+	const comma = dataUrl.indexOf(",");
+	if (comma === -1) throw new Error("Not a data URL");
+	const mime = dataUrl.slice(5, comma).split(";")[0] || "application/octet-stream";
+	const bin = atob(dataUrl.slice(comma + 1));
+	const bytes = new Uint8Array(bin.length);
+	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+	return new Blob([bytes], { type: mime });
+}
+
+/**
  * Resolve `images.autoResize` from the daemon (defaults true, matching
  * the schema default). A settings.get failure keeps the default — the
  * daemon's own normalize pass would still cap sizes on arrival.
@@ -84,7 +99,7 @@ export async function resizeImageDataUrl(
 ): Promise<{ dataUrl: string; mimeType: string } | null> {
 	let bitmap: ImageBitmap | null = null;
 	try {
-		const blob = await (await fetch(dataUrl)).blob();
+		const blob = dataUrlToBlob(dataUrl);
 		bitmap = await createImageBitmap(blob);
 		const { width, height } = bitmap;
 		const originalBytes = dataUrlByteLength(dataUrl);

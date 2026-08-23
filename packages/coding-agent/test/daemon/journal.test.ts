@@ -126,4 +126,37 @@ describe("AppendJournal", () => {
 		const remaining = await j.readAll();
 		expect(remaining.map(r => r.seq)).toEqual([8, 9, 10]);
 	});
+
+	test("compact while the append fd is open replaces the file and keeps appending", async () => {
+		// Regression: compact() renames over the journal while the append fd
+		// is held open. On Windows that rename fails with EPERM (the target
+		// is locked by the fd) — on POSIX it succeeds but leaves the fd
+		// pointing at the unlinked inode, silently losing later appends.
+		// #replaceFile closes → renames (bounded retry) → reopens, and
+		// appends landing in the window are queued on #fdReady, not dropped.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		// hold the fd open across compact (the daemon's live-session shape)
+		for (let i = 0; i < 5; i++) j.append(event("thinking_level_changed", i));
+		await j.compact(2, { v: 1 });
+		// appends after compact must reach the REPLACED journal file
+		for (let i = 5; i < 8; i++) j.append(event("thinking_level_changed", i));
+		await j.flush();
+		const remaining = await j.readAll();
+		expect(remaining.map(r => r.seq)).toEqual([3, 4, 5, 6, 7, 8]);
+		await j.close();
+		// a fresh instance sees the same tail (nothing lost to a stale fd)
+		const j2 = new AppendJournal(dir, "s1");
+		const { checkpoint, events } = await j2.replaySource();
+		expect(checkpoint!.seq).toBe(2);
+		expect(
+			events.map(e => {
+				if (e && typeof e === "object" && "thinkingLevel" in e && typeof e.thinkingLevel === "string") {
+					return e.thinkingLevel;
+				}
+				return "";
+			}),
+		).toEqual(["lvl-2", "lvl-3", "lvl-4", "lvl-5", "lvl-6", "lvl-7"]);
+	});
 });
