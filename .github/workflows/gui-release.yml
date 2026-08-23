@@ -128,12 +128,10 @@ jobs:
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               const sections = changelog.split(/^## \[/m).slice(1);
               const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
-              const body = `# MusePi ${pkg.version}
-
-**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)
-
-${notes}
-`;
+              const body =
+                `# MusePi ${pkg.version}\n\n` +
+                `**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)\n\n` +
+                notes;
               fs.writeFileSync("dist/RELEASE_NOTES.md", body);
               console.log("release notes written");
               EOF

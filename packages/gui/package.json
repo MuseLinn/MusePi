@@ -93,7 +93,9 @@
 			"category": "public.app-category.developer-tools",
 			"identity": "-",
 			"hardenedRuntime": true,
-			"gatekeeperAssess": false
+			"gatekeeperAssess": false,
+			"entitlements": "build/entitlements.mac.plist",
+			"entitlementsInherit": "build/entitlements.mac.plist"
 		},
 		"dmg": {
 			"title": "MusePi-${version}",
