@@ -112,11 +112,19 @@ async function installBinary(src: string, dest: string): Promise<void> {
 		try {
 			await fs.unlink(dest);
 		} catch (unlinkErr) {
-			if ((unlinkErr as NodeJS.ErrnoException).code !== "ENOENT") {
+			if ((unlinkErr as NodeJS.ErrnoException).code === "ENOENT") {
+				// target doesn't exist yet — rename will work below
+			} else if (process.platform === "win32" && (unlinkErr as NodeJS.ErrnoException).code === "EPERM") {
+				// Target is loaded (e.g. this session itself uses pi_natives).
+				// Windows cannot unlink a loaded DLL. Keep the old file — the
+				// new build is in tempPath and will be picked up on next
+				// process restart (or overwritten by the next build).
+				console.warn(`[natives] ${path.basename(dest)} is in use; keeping old version (new build in ${path.basename(tempPath)})`);
+				return;
+			} else {
 				await fs.unlink(tempPath).catch(() => {});
-				const isWindows = process.platform === "win32";
 				throw new Error(
-					`Cannot replace ${path.basename(dest)}${isWindows ? " (file may be in use - close any running processes)" : ""}: ${(unlinkErr as Error).message}`,
+					`Cannot replace ${path.basename(dest)}: ${(unlinkErr as Error).message}`,
 				);
 			}
 		}
