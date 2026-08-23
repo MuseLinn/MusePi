@@ -105,9 +105,11 @@ jobs:
               const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
               const tag = process.env.GITHUB_REF_NAME || `v${pkg.version}`;
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
-              // Take the latest ## [x.y.z] section (the one after the header)
+              // Take the LATEST ## [x.y.z] section (the one after the header is
+              // the oldest; sections split from "## [" puts newest LAST when the
+              // file lists oldest-first)
               const sections = changelog.split(/^## \[/m).slice(1);
-              const notes = sections.length ? `## [${sections[0]}`.trim() : "";
+              const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
               const manifest = {
                 version: pkg.version,
                 url: `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.dmg`,
