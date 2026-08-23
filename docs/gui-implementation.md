@@ -91,15 +91,9 @@ daemon RPC:
 
 ## 4. 会话设置与清理(算法)
 
-<<<<<<< HEAD
 - **会话默认值组** = 默认模型(`ModelSelector` 无 sessionId → `models.listAvailable`,写 `musepi-gui-default-model`——WelcomeComposer 读同 key)+ 默认思考等级(segmented,`musepi-gui-default-thinking`)+ 自动标题(`musepi-gui-autotitle`)+ 显示删除对话框(`musepi-gui-confirm-delete`)。
+- **胶囊合并纯 UI**(ModelThinkingCapsule):composer/欢迎页两选择器合成一胶囊按钮——左段模型(品牌图标 + 名)、右段思考(brain + 等级),点击各自弹**原菜单**(搜索/收藏/图钉 / 等级 ladder)。**零新 RPC**:复用 `models.list(available)` / `session.setModel` / `settings.get(modelRoles)` / `getSupportedEfforts` 原链路,胶囊只重组触发按钮 + 容器查询收缩(`@container` 基于 `.gui-composer-frame` inline-size,文字 180ms 淡出为仅图标,`gui-motion-off` 瞬切);锚点仍走 `useFloatingMenu`(两阶段 + 模块级互斥,一次只开一个菜单)。
 - **会话保留组** = 启用自动清理(`musepi-gui-autoclean`)+ 保留时长 stepper 1-365 天(`musepi-gui-autoclean-days`,默认 30,关闭时行 `gui-settings-row--disabled` 降透明+pointer-events:none)+ 过期动作归档/删除(`musepi-gui-autoclean-action`)+ 手动清理(`gui-btn` + 「当前可清理:{0}」)。
-=======
-- **会话默认值组** = 默认模型(`ModelSelector` 无 sessionId → `models.listAvailable`,写 `omp-gui-default-model`——WelcomeComposer 读同 key)+ 默认思考等级(segmented,`omp-gui-default-thinking`)+ 自动标题(`omp-gui-autotitle`)+ 显示删除对话框(`omp-gui-confirm-delete`)。
-- **胶囊合并纯 UI**(ModelThinkingCapsule):composer/欢迎页两选择器合成一胶囊按钮——左段模型(ai-agent + 名)、右段思考(brain + 等级),点击各自弹**原菜单**(搜索/收藏/图钉 / 等级 ladder)。**零新 RPC**:复用 `models.list(available)` / `session.setModel` / `settings.get(modelRoles)` / `getSupportedEfforts` 原链路,胶囊只重组触发按钮 + 容器查询收缩(`@container` 基于 `.gui-composer-frame` inline-size,文字 180ms 淡出为仅图标,`gui-motion-off` 瞬切);锚点仍走 `useFloatingMenu`(两阶段 + 模块级互斥,一次只开一个菜单)。
-- **会话保留组** = 启用自动清理(`omp-gui-autoclean`)+ 保留时长 stepper 1-365 天(`omp-gui-autoclean-days`,默认 30,关闭时行 `gui-settings-row--disabled` 降透明+pointer-events:none)+ 过期动作归档/删除(`omp-gui-autoclean-action`)+ 手动清理(`gui-btn` + 「当前可清理:{0}」)。
->>>>>>> 44ab4c3282 (feat(gui): model/thinking capsule 合并选择器为单胶囊)
-- **候选算法**(openchamber parity):`session.list` 按 timestamp 排序,**排除当前会话 + 最近 5 个活跃**后,`updated < now - N天` 者为候选;执行后已处理 id 进本地 `cleanedRef`(会话内不再提示)。自动模式每小时检查一次、24h 冷却(`lastRunRef`)。
 - **动作语义**:归档 = `session.close`(live 会话转 daemon 快照;**SDK 文件会话 close 报错被吞**——daemon 刻意不碰 workspace 文件);删除 = `session.delete`(**2026-08-11 起永久删除**:journal 文件 + materialized.db 物化行 + SDK transcript 主文件(`<sessionsDir>/<project>/<timestamp>_<sid>.jsonl`)+ 同名 artifacts 目录——修复前只删 journal/db 行,jsonl 残留导致 `listAllSessions()` 文件扫描重新列出、历史列表"复活"已删会话)。**已知语义**:`knownSessions` 的 `listAllSessions()` 有 10s TTL 缓存(`#historyCache`)——删除后列表最多延迟 10s 刷新;`session.list` 也可能显示"已删但缓存未过期"的会话,非 bug。**实现坑**:删除 transcript 用 `Bun.Glob.scanSync()` 返回**相对路径**,必须 `path.join(sessionsRoot, f)` 再 unlink/rm——裸相对路径按 daemon cwd 解析 → ENOENT 抛错中断循环。
 - **删除确认统一在 `deleteSession`**(`useConfirm()` 弹窗,Escape/backdrop/取消/确定都可关;GuiHeader 与 SessionSidebar 不再自弹——避免双弹;开关关=直删)。
 

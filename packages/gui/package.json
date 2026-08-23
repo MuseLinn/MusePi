@@ -123,5 +123,8 @@
 			"maintainer": "MusePi",
 			"artifactName": "${productName}-${version}-${arch}.${ext}"
 		}
+	},
+	"dependencies": {
+		"@lobehub/icons": "^5.16.0"
 	}
 }

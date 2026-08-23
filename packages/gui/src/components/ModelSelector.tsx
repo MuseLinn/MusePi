@@ -103,7 +103,6 @@ export function ModelSelector({
 	maxLabelWidth = "150px",
 	allowSetDefault = false,
 	currentModelId = null,
-	capsule = false,
 }: {
 	rpc: RpcClient;
 	sessionId: string | null;
@@ -123,10 +122,6 @@ export function ModelSelector({
 	 *  re-entering the session instead of the selector snapping to the
 	 *  list head (or to another session's stale preselect). */
 	currentModelId?: string | null;
-	/** Capsule mode (ModelThinkingCapsule): the trigger renders as a
-	 *  transparent segment inside the shared pill — no own pill surface,
-	 *  no chevron; the menu itself is unchanged. */
-	capsule?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [models, setModels] = useState<WireModel[]>([]);
@@ -331,26 +326,25 @@ export function ModelSelector({
 	};
 
 	return (
-		<div className={capsule ? "gui-model-capsule-seg" : "gui-model"} ref={capsule ? undefined : anchorRef}>
+		<div className="gui-model" ref={anchorRef}>
 			<button
 				type="button"
-				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
+				className="gui-model-btn"
 				onClick={() => setOpen(v => !v)}
-				ref={capsule ? anchorRef : undefined}
 				title={current ? `${current.provider}/${current.id} · ${current.name}` : t("model")}
 				aria-label={t("select model")}
 			>
-				<Icon name="ai-agent" className="h-3.5 w-3.5" />
-<<<<<<< HEAD
-				<span className="truncate" style={{ maxWidth: maxLabelWidth }}>
+				{current ? (
+					<ModelBrandIcon provider={current.provider} modelId={current.id} size={14} />
+				) : (
+					<Icon name="ai-agent" className="h-3.5 w-3.5" />
+				)}
+				<span className="gui-model-capsule-seg-text truncate" style={{ maxLabelWidth }}>
 					{label}
 				</span>
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-=======
-				<span className="gui-model-capsule-seg-text truncate" style={{ maxWidth: maxLabelWidth }}>
-					{label}
 				</span>
->>>>>>> 44ab4c3282 (feat(gui): model/thinking capsule 合并选择器为单胶囊)
+				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			{renderMenu(
 				<div className="gui-model-menu">
@@ -369,7 +363,6 @@ export function ModelSelector({
 						{sorted.map(m => {
 							const favKey = favKeyOf(m);
 							const fav = favs.includes(favKey) || favs.includes(m.id);
-<<<<<<< HEAD
 							const isDefault = `${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
 							const genModel = isGenerationModel(m);
 							const capTitle = [
@@ -389,15 +382,12 @@ export function ModelSelector({
 									? t("image generation model — use the generate_image tool")
 									: t("video generation model — use the video generation tool")
 								: undefined;
-=======
->>>>>>> 44ab4c3282 (feat(gui): model/thinking capsule 合并选择器为单胶囊)
 							return (
 								// Row is a div (role=button) so the favorite star can be a
 								// real <button> inside it — nested buttons are invalid HTML.
 								<div
 									key={`${m.provider}/${m.id}`}
 									role="button"
-<<<<<<< HEAD
 									tabIndex={genModel ? -1 : 0}
 									aria-disabled={genModel || undefined}
 									title={genNote}
@@ -460,66 +450,6 @@ export function ModelSelector({
 											<span className="gui-model-ctx">{formatContextWindow(m.contextWindow)}</span>
 										)}
 									</span>
-=======
-									tabIndex={0}
-									className={`gui-model-opt${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
-									onClick={() => select(m.id)}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											select(m.id);
-										}
-									}}
-								>
-									<span className="flex min-w-0 flex-1 items-center gap-2">
-										<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
-										<span className="gui-provider-chip">{m.provider}</span>
-									</span>
-									<button
-										type="button"
-										className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
-										title={fav ? t("unfavorite model") : t("favorite model")}
-										aria-label={fav ? t("unfavorite model") : t("favorite model")}
-										onClick={e => {
-											e.stopPropagation();
-											toggleFavModel(m.id, m.provider);
-										}}
-									>
-										<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
-									</button>
-									{allowSetDefault && (
-										<button
-											type="button"
-											className={`gui-model-fav${`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel ? " gui-model-fav--on" : ""}`}
-											title={
-												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-													? t("default model")
-													: t("set as default model")
-											}
-											aria-label={
-												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-													? t("default model")
-													: t("set as default model")
-											}
-											onClick={e => {
-												e.stopPropagation();
-												setAsDefault(m.id, m.provider);
-											}}
-										>
-											<Icon
-												name={
-													`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel
-														? "target-fill"
-														: "target"
-												}
-												className="h-3.5 w-3.5"
-											/>
-										</button>
-									)}
-									{`${m.provider}/${m.id}` === modelId && (
-										<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
-									)}
->>>>>>> 44ab4c3282 (feat(gui): model/thinking capsule 合并选择器为单胶囊)
 								</div>
 							);
 						})}

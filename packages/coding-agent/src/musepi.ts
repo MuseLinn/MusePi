@@ -2,9 +2,9 @@
 // MusePi CLI entry point
 // Sets version before delegating to the CLI.
 
-// Override version display
-process.env.MUSEPI_VERSION = "0.4.3";
+import pkg from "../package.json" with { type: "json" };
 
-// Import and run the CLI
+process.env.MUSEPI_VERSION = pkg.version;
+
 const { runCli } = await import("./cli.ts");
-await runCli(process.argv.slice(2));
+await runCli(process.argv.slice(1));

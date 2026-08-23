@@ -5173,6 +5173,12 @@ export class DaemonServer {
 				// conversation works (the GUI opens them snapshot-only via
 				// session.resume; activation makes them live again).
 				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId));
+				// Idle-closed sessions lose their subscribers when the daemon
+				// drops the live entry. Re-subscribe this connection before the
+				// agent turn starts so the resulting events reach the GUI; a
+				// reactivated session has no in-flight events, so there is no
+				// catch-up gap to fill here.
+				await this.#host.subscribe(p.sessionId, conn);
 				// "prompt" (default) = plain sendUserMessage; steer/followUp
 				// map to the AgentSession delivery semantics.
 				const options = p.deliverAs && p.deliverAs !== "prompt" ? { deliverAs: p.deliverAs } : undefined;

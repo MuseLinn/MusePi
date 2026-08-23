@@ -38,6 +38,19 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 
 **Catalog import convention**: code in this repo imports catalog _values_ (bundled models, model-thinking helpers, identity, descriptors, model manager/cache) from `@musepi/pi-catalog/<module>` — never via `@musepi/pi-ai`. The pi-ai barrel re-exports only the model/effort _types_ its own signatures use (`Model`, `Api`, `ThinkingConfig`, `Effort`, …); type-only imports of those from `@musepi/pi-ai` are fine.
 
+## Package READMEs
+
+Every package directory under `packages/` must contain a `README.md`.  New
+packages (and any updated README) must be bilingual:
+
+- `README.md` — English
+- `README.zh-CN.md` — Chinese
+
+Existing single-language READMEs are grandfathered in the debt register inside
+`scripts/verify-package-readmes.ts`; the gate runs as part of `bun run check`
+(`check:tools`).  When you translate a grandfathered README, remove its name
+from the script's `GRANDFATHERED` set.
+
 ## GitHub
 
 Unless user tells you exactly what to write:

@@ -190,14 +190,10 @@
 
 ### 模型选择器(provider 复合键)
 
-<<<<<<< HEAD
 - **模型身份 = `provider/id`**,绝不是裸 id——两个供应商可提供同裸 id(opencode-go / opencode-zen 都出 `deepseek-v4-flash`):收藏(`musepi-gui-fav-models`)、DEFAULT 图钉(`modelRoles.default`)、选中态、角色行赋值全部按 `provider/id` 键控(旧裸 id 条目兼容匹配、toggle 时清理);`session.setModel` 携带 `provider` 让 daemon 精确解析(daemon 侧 provider 限定查找已加)。
 - **composer/欢迎页**模型菜单行 = 模型名 + provider 徽标 + 收藏星 + **DEFAULT 图钉**(target 图标,当前默认实心)——点图钉即写 `modelRoles.default`(设置页 DEFAULT 角色同键,两边一致);菜单 min-width 260 / max-width 344。
-=======
-- **模型身份 = `provider/id`**,绝不是裸 id——两个供应商可提供同裸 id(opencode-go / opencode-zen 都出 `deepseek-v4-flash`):收藏(`omp-gui-fav-models`)、DEFAULT 图钉(`modelRoles.default`)、选中态、角色行赋值全部按 `provider/id` 键控(旧裸 id 条目兼容匹配、toggle 时清理);`session.setModel` 携带 `provider` 让 daemon 精确解析(daemon 侧 provider 限定查找已加)。
-- **composer/欢迎页模型菜单行** = 模型名 + provider 徽标 + 收藏星 + **DEFAULT 图钉**(target 图标,当前默认实心)——点图钉即写 `modelRoles.default`(设置页 DEFAULT 角色同键,两边一致);菜单 min-width 260 / max-width 344。
-- **单胶囊合并(dsh single-trigger parity)**:两个选择器合并为一个胶囊(`ModelThinkingCapsule`),左段显示模型图标(ai-agent)+ 模型名,右段显示思考图标(brain)+ 等级文本;点击各自弹独立菜单(模型搜索/收藏/图钉菜单 + 思考等级 ladder)。胶囊在 composer frame 宽度不足时自动收缩为仅图标(文字通过 `@container` 查询 + `--gui-motion-chip` 180ms 过渡淡出,`gui-motion-off` 直接切换)。胶囊段之间细竖线分隔,每段 hover 用 `--spring` 150ms 过渡高亮。
->>>>>>> 44ab4c3282 (feat(gui): model/thinking capsule 合并选择器为单胶囊)
+- **单胶囊合并(dsh single-trigger parity)**:两个选择器合并为一个胶囊(`ModelThinkingCapsule`),左段显示模型品牌图标 + 模型名,右段显示思考图标(brain)+ 等级文本;点击各自弹独立菜单(模型搜索/收藏/图钉菜单 + 思考等级 ladder)。胶囊在 composer frame 宽度不足时自动收缩为仅图标(文字通过 `@container` 查询 + `--gui-motion-chip` 180ms 过渡淡出,`gui-motion-off` 直接切换;收缩阈值 480px 思考文本先让位、380px 模型文本与分隔线再让位,均以 `.gui-composer-frame` 的 inline size 为基准)。胶囊段之间细竖线分隔,每段 hover 用 `--spring` 150ms 过渡高亮,高亮形状贴合胶囊(首段圆左半、末段圆右半、单段全圆)——与独立 `.gui-model-btn` 的 hover 一致;胶囊 `flex-shrink: 0`,按钮行拥挤时不被挤压(收缩只由 frame 宽度驱动)。
+- **模型品牌图标(`@lobehub/icons`,MIT)**:胶囊左段与模型菜单行均按 `provider` 渲染品牌 logo(Mono 单色变体,`size 14`;`model-brand-icon.tsx` 内联 24 个 provider→图标映射 + 按 modelId 子串兜底),未知 provider 回落 oc-icons `ai-agent`;深度导入(`@lobehub/icons/es/<Brand>`)保证 tree-shaking 只打包用到的品牌。
 - **角色思考等级动态**:角色行 thinking select 渲染 `resolvedRoleModels[role].efforts`(daemon `getSupportedEfforts`,模型无 thinking 支持则为空)——绝不固定七档;每次角色模型变更经 `applyRoleModels`(set 成功后重拉 resolvedRoleModels)让"自动选择"派生行与等级列表即时刷新。
 
 ### 获取可用模型(自定义供应商表单)

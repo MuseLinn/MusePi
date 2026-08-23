@@ -100,7 +100,12 @@
 	height: 26px;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	flex-shrink: 1;
+	/* The pill must NEVER be squeezed by the button-row flex: row overflow
+	 * (attach/queue/focus/chips sharing the line) would otherwise crush the
+	 * segment labels to zero width and render icon-only even when the frame
+	 * is wide. Shrink-to-icon is driven solely by the @container queries
+	 * below (composer frame genuinely narrow), not by row crowding. */
+	flex-shrink: 0;
 	min-width: 0;
 }
 
@@ -119,12 +124,29 @@
 	height: 100%;
 	padding: 0 9px;
 	border: 0;
+	border-radius: 999px;
 	background: transparent;
 	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	cursor: pointer;
 	transition: background 150ms var(--spring), color 150ms var(--spring);
+}
+
+/* Segment hover highlight hugs the pill's capsule shape instead of painting
+ * a rectangle: first segment rounds the left half, last the right half, a
+ * lone segment (no thinking selector) is a full pill — matching the
+ * standalone .gui-model-btn hover. */
+.gui-model-capsule-seg:first-child > .gui-model-capsule-seg-btn {
+	border-radius: 999px 0 0 999px;
+}
+
+.gui-model-capsule-seg:last-child > .gui-model-capsule-seg-btn {
+	border-radius: 0 999px 999px 0;
+}
+
+.gui-model-capsule-seg:only-child > .gui-model-capsule-seg-btn {
+	border-radius: 999px;
 }
 
 .gui-model-capsule-seg-btn:hover {
@@ -153,10 +175,12 @@
 	transition: opacity 180ms var(--spring);
 }
 
-/* Narrow composer: first the thinking label gives way (keep the level
- * discoverable via its brain icon + title), then the model label. */
-@container (max-width: 620px) {
-	.gui-model-capsule-seg-text {
+/* Narrow composer: the thinking-effort label gives way first (the brain
+ * icon + title keep the level discoverable), then the model label, then
+ * the divider—all at thresholds where the composer frame is genuinely
+ * cramped (not at normal desktop widths). */
+@container (max-width: 480px) {
+	.gui-model-capsule-seg-text--thinking {
 		opacity: 0;
 		width: 0;
 		padding: 0;
@@ -164,7 +188,13 @@
 	}
 }
 
-@container (max-width: 420px) {
+@container (max-width: 380px) {
+	.gui-model-capsule-seg-text {
+		opacity: 0;
+		width: 0;
+		padding: 0;
+		overflow: hidden;
+	}
 	.gui-model-capsule-sep {
 		opacity: 0;
 		width: 0;

@@ -75,7 +75,9 @@ export function ThinkingSelector({
 				aria-label={t("thinking level")}
 			>
 				<Icon name="brain" className="h-3.5 w-3.5" />
-				<span className="gui-model-capsule-seg-text max-w-[120px] truncate">{thinkingLabel(value)}</span>
+				<span className="gui-model-capsule-seg-text gui-model-capsule-seg-text--thinking max-w-[120px] truncate">
+					{thinkingLabel(value)}
+				</span>
 			</button>
 			{renderMenu(
 				<div className="gui-model-menu gui-model-menu--compact">
