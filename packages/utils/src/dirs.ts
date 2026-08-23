@@ -603,13 +603,18 @@ export function setWorktreesDir(dir: string | undefined): string | undefined {
 
 /**
  * Get the agent-managed worktrees directory. Resolution order: the
- * `OMP_WORKTREE_DIR` env var, then the {@link setWorktreesDir} override (the
- * `worktree.base` setting), then the `~/.musepi/wt` default. The env var and the
- * override are both `~`-expanded and must be absolute; a relative value is
- * ignored and resolution falls through.
+ * `MUSEPI_WORKTREE_DIR` env var (falling back to the legacy `OMP_WORKTREE_DIR`),
+ * then the {@link setWorktreesDir} override (the `worktree.base` setting), then
+ * the `~/.musepi/wt` default. The env var and the override are both
+ * `~`-expanded and must be absolute; a relative value is ignored and resolution
+ * falls through.
  */
 export function getWorktreesDir(): string {
-	return resolveWorktreeBase(process.env.OMP_WORKTREE_DIR) ?? worktreesDirOverride ?? dirs.rootSubdir("wt", "data");
+	return (
+		resolveWorktreeBase(process.env.MUSEPI_WORKTREE_DIR ?? process.env.OMP_WORKTREE_DIR) ??
+		worktreesDirOverride ??
+		dirs.rootSubdir("wt", "data")
+	);
 }
 
 /** Get the SSH control socket directory (~/.musepi/ssh-control). */
@@ -680,7 +685,7 @@ export function getGpuCachePath(): string {
  * cache file without touching the rest of the config root.
  */
 export function getGithubCacheDbPath(): string {
-	const override = process.env.OMP_GITHUB_CACHE_DB;
+	const override = process.env.MUSEPI_GITHUB_CACHE_DB ?? process.env.OMP_GITHUB_CACHE_DB;
 	if (override) return override;
 	return dirs.rootSubdir(path.join("cache", "github-cache.db"), "cache");
 }
@@ -691,7 +696,7 @@ export function getGithubCacheDbPath(): string {
  * operators can isolate or relocate the cache file.
  */
 export function getAuthBrokerSnapshotCachePath(): string {
-	const override = process.env.OMP_AUTH_BROKER_SNAPSHOT_CACHE;
+	const override = process.env.MUSEPI_AUTH_BROKER_SNAPSHOT_CACHE ?? process.env.OMP_AUTH_BROKER_SNAPSHOT_CACHE;
 	if (override) return override;
 	return dirs.rootSubdir(path.join("cache", "auth-broker-snapshot.enc"), "cache");
 }

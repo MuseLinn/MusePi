@@ -1,16 +1,19 @@
 import { logger } from "@musepi/pi-utils";
 
 const DEFAULT_MCP_TIMEOUT_MS = 30_000;
-const MCP_TIMEOUT_ENV = "OMP_MCP_TIMEOUT_MS";
+// MusePi-canonical env name; OMP_* kept as a compatibility fallback so
+// existing user configs (and the upstream omp lineage) keep working.
+const MCP_TIMEOUT_ENV = "MUSEPI_MCP_TIMEOUT_MS";
+const MCP_TIMEOUT_ENV_FALLBACK = "OMP_MCP_TIMEOUT_MS";
 
 let neverAbortController: AbortController | undefined;
 
 export function resolveMCPTimeoutMs(configTimeout?: number): number {
-	const raw = Bun.env[MCP_TIMEOUT_ENV]?.trim();
+	const raw = Bun.env[MCP_TIMEOUT_ENV]?.trim() ?? Bun.env[MCP_TIMEOUT_ENV_FALLBACK]?.trim();
 	if (raw) {
 		const value = Number(raw);
 		if (Number.isFinite(value) && value >= 0) return value;
-		logger.warn("Ignoring invalid OMP_MCP_TIMEOUT_MS env value; expected a non-negative number", {
+		logger.warn(`Ignoring invalid ${MCP_TIMEOUT_ENV} env value; expected a non-negative number`, {
 			value: raw,
 		});
 	}

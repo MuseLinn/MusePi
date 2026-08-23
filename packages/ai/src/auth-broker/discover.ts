@@ -118,7 +118,7 @@ async function readConfigYaml(agentDir: string): Promise<ConfigSnapshot> {
 }
 
 export async function loadAuthBrokerAccountPool(): Promise<AuthBrokerAccountPool | undefined> {
-	const filePath = process.env.OMP_AUTH_BROKER_ACCOUNT_POOL_FILE?.trim();
+	const filePath = process.env.MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE ?? process.env.OMP_AUTH_BROKER_ACCOUNT_POOL_FILE?.trim();
 	if (!filePath) return undefined;
 
 	let parsed: unknown;
@@ -169,7 +169,7 @@ export async function loadAuthBrokerAccountPool(): Promise<AuthBrokerAccountPool
 }
 
 function resolveSnapshotTtlMs(): number {
-	const raw = process.env.OMP_AUTH_BROKER_SNAPSHOT_TTL_MS;
+	const raw = process.env.MUSEPI_AUTH_BROKER_SNAPSHOT_TTL_MS ?? process.env.OMP_AUTH_BROKER_SNAPSHOT_TTL_MS;
 	if (raw === undefined) return DEFAULT_SNAPSHOT_CACHE_TTL_MS;
 	const value = raw.trim();
 	if (value === "") return DEFAULT_SNAPSHOT_CACHE_TTL_MS;
@@ -196,8 +196,8 @@ export async function resolveAuthBrokerConfig(
 	const agentDir = options.agentDir ?? getAgentDir();
 	const resolveConfig = options.configValueResolver ?? defaultResolveConfigValue;
 
-	const envUrl = process.env.OMP_AUTH_BROKER_URL;
-	const envToken = process.env.OMP_AUTH_BROKER_TOKEN;
+	const envUrl = process.env.MUSEPI_AUTH_BROKER_URL ?? process.env.OMP_AUTH_BROKER_URL;
+	const envToken = process.env.MUSEPI_AUTH_BROKER_TOKEN ?? process.env.OMP_AUTH_BROKER_TOKEN;
 
 	let url = envUrl && envUrl.length > 0 ? envUrl : undefined;
 	let configToken: string | undefined;
