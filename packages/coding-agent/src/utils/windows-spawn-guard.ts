@@ -27,7 +27,6 @@
  * 也允许调用点覆盖)。
  */
 
-/** Bun.spawn first arg: array (cmd form) or SpawnOptions object. */
 type SpawnCmd = Parameters<typeof Bun.spawn>[0];
 /** SpawnOptions object shape (the object form carries `cmd` inside). */
 interface SpawnOptionsObject {
@@ -36,11 +35,11 @@ interface SpawnOptionsObject {
 	[key: string]: unknown;
 }
 
-function isOptionsObject(cmd: SpawnCmd): cmd is SpawnOptionsObject {
+function isOptionsObject(cmd: unknown): cmd is SpawnOptionsObject {
 	return typeof cmd === "object" && cmd !== null && !Array.isArray(cmd) && "cmd" in cmd;
 }
 
-function isArrayCmd(cmd: SpawnCmd): cmd is readonly string[] {
+function isArrayCmd(cmd: unknown): cmd is readonly string[] {
 	return Array.isArray(cmd);
 }
 
@@ -57,47 +56,47 @@ export function installWindowsSpawnGuard(): void {
 	const originalSpawnSync = Bun.spawnSync;
 
 	(Bun as unknown as { spawn: typeof Bun.spawn }).spawn = ((...args: Parameters<typeof Bun.spawn>) => {
-		const [cmd, options] = args;
+		const [cmd, options] = args as [unknown, Parameters<typeof Bun.spawn>[1]];
 		// Object form: inject into the FIRST argument (Bun ignores a second
 		// arg here — verified: cwd in the object beats cwd in extra opts).
 		if (isOptionsObject(cmd)) {
 			if (cmd.windowsHide === undefined) {
 				const merged: SpawnOptionsObject = { ...cmd, windowsHide: true };
-				return originalSpawn(merged as SpawnCmd, options);
+				return originalSpawn(merged as unknown as SpawnCmd, options);
 			}
-			return originalSpawn(cmd as SpawnCmd, options);
+			return originalSpawn(cmd as unknown as SpawnCmd, options);
 		}
 		// Array form: options is the second arg — inject there.
 		if (isArrayCmd(cmd)) {
 			const opts = (options ?? {}) as Record<string, unknown>;
 			if (opts.windowsHide === undefined) {
 				opts.windowsHide = true;
-				return originalSpawn(cmd as SpawnCmd, opts as never);
+				return originalSpawn(cmd as unknown as SpawnCmd, opts as never);
 			}
-			return originalSpawn(cmd as SpawnCmd, options);
+			return originalSpawn(cmd as unknown as SpawnCmd, options);
 		}
 		// Unrecognized shape — pass through untouched.
-		return originalSpawn(cmd as SpawnCmd, options);
+		return originalSpawn(cmd as unknown as SpawnCmd, options);
 	}) as typeof Bun.spawn;
 
 	(Bun as unknown as { spawnSync: typeof Bun.spawnSync }).spawnSync = ((...args: Parameters<typeof Bun.spawnSync>) => {
-		const [cmd, options] = args;
+		const [cmd, options] = args as [unknown, Parameters<typeof Bun.spawnSync>[1]];
 		if (isOptionsObject(cmd)) {
 			if (cmd.windowsHide === undefined) {
 				const merged: SpawnOptionsObject = { ...cmd, windowsHide: true };
-				return originalSpawnSync(merged as Parameters<typeof Bun.spawnSync>[0], options);
+				return originalSpawnSync(merged as unknown as Parameters<typeof Bun.spawnSync>[0], options);
 			}
-			return originalSpawnSync(cmd as Parameters<typeof Bun.spawnSync>[0], options);
+			return originalSpawnSync(cmd as unknown as Parameters<typeof Bun.spawnSync>[0], options);
 		}
 		if (isArrayCmd(cmd)) {
 			const opts = (options ?? {}) as Record<string, unknown>;
 			if (opts.windowsHide === undefined) {
 				opts.windowsHide = true;
-				return originalSpawnSync(cmd as Parameters<typeof Bun.spawnSync>[0], opts as never);
+				return originalSpawnSync(cmd as unknown as Parameters<typeof Bun.spawnSync>[0], opts as never);
 			}
-			return originalSpawnSync(cmd as Parameters<typeof Bun.spawnSync>[0], options);
+			return originalSpawnSync(cmd as unknown as Parameters<typeof Bun.spawnSync>[0], options);
 		}
-		return originalSpawnSync(cmd as Parameters<typeof Bun.spawnSync>[0], options);
+		return originalSpawnSync(cmd as unknown as Parameters<typeof Bun.spawnSync>[0], options);
 	}) as typeof Bun.spawnSync;
 
 	(Bun.spawn as unknown as { __musepiGuard: boolean }).__musepiGuard = true;

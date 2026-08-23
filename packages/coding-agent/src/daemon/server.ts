@@ -8887,6 +8887,9 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
  */
 let sdkPrewarmed = false;
 
+export async function startDaemon(
+	options: DaemonOptions = {},
+): Promise<{ socketPath: string; wsPort?: number; close: () => Promise<void> }> {
 	// Windows: every Bun.spawn child (git/gh/shell/powershell) opens a new
 	// console window unless windowsHide is set. Patch the globals once so no
 	// spawn site (current or future) can leak a terminal popup from the
