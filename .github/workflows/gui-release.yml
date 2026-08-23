@@ -1,7 +1,9 @@
 name: GUI Desktop Release
 
-# MusePi Desktop (Electron) 发布：按平台并行构建 natives + 打包 dmg。
-# 与 CLI/npm 发布(cicd ci.yml)分离——CLI/TUI 和 Desktop 分别打包发布。
+# MusePi Desktop (Electron) 发布：按平台并行构建 natives + daemon + 打包。
+# 平台范围：macOS(arm64) + Linux(x64/arm64)。
+# Windows(win32-x64) 暂未接入 — 需 musepi 自编 win32 natives(哨兵 0_4_3)，
+# CI hosted runner 磁盘受限(LLVM msvc + xwin SDK 6-8GB+)，等待专用方案。
 on:
    push:
       tags:
@@ -16,8 +18,8 @@ permissions:
    contents: read
 
 jobs:
-   package_darwin:
-      name: "MusePi dmg: ${{ matrix.target_id }}"
+   package_desktop:
+      name: "MusePi: ${{ matrix.target_id }}"
       strategy:
          fail-fast: false
          matrix:
@@ -26,6 +28,22 @@ jobs:
                     os: macos-14,
                     target_id: darwin-arm64,
                     native_targets: darwin-arm64,
+                    builder: mac,
+                    artifact_ext: dmg,
+                 }
+               - {
+                    os: ubuntu-22.04,
+                    target_id: linux-x64,
+                    native_targets: linux-x64-baseline,
+                    builder: linux,
+                    artifact_glob: "release/*.AppImage release/*.deb",
+                 }
+               - {
+                    os: ubuntu-24.04-arm,
+                    target_id: linux-arm64,
+                    native_targets: linux-arm64,
+                    builder: linux,
+                    artifact_glob: "release/*.AppImage release/*.deb",
                  }
       runs-on: ${{ matrix.os }}
       env:
@@ -53,10 +71,12 @@ jobs:
               cache-scope: gui-release-${{ matrix.target_id }}
 
          - name: Build daemon binary (musepi CLI)
+           if: matrix.builder == 'mac' || matrix.builder == 'linux'
            working-directory: packages/coding-agent
            run: bun run build
 
          - name: Stage daemon binary into GUI vendor
+           if: matrix.builder == 'mac' || matrix.builder == 'linux'
            run: |
               mkdir -p packages/gui/vendor/daemon
               cp packages/coding-agent/dist/musepi packages/gui/vendor/daemon/musepi
@@ -66,21 +86,23 @@ jobs:
            working-directory: packages/gui
            run: bun run build
 
-         - name: Package dmg
-           run: bunx electron-builder --mac --publish never
+         - name: Package (electron-builder)
            working-directory: packages/gui
+           run: bunx electron-builder --${{ matrix.builder }} --publish never
 
-         - name: Upload dmg artifact
+         - name: Upload artifact
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
-              name: musepi-dmg-${{ matrix.target_id }}
-              path: packages/gui/release/*.dmg
+              name: musepi-${{ matrix.target_id }}
+              path: |
+                packages/gui/release/*.${{ matrix.artifact_ext }}
+                ${{ matrix.artifact_glob }}
               if-no-files-found: error
 
    publish:
-      name: "Publish MusePi dmg releases"
+      name: "Publish MusePi Desktop releases"
       if: startsWith(github.ref, 'refs/tags/v')
-      needs: [package_darwin]
+      needs: [package_desktop]
       runs-on: ubuntu-22.04
       permissions:
          contents: write
@@ -89,7 +111,7 @@ jobs:
 
          - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
            with:
-              pattern: musepi-dmg-*
+              pattern: musepi-*
               path: dist
               merge-multiple: true
 
@@ -118,7 +140,7 @@ jobs:
               fs.writeFileSync("packages/gui/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
               console.log("update-manifest:", manifest.version, manifest.url);
               EOF
-              # Stage it beside the dmg for the upload step
+              # Stage it beside the artifacts for the upload step
               cp packages/gui/update-manifest.json dist/update-manifest.json
               # Release page body: download instructions + the changelog section
               # (avoids GitHub's auto-generated duplicated "Full Changelog" link).
@@ -131,6 +153,7 @@ jobs:
               const body =
                 `# MusePi ${pkg.version}\n\n` +
                 `**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)\n\n` +
+                `**Linux**: download the AppImage or .deb from this release\n\n` +
                 notes;
               fs.writeFileSync("dist/RELEASE_NOTES.md", body);
               console.log("release notes written");
@@ -141,5 +164,7 @@ jobs:
            with:
               files: |
                 dist/*.dmg
+                dist/*.AppImage
+                dist/*.deb
                 dist/update-manifest.json
               body_path: dist/RELEASE_NOTES.md
