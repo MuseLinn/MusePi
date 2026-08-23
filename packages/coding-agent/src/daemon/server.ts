@@ -3496,7 +3496,7 @@ export class DaemonServer {
 					version: musepiVersion ?? VERSION,
 					musepiVersion: musepiVersion ?? null,
 					engineVersion: VERSION,
-					engine: musepiVersion ? `MusePi ${musepiVersion} (OMP ${VERSION})` : `MusePi (OMP ${VERSION})`,
+					engine: musepiVersion ? `MusePi ${musepiVersion}` : `MusePi ${VERSION}`,
 					dataRoot: getConfigRootDir(),
 					configDir: getAgentDir(),
 					runtime: `Bun ${process.versions.bun} · ${process.platform}/${process.arch}`,

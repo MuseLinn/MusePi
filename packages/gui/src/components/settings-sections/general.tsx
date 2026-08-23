@@ -352,7 +352,9 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="gui-settings-row">
 							<div>
 								<div className="gui-settings-row-label">{t("engine")}</div>
-								<div className="text-[13px] text-[var(--color-text-muted)]">OMP {info.engineVersion}</div>
+								<div className="text-[13px] text-[var(--color-text-muted)]">
+									{info.engine ?? `MusePi ${info.engineVersion}`}
+								</div>
 							</div>
 						</div>
 					)}
