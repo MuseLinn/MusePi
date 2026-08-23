@@ -22,13 +22,13 @@
 
 ---
 
-MusePi 是 [oh-my-pi](https://github.com/can1357/oh-my-pi)（OMP，fork 自 [Pi](https://github.com/badlogic/pi-mono)）的**桌面优先定制版**：保留上游完整的 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），在其上构建了 **Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。
+MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
 
-应用版本 `0.3.1`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
+应用版本 `0.4.3`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
 
 ## ✨ 特性
 
-### 桌面 GUI（相对 OMP 的核心差异）
+### 桌面 GUI
 
 - **Electron 桌面应用**（`packages/gui`）：三栏布局（会话侧栏 + 聊天流 + 上下文面板）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
 - **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
@@ -46,7 +46,7 @@ MusePi 是 [oh-my-pi](https://github.com/can1357/oh-my-pi)（OMP，fork 自 [Pi]
 - **右侧面板**：文件树（PDF/图片/文本预览、系统打开）、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器（视口预设、元素选取）、项目笔记 + 待办 + 计划文件。
 - **子智能体操作**（Agent Hub parity）：右栏 AgentsPanel 停止/复活/对话（`agents.kill/revive/chat` RPC）。
 
-### 继承上游 OMP 核心
+### 核心引擎
 
 - **40+ LLM provider**、32 内置工具、`xd://` 设备扩展、prompt 工程持续调优。
 - **LSP** 接线每个写操作（重命名/引用/代码动作）、**DAP** 调试器驱动。
@@ -79,7 +79,7 @@ bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
 bun --cwd=packages/gui run desktop
 ```
 
-`musepi` 子命令继承 OMP：`launch`（默认对话）、`serve`（daemon）、`acp`、`agents`、`commit`、`config`、`join`、`models`、`plugin`、`say`、`share`、`setup`、`shell`、`stats`、`update`、`completions` 等。
+`musepi` 子命令：`launch`（默认对话）、`serve`（daemon）、`acp`、`agents`、`commit`、`config`、`join`、`models`、`plugin`、`say`、`share`、`setup`、`shell`、`stats`、`update`、`completions` 等。
 
 配置目录为 `~/.musepi/`（品牌化差异；`PI_CONFIG_DIR` 可覆盖）。
 
@@ -161,4 +161,4 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.3.1）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.3）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。

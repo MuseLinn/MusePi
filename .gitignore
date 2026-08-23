@@ -90,6 +90,7 @@ packages/coding-agent/bench/boot-baseline.json
 /bazel-testlogs
 /bazel-pi
 /bazel-oh-my-pi
+/bazel-musepi-omp
 /.bazelrc.user
 packages/gui/release/
 packages/gui/dist/
