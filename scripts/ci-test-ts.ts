@@ -555,11 +555,11 @@ function isCI(): boolean {
 }
 
 // Fan-out width for the local parallel path, clamped to the command count.
-// Defaults to the machine's available parallelism; `OMP_TEST_CONCURRENCY`
+// Defaults to the machine's available parallelism; `MUSEPI_TEST_CONCURRENCY`
 // overrides it — a positive integer to pick an exact width (dial down on a
 // memory-constrained laptop), or `all`/`max` to launch every chunk at once.
 function testConcurrency(total: number): number {
-	const raw = Bun.env.OMP_TEST_CONCURRENCY?.trim().toLowerCase();
+	const raw = Bun.env.MUSEPI_TEST_CONCURRENCY?.trim().toLowerCase();
 	if (!raw) return Math.min(Math.max(1, os.availableParallelism()), total);
 	if (raw === "all" || raw === "max") {
 		return total;
@@ -568,7 +568,7 @@ function testConcurrency(total: number): number {
 	if (Number.isFinite(override) && override >= 1) {
 		return Math.min(Math.floor(override), total);
 	}
-	throw new Error(`Invalid OMP_TEST_CONCURRENCY=${JSON.stringify(raw)}; expected a positive integer, all, or max`);
+	throw new Error(`Invalid MUSEPI_TEST_CONCURRENCY=${JSON.stringify(raw)}; expected a positive integer, all, or max`);
 }
 
 // Test files interleave real IO — sqlite writes, temp dirs, spawned CLIs — with
@@ -792,7 +792,7 @@ export async function runTestCommandsInParallel(commands: TestCommand[], concurr
 	const fileWidths = [...new Set(commands.map(c => c.parallel).filter(p => p !== undefined))].sort((a, b) => a - b);
 	console.log(
 		`Running ${commands.length} test command(s), up to ${concurrency} in parallel ` +
-			`(OMP_TEST_CONCURRENCY=<n>|all to change); ${os.availableParallelism()} cores, ` +
+			`(MUSEPI_TEST_CONCURRENCY=<n>|all to change); ${os.availableParallelism()} cores, ` +
 			`--parallel=${fileWidths.join("/") || "n/a"} per chunk.`,
 	);
 
@@ -945,7 +945,7 @@ if (import.meta.main) {
 	}
 
 	const requestedCommands = await commandsForMode(requestedMode as Mode);
-	const explicitConcurrency = Boolean(Bun.env.OMP_TEST_CONCURRENCY?.trim());
+	const explicitConcurrency = Boolean(Bun.env.MUSEPI_TEST_CONCURRENCY?.trim());
 	// CI defaults to one process at a time, but memory-sized workflow buckets
 	// explicitly opt into bounded process concurrency. Local runs fan out by
 	// default and may use the same override. Resolved before the dry-run check so

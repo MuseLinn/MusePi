@@ -131,7 +131,7 @@ bun run lint / fmt       # biome + rustfmt
 
 测试注意（记录在 UPSTREAM.md 验证节）：
 
-- 全量测试建议 `OMP_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
+- 全量测试建议 `MUSEPI_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
 - Rust bucket 需要 `cargo-nextest`，且在 `~/.cargo/bin` 前置的 PATH 下跑。
 - 改 `desktop-web` 后必须重建 GUI（`bun --cwd=packages/gui run build`）再验证——浏览器会缓存旧 bundle。
 - GUI/daemon E2E 隔离：`PI_CONFIG_DIR=musepi-test` 起测试 daemon（:8310）；测试 GUI 用 `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`，puppeteer 只连 **9223**（CDP 端点）。

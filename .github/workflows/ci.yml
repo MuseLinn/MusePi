@@ -447,7 +447,7 @@ jobs:
               targets: linux-x64-baseline linux-x64-modern
          - name: Test workspace packages and repo scripts (TS)
            env:
-              OMP_TEST_CONCURRENCY: "4"
+              MUSEPI_TEST_CONCURRENCY: "4"
            run: |
               bun run ci:test:ts:workspace
               # Not `test:scripts`: scripts/musl-release.test.ts fails on main
@@ -488,7 +488,7 @@ jobs:
               targets: linux-x64-baseline linux-x64-modern
          - name: Test native/TUI/browser-ish packages (TS)
            env:
-              OMP_TEST_CONCURRENCY: "4"
+              MUSEPI_TEST_CONCURRENCY: "4"
            run: bun run ci:test:ts:native
 
    test_coding_agent_ui:
@@ -506,7 +506,7 @@ jobs:
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent UI/TUI bucket
            env:
-              OMP_TEST_CONCURRENCY: "2"
+              MUSEPI_TEST_CONCURRENCY: "2"
            run: bun run ci:test:coding-agent:ui
 
    test_coding_agent_runtime:
@@ -526,7 +526,7 @@ jobs:
            # Runtime/session tests import native-backed barrels too; keep this
            # separate for concurrency, not as a native-free guardrail.
            env:
-              OMP_TEST_CONCURRENCY: "4"
+              MUSEPI_TEST_CONCURRENCY: "4"
            run: bun run ci:test:coding-agent:runtime
 
    test_coding_agent_native:
@@ -544,7 +544,7 @@ jobs:
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent native/unit bucket
            env:
-              OMP_TEST_CONCURRENCY: "4"
+              MUSEPI_TEST_CONCURRENCY: "4"
               # The mupdf/PDF-extraction chunk measures ~7 min on burstable
               # runners under a full 8-wide fan-out; the default 600 s chunk
               # watchdog SIGKILLed it (release run 30519992654). The watchdog
