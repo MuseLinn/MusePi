@@ -23,11 +23,6 @@ jobs:
          matrix:
             include:
                - {
-                    os: macos-15-intel,
-                    target_id: darwin-x64,
-                    native_targets: darwin-x64-baseline,
-                 }
-               - {
                     os: macos-14,
                     target_id: darwin-arm64,
                     native_targets: darwin-arm64,
