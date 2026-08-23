@@ -60,9 +60,9 @@ import { useModes } from "./composer/use-modes";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ExtensionStatusCard } from "./ExtensionStatusCard";
-import { ModelSelector } from "./ModelSelector";
+import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
-import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
+import type { ThinkingLevel } from "./ThinkingSelector";
 
 export type {
 	UsageActiveAccountView,
@@ -1667,13 +1667,16 @@ export function Composer({
 						{/* Focus mode sits between the attach menu and the model
 						 * selector (openchamber ComposerFooter order). */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
-						<ModelSelector
+						<ModelThinkingCapsule
 							rpc={rpc}
 							sessionId={sessionId}
-							presetId={presetModelId}
+							presetModelId={presetModelId}
 							currentModelId={contextUsage?.model ?? null}
+							thinkingLevel={thinkingLevel}
+							thinkingCeiling={thinkingCeiling}
+							thinkingEfforts={thinkingEfforts}
 							allowSetDefault
-							onSelect={id => {
+							onModelSelect={id => {
 								if (id) onModelChange?.(id);
 								// The daemon finished the switch before this
 								// fires — refresh the ring/card immediately so
@@ -1681,15 +1684,8 @@ export function Composer({
 								// waiting for the next 3s poll.
 								refreshUsage();
 							}}
+							onSetThinking={onSetThinking}
 						/>
-						{onSetThinking && (
-							<ThinkingSelector
-								value={thinkingLevel}
-								onChange={onSetThinking}
-								ceiling={thinkingCeiling}
-								efforts={thinkingEfforts}
-							/>
-						)}
 						{/* Session mode toggles (TUI /fast /computer /vision /prewalk
 						 * parity): a compact popover in the action row, session-only
 						 * (hidden in the welcome scene). */}

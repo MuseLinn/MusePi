@@ -87,6 +87,98 @@
 	overflow-x: hidden;
 }
 
+/* ── Model/thinking capsule (ModelThinkingCapsule, dsh single-trigger
+ *    parity): ONE pill, TWO segments — model left, thinking effort right,
+ *    each opening its own unchanged menu. The pill collapses its segment
+ *    labels to icon-only (TUI compactThinkingLevel parity) when the
+ *    composer frame (its nearest container ancestor) is narrow — the
+ *    `@container` queries below resolve against .gui-composer-frame's
+ *    inline size, so the pill shrinks with the surface, not with itself. ── */
+.gui-model-capsule {
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	flex-shrink: 1;
+	min-width: 0;
+}
+
+.gui-model-capsule-seg {
+	position: relative;
+	display: flex;
+	align-items: center;
+	height: 100%;
+	min-width: 0;
+}
+
+.gui-model-capsule-seg-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 100%;
+	padding: 0 9px;
+	border: 0;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	cursor: pointer;
+	transition: background 150ms var(--spring), color 150ms var(--spring);
+}
+
+.gui-model-capsule-seg-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-model-capsule-seg-btn:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+.gui-model-capsule-sep {
+	width: 1px;
+	height: 14px;
+	flex: none;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	opacity: 1;
+	transition: opacity 180ms var(--spring);
+}
+
+/* Segment label: fades out before the icon-only collapse so the shrink
+ * reads as a morph (text → icon), not a pop. */
+.gui-model-capsule-seg-text {
+	opacity: 1;
+	transition: opacity 180ms var(--spring);
+}
+
+/* Narrow composer: first the thinking label gives way (keep the level
+ * discoverable via its brain icon + title), then the model label. */
+@container (max-width: 620px) {
+	.gui-model-capsule-seg-text {
+		opacity: 0;
+		width: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+}
+
+@container (max-width: 420px) {
+	.gui-model-capsule-sep {
+		opacity: 0;
+		width: 0;
+	}
+}
+
+/* Motion off: the label/divider collapses instantly instead of fading
+ * (the transition below would otherwise animate on every window resize). */
+.gui-motion-off .gui-model-capsule-seg-btn,
+.gui-motion-off .gui-model-capsule-seg-text,
+.gui-motion-off .gui-model-capsule-sep {
+	transition: none !important;
+}
+
 /* The search box is pinned above the list — only the model rows scroll. */
 .gui-model-list {
 	flex: 1;

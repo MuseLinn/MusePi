@@ -4,6 +4,7 @@
 
 ### Added
 
+- Model/thinking capsule (ModelThinkingCapsule): model and thinking selector merged into one pill with two clickable segments — model (ai-agent icon + name) on the left, thinking effort (brain icon + level) on the right. Each segment opens its own independent floating menu (model menu with search/favorites/DEFAULT pin, thinking menu with off/auto/effort ladder). The pill collapses to icon-only at narrow composer widths via container query on the composer frame. Motion follows gui-design: chip 180ms spring transitions, gui-menu-in/out for menus, gui-motion-off degrades gracefully. ([#musepi](https://github.com/MuseLinn/MusePi))
 - Fenced code blocks now render with a header bar: language tag on the left and a copy button on the right (copied state shows 已复制 briefly). The copy source is the raw fenced text, so it stays correct after tree-sitter highlighting.
 - Composer input raised to a roomier 14px/22px with 10px radius and a soft focus ring; header gets more breathing room (10px 14px padding, 14px semibold title).
 

@@ -87,6 +87,11 @@
 	box-shadow: var(--gui-input-shadow);
 	/* Smooth height changes when the textarea autosizes. */
 	transition: box-shadow 160ms ease-out;
+	/* Container-query context for the model/thinking capsule: the pill's
+	 * icon-only collapse resolves against THIS frame's inline size (the
+	 * frame's width is driven by the surface, unlike the pill whose width
+	 * is content-driven — a pill self-context would never shrink). */
+	container-type: inline-size;
 }
 
 .gui-composer-frame[data-enhancing]::after {

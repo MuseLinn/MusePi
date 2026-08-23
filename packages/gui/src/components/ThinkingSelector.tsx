@@ -28,6 +28,7 @@ export function ThinkingSelector({
 	onChange,
 	ceiling,
 	efforts,
+	capsule = false,
 }: {
 	value: string | null | undefined;
 	onChange(level: ThinkingLevel | null): void;
@@ -35,6 +36,10 @@ export function ThinkingSelector({
 	ceiling?: string | null;
 	/** Exact effort ladder of the current model; undefined = full ladder. */
 	efforts?: readonly string[] | null;
+	/** Capsule mode (ModelThinkingCapsule): the trigger renders as a
+	 *  transparent segment inside the shared pill — no own pill surface,
+	 *  no chevron; the menu itself is unchanged. */
+	capsule?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
@@ -46,7 +51,9 @@ export function ThinkingSelector({
 				path.some(
 					el =>
 						el instanceof HTMLElement &&
-						(el.classList?.contains("gui-model-btn") || el.classList?.contains("gui-menu-popup")),
+						(el.classList?.contains("gui-model-btn") ||
+							el.classList?.contains("gui-model-capsule-seg-btn") ||
+							el.classList?.contains("gui-menu-popup")),
 				)
 			) {
 				return;
@@ -58,17 +65,17 @@ export function ThinkingSelector({
 	}, []);
 
 	return (
-		<div className="gui-model" ref={anchorRef}>
+		<div className={capsule ? "gui-model-capsule-seg" : "gui-model"} ref={capsule ? undefined : anchorRef}>
 			<button
 				type="button"
-				className="gui-model-btn"
+				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
+				ref={capsule ? anchorRef : undefined}
 				onClick={() => setOpen(v => !v)}
-				title={t("thinking level")}
+				title={capsule ? `${t("thinking level")} · ${thinkingLabel(value)}` : t("thinking level")}
 				aria-label={t("thinking level")}
 			>
 				<Icon name="brain" className="h-3.5 w-3.5" />
-				<span className="max-w-[120px] truncate">{thinkingLabel(value)}</span>
-				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+				<span className="gui-model-capsule-seg-text max-w-[120px] truncate">{thinkingLabel(value)}</span>
 			</button>
 			{renderMenu(
 				<div className="gui-model-menu gui-model-menu--compact">

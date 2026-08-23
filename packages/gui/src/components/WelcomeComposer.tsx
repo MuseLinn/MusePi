@@ -10,7 +10,7 @@ import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
-import { modLabel, shortcutLabel } from "../lib/shortcuts";
+import { modLabel } from "../lib/shortcuts";
 import { rankSlashEntries } from "../lib/slash-rank";
 import {
 	loadSuggestions,
@@ -37,13 +37,12 @@ import {
 } from "./Composer";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
-import { ModelSelector } from "./ModelSelector";
+import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { ShinyText } from "./ShinyText";
 import { type SlashEntry, SlashRow } from "./SlashRow";
-import { TextMorph } from "./TextMorph";
-import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
+import type { ThinkingLevel } from "./ThinkingSelector";
 
 /** Time-aware greeting (ZCode-style): seven brackets — 清晨 / 早上 / 中午 /
  * 下午 / 晚上 / 深夜. Each bracket carries its own tone so the welcome
@@ -497,7 +496,9 @@ export function WelcomeComposer({
 	// Dot-matrix brand backdrop pref (设置 → 常规 toggle + custom text,
 	// musepi-gui-dotmatrix / musepi-gui-dotmatrix-text).
 	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
-	const [dotMatrixText, setDotMatrixText] = useState(() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi");
+	const [dotMatrixText, setDotMatrixText] = useState(
+		() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi",
+	);
 	useEffect(() => {
 		const on = (): void => {
 			setDotMatrixOn(localStorage.getItem("musepi-gui-dotmatrix") !== "0");
@@ -1222,29 +1223,27 @@ export function WelcomeComposer({
 										<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 									</button>
 									{renderBranchMenu(
-										<>
-											{branchInfo.branches.map(b => (
-												<button
-													key={b}
-													type="button"
-													className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
-													disabled={switchingBranch}
-													onClick={() => {
-														if (b === branchInfo.current) {
-															setBranchOpen(false);
-															return;
-														}
-														void switchBranch(b);
-													}}
-												>
-													<Icon name="git-branch" className="h-3.5 w-3.5" />
-													<span className="min-w-0 flex-1 truncate">{b}</span>
-													{b === branchInfo.current && (
-														<Icon name="check" className="h-3 w-3 flex-shrink-0" />
-													)}
-												</button>
-											))}
-										</>,
+										branchInfo.branches.map(b => (
+											<button
+												key={b}
+												type="button"
+												className={`gui-view-opt${b === branchInfo.current ? " gui-view-opt--active" : ""}`}
+												disabled={switchingBranch}
+												onClick={() => {
+													if (b === branchInfo.current) {
+														setBranchOpen(false);
+														return;
+													}
+													void switchBranch(b);
+												}}
+											>
+												<Icon name="git-branch" className="h-3.5 w-3.5" />
+												<span className="min-w-0 flex-1 truncate">{b}</span>
+												{b === branchInfo.current && (
+													<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+												)}
+											</button>
+										)),
 									)}
 								</div>
 							)}
@@ -1309,23 +1308,21 @@ export function WelcomeComposer({
 											<Icon name="expand-up-down" className="h-3.5 w-3.5" />
 										</button>
 									)}
-									<ModelSelector
+									<ModelThinkingCapsule
 										rpc={rpc}
 										sessionId={null}
-										presetId={presetModelId ?? modelId}
+										presetModelId={presetModelId ?? modelId}
+										thinkingLevel={thinking}
+										thinkingEfforts={thinkingEfforts}
 										allowSetDefault
-										onSelect={v => {
+										onModelSelect={v => {
 											modelTouched.current = true;
 											setModelId(v);
 										}}
-									/>
-									<ThinkingSelector
-										value={thinking}
-										onChange={v => {
+										onSetThinking={v => {
 											thinkingTouched.current = true;
 											setThinking(v);
 										}}
-										efforts={thinkingEfforts}
 									/>
 									{/* Armed mode chips (plan/goal): shown IN the button row
 									 * right of the thinking selector so the armed state is
