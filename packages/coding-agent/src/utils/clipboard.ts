@@ -35,6 +35,7 @@ async function spawnCapture(
 		stdout: "pipe",
 		stderr: "ignore",
 		stdin: options.input !== undefined ? Buffer.from(options.input) : "ignore",
+		windowsHide: true,
 	});
 	let timedOut = false;
 	const timer = setTimeout(() => {
@@ -182,6 +183,7 @@ async function readImageViaPowerShell(): Promise<ClipboardImage | null> {
 				stdout: "pipe",
 				stderr: "ignore",
 				stdin: "ignore",
+				windowsHide: true,
 			},
 		);
 		const timer = setTimeout(() => proc.kill(), POWERSHELL_TIMEOUT_MS);
@@ -240,6 +242,7 @@ async function readTextViaPowerShell(): Promise<string | null> {
 			stdout: "pipe",
 			stderr: "ignore",
 			stdin: "ignore",
+			windowsHide: true,
 		});
 		const timer = setTimeout(() => proc.kill(), POWERSHELL_TIMEOUT_MS);
 		let stdout = "";

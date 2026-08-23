@@ -290,6 +290,7 @@ export async function getOrCreateSnapshot(
 			stderr: "ignore",
 			timeout: timeoutMs,
 			killSignal: "SIGKILL",
+			windowsHide: true,
 		});
 
 		await child.exited;

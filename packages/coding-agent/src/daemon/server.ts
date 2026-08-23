@@ -445,6 +445,7 @@ import {
 	type SubagentProgressPayload,
 } from "../task/types";
 import { EventBus } from "../utils/event-bus";
+import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { openPath } from "../utils/open";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
@@ -4595,6 +4596,7 @@ export class DaemonServer {
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				if (proc.exitCode !== 0) return { error: "not a git repository" };
 				return p.graph === true
@@ -4611,7 +4613,7 @@ export class DaemonServer {
 				const maxLines = Math.min(500, Math.max(20, p.maxLines ?? 200));
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
 				const run = async (args: string[]): Promise<string> => {
-					const proc = Bun.spawnSync({ cmd: ["git", ...args], cwd, stdout: "pipe", stderr: "pipe" });
+					const proc = Bun.spawnSync({ cmd: ["git", ...args], cwd, stdout: "pipe", stderr: "pipe", windowsHide: true, });
 					return proc.stdout.toString();
 				};
 				let root = "";
@@ -4653,6 +4655,7 @@ export class DaemonServer {
 						cwd,
 						stdout: "pipe",
 						stderr: "pipe",
+						windowsHide: true,
 					});
 					// Belt-and-braces: a hung git (network FS, hooks) must
 					// never pin the RPC open forever.
@@ -4721,7 +4724,7 @@ export class DaemonServer {
 				const cwd = path.resolve(
 					typeof p.cwd === "string" && (p.cwd as string).length > 0 ? (p.cwd as string) : this.#host.cwd(),
 				);
-				const proc = Bun.spawn({ cmd: ["git", "add", "--", ...paths], cwd, stdout: "pipe", stderr: "pipe" });
+				const proc = Bun.spawn({ cmd: ["git", "add", "--", ...paths], cwd, stdout: "pipe", stderr: "pipe", windowsHide: true, });
 				setTimeout(() => {
 					try {
 						proc.kill();
@@ -4745,6 +4748,7 @@ export class DaemonServer {
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				setTimeout(() => {
 					try {
@@ -4761,6 +4765,7 @@ export class DaemonServer {
 						cwd,
 						stdout: "pipe",
 						stderr: "pipe",
+						windowsHide: true,
 					});
 					const [exit2, err2] = await Promise.all([
 						proc2.exited.catch(() => null),
@@ -4795,6 +4800,7 @@ export class DaemonServer {
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				setTimeout(() => {
 					try {
@@ -4822,12 +4828,14 @@ export class DaemonServer {
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				const list = Bun.spawnSync({
 					cmd: ["git", "for-each-ref", "refs/heads", "--format=%(refname:short)"],
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				if (current.exitCode !== 0 || list.exitCode !== 0) return { error: "not a git repository" };
 				const branches = list.stdout
@@ -4854,6 +4862,7 @@ export class DaemonServer {
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				if (proc.exitCode !== 0) return { error: proc.stderr.toString().trim() || "git checkout failed" };
 				return { ok: true };
@@ -4894,6 +4903,7 @@ export class DaemonServer {
 					stdout: "pipe",
 					stderr: "pipe",
 					env: storedToken ? { ...process.env, GH_TOKEN: storedToken.token } : undefined,
+					windowsHide: true,
 				});
 				setTimeout(() => {
 					try {
@@ -4928,7 +4938,7 @@ export class DaemonServer {
 				): Promise<{ exit: number; out: string; err: string }> => {
 					const gh = ghPath();
 					if (gh === null) return { exit: -1, out: "", err: "gh CLI not installed" };
-					const proc = Bun.spawn({ cmd: [gh, ...args], stdout: "pipe", stderr: "pipe", env });
+					const proc = Bun.spawn({ cmd: [gh, ...args], stdout: "pipe", stderr: "pipe", env, windowsHide: true, });
 					setTimeout(() => {
 						try {
 							proc.kill();
@@ -5082,6 +5092,7 @@ export class DaemonServer {
 						stdout: "pipe",
 						stderr: "pipe",
 						env: { ...process.env, GH_TOKEN: body.access_token },
+						windowsHide: true,
 					});
 					if (who.exitCode === 0) {
 						const [login, email] = who.stdout.toString().trim().split("\0");
@@ -5114,6 +5125,7 @@ export class DaemonServer {
 					cmd: [gh, "auth", "logout", "--hostname", "github.com", "--yes"],
 					stdout: "pipe",
 					stderr: "pipe",
+					windowsHide: true,
 				});
 				setTimeout(() => {
 					try {
@@ -8875,9 +8887,11 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
  */
 let sdkPrewarmed = false;
 
-export async function startDaemon(
-	options: DaemonOptions = {},
-): Promise<{ socketPath: string; wsPort?: number; close: () => Promise<void> }> {
+	// Windows: every Bun.spawn child (git/gh/shell/powershell) opens a new
+	// console window unless windowsHide is set. Patch the globals once so no
+	// spawn site (current or future) can leak a terminal popup from the
+	// GUI-hosted daemon.
+	installWindowsSpawnGuard();
 	// A daemon must outlive stray async rejections (e.g. a provider stream
 	// tearing down while a session is disposed mid-turn): Bun's default
 	// handler prints and exits with code 1. Log with the stack instead so a
