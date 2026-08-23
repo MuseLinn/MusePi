@@ -363,26 +363,23 @@ jobs:
               if-no-files-found: error
               retention-days: 1
 
-   # win32 交叉编译需 LLVM msvc 工具链 + xwin Win11 SDK（合计 6-8GB+），
-   # hosted ubuntu 14GB 盘无法容纳（实测两次 No space left on device）。
-   # 改从 npm 拉 upstream release addon（与 PR 的 x64 同逻辑）；
-   # 本地 win32 native 变更通过远程 Windows 机器本地验证。
+   # win32 交叉编译用 hermetic clang-cl + xwin Win11 SDK（bazel-cache 复用
+   # 工具链，避免每次重下 6-8GB）。musepi 完全独立，不再从 npm 拉
+   # @musepi/pi-natives-*（那些包未发布/E404）——win32 natives 与 mac/linux
+   # 一样由 bazel 本地产出，哨兵版本随 musepi（__piNativesV0_4_3）。
+   # 首次加载工具链需较大磁盘；工具链缓存后后续 run 复用。
    native_addons_win:
       name: Build native addons (win32)
       runs-on: ubuntu-22.04
       steps:
          - uses: actions/checkout@v4
-         - name: Fetch win32 addon (npm release)
-           shell: bash
-           run: |
-              set -euo pipefail
-              tarball="$(npm view @musepi/pi-natives-win32-x64@latest dist.tarball)"
-              echo "Fetching $tarball"
-              curl -fsSL --retry 3 "$tarball" | tar -xz -C "$RUNNER_TEMP"
-              mkdir -p bazel-bin/natives-win32-x64-baseline
-              cp "$RUNNER_TEMP/package/pi_natives.win32-x64-baseline.node" bazel-bin/natives-win32-x64-baseline/
+         - name: Build win32 addon (bazel cross)
+           uses: ./.github/actions/bazel-natives
+           with:
+              targets: win32-x64-baseline
+              cache-scope: natives-win32
          # win32 .node 是 PE 二进制，linux runner 无法 dlopen；验证文件完整
-         # 性（存在 + 非空 + MZ 魔数）防止坏下载静默流入下游。
+         # 性（存在 + 非空 + MZ 魔数）防止坏产物静默流出。
          - name: Smoke win32 addon
            shell: bash
            run: |
