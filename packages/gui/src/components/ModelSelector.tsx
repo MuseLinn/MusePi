@@ -343,8 +343,6 @@ export function ModelSelector({
 					{label}
 				</span>
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-				</span>
-				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			{renderMenu(
 				<div className="gui-model-menu">

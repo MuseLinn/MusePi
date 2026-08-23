@@ -1,4 +1,4 @@
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import type { FetchImpl } from "@musepi/pi-utils";
 import { parseGeminiModel, semverGte } from "../identity/classify";
 import { isGeminiModelId } from "../identity/family";

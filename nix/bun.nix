@@ -693,7 +693,7 @@
   "@musepi/collab-web" = copyPathToStore ../packages/collab-web;
   "@musepi/hashline" = copyPathToStore ../packages/hashline;
   "@musepi/omp-stats" = copyPathToStore ../packages/stats;
-  "@musepi/omptype" = copyPathToStore ../packages/omptype;
+  "@musepi/musepi-type" = copyPathToStore ../packages/musepi-type;
   "@musepi/pi-agent-core" = copyPathToStore ../packages/agent;
   "@musepi/pi-ai" = copyPathToStore ../packages/ai;
   "@musepi/pi-catalog" = copyPathToStore ../packages/catalog;

@@ -12,7 +12,7 @@
  * exception (standard type keeps extra keys): it preserves provider-specific extension fields so
  * they round-trip through the broker instead of being dropped (see below).
  */
-import { type FluentType, type } from "@musepi/omptype";
+import { type FluentType, type } from "@musepi/musepi-type";
 import {
 	type ApiKeyCredential,
 	type AuthCredential,
