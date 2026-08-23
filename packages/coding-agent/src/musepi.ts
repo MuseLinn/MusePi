@@ -7,4 +7,6 @@ import pkg from "../package.json" with { type: "json" };
 process.env.MUSEPI_VERSION = pkg.version;
 
 const { runCli } = await import("./cli.ts");
-await runCli(process.argv.slice(1));
+// `process.argv` is [bun, script-path, ...args]; drop both before delegating
+// (mirrors the `slice(2)` in cli.ts's own process-entry guard).
+await runCli(process.argv.slice(2));
