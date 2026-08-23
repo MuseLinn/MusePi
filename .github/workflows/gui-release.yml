@@ -58,7 +58,8 @@ jobs:
               cache-scope: gui-release-${{ matrix.target_id }}
 
          - name: Build daemon binary (musepi CLI)
-           run: bun --cwd packages/coding-agent run build
+           working-directory: packages/coding-agent
+           run: bun run build
 
          - name: Stage daemon binary into GUI vendor
            run: |
@@ -67,7 +68,8 @@ jobs:
               chmod +x packages/gui/vendor/daemon/musepi
 
          - name: Build GUI renderer
-           run: bun --cwd packages/gui run build
+           working-directory: packages/gui
+           run: bun run build
 
          - name: Package dmg
            run: bunx electron-builder --mac --publish never
