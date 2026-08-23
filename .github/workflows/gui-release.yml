@@ -120,6 +120,23 @@ jobs:
               EOF
               # Stage it beside the dmg for the upload step
               cp packages/gui/update-manifest.json dist/update-manifest.json
+              # Release page body: download instructions + the changelog section
+              # (avoids GitHub's auto-generated duplicated "Full Changelog" link).
+              node --input-type=module <<'EOF'
+              import fs from "node:fs";
+              const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
+              const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
+              const sections = changelog.split(/^## \[/m).slice(1);
+              const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
+              const body = `# MusePi ${pkg.version}
+
+**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)
+
+${notes}
+`;
+              fs.writeFileSync("dist/RELEASE_NOTES.md", body);
+              console.log("release notes written");
+              EOF
 
          - name: Upload release assets
            uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -127,4 +144,4 @@ jobs:
               files: |
                 dist/*.dmg
                 dist/update-manifest.json
-              generate_release_notes: true
+              body_path: dist/RELEASE_NOTES.md

@@ -166,7 +166,7 @@ export function createInterruptedTurnAbortMessage(
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 		stopReason: "aborted",
-		errorMessage: `Previous OMP process exited before completing the turn${causeText}. The turn was interrupted and will not continue automatically; send a new message to continue.`,
+		errorMessage: `Previous MusePi process exited before completing the turn${causeText}. The turn was interrupted and will not continue automatically; send a new message to continue.`,
 		timestamp: Number.isFinite(recordedAt) ? recordedAt : Date.now(),
 	};
 }
@@ -311,5 +311,5 @@ export function describePendingToolCalls(entries: readonly SessionEntry[]): stri
 	if (pending.length === 0) return undefined;
 	const formatted = pending.map(formatPendingToolCall).join(", ");
 	const noun = pending.length === 1 ? "tool call" : "tool calls";
-	return `Previous session ended while ${pending.length} ${noun} remained pending: ${formatted}. The prior OMP process exited before recording tool result(s).`;
+	return `Previous session ended while ${pending.length} ${noun} remained pending: ${formatted}. The prior MusePi process exited before recording tool result(s).`;
 }

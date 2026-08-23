@@ -91,7 +91,9 @@
 				"dir"
 			],
 			"category": "public.app-category.developer-tools",
-			"identity": null
+			"identity": "-",
+			"hardenedRuntime": true,
+			"gatekeeperAssess": false
 		},
 		"dmg": {
 			"title": "MusePi-${version}",
