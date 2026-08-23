@@ -49,12 +49,10 @@ runs:
         run: |
            set -euo pipefail
            remote=false
-           if [ -n "${BAZEL_REMOTE_USER:-}" ] || [ -n "${BAZEL_REMOTE_PASSWORD:-}" ]; then
-             if [ -z "${BAZEL_REMOTE_USER:-}" ] || [ -z "${BAZEL_REMOTE_PASSWORD:-}" ]; then
-               echo "::error::BAZEL_REMOTE_USER and BAZEL_REMOTE_PASSWORD must both be set"
-               exit 1
-             fi
+           if [ -n "${BAZEL_REMOTE_USER:-}" ] && [ -n "${BAZEL_REMOTE_PASSWORD:-}" ]; then
              remote=true
+           elif [ -n "${BAZEL_REMOTE_USER:-}" ] || [ -n "${BAZEL_REMOTE_PASSWORD:-}" ]; then
+             echo "::warning::BAZEL_REMOTE_USER or BAZEL_REMOTE_PASSWORD is set without the other; falling back to local disk cache"
            fi
            key="bazel-disk-v3-${{ inputs.scope }}-${{ runner.os }}-${{ runner.arch }}-$CONFIG_HASH-$SOURCE_HASH"
            prefix="bazel-disk-v3-${{ inputs.scope }}-${{ runner.os }}-${{ runner.arch }}-$CONFIG_HASH-"
