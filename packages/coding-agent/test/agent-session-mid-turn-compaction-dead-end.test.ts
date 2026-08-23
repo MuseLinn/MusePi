@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import * as compactionModule from "@musepi/pi-agent-core/compaction";
 import { createMockModel, type MockResponse } from "@musepi/pi-ai/providers/mock";

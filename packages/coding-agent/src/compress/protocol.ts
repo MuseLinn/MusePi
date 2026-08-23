@@ -13,7 +13,7 @@
  * const tools = [protocol.rewriteTool(), protocol.approveTool()];
  * // …drive a session, then read protocol.latest / protocol.approved
  */
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Tokenizer } from "@musepi/pi-agent-core";
 import type { ToolDefinition } from "../extensibility/extensions";
 import approveDescription from "../prompts/tools/approve.md" with { type: "text" };

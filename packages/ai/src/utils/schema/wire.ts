@@ -6,7 +6,7 @@
  * validators see the same JSON Schema dialect.
  */
 
-import type { Type } from "@musepi/omptype";
+import type { Type } from "@musepi/musepi-type";
 import type { Tool, TSchema } from "../../types";
 import { upgradeJsonSchemaTo202012 } from "./draft";
 import { stamp } from "./stamps";

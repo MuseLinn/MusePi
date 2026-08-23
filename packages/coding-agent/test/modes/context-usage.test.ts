@@ -6,7 +6,7 @@
  * internals, which massively overcounts.
  */
 import { describe, expect, it } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { Tokenizer } from "@musepi/pi-agent-core";
 import { arkToWireSchema } from "@musepi/pi-ai/utils/schema";
 import {

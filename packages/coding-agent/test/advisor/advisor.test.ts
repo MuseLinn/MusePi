@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { type AgentMessage, type AgentTelemetryConfig, Tokenizer } from "@musepi/pi-agent-core";
 import type { AssistantMessage } from "@musepi/pi-ai";
 import * as AIError from "@musepi/pi-ai/error";

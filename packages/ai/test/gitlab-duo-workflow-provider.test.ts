@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type } from "@musepi/omptype";
+import { type } from "@musepi/musepi-type";
 import { isContextOverflow } from "@musepi/pi-ai/error";
 import {
 	buildGitLabDuoWorkflowApprovalStartRequest,

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { OmpErrors, type } from "@musepi/omptype";
+import { OmpErrors, type } from "@musepi/musepi-type";
 import type { ProviderFileReference } from "@musepi/pi-ai";
 import { isEnoent } from "@musepi/pi-utils";
 import type { RemoteDeleteAction } from "./publication";
