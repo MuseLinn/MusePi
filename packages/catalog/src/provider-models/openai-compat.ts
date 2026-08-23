@@ -2736,6 +2736,7 @@ function mapOpenRouterThinking(entry: OpenAICompatibleModelRecord): ThinkingConf
 		mode: "effort",
 		efforts,
 		...(defaultLevel !== undefined && efforts.includes(defaultLevel) ? { defaultLevel } : {}),
+		...(reasoning.mandatory === true ? { requiresEffort: true } : {}),
 	};
 }
 
@@ -6298,6 +6299,29 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_GOOGLE_VERTEX: readonly ModelsDevProviderD
 	}),
 ];
 
+const OPENCODE_MODELS_DEV_DESCRIPTORS: readonly ModelsDevProviderDescriptor[] = [
+	openAiCompletionsDescriptor("opencode", "opencode-zen", "https://opencode.ai/zen/v1", {
+		filterModel: filterActiveToolCallModels,
+		resolveApi: (modelId, raw) =>
+			resolveApiByRules(
+				modelId,
+				raw,
+				OPENCODE_ZEN_API_RESOLUTION.rules,
+				OPENCODE_ZEN_API_RESOLUTION.defaultResolution,
+			),
+	}),
+	openAiCompletionsDescriptor("opencode-go", "opencode-go", "https://opencode.ai/zen/go/v1", {
+		filterModel: filterActiveToolCallModels,
+		resolveApi: (modelId, raw) =>
+			resolveApiByRules(
+				modelId,
+				raw,
+				OPENCODE_GO_API_RESOLUTION.rules,
+				OPENCODE_GO_API_RESOLUTION.defaultResolution,
+			),
+	}),
+];
+
 const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDescriptor[] = [
 	// --- Azure OpenAI ---
 	// OpenAI-family models hosted on Azure, served via the Responses API. baseUrl
@@ -6319,28 +6343,8 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_SPECIALIZED: readonly ModelsDevProviderDes
 	),
 	// --- Mistral ---
 	openAiCompletionsDescriptor("mistral", "mistral", "https://api.mistral.ai/v1"),
-	// --- OpenCode Zen ---
-	openAiCompletionsDescriptor("opencode", "opencode-zen", "https://opencode.ai/zen/v1", {
-		filterModel: filterActiveToolCallModels,
-		resolveApi: (modelId, raw) =>
-			resolveApiByRules(
-				modelId,
-				raw,
-				OPENCODE_ZEN_API_RESOLUTION.rules,
-				OPENCODE_ZEN_API_RESOLUTION.defaultResolution,
-			),
-	}),
-	// --- OpenCode Go ---
-	openAiCompletionsDescriptor("opencode-go", "opencode-go", "https://opencode.ai/zen/go/v1", {
-		filterModel: filterActiveToolCallModels,
-		resolveApi: (modelId, raw) =>
-			resolveApiByRules(
-				modelId,
-				raw,
-				OPENCODE_GO_API_RESOLUTION.rules,
-				OPENCODE_GO_API_RESOLUTION.defaultResolution,
-			),
-	}),
+	// --- OpenCode Zen / Go ---
+	...OPENCODE_MODELS_DEV_DESCRIPTORS,
 	// --- GitHub Copilot ---
 	openAiCompletionsDescriptor("github-copilot", "github-copilot", COPILOT_BASE_URL, {
 		defaultContextWindow: 128000,

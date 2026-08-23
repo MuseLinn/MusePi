@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -29,7 +29,7 @@ import { applyListLimit } from "./list-limit";
 import { formatStyledArtifactReference, type OutputMeta } from "./output-meta";
 import { isReadableUrlPath, type LineRange, parseLineRanges } from "./path-utils";
 import { formatBytes, formatExpandHint, getDomain, replaceTabs } from "./render-utils";
-import { listTables, looksLikeSqlite, renderTableList } from "./sqlite-reader";
+import { listTables, looksLikeSqlite, openSqliteReadConnection, renderTableList } from "./sqlite-reader";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 import { clampTimeout } from "./tool-timeouts";
@@ -886,8 +886,7 @@ async function renderSqlitePayload(bytes: Uint8Array): Promise<string> {
 	return withTempBinaryFile("omp-url-sqlite-", ".sqlite", bytes, async tempPath => {
 		let db: Database | null = null;
 		try {
-			db = new Database(tempPath, { readonly: true, strict: true });
-			db.run("PRAGMA busy_timeout = 3000");
+			db = await openSqliteReadConnection(tempPath);
 			const listLimit = applyListLimit(listTables(db), { limit: URL_SQLITE_LIST_LIMIT });
 			return renderTableList(listLimit.items);
 		} finally {

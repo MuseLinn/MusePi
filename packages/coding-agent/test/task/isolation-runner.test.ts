@@ -116,6 +116,9 @@ describe("runIsolatedSubprocess", () => {
 			session: null,
 			status: "parked",
 		});
+		// No branch was ever created, so the rescue probe finds nothing to keep.
+		vi.spyOn(gitModule.revList, "range").mockRejectedValue(new Error("unknown revision"));
+		vi.spyOn(gitModule.ref, "exists").mockResolvedValue(false);
 		const deleteSpy = vi.spyOn(gitModule.branch, "tryDelete").mockResolvedValue(true);
 
 		const outcome = await runIsolatedSubprocess({
@@ -148,6 +151,81 @@ describe("runIsolatedSubprocess", () => {
 		expect(deleteSpy).toHaveBeenCalledWith(repoRoot, "omp/task/PreserveBranchFailure");
 		expect(cleanupSpy).toHaveBeenCalledTimes(1);
 		expect(AgentRegistry.global().get("PreserveBranchFailure")?.history?.patchPath).toBe(patchPath);
+	});
+
+	it("keeps the task branch when it already carries the agent's commits", async () => {
+		// Regression for #8868: `commitToBranch` fetches the agent's commits into
+		// the parent ODB and creates `omp/task/<id>` before it commits the leftover
+		// working-tree delta. A throw from that trailing step used to delete the
+		// branch while the isolation worktree — the only other copy — was torn
+		// down in `finally`, losing committed work outright.
+		const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-isolation-rescue-"));
+		tempRoots.push(repoRoot);
+		const isolationDir = path.join(repoRoot, "isolated");
+		const artifactsDir = path.join(repoRoot, "artifacts");
+		const baseline = {
+			root: {
+				repoRoot,
+				headCommit: "base",
+				staged: "",
+				unstaged: "",
+				untracked: [],
+				untrackedPatch: "",
+			},
+			nested: [],
+		};
+
+		vi.spyOn(worktreeModule, "ensureIsolation").mockResolvedValue({
+			mergedDir: isolationDir,
+			backend: natives.IsoBackendKind.Rcopy,
+			fellBack: false,
+			fallbackReason: null,
+		});
+		vi.spyOn(executorModule, "runSubprocess").mockResolvedValue(result({ id: "RescueBranchCommits" }));
+		vi.spyOn(worktreeModule, "commitToBranch").mockRejectedValue(
+			new Error("git apply --3way failed for task RescueBranchCommits"),
+		);
+		vi.spyOn(worktreeModule, "captureDeltaPatch").mockResolvedValue({ rootPatch: "", nestedPatches: [] });
+		const cleanupSpy = vi.spyOn(worktreeModule, "cleanupIsolation").mockResolvedValue();
+		AgentRegistry.global().register({
+			id: "RescueBranchCommits",
+			displayName: "RescueBranchCommits",
+			kind: "sub",
+			session: null,
+			status: "parked",
+		});
+		const rangeSpy = vi.spyOn(gitModule.revList, "range").mockRejectedValue(new Error("object database unavailable"));
+		const refSpy = vi.spyOn(gitModule.ref, "exists").mockResolvedValue(true);
+		const deleteSpy = vi.spyOn(gitModule.branch, "tryDelete").mockResolvedValue(true);
+
+		const outcome = await runIsolatedSubprocess({
+			baseOptions: {
+				cwd: repoRoot,
+				agent: {
+					name: "task",
+					description: "Task agent",
+					systemPrompt: "test",
+					source: "bundled",
+				},
+				task: "Do work",
+				index: 0,
+				id: "RescueBranchCommits",
+			},
+			context: { repoRoot, baseline },
+			preferredBackend: undefined,
+			agentId: "RescueBranchCommits",
+			mergeMode: "branch",
+			artifactsDir,
+			buildFailureResult: err => result({ exitCode: 1, error: String(err) }),
+		});
+
+		expect(rangeSpy).toHaveBeenCalledWith(repoRoot, "base", "omp/task/RescueBranchCommits");
+		expect(refSpy).toHaveBeenCalledWith(repoRoot, "refs/heads/omp/task/RescueBranchCommits");
+		expect(deleteSpy).not.toHaveBeenCalled();
+		expect(outcome.error).toContain("git apply --3way failed");
+		expect(outcome.error).toContain("preserved on branch omp/task/RescueBranchCommits");
+		expect(outcome.error).toContain("cherry-pick");
+		expect(cleanupSpy).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps an isolated worktree until deferred child cleanup settles", async () => {
@@ -246,10 +324,24 @@ describe("mergeIsolatedChanges", () => {
 		expect(outcome.changesApplied).toBe(false);
 		expect(outcome.hadAnyChanges).toBe(false);
 		expect(outcome.mergedBranchForNestedPatches).toBe(false);
-		expect(outcome.summary).toContain("Branch merge failed before a task branch could be created");
+		expect(outcome.summary).toContain("Branch merge failed while capturing the task branch");
 		expect(outcome.summary).toContain("git apply --3way failed");
 		expect(outcome.summary).toContain("/repo/artifacts/dirty-context.patch");
 		expect(outcome.summary).not.toContain("No changes to apply");
+	});
+
+	it("relays the rescued task branch into the merge summary", async () => {
+		const outcome = await mergeIsolatedChanges({
+			repoRoot: "/repo",
+			mergeMode: "branch",
+			result: result({
+				error: "Merge failed: conflict. The agent's commits are preserved on branch omp/task/Rescued — merge or cherry-pick it manually.",
+			}),
+		});
+
+		expect(outcome.changesApplied).toBe(false);
+		expect(outcome.summary).toContain("omp/task/Rescued");
+		expect(outcome.summary).toContain("cherry-pick");
 	});
 
 	it("treats already-applied patch-mode diffs as successful no-ops", async () => {

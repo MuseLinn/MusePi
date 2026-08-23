@@ -95,6 +95,7 @@ export type SettingDef =
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CONDITIONS: Record<string, () => boolean> = {
+	macOS: () => process.platform === "darwin",
 	hasImageProtocol: () => !!TERMINAL.imageProtocol,
 	advisorEnabled: () => {
 		try {
@@ -155,6 +156,13 @@ const CONDITIONS: Record<string, () => boolean> = {
 	summarizeActive: () => {
 		try {
 			return Settings.instance.get("read.summarize.enabled") === true;
+		} catch {
+			return false;
+		}
+	},
+	unexpectedStopSmart: () => {
+		try {
+			return Settings.instance.get("features.unexpectedStopDetection") === "smart";
 		} catch {
 			return false;
 		}

@@ -663,6 +663,26 @@ describe("runSubprocess yield reminders", () => {
 		expect(result.stderr).toBe("Cancelled before start");
 	});
 
+	it("attributes a failed assistant turn with its resolved provider and model", async () => {
+		const session = createMockSession(({ emit, state }) => {
+			const failed: AssistantMessage = {
+				...createAssistantStopMessage(""),
+				stopReason: "error",
+				errorMessage: "Connect error invalid_argument: Error",
+			};
+			state.messages.push(failed);
+			emit({ type: "message_end", message: failed });
+		});
+
+		mockCreateAgentSession(session);
+
+		const result = await runSubprocess({ ...baseOptions, id: "subagent-provider-error" });
+
+		expect(result.exitCode).toBe(1);
+		expect(result.error).toBe("[openai/mock] Connect error invalid_argument: Error");
+		expect(result.stderr).toBe("[openai/mock] Connect error invalid_argument: Error");
+	});
+
 	it("surfaces the assistant abort message instead of 'Cancelled by caller' on an internal turn abort", async () => {
 		// No caller signal and no runtime limit: the subagent's own turn ended with
 		// stopReason "aborted" (e.g. a merged request-signal abort). abortReason is

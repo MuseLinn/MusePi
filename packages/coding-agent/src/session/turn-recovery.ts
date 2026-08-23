@@ -748,7 +748,8 @@ export class TurnRecovery {
 		});
 	}
 	async #handleUnexpectedAssistantStop(assistantMessage: AssistantMessage): Promise<boolean> {
-		if (!this.#host.settings.get("features.unexpectedStopDetection")) {
+		const mode = this.#host.settings.get("features.unexpectedStopDetection");
+		if (mode === "none") {
 			return false;
 		}
 		if (!isUnexpectedStopCandidate(assistantMessage)) {
@@ -760,37 +761,43 @@ export class TurnRecovery {
 			.filter((content): content is TextContent => content.type === "text")
 			.map(content => content.text)
 			.join("\n");
-		// Thinking-only stops carry their signal in the thinking block (a trapped
-		// response or a truncated fragment); classify on that when there is no text.
-		if (!hasNonWhitespace(text)) {
+		const hasTextContent = hasNonWhitespace(text);
+
+		// A thinking-only terminal turn has no visible assistant message, so both
+		// mechanical and smart modes retry it directly. Tool-call turns never reach
+		// this path: isUnexpectedStopCandidate excludes them, including forced tools.
+		if (!hasTextContent) {
 			text = assistantMessage.content
 				.filter((content): content is ThinkingContent => content.type === "thinking")
 				.map(content => content.thinking)
 				.join("\n");
-		}
-		if (!hasNonWhitespace(text)) {
+			if (!hasNonWhitespace(text)) {
+				this.#unexpectedStopRetryCount = 0;
+				return false;
+			}
+		} else if (mode === "mechanical") {
 			this.#unexpectedStopRetryCount = 0;
 			return false;
-		}
+		} else {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), UNEXPECTED_STOP_TIMEOUT_MS);
+			let classification: boolean | undefined;
+			try {
+				classification = await classifyUnexpectedStop(text, {
+					settings: this.#host.settings,
+					registry: this.#host.modelRegistry,
+					sessionId: this.#host.sessionId(),
+					metadataResolver: (provider: string) => this.#host.agent.metadataForProvider(provider),
+					signal: controller.signal,
+				});
+			} finally {
+				clearTimeout(timeout);
+			}
 
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), UNEXPECTED_STOP_TIMEOUT_MS);
-		let classification: boolean | undefined;
-		try {
-			classification = await classifyUnexpectedStop(text, {
-				settings: this.#host.settings,
-				registry: this.#host.modelRegistry,
-				sessionId: this.#host.sessionId(),
-				metadataResolver: (provider: string) => this.#host.agent.metadataForProvider(provider),
-				signal: controller.signal,
-			});
-		} finally {
-			clearTimeout(timeout);
-		}
-
-		if (classification !== true) {
-			this.#unexpectedStopRetryCount = 0;
-			return false;
+			if (classification !== true) {
+				this.#unexpectedStopRetryCount = 0;
+				return false;
+			}
 		}
 
 		this.#unexpectedStopRetryCount++;
@@ -1243,15 +1250,22 @@ export class TurnRecovery {
 	}
 
 	/**
-	 * OpenRouter can repeatedly close Gemini streams at the reasoning-to-payload
-	 * transition. One retry covers a transient edge failure; the normal ten-retry
-	 * budget would otherwise re-run the same expensive reasoning cycle unchanged.
+	 * Known provider routes can repeatedly close after completing an expensive
+	 * reasoning phase. One retry covers a transient edge failure; the normal
+	 * ten-retry budget would otherwise replay the same reasoning cycle unchanged.
 	 */
-	#isOpenRouterThinkingStreamClose(message: AssistantMessage): boolean {
+	#isBoundedThinkingStreamClose(message: AssistantMessage): boolean {
+		if (!message.content.some(block => block.type === "thinking" && block.thinking.trim().length > 0)) {
+			return false;
+		}
+		const errorMessage = message.errorMessage ?? "";
 		return (
-			message.provider === "openrouter" &&
-			/server_error:\s*stream closed with reason:\s*error/i.test(message.errorMessage ?? "") &&
-			message.content.some(block => block.type === "thinking" && block.thinking.trim().length > 0)
+			(message.provider === "openrouter" &&
+				/server_error:\s*stream closed with reason:\s*error/i.test(errorMessage)) ||
+			(message.provider === "github-copilot" &&
+				message.model === "grok-4.6" &&
+				message.api === "openai-responses" &&
+				/OpenAI responses stream closed before a terminal response event was received/i.test(errorMessage))
 		);
 	}
 
@@ -1915,7 +1929,7 @@ export class TurnRecovery {
 		// (every rotation sets switchedCredential and skips it), so without
 		// this last resort a provider-wide usage cap never fails over to the
 		// configured chain.
-		const maxRetries = this.#isOpenRouterThinkingStreamClose(message)
+		const maxRetries = this.#isBoundedThinkingStreamClose(message)
 			? Math.min(retrySettings.maxRetries, 1)
 			: retrySettings.maxRetries;
 		const retryBudgetExhausted = this.#retryAttempt > maxRetries;

@@ -52,6 +52,34 @@ describe("buildResponsesDeltaInput streaming-symbol scrub", () => {
 		expect(delta?.[0]).toBe(appended);
 	});
 
+	it("chains a replay-sanitized custom tool call when live history retains its output id", () => {
+		const user: ResponseInputItem = {
+			type: "message",
+			role: "user",
+			content: [{ type: "input_text", text: "edit the file" }],
+		};
+		const previousCustomCall = {
+			type: "custom_tool_call",
+			call_id: "call_eval_1",
+			name: "eval",
+			input: "print('ok')",
+		} as ResponseInputItem;
+		const liveCustomCall = {
+			...previousCustomCall,
+			id: "ctc_eval_1",
+			status: "completed",
+		} as ResponseInputItem;
+		const output = {
+			type: "custom_tool_call_output",
+			call_id: "call_eval_1",
+			output: "ok",
+		} as ResponseInputItem;
+
+		expect(
+			buildResponsesDeltaInput({ input: [user] }, [previousCustomCall], { input: [user, liveCustomCall, output] }),
+		).toEqual([output]);
+	});
+
 	it("still breaks the chain on a real content change, not just symbol noise", () => {
 		const previous = { input: [baselineItems()[0]] };
 		const previousResponseItems = [baselineItems()[1]];

@@ -308,7 +308,6 @@ describe("Markdown incremental streaming lex (E2)", () => {
 		streaming.setText(doc);
 		const streamLines = streaming.render(60);
 		expect(streamLines).toEqual(renderCold(doc, 60));
-		expect(streaming.getLastRenderSettledRows()).toBeGreaterThan(0);
 	});
 
 	it("a document that is one still-growing list never freezes mid-list", () => {
@@ -323,7 +322,6 @@ describe("Markdown incremental streaming lex (E2)", () => {
 			streaming.setText(doc.slice(0, len));
 			const streamLines = streaming.render(60);
 			expect(streamLines).toEqual(renderCold(doc.slice(0, len), 60));
-			expect(streaming.getLastRenderSettledRows()).toBe(0);
 		}
 	});
 });

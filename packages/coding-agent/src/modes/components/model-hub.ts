@@ -219,6 +219,12 @@ export class ModelHubComponent implements Component {
 	#scheduledProviderRefreshes = new Map<string, Timer>();
 	#refreshSpinnerFrame = 0;
 	#refreshSpinnerInterval?: Timer;
+	// Optional discoverable locals (ollama, llama.cpp, lm-studio) hidden from
+	// the sidebar because discovery found nothing at their endpoint (#2761).
+	// Rebuilt on every sidebar build; consumed by the once-per-open re-probe.
+	#hiddenOptionalProviders = new Set<string>();
+	/** Providers already re-probed by {@link ModelHubComponent.#reprobeHiddenOptionalProviders} this hub open. */
+	#reprobedHiddenProviders = new Set<string>();
 
 	// Frame geometry from the last render, for mouse hit-testing (the
 	// fullscreen overlay paints from screen row 0, so mouse rows map 1:1).
@@ -270,6 +276,7 @@ export class ModelHubComponent implements Component {
 			this.#registry
 				.refresh("offline")
 				.then(() => this.#syncFromRegistryState())
+				.then(() => this.#reprobeHiddenOptionalProviders())
 				.catch(error => {
 					this.#configError = error instanceof Error ? error.message : String(error);
 				})
@@ -352,6 +359,7 @@ export class ModelHubComponent implements Component {
 	}
 
 	#buildSidebar(allModels: ReadonlyArray<Model>, availableModels: ReadonlyArray<Model>): void {
+		this.#hiddenOptionalProviders.clear();
 		const scoped = this.#scopedModels.length > 0;
 		let disabledProviders: ReadonlySet<string>;
 		try {
@@ -384,6 +392,20 @@ export class ModelHubComponent implements Component {
 				// locked; keyless/custom endpoints (ollama, vllm, …) surface as
 				// selectable so discovery can populate them.
 				if (authStorage.hasAuth(provider) || !locked.has(provider)) {
+					// #2761: implicit local endpoints (optional: true) stay hidden
+					// until discovery actually reaches a server. "idle" means never
+					// probed; "unavailable" means the endpoint is unreachable; both
+					// would render a dead tab for a provider the user never
+					// configured. models.yml discovery providers (optional: false)
+					// and providers with stored auth keep their entry so
+					// misconfigurations stay visible and diagnosable.
+					if (!authStorage.hasAuth(provider)) {
+						const discovery = this.#registry.getProviderDiscoveryState(provider);
+						if (discovery?.optional && (discovery.status === "idle" || discovery.status === "unavailable")) {
+							this.#hiddenOptionalProviders.add(provider);
+							continue;
+						}
+					}
 					locked.delete(provider);
 					unlocked.add(provider);
 				}
@@ -700,6 +722,23 @@ export class ModelHubComponent implements Component {
 		} finally {
 			this.#setProviderRefreshing(providerId, false);
 			this.#tui.requestRender();
+		}
+	}
+
+	/**
+	 * Background-probe optional discoverable providers hidden from the
+	 * sidebar (#2761). Runs once per provider per hub open, after the offline
+	 * hydration settles: when a previously dead local endpoint (ollama,
+	 * llama.cpp, lm-studio) is now serving models, the online refresh
+	 * repopulates the registry and the sync resurfaces its tab. Endpoints
+	 * still down keep their "unavailable" state and stay hidden.
+	 */
+	#reprobeHiddenOptionalProviders(): void {
+		if (this.#scopedModels.length > 0) return;
+		for (const provider of this.#hiddenOptionalProviders) {
+			if (this.#reprobedHiddenProviders.has(provider)) continue;
+			this.#reprobedHiddenProviders.add(provider);
+			void this.#refreshProviderInBackground(provider);
 		}
 	}
 

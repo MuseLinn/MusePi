@@ -1,5 +1,5 @@
-import { isDashscopeCompatibleModeUrl } from "@musepi/pi-catalog/hosts";
-import { isQwenModelId } from "@musepi/pi-catalog/identity";
+import { isDashscopeCompatibleModeUrl, modelMatchesHost } from "@musepi/pi-catalog/hosts";
+import { isDeepseekModelIdOrName, isQwenModelId } from "@musepi/pi-catalog/identity";
 
 import type { ImageContent, Model, TextContent } from "../types";
 
@@ -63,4 +63,39 @@ export function isDashscopeCompatibleModeTextOnlyQwen(model: Model<"openai-compl
 	const major = maxMatch[1] ? Number.parseInt(maxMatch[1], 10) : 0;
 	const minor = maxMatch[2] ? Number.parseInt(maxMatch[2], 10) : 0;
 	return major < 3 || (major === 3 && minor < 8);
+}
+
+/**
+ * Detect known text-only DeepSeek models served via OpenAI-compatible Chat
+ * Completions endpoints whose server-side deserializers reject `image_url`
+ * content parts with HTTP 400 (`unknown variant \`image_url\`, expected \`text\``).
+ *
+ * Used as a defensive override in `convertMessages` so misconfigured model
+ * definitions or user overrides (e.g. `models.yml` claiming `input: [text, image]`)
+ * do not crash the session with an unrecoverable 400.
+ */
+export function isTextOnlyDeepSeek(model: Model<"openai-completions">): boolean {
+	const id = model.id.toLowerCase();
+	const name = (model.name ?? "").toLowerCase();
+	// DeepSeek OCR is a genuinely multimodal model served by Novita.
+	if (id.includes("deepseek-ocr") || name.includes("deepseek-ocr")) return false;
+	return (
+		modelMatchesHost(model, "deepseekFamily") ||
+		isDeepseekModelIdOrName(model.id) ||
+		isDeepseekModelIdOrName(model.name ?? "") ||
+		model.provider === "deepseek"
+	);
+}
+
+/**
+ * Evaluates whether an OpenAI-compatible Chat Completions model genuinely
+ * supports multimodal image inputs on the wire. Defensive guards override
+ * misconfigured provider descriptors or user model entries (e.g. text-only
+ * DashScope Qwen SKUs, DeepSeek models) whose endpoints reject `image_url`.
+ */
+export function isOpenAICompletionsVisionSupported(model: Model<"openai-completions">): boolean {
+	if (!model.input.includes("image")) return false;
+	if (isDashscopeCompatibleModeTextOnlyQwen(model)) return false;
+	if (isTextOnlyDeepSeek(model)) return false;
+	return true;
 }

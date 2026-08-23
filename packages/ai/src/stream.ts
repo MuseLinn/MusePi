@@ -79,6 +79,7 @@ import type {
 import { resolveCacheRetention } from "./utils";
 import { AssistantMessageEventStream } from "./utils/event-stream";
 import { isFoundryEnabled } from "./utils/foundry";
+import { applyGlyphCodec } from "./utils/glyph-codec";
 import { wrapLeakedThinkingStream } from "./utils/leaked-thinking-stream";
 import { wrapFetchForProxy } from "./utils/proxy";
 import { withRequestDebugFetch } from "./utils/request-debug";
@@ -873,8 +874,19 @@ export function stream<TApi extends Api>(
 	context: Context,
 	options?: OptionsForApi<TApi>,
 ): AssistantMessageEventStream {
-	return withThinkingLoopGuard(model, options, opts =>
-		withProviderInFlightLimit(model, opts, () => streamDispatch(model, context, opts)),
+	if (!model.requiresGlyphTokenization) {
+		return withThinkingLoopGuard(model, options, opts =>
+			withProviderInFlightLimit(model, opts, () => streamDispatch(model, context, opts)),
+		);
+	}
+	const codec = applyGlyphCodec(context);
+	const execHandlers = options?.execHandlers;
+	const wireOptions: OptionsForApi<TApi> | undefined =
+		execHandlers === undefined ? options : { ...options, execHandlers: codec.wrapCursorExecHandlers(execHandlers) };
+	return codec.wrap(
+		withThinkingLoopGuard(model, wireOptions, opts =>
+			withProviderInFlightLimit(model, opts, () => streamDispatch(model, codec.context, opts)),
+		),
 	);
 }
 
@@ -1406,7 +1418,21 @@ export function streamSimple<TApi extends Api>(
 	context: Context,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
-	return streamSimpleWithAnthropicCacheRefresh(model, context, options);
+	if (!model.requiresGlyphTokenization) {
+		return streamSimpleWithAnthropicCacheRefresh(model, context, options);
+	}
+	const codec = applyGlyphCodec(context);
+	const execHandlers = options?.cursorExecHandlers ?? options?.execHandlers;
+	const wrappedExecHandlers = execHandlers === undefined ? undefined : codec.wrapCursorExecHandlers(execHandlers);
+	const wireOptions =
+		wrappedExecHandlers === undefined
+			? options
+			: {
+					...options,
+					execHandlers: wrappedExecHandlers,
+					cursorExecHandlers: wrappedExecHandlers,
+				};
+	return codec.wrap(streamSimpleWithAnthropicCacheRefresh(model, codec.context, wireOptions));
 }
 
 function streamSimpleRequest<TApi extends Api>(
@@ -1537,7 +1563,18 @@ function streamSimpleRequest<TApi extends Api>(
 	// pi-native transport.
 	if (model.transport === "pi-native") {
 		return withThinkingLoopGuard(model, requestOptions, opts =>
-			withProviderInFlightLimit(model, opts, () => streamPiNative(model, context, opts)),
+			withProviderInFlightLimit(model, opts, () => {
+				const nativeOptions =
+					model.api === "bedrock-converse-stream"
+						? {
+								...(opts ?? {}),
+								guardrailIdentifier: model.guardrailIdentifier ?? opts?.guardrailIdentifier,
+								guardrailVersion: model.guardrailVersion ?? opts?.guardrailVersion,
+								guardrailTrace: model.guardrailTrace ?? opts?.guardrailTrace,
+							}
+						: opts;
+				return streamPiNative(model, context, nativeOptions);
+			}),
 		);
 	}
 

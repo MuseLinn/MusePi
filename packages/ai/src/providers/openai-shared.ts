@@ -25,6 +25,7 @@ import {
 	$env,
 	classifyJsonPrefix,
 	extractHttpStatusFromError,
+	isRecord,
 	logger,
 	parseImageMetadata,
 	parseStreamingJson,
@@ -714,17 +715,27 @@ export interface OpenAIExtraBodyOptions {
 }
 
 /**
- * Merge a compat/options `extraBody` blob into the request params. When
- * `dropThinkingWhenReasoningEffort` is set and `reasoning_effort` is present,
- * delete the conflicting `thinking` toggle (Fireworks rejects both together).
+ * Merge a compat/options `extraBody` blob into the request params. An encoded
+ * Venice disable signal takes precedence over static `venice_parameters`, so
+ * an explicit per-turn Thinking Off selection cannot be re-enabled by config.
+ * When `dropThinkingWhenReasoningEffort` is set and `reasoning_effort` is
+ * present, delete the conflicting `thinking` toggle (Fireworks rejects both).
  */
 export function applyOpenAIExtraBody<P extends object>(
-	params: P,
+	params: P & { venice_parameters?: Record<string, unknown> },
 	extraBody: Record<string, unknown> | undefined,
 	options?: OpenAIExtraBodyOptions,
 ): void {
 	if (!extraBody) return;
+	const encodedVeniceParameters = params.venice_parameters;
 	Object.assign(params, extraBody);
+	if (encodedVeniceParameters?.disable_thinking === true) {
+		const configuredVeniceParameters = extraBody.venice_parameters;
+		params.venice_parameters = {
+			...(isRecord(configuredVeniceParameters) ? configuredVeniceParameters : {}),
+			...encodedVeniceParameters,
+		};
+	}
 	if (options?.dropThinkingWhenReasoningEffort) {
 		const shaped = params as { reasoning_effort?: unknown; thinking?: unknown };
 		if (shaped.reasoning_effort !== undefined) {
@@ -735,10 +746,10 @@ export function applyOpenAIExtraBody<P extends object>(
 
 /**
  * Chat Completions streaming request body shaped by the OpenAI-family providers.
- * Extends the vendored SDK params with the compat dialect fields pi-ai emits
- * (binary `thinking`, Qwen `enable_thinking`/`chat_template_kwargs`, nested
- * `reasoning`, gateway `provider`/`providerOptions`, sampling extras). Lives in
- * the shared module beside the request-shaping helpers that mutate it.
+ * (binary `thinking`, Qwen `enable_thinking`/`chat_template_kwargs`, Venice
+ * `venice_parameters`, nested `reasoning`, gateway `provider`/`providerOptions`,
+ * sampling extras). Lives in the shared module beside the request-shaping
+ * helpers that mutate it.
  */
 export type OpenAICompletionsParams = Omit<ChatCompletionCreateParamsStreaming, "reasoning_effort" | "service_tier"> & {
 	top_k?: number;
@@ -749,6 +760,7 @@ export type OpenAICompletionsParams = Omit<ChatCompletionCreateParamsStreaming, 
 	preserve_thinking?: boolean;
 	chat_template_kwargs?: { enable_thinking?: boolean; preserve_thinking?: boolean; reasoning_effort?: string };
 	reasoning?: { effort?: string } | { enabled: false };
+	venice_parameters?: { disable_thinking?: boolean; [key: string]: unknown };
 	reasoning_effort?: string | null;
 	service_tier?: ServiceTier;
 	tool_stream?: boolean;
@@ -998,6 +1010,9 @@ function encodeChatCompletionsDisabledReasoning(
 			(params as typeof params & { reasoning?: { effort?: string } | { enabled: false } }).reasoning = {
 				enabled: false,
 			};
+			break;
+		case "venice-disable-thinking":
+			params.venice_parameters = { ...params.venice_parameters, disable_thinking: true };
 			break;
 		default:
 			delete params.reasoning;
@@ -3690,6 +3705,17 @@ const ITEM_LIFECYCLE_EXCLUDE_MAP = {
 };
 
 /**
+ * Replay sanitization strips output item IDs from message/function/custom
+ * assistant items. A live transcript rebuilt from the corresponding agent
+ * message may still retain that ID; it is output-only identity, while call_id
+ * remains the semantic tool/result pairing key.
+ */
+const REPLAY_SANITIZED_ITEM_EXCLUDE_MAP = {
+	status: true,
+	id: true,
+};
+
+/**
  * Strict-prefix delta for stateful `previous_response_id` chaining (used by the
  * platform Responses provider and the Codex provider on both transports):
  * returns the input items the current request appends beyond the previous
@@ -3716,7 +3742,12 @@ export function buildResponsesDeltaInput<TItem extends ResponseInputItem | Input
 	for (const series of [previous.input, previousResponseItems]) {
 		if (!series) continue;
 		for (const item of series) {
-			if (deepEqualsWithout(item, current.input[index], ITEM_LIFECYCLE_EXCLUDE_MAP)) {
+			const type = item.type;
+			const omitKeys =
+				type === "message" || type === "function_call" || type === "custom_tool_call"
+					? REPLAY_SANITIZED_ITEM_EXCLUDE_MAP
+					: ITEM_LIFECYCLE_EXCLUDE_MAP;
+			if (deepEqualsWithout(item, current.input[index], omitKeys)) {
 				index++;
 			} else {
 				return null;

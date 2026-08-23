@@ -296,7 +296,7 @@ describe("read and write route xd:// device URLs", () => {
 		}
 	});
 
-	it("renderCall withholds a partial xd:// URL, then delegates once settled", async () => {
+	it("renderCall withholds a partial xd:// URL, then queues until execution starts", async () => {
 		await themeModule.initTheme();
 		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
 		if (!uiTheme) throw new Error("expected an initialized theme");
@@ -311,10 +311,56 @@ describe("read and write route xd:// device URLs", () => {
 		// never sees a half-typed "xd://ast_" frame.
 		expect(writeToolRenderer.renderCall({ path: "xd://ast_e" }, options, uiTheme)).toBeUndefined();
 
-		// Path settled + content streaming: delegate to the mounted tool's renderer
+		// Path settled + content streaming, but the write has not executed yet:
+		// show a queued card instead of the inner tool's in-flight renderer.
+		const queued = writeToolRenderer.renderCall({ path: "xd://ast_edit", content }, options, uiTheme);
+		expect(queued).toBeDefined();
+		const queuedText = Bun.stripANSI(queued!.render(80).join("\n"));
+		expect(queuedText).toContain("queued");
+		expect(queuedText).toContain("ast_edit");
+
+		// Args can be final at message_end while an earlier exclusive write still
+		// runs — keep the queued card until this call's tool_execution_start.
+		const argsCompleteOnly = writeToolRenderer.renderCall(
+			{ path: "xd://ast_edit", content },
+			{ ...options, argsComplete: true },
+			uiTheme,
+		);
+		expect(Bun.stripANSI(argsCompleteOnly!.render(80).join("\n"))).toContain("queued");
+
+		// Same payload after tool_execution_start: delegate to the inner renderer
 		// instead of throwing ReferenceError inside a generic Write frame.
-		const rendered = writeToolRenderer.renderCall({ path: "xd://ast_edit", content }, options, uiTheme);
-		expect(rendered).toBeDefined();
+		const executing = writeToolRenderer.renderCall(
+			{ path: "xd://ast_edit", content },
+			{ ...options, argsComplete: true, executionStarted: true },
+			uiTheme,
+		);
+		expect(executing).toBeDefined();
+		const executingText = Bun.stripANSI(executing!.render(80).join("\n"));
+		expect(executingText).not.toContain("queued");
+	});
+
+	it("renders streamed MCP device writes as queued until execution starts", async () => {
+		await themeModule.initTheme();
+		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
+		if (!uiTheme) throw new Error("expected an initialized theme");
+		const content = JSON.stringify({
+			action: "grep_all",
+			pattern: "Broken",
+			scope: "game.StarterPlayer",
+			studio: "AED Content Development",
+			maxResults: 20,
+		});
+		const queued = writeToolRenderer.renderCall(
+			{ path: "xd://mcp__ecoport_search", content },
+			{ expanded: false, isPartial: true },
+			uiTheme,
+		);
+		expect(queued).toBeDefined();
+		const queuedText = Bun.stripANSI(queued!.render(120).join("\n"));
+		expect(queuedText).toContain("queued");
+		expect(queuedText).toContain("ecoport/search");
+		expect(queuedText).toContain("Broken");
 	});
 
 	it("renders device execution errors as the mounted tool instead of write", async () => {

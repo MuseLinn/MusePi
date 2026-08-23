@@ -50,7 +50,7 @@ function createFixture(): Fixture {
 		chatContainer: {
 			addChild: (block: unknown) => blocks.push(block),
 			removeChild: vi.fn(),
-			isBlockUncommitted: () => false,
+			canRemoveBlock: () => false,
 		},
 		toolOutputExpanded: false,
 		setTodos: vi.fn(),

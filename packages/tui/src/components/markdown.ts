@@ -11,12 +11,7 @@ import { latexToBlock } from "../latex-block";
 import { inlineMathSpanEnd, isBareMathEnvironment, latexToUnicode } from "../latex-to-unicode";
 import type { SymbolTheme } from "../symbols";
 import { TERMINAL } from "../terminal-capabilities";
-import type {
-	Component,
-	NativeScrollbackCommittedRows,
-	NativeScrollbackReplay,
-	NativeScrollbackWidthEpoch,
-} from "../tui";
+import type { Component } from "../tui";
 import {
 	applyBackgroundToLine,
 	Ellipsis,
@@ -924,28 +919,17 @@ function renderedLine(text: string, literalCode?: boolean): RenderedLine {
 	return literalCode ? { text, literalCode: true } : { text };
 }
 
-interface RenderCacheEntry {
-	lines: readonly string[];
-	tables: readonly RenderedTableLayout[];
-}
-
-const renderCache = new LRUCache<string, RenderCacheEntry>({
+const renderCache = new LRUCache<string, readonly string[]>({
 	max: RENDER_CACHE_MAX,
 	maxSize: RENDER_CACHE_MAX_SIZE,
 	maxEntrySize: RENDER_CACHE_MAX_ENTRY_SIZE,
-	sizeCalculation: renderCacheEntrySize,
+	sizeCalculation: renderedLinesCacheSize,
 });
 
 function renderedLinesCacheSize(lines: readonly string[]): number {
 	let size = lines.length;
 	for (let i = 0; i < lines.length; i++) size += lines[i]!.length;
 	return Math.max(1, size);
-}
-
-function renderCacheEntrySize(entry: RenderCacheEntry): number {
-	let size = renderedLinesCacheSize(entry.lines);
-	for (const table of entry.tables) size += table.key.length + table.columnWidths.length + 4;
-	return size;
 }
 
 // A reference-link definition (`[label]: dest`) resolves across the whole
@@ -1166,6 +1150,15 @@ export interface DefaultTextStyle {
 }
 
 /**
+ * Stateful incremental code highlighter carrying parser state across pushes.
+ * Produced per streaming fence by {@link MarkdownTheme.createHighlightStream}.
+ */
+export interface HighlightStreamSession {
+	/** Highlight the next chunk and advance parser state. */
+	push(chunk: string): string;
+}
+
+/**
  * Theme functions for markdown elements.
  * Each function takes text and returns styled text with ANSI codes.
  */
@@ -1185,6 +1178,14 @@ export interface MarkdownTheme {
 	strikethrough: (text: string) => string;
 	underline: (text: string) => string;
 	highlightCode?: (code: string, lang?: string) => string[];
+	/**
+	 * Create a stateful incremental highlighter for one streaming code fence.
+	 * `push` receives newline-terminated complete lines (only the final push
+	 * may omit the trailing newline) and must return highlighted ANSI text for
+	 * exactly the pushed chunk, byte-identical to highlighting the concatenated
+	 * text through `highlightCode`. Return null when `lang` is unsupported.
+	 */
+	createHighlightStream?: (lang?: string) => HighlightStreamSession | null;
 	/**
 	 * Resolve a mermaid ASCII rendering by fenced block source text.
 	 * Return null to fall back to fenced code rendering.
@@ -1453,35 +1454,25 @@ interface StreamPrefixLineCache extends RenderSignature {
 	text: string;
 	tokenCount: number;
 	lines: readonly string[];
-	tables: readonly TableRenderSpec[];
 }
-interface StreamingDiffLineCache extends RenderSignature {
+interface StreamingHighlightCache extends RenderSignature {
 	lang: string | undefined;
 	text: string;
 	lines: readonly string[];
+	stream: HighlightStreamSession;
 }
 
-interface TableLayoutLock {
-	availableWidth: number;
-	columnWidths: readonly number[];
+/**
+ * Split a highlight-stream push result (newline-terminated lines) into
+ * per-line strings, dropping the empty tail produced by the final newline.
+ */
+function splitPushedHighlightLines(pushed: string): string[] {
+	const lines = pushed.split("\n");
+	lines.pop();
+	return lines;
 }
 
-interface TableRenderSpec extends TableLayoutLock {
-	key: string;
-	lineCount: number;
-	startRow: number;
-	endRow: number;
-}
-
-interface RenderedTableLayout extends TableLayoutLock {
-	key: string;
-	startRow: number;
-	endRow: number;
-}
-
-export class Markdown
-	implements Component, NativeScrollbackCommittedRows, NativeScrollbackReplay, NativeScrollbackWidthEpoch
-{
+export class Markdown implements Component {
 	#text: string;
 	#paddingX: number; // Left/right padding
 	#paddingY: number; // Top/bottom padding
@@ -1509,48 +1500,19 @@ export class Markdown
 	#streamPrefixText?: string;
 	#streamPrefixTokens?: Token[];
 	#streamPrefixLineCache?: StreamPrefixLineCache;
-	// Rows of the most recent render() that are settled — top padding plus the
-	// rendered frozen token prefix — exposed via getLastRenderSettledRows()
-	// for native-scrollback commit gating.
-	#lastRenderSettledRows = 0;
-	// Frozen-prefix text backing the last non-zero settled exposure. Settled
-	// rows are declared final downstream, so a render whose frozen text no
-	// longer extends this prefix (a rewind / wholesale rewrite) resets the
-	// exposure to 0 and re-earns it — the exposure is hard-monotone within a
-	// text lineage.
-	#settledExposedText?: string;
-	// Semantic source state that produced the most recent render. Unlike #text,
-	// it does not advance when streaming updates arrive before the next paint.
-	#lastRenderedText?: string;
-	#lastRenderedTransientRenderCache = false;
-	#lastRenderedHasMutableTrailingRow = false;
-	#widthEpochBoundaries = new WeakMap<
-		object,
-		{ text: string; transientRenderCache: boolean; hasMutableTrailingRow: boolean }
-	>();
-
 	// True while #renderStreamingContentLines renders the frozen token range:
 	// frozen code blocks highlight even in transient mode so their bytes match
 	// the finalized render (they render once into the prefix line cache, so
-	// the FFI cost is amortized). The volatile tail normally stays
-	// unhighlighted; streaming diff fences line-highlight completed rows so
-	// semantic colors reach native scrollback before rows leave the viewport.
-	#renderingFrozenPrefix = false;
-	#streamingDiffLineCache?: StreamingDiffLineCache;
+	// the FFI cost is amortized). In the volatile tail, an open fence
+	// incrementally highlights its completed lines through a stateful
+	// highlight stream (falling back to per-line highlighting for diff-family
+	// fences when the theme lacks one) so completed rows are styled immediately;
+	// only the trailing partial line stays unhighlighted.
+	#renderingStablePrefix = false;
+	#streamingHighlightCache?: StreamingHighlightCache;
 	#activeRenderSignature?: RenderSignature;
-	// Streaming tables may grow naturally while wholly repaintable. Once any
-	// physical row of a table enters native scrollback, its current column widths
-	// are locked for the rest of this append-only text lineage: future wider cells
-	// wrap inside those columns instead of reflowing immutable history above.
-	#tableLayoutWidth?: number;
-	#lockedTableLayouts = new Map<string, TableLayoutLock>();
-	#lastRenderedTableLayouts: RenderedTableLayout[] = [];
-	#activeTableRenderSpecs?: TableRenderSpec[];
-
 	#ignoreTight = false;
-
 	setIgnoreTight(ignore: boolean): this {
-		if (this.#ignoreTight !== ignore) this.#clearTableLayouts();
 		this.#ignoreTight = ignore;
 		this.invalidate();
 		return this;
@@ -1580,7 +1542,6 @@ export class Markdown
 		// full lex + wrap runs per re-emit — one of the top CPU hotspots during
 		// streaming (issue #4353). Mirrors `Text.setText`'s guard.
 		if (text === this.#text) return false;
-		if (!text.startsWith(this.#text)) this.#clearTableLayouts();
 		this.#text = text;
 		if (!text.trim()) {
 			// Blank replacement: render() early-returns before #lexTokens can see
@@ -1589,7 +1550,6 @@ export class Markdown
 			this.#streamPrefixText = undefined;
 			this.#streamPrefixTokens = undefined;
 			this.#streamPrefixLineCache = undefined;
-			this.#settledExposedText = undefined;
 		}
 		this.invalidate();
 		return true;
@@ -1611,104 +1571,6 @@ export class Markdown
 		this.invalidate();
 	}
 
-	/**
-	 * Rows at the top of the most recent render() (top padding + rendered
-	 * frozen-token prefix) whose bytes are settled: byte-stable at this
-	 * width/theme for as long as the text keeps growing append-only. Hosts
-	 * feed this to transcript commit gating (see the coding agent's
-	 * `FinalizableBlock.getTranscriptBlockSettledRows`). 0 outside streaming
-	 * (`transientRenderCache`) mode, after a text rewind (re-earned on the new
-	 * lineage), and on cache-served non-streaming renders.
-	 */
-	getLastRenderSettledRows(): number {
-		return this.#lastRenderSettledRows;
-	}
-
-	captureNativeScrollbackWidthEpoch(): unknown {
-		if (this.#lastRenderedText === undefined) return undefined;
-		const marker = {};
-		this.#widthEpochBoundaries.set(marker, {
-			text: this.#lastRenderedText,
-			transientRenderCache: this.#lastRenderedTransientRenderCache,
-			hasMutableTrailingRow: this.#lastRenderedHasMutableTrailingRow,
-		});
-		return marker;
-	}
-
-	resolveNativeScrollbackWidthEpoch(boundary: unknown): number | undefined {
-		if (typeof boundary !== "object" || boundary === null || this.#cachedWidth === undefined) return undefined;
-		const captured = this.#widthEpochBoundaries.get(boundary);
-		if (captured === undefined) return undefined;
-		const snapshot = new Markdown(
-			captured.text,
-			this.#paddingX,
-			this.#paddingY,
-			this.#theme,
-			this.#defaultTextStyle,
-			this.#codeBlockIndent,
-		);
-		snapshot.#ignoreTight = this.#ignoreTight;
-		snapshot.#transientRenderCache = captured.transientRenderCache;
-		return Math.max(
-			0,
-			snapshot.render(this.#cachedWidth).length - this.#paddingY - (captured.hasMutableTrailingRow ? 1 : 0),
-		);
-	}
-
-	getNativeScrollbackWidthEpochRows(): number | undefined {
-		return this.#cachedLines === undefined ? undefined : this.#widthEpochRows(this.#cachedLines.length);
-	}
-
-	isNativeScrollbackWidthEpochAppendOnly(boundary: unknown): boolean {
-		if (typeof boundary !== "object" || boundary === null) return true;
-		return this.#widthEpochBoundaries.get(boundary)?.hasMutableTrailingRow !== true;
-	}
-
-	#widthEpochRows(renderedRows: number): number {
-		return Math.max(0, renderedRows - this.#paddingY - (this.#transientRenderCache ? 1 : 0));
-	}
-
-	#recordLastRenderedState(hasContentRows: boolean): void {
-		this.#lastRenderedText = this.#text;
-		this.#lastRenderedTransientRenderCache = this.#transientRenderCache;
-		this.#lastRenderedHasMutableTrailingRow = this.#transientRenderCache && hasContentRows;
-	}
-
-	/**
-	 * Freeze every table whose first physical row is already part of the native
-	 * scrollback prefix. The recorded widths came from the exact frame that was
-	 * just emitted, so the next streamed delta cannot retroactively widen it.
-	 */
-	setNativeScrollbackCommittedRows(rows: number): void {
-		const committed = Number.isFinite(rows) ? Math.max(0, Math.trunc(rows)) : 0;
-		let changed = false;
-		for (const table of this.#lastRenderedTableLayouts) {
-			if (table.startRow >= committed || this.#lockedTableLayouts.has(table.key)) continue;
-			this.#lockedTableLayouts.set(table.key, {
-				availableWidth: table.availableWidth,
-				columnWidths: table.columnWidths.slice(),
-			});
-			changed = true;
-		}
-		if (changed) this.invalidate();
-	}
-
-	/** A destructive replay removes the immutable tape this layout was guarding. */
-	prepareNativeScrollbackReplay(): void {
-		this.#clearTableLayouts();
-		this.#tableLayoutWidth = undefined;
-		this.invalidate();
-	}
-
-	#clearTableLayouts(): void {
-		this.#lockedTableLayouts.clear();
-		this.#lastRenderedTableLayouts = [];
-		this.#activeTableRenderSpecs = undefined;
-		// Same-width replay/non-append rewrites could otherwise reuse physical
-		// prefix lines rendered with the retired locked widths.
-		this.#streamPrefixLineCache = undefined;
-	}
-
 	// Lex `text` into block tokens, reusing the frozen stable prefix when the text
 	// only grew (the streaming path). Falls back to a full lex whenever the prefix
 	// is no longer a prefix (non-append edit), the text carries reference-link
@@ -1716,17 +1578,19 @@ export class Markdown
 	// raw-span offsets). Every fallback is correctness-preserving — only speed
 	// differs; the render loop sees the identical token list either way.
 	#lexTokens(text: string): Token[] {
-		const canStream = !HAS_REF_DEF.test(text) && !text.includes("\r");
+		// When a frozen prefix exists, it was already verified ref-def-free when
+		// frozen (#freezeStablePrefix only runs when canStream was true). The prefix
+		// ends at a "\n\n" block boundary (stableBlockBoundary), so the tail starts
+		// at a fresh line — scanning only the tail for ref defs is sufficient and
+		// avoids re-scanning the growing prefix every frame (O(n²) → O(n) overall).
 		const prefix = this.#streamPrefixText;
 		const prefixTokens = this.#streamPrefixTokens;
-		if (
-			canStream &&
-			prefix !== undefined &&
-			prefixTokens !== undefined &&
-			text.length > prefix.length &&
-			text.startsWith(prefix)
-		) {
-			const tailTokens = lexDocument(text.slice(prefix.length));
+		const hasPrefix =
+			prefix !== undefined && prefixTokens !== undefined && text.length > prefix.length && text.startsWith(prefix);
+		const refDefText = hasPrefix ? text.slice(prefix.length) : text;
+		const canStream = !HAS_REF_DEF.test(refDefText) && !refDefText.includes("\r");
+		if (canStream && hasPrefix) {
+			const tailTokens = lexDocument(refDefText);
 			const tokens = [...prefixTokens, ...tailTokens];
 			this.#freezeStablePrefix(text, tokens, { preserveExisting: true });
 			return tokens;
@@ -1763,23 +1627,13 @@ export class Markdown
 	}
 
 	render(width: number): readonly string[] {
-		if (this.#tableLayoutWidth !== undefined && this.#tableLayoutWidth !== width) {
-			this.#clearTableLayouts();
-			this.invalidate();
-		}
-		this.#tableLayoutWidth = width;
 		// L1: per-instance cache — fastest path for repeated renders of the same
 		// instance at the same width (e.g. resize debounce, repeated redraws).
 		// Returning the cached reference is load-bearing: parents memoize their
 		// concatenation on reference equality.
 		if (this.#cachedLines && this.#cachedText === this.#text && this.#cachedWidth === width) {
-			this.#recordLastRenderedState(this.#cachedLines.length > 0);
 			return this.#cachedLines;
 		}
-
-		// Recomputed below by the streaming path; every other path (cache-served,
-		// empty text, non-streaming full render) exposes no settled rows.
-		this.#lastRenderSettledRows = 0;
 
 		// Calculate available width for content (subtract horizontal padding)
 		const paddingX = this.#ignoreTight ? this.#paddingX : getPaddingX(this.#paddingX);
@@ -1790,7 +1644,6 @@ export class Markdown
 			this.#cachedText = this.#text;
 			this.#cachedWidth = width;
 			this.#cachedLines = EMPTY_RENDER_LINES;
-			this.#recordLastRenderedState(false);
 			return EMPTY_RENDER_LINES;
 		}
 
@@ -1813,41 +1666,29 @@ export class Markdown
 		// theme.heading is used as the representative theme probe — it's required
 		// by MarkdownTheme and is one of the most styling-sensitive entries.
 		let cacheKey: string | undefined;
-		if (!this.transientRenderCache && this.#lockedTableLayouts.size === 0) {
+		if (!this.transientRenderCache) {
 			cacheKey = this.#renderCacheKey(normalizedText, signature);
 			const cached = renderCache.get(cacheKey);
 			if (cached !== undefined) {
-				// Restore both the rendered rows and the geometry metadata that produced
-				// them. A later scrollback publication must never lock widths from an
-				// older transient frame against rows served from this cache entry.
-				this.#lastRenderedTableLayouts = cached.tables.map(table => ({
-					...table,
-					columnWidths: table.columnWidths.slice(),
-				}));
 				// Populate L1 so subsequent calls from this instance are O(1) map lookup.
 				this.#cachedText = this.#text;
 				this.#cachedWidth = width;
-				this.#cachedLines = cached.lines;
-				this.#recordLastRenderedState(cached.lines.length > 0);
-				return cached.lines;
+				this.#cachedLines = cached;
+				return cached;
 			}
 		}
 
 		// Parse markdown to HTML-like tokens
 		const tokens = this.#lexTokens(normalizedText);
 		let contentLines: string[];
-		const tableRenderSpecs: TableRenderSpec[] = [];
-		this.#activeTableRenderSpecs = tableRenderSpecs;
 		this.#activeRenderSignature = signature;
 		try {
 			contentLines = this.transientRenderCache
 				? this.#renderStreamingContentLines(tokens, normalizedText, signature, contentWidth)
-				: this.#renderContentLines(tokens, 0, tokens.length, contentWidth, signature, 0, 0);
+				: this.#renderContentLines(tokens, 0, tokens.length, contentWidth, signature);
 		} finally {
 			this.#activeRenderSignature = undefined;
-			this.#activeTableRenderSpecs = undefined;
 		}
-		this.#lastRenderedTableLayouts = this.#resolveRenderedTableLayouts(tableRenderSpecs, signature.paddingY);
 		const emptyLines = this.#renderEmptyPaddingLines(signature);
 
 		// Combine top padding, content, and bottom padding
@@ -1864,16 +1705,8 @@ export class Markdown
 		// Update L2 module-level LRU so future instances with the same key skip
 		// the marked.lexer + highlightCode (Rust FFI) work entirely.
 		if (cacheKey !== undefined) {
-			renderCache.set(cacheKey, {
-				lines: result,
-				tables: this.#lastRenderedTableLayouts.map(table => ({
-					...table,
-					columnWidths: table.columnWidths.slice(),
-				})),
-			});
+			renderCache.set(cacheKey, result);
 		}
-		this.#recordLastRenderedState(contentLines.length > 0);
-
 		return result;
 	}
 
@@ -1905,78 +1738,43 @@ export class Markdown
 		signature: RenderSignature,
 		contentWidth: number,
 	): string[] {
-		const frozenText = this.#streamPrefixText;
-		const frozenTokenCount = this.#streamPrefixTokens?.length ?? 0;
-		if (frozenText === undefined || frozenTokenCount === 0 || !normalizedText.startsWith(frozenText)) {
-			return this.#renderContentLines(tokens, 0, tokens.length, contentWidth, signature, 0, 0);
+		const stableText = this.#streamPrefixText;
+		const stableTokenCount = this.#streamPrefixTokens?.length ?? 0;
+		if (stableText === undefined || stableTokenCount === 0 || !normalizedText.startsWith(stableText)) {
+			return this.#renderContentLines(tokens, 0, tokens.length, contentWidth, signature);
 		}
 
 		const contentLines: string[] = [];
-		const reusablePrefix = this.#matchingStreamPrefixLineCache(normalizedText, frozenText, signature);
+		const reusablePrefix = this.#matchingStreamPrefixLineCache(normalizedText, stableText, signature);
 		let renderedUntil = 0;
-		let renderedSourceOffset = 0;
-		if (reusablePrefix && reusablePrefix.tokenCount <= frozenTokenCount) {
+		if (reusablePrefix && reusablePrefix.tokenCount <= stableTokenCount) {
 			contentLines.push(...reusablePrefix.lines);
-			this.#activeTableRenderSpecs?.push(...reusablePrefix.tables);
 			renderedUntil = reusablePrefix.tokenCount;
-			renderedSourceOffset = reusablePrefix.text.length;
 		}
 
-		if (renderedUntil < frozenTokenCount) {
-			// Frozen tokens render with full fidelity (syntax highlighting on)
+		if (renderedUntil < stableTokenCount) {
+			// Stable tokens render with full fidelity (syntax highlighting on)
 			// so these cached rows byte-match the finalized render.
-			this.#renderingFrozenPrefix = true;
+			this.#renderingStablePrefix = true;
 			try {
 				contentLines.push(
-					...this.#renderContentLines(
-						tokens,
-						renderedUntil,
-						frozenTokenCount,
-						contentWidth,
-						signature,
-						contentLines.length,
-						renderedSourceOffset,
-					),
+					...this.#renderContentLines(tokens, renderedUntil, stableTokenCount, contentWidth, signature),
 				);
 			} finally {
-				this.#renderingFrozenPrefix = false;
+				this.#renderingStablePrefix = false;
 			}
-			renderedUntil = frozenTokenCount;
+			renderedUntil = stableTokenCount;
 		}
 
 		this.#streamPrefixLineCache = {
 			...signature,
-			text: frozenText,
-			tokenCount: frozenTokenCount,
+			text: stableText,
+			tokenCount: stableTokenCount,
 			lines: contentLines.slice(),
-			tables: this.#activeTableRenderSpecs?.slice() ?? [],
 		};
 
-		// Settled exposure (hard-monotone): these rows are declared final to
-		// the host, so expose them only while the frozen text still extends
-		// the previously exposed prefix; a rewind resets to 0 and re-earns on
-		// the rewritten lineage.
-		if (contentLines.length > 0) {
-			if (this.#settledExposedText === undefined || frozenText.startsWith(this.#settledExposedText)) {
-				this.#settledExposedText = frozenText;
-				this.#lastRenderSettledRows = signature.paddingY + contentLines.length;
-			} else {
-				this.#settledExposedText = undefined;
-			}
-		}
-
 		if (renderedUntil < tokens.length) {
-			contentLines.push(
-				...this.#renderContentLines(
-					tokens,
-					renderedUntil,
-					tokens.length,
-					contentWidth,
-					signature,
-					contentLines.length,
-					frozenText.length,
-				),
-			);
+			contentLines.push(...this.#renderContentLines(tokens, renderedUntil, tokens.length, contentWidth, signature));
 		}
 
 		return contentLines;
@@ -1984,12 +1782,12 @@ export class Markdown
 
 	#matchingStreamPrefixLineCache(
 		normalizedText: string,
-		frozenText: string,
+		stableText: string,
 		signature: RenderSignature,
 	): StreamPrefixLineCache | undefined {
 		const cache = this.#streamPrefixLineCache;
 		if (!cache) return undefined;
-		if (!normalizedText.startsWith(cache.text) || !frozenText.startsWith(cache.text)) return undefined;
+		if (!normalizedText.startsWith(cache.text) || !stableText.startsWith(cache.text)) return undefined;
 		if (cache.width !== signature.width) return undefined;
 		if (cache.paddingX !== signature.paddingX) return undefined;
 		if (cache.paddingY !== signature.paddingY) return undefined;
@@ -2010,25 +1808,12 @@ export class Markdown
 		end: number,
 		contentWidth: number,
 		signature: RenderSignature,
-		rowOffset: number,
-		startingSourceOffset: number,
 	): string[] {
 		const wrappedLines: RenderedLine[] = [];
-		let sourceOffset = startingSourceOffset;
 		for (let i = start; i < end; i++) {
 			const token = tokens[i];
 			const nextToken = tokens[i + 1];
-			const tableSpecStart = this.#activeTableRenderSpecs?.length ?? 0;
-			const tokenWrappedRowStart = wrappedLines.length;
-			const tokenRowStart = rowOffset + tokenWrappedRowStart;
-			const renderedTokenLines = this.#renderToken(
-				token,
-				contentWidth,
-				nextToken?.type,
-				undefined,
-				`offset:${sourceOffset}`,
-			);
-			const tokenLineOffsets = [0];
+			const renderedTokenLines = this.#renderToken(token, contentWidth, nextToken?.type);
 			for (const renderedRow of renderedTokenLines) {
 				// Lists wrap while their structural prefixes are still available, so
 				// continuation rows retain the correct hanging indent. Re-wrapping the
@@ -2045,30 +1830,7 @@ export class Markdown
 						}
 					}
 				}
-				tokenLineOffsets.push(wrappedLines.length - tokenWrappedRowStart);
 			}
-			const tableSpecs = this.#activeTableRenderSpecs;
-			if (tableSpecs !== undefined) {
-				for (let specIndex = tableSpecStart; specIndex < tableSpecs.length; specIndex++) {
-					const spec = tableSpecs[specIndex]!;
-					let relativeStart: number;
-					let relativeEnd: number;
-					if (token.type === "table") {
-						// Exclude the optional inter-block blank from a top-level table's span.
-						relativeStart = 0;
-						relativeEnd = Math.min(renderedTokenLines.length, spec.lineCount);
-					} else {
-						// Container renderers express nested table spans relative to their
-						// returned lines. Preserve that exact span through this final wrap.
-						if (spec.startRow < 0 || spec.endRow <= spec.startRow) continue;
-						relativeStart = Math.min(renderedTokenLines.length, spec.startRow);
-						relativeEnd = Math.min(renderedTokenLines.length, spec.endRow);
-					}
-					spec.startRow = tokenRowStart + tokenLineOffsets[relativeStart]!;
-					spec.endRow = tokenRowStart + tokenLineOffsets[relativeEnd]!;
-				}
-			}
-			sourceOffset += token.raw.length;
 		}
 
 		const leftMargin = padding(signature.paddingX);
@@ -2117,37 +1879,20 @@ export class Markdown
 		return contentLines;
 	}
 
-	#resolveRenderedTableLayouts(specs: readonly TableRenderSpec[], topPadding: number): RenderedTableLayout[] {
-		const layouts: RenderedTableLayout[] = [];
-		for (const spec of specs) {
-			if (spec.startRow < 0 || spec.endRow <= spec.startRow) continue;
-			layouts.push({
-				key: spec.key,
-				availableWidth: spec.availableWidth,
-				columnWidths: spec.columnWidths.slice(),
-				startRow: topPadding + spec.startRow,
-				endRow: topPadding + spec.endRow,
-			});
-		}
-		return layouts;
-	}
-
 	#renderCodeBodyLines(token: Token, codeIndent: string): RenderedLine[] {
 		const literalCode = this.#codeBlockIndent === 0;
 		const bodyLines: RenderedLine[] = [];
 		const tokenText = "text" in token && typeof token.text === "string" ? token.text : "";
 		const lang = "lang" in token && typeof token.lang === "string" ? token.lang : undefined;
-		const normalizedLang = lang?.toLowerCase();
-		const canStreamDiff =
-			this.transientRenderCache &&
-			!this.#renderingFrozenPrefix &&
-			this.#theme.highlightCode &&
-			(normalizedLang === "diff" || normalizedLang === "patch" || normalizedLang === "udiff");
 		const addBodyLine = (line: string): void => {
 			bodyLines.push(renderedLine(literalCode ? line : codeIndent + line, literalCode));
 		};
 
-		if (this.#theme.highlightCode && (!this.transientRenderCache || this.#renderingFrozenPrefix)) {
+		const streaming = this.transientRenderCache && !this.#renderingStablePrefix;
+		if (this.#theme.highlightCode && (!streaming || this.#codeTokenHasClosingFence(token))) {
+			// Finalized content — or a fence that closed mid-stream, which
+			// highlights through the same whole-block call the finalized render
+			// uses so cached stable rows byte-match it.
 			const highlightedLines = this.#theme.highlightCode(tokenText, lang);
 			for (const hlLine of highlightedLines) {
 				addBodyLine(hlLine);
@@ -2155,18 +1900,18 @@ export class Markdown
 			return bodyLines;
 		}
 
-		if (canStreamDiff) {
-			const closedFence = this.#codeTokenHasClosingFence(token);
+		if (streaming && this.#theme.highlightCode) {
+			// Open fence: highlight completed lines incrementally so semantic
+			// colors reach completed rows immediately; only the trailing partial
+			// line stays unhighlighted.
 			const lineEnd = tokenText.lastIndexOf("\n");
-			if (closedFence || lineEnd >= 0) {
-				const completedText = closedFence ? tokenText : tokenText.slice(0, lineEnd);
-				for (const hlLine of this.#highlightStreamingDiffLines(completedText, lang)) {
+			const completedLines = lineEnd >= 0 ? this.#highlightStreamingLines(tokenText.slice(0, lineEnd), lang) : null;
+			if (completedLines) {
+				for (const hlLine of completedLines) {
 					addBodyLine(hlLine);
 				}
-				if (!closedFence) {
-					for (const codeLine of tokenText.slice(lineEnd + 1).split("\n")) {
-						addBodyLine(this.#theme.codeBlock(codeLine));
-					}
+				for (const codeLine of tokenText.slice(lineEnd + 1).split("\n")) {
+					addBodyLine(this.#theme.codeBlock(codeLine));
 				}
 				return bodyLines;
 			}
@@ -2209,11 +1954,17 @@ export class Markdown
 		return false;
 	}
 
-	#highlightStreamingDiffLines(completedText: string, lang: string | undefined): readonly string[] {
-		const highlightCode = this.#theme.highlightCode;
-		if (!highlightCode) return [];
+	/**
+	 * Highlight the completed (newline-terminated) prefix of a streaming code
+	 * fence. Uses a stateful per-fence highlight stream so each render pushes
+	 * only the newly completed lines, with output byte-identical to the
+	 * whole-block `highlightCode` the finalized render performs. Returns null
+	 * when no stream is available for `lang` (caller falls back to plain
+	 * code-block styling).
+	 */
+	#highlightStreamingLines(completedText: string, lang: string | undefined): readonly string[] | null {
 		const signature = this.#activeRenderSignature;
-		const cache = this.#streamingDiffLineCache;
+		const cache = this.#streamingHighlightCache;
 		if (
 			signature &&
 			cache &&
@@ -2233,23 +1984,47 @@ export class Markdown
 			cache.headingProbe === signature.headingProbe
 		) {
 			if (completedText.length === cache.text.length) return cache.lines;
-			const lines = cache.lines.slice();
+			// Invariant: the stream has consumed `cache.text + "\n"`, so pushing
+			// the added lines with a trailing newline advances it to
+			// `completedText + "\n"` — every fed line stays newline-terminated.
 			const addedText = completedText.slice(cache.text.length + 1);
-			for (const codeLine of addedText.split("\n")) {
-				lines.push(...highlightCode(codeLine, lang));
-			}
-			this.#streamingDiffLineCache = { ...signature, lang, text: completedText, lines };
+			const lines = cache.lines.concat(splitPushedHighlightLines(cache.stream.push(`${addedText}\n`)));
+			this.#streamingHighlightCache = { ...signature, lang, text: completedText, lines, stream: cache.stream };
 			return lines;
 		}
 
-		const lines: string[] = [];
-		for (const codeLine of completedText.split("\n")) {
-			lines.push(...highlightCode(codeLine, lang));
-		}
+		const stream = this.#createHighlightStream(lang);
+		if (!stream) return null;
+		const lines = splitPushedHighlightLines(stream.push(`${completedText}\n`));
 		if (signature) {
-			this.#streamingDiffLineCache = { ...signature, lang, text: completedText, lines };
+			this.#streamingHighlightCache = { ...signature, lang, text: completedText, lines, stream };
 		}
 		return lines;
+	}
+
+	/**
+	 * Resolve a highlight stream for `lang`. Prefers the theme's stateful
+	 * factory; without one, emulates a stream via per-line `highlightCode` for
+	 * diff-family fences only — that grammar is line-local, so per-line output
+	 * matches the whole-block render (other grammars carry cross-line state
+	 * and would diverge).
+	 */
+	#createHighlightStream(lang: string | undefined): HighlightStreamSession | null {
+		const factory = this.#theme.createHighlightStream;
+		if (factory) return factory(lang);
+		const highlightCode = this.#theme.highlightCode;
+		if (!highlightCode) return null;
+		const normalizedLang = lang?.toLowerCase();
+		if (normalizedLang !== "diff" && normalizedLang !== "patch" && normalizedLang !== "udiff") return null;
+		return {
+			push: chunk => {
+				const lines = chunk.split("\n");
+				const trailing = lines.pop() ?? "";
+				let out = "";
+				for (const line of lines) out += `${highlightCode(line, lang).join("\n")}\n`;
+				return trailing ? out + highlightCode(trailing, lang).join("\n") : out;
+			},
+		};
 	}
 
 	#renderEmptyPaddingLines(signature: RenderSignature): string[] {
@@ -2351,7 +2126,6 @@ export class Markdown
 		width: number,
 		nextTokenType?: string,
 		styleContext?: InlineStyleContext,
-		tokenKey = "root",
 	): RenderedLine[] {
 		const lines: RenderedLine[] = [];
 
@@ -2461,7 +2235,7 @@ export class Markdown
 			}
 
 			case "table": {
-				const tableLines = this.#renderTable(token as TableToken, width, nextTokenType, styleContext, tokenKey);
+				const tableLines = this.#renderTable(token as TableToken, width, nextTokenType, styleContext);
 				for (const tableLine of tableLines) lines.push(renderedLine(tableLine));
 				break;
 			}
@@ -2474,58 +2248,23 @@ export class Markdown
 				const quoteContentWidth = Math.max(1, width - 2);
 				const quoteTokens = token.tokens || [];
 				const renderedQuoteLines: RenderedLine[] = [];
-				const blockquoteSpecStart = this.#activeTableRenderSpecs?.length ?? 0;
-
 				for (let i = 0; i < quoteTokens.length; i++) {
 					const quoteToken = quoteTokens[i];
 					const nextQuoteToken = quoteTokens[i + 1];
-					const quoteTokenRowStart = renderedQuoteLines.length;
-					const quoteSpecStart = this.#activeTableRenderSpecs?.length ?? 0;
 					const quoteTokenLines = this.#renderToken(
 						quoteToken,
 						quoteContentWidth,
 						nextQuoteToken?.type,
 						quoteInlineStyleContext,
-						`${tokenKey}/quote:${i}`,
 					);
 					renderedQuoteLines.push(...quoteTokenLines);
-
-					const tableSpecs = this.#activeTableRenderSpecs;
-					if (tableSpecs !== undefined) {
-						for (let specIndex = quoteSpecStart; specIndex < tableSpecs.length; specIndex++) {
-							const spec = tableSpecs[specIndex]!;
-							if (spec.startRow < 0) {
-								// Direct child tables initially have no row coordinates. Their
-								// structural line count excludes any inter-block blank.
-								spec.startRow = quoteTokenRowStart;
-								spec.endRow = quoteTokenRowStart + Math.min(quoteTokenLines.length, spec.lineCount);
-							} else {
-								// A nested blockquote already mapped the table into its own
-								// returned rows; translate those rows into this quote's input.
-								spec.startRow += quoteTokenRowStart;
-								spec.endRow += quoteTokenRowStart;
-							}
-						}
-					}
 				}
 
 				while (renderedQuoteLines.length > 0 && renderedQuoteLines[renderedQuoteLines.length - 1]!.text === "") {
 					renderedQuoteLines.pop();
 				}
 
-				const quoteRowOffsets: number[] = [];
-				const borderedQuoteLines = this.#applyQuoteBorder(renderedQuoteLines, width, quoteRowOffsets);
-				const tableSpecs = this.#activeTableRenderSpecs;
-				if (tableSpecs !== undefined) {
-					for (let specIndex = blockquoteSpecStart; specIndex < tableSpecs.length; specIndex++) {
-						const spec = tableSpecs[specIndex]!;
-						if (spec.startRow < 0 || spec.endRow <= spec.startRow) continue;
-						const relativeStart = Math.min(renderedQuoteLines.length, spec.startRow);
-						const relativeEnd = Math.min(renderedQuoteLines.length, spec.endRow);
-						spec.startRow = quoteRowOffsets[relativeStart]!;
-						spec.endRow = quoteRowOffsets[relativeEnd]!;
-					}
-				}
+				const borderedQuoteLines = this.#applyQuoteBorder(renderedQuoteLines, width);
 				lines.push(...borderedQuoteLines);
 				if (nextTokenType && nextTokenType !== "space") {
 					lines.push(renderedLine("")); // Add spacing after blockquotes (unless space token follows)
@@ -2573,7 +2312,7 @@ export class Markdown
 	 * Wrap already-rendered lines in the blockquote border and quote styling.
 	 * `width` is the full content width; the border reserves two cells.
 	 */
-	#applyQuoteBorder(renderedLines: RenderedLine[], width: number, sourceRowOffsets?: number[]): RenderedLine[] {
+	#applyQuoteBorder(renderedLines: RenderedLine[], width: number): RenderedLine[] {
 		const quoteStyle = (text: string) => this.#theme.quote(this.#theme.italic(text));
 		const quoteStylePrefix = this.#getStylePrefix(quoteStyle);
 		const applyQuoteStyle = (line: string): string => {
@@ -2585,7 +2324,6 @@ export class Markdown
 		};
 		const quoteContentWidth = Math.max(1, width - 2);
 		const lines: RenderedLine[] = [];
-		sourceRowOffsets?.push(0);
 		for (const quoteLine of renderedLines) {
 			if (quoteLine.literalCode) {
 				const wrappedLiteralRows = wrapTextWithAnsi(quoteLine.text, quoteContentWidth);
@@ -2602,7 +2340,6 @@ export class Markdown
 					lines.push(renderedLine(this.#theme.quoteBorder(`${this.#theme.symbols.quoteBorder} `) + wrappedLine));
 				}
 			}
-			sourceRowOffsets?.push(lines.length);
 		}
 		return lines;
 	}
@@ -2976,7 +2713,6 @@ export class Markdown
 		availableWidth: number,
 		nextTokenType?: string,
 		styleContext?: InlineStyleContext,
-		tableKey = "table",
 	): string[] {
 		const lines: string[] = [];
 		const numCols = token.header.length;
@@ -3091,17 +2827,6 @@ export class Markdown
 			}
 		}
 
-		const lockedLayout = this.#lockedTableLayouts.get(tableKey);
-		if (
-			lockedLayout !== undefined &&
-			lockedLayout.availableWidth === availableWidth &&
-			lockedLayout.columnWidths.length === numCols &&
-			lockedLayout.columnWidths.every(width => Number.isFinite(width) && width >= 1) &&
-			lockedLayout.columnWidths.reduce((total, width) => total + width, borderOverhead) <= availableWidth
-		) {
-			columnWidths = lockedLayout.columnWidths.slice();
-		}
-
 		const t = this.#theme.symbols.table;
 		const h = t.horizontal;
 		const v = t.vertical;
@@ -3157,15 +2882,6 @@ export class Markdown
 		const bottomBorderCells = columnWidths.map(w => h.repeat(w));
 		const bottomBorder = `${t.bottomLeft}${h}${bottomBorderCells.join(`${h}${t.teeUp}${h}`)}${h}${t.bottomRight}`;
 		lines.push(bottomBorder);
-		this.#activeTableRenderSpecs?.push({
-			key: tableKey,
-			availableWidth,
-			columnWidths: columnWidths.slice(),
-			lineCount: lines.length,
-			startRow: -1,
-			endRow: -1,
-		});
-
 		if (nextTokenType && nextTokenType !== "space") {
 			lines.push(""); // Add spacing after table
 		}

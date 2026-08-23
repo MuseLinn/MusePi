@@ -371,6 +371,14 @@ export class HubTool implements AgentTool<typeof hubSchema, HubDetails> {
 		if (!manager || runningJobs.length === 0) {
 			// No job legs: pure message wait — or nothing to block on at all.
 			if (!messaging) return nothingToWaitForResult(this.session);
+			// The bus mailbox is a separate store from the session-pending buffer
+			// drained above, and only `executeMessageWait` below ever reads it. A
+			// peer that sends and then stops running leaves its message queued
+			// there, so without this take the liveness gate would answer "nothing
+			// to wait for" while `hub inbox` hands back the very message being
+			// waited on. Single atomic take: the rest of the backlog stays queued.
+			const queued = IrcBus.global().take(messaging.senderId, from);
+			if (queued) return messageResult(messaging.senderId, queued);
 			if (!from) {
 				// A bare wait can only be satisfied by a running peer eventually
 				// sending something; with none, return the snapshot immediately

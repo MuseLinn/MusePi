@@ -98,56 +98,6 @@ describe("AssistantMessageComponent mermaid markdown", () => {
 	});
 });
 
-describe("AssistantMessageComponent settled-row commit boundary", () => {
-	function renderStreamingMarkdown(markdown: string): AssistantMessageComponent {
-		const component = new AssistantMessageComponent();
-		component.updateContent(createAssistantMessage(markdown), { transient: true });
-		component.render(80);
-		return component;
-	}
-
-	it("exposes frozen paragraph rows for streaming prose", () => {
-		const component = renderStreamingMarkdown(
-			"First paragraph is already byte-stable.\n\nSecond paragraph is still streaming tokens",
-		);
-
-		expect(component.getTranscriptBlockSettledRows()).toBeGreaterThan(0);
-	});
-
-	it("exposes zero settled rows for Mermaid while streaming", () => {
-		for (const markdown of [
-			"Here is the flow:\n\n```mermaid\nflowchart TD\n  A-->B",
-			"```mermaid\nflowchart TD\n  A-->B\n```",
-		]) {
-			const component = renderStreamingMarkdown(markdown);
-
-			expect(component.getTranscriptBlockSettledRows()).toBe(0);
-		}
-	});
-
-	it("keeps a streaming table in the unsettled tail", () => {
-		const component = renderStreamingMarkdown("Results:\n\n| Name | Score |\n| --- | --- |\n| a | 1 |");
-		const renderedRows = component.render(80);
-		const settledRows = component.getTranscriptBlockSettledRows();
-
-		expect(settledRows).toBeGreaterThan(0);
-		expect(settledRows).toBeLessThan(renderedRows.length);
-		expect(Bun.stripANSI(renderedRows.slice(settledRows).join("\n"))).toContain("Name");
-	});
-
-	it("exposes zero settled rows after a reflowing block finalizes", () => {
-		for (const markdown of [
-			"```mermaid\nflowchart TD\n  A-->B\n```",
-			"| Name | Score |\n| --- | --- |\n| a | 1 |\n| b | 2 |",
-		]) {
-			const component = renderStreamingMarkdown(markdown);
-			component.markTranscriptBlockFinalized();
-
-			expect(component.getTranscriptBlockSettledRows()).toBe(0);
-		}
-	});
-});
-
 describe("AssistantMessageComponent thinking renderers", () => {
 	it("renders all extension outputs below visible thinking blocks in registration order", () => {
 		const contexts: Array<{ contentIndex: number; thinkingIndex: number; text: string }> = [];

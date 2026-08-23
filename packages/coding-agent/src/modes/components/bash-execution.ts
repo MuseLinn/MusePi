@@ -40,6 +40,11 @@ export class BashExecutionComponent extends Container {
 	#loader: Loader;
 	#truncation?: TruncationMeta;
 	#expanded = false;
+	// Post-finalize mutation counter (FinalizableBlock.getTranscriptBlockVersion):
+	// a completed command's block still mutates on expansion toggles, and the
+	// transcript's width-epoch resolution and committed-render bypass must
+	// observe that.
+	#blockVersion = 0;
 	#displayDirty = false;
 	#chunkGate = false;
 	#contentContainer: Container;
@@ -73,10 +78,15 @@ export class BashExecutionComponent extends Container {
 		return this.#status !== "running";
 	}
 
+	getTranscriptBlockVersion(): number {
+		return this.#blockVersion;
+	}
+
 	/**
 	 * Set whether the output is expanded (shows full output) or collapsed (preview only).
 	 */
 	setExpanded(expanded: boolean): void {
+		if (this.#expanded !== expanded) this.#blockVersion++;
 		this.#expanded = expanded;
 		this.#updateDisplay();
 	}

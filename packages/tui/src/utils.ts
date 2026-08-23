@@ -226,6 +226,13 @@ export function getSegmenter(): Intl.Segmenter {
 const OSC66_SPAN_REGEX = /\x1b\]66;([^;]*);([\s\S]*?)(?:\x07|\x1b\\)/g;
 const OSC66_PREFIX = "\x1b]66;";
 const ESC = "\x1b";
+// APC sequences (`ESC _ ... ST|BEL`) — Kitty graphics commands such as the
+// virtual-placement prefix on Unicode-placeholder image lines, or the TUI's
+// BEL-terminated cursor marker. `Bun.stringWidth` strips CSI/OSC but counts APC
+// payloads as printable text, so they are removed before measuring (they occupy
+// zero cells — matching the native width engine in pi-natives/text.rs).
+const APC_SPAN_REGEX = /\x1b_[\s\S]*?(?:\x07|\x1b\\)/g;
+const APC_PREFIX = "\x1b_";
 const TAB = "\t";
 const LONG_WIDTH_FAST_PATH_MIN = 128;
 
@@ -343,7 +350,8 @@ export function visibleWidth(str: string): number {
 	// `Bun.stringWidth` is a JSC builtin (no per-call N-API number box, unlike
 	// the native scanner that traps under Bun 1.3.x GC/N-API load). It strips
 	// CSI/OSC to zero cells and shares the native engine's UAX#11 width tables.
-	let width = Bun.stringWidth(str, STRING_WIDTH_OPTS);
+	const measurable = str.includes(APC_PREFIX) ? str.replace(APC_SPAN_REGEX, "") : str;
+	let width = Bun.stringWidth(measurable, STRING_WIDTH_OPTS);
 	if (tabCount > 0) width += tabCount * DEFAULT_TAB_WIDTH;
 
 	// OSC 66: add back each stripped span as `scale * (explicit w ?? payload

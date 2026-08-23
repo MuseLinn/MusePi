@@ -81,16 +81,14 @@
 			"ts-morph": "^28.0.0",
 			"typescript": "^7.0.2",
 			"vite": "^8.1.4",
-			"vite-plugin-solid": "^2.11.12",
-			"@musepi/musepi-type": "0.4.3",
-			"@musepi/musepi-stats": "0.4.3"
+			"vite-plugin-solid": "^2.11.12"
 		}
 	},
 	"overrides": {
 		"@ark/schema": "0.56.2"
 	},
 	"scripts": {
-		"setup": "bun install && bun run build:native && bun --cwd=packages/coding-agent link",
+		"setup": "bun install && bun run build:native && bun --cwd=packages/coding-agent link && sh scripts/link-omp.sh",
 		"dev": "bun --cwd=packages/coding-agent src/cli.ts",
 		"musepi": "bun --cwd=packages/coding-agent src/musepi.ts",
 		"dev:timing": "PI_TIMING=x bun --cwd=packages/coding-agent --preload ../utils/src/module-timer.ts src/cli.ts",
@@ -189,7 +187,6 @@
 		"@biomejs/biome": "catalog:",
 		"@types/bun": "catalog:",
 		"@typescript/native-preview": "catalog:",
-		"glob": "^7.2.3",
 		"lint-staged": "catalog:",
 		"morphicons": "^1.7.0",
 		"prettier": "catalog:",
@@ -200,8 +197,6 @@
 		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
-		"sherpa-onnx": "1.13.2",
-		"sherpa-onnx-darwin-arm64": "1.13.3",
 		"sherpa-onnx-node": "1.13.2"
 	}
 }

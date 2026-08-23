@@ -3,6 +3,7 @@ import { scheduler } from "node:timers/promises";
 import { streamSimple } from "@musepi/pi-ai";
 import {
 	buildTransformedCodexRequestBody,
+	createOpenAICodexCompatibilityMetadata,
 	getOpenAICodexTransportDetails,
 	getOpenAICodexWebSocketDebugStats,
 	prewarmOpenAICodexResponses,
@@ -3066,7 +3067,7 @@ describe("openai-codex streaming", () => {
 		expect(continuationMetadata["x-codex-turn-metadata"]).toBe(continuationHeaders.get("x-codex-turn-metadata"));
 	});
 
-	it("clears stale main turn-state after pre-turn compaction", async () => {
+	it("seeds the first sample from pre-turn compaction turn-state", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
 		setAgentDir(tempDir.path());
 		const token = createCodexTestToken();
@@ -3074,13 +3075,15 @@ describe("openai-codex streaming", () => {
 		let websocketRequestCount = 0;
 
 		class PreTurnCompactionWebSocket extends MockWebSocket {
-			handshakeHeaders = {
-				"x-codex-turn-state": "stale-main-turn-state",
-				"x-models-etag": "models-etag-1",
-			};
+			handshakeHeaders: WsHeaders;
 
 			constructor(url: string, options?: { headers?: WsHeaders }) {
 				super(url, options);
+				this.handshakeHeaders = {
+					"x-codex-turn-state":
+						websocketInstances.length === 0 ? "stale-main-turn-state" : "compaction-turn-state",
+					"x-models-etag": "models-etag-1",
+				};
 				websocketInstances.push(this);
 				queueMicrotask(() => {
 					this.readyState = MockWebSocket.OPEN;
@@ -3164,7 +3167,7 @@ describe("openai-codex streaming", () => {
 				}),
 			).toMatchObject({
 				websocketConnected: true,
-				hasTurnState: false,
+				hasTurnState: true,
 			});
 			await streamOpenAICodexResponses(
 				sseModel,
@@ -3180,7 +3183,7 @@ describe("openai-codex streaming", () => {
 				},
 			).result();
 			expect(fetchMock).toHaveBeenCalledTimes(1);
-			expect(sseHeaders?.get("x-codex-turn-state")).toBeNull();
+			expect(sseHeaders?.get("x-codex-turn-state")).toBe("compaction-turn-state");
 		} finally {
 			for (const state of providerSessionState.values()) state.close();
 			providerSessionState.clear();
@@ -3522,6 +3525,112 @@ describe("openai-codex streaming", () => {
 		]);
 	});
 
+	it("chains websocket custom-tool output when live replay retains the provider item id", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-custom-append-");
+		setAgentDir(tempDir.path());
+		const sentRequests: Array<Record<string, unknown>> = [];
+		const customInput = "print('ok')";
+
+		class CustomToolAppendWebSocket extends MockWebSocket {
+			constructor(url: string, options?: WsOptions) {
+				super(url, options);
+				this.scheduleOpen();
+			}
+
+			override send(data: string): void {
+				sentRequests.push(JSON.parse(data) as Record<string, unknown>);
+				if (sentRequests.length === 1) {
+					this.sendJson({
+						type: "response.output_item.added",
+						output_index: 0,
+						item: {
+							type: "custom_tool_call",
+							id: "ctc_eval_1",
+							call_id: "call_eval_1",
+							name: "eval",
+							input: "",
+						},
+					});
+					this.sendJson({
+						type: "response.output_item.done",
+						output_index: 0,
+						item: {
+							type: "custom_tool_call",
+							id: "ctc_eval_1",
+							call_id: "call_eval_1",
+							name: "eval",
+							input: customInput,
+							status: "completed",
+						},
+					});
+					this.sendJson({
+						type: "response.completed",
+						response: { id: "resp_custom", status: "completed", usage: DEFAULT_USAGE },
+					});
+					return;
+				}
+				this.emitCodexResponse({
+					messageId: "msg_custom_done",
+					responseId: "resp_custom_done",
+					text: "Done",
+					terminalType: "response.completed",
+				});
+			}
+		}
+
+		global.WebSocket = CustomToolAppendWebSocket as unknown as typeof WebSocket;
+		const model = createCodexTestModel("https://chatgpt.com/backend-api");
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const firstUser = { role: "user" as const, content: "Run the code", timestamp: Date.now() };
+		const options = {
+			apiKey: createCodexTestToken(),
+			fetch: vi.fn(async () => {
+				throw new Error("SSE fallback should not be called");
+			}) as FetchImpl,
+			providerSessionState,
+			sessionId: "ws-custom-tool-append",
+		};
+
+		const firstResponse = await streamOpenAICodexResponses(
+			model,
+			{ systemPrompt: ["You are a helpful assistant."], messages: [firstUser] },
+			options,
+		).result();
+		const toolCall = firstResponse.content.find(
+			(block): block is Extract<(typeof firstResponse.content)[number], { type: "toolCall" }> =>
+				block.type === "toolCall",
+		);
+		if (!toolCall) throw new Error("expected a custom tool call");
+		expect(toolCall.customWireName).toBe("eval");
+		const toolResult = {
+			role: "toolResult" as const,
+			toolCallId: toolCall.id,
+			toolName: toolCall.name,
+			content: [{ type: "text" as const, text: "ok" }],
+			isError: false,
+			timestamp: Date.now(),
+		};
+
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: ["You are a helpful assistant."],
+				messages: [firstUser, firstResponse, toolResult],
+			},
+			options,
+		).result();
+
+		expect(sentRequests).toHaveLength(2);
+		expect(sentRequests[1]?.previous_response_id).toBe("resp_custom");
+		expect(sentRequests[1]?.input).toEqual([
+			expect.objectContaining({
+				type: "custom_tool_call_output",
+				call_id: "call_eval_1",
+				output: "ok",
+			}),
+		]);
+	});
+
 	it("does not enable websocket append state for a non-replayable response", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
 		setAgentDir(tempDir.path());
@@ -3779,6 +3888,104 @@ describe("openai-codex streaming", () => {
 		expect(JSON.stringify(thirdInput)).not.toContain("First question");
 	});
 
+	it("preserves turn-state when append matching falls back to full context", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+		const sentRequests: Array<Record<string, unknown>> = [];
+		const fetchMock = vi.fn(async () => {
+			throw new Error("SSE fallback should not be called");
+		});
+
+		class AppendMismatchWebSocket extends MockWebSocket {
+			constructor(url: string, options?: { headers?: WsHeaders }) {
+				super(url, options);
+				this.scheduleOpen();
+			}
+
+			override send(data: string): void {
+				const parsed: unknown = JSON.parse(data);
+				const request = requireRecord(parsed, "websocket request");
+				sentRequests.push(request);
+				if (sentRequests.length === 1) {
+					this.sendJson({
+						type: "response.metadata",
+						headers: { "x-codex-turn-state": "sticky-turn-state" },
+					});
+					this.sendJson({ type: "response.created", response: { id: "resp_1" } });
+					this.sendJson({
+						type: "response.output_item.added",
+						item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: "" },
+					});
+					this.sendJson({
+						type: "response.output_item.done",
+						item: {
+							type: "function_call",
+							id: "fc_1",
+							call_id: "call_1",
+							name: "read_file",
+							arguments: '{"path":"README.md"}',
+						},
+					});
+					this.sendJson({
+						type: "response.completed",
+						response: { id: "resp_1", status: "completed", usage: DEFAULT_USAGE },
+					});
+					return;
+				}
+				this.emitCodexResponse({
+					messageId: "msg_2",
+					responseId: "resp_2",
+					text: "Done",
+					terminalType: "response.completed",
+					includeCreated: true,
+				});
+			}
+		}
+
+		global.WebSocket = AppendMismatchWebSocket as unknown as typeof WebSocket;
+		const model = createCodexTestModel("https://chatgpt.com/backend-api");
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const firstUser = { role: "user" as const, content: "Read the file", timestamp: Date.now() };
+		const options = {
+			fetch: fetchMock as FetchImpl,
+			apiKey: createCodexTestToken(),
+			sessionId: "ws-append-mismatch-session",
+			providerSessionState,
+		};
+		const first = await streamOpenAICodexResponses(
+			model,
+			{ systemPrompt: ["Initial instructions"], messages: [firstUser] },
+			options,
+		).result();
+		const toolCall = first.content.find(
+			(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
+		);
+		const toolResult = {
+			role: "toolResult" as const,
+			toolCallId: toolCall!.id,
+			toolName: toolCall!.name,
+			content: [{ type: "text" as const, text: "file contents" }],
+			isError: false,
+			timestamp: Date.now(),
+		};
+
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: ["Changed instructions force a full-context replay"],
+				messages: [firstUser, first, toolResult],
+			},
+			options,
+		).result();
+
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(sentRequests).toHaveLength(2);
+		expect(sentRequests[1]?.previous_response_id).toBeUndefined();
+		expect(JSON.stringify(sentRequests[1]?.input)).toContain("Read the file");
+		const metadata = requireRecord(sentRequests[1]?.client_metadata, "continuation client_metadata");
+		expect(metadata["x-codex-turn-state"]).toBe("sticky-turn-state");
+	});
+
 	it("retries websocket continuations with full context when previous_response_id expires", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
 		setAgentDir(tempDir.path());
@@ -3813,6 +4020,10 @@ describe("openai-codex streaming", () => {
 				if (requestIndex === 2) {
 					expect(request.previous_response_id).toBe("resp_1");
 					this.sendJson({
+						type: "response.metadata",
+						headers: { "x-codex-turn-state": "retry-turn-state" },
+					});
+					this.sendJson({
 						type: "error",
 						code: "previous_response_not_found",
 						message: "Previous response with id 'resp_1' not found.",
@@ -3822,6 +4033,8 @@ describe("openai-codex streaming", () => {
 
 				if (requestIndex === 3) {
 					expect(request.previous_response_id).toBeUndefined();
+					const metadata = requireRecord(request.client_metadata, "retry client_metadata");
+					expect(metadata["x-codex-turn-state"]).toBe("retry-turn-state");
 					this.emitCodexResponse({
 						messageId: "msg_3",
 						responseId: "resp_3",
@@ -4604,7 +4817,7 @@ describe("openai-codex streaming", () => {
 		});
 		expect(details.websocketDisabled).toBe(false);
 		expect(fetchMock).not.toHaveBeenCalled();
-	});
+	}, 15_000); // real handshake join; 5s default flakes under full-suite load
 
 	it("surfaces a whitespace flood arriving after a delivered tool call instead of replaying", async () => {
 		const tempDir = TempDir.createSync("@pi-codex-stream-");
@@ -5117,10 +5330,10 @@ describe("openai-codex streaming", () => {
 			const index = callCount;
 			callCount += 1;
 			const sse =
-				index === 0
+				index < 2
 					? `${[
-							`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: "" } })}`,
-							`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "read_file", arguments: '{"path":"README.md"}' } })}`,
+							`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "function_call", id: `fc_${index + 1}`, call_id: `call_${index + 1}`, name: "read_file", arguments: "" } })}`,
+							`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "function_call", id: `fc_${index + 1}`, call_id: `call_${index + 1}`, name: "read_file", arguments: '{"path":"README.md"}' } })}`,
 							`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8, input_tokens_details: { cached_tokens: 0 } } } })}`,
 						].join("\n\n")}\n\n`
 					: `${[
@@ -5128,7 +5341,8 @@ describe("openai-codex streaming", () => {
 							`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "message", id: `msg_${index}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: "Done" }] } })}`,
 							`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8, input_tokens_details: { cached_tokens: 0 } } } })}`,
 						].join("\n\n")}\n\n`;
-			// Every response mints a turn state; only within-turn follow-ups may echo it.
+			// Each response may return a different value, but the first non-empty
+			// value remains sticky for the logical turn.
 			const responseHeaders = new Headers({ "content-type": "text/event-stream" });
 			responseHeaders.set("x-codex-turn-state", `turn-state-${index + 1}`);
 			return new Response(sse, { status: 200, headers: responseHeaders });
@@ -5169,13 +5383,29 @@ describe("openai-codex streaming", () => {
 			isError: false,
 			timestamp: Date.now(),
 		};
-		// Tool-loop follow-up within the same turn replays the captured turn state.
+		// Tool-loop follow-ups within the same turn replay the first captured turn state.
 		const second = await streamOpenAICodexResponses(
 			model,
 			{ systemPrompt, messages: [firstUser, first, toolResult] },
 			options,
 		).result();
-		// A new user turn starts without it, even though the previous response minted one.
+		const secondToolCall = second.content.find(
+			(c): c is Extract<(typeof second.content)[number], { type: "toolCall" }> => c.type === "toolCall",
+		);
+		const secondToolResult = {
+			role: "toolResult" as const,
+			toolCallId: secondToolCall!.id,
+			toolName: secondToolCall!.name,
+			content: [{ type: "text" as const, text: "more file contents" }],
+			isError: false,
+			timestamp: Date.now(),
+		};
+		const third = await streamOpenAICodexResponses(
+			model,
+			{ systemPrompt, messages: [firstUser, first, toolResult, second, secondToolResult] },
+			options,
+		).result();
+		// A new user turn starts without it, even though later responses returned other values.
 		await streamOpenAICodexResponses(
 			model,
 			{
@@ -5185,13 +5415,285 @@ describe("openai-codex streaming", () => {
 					first,
 					toolResult,
 					second,
+					secondToolResult,
+					third,
 					{ role: "user" as const, content: "Next task", timestamp: Date.now() + 1 },
 				],
 			},
 			options,
 		).result();
 
-		expect(requestTurnStates).toEqual([null, "turn-state-1", null]);
+		expect(requestTurnStates).toEqual([null, "turn-state-1", "turn-state-1", null]);
+	});
+
+	it("isolates turn-state by credential, backend, model, and Responses Lite mode", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+		const firstModel: Model<"openai-codex-responses"> = {
+			...createCodexTestModel("https://chatgpt.com/backend-api"),
+			preferWebsockets: false,
+		};
+		const firstApiKey = createCodexTestToken("account-a");
+		const variants: Array<{
+			name: string;
+			model: Model<"openai-codex-responses">;
+			apiKey: string;
+			responsesLite: boolean;
+		}> = [
+			{
+				name: "credential",
+				model: firstModel,
+				apiKey: createCodexTestToken("account-b"),
+				responsesLite: false,
+			},
+			{
+				name: "backend",
+				model: { ...firstModel, baseUrl: "https://codex.example/backend-api" },
+				apiKey: firstApiKey,
+				responsesLite: false,
+			},
+			{
+				name: "model",
+				model: { ...firstModel, id: "gpt-5.4-codex", name: "GPT-5.4 Codex" },
+				apiKey: firstApiKey,
+				responsesLite: false,
+			},
+			{
+				name: "Responses Lite mode",
+				model: firstModel,
+				apiKey: firstApiKey,
+				responsesLite: true,
+			},
+		];
+
+		for (const [index, variant] of variants.entries()) {
+			const requestTurnStates: Array<string | null> = [];
+			let requestCount = 0;
+			const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+				const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+				requestTurnStates.push(headers.get("x-codex-turn-state"));
+				const sse =
+					requestCount === 0
+						? `${[
+								`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "function_call", id: "fc_identity", call_id: "call_identity", name: "read_file", arguments: "" } })}`,
+								`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "function_call", id: "fc_identity", call_id: "call_identity", name: "read_file", arguments: '{"path":"README.md"}' } })}`,
+								`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", usage: DEFAULT_USAGE } })}`,
+							].join("\n\n")}\n\n`
+						: createCompletedCodexSse("Done");
+				requestCount += 1;
+				const responseHeaders = new Headers({ "content-type": "text/event-stream" });
+				if (requestCount === 1) responseHeaders.set("x-codex-turn-state", "account-a-turn-state");
+				return new Response(sse, { status: 200, headers: responseHeaders });
+			});
+			const providerSessionState = new Map<string, ProviderSessionState>();
+			const sessionId = `turn-state-identity-${index}`;
+			const firstUser = { role: "user" as const, content: "Read the file", timestamp: Date.now() };
+			const first = await streamOpenAICodexResponses(
+				firstModel,
+				{ systemPrompt: ["You are a helpful assistant."], messages: [firstUser] },
+				{
+					apiKey: firstApiKey,
+					fetch: fetchMock as FetchImpl,
+					sessionId,
+					providerSessionState,
+					responsesLite: false,
+				},
+			).result();
+			const toolCall = first.content.find(
+				(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
+			);
+			await streamOpenAICodexResponses(
+				variant.model,
+				{
+					systemPrompt: ["You are a helpful assistant."],
+					messages: [
+						firstUser,
+						first,
+						{
+							role: "toolResult",
+							toolCallId: toolCall!.id,
+							toolName: toolCall!.name,
+							content: [{ type: "text", text: "file contents" }],
+							isError: false,
+							timestamp: Date.now(),
+						},
+					],
+				},
+				{
+					apiKey: variant.apiKey,
+					fetch: fetchMock as FetchImpl,
+					sessionId,
+					providerSessionState,
+					responsesLite: variant.responsesLite,
+				},
+			).result();
+
+			expect({ [variant.name]: requestTurnStates }).toEqual({ [variant.name]: [null, null] });
+		}
+	});
+
+	it("isolates standalone compaction from a live turn-state", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+		const requestTurnStates: Array<string | null> = [];
+		let requestCount = 0;
+		const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+			const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+			requestTurnStates.push(headers.get("x-codex-turn-state"));
+			const index = requestCount;
+			requestCount += 1;
+			const sse =
+				index === 0
+					? `${[
+							`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "function_call", id: "fc_live", call_id: "call_live", name: "read_file", arguments: "" } })}`,
+							`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "function_call", id: "fc_live", call_id: "call_live", name: "read_file", arguments: '{"path":"README.md"}' } })}`,
+							`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", usage: DEFAULT_USAGE } })}`,
+						].join("\n\n")}\n\n`
+					: createCompletedCodexSse("Done");
+			const responseHeaders = new Headers({ "content-type": "text/event-stream" });
+			responseHeaders.set(
+				"x-codex-turn-state",
+				index === 0 ? "live-turn-state" : index === 1 ? "standalone-turn-state" : "continuation-turn-state",
+			);
+			return new Response(sse, { status: 200, headers: responseHeaders });
+		});
+		const model = { ...createCodexTestModel("https://chatgpt.com/backend-api"), preferWebsockets: false };
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const sessionId = "standalone-isolation-session";
+		const firstUser = { role: "user" as const, content: "Read the file", timestamp: Date.now() };
+		const options = {
+			apiKey: createCodexTestToken(),
+			fetch: fetchMock as FetchImpl,
+			sessionId,
+			providerSessionState,
+		};
+		const first = await streamOpenAICodexResponses(
+			model,
+			{ systemPrompt: ["You are a helpful assistant."], messages: [firstUser] },
+			options,
+		).result();
+		const toolCall = first.content.find(
+			(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
+		);
+		const standalone: CodexCompactionRequestContext = {
+			operationId: "standalone-isolation-operation",
+			trigger: "manual",
+			reason: "user_requested",
+			implementation: "responses",
+			phase: "standalone_turn",
+			strategy: "memento",
+		};
+		await streamOpenAICodexResponses(model, createCodexTestContext(), {
+			...options,
+			codexCompaction: standalone,
+		}).result();
+		resetOpenAICodexHistoryAfterCompaction({
+			providerSessionState,
+			sessionId,
+			compaction: standalone,
+		});
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: ["You are a helpful assistant."],
+				messages: [
+					firstUser,
+					first,
+					{
+						role: "toolResult",
+						toolCallId: toolCall!.id,
+						toolName: toolCall!.name,
+						content: [{ type: "text", text: "file contents" }],
+						isError: false,
+						timestamp: Date.now(),
+					},
+				],
+			},
+			options,
+		).result();
+
+		expect(requestTurnStates).toEqual([null, null, "live-turn-state"]);
+	});
+
+	it("drops stale turn-state when direct pre-turn compaction opens the next turn", async () => {
+		const tempDir = TempDir.createSync("@pi-codex-stream-");
+		setAgentDir(tempDir.path());
+		const requestTurnStates: Array<string | null> = [];
+		let requestCount = 0;
+		const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+			const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+			requestTurnStates.push(headers.get("x-codex-turn-state"));
+			const sse =
+				requestCount === 0
+					? `${[
+							`data: ${JSON.stringify({ type: "response.output_item.added", item: { type: "function_call", id: "fc_live", call_id: "call_live", name: "read_file", arguments: "" } })}`,
+							`data: ${JSON.stringify({ type: "response.output_item.done", item: { type: "function_call", id: "fc_live", call_id: "call_live", name: "read_file", arguments: '{"path":"README.md"}' } })}`,
+							`data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", usage: DEFAULT_USAGE } })}`,
+						].join("\n\n")}\n\n`
+					: createCompletedCodexSse("Done");
+			requestCount += 1;
+			const responseHeaders = new Headers({ "content-type": "text/event-stream" });
+			if (requestCount === 1) responseHeaders.set("x-codex-turn-state", "stale-turn-state");
+			return new Response(sse, { status: 200, headers: responseHeaders });
+		});
+		const model = { ...createCodexTestModel("https://chatgpt.com/backend-api"), preferWebsockets: false };
+		const providerSessionState = new Map<string, ProviderSessionState>();
+		const sessionId = "direct-pre-turn-compaction-session";
+		const options = {
+			apiKey: createCodexTestToken(),
+			fetch: fetchMock as FetchImpl,
+			sessionId,
+			providerSessionState,
+		};
+		const firstUser = { role: "user" as const, content: "Read the file", timestamp: Date.now() };
+		const first = await streamOpenAICodexResponses(
+			model,
+			{ systemPrompt: ["You are a helpful assistant."], messages: [firstUser] },
+			options,
+		).result();
+		const toolCall = first.content.find(
+			(c): c is Extract<(typeof first.content)[number], { type: "toolCall" }> => c.type === "toolCall",
+		);
+		// Direct `/responses/compact` compaction reuses the compatibility helper
+		// instead of the stream request-context path.
+		const compaction: CodexCompactionRequestContext = {
+			operationId: "direct-pre-turn-operation",
+			trigger: "auto",
+			reason: "context_limit",
+			implementation: "responses_compact",
+			phase: "pre_turn",
+			strategy: "memento",
+		};
+		createOpenAICodexCompatibilityMetadata({
+			sessionId,
+			providerSessionState,
+			requestKind: "compaction",
+			compaction,
+		});
+		resetOpenAICodexHistoryAfterCompaction({ providerSessionState, sessionId, compaction });
+		// The post-compaction sampling turn reuses the compaction turn; it must not
+		// replay the previous turn's sticky token.
+		await streamOpenAICodexResponses(
+			model,
+			{
+				systemPrompt: ["You are a helpful assistant."],
+				messages: [
+					firstUser,
+					first,
+					{
+						role: "toolResult",
+						toolCallId: toolCall!.id,
+						toolName: toolCall!.name,
+						content: [{ type: "text", text: "file contents" }],
+						isError: false,
+						timestamp: Date.now(),
+					},
+				],
+			},
+			options,
+		).result();
+
+		expect(requestTurnStates).toEqual([null, null]);
 	});
 
 	it("captures x-codex-turn-state from response.metadata event headers", async () => {

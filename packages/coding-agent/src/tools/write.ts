@@ -51,10 +51,10 @@ import { invalidateFsScanAfterWrite } from "./fs-cache-invalidation";
 import { type OutputMeta, outputMeta } from "./output-meta";
 import {
 	formatPathRelativeToCwd,
-	isInternalUrlPath,
 	pathTargetsSsh,
 	peelWriteUrlSelector,
 	probeLiteralPathExists,
+	resolveFileWriteApprovalTier,
 	splitPathAndSel,
 } from "./path-utils";
 import { enforcePlanModeWrite, resolvePlanPath, unwrapHashlineHeaderPath } from "./plan-mode-guard";
@@ -74,6 +74,7 @@ import {
 	TRUNCATE_LENGTHS,
 	truncateToWidth,
 } from "./render-utils";
+import type { ToolActivityContext, ToolActivitySummary } from "./renderers";
 import { dispatchReportIssueDevice, REPORT_ISSUE_DEVICE_NAME, renderReportIssueDeviceCall } from "./report-tool-issue";
 import { dispatchResolutionDevice, isResolutionDeviceName, renderResolutionDeviceCall } from "./resolve";
 import {
@@ -94,6 +95,7 @@ import {
 	renderXdevResult,
 	resolveXdevTool,
 	type XdevDispatch,
+	xdevActivitySummary,
 	xdevListing,
 } from "./xdev";
 
@@ -545,14 +547,7 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 		// gate them like the exec-tier `ssh` tool, ahead of the handler-write
 		// logic. Substring match also covers selector-suffixed targets.
 		if (pathTargetsSsh(path)) return "exec";
-		if (!isInternalUrlPath(path)) return "write";
-		// Internal URLs are usually session-local artifacts (read tier), but a
-		// scheme whose handler exposes a `write` hook mutates handler-owned user
-		// data (e.g. vault:// notes) and must take the write tier so always-ask
-		// mode actually prompts.
-		const match = /^([a-z][a-z0-9+.-]*):\/\//i.exec(path.trim());
-		const handler = match ? InternalUrlRouter.instance().getHandler(match[1]!.toLowerCase()) : undefined;
-		return handler?.write ? "write" : "read";
+		return resolveFileWriteApprovalTier(path);
 	};
 	readonly formatApprovalDetails = (args: unknown): string[] => {
 		const params = args as Partial<WriteParams>;
@@ -1398,10 +1393,9 @@ function normalizeDisplayText(text: unknown): string {
  * Minimum line-number gutter width for write previews. The streaming preview's
  * gutter must stay byte-stable as the line count grows: a width derived purely
  * from `String(totalLines).length` widens at the 10/100/1000-line crossings,
- * rewriting every already-rendered row — which forces the transcript's commit
- * audit to recommit the block's committed prefix (a full duplicate in native
- * scrollback). Reserving 3 digits keeps the gutter constant through 999 lines
- * and keeps the streamed rows byte-identical to the final result render.
+ * causing the live preview to jitter. Reserving 3 digits keeps the gutter
+ * constant through 999 lines and keeps the streamed rows aligned with the
+ * final result render.
  */
 const WRITE_GUTTER_MIN_WIDTH = 3;
 
@@ -1576,6 +1570,24 @@ export interface WriteRenderContext {
 }
 
 export const writeToolRenderer = {
+	/** Compact one-line activity: device writes read as the mounted tool (`LSP · references foo`), file writes as `Write · <path>`. */
+	activitySummary(args: unknown, context: ToolActivityContext): ToolActivitySummary {
+		const writeArgs = (args ?? {}) as WriteRenderArgs;
+		const rawPath =
+			typeof writeArgs.file_path === "string"
+				? writeArgs.file_path
+				: typeof writeArgs.path === "string"
+					? writeArgs.path
+					: "";
+		if (!rawPath) return { label: "Write" };
+		const xdev = parseXdUrl(rawPath);
+		if (xdev?.name) {
+			const resolveMounted = (context.renderContext as WriteRenderContext | undefined)?.resolveXdevMounted;
+			return xdevActivitySummary(xdev.name, writeArgs.content, resolveMounted);
+		}
+		return { label: "Write", detail: shortenPath(rawPath) };
+	},
+
 	renderCall(
 		args: WriteRenderArgs,
 		options: RenderResultOptions & { renderContext?: WriteRenderContext },
@@ -1584,7 +1596,8 @@ export const writeToolRenderer = {
 		const rawPath =
 			typeof args.file_path === "string" ? args.file_path : typeof args.path === "string" ? args.path : "";
 		// Render NOTHING until the streamed path arrives and provably is not an
-		// xd:// device; xd:// writes then delegate to the mounted tool's renderer.
+		// xd:// device. Device writes then render as queued until execution starts,
+		// after which they delegate to the mounted tool's renderer.
 		// A present-but-malformed path (array/object from a bad provider parse)
 		// is definitively not xd:// — fall through to the legacy frame.
 		if (args.path === undefined && args.file_path === undefined) return undefined;

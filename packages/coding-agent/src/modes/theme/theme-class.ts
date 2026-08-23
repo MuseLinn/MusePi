@@ -490,6 +490,7 @@ export class Theme {
 			file: this.#symbols["icon.file"],
 			git: this.#symbols["icon.git"],
 			branch: this.#symbols["icon.branch"],
+			pin: this.#symbols["icon.pin"],
 			pr: this.#symbols["icon.pr"],
 			tokens: this.#symbols["icon.tokens"],
 			context: this.#symbols["icon.context"],

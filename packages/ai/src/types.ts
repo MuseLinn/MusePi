@@ -633,6 +633,14 @@ export interface SimpleStreamOptions extends Omit<StreamOptions, "apiKey"> {
 	 * A rejecting transformer is swallowed and the reserved payload stands in.
 	 */
 	cursorOnToolResult?: CursorToolResultHandler;
+	/**
+	 * Amazon Bedrock Guardrail settings forwarded through transports that do not
+	 * dispatch directly to the Bedrock provider. Model-level values take
+	 * precedence when both are present.
+	 */
+	guardrailIdentifier?: string;
+	guardrailVersion?: string;
+	guardrailTrace?: "enabled" | "disabled" | "enabled_full";
 	/** Optional tool choice override for compatible providers */
 	toolChoice?: ToolChoice;
 	/** OpenAI service tier for processing priority/cost control. Ignored by non-OpenAI providers. */
@@ -945,6 +953,8 @@ export interface AssistantMessage {
 	stopReason: StopReason;
 	stopDetails?: StopDetails | null;
 	errorMessage?: string;
+	/** Stable recovery-classification text when errorMessage includes display-only diagnostics. */
+	errorClassificationMessage?: string;
 	/** Per-tool abort messages used when an aborted assistant turn needs different placeholder results per tool call. */
 	toolCallAbortMessages?: Record<string, string>;
 	/** HTTP status surfaced by the provider when the request failed. Populated by every provider's catch block alongside `errorMessage` so consumers (auth retry, telemetry, UI) can branch without regex-scraping the message. */

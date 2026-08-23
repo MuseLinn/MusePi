@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as url from "node:url";
 import { glob } from "@musepi/pi-natives";
-import { hasFsCode, isEnoent, isEnotdir, stripWindowsExtendedLengthPathPrefix, untilAborted } from "@musepi/pi-utils";
+import { hasFsCode, isEnoent, isEnotdir, stripWindowsExtendedLengthPathPrefix } from "@musepi/pi-utils";
 import type { Skill } from "../extensibility/skills";
 import { InternalUrlRouter, type LocalProtocolOptions } from "../internal-urls";
 import { ToolAbortError, ToolError } from "./tool-errors";
@@ -470,6 +470,19 @@ export function isInternalUrlPath(filePath: string): boolean {
 		if (expandedAndNormalized.startsWith(prefix)) return true;
 	}
 	return false;
+}
+
+/**
+ * Approval tier for a path that will be written through the file/internal-URL
+ * routing layer. Internal resources are read-tier only when their handler is
+ * read-only; writable handlers such as vault:// must retain write approval.
+ */
+export function resolveFileWriteApprovalTier(filePath: string): "read" | "write" {
+	const normalized = normalizeLocalScheme(expandPath(normalizeLocalScheme(filePath)));
+	if (!TOP_LEVEL_INTERNAL_URL_PREFIXES.some(prefix => normalized.startsWith(prefix))) return "write";
+	const scheme = INTERNAL_URL_SCHEME_RE.exec(normalized)?.[1]?.toLowerCase();
+	const handler = scheme ? InternalUrlRouter.instance().getHandler(scheme) : undefined;
+	return handler?.write ? "write" : "read";
 }
 
 /**
@@ -1247,14 +1260,11 @@ function escapeGlobMetachars(value: string): string {
 	return value.replace(/[*?[{]/g, "[$&]");
 }
 
-/**
- * Find a unique workspace entry whose trailing path matches a missing authored path.
- * Returns `null` for no match, ambiguity, timeout, or scan failure.
- */
-export async function findUniqueWorkspaceSuffix(
+async function findUniqueWorkspaceSuffixWithGlob(
 	rawPath: string,
 	cwd: string,
-	signal?: AbortSignal,
+	signal: AbortSignal | undefined,
+	globImpl: typeof glob,
 ): Promise<{ absolutePath: string; displayPath: string } | null> {
 	const normalized = rawPath.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
 	if (!normalized) return null;
@@ -1264,19 +1274,17 @@ export async function findUniqueWorkspaceSuffix(
 
 	let matches: string[];
 	try {
-		const result = await untilAborted(combinedSignal, () =>
-			glob({
-				pattern: `**/${escapeGlobMetachars(normalized)}`,
-				path: cwd,
-				hidden: true,
-			}),
-		);
+		const result = await globImpl({
+			pattern: `**/${escapeGlobMetachars(normalized)}`,
+			path: cwd,
+			hidden: true,
+			signal: combinedSignal,
+			timeoutMs: WORKSPACE_SUFFIX_TIMEOUT_MS,
+		});
+		if (signal?.aborted) throw new ToolAbortError();
 		matches = result.matches.map(match => match.path);
-	} catch (error) {
-		if (error instanceof Error && error.name === "AbortError") {
-			if (!signal?.aborted) return null;
-			throw new ToolAbortError();
-		}
+	} catch {
+		if (signal?.aborted) throw new ToolAbortError();
 		return null;
 	}
 
@@ -1285,6 +1293,28 @@ export async function findUniqueWorkspaceSuffix(
 		absolutePath: path.resolve(cwd, matches[0]),
 		displayPath: matches[0],
 	};
+}
+
+/**
+ * Find a unique workspace entry whose trailing path matches a missing authored path.
+ * Returns `null` for no match, ambiguity, timeout, or scan failure.
+ */
+export async function findUniqueWorkspaceSuffix(
+	rawPath: string,
+	cwd: string,
+	signal?: AbortSignal,
+): Promise<{ absolutePath: string; displayPath: string } | null> {
+	return findUniqueWorkspaceSuffixWithGlob(rawPath, cwd, signal, glob);
+}
+
+/** Exercise the post-native cancellation boundary without a real filesystem walk. */
+export async function findUniqueWorkspaceSuffixWithGlobForTest(
+	rawPath: string,
+	cwd: string,
+	signal: AbortSignal | undefined,
+	globImpl: typeof glob,
+): Promise<{ absolutePath: string; displayPath: string } | null> {
+	return findUniqueWorkspaceSuffixWithGlob(rawPath, cwd, signal, globImpl);
 }
 
 // =============================================================================

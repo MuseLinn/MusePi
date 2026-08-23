@@ -91,6 +91,27 @@ export function extractGoogleOAuthToken(value: string | undefined): string | und
 	return value;
 }
 
+/**
+ * Pull the GCP project id out of a Google structured discovery key
+ * (`{ token, projectId, ... }` or `{ token, project_id, ... }`). Runtime/config API-key overrides and
+ * refreshed OAuth credentials carry the project inline; raw bare tokens do
+ * not. Returns `undefined` when the value is not structured or omits the id.
+ */
+export function extractGoogleOAuthProjectId(value: string | undefined): string | undefined {
+	if (!isAuthenticated(value)) return undefined;
+	try {
+		const parsed = JSON.parse(value) as { projectId?: unknown; project_id?: unknown };
+		const rawProjectId = typeof parsed.projectId === "string" ? parsed.projectId : parsed.project_id;
+		if (typeof rawProjectId === "string") {
+			const projectId = rawProjectId.trim();
+			return projectId.length > 0 ? projectId : undefined;
+		}
+	} catch {
+		// Raw (non-JSON) tokens carry no project id.
+	}
+	return undefined;
+}
+
 export function getOAuthCredentialsForProvider(authStorage: AuthStorage, provider: string): OAuthCredential[] {
 	const providerEntry = authStorage.getAll()[provider];
 	if (!providerEntry) {

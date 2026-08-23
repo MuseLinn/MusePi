@@ -1023,7 +1023,7 @@ async function rewriteLegacyExtensionSource(
 			replacement = toImportSpecifier(TYPEBOX_SHIM_PATH);
 		}
 		if (!replacement && specifier.startsWith("#")) {
-			const resolved = await resolvePackageImportSpecifier(specifier, importerPath);
+			const resolved = packageImportPath(specifier, await resolvePackageImportSpecifier(specifier, importerPath));
 			if (resolved) replacement = toGraphImportSpecifier(resolved, resolvedImportMtimeTag);
 		}
 		if (!replacement && isBareExtensionDependencySpecifier(specifier)) {
@@ -1247,8 +1247,12 @@ async function resolvePackageImportTarget(
 	const substituted = wildcard === null ? target : target.replaceAll("*", wildcard);
 	return resolvePackageSourceTarget(packageRoot, path.resolve(packageRoot, substituted));
 }
+type PackageImportResolution = string | typeof PACKAGE_IMPORT_EXCLUDED | null;
 
-async function resolvePackageImportSpecifier(specifier: string, importerPath: string): Promise<string | null> {
+async function resolvePackageImportSpecifier(
+	specifier: string,
+	importerPath: string,
+): Promise<PackageImportResolution> {
 	if (!specifier.startsWith("#")) {
 		return null;
 	}
@@ -1265,7 +1269,7 @@ async function resolvePackageImportSpecifier(specifier: string, importerPath: st
 
 	const exactTarget = selectPackageImportTarget(imports[specifier]);
 	if (exactTarget === PACKAGE_IMPORT_EXCLUDED) {
-		return null;
+		return PACKAGE_IMPORT_EXCLUDED;
 	}
 	if (exactTarget !== null) {
 		return resolvePackageImportTarget(packageRoot, exactTarget, null);
@@ -1297,9 +1301,15 @@ async function resolvePackageImportSpecifier(specifier: string, importerPath: st
 	}
 
 	if (!bestMatch || bestMatch.target === PACKAGE_IMPORT_EXCLUDED) {
-		return null;
+		return bestMatch?.target ?? null;
 	}
 	return resolvePackageImportTarget(packageRoot, bestMatch.target, bestMatch.wildcard);
+}
+function packageImportPath(specifier: string, resolution: PackageImportResolution): string | null {
+	if (resolution === PACKAGE_IMPORT_EXCLUDED) {
+		throw new Error(`Package import "${specifier}" is excluded by its package imports map`);
+	}
+	return resolution;
 }
 
 function isBareExtensionDependencySpecifier(specifier: string): boolean {
@@ -1404,6 +1414,20 @@ async function isCommonJsModulePath(
 		sourceType ?? parseExtensionSource(await Bun.file(modulePath).text(), modulePath).program.sourceType;
 	if (parsedSourceType === "module") {
 		return false;
+	}
+	if (parsedSourceType === "script") {
+		const ast = parseExtensionSource(await Bun.file(modulePath).text(), modulePath);
+		const hasUnshadowedCommonJsSyntax = collectScopedAstNodes(
+			ast,
+			node => node.type === "CallExpression" || node.type === "MemberExpression",
+		).some(({ node, scope }) => {
+			if (isGlobalRequireCall(node, scope)) return true;
+			if (node.type !== "MemberExpression") return false;
+			return isUnshadowedExportsTarget(node, scope) || isUnshadowedExportsTarget(asAstNode(node.object), scope);
+		});
+		if (hasUnshadowedCommonJsSyntax) {
+			return true;
+		}
 	}
 	if (inheritedKind) {
 		return inheritedKind === "commonjs";
@@ -1741,7 +1765,10 @@ async function rewriteExtensionSpecifiers(
 				const candidate = Bun.resolveSync(reference.specifier, path.dirname(importerPath));
 				resolved = hasSourceModuleExtension(candidate) ? await realpathOrSelf(candidate) : null;
 			} else if (reference.specifier.startsWith("#")) {
-				resolved = await resolvePackageImportSpecifier(reference.specifier, importerPath);
+				resolved = packageImportPath(
+					reference.specifier,
+					await resolvePackageImportSpecifier(reference.specifier, importerPath),
+				);
 			} else {
 				resolved = await resolveExtensionBareDependency(reference.specifier, importerPath);
 			}
@@ -2042,7 +2069,7 @@ async function collectExtensionModules(entryRealPath: string): Promise<Extension
 						}
 					}
 				} else if (specifier.startsWith("#")) {
-					const candidate = await resolvePackageImportSpecifier(specifier, file);
+					const candidate = packageImportPath(specifier, await resolvePackageImportSpecifier(specifier, file));
 					if (candidate) {
 						const inheritedTargetKind = isRequired
 							? sourceIsCommonJs

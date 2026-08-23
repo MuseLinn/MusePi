@@ -13,6 +13,9 @@ export interface ProviderOverride {
 	compat?: ModelSpec<Api>["compat"];
 	remoteCompaction?: RemoteCompactionConfig<Api>;
 	transport?: Model<Api>["transport"];
+	guardrailIdentifier?: Model<Api>["guardrailIdentifier"];
+	guardrailVersion?: Model<Api>["guardrailVersion"];
+	guardrailTrace?: Model<Api>["guardrailTrace"];
 }
 
 /**

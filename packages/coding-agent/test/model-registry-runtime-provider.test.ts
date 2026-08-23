@@ -523,6 +523,42 @@ describe("ModelRegistry runtime provider registration", () => {
 		expect(configuredRegistry.find("anthropic", modelId)?.headers?.[sharedHeader]).toBe(configHeaderValue);
 	});
 
+	test("runtime-registered models inherit configured provider guardrails", () => {
+		const providerName = "amazon-bedrock";
+		const modelId = "runtime-bedrock-model";
+		const guardrailIdentifier = "arn:aws:bedrock:eu-west-2:123456789012:guardrail/abcd1234";
+
+		fs.writeFileSync(
+			modelsJsonPath,
+			JSON.stringify({
+				providers: {
+					[providerName]: {
+						guardrailIdentifier,
+						guardrailVersion: "1",
+						guardrailTrace: "enabled",
+					},
+				},
+			}),
+		);
+		const configuredRegistry = new ModelRegistry(authStorage, modelsJsonPath, { fetch: offlineFetch });
+
+		configuredRegistry.registerProvider(
+			providerName,
+			{
+				baseUrl: "https://bedrock-runtime.us-east-1.amazonaws.com",
+				apiKey: "RUNTIME_KEY",
+				api: "bedrock-converse-stream",
+				models: [{ ...baseModel, id: modelId }],
+			},
+			"ext://runtime",
+		);
+
+		const model = configuredRegistry.find(providerName, modelId);
+		expect(model?.guardrailIdentifier).toBe(guardrailIdentifier);
+		expect(model?.guardrailVersion).toBe("1");
+		expect(model?.guardrailTrace).toBe("enabled");
+	});
+
 	test("extension-registered API keys survive refresh cycle for auth resolution", async () => {
 		// Set up the env var that the apiKey config references
 		process.env.TEST_RUNTIME_KEY = "test-value";

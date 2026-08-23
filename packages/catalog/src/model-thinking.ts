@@ -33,6 +33,7 @@ import {
 	isMinimaxM2FamilyModelId,
 	isMinimaxM3FamilyModelId,
 	isOpenAIGptOssModelId,
+	isQwenModelId,
 	supportsAdaptiveThinkingDisplay,
 } from "./identity/family";
 import type {
@@ -352,6 +353,9 @@ function getModelDefinedEfforts<TApi extends Api>(
 	if (isKimiK3ModelId(spec.id)) {
 		return LOW_HIGH_MAX_REASONING_EFFORTS;
 	}
+	if (isOpenCodeGatewayOxAlphaModel(spec)) {
+		return LOW_HIGH_MAX_REASONING_EFFORTS;
+	}
 	if (isSakanaFuguReasoningModel(spec)) {
 		return HIGH_MAX_REASONING_EFFORTS;
 	}
@@ -377,9 +381,15 @@ function getModelDefinedEfforts<TApi extends Api>(
 		return OLLAMA_REASONING_EFFORTS;
 	}
 	if (
-		(isOpenAICompatReasoningApi(spec.api) || (spec.api === "ollama-chat" && spec.provider === "ollama-cloud")) &&
+		(isOpenAICompatReasoningApi(spec.api) ||
+			spec.api === "openai-responses" ||
+			(spec.api === "ollama-chat" && spec.provider === "ollama-cloud")) &&
 		isDeepseekReasoningModel(spec)
 	) {
+		// The DeepSeek V4 effort ladder is a model property, not a transport one:
+		// `opencode-go/deepseek-v4-flash` is pinned to `openai-responses` (the Go
+		// gateway serves it only at /responses), yet carries the same wire-exact
+		// low/high/max scale — so the Responses transport is admitted here too.
 		// DeepSeek V4 (Flash and Pro) accepts the wire-exact low/high/max ladder
 		// on every first-party/aggregator host — the direct API, aggregators, and
 		// Ollama Cloud alike (medium/xhigh fold into high, max is a real wire
@@ -518,6 +528,22 @@ function isSakanaFuguReasoningModel<TApi extends Api>(spec: ModelSpec<TApi>): bo
 	return spec.provider === "sakana" && /^fugu(?:$|-)/i.test(spec.id);
 }
 
+/**
+ * "Ox Alpha" stealth models on the OpenCode gateways (`opencode-go` /
+ * `opencode-zen`) reason through the wire-exact `low`/`high`/`max` ladder with
+ * mandatory thinking: the gateway rejects `minimal`/`medium`/`xhigh`
+ * (`[1210] ... please use low, high, or max`), the same dialect it already
+ * serves for GLM-5.3 and Kimi K3. Other hosts proxying an `ox-alpha` SKU
+ * (Kilo, NanoGPT, Venice, OpenRouter) expose their own vocabularies and are
+ * left untouched. See issue #9349.
+ */
+function isOpenCodeGatewayOxAlphaModel<TApi extends Api>(spec: ModelSpec<TApi>): boolean {
+	return (
+		(spec.provider === "opencode-go" || spec.provider === "opencode-zen") &&
+		/(?:^|\/)ox-alpha(?:-|$)/i.test(bareModelId(spec.id))
+	);
+}
+
 function isDeepseekReasoningModel<TApi extends Api>(spec: ModelSpec<TApi>): boolean {
 	if (!spec.reasoning) return false;
 	const lowerId = spec.id.toLowerCase();
@@ -640,6 +666,13 @@ function inferFallbackEfforts<TApi extends Api>(spec: ModelSpec<TApi>, compat: C
 	}
 	if (isOpenAICompatReasoningApi(spec.api)) {
 		const resolved = compat as ResolvedOpenAICompat;
+		if (
+			resolved.thinkingFormat === "openai" &&
+			modelMatchesHost({ provider: spec.provider, baseUrl: spec.baseUrl ?? "" }, "venice") &&
+			isQwenModelId(spec.id)
+		) {
+			return DEFAULT_REASONING_EFFORTS;
+		}
 		if (resolved.thinkingFormat === "openai" && resolved.supportsReasoningEffort) {
 			return DEFAULT_REASONING_EFFORTS_WITH_XHIGH;
 		}

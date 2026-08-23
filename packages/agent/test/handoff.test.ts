@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
 import { type } from "@musepi/musepi-type";
 import type { AgentMessage, AgentTool } from "@musepi/pi-agent-core";
-import { generateHandoff, generateHandoffFromContext, renderHandoffPrompt } from "@musepi/pi-agent-core/compaction";
+import {
+	createCompactionSummaryMessage,
+	defaultConvertToLlm,
+	generateHandoff,
+	generateHandoffFromContext,
+	renderHandoffPrompt,
+} from "@musepi/pi-agent-core/compaction";
 import { ThinkingLevel } from "@musepi/pi-agent-core/thinking";
 import type { AssistantMessage, Model, ToolCall } from "@musepi/pi-ai";
 import * as ai from "@musepi/pi-ai";
@@ -60,6 +66,47 @@ function getTestModel(): Model {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+});
+describe("handoff summary injection", () => {
+	// Regression: without handoff-specific framing the successor misreads the
+	// document's first-person "Next Steps" as fresh user instructions, or tries
+	// to write the handoff again.
+	const document = "## Goal\nContinue the resize fix.\n\n## Next Steps\n1. Run the focused test";
+
+	function convertedText(method: string | undefined): string {
+		const message = createCompactionSummaryMessage(
+			document,
+			1000,
+			new Date().toISOString(),
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			{ method },
+		);
+		const [converted] = defaultConvertToLlm([message]);
+		if (!converted || !Array.isArray(converted.content)) throw new Error("Expected converted content blocks");
+		const block = converted.content[0];
+		if (block?.type !== "text") throw new Error("Expected leading text block");
+		return block.text;
+	}
+
+	test("handoff-method summary is framed as the successor's own prior handoff", () => {
+		const text = convertedText("handoff");
+		expect(text).toContain("<handoff>");
+		expect(text).toContain("prior instance");
+		expect(text).toContain("NEVER write another handoff document");
+		expect(text).toContain(document);
+		expect(text).not.toContain("<summary>");
+	});
+
+	test("non-handoff methods keep the generic compaction framing", () => {
+		const text = convertedText("remote");
+		expect(text).toContain("<summary>");
+		expect(text).toContain(document);
+		expect(text).not.toContain("<handoff>");
+	});
 });
 
 describe("handoff helpers", () => {

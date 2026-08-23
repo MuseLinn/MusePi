@@ -1516,6 +1516,87 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		}
 	});
 
+	it("excludes hidden custom tools from the parent active set unless listed", async () => {
+		const tempDir = makeTempDir();
+		const hiddenTool = {
+			...sdkCustomTool,
+			name: "hidden_custom_tool",
+			hidden: true,
+		} satisfies CustomTool;
+
+		const { session } = await createAgentSession({
+			...baseOptions(tempDir),
+			customTools: [hiddenTool],
+		});
+
+		try {
+			expect(session.getAllToolNames()).toContain("hidden_custom_tool");
+			expect(session.getActiveToolNames()).not.toContain("hidden_custom_tool");
+			expect(session.getXdevToolEntries().map(e => e.name)).not.toContain("hidden_custom_tool");
+			expect(session.systemPrompt.join("\n")).not.toContain("hidden_custom_tool");
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("keeps a hidden custom-tool winner inactive after a visible extension name collision", async () => {
+		const tempDir = makeTempDir();
+		const hiddenTool = {
+			...sdkCustomTool,
+			name: "colliding_hidden_tool",
+			label: "Hidden SDK Winner",
+			hidden: true,
+		} satisfies CustomTool;
+
+		const { session } = await createAgentSession({
+			...baseOptions(tempDir),
+			extensions: [
+				pi => {
+					pi.registerTool({
+						name: hiddenTool.name,
+						label: "Visible Extension Loser",
+						description: "Visible definition that loses registry precedence.",
+						parameters: type({}),
+						async execute() {
+							return { content: [{ type: "text", text: "visible" }] };
+						},
+					});
+				},
+			],
+			customTools: [hiddenTool],
+		});
+
+		try {
+			expect(session.getToolByName(hiddenTool.name)?.label).toBe(hiddenTool.label);
+			expect(session.getActiveToolNames()).not.toContain(hiddenTool.name);
+			expect(session.getXdevToolEntries().map(entry => entry.name)).not.toContain(hiddenTool.name);
+			expect(session.systemPrompt.join("\n")).not.toContain(hiddenTool.name);
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("activates a hidden custom tool when an agent lists it", async () => {
+		const tempDir = makeTempDir();
+		const hiddenTool = {
+			...sdkCustomTool,
+			name: "hidden_custom_tool",
+			hidden: true,
+		} satisfies CustomTool;
+
+		const { session } = await createAgentSession({
+			...baseOptions(tempDir),
+			customTools: [hiddenTool],
+			toolNames: ["read", "hidden_custom_tool"],
+		});
+
+		try {
+			expect(session.getActiveToolNames()).toContain("hidden_custom_tool");
+		} finally {
+			await session.dispose();
+		}
+	});
+
 	it("allows explicitly requested defaultInactive extension tools into the initial active set", async () => {
 		const tempDir = makeTempDir();
 

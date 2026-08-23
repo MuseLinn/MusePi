@@ -1,4 +1,4 @@
-import { extractRetryHint } from "@musepi/pi-utils";
+import { extractRetryHint } from "@musepi/pi-utils/fetch-retry";
 
 /**
  * Rate limit reason classification and backoff calculation utilities.

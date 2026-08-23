@@ -148,6 +148,84 @@ describe("CombinedAutocompleteProvider", () => {
 			expect(result?.items.map(item => item.value)).toEqual(["skill:humanizer"]);
 		});
 
+		it("collapses skills into a single skill: namespace row at prompt start", async () => {
+			const provider = new CombinedAutocompleteProvider(
+				[
+					{ name: "skill:humanizer", description: "Remove signs of AI writing" },
+					{ name: "skill:reviewer", description: "Code review" },
+					{ name: "model", description: "Switch model" },
+				],
+				"/tmp",
+			);
+
+			const result = await provider.getSuggestions(["/"], 0, 1);
+
+			expect(result?.items.map(item => item.value)).toEqual(["skill:", "model"]);
+		});
+
+		it("keeps only the namespace row while the leading prefix approaches skill:", async () => {
+			const provider = new CombinedAutocompleteProvider(
+				[
+					{ name: "skill:humanizer", description: "Remove signs of AI writing" },
+					{ name: "skill:reviewer", description: "Code review" },
+					{ name: "model", description: "Switch model" },
+				],
+				"/tmp",
+			);
+
+			const result = await provider.getSuggestions(["/sk"], 0, "/sk".length);
+
+			expect(result?.items.map(item => item.value)).toEqual(["skill:"]);
+		});
+
+		it("does not surface skills for a leading prefix unrelated to the namespace", async () => {
+			const provider = new CombinedAutocompleteProvider(
+				[{ name: "skill:humanizer", description: "Remove signs of AI writing" }],
+				"/tmp",
+			);
+
+			// Bare-name and description fuzzy matches are reserved for the
+			// mid-prompt skill popup; at prompt start only `/skill:…` lists skills.
+			const result = await provider.getSuggestions(["/hum"], 0, "/hum".length);
+
+			expect(result).toBeNull();
+		});
+
+		it("expands individual skills once the leading prefix enters the namespace", async () => {
+			const provider = new CombinedAutocompleteProvider(
+				[
+					{ name: "skill:humanizer", description: "Remove signs of AI writing" },
+					{ name: "skill:reviewer", description: "Code review" },
+					{ name: "model", description: "Switch model" },
+				],
+				"/tmp",
+			);
+
+			const result = await provider.getSuggestions(["/skill:"], 0, "/skill:".length);
+
+			expect(result?.items.map(item => item.value)).toEqual(["skill:humanizer", "skill:reviewer"]);
+		});
+
+		it("completes the namespace row without a trailing space so completion can continue", () => {
+			const provider = new CombinedAutocompleteProvider([], "/tmp");
+
+			const result = provider.applyCompletion(["/sk"], 0, "/sk".length, { value: "skill:", label: "skill:" }, "/sk");
+
+			expect(result.lines[0]).toBe("/skill:");
+			expect(result.cursorCol).toBe("/skill:".length);
+		});
+
+		it("never sync-completes Enter to the bare skill namespace", () => {
+			const provider = new CombinedAutocompleteProvider(
+				[{ name: "skill:humanizer", description: "Remove signs of AI writing" }],
+				"/tmp",
+			);
+
+			// items[0] of the sync path is applied and submitted immediately;
+			// `/skill:` alone is not a runnable command, so `/sk` must not match.
+			expect(provider.trySyncSlashCompletion("/sk")).toBeNull();
+		});
+
 		it("lists every skill while typing toward the skill: namespace mid-prompt", async () => {
 			const provider = new CombinedAutocompleteProvider(
 				[
@@ -821,6 +899,48 @@ describe("trySyncSlashCompletion", () => {
 		const provider = new CombinedAutocompleteProvider([{ value: "model", label: "Switch model" }], "/tmp");
 		const result = provider.trySyncSlashCompletion("/mod");
 		expect(result!.items.map(i => i.value)).toEqual(["model"]);
+	});
+
+	it("ranks equal-score prefix matches by usage frequency, keeping registry order for unused ones", async () => {
+		const commands = [
+			{ name: "setup", description: "Open provider setup" },
+			{ name: "settings", description: "Open settings menu" },
+			{ name: "session", description: "Session management" },
+		];
+		const usage: Record<string, number> = { settings: 4 };
+
+		const ranked = new CombinedAutocompleteProvider(commands, "/tmp", {
+			commandUsage: name => usage[name] ?? 0,
+		});
+		const result = await ranked.getSuggestions(["/se"], 0, 3);
+		expect(result?.items.map(i => i.value)).toEqual(["settings", "setup", "session"]);
+
+		// Exact text matches still outrank usage: /setup beats a frequent /settings.
+		const exact = await ranked.getSuggestions(["/setup"], 0, 6);
+		expect(exact?.items[0]?.value).toBe("setup");
+
+		// Without usage data, registry order is preserved.
+		const unranked = new CombinedAutocompleteProvider(commands, "/tmp");
+		const plain = await unranked.getSuggestions(["/se"], 0, 3);
+		expect(plain?.items.map(i => i.value)).toEqual(["setup", "settings", "session"]);
+	});
+
+	it("carries command icons into name and alias suggestion rows", async () => {
+		const provider = new CombinedAutocompleteProvider(
+			[
+				{ name: "model", description: "Switch model", icon: "\uec19" },
+				{ name: "quit", aliases: ["q"], description: "Quit the application", icon: "\uf011" },
+				{ name: "hotkeys", description: "Show keyboard shortcuts" },
+			],
+			"/tmp",
+		);
+		const bare = await provider.getSuggestions(["/"], 0, 1);
+		expect(bare?.items.find(i => i.value === "model")?.icon).toBe("\uec19");
+		expect(bare?.items.find(i => i.value === "hotkeys")?.icon).toBeUndefined();
+
+		// An alias row inherits the owning command's icon (/q resolves via alias).
+		const alias = await provider.getSuggestions(["/q"], 0, 2);
+		expect(alias?.items[0]).toMatchObject({ value: "q", icon: "\uf011" });
 	});
 
 	it("does not list aliases as separate rows for bare slash suggestions", async () => {

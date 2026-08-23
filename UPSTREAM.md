@@ -494,3 +494,47 @@ P4 **消息渲染细节**:`<advisory>` 块(advisor 工具 note 格式)渲染为�
 - **失败聚焦回目录**：guest error 帧在目录语境（#workspace !== null）只 toast 不 #end（原来 #end 整个连接——点空会话后 guest 被踢）；error 时 focusedSessionId 重置 null + phase 回 workspace。guard 必须用 #workspace 而非 phase（select 后 phase 是 "waiting" 不是 "workspace"）
 - **折叠动画双向**：useCollapseHeight（collab-web/src/lib/use-collapse.ts）——body 保持挂载、--h var 驱动 height（CSS transition 220ms）、--closed 归零 padding/border（同步过渡）。border-box 下 height:0 压不掉 padding（残留 4px）——必须 content-box + --closed 清 padding。grid 0fr↔1fr 折叠仍不可用
 - **bun build [hash] 陷阱**：--entry-naming=[hash] 是入口稳定 hash（非内容指纹）——改 src 后重建可能生成同名 bundle，浏览器缓存旧 JS 表现为"修了但没修"。必须 rm -rf dist 重建（bun build 输出缓存还会返回陈旧产物）；浏览器验证前先确认 script src 文件名变了
+
+## 参考吸收:oh-my-pi v17.4.3 → v18.0.2(2026-08-23,Windows 机执行)
+
+> 范围:412 commits / 545 files 原始 diff;选择性吸收 P0 bugfix + 低冲突 feature,版本统一到 MusePi 自己的方案:**全工作区 0.4.3**(gui 对齐 v0.4.3 tag),不再跟随 OMP 17.x 镜像号。
+
+### 吸收内容
+
+- **PURE 复制(122 文件,v18 终态 + @oh-my-pi→@musepi rename)**:MCP timeout/abort 竞态(timeout.ts/transports/http.ts + 测试)、LSP index、irc/bus、ai error/flags+rate-limit+vision-guard+usage/cursor+event-stream、catalog build(glyph 标记)+discovery/gemini-cli、edit hashline/execute+normalize+modes/replace、mnemopi config/state/episodic-graph、tui autocomplete/fuzzy/markdown/select-list/text/loader/image/stdin-buffer/terminal/keybindings、utils env(dotenv 过滤)+mermaid-ascii grid、session-picker、capability fs、extensibility/tool-proxy(applyToolProxy 绑定修复)等
+- **3-way 合并(merge-file --diff3,base=v17.4.3+rename)**:110 文件干净合并;82 文件冲突手解(逐 hunk ours/theirs/混合)
+- **新特性**:session pinning(/pin + session-selector 图钉)、session title-index、glyph tokenization(Claude 系 provider,stream.ts applyGlyphCodec 全链)、task error-attribution(connect-error-detail)、多语言 workspace diagnostics、welcome 断点抖动修复(动态标签不参与 min-width)、thinking-loop 工具调用后保持武装、APC 序列零宽测量、[DONE] sentinel、Devin/Cursor trailer 诊断(flags.errorClassificationMessage)、handoff summary context(agent compaction method 字段)、bash/eval prompt auto-background 措辞
+- **版本**:全部 workspace 包(含此前遗留的 17.x/16.x 镜像号)统一为 0.4.3;root catalog 与 sdk/coding-agent/desktop-web 的精确 pin 同步刷新
+
+### 明确跳过(记录备查)
+
+- **natives Rust 层全部**(pty Windows 取消/legacy addon ABI/spelling/Tty TTY pump):需全平台重建,musepi natives 有独立 sentinel 机制
+- **Bedrock Guardrails**(5 commits):musepi 无消费端;stream.ts/models-config 中泄漏字段已剔除
+- **models.json**:musepi 独立再生成管线(64 provider 全部分叉),不手并;上游模型数据更新走 musepi catalog 管线
+- **catalog provider-plumbing**(openai-compat stencil/cache-provider-id v3/model-thinking ox-alpha ladder):与 models.json 耦合,保留 musepi 版
+- **cursor provider 演进**(wireMode/not-found 重试/usage 修复):musepi cursor.ts 已深度分叉(同步 buildGrpcRequest/自有 JSON 校验),整文件保留 ours
+- **Code Mode 演进**(session-tools/agent-session/tools-index 的 codeModeDirectToolNames 等):musepi 已删除 Code Mode(tool-select 替代)
+- **cleanse 重构**:musepi cleanse 独立实现
+- **startup composer/composer-cache/composer-attachments/deferred-input 全簇**:musepi composer 状态管理独立
+- **macOS spelling 全链**(natives API 依赖)
+- **TUI scrollback/resize-epoch 重写簇**(tui.ts/editor.ts/transcript-container width epochs、Kitty delete-all、resizeReplaySize、block lifecycle settled/committed):**值得专项移植**(修 tmux resize 重放/幽灵 Kitty 图形/同尺寸重放 3 个真实 bug),约 400 行跨 6+ 文件,需 tmux 实测;issue-2088 断言差异即此簇
+- **/mcp test Esc 所有权 + reload fs-cache 清理**:musepi mcp-command-controller 结构不同
+- **premature stream close continuation**(turn-recovery):依赖 musepi 已简化的 transportReset 机制
+- **post-snapshot remote compaction turns**(providerReplayThroughEntryId):依赖 compaction 元数据字段(musepi 已移除 tokensAfter/method)
+- **update channel/canary/render-cli/bench profiles**:发布工具链不采用
+- **kitty-vt-wasm 引擎**:新依赖,未引入
+
+### 测试处理
+
+- 新增上游测试:goal-tool-runtime-enable(后随 tools/index 回退移除)、session-pins、system-prompt-context-dedup、task/error-attribution、lsp mux/reload、fuzzy-shadowed-occurrence、legacy CJS(后移除,parse-cache 未吸收)、cowork-fetch-proxy 等
+- 回退到 musepi 版:与回退源码配对的全部测试(model-registry/selector-side-effects/sdk-model-selection/model-discovery/update-cli/cleanse/edit-mode/approval/shake/streaming-scrollback/render-initial-messages/tool-execution-background-task/image-budget/image-clip/custom-editor/agent.test/remote-compaction/generated-policies/model-thinking)
+- 移除:依赖已删除子系统的测试(protobuf/cursor-proto/devin-proto/glyph-codec fixtures、markdown-stream-prefix-cache、history-frame-plan、transcript-streaming-commit-repro、mcp-reload-fs-cache、event-controller-xdev-queue、issue-6276 guardrails)
+- **验证结果(Windows)**:9 包 tsgo 0 错误;catalog 605/605、agent 除已知 codex-WS flaky(HEAD 同样挂)全绿、tui 失败 19→16(净修复 6 个 fuzzy/OSC 断言,新增 3 个属推迟 scrollback 簇)、utils/stats/mnemopi 失败均为 HEAD 既有 Windows 环境项、coding-agent 定向套件绿(余 2 个 EBUSY 临时目录竞争)
+
+### 已知残留(后续专项)
+
+1. TUI scrollback/resize-epoch 簇移植(commit 清单:3aaeb511644/dc139073e6b/43ab41754e6/1aa052f224a/61ef86a29af + editor/transcript 组件侧)
+2. cursor provider wireMode/usage 修复回移
+3. premature-close continuation + post-snapshot compaction(需先恢复 compaction 元数据)
+4. /mcp reload fs-cache(2 行,需按 musepi controller 结构重放)
+5. 上游 models.json 数据更新(musepi catalog 管线再生成)

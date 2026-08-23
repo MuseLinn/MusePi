@@ -160,14 +160,6 @@ export class Loader extends Text {
 		if (!this.#ui) {
 			return;
 		}
-		// Direct write: a loader tick changes only this component, so the TUI can
-		// update the already-positioned rows without driving the full
-		// compose/prepare/diff pipeline. Lightweight test stubs may not carry the
-		// newer API; keep their legacy component-scoped path working.
-		if (typeof this.#ui.requestDirectWrite === "function") {
-			this.#ui.requestDirectWrite(this);
-		} else {
-			this.#ui.requestComponentRender(this);
-		}
+		this.#ui.requestComponentRender(this);
 	}
 }

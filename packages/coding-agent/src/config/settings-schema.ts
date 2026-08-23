@@ -1052,6 +1052,34 @@ export const SETTINGS_SCHEMA = {
 		description:
 			"Maximum number of inline images kept as live terminal graphics (default 8). Older images fall back to a text placeholder via a full redraw once the limit is exceeded. Set to 0 to keep every image (no limit).",
 	},
+	"tui.resizeScrollback": {
+		type: "enum",
+		values: ["append", "rebuild", "preserve"] as const,
+		default: "rebuild",
+		ui: {
+			tab: "appearance",
+			group: "Display",
+			label: "Resize Scrollback",
+			description: "How a settled terminal resize refreshes transcript rows retained in terminal scrollback",
+			options: [
+				{
+					value: "append",
+					label: "Append",
+					description: "Replay the transcript at the new width below retained history",
+				},
+				{
+					value: "rebuild",
+					label: "Rebuild",
+					description: "Erase all terminal scrollback, then replay one current-width transcript",
+				},
+				{
+					value: "preserve",
+					label: "Preserve",
+					description: "Repaint only the viewport and keep history wrapped at its old width",
+				},
+			],
+		},
+	},
 
 	"terminal.showProgress": {
 		type: "boolean",
@@ -1925,7 +1953,7 @@ export const SETTINGS_SCHEMA = {
 
 	autocompleteMaxVisible: {
 		type: "number",
-		default: 5,
+		default: 10,
 		ui: {
 			tab: "interaction",
 			tuiOnly: true,
@@ -1940,6 +1968,42 @@ export const SETTINGS_SCHEMA = {
 				{ value: "15", label: "15 items" },
 				{ value: "20", label: "20 items" },
 			],
+		},
+	},
+
+	"spelling.typoDetection": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "interaction",
+			group: "Input",
+			label: "Typo Detection (macOS)",
+			description: "Mark misspelled prompt words with the active macOS dictionaries",
+			condition: "macOS",
+		},
+	},
+
+	"spelling.autocomplete": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "interaction",
+			group: "Input",
+			label: "Word Autocomplete (macOS)",
+			description: "Show macOS dictionary word completions as inline hints accepted with Tab",
+			condition: "macOS",
+		},
+	},
+
+	"spelling.autocorrect": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "interaction",
+			group: "Input",
+			label: "Autocorrect (macOS)",
+			description: "Apply confident macOS spelling corrections after completed words",
+			condition: "macOS",
 		},
 	},
 
@@ -2020,6 +2084,21 @@ export const SETTINGS_SCHEMA = {
 			group: "Startup & Updates",
 			label: "Check for Updates",
 			description: "Check for musepi updates on startup",
+		},
+	},
+	"update.channel": {
+		type: "enum",
+		values: ["stable", "canary"] as const,
+		default: "stable",
+		ui: {
+			tab: "interaction",
+			group: "Startup & Updates",
+			label: "Update Channel",
+			description: "Update channel used by omp update and the startup update check",
+			options: [
+				{ value: "stable", label: "Stable" },
+				{ value: "canary", label: "Canary" },
+			],
 		},
 	},
 
@@ -3452,6 +3531,16 @@ export const SETTINGS_SCHEMA = {
 			description: "Reject edits anchored on lines a prior read/search never displayed in full",
 		},
 	},
+	"edit.blackbox.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "files",
+			group: "Editing",
+			label: "Record Parse Regressions",
+			description: "Append full before/after source when an edit introduces an AST parse failure",
+		},
+	},
 
 	readLineNumbers: {
 		type: "boolean",
@@ -3688,7 +3777,7 @@ export const SETTINGS_SCHEMA = {
 
 	"bash.autoBackground.enabled": {
 		type: "boolean",
-		default: false,
+		default: true,
 		ui: {
 			tab: "shell",
 			group: "Bash",
@@ -5539,14 +5628,28 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 	"features.unexpectedStopDetection": {
-		type: "boolean",
-		default: false,
+		type: "enum",
+		values: ["none", "mechanical", "smart"] as const,
+		default: "mechanical",
 		ui: {
 			tab: "interaction",
 			group: "Agent",
-			label: "Detect unexpected stops",
+			label: "Unexpected Stops",
 			description:
-				"Use a small model to detect when the assistant says it will continue but stops without tool calls; automatically prompt it to continue.",
+				"Automatically recover when the assistant stops without a visible message. Smart also classifies text-only stops with a small model.",
+			options: [
+				{ value: "none", label: "None", description: "Disabled" },
+				{
+					value: "mechanical",
+					label: "Mechanical",
+					description: "Retry stops with no visible assistant message; tool calls are excluded (default)",
+				},
+				{
+					value: "smart",
+					label: "Smart",
+					description: "Mechanical + small-model classification of text-only stops",
+				},
+			],
 		},
 	},
 	"providers.unexpectedStopModel": {
@@ -5558,8 +5661,8 @@ export const SETTINGS_SCHEMA = {
 			group: "Tiny Model",
 			label: "Unexpected Stop Model",
 			description:
-				"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
-			condition: "unexpectedStopDetection",
+				"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
+			condition: "unexpectedStopSmart",
 			options: TINY_MEMORY_MODEL_OPTIONS,
 		},
 	},

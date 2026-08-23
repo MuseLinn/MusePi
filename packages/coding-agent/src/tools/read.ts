@@ -1038,6 +1038,14 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			isDirectory = stat.isDirectory();
 		} catch (error) {
 			if (isNotFoundError(error)) {
+				// A documented semicolon list is explicit user scope, while suffix
+				// matching is only fuzzy recovery. Fan the list out before a broad
+				// workspace scan, but only after literal/archive/sqlite resolution so
+				// real resources containing semicolons retain precedence.
+				if (readPath.includes(";")) {
+					const delimitedResult = await this.#tryReadDelimitedPaths(readPath, signal);
+					if (delimitedResult) return delimitedResult;
+				}
 				// Attempt unique suffix resolution before falling back to the approved-plan
 				// alias or fuzzy suggestions. Existing workspace files retain precedence.
 				if (!isRemoteMountPath(absolutePath)) {

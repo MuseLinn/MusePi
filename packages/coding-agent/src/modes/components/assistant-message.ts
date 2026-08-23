@@ -30,9 +30,6 @@ import { type CacheInvalidation, CacheInvalidationMarkerComponent } from "./cach
  */
 const MAX_TRANSCRIPT_ERROR_LINES = 8;
 
-/** Opening or closing fence of a code block: ≥3 backticks/tildes plus info string. */
-const CODE_FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-
 type ThinkingContentBlock = Extract<AssistantMessage["content"][number], { type: "thinking" }>;
 type DisplayThinkingContentBlock = ThinkingContentBlock & { rawThinking?: string };
 
@@ -58,29 +55,6 @@ function resolveThinkingDisplay(block: ThinkingContentBlock, proseOnly: boolean)
  * re-layout rows that already looked settled. Fence-aware so a mermaid
  * example inside a regular code block never triggers the deferral.
  */
-function containsMermaidFence(text: string): boolean {
-	let fence: string | null = null;
-	for (const line of text.split("\n")) {
-		const fenceMatch = CODE_FENCE_LINE.exec(line);
-		if (fence !== null) {
-			// Inside a code block: only a bare matching closing fence ends it.
-			if (
-				fenceMatch &&
-				fenceMatch[2]!.trim() === "" &&
-				fenceMatch[1]![0] === fence[0] &&
-				fenceMatch[1]!.length >= fence.length
-			) {
-				fence = null;
-			}
-			continue;
-		}
-		if (fenceMatch) {
-			if (/^mermaid\b/.test(fenceMatch[2]!.trim())) return true;
-			fence = fenceMatch[1]!;
-		}
-	}
-	return false;
-}
 
 /**
  * Frames for the streaming "thinking" pulse rendered in place of a hidden
@@ -190,17 +164,6 @@ export class AssistantMessageComponent extends Container {
 	#kittyConversionsInFlight = new Set<string>();
 	#transcriptBlockFinalized: boolean;
 	/**
-	 * True while any rendered item carries a ` ```mermaid ` fence. Mermaid's
-	 * ASCII form resolves asynchronously and can re-layout rows that already
-	 * looked settled, so settling defers until the message finalizes. See
-	 * {@link getTranscriptBlockSettledRows}. Recomputed in
-	 * {@link updateContent} ahead of the fast-path return, so it tracks every
-	 * stream tick. Streaming GFM tables need no gate: they live in markdown's
-	 * unfrozen tail while re-aligning and render deterministically once their
-	 * block completes.
-	 */
-	#containsMermaidSource = false;
-	/**
 	 * When true, the turn-ending `Error: …` line for `stopReason === "error"` is
 	 * suppressed because the same error is currently shown in the pinned banner
 	 * above the editor (see `EventController` + `ErrorBannerComponent`). Avoids
@@ -236,9 +199,6 @@ export class AssistantMessageComponent extends Container {
 	/** Whether the last updateContent carried an in-flight streaming partial; such
 	 *  renders bypass the markdown module LRU (see Markdown.transientRenderCache). */
 	#lastUpdateTransient = false;
-	/** Width of the most recent render(); the settled-rows walk reads child
-	 *  renders at exactly this width (L1 cache hits). */
-	#lastRenderWidth = 0;
 	// Fast-path state: reuse Markdown children when message shape is stable during streaming.
 	#fastPathKey: string | undefined;
 	#fastPathItems:
@@ -319,11 +279,6 @@ export class AssistantMessageComponent extends Container {
 		if (this.#lastMessage) {
 			this.updateContent(this.#lastMessage, { transient: this.#lastUpdateTransient });
 		}
-	}
-
-	override render(width: number): readonly string[] {
-		this.#lastRenderWidth = width;
-		return super.render(width);
 	}
 
 	setHideThinkingBlock(hide: boolean): void {
@@ -455,47 +410,6 @@ export class AssistantMessageComponent extends Container {
 
 	isTranscriptBlockFinalized(): boolean {
 		return this.#transcriptBlockFinalized;
-	}
-
-	/**
-	 * Settled leading rows for mid-stream native-scrollback commits (see
-	 * `FinalizableBlock.getTranscriptBlockSettledRows`). Completed content
-	 * blocks render in final form (non-transient) and settle in full; the
-	 * actively streaming markdown contributes its rendered frozen-token
-	 * prefix. The walk stops at the first child that is not declared
-	 * byte-stable (the animated thinking pulse, extension components, images,
-	 * error rows), and a cache-invalidation marker above the content defers
-	 * settling entirely. Mermaid anywhere defers wholesale — its ASCII
-	 * rendering resolves asynchronously and can re-layout settled-looking
-	 * rows. Reads only L1-cached child renders at the width recorded by this
-	 * frame's render().
-	 */
-	getTranscriptBlockSettledRows(): number {
-		if (this.#transcriptBlockFinalized || !this.#lastUpdateTransient) return 0;
-		if (this.#containsMermaidSource) return 0;
-		if (this.#markerSlot.children.length > 0) return 0;
-		const items = this.#fastPathItems;
-		const width = this.#lastRenderWidth;
-		if (!items || items.length === 0 || width <= 0) return 0;
-		const streaming = items[items.length - 1]!.md;
-		// Items are captured in child order: match completed mds positionally.
-		let itemIndex = 0;
-		let settled = 0;
-		for (const child of this.#contentContainer.children) {
-			if (child === streaming) return settled + streaming.getLastRenderSettledRows();
-			if (itemIndex < items.length - 1 && items[itemIndex]!.md === child) {
-				itemIndex++;
-				settled += child.render(width).length;
-				continue;
-			}
-			if (child instanceof Spacer) {
-				settled += child.render(width).length;
-				continue;
-			}
-			// Not declared byte-stable: the boundary stops here.
-			return settled;
-		}
-		return settled;
 	}
 
 	getTranscriptBlockVersion(): number {
@@ -831,20 +745,6 @@ export class AssistantMessageComponent extends Container {
 			this.#thinkingTokens = 0;
 			this.#thinkingRateLive = false;
 		}
-
-		// Mermaid ASCII rendering resolves asynchronously, so a fence anywhere
-		// in the rendered source (text or visible thinking) defers settling; see
-		// getTranscriptBlockSettledRows. Detected from raw source — a Markdown
-		// parser only resolves the fence once it closes, but the stale commits
-		// would happen mid-stream.
-		this.#containsMermaidSource = message.content.some(content => {
-			if (content.type === "text") return containsMermaidFence(content.text);
-			if (content.type === "thinking" && !this.hideThinkingBlock) {
-				const display = resolveThinkingDisplay(content, this.proseOnlyThinking);
-				return display.visible && containsMermaidFence(display.text);
-			}
-			return false;
-		});
 
 		// Fast path: reuse Markdown children when shape is stable during streaming
 		if (this.#tryFastPathUpdate(message, opts)) return;

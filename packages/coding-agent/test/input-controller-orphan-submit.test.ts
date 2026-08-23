@@ -86,6 +86,8 @@ function createContext(sessionOverride?: InteractiveModeContext["session"]) {
 			prompt,
 			maybeStartTitleGeneration: vi.fn(),
 			queuedMessageCount: 0,
+			customCommands: [],
+			promptTemplates: [],
 			getQueuedMessages: () => ({ steering: [], followUp: [] }),
 		} as unknown as InteractiveModeContext["session"]);
 
@@ -96,6 +98,7 @@ function createContext(sessionOverride?: InteractiveModeContext["session"]) {
 		settings: session.settings,
 		sessionManager: { getSessionName: () => "named-session" } as InteractiveModeContext["sessionManager"],
 		compactionQueuedMessages: [] as InteractiveModeContext["compactionQueuedMessages"],
+		skillCommands: new Map(),
 		fileSlashCommands: new Set<string>(),
 		locallySubmittedUserSignatures: new Set<string>(),
 		isKnownSlashCommand: () => false,
