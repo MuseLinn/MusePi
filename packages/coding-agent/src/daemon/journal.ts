@@ -69,6 +69,32 @@ const RETRYABLE_RENAME_CODES = new Set(
 	process.platform === "win32" ? ["EPERM", "EACCES", "EBUSY"] : ["EBUSY"],
 );
 
+/**
+ * Per-file live fd registry. Several AppendJournal instances can hold the
+ * same journal file open (the live session's journal + a transient
+ * truncateSession instance). A rewrite must close EVERY instance's fd
+ * before renaming over the file — Windows rejects the rename while ANY
+ * handle holds the target — then let each instance reopen its own.
+ */
+const fdRegistry = new Map<string, Set<AppendJournal>>();
+function withFd(filePath: string): Set<AppendJournal> {
+	let set = fdRegistry.get(filePath);
+	if (!set) {
+		set = new Set();
+		fdRegistry.set(filePath, set);
+	}
+	return set;
+}
+
+/**
+ * Coordination helper: ask every instance on `filePath` to release its fd
+ * (private-field access stays inside the class). Callers invoke
+ * AppendJournal#releaseFd / #reopenFd directly; this just fans out.
+ */
+function forEachFdInstance(filePath: string, fn: (inst: AppendJournal) => Promise<void>): Promise<void> {
+	return Promise.all([...(fdRegistry.get(filePath) ?? [])].map(fn)).then(() => {});
+}
+
 export class AppendJournal {
 	readonly filePath: string;
 	#fd: fs.promises.FileHandle | null = null;
@@ -76,8 +102,6 @@ export class AppendJournal {
 	 *  rewrite's close→rename→reopen). Appends chain on this so a write
 	 *  landing in the rewrite window is queued, not silently dropped. */
 	#fdReady: Promise<fs.promises.FileHandle | null> = Promise.resolve(null);
-	/** Resolver for the in-flight #replaceFile reopen (null when idle). */
-	#reopenReady: ((fd: fs.promises.FileHandle | null) => void) | null = null;
 	#seq = 0;
 
 	constructor(dir: string, sessionId: string) {
@@ -87,6 +111,7 @@ export class AppendJournal {
 	async open(): Promise<void> {
 		await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
 		this.#fd = await fs.promises.open(this.filePath, "a");
+		withFd(this.filePath).add(this);
 		this.#fdReady = Promise.resolve(this.#fd);
 	}
 
@@ -95,17 +120,15 @@ export class AppendJournal {
 	append(event: WireAgentEvent): number {
 		const seq = ++this.#seq;
 		const record: JournalRecord = { seq, ts: new Date().toISOString(), event: shrinkForReplication(event) };
-		if (this.#fd !== null) {
-			const line = `${JSON.stringify(record)}\n`;
-			this.#writtenBytes += line.length;
-			// Writes are queued on a chain: fire-and-forget at the call site,
-			// but every reader (readAll/compact/close) flushes first so a
-			// high-frequency event burst can never lose its tail. The chain
-			// awaits #fdReady so an append landing during a rewrite's
-			// close→rename→reopen window is written to the reopened fd.
-			const prev = this.#pendingWrite ?? Promise.resolve();
-			this.#pendingWrite = prev.then(() => this.#fdReady).then(fd => fd?.write(line)).then(() => {});
-		}
+		const line = `${JSON.stringify(record)}\n`;
+		this.#writtenBytes += line.length;
+		// Writes are queued on a chain: fire-and-forget at the call site,
+		// but every reader (readAll/compact/close) flushes first so a
+		// high-frequency event burst can never lose its tail. The chain
+		// awaits #fdReady so an append landing during a rewrite's
+		// close→rename→reopen window is written to the reopened fd.
+		const prev = this.#pendingWrite ?? Promise.resolve();
+		this.#pendingWrite = prev.then(() => this.#fdReady).then(fd => fd?.write(line)).then(() => {});
 		return seq;
 	}
 
@@ -245,29 +268,53 @@ export class AppendJournal {
 	}
 
 	/**
-	 * Windows-safe atomic journal replacement: close the append fd, rename
-	 * the temp file over the journal (bounded retry for transient locks),
-	 * reopen. POSIX allows rename-over-open but leaves the old fd pointing
-	 * at the unlinked inode — later appends would silently vanish; Windows
-	 * rejects the rename outright with EPERM while the fd holds the target.
-	 * Both platforms need the same close→rename→reopen sequence.
+	 * Windows-safe atomic journal replacement. POSIX allows rename-over-open
+	 * but leaves a stale fd pointing at the unlinked inode — later appends
+	 * would silently vanish; Windows rejects the rename with EPERM while ANY
+	 * handle (including another AppendJournal instance's) holds the target.
+	 * Both platforms need the same sequence: close every fd on the file,
+	 * rename (bounded retry for transient locks), reopen each fd.
 	 */
-	async #replaceFile(tmpPath: string): Promise<void> {
-		await this.flush();
+	/** Release this instance's append fd (rewrite coordination). */
+	async #releaseFd(): Promise<void> {
 		if (this.#fd !== null) {
+			await this.flush();
 			await this.#fd.close();
 			this.#fd = null;
 		}
-		this.#fdReady = new Promise(resolve => {
-			// resolve when reopened below; a same-tick append waits for it
-			this.#reopenReady = resolve;
-		});
+		this.#fdReady = new Promise(() => {});
+	}
+
+	/** Reopen this instance's append fd after a rewrite (idempotent). */
+	async #reopenFd(): Promise<void> {
+		if (this.#fd !== null) return;
+		try {
+			this.#fd = await fs.promises.open(this.filePath, "a");
+		} catch {
+			this.#fd = null;
+		}
+		this.#fdReady = Promise.resolve(this.#fd);
+	}
+
+	/**
+	 * Windows-safe atomic journal replacement. POSIX allows rename-over-open
+	 * but leaves a stale fd pointing at the unlinked inode — later appends
+	 * would silently vanish; Windows rejects the rename with EPERM while ANY
+	 * handle (including another AppendJournal instance's) holds the target.
+	 * Both platforms need the same sequence: close every fd on the file,
+	 * rename (bounded retry for transient locks), reopen each fd.
+	 */
+	async #replaceFile(tmpPath: string): Promise<void> {
+		await this.flush();
+		// Close every instance's fd (the live session's journal may be a
+		// DIFFERENT instance than the one running this rewrite).
+		await forEachFdInstance(this.filePath, inst => inst.#releaseFd());
 		let lastErr: unknown;
 		try {
 			for (let attempt = 1; ; attempt++) {
 				try {
 					await fs.promises.rename(tmpPath, this.filePath);
-					return;
+					break;
 				} catch (err) {
 					lastErr = err;
 					const code = (err as NodeJS.ErrnoException)?.code;
@@ -276,16 +323,10 @@ export class AppendJournal {
 				}
 			}
 		} finally {
-			// Reopen regardless of rename outcome so the journal stays
-			// appendable; failure keeps fd null (append skips, as pre-open).
-			try {
-				this.#fd = await fs.promises.open(this.filePath, "a");
-			} catch {
-				this.#fd = null;
-			}
-			this.#reopenReady?.(this.#fd);
-			this.#reopenReady = null;
-			this.#fdReady = Promise.resolve(this.#fd);
+			// Reopen every closed instance regardless of rename outcome so
+			// the journal stays appendable; a failed reopen keeps fd null
+			// (append skips, same as pre-open).
+			await forEachFdInstance(this.filePath, inst => inst.#reopenFd());
 		}
 	}
 
@@ -303,10 +344,12 @@ export class AppendJournal {
 	}
 
 	async close(): Promise<void> {
+		withFd(this.filePath).delete(this);
 		if (this.#fd !== null) {
 			await this.flush();
 			await this.#fd.close();
 			this.#fd = null;
 		}
+		this.#fdReady = Promise.resolve(null);
 	}
 }
