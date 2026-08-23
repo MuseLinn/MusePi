@@ -3585,6 +3585,7 @@ export class DaemonServer {
 						parentId: r.parentId,
 						kind: "session",
 						timestamp: new Date(r.createdAt).toISOString(),
+						updatedAt: new Date(r.updatedAt).toISOString(),
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
@@ -3830,6 +3831,11 @@ export class DaemonServer {
 							id: r.sessionId,
 							parentId: r.parentId,
 							timestamp: new Date(r.createdAt).toISOString(),
+							// Last-activity time (openchamber `time.updated` parity):
+							// the sidebar sorts the session tree by this, so a
+							// resumed/continued session rises without reordering
+							// forks away from their parents.
+							updatedAt: new Date(r.updatedAt).toISOString(),
 							source: cronIds.has(r.sessionId) ? "cron" : undefined,
 							// Title = first user request (opencode/Codex convention);
 							// omit when empty so the GUI falls back to the id.
@@ -6087,6 +6093,20 @@ export class DaemonServer {
 						? resolveProviderModelReference(p.model.provider, p.model.id, models)
 						: models.find(m => m.id === p.model.id);
 					if (!model) throw new Error(`Unknown model: ${p.model.id}`);
+					// Pure generation endpoints (agnes-image-*, gpt-image-*, dall-e,
+					// flux, / agnes-video-*, veo, sora, …) respond to
+					// /v1/images/generations or /v1/videos, not the chat/messages
+					// loop — selecting one as the session model just yields a 400
+					// ("… is an image model. Use /v1/images/generations."). Reject
+					// here so a non-GUI caller can't bypass the selector filter.
+					// Multimodal *understanding* models (vision/video input) must
+					// still pass: those set image/video flags, not imageGen/videoGen.
+					const caps = resolveModelCapabilities(model.id, model.input);
+					if (caps.imageGen || caps.videoGen) {
+						throw new Error(
+							`Model ${model.id} is a ${caps.imageGen ? "image" : "video"} generation endpoint, not a chat model`,
+						);
+					}
 					await live.agentSession.setModelTemporary(model);
 					return { ok: true };
 				}
@@ -6103,6 +6123,14 @@ export class DaemonServer {
 					? resolveProviderModelReference(p.model.provider, p.model.id, available)
 					: available.find(m => m.id === p.model.id);
 				if (!model) throw new Error(`Unknown model: ${p.model.id}`);
+				// Same generation-endpoint gate as the live-session branch above
+				// (history header persistence must not pin an image/video generator).
+				const caps = resolveModelCapabilities(model.id, model.input);
+				if (caps.imageGen || caps.videoGen) {
+					throw new Error(
+						`Model ${model.id} is a ${caps.imageGen ? "image" : "video"} generation endpoint, not a chat model`,
+					);
+				}
 				if (!this.#host.persistHeaderPatch(p.sessionId, { model: `${model.provider}/${model.id}` })) {
 					throw new Error(`Unknown session: ${p.sessionId}`);
 				}

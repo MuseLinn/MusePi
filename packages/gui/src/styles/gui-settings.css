@@ -380,6 +380,19 @@
 	color: var(--color-accent);
 }
 
+/* Generation endpoints (image/video generators) are visible but not chat
+ * models: gray the row, drop hover affordance, keep the star clickable. */
+.gui-model-opt--gen,
+.gui-model-opt--gen:hover {
+	color: var(--color-text-faint);
+	background: transparent;
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+.gui-model-opt--gen .gui-model-fav {
+	cursor: pointer;
+}
+
 /* Favorite star on each model row: filled/accent when pinned. The star is
  * a nested <button> (row is role=button) and stops propagation, so pinning
  * never selects the model. */

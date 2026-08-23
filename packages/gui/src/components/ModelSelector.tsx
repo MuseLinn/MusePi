@@ -255,6 +255,17 @@ export function ModelSelector({
 
 	const favs = useSyncExternalStore(subscribeFavs, readFavModels);
 
+	// Pure generation endpoints (agnes-image-*, gpt-image-*, dall-e, flux,
+	// / agnes-video-*, veo, sora, …) cannot run the agent's chat/messages
+	// loop — they respond to /v1/images/generations or /v1/videos, so picking
+	// one as the session model ends in a 400 ("… is an image model. Use
+	// /v1/images/generations."). They stay VISIBLE in the list (discoverability
+	// — the user sees the image/video generation capability) but are disabled:
+	// the row is grayed out and select() refuses them. The generate_image /
+	// agnes_video_gen tools still target them. This must NOT disable
+	// multimodal *understanding* models (e.g. deepseek-v4-flash-vision-exp):
+	// those carry vision/video input flags, not imageGen/videoGen.
+	const isGenerationModel = (m: WireModel): boolean => m.imageGen === true || m.videoGen === true;
 	const q = query.trim().toLowerCase();
 	const filtered = q
 		? models.filter(
@@ -280,6 +291,12 @@ export function ModelSelector({
 	});
 
 	const select = (m: WireModel): void => {
+		// Generation endpoints can't be the session model — the row is disabled,
+		// but guard here too (Enter/Space keys, future callers).
+		if (isGenerationModel(m)) {
+			tapFeedback(1);
+			return;
+		}
 		// The clicked row IS the model — never re-resolve by bare id: two
 		// providers serve the same id (opencode-go vs b-ai
 		// deepseek-v4-flash-vision-exp) and a bare-id find would pick the
@@ -341,6 +358,7 @@ export function ModelSelector({
 							const favKey = favKeyOf(m);
 							const fav = favs.includes(favKey) || favs.includes(m.id);
 							const isDefault = `${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
+							const genModel = isGenerationModel(m);
 							const capTitle = [
 								m.text !== false ? t("text input") : null,
 								m.vision ? t("image understanding") : null,
@@ -351,14 +369,23 @@ export function ModelSelector({
 							]
 								.filter((label): label is string => label !== null)
 								.join(" · ");
+							// Generation endpoints are not chat models: gray the row,
+							// refuse selection, and explain why on hover.
+							const genNote = genModel
+								? m.imageGen
+									? t("image generation model — use the generate_image tool")
+									: t("video generation model — use the video generation tool")
+								: undefined;
 							return (
 								// Row is a div (role=button) so the favorite star can be a
 								// real <button> inside it — nested buttons are invalid HTML.
 								<div
 									key={`${m.provider}/${m.id}`}
 									role="button"
-									tabIndex={0}
-									className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}`}
+									tabIndex={genModel ? -1 : 0}
+									aria-disabled={genModel || undefined}
+									title={genNote}
+									className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}${genModel ? " gui-model-opt--gen" : ""}`}
 									onClick={() => select(m)}
 									onKeyDown={e => {
 										if (e.key === "Enter" || e.key === " ") {

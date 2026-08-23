@@ -7,7 +7,6 @@ import { type ContextBreakdownView, isContextCommand } from "../lib/context-comm
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
-import { sessionAccentHex } from "../lib/session-accent";
 import { sfxFor } from "../lib/sfx";
 import {
 	COMPOSER_DOCK_SLOT,
@@ -1809,7 +1808,6 @@ export function Composer({
 								tapFeedback(2);
 								onStop();
 							}}
-							accent={sessionId ? sessionAccentHex(sessionId) : null}
 						/>
 					</>
 				}

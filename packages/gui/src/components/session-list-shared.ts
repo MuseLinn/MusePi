@@ -7,6 +7,35 @@ interface FlatNode {
 	isLast: boolean;
 }
 
+/** Sort key for one session — last-activity (updatedAt) with a createdAt
+ *  fallback for daemons that predate the field, and a stable id tiebreak.
+ *  Invalid/absent timestamps sort as oldest (0) so they never jump ahead. */
+export function sessionSortKey(n: SessionListNode): number {
+	const updated = n.entry.updatedAt ? Date.parse(n.entry.updatedAt) : Number.NaN;
+	const ts = Number.isFinite(updated) ? updated : n.entry.timestamp ? Date.parse(n.entry.timestamp) : Number.NaN;
+	return Number.isFinite(ts) ? ts : 0;
+}
+
+/**
+ * Hierarchically sort a session tree WITHOUT flattening it: each sibling
+ * group (roots, and each node's children) is ordered by last-activity time,
+ * but a forked child always stays inside its parent's subtree. This is what
+ * a flat `Array.prototype.sort` over `flattenTree` output cannot do — that
+ * scatters children across the whole list and reshuffles on every poll.
+ * Returns a NEW tree; the input is not mutated.
+ */
+export function sortSessionTree(
+	roots: SessionListNode[],
+	compare: (a: SessionListNode, b: SessionListNode) => number,
+): SessionListNode[] {
+	const sortGroup = (group: SessionListNode[]): SessionListNode[] => {
+		const sorted = group.map(n => ({ ...n, children: sortGroup(n.children) }));
+		sorted.sort(compare);
+		return sorted;
+	};
+	return sortGroup(roots);
+}
+
 /**
  * Flatten a session tree for rendering, ported from the TUI TreeList
  * indentation rules (tui/tree-list.ts + modes/components/tree-selector.ts):

@@ -450,6 +450,10 @@ export const general = {
 	"image generation": "Image generation",
 	"video generation": "Video generation",
 	reasoning: "Reasoning",
+	// Generation endpoints shown in the model picker are disabled (not chat
+	// models) — the tooltip tells the user why and where to use them.
+	"image generation model — use the generate_image tool": "Image generation model — use the generate_image tool",
+	"video generation model — use the video generation tool": "Video generation model — use the video generation tool",
 	// Async-result custom message (background bash/task job completion).
 	"Background job completed": "Background job completed",
 	// Advisor notes card (TUI createAdvisorMessageCard parity).

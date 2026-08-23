@@ -447,6 +447,9 @@ export const general = {
 	"image generation": "图像生成",
 	"video generation": "视频生成",
 	reasoning: "推理",
+	// 生成端点在模型选择器中置灰禁用（非聊天模型）——提示用户原因及使用位置。
+	"image generation model — use the generate_image tool": "图像生成模型——请使用 generate_image 工具",
+	"video generation model — use the video generation tool": "视频生成模型——请使用视频生成工具",
 	// Async-result custom message (background bash/task job completion).
 	"Background job completed": "后台任务已完成",
 	// Advisor notes card (TUI createAdvisorMessageCard parity).

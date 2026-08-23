@@ -120,6 +120,8 @@ interface SessionMetaRow {
 	messageCount?: number;
 	title?: string;
 	timestamp?: string;
+	/** Last-activity time (openchamber `time.updated` parity). */
+	updatedAt?: string;
 	/** Lifecycle status from the session file tail (TUI session-list parity):
 	 *  complete | interrupted | aborted | error | pending. Powers the
 	 *  sidebar's colored status square so unfinished history is visible. */
@@ -792,6 +794,7 @@ function AppInner(): ReactNode {
 								messageCount: r.messageCount ?? 0,
 								title: r.title,
 								timestamp: r.timestamp,
+								updatedAt: r.updatedAt,
 								status: r.status,
 							},
 						]),
@@ -838,6 +841,7 @@ function AppInner(): ReactNode {
 								paused: r.paused === true,
 								title: r.title ?? row.title,
 								timestamp: r.timestamp ?? row.timestamp,
+								updatedAt: r.updatedAt ?? row.updatedAt,
 								cwd: r.cwd ?? row.cwd,
 							});
 						}

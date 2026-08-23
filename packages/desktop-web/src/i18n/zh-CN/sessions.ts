@@ -24,6 +24,14 @@ export const sessions = {
 	"{count}h ago": "{count} 小时前",
 	"{count}d ago": "{count} 天前",
 	"{count}y ago": "{count} 年前",
+
+	// ── Lifecycle status (sidebar row's left square tooltip / a11y) ──────────
+	"session status complete": "已完成",
+	"session status interrupted": "已中断",
+	"session status aborted": "已中止",
+	"session status error": "出错",
+	"session status pending": "处理中",
+	"session status unknown": "未知状态",
 } as const;
 
 /** Key union for the sessions domain (source of truth). */

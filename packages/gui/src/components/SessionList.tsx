@@ -2,7 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
-import { flattenTree } from "./session-list-shared";
+import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-shared";
 
 /**
  * 会话列表节点(命名来源:本组件渲染的是左侧栏的**会话列表** — 每个节点
@@ -20,6 +20,10 @@ export interface SessionListEntry {
 	/** 会话级父会话 id(fork 来源;消息树场景对应 entry 父节点,见 message-tree)。 */
 	parentId: string | null;
 	timestamp: string;
+	/** Last-activity time (openchamber `time.updated` parity) — the session
+	 *  tree orders by this so a resumed session rises; falls back to
+	 *  `timestamp` (createdAt) when the daemon predates the field. */
+	updatedAt?: string;
 	label?: string;
 	/** Session origin — "cron" for scheduled-task runs (grouped apart). */
 	source?: string;
@@ -42,11 +46,9 @@ const STATUS_COLOR: Record<SessionStatus, string | undefined> = {
 	unknown: undefined,
 };
 
-/** Row's left-square fill: a manual status tag wins over the derived
- *  status, both resolved through the same STATUS_COLOR map. */
-function statusFill(status: SessionStatus | undefined, manualTag: SessionStatus | undefined): string | undefined {
-	return manualTag ? STATUS_COLOR[manualTag] : status ? STATUS_COLOR[status] : undefined;
-}
+/** Row's left-square fill: manual tag wins over derived status, both
+ *  resolved through the same STATUS_COLOR map. (Logic inlined in the
+ *  render — `const status = manualTags?.get(id) ?? statuses?.get(id)`) */
 
 /** Compact row time (openchamber: 0.72rem muted right-aligned). */
 function rowTime(ts: string): string {
@@ -111,16 +113,18 @@ export function SessionList({
 	 *  order below their own status pins). */
 	sort?: "statusTime" | "none";
 }): ReactNode {
-	const flat = flattenTree(nodes);
-	if (flat.length === 0) return null;
-	if (sort !== "none") {
+	// Hierarchical sort FIRST (roots + each sibling group by last-activity,
+	// with the working/unread rank as a primary key within each group), THEN
+	// flatten. Sorting the flattened array instead would scatter forked
+	// children out of their parent subtrees and reshuffle on every poll.
+	const ordered = sort !== "none" ? sortSessionTree(nodes, (a, b) => {
 		const rank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
-		flat.sort(
-			(a, b) =>
-				rank(b.node.entry.id) - rank(a.node.entry.id) ||
-				Date.parse(b.node.entry.timestamp) - Date.parse(a.node.entry.timestamp),
-		);
-	}
+		const rDelta = rank(b.entry.id) - rank(a.entry.id);
+		if (rDelta !== 0) return rDelta;
+		return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
+	}) : nodes;
+	const flat = flattenTree(ordered);
+	if (flat.length === 0) return null;
 	// Parent lookup for fork markers **at the SESSION level** (a session forked
 	// from another session shows a branch glyph + the parent's label on hover).
 	// Note: this is cross-session fork structure, NOT the within-session message
@@ -130,7 +134,10 @@ export function SessionList({
 		<ul className="gui-session-list">
 			{flat.map(({ node, ...flatProps }) => {
 				const parent = node.entry.parentId ? byId.get(node.entry.parentId) : null;
-				const fill = statusFill(statuses?.get(node.entry.id), manualTags?.get(node.entry.id));
+				// Manual status tag wins over the derived one — same precedence
+				// as `statusFill`, so the chip's tooltip always matches its color.
+				const status = manualTags?.get(node.entry.id) ?? statuses?.get(node.entry.id);
+				const fill = status ? STATUS_COLOR[status] : undefined;
 				return (
 					<li key={node.entry.id}>
 						<button
@@ -165,24 +172,26 @@ export function SessionList({
 								className="gui-session-status"
 								aria-hidden="true"
 								style={fill ? { background: fill } : undefined}
+								title={status ? t(`session status ${status}` as const) : undefined}
 							/>
 							<span className="gui-tree-prefix">
 								{treePrefix(flatProps.indent, flatProps.showConnector, flatProps.isLast)}
 							</span>
 							<span className="gui-session-title">{node.entry.label ?? t("untitled session")}</span>
 							{pausedIds?.has(node.entry.id) && (
-								<span className="gui-tree-pause" aria-label={t("paused")} title={t("paused")}>
+								<span className="gui-tree-pause" role="img" aria-label={t("paused")} title={t("paused")}>
 									<Icon name="pause" className="h-3 w-3" />
 								</span>
 							)}
 							{workingIds?.has(node.entry.id) && (
-								<span className="gui-tree-working" aria-label={t("in progress")} title={t("in progress")}>
+								<span className="gui-tree-working" role="img" aria-label={t("in progress")} title={t("in progress")}>
 									<span className="gui-tree-working-dot" aria-hidden />
 								</span>
 							)}
 							{parent && (
 								<span
 									className="gui-tree-fork"
+									role="img"
 									aria-label={t("forked session")}
 									title={t("forked from {name}", { name: parent.entry.label ?? t("untitled session") })}
 								>

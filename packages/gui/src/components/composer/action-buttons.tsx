@@ -1,8 +1,9 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { t } from "../../i18n/index.js";
+import { TextMorph } from "../TextMorph";
 import { Icon } from "../../vendor/oc-icons";
 
 /** Prompt-enhancement lifecycle (aicss AI Agent Input parity). */
@@ -197,28 +198,26 @@ function MatrixLoader({ className }: { className?: string }): ReactNode {
 	);
 }
 
-/**
- * 三合一 send control (user direction, opendesign parity): idle renders the
- * plain send button; while the agent works the SAME button becomes the live
- * state display — a capsule with the dot-matrix bloom + a two-label stack
- * ("工作中" at rest, "停止" on hover/focus). Click aborts the turn.
- */
+/** 三合一 send control (user direction, opendesign parity): idle renders the
+ *  plain send button; while the agent works the SAME button becomes the live
+ *  state display — a capsule with the dot-matrix bloom + a morphing label
+ *  ("工作中" at rest, "停止" on hover/focus). Click aborts the turn. */
 export function SendOrStopButton({
 	canSend,
 	busy,
 	working,
 	onPress,
 	onStop,
-	accent,
 }: {
 	canSend: boolean;
 	busy: boolean;
 	working: boolean;
 	onPress(): void;
 	onStop(): void;
-	/** Session accent hex (TUI-style per-session color); null → theme accent. */
-	accent?: string | null;
 }): ReactNode {
+	// Hover/focus drives the label morph (工作中 ↔ 停止) so the swap reads as
+	// a rolling text transition instead of a hard visibility toggle.
+	const [interacting, setInteracting] = useState(false);
 	if (!working) {
 		return (
 			<button
@@ -237,16 +236,27 @@ export function SendOrStopButton({
 		<button
 			type="button"
 			className="gui-composer-send gui-composer-send--working"
-			style={accent ? ({ "--gui-send-accent": accent } as CSSProperties) : undefined}
 			onClick={onStop}
+			onMouseEnter={() => setInteracting(true)}
+			onMouseLeave={() => setInteracting(false)}
+			onFocus={() => setInteracting(true)}
+			onBlur={() => setInteracting(false)}
 			title={t("stop the current turn")}
 			aria-label={t("stop the current turn")}
 		>
 			<span className="gui-send-work">
 				<MatrixLoader className="gui-send-matrix" />
 				<span className="gui-send-labels">
-					<span className="gui-send-label gui-send-label--working">{t("working active")}</span>
-					<span className="gui-send-label gui-send-label--stop">{t("stop turn")}</span>
+					{/* Invisible widest label reserves constant pill width across the
+					 * morph (工作中 is longer than 停止), so the button never
+					 * nudges the composer on hover. */}
+					<span aria-hidden className="gui-send-label gui-send-label--sizer">
+						{t("working active")}
+					</span>
+					<TextMorph
+						text={interacting ? t("stop turn") : t("working active")}
+						className="gui-send-morph"
+					/>
 				</span>
 			</span>
 		</button>

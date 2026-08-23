@@ -360,6 +360,15 @@
 	background: var(--color-surface-raised);
 }
 
+/* Keyboard focus (Tab) — same accent ring family as the app's other
+ * focusable controls, so the row doesn't fall back to the UA blue outline.
+ * No background here: the `.gui-session-row-active` selected fill must
+ * survive — the ring alone marks keyboard focus. */
+.gui-session-row:focus-visible {
+	outline: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
+	outline-offset: -1px;
+}
+
 .gui-session-row-active {
 	/* Stronger selected state than hover (openchamber: bg-primary/10 + accent). */
 	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised));

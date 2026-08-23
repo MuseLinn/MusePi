@@ -26,4 +26,12 @@ export const sessions = {
 	"{count}h ago": "{count}h ago",
 	"{count}d ago": "{count}d ago",
 	"{count}y ago": "{count}y ago",
+
+	// ── Lifecycle status (sidebar row's left square tooltip / a11y) ──────────
+	"session status complete": "Complete",
+	"session status interrupted": "Interrupted",
+	"session status aborted": "Aborted",
+	"session status error": "Error",
+	"session status pending": "Pending",
+	"session status unknown": "Unknown",
 } as const satisfies Record<SessionsKey, string>;
