@@ -2524,9 +2524,12 @@ a.tr-tool-search-title:hover {
 	flex-direction: column;
 	gap: 8px;
 	margin-top: 8px;
-	/* 消息流窄时内联 widget 仍保底一个可读宽度（不溢出，窄容器取 100%）。 */
+	/* 消息流窄时内联 widget 仍保底一个可读宽度（不溢出，窄容器取 100%）。
+	 * 300px 保底替代旧 420px——窄流(如紧凑右侧栏)下 420px 会横向撑破,
+	 * 300px 更贴近大多数 widget 的合理最小可视宽度。 */
 	max-width: 100%;
-	min-width: min(420px, 100%);
+	min-width: min(300px, 100%);
+	overflow-x: hidden;
 }
 
 .tv-widget-actions {
@@ -2630,7 +2633,8 @@ a.tr-tool-search-title:hover {
 .tr-widget-fs-body {
 	width: 100%;
 	max-width: 1080px;
-	max-height: 100%;
+	/* 全屏 overlay 内滚动:48px×2 padding 后剩余可视高度,内容超高可滚。 */
+	max-height: calc(100vh - 96px);
 	overflow: auto;
 	overflow: overlay;
 	display: flex;
@@ -2642,9 +2646,15 @@ a.tr-tool-search-title:hover {
 	max-width: 1080px;
 }
 
-/* The custom-HTML face grows with the fullscreen viewport. */
+/* The custom-HTML face grows with the fullscreen viewport but must not
+ * exceed the scrollable body height (overflow handled by .tr-widget-fs-body). */
+.tr-widget-fs-body .tv-widget {
+	height: auto;
+	min-height: 0;
+}
 .tr-widget-fs-body .tv-widget-body .gui-widget-html {
-	min-height: 62vh;
+	min-height: min(62vh, 100%);
+	max-height: 100%;
 }
 
 /* ---- user-initiated shell commands (! / !! composer, TUI parity) ---- */

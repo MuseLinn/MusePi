@@ -29,6 +29,7 @@ import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SubagentPanel } from "./SubagentPanel";
+import { BtwFloatingCard } from "./BtwFloatingCard";
 import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -842,6 +843,8 @@ export function ChatView({
 		}
 		return level ?? snap.state?.thinkingLevel ?? null;
 	})();
+	// /btw floating card: null = closed, string = active question.
+	const [btwQuestion, setBtwQuestion] = useState<string | null>(null);
 	// Subagent trajectory panel (kimiwork parity): opening an agent from a
 	// swarm-card member row or the right rail slides the panel out over the
 	// chat column; the selected agent resolves against the live snapshot.
@@ -1396,6 +1399,7 @@ export function ChatView({
 											onEditConsumed={() => setPendingEdit(null)}
 											focused={focusMode}
 											onToggleFocus={onToggleFocus}
+											onBtw={q => setBtwQuestion(q)}
 											activeTask={
 												displaySettings["display.taskCardStyle"] === "classic"
 													? null
@@ -1444,6 +1448,32 @@ export function ChatView({
 				{/* Subagent trajectory drawer (kimiwork parity): slides over the
 				 * chat column when a swarm-card member row / right-rail agent
 				 * is opened; the same ag-drawer chrome as the collab guest. */}
+				{btwQuestion !== null && !focusMode && (
+					<BtwFloatingCard
+						initialQuestion={btwQuestion}
+						onAsk={(question, history) => {
+							const sessionId = store?.sessionId;
+							if (!rpc || !sessionId) return Promise.resolve(null);
+							// Rebuild a self-contained prompt that carries the
+							// conversation context: prior turns are prepended so
+							// follow-ups see the same thread (ephemeralAsk is
+							// stateless — no transcript write).
+							const ctx = history
+								.map(h => `Q: ${h.question}\nA: ${h.answer}`)
+								.join("\n\n");
+							const promptText = ctx
+								? `Context:\n${ctx}\n\nNew question:\n${question}\n\nAnswer the new question in the context above.`
+								: question;
+							return rpc
+								.request<{ replyText?: string } | null>("session.ephemeralAsk", {
+									sessionId,
+									promptText,
+								})
+								.then(res => (res?.replyText ? { replyText: res.replyText } : null));
+						}}
+						onClose={() => setBtwQuestion(null)}
+					/>
+				)}
 				{panelAgent !== null && !focusMode && (
 					<SubagentPanel
 						agent={panelAgent}

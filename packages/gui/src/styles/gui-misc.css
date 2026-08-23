@@ -2645,3 +2645,200 @@
 	bottom: 8px;
 	border-radius: 16px;
 }
+
+/* ── /btw floating card (TUI side-question parity) ─────────────────────── */
+.gui-btw-card {
+	display: flex;
+	flex-direction: column;
+	border-radius: 14px;
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--surface) 92%, transparent);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+	overflow: hidden;
+	max-height: min(60vh, 520px);
+}
+
+.gui-btw-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--border);
+	font-size: 12.5px;
+	font-weight: 550;
+	color: var(--color-text);
+}
+
+.gui-btw-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-btw-x {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	color: var(--color-text-muted);
+	transition: background 120ms ease, color 120ms ease;
+}
+
+.gui-btw-x:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-btw-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 10px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	scrollbar-width: thin;
+}
+
+.gui-btw-turn {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-btw-q {
+	font-size: 13px;
+	font-weight: 550;
+	color: var(--color-text);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.gui-btw-a {
+	font-size: 12.5px;
+	line-height: 1.55;
+	color: var(--color-text);
+}
+
+.gui-btw-a .md-body > *:first-child {
+	margin-top: 0;
+}
+.gui-btw-a .md-body > *:last-child {
+	margin-bottom: 0;
+}
+
+.gui-btw-error {
+	font-size: 12.5px;
+	color: var(--color-warning);
+}
+
+.gui-btw-loading {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-btw-spinner {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 2px solid var(--color-hover);
+	border-top-color: var(--color-accent);
+	animation: gui-btw-spin 800ms linear infinite;
+}
+
+@keyframes gui-btw-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.gui-btw-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-btw-input {
+	flex: 1;
+	min-width: 0;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--color-text);
+	font-size: 12.5px;
+	padding: 0 10px;
+	outline: none;
+	transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gui-btw-input:focus {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.gui-btw-input:disabled {
+	opacity: 0.5;
+}
+
+.gui-btw-send {
+	height: 28px;
+	padding: 0 12px;
+	border-radius: 8px;
+	border: none;
+	background: var(--color-accent);
+	color: var(--color-on-accent, #fff);
+	font-size: 12.5px;
+	font-weight: 550;
+	cursor: pointer;
+	transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.gui-btw-send:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-btw-send:not(:disabled):hover {
+	transform: translateY(-1px);
+}
+
+.gui-btw-stop {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12px;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+
+.gui-btw-stop:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.gui-btw-hint {
+	position: absolute;
+	right: 12px;
+	bottom: 48px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	pointer-events: none;
+}

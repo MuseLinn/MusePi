@@ -119,6 +119,10 @@ export interface ComposerProps {
 	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
+	/** /btw 旁路提问 (TUI parity): intercept the slash command and hand the
+	 *  question to the caller (ChatView shows BtwFloatingCard) instead of
+	 *  sending it to the agent (whose btw is TUI-only). */
+	onBtw?(question: string): void;
 	/** Live `task` tool running in this session (ChatView passes the last
 	 *  active task tool's partialResult) — drives the temporary swarm status
 	 *  chip above the input. Clicking the chip opens the frosted floating
@@ -303,6 +307,7 @@ export function Composer({
 	presetModelId,
 	focused,
 	onToggleFocus,
+	onBtw,
 	activeTask,
 	swarmHost,
 	welcome,
@@ -1141,6 +1146,20 @@ export function Composer({
 				sfxFor("send");
 				return;
 			}
+			// GUI-native /btw: side question in a floating card (TUI parity —
+			// the TUI command is TUI-only, so intercept like /usage).
+			const btwMatch = /^\/btw(?:\s+(.+))?$/s.exec(trimmed);
+			if (btwMatch) {
+				const question = (btwMatch[1] ?? "").trim();
+				if (!question) {
+					showSlashNotice("error", "Usage: /btw <question>");
+					return;
+				}
+				onBtw?.(question);
+				setText("");
+				sfxFor("send");
+				return;
+			}
 			// Delivery semantics MUST match the TUI:
 			//  - Enter while the agent works → the configured busy behavior
 			//    (busyEnter: steer = insert into the running turn now, TUI
@@ -1259,7 +1278,11 @@ export function Composer({
 			onQuotesChange,
 			busyEnter,
 			openUsagePanel,
+			openArPanel,
+			openDebugPanel,
 			openContextPanel,
+			onBtw,
+			showSlashNotice,
 			refreshQueued,
 			pushHistory,
 		],
