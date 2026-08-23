@@ -333,3 +333,12 @@ daemon RPC:
 - 渲染端 `UpdateToast.tsx`（`gui/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「前往下载」/「跳过此版本」。
 - **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`，弹窗读 `CHANGELOG.musepi.md`，发版两处都要填。
 - 桥接统一走 `gui/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
+
+### 发布产物与 CLI 关系（2026-08-23 实测确认）
+
+**dmg 自包含 daemon，不依赖 `bun run setup` 污染系统**：`daemonCommand()`（`electron/daemon.cjs`）解析顺序——① PATH 上的 `musepi`（仅当用户单独装过）→ ② **打包版 `Resources/app.asar.unpacked/vendor/daemon/musepi`（120M 完整 CLI 二进制，workflow 的 "Build daemon binary + Stage 进 vendor + asarUnpack vendor/daemon/**" 保证必达）** → ③ dev 模式 `bun src/cli.ts serve`。
+
+**发布链路要点**：
+- `gui-release.yml` 只发布 **darwin-arm64**（砍掉 x64——x64 runner 打 arm64 dmg 缺 `sherpa-onnx-darwin-arm64` 架构变体，electron-builder 结构性失败）。
+- **签名**：mac `identity "-"`（ad-hoc）+ hardenedRuntime + `build/entitlements.mac.plist`（照 openchamber：allow-jit / disable-library-validation 等，解决 Electron JIT + dlopen 原生模块）。ad-hoc 仅消除「完全无签名显已损坏」，**双击打开仍被 Gatekeeper 拦**——要「双击直开」需 Developer ID 签名 + `notarize: true`（需 APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID secrets；workflow `MACOS_SIGNING` 条件已预留）。
+- **不像 VSCode**：app 自带 daemon 供 GUI 用，但**不注册 PATH**（`extraResources: []`、无 CLI symlink）。终端敲 `musepi` 默认没有；要终端 CLI 需 `bun run setup`/`bun link` 或 `bun install -g @musepi/pi-coding-agent`，或给 electron-builder 加 `afterInstall` 符号链接钩子（需管理员权限，且与单独装的 CLI 可能冲突——用户决策项）。
