@@ -244,7 +244,14 @@ try {
 	// The package declares Bun as its build runtime. Invoke napi's JavaScript
 	// entry through this Bun process instead of its `#!/usr/bin/env node` shim so
 	// an old host Node installation cannot make an otherwise supported Bun build fail.
-	const buildResult = await $`${process.execPath} ${napiBin} ${napiArgs}`.nothrow();
+	// Pin the cargo toolchain: xutf (tree-sitter dep) needs
+	// `#![feature(portable_simd)]` (nightly-only). rustup resolves the
+	// toolchain from the *cwd*, not --manifest-path, and napi spawns cargo
+	// with cwd=this package — so a rust-toolchain.toml here is required.
+	// (crates/pi-natives/rust-toolchain.toml covers direct cargo use.)
+	const buildResult = await $`${process.execPath} ${napiBin} ${napiArgs}`.env({
+		RUSTUP_TOOLCHAIN: "nightly",
+	}).nothrow();
 	if (buildResult.exitCode !== 0) {
 		const stdout = buildResult.stdout?.toString("utf-8") ?? "";
 		const stderr = buildResult.stderr?.toString("utf-8") ?? "";
