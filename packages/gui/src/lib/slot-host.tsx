@@ -1,3 +1,4 @@
+import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/desktop-web";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
@@ -18,56 +19,34 @@ import type { RpcClient } from "./rpc";
  * shows up in the extension center instead of silently missing.
  */
 
-/** First slot id — the settings page's extension-contributed section. */
-export const SETTINGS_EXTENSION_SLOT = "settings.extensions";
-/** Right-side workspace panel slot (modes v2 右面板 Phase 0-2): extensions
- *  contribute tabs/sections to the right pane via
- *  `pi.registerComponent({ slot: "panel.right", moduleUrl })`. */
-export const RIGHT_PANEL_SLOT = "panel.right";
-/** Right-edge 44px icon rail slot (openchamber ContextPanelRail parity):
- *  extension icons mount at the rail's bottom section. */
-export const RIGHT_RAIL_SLOT = "rail.right";
+/** First slot id — the settings page's extension-contributed section.
+ *  Values derived from EXTENSION_SLOT_DECLARATION (collab-proto 单一权威). */
+export const SETTINGS_EXTENSION_SLOT = EXTENSION_SLOT_DECLARATION.exact[0] as string;
+/** Right-side workspace panel slot. */
+export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1] as string;
+/** Right-edge 44px icon rail slot. */
+export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[2] as string;
 /** 内核级 slot 命名空间(P1 架构开放):slot 名是开放
- *  命名空间,前缀决定挂载位置,GUI 按前缀自动挂载 —— 扩展声明任意
- *  `panel.tab.<id>` / `settings.tab.<id>` / `rail.<id>` 即自动出现为
- *  tab/设置页/rail 图标,宿主不再逐槽位硬编码。保留的旧槽位
- *  (panel.right/rail.right/settings.extensions)语义不变。 */
-export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
-export const SETTINGS_TAB_SLOT_PREFIX = "settings.tab.";
-export const RAIL_SLOT_PREFIX = "rail.";
-/** Keyed settings card slot:每个启用扩展
- *  注册 `settings.item.<extId>` 组件即自动在设置页"扩展设置"分区获得一张
- *  卡片,组件经 settingsScope 读写该扩展自己的设置键。 */
-export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
-/** 单行偏好槽:`settings.action.<id>` 组件
- *  挂到设置页"通用"分区 —— 功能插件贡献单行偏好(语言/外观/Enter 行为),
- *  无需整 tab 或整卡。 */
-export const SETTINGS_ACTION_SLOT_PREFIX = "settings.action.";
-/** Composer 座位槽:
- *  dock = 输入卡上方整行;left/right = 底部工具栏两端。list 语义 ——
- *  多个扩展可同时往同一槽注入组件。 */
-export const COMPOSER_DOCK_SLOT = "composer.dock";
-export const COMPOSER_LEFT_SLOT = "composer.left";
-export const COMPOSER_RIGHT_SLOT = "composer.right";
+ *  命名空间,前缀决定挂载位置,GUI 按前缀自动挂载。 */
+export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0] as string;
+export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1] as string;
+export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2] as string;
+/** Keyed settings card slot. */
+export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3] as string;
+/** 单行偏好槽。 */
+export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4] as string;
+/** Composer 座位槽。 */
+export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3] as string;
+export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4] as string;
+export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5] as string;
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
+/** 桌面端实际挂载的槽位(与 EXTENSION_SLOT_DECLARATION 对齐,诊断未挂载)。
+ *  Values derived from the collab-proto single source of truth. */
 export const GUI_SLOT_HOSTS = {
-	exact: [
-		SETTINGS_EXTENSION_SLOT,
-		RIGHT_PANEL_SLOT,
-		RIGHT_RAIL_SLOT,
-		COMPOSER_DOCK_SLOT,
-		COMPOSER_LEFT_SLOT,
-		COMPOSER_RIGHT_SLOT,
-	],
-	prefixes: [
-		PANEL_TAB_SLOT_PREFIX,
-		SETTINGS_TAB_SLOT_PREFIX,
-		RAIL_SLOT_PREFIX,
-		SETTINGS_ITEM_SLOT_PREFIX,
-		SETTINGS_ACTION_SLOT_PREFIX,
-	],
+	exact: EXTENSION_SLOT_DECLARATION.exact.map(s => s as string) as unknown as typeof EXTENSION_SLOT_DECLARATION.exact,
+	prefixes: EXTENSION_SLOT_DECLARATION.prefixes.map(s => s as string) as unknown as typeof EXTENSION_SLOT_DECLARATION.prefixes,
 } as const;
 
 export interface SlotComponent {
