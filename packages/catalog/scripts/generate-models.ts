@@ -423,7 +423,7 @@ async function fetchAntigravityModels(): Promise<ModelSpec<"google-gemini-cli">[
 	const access = await getOAuthAccessFromStorage("google-antigravity");
 	if (!access) {
 		console.log("No Antigravity or Gemini CLI credentials found, will use previous models.");
-		console.log("Tip: If you are logged in under a specific profile, run with OMP_PROFILE=<name>.");
+		console.log("Tip: If you are logged in under a specific profile, run with MUSEPI_PROFILE=<name>.");
 		return [];
 	}
 	try {
@@ -480,7 +480,7 @@ async function fetchCodexDiscoveryModels(): Promise<ModelSpec<"openai-codex-resp
 	}
 	if (accounts.length === 0) {
 		console.log("No Codex credentials found, will use previous models.");
-		console.log("Tip: If you are logged in under a specific profile, run with OMP_PROFILE=<name>.");
+		console.log("Tip: If you are logged in under a specific profile, run with MUSEPI_PROFILE=<name>.");
 		return [];
 	}
 	console.log(`Fetching models from Codex API for ${accounts.length} account(s)...`);

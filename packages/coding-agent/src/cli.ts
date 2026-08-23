@@ -342,20 +342,20 @@ export async function runCli(argv: string[]): Promise<void> {
 		if (extracted.profile !== undefined) {
 			setProfile(extracted.profile);
 		} else {
-			// No explicit --profile: activate any OMP_PROFILE/PI_PROFILE inherited
-			// from the environment. Module-load resolution deliberately swallows an
-			// invalid value to avoid an uncaught throw before this try/catch is in
-			// scope (see `readProfileFromEnvSafe` in dirs.ts), and callers may set
-			// OMP_PROFILE after importing this module (profile aliases/tests). Surfacing
-			// validation here turns `OMP_PROFILE=.. musepi --version` into a clean error;
-			// calling setProfile keeps every later path helper on the env-selected
-			// profile instead of the default agent directory.
-			setProfile(resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE));
+			// No explicit --profile: activate MUSEPI_PROFILE inherited from the
+			// environment. Module-load resolution deliberately swallows an invalid
+			// value to avoid an uncaught throw before this try/catch is in scope
+			// (see `readProfileFromEnvSafe` in dirs.ts), and callers may set
+			// MUSEPI_PROFILE after importing this module (profile aliases/tests).
+			// Surfacing validation here turns `MUSEPI_PROFILE=.. musepi --version`
+			// into a clean error; calling setProfile keeps every later path helper
+			// on the env-selected profile instead of the default agent directory.
+			setProfile(resolveProfileEnv(process.env.MUSEPI_PROFILE));
 		}
 		if (extracted.aliasName !== undefined) {
 			const profile = extracted.profile ?? getActiveProfile();
 			if (!profile) {
-				throw new Error("--alias requires --profile <name> or OMP_PROFILE");
+				throw new Error("--alias requires --profile <name> or MUSEPI_PROFILE");
 			}
 			const result = await installProfileAlias({
 				profile,

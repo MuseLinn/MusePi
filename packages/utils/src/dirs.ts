@@ -36,7 +36,7 @@ export const USER_AGENT = `musepi/${VERSION}`;
 export const MIN_BUN_VERSION: string = engines.bun.replace(/[^0-9.]/g, "");
 
 const PROFILE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const PROFILE_ENV_KEYS = ["OMP_PROFILE", "PI_PROFILE"] as const;
+const PROFILE_ENV_KEYS = ["MUSEPI_PROFILE"] as const;
 
 /**
  * Names Windows treats as reserved device aliases. Matches the basename
@@ -67,7 +67,7 @@ export function normalizeProfileName(profile: string | undefined): string | unde
 		WINDOWS_RESERVED_BASENAME_RE.test(normalized)
 	) {
 		throw new Error(
-			`Invalid OMP profile "${profile}". Profile names must match ${PROFILE_NAME_RE.source}, ` +
+			`Invalid profile "${profile}". Profile names must match ${PROFILE_NAME_RE.source}, ` +
 				`cannot be "." or "..", cannot end with ".", and cannot be a Windows reserved device name ` +
 				`(CON, PRN, AUX, NUL, COM0-9, LPT0-9, or any of those with an extension).`,
 		);
@@ -76,37 +76,27 @@ export function normalizeProfileName(profile: string | undefined): string | unde
 }
 
 /**
- * Resolve the active profile from the two profile env vars. `OMP_PROFILE` is the
- * canonical variable and takes precedence; `PI_PROFILE` is the legacy
- * compatibility fallback, consulted only when `OMP_PROFILE` is undefined. An
- * explicitly-empty `OMP_PROFILE` therefore selects the default profile rather
- * than silently inheriting `PI_PROFILE`. Delegates validation/normalization to
- * {@link normalizeProfileName} (which throws on a syntactically invalid value).
+ * Resolve the active profile from the `MUSEPI_PROFILE` environment variable.
+ * An explicitly-empty value selects the default profile. Delegates
+ * validation/normalization to {@link normalizeProfileName} (which throws on a
+ * syntactically invalid value).
  */
-export function resolveProfileEnv(omp: string | undefined, pi: string | undefined): string | undefined {
-	return normalizeProfileName(omp !== undefined ? omp : pi);
+export function resolveProfileEnv(value: string | undefined): string | undefined {
+	return normalizeProfileName(value);
 }
 
 function getProfileFromEnv(): string | undefined {
-	return resolveProfileEnv(process.env.OMP_PROFILE, process.env.PI_PROFILE);
+	return resolveProfileEnv(process.env.MUSEPI_PROFILE);
 }
 
 /**
  * Module-load profile resolution. Unlike {@link getProfileFromEnv}, an invalid
- * OMP_PROFILE/PI_PROFILE value does NOT throw here — a bad env var must not
+ * MUSEPI_PROFILE value does NOT throw here — a bad env var must not
  * crash a bare `import` of this module with an uncaught stack trace before the
  * CLI's error handling is in scope. The default profile is used instead; the
  * CLI re-validates the env (see `runCli` in coding-agent/src/cli.ts) so the
- * user still gets a clean "Invalid OMP profile" message.
+ * user still gets a clean "Invalid profile" message.
  */
-function readProfileFromEnvSafe(): string | undefined {
-	try {
-		return getProfileFromEnv();
-	} catch {
-		return undefined;
-	}
-}
-
 function getBaseConfigRoot(): string {
 	// An absolute PI_CONFIG_DIR is a full config-root override (the GUI's
 	// data-root relocation passes e.g. /Volumes/Data/.musepi); path.join
@@ -120,9 +110,9 @@ function getProfileConfigRoot(profile: string | undefined): string {
 	return profile ? path.join(root, "profiles", profile) : root;
 }
 
-function readPiProfileFromEnvSafe(): string | undefined {
+function readProfileFromEnvSafe(): string | undefined {
 	try {
-		return normalizeProfileName(process.env.PI_PROFILE);
+		return normalizeProfileName(process.env.MUSEPI_PROFILE);
 	} catch {
 		return undefined;
 	}
@@ -338,7 +328,7 @@ class DirResolver {
  * (propagated by a parent's `setProfile`), so it must NOT be snapshotted as the
  * default-mode baseline — otherwise default mode would resolve to the profile's
  * agent dir. The profile source can be the active profile or a lower-priority
- * `PI_PROFILE` that was bypassed because `OMP_PROFILE` explicitly selected the
+ * profile that was bypassed because `MUSEPI_PROFILE` explicitly selected the
  * default profile. Returns `undefined` in those cases so reset falls back to the
  * standard `~/.musepi/agent`.
  */
@@ -347,6 +337,10 @@ function resolvePreProfileAgentDir(
 	agentDirEnv: string | undefined,
 	profileAgentDirSource: string | undefined = profile,
 ): string | undefined {
+	// An explicitly-present profile env (even empty = "default") means the
+	// user declared their profile choice; any inherited profile-derived
+	// PI_CODING_AGENT_DIR must not be adopted as a default-mode override.
+	if (profileAgentDirSource !== undefined && profile === undefined) return undefined;
 	return isProfileDerivedAgentDir(profile ?? profileAgentDirSource, agentDirEnv) ? undefined : agentDirEnv;
 }
 
@@ -362,7 +356,7 @@ let activeProfile = readProfileFromEnvSafe();
 function resolveActiveAgentDirOverride(): string | undefined {
 	return activeProfile
 		? undefined
-		: resolvePreProfileAgentDir(undefined, process.env.PI_CODING_AGENT_DIR, readPiProfileFromEnvSafe());
+		: resolvePreProfileAgentDir(undefined, process.env.PI_CODING_AGENT_DIR, process.env.MUSEPI_PROFILE);
 }
 
 let dirs = new DirResolver({
@@ -383,7 +377,7 @@ let dirs = new DirResolver({
 let preProfileAgentDirEnv: string | undefined = resolvePreProfileAgentDir(
 	activeProfile,
 	process.env.PI_CODING_AGENT_DIR,
-	activeProfile ?? readPiProfileFromEnvSafe(),
+	activeProfile ?? process.env.MUSEPI_PROFILE,
 );
 // Anchor home for the resolver. Captured at module load to stay stable across
 // test mocks of `os.homedir()`. `getPluginsDir(home)` compares against this so
@@ -440,7 +434,7 @@ export function __resetProfileSnapshotForTests(): void {
 	preProfileAgentDirEnv = resolvePreProfileAgentDir(
 		activeProfile,
 		process.env.PI_CODING_AGENT_DIR,
-		activeProfile ?? readPiProfileFromEnvSafe(),
+		activeProfile ?? process.env.MUSEPI_PROFILE,
 	);
 }
 
@@ -468,14 +462,13 @@ export function setProfile(profile: string | undefined): void {
 		preProfileAgentDirEnv = resolvePreProfileAgentDir(
 			undefined,
 			process.env.PI_CODING_AGENT_DIR,
-			readPiProfileFromEnvSafe(),
+			process.env.MUSEPI_PROFILE,
 		);
 	}
 	activeProfile = next;
 	if (activeProfile) {
 		dirs = new DirResolver({ profile: activeProfile });
-		process.env.OMP_PROFILE = activeProfile;
-		process.env.PI_PROFILE = activeProfile;
+		process.env.MUSEPI_PROFILE = activeProfile;
 		process.env.PI_CODING_AGENT_DIR = dirs.agentDir;
 	} else {
 		for (const key of PROFILE_ENV_KEYS) {

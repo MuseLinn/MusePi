@@ -26,14 +26,12 @@ function restoreEnv(key: string, value: string | undefined): void {
 describe("document conversion cache directory", () => {
 	let tempRoot = "";
 	let originalPiCodingAgentDir: string | undefined;
-	let originalOmpProfile: string | undefined;
-	let originalPiProfile: string | undefined;
+	let originalProfile: string | undefined;
 	let originalXdgCacheHome: string | undefined;
 
 	beforeEach(async () => {
 		originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
-		originalOmpProfile = process.env.OMP_PROFILE;
-		originalPiProfile = process.env.PI_PROFILE;
+		originalProfile = process.env.MUSEPI_PROFILE;
 		originalXdgCacheHome = process.env.XDG_CACHE_HOME;
 		tempRoot = path.join(os.tmpdir(), "pi-utils-document-cache", Snowflake.next());
 		await fs.mkdir(tempRoot, { recursive: true });
@@ -41,8 +39,7 @@ describe("document conversion cache directory", () => {
 
 	afterEach(async () => {
 		restoreEnv("PI_CODING_AGENT_DIR", originalPiCodingAgentDir);
-		restoreEnv("OMP_PROFILE", originalOmpProfile);
-		restoreEnv("PI_PROFILE", originalPiProfile);
+		restoreEnv("MUSEPI_PROFILE", originalProfile);
 		restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
 		__resetDirsFromEnvForTests();
 		await fs.rm(tempRoot, { recursive: true, force: true });
@@ -104,12 +101,10 @@ describe("PI_CONFIG_DIR config-root override", () => {
 describe("test directory state cleanup", () => {
 	it("restores the active profile from the current env after setAgentDir mutations", () => {
 		const originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
-		const originalOmpProfile = process.env.OMP_PROFILE;
-		const originalPiProfile = process.env.PI_PROFILE;
+		const originalProfile = process.env.MUSEPI_PROFILE;
 		const originalXdgCacheHome = process.env.XDG_CACHE_HOME;
 		try {
-			process.env.OMP_PROFILE = "cache-profile";
-			delete process.env.PI_PROFILE;
+			process.env.MUSEPI_PROFILE = "cache-profile";
 			delete process.env.PI_CODING_AGENT_DIR;
 			delete process.env.XDG_CACHE_HOME;
 			__resetDirsFromEnvForTests();
@@ -117,8 +112,7 @@ describe("test directory state cleanup", () => {
 			setAgentDir(path.join(os.tmpdir(), "pi-utils-document-cache", Snowflake.next(), "agent"));
 			expect(getActiveProfile()).toBeUndefined();
 
-			process.env.OMP_PROFILE = "cache-profile";
-			delete process.env.PI_PROFILE;
+			process.env.MUSEPI_PROFILE = "cache-profile";
 			delete process.env.PI_CODING_AGENT_DIR;
 			__resetDirsFromEnvForTests();
 
@@ -128,9 +122,8 @@ describe("test directory state cleanup", () => {
 			);
 		} finally {
 			restoreEnv("PI_CODING_AGENT_DIR", originalPiCodingAgentDir);
-			restoreEnv("OMP_PROFILE", originalOmpProfile);
-			restoreEnv("PI_PROFILE", originalPiProfile);
-			restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
+			restoreEnv("MUSEPI_PROFILE", originalProfile);
+				restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
 			__resetDirsFromEnvForTests();
 		}
 	});
@@ -139,16 +132,14 @@ describe("test directory state cleanup", () => {
 describe("legacy file adoption on XDG paths", () => {
 	let tempRoot = "";
 	let originalPiCodingAgentDir: string | undefined;
-	let originalOmpProfile: string | undefined;
-	let originalPiProfile: string | undefined;
+	let originalProfile: string | undefined;
 	let originalXdgStateHome: string | undefined;
 	let originalXdgDataHome: string | undefined;
 	let homedirSpy: Mock<() => string> | undefined;
 
 	beforeEach(async () => {
 		originalPiCodingAgentDir = process.env.PI_CODING_AGENT_DIR;
-		originalOmpProfile = process.env.OMP_PROFILE;
-		originalPiProfile = process.env.PI_PROFILE;
+		originalProfile = process.env.MUSEPI_PROFILE;
 		originalXdgStateHome = process.env.XDG_STATE_HOME;
 		originalXdgDataHome = process.env.XDG_DATA_HOME;
 		tempRoot = path.join(os.tmpdir(), "pi-utils-xdg-adoption", Snowflake.next());
@@ -159,8 +150,7 @@ describe("legacy file adoption on XDG paths", () => {
 		homedirSpy?.mockRestore();
 		homedirSpy = undefined;
 		restoreEnv("PI_CODING_AGENT_DIR", originalPiCodingAgentDir);
-		restoreEnv("OMP_PROFILE", originalOmpProfile);
-		restoreEnv("PI_PROFILE", originalPiProfile);
+		restoreEnv("MUSEPI_PROFILE", originalProfile);
 		restoreEnv("XDG_STATE_HOME", originalXdgStateHome);
 		restoreEnv("XDG_DATA_HOME", originalXdgDataHome);
 		__resetDirsFromEnvForTests();
@@ -171,8 +161,7 @@ describe("legacy file adoption on XDG paths", () => {
 	function activateTempHome(xdgEnv: Record<string, string>): void {
 		homedirSpy = spyOn(os, "homedir").mockReturnValue(tempRoot);
 		delete process.env.PI_CODING_AGENT_DIR;
-		delete process.env.OMP_PROFILE;
-		delete process.env.PI_PROFILE;
+		delete process.env.MUSEPI_PROFILE;
 		delete process.env.XDG_STATE_HOME;
 		delete process.env.XDG_DATA_HOME;
 		for (const key in xdgEnv) {
