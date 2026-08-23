@@ -190,3 +190,21 @@ export async function withHostGuard<T>(fn: () => Promise<T>): Promise<T> {
 		}
 	}
 }
+
+/**
+ * Resolve + dedupe a list of candidate paths (in order, first wins). Shared
+ * by discoverAndLoad* in hooks/custom-tools/custom-commands — each loader
+ * used to re-implement the seen-set + path.resolve loop.
+ */
+export function resolveUniquePaths(paths: readonly string[], cwd: string): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const p of paths) {
+		const resolved = path.resolve(resolvePath(p, cwd));
+		if (!seen.has(resolved)) {
+			seen.add(resolved);
+			out.push(resolved);
+		}
+	}
+	return out;
+}

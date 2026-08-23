@@ -12,7 +12,7 @@ import { loadCapability } from "../../discovery";
 import * as PiCodingAgent from "../../index";
 import type { CustomMessagePayload } from "../../session/messages";
 import * as typebox from "../legacy-typebox";
-import { resolvePath, withHostGuard } from "../utils";
+import { resolvePath, resolveUniquePaths, withHostGuard } from "../utils";
 import { execCommand } from "./runner";
 import type { ExecOptions, HookAPI, HookFactory, HookMessageRenderer, RegisteredCommand } from "./types";
 
@@ -218,26 +218,14 @@ export async function loadHooks(paths: string[], cwd: string): Promise<LoadHooks
  * Plus any explicitly configured paths from settings.
  */
 export async function discoverAndLoadHooks(configuredPaths: string[], cwd: string): Promise<LoadHooksResult> {
-	const allPaths: string[] = [];
-	const seen = new Set<string>();
-
-	// Helper to add paths without duplicates
-	const addPaths = (paths: string[]) => {
-		for (const p of paths) {
-			const resolved = path.resolve(p);
-			if (!seen.has(resolved)) {
-				seen.add(resolved);
-				allPaths.push(p);
-			}
-		}
-	};
-
 	// 1. Discover hooks via capability API
 	const discovered = await loadCapability<Hook>(hookCapability.id, { cwd });
-	addPaths(discovered.items.map(hook => hook.path));
 
-	// 2. Explicitly configured paths (can override/add)
-	addPaths(configuredPaths.map(p => resolvePath(p, cwd)));
+	// 2. Explicitly configured paths (can override/add); dedupe in order
+	const allPaths = resolveUniquePaths(
+		[...discovered.items.map(hook => hook.path), ...configuredPaths],
+		cwd,
+	);
 
 	return loadHooks(allPaths, cwd);
 }
