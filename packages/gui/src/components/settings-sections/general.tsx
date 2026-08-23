@@ -133,6 +133,29 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 	};
 	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
+	const [autostartEnabled, setAutostartEnabled] = useState(false);
+	const [autostartSupported, setAutostartSupported] = useState(false);
+	const [autostartBusy, setAutostartBusy] = useState(false);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		void rpc.request<{ enabled: boolean; supported: boolean }>("system.getAutostart", {}).then(r => {
+			if (!alive) return;
+			setAutostartEnabled(r.enabled);
+			setAutostartSupported(r.supported);
+		}).catch(() => {});
+		return () => { alive = false; };
+	}, [rpc]);
+	const toggleAutostart = (): void => {
+		if (autostartBusy || !rpc) return;
+		setAutostartBusy(true);
+		const next = !autostartEnabled;
+		void rpc.request<{ enabled: boolean }>("system.setAutostart", { enabled: next }).then(r => {
+			setAutostartEnabled(r.enabled);
+		}).catch(() => {
+			setAutostartEnabled(false);
+		}).finally(() => setAutostartBusy(false));
+	};
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");
 	// Busy-state plain-Enter behavior (dsh parity): steer (TUI default) or
@@ -283,6 +306,25 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							{t("apply")}
 						</button>
 					</div>
+				</div>
+			)}
+			{autostartSupported && (
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("launch at login")}</div>
+						<div className="gui-settings-row-desc">{t("launch at login description")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={autostartEnabled}
+						className={`gui-toggle${autostartEnabled ? " gui-toggle--on" : ""}`}
+						disabled={autostartBusy}
+						onClick={toggleAutostart}
+						aria-label={t("launch at login")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
 				</div>
 			)}
 			<div className="gui-settings-row">

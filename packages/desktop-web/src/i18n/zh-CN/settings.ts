@@ -2866,6 +2866,8 @@ export const settings = {
 	// 语音模型下载状态(语音设置页)
 	"speech models": "语音识别模型",
 	"model ready offline": "已就绪 · 本地可用",
+	"launch at login": "开机启动",
+	"launch at login description": "登录时自动启动 MusePi 后台守护进程（无需打开应用即可保持后台功能可用）",
 } as const;
 
 /** Key union for the settings domain (source of truth). */

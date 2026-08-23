@@ -2983,4 +2983,6 @@ export const settings = {
 	// Speech-model download state (voice settings page)
 	"speech models": "Speech recognition models",
 	"model ready offline": "Ready · available offline",
+	"launch at login": "Launch at login",
+	"launch at login description": "Start the MusePi daemon automatically when you log in (keeps background features available without opening the app)",
 } as const satisfies Record<SettingsKey, string>;

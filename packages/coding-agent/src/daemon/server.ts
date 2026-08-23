@@ -3578,6 +3578,19 @@ export class DaemonServer {
 				return { ready: sdkPrewarmed };
 			case "system.features":
 				return {};
+			case "system.getAutostart": {
+				// Desktop daemon launch-at-login (Windows Run key; macOS
+				// LaunchAgents; Linux XDG autostart). openchamber parity —
+				// but the DAEMON self-registers (independent of Electron),
+				// so the setting survives GUI-less operation.
+				return getAutostartState();
+			}
+			case "system.setAutostart": {
+				const p = (params ?? {}) as { enabled?: boolean };
+				const enabled = p.enabled === true;
+				await setAutostartState(enabled);
+				return { enabled };
+			}
 			case "session.create": {
 				// modeId(modelPattern/thinkingLevel)透传 host.createSession ——
 				// GUI welcome 预设 chip 的选择在创建时一次应用(modes v1/v2)。
@@ -9043,3 +9056,124 @@ export async function startDaemon(
 		},
 	};
 }
+
+
+// ── Launch-at-login (daemon self-registration, openchamber parity) ────────
+// The daemon is independent of the Electron GUI, so Electron's
+// setLoginItemSettings cannot cover it. We register the DAEMON command
+// itself in the OS autostart slot:
+//   win32   — HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run
+//   darwin  — ~/Library/LaunchAgents/dev.musepi.daemon.plist
+//   linux   — ~/.config/autostart/musepi-daemon.desktop
+// GUI-less operation: the daemon stays up after login and the GUI connects
+// on demand (open-design sidecar model). The check reads the actual slot so
+// external edits are reflected.
+
+const AUTOSTART_RUN_KEY =
+	"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\Run";
+
+/** Resolve the daemon binary path for autostart registration. Returns empty
+ *  when the binary cannot be found (dev mode — autostart only makes sense
+ *  for packaged installs). */
+function resolveDaemonBinary(): string {
+	// Packaged: look for the daemon binary relative to this script's
+	// location. The server is at <root>/packages/coding-agent/src/daemon/.
+	// The packaged binary is at <root>/packages/gui/vendor/daemon/musepi.exe
+	// (or the asar-unpacked equivalent).
+	const candidates = [
+		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi.exe"),
+		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi"),
+		// Electron asar-unpacked path (packaged app)
+		path.join((process as { resourcesPath?: string }).resourcesPath ?? "", "app.asar.unpacked", "vendor", "daemon", "musepi.exe"),
+		path.join((process as { resourcesPath?: string }).resourcesPath ?? "", "app.asar.unpacked", "vendor", "daemon", "musepi"),
+		// PATH fallback
+		Bun.which("musepi") ?? "",
+	];
+	for (const c of candidates) {
+		if (c && fs.existsSync(c)) return c;
+	}
+	return "";
+}
+
+export function getAutostartState(): { enabled: boolean; supported: boolean; binary?: string } {
+	if (process.platform === "win32") {
+		try {
+			const out = Bun.spawnSync(["reg.exe", "query", AUTOSTART_RUN_KEY, "/v", "musepi-daemon"], {
+				stdout: "pipe", stderr: "pipe",
+			});
+			return { enabled: out.exitCode === 0, supported: true };
+		} catch {
+			return { enabled: false, supported: true };
+		}
+	}
+	if (process.platform === "darwin") {
+		const plist = path.join(os.homedir(), "Library", "LaunchAgents", "dev.musepi.daemon.plist");
+		return { enabled: fs.existsSync(plist), supported: true };
+	}
+	if (process.platform === "linux") {
+		const dir = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config");
+		const desktop = path.join(dir, "autostart", "musepi-daemon.desktop");
+		return { enabled: fs.existsSync(desktop), supported: true };
+	}
+	return { enabled: false, supported: false };
+}
+
+export async function setAutostartState(enabled: boolean): Promise<void> {
+	if (process.platform === "win32") {
+		if (enabled) {
+			const bin = resolveDaemonBinary();
+			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
+			Bun.spawnSync(["reg.exe", "add", AUTOSTART_RUN_KEY, "/v", "musepi-daemon", "/t", "REG_SZ", "/d", `"${bin}" serve --port 8300`, "/f"], {
+				stdout: "pipe", stderr: "pipe",
+			});
+		} else {
+			Bun.spawnSync(["reg.exe", "delete", AUTOSTART_RUN_KEY, "/v", "musepi-daemon", "/f"], {
+				stdout: "pipe", stderr: "pipe",
+			});
+		}
+		return;
+	}
+	if (process.platform === "darwin") {
+		const plist = path.join(os.homedir(), "Library", "LaunchAgents", "dev.musepi.daemon.plist");
+		if (enabled) {
+			const bin = resolveDaemonBinary();
+			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
+			await fs.promises.mkdir(path.dirname(plist), { recursive: true });
+			await fs.promises.writeFile(plist, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.musepi.daemon</string>
+  <key>ProgramArguments</key><array>
+    <string>${bin}</string>
+    <string>serve</string>
+    <string>--port</string>
+    <string>8300</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+</dict></plist>`, "utf8");
+		} else {
+			try { await fs.promises.unlink(plist); } catch { /* no-op */ }
+		}
+		return;
+	}
+	if (process.platform === "linux") {
+		const dir = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config");
+		const desktop = path.join(dir, "autostart", "musepi-daemon.desktop");
+		if (enabled) {
+			const bin = resolveDaemonBinary();
+			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
+			await fs.promises.mkdir(path.dirname(desktop), { recursive: true });
+			await fs.promises.writeFile(desktop, `[Desktop Entry]
+Type=Application
+Name=Musepi Daemon
+Exec=${bin} serve --port 8300
+X-GNOME-Autostart-enabled=true
+`, "utf8");
+		} else {
+			try { await fs.promises.unlink(desktop); } catch { /* no-op */ }
+		}
+		return;
+	}
+	throw new Error("autostart not supported on this platform");
+}
+
