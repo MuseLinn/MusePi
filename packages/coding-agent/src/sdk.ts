@@ -45,8 +45,14 @@ import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
 import bundledBoardDesignSkill from "./bundled-skills/board-design/SKILL.md" with { type: "text" };
+import bundledCodeReviewSkill from "./bundled-skills/musepi-code-review/SKILL.md" with { type: "text" };
 import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
+import bundledFindSimplificationsSkill from "./bundled-skills/musepi-find-simplifications/SKILL.md" with {
+	type: "text",
+};
 import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
+import bundledProseStandardSkill from "./bundled-skills/musepi-prose-standard/SKILL.md" with { type: "text" };
+import bundledTrimCotLeakageSkill from "./bundled-skills/musepi-trim-cot-leakage/SKILL.md" with { type: "text" };
 import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
 import bundledWidgetDesignSkill from "./bundled-skills/widget-design/SKILL.md" with { type: "text" };
 import { loadCapability } from "./capability";
@@ -1283,11 +1289,11 @@ export function createAutoLearnCaptureRunner(
  * ```
  */
 /**
- * Bundled product skills (widget design + MusePi help) installed once into
- * the user-level `~/.agents/skills` (agents provider — enabled by default,
- * surfaced in the settings → skills tab). Idempotent: an existing
- * SKILL.md of the same name is left untouched so user edits survive.
- * `dir` (optional) copies a multi-file skill package (data/scripts/…) from
+ * Bundled product skills installed once into the user-level
+ * `~/.musepi/agent/skills` (native provider — enabled by default, surfaced in
+ * the settings → skills tab). Idempotent: an existing SKILL.md of the same
+ * name is left untouched so user edits survive. `dir` (optional) copies a
+ * multi-file skill package (data/scripts/references/…) from
  * src/bundled-skills/<dir> alongside the SKILL.md — missing files only, so
  * user-added files survive re-install.
  */
@@ -1297,6 +1303,10 @@ const BUNDLED_SKILLS = [
 	{ name: "musepi-extension-dev", content: bundledExtensionDevSkill },
 	{ name: "ui-ux-pro-max", content: bundledUiUxProMaxSkill, dir: "ui-ux-pro-max" },
 	{ name: "board-design", content: bundledBoardDesignSkill },
+	{ name: "musepi-prose-standard", content: bundledProseStandardSkill },
+	{ name: "musepi-trim-cot-leakage", content: bundledTrimCotLeakageSkill, dir: "musepi-trim-cot-leakage" },
+	{ name: "musepi-find-simplifications", content: bundledFindSimplificationsSkill },
+	{ name: "musepi-code-review", content: bundledCodeReviewSkill },
 ] as const;
 let bundledSkillsEnsured = false;
 

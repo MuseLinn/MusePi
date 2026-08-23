@@ -9,7 +9,7 @@ description: 清理"思维链泄漏"类文案——死设计会话引用（(决�
 得见的产物，叙述"变更"而不是"状态"，或在对一个早已离开的评审者辩解。修复从来不是
 只删——一段文字带有事实分句时，把每个事实改写成在 HEAD 上成立的说法，再删掉周围的
 转写；一个事实分句都不带的（审计码、控制流叙述）直接整段删。**必读背景：**
-`musepi-prose-standard` 持有本 skill 套用的完整命题规则。这是指导，不是脚本。
+`skill://musepi-prose-standard` 持有本 skill 套用的完整命题规则。这是指导，不是脚本。
 
 ## 唯一检验
 
@@ -65,7 +65,7 @@ description: 清理"思维链泄漏"类文案——死设计会话引用（(决�
 3. **按归属者修**：生成的目录 → 改生成器再重生成（`models.json` 改
    `scripts/generate-models.ts` 后 `bun run gen:models`）；i18n 域文件 → zh/en 同步改；
    模型可见字符串 → 措辞即行为，走 snapshot 支撑的变更而不是悄悄改写。
-4. **删之前**列命题（`musepi-prose-standard`），并查过度修正陷阱
+4. **删之前**列命题（`skill://musepi-prose-standard`），并查过度修正陷阱
    （[examples](references/examples.md)）：把义务改成背书、把假设说成已发布功能、
    删掉真事实、丢掉来源——都是要防的。
 5. **验证**：重跑 batteries，期望只剩正当保留；确认每个留下的引用在 HEAD 可解析；
