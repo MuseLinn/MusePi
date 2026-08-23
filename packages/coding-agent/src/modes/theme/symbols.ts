@@ -91,6 +91,7 @@ export type SymbolKey =
 	| "icon.job"
 	| "icon.cache"
 	| "icon.cacheMiss"
+	| "icon.advisor"
 	| "icon.input"
 	| "icon.output"
 	| "icon.throughput"
@@ -426,6 +427,7 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"icon.job": "⚙",
 	"icon.cache": "💾",
 	"icon.cacheMiss": "⊘",
+	"icon.advisor": "👁",
 	"icon.input": "⤵",
 	"icon.output": "⤴",
 	"icon.throughput": "⚡",
@@ -757,6 +759,7 @@ const NERD_SYMBOLS: SymbolMap = {
 	// pick:  (fa-ban) | alt: ⊘
 	"icon.cacheMiss": "\uf05e",
 	// pick:  | alt:  →
+	"icon.advisor": "\uea70",
 	"icon.input": "\uf090",
 	// pick:  | alt:  →
 	"icon.output": "\uf08b",
@@ -1083,6 +1086,7 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"icon.ghost": "@",
 	"icon.agents": "AG",
 	"icon.job": "bg",
+	"icon.advisor": "(adv)",
 	"icon.output": "out:",
 	"icon.throughput": "tok/s:",
 	"icon.cache": "cache",

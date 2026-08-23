@@ -6,6 +6,7 @@ import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
+import { ModelBrandIcon } from "./model-brand-icon";
 
 export interface WireModel {
 	id: string;

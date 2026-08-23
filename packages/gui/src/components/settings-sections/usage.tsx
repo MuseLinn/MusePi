@@ -50,7 +50,7 @@ export function fmtMs(n: number | null): string {
 	return n == null ? "—" : `${Math.round(n)}ms`;
 }
 
-/** Stats wire shapes (subset of @musepi/omp-stats shared-types). */
+/** Stats wire shapes (subset of @musepi/musepi-stats shared-types). */
 interface UsageAggregated {
 	totalRequests: number;
 	successfulRequests: number;

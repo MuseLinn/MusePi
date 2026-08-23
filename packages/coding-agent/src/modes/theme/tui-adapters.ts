@@ -7,6 +7,7 @@ import type { EditorTheme, MarkdownTheme, SelectListTheme, SettingsListTheme, Sy
 import chalk from "@musepi/pi-utils/chalk";
 import { LRUCache } from "@musepi/pi-utils/lru";
 import { resolveMermaidAscii } from "./mermaid-cache";
+import type { SlashCommandIconName } from "./symbols";
 import { theme } from "./theme";
 import type { Theme } from "./theme-class";
 
@@ -85,6 +86,12 @@ export function highlightCode(code: string, lang?: string, highlightTheme: Theme
 	// Always return a fresh array: callers (e.g. renderCodeCell) push extra lines
 	// onto the result, which would corrupt the cached string otherwise.
 	return (highlighted ?? code).split("\n");
+}
+
+export function getSlashCommandTypeIcon(name: SlashCommandIconName): string | undefined {
+	if (typeof theme === "undefined" || theme.getSymbolPreset() === "ascii") return undefined;
+	const icon = theme.cmd[name];
+	return icon.length > 0 ? icon : undefined;
 }
 
 export function getSymbolTheme(): SymbolTheme {
