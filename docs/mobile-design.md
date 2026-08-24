@@ -434,3 +434,29 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
   transcript 保持全宽 —— 两栏工作布局（内容 + rail），面板/工作区仍全屏（内容密集场景）。
 - PWA：`public/mobile.webmanifest`（MusePi 品牌，standalone，4 尺寸图标）+ mobile.html
   `<link rel="manifest">`——安卓 Chrome 可"添加到主屏幕"。
+### 11.5 引导界面重做 + 真机专属 bug 修复（2026-08-25）
+
+用户真机反馈：扫码不可用、收起态按钮不自适应宽度、语言切换不即时、"像打开网页"。
+
+根因与修复（模拟器 API 35 CDP 实测验收）：
+
+1. **扫码不可用 = 缺 CAMERA 权限**：AndroidManifest 此前只有 INTERNET。补
+   `<uses-permission android:name="android.permission.CAMERA" />` + scanQr 内先
+   `BarcodeScanner.requestPermissions()`（拒绝则显示友好错误）。实测点击扫码 →
+   系统 GrantPermissionsActivity 弹出。注意 mlkit 依赖 Google Play Services，无 GMS
+   的国产 ROM（华为等）后续需加 JS 解码兜底。
+2. **收起态按钮半宽竖排 = 容器布局 bug**：accordion 容器 div 复用 `.sh-connect-method`
+   （flex ROW），收起时 height:0 的 collapse 体仍占 flex 位，把头部按钮挤成半宽；且容器
+   与按钮双层卡面。修复：`.sh-connect-card div.sh-connect-method` 容器仅布局
+   （column、透明、padding 0），头部按钮（收起）或整个容器（展开）单面承载卡面。
+3. **语言切换不即时 = ConnectScreen 未订阅 locale**：t() 非响应式读取 store，切语言只
+   重渲染 LanguageToggle 自身。补 `useLocale()`。实测点 toggle 后副标题
+   "Connect to a computer…" 立即变 "连接同一网络的电脑"，localStorage 写入 zh-CN。
+4. **质感重做（桌面语言 + 原生材质）**：背景加第三层 accent 洗光 + MusePi dot-matrix
+   纹理（`radial-gradient` 22px 网格）；卡片 blur 18→28px saturate 160%、圆角 14→20px、
+   24px→400px 宽、双层阴影 + 顶部高光；brand mark 16→22px；method 磁贴图标 34→40px
+   squircle、圆角 10→14px、`:active` scale(0.98) 按压反馈、hover 抬升阴影、scan 磁贴
+   渐变 accent 面 + 辉光；新增 accordion chevron（"›" 收起→旋转 90° 展开）；pair-row
+   自适应宽度（96px 码位 + host 弹性吸收 + 按钮整行换行）；提交按钮 44px 主按钮 +
+   accent 辉光；错误提示升级为玻璃警示条。实测几何：闭合态三磁贴全宽 339px、图标左置
+   水平布局；展开态表单 319px 全宽在 ring 内。

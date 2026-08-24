@@ -1135,6 +1135,7 @@ export const settings = {
 	"not connected yet — connect to a computer to view sessions": "尚未连接 — 连接电脑后即可查看会话",
 	"connect to a computer": "连接电脑",
 	"scan failed — use the pair code instead": "扫码失败 — 请改用配对码",
+	"camera permission denied — use the pair code instead": "相机权限被拒绝 — 请改用配对码",
 	"or use MusePi Mobile pair code": "或使用 MusePi Mobile 配对码",
 	"get code": "获取配对码",
 	"enter the 6-digit code in MusePi Mobile (same network)": "在 MusePi Mobile 中输入 6 位配对码（同一网络）",

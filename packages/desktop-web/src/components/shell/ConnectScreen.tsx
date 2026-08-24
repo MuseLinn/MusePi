@@ -2,6 +2,7 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { isNativeShell } from "../../lib/capacitor";
+import { useLocale } from "../../i18n/use-locale.js";
 import { type Connection, loadConnections, rememberConnection, removeConnection } from "../../lib/connections";
 import { haptic } from "../../lib/haptics";
 import { secureGet, secureSet } from "../../lib/secure-store";
@@ -87,6 +88,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const pairBodyRef = useRef<HTMLDivElement | null>(null);
 	const linkBodyRef = useRef<HTMLDivElement | null>(null);
 	useCollapseHeight(openMethod === "pair", pairBodyRef);
+	// Subscribe this card to locale changes: every label below flows through
+	// t(), which reads the store non-reactively — without a useLocale()
+	// subscriber here, switching languages only re-renders the toggle button
+	// and the rest of the guide keeps the old language until remount.
+	useLocale();
 	useCollapseHeight(openMethod === "link", linkBodyRef);
 
 	// Hydrate secure-stored state (recent connections, remembered pair host)
@@ -148,11 +154,17 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	};
 
 	// Scan QR — lazily imports the mlkit plugin so the browser bundle stays
-	// lean and non-native pages never touch Capacitor.
+	// lean and non-native pages never touch Capacitor. Runtime camera consent
+	// is requested here (the manifest only declares the permission).
 	const scanQr = async (): Promise<void> => {
 		setLocalError(null);
 		try {
 			const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
+			const { camera } = await BarcodeScanner.requestPermissions();
+			if (camera !== "granted") {
+				setLocalError(t("camera permission denied — use the pair code instead"));
+				return;
+			}
 			const result = await BarcodeScanner.scan();
 			const value = result.barcodes?.[0]?.displayValue?.trim();
 			if (value) connect(value, name.trim() || t("guest"));
@@ -319,6 +331,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 								{t("enter the 6-digit code from the desktop share panel")}
 							</span>
 						</span>
+						<span className="sh-connect-method-chev" aria-hidden="true">
+							›
+						</span>
 					</button>
 					<div
 						className="sh-connect-collapse"
@@ -374,6 +389,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 						<span className="sh-connect-method-body">
 							<span className="sh-connect-method-title">{t("paste a join link")}</span>
 							<span className="sh-connect-method-desc">{t("ws://host:port/r/room.key")}</span>
+						</span>
+						<span className="sh-connect-method-chev" aria-hidden="true">
+							›
 						</span>
 					</button>
 					<div

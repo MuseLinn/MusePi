@@ -1188,6 +1188,8 @@ export const settings = {
 		"Not connected yet — connect to a computer to view sessions",
 	"connect to a computer": "Connect to a computer",
 	"scan failed — use the pair code instead": "Scan failed — use the pair code instead",
+	"camera permission denied — use the pair code instead":
+		"Camera permission denied — use the pair code instead",
 	"or use MusePi Mobile pair code": "or use MusePi Mobile pair code",
 	"get code": "Get code",
 	"enter the 6-digit code in MusePi Mobile (same network)": "Enter the 6-digit code in MusePi Mobile (same network)",

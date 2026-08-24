@@ -49,4 +49,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- QR connect: mlkit barcode scanning needs the camera. The plugin
+         requests runtime consent on first scan. -->
+    <uses-permission android:name="android.permission.CAMERA" />
 </manifest>

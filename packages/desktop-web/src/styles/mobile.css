@@ -14,30 +14,7 @@
 
 	.sh-connect-card {
 		max-width: 100%;
-		padding: 20px 16px;
-		border-radius: 12px;
-	}
-
-	.sh-connect-method {
-		padding: 12px;
-	}
-
-	.sh-connect-pair-row {
-		flex-wrap: wrap;
-	}
-
-	.sh-connect-pair-row .sh-input:first-child {
-		width: 100%;
-		flex: none;
-		text-align: center;
-	}
-
-	.sh-connect-pair-row .sh-input:nth-child(2) {
-		flex: 1 1 100%;
-	}
-
-	.sh-connect-pair-row .sh-btn {
-		flex: 1 1 100%;
+		border-radius: 18px;
 	}
 }
 

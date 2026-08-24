@@ -722,10 +722,12 @@
 	place-items: start center;
 	overflow-y: auto;
 	overflow-y: overlay;
-	/* GUI pane-glow parity: ambient accent wash behind the glass card. */
+	/* GUI pane-glow parity + MusePi dot-matrix brand texture behind the
+	 * glass card: two accent washes and a faint adaptive dot grid. */
 	background:
-		radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-accent) 6%, transparent) 0%, transparent 55%),
-		radial-gradient(80% 60% at 85% 100%, color-mix(in oklab, var(--color-accent) 4%, transparent) 0%, transparent 50%),
+		radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-accent) 8%, transparent) 0%, transparent 55%),
+		radial-gradient(80% 60% at 85% 100%, color-mix(in oklab, var(--color-accent) 5%, transparent) 0%, transparent 50%),
+		radial-gradient(color-mix(in oklab, var(--fg) 4.5%, transparent) 1px, transparent 1.5px) 0 0 / 22px 22px,
 		var(--bg);
 	padding: 16px;
 	padding-top: calc(16px + var(--safe-top, 0px));
@@ -735,30 +737,31 @@
 
 .sh-connect-card {
 	width: 100%;
-	max-width: 380px;
+	max-width: 400px;
 	max-height: 100%;
 	overflow-y: auto;
 	overflow-y: overlay;
 	overscroll-behavior: contain;
-	padding: 28px;
+	padding: 26px 24px;
 	margin: auto 0;
 	position: relative;
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	/* Glass surface: translucent raised panel over the ambient glow, with a
-	 * hairline top highlight and the overlay shadow (GUI dialog language). */
-	background: color-mix(in oklab, var(--bg-raised) 82%, transparent);
-	backdrop-filter: blur(18px) saturate(150%);
-	-webkit-backdrop-filter: blur(18px) saturate(150%);
+	/* Native-grade glass surface (SessionsSheet language): deep blur +
+	 * saturation, hairline border with a bright top edge, layered ambient
+	 * shadow and an inset highlight so the panel reads as lifted glass. */
+	background: color-mix(in oklab, var(--bg-raised) 72%, transparent);
+	backdrop-filter: blur(28px) saturate(160%);
+	-webkit-backdrop-filter: blur(28px) saturate(160%);
 	border: 0.5px solid var(--border-strong);
-	border-top-color: color-mix(in oklab, var(--fg) 14%, transparent);
-	border-radius: 14px;
+	border-top-color: color-mix(in oklab, var(--fg) 16%, transparent);
+	border-radius: 20px;
 	box-shadow:
-		0 24px 48px oklch(0 0 0 / 35%),
-		0 4px 12px oklch(0 0 0 / 25%),
-		inset 0 1px 0 color-mix(in oklab, var(--fg) 8%, transparent);
-	animation: sh-connect-in 240ms var(--spring) both;
+		0 32px 64px oklch(0 0 0 / 38%),
+		0 6px 18px oklch(0 0 0 / 22%),
+		inset 0 1px 0 color-mix(in oklab, var(--fg) 10%, transparent);
+	animation: sh-connect-in 320ms var(--spring) both;
 }
 
 @keyframes sh-connect-in {
@@ -802,18 +805,19 @@
 .sh-lockup {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	font: 500 15px / 1.5 var(--font-mono);
+	gap: 9px;
+	font: 500 16px / 1.4 var(--font-mono);
 	letter-spacing: 0.02em;
 	margin: 0;
 }
 
 .sh-lockup-mark {
-	width: 16px;
-	height: 16px;
+	width: 22px;
+	height: 22px;
 	flex: none;
 	background: var(--brand-mark-gradient);
-	border-radius: 4px;
+	border-radius: 6px;
+	box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 25%, transparent);
 }
 
 .sh-lockup-pi {
@@ -823,7 +827,7 @@
 .sh-connect-sub {
 	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);
-	margin-top: -4px;
+	margin-top: -2px;
 }
 
 .sh-connect-recent {
@@ -882,52 +886,74 @@
 .sh-connect-method {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 13px;
 	width: 100%;
-	padding: 12px 14px;
+	padding: 14px;
 	text-align: left;
 	background: color-mix(in oklab, var(--bg-inset) 55%, transparent);
 	border: 0.5px solid var(--border);
-	border-radius: 10px;
+	border-radius: 14px;
 	/* Entry cascade: --order is set inline per method (0/1/2). */
 	animation: sh-rise 340ms var(--spring) both;
 	animation-delay: calc(var(--order, 0) * 70ms);
 	transition:
 		background 150ms var(--spring-snappy),
-		border-color 150ms var(--spring-snappy);
+		border-color 150ms var(--spring-snappy),
+		box-shadow 150ms var(--spring-snappy),
+		transform 120ms var(--spring-snappy);
 }
 
 .sh-connect-method:hover {
 	background: color-mix(in oklab, var(--bg-overlay) 70%, transparent);
 	border-color: var(--border-strong);
+	box-shadow: 0 4px 14px oklch(0 0 0 / 18%);
+}
+
+.sh-connect-method:active {
+	transform: scale(0.98);
 }
 
 .sh-connect-method--scan {
-	background: color-mix(in oklab, var(--color-accent) 12%, var(--bg-inset));
-	border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+	background: linear-gradient(
+		135deg,
+		color-mix(in oklab, var(--color-accent) 16%, transparent),
+		color-mix(in oklab, var(--color-accent) 7%, var(--bg-inset))
+	);
+	border-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.sh-connect-method--scan:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	box-shadow:
+		0 4px 16px color-mix(in oklab, var(--color-accent) 22%, transparent),
+		inset 0 1px 0 color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 
 .sh-connect-method-ico {
 	flex: none;
-	width: 34px;
-	height: 34px;
+	width: 40px;
+	height: 40px;
 	display: grid;
 	place-items: center;
-	font-size: 15px;
+	font-size: 17px;
 	color: var(--fg-muted);
 	background: color-mix(in oklab, var(--bg-raised) 80%, transparent);
-	border-radius: 8px;
+	border-radius: 12px;
+	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 6%, transparent);
 }
 
 .sh-connect-method--scan .sh-connect-method-ico {
 	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, var(--bg-raised));
 }
 
 .sh-connect-method-body {
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
+	gap: 2px;
 	min-width: 0;
+	flex: 1;
 }
 
 .sh-connect-method-title {
@@ -940,17 +966,58 @@
 	color: var(--fg-faint);
 }
 
-.sh-connect-method--open {
-	/* The open container wraps the header button + the collapsible body.
-	 * It inherits .sh-connect-method's flex row — that laid the form BESIDE
-	 * the header (cramped/overlapping on narrow phones). Stack them. */
-	flex-direction: column;
-	align-items: stretch;
-	gap: 10px;
+/* Accordion affordance: "›" rests pointing right, rotates to point down
+ * when the body is open. */
+.sh-connect-method-chev {
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 15px;
+	line-height: 1;
+	transition: transform 200ms var(--spring-snappy), color 150ms var(--spring-snappy);
+	margin-right: 2px;
 }
 
-.sh-connect-method--open .sh-connect-method {
+.sh-connect-method--open > .sh-connect-method .sh-connect-method-chev {
+	transform: rotate(90deg);
+	color: var(--fg-muted);
+}
+
+/* The accordion CONTAINER div reuses .sh-connect-method for the entry
+ * cascade — but as a flex ROW it laid the height-0 collapse body BESIDE the
+ * header button (the closed tile squeezed to half width), and its card
+ * surface double-painted over the button's. Containers are layout-only:
+ * always column, never painted. The header button (closed) or the whole
+ * container (open) carries the single card surface. */
+.sh-connect-card div.sh-connect-method {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	padding: 0;
+}
+
+.sh-connect-method--open {
+	background: color-mix(in oklab, var(--bg-inset) 55%, transparent);
 	border-color: var(--ring);
+}
+
+.sh-connect-method--open > .sh-connect-method {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+}
+
+/* The open form panel floats inside the ring with its own inset. */
+.sh-connect-method--open .sh-connect-collapse .sh-connect-pair {
+	margin: 0 10px 10px;
+}
+
+.sh-connect-method--open > .sh-connect-method {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
 }
 
 /* Collapsible accordion body: height driven by --h (useCollapseHeight). */
@@ -965,29 +1032,38 @@
 .sh-connect-pair {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	margin-top: 8px;
-	padding: 10px;
+	gap: 8px;
+	margin-top: 2px;
+	padding: 12px;
 	background: color-mix(in oklab, var(--bg-inset) 40%, transparent);
-	border-radius: 8px;
+	border-radius: 10px;
 }
 
+/* Adaptive widths: the 6-digit code keeps a compact fixed track; the host
+ * input absorbs every remaining pixel (min-width guards against overflow);
+ * the submit pill wraps below on narrow screens instead of squeezing. */
 .sh-connect-pair-row {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 6px;
-	align-items: center;
+	align-items: stretch;
 }
 
 .sh-connect-pair-row .sh-input:first-child {
-	width: 88px;
-	flex: none;
+	width: 96px;
+	flex: 1 1 96px;
+	min-width: 96px;
 	text-align: center;
 	letter-spacing: 0.12em;
 }
 
 .sh-connect-pair-row .sh-input:nth-child(2) {
-	flex: 1;
+	flex: 2 1 140px;
 	min-width: 0;
+}
+
+.sh-connect-pair-row .sh-btn-primary {
+	flex: 1 1 100%;
 }
 
 .sh-connect-skip {
@@ -1060,8 +1136,13 @@
 }
 
 .sh-connect-error {
+	padding: 9px 12px;
 	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
 	color: var(--err);
+	background: color-mix(in oklab, var(--err) 10%, transparent);
+	border: 0.5px solid color-mix(in oklab, var(--err) 32%, transparent);
+	border-radius: 10px;
 	animation: sh-shake 340ms ease-out;
 }
 
@@ -1187,16 +1268,24 @@
 	flex: none;
 	color: var(--fg-faint);
 }
-
-.sh-switcher-act:hover {
-	color: var(--fg);
-}
-
 .sh-connect-submit {
 	justify-content: center;
-	padding: 7px 10px;
+	padding: 10px 14px;
 	margin-top: 8px;
+	min-height: 44px;
+	border-radius: 12px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	box-shadow:
+		0 4px 14px color-mix(in oklab, var(--color-accent) 30%, transparent),
+		inset 0 1px 0 color-mix(in oklab, #fff 18%, transparent);
 }
+
+.sh-connect-submit:active:not(:disabled) {
+	transform: scale(0.98);
+	filter: brightness(0.96);
+}
+
 
 /* ---- responsive mobile styles ---- */
 @media (max-width: 768px) {
