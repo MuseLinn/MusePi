@@ -1457,11 +1457,29 @@ export class DaemonSessionHost {
 		// shows exactly what the agent sees.
 		const sdkEntries = (agentSession.sessionManager as { getEntries?: () => SessionEntry[] } | null)?.getEntries?.();
 		if (sdkEntries && sdkEntries.length > 0) {
+			// SDK 条目 id/parentId 是 hex 树空间;MaterializedView 的条目身份
+			// 是 messageKey("role:timestamp",live wire seam 同款)。不转换就
+			// 混入两种 id 空间:branchChildren/面包屑/leafPath 全按 hex 找
+			// messageKey,三层树 UI 在历史会话上全部失效。这里统一 rekey
+			// (id → messageKey,parentId → 父条目的 messageKey)。
+			const byHex = new Map(sdkEntries.map(e => [e.id, e]));
+			const viewEntries = sdkEntries.map(e => {
+				const msg = (e as { message?: WireMessage }).message;
+				if (e.type !== "message" || !msg) return e;
+				const key = messageKey(msg);
+				const parent = e.parentId ? byHex.get(e.parentId) : null;
+				const parentMsg = parent ? (parent as { message?: WireMessage }).message : null;
+				return {
+					...e,
+					id: key,
+					parentId: parent && parent.type === "message" && parentMsg ? messageKey(parentMsg) : null,
+				};
+			});
 			view =
 				MaterializedView.fromSnapshot(sessionId, cwd, {
-					entries: sdkEntries,
+					entries: viewEntries,
 					state: { isStreaming: false, queuedMessageCount: 0, cwd, participants: [] },
-					cursor: sdkEntries.length,
+					cursor: viewEntries.length,
 					agents: [],
 				}) ?? view;
 		}
