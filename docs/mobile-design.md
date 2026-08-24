@@ -460,3 +460,19 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
    自适应宽度（96px 码位 + host 弹性吸收 + 按钮整行换行）；提交按钮 44px 主按钮 +
    accent 辉光；错误提示升级为玻璃警示条。实测几何：闭合态三磁贴全宽 339px、图标左置
    水平布局；展开态表单 319px 全宽在 ring 内。
+### 11.6 沉浸式修复 + 减法扫码重写（2026-08-25）
+
+用户反馈卓易通无沉浸、扫码不可用、引导界面动效不自然。
+
+**沉浸式（三阶段修复，CDP 逐级验证）**：
+1. 主题声明透明栏 + `setDecorFitsSystemWindows(false)`（onCreate + onWindowFocusChanged 双时机）→ WebView 全屏 915dp ✅
+2. 消费全部窗口 insets（`WindowInsetsCompat.CONSUMED`）→ 内容真正铺到 bar 下 ✅
+3. Insets 原生插件（`InsetsPlugin`，`Capacitor.nativePromise` 桥调用）读取真实 `statusBars.top(49dp)` / `navigationBars.bottom(24dp)` → 注入 `--safe-top`/`--safe-bottom` CSS 变量 → 连接卡 padding-top 正确避开状态栏时钟 ✅
+
+**扫码（弃 mlkit，改用纯 JS + getUserMedia）**：
+- 根因：`@capacitor-mlkit/barcode-scanning` 需 Google Play Services Barcode 模块，卓易通/无 GMS 设备无法使用
+- 替换为 `jsQR`（纯 JS QR 解码器）+ `navigator.mediaDevices.getUserMedia`（Capacitor WebView 已验证可用，480p back camera）
+- 全屏动画取景框：4 个 glowing 角标（accent 色 + 辉光）、扫描线匀速上下 sweep（2.4s cycle）、暗色遮罩外场、手电筒切换、成功率振动反馈
+- 无 GMS 依赖，任何设备均可工作
+
+**引导动效**：方法磁贴按压反馈（`:active` scale(0.98)）、hover 抬升阴影、chevron 展开旋转（200ms spring）、入场错峰动画（70ms stagger）、折叠体高度过渡（240ms spring）

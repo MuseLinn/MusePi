@@ -77,33 +77,28 @@ async function setupImmersiveSystemBars(): Promise<void> {
 	}
 }
 
-// Immersive fallback: some Android compatibility layers (卓易通) ship an older
-// WebView that ignores env(safe-area-inset-*). Detect that and inject the
-// CSS variables from native StatusBar info if the plugin reports them;
-// otherwise fall back to a fixed status-bar allowance (~24dp, scaled by DPR
-// is handled natively — we use CSS px so 24px is the conservative default).
+// Android WebView never surfaces real system-bar insets via
+// env(safe-area-inset-*) — CSS.supports("env(...)") returns true but the
+// value is always 0, even in edge-to-edge mode. The native Insets plugin
+// (see MainActivity/InsetsPlugin) reads the true status/nav bar heights and
+// we inject them as the CSS variables; a fixed allowance covers older
+// compatibility layers (卓易通) where the plugin may not be reachable.
 async function setupSafeAreaFallback(): Promise<void> {
 	const css = document.documentElement;
-	const supportsEnv = typeof CSS !== "undefined" && CSS.supports("padding-top", "env(safe-area-inset-top, 0px)");
-	if (!supportsEnv) {
-		// Old WebView: fixed allowance. 24px top (status bar) + 12px bottom.
-		css.style.setProperty("--safe-top", "24px");
-		css.style.setProperty("--safe-bottom", "12px");
-	}
+	// Conservative defaults: 48px top (covers cutout/punch-hole status bars),
+	// 24px bottom (gesture nav). Real values from the plugin override these.
+	css.style.setProperty("--safe-top", "48px");
+	css.style.setProperty("--safe-bottom", "24px");
 	try {
-		const mod = await import("@capacitor/status-bar");
-		const { StatusBar } = mod;
-		const info = await StatusBar.getInfo();
-		// getInfo() exposes height() via the underlying plugin only on newer
-		// versions; when present it beats the CSS guess.
-		const withHeight = StatusBar as typeof StatusBar & { height?: () => Promise<{ height: number }> };
-		if (typeof withHeight.height === "function") {
-			const { height } = await withHeight.height();
-			if (height > 0) css.style.setProperty("--safe-top", `${height}px`);
-		}
-		void info;
+		// Insets is a native-only plugin (no JS module), so it is not present
+		// in window.Capacitor.Plugins — call it through the low-level bridge.
+		const insets = (await window.Capacitor?.nativePromise?.("Insets", "getSystemBars")) as
+			| { top: number; bottom: number }
+			| undefined;
+		if (insets && insets.top > 0) css.style.setProperty("--safe-top", `${insets.top}px`);
+		if (insets && insets.bottom > 0) css.style.setProperty("--safe-bottom", `${insets.bottom}px`);
 	} catch {
-		// plugin absent (browser) — env()/fixed fallback stands
+		// plugin absent (browser / old compat layer) — fixed allowance stands
 	}
 }
 

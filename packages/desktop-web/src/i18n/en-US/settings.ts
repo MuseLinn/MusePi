@@ -1188,6 +1188,9 @@ export const settings = {
 		"Not connected yet — connect to a computer to view sessions",
 	"connect to a computer": "Connect to a computer",
 	"scan failed — use the pair code instead": "Scan failed — use the pair code instead",
+	"camera unavailable — use the pair code instead": "Camera unavailable — use the pair code instead",
+	"align the QR code in the frame": "Align the QR code in the frame",
+	"torch": "Torch",
 	"camera permission denied — use the pair code instead":
 		"Camera permission denied — use the pair code instead",
 	"or use MusePi Mobile pair code": "or use MusePi Mobile pair code",

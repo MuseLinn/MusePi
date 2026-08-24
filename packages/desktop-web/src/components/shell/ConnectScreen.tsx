@@ -9,6 +9,7 @@ import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
 import { LanguageToggle } from "./LanguageToggle";
+import { QrScanner } from "./QrScanner";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ConnectScreenProps {
@@ -76,6 +77,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const [pairHost, setPairHost] = useState("");
 	const [pairBusy, setPairBusy] = useState(false);
 	const [openMethod, setOpenMethod] = useState<"pair" | "link" | null>(null);
+	const [scanning, setScanning] = useState(false);
 	const [skipped, setSkipped] = useState(() => {
 		try {
 			return localStorage.getItem(SKIP_KEY) === "1";
@@ -153,25 +155,21 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		setSkipped(false);
 	};
 
-	// Scan QR — lazily imports the mlkit plugin so the browser bundle stays
-	// lean and non-native pages never touch Capacitor. Runtime camera consent
-	// is requested here (the manifest only declares the permission).
-	const scanQr = async (): Promise<void> => {
+	// Open the camera scanner (getUserMedia + jsQR). This avoids
+	// @capacitor-mlkit, whose Google Play Services barcode module is
+	// unavailable on 卓易通 / HarmonyOS-compat and non-GMS devices.
+	const scanQr = (): void => {
 		setLocalError(null);
-		try {
-			const { BarcodeScanner } = await import("@capacitor-mlkit/barcode-scanning");
-			const { camera } = await BarcodeScanner.requestPermissions();
-			if (camera !== "granted") {
-				setLocalError(t("camera permission denied — use the pair code instead"));
-				return;
-			}
-			const result = await BarcodeScanner.scan();
-			const value = result.barcodes?.[0]?.displayValue?.trim();
-			if (value) connect(value, name.trim() || t("guest"));
-		} catch {
-			setLocalError(t("scan failed — use the pair code instead"));
-			haptic([20, 60, 20]);
-		}
+		setScanning(true);
+	};
+
+	const onScanResult = (value: string): void => {
+		setScanning(false);
+		connect(value, name.trim() || t("guest"));
+	};
+
+	const onScanCancel = (): void => {
+		setScanning(false);
 	};
 
 	const resolvePair = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -439,6 +437,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					{t("skip for now")}
 				</button>
 			</div>
+			{scanning && (
+				<QrScanner onCancel={onScanCancel} onResult={onScanResult} />
+			)}
 		</div>
 	);
 }

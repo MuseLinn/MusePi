@@ -17,6 +17,8 @@
 declare global {
 	interface Window {
 		Capacitor?: {
+			/** Low-level bridge: call a native-registered plugin by name. */
+			nativePromise?: <T = unknown>(pluginName: string, methodName: string, options?: Record<string, unknown>) => Promise<T>;
 			plugins?: {
 				Keyboard?: {
 					removeAllListeners: () => Promise<void>;
@@ -29,6 +31,9 @@ declare global {
 			// populated on real Android WebViews; reach plugins through the
 			// JS modules or this registry instead.
 			Plugins?: {
+				Insets?: {
+					getSystemBars: () => Promise<{ top: number; bottom: number }>;
+				};
 				Badge?: {
 					get: () => Promise<{ count: number }>;
 					set: (o: { count: number }) => Promise<void>;
