@@ -49,6 +49,11 @@ export function RightRail({
 	const [width, setWidth] = useState<number>(() => readSurfaceWidth(cwd));
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	const overflowRef = useRef<HTMLDivElement | null>(null);
+	const railRef = useRef<HTMLElement | null>(null);
+	// Nav-axis overflow fold (user: 更多按钮只在高度不够时显示). When every
+	// surface fits the rail height, render all (incl. secondary) as icons;
+	// only a rail shorter than the item stack folds secondary into the "…".
+	const [railFits, setRailFits] = useState(false);
 	const ctx: SurfaceProps = useMemo(() => ({ rpc, sessionId, cwd }), [rpc, sessionId, cwd]);
 
 	// 注册表顺序 → 渲染项（过滤 has-content 不可见；未知/扩展追加在尾）
@@ -77,6 +82,10 @@ export function RightRail({
 	// primary → rail 图标；secondary → 折叠菜单
 	const primaryItems = useMemo(() => items.filter(({ s }) => s.group === "primary"), [items]);
 	const secondaryItems = useMemo(() => items.filter(({ s }) => s.group !== "primary"), [items]);
+	// When the rail fits everything, show the whole order as icons (state
+	// changes); otherwise keep the primary axis and fold secondary into "…".
+	const railItems = railFits ? items : primaryItems;
+	const foldedItems = railFits ? [] : secondaryItems;
 
 	const persist = useCallback((next: string[]) => { setOrder(next); writeSurfaceOrder(next, cwd); }, [cwd]);
 
@@ -100,6 +109,24 @@ export function RightRail({
 		const el = scrollRef.current;
 		if (!el || typeof ResizeObserver === "undefined") return;
 		const update = (): void => setFeathered(el.scrollHeight > el.clientHeight + 1);
+		update();
+		const ro = new ResizeObserver(update);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [items.length, extItems.length, railFits]);
+
+	// Does the whole surface stack fit the rail height? Drives the fold
+	// (see railItems). Uses a per-item height so the decision never
+	// oscillates from the render it controls.
+	useEffect(() => {
+		const el = railRef.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const ITEM_H = 34; // 32px button + 2px column gap
+		const PAD = 12; // group vertical padding (6+6)
+		const update = (): void => {
+			const count = items.length + extItems.length;
+			setRailFits(PAD + count * ITEM_H <= el.clientHeight);
+		};
 		update();
 		const ro = new ResizeObserver(update);
 		ro.observe(el);
@@ -130,7 +157,7 @@ export function RightRail({
 	}, [tool, cwd]);
 
 	return (
-		<aside className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
+		<aside ref={railRef} className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
 			{/* The single navigation axis (VSCode Activity-Bar unification).
 			 * Scrolls when a short window cannot fit every view; edges
 			 * feather only while overflowing. */}
@@ -139,7 +166,7 @@ export function RightRail({
 				className="gui-right-rail-group gui-right-rail-scroll"
 				data-feathered={feathered ? "" : undefined}
 			>
-				{primaryItems.map(({ id, s }) => (
+				{railItems.map(({ id, s }) => (
 					<button
 						key={id}
 						type="button"
@@ -170,7 +197,7 @@ export function RightRail({
 					</button>
 				))}
 			</div>
-			{secondaryItems.length > 0 && (
+			{foldedItems.length > 0 && (
 				<div className="gui-right-rail-group" ref={overflowRef}>
 					<button
 						type="button"
@@ -214,7 +241,7 @@ export function RightRail({
 								}
 							}}
 						>
-							{secondaryItems.map(({ id, s }) => (
+							{foldedItems.map(({ id, s }) => (
 								<button
 									key={id}
 									type="button"

@@ -26,9 +26,14 @@ import { Icon } from "../vendor/oc-icons";
 let nextLayoutRevision = 0;
 
 /** App overlays that must render ABOVE the native view (it always sits on
- *  top of the DOM): dialogs/toasts hide the view while open. Our dialogs
- *  mount/unmount, so presence checks (not data-state toggles) are enough. */
-const APP_OVERLAY_SELECTOR = '[role="dialog"], [role="alertdialog"], [data-sonner-toast]';
+ *  top of the DOM): dialogs/toasts/menus/suggestions hide the view while
+ *  open. The rail overflow menu and address suggestions are DOM popups that
+ *  project onto the slot region — without hiding the view they are buried
+ *  under the native WebContentsView (user: 浮窗和浏览器元素层级混乱). Our
+ *  dialogs mount/unmount, so presence checks (not data-state toggles) are
+ *  enough. */
+const APP_OVERLAY_SELECTOR =
+	'[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-sonner-toast]';
 
 function hasBlockingOverlay(): boolean {
 	return document.querySelector(APP_OVERLAY_SELECTOR) !== null;

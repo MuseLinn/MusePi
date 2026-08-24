@@ -176,6 +176,7 @@
 }
 
 .gui-right-rail-group {
+	position: relative; /* anchor for the overflow menu (right:48px / top:6px) */
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -228,7 +229,7 @@
 .gui-right-rail-overflow {
 	position: absolute;
 	right: 48px;
-	top: 0;
+	top: 6px; /* align with the "…" button (group has 6px top padding) */
 	z-index: 60;
 	display: flex;
 	flex-direction: column;
@@ -3022,9 +3023,9 @@ body.gui-resizing .gui-pane-right {
  * width, top shadow, and the drag-handle turns off. */
 .gui-pane-right--maximized {
 	position: fixed;
-	top: 0;
+	top: 48px; /* below .gui-header h-12 — never cover the title bar */
 	right: 0;
-	height: 100vh;
+	height: calc(100vh - 48px);
 	z-index: 850;
 	box-shadow: -8px 0 32px rgb(0 0 0 / 16%);
 	border-left: 1px solid var(--border);

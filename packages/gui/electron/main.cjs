@@ -2055,6 +2055,12 @@ function createWindow() {
 		}
 	});
 
+	// The managed browser owns a WebContentsView child of this window. When
+	// the window is recreated (show-main-window path after a close), the
+	// controller must re-point at the fresh window — a stale owner made the
+	// next navigate throw "Object has been destroyed" (managed-browser crash).
+	managedBrowser.setOwner(mainWindow);
+
 	// Persist main-window bounds (debounced — drags/resizes fire move/resize
 	// continuously) so a relaunch restores the user's layout.
 	let saveBounds = () => {

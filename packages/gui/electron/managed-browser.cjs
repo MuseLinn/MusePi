@@ -547,14 +547,33 @@ class ManagedBrowserController {
 
 	// ── lifecycle ────────────────────────────────────────────────────────
 
-	async start(ownerWindow) {
+	/**
+	 * Re-point the controller at the current main window. The GUI can
+	 * recreate the window (show-main-window path: pet/tray reopen after a
+	 * close), and the old owner stays destroyed — a stale `this.owner`
+	 * makes the next `createTab()` throw "Object has been destroyed" at
+	 * `owner.contentView.addChildView` (the managed-browser:navigate crash
+	 * the user hit). Same window: no-op; a different window drops the old
+	 * tabs and re-arms the closed handler.
+	 */
+	setOwner(ownerWindow) {
+		if (this.owner === ownerWindow) return;
+		for (const tab of [...this.tabs.values()]) tab.dispose();
+		this.tabs.clear();
+		this.activeTabId = null;
+		this.agentTabId = null;
 		this.owner = ownerWindow;
 		this.owner.on("closed", () => {
 			for (const tab of [...this.tabs.values()]) tab.dispose();
 			this.tabs.clear();
 			this.activeTabId = null;
+			this.agentTabId = null;
 			this.closeServer();
 		});
+	}
+
+	async start(ownerWindow) {
+		this.setOwner(ownerWindow);
 		this.guardPartition();
 		this.registerIpc();
 		await this.startServer();
@@ -593,6 +612,7 @@ class ManagedBrowserController {
 	// ── tabs ─────────────────────────────────────────────────────────────
 
 	createTab(url = "about:blank", openedByAgent = false) {
+		if (!this.owner || this.owner.isDestroyed()) return null;
 		const tab = new ManagedTab(this, url, openedByAgent);
 		this.tabs.set(String(tab.id), tab);
 		if (!this.activeTabId) this.activeTabId = String(tab.id);
@@ -614,6 +634,7 @@ class ManagedBrowserController {
 	}
 
 	ensureTab(url = "about:blank", openedByAgent = false) {
+		if (!this.owner || this.owner.isDestroyed()) return null;
 		if (this.tabs.size > 0) return this.tabs.get(this.activeTabId);
 		return this.createTab(url, openedByAgent);
 	}
@@ -1525,6 +1546,7 @@ class ManagedBrowserController {
 		});
 		ipcMain.handle("managed-browser:navigate", async (_e, input) => {
 			const tab = this.ensureTab();
+			if (!tab) return { ok: false, error: "browser window unavailable" };
 			const result = await tab.navigate(input?.url ?? "");
 			if (result.ok) this.recordActivity(tab, "navigate", result.url, "dispatched");
 			this.emitState({});
