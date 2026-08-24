@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import {
@@ -15,8 +15,9 @@ import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
 
 /**
  * RightRail — the right-edge 44px icon rail, driven by the surface registry:
- * ① toolbar from the registry; ② has-content items hidden when empty;
- * ③ draggable reorder persisted to localStorage; ④ width starts from
+ * ① toolbar from the registry; ② primary-group surfaces render as icons,
+ *    secondary-group surfaces fold into the "…" overflow menu (rail 过载治理);
+ * ③ has-content items hidden when empty; ④ width starts from
  * defaultWidthFraction and persists. Keyboard (Mod+1..N / Mod+E / Mod+Shift+E)
  * stays in App/ChatView, not duplicated here.
  */
@@ -40,6 +41,8 @@ export function RightRail({
 	// 顺序（目录级）+ 面板宽（目录级）
 	const [order, setOrder] = useState<string[]>(() => readSurfaceOrder(cwd));
 	const [width, setWidth] = useState<number>(() => readSurfaceWidth(cwd));
+	const [overflowOpen, setOverflowOpen] = useState(false);
+	const overflowRef = useRef<HTMLDivElement | null>(null);
 	const ctx: SurfaceProps = useMemo(() => ({ rpc, sessionId, cwd }), [rpc, sessionId, cwd]);
 
 	// 注册表顺序 → 渲染项（过滤 has-content 不可见；未知/扩展追加在尾）
@@ -54,9 +57,13 @@ export function RightRail({
 		return ordered;
 	}, [order, ctx]);
 
+	// primary → rail 图标；secondary → 折叠菜单
+	const primaryItems = useMemo(() => items.filter(({ s }) => s.group === "primary"), [items]);
+	const secondaryItems = useMemo(() => items.filter(({ s }) => s.group !== "primary"), [items]);
+
 	const persist = useCallback((next: string[]) => { setOrder(next); writeSurfaceOrder(next, cwd); }, [cwd]);
 
-	// 拖拽重排（原生 HTML5 drag）
+	// 拖拽重排（原生 HTML5 drag，primary 组内）
 	const [dragId, setDragId] = useState<string | null>(null);
 	const onDrop = (targetId: string): void => {
 		if (!dragId || dragId === targetId) return;
@@ -67,12 +74,22 @@ export function RightRail({
 		setDragId(null);
 	};
 
+	// 折叠菜单：点击外部关闭
+	useEffect(() => {
+		if (!overflowOpen) return;
+		const onDocClick = (e: MouseEvent): void => {
+			if (!overflowRef.current?.contains(e.target as Node)) setOverflowOpen(false);
+		};
+		document.addEventListener("mousedown", onDocClick);
+		return () => document.removeEventListener("mousedown", onDocClick);
+	}, [overflowOpen]);
+
 	useEffect(() => {
 		const apply = (id: string): void => {
 			const s = surfaceById(id);
 			if (!s) return;
 			setWidth(w => {
-				const next = Math.max(200, Math.min(560, Math.round((s.defaultWidthFraction ?? 0.5) * 560)));
+				const next = Math.max(200, Math.min(900, Math.round((s.defaultWidthFraction ?? 0.5) * 900)));
 				writeSurfaceWidth(next, cwd);
 				return w === 0 || w === 300 ? next : w; // 首次用默认占比，之后保持用户拖拽
 			});
@@ -83,7 +100,7 @@ export function RightRail({
 	return (
 		<aside className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
 			<div className="gui-right-rail-group">
-				{items.map(({ id, s }) => (
+				{primaryItems.map(({ id, s }) => (
 					<button
 						key={id}
 						type="button"
@@ -101,6 +118,39 @@ export function RightRail({
 					</button>
 				))}
 			</div>
+			{secondaryItems.length > 0 && (
+				<div className="gui-right-rail-group" ref={overflowRef}>
+					<button
+						type="button"
+						className={`gui-right-rail-btn${overflowOpen ? " gui-right-rail-btn--active" : ""}`}
+						title="more tools"
+						aria-label="more tools"
+						aria-expanded={overflowOpen}
+						onClick={() => setOverflowOpen(v => !v)}
+					>
+						<Icon name="more" className="h-4 w-4" />
+					</button>
+					{overflowOpen && (
+						<div className="gui-right-rail-overflow" role="menu">
+							{secondaryItems.map(({ id, s }) => (
+								<button
+									key={id}
+									type="button"
+									role="menuitem"
+									className={`gui-right-rail-overflow-item${tool === id ? " gui-right-rail-overflow-item--active" : ""}`}
+									onClick={() => {
+										onSelect(id);
+										setOverflowOpen(false);
+									}}
+								>
+									<Icon name={s.icon as IconName} className="h-3.5 w-3.5" />
+									<span>{s.label}</span>
+								</button>
+							))}
+						</div>
+					)}
+				</div>
+			)}
 			<div className="gui-right-rail-spacer" />
 			<div className="gui-right-rail-group">
 				<button

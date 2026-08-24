@@ -209,6 +209,44 @@
 	color: var(--color-accent);
 }
 
+/* Secondary-surface overflow menu ("…" button) — rail 过载治理 */
+.gui-right-rail-overflow {
+	position: absolute;
+	right: 48px;
+	top: 0;
+	z-index: 60;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 168px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--color-surface);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+}
+
+.gui-right-rail-overflow-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 6px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+	text-align: left;
+	transition: background 140ms ease, color 140ms ease;
+}
+
+.gui-right-rail-overflow-item:hover {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+}
+
+.gui-right-rail-overflow-item--active {
+	color: var(--color-accent);
+}
+
 /* Right-pane width drag handle (left edge). */
 .gui-pane-resize-x {
 	position: absolute;

@@ -18,12 +18,16 @@ export interface SurfaceProps {
 	cwd?: string;
 }
 
+export type SurfaceGroup = "primary" | "secondary" | "tertiary";
+
 export interface SurfaceDescriptor {
 	id: SurfaceId;
 	/** i18n key（用 t() 取 display） */
 	label: string;
 	/** oc-icons 的 IconName */
 	icon: string;
+	/** 分组：primary 显式图标、secondary 折叠菜单、tertiary 不占 rail */
+	group: SurfaceGroup;
 	/** has-content：仅在“有内容”时出现在 rail（如无 diff/PR 时隐藏） */
 	availability: SurfaceAvailability;
 	/** 面板默认宽度占比（0..1），起步宽由它决定 */
@@ -35,13 +39,13 @@ export interface SurfaceDescriptor {
 
 /* ── 内置 surface ─────────────────────────────────────────────── */
 export const SURFACES: SurfaceDescriptor[] = [
-	{ id: "context", label: "chat.context", icon: "pie-chart", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "files", label: "chat.files", icon: "folder", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "git", label: "chat.git", icon: "git-branch", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "diff", label: "chat.diff", icon: "file", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "pr", label: "chat.pr", icon: "git-pull-request", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "notes", label: "chat.notes", icon: "book-open", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "browser", label: "chat.browser", icon: "global", availability: "always", defaultWidthFraction: 0.6 },
+	{ id: "context", label: "chat.context", icon: "pie-chart", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "files", label: "chat.files", icon: "folder", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "git", label: "chat.git", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
+	{ id: "diff", label: "chat.diff", icon: "file", group: "secondary", availability: "always", defaultWidthFraction: 0.55 },
+	{ id: "pr", label: "chat.pr", icon: "git-pull-request", group: "secondary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "notes", label: "chat.notes", icon: "book-open", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "browser", label: "chat.browser", icon: "global", group: "primary", availability: "always", defaultWidthFraction: 0.6 },
 ];
 
 const byId = new Map<string, SurfaceDescriptor>(SURFACES.map(s => [s.id, s]));
@@ -82,7 +86,7 @@ export function writeSurfaceOrder(ids: string[], cwd?: string): void {
 
 export function readSurfaceWidth(cwd?: string): number {
 	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try { const n = Number(localStorage.getItem(key)); if (Number.isFinite(n)) return Math.min(560, Math.max(200, n)); } catch {}
+	try { const n = Number(localStorage.getItem(key)); if (Number.isFinite(n)) return Math.min(900, Math.max(200, n)); } catch {}
 	return 300;
 }
 export function writeSurfaceWidth(w: number, cwd?: string): void {
