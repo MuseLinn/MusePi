@@ -76,6 +76,5 @@ export const transcript = {
 	"btw unavailable — no active session": "No active session for /btw",
 	"btw failed — check the daemon connection": "Btw failed — check the daemon connection",
 	"follow up…": "Follow up…",
-	"ask": "Ask",
 	"Enter to ask — Esc closes": "Enter to ask, Esc to close",
 } as const satisfies Record<TranscriptKey, string>;

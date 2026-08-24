@@ -20,25 +20,24 @@ import type { RpcClient } from "./rpc";
  */
 
 /** First slot id — the settings page's extension-contributed section.
- *  Values derived from EXTENSION_SLOT_DECLARATION (collab-proto 单一权威). */
-export const SETTINGS_EXTENSION_SLOT = EXTENSION_SLOT_DECLARATION.exact[0] as string;
+ *  EXTENSION_SLOT_DECLARATION.exact order: [panel.right, rail.right, settings.extensions, composer.dock, composer.left, composer.right] */
+export const SETTINGS_EXTENSION_SLOT = EXTENSION_SLOT_DECLARATION.exact[2]; // "settings.extensions"
 /** Right-side workspace panel slot. */
-export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1] as string;
+export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[0];       // "panel.right"
 /** Right-edge 44px icon rail slot. */
-export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[2] as string;
-/** 内核级 slot 命名空间(P1 架构开放):slot 名是开放
- *  命名空间,前缀决定挂载位置,GUI 按前缀自动挂载。 */
-export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0] as string;
-export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1] as string;
-export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2] as string;
+export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1];        // "rail.right"
+/** 内核级 slot 命名空间(P1 架构开放):slot 名是开放命名空间,前缀决定挂载位置。 */
+export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0]; // "panel.tab."
+export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1]; // "settings.tab."
+export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2];    // "rail."
 /** Keyed settings card slot. */
-export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3] as string;
+export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
-export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4] as string;
+export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
 /** Composer 座位槽。 */
-export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3] as string;
-export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4] as string;
-export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5] as string;
+export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3];     // "composer.dock"
+export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4];     // "composer.left"
+export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5];    // "composer.right"
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
