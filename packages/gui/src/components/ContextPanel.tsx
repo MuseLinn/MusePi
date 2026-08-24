@@ -335,19 +335,6 @@ export function ContextPanel({
 						))}
 					</div>
 					<div className="ml-auto flex items-center gap-0.5">
-						{TOOLS.map(toolDef => (
-							<button
-								key={toolDef.id}
-								type="button"
-								className={`gui-pane-tool${tool === toolDef.id ? " gui-pane-tool--active" : ""}`}
-								title={toolDef.label}
-								aria-label={toolDef.label}
-								onClick={() => onToolChange(tool === toolDef.id ? null : toolDef.id)}
-							>
-								<Icon name={toolDef.icon as never} className="h-3.5 w-3.5" />
-								{tool === toolDef.id && <span className="gui-pane-tool-label">{toolDef.label}</span>}
-							</button>
-						))}
 						<button
 							type="button"
 							title={maximized ? t("restore panel") : t("maximize panel")}
