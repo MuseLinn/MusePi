@@ -537,4 +537,29 @@ P4 **消息渲染细节**:`<advisory>` 块(advisor 工具 note 格式)渲染为�
 2. cursor provider wireMode/usage 修复回移
 3. premature-close continuation + post-snapshot compaction(需先恢复 compaction 元数据)
 4. /mcp reload fs-cache(2 行,需按 musepi controller 结构重放)
-5. 上游 models.json 数据更新(musepi catalog 管线再生成)
+## 参考吸收:oh-my-pi v18.0.3(2026-08-24,Windows 机执行)
+
+> 范围:12 commits(18.0.2→18.0.3)。选择性吸收 P0 bugfix + 部分 P1,未升版本(继续 0.4.3 线)。提交 `7fd084ca1d`,9 文件 / +670/−3。
+
+### 吸收内容
+
+- **P0 /mcp test 配置查找竞态**(fix: race /mcp test config lookup against esc abort):`mcp-command-controller.ts` 用既有 `raceAbortSignal` 包裹查找,ESC 中止不再与配置解析竞态崩溃
+- **P0 Fireworks mid-generation NaN 400**(fix: classified fireworks mid-generation nan 400 as transient):`ai/src/error/flags.ts` 加 `GENERATION_NAN_PATTERN` 分类分支 → `Transient` + retryable;`test/error-aierr.test.ts` +2 测试
+- **P1 edit 自动语法错误修复**(feat: automatic syntax error repair for edits):`edit/blackbox.ts`(sourceParses/introducedParseFailure/createEditBlackboxRecorder)+ `edit/auto-repair.ts`(computeRepairRegion/repairParseRegression/attemptEditAutoRepair)+ `edit/auto-repair.md`(Handlebars prompt)+ `edit/auto-repair.test.ts`(7 测试)+ `config/settings-schema.ts` 加 `edit.autoRepair.enabled` 布尔;`edit/index.ts` 的 `EditTool.execute` 接 post-execution parse 检查→auto-repair 调用
+- **desktop 对齐**:auto-repair notification 经 wire 协议 `result.content` 返回,desktop-web `edit.tsx` 的 `ResultText` 直接渲染——天然对齐,无需 desktop 单独改动;hub/usage 为 TUI 独有 cosmetic,desktop 有独立 renderer,保持现状
+
+### 明确跳过(记录备查)
+
+- **compact hub activity summary**(8c69d1a2b13):TUI transcript 容器 cosmetic,musepi TUI 结构已分叉,低价值
+- **eval wall-clock timeout abort shield**(0b14041d46b):musepi eval 超时处理独立
+- **duplicate typo rendering filter**(044010c58b4):musepi typo 渲染路径已分叉
+- **recommended checkbox fix**(1bd9a6d9d9e):musepi TUI 无该复选框
+- **unexpected-stop detection**(7a55f26cc02/543d2998ae0,属 v18.0.2):musepi agent loop 终止处理已独立
+- **canary 发布通道**(14f798c1e0f 等,属 v18.0.2):发布工具链不采用
+- **natives / models.json**:同 v18.0.2 决策,不手并
+
+### 验证结果(Windows)
+
+- 类型检查:仅预存在 `daemon/server.ts:3866` `updatedAt` 错误(非本次改动);所有吸收文件 0 TS 错误
+- 测试:auto-repair 7/7、error-aierr 23/23(含 2 新增)
+- biome:8 文件全干净(settings-schema 缩进 + test 长行由 biome --write 修正)
