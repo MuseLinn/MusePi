@@ -135,6 +135,15 @@ const COPILOT_TRANSIENT_MODEL_CODES: Record<string, true> = {
 	model_not_supported: true,
 };
 const COPILOT_TRANSIENT_MODEL_PATTERN = /model_not_supported/i;
+// Fireworks (and other OpenAI-compat backends) can abort mid-generation with an
+// HTTP 400 `invalid_request_error` whose body reports a model-side numerical
+// fault: "Floating point NaN (not-a-number) is detected in generation". Despite
+// the request-validation wrapper this is a decode-time logits overflow, not a
+// bad request — a byte-identical replay of the same payload succeeds. The fault
+// fires before any content is emitted, so retry is replay-safe. Kept narrow
+// (both the NaN wording and "detected in generation") so it cannot swallow
+// genuine request-validation 400s.
+const GENERATION_NAN_PATTERN = /floating[ _-]?point nan\b.*\bdetected in generation/is;
 // Anthropic strict-tool grammar too large / schema too complex (400 invalid_request_error).
 // Feature-gated deployments (Azure Foundry, Baseten, …) reject `strict: true`
 // tools outright when the hosted model lacks structured outputs, e.g.
@@ -394,6 +403,9 @@ function classifyText(errorMessage: string | undefined, errorStatus: number | un
 
 		// Copilot's `model_not_supported` fleet-skew rejection is transient.
 		if (statusClean === 400 && COPILOT_TRANSIENT_MODEL_PATTERN.test(cleanMessage)) kinds |= Flag.Transient;
+		// Fireworks mid-generation NaN 400 is a model-side decode fault, not a bad
+		// request; a byte-identical replay succeeds, so treat it as transient.
+		if (statusClean === 400 && GENERATION_NAN_PATTERN.test(cleanMessage)) kinds |= Flag.Transient;
 		if (matchesStrictToolsRejection(cleanMessage, statusClean)) kinds |= Flag.Grammar;
 		if (matchesFastModeUnsupported(cleanMessage, statusClean)) kinds |= Flag.FastModeUnsupported;
 	}

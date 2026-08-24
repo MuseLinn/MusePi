@@ -1580,7 +1580,16 @@ export class MCPCommandController {
 
 		let connection: MCPServerConnection | undefined;
 		try {
-			const found = await this.#resolveServerForAuth(name);
+			// Race the config read against Esc: a slow/stuck #resolveServerForAuth()
+			// (e.g. config on a network filesystem) must surface cancellation
+			// immediately via the catch branch below, not stay suspended until
+			// the read settles. The post-await signal.aborted bailout is kept
+			// for the microtask gap.
+			const found = await raceAbortSignal(
+				this.#resolveServerForAuth(name),
+				abortController.signal,
+				() => new DOMException("Aborted", "AbortError"),
+			);
 
 			if (!found) {
 				this.ctx.showError(

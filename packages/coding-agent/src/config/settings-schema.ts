@@ -3541,6 +3541,17 @@ export const SETTINGS_SCHEMA = {
 			description: "Append full before/after source when an edit introduces an AST parse failure",
 		},
 	},
+	"edit.autoRepair.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "files",
+			group: "Editing",
+			label: "Auto-Repair Syntax Errors",
+			description:
+				"Automatically fix syntax errors introduced by edits using AST-based localization and a small model",
+		},
+	},
 
 	readLineNumbers: {
 		type: "boolean",

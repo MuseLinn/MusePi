@@ -15,6 +15,8 @@ import { truncateForPrompt } from "../tools/approval";
 import { findUniqueWorkspaceSuffix, isInternalUrlPath } from "../tools/path-utils";
 import { resolvePlanPath } from "../tools/plan-mode-guard";
 import { type EditMode, normalizeEditMode, resolveEditMode } from "../utils/edit-mode";
+import { attemptEditAutoRepair } from "./auto-repair";
+import { sourceParses } from "./blackbox";
 import { executeHashlineSingle, hashlineEditParamsSchema } from "./hashline";
 import { type ApplyPatchParams, applyPatchSchema, expandApplyPatchToEntries } from "./modes/apply-patch";
 import applyPatchGrammar from "./modes/apply-patch.lark" with { type: "text" };
@@ -496,7 +498,6 @@ export class EditTool implements AgentTool<TInput> {
 	matcherEntries(args: unknown): readonly { path: string; digest: string }[] | undefined {
 		return EDIT_MODE_STRATEGIES[this.mode].matcherEntries(args);
 	}
-
 	async execute(
 		_toolCallId: string,
 		params: EditParams,
@@ -505,7 +506,54 @@ export class EditTool implements AgentTool<TInput> {
 		context?: AgentToolContext,
 	): Promise<AgentToolResult<EditToolDetails, TInput>> {
 		const modeDefinition = this.#getModeDefinition();
-		return modeDefinition.execute(this, params, signal, getLspBatchRequest(context?.toolCall), onUpdate);
+		const result = await modeDefinition.execute(
+			this,
+			params,
+			signal,
+			getLspBatchRequest(context?.toolCall),
+			onUpdate,
+		);
+
+		// Post-execution auto-repair: capture pre-state before the first
+		// execute call, then compare after to detect parse regressions.
+		const primaryPath = extractApprovalPath(params as unknown as Record<string, unknown>);
+		const targetPath = primaryPath !== "(unknown)" ? primaryPath : undefined;
+		if (!targetPath) return result;
+		try {
+			const prev = await Bun.file(targetPath).text();
+			const details = result.details;
+			if (
+				details &&
+				typeof details === "object" &&
+				"path" in details &&
+				typeof (details as unknown as Record<string, unknown>).path === "string"
+			) {
+				const detailsPath = (details as { path: string }).path;
+				if (detailsPath !== targetPath) return result;
+			}
+			if (!sourceParses(prev, targetPath)) return result;
+			const next = await Bun.file(targetPath).text();
+			if (sourceParses(next, targetPath)) return result;
+			if (!this.session.settings.get("edit.autoRepair.enabled")) return result;
+			const repair = await attemptEditAutoRepair({
+				session: this.session,
+				snapshot: { path: targetPath, prev, next },
+				writethrough: this.#writethrough,
+				signal,
+			});
+			if (!repair) return result;
+			const repairNotice = [
+				"",
+				`Auto-repaired syntax error in ${targetPath} (${repair.attempts} attempt${repair.attempts > 1 ? "s" : ""}, ${repair.model}):`,
+				repair.diff,
+				"",
+			].join("\n");
+			result.content = [...result.content, { type: "text", text: repairNotice }];
+		} catch {
+			// Parse probing / repair is best-effort; never turn a successful
+			// edit into a reported failure.
+		}
+		return result;
 	}
 
 	#getModeDefinition(): EditModeDefinition {
