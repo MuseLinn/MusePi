@@ -1,7 +1,9 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { isNativeShell } from "../../lib/capacitor";
 import { type Connection, loadConnections, rememberConnection, removeConnection } from "../../lib/connections";
+import { haptic } from "../../lib/haptics";
 import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
@@ -53,11 +55,6 @@ function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
 			reject(new Error(t("cannot reach the computer — same Wi-Fi?")));
 		};
 	});
-}
-
-/** True in the Capacitor shell (native WebView bridge present). */
-function isNativeShell(): boolean {
-	return typeof window !== "undefined" && (window as unknown as { Capacitor?: unknown }).Capacitor != null;
 }
 
 /**
@@ -118,6 +115,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		rememberConnection(target, who);
 		setRecent(loadConnections());
 		onConnect(target, who);
+		haptic(12);
 	};
 
 	const submit = (e: FormEvent<HTMLFormElement>): void => {
@@ -160,6 +158,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 			if (value) connect(value, name.trim() || t("guest"));
 		} catch {
 			setLocalError(t("scan failed — use the pair code instead"));
+			haptic([20, 60, 20]);
 		}
 	};
 
@@ -180,6 +179,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 			connect(webLink, name.trim() || t("guest"));
 		} catch (err) {
 			setLocalError(err instanceof Error ? err.message : String(err));
+			haptic([20, 60, 20]);
 		} finally {
 			setPairBusy(false);
 		}

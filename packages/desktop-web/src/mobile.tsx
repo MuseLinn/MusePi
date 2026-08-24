@@ -5,34 +5,26 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/mobile.css";
 import "./i18n";
+import { isNativeShell, setupAndroidBackHandler } from "./lib/capacitor";
 
 // Capacitor keyboard bridge: with Keyboard resize 'none' the WebView keeps its
 // full height when the soft keyboard opens, so the visual viewport never
 // shrinks. Drive the --mp-keyboard-inset CSS variable from the plugin events
 // instead; the composer and header consume it. This entry only runs inside the
 // Capacitor shell (mobile.html); the desktop web entry never touches it.
-declare global {
-	interface Window {
-		Capacitor?: {
-			plugins?: {
-				Keyboard?: {
-					removeAllListeners: () => Promise<void>;
-					addListener: (eventName: string, cb: (info: { keyboardHeight: number }) => void) => Promise<unknown>;
-				};
-				LocalNotifications?: unknown;
-				App?: unknown;
-			};
-		};
-	}
-}
+// Native plugins are reached through their JS modules (platform-specific,
+// dynamic imports); shell detection lives in lib/capacitor.ts.
 
-function setupCapacitorKeyboardInset(): void {
-	const keyboard = window.Capacitor?.plugins?.Keyboard;
-	if (!keyboard) return;
+async function setupCapacitorKeyboardInset(): Promise<void> {
+	if (!isNativeShell()) return;
+	// Platform-specific module: the Keyboard plugin module registers itself
+	// on window.Capacitor.Plugins when imported; `window.Capacitor.plugins`
+	// (lowercase) is never populated on real Android WebViews.
+	const { Keyboard } = await import("@capacitor/keyboard");
 	const root = document.documentElement;
-	keyboard.removeAllListeners().catch(() => {});
-	keyboard.addListener("keyboardWillShow", ({ keyboardHeight }) => {
-		root.style.setProperty("--mp-keyboard-inset", `${keyboardHeight}px`);
+	await Keyboard.removeAllListeners();
+	Keyboard.addListener("keyboardWillShow", (info: { keyboardHeight: number }) => {
+		root.style.setProperty("--mp-keyboard-inset", `${info.keyboardHeight}px`);
 		// Lift the focused input above the IME inside the connect guide
 		// (the guide is a scroll container — scrollIntoView scrolls it).
 		const el = document.activeElement;
@@ -40,7 +32,7 @@ function setupCapacitorKeyboardInset(): void {
 			el.scrollIntoView({ block: "center", behavior: "smooth" });
 		}
 	});
-	keyboard.addListener("keyboardWillHide", () => {
+	Keyboard.addListener("keyboardWillHide", () => {
 		root.style.setProperty("--mp-keyboard-inset", "0px");
 	});
 }
@@ -110,10 +102,11 @@ async function setupSafeAreaFallback(): Promise<void> {
 	}
 }
 
-setupCapacitorKeyboardInset();
+void setupCapacitorKeyboardInset();
 setupVisualViewportKeyboardFallback();
 void setupSafeAreaFallback();
 void setupImmersiveSystemBars();
+void setupAndroidBackHandler();
 
 /** Launch splash — brief brand animation before the connect guide. The
  *  spring curve mirrors the shell tokens; clicking skips straight in. */

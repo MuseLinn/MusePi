@@ -1,3 +1,4 @@
+import type { AssistantMessage } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
@@ -11,13 +12,12 @@ import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { Toasts } from "./components/shell/Toasts";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
-import { Transcript } from "./components/transcript/Transcript";
-import { msgText } from "./components/transcript/Transcript";
+import { msgText, Transcript } from "./components/transcript/Transcript";
 import { t } from "./i18n/index.js";
+import { BACK_EVENT, isNativeShell } from "./lib/capacitor";
 import { GuestClient } from "./lib/client";
 import { useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
-import type { AssistantMessage } from "@musepi/pi-wire";
 import "./components/shell/shell.css";
 
 const NAME_KEY = "omp.collab.name";
@@ -130,7 +130,15 @@ export function App(): ReactNode {
 			/>
 		);
 	}
-	return <Session client={client} onLeave={leave} onRejoin={rejoin} currentLink={credsRef.current?.link ?? ""} onSwitchTo={connect} />;
+	return (
+		<Session
+			client={client}
+			onLeave={leave}
+			onRejoin={rejoin}
+			currentLink={credsRef.current?.link ?? ""}
+			onSwitchTo={connect}
+		/>
+	);
 }
 
 /**
@@ -143,8 +151,28 @@ export function App(): ReactNode {
  */
 function useMobileNotifications(client: GuestClient | null): void {
 	const lastNotifiedRef = useRef(0);
+	// Android 13+ requires an explicit POST_NOTIFICATIONS grant before
+	// schedule() does anything; without it the call silently no-ops. Request
+	// once on the first live connection (native shell only — browsers have no
+	// notification permission here, and the plugin import is lazy anyway).
+	const permissionRequestedRef = useRef(false);
 	useEffect(() => {
 		if (!client) return;
+		if (!permissionRequestedRef.current && isNativeShell()) {
+			permissionRequestedRef.current = true;
+			void (async () => {
+				try {
+					const { LocalNotifications } = await import("@capacitor/local-notifications");
+					const status = await LocalNotifications.checkPermissions();
+					if (status.display !== "granted") {
+						await LocalNotifications.requestPermissions();
+					}
+				} catch {
+					// permission prompt unavailable (older Android / browser) — silent;
+					// scheduling below still no-ops rather than crashing
+				}
+			})();
+		}
 		let disposed = false;
 		const unsub = client.subscribe(() => {
 			if (disposed) return;
@@ -197,7 +225,8 @@ function useMobileNotifications(client: GuestClient | null): void {
 }
 
 /** Persistent warning strip for plaintext (no-E2E) sessions. */
-function PlaintextBanner(): ReactNode {	return (
+function PlaintextBanner(): ReactNode {
+	return (
 		<div className="plaintext-banner" role="alert">
 			{t("plaintext session: not encrypted — anyone on this network can read it")}
 		</div>
@@ -309,6 +338,35 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 	const inWorkspace = workspace !== null && focusedSessionId === null;
 	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
 	const sessionCwd = state?.cwd ?? null;
+	// Android back key: close the topmost layer (agent drawer → rail → panel →
+	// workspace focus) before the shell is allowed to exit. The mobile entry
+	// dispatches `musepi:back`; preventDefault marks the press consumed so
+	// setupAndroidBackHandler won't exit the app.
+	useEffect(() => {
+		const onBack = (e: Event): void => {
+			if (selectedId !== null) {
+				setSelectedId(null);
+				e.preventDefault();
+				return;
+			}
+			if (railOpen) {
+				setRailOpen(false);
+				e.preventDefault();
+				return;
+			}
+			if (activePanel !== null) {
+				setActivePanel(null);
+				e.preventDefault();
+				return;
+			}
+			if (workspace !== null && focusedSessionId !== null) {
+				backToWorkspace();
+				e.preventDefault();
+			}
+		};
+		window.addEventListener(BACK_EVENT, onBack);
+		return () => window.removeEventListener(BACK_EVENT, onBack);
+	}, [selectedId, railOpen, activePanel, workspace, focusedSessionId, backToWorkspace]);
 
 	return (
 		<div className="sh-app">

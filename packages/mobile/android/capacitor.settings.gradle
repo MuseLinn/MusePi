@@ -8,6 +8,9 @@ project(':aparajita-capacitor-secure-storage').projectDir = new File('../../../n
 include ':capacitor-mlkit-barcode-scanning'
 project(':capacitor-mlkit-barcode-scanning').projectDir = new File('../../../node_modules/.bun/@capacitor-mlkit+barcode-scanning@8.1.0+6139e07751574bda/node_modules/@capacitor-mlkit/barcode-scanning/android')
 
+include ':capacitor-app'
+project(':capacitor-app').projectDir = new File('../../../node_modules/.bun/@capacitor+app@8.1.1+6139e07751574bda/node_modules/@capacitor/app/android')
+
 include ':capacitor-keyboard'
 project(':capacitor-keyboard').projectDir = new File('../../../node_modules/.bun/@capacitor+keyboard@8.0.5+6139e07751574bda/node_modules/@capacitor/keyboard/android')
 
