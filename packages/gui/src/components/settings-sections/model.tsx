@@ -126,6 +126,7 @@ export function ModelSection({
 	custom,
 	loginState,
 	busy,
+	pendingLogins,
 	onLogin,
 	onLogout,
 	onSubmitInput,
@@ -146,6 +147,10 @@ export function ModelSection({
 		waitingInput?: boolean;
 	} | null;
 	busy: boolean;
+	/** Provider ids whose OAuth/API login is in flight — only THOSE provider
+	 *  login controls are disabled, so one pending login doesn't freeze every
+	 *  other provider's button (user report: "登录按钮有时点击没反应"). */
+	pendingLogins: string[];
 	onLogin(providerId: string): void;
 	onLogout(providerId: string): void;
 	onSubmitInput(value: string): void;
@@ -1164,7 +1169,7 @@ export function ModelSection({
 							<button
 								type="button"
 								className="gui-btn gui-btn-approve"
-								disabled={!known?.available || busy}
+								disabled={!known?.available || pendingLogins.includes(p.provider)}
 								onClick={() => void onLogin(p.provider)}
 							>
 								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
@@ -1728,7 +1733,7 @@ export function ModelSection({
 																				<button
 																					type="button"
 																					className="gui-view-opt"
-																					disabled={!p.available || busy}
+																					disabled={!p.available || pendingLogins.includes(p.id)}
 																					onClick={() => {
 																						setActionsMenu(null);
 																						void onLogin(p.id);

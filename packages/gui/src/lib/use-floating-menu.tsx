@@ -170,13 +170,17 @@ export function useFloatingMenu(
 				className={`gui-menu-popup ${className}${closing ? " gui-menu-popup--closing" : ""}${!closing && entered ? " gui-menu-popup--entered" : ""}`}
 				style={{
 					// Inline position wins over the menu-specific classes
-					// (gui-creds-menu etc. declare position:absolute for their
-					// legacy inline mode — the portal container must stay fixed).
+					// (gui-creds-menu etc. declare position:absolute + top/right
+					// for their legacy inline mode — the portal container must
+					// stay fixed). Every offset is set explicitly so a class's
+					// static top/right/bottom cannot leak: for position:fixed a
+					// `100%` top resolves to the viewport height, which pushed
+					// upward-opening menus off-screen (gui-creds-menu bug).
 					position: "fixed",
-					left: pos.left,
-					right: pos.right,
-					top: pos.top,
-					bottom: pos.bottom,
+					left: pos.left ?? "auto",
+					right: pos.right ?? "auto",
+					top: pos.top ?? "auto",
+					bottom: pos.bottom ?? "auto",
 					transformOrigin: align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
 				}}
 			>
