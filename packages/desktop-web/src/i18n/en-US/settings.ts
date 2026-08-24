@@ -517,6 +517,10 @@ export const settings = {
 	"skip this version": "Skip this version",
 	"choose light, dark or follow the system": "Choose light, dark, or follow the system theme.",
 	"glass opacity": "Frosted glass opacity",
+	"glass preset light": "Light",
+	"glass preset standard": "Standard",
+	"glass preset strong": "Strong",
+	"glass opacity description": "Frosted glass preset; transparency adapts per theme",
 	"window transparency": "Window transparency",
 	"window transparency description":
 		"When off, the glass background becomes opaque and the transparency slider is hidden.",

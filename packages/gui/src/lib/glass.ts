@@ -1,35 +1,96 @@
 // Glass transparency pipeline (settings → 外观):
 //
-// The slider value IS the transparency percentage (30–90): higher = more
-// see-through. The renderer writes it as --gui-glass-alpha (0.3–0.9) and
-// derives the scrim strength and the adaptive text colors in CSS, so the
-// slider reads in the same direction as the "磨砂玻璃透明度" label.
+// The transparency control is a PRESET selector (light / standard / strong)
+// rather than a continuous slider — matching the platform norm (macOS
+// "reduce transparency" / Windows "transparency effects" are both toggles,
+// never a slider). Each preset maps to an alpha (0–1, higher = more
+// see-through) that is theme-aware: the light scheme needs a lower alpha
+// so a bright translucent glass doesn't wash out.
 //
-// v1 of the pref stored the scrim-strength coefficient (higher = MORE
-// opaque) — the direction the label now contradicts. readGlassLevel()
-// migrates the stored value once (40 v1 ≈ 60 v2) under a version marker.
+// The renderer writes the preset id to --gui-glass-alpha via applyGlassPreset,
+// and CSS derives the scrim strength and adaptive text colors from it.
+//
+// v1 of the pref stored a numeric scrim-strength coefficient and v2 stored
+// the transparency percentage (30–90). readGlassPreset() migrates a stored
+// value once to a preset id under a version marker.
 
 const GLASS_KEY = "musepi-gui-glass";
-const GLASS_V2_KEY = "musepi-gui-glass-v2";
+const GLASS_V3_KEY = "musepi-gui-glass-v3";
 
-export const GLASS_MIN = 30;
-export const GLASS_MAX = 90;
-
-/** Migrated transparency percentage from localStorage (default 55). */
-export function readGlassLevel(): number {
-	let v = Number(localStorage.getItem(GLASS_KEY) ?? 55);
-	if (!Number.isFinite(v) || v < 0 || v > 100) v = 55;
-	if (!localStorage.getItem(GLASS_V2_KEY)) {
-		v = Math.min(GLASS_MAX, Math.max(GLASS_MIN, 100 - v));
-		localStorage.setItem(GLASS_KEY, String(v));
-		localStorage.setItem(GLASS_V2_KEY, "1");
-	}
-	return v;
+export interface GlassPreset {
+	/** stored id (persisted in localStorage) */
+	id: string;
+	/** i18n key: `glass preset ${id}` */
+	labelKey: string;
+	/** dark-scheme alpha (0–1, higher = more see-through) */
+	darkAlpha: number;
+	/** light-scheme alpha (0–1) — lower than dark so light glass stays readable */
+	lightAlpha: number;
 }
 
-/** Apply a transparency level (30–90) to the document root. */
-export function applyGlassLevel(v: number): void {
-	const t = Math.min(GLASS_MAX, Math.max(GLASS_MIN, v)) / 100;
+/** Preset ladder, ordered light → strong. Same order shown in the UI. */
+export const GLASS_PRESETS: GlassPreset[] = [
+	{ id: "light", labelKey: "glass preset light", darkAlpha: 0.35, lightAlpha: 0.22 },
+	{ id: "standard", labelKey: "glass preset standard", darkAlpha: 0.55, lightAlpha: 0.38 },
+	{ id: "strong", labelKey: "glass preset strong", darkAlpha: 0.75, lightAlpha: 0.55 },
+];
+
+/** Resolve the native window material for the current UI theme: the light
+ *  scheme needs the bright vibrancy material — under-window dims the
+ *  backdrop, which turns a light translucent glass grey. */
+export function glassMaterialStyle(): "light" | "dark" {
+	const theme = document.documentElement.dataset.theme;
+	return theme === "light" ? "light" : "dark";
+}
+
+function presetById(id: string | null | undefined): GlassPreset {
+	return GLASS_PRESETS.find(p => p.id === id) ?? GLASS_PRESETS[1]!;
+}
+
+/** Map a legacy numeric transparency (30–90, v2) or scrim coefficient (v1)
+ *  onto the nearest preset id. */
+function numericToPreset(v: number): GlassPreset {
+	const alpha = v / 100;
+	let best = GLASS_PRESETS[0]!;
+	let bestDist = Number.POSITIVE_INFINITY;
+	for (const p of GLASS_PRESETS) {
+		// preset "alpha" for matching purposes: average of dark/light — the
+		// stored value is theme-independent, so no single exact target.
+		const target = (p.darkAlpha + p.lightAlpha) / 2;
+		const d = Math.abs(target - alpha);
+		if (d < bestDist) {
+			bestDist = d;
+			best = p;
+		}
+	}
+	return best;
+}
+
+/** Read the persisted preset id, migrating legacy numeric values once. */
+export function readGlassPreset(): GlassPreset {
+	const stored = localStorage.getItem(GLASS_KEY);
+	if (!localStorage.getItem(GLASS_V3_KEY)) {
+		// legacy: numeric scrim coefficient (v1) or transparency % (v2)
+		const n = Number(stored);
+		if (Number.isFinite(n) && n >= 0 && n <= 100) {
+			const preset = numericToPreset(n);
+			localStorage.setItem(GLASS_KEY, preset.id);
+			localStorage.setItem(GLASS_V3_KEY, "1");
+			return preset;
+		}
+		localStorage.setItem(GLASS_V3_KEY, "1");
+	}
+	return presetById(stored);
+}
+
+/** Resolve the preset alpha for the current theme. */
+export function presetAlpha(preset: GlassPreset, theme: "light" | "dark" = glassMaterialStyle()): number {
+	return theme === "light" ? preset.lightAlpha : preset.darkAlpha;
+}
+
+/** Apply a preset to the document root (theme-aware alpha). */
+export function applyGlassPreset(preset: GlassPreset): void {
+	const t = presetAlpha(preset);
 	const root = document.documentElement;
 	root.style.setProperty("--gui-glass-alpha", String(t));
 	// ≥50% transparent: blend glass-pane text toward white (dark scheme) or
@@ -38,14 +99,6 @@ export function applyGlassLevel(v: number): void {
 }
 
 export type GlassMaterialStyle = "light" | "dark";
-
-/** Resolve the native window material for the current UI theme: the light
- *  scheme needs the bright vibrancy material — under-window dims the
- *  backdrop, which turns a light translucent glass grey. */
-export function glassMaterialStyle(): GlassMaterialStyle {
-	const theme = document.documentElement.dataset.theme;
-	return theme === "light" ? "light" : "dark";
-}
 
 /**
  * Mirror the glass state onto the native window material (electron shell).

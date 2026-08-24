@@ -853,6 +853,11 @@
 	color: var(--color-text-muted);
 }
 
+.gui-glass-seg .gui-seg-btn {
+	flex: 1;
+	justify-content: center;
+}
+
 /* ── Responsive: collapse details below 1100px, sidebar below 720px ──── */
 
 @media (max-width: 1100px) {
