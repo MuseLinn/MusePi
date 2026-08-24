@@ -1,3 +1,4 @@
+import { t, type TranslationKey } from "@musepi/desktop-web";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -29,6 +30,7 @@ export function RightRail({
 	rightPanelOpen,
 	onSelect,
 	onToggleRightPanel,
+	extTabs = [],
 }: {
 	rpc: RpcClient | null;
 	sessionId?: string | null;
@@ -37,6 +39,10 @@ export function RightRail({
 	rightPanelOpen: boolean;
 	onSelect(tool: string): void;
 	onToggleRightPanel?(): void;
+	/** Extension panel-tab slots (panel.tab.*), rendered as primary rail
+	 *  items after the built-in surfaces (nav unification: the rail is the
+	 *  single navigation axis — no second tab row in the panel header). */
+	extTabs?: import("../lib/slot-host").SlotComponent[];
 }): ReactNode {
 	// 顺序（目录级）+ 面板宽（目录级）
 	const [order, setOrder] = useState<string[]>(() => readSurfaceOrder(cwd));
@@ -54,8 +60,19 @@ export function RightRail({
 			if (!surfaceVisible(s, ctx)) continue;
 			ordered.push({ id, s });
 		}
+		// Registry ids absent from a stale stored order still ship (the rail
+		// grew from tools-only to the full nav axis).
+		for (const s of SURFACES) {
+			if (!order.includes(s.id) && surfaceVisible(s, ctx)) ordered.push({ id: s.id, s });
+		}
 		return ordered;
 	}, [order, ctx]);
+
+	// Extension tabs render as primary items after the built-ins.
+	const extItems = useMemo(
+		() => extTabs.map(item => ({ id: `ext:${item.slot}`, item })),
+		[extTabs],
+	);
 
 	// primary → rail 图标；secondary → 折叠菜单
 	const primaryItems = useMemo(() => items.filter(({ s }) => s.group === "primary"), [items]);
@@ -73,6 +90,21 @@ export function RightRail({
 		persist(ids);
 		setDragId(null);
 	};
+
+	// Nav-axis overflow measure: enable edge feathering only while the icon
+	// column actually scrolls (short windows); a permanent mask would dim
+	// the first/last icons for everyone.
+	const scrollRef = useRef<HTMLDivElement | null>(null);
+	const [feathered, setFeathered] = useState(false);
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const update = (): void => setFeathered(el.scrollHeight > el.clientHeight + 1);
+		update();
+		const ro = new ResizeObserver(update);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, [items.length, extItems.length]);
 
 	// 折叠菜单：点击外部关闭
 	useEffect(() => {
@@ -99,7 +131,14 @@ export function RightRail({
 
 	return (
 		<aside className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
-			<div className="gui-right-rail-group">
+			{/* The single navigation axis (VSCode Activity-Bar unification).
+			 * Scrolls when a short window cannot fit every view; edges
+			 * feather only while overflowing. */}
+			<div
+				ref={scrollRef}
+				className="gui-right-rail-group gui-right-rail-scroll"
+				data-feathered={feathered ? "" : undefined}
+			>
 				{primaryItems.map(({ id, s }) => (
 					<button
 						key={id}
@@ -109,12 +148,25 @@ export function RightRail({
 						onDragOver={e => e.preventDefault()}
 						onDrop={() => onDrop(id)}
 						className={`gui-right-rail-btn${tool === id ? " gui-right-rail-btn--active" : ""}`}
-						title={s.label}
-						aria-label={s.label}
+						title={t(s.label as TranslationKey)}
+						aria-label={t(s.label as TranslationKey)}
 						aria-pressed={tool === id}
 						onClick={() => onSelect(id)}
 					>
 						<Icon name={s.icon as IconName} className="h-4 w-4" />
+					</button>
+				))}
+				{extItems.map(({ id, item }) => (
+					<button
+						key={`${item.extensionId}:${item.slot}`}
+						type="button"
+						className={`gui-right-rail-btn${tool === id ? " gui-right-rail-btn--active" : ""}`}
+						title={item.label ?? item.slot}
+						aria-label={item.label ?? item.slot}
+						aria-pressed={tool === id}
+						onClick={() => onSelect(id)}
+					>
+						<Icon name="plug" className="h-4 w-4" />
 					</button>
 				))}
 			</div>
@@ -174,7 +226,7 @@ export function RightRail({
 									}}
 								>
 									<Icon name={s.icon as IconName} className="h-3.5 w-3.5" />
-									<span>{s.label}</span>
+									<span>{t(s.label as TranslationKey)}</span>
 								</button>
 							))}
 						</div>

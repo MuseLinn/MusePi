@@ -5,21 +5,17 @@ import {
 	latestWidgetFromEntries,
 	t,
 	WidgetCard,
+	type TranslationKey,
 } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
 import { useChatHighlight } from "../lib/highlight";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
-import {
-	PANEL_TAB_SLOT_PREFIX,
-	RIGHT_PANEL_SLOT,
-	SlotComponentHost,
-	SlotComponentMount,
-	useSlotComponentsByPrefix,
-} from "../lib/slot-host";
+import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
+import { surfaceById } from "../lib/surfaces/registry";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FadeScroll } from "./FadeScroll";
@@ -51,14 +47,6 @@ declare global {
  *  then each shows an honest placeholder with its future scope. (The
  *  terminal lives in the bottom dock now, not here.) Exported so the
  *  right-edge rail (RightRail) renders the same icon set. */
-export const TOOLS: { id: string; icon: string; label: string }[] = [
-	{ id: "git", icon: "git-branch", label: t("git graph") },
-	{ id: "pr", icon: "git-pull-request", label: t("pull requests") },
-	{ id: "diff", icon: "file", label: t("workspace changes") },
-	{ id: "notes", icon: "book", label: t("project knowledge") },
-	{ id: "browser", icon: "global", label: t("browser") },
-];
-
 function fmtTokens(n: number): string {
 	if (!Number.isFinite(n)) return "0";
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -79,8 +67,9 @@ export function ContextPanel({
 	open = true,
 	openRequest = null,
 	browserOpenRequest = null,
-	tool,
-	onToolChange,
+	extTabs = [],
+	view,
+	onViewChange,
 	onJumpToEntry,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
@@ -99,10 +88,14 @@ export function ContextPanel({
 	/** External browser reveal (chat link click / agent browser.open):
 	 *  switches to the browser tool and navigates the active tab. */
 	browserOpenRequest?: { url: string; nonce: number } | null;
-	/** Active tool view — controlled from ChatView so the right-edge rail
-	 *  (RightRail) and the panel share one selection. */
-	tool: string | null;
-	onToolChange(tool: string | null): void;
+	/** Extension panel-tab slots (panel.tab.*); nav items live in the
+	 *  RightRail — the panel only renders their content. */
+	extTabs?: import("../lib/slot-host").SlotComponent[];
+	/** Active view — controlled from ChatView; the RightRail is the single
+	 *  navigation axis (nav unification), so this covers session tabs
+	 *  (context/files/…), tool panes (git/browser/…) and ext:* slots. */
+	view: string | null;
+	onViewChange(view: string | null): void;
 	/** Jump the transcript to an entry id (trajectory rows; provided by
 	 *  ChatView — absent = trajectory rows render without jump action). */
 	onJumpToEntry?(entryId: string): void;
@@ -115,10 +108,7 @@ export function ContextPanel({
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
-	const [tab, setTab] = useState<"context" | "files" | "widget" | "trajectory" | "jobs" | string>("files");
-	// 内核级 slot(P1):`panel.tab.<id>` 槽位组件自动挂载为右面板 tab ——
-	// 宿主不再硬编码 tab 结构,扩展声明即出现。
-	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
+
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
 	// ring): tokens / capacity / percent, polled while the panel lives.
@@ -203,15 +193,14 @@ export function ContextPanel({
 	// Relay external reveal requests into the FilePane preview.
 	useEffect(() => {
 		if (!openRequest) return;
-		onToolChange(null);
-		setTab("files");
+		onViewChange("files");
 	}, [openRequest]);
-	// Relay external browser reveals: switch to the browser tool (right rail
+	// Relay external browser reveals: switch to the browser view (the rail
 	// selects it; ManagedBrowserPane navigates on the nonce).
 	useEffect(() => {
 		if (!browserOpenRequest) return;
-		onToolChange("browser");
-	}, [browserOpenRequest, onToolChange]);
+		onViewChange("browser");
+	}, [browserOpenRequest, onViewChange]);
 	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
 	// browser (browser.gui), surface the browser tool so the user sees the
 	// agent's work without hunting for the panel.
@@ -222,7 +211,7 @@ export function ContextPanel({
 		return api.onManagedBrowserState(next => {
 			if (next.agentActivity === true && next.activeTabId && agentBrowserTabRef.current !== next.activeTabId) {
 				agentBrowserTabRef.current = next.activeTabId;
-				onToolChange("browser");
+				onViewChange("browser");
 			}
 		});
 	}, []);
@@ -267,73 +256,28 @@ export function ContextPanel({
 		window.addEventListener("pointerup", up);
 	};
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
+	// Header chrome title (nav unification): the rail owns navigation;
+	// the header labels the active view.
+	const headerTitle = useMemo(() => {
+		if (!view) return t("context");
+		const ext = view.startsWith("ext:") ? extTabs.find(x => `ext:${x.slot}` === view) : undefined;
+		if (ext) return ext.label ?? ext.slot;
+		return t((surfaceById(view)?.label ?? "context") as TranslationKey);
+	}, [view, extTabs]);
+
 	return (
 		<aside className={panelClass} style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}>
 			{/* Left-edge drag handle for width (pointer capture on the 4px
 			 * strip; cursor col-resize over it). */}
 			<div className="gui-pane-resize-x" onPointerDown={maximized ? undefined : onResizeStart} aria-hidden />
 			<div className="flex h-full min-h-0 w-full flex-col">
-				{/* Header: context/files tabs + tool rail (ZCode 打开标签页). */}
-				<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2">
-					<button
-						type="button"
-						title={t("context")}
-						aria-label={t("context")}
-						className={`gui-pane-tab${tab === "context" ? " gui-pane-tab--active" : ""}`}
-						onClick={() => setTab("context")}
-					>
-						<Icon name="donut-chart" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						title={t("files")}
-						aria-label={t("files")}
-						className={`gui-pane-tab${tab === "files" ? " gui-pane-tab--active" : ""}`}
-						onClick={() => setTab("files")}
-					>
-						<Icon name="folder" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						title={t("widget preview")}
-						aria-label={t("widget preview")}
-						className={`gui-pane-tab${tab === "widget" ? " gui-pane-tab--active" : ""}`}
-						onClick={() => setTab("widget")}
-					>
-						<Icon name="sparkling" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						title={t("trajectory")}
-						aria-label={t("trajectory")}
-						className={`gui-pane-tab${tab === "trajectory" ? " gui-pane-tab--active" : ""}`}
-						onClick={() => setTab("trajectory")}
-					>
-						<Icon name="list-unordered" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						title={t("jobs")}
-						aria-label={t("jobs")}
-						className={`gui-pane-tab${tab === "jobs" ? " gui-pane-tab--active" : ""}`}
-						onClick={() => setTab("jobs")}
-					>
-						<Icon name="task" className="h-4 w-4" />
-					</button>
-					<div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto no-scrollbar">
-						{extTabs.map(item => (
-							<button
-								key={`${item.extensionId}:${item.slot}`}
-								type="button"
-								title={item.label ?? item.slot}
-								aria-label={item.label ?? item.slot}
-								className={`gui-pane-tab${tab === `ext:${item.slot}` ? " gui-pane-tab--active" : ""}`}
-								onClick={() => setTab(`ext:${item.slot}`)}
-							>
-								<Icon name="plug" className="h-4 w-4" />
-							</button>
-						))}
-					</div>
+				{/* View-local chrome (nav unification): the RightRail owns
+				 * navigation; the header shows the current view's title plus the
+				 * panel-level maximize toggle. */}
+				<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+					<span className="gui-pane-title truncate text-[12px] font-medium text-[var(--color-text-muted)]">
+						{headerTitle}
+					</span>
 					<div className="ml-auto flex items-center gap-0.5">
 						<button
 							type="button"
@@ -346,7 +290,7 @@ export function ContextPanel({
 						</button>
 					</div>
 				</div>
-				{tool === "browser" ? (
+				{view === "browser" ? (
 					/* Browser pane renders OUTSIDE the feather-scroll container:
 					 * the native WebContentsView projects the slot's exact CSS
 					 * rect — a padded/scrollable wrapper breaks the height chain
@@ -354,34 +298,26 @@ export function ContextPanel({
 					<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
 				) : (
 					<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
-						{tool === "notes" ? (
+						{view === "notes" ? (
 							<NotesPane rpc={rpc} cwd={cwd} />
-						) : tool === "diff" ? (
+						) : view === "diff" ? (
 							<DiffPane rpc={rpc} cwd={cwd} />
-						) : tool === "git" ? (
+						) : view === "git" ? (
 							<GitLogPane rpc={rpc} cwd={cwd} />
-						) : tool === "pr" ? (
+						) : view === "pr" ? (
 							<PrPane rpc={rpc} cwd={cwd} />
-						) : tool ? (
-							<div className="gui-tool-placeholder">
-								<Icon name={TOOLS.find(x => x.id === tool)?.icon as never} className="h-5 w-5" />
-								<div className="text-[13px] font-medium">{TOOLS.find(x => x.id === tool)?.label}</div>
-								<p className="text-[12px] leading-relaxed text-[var(--color-text-faint)]">
-									{t("tool needs a daemon backend — coming with the desktop release")}
-								</p>
-							</div>
-						) : tab === "files" && cwd ? (
+						) : view === "files" && cwd ? (
 							<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
-						) : tab === "widget" ? (
+						) : view === "widget" ? (
 							<WidgetSidebarTab entries={snap?.entries ?? []} />
-						) : tab === "trajectory" ? (
+						) : view === "trajectory" ? (
 							<TrajectoryView
 								entries={snap?.entries ?? []}
 								modelId={snap?.state?.model?.id}
 								roundDurations={snap?.roundDurations}
 								onJumpToEntry={onJumpToEntry}
 							/>
-						) : tab === "jobs" ? (
+						) : view === "jobs" ? (
 							snap?.sessionId ? (
 								<JobsPane rpc={rpc} sessionId={snap.sessionId} />
 							) : (
@@ -393,16 +329,16 @@ export function ContextPanel({
 									<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
 								</div>
 							)
-						) : typeof tab === "string" && tab.startsWith("ext:") ? (
+						) : typeof view === "string" && view.startsWith("ext:") ? (
 							(() => {
-								const item = extTabs.find(x => `ext:${x.slot}` === tab);
+								const item = extTabs.find(x => `ext:${x.slot}` === view);
 								return item ? (
 									<FadeScroll className="h-full overflow-y-auto">
 										<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
 									</FadeScroll>
 								) : null;
 							})()
-						) : tab === "context" ? (
+						) : (
 							<div className="px-1 py-2">
 								<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
 								<div className="flex flex-col gap-1 px-2 text-[13px]">
@@ -544,15 +480,7 @@ export function ContextPanel({
 									</p>
 								)}
 							</div>
-						) : (
-							<div className="gui-pane-tab-empty">
-								<span className="gui-pane-tab-empty-icon">
-									<Icon name="folder" />
-								</span>
-								<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
-								<p className="gui-pane-tab-empty-hint">{t("context empty hint")}</p>
-							</div>
-						)}
+												)}
 						{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
 						 * 挂内容区末尾,随面板滚动。 */}
 						<div className="gui-pane-extension px-2 pt-3">

@@ -1,14 +1,18 @@
 import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t } from "@musepi/desktop-web";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
-import { useExtensionToolViews } from "../lib/slot-host";
+import {
+	PANEL_TAB_SLOT_PREFIX,
+	useExtensionToolViews,
+	useSlotComponentsByPrefix,
+} from "../lib/slot-host";
 import { scrollToEntry } from "../lib/transcript-jump";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
@@ -598,9 +602,13 @@ export function ChatView({
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
 	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
-	// Shared ContextPanel tool selection — controlled here so the right-edge
-	// rail (RightRail) and the panel toggle the same view (modes v2 右面板).
-	const [contextTool, setContextTool] = useState<string | null>(null);
+	// Active right-panel view — the single navigation axis (nav
+	// unification): RightRail renders every surface (session tabs, tool
+	// panes, ext:* slots) and this state drives the ContextPanel body.
+	const [activeView, setActiveView] = useState<string | null>("context");
+	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
+	// the panel only renders their content.
+	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
 	useEffect(() => {
 		const onOpenFile = (ev: Event): void => {
 			const detail = (ev as CustomEvent<{ path?: string }>).detail;
@@ -1453,8 +1461,9 @@ export function ChatView({
 									open={rightPanelOpen && !focusMode}
 									openRequest={openFileReq}
 									browserOpenRequest={openBrowserReq}
-									tool={contextTool}
-									onToolChange={setContextTool}
+									view={activeView}
+									onViewChange={setActiveView}
+									extTabs={extTabs}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
 										if (ts) scrollToEntry(transcriptRef.current, ts);
@@ -1468,11 +1477,18 @@ export function ChatView({
 									sessionId={store?.sessionId ?? null}
 									cwd={store?.cwd ?? ""}
 									rpc={rpc}
-									tool={contextTool}
+									tool={activeView}
 									rightPanelOpen={rightPanelOpen && !focusMode}
-									onSelect={tool => {
-										setContextTool(prev => (prev === tool ? null : tool));
-										if (!rightPanelOpen) onExpandRightPanel?.();
+									extTabs={extTabs}
+									onSelect={id => {
+										// Same view while open → collapse (Chrome side-panel
+										// semantics); otherwise select and expand.
+										if (id === activeView && rightPanelOpen && !focusMode) {
+											onToggleRightPanel?.();
+											return;
+										}
+										setActiveView(id);
+										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 									}}
 									onToggleRightPanel={onToggleRightPanel}
 								/>
@@ -1482,7 +1498,7 @@ export function ChatView({
 								<BrowserGuiHint
 									activeTools={snap?.activeTools}
 									rpc={rpc}
-									onView={() => setContextTool("browser")}
+									onView={() => setActiveView("browser")}
 									onExpandPanel={onExpandRightPanel}
 								/>
 							</div>

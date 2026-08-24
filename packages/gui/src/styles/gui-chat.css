@@ -188,6 +188,21 @@
 	min-height: 4px;
 }
 
+/* Nav axis overflow (nav unification): vertical scroll with hidden
+ * scrollbar; while overflowing, top/bottom edges feather via mask. */
+.gui-right-rail-scroll {
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+.gui-right-rail-scroll::-webkit-scrollbar {
+	display: none;
+}
+.gui-right-rail-scroll[data-feathered] {
+	-webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+	mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+}
+
 .gui-right-rail-btn {
 	width: 32px;
 	height: 32px;

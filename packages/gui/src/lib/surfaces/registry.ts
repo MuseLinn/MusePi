@@ -39,13 +39,20 @@ export interface SurfaceDescriptor {
 
 /* ── 内置 surface ─────────────────────────────────────────────── */
 export const SURFACES: SurfaceDescriptor[] = [
-	{ id: "context", label: "chat.context", icon: "pie-chart", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "files", label: "chat.files", icon: "folder", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "git", label: "chat.git", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "diff", label: "chat.diff", icon: "file", group: "secondary", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "pr", label: "chat.pr", icon: "git-pull-request", group: "secondary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "notes", label: "chat.notes", icon: "book-open", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "browser", label: "chat.browser", icon: "global", group: "primary", availability: "always", defaultWidthFraction: 0.6 },
+	// Session views (formerly the panel header tabs) — VSCode Activity-Bar
+	// unification: ONE rail drives the whole panel.
+	{ id: "context", label: "context", icon: "donut-chart", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "files", label: "files", icon: "folder", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "trajectory", label: "trajectory", icon: "list-unordered", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "jobs", label: "jobs", icon: "task", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	// Workbench tool panes.
+	{ id: "git", label: "git graph", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
+	{ id: "diff", label: "workspace changes", icon: "file", group: "secondary", availability: "always", defaultWidthFraction: 0.55 },
+	{ id: "pr", label: "pull requests", icon: "git-pull-request", group: "secondary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "notes", label: "project knowledge", icon: "book-open", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{ id: "browser", label: "browser", icon: "global", group: "primary", availability: "always", defaultWidthFraction: 0.6 },
+	// Niche: widget preview folds into the overflow menu.
+	{ id: "widget", label: "widget preview", icon: "sparkling", group: "secondary", availability: "always", defaultWidthFraction: 0.45 },
 ];
 
 const byId = new Map<string, SurfaceDescriptor>(SURFACES.map(s => [s.id, s]));
