@@ -1614,6 +1614,18 @@ export function ChatView({
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
 										if (ts) scrollToEntry(transcriptRef.current, ts);
 									}}
+									leafId={effectiveLeaf}
+									activePathIds={activePathIds}
+									onBranchTo={id => {
+										void branchTo(id).then(res => {
+											if (res?.editorText) setPendingEdit(res.editorText);
+										});
+									}}
+									onForkAt={id => {
+										const entry = snap?.entries.find(e => e.id === id);
+										const isUser = entry?.type === "message" && entry.message.role === "user";
+										void forkFromMessage(id, undefined, !isUser);
+									}}
 								/>
 								{/* Right-edge 44px icon rail (openchamber ContextPanelRail
 								 * parity): tool icons + panel fold toggle + extension

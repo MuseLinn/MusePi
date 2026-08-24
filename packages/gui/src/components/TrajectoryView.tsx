@@ -2,6 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
+import { buildMessageTree, type MessageTreeNode } from "../lib/message-tree";
 import { FadeScroll } from "./FadeScroll";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import {
@@ -208,11 +209,134 @@ function InspectorCard({
 	);
 }
 
+/** 树行 kind 提取(message 条目按 role;其余条目归为 other)。 */
+function treeKindOf(entry: unknown): "user" | "assistant" | "toolResult" | "other" {
+	if (!entry || typeof entry !== "object") return "other";
+	const e = entry as { type?: unknown; message?: { role?: unknown } };
+	if (e.type === "message") {
+		const role = e.message?.role;
+		if (role === "user") return "user";
+		if (role === "toolResult") return "toolResult";
+		return "assistant";
+	}
+	return "other";
+}
+
+/** 树行文本预览:message content 块拼接纯文本;非消息条目显示类型名。 */
+function treeTextOf(entry: unknown): string {
+	if (!entry || typeof entry !== "object") return "…";
+	const e = entry as { type?: unknown; message?: { content?: unknown; text?: unknown } };
+	if (e.type === "message") {
+		const m = e.message;
+		const blocks = Array.isArray(m?.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
+		const text =
+			typeof m?.content === "string"
+				? m.content
+				: typeof m?.text === "string"
+					? m.text
+					: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
+		return text.replace(/\s+/g, " ").trim().slice(0, 90) || "…";
+	}
+	return typeof e.type === "string" ? e.type : "entry";
+}
+
+const TREE_ICON: Record<string, string> = {
+	user: "user",
+	toolResult: "hammer",
+	assistant: "sparkling",
+	other: "file-list-2",
+};
+
+/** 分支树单行(第二层):缩进层级 + kind 图标 + 预览 + 子分支角标(点击折叠)
+ *  + 悬停操作(branchAt 重答 / fork 新会话)。当前叶脉冲高亮,活动路径全亮,
+ *  路径外淡显——与第一层 BranchBar 同一 id 空间(view key)。 */
+function TreeNodeRow({
+	node,
+	depth,
+	isLeaf,
+	onPath,
+	childCount,
+	isCollapsed,
+	onToggleCollapse,
+	onJump,
+	onBranchTo,
+	onForkAt,
+}: {
+	node: MessageTreeNode;
+	depth: number;
+	isLeaf: boolean;
+	onPath: boolean;
+	childCount: number;
+	isCollapsed: boolean;
+	onToggleCollapse(id: string): void;
+	onJump(id: string): void;
+	onBranchTo?(id: string): void;
+	onForkAt?(id: string): void;
+}): ReactNode {
+	const kind = treeKindOf(node.entry);
+	return (
+		<div
+			className={`traj-trow${onPath ? "" : " traj-trow--off"}${isLeaf ? " traj-trow--leaf" : ""}`}
+			style={{ paddingLeft: depth * 14 }}
+		>
+			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("trajectory jump")}>
+				<Icon
+					name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
+					className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
+				/>
+				<span className="traj-trow-text">{treeTextOf(node.entry)}</span>
+				{childCount > 1 && (
+					<span
+						className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
+						title={isCollapsed ? t("trajectory expand branch") : t("trajectory collapse branch")}
+						onClick={e => {
+							e.stopPropagation();
+							onToggleCollapse(node.id);
+						}}
+					>
+						{childCount}
+					</span>
+				)}
+			</button>
+			{(onBranchTo || onForkAt) && (
+				<span className="traj-trow-actions">
+					{onBranchTo && (
+						<button
+							type="button"
+							className="traj-trow-action"
+							title={t("branch re-answer here")}
+							aria-label={t("branch re-answer here")}
+							onClick={() => onBranchTo(node.id)}
+						>
+							<Icon name="git-branch" className="h-3 w-3" />
+						</button>
+					)}
+					{onForkAt && (
+						<button
+							type="button"
+							className="traj-trow-action"
+							title={t("fork session here")}
+							aria-label={t("fork session here")}
+							onClick={() => onForkAt(node.id)}
+						>
+							<Icon name="git-fork" className="h-3 w-3" />
+						</button>
+					)}
+				</span>
+			)}
+		</div>
+	);
+}
+
 export function TrajectoryView({
 	entries,
 	modelId,
 	roundDurations,
 	onJumpToEntry,
+	leafId,
+	activePathIds,
+	onBranchTo,
+	onForkAt,
 }: {
 	entries: readonly unknown[];
 	modelId?: string;
@@ -221,7 +345,17 @@ export function TrajectoryView({
 	/** Jump the transcript to an entry id (ChatView wiring). Absent =
 	 *  flat event list without jump affordances (backward compatible). */
 	onJumpToEntry?: (entryId: string) => void;
+	/** Layer-2 分支树模式:当前叶子(view key id;null/undefined = 尾部)。
+	 *  与 activePathIds 一起驱动行高亮/淡显。 */
+	leafId?: string | null;
+	/** 活动路径(根→叶)上的条目 id 集;未提供 = 全部视为在路径上。 */
+	activePathIds?: ReadonlySet<string>;
+	/** branchAt 重答:把会话叶移到该节点并回填编辑器(TUI navigateTree parity)。 */
+	onBranchTo?(id: string): void;
+	/** forkAt:从该节点分叉新会话。 */
+	onForkAt?(id: string): void;
 }): ReactNode {
+	const [mode, setMode] = useState<"timeline" | "tree">("timeline");
 	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
 	// 折叠的 turn 集合(默认全部展开;点击行头折叠/展开)。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
@@ -229,6 +363,19 @@ export function TrajectoryView({
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	// Overview 时间轴拖拽区间(聚焦模式;null = 全量)。
 	const [range, setRange] = useState<TimelineRange | null>(null);
+	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
+	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
+	const treeRows = useMemo(() => {
+		const rows: { node: MessageTreeNode; depth: number }[] = [];
+		const walk = (nodes: readonly MessageTreeNode[], depth: number): void => {
+			for (const node of nodes) {
+				rows.push({ node, depth });
+				if (!collapsedNodes.has(node.id)) walk(node.children, depth + 1);
+			}
+		};
+		walk(buildMessageTree(entries), 0);
+		return rows;
+	}, [entries, collapsedNodes]);
 
 	// Esc 退出检视/聚焦(Esc 优先级:先清区间,再清选中——与模态键盘契约一致)。
 	useEffect(() => {
@@ -255,6 +402,31 @@ export function TrajectoryView({
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
+			{/* Timeline | Tree 切换(第二层):同一棵 entry 树的两个投影轴。 */}
+			<div className="traj-mode-row">
+				<div className="traj-mode-toggle" role="tablist">
+					<button
+						type="button"
+						role="tab"
+						aria-selected={mode === "timeline"}
+						className={`traj-mode-btn${mode === "timeline" ? " traj-mode-btn--on" : ""}`}
+						onClick={() => setMode("timeline")}
+					>
+						<Icon name="history" className="h-3 w-3" />
+						{t("trajectory mode timeline")}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={mode === "tree"}
+						className={`traj-mode-btn${mode === "tree" ? " traj-mode-btn--on" : ""}`}
+						onClick={() => setMode("tree")}
+					>
+						<Icon name="git-branch" className="h-3 w-3" />
+						{t("trajectory mode tree")}
+					</button>
+				</div>
+			</div>
 			{/* 顶部统计(DSH Trajectory 同款):Duration / Turns / Calls / Model */}
 			<div className="grid grid-cols-2 gap-1.5 px-2.5 pb-2 pt-2">
 				<div className="gui-ctx-stat">
@@ -315,7 +487,38 @@ export function TrajectoryView({
 				</div>
 			)}
 			<FadeScroll className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3">
-				{turns.length === 0 ? (
+				{mode === "tree" ? (
+					treeRows.length === 0 ? (
+						<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
+							{t("trajectory empty")}
+						</p>
+					) : (
+						<div className="flex flex-col">
+							{treeRows.map(row => (
+								<TreeNodeRow
+									key={row.node.id}
+									node={row.node}
+									depth={row.depth}
+									isLeaf={leafId != null && row.node.id === leafId}
+									onPath={!activePathIds || activePathIds.has(row.node.id)}
+									childCount={row.node.children.length}
+									isCollapsed={collapsedNodes.has(row.node.id)}
+									onToggleCollapse={id =>
+										setCollapsedNodes(prev => {
+											const next = new Set(prev);
+											if (next.has(id)) next.delete(id);
+											else next.add(id);
+											return next;
+										})
+									}
+									onJump={onJumpToEntry ?? (() => {})}
+									onBranchTo={onBranchTo}
+									onForkAt={onForkAt}
+								/>
+							))}
+						</div>
+					)
+				) : turns.length === 0 ? (
 					<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
 						{t("trajectory empty")}
 					</p>

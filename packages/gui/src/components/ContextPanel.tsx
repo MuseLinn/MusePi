@@ -70,6 +70,10 @@ export function ContextPanel({
 	extTabs = [],
 	view,
 	onViewChange,
+	leafId,
+	activePathIds,
+	onBranchTo,
+	onForkAt,
 	onJumpToEntry,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
@@ -99,6 +103,11 @@ export function ContextPanel({
 	/** Jump the transcript to an entry id (trajectory rows; provided by
 	 *  ChatView — absent = trajectory rows render without jump action). */
 	onJumpToEntry?(entryId: string): void;
+	/** Layer-2 分支树(轨迹 Tree 模式):当前叶 + 活动路径 + 分支/fork 动作。 */
+	leafId?: string | null;
+	activePathIds?: ReadonlySet<string>;
+	onBranchTo?(id: string): void;
+	onForkAt?(id: string): void;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
@@ -316,6 +325,10 @@ export function ContextPanel({
 								modelId={snap?.state?.model?.id}
 								roundDurations={snap?.roundDurations}
 								onJumpToEntry={onJumpToEntry}
+								leafId={leafId}
+								activePathIds={activePathIds}
+								onBranchTo={onBranchTo}
+								onForkAt={onForkAt}
 							/>
 						) : view === "jobs" ? (
 							snap?.sessionId ? (
