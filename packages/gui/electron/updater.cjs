@@ -1,78 +1,145 @@
 /**
- * OTA updater — checks a version manifest and hands the renderer the
- * download URL when a newer release exists.
+ * OTA updater — wraps electron-updater v6 to provide the existing renderer
+ * contract (checkForUpdates → UpdateCheckResult) plus download/install
+ * controls (updater-download / updater-install / updater-state).
  *
- * The manifest is a tiny JSON attached as an ASSET to each GitHub release
- * (BitFun parity): /releases/latest/download/<asset> 302s to the newest
- * release's copy — no api.github.com rate limits, works anonymously once
- * the repo is public.
- *   { "version": "0.4.3", "url": "https://…/MusePi-0.4.3.dmg", "notes": "…" }
- *
- * Resolution order: OMP_UPDATE_MANIFEST_URL env → package.json
- * "update" → the MusePi releases-latest asset default. Auto-check on
- * startup can be silenced with OMP_NO_AUTO_UPDATE=1.
+ * electron-updater reads the feed from the electron-builder publish config
+ * (GitHub provider → latest.yml per platform). The daemon-side update flow
+ * (changelog.display, "no-update-source") is unchanged — the old
+ * update-manifest.json asset still exists for the daemon RPC.
  */
 "use strict";
 
+const { autoUpdater } = require("electron-updater");
 const { app } = require("electron");
-const fs = require("node:fs");
-const path = require("node:path");
 
-const pkgPath = path.resolve(__dirname, "..", "package.json");
-let pkg = {};
-try {
-	pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-} catch {
-	// package.json missing — env-only mode
+/** Current user-facing state (mirrored to the renderer via updater-state). */
+const state = {
+	status: "idle", // idle | checking | downloading | downloaded | error
+	version: null,
+	progress: { percent: 0, transferred: 0, total: 0 },
+	error: null,
+};
+
+/** Subscription list for upstream → renderer events (set by main.cjs). */
+let sendToRenderer = null; // (channel, data) => void
+
+/**
+ * Wire the updater to a renderer send function (called once by main.cjs
+ * after the main window is ready, so auto-detected update events can
+ * forward to the renderer).
+ */
+function wireRenderer(forward) {
+	sendToRenderer = forward;
 }
 
-/** Default channel: the update-manifest.json asset on the latest GitHub release. */
-const RELEASE_MANIFEST_URL =
-	"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+// ── autoUpdater event wiring ─────────────────────────────────────────────
 
-function manifestUrl() {
-	if (process.env.OMP_UPDATE_MANIFEST_URL) return process.env.OMP_UPDATE_MANIFEST_URL;
-	if (pkg.update?.manifestUrl) return pkg.update.manifestUrl;
-	return RELEASE_MANIFEST_URL;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+
+autoUpdater.on("checking-for-update", () => {
+	state.status = "checking";
+	state.error = null;
+	emitState();
+});
+
+autoUpdater.on("update-available", (info) => {
+	state.status = "idle";
+	state.version = info.version;
+	state.error = null;
+	emitState();
+	emitUpdateAvailable(info.version);
+});
+
+autoUpdater.on("update-not-available", () => {
+	state.status = "idle";
+	state.error = null;
+	emitState();
+});
+
+autoUpdater.on("error", (err) => {
+	state.status = "error";
+	state.error = err?.message ?? String(err);
+	emitState();
+});
+
+autoUpdater.on("download-progress", (progress) => {
+	state.status = "downloading";
+	state.progress = {
+		percent: Math.round(progress.percent),
+		transferred: progress.transferred,
+		total: progress.total,
+	};
+	emitState();
+});
+
+autoUpdater.on("update-downloaded", (info) => {
+	state.status = "downloaded";
+	state.version = info.version;
+	state.progress = { percent: 100, transferred: 0, total: 0 };
+	state.error = null;
+	emitState();
+});
+
+function emitState() {
+	if (sendToRenderer) sendToRenderer("updater-state", { ...state });
 }
 
-/** Fetch + compare the remote version. Returns null when up to date or disabled. */
-async function checkForUpdates(timeoutMs = 8000) {
-	const url = manifestUrl();
-	if (!url) return { enabled: false, reason: "no-update-source" };
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), timeoutMs);
+function emitUpdateAvailable(version) {
+	if (sendToRenderer) {
+		sendToRenderer("update-available", {
+			enabled: true,
+			newer: true,
+			current: app.getVersion(),
+			latest: version,
+		});
+	}
+}
+
+// ── Public API (replaces the old updater.cjs exports) ────────────────────
+
+/**
+ * Check for updates. Returns the current state (synchronous — the
+ * autoUpdater events drive the state machine; the renderer listens to
+ * updater-state for live updates).
+ */
+async function checkForUpdates() {
 	try {
-		const res = await fetch(url, { signal: controller.signal, headers: { "Cache-Control": "no-cache" } });
-		if (res.status === 404) {
-			// The manifest repo is private or the file was never published —
-			// equivalent to having no update source. The settings button must
-			// not show a scary error for a not-yet-released app.
-			return { enabled: false, reason: "no-update-source" };
-		}
-		if (!res.ok) return { enabled: true, error: `manifest ${res.status}` };
-		const manifest = await res.json();
-		if (typeof manifest.version !== "string" || typeof manifest.url !== "string") {
-			return { enabled: true, error: "bad manifest" };
-		}
-		const current = app.getVersion();
-		const newer = compareVersions(manifest.version, current) > 0;
-		return { enabled: true, current, latest: manifest.version, newer, url: manifest.url, notes: manifest.notes };
+		await autoUpdater.checkForUpdates();
 	} catch (err) {
-		return { enabled: true, error: err instanceof Error ? err.message : String(err) };
-	} finally {
-		clearTimeout(timer);
+		state.status = "error";
+		state.error = err?.message ?? String(err);
+		emitState();
+		return { enabled: true, error: state.error };
+	}
+	return { enabled: true };
+}
+
+/**
+ * Download the detected update. The renderer shows progress via
+ * updater-state events. Returns true on success, false on error.
+ */
+async function downloadUpdate() {
+	try {
+		await autoUpdater.downloadUpdate();
+		return true;
+	} catch (err) {
+		state.status = "error";
+		state.error = err?.message ?? String(err);
+		emitState();
+		return false;
 	}
 }
 
-/** Semver-ish compare; "0.1.0" < "0.1.1" < "0.2.0". */
-function compareVersions(a, b) {
-	const pa = String(a).split(".").map(n => Number.parseInt(n, 10) || 0);
-	const pb = String(b).split(".").map(n => Number.parseInt(n, 10) || 0);
-	for (let i = 0; i < 3; i++) {
-		if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
-	}
-	return 0;
+/**
+ * Quit and install the downloaded update. The caller must kill the daemon
+ * sidecar before calling this.
+ */
+function quitAndInstall() {
+	setImmediate(() => {
+		autoUpdater.quitAndInstall();
+	});
 }
 
-module.exports = { checkForUpdates, manifestUrl };
+module.exports = { checkForUpdates, downloadUpdate, quitAndInstall, wireRenderer, state };

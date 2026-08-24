@@ -118,6 +118,7 @@ jobs:
                 packages/gui/release/*.${{ matrix.artifact_ext }}
                 packages/gui/release/*.AppImage
                 packages/gui/release/*.deb
+                packages/gui/release/latest*.yml
               if-no-files-found: error
 
    publish:
@@ -189,5 +190,6 @@ jobs:
                 dist/*.AppImage
                 dist/*.deb
                 dist/*-setup.exe
+                dist/latest*.yml
                 dist/update-manifest.json
               body_path: dist/RELEASE_NOTES.md

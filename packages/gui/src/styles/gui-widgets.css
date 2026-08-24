@@ -4148,6 +4148,36 @@
 	margin-top: 2px;
 }
 
+/* OTA: progress bar (downloadUpdate) */
+.gui-update-toast-progress {
+	position: relative;
+	height: 6px;
+	border-radius: 3px;
+	background: var(--bg-mod);
+	overflow: hidden;
+}
+.gui-update-toast-progress-bar {
+	position: absolute;
+	left: 0;
+	top: 0;
+	height: 100%;
+	border-radius: 3px;
+	background: var(--accent);
+	transition: width 200ms linear;
+}
+.gui-update-toast-progress-label {
+	position: absolute;
+	right: 0;
+	top: -16px;
+	font-size: 11px;
+	color: var(--accent);
+}
+/* OTA: download error */
+.gui-update-toast-error {
+	font-size: 12px;
+	color: var(--color-red);
+}
+
 /* Settings → general 检查更新 richer result: notes snippet + explicit
  * download button (replaces the old auto window.open popup). */
 .gui-update-result {

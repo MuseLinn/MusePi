@@ -118,10 +118,17 @@
 			"maintainer": "MusePi",
 			"executableName": "musepi",
 			"artifactName": "${productName}-${version}-${arch}.${ext}"
+		},
+		"publish": {
+			"provider": "github",
+			"owner": "MuseLinn",
+			"repo": "MusePi",
+			"channel": "latest"
 		}
 	},
 	"dependencies": {
-		"@lobehub/icons": "^5.16.0"
+		"@lobehub/icons": "^5.16.0",
+		"electron-updater": "6.4.1"
 	},
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn"

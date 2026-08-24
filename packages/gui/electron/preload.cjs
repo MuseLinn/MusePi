@@ -58,13 +58,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Haptic tap (macOS Taptic Engine) — pattern 0 generic / 1 alignment /
 	 *  2 level-change; no-op on platforms without a haptic device. */
 	haptic: (pattern) => ipcRenderer.invoke("haptic", pattern),
-	/** OTA: compare the local version against the update manifest. */
+	/** OTA: check for updates (electron-updater; null result = disabled). */
 	checkUpdates: () => ipcRenderer.invoke("updater-check"),
+	/** OTA: current updater state (idle/checking/downloading/downloaded/error). */
+	getUpdateState: () => ipcRenderer.invoke("updater-state"),
+	/** OTA: download the detected update (progress via onUpdateState). */
+	downloadUpdate: () => ipcRenderer.invoke("updater-download"),
+	/** OTA: kill daemon + quitAndInstall (restart into the new version). */
+	installUpdate: () => ipcRenderer.invoke("updater-install"),
 	/** OTA: listen for an auto-checked update notice. */
 	onUpdateAvailable: (cb) => {
 		const listener = (_e, result) => cb(result);
 		ipcRenderer.on("update-available", listener);
 		return () => ipcRenderer.removeListener("update-available", listener);
+	},
+	/** OTA: live updater state pushes (checking/downloading/downloaded/error). */
+	onUpdateState: (cb) => {
+		const listener = (_e, state) => cb(state);
+		ipcRenderer.on("updater-state", listener);
+		return () => ipcRenderer.removeListener("updater-state", listener);
 	},
 	/** Agent companion pet window (伙伴): show/hide the floating pet. */
 	setPetVisible: (visible) => ipcRenderer.invoke("pet-toggle", visible),

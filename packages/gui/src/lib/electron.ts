@@ -17,10 +17,26 @@ export interface ElectronAPI {
 	listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
 	openExternal(url: string): Promise<boolean>;
 	readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
-	/** OTA probe (updater.cjs manifest compare); null result = disabled. */
+	/** OTA check (electron-updater); null result = disabled. */
 	checkUpdates(): Promise<UpdateCheckResult | null>;
+	/** Current updater state (idle/checking/downloading/downloaded/error). */
+	getUpdateState(): Promise<UpdaterState | null>;
+	/** Download the detected update (progress via onUpdateState). */
+	downloadUpdate(): Promise<boolean>;
+	/** Kill daemon + quitAndInstall (restart into the new version). */
+	installUpdate(): Promise<boolean>;
 	/** Startup auto-check notice; returns the unsubscribe function. */
 	onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void;
+	/** Live updater state pushes; returns the unsubscribe function. */
+	onUpdateState(cb: (state: UpdaterState) => void): () => void;
+}
+
+/** Live updater state (main process electron-updater → renderer contract). */
+export interface UpdaterState {
+	status: "idle" | "checking" | "downloading" | "downloaded" | "error";
+	version?: string | null;
+	progress?: { percent: number; transferred: number; total: number };
+	error?: string | null;
 }
 
 /** An app the current folder can be opened with (openchamber open-in). */
@@ -158,6 +174,27 @@ export function onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () =
 	if (!isElectron()) return () => {};
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.onUpdateAvailable(cb);
+}
+
+/** Live updater state pushes (idle/checking/downloading/downloaded/error). */
+export function onUpdateState(cb: (state: UpdaterState) => void): () => void {
+	if (!isElectron()) return () => {};
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.onUpdateState(cb);
+}
+
+/** Download the detected update (progress via onUpdateState). */
+export function downloadUpdate(): Promise<boolean> {
+	if (!isElectron()) return Promise.resolve(false);
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.downloadUpdate();
+}
+
+/** Kill daemon + quitAndInstall (restart into the new version). */
+export function installUpdate(): Promise<boolean> {
+	if (!isElectron()) return Promise.resolve(false);
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.installUpdate();
 }
 
 /** Open a directory with a specific app (Finder, VS Code, …). */

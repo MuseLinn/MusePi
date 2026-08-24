@@ -19,7 +19,7 @@ const os = require("node:os");
 const fs = require("node:fs");
 const { probe, restart, start, kill, portOpen } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
-const { checkForUpdates } = require("./updater.cjs");
+const { checkForUpdates, downloadUpdate, quitAndInstall, wireRenderer, state: updaterState } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
 
 // ── Data-root override ────────────────────────────────────────────────────
@@ -2010,6 +2010,11 @@ function createWindow() {
 	// orphaned ("前后端掉线"). Auto-reload — the app's boot/reconnect path
 	// re-attaches and reopens the active session (rpc onStatus open →
 	// openSession), so a crash recovers without a manual relaunch.
+	// OTA updater: forward electron-updater events to the renderer (UpdateToast).
+	wireRenderer((channel, data) => {
+		if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
+	});
+
 	mainWindow.webContents.on("render-process-gone", (_event, details) => {
 		if (details.reason === "clean-exit") return;
 		console.error("[main] renderer process gone:", details.reason, "exitCode:", details.exitCode);
@@ -2129,6 +2134,24 @@ ipcMain.handle("notification-show", (_event, { title, body }) => {
 // ── IPC: OTA update check (manifest-driven) ───────────────────────────────
 
 ipcMain.handle("updater-check", () => checkForUpdates());
+ipcMain.handle("updater-state", () => ({ ...updaterState }));
+ipcMain.handle("updater-download", () => downloadUpdate());
+ipcMain.handle("updater-install", async () => {
+	// Kill the daemon sidecar BEFORE quitting so the installed app can
+	// start its own fresh daemon (openchamber killSidecar parity). The
+	// daemon holds the ws.port / journal; a live one would be orphaned.
+	try {
+		const { kill, probe } = require("./daemon.cjs");
+		const port = probe();
+		if (port) await kill(port);
+	} catch (err) {
+		console.error("[updater] daemon kill failed:", err?.message ?? err);
+	}
+	// setImmediate: let the IPC reply flush before quitAndInstall, or the
+	// renderer never sees the response (openchamber experience).
+	quitAndInstall();
+	return true;
+});
 // OTA/发布一致性:renderer 拿 GUI 版本,与 daemon 的 system.meta
 // musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
 // daemon-restart 刷新(见 app.tsx boot)。
