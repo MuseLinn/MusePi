@@ -422,6 +422,16 @@ export function SettingsView({
 		waitingInput?: boolean;
 	} | null>(null);
 	const [busy, setBusy] = useState(false);
+	// Provider ids whose OAuth/API login is in flight. Kept per-provider so a
+	// pending login only disables THAT provider's buttons; the global `busy`
+	// flag alone froze every login button for the whole OAuth wait (user
+	// report: "设置界面的模型登录按钮有时点击没反应").
+	const [pendingLogins, setPendingLogins] = useState<string[]>([]);
+	// Ref-count of in-flight logins (ref, not state): the `finally` runs after
+	// an await, so reading `pendingLogins` there sees the render-time snapshot
+	// — a stale-closure bug for concurrent logins. `busy` is derived from this
+	// counter instead.
+	const pendingLoginCount = useRef(0);
 	// Content-boundary feather (transcript parity): the nav column and the
 	// section content both scroll inside the settings surface — the shared
 	// hook flips their data-top-scroll / data-bottom-scroll mask attrs.
@@ -505,17 +515,27 @@ export function SettingsView({
 		// from the settings page opened without an active session.
 		if (!rpc) return;
 		setBusy(true);
+		pendingLoginCount.current += 1;
+		setPendingLogins(p => (p.includes(providerId) ? p : [...p, providerId]));
 		setLoginState({ providerId });
 		try {
 			const result = await rpc.request<{ ok: boolean }>("providers.login", { sessionId, providerId });
 			if (result?.ok) {
-				setLoginState(null);
+				// Only clear the login panel if THIS provider's flow is still
+				// the one being shown (a later login may have taken the spot).
+				setLoginState(s => (s?.providerId === providerId ? null : s));
 				await loadProviders();
 			}
 		} catch (err) {
-			setLoginState({ providerId, message: err instanceof Error ? err.message : String(err) });
+			setLoginState(s =>
+				s?.providerId === providerId
+					? { providerId, message: err instanceof Error ? err.message : String(err) }
+					: s,
+			);
 		} finally {
-			setBusy(false);
+			setPendingLogins(p => p.filter(x => x !== providerId));
+			pendingLoginCount.current = Math.max(0, pendingLoginCount.current - 1);
+			if (pendingLoginCount.current === 0) setBusy(false);
 		}
 	};
 
@@ -696,6 +716,7 @@ export function SettingsView({
 									custom={custom}
 									loginState={loginState}
 									busy={busy}
+									pendingLogins={pendingLogins}
 									onLogin={login}
 									onLogout={logout}
 									onSubmitInput={submitLoginInput}

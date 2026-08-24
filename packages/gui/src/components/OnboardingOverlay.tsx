@@ -369,6 +369,11 @@ function ProviderSetup({
 		waitingInput?: boolean;
 	} | null>(null);
 	const [loginBusy, setLoginBusy] = useState(false);
+	// Provider ids whose login is in flight — only those rows' login buttons
+	// are disabled so one pending OAuth doesn't freeze every other provider's
+	// login (settings parity fix, user report: 登录按钮有时点击没反应).
+	const [loginPending, setLoginPending] = useState<string[]>([]);
+	const loginPendingCount = useRef(0);
 	const [promptValue, setPromptValue] = useState("");
 	const [copied, setCopied] = useState(false);
 	// API-key import inline editor.
@@ -481,18 +486,26 @@ function ProviderSetup({
 			return;
 		}
 		setLoginBusy(true);
+		loginPendingCount.current += 1;
+		setLoginPending(p => (p.includes(providerId) ? p : [...p, providerId]));
 		setError(null);
 		setLoginState({ providerId });
 		try {
 			const result = await rpc.request<{ ok: boolean }>("providers.login", { providerId });
 			if (result?.ok) {
-				setLoginState(null);
+				setLoginState(s => (s?.providerId === providerId ? null : s));
 				await loadProviders();
 			}
 		} catch (err) {
-			setLoginState({ providerId, message: err instanceof Error ? err.message : String(err) });
+			setLoginState(s =>
+				s?.providerId === providerId
+					? { providerId, message: err instanceof Error ? err.message : String(err) }
+					: s,
+			);
 		} finally {
-			setLoginBusy(false);
+			setLoginPending(p => p.filter(x => x !== providerId));
+			loginPendingCount.current = Math.max(0, loginPendingCount.current - 1);
+			if (loginPendingCount.current === 0) setLoginBusy(false);
 		}
 	};
 
@@ -850,7 +863,7 @@ function ProviderSetup({
 									<button
 										type="button"
 										className="gui-btn gui-obo-provider-login"
-										disabled={loginBusy}
+										disabled={loginPending.includes(p.id)}
 										onClick={() => void login(p.id)}
 									>
 										{t("login")}
