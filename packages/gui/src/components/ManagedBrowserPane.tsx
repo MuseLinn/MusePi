@@ -173,7 +173,14 @@ const QUICK_LINKS: Array<{ label: string; url: string; icon: "github" | "search"
 	{ label: "DeepL", url: "https://www.deepl.com", icon: "chat-1" },
 ];
 
-export function ManagedBrowserPane(): ReactNode {
+export function ManagedBrowserPane({
+	openRequest = null,
+}: {
+	/** External reveal (chat link click / agent browser open): navigate the
+	 *  active tab to this URL when the nonce advances (proma
+	 *  AgentBrowserLinkProvider parity). */
+	openRequest?: { url: string; nonce: number } | null;
+} = {}): ReactNode {
 	const api = window.electronAPI;
 	const [state, setState] = useState<ManagedBrowserState | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -338,6 +345,15 @@ export function ManagedBrowserPane(): ReactNode {
 		e.preventDefault();
 		void navigateTo(addressValue);
 	};
+
+	// External reveal: chat link clicks (and agent browser.open) navigate the
+	// active tab. The nonce makes repeated clicks on the same URL re-trigger.
+	const lastReveal = useRef(0);
+	useEffect(() => {
+		if (!openRequest || openRequest.nonce === lastReveal.current) return;
+		lastReveal.current = openRequest.nonce;
+		void navigateTo(openRequest.url);
+	}, [openRequest, navigateTo]);
 
 	// Suggestions: history entries filtered by the query (open-design parity).
 	const suggestions = useMemo(() => {

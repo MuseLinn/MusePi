@@ -78,6 +78,7 @@ export function ContextPanel({
 	className,
 	open = true,
 	openRequest = null,
+	browserOpenRequest = null,
 	tool,
 	onToolChange,
 	onJumpToEntry,
@@ -95,6 +96,9 @@ export function ContextPanel({
 	/** External reveal request (artifact cards / transcript paths):
 	 *  switches to the files tab and previews the path. */
 	openRequest?: { path: string; nonce: number } | null;
+	/** External browser reveal (chat link click / agent browser.open):
+	 *  switches to the browser tool and navigates the active tab. */
+	browserOpenRequest?: { url: string; nonce: number } | null;
 	/** Active tool view — controlled from ChatView so the right-edge rail
 	 *  (RightRail) and the panel share one selection. */
 	tool: string | null;
@@ -202,6 +206,12 @@ export function ContextPanel({
 		onToolChange(null);
 		setTab("files");
 	}, [openRequest]);
+	// Relay external browser reveals: switch to the browser tool (right rail
+	// selects it; ManagedBrowserPane navigates on the nonce).
+	useEffect(() => {
+		if (!browserOpenRequest) return;
+		onToolChange("browser");
+	}, [browserOpenRequest, onToolChange]);
 	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
 	// browser (browser.gui), surface the browser tool so the user sees the
 	// agent's work without hunting for the panel.
@@ -354,7 +364,7 @@ export function ContextPanel({
 					 * the native WebContentsView projects the slot's exact CSS
 					 * rect — a padded/scrollable wrapper breaks the height chain
 					 * and clips the projection. */
-					<BrowserPane rpc={rpc} />
+					<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
 				) : (
 					<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 						{tool === "notes" ? (
@@ -1543,9 +1553,15 @@ const BROWSER_VIEWPORTS = [
  * drives with `browser.gui`. Plain-browser builds fall back to the legacy
  * webview/iframe pane.
  */
-function BrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
+function BrowserPane({
+	rpc,
+	browserOpenRequest = null,
+}: {
+	rpc: RpcClient;
+	browserOpenRequest?: { url: string; nonce: number } | null;
+}): ReactNode {
 	const managed = typeof window.electronAPI?.managedBrowserOpen === "function";
-	if (managed) return <ManagedBrowserPane />;
+	if (managed) return <ManagedBrowserPane openRequest={browserOpenRequest} />;
 	return <LegacyBrowserPane rpc={rpc} />;
 }
 

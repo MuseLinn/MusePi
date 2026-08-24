@@ -2020,6 +2020,24 @@ function createWindow() {
 		if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
 	});
 
+	// External-link policy (openchamber parity): renderer <a target=_blank>
+	// must NOT spawn orphan Electron windows, and in-window navigation must
+	// not replace the whole app. http(s) targets open in the system browser
+	// (shell.openExternal) — the managed in-app browser (WebContentsView)
+	// is driven separately via managed-browser IPC, not window navigation.
+	mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+		if (/^https?:/i.test(url)) void shell.openExternal(url);
+		return { action: "deny" };
+	});
+	mainWindow.webContents.on("will-navigate", (event, url) => {
+		// Allow the app's own routes; everything else leaves via the
+		// system browser (defense-in-depth for links that bypass target=_blank).
+		if (/^https?:/i.test(url) && !url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")) {
+			event.preventDefault();
+			void shell.openExternal(url);
+		}
+	});
+
 	mainWindow.webContents.on("render-process-gone", (_event, details) => {
 		if (details.reason === "clean-exit") return;
 		console.error("[main] renderer process gone:", details.reason, "exitCode:", details.exitCode);

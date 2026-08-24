@@ -595,6 +595,20 @@ export const Markdown = memo(function Markdown({
 	// from the rendered DOM so inline markdown never leaks into the cells.
 	const onCopy = useCallback((e: ReactMouseEvent<HTMLDivElement>): void => {
 		const target = e.target as HTMLElement;
+		// Chat link → managed in-app browser (proma AgentBrowserLinkProvider
+		// parity): http(s) link clicks dispatch omp-open-url so ChatView can
+		// open them in the right-panel browser instead of the system browser
+		// (the old target=_blank opened a bare Electron window). Modifier
+		// clicks (ctrl/cmd) still open externally via the default behavior.
+		const linkEl = target.closest<HTMLElement>("a[href]");
+		if (linkEl && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+			const href = linkEl.getAttribute("href") ?? "";
+			if (/^https?:\/\//i.test(href)) {
+				e.preventDefault();
+				window.dispatchEvent(new CustomEvent("omp-open-url", { detail: { url: href } }));
+				return;
+			}
+		}
 		const pathEl = target.closest<HTMLElement>("[data-open-path]");
 		if (pathEl) {
 			const path = pathEl.getAttribute("data-open-path") ?? "";

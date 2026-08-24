@@ -594,6 +594,9 @@ export function ChatView({
 	// into the ContextPanel → FilePane preview. nonce re-triggers the same
 	// path (re-click while already open).
 	const [openFileReq, setOpenFileReq] = useState<{ path: string; nonce: number } | null>(null);
+	// External browser reveal (chat link click → managed browser, proma
+	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
+	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
 	// Shared ContextPanel tool selection — controlled here so the right-edge
 	// rail (RightRail) and the panel toggle the same view (modes v2 右面板).
 	const [contextTool, setContextTool] = useState<string | null>(null);
@@ -608,6 +611,17 @@ export function ChatView({
 		window.addEventListener("omp-open-file", onOpenFile);
 		return () => window.removeEventListener("omp-open-file", onOpenFile);
 	}, [onOpenFileInPanel]);
+	// External browser reveal (chat link click → managed browser).
+	useEffect(() => {
+		const onOpenUrl = (ev: Event): void => {
+			const detail = (ev as CustomEvent<{ url?: string }>).detail;
+			const url = detail?.url;
+			if (typeof url !== "string" || !url) return;
+			setOpenBrowserReq(prev => ({ url, nonce: (prev?.nonce ?? 0) + 1 }));
+		};
+		window.addEventListener("omp-open-url", onOpenUrl);
+		return () => window.removeEventListener("omp-open-url", onOpenUrl);
+	}, []);
 	const setThinking = (level: ThinkingLevel | null): void => {
 		if (!store) return;
 		void rpc
@@ -1437,6 +1451,7 @@ export function ChatView({
 									rpc={rpc}
 									open={rightPanelOpen && !focusMode}
 									openRequest={openFileReq}
+									browserOpenRequest={openBrowserReq}
 									tool={contextTool}
 									onToolChange={setContextTool}
 									onJumpToEntry={entryId => {
