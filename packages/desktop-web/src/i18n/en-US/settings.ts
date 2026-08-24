@@ -989,6 +989,11 @@ export const settings = {
 	"widget fullscreen": "Fullscreen view",
 	"widget preview": "Widget preview",
 	"maximize panel": "Maximize panel",
+	"watch the agent's browser live": "Watch the agent\u2019s browser live",
+	"the agent is using its own hidden browser \u2014 enable the managed browser to watch it in the side panel and share login state":
+		"The agent is using its own hidden browser. Enable the managed browser to watch it live in the side panel and share its login state.",
+	"enable & watch": "Enable & watch",
+	"don't ask again": "Don\u2019t ask again",
 	"restore panel": "Restore panel",
 	"widget preview empty": "No widget preview yet — visual widgets rendered in chat will stay here",
 	"page preview": "Page preview",

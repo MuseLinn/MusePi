@@ -939,6 +939,11 @@ export const settings = {
 	"widget fullscreen": "全屏查看",
 	"widget preview": "组件预览",
 	"maximize panel": "最大化面板",
+	"watch the agent's browser live": "实时查看 agent 的浏览器操作",
+	"the agent is using its own hidden browser — enable the managed browser to watch it in the side panel and share login state":
+		"agent 正在使用独立的隐藏浏览器。启用受管浏览器后可在右侧面板实时查看，并与它共享登录状态。",
+	"enable & watch": "启用并查看",
+	"don't ask again": "不再提示",
 	"restore panel": "还原面板",
 	"widget preview empty": "暂无组件预览——对话中渲染的可视化组件会常驻显示在这里",
 	"page preview": "页面预览",

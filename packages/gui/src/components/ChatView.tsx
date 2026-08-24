@@ -25,6 +25,7 @@ import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
+import { BrowserGuiHint } from "./BrowserGuiHint";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -1474,6 +1475,15 @@ export function ChatView({
 										if (!rightPanelOpen) onExpandRightPanel?.();
 									}}
 									onToggleRightPanel={onToggleRightPanel}
+								/>
+								{/* First browser-use hint: browser.gui defaults off, so the
+								 * agent's first browsing turn is invisible — offer the
+								 * managed in-app browser with a one-click switch. */}
+								<BrowserGuiHint
+									activeTools={snap?.activeTools}
+									rpc={rpc}
+									onView={() => setContextTool("browser")}
+									onExpandPanel={onExpandRightPanel}
 								/>
 							</div>
 						</div>
