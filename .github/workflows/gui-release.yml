@@ -30,20 +30,21 @@ jobs:
                     native_targets: darwin-arm64,
                     builder: mac,
                     artifact_ext: dmg,
+                    artifact_glob: "packages/gui/release/*.dmg",
                  }
                - {
                     os: ubuntu-22.04,
                     target_id: linux-x64,
                     native_targets: linux-x64-baseline,
                     builder: linux,
-                    artifact_glob: "release/*.AppImage release/*.deb",
+                    artifact_glob: "packages/gui/release/*.AppImage packages/gui/release/*.deb",
                  }
                - {
                     os: ubuntu-24.04-arm,
                     target_id: linux-arm64,
                     native_targets: linux-arm64,
                     builder: linux,
-                    artifact_glob: "release/*.AppImage release/*.deb",
+                    artifact_glob: "packages/gui/release/*.AppImage packages/gui/release/*.deb",
                  }
       runs-on: ${{ matrix.os }}
       env:
@@ -95,7 +96,6 @@ jobs:
            with:
               name: musepi-${{ matrix.target_id }}
               path: |
-                packages/gui/release/*.${{ matrix.artifact_ext }}
                 ${{ matrix.artifact_glob }}
               if-no-files-found: error
 
