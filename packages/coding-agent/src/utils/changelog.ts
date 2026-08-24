@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { getLastChangelogVersionPath, isEnoent, logger } from "@musepi/pi-utils";
 import bundledChangelogPath from "../../CHANGELOG.md" with { type: "file" };
+import bundledMusepiChangelogPath from "../../CHANGELOG.musepi.md" with { type: "file" };
 import { getMusepiChangelogPath } from "../config";
 import type { SettingValue } from "../config/settings";
 
@@ -161,6 +162,16 @@ export async function parseChangelog(changelogPath: string | undefined): Promise
 			}
 		}
 	}
+	// Compiled binaries can't resolve package assets (import.meta.dir points
+	// into bunfs), so try the embedded MusePi changelog before falling back
+	// to the upstream OMP changelog.
+	if (content === undefined) {
+		try {
+			content = await Bun.file(resolveBundledChangelogPath(bundledMusepiChangelogPath, import.meta.url)).text();
+		} catch {
+			// absent in non-compiled builds — fall through to the upstream fallback
+		}
+	}
 	content ??= await Bun.file(resolveBundledChangelogPath(bundledChangelogPath, import.meta.url)).text();
 
 	return parseChangelogContent(content);
@@ -315,7 +326,7 @@ export function selectStartupChangelog(
 		oldestFirst: false,
 	});
 	const summary = summarizeChangelogEntries(newEntries);
-	const latestEntry = newEntries[0];
+	const latestEntry = newEntries[newEntries.length - 1] ?? newEntries[0];
 	return {
 		markdown: rendered.markdown,
 		persistCurrentVersion: true,

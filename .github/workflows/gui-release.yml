@@ -1,9 +1,9 @@
 name: GUI Desktop Release
 
 # MusePi Desktop (Electron) 发布：按平台并行构建 natives + daemon + 打包。
-# 平台范围：macOS(arm64) + Linux(x64/arm64)。
-# Windows(win32-x64) 暂未接入 — 需 musepi 自编 win32 natives(哨兵 0_4_3)，
-# CI hosted runner 磁盘受限(LLVM msvc + xwin SDK 6-8GB+)，等待专用方案。
+# 平台范围：macOS(arm64) + Linux(x64/arm64) + Windows(win32-x64)。
+# Windows 通过 cargo 构建 natives(dtolnay nightly)+ electron-builder nsis；
+# Linux 走 bazel natives；macOS 走 bazel + dmg。
 on:
    push:
       tags:
