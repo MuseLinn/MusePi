@@ -193,7 +193,8 @@
 		"morphicons": "^1.7.0",
 		"prettier": "catalog:",
 		"ts-morph": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"glob": "^7.2.3"
 	},
 	"lint-staged": {
 		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
