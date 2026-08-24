@@ -240,6 +240,7 @@
 	border-radius: 10px;
 	background: var(--color-surface);
 	box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+	animation: gui-browser-pop 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .gui-right-rail-overflow-item {
