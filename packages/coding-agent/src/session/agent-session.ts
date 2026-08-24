@@ -8882,7 +8882,8 @@ export class AgentSession {
 
 		if (targetEntry.type === "message" && targetEntry.message.role === "user") {
 			// User message: leaf = parent (null if root), text goes to editor
-			newLeafId = targetEntry.parentId;
+			// Normalize undefined → null (SDK jsonl roots may lack parentId).
+			newLeafId = targetEntry.parentId ?? null;
 			editorText = this.#extractUserMessageText(targetEntry.message.content);
 			const targetImages = this.#extractUserMessageImages(targetEntry.message.content);
 			if (targetImages.length > 0) editorImages = targetImages;
