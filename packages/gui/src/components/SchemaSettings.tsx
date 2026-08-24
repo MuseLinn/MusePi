@@ -1,4 +1,5 @@
-import { setLocale, type TranslationKey, t } from "@musepi/desktop-web";
+import { setLocale, type TranslationKey, t } from "@musepi/desktop-web"
+import { GuiSelect } from "./GuiSelect";
 import { type ReactNode, useState } from "react";
 import { Reveal } from "./Reveal";
 
@@ -210,23 +211,15 @@ export function SchemaSettings({
 														<span className="gui-toggle-knob" />
 													</button>
 												) : item.type === "enum" && Array.isArray(item.ui?.options) ? (
-													<select
+													<GuiSelect
 														className="gui-settings-select !w-auto max-w-[240px]"
 														value={typeof value === "string" ? value : ""}
-														onChange={e => commit(item.key, e.target.value)}
-													>
-														{item.ui.options.map(opt => (
-															<option
-																key={opt.value}
-																value={opt.value}
-																title={
-																	opt.description ? t(opt.description as TranslationKey) : undefined
-																}
-															>
-																{t(opt.label as TranslationKey)}
-															</option>
-														))}
-													</select>
+														onChange={v => commit(item.key, v)}
+														options={item.ui.options.map(opt => ({
+															value: opt.value,
+															label: t(opt.label as TranslationKey),
+														}))}
+													/>
 												) : item.ui?.options === "runtime" ? (
 													// Runtime-populated select (TUI theme registry):
 													// the daemon resolves the list into
@@ -235,26 +228,19 @@ export function SchemaSettings({
 													// falls back to a read-only input — typing a
 													// bogus id would corrupt config.yml (F3 audit).
 													Array.isArray(item.runtimeOptions) && item.runtimeOptions.length > 0 ? (
-														<select
+														<GuiSelect
 															className="gui-settings-select !w-auto max-w-[240px]"
 															value={typeof value === "string" ? value : ""}
-															onChange={e => commit(item.key, e.target.value)}
-														>
-															{/* Keep a stored value that is no longer in the
-															 * registry selectable instead of a blank box. */}
-															{typeof value === "string" &&
-																value !== "" &&
-																!item.runtimeOptions.includes(value) && (
-																	<option key={value} value={value}>
-																		{value}
-																	</option>
-																)}
-															{item.runtimeOptions.map(opt => (
-																<option key={opt} value={opt}>
-																	{opt}
-																</option>
-															))}
-														</select>
+															onChange={v => commit(item.key, v)}
+															options={(() => {
+																const opts = item.runtimeOptions.map(o => ({ value: o, label: o }));
+																// Keep a stored value not in the registry selectable
+																if (typeof value === "string" && value !== "" && !item.runtimeOptions.includes(value)) {
+																	opts.push({ value, label: value });
+																}
+																return opts;
+															})()}
+														/>
 													) : (
 														<input
 															type="text"
