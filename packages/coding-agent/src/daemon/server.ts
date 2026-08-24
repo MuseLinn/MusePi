@@ -1986,11 +1986,22 @@ export class DaemonSessionHost {
 				return view.cursor;
 			}
 			await journal.truncate(target);
-			const { events } = await journal.replaySource();
+			// Replay from the checkpoint + incremental events (the old code
+			// discarded the checkpoint and replayed from the raw events only,
+			// which lost every message compaction had folded — the bug that
+			// made revert PROBABILISTICALLY erase earlier messages).
+			const { checkpoint: ckpt, events } = await journal.replaySource();
 			const cwd = live?.view
 				? (live.view.snapshot().state.cwd ?? this.#options.cwd ?? "")
 				: (this.#options.cwd ?? "");
-			const view = MaterializedView.replay(sessionId, cwd, events);
+			let view = ckpt
+				? MaterializedView.fromSnapshot(sessionId, cwd, ckpt.snapshot)
+				: null;
+			if (view) {
+				for (const event of events) view.apply(event);
+			} else {
+				view = MaterializedView.replay(sessionId, cwd, events);
+			}
 			// Rounds that completed before this truncation keep their frozen
 			// totals (the replay itself never records durations).
 			view.seedRoundDurations(this.#store.load(sessionId)?.roundDurations);
