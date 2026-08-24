@@ -108,11 +108,6 @@
 			"icon": "build/icon.ico",
 			"artifactName": "${productName}-${version}-setup.${ext}"
 		},
-		"nsis": {
-			"oneClick": false,
-			"allowToChangeInstallationDirectory": true,
-			"artifactName": "${productName}-${version}-setup.${ext}"
-		},
 		"linux": {
 			"target": [
 				"AppImage",
@@ -121,6 +116,7 @@
 			"icon": "build/icon.png",
 			"category": "Development",
 			"maintainer": "MusePi",
+			"executableName": "musepi",
 			"artifactName": "${productName}-${version}-${arch}.${ext}"
 		}
 	},
