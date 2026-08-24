@@ -28,6 +28,7 @@ import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageTreeButton } from "./MessageTree";
+import { SessionTreeCanvas } from "./SessionTreeCanvas";
 import type { ReminderRow } from "./RemindersPanel";
 import { BrowserGuiHint } from "./BrowserGuiHint";
 import { RightRail } from "./RightRail";
@@ -611,6 +612,8 @@ export function ChatView({
 	// a branchAt / branch switch sets it to a historical node so sending
 	// forks a new branch under it (TUI navigateTree parity).
 	const [currentLeafKey, setCurrentLeafKey] = useState<string | null>(null);
+	// Layer-3: 聊天表面顶层 Chat | Canvas 切换(canvas = 会话树地图)。
+	const [viewMode, setViewMode] = useState<"chat" | "canvas">("chat");
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
@@ -1215,6 +1218,29 @@ export function ChatView({
 										 * content fade via mask-image, applied only while the
 										 * transcript overflows (top/bottom data attrs). */}
 										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
+											{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
+											<div className="gui-surface-mode" role="tablist">
+												<button
+													type="button"
+													role="tab"
+													aria-selected={viewMode === "chat"}
+													className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
+													onClick={() => setViewMode("chat")}
+												>
+													<Icon name="chat-history" className="h-3 w-3" />
+													{t("surface chat")}
+												</button>
+												<button
+													type="button"
+													role="tab"
+													aria-selected={viewMode === "canvas"}
+													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
+													onClick={() => setViewMode("canvas")}
+												>
+													<Icon name="apps-2-ai" className="h-3 w-3" />
+													{t("surface canvas")}
+												</button>
+											</div>
 											{/* History-session cold-open skeleton (React-Bits style):
 											 * the daemon reactivates the session on demand — cover
 											 * the (stale) previous transcript while the RPC runs. */}
@@ -1235,6 +1261,36 @@ export function ChatView({
 													</div>
 												</div>
 											)}
+											{viewMode === "canvas" ? (
+												<SessionTreeCanvas
+													entries={snap?.entries ?? []}
+													leafId={effectiveLeaf}
+													activePathIds={activePathIds}
+													onJump={id => {
+														const ts = (snap?.entries ?? []).find(
+															e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+														);
+														const t2 = typeof ts === "object" && ts !== null ? (ts as { timestamp?: unknown }).timestamp : null;
+														if (typeof t2 === "string") {
+															setViewMode("chat");
+															scrollToEntry(transcriptRef.current, t2);
+														}
+													}}
+													onBranchTo={id => {
+														void branchTo(id).then(res => {
+															if (res?.editorText) setPendingEdit(res.editorText);
+														});
+													}}
+													onForkAt={id => {
+														const entry = (snap?.entries ?? []).find(
+															e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+														);
+														const isUser = entry?.type === "message" && entry.message.role === "user";
+														void forkFromMessage(id, undefined, !isUser);
+													}}
+												/>
+											) : (
+											<>
 											<div
 												ref={transcriptRef}
 												className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
@@ -1421,6 +1477,8 @@ export function ChatView({
 														<Icon name="close" className="h-3 w-3" />
 													</button>
 												</div>
+											)}
+											</>
 											)}
 										</div>
 										{/* Turn-position rail (openchamber PromptNavigatorRail

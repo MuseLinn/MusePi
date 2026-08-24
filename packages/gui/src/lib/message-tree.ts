@@ -66,3 +66,42 @@ export function flattenMessageTree(roots: readonly MessageTreeNode[]): FlatMessa
 	walk(roots, 0);
 	return rows;
 }
+
+/** 树行 kind 提取(message 条目按 role;其余条目归为 other)。 */
+export function treeKindOf(entry: unknown): "user" | "assistant" | "toolResult" | "other" {
+	if (!entry || typeof entry !== "object") return "other";
+	const e = entry as { type?: unknown; message?: { role?: unknown } };
+	if (e.type === "message") {
+		const role = e.message?.role;
+		if (role === "user") return "user";
+		if (role === "toolResult") return "toolResult";
+		return "assistant";
+	}
+	return "other";
+}
+
+/** 树行文本预览:message content 块拼接纯文本;非消息条目显示类型名。 */
+export function treeTextOf(entry: unknown): string {
+	if (!entry || typeof entry !== "object") return "…";
+	const e = entry as { type?: unknown; message?: { content?: unknown; text?: unknown } };
+	if (e.type === "message") {
+		const m = e.message;
+		const blocks = Array.isArray(m?.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
+		const text =
+			typeof m?.content === "string"
+				? m.content
+				: typeof m?.text === "string"
+					? m.text
+					: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
+		return text.replace(/\s+/g, " ").trim().slice(0, 90) || "…";
+	}
+	return typeof e.type === "string" ? e.type : "entry";
+}
+
+/** 树节点 kind → oc-icons 名(轨迹树行/地图画布共用)。 */
+export const TREE_ICON: Record<string, string> = {
+	user: "user",
+	toolResult: "hammer",
+	assistant: "sparkling",
+	other: "file-list-2",
+};

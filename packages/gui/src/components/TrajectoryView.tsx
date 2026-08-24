@@ -2,7 +2,7 @@ import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
-import { buildMessageTree, type MessageTreeNode } from "../lib/message-tree";
+import { buildMessageTree, TREE_ICON, type MessageTreeNode, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { FadeScroll } from "./FadeScroll";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import {
@@ -208,44 +208,6 @@ function InspectorCard({
 		</div>
 	);
 }
-
-/** 树行 kind 提取(message 条目按 role;其余条目归为 other)。 */
-function treeKindOf(entry: unknown): "user" | "assistant" | "toolResult" | "other" {
-	if (!entry || typeof entry !== "object") return "other";
-	const e = entry as { type?: unknown; message?: { role?: unknown } };
-	if (e.type === "message") {
-		const role = e.message?.role;
-		if (role === "user") return "user";
-		if (role === "toolResult") return "toolResult";
-		return "assistant";
-	}
-	return "other";
-}
-
-/** 树行文本预览:message content 块拼接纯文本;非消息条目显示类型名。 */
-function treeTextOf(entry: unknown): string {
-	if (!entry || typeof entry !== "object") return "…";
-	const e = entry as { type?: unknown; message?: { content?: unknown; text?: unknown } };
-	if (e.type === "message") {
-		const m = e.message;
-		const blocks = Array.isArray(m?.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
-		const text =
-			typeof m?.content === "string"
-				? m.content
-				: typeof m?.text === "string"
-					? m.text
-					: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
-		return text.replace(/\s+/g, " ").trim().slice(0, 90) || "…";
-	}
-	return typeof e.type === "string" ? e.type : "entry";
-}
-
-const TREE_ICON: Record<string, string> = {
-	user: "user",
-	toolResult: "hammer",
-	assistant: "sparkling",
-	other: "file-list-2",
-};
 
 /** 分支树单行(第二层):缩进层级 + kind 图标 + 预览 + 子分支角标(点击折叠)
  *  + 悬停操作(branchAt 重答 / fork 新会话)。当前叶脉冲高亮,活动路径全亮,

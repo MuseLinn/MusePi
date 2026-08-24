@@ -1987,6 +1987,199 @@
 	color: var(--color-text);
 }
 
+/* ── Session tree canvas (Layer-3 地图视图) ────────────────────────── */
+.gui-surface-mode {
+	position: absolute;
+	top: 8px;
+	right: 12px;
+	z-index: 30;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 2px;
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.gui-surface-mode-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 9px;
+	border-radius: 6px;
+	font-size: 11px;
+	color: var(--color-text-muted);
+	background: transparent;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-surface-mode-btn:hover {
+	color: var(--color-text);
+}
+.gui-surface-mode-btn--on {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-text);
+}
+
+.stc-wrap {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background:
+		radial-gradient(color-mix(in oklab, var(--color-text-faint) 14%, transparent) 1px, transparent 1px) 0 0 / 22px 22px,
+		var(--color-surface);
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+.stc-wrap[data-dragging] {
+	cursor: grabbing;
+}
+.stc-empty {
+	padding: 24px 16px;
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+.stc-world {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: 0 0;
+}
+.stc-edges {
+	position: absolute;
+	top: 0;
+	left: 0;
+	overflow: visible;
+	pointer-events: none;
+}
+.stc-edge {
+	fill: none;
+	stroke: color-mix(in oklab, var(--color-text-faint) 45%, transparent);
+	stroke-width: 1.5;
+}
+.stc-edge--off {
+	stroke-dasharray: 4 4;
+	opacity: 0.4;
+}
+.stc-node {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: var(--color-surface-raised, var(--color-bg));
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+	font-size: 11px;
+	color: var(--color-text);
+	cursor: pointer;
+	transition: border-color 120ms ease;
+}
+.stc-node:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+}
+.stc-node--user {
+	border-left: 3px solid color-mix(in oklab, var(--color-info, #6aa1ff) 70%, transparent);
+}
+.stc-node--assistant {
+	border-left: 3px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+}
+.stc-node--toolResult {
+	border-left: 3px solid color-mix(in oklab, var(--color-text-faint) 60%, transparent);
+}
+.stc-node-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-muted);
+}
+.stc-node--leaf {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	animation: stc-leaf-pulse 2.4s ease-in-out infinite;
+}
+@keyframes stc-leaf-pulse {
+	0%,
+	100% {
+		box-shadow:
+			0 0 0 0 color-mix(in oklab, var(--color-accent) 30%, transparent),
+			0 2px 8px rgba(0, 0, 0, 0.16);
+	}
+	50% {
+		box-shadow:
+			0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent),
+			0 2px 8px rgba(0, 0, 0, 0.16);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.stc-node--leaf {
+		animation: none;
+	}
+}
+.stc-node--off {
+	opacity: 0.42;
+}
+.stc-node-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 15px;
+	height: 15px;
+	padding: 0 4px;
+	border-radius: 7px;
+	font-size: 9.5px;
+	line-height: 1;
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+	flex-shrink: 0;
+}
+.stc-node-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 4px;
+	color: var(--color-text-muted);
+	background: transparent;
+	flex-shrink: 0;
+}
+.stc-node-action:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+.stc-zoom {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.stc-zoom-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+}
+.stc-zoom-btn:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+}
+
 .traj-inspector {
 	border: 1px solid var(--border);
 	border-radius: 10px;
