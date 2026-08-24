@@ -23,7 +23,7 @@ const NODE_H = 40;
 const GAP_X = 36;
 const GAP_Y = 64;
 const FIT_PADDING = 28;
-const MIN_SCALE = 0.3;
+const MIN_SCALE = 0.1;
 const MAX_SCALE = 2.2;
 
 interface CanvasNode {
@@ -94,10 +94,19 @@ export function SessionTreeCanvas({
 			MAX_SCALE,
 			Math.max(MIN_SCALE, Math.min((wrap.clientWidth - FIT_PADDING * 2) / width, (wrap.clientHeight - FIT_PADDING * 2) / height, 1)),
 		);
+		const scaledW = width * scale;
+		const scaledH = height * scale;
+		const rootX = nodes.find(n => n.depth === 0)?.x ?? 0;
 		setView({
 			scale,
-			x: (wrap.clientWidth - width * scale) / 2,
-			y: (wrap.clientHeight - height * scale) / 2,
+			// Whole map fits → center it; else center on the ROOT (the flow
+			// start) so it's always in view and branches grow rightward —
+			// centering an overflowing tree hides the root off-screen left.
+			x:
+				scaledW > wrap.clientWidth
+					? wrap.clientWidth / 2 - (rootX + NODE_W / 2) * scale
+					: (wrap.clientWidth - scaledW) / 2,
+			y: scaledH > wrap.clientHeight ? FIT_PADDING : (wrap.clientHeight - scaledH) / 2,
 		});
 	}, [width, height]);
 
@@ -162,27 +171,42 @@ export function SessionTreeCanvas({
 						transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
 					}}
 				>
-					<svg className="stc-edges" width={width} height={height}>
-						{nodes.flatMap(n =>
-							n.node.children.map(c => {
-								const child = nodes.find(m => m.node.id === c.id);
-								if (!child) return null;
-								const x1 = n.x + NODE_W / 2;
-								const y1 = n.y + NODE_H;
-								const x2 = child.x + NODE_W / 2;
-								const y2 = child.y;
-								const my = (y1 + y2) / 2;
-								const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
-								return (
-									<path
-										key={`${n.node.id}-${c.id}`}
-										className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
-										d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
-									/>
-								);
-							}),
-						)}
-					</svg>
+	<svg className="stc-edges" width={width} height={height}>
+		<defs>
+			<marker
+				id="stc-arrow"
+				viewBox="0 0 10 10"
+				refX="9"
+				refY="5"
+				markerWidth="7"
+				markerHeight="7"
+				orient="auto-start-reverse"
+			>
+				<path d="M 0 0 L 10 5 L 0 10 z" className="stc-arrow-head" />
+			</marker>
+		</defs>
+					{nodes.flatMap(n =>
+						n.node.children.map(c => {
+							const child = nodes.find(m => m.node.id === c.id);
+							if (!child) return null;
+							const x1 = n.x + NODE_W / 2;
+							const y1 = n.y + NODE_H;
+							const x2 = child.x + NODE_W / 2;
+							// Leave room so the arrowhead lands at the child top edge.
+							const y2 = child.y + 4;
+							const my = (y1 + y2) / 2;
+							const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
+							return (
+								<path
+									key={`${n.node.id}-${c.id}`}
+									className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
+									markerEnd={onPath ? "url(#stc-arrow)" : undefined}
+									d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
+								/>
+							);
+						}),
+					)}
+	</svg>
 					{nodes.map(n => {
 						const kind = treeKindOf(n.node.entry);
 						const isLeaf = leafId != null && n.node.id === leafId;
@@ -191,7 +215,7 @@ export function SessionTreeCanvas({
 						return (
 							<div
 								key={n.node.id}
-								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${onPath ? "" : " stc-node--off"}`}
+								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${onPath ? " stc-node--active" : " stc-node--off"}`}
 								style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H }}
 								onClick={() => {
 									if (!suppressClick.current) onJump(n.node.id);

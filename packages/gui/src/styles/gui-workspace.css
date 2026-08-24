@@ -2058,12 +2058,17 @@
 }
 .stc-edge {
 	fill: none;
-	stroke: color-mix(in oklab, var(--color-text-faint) 45%, transparent);
-	stroke-width: 1.5;
+	stroke: color-mix(in oklab, var(--color-accent) 72%, transparent);
+	stroke-width: 2;
 }
 .stc-edge--off {
+	stroke: color-mix(in oklab, var(--color-text-faint) 40%, transparent);
+	stroke-width: 1.5;
 	stroke-dasharray: 4 4;
 	opacity: 0.4;
+}
+.stc-arrow-head {
+	fill: var(--color-accent);
 }
 .stc-node {
 	position: absolute;
@@ -2124,6 +2129,16 @@
 }
 .stc-node--off {
 	opacity: 0.42;
+}
+.stc-node--active {
+	border-color: color-mix(in oklab, var(--color-accent) 58%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 7%, var(--color-surface-raised, var(--color-bg)));
+}
+.stc-node--active.stc-node--leaf {
+	border-color: var(--color-accent);
+}
+.stc-node--active .stc-node-text {
+	color: var(--color-text);
 }
 .stc-node-badge {
 	display: inline-flex;
