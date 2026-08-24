@@ -1136,6 +1136,7 @@ export const settings = {
 	"new folder": "New folder",
 	rename: "Rename",
 	"confirm delete?": "Confirm delete?",
+	"back to files": "Back to files",
 	"search files": "Search files",
 	"what's new": "What's new",
 	"what's new in MusePi": "What's new in MusePi",

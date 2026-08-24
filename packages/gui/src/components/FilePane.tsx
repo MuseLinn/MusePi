@@ -1,11 +1,10 @@
 import { highlightToCodeHtml, Markdown, t } from "@musepi/desktop-web";
-import { File as FileIcon, FileCode, FileImage, FileJson, FileText, FileType, Folder, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, File as FileIcon, FileCode, FileImage, FileJson, FilePlus, FileText, FileType, Folder, FolderPlus, RefreshCw, Search } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
-import { usePointerDrag } from "../lib/use-pointer-drag";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /**
@@ -128,6 +127,9 @@ const ROW_BUFFER = 6;
 interface TreeNode {
 	entry: WorkspaceEntry;
 	children: TreeNode[];
+	/** Display label — "a/b" when a single-child dir chain is compressed
+	 *  (bitfun lazyCompressFileTree / VS Code path-compression parity). */
+	label: string;
 }
 
 type Editing =
@@ -150,7 +152,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 	const byPath = new Map<string, TreeNode>();
 	const roots: TreeNode[] = [];
 	for (const e of dirs) {
-		byPath.set(e.path, { entry: e, children: [] });
+		byPath.set(e.path, { entry: e, children: [], label: e.name });
 	}
 	for (const e of dirs) {
 		const node = byPath.get(e.path)!;
@@ -163,7 +165,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 	for (const e of files) {
 		const slash = e.path.lastIndexOf("/");
 		const parentPath = slash === -1 ? "" : e.path.slice(0, slash);
-		const node: TreeNode = { entry: e, children: [] };
+		const node: TreeNode = { entry: e, children: [], label: e.name };
 		const parent = byPath.get(parentPath);
 		if (parent) parent.children.push(node);
 		else roots.push(node);
@@ -207,6 +209,33 @@ function flattenVisible(
 		}
 	};
 	push(nodes, 1);
+	return out;
+}
+
+/** Collapse single-child directory chains into one display row
+ *  (bitfun lazyCompressFileTree / VS Code path-compression parity):
+ *  a dir with exactly one dir child (that itself has children) merges
+ *  their labels into "a/b". The deepest entry.path stays the collapse
+ *  key and the target of fs operations; only the label changes. */
+function compressTree(nodes: TreeNode[]): TreeNode[] {
+	const out: TreeNode[] = [];
+	for (const node of nodes) {
+		let cur: TreeNode = { ...node, children: compressTree(node.children) };
+		while (
+			cur.entry.isDir &&
+			cur.children.length === 1 &&
+			cur.children[0]!.entry.isDir &&
+			cur.children[0]!.children.length > 0
+		) {
+			const child = cur.children[0]!;
+			cur = {
+				entry: { ...child.entry },
+				children: child.children,
+				label: `${cur.label}/${child.label}`,
+			};
+		}
+		out.push(cur);
+	}
 	return out;
 }
 
@@ -269,39 +298,10 @@ export function FilePane({
 	const [editValue, setEditValue] = useState("");
 	const [scrollTop, setScrollTop] = useState(0);
 	const [viewH, setViewH] = useState(400);
-	const [treeW, setTreeW] = useState(() => {
-		try {
-			const v = Number.parseFloat(localStorage.getItem("musepi-gui-filepane-tree") ?? "");
-			return Number.isFinite(v) && v >= 0.28 && v <= 0.6 ? v : 0.42;
-		} catch {
-			return 0.42;
-		}
-	});
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
 	const highlight = useChatHighlight();
-	// Vertical splitter (openchamber parity): unified usePointerDrag
-	// primitive — pointer capture + cancel; the old window-listener version
-	// leaked listeners when the pointer left the window.
-	const splitStartRef = useRef(treeW);
-	const splitterDrag = usePointerDrag({
-		onDragStart: () => {
-			splitStartRef.current = treeW;
-		},
-		onDragMove: ({ dx }) => {
-			const w = bodyRef.current?.clientWidth ?? 400;
-			const next = Math.min(0.6, Math.max(0.28, splitStartRef.current + dx / w));
-			setTreeW(next);
-		},
-		onDragEnd: () => {
-			try {
-				localStorage.setItem("musepi-gui-filepane-tree", String(treeW));
-			} catch {
-				// storage unavailable
-			}
-		},
-	});
 
 	// pdf.js worker: copied next to index.html by the build script
 	// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
@@ -352,7 +352,7 @@ export function FilePane({
 		};
 	}, [preview?.imageUrl]);
 
-	const tree = useMemo(() => buildTree(entries ?? []), [entries]);
+	const tree = useMemo(() => compressTree(buildTree(entries ?? [])), [entries]);
 	const rows = useMemo(() => flattenVisible(tree, collapsed, query.trim()), [tree, collapsed, query]);
 	const total = rows.length + (editing ? 1 : 0);
 	const start = Math.max(0, Math.floor(scrollTop / ROW_H) - ROW_BUFFER);
@@ -632,7 +632,7 @@ export function FilePane({
 						<span className={`gui-filepane-caret${closed ? " gui-filepane-caret--closed" : ""}`}>▾</span>
 						<Folder size={12} className="gui-filepane-icon" />
 						<span className="gui-filepane-name" title={entry.path}>
-							{entry.name}
+							{node.label}
 						</span>
 					</button>
 				</li>
@@ -661,7 +661,7 @@ export function FilePane({
 						className={`gui-filepane-name${entry.name === "AGENTS.md" ? " gui-filepane-agents" : ""}`}
 						title={entry.path}
 					>
-						{entry.name}
+						{node.label}
 					</span>
 				</button>
 			</li>
@@ -696,6 +696,22 @@ export function FilePane({
 			<div className="gui-filepane-head">
 				<span className="gui-sidebar-title">{t("Files")}</span>
 				<div className="gui-filepane-actions">
+					<button
+						className="gui-btn gui-btn-icon"
+						type="button"
+						title={t("new file")}
+						onClick={() => startNewFile("", 1)}
+					>
+						<FilePlus size={12} />
+					</button>
+					<button
+						className="gui-btn gui-btn-icon"
+						type="button"
+						title={t("new folder")}
+						onClick={() => startNewDir("", 1)}
+					>
+						<FolderPlus size={12} />
+					</button>
 					<label className="gui-filepane-search" title={t("search files")}>
 						<Search size={12} className="gui-filepane-search-icon" />
 						<input
@@ -722,10 +738,9 @@ export function FilePane({
 			{error && <p className="gui-error">{error}</p>}
 			{!entries && !error && <p className="gui-filepane-empty">{t("loading…")}</p>}
 			<div className="gui-filepane-body" ref={bodyRef}>
-				{entries && (
+				{entries && !preview && (
 					<div
 						className="gui-filepane-list"
-						style={preview ? { flexBasis: `${treeW * 100}%` } : undefined}
 						ref={listRef}
 						onScroll={ev => setScrollTop(ev.currentTarget.scrollTop)}
 						role="tree"
@@ -742,29 +757,28 @@ export function FilePane({
 					</div>
 				)}
 				{preview && (
-					<>
-						{/* Vertical splitter (openchamber parity): drag to resize
-						 * the tree column; persisted per run. */}
-						<div
-							className="gui-filepane-splitter"
-							{...splitterDrag}
-							style={{ touchAction: "none" }}
-							aria-hidden
-						/>
-						<div className="gui-filepane-preview">
-							<div className="gui-filepane-preview-head">
-								<span className="gui-filepane-preview-name" title={preview.path}>
-									{preview.name}
-								</span>
-								<button
-									type="button"
-									className="gui-btn gui-btn-icon"
-									title={t("close")}
-									onClick={() => setPreview(null)}
-								>
-									✕
-								</button>
-							</div>
+					<div className="gui-filepane-preview">
+						<div className="gui-filepane-preview-head">
+							<button
+								type="button"
+								className="gui-btn gui-btn-icon"
+								title={t("back to files")}
+								onClick={() => setPreview(null)}
+							>
+								<ArrowLeft size={12} />
+							</button>
+							<span className="gui-filepane-preview-name" title={preview.path}>
+								{preview.name}
+							</span>
+							<button
+								type="button"
+								className="gui-btn gui-btn-icon"
+								title={t("close")}
+								onClick={() => setPreview(null)}
+							>
+								✕
+							</button>
+						</div>
 							<div className="gui-filepane-preview-body">
 								{preview.error && <p className="gui-error">{preview.error}</p>}
 								{preview.htmlLive !== undefined && (
@@ -805,7 +819,6 @@ export function FilePane({
 								)}
 							</div>
 						</div>
-					</>
 				)}
 			</div>
 			<ContextMenu

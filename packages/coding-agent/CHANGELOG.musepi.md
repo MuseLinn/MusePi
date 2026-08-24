@@ -31,6 +31,42 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   the same key`)。
 - 上下文圆环配额弹层丢失凭据归属(各供应商限额拍平后无法区分账户)。
 
+## [0.4.4] - 2026-08-24
+
+### Added
+
+- **Windows 安装器升级(NSIS assisted)**:安装可选目录(默认 `%LOCALAPPDATA%\Programs`,
+  逐用户免管理员);升级检测复用已装路径并预填;桌面/开始菜单快捷方式 + 卸载项中文名;
+  卸载保留用户数据(`deleteAppDataOnUninstall=false`);electron-updater 增量更新兼容。
+- **GUI 长文本粘贴门控**:粘贴 >100 行或 >4000 字符时弹选择菜单(直接粘贴 / 包裹为
+  代码块 / 附加为工作区文件),TUI large-paste 菜单 parity。
+- **TUI 粘贴附件芯片**(upstream v18.0.x 吸收):粘贴文本变 chips 带、图片变
+  `🖼 img-1` 原子 token(折叠/compact/shift),`setCollapsedText` 恢复草稿原文。
+- **右侧面板 Phase 1**:surface 分组(primary/secondary/tertiary)+ rail 溢出菜单
+  (diff/pr 折叠)+ 宽度上限 560→900。
+- **OTA 重启更新(electron-updater)**:`下载更新 → 进度条 → 立即重启`,daemon
+  sidecar 先杀再 `quitAndInstall`;下载失败回退「前往下载」;CI 发布各平台
+  `latest*.yml`(下一版本起 OTA 自动生效)。
+
+### Changed
+
+- **文件面板重构**(bitfun/VS Code 规范):
+  - 预览接管模式——打开文件时预览占满整个面板(原左右分栏 + 拖拽比例已移除),
+    顶部返回按钮回树;窄面板下树/预览互斥,不再互相挤压。
+  - 路径压缩——单子目录链(`src/components`)合并为一行显示,点开直接展开到
+    链内文件(bitfun lazyCompressFileTree parity)。
+  - 工具栏新增「新建文件/新建文件夹」按钮(原仅右键可达)。
+  - 面板宽度上限 1200px(代码预览可读宽度,openchamber 380–1400 适配)。
+- **openchamber 目录选择对话框参考**:保持右面板 context/files/git/notes/browser
+  布局(与 openchamber 一致),文件树不迁移左侧。
+- **清理历史遗留 tags**:删除上游 oh-my-pi 遗留 tags(~900 本地 / ~290 远程,
+  v0.5.x–v18.x),仅保留 musepi 版本线(v0.2.x + v0.4.x)。
+- **v0.4.3 release body 补全**:全平台下载表格(macOS/Windows/Linux x64/arm64)。
+
+### Fixed
+
+- `bun.lock` 未提交 electron-updater 条目导致 CI `--frozen-lockfile` 失败。
+
 ## [0.4.3] - 2026-08-22
 
 ### Added

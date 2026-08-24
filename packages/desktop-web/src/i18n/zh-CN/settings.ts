@@ -1084,6 +1084,7 @@ export const settings = {
 	"new folder": "新建文件夹",
 	rename: "重命名",
 	"confirm delete?": "确认删除？",
+	"back to files": "返回文件列表",
 	"search files": "搜索文件",
 	"what's new": "新功能",
 	"what's new in MusePi": "MusePi 新功能",

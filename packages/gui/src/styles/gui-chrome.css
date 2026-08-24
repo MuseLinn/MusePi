@@ -577,30 +577,16 @@
 	position: relative;
 }
 
-/* Left/right split (openchamber parity): tree on the left, preview on
- * the right with a draggable vertical splitter. */
+/* Preview takeover (bitfun/VS Code narrow-sidebar parity): the tree and
+ * the preview are mutually exclusive modes of the same body — opening a
+ * file replaces the tree full-panel (back button returns). */
 .gui-filepane-body {
 	display: flex;
-	flex-direction: row;
+	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
 	gap: 0;
-}
-
-.gui-filepane-splitter {
-	flex: none;
-	width: 5px;
-	margin: 0 -2px;
-	cursor: col-resize;
-	z-index: 1;
-	background: transparent;
-	border-radius: 3px;
-}
-
-.gui-filepane-splitter:hover {
-	background: var(--color-accent);
-	opacity: 0.5;
 }
 
 /* Virtual rows: fixed height (ROW_H=26 in FilePane.tsx) so the spacer
@@ -761,7 +747,6 @@
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
-	border-left: 1px solid var(--border);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -799,7 +784,7 @@
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	overflow: auto;
-	max-height: 320px;
+	flex: 1;
 	white-space: pre-wrap;
 	word-break: break-word;
 	background: var(--color-bg);
@@ -808,7 +793,7 @@
 .gui-filepane-preview-md {
 	padding: 6px 10px;
 	overflow: auto;
-	max-height: 360px;
+	flex: 1;
 	background: var(--color-bg);
 	font-size: var(--ui-font-size-sm);
 }
@@ -832,8 +817,8 @@
 
 .gui-filepane-preview-html-frame {
 	width: 100%;
-	min-height: 380px;
 	flex: 1;
+	min-height: 0;
 	border: none;
 	background: var(--color-bg);
 }
@@ -846,7 +831,11 @@
 	padding: 8px;
 	background: var(--color-bg);
 	overflow: auto;
-	max-height: 320px;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
 }
 
 .gui-filepane-preview-img {

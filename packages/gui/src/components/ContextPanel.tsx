@@ -218,13 +218,14 @@ export function ContextPanel({
 	}, []);
 	// Resizable right-pane width (openchamber parity): drag the left edge;
 	// persisted per run.
-	// Width range 260–900 (openchamber ContextPanel 380–1400, adapted to the
-	// desktop surface): the file tree and browser both need more room than
-	// the old 200–560 cap; 260 keeps a minimal notes/context view usable.
+	// Width range 260–1200 (openchamber ContextPanel 380–1400, adapted to the
+	// desktop surface): file preview takeover and the browser need room; 260
+	// keeps a minimal notes/context view usable. 1200 = code previews at
+	// readable width.
 	const [width, setWidth] = useState(() => {
 		try {
 			const v = Number.parseInt(localStorage.getItem("musepi-gui-right-width") ?? "", 10);
-			return Number.isFinite(v) && v >= 260 && v <= 900 ? v : 340;
+			return Number.isFinite(v) && v >= 260 && v <= 1200 ? v : 340;
 		} catch {
 			return 340;
 		}
@@ -235,7 +236,7 @@ export function ContextPanel({
 		const move = (ev: PointerEvent): void => {
 			const s = resizeRef.current;
 			if (!s) return;
-			const next = Math.min(900, Math.max(260, s.startW + (s.startX - ev.clientX)));
+			const next = Math.min(1200, Math.max(260, s.startW + (s.startX - ev.clientX)));
 			setWidth(next);
 		};
 		const up = (): void => {

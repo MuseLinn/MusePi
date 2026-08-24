@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/gui",
-	"version": "0.4.3",
+	"version": "0.4.4",
 	"private": true,
 	"description": "MusePi desktop GUI — React SPA over the musepi daemon JSON-RPC (daemon Phase 4)",
 	"license": "MIT",
@@ -107,6 +107,19 @@
 			],
 			"icon": "build/icon.ico",
 			"artifactName": "${productName}-${version}-setup.${ext}"
+		},
+		"nsis": {
+			"oneClick": false,
+			"perMachine": false,
+			"allowToChangeInstallationDirectory": true,
+			"allowElevation": true,
+			"createDesktopShortcut": "always",
+			"createStartMenuShortcut": true,
+			"shortcutName": "MusePi",
+			"uninstallDisplayName": "MusePi ${version}",
+			"deleteAppDataOnUninstall": false,
+			"installerLanguages": ["zh_CN", "en_US"],
+			"language": "2052"
 		},
 		"linux": {
 			"target": [

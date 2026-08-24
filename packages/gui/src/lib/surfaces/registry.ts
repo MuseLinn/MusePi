@@ -86,7 +86,7 @@ export function writeSurfaceOrder(ids: string[], cwd?: string): void {
 
 export function readSurfaceWidth(cwd?: string): number {
 	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try { const n = Number(localStorage.getItem(key)); if (Number.isFinite(n)) return Math.min(900, Math.max(200, n)); } catch {}
+	try { const n = Number(localStorage.getItem(key)); if (Number.isFinite(n)) return Math.min(1200, Math.max(200, n)); } catch {}
 	return 300;
 }
 export function writeSurfaceWidth(w: number, cwd?: string): void {
