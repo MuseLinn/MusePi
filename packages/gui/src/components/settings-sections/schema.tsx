@@ -21,6 +21,7 @@ export function SchemaTabSection({
 	rpc,
 	tabs,
 	groups,
+	excludeGroups,
 }: {
 	rpc: RpcClient | null;
 	tabs: string[];
@@ -28,6 +29,10 @@ export function SchemaTabSection({
 	 * render (e.g. the voice page shows the interaction tab's "Speech"
 	 * group without duplicating the whole tab). */
 	groups?: readonly string[];
+	/** Optional ui.group exclude: items in these groups are skipped even
+	 * when no `groups` include filter is set (e.g. interaction tab
+	 * excludes "Speech" so it only lives on the voice tab). */
+	excludeGroups?: readonly string[];
 }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -40,7 +45,11 @@ export function SchemaTabSection({
 			.then(async res => {
 				if (!alive) return;
 				const all = (res[tabs[0] ?? ""] ?? []) as SchemaItem[];
-				const items = groups ? all.filter(i => i.ui?.group !== undefined && groups.includes(i.ui.group)) : all;
+				const items = groups
+					? all.filter(i => i.ui?.group !== undefined && groups.includes(i.ui.group))
+					: excludeGroups
+						? all.filter(i => i.ui?.group === undefined || !excludeGroups.includes(i.ui.group))
+						: all;
 				setSchema(items);
 				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: items.map(i => i.key) });
 				if (alive) {

@@ -6,6 +6,7 @@ import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import type { RpcClient } from "../lib/rpc";
 
 const EMPTY_TOOLS: TranscriptProps["activeTools"] = new Map();
@@ -139,8 +140,10 @@ export function SubagentPanel(props: {
 		return () => window.removeEventListener("keydown", onKey);
 	}, [onClose]);
 
+	// Focus trap: Tab stays inside the trajectory drawer while open.
+	const trapRef = useFocusTrap<HTMLElement>(true);
 	return (
-		<aside className="ag-drawer" role="dialog" aria-modal="true" aria-label={agent.displayName}>
+		<aside ref={trapRef} className="ag-drawer" role="dialog" aria-modal="true" aria-label={agent.displayName}>
 			<header className="ag-drawer-head">
 				<div className="ag-drawer-title">
 					<span className="ag-drawer-name">{agent.displayName}</span>

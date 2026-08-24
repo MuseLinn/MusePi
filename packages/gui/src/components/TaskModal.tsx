@@ -4,6 +4,7 @@ import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { useFocusTrap } from "../lib/use-focus-trap";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -39,8 +40,12 @@ export function TaskModal({
 		return () => window.removeEventListener("keydown", onKey);
 	}, [close]);
 
+	// Focus trap: Tab/Shift+Tab stay inside the modal; focus restored to
+	// the opener on close (WCAG 2.1.2 parity).
+	const trapRef = useFocusTrap<HTMLDivElement>(true);
 	return (
 		<div
+			ref={trapRef}
 			className={`gui-task-modal${enteredCls ? " gui-task-modal--entered" : ""}${closing ? " gui-task-modal--closing" : ""}`}
 			role="dialog"
 			aria-modal="true"

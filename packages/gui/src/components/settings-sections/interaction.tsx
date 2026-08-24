@@ -109,7 +109,7 @@ export function InteractionSection({ rpc }: { rpc: RpcClient | null }): ReactNod
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("interaction")}</h2>
-			<SchemaTabSection rpc={rpc} tabs={["interaction"]} />
+			<SchemaTabSection rpc={rpc} tabs={["interaction"]} excludeGroups={["Speech"]} />
 			<SpeechTestCard rpc={rpc} />
 		</>
 	);
