@@ -230,6 +230,10 @@ export function ContextPanel({
 			return 340;
 		}
 	});
+	// Maximize (openchamber fullscreen-surface / proma quick-window parity):
+	// the panel floats over the chat column at near-full width/height; toggling
+	// off returns to the persisted width. Width-drag is disabled while maximized.
+	const [maximized, setMaximized] = useState(false);
 	const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
 	const onResizeStart = (e: React.PointerEvent<HTMLDivElement>): void => {
 		resizeRef.current = { startX: e.clientX, startW: width };
@@ -252,12 +256,12 @@ export function ContextPanel({
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
 	};
-	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${className ? ` ${className}` : ""}`;
+	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
 	return (
-		<aside className={panelClass} style={{ width }}>
+		<aside className={panelClass} style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}>
 			{/* Left-edge drag handle for width (pointer capture on the 4px
 			 * strip; cursor col-resize over it). */}
-			<div className="gui-pane-resize-x" onPointerDown={onResizeStart} aria-hidden />
+			<div className="gui-pane-resize-x" onPointerDown={maximized ? undefined : onResizeStart} aria-hidden />
 			<div className="flex h-full min-h-0 w-full flex-col">
 				{/* Header: context/files tabs + tool rail (ZCode 打开标签页). */}
 				<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-2">
@@ -334,6 +338,15 @@ export function ContextPanel({
 								{tool === toolDef.id && <span className="gui-pane-tool-label">{toolDef.label}</span>}
 							</button>
 						))}
+						<button
+							type="button"
+							title={maximized ? t("restore panel") : t("maximize panel")}
+							aria-label={maximized ? t("restore panel") : t("maximize panel")}
+							className="gui-pane-tool"
+							onClick={() => setMaximized(v => !v)}
+						>
+							<Icon name={maximized ? "fullscreen-exit" : "fullscreen"} className="h-3.5 w-3.5" />
+						</button>
 					</div>
 				</div>
 				{tool === "browser" ? (

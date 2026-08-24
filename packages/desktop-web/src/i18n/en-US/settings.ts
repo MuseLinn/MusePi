@@ -988,6 +988,8 @@ export const settings = {
 		"Visual widgets render as standalone cards in the message stream (like file preview cards); tool calls stay collapsed by default",
 	"widget fullscreen": "Fullscreen view",
 	"widget preview": "Widget preview",
+	"maximize panel": "Maximize panel",
+	"restore panel": "Restore panel",
 	"widget preview empty": "No widget preview yet — visual widgets rendered in chat will stay here",
 	"page preview": "Page preview",
 	"source code": "Source code",

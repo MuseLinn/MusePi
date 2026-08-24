@@ -938,6 +938,8 @@ export const settings = {
 	"widget standalone description": "可视化组件以独立卡片展示在对话消息流中（类似文件预览卡片），工具调用处默认折叠",
 	"widget fullscreen": "全屏查看",
 	"widget preview": "组件预览",
+	"maximize panel": "最大化面板",
+	"restore panel": "还原面板",
 	"widget preview empty": "暂无组件预览——对话中渲染的可视化组件会常驻显示在这里",
 	"page preview": "页面预览",
 	"source code": "源码",

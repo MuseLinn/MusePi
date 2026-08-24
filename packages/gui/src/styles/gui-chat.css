@@ -3002,6 +3002,21 @@ body.gui-resizing .gui-pane-right {
 	pointer-events: none;
 }
 
+/* Maximized mode (openchamber fullscreen-surface parity): the panel floats
+ * over the chat column — fixed position, full window height, near-full
+ * width, top shadow, and the drag-handle turns off. */
+.gui-pane-right--maximized {
+	position: fixed;
+	top: 0;
+	right: 0;
+	height: 100vh;
+	z-index: 850;
+	box-shadow: -8px 0 32px rgb(0 0 0 / 16%);
+	border-left: 1px solid var(--border);
+	background: var(--bg);
+	transition: width 220ms var(--spring), box-shadow 220ms ease;
+}
+
 /* ── Mini chat window (?mini=1): chat-only shell ─────────────────────── */
 .gui-shell--mini {
 	flex-direction: column;
