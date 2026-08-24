@@ -151,6 +151,9 @@
 	cursor: pointer;
 }
 
+.gui-tray-menu__session {
+	transition: background 140ms ease-out, color 140ms ease-out;
+}
 .gui-tray-menu__session:hover {
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
@@ -172,6 +175,8 @@
 .gui-tray-menu__approval {
 	padding: 6px 10px;
 	border-radius: 8px;
+
+	transition: background 140ms ease-out, color 140ms ease-out;
 }
 
 .gui-tray-menu__approval:hover {

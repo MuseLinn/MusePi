@@ -295,4 +295,15 @@ html.gui-glass-adaptive {
 	.pac-chomp.pac-mouth-f2 {
 		opacity: 0;
 	}
+	/* Bitfun motionPreference parity: collapse ALL transform/opacity
+	 * keyframe animations to instant (fades snap to final state, springs
+	 * skip, morphs/rolls jump). Keep opacity-only fades at a short 80ms so
+	 * content appearing still reads as intentional. */
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
