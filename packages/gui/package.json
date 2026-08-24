@@ -122,5 +122,7 @@
 	},
 	"dependencies": {
 		"@lobehub/icons": "^5.16.0"
-	}
+	},
+	"homepage": "https://github.com/MuseLinn/MusePi",
+	"author": "MuseLinn"
 }
