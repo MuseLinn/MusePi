@@ -9,6 +9,9 @@ import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
 import { LanguageToggle } from "./LanguageToggle";
+import { BlurText } from "./BlurText";
+import { DotMatrixMark } from "./DotMatrixMark";
+import { ShinyText } from "./ShinyText";
 import { QrScanner } from "./QrScanner";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -203,16 +206,19 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		return (
 			<div className="sh-connect">
 				<div className="sh-connect-card sh-connect-card--empty">
+				<div className="sh-connect-matrix" aria-hidden="true">
+					<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
+				</div>
 					<div className="sh-connect-head">
 						<div className="sh-lockup">
 							<span className="sh-lockup-mark" aria-hidden="true" />
-							<span className="sh-lockup-pi">π</span> {t("musepi collab")}
+							<span className="sh-lockup-pi">π</span> <BlurText text={t("musepi collab")} />
 						</div>
 						<ThemeToggle />
 						<AccentToggle />
 						<LanguageToggle />
 					</div>
-					<div className="sh-connect-sub">{t("live agent session, in your browser")}</div>
+					<div className="sh-connect-sub"><ShinyText text={t("live agent session, in your browser")} speed={3.4} spread={120} /></div>
 					<p className="sh-connect-empty-text">
 						{t("not connected yet — connect to a computer to view sessions")}
 					</p>
@@ -256,16 +262,19 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	return (
 		<div className="sh-connect">
 			<div className="sh-connect-card">
+				<div className="sh-connect-matrix" aria-hidden="true">
+					<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
+				</div>
 				<div className="sh-connect-head">
 					<div className="sh-lockup">
 						<span className="sh-lockup-mark" aria-hidden="true" />
-						<span className="sh-lockup-pi">π</span> {t("musepi collab")}
+						<span className="sh-lockup-pi">π</span> <BlurText text={t("musepi collab")} />
 					</div>
 					<ThemeToggle />
 					<AccentToggle />
 					<LanguageToggle />
 				</div>
-				<div className="sh-connect-sub">{t("connect to a computer on your network")}</div>
+				<div className="sh-connect-sub"><ShinyText text={t("connect to a computer on your network")} speed={3.4} spread={120} /></div>
 				{recent.length > 0 && (
 					<div className="sh-connect-recent">
 						<span className="sh-field-label">{t("recent connections")}</span>

@@ -195,6 +195,35 @@ host.onmessage = e => {
 				});
 				console.log("PUSHED notification-trigger entry");
 			}, 8000);
+		} else if (frame.t === "workspace-select") {
+			// Guest picked a card in the workspace directory: refocus that
+			// session and replay welcome + snapshot so the transcript hydrates.
+			const sel = (frame as { sessionId?: string }).sessionId ?? "s1";
+			console.log("workspace-select:", sel);
+			sendFrame({
+				t: "workspace-session",
+				session: {
+					id: sel,
+					title: sel === "s2" ? "Board cleanup" : "Migration",
+					cwd: sel === "s2" ? "/work/musepi/docs" : "/work/musepi",
+					working: sel === "s1",
+					paused: sel === "s2",
+					live: true,
+					messageCount: sel === "s2" ? 12 : 3,
+					updatedAt: now(),
+				},
+			});
+			sendFrame({
+				t: "welcome",
+				proto: COLLAB_PROTO,
+				header: sel === "s1" ? HEADER : { ...HEADER, id: sel },
+				state: STATE,
+				agents: AGENTS,
+				entryCount: sel === "s1" ? entries.length : 0,
+				readOnly: false,
+			});
+			if (sel === "s1") sendFrame({ t: "snapshot-chunk", entries, final: true });
+			else sendFrame({ t: "snapshot-chunk", entries: [], final: true });
 		} else if (frame.t === "prompt") {
 			sendFrame({
 				t: "entry",
