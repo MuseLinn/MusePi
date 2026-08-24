@@ -17,7 +17,7 @@
  */
 import { rewriteEnvelopePeer, unpackEnvelope } from "@musepi/collab-proto";
 
-const ROOM_PATH_RE = /^\/r\/([A-Za-z0-9_-]{10,64})$/;
+const ROOM_PATH_RE = /^\/r\/([A-Za-z0-9_-]{10,64})(?:\.[A-Za-z0-9_-]+)?$/; // <roomId>[.<key>] — key is E2E-only; relay keys by roomId
 
 const DEFAULT_PORT = 7466;
 
@@ -47,6 +47,10 @@ export function startLocalRelay(port = 0): LocalRelay {
 	const rooms = new Map<string, Room>();
 
 	const server = Bun.serve({
+		// Bind IPv4 explicitly: Bun may default to an IPv6-only socket on
+		// Windows, which the emulator's 10.0.2.2 (IPv4) can't reach. The
+		// emulator ↔ host gateway is IPv4, so listen on the v4 wildcard.
+		hostname: "0.0.0.0",
 		port,
 		fetch(req, srv): Response | undefined {
 			const url = new URL(req.url);

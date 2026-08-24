@@ -1,5 +1,7 @@
+import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { ArrowLeft, CalendarClock, Folder, LayoutDashboard, LogOut, MessageSquare, PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { type TranslationKey, t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
@@ -7,6 +9,7 @@ import { useGuestSelector } from "../../lib/use-guest";
 import { AccentToggle } from "./AccentToggle";
 import { LanguageToggle } from "./LanguageToggle";
 import { ServerSwitcher } from "./ServerSwitcher";
+import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Guest side panels reachable from the header nav. */
@@ -26,6 +29,12 @@ export interface HeaderBarProps {
 	currentLink: string;
 	/** Jump to another saved connection. */
 	onSwitchTo(link: string, name: string): void;
+	/** Live sessions on this host; null = single-session/no workspace (no sheet). */
+	sessions: readonly WorkspaceSessionInfo[] | null;
+	/** Currently focused session (accent-highlighted in the sheet). */
+	focusedSessionId: string | null;
+	/** Focus a session from the switcher sheet. */
+	onSelectSession(id: string): void;
 }
 
 const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
@@ -44,6 +53,9 @@ export function HeaderBar({
 	onSelectPanel,
 	currentLink,
 	onSwitchTo,
+	sessions,
+	focusedSessionId,
+	onSelectSession,
 }: HeaderBarProps): ReactNode {
 	// Field-level subscriptions: the header only re-renders when its own
 	// fields change, never on every transcript/notice frame.
@@ -63,6 +75,10 @@ export function HeaderBar({
 				: null);
 	}
 
+	// The session switcher sheet is only reachable on multi-session hosts.
+	const canSwitch = sessions != null && sessions.length > 0;
+	const [sheetOpen, setSheetOpen] = useState(false);
+
 	return (
 		<header className="sh-header">
 			<div className="sh-header-left">
@@ -81,9 +97,20 @@ export function HeaderBar({
 						<ArrowLeft size={14} />
 					</button>
 				)}
-				<span className="sh-title" title={title}>
-					{title}
-				</span>
+				{canSwitch ? (
+					<button
+						type="button"
+						className={`sh-title sh-title-btn${sheetOpen ? " sh-title--open" : ""}`}
+						onClick={() => setSheetOpen(open => !open)}
+						title={t("sessions")}
+					>
+						{title}
+					</button>
+				) : (
+					<span className="sh-title" title={title}>
+						{title}
+					</span>
+				)}
 				{state?.cwd && (
 					<span className="sh-cwd" title={state.cwd}>
 						{shortenPath(state.cwd)}
@@ -153,6 +180,15 @@ export function HeaderBar({
 					<LogOut size={14} />
 				</button>
 			</div>
+			{sessions != null && (
+				<SessionsSheet
+					sessions={sessions}
+					currentId={focusedSessionId}
+					onSelect={onSelectSession}
+					open={sheetOpen}
+					onClose={() => setSheetOpen(false)}
+				/>
+			)}
 		</header>
 	);
 }

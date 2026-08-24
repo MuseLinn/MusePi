@@ -345,7 +345,8 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
 触觉反馈（§5.2）、hover-only 操作触屏常显（§5.4）、README 补设计文档入口。
 
 ### P2（后续）
-- 底部 sheet 会话切换（openchamber `MobileSessionsSheet` 模式，替代 header popover）；
+- 底部 sheet 会话切换（✅ 已实现：`SessionsSheet`，iOS 26 / 鸿蒙 6.1 悬浮毛玻璃圆角卡片，
+  header 标题触发，见 §11 验证记录）；
 - 工作区抽屉多 tab（Changes/Files/…，右缘滑动 + header 入口双通道）；
 - 边缘滑动返回手势 + 下拉刷新（§5.1）；
 - `musepi://` 原生深链 + 通知点击跳会话；
@@ -382,3 +383,19 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
   推送后台通知触发消息；配合 `scripts/local-relay.ts` 使用。
 - 驱动方式：`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` → CDP 直接操作
   WebView DOM（uiautomator 无法读 WebView 内容）。
+
+### 11.1 P2 底部 sheet（SessionsSheet，2026-08-24）
+
+iOS 26 / 鸿蒙 6.1 悬浮毛玻璃圆角卡片。多会话工作区（本次 stub 扩展为 2 个 session）时，header 标题
+变为触发按钮；点开浮动底部卡片：`blur(24px) saturate(150%)`（`--blur-3xl`）毛玻璃 + 24px 大圆角 +
+顶部高光细边 + grabber 指示条 + 弹性上滑入场。实机验证通过：列表（2 items，状态 dot + cwd +
+相对时间 + 消息数）、当前会话 accent 高亮 + check、点选聚焦（"Joining session…"）、点遮罩关闭、
+拖拽向下 >120px 关闭。`prefers-reduced-motion` 跳过动效。
+
+真机调试备忘：Capacitor Android 的 `androidScheme: "https"` 下，WebView 会按 mixed-content 拦截
+`ws://`（LAN 明文）——但本项目实际验证 ws 可达，说明 `allowMixedContent: true` 生效；真正拦住的
+是跨域 fetch（CORS，非 ws）。ws 握手在本机经 `10.0.2.2` 可达，**前提是 relay 绑定 IPv4**
+（`Bun.serve` 默认可能在 Windows 绑 IPv6-only `[::]`，模拟器 IPv4 不可达——local-relay.ts 加
+`hostname: "0.0.0.0"` 修复）。另修 `ROOM_PATH_RE`：collab 链接路径是 `/r/<roomId>.<key>`，原正则
+`[A-Za-z0-9_-]{10,64}` 不含 `.` 导致 room key 含点时 upgrade 404/1006——扩为
+`(?:[.][A-Za-z0-9_-]+)?$`，`match[1]` 仍为 roomId（E2E 密钥不参与 relay 路由）。

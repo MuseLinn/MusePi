@@ -117,12 +117,18 @@
 	--chart-4: oklch(0.6 0.19 320);
 	--chart-5: var(--fg-faint);
 
-	/* radius ladder — existing names unchanged; gui work uses these */
-	--radius-xs: var(--radius-sm);
-	--radius-md: var(--radius);
-	--radius-xl: 12px;
-	--radius-2xl: 16px;
-	--radius-full: 999px;
+
+	/* frosted-glass ladder (iOS 26 / HarmonyOS 6.1 floating-card language) —
+	 * exact aliases of the values already in use, so swapping literals for
+	 * tokens is a zero-visual-change refactor; --blur-3xl is the elevated
+	 * floating-sheet blur (bottom sheets / modal cards). */
+	--blur-xs: 8px;
+	--blur-sm: 10px;
+	--blur-md: 14px;
+	--blur-lg: 16px;
+	--blur-xl: 18px;
+	--blur-2xl: 20px;
+	--blur-3xl: 24px;
 
 	/* type ladder — base follows the GUI's --gui-font-scale (set on the
 	 * document root by the desktop settings stepper); plain web/guest pages

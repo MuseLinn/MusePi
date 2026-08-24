@@ -51,6 +51,19 @@ export function fmtPercent(p: number | null | undefined): string {
 	return `${Math.round(Math.min(100, Math.max(0, p)))}%`;
 }
 
+/** "just now", "5 min ago", "3 h ago", "2 d ago" — collab workspace timestamps.
+ *  Input: epoch ms. Locale-aware via the session i18n keys (distinct from
+ *  relTime's second-granularity set). */
+export function formatWhen(ts: number): string {
+	const delta = Date.now() - ts;
+	if (delta < 60_000) return t("just now");
+	const minutes = Math.floor(delta / 60_000);
+	if (minutes < 60) return t("{count} min ago", { count: String(minutes) });
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return t("{count} h ago", { count: String(hours) });
+	return t("{count} d ago", { count: String(Math.floor(hours / 24)) });
+}
+
 /** Home-relative, middle-elided path: "~/…/packages/desktop-web". */
 export function shortenPath(p: string): string {
 	if (typeof p !== "string" || p.length === 0) return "";

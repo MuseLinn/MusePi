@@ -229,14 +229,47 @@
 	flex: none;
 }
 
-.sh-title {
-	font-size: var(--ui-font-size);
-	font-weight: 600;
-	letter-spacing: -0.01em;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	min-width: 0;
+
+/* Title as a session-switcher trigger (button reset keeps it identical to the
+ * plain span; tap target ≥44px on mobile). */
+.sh-title-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	padding: 0;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--radius);
+	line-height: 1.2;
+}
+
+.sh-title-btn:active {
+	opacity: 0.7;
+}
+
+.sh-title-btn::after {
+	content: "";
+	width: 0;
+	height: 0;
+	margin-left: 2px;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	border-top: 5px solid var(--fg-faint);
+	flex: none;
+}
+
+.sh-title--open::after {
+	transform: rotate(180deg);
+}
+
+@media (max-width: 640px) {
+	.sh-title-btn {
+		min-height: 44px;
+	}
 }
 
 .sh-cwd {
@@ -2049,4 +2082,231 @@
 	min-width: 0;
 	padding: 2px 6px;
 	font-size: var(--ui-font-size-sm);
+}
+
+/* ── SessionsSheet — iOS 26 / HarmonyOS 6.1 floating frosted-glass card ────── */
+.ss-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 2000;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	background: oklch(0 0 0 / 42%);
+	backdrop-filter: blur(2px);
+	animation: ss-backdrop-in 180ms ease-out;
+}
+
+.ss-card {
+	position: relative;
+	width: 100%;
+	max-width: 640px;
+	margin: 0 10px calc(10px + var(--safe-bottom, 0px));
+	border-radius: 24px;
+	background: color-mix(in oklab, var(--bg-raised) 78%, transparent);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	border: 0.5px solid var(--border-strong);
+	border-top-color: color-mix(in oklab, var(--fg) 12%, transparent);
+	box-shadow:
+		0 24px 48px oklch(0 0 0 / 40%),
+		inset 0 1px 0 color-mix(in oklab, var(--fg) 10%, transparent);
+	overflow: hidden;
+	animation: ss-card-in 280ms var(--spring-bouncy);
+}
+
+/* Drag handle zone (grabber + head). touch-action:none so downward drag isn't
+ * hijacked by the list scroll; the list below scrolls normally. */
+.ss-drag {
+	touch-action: none;
+}
+
+.ss-grabber {
+	width: 36px;
+	height: 4px;
+	margin: 10px auto 6px;
+	border-radius: var(--radius-full);
+	background: var(--border-strong);
+}
+
+.ss-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 2px 10px 8px 18px;
+}
+
+.ss-card-title {
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.ss-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border: none;
+	background: none;
+	color: var(--fg-muted);
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.ss-close:hover {
+	color: var(--fg);
+	background: var(--bg-inset);
+}
+
+.ss-list {
+	max-height: min(60vh, 480px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+	padding: 4px 8px 12px;
+}
+
+.ss-empty {
+	padding: 20px 12px;
+	text-align: center;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+}
+
+.ss-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	min-height: 56px;
+	padding: 8px 12px;
+	border: none;
+	border-radius: var(--radius-lg);
+	background: none;
+	color: var(--fg);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ss-item:hover {
+	background: var(--bg-inset);
+}
+
+.ss-item--active {
+	background: var(--accent-muted);
+	color: var(--accent);
+}
+
+.ss-item-status {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+}
+
+.ss-item-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: var(--radius-full);
+	background: var(--ok);
+}
+
+.ss-item-dot--paused {
+	background: var(--fg-faint);
+}
+
+.ss-spin {
+	animation: ss-spin 900ms linear infinite;
+}
+
+.ss-item-body {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.ss-item-title {
+	font-size: var(--ui-font-size);
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ss-item--active .ss-item-title {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.ss-item-cwd {
+	font: 400 11px / 1.5 var(--font-mono);
+	color: var(--fg-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ss-item-meta {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+}
+
+.ss-item-count {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.ss-item-when {
+	font: 400 10px / 1.4 var(--font-mono);
+	color: var(--fg-faint);
+}
+
+.ss-item-check {
+	flex: none;
+	display: inline-flex;
+	color: var(--accent);
+}
+
+/* Entrance + spinner. Reduced motion: entrance falls back to plain fade. */
+@keyframes ss-backdrop-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes ss-card-in {
+	from {
+		transform: translateY(60%);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+@keyframes ss-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ss-backdrop,
+	.ss-card {
+		animation: none;
+	}
 }

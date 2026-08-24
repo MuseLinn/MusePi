@@ -117,6 +117,47 @@ host.onmessage = e => {
 		}
 		console.log("guest frame:", frame.t);
 		if (frame.t === "hello") {
+			// Present a multi-session workspace so the mobile header title
+			// becomes the SessionsSheet trigger (sessions.length > 1), then
+			// focus the first session so we land in session (not directory) mode.
+			sendFrame({
+				t: "workspace",
+				sessions: [
+					{
+						id: "s1",
+						title: "Migration",
+						cwd: "/work/musepi",
+						working: true,
+						paused: false,
+						live: true,
+						messageCount: 3,
+						updatedAt: now(),
+					},
+					{
+						id: "s2",
+						title: "Board cleanup",
+						cwd: "/work/musepi/docs",
+						working: false,
+						paused: true,
+						live: false,
+						messageCount: 12,
+						updatedAt: Date.now() - 3600_000,
+					},
+				],
+			});
+			sendFrame({
+				t: "workspace-session",
+				session: {
+					id: "s1",
+					title: "Migration",
+					cwd: "/work/musepi",
+					working: true,
+					paused: false,
+					live: true,
+					messageCount: 3,
+					updatedAt: now(),
+				},
+			});
 			sendFrame({
 				t: "welcome",
 				proto: COLLAB_PROTO,

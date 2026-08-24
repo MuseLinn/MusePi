@@ -377,9 +377,12 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				onLeave={onLeave}
 				onBack={inWorkspace ? undefined : workspace !== null ? backToWorkspace : undefined}
 				activePanel={activePanel}
-				onSelectPanel={setActivePanel}
 				currentLink={currentLink}
 				onSwitchTo={onSwitchTo}
+				onSelectPanel={setActivePanel}
+				sessions={workspace}
+				focusedSessionId={focusedSessionId}
+				onSelectSession={id => client.selectWorkspaceSession(id)}
 			/>
 			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">

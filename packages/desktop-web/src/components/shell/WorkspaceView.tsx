@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
-import { shortenPath } from "../../lib/format";
+import { shortenPath, formatWhen } from "../../lib/format";
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 
 /**
@@ -171,17 +171,6 @@ function WorkspaceCard({
 			</div>
 		</button>
 	);
-}
-
-/** Relative timestamp (locale-aware, no lib). */
-function formatWhen(ts: number): string {
-	const delta = Date.now() - ts;
-	if (delta < 60_000) return t("just now");
-	const minutes = Math.floor(delta / 60_000);
-	if (minutes < 60) return t("{count} min ago", { count: String(minutes) });
-	const hours = Math.floor(minutes / 60);
-	if (hours < 24) return t("{count} h ago", { count: String(hours) });
-	return t("{count} d ago", { count: String(Math.floor(hours / 24)) });
 }
 
 /** Project-block grouping: sessions bucketed by working directory. */
