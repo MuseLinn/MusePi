@@ -13,6 +13,8 @@ import {
 } from "@musepi/pi-agent-core";
 import type { CompactionOutcome } from "@musepi/pi-agent-core/compaction";
 import type { AssistantMessage, ImageContent, Message, Model, Usage, UsageReport } from "@musepi/pi-ai";
+import { AttachmentChipsBand } from "./components/attachment-chips";
+import { materializeImageReferenceLinks } from "./image-references";
 import { modelsAreEqual } from "@musepi/pi-catalog/models";
 import type {
 	AutocompleteProvider,
@@ -511,6 +513,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	editorContainer: Container;
 	hookWidgetContainerAbove: Container;
 	hookWidgetContainerBelow: Container;
+	attachmentChipsContainer: Container;
 	statusLine: StatusLineComponent;
 
 	isInitialized = false;
@@ -822,6 +825,14 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.hookWidgetContainerAbove = new Container();
 		this.hookWidgetContainerAbove.addChild(new Spacer(1));
 		this.hookWidgetContainerBelow = new Container();
+		this.attachmentChipsContainer = new Container();
+		this.attachmentChipsContainer.addChild(
+			new AttachmentChipsBand(this.editor, this.ui.imageBudget, () => this.ui.requestRender()),
+		);
+		// Restored drafts (esc-esc, /tree, branch) re-materialize blob-store links off the render
+		// path so their chip tokens become clickable again instead of degrading to dead text.
+		this.editor.draftImageLinkMaterializer = images =>
+			materializeImageReferenceLinks(images, this.sessionManager.putBlob.bind(this.sessionManager));
 		this.editorContainer = new Container();
 		// Owns Esc for every `/mcp test` that is active or whose cancellation hint may still be visible.
 		this.mcpTestEscapeHandlers = new Set();
@@ -1064,6 +1075,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// HUDs, just above the editor's hook-widget top margin — so it reads next to
 		// the prompt while keeping the one-line gap above the editor.
 		this.ui.addChild(this.statusContainer);
+		this.ui.addChild(this.attachmentChipsContainer);
 		this.ui.addChild(this.statusLine); // Only renders hook statuses (main status in editor border)
 		this.ui.addChild(this.hookWidgetContainerAbove);
 		this.ui.addChild(this.editorContainer);

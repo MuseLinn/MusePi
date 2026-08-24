@@ -225,6 +225,9 @@ export type SymbolKey =
 	| "lang.pdf"
 	| "lang.archive"
 	| "lang.binary"
+	// Composer attachment chips (image paste / large text paste)
+	| "chip.image"
+	| "chip.paste"
 	// Settings tab icons
 	| "tab.appearance"
 	| "tab.model"
@@ -560,6 +563,9 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"lang.pdf": "📕",
 	"lang.archive": "🗜",
 	"lang.binary": "⚙",
+	// Composer attachment chips
+	"chip.image": "🖼",
+	"chip.paste": "📄",
 	// Settings tabs
 	"tab.appearance": "🎨",
 	"tab.model": "🤖",
@@ -964,6 +970,9 @@ const NERD_SYMBOLS: SymbolMap = {
 	"lang.pdf": "\u{F0226}",
 	"lang.archive": "\u{F187}",
 	"lang.binary": "\u{F019A}",
+	// Composer attachment chips (fa-image / fa-file_text, matches omp2)
+	"chip.image": "\uf03e",
+	"chip.paste": "\uf15c",
 	// Settings tab icons
 	"tab.appearance": "󰃣",
 	"tab.model": "󰚩",
@@ -1218,6 +1227,9 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"lang.pdf": "pdf",
 	"lang.archive": "zip",
 	"lang.binary": "bin",
+	// Composer attachment chips
+	"chip.image": "img",
+	"chip.paste": "txt",
 	// Settings tab icons
 	"tab.appearance": "[A]",
 	"tab.model": "[M]",

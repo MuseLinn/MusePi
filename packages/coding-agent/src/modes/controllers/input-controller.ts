@@ -14,7 +14,8 @@ import { TinyTitleDownloadProgressComponent } from "../../modes/components/tiny-
 import { ToolExecutionComponent } from "../../modes/components/tool-execution";
 import { TreeSelectorComponent } from "../../modes/components/tree-selector";
 import { expandEmoticons } from "../../modes/emoji-autocomplete";
-import { materializeImageReferenceLinks, shiftImageMarkers } from "../../modes/image-references";
+import { materializeImageReferenceLinks, setCachedImageDimensions } from "../../modes/image-references";
+import { chipLabel, compactImageMarkers, shiftImageMarkers } from "../../modes/composer-attachments";
 import { createPromptActionAutocompleteProvider } from "../../modes/prompt-action-autocomplete";
 import { parseQueueShorthand, splitQueuedMessages } from "../../modes/queue-input";
 import { invokeSkillCommandFromText, isKnownSkillCommand } from "../../modes/skill-command";
@@ -186,6 +187,10 @@ export class InputController {
 	// Sequential index for `local://paste-N.md` references created by the large-paste
 	// flow. Seeded from 0 and bumped past existing paste files.
 	#pasteCounter = 0;
+
+	// Visible-chip signature from the last editor change; a difference escapes the
+	// scoped-input render fast path so the attachment chips band repaints.
+	#lastChipsSignature = "";
 
 	#showTinyTitleDownloadProgress(modelKey: string): void {
 		if (!isTinyTitleLocalModelKey(modelKey)) return;
@@ -566,6 +571,18 @@ export class InputController {
 			if (wasBashMode !== this.ctx.isBashMode || wasPythonMode !== this.ctx.isPythonMode) {
 				this.ctx.updateEditorBorderColor();
 			}
+			// Editor input repaints through the scoped fast path (only the editor
+			// component). The attachment chips band lives outside the editor, so a
+			// visibility change — a chip pasted in or its token deleted — must escape
+			// the fast path with a full render or the band goes stale.
+			const chipsSignature = this.ctx.editor
+				.composerChips()
+				.map(chip => `${chip.kind}${chip.n}`)
+				.join(",");
+			if (chipsSignature !== this.#lastChipsSignature) {
+				this.#lastChipsSignature = chipsSignature;
+				this.ctx.ui.requestRender();
+			}
 		};
 	}
 
@@ -853,7 +870,7 @@ export class InputController {
 				try {
 					await this.ctx.session.prompt(text, { images: inputImages });
 				} catch (error) {
-					this.ctx.editor.setText(text);
+					this.ctx.editor.setCollapsedText(text);
 					this.ctx.showError(error instanceof Error ? error.message : String(error));
 				}
 				return;
@@ -879,9 +896,9 @@ export class InputController {
 						{ imageCount: images?.length ?? 0 },
 					);
 				} catch (error) {
-					// Don't lose the queued steer draft: restore text and images so
-					// the user can retry after dispatch validation/queue failures.
-					this.ctx.editor.setText(text);
+					// Don't lose the queued steer draft: restore images then the collapsed
+					// text so chip tokens (and band cards) survive the retry.
+					this.ctx.editor.setCollapsedText(text);
 					if (images && images.length > 0) {
 						this.ctx.editor.pendingImages = [...images];
 						this.ctx.editor.pendingImageLinks = inputImageLinks
@@ -946,10 +963,10 @@ export class InputController {
 						},
 					);
 				} catch (error) {
-					// Don't lose the message: hand the text and images back to the
+					// Don't lose the message: hand images then collapsed text back to the
 					// editor so the user can retry (e.g. prompt dispatch rejecting an
 					// extension command).
-					this.ctx.editor.setText(text);
+					this.ctx.editor.setCollapsedText(text);
 					if (images && images.length > 0) {
 						this.ctx.editor.pendingImages = [...images];
 						this.ctx.editor.pendingImageLinks = inputImageLinks
@@ -1018,7 +1035,7 @@ export class InputController {
 		} catch (error) {
 			// Hand the message back, mirroring the main submit error path: restore
 			// pasted images so the user can retry an image-only or text+image draft.
-			this.ctx.editor.setText(text);
+			this.ctx.editor.setCollapsedText(text);
 			if (images && images.length > 0) {
 				this.ctx.editor.pendingImages = [...images];
 				this.ctx.editor.pendingImageLinks = imageLinks ? [...imageLinks] : images.map(() => undefined);
@@ -1164,7 +1181,7 @@ export class InputController {
 		const draftImages = images && images.length > 0 ? [...images] : undefined;
 		const draftImageLinks = draftImages && imageLinks && imageLinks.length > 0 ? [...imageLinks] : undefined;
 		const restoreDraft = () => {
-			this.ctx.editor.setText(text);
+			this.ctx.editor.setCollapsedText(text);
 			if (draftImages && draftImages.length > 0) {
 				this.ctx.editor.pendingImages = [...draftImages];
 				this.ctx.editor.pendingImageLinks = draftImageLinks
@@ -1330,9 +1347,22 @@ export class InputController {
 		this.ctx.ui.requestRender();
 	}
 
+	/** Enforce the deleted-chip contract at submit time: images whose inline token was removed
+	 *  from the draft are dropped, and surviving markers are renumbered to the dense 1..K the
+	 *  positional `[Image #N] ↔ images[N-1]` mapping requires. Returns the rewritten text. */
+	#compactDraftImages(text: string): string {
+		const editor = this.ctx.editor;
+		const compacted = compactImageMarkers(text, editor.pendingImages.length);
+		if (!compacted) return text;
+		editor.pendingImages = compacted.keep.map(i => editor.pendingImages[i]);
+		editor.pendingImageLinks = compacted.keep.map(i => editor.pendingImageLinks[i]);
+		editor.imageLinks = editor.pendingImageLinks.length > 0 ? editor.pendingImageLinks : undefined;
+		return compacted.text.trim();
+	}
+
 	/** Send editor text as a follow-up message (queued behind current stream). */
 	async handleFollowUp(): Promise<void> {
-		let text = this.ctx.editor.getExpandedText().trim();
+		let text = this.#compactDraftImages(this.ctx.editor.getExpandedText().trim());
 		const images = this.ctx.editor.pendingImages.length > 0 ? [...this.ctx.editor.pendingImages] : undefined;
 		const imageLinks =
 			images && this.ctx.editor.pendingImageLinks.length > 0 ? [...this.ctx.editor.pendingImageLinks] : undefined;
@@ -1381,7 +1411,8 @@ export class InputController {
 		// queue rejection): restore both text AND pending images so an image-only
 		// or text+image draft can be retried, mirroring the main submit error path.
 		const restoreOnError = (error: unknown) => {
-			this.ctx.editor.setText(text);
+			// Collapse restores the chip tokens (and their band cards) for the failed draft.
+			this.ctx.editor.setCollapsedText(text);
 			if (images && images.length > 0) {
 				this.ctx.editor.pendingImages = [...images];
 				this.ctx.editor.pendingImageLinks = imageLinks ? [...imageLinks] : images.map(() => undefined);
@@ -1467,10 +1498,11 @@ export class InputController {
 		}
 		const currentText = options?.currentText ?? this.ctx.editor.getText();
 		const combinedText = [queuedText, currentText].filter(t => t.trim()).join("\n\n");
-		this.ctx.editor.setText(combinedText);
-		// Hand queued images back to the pending-image buffer (links are
-		// re-materialized lazily; the restored text already carries the
-		// renumbered `[Image #N, WxH]` markers).
+		// Hand queued images back to the pending-image buffer first (links are
+		// re-materialized lazily), then set the text: setCollapsedText folds the
+		// renumbered `[Image #N, WxH]` references back into chip tokens, and the
+		// collapse only recognizes indices within the merged pendingImages range.
+		this.ctx.editor.setCollapsedText(combinedText);
 		if (queuedImages.length > 0) {
 			this.ctx.editor.pendingImages.push(...queuedImages);
 			this.ctx.editor.pendingImageLinks.push(...queuedImages.map(() => undefined));
@@ -1505,8 +1537,11 @@ export class InputController {
 		this.ctx.editor.imageLinks = this.ctx.editor.pendingImageLinks;
 		const imageNum = this.ctx.editor.pendingImages.length;
 		const dims = await this.#imageDimensions(imageData);
-		const label = dims ? `[Image #${imageNum}, ${dims.width}x${dims.height}]` : `[Image #${imageNum}]`;
-		this.ctx.editor.insertText(`${label} `);
+		setCachedImageDimensions(imageData, dims ?? null);
+		// The buffer holds the compact chip token; the atom table expands it to the bracketed
+		// marker (the wire/transcript format) on submit.
+		const expansion = dims ? `[Image #${imageNum}, ${dims.width}x${dims.height}]` : `[Image #${imageNum}]`;
+		this.ctx.editor.insertAtom(chipLabel("image", imageNum), expansion);
 		this.ctx.ui.requestRender();
 	}
 
@@ -1735,7 +1770,12 @@ export class InputController {
 	 */
 	handleLargePaste(text: string, lineCount: number): boolean {
 		const threshold = this.ctx.settings.get("paste.largeMenuThreshold");
-		if (!(threshold > 0) || lineCount < threshold) return false;
+		if (!(threshold > 0) || lineCount < threshold) {
+			// Below the menu threshold: stage the paste as a text-attachment chip
+			// (compact token in the buffer, band card above the editor).
+			this.ctx.editor.insertTextAttachment(text);
+			return true;
+		}
 		void this.presentLargePasteMenu(text, lineCount);
 		return true;
 	}
@@ -1769,17 +1809,17 @@ export class InputController {
 
 		switch (choice) {
 			case WRAPPED_BLOCK:
-				this.ctx.editor.insertPaste(wrapPasteInAttachmentBlock(text));
+				this.ctx.editor.insertTextAttachment(text, wrapPasteInAttachmentBlock(text));
 				break;
 			case LOCAL_FILE:
 				await this.#attachPasteAsFile(text, lineCount);
 				break;
 			case INLINE:
-				this.ctx.editor.insertPaste(text);
+				this.ctx.editor.insertTextAttachment(text);
 				break;
 			default:
-				// Esc / cancel: keep the original behavior — collapse to an inline paste marker.
-				this.ctx.editor.insertPaste(text);
+				// Esc / cancel: keep the original behavior — stage as a text-attachment chip.
+				this.ctx.editor.insertTextAttachment(text);
 				break;
 		}
 		this.ctx.ui.requestRender();
@@ -1813,8 +1853,8 @@ export class InputController {
 			logger.warn("failed to save large paste to file", {
 				error: error instanceof Error ? error.message : String(error),
 			});
-			this.ctx.editor.insertPaste(text);
-			this.ctx.showError("Failed to save paste to a file — pasted inline instead");
+			this.ctx.editor.insertTextAttachment(text);
+			this.ctx.showError("Failed to save paste to a file — attached as a text chip instead");
 		}
 	}
 
