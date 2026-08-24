@@ -6764,6 +6764,10 @@ export class DaemonServer {
 					ceiling: live.agentSession.thinkingLevelCeiling,
 					level: live.agentSession.thinkingLevel,
 					auto: live.agentSession.isAutoThinking,
+					// The level auto RESOLVED to for the current turn (undefined
+					// until the daemon classifies; TUI status-line parity — the
+					// GUI chip shows "auto" pending, then the concrete effort).
+					resolved: live.agentSession.autoResolvedThinkingLevel(),
 					// The current model's exact effort ladder (TUI parity: the
 					// selector offers off/auto + getSupportedEfforts(model), not
 					// a fixed seven-rung ladder).

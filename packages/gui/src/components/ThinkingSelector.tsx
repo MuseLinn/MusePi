@@ -25,12 +25,18 @@ const LEVEL_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
  */
 export function ThinkingSelector({
 	value,
+	configValue,
 	onChange,
 	ceiling,
 	efforts,
 	capsule = false,
 }: {
 	value: string | null | undefined;
+	/** Configured selector state (auto vs pinned) for menu highlight;
+	 *  defaults to `value`. The chip label shows `value` — in auto mode
+	 *  the chip shows the RESOLVED effort while the menu keeps "auto"
+	 *  highlighted (TUI status-line / selector parity). */
+	configValue?: string | null | undefined;
 	onChange(level: ThinkingLevel | null): void;
 	/** Per-model effort cap — rungs above it are disabled (TUI parity). */
 	ceiling?: string | null;
@@ -83,7 +89,7 @@ export function ThinkingSelector({
 				<div className="gui-model-menu gui-model-menu--compact">
 					<button
 						type="button"
-						className={`gui-model-opt${value == null ? " gui-model-opt--active" : ""}`}
+						className={`gui-model-opt${(configValue ?? value) == null ? " gui-model-opt--active" : ""}`}
 						onClick={() => {
 							tapFeedback(1);
 							onChange(null);
@@ -95,7 +101,7 @@ export function ThinkingSelector({
 					</button>
 					<button
 						type="button"
-						className={`gui-model-opt${value === "auto" ? " gui-model-opt--active" : ""}`}
+						className={`gui-model-opt${(configValue ?? value) === "auto" ? " gui-model-opt--active" : ""}`}
 						onClick={() => {
 							tapFeedback(1);
 							onChange("auto");
@@ -116,7 +122,7 @@ export function ThinkingSelector({
 										key={level}
 										type="button"
 										disabled={capped}
-										className={`gui-model-opt${value === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
+										className={`gui-model-opt${(configValue ?? value) === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
 										title={capped ? t("thinking capped by model") : undefined}
 										onClick={() => {
 											if (capped) return;
@@ -143,7 +149,7 @@ export function ThinkingSelector({
 										key={level}
 										type="button"
 										disabled={capped}
-										className={`gui-model-opt${value === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
+										className={`gui-model-opt${(configValue ?? value) === level ? " gui-model-opt--active" : ""}${capped ? " gui-model-opt--capped" : ""}`}
 										title={capped ? t("thinking capped by model") : undefined}
 										onClick={() => {
 											if (capped) return;

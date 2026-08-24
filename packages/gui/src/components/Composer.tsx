@@ -93,6 +93,8 @@ export interface ComposerProps {
 	cwd?: string;
 	/** Current session thinking effort (snap.state.thinkingLevel). */
 	thinkingLevel?: string | null;
+	/** Configured selector state (auto vs pinned) — menu highlight. */
+	thinkingConfigLevel?: string | null;
 	/** Per-model effort ceiling; higher ladder rungs disable. */
 	thinkingCeiling?: string | null;
 	/** Current model's exact effort ladder (getSupportedEfforts); undefined
@@ -296,6 +298,7 @@ export function Composer({
 	sessionId,
 	cwd,
 	thinkingLevel,
+	thinkingConfigLevel,
 	onSetThinking,
 	onModelChange,
 	thinkingCeiling,
@@ -1696,6 +1699,7 @@ export function Composer({
 							presetModelId={presetModelId}
 							currentModelId={contextUsage?.model ?? null}
 							thinkingLevel={thinkingLevel}
+							thinkingConfigLevel={thinkingConfigLevel}
 							thinkingCeiling={thinkingCeiling}
 							thinkingEfforts={thinkingEfforts}
 							allowSetDefault

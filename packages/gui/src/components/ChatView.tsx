@@ -608,11 +608,17 @@ export function ChatView({
 		window.addEventListener("omp-open-file", onOpenFile);
 		return () => window.removeEventListener("omp-open-file", onOpenFile);
 	}, [onOpenFileInPanel]);
-	const [pendingEdit, setPendingEdit] = useState<string | null>(null);
 	const setThinking = (level: ThinkingLevel | null): void => {
 		if (!store) return;
 		void rpc
 			.request("session.setThinkingLevel", { sessionId: store.sessionId, thinkingLevel: level ?? null })
+			.then(() => {
+				// Refresh auto flag + level immediately: thinkingInfoAuto is
+				// the chip's authority, and without this it would keep showing
+				// "auto" after the user pins a concrete level (the 3s poll is
+				// too slow for a click → chip latency the user can see).
+				fetchThinkingInfo();
+			})
 			.catch(() => {});
 	};
 	// Revert history (openchamber RevertedMessageDock parity): the daemon
@@ -678,6 +684,9 @@ export function ChatView({
 			// daemon rejected — keep the transcript as-is
 		}
 	};
+	// Pending composer prefill: message text sent back for re-editing
+	// (revert-dock 回填 + transcript inline edit). null = no pending edit.
+	const [pendingEdit, setPendingEdit] = useState<string | null>(null);
 	// 回填: put the reverted text into the composer for re-editing.
 	const restoreReverted = (text: string): void => {
 		setPendingEdit(text);
@@ -813,23 +822,24 @@ export function ChatView({
 	// ladder itself is the current model's supported efforts. GuiHeader runs
 	// the same query for its title label; this one feeds the selector.
 	const [thinkingInfoLevel, setThinkingInfoLevel] = useState<string | null>(null);
+	const [thinkingInfoResolved, setThinkingInfoResolved] = useState<string | null>(null);
 	const [thinkingInfoAuto, setThinkingInfoAuto] = useState(false);
 	const [thinkingCeiling, setThinkingCeiling] = useState<string | null>(null);
 	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
-	// Live thinking level: the daemon records thinking_level_change entries
-	// but never mutates state.thinkingLevel, so derive the current level from
-	// the LAST change entry — the composer chip updates the moment the entry
-	// lands, without a transcript marker row. Auto mode reads as the user's
-	// selector ("auto") from session.thinkingInfo — the realtime RPC is the
-	// authoritative auto flag, since the wire entry carries only the
-	// provisional/resolved effort, not the "auto" configuration.
+	// TUI status-line parity: auto shows the CONCRETE resolved effort once
+	// the daemon classifies the turn ("◉ high"), "auto" while pending. The
+	// configured selector state (auto vs pinned) is passed separately as
+	// configValue so the menu can still highlight "auto" while the chip
+	// shows the resolved level. Non-auto falls through to the wire entry /
+	// session.thinkingInfo level.
 	const thinkingLevel: string | null = (() => {
 		if (!snap) return null;
+		if (thinkingInfoAuto) return thinkingInfoResolved ?? "auto";
 		let level: string | null = snap.state?.thinkingLevel ?? null;
 		for (const entry of snap.entries) {
 			if (entry.type === "thinking_level_change") level = entry.thinkingLevel ?? null;
 		}
-		return thinkingInfoAuto ? "auto" : (level ?? thinkingInfoLevel ?? null);
+		return level ?? thinkingInfoLevel ?? null;
 	})();
 	// The work-timer badge wants the ACTUAL effort this round used — the
 	// last thinking_level_change entry carries the auto-classified resolved
@@ -870,14 +880,18 @@ export function ChatView({
 	const fetchThinkingInfo = useCallback((): void => {
 		if (!rpc || !store) return;
 		void rpc
-			.request<{ ceiling?: string | null; efforts?: string[]; level?: string | null; auto?: boolean }>(
-				"session.thinkingInfo",
-				{ sessionId: store.sessionId },
-			)
+			.request<{
+				ceiling?: string | null;
+				efforts?: string[];
+				level?: string | null;
+				auto?: boolean;
+				resolved?: string | null;
+			}>("session.thinkingInfo", { sessionId: store.sessionId })
 			.then(info => {
 				setThinkingCeiling(info?.ceiling ?? null);
 				setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
 				setThinkingInfoLevel(info?.level ?? null);
+				setThinkingInfoResolved(info?.resolved ?? null);
 				setThinkingInfoAuto(info?.auto === true);
 			})
 			.catch(() => {});
@@ -887,15 +901,19 @@ export function ChatView({
 		let cancelled = false;
 		const load = (): void => {
 			void rpc
-				.request<{ ceiling?: string | null; efforts?: string[]; level?: string | null; auto?: boolean }>(
-					"session.thinkingInfo",
-					{ sessionId: store.sessionId },
-				)
+				.request<{
+					ceiling?: string | null;
+					efforts?: string[];
+					level?: string | null;
+					auto?: boolean;
+					resolved?: string | null;
+				}>("session.thinkingInfo", { sessionId: store.sessionId })
 				.then(info => {
 					if (cancelled) return;
 					setThinkingCeiling(info?.ceiling ?? null);
 					setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
 					setThinkingInfoLevel(info?.level ?? null);
+					setThinkingInfoResolved(info?.resolved ?? null);
 					setThinkingInfoAuto(info?.auto === true);
 				})
 				.catch(() => {});
@@ -1387,6 +1405,7 @@ export function ChatView({
 											sessionId={store.sessionId}
 											cwd={store.cwd}
 											thinkingLevel={thinkingLevel}
+										thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
 											onSetThinking={setThinking}
 											onModelChange={onComposerModelChange}
 											thinkingCeiling={thinkingCeiling}

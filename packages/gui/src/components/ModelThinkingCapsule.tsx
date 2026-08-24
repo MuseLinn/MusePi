@@ -25,6 +25,7 @@ export function ModelThinkingCapsule({
 	presetModelId,
 	currentModelId,
 	thinkingLevel,
+	thinkingConfigLevel,
 	thinkingCeiling,
 	thinkingEfforts,
 	allowSetDefault = false,
@@ -36,6 +37,9 @@ export function ModelThinkingCapsule({
 	presetModelId?: string | null;
 	currentModelId?: string | null;
 	thinkingLevel?: string | null;
+	/** Configured selector state (auto vs pinned) — menu highlight; the
+	 *  chip label shows thinkingLevel (the resolved effort). */
+	thinkingConfigLevel?: string | null;
 	thinkingCeiling?: string | null;
 	thinkingEfforts?: readonly string[] | null;
 	allowSetDefault?: boolean;
@@ -56,6 +60,7 @@ export function ModelThinkingCapsule({
 					<div className="gui-model-capsule-sep" aria-hidden="true" />
 					<ThinkingSelector
 						value={thinkingLevel}
+						configValue={thinkingConfigLevel}
 						onChange={onSetThinking}
 						ceiling={thinkingCeiling}
 						efforts={thinkingEfforts}
