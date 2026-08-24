@@ -1,6 +1,6 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { buildMessageTree, TREE_ICON, type MessageTreeNode, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { FadeScroll } from "./FadeScroll";
@@ -327,6 +327,7 @@ export function TrajectoryView({
 	const [range, setRange] = useState<TimelineRange | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
 	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
+	const treeRoots = useMemo(() => buildMessageTree(entries), [entries]);
 	const treeRows = useMemo(() => {
 		const rows: { node: MessageTreeNode; depth: number }[] = [];
 		const walk = (nodes: readonly MessageTreeNode[], depth: number): void => {
@@ -335,9 +336,27 @@ export function TrajectoryView({
 				if (!collapsedNodes.has(node.id)) walk(node.children, depth + 1);
 			}
 		};
-		walk(buildMessageTree(entries), 0);
+		walk(treeRoots, 0);
 		return rows;
-	}, [entries, collapsedNodes]);
+	}, [treeRoots, collapsedNodes]);
+	// 性能:进入树模式时默认折叠非当前路径的多子分支(懒展开——折叠节点
+	// 的子行只在展开后渲染)。以 leafId 作会话标识,切会话重新播种。
+	const seededCollapseFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (mode !== "tree") return;
+		const sessionKey = leafId ?? "";
+		if (seededCollapseFor.current === sessionKey) return;
+		seededCollapseFor.current = sessionKey;
+		const ids = new Set<string>();
+		const walk = (nodes: readonly MessageTreeNode[]): void => {
+			for (const node of nodes) {
+				if (node.children.length > 1 && activePathIds && !activePathIds.has(node.id)) ids.add(node.id);
+				walk(node.children);
+			}
+		};
+		walk(treeRoots);
+		setCollapsedNodes(ids);
+	}, [mode, treeRoots, activePathIds, leafId]);
 
 	// Esc 退出检视/聚焦(Esc 优先级:先清区间,再清选中——与模态键盘契约一致)。
 	useEffect(() => {

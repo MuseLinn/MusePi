@@ -197,7 +197,7 @@ navigateTree(targetId) →
 
 ## 四、实施计划
 
-### Phase 0: 新增 RPC：`session.branchAt`（P0，2 天）
+### Phase 0: 新增 RPC：`session.branchAt`（P0，2 天） （**已完成**：`b6d31253a1`）
 
 **目的**：GUI retry 和树导航需要 TUI `navigateTree` 同款 in-place 叶移动，而不是截断或 fork 新会话。
 
@@ -214,7 +214,7 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 
 **验证**：daemon 单元测试（mocked live session）+ bun test
 
-### Phase 1: Bug 修复（P0，1 天）
+### Phase 1: Bug 修复（P0，1 天） （**已完成**：`e23abadc70` + `8049b5b28f`）
 
 **Step 1: `journal.truncate(-1)` guard**（~1 文件，2 小时）
 - `server.ts` `truncateSession`：`target < 0` 时 return error 而非 truncate
@@ -227,7 +227,7 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 - `Transcript.tsx`：`retryTargets` 改用 `buildMessageTree` 查找 direct parent
 - `ChatView.tsx`：retry 按钮改为调 `session.branchAt` + 回填文本 + `onSend`（不截断）
 
-### Phase 2: 第一层——时间线主路径（P0，3 天）
+### Phase 2: 第一层——时间线主路径（P0，3 天） （**已完成**：`b6d31253a1`）
 
 **Step 4: 分支横条**（`packages/gui/src/components/Transcript.tsx`）
 - 检测每个消息的子节点数量（`buildMessageTree` 结果）
@@ -243,7 +243,7 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 - 检测当前 leaf 是否为历史节点（leaf 不是树中最后一个子节点）
 - 显示提示文案 + 确认
 
-### Phase 3: 第二层——轨迹 + 树面板（P1，2 天）
+### Phase 3: 第二层——轨迹 + 树面板（P1，2 天） （**已完成**：`6a2a8a69ab`）
 
 **Step 7: TrajectoryView 树模式**（`TrajectoryView.tsx`）
 - 加切换按钮 `Timeline | Tree`
@@ -253,14 +253,14 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 **Step 8: MessageTree 增强**（`MessageTree.tsx`）
 - 同步 TrajectoryView 树模式的视觉改进
 
-### Phase 4: 第三层——dagre 地图视图（P1，3 天）
+### Phase 4: 第三层——dagre 地图视图（P1，3 天） （**已完成**：`825b4ab8a0`，零 dagre 依赖手写分层布局）
 
 **Step 9: SessionTreeCanvas**（新组件 `SessionTreeCanvas.tsx`）
 - dagre 自动布局 + 缩放/平移 (react-flow / custom)
 - 卡片节点 + 连接线 + 操作栏
 - ChatView 顶部加 `Chat | Canvas` 切换
 
-### Phase 5: 性能（P2，1 天）
+### Phase 5: 性能（P2，1 天） （**部分完成**：默认折叠非当前分支 ✓；indexeddb 缓存跳过（见更新日志））
 
 **Step 10: 虚拟化 + 懒加载 + 缓存**
 - 第二/三层树面板虚拟化滚动
@@ -268,7 +268,7 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 - 骨架屏 + 增量同步
 - 会话树拓扑 indexeddb 缓存（复用 TUI 方案）
 
-### Phase 6: 验证（P2，2 天）
+### Phase 6: 验证（P2，2 天） （**部分完成**：组件级视觉冒烟通过；完整 GUI 隔离测试链路待后续）
 
 **Step 11: E2E 自动测试**
 - 隔离 daemon + headless Electron
