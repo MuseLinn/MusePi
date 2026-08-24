@@ -130,8 +130,17 @@ export function SubagentPanel(props: {
 			? Math.min(100, (p.contextTokens / p.contextWindow) * 100)
 			: null;
 
+	// Esc closes the drawer (modal panel parity with TaskModal).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+
 	return (
-		<aside className="ag-drawer" role="dialog" aria-label={agent.displayName}>
+		<aside className="ag-drawer" role="dialog" aria-modal="true" aria-label={agent.displayName}>
 			<header className="ag-drawer-head">
 				<div className="ag-drawer-title">
 					<span className="ag-drawer-name">{agent.displayName}</span>

@@ -2,7 +2,7 @@ import { t } from "@musepi/desktop-web/src/i18n/index.js";
 import { GuiSelect } from "./GuiSelect";
 import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 
@@ -30,6 +30,15 @@ export function TaskModal({
 		setClosing(true);
 		setTimeout(onClose, 150);
 	};
+	// Esc closes the modal.
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") close();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [close]);
+
 	return (
 		<div
 			className={`gui-task-modal${enteredCls ? " gui-task-modal--entered" : ""}${closing ? " gui-task-modal--closing" : ""}`}

@@ -493,10 +493,13 @@ const DIFF_SAMPLE = `--- a/src/greet.ts
 export function TypewriterPreview(): ReactNode {
 	const text = useTypewriterSample();
 	const smoothOn = (() => {
+		// display.smoothStreaming is the single source of truth (the old
+		// musepi-gui-chat-smooth localStorage key is dead — the toggle
+		// merged into 外观). ChatView flips the html class from the daemon
+		// setting; the preview follows the same class so the demo shows the
+		// real behavior instead of a stale default.
 		try {
-			// PrefToggle writes "1"/"0" — absent key = default on.
-			const v = localStorage.getItem("musepi-gui-chat-smooth");
-			return v === null ? true : v !== "0";
+			return !document.documentElement.classList.contains("gui-chat-no-smooth");
 		} catch {
 			return true;
 		}
