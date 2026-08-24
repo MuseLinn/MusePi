@@ -1984,18 +1984,23 @@ function createWindow() {
 		// - macOS: transparent background + under-window vibrancy — the
 		//   system material paints the shell, the page paints translucent
 		//   scrims over it. The renderer toggles off via `gui-vibrancy`.
-		// - Windows: TRANSPARENT window + CSS glass layer. DWM Acrylic
-		//   (backgroundMaterial) has no per-window tint-opacity API, so the
-		//   磨砂玻璃透明度 slider could only change the page tint's depth,
-		//   never the background see-through (user report). A transparent
-		//   frame lets the CSS --gui-glass-alpha drive real see-through;
-		//   the glass layer self-draws (blur + translucent scrim, same
-		//   recipe as the bubble window). Cost: per-surface redraws on
-		//   transparent frames — the reason acrylic was chosen before —
-		//   mitigated by keeping the main scrim blur-free (alpha only).
+		// - Windows 11: DWM Acrylic via backgroundMaterial (the same
+		//   material the tray menu window uses). The window stays OPAQUE —
+		//   the DWM compositor blurs the desktop behind the whole frame,
+		//   and the page's translucent scrims over a transparent
+		//   backgroundColor let the frosted material show through, so
+		//   every pane (sidebar, header, menus) reads as the same real
+		//   frosted glass. The 磨砂玻璃透明度 slider then controls how
+		//   much of that blurred backdrop the scrim lets through (true
+		//   see-through — the previous transparent-window variant showed
+		//   the desktop sharp and unblurred, so the slider only changed
+		//   the tint's depth, user report). Windows 10 / Linux fall back
+		//   to a transparent frame with the CSS self-drawn glass layer.
 		...(process.platform === "darwin"
 			? { backgroundColor: "#00000000", vibrancy: "under-window" }
-			: { backgroundColor: "#00000000" }),
+			: process.platform === "win32" && IS_WIN11
+				? { backgroundColor: "#00000000", backgroundMaterial: "acrylic" }
+				: { backgroundColor: "#00000000" }),
 	});
 
 	// Dev hot-reload renderer: with MUSEPI_GUI_DEV=1 (bun run desktop:dev)
@@ -2240,14 +2245,22 @@ ipcMain.handle("haptic", (_event, pattern = 0) => {
 ipcMain.handle("gui-vibrancy", (event, enabled, style) => {	const win = BrowserWindow.fromWebContents(event.sender);
 	if (!win) return;
 	if (process.platform === "win32") {
-		// Windows: glass is DWM-provided (backgroundMaterial). Toggle the
-		// material instead of window transparency — transparent:true on
-		// Windows flickers per-surface under GPU and would cover the Mica.
+		// Windows: glass is DWM-provided (backgroundMaterial) — the whole
+		// window becomes real frosted glass over the desktop. Toggling
+		// swaps the material and the base color: ON restores the acrylic
+		// + transparent base (the page scrims show the frost through),
+		// OFF removes the material and paints an opaque theme base (the
+		// renderer also forces --gui-glass-overlay:100%, so no trace of
+		// the glass remains). Windows 10 has no material API — the
+		// transparent frame stands in and the renderer's opaque overlay
+		// covers the toggle-off side.
 		try {
 			win.setBackgroundMaterial(enabled ? "acrylic" : "none");
+			if (enabled) win.setBackgroundColor("#00000000");
+			else win.setBackgroundColor(style === "light" ? "#f6f6f4" : "#0d0d0f");
 		} catch {
-			// Windows 10 / unsupported: material API absent — opaque
-			// background stands, nothing to do.
+			// Windows 10 / unsupported: material API absent — nothing to
+			// toggle (the renderer's CSS overlay handles the opaque side).
 		}
 		return;
 	}

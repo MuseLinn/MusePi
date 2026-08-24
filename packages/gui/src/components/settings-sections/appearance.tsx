@@ -42,7 +42,7 @@ import {
 	UI_FONT_OPTIONS,
 	WEEK_START_KEY,
 } from "../../lib/appearance";
-import { applyGlassLevel, applyGlassMaterial, GLASS_MAX, GLASS_MIN, readGlassLevel } from "../../lib/glass";
+import { applyGlassMaterial, applyGlassPreset, GLASS_PRESETS, readGlassPreset } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
 import {
@@ -180,7 +180,7 @@ export function AppearanceSection({
 	const [importedSkins, setImportedSkins] = useState<ScrollbarSkin[]>(() => readImportedSkins());
 	const [skinError, setSkinError] = useState(false);
 	const [importingSkin, setImportingSkin] = useState(false);
-	const [glass, setGlass] = useState<number>(() => readGlassLevel());
+	const [glass, setGlass] = useState<string>(() => readGlassPreset().id);
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
@@ -596,22 +596,26 @@ export function AppearanceSection({
 				<Reveal open={glassEnabled}>
 					<div className="gui-settings-field">
 						<div className="gui-settings-field-label">{t("glass opacity")}</div>
+						<div className="gui-settings-field-hint">{t("glass opacity description")}</div>
 						<div className="gui-settings-field-control">
-							<input
-								type="range"
-								min={GLASS_MIN}
-								max={GLASS_MAX}
-								step={5}
-								value={glass}
-								className="gui-range"
-								onChange={e => {
-									const v = Number(e.target.value);
-									setGlass(v);
-									setPref("musepi-gui-glass", v);
-									applyGlassLevel(v);
-								}}
-							/>
-							<span className="gui-settings-row-desc">{glass}%</span>
+							<div className="gui-segmented gui-glass-seg" role="radiogroup" aria-label={t("glass opacity")}>
+								{GLASS_PRESETS.map(p => (
+									<button
+										key={p.id}
+										type="button"
+										role="radio"
+										aria-checked={glass === p.id}
+										className={`gui-seg-btn${glass === p.id ? " gui-seg-btn--active" : ""}`}
+										onClick={() => {
+											setGlass(p.id);
+											setPref("musepi-gui-glass", p.id);
+											applyGlassPreset(p);
+										}}
+									>
+										{t(`glass preset ${p.id}`)}
+									</button>
+								))}
+							</div>
 						</div>
 					</div>
 				</Reveal>

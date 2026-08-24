@@ -29,7 +29,7 @@ import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { pickDirectory } from "./lib/electron";
-import { applyGlassLevel, applyGlassMaterial, readGlassLevel } from "./lib/glass";
+import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
@@ -169,7 +169,7 @@ function AppInner(): ReactNode {
 			if (fs) document.documentElement.style.setProperty("--gui-font-scale", `${fs}px`);
 			// Glass transparency (slider value = transparency %) — migrates the
 			// v1 scrim-coefficient pref once, then applies scrim + adaptive text.
-			applyGlassLevel(readGlassLevel());
+			applyGlassPreset(readGlassPreset());
 			// Window-transparency toggle OFF → opaque panes (overrides the slider).
 			const glassEnabled = localStorage.getItem("musepi-gui-glass-enabled") !== "0";
 			if (!glassEnabled) {

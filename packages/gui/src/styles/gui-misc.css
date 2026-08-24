@@ -483,7 +483,7 @@
 	box-shadow:
 		0 10px 32px rgba(0, 0, 0, 0.22),
 		0 0 0 1px rgba(0, 0, 0, 0.04);
-	backdrop-filter: blur(18px) saturate(160%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	opacity: 0;
 }
 
@@ -1425,8 +1425,8 @@
 	border: 1px solid var(--border-strong);
 	border-radius: 12px;
 	background: var(--bg-overlay);
-	backdrop-filter: blur(16px) saturate(140%);
-	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
 }
 
@@ -1524,8 +1524,8 @@
 	border: 1px solid var(--border-strong);
 	border-radius: 12px;
 	background: var(--bg-overlay);
-	backdrop-filter: blur(16px) saturate(140%);
-	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
 }
 
@@ -2653,8 +2653,8 @@
 	border-radius: 14px;
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--surface) 92%, transparent);
-	backdrop-filter: blur(16px);
-	-webkit-backdrop-filter: blur(16px);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
 	overflow: hidden;
 	max-height: min(60vh, 520px);
