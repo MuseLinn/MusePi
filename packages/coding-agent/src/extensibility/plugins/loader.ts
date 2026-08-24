@@ -78,6 +78,7 @@ async function collectPluginsAtRoot(
 	root: string,
 	projectOverrides: ProjectPluginOverrides,
 	scope: ScopedInstalledPlugin["scope"],
+	includeDisabled = false,
 ): Promise<ScopedInstalledPlugin[]> {
 	const nodeModulesPath = path.join(root, "node_modules");
 	if (!fs.existsSync(nodeModulesPath)) return [];
@@ -133,14 +134,10 @@ async function collectPluginsAtRoot(
 		const runtimeState = runtimeConfig.plugins[name];
 
 		// Check if disabled globally
-		if (runtimeState && !runtimeState.enabled) {
-			continue;
-		}
-
+		const globallyDisabled = !!runtimeState && !runtimeState.enabled;
 		// Check if disabled in project
-		if (projectOverrides.disabled?.includes(name)) {
-			continue;
-		}
+		const projectDisabled = projectOverrides.disabled?.includes(name) ?? false;
+		if ((globallyDisabled || projectDisabled) && !includeDisabled) continue;
 
 		// Resolve enabled features (project overrides take precedence)
 		const enabledFeatures = projectOverrides.features?.[name] ?? runtimeState?.enabledFeatures ?? null;
@@ -151,7 +148,7 @@ async function collectPluginsAtRoot(
 			scope,
 			manifest,
 			enabledFeatures,
-			enabled: true,
+			enabled: !globallyDisabled && !projectDisabled,
 		});
 	}
 
@@ -195,14 +192,14 @@ async function loadEnabledPlugins(cwd: string, home?: string): Promise<ScopedIns
 	const projectOverrides = await loadProjectOverrides(cwd);
 
 	const userRoot = getPluginsDir(home);
-	const userPlugins = await collectPluginsAtRoot(userRoot, projectOverrides, "user");
+	const userPlugins = await collectPluginsAtRoot(userRoot, projectOverrides, "user", false);
 
 	let projectPlugins: ScopedInstalledPlugin[] = [];
 	const projectRegistryPath = await resolveActiveProjectRegistryPath(cwd);
 	if (projectRegistryPath) {
 		const projectRoot = path.dirname(projectRegistryPath);
 		if (projectRoot !== userRoot) {
-			projectPlugins = await collectPluginsAtRoot(projectRoot, projectOverrides, "project");
+			projectPlugins = await collectPluginsAtRoot(projectRoot, projectOverrides, "project", false);
 		}
 	}
 
@@ -210,6 +207,38 @@ async function loadEnabledPlugins(cwd: string, home?: string): Promise<ScopedIns
 	if (userPlugins.length === 0) return projectPlugins;
 
 	// Project entries shadow user entries with the same package name.
+	const merged = new Map<string, ScopedInstalledPlugin>();
+	for (const plugin of userPlugins) merged.set(plugin.name, plugin);
+	for (const plugin of projectPlugins) merged.set(plugin.name, plugin);
+	return Array.from(merged.values());
+}
+
+/**
+ * List ALL installed plugins (enabled and disabled) with their resolved
+ * metadata. Mirrors `getEnabledPlugins` root enumeration but keeps entries
+ * that the runtime config / project overrides disabled (enabled:false) so
+ * the settings → plugins tab can show the full inventory and let the user
+ * re-enable. Project entries shadow user entries with the same package
+ * name, matching the shadow semantics of `MarketplaceManager`.
+ */
+export async function getAllPlugins(cwd: string, opts: { home?: string } = {}): Promise<ScopedInstalledPlugin[]> {
+	const { home } = opts;
+	const projectOverrides = await loadProjectOverrides(cwd);
+	const userRoot = getPluginsDir(home);
+	const userPlugins = await collectPluginsAtRoot(userRoot, projectOverrides, "user", true);
+
+	let projectPlugins: ScopedInstalledPlugin[] = [];
+	const projectRegistryPath = await resolveActiveProjectRegistryPath(cwd);
+	if (projectRegistryPath) {
+		const projectRoot = path.dirname(projectRegistryPath);
+		if (projectRoot !== userRoot) {
+			projectPlugins = await collectPluginsAtRoot(projectRoot, projectOverrides, "project", true);
+		}
+	}
+
+	if (projectPlugins.length === 0) return userPlugins;
+	if (userPlugins.length === 0) return projectPlugins;
+
 	const merged = new Map<string, ScopedInstalledPlugin>();
 	for (const plugin of userPlugins) merged.set(plugin.name, plugin);
 	for (const plugin of projectPlugins) merged.set(plugin.name, plugin);

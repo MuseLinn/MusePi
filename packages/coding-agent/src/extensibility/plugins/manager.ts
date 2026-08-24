@@ -396,6 +396,24 @@ export class PluginManager {
 	 * @param options - Install options
 	 * @returns Installed plugin metadata
 	 */
+	/**
+	 * Enable or disable an installed plugin by toggling its runtime-config
+	 * `enabled` flag in `musepi-plugins.lock.json`. Calling with
+	 * `enabled=true` creates the lock entry if absent (fresh install default
+	 * is enabled). Returns the new state.
+	 */
+	async setPluginEnabled(name: string, enabled: boolean): Promise<boolean> {
+		await this.#ensureConfigLoaded();
+		const existing = this.#runtimeConfig!.plugins[name];
+		this.#runtimeConfig!.plugins[name] = {
+			enabled,
+			version: existing?.version ?? "0.0.0",
+			enabledFeatures: existing?.enabledFeatures ?? null,
+		};
+		await this.#saveRuntimeConfig();
+		return enabled;
+	}
+
 	async install(specString: string, options: InstallOptions = {}): Promise<InstalledPlugin> {
 		const spec = parsePluginSpec(specString);
 		const gitSource = parseGitUrl(spec.packageName);

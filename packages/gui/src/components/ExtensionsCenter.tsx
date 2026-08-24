@@ -42,11 +42,15 @@ function stateLabel(e: ExtensionItem): string {
 	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
 }
 
-/** One plugin entry from daemon plugins.list (session-independent extension
- *  scan: path/label/tools/commands/handlers). */
+/** One installed plugin package from daemon plugins.packages (full
+ *  inventory incl. disabled: name/version/description/scope/enabled). */
 interface PluginEntry {
+	name: string;
+	version: string;
 	path: string;
-	label: string | null;
+	scope: "user" | "project";
+	enabled: boolean;
+	description: string | null;
 	tools: number;
 	commands: number;
 	handlers: number;
@@ -104,11 +108,10 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		if (!rpc) return;
 		let alive = true;
 		void rpc
-			.request<{ plugins: PluginEntry[]; errors: Array<{ path: string; error: string }> }>("plugins.list", {})
+			.request<{ plugins: PluginEntry[] }>("plugins.packages", {})
 			.then(res => {
 				if (!alive) return;
 				setPlugins(res?.plugins ?? []);
-				setPluginsError(res?.errors?.length ? `${res.errors.length} load error(s)` : null);
 			})
 			.catch((e: unknown) => alive && setPluginsError(e instanceof Error ? e.message : String(e)));
 		return () => {
@@ -207,6 +210,19 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		void rpc
 			.request("extensions.setProviderEnabled", { providerId: p.id, enabled: !p.enabled })
 			.then(() => setError(null))
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+	};
+
+	const togglePlugin = (p: PluginEntry): void => {
+		if (!rpc) return;
+		void rpc
+			.request("plugins.setEnabled", { name: p.name, enabled: !p.enabled })
+			.then(() => {
+				setPlugins(prev =>
+					prev.map(x => (x.name === p.name ? { ...x, enabled: !p.enabled } : x)),
+				);
+				setError(null);
+			})
 			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	};
 
@@ -367,7 +383,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 										<div className="gui-ext-provider-h">
 											<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
 											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-												{p.label ?? p.path.split("/").pop() ?? p.path}
+												{p.name}
 											</span>
 											<span className="gui-ext-group-count">
 												{t("plugin counts", {
@@ -376,7 +392,20 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 													handlers: p.handlers,
 												})}
 											</span>
+											<button
+												type="button"
+												role="switch"
+												aria-checked={p.enabled}
+												aria-label={`${t("plugin enable")} ${p.name}`}
+												className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
+												onClick={() => void togglePlugin(p)}
+											/>
 										</div>
+										<div className="gui-ext-plugins-meta">
+											<span className="gui-ext-plugins-version">v{p.version}</span>
+											<span className="gui-ext-plugins-scope">{p.scope === "project" ? t("plugin scope project") : t("plugin scope user")}</span>
+										</div>
+										{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
 										<div className="gui-ext-plugins-path">{p.path}</div>
 									</div>
 								))}

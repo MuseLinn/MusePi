@@ -2970,6 +2970,23 @@ export class DaemonServer {
 		errors: { path: string; error: string }[];
 	} | null = null;
 
+	/** TTL cache of the full installed-plugin inventory (settings → plugins
+	 *  tab, enabled + disabled). */
+	#pluginPackagesCache: {
+		at: number;
+		plugins: {
+			name: string;
+			version: string;
+			path: string;
+			scope: "user" | "project";
+			enabled: boolean;
+			description: string | null;
+			tools: number;
+			commands: number;
+			handlers: number;
+		}[];
+	} | null = null;
+
 	/** TTL cache of the skills scan (settings → skills tab + slash
 	 *  completion). */
 	#skillsCache: {
@@ -4048,6 +4065,43 @@ export class DaemonServer {
 					};
 				}
 				return this.#pluginsCache;
+			}
+			case "plugins.packages": {
+				// Full installed-plugin inventory (enabled + disabled) for the
+				// settings → plugins tab. Session-independent; TTL-cached so
+				// the list doesn't re-walk node_modules on each tab switch.
+				if (!this.#pluginPackagesCache || Date.now() - this.#pluginPackagesCache.at > 10_000) {
+					const { getAllPlugins } = await import("../extensibility/plugins/loader");
+					const installed = await getAllPlugins(this.#host.cwd());
+					this.#pluginPackagesCache = {
+						at: Date.now(),
+						plugins: installed.map(p => ({
+							name: p.name,
+							version: p.version,
+							path: p.path,
+							scope: p.scope,
+							enabled: p.enabled,
+							description: p.manifest.description ?? null,
+							tools: p.manifest.tools ? 1 : 0,
+							commands: Array.isArray(p.manifest.commands) ? p.manifest.commands.length : p.manifest.commands ? 1 : 0,
+							handlers: typeof p.manifest.hooks === "string" ? 1 : p.manifest.hooks ? Object.keys(p.manifest.hooks).length : 0,
+						})),
+					};
+				}
+				return this.#pluginPackagesCache;
+			}
+			case "plugins.setEnabled": {
+				// Enable/disable an installed plugin (settings → plugins tab
+				// toggle). Mirrors the TUI /plugins enable|disable command;
+				// busts the TTL cache so the next list reflects the change.
+				const { PluginManager } = await import("../extensibility/plugins/manager");
+				const p = (params ?? {}) as { name: string; enabled: boolean };
+				if (!p.name) throw new Error("plugins.setEnabled: name required");
+				const manager = new PluginManager(this.#host.cwd());
+				await manager.setPluginEnabled(p.name, Boolean(p.enabled));
+				this.#pluginPackagesCache = null;
+				this.#pluginsCache = null;
+				return { ok: true, enabled: Boolean(p.enabled) };
 			}
 			case "skills.list": {
 				// Session-independent skill discovery (settings → skills tab).
