@@ -1548,7 +1548,9 @@ class ManagedBrowserController {
 			const tab = this.ensureTab();
 			if (!tab) return { ok: false, error: "browser window unavailable" };
 			const result = await tab.navigate(input?.url ?? "");
-			if (result.ok) this.recordActivity(tab, "navigate", result.url, "dispatched");
+			// Do NOT record user-initiated navigation into the agent activity
+			// ledger — that ledger is the agent's browser lane (user: 浏览器里
+			// 多出个无法点击的 agent 行). Agent navs go through the CDP path.
 			this.emitState({});
 			return result;
 		});

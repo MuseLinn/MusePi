@@ -1604,6 +1604,7 @@ export function ChatView({
 										{ask && onAskAnswer && <AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />}
 										{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
 										 * above the composer (root > … > leaf, click any segment to jump). */}
+										{currentLeafKey !== null && (
 										<SessionTreeNav
 											segments={breadcrumb}
 											activeLeafIsHistorical={leafChildren.length > 0}
@@ -1619,6 +1620,7 @@ export function ChatView({
 												if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
 											}}
 										/>
+										)}
 										<Composer
 											working={snap?.working ?? false}
 											petMood={moodFromState({
