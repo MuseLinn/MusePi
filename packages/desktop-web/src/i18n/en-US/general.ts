@@ -307,6 +307,7 @@ export const general = {
 	"restart daemon description": "Restart the background service to load new code (sessions are kept and recoverable)",
 	"quit app": "Quit app",
 	"open preview": "Open preview",
+	"open image viewer": "Open image viewer",
 	"open with app": "Open with app",
 	"files created": "Files produced this run",
 	"preview in right panel": "Preview in right panel",

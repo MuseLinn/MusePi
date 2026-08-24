@@ -304,6 +304,7 @@ export const general = {
 	"restart daemon description": "重启后台服务进程以加载新代码（会话保留，可恢复）",
 	"quit app": "退出应用",
 	"open preview": "打开预览",
+	"open image viewer": "打开图片查看器",
 	"open with app": "在应用中打开",
 	"files created": "本次产出文件",
 	"preview in right panel": "在右侧面板预览",

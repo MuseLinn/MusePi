@@ -845,6 +845,18 @@
 	display: block;
 	border-radius: var(--radius-xs);
 }
+.gui-filepane-preview-img-btn {
+	display: block;
+	width: 100%;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: zoom-in;
+}
+.gui-filepane-preview-img-btn:hover .gui-filepane-preview-img {
+	filter: brightness(1.04);
+}
+
 
 .gui-filepane-preview-note {
 	margin: 0;

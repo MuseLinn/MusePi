@@ -1,4 +1,4 @@
-import { highlightToCodeHtml, Markdown, t } from "@musepi/desktop-web";
+import { highlightToCodeHtml, ImageLightbox, Markdown, t } from "@musepi/desktop-web";
 import { ArrowLeft, File as FileIcon, FileCode, FileImage, FileJson, FilePlus, FileText, FileType, Folder, FolderPlus, RefreshCw, Search } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
@@ -288,6 +288,7 @@ export function FilePane({
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
+	const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
 	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
 	const [htmlLiveMode, setHtmlLiveMode] = useState<"live" | "source">("live");
 	const [ctx, setCtx] = useState<MenuState | null>(null);
@@ -807,7 +808,14 @@ export function FilePane({
 								) : null}
 								{preview.imageUrl && (
 									<div className="gui-filepane-preview-img-wrap">
-										<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
+										<button
+											type="button"
+											className="gui-filepane-preview-img-btn"
+											title={t("open image viewer")}
+											onClick={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
+										>
+											<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
+										</button>
 									</div>
 								)}
 								{preview.pdfPages && (
@@ -837,6 +845,12 @@ export function FilePane({
 				y={ctx?.y ?? 0}
 				items={menuItems}
 				onClose={() => setCtx(null)}
+			/>
+			<ImageLightbox
+				items={lightbox ? [{ src: lightbox.src, alt: lightbox.name }] : []}
+				index={lightbox ? 0 : null}
+				onClose={() => setLightbox(null)}
+				onIndexChange={() => {}}
 			/>
 		</div>
 	);
