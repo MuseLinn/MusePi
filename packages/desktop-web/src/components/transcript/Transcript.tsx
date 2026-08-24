@@ -142,6 +142,67 @@ export interface TranscriptProps {
 	onStopSpeak?(): void;
 	/** Save an assistant reply as an image to the clipboard (openchamber). */
 	onSaveImage?(text: string): void;
+	/** Branch topology (session-tree nav, layer-1): children counts per
+	 *  entry id (from buildMessageTree) + the active path id set. When
+	 *  provided, messages with MULTIPLE children render a branch bar
+	 *  ("此节点有 N 个分支") that expands sibling switches; entries OFF the
+	 *  active path collapse into it. Absent/undefined = plain linear
+	 *  rendering (web shell, no branches) — zero behavior change. */
+	branchInfo?: {
+		childCount: ReadonlyMap<string, number>;
+		activePathIds: ReadonlySet<string>;
+		onSwitchBranch?(leafEntryId: string): void;
+	};
+}
+
+/** Layer-1 branch bar: rendered under a message that has MULTIPLE
+ *  children in the entry tree. Collapsed: a thin divider line with the
+ *  branch count; expanded (click): sibling switch buttons. The active
+ *  child is highlighted. Zero branches → never rendered. */
+export function BranchBar({
+	count,
+	childrenLabels,
+	activeChildId,
+	onPick,
+}: {
+	count: number;
+	childrenLabels: Array<{ id: string; label: string }>;
+	activeChildId?: string | null;
+	onPick(childId: string): void;
+}): ReactNode {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="tr-branch">
+			<button type="button" className="tr-branch-bar" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+				<span className="tr-branch-line" aria-hidden />
+				<span className="tr-branch-count">
+					{t("this node has {count} branches", { count: String(count) })}
+				</span>
+				<span className="tr-branch-line" aria-hidden />
+			</button>
+			{open && (
+				<div className="tr-branch-list" role="listbox" aria-label={t("switch branch")}>
+					{childrenLabels.map(c => (
+						<button
+							key={c.id}
+							type="button"
+							role="option"
+							aria-selected={c.id === activeChildId}
+							className={`tr-branch-item${c.id === activeChildId ? " tr-branch-item--active" : ""}`}
+							onClick={() => {
+								setOpen(false);
+								onPick(c.id);
+							}}
+						>
+							<GitFork size={11} />
+							<span className="tr-branch-item-text">{c.label || "…"}</span>
+							{c.id === activeChildId && <span className="tr-branch-active-dot" aria-hidden />}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
 }
 
 function Row({
@@ -1338,6 +1399,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onSaveImage,
 		speakingId,
 		onStopSpeak,
+		branchInfo,
 	} = props;
 
 	const results = useMemo(() => {
@@ -1367,6 +1429,48 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}
 		return map;
 	}, [entries]);
+
+	// ── Layer-1 branch topology (session-tree nav) ─────────────────────
+	// Children index over the FULL entries by parentId (wire seam tags it
+	// on message_start). Only built when the caller provides branchInfo —
+	// plain linear consumers pay nothing.
+	const branchChildren = useMemo(() => {
+		const map = new Map<string, SessionEntry[]>();
+		if (!branchInfo) return map;
+		for (const entry of entries) {
+			const pid = entry.parentId ?? "";
+			if (!pid) continue;
+			const bucket = map.get(pid);
+			if (bucket) bucket.push(entry);
+			else map.set(pid, [entry]);
+		}
+		return map;
+	}, [entries, branchInfo]);
+	// Short label for a branch-switch button (first text line of a message).
+	const entryLabelOf = useCallback((e: SessionEntry): string => {
+		if (e.type !== "message") return e.type;
+		const m = e.message as { role?: string; content?: unknown };
+		const blocks = Array.isArray(m.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
+		const text =
+			typeof m.content === "string"
+				? m.content
+				: blocks
+						.filter(b => b?.type === "text")
+						.map(b => b.text ?? "")
+						.join(" ");
+		return text.replace(/\s+/g, " ").trim().slice(0, 60);
+	}, []);
+	// Which child of `parentId` lies on the active path (the one whose
+	// subtree contains the current leaf — approximated here as the LAST
+	// child in entry order, which is where new branches append).
+	const activeChildOf = useCallback(
+		(parentId: string): string | null => {
+			const kids = branchChildren.get(parentId);
+			if (!kids || kids.length === 0) return null;
+			return kids[kids.length - 1]!.id;
+		},
+		[branchChildren],
+	);
 
 	// Turn-final file artifacts (本轮文件卡片展示在最底部): a turn spans
 	// multiple assistant messages (one per agent step), so the final files
@@ -1689,6 +1793,27 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						prevIsAssistant = true;
 					} else {
 						prevIsAssistant = false;
+					}
+					// Layer-1 branch bar: a message with MULTIPLE children gets
+					// a switchable divider under it (hidden when the caller
+					// provides no branch topology — plain linear sessions).
+					const childCount = branchInfo?.childCount.get(entry.id) ?? 0;
+					if (branchInfo && childCount > 1 && entry.type === "message") {
+						const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
+							id: c.id,
+							label: entryLabelOf(c),
+						}));
+						return (
+							<div key={entry.id} className="tr-branch-wrap">
+								{row}
+								<BranchBar
+									count={childCount}
+									childrenLabels={kids}
+									activeChildId={activeChildOf(entry.id)}
+									onPick={id => branchInfo.onSwitchBranch?.(id)}
+								/>
+							</div>
+						);
 					}
 					return row;
 				});

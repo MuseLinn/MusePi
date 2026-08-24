@@ -32,6 +32,7 @@ import type { ReminderRow } from "./RemindersPanel";
 import { BrowserGuiHint } from "./BrowserGuiHint";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
+import { SessionTreeNav, type BreadcrumbSegment } from "./SessionTreeNav";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SubagentPanel } from "./SubagentPanel";
 import { BtwFloatingCard } from "./BtwFloatingCard";
@@ -606,6 +607,10 @@ export function ChatView({
 	// unification): RightRail renders every surface (session tabs, tool
 	// panes, ext:* slots) and this state drives the ContextPanel body.
 	const [activeView, setActiveView] = useState<string | null>("context");
+	// Layer-1 session-tree leaf: null = follow the tip (linear session);
+	// a branchAt / branch switch sets it to a historical node so sending
+	// forks a new branch under it (TUI navigateTree parity).
+	const [currentLeafKey, setCurrentLeafKey] = useState<string | null>(null);
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
@@ -689,23 +694,34 @@ export function ChatView({
 			// daemon rejected — keep the transcript as-is
 		}
 	};
-	// Retry (重新生成该回复): truncate to the user message that produced
-	// this reply, then re-send it — the turn replays from the user node.
-	// The old reply (and any later tail) lands in the revert backup, so
-	// the 撤回 dock can restore it. NOT "send the assistant text back".
-	// deliverAs is OMITTED on purpose: an explicit "followUp"/"steer" only
-	// QUEUES the message without starting a turn when the session is idle
-	// (AgentSession.sendUserMessage) — retry must start a fresh turn.
+	// Retry (重新生成该回复): branch to the user message that produced
+	// this reply and re-send it (TUI navigateTree parity, 2026-08-24).
+	// session.branchAt moves the session leaf IN PLACE — the old reply and
+	// any later tail stay on the tree as a sibling branch (NOT truncated
+	// like revertTo, NOT copied like forkAt). The new turn re-answers the
+	// user message and forks a parallel branch.
+	const branchTo = useCallback(
+		async (messageId: string): Promise<{ leafId: string | null; editorText: string | null } | null> => {
+			if (!store) return null;
+			try {
+				const res = await rpc.request<{
+					ok: boolean;
+					leafId: string | null;
+					editorText: string | null;
+				}>("session.branchAt", { sessionId: store.sessionId, messageId });
+				if (res?.ok !== true) return null;
+				if (res.leafId) setCurrentLeafKey(res.leafId);
+				return { leafId: res.leafId ?? null, editorText: res.editorText ?? null };
+			} catch {
+				return null;
+			}
+		},
+		[rpc, store],
+	);
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
-		if (!store) return;
-		try {
-			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
-			await onReloadSession?.();
-			await refreshReverts();
-			onSend(text);
-		} catch {
-			// daemon rejected — keep the transcript as-is
-		}
+		const res = await branchTo(messageId);
+		if (res?.editorText) onSend(res.editorText);
+		else if (res) onSend(text);
 	};
 	// Pending composer prefill: message text sent back for re-editing
 	// (revert-dock 回填 + transcript inline edit). null = no pending edit.
@@ -791,6 +807,110 @@ export function ChatView({
 			// daemon rejected (unknown message/session) — keep as-is
 		}
 	};
+	// ── Layer-1 session-tree topology (nav unification, 2026-08-24) ────
+	// Children index over the view entries by parentId; the active path
+	// (breadcrumb + transcript filtering) walks from the leaf up.
+	const branchChildren = useMemo(() => {
+		const map = new Map<string, { id: string; kind: string }[]>();
+		for (const entry of snap?.entries ?? []) {
+			const e = entry as { id?: string; parentId?: string | null; type?: string; message?: { role?: string } };
+			if (typeof e.id !== "string" || typeof e.parentId !== "string" || !e.parentId) continue;
+			const bucket = map.get(e.parentId);
+			const row = {
+				id: e.id,
+				kind: e.type === "message" ? (e.message?.role ?? "message") : (e.type ?? "entry"),
+			};
+			if (bucket) bucket.push(row);
+			else map.set(e.parentId, [row]);
+		}
+		return map;
+	}, [snap?.entries]);
+	// Current leaf: explicit branch switch wins; otherwise the LAST entry
+	// (linear tip). Reset the override whenever the session changes.
+	const effectiveLeaf = useMemo(() => {
+		const entries = snap?.entries ?? [];
+		const last = entries[entries.length - 1];
+		const lastId = typeof last === "object" && last !== null ? (last as { id?: unknown }).id : undefined;
+		return currentLeafKey ?? (typeof lastId === "string" ? lastId : null);
+	}, [currentLeafKey, snap?.entries]);
+	// Walk root → leaf via parentId (breadcrumb path).
+	const leafPath = useMemo(() => {
+		const byId = new Map<string, { id: string; kind: string }>();
+		for (const entry of snap?.entries ?? []) {
+			const e = entry as { id?: string; type?: string; message?: { role?: string } };
+			if (typeof e.id !== "string") continue;
+			byId.set(e.id, {
+				id: e.id,
+				kind: e.type === "message" ? (e.message?.role ?? "message") : (e.type ?? "entry"),
+			});
+		}
+		const path: { id: string; kind: string }[] = [];
+		const seen = new Set<string>();
+		let cursor = effectiveLeaf;
+		while (cursor && !seen.has(cursor)) {
+			seen.add(cursor);
+			const node = byId.get(cursor);
+			if (!node) break;
+			path.unshift(node);
+			const entry = (snap?.entries ?? []).find(
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === cursor,
+			);
+			const parent = typeof entry === "object" && entry !== null ? (entry as { parentId?: unknown }).parentId : null;
+			cursor = typeof parent === "string" ? parent : null;
+		}
+		return path;
+	}, [effectiveLeaf, snap?.entries]);
+	// Active path id set for transcript filtering (off-path entries collapse).
+	const activePathIds = useMemo(
+		() => new Set(leafPath.map(p => p.id)),
+		[leafPath],
+	);
+	// The leaf is "historical" when it already has children — sending now
+	// would fork a new branch under it.
+	const leafChildren = useMemo(() => {
+		if (!effectiveLeaf) return [];
+		return branchChildren.get(effectiveLeaf) ?? [];
+	}, [branchChildren, effectiveLeaf]);
+	const labelOf = (entry: { id: string } | undefined, fallback: string): string => {
+		if (!entry) return fallback;
+		const raw = (snap?.entries ?? []).find(
+			e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === entry.id,
+		);
+		if (!raw || typeof raw !== "object") return fallback;
+		const m = (raw as { message?: { content?: unknown } }).message;
+		const blocks = Array.isArray(m?.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
+		const text =
+			typeof m?.content === "string"
+				? m.content
+				: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
+		return text.replace(/\s+/g, " ").trim().slice(0, 60) || fallback;
+	};
+	const breadcrumb: BreadcrumbSegment[] = useMemo(
+		() =>
+			leafPath.map((p, i) => ({
+				id: p.id,
+				kind: (p.kind as "user") === "user" ? "user" : p.kind === "toolResult" ? "toolResult" : "assistant",
+				label: labelOf(p, i === 0 ? t("root") : "…"),
+			})),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[leafPath],
+	);
+	const switchBranch = useCallback(
+		(childId: string): void => {
+			// Jump the transcript to the picked sibling first, then move the
+			// session leaf there (branchAt) so continuing forks from it.
+			const entry = (snap?.entries ?? []).find(
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === childId,
+			);
+			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
+			if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
+			setCurrentLeafKey(childId);
+			void branchTo(childId);
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[snap?.entries, branchTo],
+	);
+
 	// Lazy history backfill (kimi/DSH parity): the transcript fires this
 	// when its tail window is fully expanded and the user scrolls up past
 	// the oldest loaded entry. Pages the next chunk from session.history
@@ -1218,6 +1338,15 @@ export function ChatView({
 														/* ZCode: avatars replace the 宿主/代理 gutter labels. */
 														userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
 														agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
+														/* Layer-1 branch topology: multi-child messages render a
+														 * switchable branch bar; off-path entries collapse. */
+														branchInfo={{
+															childCount: new Map(
+																[...branchChildren.entries()].map(([pid, kids]) => [pid, kids.length]),
+															),
+															activePathIds,
+															onSwitchBranch: switchBranch,
+														}}
 													/>
 												</CodeHighlightProvider>
 											</div>
@@ -1415,6 +1544,23 @@ export function ChatView({
 											/>
 										))}
 										{ask && onAskAnswer && <AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />}
+										{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
+										 * above the composer (root > … > leaf, click any segment to jump). */}
+										<SessionTreeNav
+											segments={breadcrumb}
+											activeLeafIsHistorical={leafChildren.length > 0}
+											activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("this node"))}
+											onJump={id => {
+												const entry = (snap?.entries ?? []).find(
+													e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+												);
+												const ts =
+													typeof entry === "object" && entry !== null
+														? (entry as { timestamp?: unknown }).timestamp
+														: null;
+												if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
+											}}
+										/>
 										<Composer
 											working={snap?.working ?? false}
 											petMood={moodFromState({

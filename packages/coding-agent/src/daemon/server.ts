@@ -1731,7 +1731,16 @@ export class DaemonSessionHost {
 					(m.role === "user" || m.role === "assistant" || m.role === "toolResult") &&
 					m.parentId === undefined
 				) {
-					m.parentId = agentSession.sessionManager.getLeafId() ?? null;
+					// The leaf id is the SDK entry id (generateId hex), but the
+					// materialized view keys its entries by messageKey
+					// ("role:timestamp") — convert so the GUI tree can actually
+					// link parent ↔ child across the two id spaces.
+					const parentEntry = (
+						agentSession.sessionManager as unknown as {
+							getLeafEntry(): { message: WireMessage } | undefined;
+						}
+					).getLeafEntry();
+					m.parentId = parentEntry ? messageKey(parentEntry.message as WireMessage) : null;
 				}
 			}
 			const seq = ++live.seq;
@@ -5788,6 +5797,66 @@ export class DaemonServer {
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const { replyText } = await live.agentSession.runEphemeralTurn({ promptText: p.promptText });
 				return { replyText };
+			}
+			case "session.branchAt": {
+				// Non-destructive branch (TUI navigateTree /tree parity): move
+				// the session's leaf IN PLACE — the target node stays on the
+				// current branch, so the old leaf and its subtree remain
+				// reachable as a sibling branch. User messages re-answer (leaf
+				// = parent, text backfilled for the composer); assistant/tool
+				// nodes land the leaf on the node to continue from there.
+				// Unlike revertTo this NEVER truncates, and unlike forkAt it
+				// NEVER creates a new session file — it's the same session tree
+				// with a new leaf position.
+				const bp = (params ?? {}) as { sessionId: string; messageId: string };
+				if (!bp.messageId) throw new Error("messageId required");
+				const blive = this.#host.get(bp.sessionId);
+				if (!blive) throw new Error("branchAt requires a live session");
+				// Resolve the view key ("role:timestamp") to the SDK entry id
+				// (same matching as revertTo's sdkMessageIndex).
+				const bentries = (
+					blive.agentSession as unknown as {
+						sessionManager: { getEntries(): SessionEntry[] };
+					}
+				).sessionManager.getEntries();
+				const bviewKey = bp.messageId;
+				let bsdkId = bentries.find(e => e.id === bviewKey)?.id;
+				if (!bsdkId) {
+					const bsep = bviewKey.indexOf(":");
+					if (bsep > 0) {
+						const brole = bviewKey.slice(0, bsep);
+						const bkey = bviewKey.slice(bsep + 1);
+						const bhit = bentries.find(e => {
+							if (e.type !== "message") return false;
+							const m = e.message as { role?: string; timestamp?: number | string; toolCallId?: string };
+							if (m.role !== brole) return false;
+							return brole === "toolResult" ? m.toolCallId === bkey : String(m.timestamp) === bkey;
+						});
+						bsdkId = bhit?.id;
+					}
+				}
+				if (!bsdkId) throw new Error(`Unknown message: ${bp.messageId}`);
+				const bresult = await (
+					blive.agentSession as unknown as {
+						navigateTree(
+							id: string,
+							opts?: Record<string, unknown>,
+						): Promise<{ cancelled?: boolean; editorText?: string; editorImages?: unknown[] }>;
+					}
+				).navigateTree(bsdkId, {});
+				if (bresult.cancelled) return { ok: false };
+				const bsm = blive.agentSession.sessionManager as unknown as {
+					getLeafEntry(): { message: WireMessage } | undefined;
+				};
+				const bleafEntry = bsm.getLeafEntry();
+				const bleafKey =
+					bleafEntry ? messageKey(bleafEntry.message as WireMessage) : null;
+				return {
+					ok: true,
+					leafId: bleafKey,
+					editorText: bresult.editorText ?? null,
+					editorImages: bresult.editorImages ?? [],
+				};
 			}
 			case "session.forkAt": {
 				// Non-destructive fork (GUI 分叉): copy the parent session's
