@@ -501,8 +501,8 @@
 	border: 0.5px solid transparent;
 	border-radius: 14px;
 	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
-	backdrop-filter: blur(24px) saturate(150%);
-	-webkit-backdrop-filter: blur(24px) saturate(150%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: var(--gui-input-shadow);
 }
 
@@ -2956,11 +2956,16 @@ body.gui-resizing .gui-pane-right {
 
 /* Sidebar surface tint: the sidebar reads as the glass's left region,
  * separated from the chat surface by a subtle surface tint instead of a
- * hairline. Pure color mix — no translucency, no backdrop-filter — so
- * it holds on all platforms (the tint is always on top of the glass,
- * never dependent on blur). */
+ * hairline. Translucent over the workspace glass layer + the unified
+ * blur recipe — real frosted glass (the opaque 55%+surface tint read
+ * as a flat block, user report: 左侧面板顶部菜单标题栏不再是磨砂透明毛玻璃).
+ * The window material (macOS vibrancy / Windows DWM acrylic) supplies
+ * the backdrop the blur reads through; on transparent frames the tint
+ * alone still separates the pane from the chat card. */
 .gui-pane-side--immersive {
-	background: color-mix(in oklab, var(--color-surface-sunken) 55%, var(--color-surface));
+	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: none;
 }
 
@@ -3330,7 +3335,7 @@ body.gui-resizing .gui-pane-right {
 	border-radius: 12px;
 	border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
 	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
-	backdrop-filter: blur(12px);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 	overflow: hidden;
 	/* Enter/exit (pin-widget "resolves from a soft blur" language):

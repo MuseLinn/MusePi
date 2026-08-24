@@ -194,8 +194,8 @@
 	border-radius: 12px;
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
-	backdrop-filter: blur(20px) saturate(180%);
-	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
 	animation: gui-todo-in 200ms var(--spring);
 }
@@ -673,8 +673,8 @@
 	z-index: 30;
 	/* Frosted glass (same recipe as the floating menus). */
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
 		0 0 0 1px rgba(0, 0, 0, 0.36),

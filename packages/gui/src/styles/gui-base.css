@@ -124,6 +124,12 @@ html body {
  *                       gets stronger, never inverted. */
 :root {
 	--gui-glass-overlay: clamp(24%, calc(55% * (1 - var(--gui-glass-alpha, 0.55))), 55%);
+	/* Unified glass recipe: every frosted surface derives blur and
+	 * saturation from these tokens. The blur scales with the slider so
+	 * the 磨砂玻璃透明度 adjustment has a real visual effect (more
+	 * transparency = more blur = glassier), not just a tint depth. */
+	--gui-glass-blur: calc(24px * (var(--gui-glass-alpha, 0.55) / 0.55));
+	--gui-glass-saturate: 180%;
 }
 
 /* Light scheme: the backdrop behind the window is DIMMED by the native
@@ -143,6 +149,15 @@ html body {
  * grey under-window caused. With the bright material a thin scrim reads
  * as real frosted glass (user report: 顶栏/左侧面板 不磨砂、像不透明纯色). */
 [data-platform="darwin"][data-theme="light"] {
+	--gui-glass-overlay: clamp(22%, calc(58% * (1 - var(--gui-glass-alpha, 0.55))), 58%);
+}
+
+/* Windows light: DWM Acrylic (backgroundMaterial) on Windows 11 is a
+ * bright translucent material like macOS vibrancy "light" — the thick
+ * 58–76% white scrim from the default light scheme washes out the frost
+ * and reads as near-opaque ("不是真磨砂玻璃"). A thin scrim over the
+ * acrylic gives clean light frosted glass. */
+[data-platform="win32"][data-theme="light"] {
 	--gui-glass-overlay: clamp(22%, calc(58% * (1 - var(--gui-glass-alpha, 0.55))), 58%);
 }
 

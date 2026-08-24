@@ -261,16 +261,18 @@
 	 * (settings-parity; previously each pane carried its own scrim and the
 	 * corners around the rounded card showed raw vibrancy). */
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 }
 
-/* Performance: on the Windows/Linux TRANSPARENT frame this backdrop has
- * nothing beneath it to blur (behind the scrim is the desktop, which
- * Chromium does not sample) — the blur re-composites the whole workspace
- * every frame for zero visual gain (GPU process burn on Windows). macOS
- * keeps it: the vibrancy window's page blur layers over the system
- * material. */
+/* Performance: on Windows/Linux the workspace root has nothing beneath
+ * it to blur (Windows 11's DWM Acrylic is composited by the OS, which
+ * Chromium does not sample; Win10/Linux transparent frames show the raw
+ * desktop) — the blur would re-composite the whole workspace every frame
+ * for zero visual gain (GPU process burn on Windows). The frosted look
+ * comes from the window material (DWM acrylic / macOS vibrancy) showing
+ * through the translucent scrim; macOS keeps the page blur because the
+ * vibrancy window's page blur layers over the system material. */
 [data-platform="win32"] .gui-main,
 [data-platform="linux"] .gui-main {
 	backdrop-filter: none;

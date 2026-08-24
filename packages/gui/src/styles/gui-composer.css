@@ -82,8 +82,8 @@
 	/* Frosted glass: translucent enough that the brand watermark blurs
 	 * through the card (visible frosted effect over the π backdrop). */
 	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
-	backdrop-filter: blur(24px) saturate(150%);
-	-webkit-backdrop-filter: blur(24px) saturate(150%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: var(--gui-input-shadow);
 	/* Smooth height changes when the textarea autosizes. */
 	transition: box-shadow 160ms ease-out;
@@ -310,7 +310,7 @@
 	border: 1px solid var(--border);
 	border-radius: 12px;
 	background: color-mix(in oklab, var(--color-surface) 92%, var(--color-bg));
-	backdrop-filter: blur(24px);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 
@@ -697,8 +697,8 @@
 	border-radius: 7px;
 	border: 1px solid color-mix(in oklab, var(--color-text-faint) 22%, transparent);
 	background: color-mix(in oklab, var(--color-bg) 88%, transparent);
-	backdrop-filter: blur(12px) saturate(150%);
-	-webkit-backdrop-filter: blur(12px) saturate(150%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow:
 		0 4px 16px rgba(0, 0, 0, 0.35),
 		inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -969,8 +969,8 @@
 
 .gui-topbar {
 	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
-	backdrop-filter: blur(14px) saturate(140%);
-	-webkit-backdrop-filter: blur(14px) saturate(140%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 }
 
 /* Center-pane ambient glow — gives the frosted side panes something to
@@ -1113,8 +1113,8 @@
 	margin: 0 8px;
 	border-radius: 10px;
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
-	backdrop-filter: blur(14px) saturate(140%);
-	-webkit-backdrop-filter: blur(14px) saturate(140%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 }
 
@@ -1504,8 +1504,8 @@
 	padding: 6px;
 	border-radius: 12px;
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(24px) saturate(180%);
-	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
 		0 0 0 1px rgba(0, 0, 0, 0.36),
