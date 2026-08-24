@@ -352,6 +352,7 @@ class ManagedTab {
 			this.loading = false;
 			this.refreshState();
 			controller.notifyLifecycle(this);
+			controller.markActivityComplete(this);
 		});
 		wc.on("did-navigate", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
@@ -793,6 +794,21 @@ class ManagedBrowserController {
 			at: Date.now(),
 		});
 		if (this.ledger.length > MAX_ACTIVITY_ITEMS) this.ledger.shift();
+	}
+
+	/** An agent-initiated action on `tab` finished loading — drop its
+	 *  in-flight ledger entry so the renderer hides the "Agent 活动" row
+	 *  (it is transient: visible only while the agent is working). */
+	markActivityComplete(tab) {
+		const id = String(tab.id);
+		for (let i = this.ledger.length - 1; i >= 0; i--) {
+			const entry = this.ledger[i];
+			if (entry.tabId === id && entry.status === "dispatched") {
+				entry.status = "completed";
+				this.emitState({});
+				return;
+			}
+		}
 	}
 
 	activitySummary(action, tab, url) {

@@ -693,7 +693,7 @@ export function ManagedBrowserPane({
 			)}
 			{/* Agent activity ledger (sanitized in main — never page text,
 			 * cookies or script source). */}
-			{state?.activity && (
+			{state?.activity?.status === "dispatched" && (
 				<div
 					className="flex min-h-6 items-center gap-2 border-b border-[var(--border)] bg-[var(--color-accent)]/[0.04] px-2 py-0.5 text-[11px]"
 					role="status"
