@@ -5,7 +5,12 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/mobile.css";
 import "./i18n";
-import { isNativeShell, setupAndroidBackHandler } from "./lib/capacitor";
+import {
+	isNativeShell,
+	setupAndroidBackHandler,
+	setupDeepLinkHandler,
+	setupNotificationTapHandler,
+} from "./lib/capacitor";
 
 // Capacitor keyboard bridge: with Keyboard resize 'none' the WebView keeps its
 // full height when the soft keyboard opens, so the visual viewport never
@@ -107,6 +112,8 @@ setupVisualViewportKeyboardFallback();
 void setupSafeAreaFallback();
 void setupImmersiveSystemBars();
 void setupAndroidBackHandler();
+void setupDeepLinkHandler();
+void setupNotificationTapHandler();
 
 /** Launch splash — brief brand animation before the connect guide. The
  *  spring curve mirrors the shell tokens; clicking skips straight in. */

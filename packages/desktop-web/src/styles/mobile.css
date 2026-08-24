@@ -56,3 +56,31 @@
 /* Main session view: the composer strip's own padding-bottom already adds
  * the gesture-bar inset + IME inset (shell.css .sh-composer) — the inner
  * floating card must not double-count it. */
+
+/* Tablets (≥768px CSS px): the agents rail becomes a persistent left column
+ * beside the transcript instead of a full-screen overlay — desktop-shell
+ * parity on wide screens, content stays readable at 100% width. The rail is
+ * still toggleable (HeaderBar rail button); the backdrop disappears because
+ * there is no overlay to dismiss.
+ */
+@media (min-width: 768px) {
+	.sh-rail {
+		position: static;
+		width: 300px;
+		max-width: 300px;
+		flex: none;
+		border-left: 1px solid var(--color-border, transparent);
+		border-top: none;
+		border-radius: 0;
+		box-shadow: none;
+		height: 100%;
+	}
+
+	.sh-rail-backdrop {
+		display: none;
+	}
+
+	.sh-transcript {
+		max-width: none;
+	}
+}

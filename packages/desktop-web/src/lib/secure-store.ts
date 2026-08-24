@@ -16,12 +16,7 @@ const TIMEOUT_MS = 2000;
 const KEYCHAIN_ACCESS_WHEN_UNLOCKED = 0;
 
 type NativeSecureStorage = {
-	internalSetItem: (options: {
-		prefixedKey: string;
-		data: string;
-		sync: boolean;
-		access: number;
-	}) => Promise<void>;
+	internalSetItem: (options: { prefixedKey: string; data: string; sync: boolean; access: number }) => Promise<void>;
 	internalGetItem: (options: { prefixedKey: string; sync: boolean }) => Promise<{ data: string | null }>;
 	internalRemoveItem: (options: { prefixedKey: string; sync: boolean }) => Promise<{ success: boolean }>;
 };
@@ -38,7 +33,7 @@ async function withTimeout<T>(operation: Promise<T>, fallback: T): Promise<T> {
 	try {
 		return await Promise.race([operation.catch(() => fallback), timeout]);
 	} finally {
-		if (timer !== undefined) clearTimeout(timer);
+		clearTimeout(timer);
 	}
 }
 
@@ -46,7 +41,17 @@ async function nativeStore(): Promise<NativeSecureStorage | null> {
 	if (!isNativeShell()) return null;
 	try {
 		const { SecureStorage } = await import("@aparajita/capacitor-secure-storage");
-		return SecureStorage as unknown as NativeSecureStorage;
+		const native = SecureStorage as unknown as NativeSecureStorage;
+		// The plugin export is a Capacitor plugin proxy: its get trap routes
+		// EVERY property access — including `then` — through the bridge, so
+		// awaiting the returned object (or Promise.resolve()-ing it) throws
+		// "SecureStorage.then() is not implemented on android". Bind the three
+		// methods into a plain object so callers never await the proxy itself.
+		return {
+			internalGetItem: o => native.internalGetItem(o),
+			internalSetItem: o => native.internalSetItem(o),
+			internalRemoveItem: o => native.internalRemoveItem(o),
+		};
 	} catch {
 		return null;
 	}
@@ -57,10 +62,9 @@ export async function secureGet(key: string): Promise<string | null> {
 	const mirror = localStorage.getItem(key);
 	const store = await nativeStore();
 	if (!store) return mirror;
-	const { data } = await withTimeout(
-		store.internalGetItem({ prefixedKey: PREFIX + key, sync: false }),
-		{ data: null },
-	);
+	const { data } = await withTimeout(store.internalGetItem({ prefixedKey: PREFIX + key, sync: false }), {
+		data: null,
+	});
 	return data ?? mirror;
 }
 

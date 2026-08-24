@@ -344,14 +344,19 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
 通知权限请求（§6.4）、系统返回键分层导航（§6.3）、44px 触控目标 + 窄屏 header 收敛（§4.3）、
 触觉反馈（§5.2）、hover-only 操作触屏常显（§5.4）、README 补设计文档入口。
 
-### P2（后续）
-- 底部 sheet 会话切换（✅ 已实现：`SessionsSheet`，iOS 26 / 鸿蒙 6.1 悬浮毛玻璃圆角卡片，
-  header 标题触发，见 §11 验证记录）；
+### P2（2026-08-25 全部落地）
+- 底部 sheet 会话切换 ✅（`SessionsSheet`，iOS 26 / 鸿蒙 6.1 悬浮毛玻璃圆角卡片，
+  header 标题触发，见 §11.1）；
+- `musepi://` 原生深链 + 通知点击跳会话 ✅（intent filter + `appUrlOpen`/`getLaunchUrl`
+  双通道 + 冷启动 stash；通知 `extra.link` 经 `localNotificationActionPerformed` 路由，见 §11.3）；
+- 应用图标角标（未读会话数）✅（`@capawesome/capacitor-badge` ShortcutBadger，小米/华为/OPPO
+  启动器支持；前台恢复自动清零；`Capacitor.Plugins.Badge` 直取，规避 bundle 动态 import 解析）；
+- 平板/折叠屏布局 ✅（≥768px rail 常驻为左侧栏，transcript 全宽，见 §11.4）；
+- PWA 清单 ✅（`mobile.webmanifest` + mobile.html manifest link，可安装 standalone）。
+
+### P3（后续）
 - 工作区抽屉多 tab（Changes/Files/…，右缘滑动 + header 入口双通道）；
 - 边缘滑动返回手势 + 下拉刷新（§5.1）；
-- `musepi://` 原生深链 + 通知点击跳会话；
-- 应用图标角标（未读会话数）；
-- 平板/折叠屏 SIZE 类布局（3 栏：会话侧栏 + 聊天 + 工作区面板）；
 - PWA service worker（离线缓存 connect 壳 + 前台推送抑制）。
 ## 11. 模拟器验证记录（2026-08-24，API 35 / Pixel 6 AVD / WHPX）
 
@@ -399,3 +404,33 @@ iOS 26 / 鸿蒙 6.1 悬浮毛玻璃圆角卡片。多会话工作区（本次 st
 `hostname: "0.0.0.0"` 修复）。另修 `ROOM_PATH_RE`：collab 链接路径是 `/r/<roomId>.<key>`，原正则
 `[A-Za-z0-9_-]{10,64}` 不含 `.` 导致 room key 含点时 upgrade 404/1006——扩为
 `(?:[.][A-Za-z0-9_-]+)?$`，`match[1]` 仍为 roomId（E2E 密钥不参与 relay 路由）。
+### 11.2 SecureStorage 修复（2026-08-25）
+
+`@aparajita/capacitor-secure-storage` v8 导出的 `SecureStorage` 是 Capacitor 插件 Proxy：其 get
+trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `secure-store.ts` 的 `nativeStore()` 直接
+返回该 Proxy，调用方 `await nativeStore()` → `Promise.resolve(proxy)` 读取 `proxy.then` →
+`createPluginMethodWrapper("then")` → 抛 `"SecureStorage.then() is not implemented on android"`
+（每次启动 logcat 报错，secure 层静默回退 localStorage 镜像）。修复：`nativeStore()` 把三个
+`internal*` 方法绑定进普通对象返回，调用方永远不会 await 到 Proxy 本体。真机验证：Keystore
+写/读/重启持久化/删除全链路通过（`internalSetItem` → `internalGetItem` 返回原值，force-stop 后仍在）。
+
+### 11.3 深链 + 通知点击跳转 + 角标（2026-08-25）
+
+- `musepi://connect?link=<url-encoded collab link>` intent filter（AndroidManifest）→
+  `@capacitor/app` `appUrlOpen`（热启动）+ `getLaunchUrl`（冷启动，启动画面延迟 React 挂载时事件
+  已先到）→ 模块级 stash + `DEEP_LINK_EVENT`。冷启动实测：`am start -a VIEW -d musepi://...`
+  直接进 Session/工作区（跳过 connect 屏），stub 收到 guest hello。
+- 通知 `extra.link` 经 `localNotificationActionPerformed` → 同一 DEEP_LINK_EVENT 路由（冷启动
+  通知点击跳回对应会话）。
+- 角标：`@capawesome/capacitor-badge`（ShortcutBadger），后台通知时 `incrementBadge()`，
+  `visibilitychange` 前台恢复 `clearBadge()`。**注意**：`await import("@capawesome/...")` 在 bundle
+  运行时解析失败（bundler 未建 chunk 映射），必须走 `window.Capacitor.Plugins.Badge`（大写 Plugins，
+  与既有 `setupAndroidBackHandler` 教训一致）。Pixel launcher 不支持 badge（ShortcutBadger
+  `supported=false`），API 本身验证通过（set 3 → get 3 → clear 0）；小米/华为/OPPO 启动器可用。
+
+### 11.4 平板布局 + PWA（2026-08-25）
+
+- ≥768px：agents rail 从全屏覆盖层变为常驻左侧列（`position: static; width: 300px`，backdrop 隐藏），
+  transcript 保持全宽 —— 两栏工作布局（内容 + rail），面板/工作区仍全屏（内容密集场景）。
+- PWA：`public/mobile.webmanifest`（MusePi 品牌，standalone，4 尺寸图标）+ mobile.html
+  `<link rel="manifest">`——安卓 Chrome 可"添加到主屏幕"。

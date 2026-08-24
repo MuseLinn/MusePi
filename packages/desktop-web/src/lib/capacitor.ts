@@ -24,6 +24,17 @@ declare global {
 				};
 				LocalNotifications?: unknown;
 			};
+			// Runtime registry of registered plugins (capital P). The
+			// lowercase `plugins` above is a legacy declaration that is never
+			// populated on real Android WebViews; reach plugins through the
+			// JS modules or this registry instead.
+			Plugins?: {
+				Badge?: {
+					get: () => Promise<{ count: number }>;
+					set: (o: { count: number }) => Promise<void>;
+					clear: () => Promise<void>;
+				};
+			};
 		};
 	}
 }
@@ -68,4 +79,116 @@ export async function setupAndroidBackHandler(): Promise<void> {
 			void App.exitApp();
 		}
 	});
+}
+/**
+ * DOM event carrying a native deep link (musepi://connect?link=<collab link>)
+ * delivered by the OS — opened from a notification, a QR scanner, or a
+ * `musepi://` URL. The app listener connects to the collab link directly,
+ * bypassing the connect screen.
+ */
+export const DEEP_LINK_EVENT = "musepi:deep-link";
+
+/**
+ * Deep link that arrived before the app's event listener mounted (cold start:
+ * the boot splash delays React mount past Capacitor's appUrlOpen replay).
+ * `consumePendingDeepLink()` drains it once on mount; later links flow
+ * through DEEP_LINK_EVENT.
+ */
+let pendingDeepLink: string | null = null;
+
+/** Drain the pre-mount deep link (returns it at most once). */
+export function consumePendingDeepLink(): string | null {
+	const link = pendingDeepLink;
+	pendingDeepLink = null;
+	return link;
+}
+
+/**
+ * Wire the native deep-link channel.
+ *
+ * Android: the `musepi://` intent filter (see AndroidManifest.xml) delivers
+ * `appUrlOpen` on cold start (via the intent stash) and warm start. iOS would
+ * need the same scheme in Info.plist + the app delegate — out of scope here,
+ * the shell is Android-first (mobile.html only runs on Android today).
+ *
+ * The URL shape is `musepi://connect?link=<url-encoded collab ws link>`.
+ * Desktop web never calls this — browsers use the hash deep link instead.
+ */
+export async function setupDeepLinkHandler(): Promise<void> {
+	if (!isNativeShell()) return;
+	const { App } = await import("@capacitor/app");
+	const handle = (url: string): void => {
+		try {
+			const parsed = new URL(url);
+			const link = parsed.searchParams.get("link");
+			if (parsed.protocol !== "musepi:" || !link) return;
+			// Stash first: on cold start this fires before the app's listener
+			// mounts (boot splash), so the event alone would be lost.
+			pendingDeepLink = link;
+			window.dispatchEvent(new CustomEvent(DEEP_LINK_EVENT, { detail: { link } }));
+		} catch {
+			// malformed deep link — ignore
+		}
+	};
+	void App.addListener("appUrlOpen", (data: { url: string }) => handle(data.url));
+	// Cold start: the launch intent carries the URL; appUrlOpen may or may not
+	// replay it depending on activity launch mode timing — getLaunchUrl is
+	// authoritative for the cold-start case.
+	void App.getLaunchUrl().then(launch => {
+		if (launch?.url) handle(launch.url);
+	});
+}
+
+/**
+ * Notification-tap routing: LocalNotifications fires
+ * `localNotificationActionPerformed` when the user taps a scheduled
+ * notification (including cold start — the plugin replays the pending
+ * action). The schedule payload carries `extra.link`; route it through the
+ * same DEEP_LINK_EVENT the musepi:// handler uses.
+ */
+export async function setupNotificationTapHandler(): Promise<void> {
+	if (!isNativeShell()) return;
+	const { LocalNotifications } = await import("@capacitor/local-notifications");
+	void LocalNotifications.addListener("localNotificationActionPerformed", action => {
+		const link = (action.notification.extra as { link?: string } | undefined)?.link;
+		if (link) {
+			window.dispatchEvent(new CustomEvent(DEEP_LINK_EVENT, { detail: { link } }));
+		}
+	});
+}
+
+/**
+ * Launcher icon badge (unread count) via ShortcutBadger — Samsung/Xiaomi/
+ * Huawei/Oppo launchers; silently no-ops on launchers without badge support
+ * (Pixel's native launcher). The count increments per background
+ * notification and clears when the app returns to the foreground.
+ */
+export async function incrementBadge(): Promise<void> {
+	if (!isNativeShell()) return;
+	try {
+		// Badge is registered by the bundle (registerPlugin).
+		// Use Plugins directly to avoid runtime import resolution issues.
+		const Badge = window.Capacitor!.Plugins!.Badge as {
+			get: () => Promise<{ count: number }>;
+			set: (o: { count: number }) => Promise<void>;
+			clear: () => Promise<void>;
+		};
+		const { count } = await Badge.get();
+		await Badge.set({ count: count + 1 });
+	} catch {
+		// launcher without badge support — silent
+	}
+}
+
+/** Clear the launcher badge (foreground return / all read). */
+export async function clearBadge(): Promise<void> {
+	if (!isNativeShell()) return;
+	try {
+		const Badge = window.Capacitor!.Plugins!.Badge as {
+			clear: () => Promise<void>;
+		};
+		await Badge.clear();
+	} catch {
+		// launcher without badge support — silent
+	}
 }

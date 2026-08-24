@@ -14,7 +14,14 @@ import { Toasts } from "./components/shell/Toasts";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
 import { t } from "./i18n/index.js";
-import { BACK_EVENT, isNativeShell } from "./lib/capacitor";
+import {
+	BACK_EVENT,
+	clearBadge,
+	consumePendingDeepLink,
+	DEEP_LINK_EVENT,
+	incrementBadge,
+	isNativeShell,
+} from "./lib/capacitor";
 import { GuestClient } from "./lib/client";
 import { useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
@@ -114,11 +121,27 @@ export function App(): ReactNode {
 		if (link) connect(link, storedName());
 	}, [connect]);
 
+	// Deep link: a native musepi:// URL (notification tap / QR / external link)
+	// delivered by the Capacitor App plugin — connect directly, same as hash.
+	useEffect(() => {
+		if (!isNativeShell()) return;
+		const onLink = (e: Event): void => {
+			const link = (e as CustomEvent<{ link: string }>).detail?.link;
+			if (link) connect(link, storedName());
+		};
+		// Cold start: the link arrived before this listener mounted (boot
+		// splash) — the stash drains it exactly once.
+		const stashed = consumePendingDeepLink();
+		if (stashed) connect(stashed, storedName());
+		window.addEventListener(DEEP_LINK_EVENT, onLink);
+		return () => window.removeEventListener(DEEP_LINK_EVENT, onLink);
+	}, [connect]);
+
 	useEffect(() => {
 		if (!client) document.title = t("musepi collab");
 	}, [client]);
 
-	useMobileNotifications(client);
+	useMobileNotifications(client, credsRef.current?.link ?? null);
 
 	if (!client) {
 		return (
@@ -149,7 +172,7 @@ export function App(): ReactNode {
  * This is the LAN-architecture equivalent of openchamber's APNs/FCM relay
  * (which requires a cloud server we do not have).
  */
-function useMobileNotifications(client: GuestClient | null): void {
+function useMobileNotifications(client: GuestClient | null, link: string | null): void {
 	const lastNotifiedRef = useRef(0);
 	// Android 13+ requires an explicit POST_NOTIFICATIONS grant before
 	// schedule() does anything; without it the call silently no-ops. Request
@@ -209,9 +232,16 @@ function useMobileNotifications(client: GuestClient | null): void {
 								title: t("musepi session update"),
 								body: text.slice(0, 140) || t("session update"),
 								smallIcon: "ic_stat_musepi",
+								// Deep-link payload: tapping the notification routes
+								// back to this session via DEEP_LINK_EVENT (see
+								// setupDeepLinkHandler) even after a cold start.
+								extra: link ? { link } : undefined,
 							},
 						],
 					});
+					// Launcher badge rides the notification (ShortcutBadger —
+					// Samsung/Xiaomi/Huawei/Oppo; no-op on unsupported launchers).
+					void incrementBadge();
 				} catch {
 					// notifications unavailable (permission/plugin) — silent
 				}
@@ -222,6 +252,16 @@ function useMobileNotifications(client: GuestClient | null): void {
 			unsub();
 		};
 	}, [client]);
+
+	// Foreground return: the user has seen the app — clear the badge.
+	useEffect(() => {
+		if (!isNativeShell()) return;
+		const onVisible = (): void => {
+			if (!document.hidden) void clearBadge();
+		};
+		document.addEventListener("visibilitychange", onVisible);
+		return () => document.removeEventListener("visibilitychange", onVisible);
+	}, []);
 }
 
 /** Persistent warning strip for plaintext (no-E2E) sessions. */

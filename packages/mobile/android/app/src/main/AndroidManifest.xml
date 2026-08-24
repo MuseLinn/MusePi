@@ -23,6 +23,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- musepi://connect?link=<collab link> — notification taps,
+                     QR scans, or external links land here. singleTask keeps
+                     the existing WebView instance (appUrlOpen warm-start). -->
+                <data android:scheme="musepi" android:host="connect" />
+            </intent-filter>
+
         </activity>
 
         <provider

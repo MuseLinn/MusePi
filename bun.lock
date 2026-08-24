@@ -139,6 +139,7 @@
         "@capacitor/keyboard": "^8.0.0",
         "@capacitor/local-notifications": "^8.1.1",
         "@capacitor/status-bar": "^8.0.0",
+        "@capawesome/capacitor-badge": "^8.0.2",
         "@musepi/collab-proto": "0.4.3",
         "@musepi/pi-utils": "catalog:",
         "@musepi/pi-wire": "workspace:*",
@@ -274,6 +275,7 @@
         "@capacitor/keyboard": "^8.0.0",
         "@capacitor/local-notifications": "^8.1.1",
         "@capacitor/status-bar": "^8.0.0",
+        "@capawesome/capacitor-badge": "^8.0.2",
       },
       "devDependencies": {
         "@capacitor/android": "^8.4.1",
@@ -596,6 +598,8 @@
     "@capacitor/local-notifications": ["@capacitor/local-notifications@8.3.0", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-QvgW2ucBAwtI/arLrUP1XRTJVzJxmdI9BOCl+E9J2HAmYuSWZtDFb3e1fpnciVzwZaq6RDP00baBQgG6eYik/Q=="],
 
     "@capacitor/status-bar": ["@capacitor/status-bar@8.0.3", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-csSpfNeN49Hx9JaQBSJEIiEbOLtXg3kcc2IpScq2fu5L520h3AWEvsxoH8Srk1jxfRKepaJ4S4sqSC3foI4AgA=="],
+
+    "@capawesome/capacitor-badge": ["@capawesome/capacitor-badge@8.0.2", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-4ZnRyFvViaokupdrOi3OkoBurH+23hnxni+PYq5C1ObNLYbhty/WK8BzMtndCv0S47XjGBLjQ9DJsYj3JDVxGQ=="],
 
     "@chevrotain/types": ["@chevrotain/types@11.1.2", "", {}, "sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw=="],
 
