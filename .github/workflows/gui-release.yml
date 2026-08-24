@@ -172,11 +172,15 @@ jobs:
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               const sections = changelog.split(/^## \[/m).slice(1);
               const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
+              const dl = (name) => `https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/${name}`;
               const body =
                 `# MusePi ${pkg.version}\n\n` +
-                `**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)\n\n` +
-                `**Linux**: download the AppImage or .deb from this release\n\n` +
-                `**Windows**: download MusePi-${pkg.version}-setup.exe from this release\n\n` +
+                `| Platform | 下载 |\n` +
+                `| --- | --- |\n` +
+                `| macOS (Apple Silicon) | [MusePi-${pkg.version}-arm64.dmg](${dl(`MusePi-${pkg.version}-arm64.dmg`)}) |\n` +
+                `| Windows | [MusePi-${pkg.version}-setup.exe](${dl(`MusePi-${pkg.version}-setup.exe`)}) |\n` +
+                `| Linux x64 | [MusePi-${pkg.version}-x86_64.AppImage](${dl(`MusePi-${pkg.version}-x86_64.AppImage`)}) · [MusePi-${pkg.version}-amd64.deb](${dl(`MusePi-${pkg.version}-amd64.deb`)}) |\n` +
+                `| Linux arm64 | [MusePi-${pkg.version}-arm64.AppImage](${dl(`MusePi-${pkg.version}-arm64.AppImage`)}) · [MusePi-${pkg.version}-arm64.deb](${dl(`MusePi-${pkg.version}-arm64.deb`)}) |\n\n` +
                 notes;
               fs.writeFileSync("dist/RELEASE_NOTES.md", body);
               console.log("release notes written");
