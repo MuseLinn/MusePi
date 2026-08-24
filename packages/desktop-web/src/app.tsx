@@ -20,6 +20,7 @@ import {
 	consumePendingDeepLink,
 	DEEP_LINK_EVENT,
 	incrementBadge,
+	isMobileShell,
 	isNativeShell,
 } from "./lib/capacitor";
 import { GuestClient } from "./lib/client";
@@ -124,7 +125,7 @@ export function App(): ReactNode {
 	// Deep link: a native musepi:// URL (notification tap / QR / external link)
 	// delivered by the Capacitor App plugin — connect directly, same as hash.
 	useEffect(() => {
-		if (!isNativeShell()) return;
+		if (!isMobileShell()) return;
 		const onLink = (e: Event): void => {
 			const link = (e as CustomEvent<{ link: string }>).detail?.link;
 			if (link) connect(link, storedName());
@@ -255,7 +256,7 @@ function useMobileNotifications(client: GuestClient | null, link: string | null)
 
 	// Foreground return: the user has seen the app — clear the badge.
 	useEffect(() => {
-		if (!isNativeShell()) return;
+		if (!isMobileShell()) return;
 		const onVisible = (): void => {
 			if (!document.hidden) void clearBadge();
 		};

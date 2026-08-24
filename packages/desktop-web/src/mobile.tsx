@@ -6,7 +6,9 @@ import "./styles/base.css";
 import "./styles/mobile.css";
 import "./i18n";
 import {
+	getSystemBarInsets,
 	isNativeShell,
+	isMobileShell,
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
@@ -77,12 +79,11 @@ async function setupImmersiveSystemBars(): Promise<void> {
 	}
 }
 
-// Android WebView never surfaces real system-bar insets via
-// env(safe-area-inset-*) — CSS.supports("env(...)") returns true but the
-// value is always 0, even in edge-to-edge mode. The native Insets plugin
-// (see MainActivity/InsetsPlugin) reads the true status/nav bar heights and
-// we inject them as the CSS variables; a fixed allowance covers older
-// compatibility layers (卓易通) where the plugin may not be reachable.
+// Android WebView (and HarmonyOS WebView) never surface real system-bar
+// insets via env(safe-area-inset-*) — the value is always 0. The shared
+// getSystemBarInsets() function probes the active shell (Capacitor or
+// harmonyNative) and returns the true bar heights; a fixed allowance covers
+// shells where the native plugin may not be reachable.
 async function setupSafeAreaFallback(): Promise<void> {
 	const css = document.documentElement;
 	// Conservative defaults: 48px top (covers cutout/punch-hole status bars),
@@ -90,15 +91,11 @@ async function setupSafeAreaFallback(): Promise<void> {
 	css.style.setProperty("--safe-top", "48px");
 	css.style.setProperty("--safe-bottom", "24px");
 	try {
-		// Insets is a native-only plugin (no JS module), so it is not present
-		// in window.Capacitor.Plugins — call it through the low-level bridge.
-		const insets = (await window.Capacitor?.nativePromise?.("Insets", "getSystemBars")) as
-			| { top: number; bottom: number }
-			| undefined;
+		const insets = await getSystemBarInsets();
 		if (insets && insets.top > 0) css.style.setProperty("--safe-top", `${insets.top}px`);
 		if (insets && insets.bottom > 0) css.style.setProperty("--safe-bottom", `${insets.bottom}px`);
 	} catch {
-		// plugin absent (browser / old compat layer) — fixed allowance stands
+		// plugin absent — fixed allowance stands
 	}
 }
 

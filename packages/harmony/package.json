@@ -1,0 +1,10 @@
+{
+	"name": "@musepi/harmony",
+	"version": "1.0.0",
+	"private": true,
+	"description": "HarmonyOS NEXT WebView shell for the MusePi mobile UI",
+	"type": "module",
+	"scripts": {
+		"copy:web": "node scripts/copy-web-assets.js"
+	}
+}

@@ -476,3 +476,17 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 无 GMS 依赖，任何设备均可工作
 
 **引导动效**：方法磁贴按压反馈（`:active` scale(0.98)）、hover 抬升阴影、chevron 展开旋转（200ms spring）、入场错峰动画（70ms stagger）、折叠体高度过渡（240ms spring）
+
+### 11.7 HarmonyOS WebView 壳（2026-08-25）
+
+用户诉"卓易通没沉浸"，本质是抵触兼容层。方案：`packages/harmony/` 用 ArkTS `Web` 组件加载现有 desktop-web 移动 bundle，一等地壳（非兼容层），沉浸/相机/权限全部原生。
+
+**桥接设计**：`capacitor.ts` 扩为单一桥路由器——`isMobileShell()` 同时识别 Capacitor 与 `window.harmonyNative`（ArkTS javaScriptProxy）。同一 dist 双壳通用，`mobile.tsx` 零改动（仅 insets 提取为共享 `getSystemBarInsets()`）。JavaProxy 方法同步返回 JSON 字符串。
+
+**HarmonyNative 桥表面**：`getSystemBars()`（avoid area → vp，vp==CSS px）、`getBadge`/`setBadgeCount`/`clearBadge`（notificationManager）、`consumeDeepLink()`（冷启动深链）。JS 侧回调：`window.__harmonyKeyboard(h)`（onKeyboardHeightChange 推送）、`window.__harmonyDeepLink(uri)`（onNewWant 推送）。
+
+**深链**：`module.json5` ability skills → uris 注册 `musepi://connect?link=`；EntryAbility onCreate 存冷启动 URI、onNewWant 推热启动。
+
+**构建**：desktop-web `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 packages/harmony 运行。rawfile gitignored。
+
+**取舍**：凭证回退 localStorage（未接 `@ohos.security.asset`，P3）；通知/语音/原生图标均为 P3。若用户要真原生体验，connect+会话列表 ArkTS 重写是后续独立工程。

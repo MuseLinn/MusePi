@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "MusePi"
+    },
+    {
+      "name": "app_name_desc",
+      "value": "MusePi mobile client"
+    },
+    {
+      "name": "perm_internet_reason",
+      "value": "Connect to the MusePi agent daemon"
+    },
+    {
+      "name": "perm_camera_reason",
+      "value": "Scan QR codes to connect"
+    },
+    {
+      "name": "perm_mic_reason",
+      "value": "Voice input in agent chat"
+    }
+  ]
+}
