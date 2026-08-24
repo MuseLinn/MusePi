@@ -175,6 +175,7 @@ jobs:
                 `# MusePi ${pkg.version}\n\n` +
                 `**macOS (Apple Silicon)**: download [MusePi-${pkg.version}-arm64.dmg](https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/MusePi-${pkg.version}-arm64.dmg)\n\n` +
                 `**Linux**: download the AppImage or .deb from this release\n\n` +
+                `**Windows**: download MusePi-${pkg.version}-setup.exe from this release\n\n` +
                 notes;
               fs.writeFileSync("dist/RELEASE_NOTES.md", body);
               console.log("release notes written");
@@ -187,5 +188,6 @@ jobs:
                 dist/*.dmg
                 dist/*.AppImage
                 dist/*.deb
+                dist/*-setup.exe
                 dist/update-manifest.json
               body_path: dist/RELEASE_NOTES.md
