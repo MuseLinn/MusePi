@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
+import { haptic } from "../../lib/haptics";
 import { useGuestSelector } from "../../lib/use-guest";
 
 export interface ComposerProps {
@@ -134,6 +135,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 		if (!trimmed || !live || readOnly) return;
 		client.sendPrompt(trimmed);
 		setText("");
+		haptic(8);
 	}, [client, live, readOnly, text]);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -187,7 +189,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						<button
 							type="button"
 							className="sh-btn sh-btn-stop"
-							onClick={() => client.sendAbort()}
+							onClick={() => {
+								client.sendAbort();
+								haptic(15);
+							}}
 							disabled={!live}
 							title={t("stop the current turn")}
 						>
@@ -231,7 +236,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						<button
 							type="button"
 							className="sh-btn sh-btn-stop"
-							onClick={() => client.sendAbort()}
+							onClick={() => {
+								client.sendAbort();
+								haptic(15);
+							}}
 							disabled={!live}
 							title={t("stop the current turn")}
 						>

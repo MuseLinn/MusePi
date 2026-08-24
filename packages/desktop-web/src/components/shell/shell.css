@@ -1219,12 +1219,37 @@
 	.sh-composer-actions .sh-btn {
 		padding: 8px;
 	}
+	/* Mobile touch floor: 44px hit area for icon buttons and composer
+	 * actions (iOS HIG / Material3 tap-target guidance). The visual padding
+	 * is unchanged — the min-size extends the hit area, not the look. */
+	.sh-btn-icon {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	.sh-composer-actions .sh-btn {
+		min-width: 44px;
+		min-height: 44px;
+	}
 	.sh-composer-input,
 	.sh-input,
 	.sh-input-mono,
 	.sh-ask-title,
 	.sh-ask-option-label {
 		font-size: 16px;
+	}
+}
+
+/* Narrow phones: drop decorative header controls — participant avatars,
+ * the phase dot, and the accent/language toggles (still reachable on the
+ * connect screen). The theme toggle stays: it is the one setting users
+ * flip mid-session. :has() needs Chromium 105+/Safari 15.4+ — the Android
+ * WebView baseline is 111, and desktop browsers all support it. */
+@media (max-width: 520px) {
+	.sh-avatars,
+	.sh-dot,
+	.sh-header .sh-theme-toggle:has(.sh-accent-dot),
+	.sh-header .sh-theme-toggle:has(.sh-lang-code) {
+		display: none;
 	}
 }
 

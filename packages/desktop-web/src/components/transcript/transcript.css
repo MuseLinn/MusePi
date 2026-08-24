@@ -1402,6 +1402,15 @@
 	opacity: 1;
 }
 
+/* Touch devices have no hover to reveal the action row — always show it
+ * (mobile design spec §5.4: hover-only affordances must not be the only
+ * path on phones). */
+@media (hover: none) {
+	.tr-actions {
+		opacity: 1;
+	}
+}
+
 .tr-action {
 	border: none;
 	background: none;
@@ -1579,6 +1588,15 @@
 
 .tr-row:hover .tr-actions {
 	opacity: 1;
+}
+
+/* Touch devices have no hover to reveal the action row — always show it
+ * (mobile design spec §5.4: hover-only affordances must not be the only
+ * path on phones). */
+@media (hover: none) {
+	.tr-actions {
+		opacity: 1;
+	}
 }
 
 .tr-action {
