@@ -41,6 +41,13 @@ export const composer = {
 	cancelled: "已取消",
 	"show all": "显示全部",
 	lines: "行",
+
+	// ── Long text paste gate (TUI large-paste parity) ─────────────────
+	"Pasted {lines} lines ({chars} chars)": "粘贴了 {lines} 行（{chars} 字符）",
+	"discard paste": "放弃粘贴",
+	"paste inline": "直接粘贴",
+	"wrap as code block": "包裹为代码块",
+	"attach as file": "附加为文件",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

@@ -53,6 +53,8 @@ import type {
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
 import { useAttachments } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
+import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
+import { LongPasteDialog, type LongPasteAction } from "./composer/long-paste-dialog";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
 import { useModeToggles } from "./composer/use-mode-toggles";
@@ -335,6 +337,7 @@ export function Composer({
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
 	const { attachments, setAttachments, addImageFiles, onPaste, onDrop } = useAttachments(rpc);
+	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
 	const [dictating, setDictating] = useState(false);
 	const [transcribing, setTranscribing] = useState(false);
 	const [voiceSeconds, setVoiceSeconds] = useState(0);
@@ -1849,6 +1852,43 @@ export function Composer({
 						}}
 					/>
 				)}
+				{pendingPaste && (
+					<LongPasteDialog
+						lineCount={pendingPaste.lineCount}
+						charCount={pendingPaste.charCount}
+						onAction={(action: LongPasteAction) => {
+							const ta = taRef.current;
+							if (!ta) {
+								dismissLongPaste();
+								return;
+							}
+							const start = ta.selectionStart ?? ta.value.length;
+							const end = ta.selectionEnd ?? ta.value.length;
+							if (action === "file") {
+								void (async () => {
+									try {
+										const name = `paste-${Date.now()}.md`;
+										await rpc.request("fs.write", { cwd: cwd ?? "", path: name, content: pendingPaste.text });
+										const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
+										setText(newText);
+										requestAnimationFrame(() => ta.setSelectionRange(start + name.length, start + name.length));
+									} catch {
+										const newText = ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
+										setText(newText);
+									}
+								})();
+								dismissLongPaste();
+								return;
+							}
+							const insertion = action === "code-block" ? `\`\`\`\n${pendingPaste.text}\n\`\`\`` : pendingPaste.text;
+							const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
+							setText(newText);
+							requestAnimationFrame(() => ta.setSelectionRange(start + insertion.length, start + insertion.length));
+							dismissLongPaste();
+						}}
+						onDismiss={dismissLongPaste}
+					/>
+				)}
 				{quotes.length > 0 && (
 					<QuoteCards
 						quotes={quotes}
@@ -1865,7 +1905,15 @@ export function Composer({
 					}}
 					value={text}
 					rows={MIN_ROWS}
-					onPaste={onPaste}
+					onPaste={e => {
+						onPaste(e);
+						if (e.defaultPrevented) return;
+						const pastedText = e.clipboardData.getData("text");
+						if (isLongPastedText(pastedText)) {
+							e.preventDefault();
+							requestLongPaste(pastedText);
+						}
+					}}
 					onDrop={onDrop}
 					onChange={e => {
 						setText(e.target.value);

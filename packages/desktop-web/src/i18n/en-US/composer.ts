@@ -43,4 +43,11 @@ export const composer = {
 	cancelled: "Cancelled",
 	"show all": "Show all",
 	lines: "Lines",
+
+	// ── Long text paste gate (TUI large-paste parity) ─────────────────
+	"Pasted {lines} lines ({chars} chars)": "Pasted {lines} lines ({chars} chars)",
+	"discard paste": "Discard paste",
+	"paste inline": "Paste inline",
+	"wrap as code block": "Wrap as code block",
+	"attach as file": "Attach as file",
 } as const satisfies Record<ComposerKey, string>;

@@ -9,6 +9,8 @@ import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
+import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
+import { LongPasteDialog, type LongPasteAction } from "./composer/long-paste-dialog";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
 import { rankSlashEntries } from "../lib/slash-rank";
@@ -238,6 +240,7 @@ export function WelcomeComposer({
 		window.addEventListener("musepi-gui-quote-append", onQuoteAppend);
 		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
 	}, []);
+	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
 	const [attachments, setAttachments] = useState<{ id: number; dataUrl: string; mimeType: string; name: string }[]>(
 		[],
 	);
@@ -1434,7 +1437,45 @@ export function WelcomeComposer({
 											))}
 									</div>,
 								)}
-								<textarea
+								
+								{pendingPaste && (
+									<LongPasteDialog
+										lineCount={pendingPaste.lineCount}
+										charCount={pendingPaste.charCount}
+										onAction={action => {
+											const ta = taRef.current;
+											if (!ta) {
+												dismissLongPaste();
+												return;
+											}
+											const start = ta.selectionStart ?? ta.value.length;
+											const end = ta.selectionEnd ?? ta.value.length;
+											if (action === "file") {
+												void (async () => {
+													try {
+														const name = `paste-${Date.now()}.md`;
+														await rpc.request("fs.write", { cwd: project ?? "", path: name, content: pendingPaste.text });
+														const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
+														setText(newText);
+														requestAnimationFrame(() => ta.setSelectionRange(start + name.length, start + name.length));
+													} catch {
+														const newText = ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
+														setText(newText);
+													}
+												})();
+												dismissLongPaste();
+												return;
+											}
+											const insertion = action === "code-block" ? `\`\`\`\n${pendingPaste.text}\n\`\`\`` : pendingPaste.text;
+											const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
+											setText(newText);
+											requestAnimationFrame(() => ta.setSelectionRange(start + insertion.length, start + insertion.length));
+											dismissLongPaste();
+										}}
+										onDismiss={dismissLongPaste}
+									/>
+								)}
+<textarea
 									ref={el => {
 										taRef.current = el;
 										compAnchorRef(el);
@@ -1451,6 +1492,12 @@ export function WelcomeComposer({
 										if (files.length > 0) {
 											e.preventDefault();
 											void addImageFiles(files);
+											return;
+										}
+										const pastedText = e.clipboardData.getData("text");
+										if (isLongPastedText(pastedText)) {
+											e.preventDefault();
+											requestLongPaste(pastedText);
 										}
 									}}
 									onDrop={e => {
