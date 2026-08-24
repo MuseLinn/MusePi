@@ -17,9 +17,13 @@
 const GLASS_KEY = "musepi-gui-glass";
 const GLASS_V3_KEY = "musepi-gui-glass-v3";
 
+/** Literal preset ids — keeping this narrow lets the UI's template i18n key
+ *  (`glass preset ${p.id}`) resolve to a valid TranslationKey union member. */
+export type GlassPresetId = "light" | "standard" | "strong";
+
 export interface GlassPreset {
 	/** stored id (persisted in localStorage) */
-	id: string;
+	id: GlassPresetId;
 	/** i18n key: `glass preset ${id}` */
 	labelKey: string;
 	/** dark-scheme alpha (0–1, higher = more see-through) */
