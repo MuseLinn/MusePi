@@ -88,6 +88,7 @@
 		"mac": {
 			"target": [
 				"dmg",
+				"zip",
 				"dir"
 			],
 			"category": "public.app-category.developer-tools",

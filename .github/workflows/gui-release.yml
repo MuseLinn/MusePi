@@ -108,7 +108,17 @@ jobs:
 
          - name: Package (electron-builder)
            working-directory: packages/gui
-           run: bunx electron-builder --${{ matrix.builder }} --publish never
+           # Beta tags (v*-beta*) build the "beta" publish channel: electron-builder
+           # then writes beta.yml / beta-mac.yml / beta-linux*.yml and embeds
+           # channel=beta into the installed app's app-update.yml, so beta installs
+           # OTA-follow only beta releases (stable installs keep reading latest*.yml).
+           shell: bash
+           run: |
+             ARGS="--${{ matrix.builder }} --publish never"
+             if [[ "${GITHUB_REF_NAME}" == *-beta* ]]; then
+               ARGS="$ARGS -c.publish.channel=beta"
+             fi
+             bunx electron-builder $ARGS
 
          - name: Upload artifact
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -118,7 +128,8 @@ jobs:
                 packages/gui/release/*.${{ matrix.artifact_ext }}
                 packages/gui/release/*.AppImage
                 packages/gui/release/*.deb
-                packages/gui/release/latest*.yml
+                packages/gui/release/*.yml
+                packages/gui/release/*.zip
               if-no-files-found: error
 
    publish:
@@ -189,11 +200,14 @@ jobs:
          - name: Upload release assets
            uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
            with:
+              # Beta tags (v*-beta*) publish as GitHub prereleases: stable clients
+              # (allowPrerelease=false → GitHub /releases/latest) never see them.
+              prerelease: ${{ contains(github.ref_name, '-beta') }}
               files: |
                 dist/*.dmg
                 dist/*.AppImage
                 dist/*.deb
                 dist/*-setup.exe
-                dist/latest*.yml
+                dist/*.yml
                 dist/update-manifest.json
               body_path: dist/RELEASE_NOTES.md
