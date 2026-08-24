@@ -46,6 +46,14 @@ jobs:
                     builder: linux,
                     artifact_glob: "packages/gui/release/*",
                  }
+               - {
+                    os: windows-2022,
+                    target_id: win32-x64,
+                    native_targets: win32-x64-modern,
+                    builder: win,
+                    artifact_ext: exe,
+                    artifact_glob: "packages/gui/release/*.exe",
+                 }
       runs-on: ${{ matrix.os }}
       env:
          MACOS_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER_ID != '' && secrets.APPLE_API_KEY != '' }}
@@ -66,22 +74,33 @@ jobs:
            run: bun install --frozen-lockfile
 
          - name: Build native addon (bazel)
+           if: matrix.builder != 'win'
            uses: ./.github/actions/bazel-natives
            with:
               targets: ${{ matrix.native_targets }}
               cache-scope: gui-release-${{ matrix.target_id }}
 
+         - uses: dtolnay/rust-toolchain@stable
+           if: matrix.builder == 'win'
+           with:
+              toolchain: nightly-2026-07-28
+
+         - name: Build native addon (cargo, win32)
+           if: matrix.builder == 'win'
+           working-directory: packages/natives
+           run: bun run build
+
          - name: Build daemon binary (musepi CLI)
-           if: matrix.builder == 'mac' || matrix.builder == 'linux'
+           if: matrix.builder == 'mac' || matrix.builder == 'linux' || matrix.builder == 'win'
            working-directory: packages/coding-agent
            run: bun run build
 
          - name: Stage daemon binary into GUI vendor
-           if: matrix.builder == 'mac' || matrix.builder == 'linux'
+           if: matrix.builder == 'mac' || matrix.builder == 'linux' || matrix.builder == 'win'
            run: |
               mkdir -p packages/gui/vendor/daemon
-              cp packages/coding-agent/dist/musepi packages/gui/vendor/daemon/musepi
-              chmod +x packages/gui/vendor/daemon/musepi
+              cp packages/coding-agent/dist/musepi${{ matrix.builder == 'win' && '.exe' || '' }} packages/gui/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
+              chmod +x packages/gui/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
 
          - name: Build GUI renderer
            working-directory: packages/gui
