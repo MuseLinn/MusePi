@@ -51,7 +51,11 @@ export function GroupedSessionList({
 }): ReactNode {
 	const groups = new Map<string, SessionListNode[]>();
 	for (const n of nodes) {
-		const g = dateGroup(n.entry.timestamp) || "earlier";
+		// Bucket by LAST-ACTIVITY (openchamber `time.updated` parity, the same
+		// key the in-group SessionList sorts by): a session created last week
+		// but resumed today belongs under "today", not "earlier" (creation
+		// time). Fall back to the creation timestamp for old daemons.
+		const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || "earlier";
 		const list = groups.get(g) ?? [];
 		list.push(n);
 		groups.set(g, list);
