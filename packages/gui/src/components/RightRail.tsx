@@ -131,7 +131,37 @@ export function RightRail({
 						<Icon name="more" className="h-4 w-4" />
 					</button>
 					{overflowOpen && (
-						<div className="gui-right-rail-overflow" role="menu">
+						<div
+							className="gui-right-rail-overflow"
+							role="menu"
+							aria-orientation="vertical"
+							onKeyDown={e => {
+								if (e.key === "Escape") {
+									e.preventDefault();
+									setOverflowOpen(false);
+									return;
+								}
+								// ArrowUp/Down cycle items, Enter activates.
+								const buttons = Array.from(
+									e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]"),
+								);
+								if (buttons.length === 0) return;
+								const idx = buttons.indexOf(document.activeElement as HTMLButtonElement);
+								if (e.key === "ArrowDown") {
+									e.preventDefault();
+									buttons[(idx + 1) % buttons.length]!.focus();
+								} else if (e.key === "ArrowUp") {
+									e.preventDefault();
+									buttons[(idx - 1 + buttons.length) % buttons.length]!.focus();
+								} else if (e.key === "Enter" || e.key === " ") {
+									const active = document.activeElement as HTMLButtonElement | null;
+									if (active?.getAttribute("role") === "menuitem") {
+										e.preventDefault();
+										active.click();
+									}
+								}
+							}}
+						>
 							{secondaryItems.map(({ id, s }) => (
 								<button
 									key={id}

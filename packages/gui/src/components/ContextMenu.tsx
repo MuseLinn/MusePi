@@ -45,7 +45,38 @@ export function ContextMenu({
 		anchor: open ? { x, y } : null,
 	});
 	return renderMenu(
-		<div role="menu">
+		<div
+			role="menu"
+			aria-orientation="vertical"
+			onKeyDown={e => {
+				// Keyboard menu navigation: ↑/↓ cycle enabled items, Home/End
+				// jump, Enter/Space activate. Esc handled by the floating menu.
+				const buttons = Array.from(
+					e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)"),
+				);
+				if (buttons.length === 0) return;
+				const idx = buttons.indexOf(document.activeElement as HTMLButtonElement);
+				if (e.key === "ArrowDown") {
+					e.preventDefault();
+					buttons[(idx + 1) % buttons.length]!.focus();
+				} else if (e.key === "ArrowUp") {
+					e.preventDefault();
+					buttons[(idx - 1 + buttons.length) % buttons.length]!.focus();
+				} else if (e.key === "Home") {
+					e.preventDefault();
+					buttons[0]!.focus();
+				} else if (e.key === "End") {
+					e.preventDefault();
+					buttons[buttons.length - 1]!.focus();
+				} else if (e.key === "Enter" || e.key === " ") {
+					const active = document.activeElement as HTMLButtonElement | null;
+					if (active?.getAttribute("role") === "menuitem") {
+						e.preventDefault();
+						active.click();
+					}
+				}
+			}}
+		>
 			{items.map((item, i) => (
 				// Menu rows are static call-site arrays — the index is the identity.
 				<div key={i}>

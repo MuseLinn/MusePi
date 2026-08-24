@@ -604,7 +604,11 @@ export function FilePane({
 		return items;
 	}, [ctx, openPreview, copyPath, load, startNewFile, startNewDir, startRename, confirmDelete, cwd]);
 
-	const renderRow = (row: { node: TreeNode; depth: number }): ReactNode => {
+	const renderRow = (
+		row: { node: TreeNode; depth: number },
+		posInSet?: number,
+		setSize?: number,
+	): ReactNode => {
 		const { node, depth } = row;
 		const { entry } = node;
 		const isDir = entry.isDir;
@@ -618,6 +622,9 @@ export function FilePane({
 					className="gui-filepane-vrow gui-filepane-dir"
 					style={{ paddingLeft: indent }}
 					role="treeitem"
+					aria-level={depth}
+					aria-posinset={posInSet}
+					aria-setsize={setSize}
 					aria-expanded={!closed}
 				>
 					<button
@@ -646,6 +653,9 @@ export function FilePane({
 				}`}
 				style={{ paddingLeft: indent }}
 				role="treeitem"
+				aria-level={depth}
+				aria-posinset={posInSet}
+				aria-setsize={setSize}
 			>
 				<button
 					type="button"
@@ -750,7 +760,7 @@ export function FilePane({
 								{Array.from({ length: end - start }, (_, k) => {
 									const i = start + k;
 									if (editing && i === editIndex) return editingRow;
-									return i < rows.length ? renderRow(rows[i]!) : null;
+									return i < rows.length ? renderRow(rows[i]!, i + 1, rows.length) : null;
 								})}
 							</div>
 						</div>
