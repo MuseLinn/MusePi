@@ -568,3 +568,34 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 配对码磁贴："6 位配对码 + 电脑地址 — 都在桌面分享面板上"（原未说明地址来源）
 - 配对表单底部 hint："看不到电脑地址？改用公网隧道分享，直接扫码链接"
   （隧道模式免地址——等价于"只输授权码"的体验）
+
+### 11.12 实例切换器 + agent 自主共享（2026-08-25，Electron E2E 验证）
+
+**实例切换器（openchamber DesktopHostSwitcher parity）**：顶栏实例按钮从"单本地 daemon 信息菜单"
+升级为多 host 切换器。
+- 数据：`RemoteHost { id, label, url, token? }`，localStorage `musepi-gui-hosts` 持久化；
+  `buildWsUrl` 把 token 拼进 WS URL（`?token=`，浏览器 WebSocket 不能设 header）
+- 菜单：本地行 + 已保存远程行（状态点/current 徽标/hover 删除）+ 添加表单
+  （label/url/token）；点击行切换 → `musepi-gui-url` 持久化 + 重 boot
+- 安全边界：Electron 版本门（daemon 版本不匹配自动重启）与本地 probe/spawn 回退
+  只对 loopback 且不带 token 的 URL 生效——带 token 的远程实例绝不自动重启
+
+**daemon 远程访问**：`musepi serve --remote-token <token>`（≥16 字符）→ WS 绑 0.0.0.0 +
+全连接 bearer 鉴权（Authorization: Bearer 或 `?token=`，常量时间比较，401 拒绝）；
+未设置 → 保持 loopback-only 零认证（原行为）。E2E：无 token 401 / 带 token ping 通 /
+远程 daemon 完整渲染 GUI 会话树；切换器"添加→持久化→切换→连接成功"全链验证。
+
+**agent collab 工具（用户"让 musepi 自己开配对"需求落地）**：
+- `collab` 工具：action=start/stop/status；mode=lan（默认）/tunnel/workspace
+- 动态 approval：LAN → write tier（write 模式自动过）；tunnel → exec + override
+  （强制确认："公网隧道 — 任何人拿到链接都能加入"）；stop → write；status → read
+- daemon 注入（session.create/resume 的 agent 会话都有）：tools/context.ts 声明合并
+  AgentToolContext.collab；DaemonServer 经 setCollabToolProvider 接线；handle 直接
+  复用 collab.* RPC（dummy conn——collab case 不写连接）
+- 无 daemon 环境（TUI/CLI）：工具报"Remote sharing is unavailable"，提示用 /collab
+- 返回：LAN → link + 6 位配对码；tunnel → 公网链接 + ⚠️ 停止共享提示
+- `collab.start` RPC 新增 mode "tunnel"（cloudflared/ngrok 公网 URL）；GUI CollabDialog
+  加 Public tunnel 分段选项 + 公网警告 hint
+
+**可吸收项待办（dsh-mobile-remote 30+ API 范本）**：移动端完整会话管理/审批桥/通知悬浮球
+（见 §11.9 吸收清单），远程 daemon 连接打通后 RPC `session.*`/`jobs.*`/`subagent.*` 已可用。
