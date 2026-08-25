@@ -1604,8 +1604,8 @@ export const settings = {
 		"Enable the scriptable host-desktop control tool (screenshots, input, accessibility)",
 	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
 		"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
-		"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
+	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace":
+		"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
 	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.":
 		"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.",
 	"musepi browser relay endpoint (default http://127.0.0.1:9224).":
@@ -1614,8 +1614,8 @@ export const settings = {
 		"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.',
 	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)":
 		"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
@@ -1916,8 +1916,8 @@ export const settings = {
 	"Balance brevity and detail (default)": "Balance brevity and detail (default)",
 	"Balanced (Whisper small)": "Balanced (Whisper small)",
 	"Balanced safety margin": "Balanced safety margin",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
-		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
+		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
 	"Base URL of a self-hosted SearXNG instance used for web search":
 		"Base URL of a self-hosted SearXNG instance used for web search",
 	"Bash Approval Patterns": "Bash Approval Patterns",
@@ -1982,13 +1982,13 @@ export const settings = {
 	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
 		"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
 	"Task Card Style": "Task Card Style",
-	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card":
-		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card",
+	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
+		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
 	"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
 		"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 	"Plain tool-call card only — no swarm member grid": "Plain tool-call card only — no swarm member grid",
 	"MusePi Swarm": "MusePi Swarm",
-	"OMP original (Classic)": "OMP original (Classic)",
+	"MusePi original (Classic)": "MusePi original (Classic)",
 	"Swarm Task Card": "Swarm Task Card",
 	"Color-Blind Mode": "Color-Blind Mode",
 	"Combine diffs and git apply": "Combine diffs and git apply",

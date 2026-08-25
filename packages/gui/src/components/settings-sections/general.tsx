@@ -90,7 +90,7 @@ export function TaskCardStylePreview({
 				onClick={() => onPick("classic")}
 			>
 				{classic}
-				<span className="gui-taskstyle-preview-label">{t("OMP original (Classic)")}</span>
+				<span className="gui-taskstyle-preview-label">{t("MusePi original (Classic)")}</span>
 			</button>
 		</div>
 	);

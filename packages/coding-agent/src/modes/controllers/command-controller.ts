@@ -1269,7 +1269,7 @@ export class CommandController {
 				if (shouldPersistCwd) await this.#applyBashResultCwd(result);
 			} catch (error) {
 				this.ctx.showError(
-					t("Bash command completed, but OMP failed to update its working directory: {0}").replace(
+					t("Bash command completed, but MusePi failed to update its working directory: {0}").replace(
 						"{0}",
 						error instanceof Error ? error.message : t("Unknown error"),
 					),

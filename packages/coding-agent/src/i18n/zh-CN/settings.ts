@@ -291,7 +291,7 @@ export const settings = {
 	"Cache Miss Marker": "缓存未命中标记",
 	"Catalog Only": "仅目录",
 	"Check for Updates": "检查更新",
-	"Check for musepi updates on startup": "启动时检查 omp 更新",
+	"Check for musepi updates on startup": "启动时检查 MusePi 更新",
 	"Check for plugin updates on startup": "启动时检查插件更新",
 	"Check on startup and auto-install updates": "启动时检查并自动安装更新",
 
@@ -457,10 +457,10 @@ export const settings = {
 	"Notes (TTSR)": "注释（TTSR）",
 	"Number of concurrent sessions allowed per project": "每个项目允许的并发会话数",
 	"Number of concurrent sessions allowed globally across all projects": "所有项目全局允许的并发会话数",
-	"OMP API key": "MusePi API 密钥",
-	"OMP app": "MusePi 应用",
-	"OMP endpoint for the collab relay": "协作中继的 MusePi 端点",
-	"OMP subscription": "MusePi 订阅",
+	"MusePi API key": "MusePi API 密钥",
+	"MusePi app": "MusePi 应用",
+	"MusePi endpoint for the collab relay": "协作中继的 MusePi 端点",
+	"MusePi subscription": "MusePi 订阅",
 	Off: "关闭",
 	On: "开启",
 	"Only tool calls": "仅工具调用",
@@ -502,7 +502,7 @@ export const settings = {
 	"Quiet startup": "静默启动",
 	"Rate-limited in-flight request budget per provider": "每个提供商的速率限制进行中请求预算",
 	"Read Target Size": "读取目标大小",
-	"Rebuild OMP": "重建 MusePi",
+	"Rebuild MusePi": "重建 MusePi",
 	Record: "录制",
 	Redact: "编辑",
 	"Redact messages containing secrets before sharing": "分享前编辑包含秘密的消息",
@@ -1129,8 +1129,8 @@ export const settings = {
 	"Tokens:": "Tokens:",
 	Tokens: "Tokens",
 	"Running:": "运行中:",
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'每个提供商 ID 的最大并发 LLM 请求数（例如 "openai" 或 "anthropic"），在此配置根目录下跨本地 OMP 进程共享。未列出的提供商无限制。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'每个提供商 ID 的最大并发 LLM 请求数（例如 "openai" 或 "anthropic"），在此配置根目录下跨本地 MusePi 进程共享。未列出的提供商无限制。',
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'子代理隔离后端。"auto" 让原生 PAL 选择最佳可用后端（优先 CoW 文件系统，其次 overlayfs/ProjFS，最后 git worktree / 递归复制回退）。',
 	'JSON object mapping model roles, model selectors ("provider/model-id"), or provider wildcards ("provider/*") to ordered fallback selectors, e.g. {"default":["openai/gpt-4o-mini"],"google-antigravity/*":["google/*","google-vertex/*"]}. Model-oriented keys apply whenever that model/provider is active, regardless of role; a "provider/*" entry keeps the failing model\'s id and swaps the provider. An id-prefixed wildcard ("openrouter/google/*") re-prefixes the failing model\'s bare id (google-antigravity/gemini-x -> openrouter/google/gemini-x) and, used as a key, matches only that provider\'s ids under the prefix.':
@@ -1536,8 +1536,8 @@ export const settings = {
 		"隔离任务变更的集成方式（patch apply 或 branch merge）",
 	"Commit message style for nested repo changes (generic or AI-generated)":
 		"嵌套仓库变更的提交信息风格（generic 或 AI-generated）",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
-		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `musepi worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。OMP_WORKTREE_DIR 环境变量可覆盖此设置。",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `musepi worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MUSEPI_WORKTREE_DIR env var overrides this.":
+		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `musepi worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。MUSEPI_WORKTREE_DIR 环境变量可覆盖此设置。",
 	"How strongly to push delegating work to subagents": "将工作委托给子代理的倾向程度",
 	"Prompt guidance plus a first-turn delegation reminder": "提示引导及首轮委托提醒",
 	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.":
@@ -1789,8 +1789,8 @@ export const settings = {
 	"Rename failed: {0}": "重命名失败：{0}",
 	"Wait for the current response to finish or abort it before changing directories.":
 		"请等待当前响应完成或中止后再更改目录。",
-	"Bash command completed, but OMP failed to update its working directory: {0}":
-		"Bash 命令已完成，但 OMP 未能更新其工作目录：{0}",
+	"Bash command completed, but MusePi failed to update its working directory: {0}":
+		"Bash 命令已完成，但 MusePi 未能更新其工作目录：{0}",
 	"Bash command failed: {0}": "Bash 命令失败：{0}",
 	"Python execution failed: {0}": "Python 执行失败：{0}",
 	"Nothing to compact (no messages yet)": "无需压缩（尚无消息）",

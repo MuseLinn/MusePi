@@ -1531,8 +1531,8 @@ export const settings = {
 		"启用可脚本化的主机桌面控制工具（截图、输入、辅助功能）",
 	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
 		"当 computer 工具操作主机桌面时，在显示器上显示全屏辉光边缘、状态徽标和每次操作的目标高亮，让你始终看到智能体在做什么",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
-		"启用 OMP 原生安全扫描规划与执行，以及只读的 security:// 资源命名空间",
+	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace":
+		"启用 MusePi 原生安全扫描规划与执行，以及只读的 security:// 资源命名空间",
 	"Drive your own Chrome tabs through the musepi browser relay. Install the extension once (`musepi browser-relay install`); the relay server auto-starts when the browser tool needs it. Takes precedence over Browser CDP URL; set PI_BROWSER_RELAY=0 or PI_BROWSER_RELAY=1 to override.":
 		"通过 musepi 浏览器中继驱动你自己的 Chrome 标签页。扩展只需安装一次（`musepi browser-relay install`）；浏览器工具需要时中继服务器会自动启动。优先于 Browser CDP URL；可设置 PI_BROWSER_RELAY=0 或 PI_BROWSER_RELAY=1 覆盖。",
 	"musepi browser relay endpoint (default http://127.0.0.1:9224).":
@@ -1541,8 +1541,8 @@ export const settings = {
 		"将少用（可发现）工具挂载到 xd:// 设备 URL，通过 read/write 驱动，而非在每次请求时携带其 schema。未授予 write 工具的会话跳过挂载并顶层暴露所有工具。禁用后所有已启用工具均顶层暴露。",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'子智能体的隔离后端。"auto" 让原生 PAL 选择最佳可用后端（CoW 文件系统，其次 overlayfs/ProjFS，再其次 git worktree / 递归复制回退）。',
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'每个提供商 id（例如 "openai" 或 "anthropic"）的最大并发 LLM 请求数，在该配置根目录下的本地 OMP 进程间共享。未列出的提供商不设限。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'每个提供商 id（例如 "openai" 或 "anthropic"）的最大并发 LLM 请求数，在该配置根目录下的本地 MusePi 进程间共享。未列出的提供商不设限。',
 	"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)":
 		"web_search 推进到下一个回退前，每个提供商搜索通道的硬超时（秒，最大 300）",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
@@ -1834,8 +1834,8 @@ export const settings = {
 	"Balance brevity and detail (default)": "平衡简洁与详细（默认）",
 	"Balanced (Whisper small)": "均衡（Whisper small）",
 	"Balanced safety margin": "平衡安全边距",
-	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The OMP_WORKTREE_DIR env var overrides this.":
-		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `omp worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。OMP_WORKTREE_DIR 环境变量可覆盖此设置。",
+	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
+		"代理托管 worktree 的基准目录——任务隔离副本、`github` PR 检出以及 `omp worktree` 清理都位于此处。未设置时使用 ~/.musepi/wt。必须为绝对路径或 ~ 相对路径；相对路径会被忽略。MusePi_WORKTREE_DIR 环境变量可覆盖此设置。",
 	"Base URL of a self-hosted SearXNG instance used for web search": "用于网络搜索的自托管 SearXNG 实例的基准 URL",
 	"Bash Approval Patterns": "Bash 审批规则",
 	"Bash Auto-Background": "Bash 自动后台运行",
@@ -1898,13 +1898,13 @@ export const settings = {
 	"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point":
 		"在实时会话中折叠压缩前的历史记录到摘要分隔线后；禁用则保留完整会话并在每个压缩点显示分隔线",
 	"Task Card Style": "任务卡样式",
-	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card":
-		"task/swarm 卡片渲染样式：MusePi Swarm 显示成员网格（TUI 盲文进度条 / GUI 悬浮头像网格卡）；OMP 原版（Classic）仅保留原生工具调用卡",
+	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
+		"task/swarm 卡片渲染样式：MusePi Swarm 显示成员网格（TUI 盲文进度条 / GUI 悬浮头像网格卡）；MusePi 原版（Classic）仅保留原生工具调用卡",
 	"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
 		"Kimi 风格成员网格：每个智能体的盲文进度条（TUI）与头像+进度悬浮卡（GUI）",
 	"Plain tool-call card only — no swarm member grid": "仅普通工具调用卡，无 swarm 成员网格",
 	"MusePi Swarm": "MusePi Swarm",
-	"OMP original (Classic)": "OMP 原版 (Classic)",
+	"MusePi original (Classic)": "MusePi 原版 (Classic)",
 	"Swarm Task Card": "Swarm 任务卡",
 	"Color-Blind Mode": "色盲模式",
 	"Combine diffs and git apply": "合并差异并使用 git apply",
