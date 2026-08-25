@@ -22,6 +22,7 @@ import type { MemoryRuntimeContext } from "../../memory-backend";
 import { type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
+import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
@@ -34,6 +35,7 @@ import type {
 	BeforeProviderRequestEvent,
 	BeforeProviderRequestEventResult,
 	CompactOptions,
+	ComposerShapeDefinition,
 	ContextEvent,
 	ContextEventResult,
 	ContextUsage,
@@ -382,8 +384,9 @@ export type ShutdownHandler = () => void;
 /**
  * Emit `session_shutdown` and clear timers owned by an extension runner.
  *
- * Returns whether any shutdown handlers were present. Timer cleanup runs even
- * when a handler fails so extension background work cannot outlive its host.
+ * Returns whether any shutdown handlers were present. Fallback disposal and timer
+ * cleanup run even when a handler fails so extension background work — and a
+ * fallback bound to this session's context — cannot outlive its host.
  */
 export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner | undefined): Promise<boolean> {
 	if (!extensionRunner) return false;
@@ -394,6 +397,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 		});
 		return true;
 	} finally {
+		extensionRunner.disposeFileFallbacks();
 		extensionRunner.clearManagedTimers();
 	}
 }
@@ -512,6 +516,20 @@ export class ExtensionRunner {
 	#managedTimers = new ManagedTimers((event, error, stack) =>
 		this.emitError({ extensionPath: "<timer>", event, error, stack }),
 	);
+	/**
+	 * Disposers for the file-write/delete fallback trampolines installed in
+	 * {@link initialize}. The registry behind them is PROCESS-WIDE, so a runner
+	 * that never removes its entries would leak handlers across sessions — and
+	 * worse, a handler whose owning session is gone would still fire for a later
+	 * session's denied mutation with a dead `createContext()`. Trampolines are
+	 * drained by {@link disposeFileFallbacks} on session shutdown (and before a
+	 * re-initialize installs a fresh generation) so a handler from a torn-down
+	 * session can never fire for a later one sharing the same process.
+	 *
+	 * Each trampoline re-reads its extension's handler list at call time rather
+	 * than snapshotting it at install time.
+	 */
+	#fileFallbackDisposers: Array<() => void> = [];
 	/**
 	 * Dedup markers for `tool_call` emission, keyed `${toolCallId}:${toolName}`.
 	 * The agent loop emits `tool_call` at arg-prep time (before scheduling and
@@ -662,6 +680,14 @@ export class ExtensionRunner {
 		return this.sessionManager.getCwd();
 	}
 
+	/** Live session id, read through at dispatch time for the same reason as
+	 *  {@link cwd}: the process-wide file-write/delete fallback registry names
+	 *  the session that issued a denied mutation, and that name must track the
+	 *  runner's actual session, not a construction-time snapshot. */
+	get sessionId(): string {
+		return this.sessionManager.getSessionId();
+	}
+
 	initialize(
 		actions: ExtensionActions,
 		contextActions: ExtensionContextActions,
@@ -718,6 +744,55 @@ export class ExtensionRunner {
 		this.#uiContext = uiContext ?? noOpUIContext;
 		this.#mode = mode;
 		this.#initialized = true;
+
+		// Re-initialize (e.g. a mode switch rewiring UI/runtime actions) must not
+		// accumulate duplicate global registrations — drop the prior generation before
+		// installing this one's trampolines.
+		this.disposeFileFallbacks();
+		for (const ext of this.extensions) {
+			// Nothing registered by this extension means no trampoline, so a host with
+			// no fallback-registering extension leaves the seam genuinely empty and
+			// `hasFileWriteFallback()`/`hasFileDeleteFallback()` false — the invariant
+			// the whole feature rests on. Each seam is checked separately, so an
+			// extension that only brokers writes never appears in the delete registry.
+			if (ext.fileWriteFallbackHandlers.length === 0 && ext.fileDeleteFallbackHandlers.length === 0) continue;
+			if (ext.fileWriteFallbackHandlers.length > 0) {
+				this.#fileFallbackDisposers.push(
+					addFileWriteFallback(async req => {
+						const ctx = this.createContext();
+						for (const handler of ext.fileWriteFallbackHandlers) {
+							try {
+								if (await handler(req, ctx)) return true;
+							} catch (error) {
+								logger.warn("Extension file write fallback handler threw; trying next handler", {
+									extension: ext.path,
+									error: error instanceof Error ? error.message : String(error),
+								});
+							}
+						}
+						return false;
+					}),
+				);
+			}
+			if (ext.fileDeleteFallbackHandlers.length > 0) {
+				this.#fileFallbackDisposers.push(
+					addFileDeleteFallback(async req => {
+						const ctx = this.createContext();
+						for (const handler of ext.fileDeleteFallbackHandlers) {
+							try {
+								if (await handler(req, ctx)) return true;
+							} catch (error) {
+								logger.warn("Extension file delete fallback handler threw; trying next handler", {
+									extension: ext.path,
+									error: error instanceof Error ? error.message : String(error),
+								});
+							}
+						}
+						return false;
+					}),
+				);
+			}
+		}
 
 		// Drain events buffered by emitCredentialDisabled() before initialize ran. The
 		// spread adds the `type` discriminator — `event` is the pi-ai shape (no `type`).
@@ -1098,6 +1173,15 @@ export class ExtensionRunner {
 		if (firstFailure) throw firstFailure.reason;
 	}
 
+	/** Composer shapes registered during extension load, with later extensions winning id collisions. */
+	getComposerShapes(): ComposerShapeDefinition[] {
+		const shapes = new Map<string, ComposerShapeDefinition>();
+		for (const extension of this.extensions) {
+			for (const [id, shape] of extension.composerShapes) shapes.set(id, shape);
+		}
+		return [...shapes.values()];
+	}
+
 	/**
 	 * Aggregate the registered CLI flags across a set of extensions (last write
 	 * wins on name collision). Static so callers that need the flag set before a
@@ -1322,6 +1406,16 @@ export class ExtensionRunner {
 	 */
 	clearManagedTimers(): void {
 		this.#managedTimers.clearAll();
+	}
+
+	/**
+	 * Remove this runner's file-write/delete fallback trampolines from the
+	 * process-wide registries. Called on session shutdown and before each
+	 * re-initialize so handlers never outlive (or duplicate across) the
+	 * generation that installed them.
+	 */
+	disposeFileFallbacks(): void {
+		for (const dispose of this.#fileFallbackDisposers.splice(0)) dispose();
 	}
 
 	createCommandContext(): ExtensionCommandContext {

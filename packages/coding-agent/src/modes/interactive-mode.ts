@@ -37,6 +37,7 @@ import {
 	TERMINAL,
 	Text,
 	TUI,
+	getComposerStyle,
 	visibleWidth,
 } from "@musepi/pi-tui";
 import type { TerminalAppearanceRequestToken } from "@musepi/pi-tui/terminal";
@@ -856,6 +857,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// spraying events no longer runs `getTopBorder` synchronously in the
 		// hot path where the render never gets to paint the result.
 		this.editor.setTopBorderProvider(availableWidth => this.statusLine.getTopBorder(availableWidth));
+		this.syncComposerShape();
 
 		this.hideToolActivity = settings.get("display.hideToolActivity");
 		this.chatContainer.setToolActivityVisible(!this.hideToolActivity);
@@ -1813,8 +1815,31 @@ export class InteractiveMode implements InteractiveModeContext {
 			transparent: settings.get("statusLine.transparent"),
 			segmentOptions: settings.get("statusLine.segmentOptions"),
 			compactThinkingLevel: settings.get("statusLine.compactThinkingLevel"),
+			contextLine: settings.get("statusLine.contextLine"),
 		});
 	}
+	syncComposerShape(): void {
+		const shape = settings.get("composer.shape") ?? "box";
+		const style = getComposerStyle(shape);
+		this.editor.setBorderStyle(shape);
+		this.statusLine.setAutocompleteActiveProbe(() => this.editor.isAutocompleteActive());
+		switch (style.statusAttachment) {
+			case "top-border":
+				this.editor.setTopBorderProvider(availableWidth => this.statusLine.getTopBorder(availableWidth));
+				break;
+			case "top-rule-chip":
+				this.editor.setTopBorderProvider(availableWidth => this.statusLine.getStandaloneTopBorder(availableWidth));
+				break;
+			case "none":
+				this.editor.setTopBorderProvider(undefined);
+				this.editor.setTopBorder(undefined);
+				break;
+		}
+		this.statusLine.setComposerStyle(style);
+		this.updateEditorBorderColor();
+		this.ui.requestRender();
+	}
+
 
 	#handleSessionAccentInputsChanged(): void {
 		this.#clearWorkingMessageAccentCache();
@@ -4154,6 +4179,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		this.#extensionUiController.clearExtensionTerminalInputListeners();
 		this.#extensionUiController.clearHookWidgets();
+		this.#extensionUiController.disposeComposerShapes();
 		for (const unsubscribe of this.#eventBusUnsubscribers) {
 			unsubscribe();
 		}
@@ -4289,6 +4315,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.editor = nextEditor;
 		this.editorContainer.addChild(nextEditor);
 		this.ui.setFocus(nextEditor);
+		this.syncComposerShape();
 
 		this.#inputController.setupKeyHandlers();
 		this.#inputController.setupEditorSubmitHandler();

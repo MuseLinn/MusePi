@@ -5,7 +5,6 @@
  * the whole conversation. It surfaces `session.getContextUsage()`, which
  * anchors on the last assistant's real provider prompt-token count — so the bar
  * matches the provider and the `/context` panel instead of an independent
- * estimate that drifted past 100%.
  *
  * `getTopBorder()` runs on every agent event (event-controller.ts), so the
  * breakdown is memoized: it re-queries `getContextUsage()` only when an input
@@ -16,8 +15,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { ContextUsage } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { initTheme, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import { StatusLineComponent } from "@musepi/pi-coding-agent/modes/components/status-line";
-import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 
 beforeAll(async () => {
@@ -40,7 +39,13 @@ interface Fake {
 	setRevision: (n: number) => void;
 }
 
-function makeSession(opts: { messages: unknown[]; contextWindow?: number; usage?: ContextUsage | undefined }): Fake {
+function makeSession(opts: {
+	messages: unknown[];
+	contextWindow?: number;
+	usage?: ContextUsage | undefined;
+	/** Session title; `null` models a fresh, not-yet-titled session. */
+	sessionName?: string | null;
+}): Fake {
 	const contextWindow = opts.contextWindow ?? 200_000;
 	let usage: ContextUsage | undefined = "usage" in opts ? opts.usage : { tokens: 1234, contextWindow, percent: 0.6 };
 	let calls = 0;
@@ -65,7 +70,7 @@ function makeSession(opts: { messages: unknown[]; contextWindow?: number; usage?
 				premiumRequests: 0,
 				cost: 0,
 			}),
-			getSessionName: () => "test",
+			getSessionName: () => (opts.sessionName === null ? undefined : (opts.sessionName ?? "test")),
 		},
 		getAsyncJobSnapshot: () => ({ running: [] }),
 		getContextUsage: () => {
@@ -270,5 +275,108 @@ describe("StatusLineComponent context breakdown", () => {
 		const plain = comp.getTopBorder(80).content.replaceAll(/\x1b\[[0-9;]*m/g, "");
 		expect(plain).toContain("5K/?");
 		expect(plain).not.toContain("0.0%/0");
+	});
+
+	it("splits the gap gauge into used (accent) and unused (border) portions", () => {
+		const { session } = makeSession({
+			messages: [userMessage("hi"), assistantMessage("done")],
+			usage: { tokens: 50_000, contextWindow: 100_000, percent: 50 },
+		});
+		const comp = new StatusLineComponent(session);
+		comp.updateSettings({
+			preset: "custom",
+			leftSegments: ["pi"],
+			rightSegments: ["session_name"],
+			separator: "none",
+			sessionAccent: false,
+			contextLine: "percentage",
+		});
+
+		const border = comp.getTopBorder(80).content;
+		// The gauge resets the background and paints the used half in the accent
+		// border color, the remainder in the plain border color.
+		expect(border).toContain("\x1b[49m");
+		expect(border).toContain(theme.getFgAnsi("borderAccent"));
+		expect(border).toContain(theme.getFgAnsi("border"));
+	});
+
+	it("contextLine off renders a solid accent gauge without the unused split", () => {
+		const { session } = makeSession({
+			messages: [userMessage("hi"), assistantMessage("done")],
+			usage: { tokens: 50_000, contextWindow: 100_000, percent: 50 },
+		});
+		const comp = new StatusLineComponent(session);
+		comp.updateSettings({
+			preset: "custom",
+			leftSegments: ["pi"],
+			rightSegments: ["session_name"],
+			separator: "none",
+			sessionAccent: false,
+			contextLine: "off",
+		});
+
+		const border = comp.getTopBorder(80).content;
+		expect(border).toContain(theme.getFgAnsi("borderAccent"));
+		expect(border).not.toContain(`${theme.getFgAnsi("border")}─`);
+	});
+
+	it("embedded mode absorbs configured context segments into the annotated gauge", () => {
+		const { session } = makeSession({
+			messages: [userMessage("hi"), assistantMessage("done")],
+			usage: { tokens: 80_000, contextWindow: 1_000_000, percent: 8 },
+		});
+		const comp = new StatusLineComponent(session);
+		comp.setAutoCompactEnabled(true);
+		comp.updateSettings({
+			preset: "custom",
+			leftSegments: ["pi", "context_pct"],
+			rightSegments: ["context_total", "session_name"],
+			separator: "powerline-thin",
+			sessionAccent: false,
+			contextLine: "embedded",
+		});
+
+		const border = comp.getTopBorder(120);
+		const plain = border.content.replaceAll(/\x1b\[[0-9;]*m/g, "");
+		expect(border.width).toBe(120);
+		// The context segments are absorbed — no chip-style percent/window pair.
+		expect(plain).not.toContain("8.0%/1M");
+		expect(plain).toContain("8%");
+		expect(plain).toContain("1M");
+		// Annotated markers: speculation tick before the auto-compaction boundary.
+		const speculationIndex = plain.indexOf("╎");
+		const compactionIndex = plain.indexOf("┃");
+		expect(speculationIndex).toBeGreaterThanOrEqual(0);
+		expect(compactionIndex).toBeGreaterThan(speculationIndex);
+		// The window label appears exactly once (absorbed into the gauge).
+		expect(plain.lastIndexOf("1M")).toBeGreaterThan(compactionIndex);
+	});
+
+	it("keeps embedded context on the gauge while the session is unnamed", () => {
+		// Regression: a fresh session has no title, so `session_name` is
+		// invisible and the right group is empty. The gauge must still bridge to
+		// the border edge and absorb the context segment — not fall back to a
+		// context chip that vanishes once the session gets auto-titled.
+		const { session } = makeSession({
+			messages: [userMessage("hi"), assistantMessage("done")],
+			usage: { tokens: 80_000, contextWindow: 1_000_000, percent: 8 },
+			sessionName: null,
+		});
+		const comp = new StatusLineComponent(session);
+		comp.updateSettings({
+			preset: "custom",
+			leftSegments: ["pi", "context_pct"],
+			rightSegments: ["session_name"],
+			separator: "powerline-thin",
+			sessionAccent: false,
+			contextLine: "embedded",
+		});
+
+		const border = comp.getTopBorder(120);
+		const plain = border.content.replaceAll(/\x1b\[[0-9;]*m/g, "");
+		expect(border.width).toBe(120);
+		expect(plain).not.toContain("8.0%/1M");
+		expect(plain).toContain("8%");
+		expect(plain).toContain("1M");
 	});
 });

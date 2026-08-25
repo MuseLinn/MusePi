@@ -227,6 +227,7 @@ export class SelectorController {
 							sessionAccent: settings.get("statusLine.sessionAccent"),
 							transparent: settings.get("statusLine.transparent"),
 							compactThinkingLevel: settings.get("statusLine.compactThinkingLevel"),
+							contextLine: settings.get("statusLine.contextLine"),
 							...previewSettings,
 						});
 						this.ctx.ui.requestRender();
@@ -256,6 +257,7 @@ export class SelectorController {
 							sessionAccent: settings.get("statusLine.sessionAccent"),
 							transparent: settings.get("statusLine.transparent"),
 							compactThinkingLevel: settings.get("statusLine.compactThinkingLevel"),
+							contextLine: settings.get("statusLine.contextLine"),
 						});
 						this.ctx.ui.requestRender();
 					},
@@ -446,6 +448,9 @@ export class SelectorController {
 			case "autoCompact":
 				this.ctx.session.setAutoCompactionEnabled(value as boolean);
 				this.ctx.statusLine.setAutoCompactEnabled(value as boolean);
+				break;
+			case "composer.shape":
+				this.ctx.syncComposerShape();
 				break;
 			case "advisor.enabled":
 				this.ctx.session.setAdvisorEnabled(value as boolean);
@@ -658,6 +663,7 @@ export class SelectorController {
 			case "statusLine.sessionAccent":
 			case "statusLine.transparent":
 			case "statusLine.compactThinkingLevel":
+			case "statusLine.contextLine":
 			case "statusLineSegments":
 			case "statusLineModelThinking":
 			case "statusLinePathAbbreviate":
@@ -679,6 +685,7 @@ export class SelectorController {
 					transparent: settings.get("statusLine.transparent"),
 					segmentOptions: settings.get("statusLine.segmentOptions"),
 					compactThinkingLevel: settings.get("statusLine.compactThinkingLevel"),
+					contextLine: settings.get("statusLine.contextLine"),
 				};
 				this.ctx.statusLine.updateSettings(statusLineSettings);
 				this.ctx.ui.requestRender();

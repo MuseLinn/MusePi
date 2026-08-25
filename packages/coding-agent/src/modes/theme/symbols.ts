@@ -65,6 +65,9 @@ export type SymbolKey =
 	| "sep.dot"
 	| "sep.slash"
 	| "sep.pipe"
+	// Context gauge boundaries
+	| "context.speculation"
+	| "context.compaction"
 	// Icons
 	| "icon.model"
 	| "icon.plan"
@@ -404,6 +407,9 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"sep.dot": " · ",
 	"sep.slash": " / ",
 	"sep.pipe": " │ ",
+	// Context gauge boundaries
+	"context.speculation": "╎",
+	"context.compaction": "┃",
 	// Icons
 	"icon.model": "⬢",
 	"icon.plan": "🗺",
@@ -715,6 +721,11 @@ const NERD_SYMBOLS: SymbolMap = {
 	"sep.slash": "\ue0bb",
 	// pick:  | alt: │ ┃ |
 	"sep.pipe": "\ue0b3",
+	// Context gauge boundaries
+	// pick: 󰕝 | alt: ╎ :
+	"context.speculation": "\u{f055d}",
+	// pick: 󰁨 | alt: ┃ |
+	"context.compaction": "\u{f0068}",
 	// Icons - Nerd Font specific
 	// pick:  | alt:   ◆
 	"icon.model": "\uec19",
@@ -1071,6 +1082,9 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"sep.dot": " - ",
 	"sep.slash": " / ",
 	"sep.pipe": " | ",
+	// Context gauge boundaries
+	"context.speculation": ":",
+	"context.compaction": "|",
 	// Icons
 	"icon.model": "[M]",
 	"icon.plan": "plan",

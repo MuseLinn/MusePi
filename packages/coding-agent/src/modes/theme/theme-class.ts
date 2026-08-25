@@ -128,6 +128,8 @@ const LANG_BRAND_COLORS: Partial<Record<SymbolKey, string>> = {
 	"lang.ruby": "#cc342d",
 	"lang.julia": "#9558b2",
 };
+/** Full and background-only reset escapes nested inside filled composer rows. */
+const BACKGROUND_RESET_PATTERN = /\x1b\[(?:0|49)m/g;
 
 export class Theme {
 	#fgColors: Record<ThemeColor, string>;
@@ -272,6 +274,17 @@ export class Theme {
 		const ansi = this.#bgColors[color];
 		if (!ansi) throw new Error(`Unknown theme background color: ${color}`);
 		return `${ansi}${text}\x1b[49m`; // Reset only background color
+	}
+	/**
+	 * Apply a background fill that resumes after nested full/background resets.
+	 *
+	 * Composer rows contain styled text and cursor escapes; a normal background
+	 * wrapper would otherwise stop at the first nested reset.
+	 */
+	bgFill(color: ThemeBg, text: string): string {
+		const ansi = this.#bgColors[color];
+		if (!ansi) throw new Error(`Unknown theme background color: ${color}`);
+		return `${ansi}${text.replace(BACKGROUND_RESET_PATTERN, `$&${ansi}`)}\x1b[49m`;
 	}
 
 	bold(text: string): string {

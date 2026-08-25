@@ -599,7 +599,7 @@ const sessionNameSegment: StatusLineSegment = {
 	id: "session_name",
 	render(ctx) {
 		const sessionManager = ctx.session.sessionManager;
-		const name = sessionManager?.getSessionName();
+		const name = sessionManager?.getSessionName() || ctx.previewTitle;
 		if (!name) return { content: "", visible: false };
 
 		const accentEnabled = ctx.sessionAccent !== false;

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { isEnoent, logger, once, untilAborted } from "@musepi/pi-utils";
 import type { BunFile } from "bun";
+import { isPermissionDeniedError, writeFileWithFallback } from "../tools/file-write-fallback";
 import { FileChangeType, notifyWorkspaceWatchedFiles } from "./client";
 import { getServersForFile } from "./config";
 import {
@@ -66,11 +67,7 @@ export async function writethroughNoop(
 	_batch?: LspWritethroughBatchRequest,
 	_getDeferred?: (dst: string) => WritethroughDeferredHandle | undefined,
 ): Promise<FileDiagnosticsResult | undefined> {
-	if (file) {
-		await file.write(content);
-	} else {
-		await Bun.write(dst, content);
-	}
+	await writeFileWithFallback(dst, content, file);
 	return undefined;
 }
 
@@ -78,6 +75,12 @@ interface PendingWritethrough {
 	dst: string;
 	file?: BunFile;
 	changeType: FileChangeType;
+	/**
+	 * The bytes this entry committed. The flush prefers a fresh read of `dst` so
+	 * post-processing sees whatever else in the batch touched the file, and falls
+	 * back to these when that read is denied.
+	 */
+	content: string;
 }
 
 interface RunLspWritethroughOptions {
@@ -303,7 +306,7 @@ async function runLspWritethrough(
 	const contentAlreadyWritten = runOptions?.contentAlreadyWritten ?? false;
 
 	let finalContent = content;
-	const writeContent = async (value: string) => (file ? file.write(value) : Bun.write(dst, value));
+	const writeContent = async (value: string) => writeFileWithFallback(dst, value, file);
 	const getWritePromise = once(() =>
 		contentAlreadyWritten && finalContent === content ? Promise.resolve() : writeContent(finalContent),
 	);
@@ -486,9 +489,16 @@ async function flushWritethroughBatch(
 		try {
 			content = await fs.promises.readFile(entry.dst, "utf8");
 		} catch (error) {
-			if (!isEnoent(error)) throw error;
-			bundle?.finalize(undefined);
-			continue;
+			if (isEnoent(error)) {
+				bundle?.finalize(undefined);
+				continue;
+			}
+			// A brokered write lands bytes this process may not be able to read
+			// back: a sandbox that denies the write commonly denies the read too.
+			// Failing here would fail a flush whose every write succeeded, so the
+			// content this entry committed stands in for the unreadable file.
+			if (!isPermissionDeniedError(error)) throw error;
+			content = entry.content;
 		}
 		const deferredInner =
 			bundle &&
@@ -580,7 +590,7 @@ export function createLspWritethrough(cwd: string, options?: WritethroughOptions
 		}
 
 		const state = getOrCreateWritethroughBatch(batch.id, resolvedOptions);
-		state.entries.set(dst, { dst, file, changeType });
+		state.entries.set(dst, { dst, file, changeType, content });
 		if (!batch.flush) return undefined;
 
 		writethroughBatches.delete(batch.id);

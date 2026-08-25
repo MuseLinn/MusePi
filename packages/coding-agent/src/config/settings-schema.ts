@@ -99,6 +99,55 @@ const BLOB_BACKEND_CHOICES = BUILTIN_BLOB_DESTINATION_METADATA.filter(
 	description: destination.reason ?? destination.family,
 }));
 
+/** Composer shape id; extensions may register additional values at runtime. */
+export type ComposerShape = string;
+
+/** Built-in composer choices and their shared settings/setup copy. */
+export const BUILTIN_COMPOSER_SHAPES = [
+	{
+		value: "box",
+		label: "Rounded Box (Default)",
+		description: "Status line embedded in top border, compact 2-line prompt",
+	},
+	{
+		value: "claude",
+		label: "Claude Code",
+		description: "Full-width horizontal rules above and below, status line at bottom",
+	},
+	{
+		value: "pi",
+		label: "Pi",
+		description: "Framed horizontal rules with status line at bottom",
+	},
+	{
+		value: "borderless",
+		label: "Borderless",
+		description: "Clean prompt glyph with status line at bottom, no box borders",
+	},
+	{
+		value: "rule",
+		label: "Top Rule Dock",
+		description: "Single top rule with status docked onto it and below",
+	},
+	{
+		value: "field",
+		label: "Compact Field",
+		description: "Filled one-row field with accent end caps",
+	},
+	{
+		value: "rail",
+		label: "Accent Rail",
+		description: "Filled one-row field anchored by a single accent rail",
+	},
+] as const;
+
+/** Built-in composer ids used by tests and non-runtime consumers. */
+export const COMPOSER_SHAPE_VALUES = BUILTIN_COMPOSER_SHAPES.map(shape => shape.value);
+
+/** How the status line gap reacts to context usage. */
+export type ContextLineMode = "off" | "percentage" | "annotated" | "embedded";
+export const CONTEXT_LINE_MODE_VALUES = ["off", "percentage", "annotated", "embedded"] as const;
+
 export type SettingTab =
 	| "appearance"
 	| "model"
@@ -151,7 +200,7 @@ export const TAB_METADATA: Record<SettingTab, { label: string; icon: `tab.${stri
  * Ungrouped settings render first, before any section heading.
  */
 export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
-	appearance: ["Theme", "Status Line", "Display", "Images"],
+	appearance: ["Theme", "Composer", "Status Line", "Display", "Images"],
 	model: ["Thinking", "Sampling", "Prompt", "Retry & Fallback", "Advisor", "Prewalk", "Vision"],
 	interaction: [
 		"Input",
@@ -674,6 +723,19 @@ export const SETTINGS_SCHEMA = {
 			description: "Use blue instead of green for diff additions",
 		},
 	},
+	// Composer
+	"composer.shape": {
+		type: "string",
+		default: "box",
+		ui: {
+			tab: "appearance",
+			group: "Composer",
+			label: "Composer Shape",
+			description: "Visual layout of the input editor and status line",
+			tuiOnly: true,
+			options: "runtime",
+		},
+	},
 
 	// Status line
 	"statusLine.preset": {
@@ -716,6 +778,37 @@ export const SETTINGS_SCHEMA = {
 				{ value: "block", label: "Block", description: "Solid blocks" },
 				{ value: "none", label: "None", description: "Space only" },
 				{ value: "ascii", label: "ASCII", description: "Greater-than signs" },
+			],
+		},
+	},
+
+	"statusLine.contextLine": {
+		type: "enum",
+		values: CONTEXT_LINE_MODE_VALUES,
+		default: "embedded",
+		ui: {
+			tab: "appearance",
+			tuiOnly: true,
+			group: "Status Line",
+			label: "Context-Reactive Line",
+			description: "How the line between the left and right segments reflects context usage (box composer only)",
+			options: [
+				{ value: "off", label: "Off", description: "Solid accent line, no context feedback" },
+				{
+					value: "percentage",
+					label: "Percentage",
+					description: "Used portion in accent color, remainder dimmed",
+				},
+				{
+					value: "annotated",
+					label: "Annotated",
+					description: "Percentage plus ticks at the speculative and auto-compaction boundaries",
+				},
+				{
+					value: "embedded",
+					label: "Embedded",
+					description: "Annotated line with the context percentage and window embedded in the gauge",
+				},
 			],
 		},
 	},

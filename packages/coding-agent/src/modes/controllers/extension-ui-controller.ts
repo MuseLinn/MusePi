@@ -27,6 +27,7 @@ import { HookEditorComponent } from "../../modes/components/hook-editor";
 import { HookInputComponent } from "../../modes/components/hook-input";
 import { HookSelectorComponent, type HookSelectorSlider } from "../../modes/components/hook-selector";
 import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../modes/theme/theme";
+import { installExtensionComposerShape } from "../../modes/components/composer-shape-registry";
 import type { InteractiveModeContext, InteractiveSelectorDialogOptions } from "../../modes/types";
 import { normalizeCustomMessagePayload, USER_INTERRUPT_LABEL } from "../../session/messages";
 import { setExtensionTerminalTitle, setSessionTerminalTitle } from "../../utils/title-generator";
@@ -64,6 +65,7 @@ function toWireSelectOptions(options: ExtensionUISelectItem[]): CollabUiSelectIt
 
 export class ExtensionUiController {
 	#extensionTerminalInputUnsubscribers = new Set<() => void>();
+	#composerShapeDisposers: Array<() => void> = [];
 	#hookWidgetsAbove = new Map<string, ExtensionUiComponent>();
 	#hookWidgetsBelow = new Map<string, ExtensionUiComponent>();
 	// Single-file dialog surface (`editorContainer` + focus) is shared by the
@@ -78,6 +80,19 @@ export class ExtensionUiController {
 	 */
 	#toolUIContext: ExtensionUIContext | undefined;
 	constructor(private ctx: InteractiveModeContext) {}
+
+	#syncExtensionComposerShapes(): void {
+		this.disposeComposerShapes();
+		for (const definition of this.ctx.session.extensionRunner?.getComposerShapes() ?? []) {
+			this.#composerShapeDisposers.push(installExtensionComposerShape(definition));
+		}
+		this.ctx.syncComposerShape();
+	}
+
+	/** Remove extension-owned composer styles from the process registries. */
+	disposeComposerShapes(): void {
+		for (const dispose of this.#composerShapeDisposers.splice(0)) dispose();
+	}
 
 	/**
 	 * Initialize the hook system with TUI-based UI context.
@@ -129,6 +144,7 @@ export class ExtensionUiController {
 		};
 		this.ctx.setToolUIContext(uiContext, true);
 		this.#toolUIContext = uiContext;
+		this.#syncExtensionComposerShapes();
 		this.ctx.session.setUsageFallbackConfirmer?.((confirmation, signal) => {
 			const reserve =
 				confirmation.remainingPercent === undefined
