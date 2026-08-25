@@ -19,9 +19,11 @@ export interface CleanseLoopOptions {
 	maxAgents: number;
 	initialReport: CleanseDiagnosticReport;
 	signal?: AbortSignal;
+	/** Maximum diagnose→dispatch→verify waves to run for continuous remediation. Default 1 = single-pass. */
+	maxWaves?: number;
 }
 
-/** Dispatch at most `maxAgents` workers once, then verify their combined edits. */
+/** Dispatch a wave of `maxAgents` workers after each diagnose pass until clean or the wave budget is exhausted. */
 export async function runCleanseLoop(
 	options: CleanseLoopOptions,
 	dependencies: CleanseLoopDependencies,
@@ -33,19 +35,27 @@ export async function runCleanseLoop(
 	if (options.signal?.aborted) {
 		return { status: "cancelled", waves: 0, report: initialReport, outcomes: [] };
 	}
-	const wave = 1;
-	const assignments = balanceDiagnostics(initialReport.diagnostics, options.maxAgents);
-	dependencies.onWave?.(wave, assignments);
-	const outcomes = await dependencies.dispatch(assignments, wave, initialReport, options.signal);
-	if (options.signal?.aborted) {
-		return { status: "cancelled", waves: 1, report: initialReport, outcomes };
+	const maxWaves = options.maxWaves ?? 1;
+	if (!Number.isInteger(maxWaves) || maxWaves <= 0) {
+		throw new Error("maxWaves must be a positive integer");
 	}
-	const report = await dependencies.collect(options.signal);
-	dependencies.onReport?.(wave, report);
-	return {
-		status: report.diagnostics.length === 0 ? "clean" : "stalled",
-		waves: 1,
-		report,
-		outcomes,
-	};
+	let report = initialReport;
+	let outcomes: CleanseAgentOutcome[] = [];
+	let waves = 0;
+	for (let wave = 1; wave <= maxWaves; wave += 1) {
+		const assignments = balanceDiagnostics(report.diagnostics, options.maxAgents);
+		dependencies.onWave?.(wave, assignments);
+		const waveOutcomes = await dependencies.dispatch(assignments, wave, report, options.signal);
+		outcomes = outcomes.concat(waveOutcomes);
+		waves = wave;
+		if (options.signal?.aborted) {
+			return { status: "cancelled", waves, report, outcomes };
+		}
+		report = await dependencies.collect(options.signal);
+		dependencies.onReport?.(wave, report);
+		if (report.diagnostics.length === 0) {
+			return { status: "clean", waves, report, outcomes };
+		}
+	}
+	return { status: "stalled", waves, report, outcomes };
 }
