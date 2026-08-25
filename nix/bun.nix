@@ -690,7 +690,6 @@
     hash = "sha512-ByP1v7YL5SMveFPP7+sj0/ZuWCOOg/Chs4NafOMpq6WNIM/hdGY0S7C0TCGDBWu1aGmOxmUIhMx3cO+IdwYZ1Q==";
   };
   "@musepi/browser-relay" = copyPathToStore ../packages/browser-relay;
-  "@musepi/collab-web" = copyPathToStore ../packages/collab-web;
   "@musepi/hashline" = copyPathToStore ../packages/hashline;
   "@musepi/omp-stats" = copyPathToStore ../packages/stats;
   "@musepi/musepi-type" = copyPathToStore ../packages/musepi-type;
