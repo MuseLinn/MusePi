@@ -76,6 +76,12 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 					return;
 				}
 				video.srcObject = stream;
+				// Mirror only user-facing cameras (selfie convention). Rear
+				// cameras (facingMode=environment) must NOT be mirrored — the
+				// previous blanket scaleX(-1) flipped the rear feed.
+				const settings = stream.getVideoTracks()[0]?.getSettings();
+				const facing = settings?.facingMode;
+				video.style.transform = facing === "user" ? "scaleX(-1)" : "none";
 				await video.play();
 				raf = requestAnimationFrame(tick);
 			} catch {
