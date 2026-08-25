@@ -5,7 +5,7 @@
  * spans through the global `@opentelemetry/api` tracer, and exposes run-level
  * callbacks for metrics/log pipelines. This module registers the OTLP/proto
  * trace, log, and metric SDK providers when the standard `OTEL_*` endpoint env
- * vars are set so `omp` can be observed by any OTLP collector without vendor
+ * vars are set so MusePi can be observed by any OTLP collector without vendor
  * coupling.
  *
  * Only the `http/protobuf` transport is supported — an
@@ -272,35 +272,35 @@ class AgentMetricRecorder {
 			description: "Token usage reported by GenAI chat calls.",
 			unit: "{token}",
 		});
-		this.#chatCostUsd = meter.createCounter("pi.omp.agent.chat.cost.estimated_usd", {
+		this.#chatCostUsd = meter.createCounter("pi.musepi.agent.chat.cost.estimated_usd", {
 			description: "Estimated USD cost for completed chat calls.",
 			unit: "USD",
 		});
-		this.#runs = meter.createCounter("pi.omp.agent.runs", {
+		this.#runs = meter.createCounter("pi.musepi.agent.runs", {
 			description: "Completed agent runs.",
 			unit: "{run}",
 		});
-		this.#steps = meter.createCounter("pi.omp.agent.steps", {
+		this.#steps = meter.createCounter("pi.musepi.agent.steps", {
 			description: "Agent loop steps completed inside a run.",
 			unit: "{step}",
 		});
-		this.#chatCalls = meter.createCounter("pi.omp.agent.chat.calls", {
+		this.#chatCalls = meter.createCounter("pi.musepi.agent.chat.calls", {
 			description: "Chat calls completed inside agent runs.",
 			unit: "{call}",
 		});
-		this.#chatDurationMs = meter.createHistogram("pi.omp.agent.chat.duration", {
+		this.#chatDurationMs = meter.createHistogram("pi.musepi.agent.chat.duration", {
 			description: "Total chat latency observed in an agent run.",
 			unit: "ms",
 		});
-		this.#toolCalls = meter.createCounter("pi.omp.agent.tool.calls", {
+		this.#toolCalls = meter.createCounter("pi.musepi.agent.tool.calls", {
 			description: "Tool calls completed inside agent runs.",
 			unit: "{call}",
 		});
-		this.#toolDurationMs = meter.createHistogram("pi.omp.agent.tool.duration", {
+		this.#toolDurationMs = meter.createHistogram("pi.musepi.agent.tool.duration", {
 			description: "Total tool latency observed in an agent run.",
 			unit: "ms",
 		});
-		this.#errors = meter.createCounter("pi.omp.agent.errors", {
+		this.#errors = meter.createCounter("pi.musepi.agent.errors", {
 			description: "Errors observed in chat and tool execution.",
 			unit: "{error}",
 		});
@@ -330,11 +330,11 @@ class AgentMetricRecorder {
 
 	recordRun(summary: AgentRunSummary, coverage: AgentRunCoverage): void {
 		const runAttrs = metricAttributes({
-			"pi.omp.agent.models_used.count": coverage.modelsUsed.length,
-			"pi.omp.agent.providers_used.count": coverage.providersUsed.length,
-			"pi.omp.agent.tools_available.count": coverage.toolsAvailable.length,
-			"pi.omp.agent.tools_invoked.count": coverage.toolsInvoked.length,
-			"pi.omp.agent.tools_unused.count": coverage.toolsUnused.length,
+			"pi.musepi.agent.models_used.count": coverage.modelsUsed.length,
+			"pi.musepi.agent.providers_used.count": coverage.providersUsed.length,
+			"pi.musepi.agent.tools_available.count": coverage.toolsAvailable.length,
+			"pi.musepi.agent.tools_invoked.count": coverage.toolsInvoked.length,
+			"pi.musepi.agent.tools_unused.count": coverage.toolsUnused.length,
 		});
 
 		this.#runs.add(1, runAttrs);
@@ -387,33 +387,33 @@ function emitRunSummaryLog(summary: AgentRunSummary, coverage: AgentRunCoverage)
 		"info",
 		"agent run completed",
 		{
-			"pi.omp.agent.step_count": summary.stepCount,
-			"pi.omp.agent.chats.total": summary.chats.total,
-			"pi.omp.agent.chats.total_latency_ms": summary.chats.totalLatencyMs,
-			"pi.omp.agent.tools.total": summary.tools.total,
-			"pi.omp.agent.tools.ok": summary.tools.ok,
-			"pi.omp.agent.tools.error": summary.tools.error,
-			"pi.omp.agent.tools.skipped": summary.tools.skipped,
-			"pi.omp.agent.tools.blocked": summary.tools.blocked,
-			"pi.omp.agent.tools.timeout": summary.tools.timeout,
-			"pi.omp.agent.tools.aborted": summary.tools.aborted,
-			"pi.omp.agent.tools.total_latency_ms": summary.tools.totalLatencyMs,
-			"pi.omp.agent.usage.input_tokens": summary.usage.inputTokens,
-			"pi.omp.agent.usage.output_tokens": summary.usage.outputTokens,
-			"pi.omp.agent.usage.cached_input_tokens": summary.usage.cachedInputTokens,
-			"pi.omp.agent.usage.cache_write_tokens": summary.usage.cacheWriteTokens,
-			"pi.omp.agent.usage.reasoning_output_tokens": summary.usage.reasoningOutputTokens,
-			"pi.omp.agent.usage.total_tokens": summary.usage.totalTokens,
-			"pi.omp.agent.cost.estimated_usd": summary.cost.estimatedUsd,
-			"pi.omp.agent.cost.unavailable_reasons": summary.cost.unavailableReasons.join(","),
-			"pi.omp.agent.errors.total": summary.errors.total,
-			"pi.omp.agent.coverage.tools_available": coverage.toolsAvailable.join(","),
-			"pi.omp.agent.coverage.tools_invoked": coverage.toolsInvoked.join(","),
-			"pi.omp.agent.coverage.tools_unused": coverage.toolsUnused.join(","),
-			"pi.omp.agent.coverage.models_used": coverage.modelsUsed.join(","),
-			"pi.omp.agent.coverage.providers_used": coverage.providersUsed.join(","),
+			"pi.musepi.agent.step_count": summary.stepCount,
+			"pi.musepi.agent.chats.total": summary.chats.total,
+			"pi.musepi.agent.chats.total_latency_ms": summary.chats.totalLatencyMs,
+			"pi.musepi.agent.tools.total": summary.tools.total,
+			"pi.musepi.agent.tools.ok": summary.tools.ok,
+			"pi.musepi.agent.tools.error": summary.tools.error,
+			"pi.musepi.agent.tools.skipped": summary.tools.skipped,
+			"pi.musepi.agent.tools.blocked": summary.tools.blocked,
+			"pi.musepi.agent.tools.timeout": summary.tools.timeout,
+			"pi.musepi.agent.tools.aborted": summary.tools.aborted,
+			"pi.musepi.agent.tools.total_latency_ms": summary.tools.totalLatencyMs,
+			"pi.musepi.agent.usage.input_tokens": summary.usage.inputTokens,
+			"pi.musepi.agent.usage.output_tokens": summary.usage.outputTokens,
+			"pi.musepi.agent.usage.cached_input_tokens": summary.usage.cachedInputTokens,
+			"pi.musepi.agent.usage.cache_write_tokens": summary.usage.cacheWriteTokens,
+			"pi.musepi.agent.usage.reasoning_output_tokens": summary.usage.reasoningOutputTokens,
+			"pi.musepi.agent.usage.total_tokens": summary.usage.totalTokens,
+			"pi.musepi.agent.cost.estimated_usd": summary.cost.estimatedUsd,
+			"pi.musepi.agent.cost.unavailable_reasons": summary.cost.unavailableReasons.join(","),
+			"pi.musepi.agent.errors.total": summary.errors.total,
+			"pi.musepi.agent.coverage.tools_available": coverage.toolsAvailable.join(","),
+			"pi.musepi.agent.coverage.tools_invoked": coverage.toolsInvoked.join(","),
+			"pi.musepi.agent.coverage.tools_unused": coverage.toolsUnused.join(","),
+			"pi.musepi.agent.coverage.models_used": coverage.modelsUsed.join(","),
+			"pi.musepi.agent.coverage.providers_used": coverage.providersUsed.join(","),
 		},
-		"pi.omp.agent.run.completed",
+		"pi.musepi.agent.run.completed",
 	);
 }
 
