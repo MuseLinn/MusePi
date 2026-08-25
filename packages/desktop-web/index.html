@@ -57,6 +57,13 @@
 			}
 		</script>
 
+		<!-- PWA: service worker for offline shell / static cache — registered
+		     after the theme script to avoid racing the first render. -->
+		<script>
+			if ("serviceWorker" in navigator) {
+				navigator.serviceWorker.register("./sw.js").catch(() => {});
+			}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

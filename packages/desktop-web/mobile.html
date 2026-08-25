@@ -22,5 +22,10 @@
 		<div id="root"></div>
 		<script>(function(){try{var s=localStorage.getItem("omp-collab-theme");var sys=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";var t=(s==="light"||s==="dark")?s:sys;document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})();</script>
 		<script type="module" src="./src/mobile.tsx"></script>
+		<script>
+			if ("serviceWorker" in navigator) {
+				navigator.serviceWorker.register("./sw.js").catch(() => {});
+			}
+		</script>
 	</body>
 </html>

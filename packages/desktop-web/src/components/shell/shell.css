@@ -1146,6 +1146,16 @@
 	animation: sh-shake 340ms ease-out;
 }
 
+.sh-connect-offline {
+	padding: 9px 12px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--fg-muted);
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	border: 0.5px solid color-mix(in oklab, var(--fg) 16%, transparent);
+	border-radius: 10px;
+}
+
 @keyframes sh-shake {
 	0%,
 	100% {

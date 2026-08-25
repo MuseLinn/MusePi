@@ -81,6 +81,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const [pairBusy, setPairBusy] = useState(false);
 	const [openMethod, setOpenMethod] = useState<"pair" | "link" | null>(null);
 	const [scanning, setScanning] = useState(false);
+	const [offline, setOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
 	const [skipped, setSkipped] = useState(() => {
 		try {
 			return localStorage.getItem(SKIP_KEY) === "1";
@@ -93,6 +94,18 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const pairBodyRef = useRef<HTMLDivElement | null>(null);
 	const linkBodyRef = useRef<HTMLDivElement | null>(null);
 	useCollapseHeight(openMethod === "pair", pairBodyRef);
+	// Offline banner: the PWA shell stays readable from cache when the network
+	// drops; make the state explicit so "paste a link" failures aren't a mystery.
+	useEffect(() => {
+		const on = (): void => setOffline(false);
+		const off = (): void => setOffline(true);
+		window.addEventListener("online", on);
+		window.addEventListener("offline", off);
+		return () => {
+			window.removeEventListener("online", on);
+			window.removeEventListener("offline", off);
+		};
+	}, []);
 	// Subscribe this card to locale changes: every label below flows through
 	// t(), which reads the store non-reactively — without a useLocale()
 	// subscriber here, switching languages only re-renders the toggle button
@@ -275,6 +288,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					<LanguageToggle />
 				</div>
 				<div className="sh-connect-sub"><ShinyText text={t("connect to a computer on your network")} speed={3.4} spread={120} /></div>
+				{offline && (
+					<div className="sh-connect-offline" role="status">
+						{t("offline — showing cached content, connecting needs a network")}
+					</div>
+				)}
 				{recent.length > 0 && (
 					<div className="sh-connect-recent">
 						<span className="sh-field-label">{t("recent connections")}</span>
@@ -378,6 +396,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									{pairBusy ? t("connecting…") : t("pair")}
 								</button>
 							</div>
+							<p className="sh-field-hint">
+								{t("no address shown? share with a public tunnel and scan the link instead")}
+							</p>
 						</form>
 					</div>
 				</div>

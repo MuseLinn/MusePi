@@ -46,7 +46,7 @@
 		"dev": "bun ./index.html",
 		"mock-host": "bun scripts/mock-host.ts",
 		"relay": "bun scripts/local-relay.ts",
-		"build": "rm -rf dist && bun build ./index.html ./mobile.html --outdir=dist --minify --entry-naming=[name]-[hash].[ext] --chunk-naming=[hash].[ext] --asset-naming=[hash].[ext] && mv dist/index-*.html dist/index.html && mv dist/mobile-*.html dist/mobile.html && cp -R public/. dist/",
+		"build": "rm -rf dist && bun build ./index.html ./mobile.html --outdir=dist --minify --entry-naming=[name]-[hash].[ext] --chunk-naming=[hash].[ext] --asset-naming=[hash].[ext] && mv dist/index-*.html dist/index.html && mv dist/mobile-*.html dist/mobile.html && cp -R public/. dist/ && cp public/sw.js dist/sw.js",
 		"gen:tool-views": "bun scripts/build-tool-views.ts",
 		"prepack": "bun run build",
 		"test": "bun test --parallel",
