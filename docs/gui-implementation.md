@@ -344,4 +344,37 @@ Three sites, one source, all via `/releases/latest/download/update-manifest.json
 **Release pipeline essentials**:
 - `gui-release.yml` publishes **darwin-arm64 only** (x64 cut — x64 runners building arm64 dmgs miss the `sherpa-onnx-darwin-arm64` arch variant, structurally failing electron-builder).
 - **Signing**: mac `identity "-"` (ad-hoc) + hardenedRuntime + `build/entitlements.mac.plist` (following openchamber: allow-jit / disable-library-validation etc., solving Electron JIT + dlopen of native modules). Ad-hoc only removes "completely unsigned shows as damaged"; **double-click open is still blocked by Gatekeeper** — "double-click opens" needs Developer ID signing + `notarize: true` (needs APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID secrets; the workflow's `MACOS_SIGNING` condition is reserved).
-- **Unlike VSCode**: the app bundles a daemon for the GUI's own use but **doesn't register PATH** (`extraResources: []`, no CLI symlink). Typing `musepi` in a terminal does nothing by default; for a terminal CLI use `bun run setup`/`bun link` or `bun install -g @musepi/pi-coding-agent`, or add an electron-builder `afterInstall` symlink hook (needs admin rights and may conflict with a separately installed CLI — a user decision).
+- **Unlike VSCode**: the app bundles a daemon for the GUI's own use but **doesn't register PATH** (`extraResources: []`, no CLI symlink). Typing `musepi` in a terminal does nothing by default; for a terminal CLI use `bun run setup`/`bun link` or `bun install -g @musepi/pi-coding-agent`, …or add an electron-builder `afterInstall` symlink hook (needs admin rights and may conflict with a separately installed CLI — a user decision).
+
+## 18. Recent landed features (2026-08-24 → 2026-08-26)
+
+Contracts, RPC shapes and pitfalls for work landed after the earlier sections; design intent in `docs/gui-design.md` §5g, per-feature specs in the referenced docs.
+
+### OTA update via electron-updater (v0.4.4, 2026-08-24)
+`docs/ota-update-design.md`. Replaces §17's "Go to download" with **download → verify → install → restart** (electron-updater v6.4.1 + GitHub provider):
+- **Config**: `packages/gui/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}` (emits `latest*.yml`). Never set `allowPrerelease` — 6.4.1 derives it (prerelease version → beta channel; stable → `/releases/latest`, prereleases ignored).
+- **IPC**: `updater-check`/`updater-download`/`updater-install` (renderer→main) + `updater-state` (`checking/downloading(percent)/downloaded/error`) + `update-available`. `autoDownload=false`, `autoInstallOnAppQuit=false`.
+- **Daemon sidecar**: `updater-install` awaits `kill(daemonPort)` then `setImmediate(() => autoUpdater.quitAndInstall())` (setImmediate flushes the IPC reply first); the vendored daemon lands with the new app.
+- **macOS needs `.zip`**: MacUpdater `findFile(files,"zip",…)` throws `ERR_UPDATER_ZIP_FILE_NOT_FOUND` without it — `mac.target` must include `"zip"` and CI must ship `*.zip` (also buys blockmap deltas). Beta: `-beta` tag → `-c.publish.channel=beta` + prerelease; CI yml wildcards widened `latest*.yml`→`*.yml` (the gap that dropped beta feeds).
+- **Degradation**: unsigned Windows NSIS → SmartScreen confirm; ad-hoc macOS dmg → verification failure falls back to "Go to download"; Linux AppImage replaces itself without signing.
+
+### Extension P3/P4 seams (plugin-design.md P-tiers)
+Landed since the 2026-08-25 audit (P3 ❌ / P4 service ❌). In `extensibility/extensions/`:
+- **`registerNotificationChannel(channel,{label})` → send(message)**: the runner's `onNotification` sink forwards each send → daemon → GUI (rendered alongside built-in notify events); the channel+send are dropped on unload so reload re-registers atomically. `ExtensionNotificationMessage { text, title?, kind? }`.
+- **`registerThemeToken(key,value)`**: the runner aggregates tokens (`applyThemeTokens`); the theme adds **only new keys** (never overriding built-ins); on unload the token is dropped and the theme re-renders without it.
+- **`registerService(name,{start?,stop?})`**: a long-lived service; `start` on load (`startServices`), `stop` on unload / shutdown / rollback — guarded (always called, throw isolated), must leave no residual process.
+
+### Widget data-proxy gap + scheduling engine (board-dashboard.md)
+`widget.data` proxy RPC is **not implemented** (market cards use static defaults; the data-source agent proxy is the remaining M4 work); the **scheduling engine is implemented GUI-side** (`desktop-web` task-run engine + BoardPage 30s poll runs `data.task.schedule`; a manual run uses the same executor, not a setTimeout).
+
+### TUI /trace + /tree
+`/tree` (structural) and `/trace` (time/cost projection) both landed in the TUI — `tree-selector.ts` `TreeProjection = "tree"|"trace"`, `/trace` slash command (`builtin-session.ts` → `showTraceSelector`). Data = tree-selector's SessionEntry tree + live `AssistantMessage.usage/.duration/.ttft` (no new data dependency). GUI-side message-tree seam (`message-tree.ts` buildMessageTree) stays the forward-compatible path. Plan: `docs/tui-trace-plan.md`.
+
+### musepi ps CLI
+`cli-commands.ts` registers `ps` → `commands/ps.ts` (`runPsCommand`): actions `list|info|logs|stop|kill|restart`; flags `-a/--all`, `-j/--json`, `--plain`, `--dir`, `--global`, `-f/--follow`, `--head`, `-n/--lines`, `--grep`, `--timeout`. Inspects/controls daemon-broker supervised processes from outside the harness (machine-global `--global` scope, e.g. browser-relay).
+
+### Telemetry metric rename → pi.musepi.agent.*
+`telemetry-export.ts` OTel metrics/attributes namespace `pi.musepi.agent.*` (counters `chat.cost.estimated_usd`, `runs`, `steps`, `chat.calls`, `tool.calls`, `errors`; histograms `chat.duration`, `tool.duration`; plus the `pi.musepi.agent.run.completed` event). Chat-token recording still tags `pi.gen_ai.agent.id`/`pi.gen_ai.agent.name`. Verified by `test/otel-signals-probe.ts`.
+
+### win32 frosted glass fix (2026-08-26)
+`gui-base.css`: `html:root, html:root body { background: transparent }` (the overlooked layer carrying opaque `var(--bg)`); `[data-platform="win32"] .gui-main, [data-platform="linux"] .gui-main { backdrop-filter:none }` (blur from the window material); `[data-platform="win32"][data-theme="light"]` scrim 22–58%.

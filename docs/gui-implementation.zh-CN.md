@@ -342,4 +342,37 @@ daemon RPC:
 **发布链路要点**：
 - `gui-release.yml` 只发布 **darwin-arm64**（砍掉 x64——x64 runner 打 arm64 dmg 缺 `sherpa-onnx-darwin-arm64` 架构变体，electron-builder 结构性失败）。
 - **签名**：mac `identity "-"`（ad-hoc）+ hardenedRuntime + `build/entitlements.mac.plist`（照 openchamber：allow-jit / disable-library-validation 等，解决 Electron JIT + dlopen 原生模块）。ad-hoc 仅消除「完全无签名显已损坏」，**双击打开仍被 Gatekeeper 拦**——要「双击直开」需 Developer ID 签名 + `notarize: true`（需 APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID secrets；workflow `MACOS_SIGNING` 条件已预留）。
-- **不像 VSCode**：app 自带 daemon 供 GUI 用，但**不注册 PATH**（`extraResources: []`、无 CLI symlink）。终端敲 `musepi` 默认没有；要终端 CLI 需 `bun run setup`/`bun link` 或 `bun install -g @musepi/pi-coding-agent`，或给 electron-builder 加 `afterInstall` 符号链接钩子（需管理员权限，且与单独装的 CLI 可能冲突——用户决策项）。
+- **不像 VSCode**：app 自带 daemon 供 GUI 用，但**不注册 PATH**（`extraResources: []`、无 CLI symlink）。终端敲 `musepi` 默认没有；要终端 CLI 需 `bun run setup`/`bun link` 或 `bun install -g @musepi/pi-coding-agent`，…或给 electron-builder 加 `afterInstall` 符号链接钩子（需管理员权限，且与单独装的 CLI 可能冲突——用户决策项）。
+
+## 18. 近期落地特性（2026-08-24 → 2026-08-26）
+
+早期章节之后落地的契约、RPC 形状与坑；设计意图在 `docs/gui-design.md` §5g，分特性规格见所列文档。
+
+### OTA 经 electron-updater 更新（v0.4.4，2026-08-24）
+`docs/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
+- **配置**：`packages/gui/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
+- **IPC**：`updater-check`/`updater-download`/`updater-install`（renderer→main）+ `updater-state`（`checking/downloading(percent)/downloaded/error`）+ `update-available`。`autoDownload=false`、`autoInstallOnAppQuit=false`。
+- **daemon sidecar**：`updater-install` 先 `kill(daemonPort)` 再 `setImmediate(() => autoUpdater.quitAndInstall())`（setImmediate 先 flush IPC reply）；vendored daemon 随新版 app 一起生效。
+- **macOS 需 `.zip`**：MacUpdater `findFile(files,"zip",…)` 无 zip 会抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`——`mac.target` 必须含 `"zip"` 且 CI 带上传 `*.zip`（顺带赢 blockmap 差量）。Beta：`-beta` tag → `-c.publish.channel=beta` + prerelease；CI yml 通配从 `latest*.yml` 放宽为 `*.yml`（此前会丢 beta feed 的缺口）。
+- **降级**：未签名 Windows NSIS → SmartScreen 确认；ad-hoc macOS dmg → 校验失败回退「前往下载」；Linux AppImage 免签自替换。
+
+### 扩展 P3/P4 接缝（plugin-design.md P 层）
+自 2026-08-25 核对（P3 ❌ / P4 service ❌）后已落地。在 `extensibility/extensions/`：
+- **`registerNotificationChannel(channel,{label})` → send(message)**：runner 的 `onNotification` sink 把每次 send 转发 → daemon → GUI（与内置 notify 事件并列渲染）；channel+send 在 unload 时整体丢弃，重载即重注册。`ExtensionNotificationMessage { text, title?, kind? }`。
+- **`registerThemeToken(key,value)`**：runner 聚合 token（`applyThemeTokens`）；主题**只加新键**（绝不覆盖内置 color/background/symbol）；unload 时丢弃该 token，主题重渲染时移除。
+- **`registerService(name,{start?,stop?})`**：长驻后台服务；`start` 在装载时跑（`startServices`），`stop` 在 unload / 会话关闭 / rollback 时跑——有守卫（必被调用、抛出被隔离），且不得残留进程。
+
+### 看板 widget 数据代理缺口 + 调度引擎（board-dashboard.md）
+`widget.data` 代理 RPC **未实现**（行情卡为静态默认值；数据源 agent 代理是剩余 M4 工作）；**调度执行引擎已在 GUI 侧实现**（`desktop-web` task-run 执行引擎 + BoardPage 30s poll 消费 `data.task.schedule`；手动 run 走同一执行器而非 setTimeout）。
+
+### TUI /trace + /tree
+`/tree`（结构投影）与 `/trace`（同一 entry 树的时间/成本投影）都已在 TUI 落地——`tree-selector.ts` `TreeProjection = "tree"|"trace"`、`/trace` slash 命令（`builtin-session.ts` → `showTraceSelector`）。数据源 = tree-selector 的 SessionEntry 树 + live `AssistantMessage.usage/.duration/.ttft`（零新数据依赖）。GUI 侧消息树 seam（`message-tree.ts` buildMessageTree）仍为向前兼容路径。方案：`docs/tui-trace-plan.md`。
+
+### musepi ps CLI
+`cli-commands.ts` 注册 `ps` → `commands/ps.ts`（`runPsCommand`）：action `list|info|logs|stop|kill|restart`；flag `-a/--all`、`-j/--json`、`--plain`、`--dir`、`--global`、`-f/--follow`、`--head`、`-n/--lines`、`--grep`、`--timeout`。从 harness 外部查看/控制 daemon-broker 托管进程（机器全局 `--global` 作用域，如 browser-relay）。
+
+### 遥测指标更名 → pi.musepi.agent.*
+`telemetry-export.ts` OTel 指标/属性统一命名空间 `pi.musepi.agent.*`（counter：`chat.cost.estimated_usd`、`runs`、`steps`、`chat.calls`、`tool.calls`、`errors`；histogram：`chat.duration`、`tool.duration`；另有 `pi.musepi.agent.run.completed` 事件）。chat token 记录仍打 `pi.gen_ai.agent.id`/`pi.gen_ai.agent.name`。`test/otel-signals-probe.ts` 验证。
+
+### win32 磨砂玻璃修复（2026-08-26）
+`gui-base.css`：`html:root, html:root body { background: transparent }`（此前被忽略、带不透明 `var(--bg)` 的一层）；`[data-platform="win32"] .gui-main, [data-platform="linux"] .gui-main { backdrop-filter:none }`（模糊来自窗口材质）；`[data-platform="win32"][data-theme="light"]` scrim 22–58%。
