@@ -1,6 +1,9 @@
 {
-	"_comment": "MusePi OTA manifest (Electron updater.cjs + daemon updates.check read this). Channel: this exact file is attached as an ASSET named update-manifest.json to each GitHub release — /releases/latest/download/update-manifest.json redirects to the newest copy (BitFun parity, no API rate limit). At each release: bump version, set url (direct download of the packaged app) + notes, and upload the file with the release assets.",
-	"version": "0.4.3",
+	"_comment": "MusePi OTA manifest (Electron updater.cjs + daemon updates.check read this). Channel: this exact file is attached as an ASSET named update-manifest.json to each GitHub release — /releases/latest/download/update-manifest.json redirects to the newest copy (BitFun parity, no API rate limit). At each release: bump version, set url (direct download of the packaged app) + bilingual notes {zh,en}, and upload the file with the release assets.",
+	"version": "0.4.4",
 	"url": "",
-	"notes": ""
+	"notes": {
+		"zh": "- Windows 安装器升级（NSIS assisted，可自定义目录、逐用户免管理员）\n- OTA 重启更新（下载更新 → 进度条 → 立即重启）\n- 右侧面板 Phase 1：surface 分组 + rail 溢出菜单\n- 移动端 MusePi（Android 远程会话伴侣）\n- collab 远程会话管理 + 分支（/btw、branchAt 撤回）",
+		"en": "- Windows installer upgrade (NSIS assisted, custom dir, per-user no-admin)\n- OTA restart update (download → progress → restart now)\n- Right panel Phase 1: surface grouping + rail overflow menu\n- Mobile MusePi (Android remote session companion)\n- Remote collab session management + branching (/btw, branchAt undo)"
+	}
 }

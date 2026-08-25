@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/desktop-web";
+import { getLocaleSnapshot, Markdown, t } from "@musepi/desktop-web";
 import { Sparkles, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -45,7 +45,9 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		void (async () => {
 			try {
 				const [changelog, updates] = await Promise.all([
-					rpc.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", {}),
+					rpc.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", {
+						locale: getLocaleSnapshot(),
+					}),
 					rpc.request<{ latest?: string } | null>("updates.check", {}),
 				]);
 				if (cancelled) return;
@@ -82,7 +84,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!rpc) return;
 		const onOpen = (): void => {
 			void rpc
-				.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", { force: true })
+				.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", { force: true, locale: getLocaleSnapshot() })
 				.then(changelog => {
 					if (!changelog?.markdown) return;
 					setMarkdown(changelog.markdown);

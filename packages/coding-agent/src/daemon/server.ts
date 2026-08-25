@@ -3555,10 +3555,12 @@ export class DaemonServer {
 					"../utils/changelog"
 				);
 				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
-				const force = (params as { force?: boolean } | undefined)?.force === true;
+				const p0 = (params as { force?: boolean; locale?: string } | undefined) ?? {};
+				const force = p0.force === true;
+				const locale = p0.locale === "en-US" ? "en-US" : "zh-CN";
 				if (force) {
 					const entries = await parseChangelog(undefined);
-					const sel = selectStartupChangelog(entries, "0.0.0", currentVersion);
+					const sel = selectStartupChangelog(entries, "0.0.0", currentVersion, locale);
 					return sel ? { markdown: sel.markdown, latestVersion: sel.latestVersion } : null;
 				}
 				const settings = await this.#settingsForRpc();
@@ -3570,8 +3572,15 @@ export class DaemonServer {
 					mode,
 					currentVersion,
 					agentDir: getAgentDir(),
+					locale,
 				});
-				return changelog ? { markdown: changelog.markdown, latestVersion: changelog.latestVersion } : null;
+				return changelog
+					? {
+							markdown: changelog.markdown,
+							latestVersion: changelog.latestVersion,
+							locale,
+						}
+					: null;
 			}
 			case "updates.check": {
 				// Version probe (Electron updater.cjs parity — the same
@@ -3588,13 +3597,22 @@ export class DaemonServer {
 						"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
 						{ signal: AbortSignal.timeout(8_000) },
 					);
-					if (!res.ok) return { latest: null };
-					const data = (await res.json()) as { version?: unknown };
+					if (!res.ok) return { latest: null, notes: null };
+					const data = (await res.json()) as {
+						version?: unknown;
+						notes?: { zh?: string; en?: string };
+					};
 					const latest = typeof data.version === "string" ? data.version : undefined;
 					const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
-					return { latest: latest && latest !== currentVersion ? latest : null };
+					// Bilingual release notes (update-manifest.json): the GUI
+					// picks a language by locale; daemon passes them through.
+					const notes = data.notes && typeof data.notes === "object" ? data.notes : null;
+					return {
+						latest: latest && latest !== currentVersion ? latest : null,
+						notes,
+					};
 				} catch {
-					return { latest: null };
+					return { latest: null, notes: null };
 				}
 			}
 			case "system.capabilities":

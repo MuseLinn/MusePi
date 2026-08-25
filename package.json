@@ -95,6 +95,7 @@
 		"musepi": "bun --cwd=packages/coding-agent src/musepi.ts",
 		"dev:timing": "PI_TIMING=x bun --cwd=packages/coding-agent --preload ../utils/src/module-timer.ts src/cli.ts",
 		"stats": "bun --cwd=packages/coding-agent src/cli.ts stats",
+	"verify-translation-pairing": "bun scripts/verify-translation-pairing.ts",
 		"collab:web:dev": "bun --cwd=packages/desktop-web run dev",
 		"collab:relay": "bun --cwd=packages/desktop-web run relay",
 		"collab:mock-host": "bun --cwd=packages/desktop-web run mock-host",

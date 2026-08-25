@@ -20,10 +20,25 @@
         <span>MusePi</span>
       </a>
       <nav class="mp-nav">
+        {% if page.lang == 'zh-CN' %}
+        <a href="#features">特性</a>
+        <a href="#screens">界面</a>
+        <a href="{{ '/docs/' | relative_url }}">文档</a>
+        <a href="#quick-start">快速开始</a>
+        {% else %}
         <a href="#features">Features</a>
         <a href="#screens">Screens</a>
         <a href="{{ '/docs/' | relative_url }}">Docs</a>
         <a href="#quick-start">Quick Start</a>
+        {% endif %}
+        {% if page.lang == 'zh-CN' %}
+        <a class="mp-lang-link" href="{{ page.url | replace: '.zh-CN.html', '.html' | relative_url }}">English</a>
+        {% else %}
+        {% assign zh_url = page.url | replace: '.html', '.zh-CN.html' %}
+        {% assign zh_exists = false %}
+        {% for p in site.pages %}{% if p.url == zh_url %}{% assign zh_exists = true %}{% endif %}{% endfor %}
+        {% if zh_exists %}<a class="mp-lang-link" href="{{ zh_url | relative_url }}">中文</a>{% endif %}
+        {% endif %}
       </nav>
     </header>
 
@@ -32,7 +47,11 @@
     </main>
 
     <footer class="mp-footer">
+      {% if page.lang == 'zh-CN' %}
+      <span>MusePi —— 桌面优先的 AI 编程助手 · 派生自 <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
+      {% else %}
       <span>MusePi — desktop-first AI coding agent · fork of <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
+      {% endif %}
     </footer>
   </div>
   <script>

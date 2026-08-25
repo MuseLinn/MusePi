@@ -3,7 +3,7 @@
 > 替代当前「检测更新 → 跳转 GitHub 下载」的手动流程，实现下载 → 校验 → 安装 → 重启。
 > 参考 opencode / openchamber / proma / bitfun（2026-08-24 调研，见 handoff scout 报告）。
 
-- **状态**: 实现中
+- **状态**: ✅ 已实现（v0.4.4，2026-08-24 随发布落地；本节清单全部完成）
 - **日期**: 2026-08-24
 
 ---
@@ -87,13 +87,13 @@ autoUpdater.autoInstallOnAppQuit = false;  // 显式重启
 
 - [x] 安装 electron-updater@6.4.1
 - [x] electron-builder publish 配置
-- [ ] updater.cjs 重写为 electron-updater
-- [ ] main.cjs：updater-download / updater-install / updater-state IPC
-- [ ] preload.cjs：暴露 downloadUpdate / installUpdate / onUpdateState
-- [ ] electron.ts：类型扩展
-- [ ] UpdateToast.tsx：下载进度 + 重启流程
-- [ ] CI：latest*.yml 上传
-- [ ] 验证：本地 mock feed + 手工流程
+- [x] updater.cjs 重写为 electron-updater
+- [x] main.cjs：updater-download / updater-install / updater-state IPC
+- [x] preload.cjs：暴露 downloadUpdate / installUpdate / onUpdateState
+- [x] electron.ts：类型扩展
+- [x] UpdateToast.tsx：下载进度 + 重启流程
+- [x] CI：latest*.yml 上传
+- [x] 验证：本地 mock feed + 手工流程
 
 ## 8. 参考
 

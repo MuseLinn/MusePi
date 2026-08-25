@@ -2,6 +2,10 @@
 
 > 2026-08-07 立项。目标：kimi work 式可交互、可编辑、可常驻桌面的组件看板；
 > 参考 kimi work（产品形态）+ bitfun Agentic Mini Apps / BitFun Canvas（技术范式）。
+>
+> **状态（2026-08-25 核对）**：M1–M3 已落地（BoardPage + WidgetRegistry + 17 种 widget +
+> `board.*`/`widget` RPC + boards.json 持久化）；M4/M5 部分落地；iframe 沙箱按 §7 决策排除；
+> **调度执行引擎未实现（无排期）**——详见 §4 里程碑标注。
 
 ## 1. 动机与参考
 
@@ -141,12 +145,13 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 - **M1 画布骨架 + WidgetRegistry**：BoardPage + 网格 + 添加/删除 + 本地状态 + 模板（每日财经/Hello World
   静态版）+ registry 底座（type→组件映射 + widget.schema）+ **通用交互件优先**（SliderCard/TabView/
   CalcCard/DataGrid/RunCard/TickerCard/ChartCard——kimi 参考形态提炼）+ reactbits 视觉件入列
-  （CountUp/ShinyText/SpotlightCard）。~1 周
-- **M2 组件运行时**：iframe 沙箱 + bridge + SDK（data/state/actions）+ 内置 5 组件
-  （真实数据走 widget.data）。~1 周
-- **M3 编辑与持久化**：拖放/缩放、编辑模式、daemon board.* RPC + 落盘。~1 周
-- **M4 AI 生成**：widget.generate 会话 → 预览 → 应用；模板市场。~1 周
-- **M5 桌面常驻**：小窗加载单组件/看板 + alwaysOnTop。~0.5 周
+  （CountUp/ShinyText/SpotlightCard）。~1 周 — **✅ 已落地**
+- **M2 组件运行时**：~~iframe 沙箱 + bridge + SDK~~ → 按 §7 决策改为**白名单 registry 替代**
+  （类型级隔离，无需沙箱）；内置 17 种 widget（真实数据走 widget.data）。~1 周 — **✅ 已落地（白名单版）**
+- **M3 编辑与持久化**：拖放/缩放、编辑模式、daemon board.* RPC + 落盘（`~/.musepi/boards/boards.json`）。~1 周 — **✅ 已落地**
+- **M4 AI 生成**：widget 工具已落地（agent 经 schema 选类型填数据渲染）；**AI 生成会话（widget.generate）+ 模板市场未做（无排期）**。~1 周 — **◐ 部分**
+- **M5 桌面常驻**：alwaysOnTop 小窗先例存在（main.cjs mini-window 族）；**看板专用小窗（board-card.html）未验证**。~0.5 周 — **◐ 部分**
+- **调度执行引擎**（§7 widget `data.task.schedule` 每小时/每天定时执行）：**未实现，列为后续里程碑，无排期** — **❌ 未做**
 
 ## 5. 风险与决策待定
 

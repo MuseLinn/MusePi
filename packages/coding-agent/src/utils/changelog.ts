@@ -260,14 +260,67 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
 }
 
 /**
+ * Locale for bilingual changelog content. Bilingual entries are written as a
+ * Chinese line followed by an indented `  - EN: English` sub-line (see
+ * CHANGELOG.musepi.md). Rendering picks one language per entry:
+ *
+ * - `"zh-CN"` (default): keep the Chinese line, drop the `- EN:` sub-line.
+ * - `"en-US"`: swap the Chinese line for the `- EN:` content.
+ *
+ * Entries without a bilingual sub-line pass through unchanged (older
+ * single-language notes stay as authored).
+ */
+export type ChangelogLocale = "zh-CN" | "en-US";
+
+/** Default locale for changelog rendering (MusePi is Chinese-first). */
+export const CHANGELOG_DEFAULT_LOCALE: ChangelogLocale = "zh-CN";
+
+function localizeChangelogContent(content: string, locale: ChangelogLocale): string {
+	const lines = content.split("\n");
+	const out: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const enSub = line.match(/^\s*- EN: (.*)$/);
+		if (enSub) {
+			// `- EN:` sub-line: dropped in zh, consumed by the parent in en.
+			continue;
+		}
+		if (locale === "en-US" && /^-\s+\S/.test(line)) {
+			// Multi-line entries put the `- EN:` sub-line after their
+			// continuation block — scan forward until the next bullet.
+			let j = i + 1;
+			let enLine: string | undefined;
+			while (j < lines.length && !/^-\s/.test(lines[j])) {
+				const m = lines[j].match(/^\s*- EN: (.*)$/);
+				if (m) {
+					enLine = m[1];
+					break;
+				}
+				j++;
+			}
+			if (enLine) {
+				out.push(`- ${enLine}`);
+				i = j;
+				continue;
+			}
+		}
+		out.push(line);
+	}
+	return out.join("\n");
+}
+
+/**
  * Render changelog entries oldest-first by default and optionally cap the Markdown source size.
  */
 export function renderChangelogEntries(
 	entries: ChangelogEntry[],
-	options: { maxBytes?: number; truncationHint?: string; oldestFirst?: boolean } = {},
+	options: { maxBytes?: number; truncationHint?: string; oldestFirst?: boolean; locale?: ChangelogLocale } = {},
 ): RenderedChangelog {
+	const locale = options.locale ?? CHANGELOG_DEFAULT_LOCALE;
 	const orderedEntries = options.oldestFirst === false ? entries : [...entries].reverse();
-	const markdown = orderedEntries.map(entry => entry.content).join("\n\n");
+	const markdown = orderedEntries
+		.map(entry => localizeChangelogContent(entry.content, locale))
+		.join("\n\n");
 	if (options.maxBytes === undefined || Buffer.byteLength(markdown) <= options.maxBytes) {
 		return { markdown, truncated: false };
 	}
@@ -294,6 +347,7 @@ export function selectStartupChangelog(
 	entries: ChangelogEntry[],
 	lastVersion: string | undefined,
 	currentVersion: string,
+	locale: ChangelogLocale = CHANGELOG_DEFAULT_LOCALE,
 ): StartupChangelogSelection {
 	const parsedLastVersion = parseChangelogVersion(lastVersion);
 	if (!parsedLastVersion) {
@@ -311,7 +365,7 @@ export function selectStartupChangelog(
 	// the current version via persistCurrentVersion below.
 	const parsedCurrentVersion = parseChangelogVersion(currentVersion);
 	if (parsedCurrentVersion && compareChangelogEntries(parsedCurrentVersion, parsedLastVersion) < 0) {
-		return selectStartupChangelog(entries, "0.0.0", currentVersion);
+		return selectStartupChangelog(entries, "0.0.0", currentVersion, locale);
 	}
 
 	const allNewEntries = getNewEntries(entries, markerVersion);
@@ -324,6 +378,7 @@ export function selectStartupChangelog(
 		maxBytes: STARTUP_CHANGELOG_MAX_BYTES,
 		truncationHint: STARTUP_CHANGELOG_FULL_HINT,
 		oldestFirst: false,
+		locale,
 	});
 	const summary = summarizeChangelogEntries(newEntries);
 	const latestEntry = newEntries[newEntries.length - 1] ?? newEntries[0];
@@ -349,6 +404,7 @@ export async function resolveStartupChangelogForDisplay(options: {
 	currentVersion: string;
 	changelogPath?: string;
 	agentDir?: string;
+	locale?: ChangelogLocale;
 }): Promise<StartupChangelogSelection | undefined> {
 	const lastVersion = await readLastChangelogVersion(options.agentDir);
 	const parsedLastVersion = parseChangelogVersion(lastVersion);
@@ -369,7 +425,12 @@ export async function resolveStartupChangelogForDisplay(options: {
 	}
 
 	const entries = await parseChangelog(options.changelogPath);
-	const startupChangelog = selectStartupChangelog(entries, lastVersion, options.currentVersion);
+	const startupChangelog = selectStartupChangelog(
+		entries,
+		lastVersion,
+		options.currentVersion,
+		options.locale ?? CHANGELOG_DEFAULT_LOCALE,
+	);
 	if (startupChangelog.persistCurrentVersion) {
 		await writeLastChangelogVersion(options.currentVersion, options.agentDir);
 	}

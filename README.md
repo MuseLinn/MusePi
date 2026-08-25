@@ -21,7 +21,7 @@
   <a href="https://discord.gg/4NMW9cdXZa"><img src="https://img.shields.io/badge/Discord-5865F2?style=flat&colorA=222222&logo=discord&logoColor=white" alt="Discord"></a></p>
 
 <p align="center">
-  <em>中文版见 <a href="README.zh-CN.md">README.zh-CN.md</a></em>
+  <em>English | <a href="README.zh-CN.md">中文</a></em>
 </p>
 
 ---

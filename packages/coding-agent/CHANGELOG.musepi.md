@@ -38,31 +38,41 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **OTA 更新渠道切换**:GUI 与 daemon 的版本探测统一走 GitHub release 资产重定向
   (`/releases/latest/download/update-manifest.json`,bitfun parity,无 api.github.com
   限流);repo 公开前 404 优雅降级为"尚未发布公开更新源"。
+  - EN: OTA update channel switch: GUI and daemon version probes both go through GitHub release asset redirects (`/releases/latest/download/update-manifest.json`, bitfun parity, no api.github.com rate limit); 404 before the repo is public degrades gracefully to “public update source not yet published”.
 - **三合一发送按钮 run 级 working**:agent 工作中按钮变为胶囊 + 点阵 bloom + 「工作中」/
   「停止」双标签;`turn_end` 不再熄灭 working(每工具批次触发),只有 `agent_end` 或权威
   state 帧才复位——修复轮间 provider 准备期按钮闪回发送箭头的问题。
+  - EN: Three-in-one send button run-level working state: while the agent works the button becomes a capsule + dot-matrix bloom + “working”/“stop” dual labels; `turn_end` no longer clears working (every tool batch triggers it), only `agent_end` or an authoritative state frame resets — fixes the button flashing back to the send arrow during inter-turn provider preparation.
 - **更新提示 toast**:主进程启动 12s 后自动检查,发现新版推送右下角 `UpdateToast`(版本
   当前→最新 + 说明 + 「前往下载」/「跳过此版本」,按版本 localStorage 记忆,bitfun
   DailyAppUpdateGate parity)。
+  - EN: Update toast: auto-check 12s after main-process startup; on a new version, push a bottom-right `UpdateToast` (current → latest + description + “go to download”/“skip this version”, remembered per version in localStorage, bitfun DailyAppUpdateGate parity).
 - **设置 → 检查更新人性化**:行内显示当前版本/状态 + 手动检查按钮;发现新版展开更新说明
   摘要 + 明确「前往下载」按钮(不再自动 window.open 弹浏览器)。
+  - EN: Settings → check for updates, humanized: inline current version/status + manual check button; on a new version, expand the update description summary + explicit “go to download” button (no longer auto window.open popping the browser).
 
 ### Changed
 
 - **模型设置 UI**:模型选择器即时刷新 + provider 模型能力/发现对齐 + 角色卡布局与
   project-scope 角色写入(TUI parity)+ 思考等级选项/模型切换 clamp 修正。
+  - EN: Model settings UI: model picker instant refresh + provider model capability/discovery alignment + role card layout and project-scope role writes (TUI parity) + thinking-level option/model-switch clamp fixes.
 - **转录渲染**:tool-result 图片内联提升、diff 语言推断、async-result/advisor
   自定义消息渲染、流式 markdown 契约(见 gui-implementation.md §16)。
+  - EN: Transcript rendering: inline tool-result images, diff language inference, async-result/advisor custom message rendering, streaming markdown contract (see gui-implementation.md §16).
 - **i18n**:词表按域拆分(渲染 12 域/TUI 13 域),en 侧编译级 parity;伙伴文案从
   pet.ts 拆到 companion.ts。
+  - EN: i18n: vocab split by domain (12 renderer / 13 TUI), compile-level en parity; companion copy moved from pet.ts to companion.ts.
 
 ### Fixed
 
 - 设置覆盖台账泄露秘密形状 key(`d0df8b77`);GuiSelect 在 roles tab 的无条件 hooks
   React #300 崩溃(`a2a95708`)。
+  - EN: Fix settings overlay ledger leaking secret-shaped keys (`d0df8b77`); GuiSelect unconditional hooks crash React #300 on the roles tab (`a2a95708`).
 - 子代理面板跨会话接线 + subscribe 时 hydration;预设模式 chip(vmodes.list)
   不再消失。
+  - EN: Fix sub-agent panel cross-session wiring + hydration on subscribe; preset mode chips (vmodes.list) no longer disappear.
 - 语音页只渲染 Speech 组而非整个交互 tab;语音模型下载流程加固(验证/去重/终止事件)。
+  - EN: Voice page renders only the Speech group instead of the whole interaction tab; voice model download flow hardened (verify/dedupe/terminate events).
 ## [0.4.4] - 2026-08-24
 
 ### Added
@@ -70,20 +80,26 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **Windows 安装器升级(NSIS assisted)**:安装可选目录(默认 `%LOCALAPPDATA%\Programs`,
   逐用户免管理员);升级检测复用已装路径并预填;桌面/开始菜单快捷方式 + 卸载项中文名;
   卸载保留用户数据(`deleteAppDataOnUninstall=false`);electron-updater 增量更新兼容。
+  - EN: Windows installer upgrade (NSIS assisted): optional install dir (default `%LOCALAPPDATA%\Programs`, per-user, no admin); upgrade detection reuses and pre-fills the installed path; desktop/Start-menu shortcuts + Chinese uninstall entry; uninstall keeps user data (`deleteAppDataOnUninstall=false`); electron-updater incremental-update compatible.
 - **GUI 长文本粘贴门控**:粘贴 >100 行或 >4000 字符时弹选择菜单(直接粘贴 / 包裹为
   代码块 / 附加为工作区文件),TUI large-paste 菜单 parity。
+  - EN: GUI large-paste gate: paste >100 lines or >4000 chars prompts a choice menu (paste / wrap as code block / attach as workspace file), TUI large-paste parity.
 - **TUI 粘贴附件芯片**(upstream v18.0.x 吸收):粘贴文本变 chips 带、图片变
   `🖼 img-1` 原子 token(折叠/compact/shift),`setCollapsedText` 恢复草稿原文。
+  - EN: TUI paste attachment chips (upstream v18.0.x absorbed): pasted text becomes a chip strip, images become `🖼 img-1` atomic tokens (collapse/compact/shift), `setCollapsedText` restores the draft text.
 - **右侧面板 Phase 1**:surface 分组(primary/secondary/tertiary)+ rail 溢出菜单
   (diff/pr 折叠)+ 宽度上限 560→900。
+  - EN: Right panel Phase 1: surface grouping (primary/secondary/tertiary) + rail overflow menu (diff/pr collapse) + width cap 560→900.
 - **OTA 重启更新(electron-updater)**:`下载更新 → 进度条 → 立即重启`,daemon
   sidecar 先杀再 `quitAndInstall`;下载失败回退「前往下载」;CI 发布各平台
   `latest*.yml`(下一版本起 OTA 自动生效)。
+  - EN: OTA restart-to-update (electron-updater): download update → progress bar → restart now; daemon sidecar killed before `quitAndInstall`; download failure falls back to “go to download”; CI publishes per-platform `latest*.yml` (OTA takes effect automatically from the next version).
 - **Beta 版本通道**:tag 含 `-beta`(如 `v0.4.5-beta.1`)的发布自动标记为 GitHub
   prerelease,并以 `beta` channel 打包(`beta.yml` / `beta-mac.yml` /
   `beta-linux*.yml`,安装版内嵌 app-update.yml `channel: beta`)——beta 安装版
   OTA 只跟 beta 通道,正式用户继续走 `latest*.yml` 互不干扰;正式版发布后
   beta 用户经 electron-updater 的 latest.yml 回退自动升级到稳定版。
+  - EN: Beta release channel: tags containing `-beta` (e.g. `v0.4.5-beta.1`) are auto-marked as GitHub prerelease and packaged with the `beta` channel (`beta.yml` / `beta-mac.yml` / `beta-linux*.yml`, installer embeds app-update.yml `channel: beta`) — beta builds only follow the beta channel while stable users keep `latest*.yml` untouched; after a stable release, beta users auto-upgrade to stable via electron-updater's latest.yml fallback.
 
 ### Changed
 
@@ -96,17 +112,22 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - 面板宽度上限 1200px(代码预览可读宽度,openchamber 380–1400 适配)。
 - **openchamber 目录选择对话框参考**:保持右面板 context/files/git/notes/browser
   布局(与 openchamber 一致),文件树不迁移左侧。
+  - EN: OpenChamber directory-picker reference: keep the right-panel context/files/git/notes/browser layout (consistent with OpenChamber); file tree not migrated to the left.
 - **清理历史遗留 tags**:删除上游 oh-my-pi 遗留 tags(~900 本地 / ~290 远程,
   v0.5.x–v18.x),仅保留 musepi 版本线(v0.2.x + v0.4.x)。
+  - EN: Clean up legacy tags: remove upstream oh-my-pi leftover tags (~900 local / ~290 remote, v0.5.x–v18.x), keep only the musepi version line (v0.2.x + v0.4.x).
 - **v0.4.3 release body 补全**:全平台下载表格(macOS/Windows/Linux x64/arm64)。
+  - EN: Complete v0.4.3 release body: full-platform download table (macOS/Windows/Linux x64/arm64).
 
 ### Fixed
 
 - `bun.lock` 未提交 electron-updater 条目导致 CI `--frozen-lockfile` 失败。
+  - EN: Fix CI `--frozen-lockfile` failure caused by the electron-updater entry not committed in `bun.lock`.
 - **macOS OTA 缺 `.zip` 工件**(源码级核实):MacUpdater 硬性要求 zip
   (`findFile(files, "zip", ["pkg","dmg"])`,无 zip 抛
   `ERR_UPDATER_ZIP_FILE_NOT_FOUND`)——mac target 补 `zip`,CI 上传/发布清单
   同步收录 `*.zip`。
+  - EN: macOS OTA missing `.zip` artifact (verified at source): MacUpdater hard-requires zip (`findFile(files, "zip", ["pkg","dmg"])`, throws `ERR_UPDATER_ZIP_FILE_NOT_FOUND` without zip) — added `zip` to the mac target; CI upload/release manifests now include `*.zip`.
 ### Added (0.4.4 追加,2026-08-25)
 
 - **移动端 MusePi(mobile)**:Capacitor Android 壳(compileSdk 36 / minSdk 24),
@@ -114,35 +135,49 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   点阵工作指示器、会话归档(localStorage,桌面 GUI parity)、PWA 离线壳 +
   连接码复制优化、旋转/断点几何过渡、时间感知问候与轮换提示、空态建议 chips、
   jsQR 扫码加入、沉浸式 edge-to-edge 布局。
+  - EN: Mobile MusePi: Capacitor Android shell (compileSdk 36 / minSdk 24), remote session companion connecting to a LAN daemon — three-in-one send control (dot-matrix bloom feedback), braille dot-matrix working indicator, session archive (localStorage, desktop GUI parity), PWA offline shell + connection-code copy optimization, rotation/breakpoint geometry transitions, time-aware greeting and rotating tips, empty-state suggestion chips, jsQR scan-to-join, immersive edge-to-edge layout.
 - **collab 远程会话管理**(dsh-mobile-remote parity):guest 可创建/删除/重命名
   会话;agent 主动分享(collab tool,分级审批);`session.abort` 允许 guest
   停止远端正在运行的 turn。
+  - EN: Collab remote session management (dsh-mobile-remote parity): guests can create/delete/rename sessions; agent-initiated sharing (collab tool, tiered approval); `session.abort` lets guests stop a running turn on the remote daemon.
 - **GUI /btw 分支提升**(TUI b-branch + openchamber promote parity):/btw 提问
   后「分支」按钮把当前会话切到新会话,问答可见,侧栏出现新分支会话 + 树路径
   transcript 脉冲。
+  - EN: GUI /btw branch promotion (TUI b-branch + OpenChamber promote parity): after /btw, the “branch” button switches the current session into a new session, Q&A stays visible, sidebar shows the new branch session + tree-path transcript pulse.
 - **撤回语义重构**(TUI navigateTree parity):撤回改为 branchAt 树跳转——
   旧回复保留为 sibling 分支、树上随时跳回;撤回悬浮卡片带 Reveal 折叠/展开
   动画;daemon 侧 revert RPC 全套移除(-1176 行)。
+  - EN: Undo semantics refactor (TUI navigateTree parity): undo is now a branchAt tree jump — the old reply stays as a sibling branch, jump back anytime from the tree; undo hover card gets Reveal collapse/expand animation; daemon-side revert RPC fully removed (-1176 lines).
 - **plan 批准并压缩上下文**:GUI plan 面板第二 primary 按钮,approve 后自动
   compact(TUI "Approve and compact context" parity)。
+  - EN: Plan approve-and-compact: second primary button on the GUI plan panel, auto-compacts after approve (TUI “Approve and compact context” parity).
 - **浮层定位规范**:全翻转+位移、btw Esc 关闭、菜单 clamp 进视口(不截断);
   AskCard 选择取消按钮、设计语言卡片(floating ask/inspector)。
+  - EN: Floating-layer positioning spec: full flip + offset, btw Esc to close, menus clamped into viewport (never clipped); AskCard select-cancel button, design-language card (floating ask/inspector).
 - **实例切换器**:连接远程 daemon(openchamber DesktopHostSwitcher parity)。
+  - EN: Instance switcher: connect to a remote daemon (OpenChamber DesktopHostSwitcher parity).
 - **HarmonyOS NEXT WebView 壳**(ArkTS Web + harmonyNative bridge)脚手架。
+  - EN: HarmonyOS NEXT WebView shell (ArkTS Web + harmonyNative bridge) scaffold.
 - **Nix 发布修复**:恢复 rust-toolchain.toml、清理 collab-web/robomp-web 死
   路径映射——OMP Nix flake 评估恢复通过。
+  - EN: Nix release fix: restored rust-toolchain.toml, cleaned up collab-web/robomp-web dead path mappings — OMP Nix flake evaluation passes again.
 
 ### Changed (0.4.4 追加)
 
 - 会话列表按最后活动日期分组(不再按创建时间);agent-activity 行转瞬态
   (agent 完成即清);breadcrumb 仅分支导航时显示。
+  - EN: Session list grouped by last-activity date (not creation time); agent-activity rows become transient (cleared when the agent finishes); breadcrumb shown only while navigating branches.
 - SessionTreeCanvas 可读总览 + 正确有向流;canvas 聚焦/跳转/搜索交互 +
   轨迹分支车道。
+  - EN: SessionTreeCanvas readable overview + correct directed flow; canvas focus/jump/search interactions + trajectory branch lanes.
 - rail 溢出菜单弹出动画(浏览器菜单 parity)。
+  - EN: Rail overflow menu pop animation (browser menu parity).
 
 ### Fixed (0.4.4 追加)
 
 - 会话列表日期分组与 canvas 地图语义修正;daemon fork 激活(title-slot 头)+
   message-tree 父级 walk-up;view-key/branch-at 测试清理损坏会话目录。
+  - EN: Fix session-list date grouping and canvas map semantics; daemon fork activation (title-slot head) + message-tree parent walk-up; view-key/branch-at tests clean up corrupted session dirs.
 - i18n general/settings 域 `active` key 冲突(去重)。
+  - EN: Dedupe i18n `active` key conflict in general/settings domains.
 

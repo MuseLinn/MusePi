@@ -10,6 +10,7 @@ title: MusePi
     mobile companion and a daemon service on top of the oh-my-pi agent engine.
     Chinese-first, frosted-glass, keyboard-driven.
   </p>
+  <p class="mp-lang">English | [中文](index.zh-CN.md)</p>
   <div class="mp-cta-row">
     <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases">Download v0.4.4 →</a>
     <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
@@ -19,12 +20,6 @@ title: MusePi
     <span class="mp-version-tag">v0.4.4</span>
     <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
   </div>
-  <div class="mp-hero-code">
-    <span class="mp-cmd">bun run setup</span><br>
-    <span class="mp-cmd">bun run musepi</span>                <span style="opacity:.5"># terminal TUI</span><br>
-    <span class="mp-cmd">bun --cwd=packages/gui run desktop</span>  <span style="opacity:.5"># desktop GUI</span>
-  </div>
-</section>
   <div class="mp-hero-code">
     <span class="mp-cmd">bun run setup</span><br>
     <span class="mp-cmd">bun run musepi</span>                <span style="opacity:.5"># terminal TUI</span><br>
