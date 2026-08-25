@@ -55,6 +55,22 @@ export interface ExtensionSkillItem {
 	/** Extension entry path that declared it (identity for _source). */
 	extensionPath: string;
 }
+/** One status-bar segment contributed by an active extension
+ *  (registerStatusBarSegment), in the extensions.list wire shape. The segment
+ *  renders statically (`label`) in the GUI status bar after the built-in
+ *  model/mode/context segments, ordered by `order`. */
+export interface StatusBarSegmentItem {
+	/** Unique segment id (`statusbar.seg.<id>` slot key). */
+	id: string;
+	/** Static display label. */
+	label: string;
+	/** Order among daemon-contributed segments (ascending; registration order otherwise). */
+	order?: number;
+	/** Forward-compat renderer hint for hosts that register named renderers. */
+	renderKey?: string;
+	/** Extension entry path that contributed it (identity). */
+	extensionPath: string;
+}
 
 /** Raw-extension load cache: entry path → loaded extension (factory runs once per TTL window). */
 const extensionLoadCache = new Map<string, { at: number; extension: Extension }>();
@@ -310,6 +326,41 @@ export async function collectExtensionSkills(
  * extensions.list `toolViews`. A broken view does not fail the whole list —
  * it carries `error` and the renderer falls back to the generic view.
  */
+/**
+ * Collect status-bar segments declared by active extension-module entries
+ * (registerStatusBarSegment), for extensions.list `statusBarSegments`.
+ * Shares the 10s load-once cache so a repeated list call never re-runs
+ * extension factories. A malformed segment (missing id/label) is skipped —
+ * extension code faults must not break the whole status bar.
+ */
+export async function collectStatusBarSegments(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<StatusBarSegmentItem[]> {
+	const out: StatusBarSegmentItem[] = [];
+	for (const entry of extensions) {
+		if (entry.kind !== "extension-module" || entry.state !== "active") continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const seg of extension.statusBarSegments ?? []) {
+			try {
+				if (!seg || typeof seg.id !== "string" || seg.id.length === 0) continue;
+				if (typeof seg.label !== "string" || seg.label.length === 0) continue;
+				out.push({
+					id: seg.id,
+					label: seg.label,
+					...(seg.order !== undefined ? { order: seg.order } : {}),
+					...(seg.renderKey !== undefined ? { renderKey: seg.renderKey } : {}),
+					extensionPath: entry.path,
+				});
+			} catch (err) {
+				console.warn(`extension status-bar segment skipped (${seg?.id ?? "<unknown>"}):`, err);
+			}
+		}
+	}
+	return out;
+}
+
 export async function collectToolViews(
 	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
 	cwd: string,

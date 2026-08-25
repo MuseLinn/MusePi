@@ -1457,6 +1457,16 @@ export interface ExtensionAPI {
 	 *  the theme subsystem; deleting the extension removes the token and
 	 *  re-renders the theme. */
 	registerThemeToken(key: string, value: string): void;
+	/** Contribute a status-bar segment. The segment renders statically
+	 *  (`label`), placed after the built-in model/mode/context segments and
+	 *  ordered by `order` (ascending; registration order otherwise).
+	 *  `renderKey` is a forward-compat hint for hosts that register named
+	 *  renderers for a segment id. Dropped on unload so a re-added extension
+	 *  re-registers it. */
+	registerStatusBarSegment(
+		id: string,
+		options: { label: string; order?: number; renderKey?: string },
+	): void;
 	// Actions
 	// =========================================================================
 
@@ -1714,6 +1724,22 @@ export interface ExtensionThemeToken {
 	value: string;
 }
 
+/** One status-bar segment contributed by an extension via
+ *  `registerStatusBarSegment`. The segment renders statically (`label`),
+ *  placed after the built-in model/mode/context segments and ordered by
+ *  `order` (ascending; registration order otherwise). Dropped on unload so a
+ *  re-added extension re-registers it. */
+export interface ExtensionStatusBarSegment {
+	/** Unique segment id (`statusbar.seg.<id>` slot key). */
+	id: string;
+	/** Static display label. */
+	label: string;
+	/** Order among daemon-contributed segments (ascending; registration order otherwise). */
+	order?: number;
+	/** Forward-compat renderer hint for hosts that register named renderers. */
+	renderKey?: string;
+}
+
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
@@ -1904,6 +1930,9 @@ export interface Extension {
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */
 	themeTokens: ExtensionThemeToken[];
+	/** Status-bar segments contributed by the extension (registerStatusBarSegment),
+	 *  rendered after the built-ins by `order`; dropped on unload. */
+	statusBarSegments: ExtensionStatusBarSegment[];
 }
 
 /** One setting contributed by an extension via registerSetting. Mirrors the

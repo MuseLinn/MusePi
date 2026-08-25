@@ -1,7 +1,8 @@
 import { t } from "@musepi/desktop-web";
 import type { SessionState } from "@musepi/pi-wire";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
+import { useExtensionRegistry } from "../lib/slot-host";
 
 /** localStorage switch (settings → 外观 → 信息状态条). */
 const STATUSBAR_KEY = "musepi-gui-statusbar-info";
@@ -80,16 +81,21 @@ const builtinSegments: StatusBarSegment[] = [
 	},
 ];
 
-function allSegments(): StatusBarSegment[] {
-	return [...builtinSegments, ...extraSegments.values()];
+/**
+ * Merge built-ins + GUI-local + daemon-contributed segments. Daemon segments
+ * (registerStatusBarSegment) render after the built-ins, ordered by `order`.
+ */
+function allSegments(daemonSegments: StatusBarSegment[]): StatusBarSegment[] {
+	return [...builtinSegments, ...extraSegments.values(), ...daemonSegments];
 }
 
 /**
  * Configurable informational status bar (TUI status-line parity, GUI form):
  * model / goal-plan mode / context-window tokens, extensible via
  * `registerStatusBarSegment`. Renders only when the settings toggle is on.
- * Data sources are the same ones the composer already polls — no new RPC
- * surface.
+ * Data sources are the same ones the composer already polls (session context
+ * usage, plus the shared extension registry for daemon-contributed segments)
+ * — no new RPC surface.
  */
 export function SessionStatusBar({
 	rpc,
@@ -101,7 +107,6 @@ export function SessionStatusBar({
 	state: SessionState | null;
 }): ReactNode {
 	const [enabled, setEnabled] = useState(statusBarEnabled);
-	const [usage, setUsage] = useState<{ tokens: number; contextWindow: number | null } | null>(null);
 
 	useEffect(() => {
 		const onStorage = (): void => setEnabled(statusBarEnabled());
@@ -109,8 +114,28 @@ export function SessionStatusBar({
 		return () => window.removeEventListener("storage", onStorage);
 	}, []);
 
+	if (!enabled) return null;
+
+	return <StatusBarContent rpc={rpc} sessionId={sessionId} state={state} />;
+}
+
+/**
+ * Renders the status-bar segments. Mounted only while the settings toggle is
+ * on, so the shared extension registry poll is not kept alive when hidden.
+ */
+function StatusBarContent({
+	rpc,
+	sessionId,
+	state,
+}: {
+	rpc: RpcClient | null;
+	sessionId: string;
+	state: SessionState | null;
+}): ReactNode {
+	const [usage, setUsage] = useState<{ tokens: number; contextWindow: number | null } | null>(null);
+
 	useEffect(() => {
-		if (!enabled || !rpc) return;
+		if (!rpc) return;
 		let alive = true;
 		const tick = (): void => {
 			void rpc
@@ -126,12 +151,21 @@ export function SessionStatusBar({
 			alive = false;
 			clearInterval(timer);
 		};
-	}, [enabled, rpc, sessionId]);
+	}, [rpc, sessionId]);
 
-	if (!enabled) return null;
+	const registry = useExtensionRegistry(rpc);
+	const daemonSegments = useMemo<StatusBarSegment[]>(() => {
+		const items = registry?.statusBarSegments ?? [];
+		return [...items]
+			.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+			.map(item => ({
+				id: item.id,
+				render: () => ({ label: item.label }),
+			}));
+	}, [registry]);
 
 	const ctx: StatusBarContext = { rpc, sessionId, state, usage };
-	const segs = allSegments()
+	const segs = allSegments(daemonSegments)
 		.map(s => s.render(ctx))
 		.filter((r): r is { label: string; title?: string } => r !== null);
 

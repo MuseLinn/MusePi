@@ -3845,6 +3845,7 @@ describe("ExtensionRunner", () => {
 				notificationChannels: [],
 				services: [],
 				themeTokens: [],
+				statusBarSegments: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);
 		};
@@ -4176,6 +4177,40 @@ describe("ExtensionRunner", () => {
 			const { errors } = await runner.reloadExtension(extPath);
 			expect(errors).toEqual([]);
 			expect(runner.getThemeTokens()).toEqual({});
+		});
+
+		it("registerStatusBarSegment aggregates segments and removes them on reload", async () => {
+			const extPath = path.join(extensionsDir, "statusbar-segment.ts");
+			fs.writeFileSync(
+				extPath,
+				`
+					export default function (pi: any) {
+						pi.registerStatusBarSegment("statusbar.seg.ext", { label: "Ext Seg", order: 5 });
+						pi.registerStatusBarSegment("statusbar.seg.leaderboard", {
+							label: "Lb",
+							renderKey: "leaderboard",
+						});
+					}
+				`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			expect(runner.getStatusBarSegments()).toEqual([
+				{ id: "statusbar.seg.ext", label: "Ext Seg", order: 5 },
+				{ id: "statusbar.seg.leaderboard", label: "Lb", renderKey: "leaderboard" },
+			]);
+			// Reload dropping the segments: the status-bar segment set is restored (no residue).
+			fs.writeFileSync(extPath, `export default function (pi: any) {}
+`);
+			const { errors } = await runner.reloadExtension(extPath);
+			expect(errors).toEqual([]);
+			expect(runner.getStatusBarSegments()).toEqual([]);
 		});
 	});
 });

@@ -53,6 +53,7 @@ import type {
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
 	ExtensionThemeToken,
+	ExtensionStatusBarSegment,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
@@ -354,6 +355,23 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		}
 		this.extension.themeTokens.push({ key, value });
 	}
+	registerStatusBarSegment(
+		id: string,
+		options: { label: string; order?: number; renderKey?: string },
+	): void {
+		if (typeof id !== "string" || id.length === 0) {
+			throw new TypeError("registerStatusBarSegment: id must be a non-empty string");
+		}
+		if (typeof options?.label !== "string" || options.label.length === 0) {
+			throw new TypeError(`registerStatusBarSegment: label for "${id}" must be a non-empty string`);
+		}
+		this.extension.statusBarSegments.push({
+			id,
+			label: options.label,
+			...(options.order !== undefined ? { order: options.order } : {}),
+			...(options.renderKey !== undefined ? { renderKey: options.renderKey } : {}),
+		});
+	}
 
 	getFlag(name: string): boolean | string | undefined {
 		if (!this.extension.flags.has(name)) return undefined;
@@ -466,6 +484,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		notificationChannels: [],
 		services: [],
 		themeTokens: [],
+		statusBarSegments: [],
 	};
 }
 

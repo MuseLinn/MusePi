@@ -74,6 +74,21 @@ export interface ToolViewItem {
 	/** Component-scoped CSS extracted at compile time. */
 	css?: string;
 }
+/** One status-bar segment from extensions.list (registerStatusBarSegment —
+ *  static label rendered after the built-in model/mode/context segments,
+ *  ordered by `order`). */
+export interface StatusBarSegmentItem {
+	/** Unique segment id (`statusbar.seg.<id>` slot key). */
+	id: string;
+	/** Static display label. */
+	label: string;
+	/** Order among daemon-contributed segments (ascending; registration order otherwise). */
+	order?: number;
+	/** Forward-compat renderer hint for hosts that register named renderers. */
+	renderKey?: string;
+	/** Extension entry path that contributed it (identity). */
+	extensionPath: string;
+}
 
 /** One normalized capability entry in extensions.list (10 kinds, TUI
  *  /extensions parity). Type home here so consumers (ExtensionsCenter,
@@ -118,6 +133,9 @@ export interface ExtensionRegistryData {
 	 *  analogue): compiled modules dispatched by tool name in the
 	 *  transcript. */
 	toolViews: ToolViewItem[];
+	/** Status-bar segments contributed by active extensions
+	 *  (registerStatusBarSegment), rendered after the built-ins by `order`. */
+	statusBarSegments: StatusBarSegmentItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
 }

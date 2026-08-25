@@ -54,6 +54,7 @@ import type {
 	ExtensionNotificationMessage,
 	ExtensionService,
 	ExtensionThemeToken,
+	ExtensionStatusBarSegment,
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -1455,6 +1456,11 @@ export class ExtensionRunner {
 	 *  registration order. */
 	getNotificationChannels(): ExtensionNotificationChannel[] {
 		return this.extensions.flatMap(ext => ext.notificationChannels);
+	}
+	/** Status-bar segments contributed by all loaded extensions to the status
+	 *  line (registerStatusBarSegment), in registration order across extensions. */
+	getStatusBarSegments(): ExtensionStatusBarSegment[] {
+		return this.extensions.flatMap(ext => ext.statusBarSegments);
 	}
 
 	/** Start every extension service whose `start` is not yet running. Each
