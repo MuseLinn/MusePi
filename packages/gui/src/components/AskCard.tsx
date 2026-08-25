@@ -62,6 +62,8 @@ export interface AskDialogSubmit {
 
 const OTHER_LABEL = "Other (type your own)";
 
+
+
 /** localStorage key for in-flight multi-question draft answers — survives
  *  session switches/relaunches until the ask resolves (openchamber
  *  QuestionCard parity: re-opening the same card restores selections). */
@@ -334,6 +336,8 @@ export function AskCard({
 	submitDialogRef.current = submitDialog;
 
 	// Toggle the per-question note editor (`n` key / note button parity).
+	// Question-level note (simplified from the TUI's row-bound note): a free
+	// text attached to this question's answer — travels as QuestionResult.note.
 	const toggleNote = (qIndex: number): void => {
 		const a = answers[qIndex];
 		if (!a) return;
@@ -408,22 +412,29 @@ export function AskCard({
 			);
 		}
 		return (
-			<div className="gui-ask-opts">
-				{(ask.options ?? []).map(label => (
-					<button
-						key={label}
-						type="button"
-						className="gui-ask-opt"
-						onClick={() => {
-							if (isOther(label)) setOtherMode(true);
-							else answerAndClear(label);
-						}}
-					>
-						<Icon name="arrow-right-s" className="h-3.5 w-3.5 flex-none opacity-60" />
-						<span className="min-w-0 flex-1 text-left">{label}</span>
+			<>
+				<div className="gui-ask-opts">
+					{(ask.options ?? []).map(label => (
+						<button
+							key={label}
+							type="button"
+							className="gui-ask-opt"
+							onClick={() => {
+								if (isOther(label)) setOtherMode(true);
+								else answerAndClear(label);
+							}}
+						>
+							<Icon name="arrow-right-s" className="h-3.5 w-3.5 flex-none opacity-60" />
+							<span className="min-w-0 flex-1 text-left">{label}</span>
+						</button>
+					))}
+				</div>
+				<div className="flex justify-end">
+					<button type="button" className="gui-btn" onClick={() => answerAndClear(null)}>
+						{t("cancel")}
 					</button>
-				))}
-			</div>
+				</div>
+			</>
 		);
 	};
 
@@ -550,7 +561,7 @@ export function AskCard({
 							className={`gui-ask-note-btn${a.noteOpen ? " gui-ask-note-btn--open" : ""}${a.note.trim() ? " gui-ask-note-btn--filled" : ""}`}
 							onClick={() => toggleNote(qIndex)}
 							title={`${t("add note")} (N)`}
-						>
+						>							
 							<Icon name="sticky-note" className="h-3 w-3" />
 							<span>{a.note.trim() ? t("note") : t("add note")}</span>
 						</button>
