@@ -57,6 +57,25 @@ function layoutTree(roots: readonly MessageTreeNode[]): { nodes: CanvasNode[]; w
 	return { nodes, width, height };
 }
 
+/** 聚焦卡片的完整消息内容(文本/思考/工具调用拼接)。 */
+function entryTextOf(entry: unknown): string {
+	if (!entry || typeof entry !== "object") return "";
+	const e = entry as { type?: string; message?: { role?: string; content?: unknown } };
+	if (e.type !== "message" || !e.message) return "…";
+	const parts = Array.isArray(e.message.content)
+		? (e.message.content as Array<{ type?: string; text?: string; name?: string; arguments?: unknown; thinking?: string }>)
+		: [];
+	const texts: string[] = [];
+	for (const p of parts) {
+		if (p?.type === "text" && p.text) texts.push(p.text);
+		else if (p?.type === "thinking" && p.thinking) texts.push(`💭 ${p.thinking}`);
+		else if (p?.type === "toolCall" && p.name) {
+			texts.push(`🔧 ${p.name}(${JSON.stringify(p.arguments) ?? ""})`);
+		}
+	}
+	return texts.join("\n") || "…";
+}
+
 export function SessionTreeCanvas({
 	entries,
 	leafId,
@@ -80,6 +99,13 @@ export function SessionTreeCanvas({
 	// 拖拽平移锚点(null = 未拖拽)。
 	const dragRef = useRef<{ px: number; py: number; vx: number; vy: number; moved: boolean } | null>(null);
 	const [dragging, setDragging] = useState(false);
+	// 单击/双击消歧:单击 = 聚焦详情卡,双击 = 跳转 transcript。
+	const singleClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const [focusedId, setFocusedId] = useState<string | null>(null);
+	// 搜索定位。
+	const [searchQuery, setSearchQuery] = useState("");
+	const [searchMatchIds, setSearchMatchIds] = useState<ReadonlySet<string>>(new Set());
+	const [searchCurrentIdx, setSearchCurrentIdx] = useState(0);
 
 	const { nodes, width, height } = useMemo(() => layoutTree(buildMessageTree(entries)), [entries]);
 
@@ -109,6 +135,44 @@ export function SessionTreeCanvas({
 			y: scaledH > wrap.clientHeight ? FIT_PADDING : (wrap.clientHeight - scaledH) / 2,
 		});
 	}, [width, height]);
+
+	const centerOnNode = useCallback(
+		(nodeId: string, targetScale?: number): void => {
+			const wrap = wrapRef.current;
+			const n = nodes.find(m => m.node.id === nodeId);
+			if (!wrap || !n) return;
+			const scale = targetScale ?? Math.max(0.6, Math.min(1.2, wrap.clientWidth / (NODE_W + GAP_X * 2)));
+			setView({
+				scale,
+				x: wrap.clientWidth / 2 - (n.x + NODE_W / 2) * scale,
+				y: wrap.clientHeight / 2 - (n.y + NODE_H / 2) * scale,
+			});
+		},
+		[nodes],
+	);
+
+	// 搜索匹配集 + 首个匹配定位。
+	const searchMatchArray = useMemo(() => {
+		if (!searchQuery.trim()) return [] as CanvasNode[];
+		const q = searchQuery.toLowerCase();
+		return nodes.filter(n => treeTextOf(n.node.entry).toLowerCase().includes(q));
+	}, [searchQuery, nodes]);
+
+	useEffect(() => {
+		setSearchMatchIds(new Set(searchMatchArray.map(n => n.node.id)));
+		setSearchCurrentIdx(0);
+		if (searchMatchArray.length > 0) centerOnNode(searchMatchArray[0]!.node.id, 1.2);
+	}, [searchMatchArray, centerOnNode]);
+
+	const scrollSearch = useCallback(
+		(dir: 1 | -1): void => {
+			const idx = searchCurrentIdx + dir;
+			if (idx < 0 || idx >= searchMatchArray.length) return;
+			setSearchCurrentIdx(idx);
+			centerOnNode(searchMatchArray[idx]!.node.id, 1.2);
+		},
+		[searchCurrentIdx, searchMatchArray, centerOnNode],
+	);
 
 	const onWheel = useCallback((e: React.WheelEvent) => {
 		e.preventDefault();
@@ -149,6 +213,46 @@ export function SessionTreeCanvas({
 		setDragging(false);
 	}, []);
 
+	// 单击 = 聚焦详情;双击 = 跳转 transcript(220ms 消歧)。
+	const handleClick = useCallback((nodeId: string) => {
+		if (suppressClick.current) return;
+		if (singleClickTimer.current !== null) clearTimeout(singleClickTimer.current);
+		singleClickTimer.current = setTimeout(() => {
+			setFocusedId(prev => (prev === nodeId ? null : nodeId));
+		}, 220);
+	}, []);
+
+	const handleDblClick = useCallback(
+		(nodeId: string) => {
+			if (singleClickTimer.current !== null) {
+				clearTimeout(singleClickTimer.current);
+				singleClickTimer.current = null;
+			}
+			suppressClick.current = true;
+			setFocusedId(null);
+			onJump(nodeId);
+		},
+		[onJump],
+	);
+
+	const focusedEntry = useMemo(() => {
+		if (focusedId === null) return null;
+		return entries.find(e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === focusedId);
+	}, [focusedId, entries]);
+
+	const focusedKind = useMemo(() => (focusedEntry ? treeKindOf(focusedEntry) : null), [focusedEntry]);
+
+	// Esc 关闭聚焦卡。
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") setFocusedId(null);
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
+
+	const hasSearch = searchQuery.trim().length > 0;
+
 	return (
 		<div
 			ref={wrapRef}
@@ -160,6 +264,55 @@ export function SessionTreeCanvas({
 			onPointerCancel={onPointerUp}
 			data-dragging={dragging || undefined}
 		>
+			{/* 搜索定位条 */}
+			<div className="stc-search" role="search" onClick={e => e.stopPropagation()}>
+				<Icon name="search" className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
+				<input
+					className="stc-search-input"
+					type="text"
+					placeholder={t("trajectory search placeholder")}
+					value={searchQuery}
+					onChange={e => setSearchQuery(e.target.value)}
+					onKeyDown={e => {
+						if (e.key === "Enter") scrollSearch(1);
+						else if (e.key === "ArrowUp") {
+							e.preventDefault();
+							scrollSearch(-1);
+						} else if (e.key === "ArrowDown") {
+							e.preventDefault();
+							scrollSearch(1);
+						}
+					}}
+				/>
+				{searchMatchArray.length > 0 && (
+					<>
+						<span className="stc-search-count">
+							{searchCurrentIdx + 1}/{searchMatchArray.length}
+						</span>
+						<span className="stc-search-nav">
+							<button
+								type="button"
+								className="stc-search-nav-btn"
+								disabled={searchCurrentIdx <= 0}
+								onClick={() => scrollSearch(-1)}
+								aria-label={t("trajectory clear filter")}
+							>
+								<Icon name="arrow-up-s" className="h-3 w-3" />
+							</button>
+							<button
+								type="button"
+								className="stc-search-nav-btn"
+								disabled={searchCurrentIdx >= searchMatchArray.length - 1}
+								onClick={() => scrollSearch(1)}
+								aria-label={t("trajectory clear filter")}
+							>
+								<Icon name="arrow-down-s" className="h-3 w-3" />
+							</button>
+						</span>
+					</>
+				)}
+			</div>
+
 			{nodes.length === 0 ? (
 				<p className="stc-empty">{t("trajectory empty")}</p>
 			) : (
@@ -212,14 +365,16 @@ export function SessionTreeCanvas({
 						const isLeaf = leafId != null && n.node.id === leafId;
 						const onPath = !activePathIds || activePathIds.has(n.node.id);
 						const childCount = n.node.children.length;
+						const searchMatch = hasSearch && searchMatchIds.has(n.node.id);
+						const isSearchCurrent = hasSearch && searchMatchArray[searchCurrentIdx]?.node.id === n.node.id;
+						const searchDim = hasSearch && !searchMatch;
 						return (
 							<div
 								key={n.node.id}
-								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${onPath ? " stc-node--active" : " stc-node--off"}`}
+								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${onPath ? " stc-node--active" : " stc-node--off"}${searchMatch ? " stc-node--search-match" : ""}${isSearchCurrent ? " stc-node--search-current" : ""}${searchDim ? " stc-node--search-dim" : ""}`}
 								style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H }}
-								onClick={() => {
-									if (!suppressClick.current) onJump(n.node.id);
-								}}
+								onClick={() => handleClick(n.node.id)}
+								onDoubleClick={() => handleDblClick(n.node.id)}
 								title={treeTextOf(n.node.entry)}
 							>
 								<Icon
@@ -265,6 +420,39 @@ export function SessionTreeCanvas({
 					})}
 				</div>
 			)}
+			{/* 聚焦详情卡(单击节点):focusedEntry 是 unknown(entries.find),
+			 * 必须显式判空——`focusedEntry &&` 会把整个表达式推成 unknown。 */}
+			{focusedId !== null && focusedEntry ? (
+				<div className="stc-focus-overlay" onClick={() => setFocusedId(null)}>
+					<div className="stc-focus-card" onClick={e => e.stopPropagation()}>
+						<div className="stc-focus-head">
+							<Icon
+								name={((focusedKind ? TREE_ICON[focusedKind] : undefined) ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
+								className={`h-3.5 w-3.5 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${focusedKind ?? "other"}`}
+							/>
+							<span className="stc-focus-label">
+								{focusedKind === "user"
+									? t("trajectory user")
+									: focusedKind === "assistant"
+										? "ASSISTANT"
+										: focusedKind === "toolResult"
+											? "TOOL"
+											: "SYSTEM"}
+							</span>
+							<button
+								type="button"
+								className="stc-focus-close"
+								onClick={() => setFocusedId(null)}
+								aria-label={t("trajectory close")}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+						</div>
+						<div className="stc-focus-body">{entryTextOf(focusedEntry) || "…"}</div>
+					</div>
+				</div>
+			) : null}
+
 			{/* 右下缩放控件(滚轮之外的精确入口)。 */}
 			<div className="stc-zoom">
 				<button

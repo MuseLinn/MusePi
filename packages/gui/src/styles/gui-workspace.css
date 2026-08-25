@@ -1921,7 +1921,10 @@
 }
 .traj-trow--off .traj-trow-main,
 .traj-trow--off .traj-trow-text {
-	opacity: 0.42;
+	opacity: 0.72;
+}
+.traj-trow--off .traj-trow-text {
+	color: var(--color-text-muted);
 }
 .traj-trow--leaf .traj-trow-main {
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
@@ -2062,10 +2065,10 @@
 	stroke-width: 2;
 }
 .stc-edge--off {
-	stroke: color-mix(in oklab, var(--color-text-faint) 40%, transparent);
+	stroke: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
 	stroke-width: 1.5;
 	stroke-dasharray: 4 4;
-	opacity: 0.4;
+	opacity: 0.65;
 }
 .stc-arrow-head {
 	fill: var(--color-accent);
@@ -2128,7 +2131,13 @@
 	}
 }
 .stc-node--off {
-	opacity: 0.42;
+	opacity: 0.75;
+}
+.stc-node--off .stc-node-text {
+	color: var(--color-text-muted);
+}
+.stc-node--off .gui-mtree-icon {
+	opacity: 0.5;
 }
 .stc-node--active {
 	border-color: color-mix(in oklab, var(--color-accent) 58%, var(--border));
@@ -2193,6 +2202,218 @@
 .stc-zoom-btn:hover {
 	color: var(--color-text);
 	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+}
+/* Canvas detail card (focus view) */
+.stc-focus-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in oklab, var(--color-bg) 60%, transparent);
+	backdrop-filter: blur(2px);
+	animation: stc-fade-in 160ms ease;
+}
+.stc-focus-card {
+	width: 90%;
+	max-width: 520px;
+	max-height: 70%;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--color-surface-raised, var(--color-bg));
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+	overflow: hidden;
+	animation: stc-scale-in 200ms ease;
+}
+.stc-focus-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+.stc-focus-label {
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--color-text-muted);
+}
+.stc-focus-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin-left: auto;
+	border-radius: 5px;
+	color: var(--color-text-muted);
+}
+.stc-focus-close:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
+	color: var(--color-text);
+}
+.stc-focus-body {
+	padding: 12px;
+	overflow-y: auto;
+	font-size: 12.5px;
+	line-height: 1.55;
+	color: var(--color-text);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+/* Canvas search bar */
+.stc-search {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: 220px;
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+}
+.stc-search:focus-within {
+	border-color: var(--color-accent);
+}
+.stc-search-input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	font-size: 11px;
+	color: var(--color-text);
+}
+.stc-search-input::placeholder {
+	color: var(--color-text-muted);
+}
+.stc-search-count {
+	font-size: 9.5px;
+	color: var(--color-text-muted);
+	flex-shrink: 0;
+}
+.stc-search-nav {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	flex-shrink: 0;
+}
+.stc-search-nav-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 3px;
+	color: var(--color-text-muted);
+}
+.stc-search-nav-btn:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+	color: var(--color-text);
+}
+.stc-search-nav-btn:disabled {
+	opacity: 0.35;
+	pointer-events: none;
+}
+.stc-node--search-match {
+	box-shadow: 0 0 0 2px var(--color-accent);
+	animation: stc-search-flash 600ms ease;
+}
+@keyframes stc-search-flash {
+	0% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent) 60%, transparent); }
+	100% { box-shadow: 0 0 0 2px var(--color-accent); }
+}
+.stc-node--search-current {
+	box-shadow: 0 0 0 3px var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised, var(--color-bg)));
+}
+.stc-node--search-dim {
+	opacity: 0.35;
+}
+/* Hover lift */
+.stc-node:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+@keyframes stc-fade-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+@keyframes stc-scale-in {
+	from { opacity: 0; transform: scale(0.92); }
+	to { opacity: 1; transform: scale(1); }
+}
+/* Trajectory branch lane grid */
+.traj-tree-lanes {
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+	min-width: 0;
+}
+.traj-tree-lane {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	flex: 1;
+	min-width: 180px;
+	max-width: 280px;
+}
+.traj-tree-lane-head {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 6px 6px;
+	font-size: 10px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--color-text-muted);
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 2px;
+}
+.traj-lane-branch-marker {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 9px;
+	color: var(--color-text-muted);
+	padding: 2px 6px 4px 8px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* Branch event chip in timeline */
+.traj-branch-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 5px;
+	font-size: 9px;
+	font-weight: 600;
+	border-radius: 4px;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	margin-left: 4px;
+	flex-shrink: 0;
+}
+/* Chat flash highlight */
+@keyframes gui-flash-highlight {
+	0% { background: color-mix(in oklab, var(--color-accent) 18%, transparent); }
+	100% { background: transparent; }
+}
+.gui-flash-highlight {
+	animation: gui-flash-highlight 1.2s ease-out;
 }
 
 .traj-inspector {

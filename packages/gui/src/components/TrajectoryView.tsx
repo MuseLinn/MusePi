@@ -25,12 +25,14 @@ function EventRow({
 	dimmed,
 	onSelect,
 	onJumpToEntry,
+	children,
 }: {
 	ev: TrajectoryEvent;
 	selected: boolean;
 	dimmed: boolean;
 	onSelect(id: string | null): void;
 	onJumpToEntry?: (entryId: string) => void;
+	children?: ReactNode;
 }): ReactNode {
 	return (
 		<div className="traj-row" onClick={() => onSelect(selected ? null : ev.id)}>
@@ -72,6 +74,7 @@ function EventRow({
 					)}
 				</div>
 			</div>
+			{children}
 			{/* 跳转入口 = 独立箭头小按钮(不再包裹整行):整行点击 = 选中检视,
 			 * 箭头点击 = 跳转 transcript。包裹式按钮此前把整行点击吞成跳转,
 			 * 检视器永远点不出来的回归(2026-08-21 实测)。 */}
@@ -339,7 +342,62 @@ export function TrajectoryView({
 		walk(treeRoots, 0);
 		return rows;
 	}, [treeRoots, collapsedNodes]);
-	// 性能:进入树模式时默认折叠非当前路径的多子分支(懒展开——折叠节点
+	// 分支列布局(垂直生长,不右延):第一子继承父列,其余子开新列;
+	// 每列 = 一个 flex column,节点按序垂直堆叠。列首显示分支来源摘要。
+	const treeLanes = useMemo(() => {
+		const laneOf = new Map<string, number>();
+		const nextLane = { n: 0 };
+		const assign = (nodes: readonly MessageTreeNode[], inherited: number): void => {
+			for (const node of nodes) {
+				const lane = laneOf.get(node.id) ?? inherited;
+				laneOf.set(node.id, lane);
+				for (let i = 0; i < node.children.length; i++) {
+					if (i === 0) {
+						laneOf.set(node.children[i]!.id, lane);
+						assign([node.children[i]!], lane);
+					} else {
+						const nl = nextLane.n++;
+						laneOf.set(node.children[i]!.id, nl);
+						assign([node.children[i]!], nl);
+					}
+				}
+			}
+		};
+		for (const root of treeRoots) {
+			if (!laneOf.has(root.id)) {
+				laneOf.set(root.id, nextLane.n++);
+				assign([root], laneOf.get(root.id)!);
+			}
+		}
+		const byLane = new Map<number, { node: MessageTreeNode; isLeaf: boolean; onPath: boolean }[]>();
+		const walk = (nodes: readonly MessageTreeNode[]): void => {
+			for (const node of nodes) {
+				const lane = laneOf.get(node.id) ?? 0;
+				const arr = byLane.get(lane) ?? [];
+				arr.push({
+					node,
+					isLeaf: leafId != null && node.id === leafId,
+					onPath: !activePathIds || activePathIds.has(node.id),
+				});
+				byLane.set(lane, arr);
+				if (!collapsedNodes.has(node.id)) walk(node.children);
+			}
+		};
+		walk(treeRoots);
+		return [...byLane.entries()]
+			.sort((a, b) => a[0] - b[0])
+			.map(([lane, rows]) => ({
+				lane,
+				rows,
+				head:
+					lane === 0
+						? undefined
+						: rows[0]
+							? treeTextOf(rows[0].node.entry).slice(0, 60)
+							: undefined,
+			}));
+	}, [treeRoots, collapsedNodes, leafId, activePathIds]);
+		// 性能:进入树模式时默认折叠非当前路径的多子分支(懒展开——折叠节点
 	// 的子行只在展开后渲染)。以 leafId 作会话标识,切会话重新播种。
 	const seededCollapseFor = useRef<string | null>(null);
 	useEffect(() => {
@@ -560,7 +618,14 @@ export function TrajectoryView({
 													}
 													onSelect={setSelectedId}
 													onJumpToEntry={onJumpToEntry}
-												/>
+												>
+													{ev.branch && (
+														<span className="traj-branch-chip">
+															<Icon name="git-fork" className="h-2.5 w-2.5" />
+															{t("trajectory branch")}
+														</span>
+													)}
+												</EventRow>
 											))}
 										</div>
 									)}

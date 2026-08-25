@@ -8,6 +8,18 @@ function msg(id: string, parentId: string | null, ts = 1): unknown {
 }
 
 describe("buildMessageTree", () => {
+	it("非 message 条目(model_change/custom)不进树", () => {
+		const entries = [
+			msg("a", null),
+			{ type: "model_change", id: "mc1", parentId: "a", timestamp: "2026-08-17T00:00:00.000Z", model: "x/y" },
+			msg("b", "a"),
+		];
+		const tree = buildMessageTree(entries);
+		expect(tree).toHaveLength(1);
+		expect(tree[0]!.id).toBe("a");
+		expect(tree[0]!.children.map(c => c.id)).toEqual(["b"]);
+	});
+
 	it("线性链:每个消息挂在父下,根 = 链头", () => {
 		const tree = buildMessageTree([msg("a", null), msg("b", "a"), msg("c", "b")]);
 		expect(tree).toHaveLength(1);

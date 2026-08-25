@@ -13,7 +13,7 @@ import {
 	useExtensionToolViews,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
-import { scrollToEntry } from "../lib/transcript-jump";
+import { scrollToEntry, scrollToEntryAndFlash } from "../lib/transcript-jump";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -1273,7 +1273,8 @@ export function ChatView({
 														const t2 = typeof ts === "object" && ts !== null ? (ts as { timestamp?: unknown }).timestamp : null;
 														if (typeof t2 === "string") {
 															setViewMode("chat");
-															scrollToEntry(transcriptRef.current, t2);
+															// 双击跳转 + 短暂高亮(1.2s flash)。
+															scrollToEntryAndFlash(transcriptRef.current, t2);
 														}
 													}}
 													onBranchTo={id => {

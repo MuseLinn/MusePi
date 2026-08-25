@@ -53,6 +53,23 @@ function toolResultEntry(ts: string, toolCallId: string, text: string): unknown 
 }
 
 describe("buildTrajectory", () => {
+	it("分支消息打 branch 标记;线性消息不带", () => {
+		// 线性:user Q1 → assistant A1 → user Q2;分支:user Q2 的 parentId
+		// 指向 Q1(重答场景)而非前驱 A1 → Q2 及其回复标记 branch。
+		const entries = [
+			{ type: "message", id: "u1", parentId: null, timestamp: "2026-08-17T00:00:00.000Z", message: { role: "user", content: [{ type: "text", text: "第一问" }] } },
+			{ type: "message", id: "a1", parentId: "u1", timestamp: "2026-08-17T00:00:01.000Z", message: { role: "assistant", content: [{ type: "text", text: "第一答" }] } },
+			{ type: "message", id: "u2", parentId: "a1", timestamp: "2026-08-17T00:00:02.000Z", message: { role: "user", content: [{ type: "text", text: "第二问" }] } },
+			{ type: "message", id: "a2", parentId: "u2", timestamp: "2026-08-17T00:00:03.000Z", message: { role: "assistant", content: [{ type: "text", text: "第二答" }] } },
+			// 分支点:重答 Q2 → 新分支 Q3(parentId 指向 u2,而非前驱 a2)。
+			{ type: "message", id: "u3", parentId: "u2", timestamp: "2026-08-17T00:00:04.000Z", message: { role: "user", content: [{ type: "text", text: "重答分支" }] } },
+			{ type: "message", id: "a3", parentId: "u3", timestamp: "2026-08-17T00:00:05.000Z", message: { role: "assistant", content: [{ type: "text", text: "分支回复" }] } },
+		];
+		const { events } = buildTrajectory(entries);
+		expect(events.filter(e => e.branch).map(e => e.title)).toEqual(["重答分支", "分支回复"]);
+		expect(events.filter(e => !e.branch).map(e => e.title)).toEqual(["第一问", "第一答", "第二问", "第二答"]);
+	});
+
 	it("提取工具调用为 TOOL 事件并回填结果", () => {
 		const entries = [
 			userEntry("2026-08-17T00:00:00.000Z", "调用 runtime_tool"),

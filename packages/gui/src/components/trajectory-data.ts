@@ -15,6 +15,8 @@ export interface TrajectoryEvent {
 	entryId?: string;
 	/** 数值化时间戳(Overview 时间轴投影与区间判定用;无则 undefined)。 */
 	tsMs?: number;
+	/** 该事件位于分支上(entry parentId ≠ 线性前驱;非当前路径的旁支消息)。 */
+	branch?: boolean;
 	/** assistant 消息自带用量(wire AssistantMessage.usage,settled 回合才有)。 */
 	usage?: TrajectoryUsage;
 	/** 该轮模型请求耗时 ms(wire AssistantMessage.duration,settled 才有)。 */
@@ -61,6 +63,11 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 	let lastTs: number | undefined;
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
 	const toolIndex = new Map<string, TrajectoryEvent>();
+	/**
+	 * 分支判定(树结构):主线 = 从根沿 first-child 下行的链;任何不在主线
+	 * 上的条目都是分支(分支点及其整棵子树)。按 parentId 建树后一次遍历。
+	 */
+	let branchIds: ReadonlySet<string> | undefined;
 
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
@@ -69,6 +76,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 			message?: Record<string, unknown>;
 			timestamp?: string;
 			id?: string;
+			parentId?: string | null;
 		};
 		const entryId = typeof entry.id === "string" ? entry.id : undefined;
 		const ts = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
@@ -106,6 +114,39 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				target.result = truncate(content || String(msg.result ?? ""), 160);
 			}
 		} else if (type === "message" && msg) {
+			// Branch detection: a message not on the main first-child chain is
+			// a branch (re-answer / fork continuation) — the timeline flags
+			// it instead of hiding it. Set is computed lazily on first use.
+			if (branchIds === undefined) {
+				const childrenOf = new Map<string, string[]>();
+				const ids = new Set<string>();
+				let rootId: string | null = null;
+				for (const raw of entries) {
+					if (!raw || typeof raw !== "object") continue;
+					const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
+					if (typeof e2.id !== "string" || e2.type !== "message") continue;
+					ids.add(e2.id);
+					const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
+					if (pid !== null) {
+						const arr = childrenOf.get(pid) ?? [];
+						arr.push(e2.id);
+						childrenOf.set(pid, arr);
+					} else if (rootId === null) {
+						rootId = e2.id;
+					}
+				}
+				// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
+				const main = new Set<string>();
+				let cur = rootId;
+				while (cur !== null && ids.has(cur)) {
+					main.add(cur);
+					cur = childrenOf.get(cur)?.[0] ?? null;
+				}
+				const branch = new Set<string>();
+				for (const id of ids) if (!main.has(id)) branch.add(id);
+				branchIds = branch;
+			}
+			const isBranch = entryId !== undefined && branchIds.has(entryId);
 			if (msg.role === "user") {
 				turn += 1;
 				const text = Array.isArray(msg.content)
@@ -123,6 +164,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						timestamp: entry.timestamp,
 						entryId,
 						tsMs,
+						branch: isBranch || undefined,
 					});
 				continue;
 			}
@@ -152,6 +194,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 							timestamp: entry.timestamp,
 							entryId,
 							tsMs,
+							branch: isBranch || undefined,
 						};
 						toolIndex.set(part.id ?? ev.id, ev);
 						events.push(ev);
@@ -172,6 +215,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						usage: msg.usage,
 						durationMs: msg.duration,
 						ttftMs: msg.ttft,
+						branch: isBranch || undefined,
 					});
 				}
 			}
