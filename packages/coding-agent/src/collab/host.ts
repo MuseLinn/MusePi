@@ -151,6 +151,8 @@ export interface CollabWorkspaceContext {
 	deleteWorkspaceSession?(sessionId: string): Promise<void>;
 	/** Rename a session (journal label, user-set). */
 	renameWorkspaceSession?(sessionId: string, title: string): Promise<void>;
+	/** Stop the running agent turn in a session. */
+	abortWorkspaceSession?(sessionId: string): Promise<void>;
 }
 
 export type CollabHostMode = "session" | "workspace";
@@ -850,6 +852,7 @@ export class CollabHost {
 		"session.create": true,
 		"session.delete": true,
 		"session.rename": true,
+		"session.abort": true,
 	};
 
 	/**
@@ -1011,6 +1014,15 @@ export class CollabHost {
 				if (!sessionId) throw new Error("session.rename: sessionId required");
 				if (!title?.trim()) throw new Error("session.rename: title required");
 				await this.#ctx.workspace.renameWorkspaceSession(sessionId, title.trim());
+				return { ok: true };
+			}
+			case "session.abort": {
+				if (!this.#ctx.workspace?.abortWorkspaceSession) {
+					throw new Error("session.abort: workspace mode required");
+				}
+				const { sessionId } = p as { sessionId?: string };
+				if (!sessionId) throw new Error("session.abort: sessionId required");
+				await this.#ctx.workspace.abortWorkspaceSession(sessionId);
 				return { ok: true };
 			}
 			default:

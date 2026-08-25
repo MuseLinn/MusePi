@@ -440,6 +440,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 						onCreateSession={() => client.rpc("session.create", {})}
 						onDeleteSession={id => client.rpc("session.delete", { sessionId: id })}
 						onRenameSession={(id, title) => client.rpc("session.rename", { sessionId: id, title })}
+						onStopSession={id => client.rpc("session.abort", { sessionId: id })}
 					/>
 				) : activePanel !== null ? (
 					<section className="sh-content" data-rail="false">

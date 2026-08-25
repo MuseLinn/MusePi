@@ -1,4 +1,4 @@
-import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Square, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -20,6 +20,7 @@ export function WorkspaceView({
 	onCreateSession,
 	onDeleteSession,
 	onRenameSession,
+	onStopSession,
 }: {
 	client: GuestClient;
 	sessions: readonly WorkspaceSessionInfo[];
@@ -30,6 +31,8 @@ export function WorkspaceView({
 	onDeleteSession?(sessionId: string): Promise<unknown>;
 	/** Rename a session (guest session.rename RPC). */
 	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
+	/** Stop a working session's running turn (guest session.abort RPC). */
+	onStopSession?(sessionId: string): Promise<unknown>;
 }): ReactNode {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// Collapsed project groups (keyed by cwd; "" = no folder).
@@ -134,7 +137,7 @@ export function WorkspaceView({
 				</div>
 				<div className="sh-workspace-grid">
 					{visibleSessions.map(session => (
-						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} onArchive={toggleArchive} />
+						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} onArchive={toggleArchive} onStopSession={onStopSession} />
 					))}
 				</div>
 				{sessions.length === 0 && <p className="sh-workspace-empty">{t("no sessions yet")}</p>}
@@ -181,6 +184,7 @@ function WorkspaceCard({
 	onDeleteSession,
 	onRenameSession,
 	onArchive,
+	onStopSession,
 }: {
 	session: WorkspaceSessionInfo;
 	onSelect(sessionId: string): void;
@@ -188,6 +192,7 @@ function WorkspaceCard({
 	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
 	/** Toggle archived (localStorage, desktop-GUI parity). */
 	onArchive?(sessionId: string): void;
+	onStopSession?(sessionId: string): Promise<unknown>;
 }): ReactNode {
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState(session.title ?? "");
@@ -250,6 +255,19 @@ function WorkspaceCard({
 				</div>
 			</button>
 			<div className="sh-ws-card-actions">
+				{session.working && onStopSession && (
+					<button
+						type="button"
+						className="sh-ws-action-btn"
+						title={t("stop the current turn")}
+						onClick={e => {
+							e.stopPropagation();
+							void onStopSession(session.id);
+						}}
+					>
+						<Square size={12} />
+					</button>
+				)}
 				<button
 					type="button"
 					className="sh-ws-action-btn"

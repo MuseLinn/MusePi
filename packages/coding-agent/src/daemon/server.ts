@@ -5692,6 +5692,13 @@ export class DaemonServer {
 							}
 							await live.agentSession.sessionManager.setSessionName(title, "user");
 						},
+						abortWorkspaceSession: async (sessionId: string) => {
+							const live = this.#host.get(sessionId) ?? (await this.#host.activate(sessionId).catch(() => null));
+							if (!live) {
+								throw new Error(`Cannot abort session ${sessionId} (not resumable)`);
+							}
+							await live.agentSession.abort({ reason: "user interrupt" });
+						},
 					},
 				};
 				const transport = new LocalShareManager({ port: undefined, onStatus: () => {} });
@@ -5862,6 +5869,15 @@ export class DaemonServer {
 					throw new Error("sessionId required");
 				}
 				await this.#host.deleteSession(p.sessionId);
+				return { ok: true };
+			}
+			case "session.abort": {
+				// TUI Esc parity: stop the running agent turn in a live
+				// session. Desktop GUI Composer stop calls this.
+				const p = (params ?? {}) as { sessionId: string };
+				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId).catch(() => null));
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				await live.agentSession.abort({ reason: "user interrupt" });
 				return { ok: true };
 			}
 			case "session.cancel": {

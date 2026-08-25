@@ -182,6 +182,9 @@ describe("collab guest rpc", () => {
 				renameWorkspaceSession: async (id: string, title: string) => {
 					calls.push(`rename:${id}:${title}`);
 				},
+				abortWorkspaceSession: async (id: string) => {
+					calls.push(`abort:${id}`);
+				},
 			},
 		};
 		const wsHost = new CollabHost(wsCtx as unknown as InteractiveModeContext, "workspace");
@@ -193,9 +196,11 @@ describe("collab guest rpc", () => {
 			expect((create.data as { sessionId?: unknown }).sessionId).toBe("sess-new");
 			const rename = await guest.rpc("session.rename", { sessionId: "sess-1", title: "Renamed" });
 			expect(rename.ok).toBe(true);
+			const abort = await guest.rpc("session.abort", { sessionId: "sess-1" });
+			expect(abort.ok).toBe(true);
 			const del = await guest.rpc("session.delete", { sessionId: "sess-1" });
 			expect(del.ok).toBe(true);
-			expect(calls).toEqual(["create", "rename:sess-1:Renamed", "delete:sess-1"]);
+			expect(calls).toEqual(["create", "rename:sess-1:Renamed", "abort:sess-1", "delete:sess-1"]);
 			// Read-only link (no write token) rejects mutating methods.
 			const viewGuest = await joinAsGuest(wsHost.viewLink, "view-test");
 			const readOnlyDel = await viewGuest.rpc("session.delete", { sessionId: "sess-1" });
