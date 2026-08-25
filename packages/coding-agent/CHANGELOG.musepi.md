@@ -31,6 +31,78 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   the same key`)。
 - 上下文圆环配额弹层丢失凭据归属(各供应商限额拍平后无法区分账户)。
 
+## [0.4.5] - 2026-08-26
+
+### Added
+
+- **Windows 毛玻璃修复**:win32/linux 上左侧面板/顶栏/ChatView 圆角外四角色差清零、透明毛玻璃生效。根因:html 元素被 desktop-web base.css 的 `var(--bg)` 不透明底色盖住整窗(`gui-base.css` 只覆了 body),DWM acrylic / macOS vibrancy 透不过来;side pane 的 `blur(15px) saturate(1.8)` 单独渲染把侧栏提亮 9-12 度,与无 blur 的顶栏/卡片围边形成肉眼可辨色差。修复:`html:root` + `html:root body` 显式 `transparent`(specificity 0,1,1 稳压 desktop-web base 的 `html { background: var(--bg) }`,无视 bundle 顺序);win32/linux 下 `.gui-pane-side` 同 `.gui-main` 禁用 backdrop-filter,三面统一走单一 scrim。CDP 渲染层 clip 像素验证:side 35,30,25 / header 33,28,23(同暖色调,delta≤5)。
+  - EN: Win32/Linux frosted glass fix: corner color mismatch between sidebar/header and the four corners around the ChatView rounded container eliminated; transparent glass effect working again. Root cause: html element kept an opaque `var(--bg)` from desktop-web base.css (gui-base.css only overrode body), blocking DWM acrylic / macOS vibrancy; .gui-pane-side's own `blur(15px) saturate(1.8)` rendered the sidebar 9-12 degrees brighter than the topbar/card ring which share no blur. Fix: `html:root` + `html:root body` explicitly `transparent` (specificity 0,1,1 wins over desktop-web base's `html { background: var(--bg) }` regardless of bundle order); `.gui-pane-side` disabled for backdrop-filter on win32/linux alongside `.gui-main`, all three surfaces share the same workspace scrim. CDP render-layer clips confirm: side 35,30,25 vs header 33,28,23 (same warm tint, delta≤5).
+- **Foreign session import — MusePi source**:foreign-session-import 新增 `musepi` 源,SDK_SESSION_ROOTS 加入 `~/.musepi/agent/sessions`、`~/.musepi/sessions`、`~/.musepi/agent/data/sessions`;`foreignSessionSources()` 把 `musepi` 放在首位(自我迁移优先级最高);`"omp"` 显示名从 `"Oh My Pi"` 精简为 `"OMP"`。`Session.delete` RPC 已级联清理三张 materialized 表(sessions / materialized_sessions / messages / agents),数据卫生无遗留。
+  - EN: Foreign session import adds a `musepi` source; SDK_SESSION_ROOTS extended with `~/.musepi/agent/sessions`, `~/.musepi/sessions`, `~/.musepi/agent/data/sessions`; `foreignSessionSources()` puts `musepi` first (self-migration priority); `"omp"` display name trimmed from `"Oh My Pi"` to `"OMP"`. `Session.delete` RPC cascades across all four materialized tables (sessions / materialized_sessions / messages / agents) — no data hygiene debt.
+- **Daemon widget.data RPC**:daemon 提供 `widget.data { feed }` RPC,首期喂行情静态/轮询接口(`open.er-api.com`),60s 进程内缓存 + 请求合并;GUI BoardPage ticker 改走 RPC,保留现有静态 seed 离线回退。desktop-web widget-task-run 的直连 fetch 路径不动。
+  - EN: Daemon exposes a `widget.data { feed }` RPC. First feed: static/periodic FX rates (`open.er-api.com`) with a 60s in-process cache + in-flight coalescing; GUI BoardPage ticker routes through RPC with static seed kept as offline fallback. The existing direct-fetch path in desktop-web widget-task-run remains untouched.
+- **扩展 statusbar.seg 桥**:extension API 新增 `registerStatusBarSegment(id, { label, order?, renderKey? })`;loader 聚合到 `Extension.statusBarSegments[]`,runner 暴露 `getStatusBarSegments()`,`extensions.list` RPC 通过新加字段下发;GUI `StatusBarContent` 消费后按 `order` 升序拼入内置三段(model/mode/context)之后。Extension artifact compiler 同步支持 slot 组件编译输出 `statusBarSegments` 形状。
+  - EN: Extension API gains `registerStatusBarSegment(id, { label, order?, renderKey? })`; loader aggregates into `Extension.statusBarSegments[]`, runner exposes `getStatusBarSegments()`, `extensions.list` RPC serves them via a new field; GUI `StatusBarContent` merges by `order` ascending after the three builtins (model/mode/context). Extension artifact compiler emits `statusBarSegments` shape alongside slot components.
+- **Cleanse 连续流**:runCleanseLoop 加 `maxWaves` 可选参数(默认 1 = 既有单次行为精确保留);多次 wave 时每次重新 balanceDiagnostics,收敛到 clean / 达到上限 / 被 abort 信号中止 / 报错均停止。4 个回归测试:2-wave 收敛、maxWaves 上限触发 stalled、wave 中途 abort、默认单波。
+  - EN: runCleanseLoop gains optional `maxWaves` (default 1 = exact existing single-pass behavior); iterates waves re-balancing each time via balanceDiagnostics; stops on clean, maxWaves hit, abort signal, or error. 4 regression tests: 2-wave convergence, maxWaves cap → stalled, mid-wave abort, default single-pass.
+- **Assembly.toml manifest 子系统**:assembly 目录新增 `manifest.ts` / `verify.ts` / `types.ts` 三件套,提供 project-level 扩展白名单 + surface 覆盖 + seams 选择(terminal / compaction);CLI `musepi assembly status|verify` 命令;boot 阶段 `bootVerifyExtensions` 在 managed errors 下按 `degraded_ok` 决定 fail-loud 或 warn+soft-fail。
+  - EN: Assembly.toml manifest subsystem — `manifest.ts` / `verify.ts` / `types.ts` providing project-level extension whitelist, surface override, and seams selection (terminal / compaction); CLI commands `musepi assembly status|verify`; boot-time `bootVerifyExtensions` raises managed errors with `degraded_ok` gating fail-loud vs warn+soft-fail.
+- **GUI /trace TUI 轨迹视图**:TreeSelectorComponent 加入 projection 参数叠加时间/成本列(HH:mm:ss、tokens↑↓、duration、8 级 cost bar、error 符号)到 `/tree` 结构投影上;builtin-session 注册 `/trace` 命令入口。与 `/tree` 共享同一 TreePanel 实例,视图切换零开销。
+  - EN: GUI `/trace` TUI trajectory view — TreeSelectorComponent gains projection param stacking time/cost columns (HH:mm:ss, tokens↑↓, duration, 8-level cost bar, error symbols) atop the `/tree` structural projection; builtin-session registers `/trace` entry. Shares one TreePanel instance with `/tree`, zero-cost view switch.
+- **MusePi ps CLI**:子命令 `ps` 注册到 cli-commands,实现 `ps --json/--plain --all --dir`,TUI interactive monitor 与静态 listing 两套形态;live-board 同时作为 supervisor state surface 贡献给 ps 上下文。
+  - EN: MusePi `ps` CLI — sub-command registered in cli-commands, implements `ps --json/--plain --all --dir`, two modes: TUI interactive monitor and static listing; live-board contributes as supervisor state surface to ps context.
+- **Widget task scheduler 真实执行引擎**:BoardPage ticker 移除 1400ms setTimeout fake run,改用 `executeAndRecord` 真实 executor 刷新;ticker 30s 周期内扫描 due tasks,按 hourly/daily/schedule 类型触发,调用真实 fetch(离线降级);desktop-web widget-task-run 的 executeWidgetTask 复用同一 isTaskDue 时序逻辑。
+  - EN: Widget task scheduler real execution engine — BoardPage ticker drops 1400ms setTimeout fake run, uses `executeAndRecord` real executor refresh; ticker scans due tasks every 30s, triggers by hourly/daily/schedule type, calls real fetch (offline degrade); desktop-web widget-task-run reuses the same isTaskDue timing logic.
+- **P3/P4 插件接缝**:extension API 补 `registerNotificationChannel` / `registerThemeToken` / `registerService`;loader 新增三类 registration 校验,runner 实现 start/stop 生命周期(isolating throwing start)、notification 路由、theme token 聚合+reload;extensions-runner 3 个回归测试。
+  - EN: P3/P4 plugin seams — extension API adds `registerNotificationChannel` / `registerThemeToken` / `registerService`; loader adds validation for three registration types, runner implements start/stop lifecycle (isolating throwing start), notification routing, theme token aggregation + reload; 3 regression tests in extensions-runner.
+- **安卓 OTA 方案文档**:docs/ota-mobile-design.md,调研结论推荐 `@capgo/capacitor-updater`(web-layer OTA,自托管 bundle 规避国内网络问题),APK 下载仅作兜底;`update-manifest.json` 保留为桌面+移动端共通的版本公告格式。
+  - EN: Android OTA design doc (docs/ota-mobile-design.md); recommendation: `@capgo/capacitor-updater` (web-layer OTA, self-hosted bundle to bypass China network issues), APK download as fallback; `update-manifest.json` retained as shared version-announcement format for desktop + mobile.
+- **8 份核心文档中英双语配对**:`approval-mode` / `computer-use` / `environment-variables` / `marketplace` / `mcp-config` / `models` / `providers` / `session-operations-export-share-fork-resume` 全部创建 `.zh-CN.md` 及 `.i18n.yaml` hash 记录,`verify-translation-pairing` 严格检查通过。
+  - EN: 8 core docs bilingual pairing — `approval-mode`, `computer-use`, `environment-variables`, `marketplace`, `mcp-config`, `models`, `providers`, `session-operations-export-share-fork-resume` all get `.zh-CN.md` + `.i18n.yaml` hash record, strict check passes via `verify-translation-pairing`.
+
+### Changed
+
+- **Telemetry 命名空间清理**:`pi.omp.agent.*` → `pi.musepi.agent.*`(11 个 counter/histogram),头注释 `"so omp can be observed"` 改为 `"so MusePi can be observed"`,otel-signals-probe + telemetry-export.test 9/9 通过。
+  - EN: Telemetry namespace cleanup — `pi.omp.agent.*` → `pi.musepi.agent.*` (11 counters/histograms), head comment updated from "so omp can be observed" to "so MusePi can be observed"; otel-signals-probe + telemetry-export.test 9/9 pass.
+- **文档活页更新**:`gui-design.md` §5g / `gui-implementation.md` §18 新增 2026-08-24→2026-08-26 落地特性章节(right-panel Phase 1-2、board widget canvas、composer.shape、statusLine.contextLine、OTA、win32 frosted-glass、双语 docs 约定、extension P3/P4 seams、/trace、musepi ps、telemetry rename)。
+  - EN: Live-docs update — `gui-design.md` §5g / `gui-implementation.md` §18 gain 2026-08-24→2026-08-26 feature sections (right-panel Phase 1-2, board widget canvas, composer.shape, statusLine.contextLine, OTA, win32 frosted-glass, bilingual docs convention, extension P3/P4 seams, /trace, musepi ps, telemetry rename).
+- **bazel pi-shell kill 信号测试超时放宽**:5s → 15s,消除 Windows 加载 runner 上的 flaky panic。
+  - EN: Bazel pi-shell kill-signal test timeout relaxed 5s → 15s, eliminating flaky panic under loaded Windows runners.
+- **Remote wt/* 分支清理**:`wt/glass`、`wt/installer-beta`、`wt/onboard-auth` 三个 worktree 已删除后遗留的远程引用一并 push --delete 清除。
+  - EN: Remote wt/* branch cleanup — `wt/glass`, `wt/installer-beta`, `wt/onboard-auth` refs deleted from origin after worktrees were removed locally.
+- **GUI settings 面板双语**:`gui-settings.md` / `gui-settings.zh-CN.md` 完成配对,切换器+结构签名对齐。
+  - EN: GUI settings panel bilingual — `gui-settings.md` / `gui-settings.zh-CN.md` pair completed, switcher + structural signature aligned.
+
+### Fixed
+
+- **session.prompt dispatched 流程修复**:session.agent.ts 将 `prompt()` 改为 await `#promptWithMessage` 返回值,undispatched user prompt 触发 `#promptDropped` 事件;原 2 个 progress-guard 失败测试(600k-char prompt persisted before dispatch → no headroom post-compaction)已修复 29/29 pass。
+  - EN: session.prompt dispatched flow fix — `prompt()` now awaits `#promptWithMessage` return; undispatched user prompts fire `#promptDropped`; the 2 failing progress-guard tests (600k-char prompt persisted before dispatch → no headroom post-compaction) now pass 29/29.
+- **TuiTrace 测试 fixture 补全**:`trace-selector.test.ts` assistant message fixture 补 `totalTokens` + `cost` 字段(`makeNode` 参数放宽为 `Record<string, unknown>`),extensions-runner.test.ts 的 `toBe(true)` 断言因 `boolean | undefined` 类型选择错误 overload 改用 `toEqual(true)` 或 `Boolean()` 包装,全部通过。
+  - EN: TuiTrace test fixture completion — `trace-selector.test.ts` assistant message fixtures gain `totalTokens` + `cost` (makeNode param widened to `Record<string, unknown>`); extensions-runner.test.ts `toBe(true)` assertions for `boolean | undefined` properties switch to `toEqual(true)` or `Boolean()` wrapper; all pass.
+- **Extension runner 类型修复**:runner.startServices()/stopServices() 签名无参,测试中传参调用改为直接调;loader 类型 guard 缺失的 registerStatusBarSegment 等新增方法补齐。
+  - EN: Extension runner type fix — runner.startServices()/stopServices() signatures are no-arg; tests adjusted. Loader type guards complete for newly added methods like registerStatusBarSegment.
+- **assembly 子系统类型修补**(子代理产出后的自修):
+  - assembly/index.ts 重复导出 `AssemblySessionState`(export { type } 与 export class 冲突)→ 删除 type re-export,保留 class
+  - assembly/index.ts getCachedAgentDir / loadAssemblySync async 化调整
+  - assembly/manifest.ts ManifestExtensionItem / compactionMethod 类型收窄
+  - assembly/verify.ts ManifestExtensions.include/exclude optional access
+  - commands/assembly.ts getAgentDir() 无参修正 + Settings.init 动态 import 绕过 shadow
+  - daemon/server.ts #openTerminal IIFE await + onExit callback 解构修正
+  - daemon/terminal-provider.ts child.off → removeListener; bun-pty 类型断言经 unknown 中转
+  - test/assembly.test.ts fixture 补 runtime 字段
+  全部编译通过,仅保留既有 updatedAt + collab 两处预存错误。
+  - EN: Assembly subsystem type fixes (post-subagent cleanup):
+    - assembly/index.ts duplicate `AssemblySessionState` re-export → removed, class kept
+    - assembly/index.ts getCachedAgentDir / loadAssemblySync async adjustments
+    - assembly/manifest.ts ManifestExtensionItem / compactionMethod type narrowing
+    - assembly/verify.ts ManifestExtensions.include/exclude optional access
+    - commands/assembly.ts getAgentDir() arg fix + Settings.init dynamic import to bypass shadow
+    - daemon/server.ts #openTerminal IIFE await + onExit callback destructuring fix
+    - daemon/terminal-provider.ts child.off → removeListener; bun-pty type assertion via unknown
+    - test/assembly.test.ts fixture runtime field added
+    All compile clean except the two pre-existing updatedAt + collab errors.
+
+
 ## [0.4.3] - 2026-08-22
 
 ### Added
