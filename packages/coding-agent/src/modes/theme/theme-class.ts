@@ -157,6 +157,7 @@ export class Theme {
 		private readonly symbolPreset: SymbolPreset,
 		symbolOverrides: Partial<Record<SymbolKey, string>>,
 		spinnerFramesOverrides: Partial<Record<SpinnerType, string[]>> = {},
+		private readonly extensionTokens: Record<string, string> = {},
 	) {
 		this.statusLineLuminance = colorLuma(bgColors.statusLineBg);
 		this.#statusLineContrastLuminance = relativeLuminance(bgColors.statusLineBg);
@@ -207,6 +208,12 @@ export class Theme {
 		const hex = this.#hexFgColors[color];
 		if (hex === undefined) throw new Error(`Unknown theme color: ${color}`);
 		return hex || (this.isLight ? "#000000" : "#e5e5e7");
+	}
+
+	/** Read a theme token contributed by an extension (registerThemeToken).
+	 *  Returns the raw string value, or `undefined` for an unknown key. */
+	getExtensionToken(key: string): string | undefined {
+		return this.extensionTokens[key];
 	}
 
 	/**

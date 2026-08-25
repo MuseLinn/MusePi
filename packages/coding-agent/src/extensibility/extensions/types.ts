@@ -1431,9 +1431,32 @@ export interface ExtensionAPI {
 	 * Registration happens during extension load. Built-in ids cannot be
 	 * replaced; when extensions reuse an id, the later extension wins.
 	 */
-	registerComposerShape(definition: ComposerShapeDefinition): void;
-
+	// Notification / Service / Theme Contribution
 	// =========================================================================
+
+	/** Register a notification channel. Returns a `send` function bound to the
+	 *  channel: each call routes through the runner's `onNotification` sink to
+	 *  the GUI, which renders it alongside its built-in notify events. The
+	 *  channel is dropped on unload, so a re-added extension re-registers it. */
+	registerNotificationChannel(
+		channel: string,
+		options?: { label?: string },
+	): (message: ExtensionNotificationMessage) => void;
+
+	/** Declare a long-lived background service. `start` runs when the extension
+	 *  loads; `stop` runs on unload / session shutdown / rollback. The runner
+	 *  guarantees `stop` is always called, isolates a throw, and the service
+	 *  must not leave residual processes. */
+	registerService(
+		name: string,
+		service: { start?: () => void | Promise<void>; stop?: () => void | Promise<void> },
+	): void;
+
+	/** Contribute a theme token (a *new* key, never overriding a built-in theme
+	 *  color/background/symbol). The runner aggregates these and hands them to
+	 *  the theme subsystem; deleting the extension removes the token and
+	 *  re-renders the theme. */
+	registerThemeToken(key: string, value: string): void;
 	// Actions
 	// =========================================================================
 
@@ -1644,11 +1667,51 @@ export interface ExtensionFlag {
 	extensionPath: string;
 }
 
-export interface ExtensionShortcut {
-	shortcut: KeyId;
-	description?: string;
-	handler: (ctx: ExtensionContext) => Promise<void> | void;
-	extensionPath: string;
+/** A notification a plugin pushes through a registered notification channel.
+ *  The daemon (via the runner's `onNotification` sink) forwards it to the GUI,
+ *  which renders it alongside its built-in notify events. */
+export interface ExtensionNotificationMessage {
+	/** Human-readable body text. */
+	text: string;
+	/** Optional title shown as the notification headline. */
+	title?: string;
+	/** Severity hint; the GUI maps it onto its notify palette. */
+	kind?: "info" | "success" | "warning" | "error";
+}
+
+/** One notification channel contributed by an extension via
+ *  `registerNotificationChannel`. The extension object holds the channel +
+ *  its bound `send` so unloading (or reload) detaches every channel atomically. */
+export interface ExtensionNotificationChannel {
+	/** Channel id (`notification.channel.<id>` slot key). */
+	channel: string;
+	/** Display name shown in the GUI notification prefs. */
+	label?: string;
+	/** Push a message on this channel. */
+	send: (message: ExtensionNotificationMessage) => void;
+}
+
+/** A long-lived background service declared by an extension via
+ *  `registerService`. `start` runs when the extension loads; `stop` runs on
+ *  unload / session shutdown / rollback and is guarded — it is always called,
+ *  its throw is isolated, and the service must not leave residual processes. */
+export interface ExtensionService {
+	/** Unique service name (namespaced); typically `service.<id>`. */
+	name: string;
+	/** Optional lifecycle; `start` runs on load, `stop` on teardown. */
+	start?: () => void | Promise<void>;
+	stop?: () => void | Promise<void>;
+}
+
+/** A theme token contributed by an extension via `registerThemeToken`. The
+ *  runner aggregates these and hands them to the theme subsystem, which adds
+ *  ONLY new keys (never overriding a built-in theme color/background/symbol).
+ *  On unload the token is dropped and the theme re-renders with it removed. */
+export interface ExtensionThemeToken {
+	/** Token key (namespaced, e.g. `ext.my-plugin.accent`). */
+	key: string;
+	/** Token value (a theme color hex, or any string the renderer reads). */
+	value: string;
 }
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -1685,8 +1748,8 @@ export type GetThinkingLevelHandler = () => ThinkingLevel | undefined;
 export type SetThinkingLevelHandler = (level: ThinkingLevel, persist?: boolean) => void;
 
 export type GetServiceTiersHandler = () => ServiceTierByFamily;
-
-export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTier | undefined) => void;
+/** Route one extension notification to the runner's sink (daemon → GUI). */
+export type EmitNotificationHandler = (channel: string, message: ExtensionNotificationMessage) => void;
 
 /** Shared state created by loader, used during registration and runtime. */
 export interface ExtensionRuntimeState {
@@ -1716,6 +1779,8 @@ export interface ExtensionActions {
 	setServiceTier?: SetServiceTierHandler;
 	getSessionName: () => string | undefined;
 	setSessionName: (name: string) => Promise<void>;
+	/** Route an extension notification to the configured sink (runner → GUI). */
+	emitNotification?: EmitNotificationHandler;
 }
 
 /** Actions for ExtensionContext (ctx.* in event handlers). */
@@ -1746,6 +1811,8 @@ export interface ExtensionCommandContextActions {
 }
 
 /** Full runtime = state + actions, including host-compatible service-tier fallbacks. */
+export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTier | undefined) => void;
+
 export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionActions {
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
@@ -1763,6 +1830,13 @@ export interface ExtensionPromptSection {
 /** A preset declared by an extension (registerMode — v2 candidate §5.5).
  *  Merged into modes.list alongside file-based presets; the extension's own
  *  prompt sections use source `mode:<id>` so a mode switch swaps them atomically. */
+export interface ExtensionShortcut {
+	shortcut: KeyId;
+	description?: string;
+	handler: (ctx: ExtensionContext) => Promise<void> | void;
+	extensionPath: string;
+}
+
 export interface ExtensionModeDefinition {
 	id: string;
 	label?: string;
@@ -1816,9 +1890,20 @@ export interface Extension {
 	 *  file-discovered skills. */
 	skills: ExtensionSkillDeclaration[];
 	/** Renderer-side per-tool views contributed by the extension
-	 *  (registerToolView): compiled to
-	 *  ESM by the daemon and dispatched by tool name in the transcript. */
+	 *  (registerToolView): compiled to ESM by the daemon and dispatched by
+	 *  tool name in the transcript. */
 	toolViews: ExtensionToolView[];
+	/** Notification channels registered by the extension
+	 *  (registerNotificationChannel): the runner routes every `send` call
+	 *  through its `onNotification` sink, and drops the whole list on unload. */
+	notificationChannels: ExtensionNotificationChannel[];
+	/** Background services declared by the extension (registerService): the
+	 *  runner calls each `start` on load and each `stop` on unload/shutdown. */
+	services: ExtensionService[];
+	/** Theme tokens contributed by the extension (registerThemeToken), merged
+	 *  into the theme as *new* keys only; dropped on unload so the theme
+	 *  re-renders with them removed. */
+	themeTokens: ExtensionThemeToken[];
 }
 
 /** One setting contributed by an extension via registerSetting. Mirrors the

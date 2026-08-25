@@ -8,6 +8,8 @@ import { type CreateThemeOptions, getBuiltinThemes, loadTheme, loadThemeJson, lo
 import type { ThemeColor, ThemeJson } from "./schema";
 import type { SymbolPreset } from "./symbols";
 import type { Theme } from "./theme-class";
+import { isValidThemeColor } from "./schema";
+import { SYMBOL_PRESETS } from "./symbols";
 
 export { getLanguageFromPath, isMarkdownPath } from "../../utils/lang-from-path";
 export { getAvailableThemes, getAvailableThemesWithPaths, getThemeByName, type ThemeInfo } from "./loader";
@@ -105,13 +107,79 @@ var autoLightTheme: string = "light";
 var onThemeChangeCallback: ((event: ThemeChangeEvent) => void) | undefined;
 var themeLoadRequestId: number = 0;
 let themeEpoch = 0;
+/** Theme tokens contributed by extensions (registerThemeToken), keyed by
+ *  token key. Only NEW keys are accepted — a key that collides with a built-in
+ *  theme color/background/symbol is dropped at ingestion. */
+var extensionThemeTokens: Record<string, string> = {};
+
+const BUILTIN_THEME_TOKEN_KEYS: Record<string, true> = {
+	selectedBg: true,
+	userMessageBg: true,
+	customMessageBg: true,
+	toolPendingBg: true,
+	toolSuccessBg: true,
+	toolErrorBg: true,
+	statusLineBg: true,
+};
+for (const key of Object.keys(SYMBOL_PRESETS.unicode)) {
+	BUILTIN_THEME_TOKEN_KEYS[key] = true;
+}
+
+function isBuiltinThemeTokenKey(key: string): boolean {
+	return isValidThemeColor(key) || BUILTIN_THEME_TOKEN_KEYS[key] === true;
+}
+
+/** Snapshot of the current extension theme tokens (never mutating the live map). */
+export function getExtensionThemeTokens(): Record<string, string> {
+	return { ...extensionThemeTokens };
+}
+
+/** Replace the extension theme tokens with only *new* keys, and re-apply the
+ *  active named theme so consumers read them merged in. */
+export function setExtensionThemeTokens(tokens: Record<string, string>): void {
+	const next: Record<string, string> = {};
+	for (const [key, value] of Object.entries(tokens)) {
+		if (isBuiltinThemeTokenKey(key)) {
+			logger.debug("Ignoring extension theme token that collides with a built-in key", { key });
+			continue;
+		}
+		next[key] = value;
+	}
+	const changed =
+		Object.keys(next).length !== Object.keys(extensionThemeTokens).length ||
+		Object.entries(next).some(([key, value]) => extensionThemeTokens[key] !== value);
+	if (!changed) return;
+	extensionThemeTokens = next;
+	if (currentThemeName !== undefined) {
+		reloadThemeWithTokens();
+	}
+}
+
+/** Re-apply the active named theme with the current extension tokens merged.
+ *  Fire-and-forget: a theme switch in flight wins over an old token refresh. */
+function reloadThemeWithTokens(): void {
+	const name = currentThemeName;
+	if (!name) return;
+	const requestId = ++themeLoadRequestId;
+	void loadTheme(name, getCurrentThemeOptions())
+		.then(loadedTheme => {
+			if (requestId !== themeLoadRequestId || currentThemeName !== name) return;
+			theme = loadedTheme;
+			notifyThemeChange({ ephemeral: true });
+		})
+		.catch(error => {
+			logger.warn(`Failed to refresh theme after extension token change: ${String(error)}`);
+		});
+}
 
 function getCurrentThemeOptions(): CreateThemeOptions {
 	return {
 		symbolPresetOverride: currentSymbolPresetOverride,
 		colorBlindMode: currentColorBlindMode,
+		extensionTokens: { ...extensionThemeTokens },
 	};
 }
+
 function configureTheme(
 	symbolPreset?: SymbolPreset,
 	colorBlindMode?: boolean,

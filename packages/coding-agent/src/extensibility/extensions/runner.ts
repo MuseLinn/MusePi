@@ -19,7 +19,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
-import { type Theme, theme } from "../../modes/theme/theme";
+import { setExtensionThemeTokens, theme, type Theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
@@ -50,6 +50,10 @@ import type {
 	ExtensionFlag,
 	ExtensionMode,
 	ExtensionRuntime,
+	ExtensionNotificationChannel,
+	ExtensionNotificationMessage,
+	ExtensionService,
+	ExtensionThemeToken,
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -399,6 +403,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 	} finally {
 		extensionRunner.disposeFileFallbacks();
 		extensionRunner.clearManagedTimers();
+		extensionRunner.stopServices();
 	}
 }
 
@@ -516,6 +521,12 @@ export class ExtensionRunner {
 	#managedTimers = new ManagedTimers((event, error, stack) =>
 		this.emitError({ extensionPath: "<timer>", event, error, stack }),
 	);
+	/** Subscribers notified when an extension pushes a notification channel
+	 *  message. The daemon host subscribes via {@link onNotification} and
+	 *  forwards to the GUI; a subscriber throw is isolated. */
+	readonly #notificationSubscribers = new Set<(channel: string, message: ExtensionNotificationMessage) => void>();
+	/** Services whose `start` has already been invoked (dedup guard). */
+	readonly #startedServices = new Set<ExtensionService>();
 	/**
 	 * Disposers for the file-write/delete fallback trampolines installed in
 	 * {@link initialize}. The registry behind them is PROCESS-WIDE, so a runner
@@ -714,6 +725,7 @@ export class ExtensionRunner {
 		this.runtime.setServiceTier = actions.setServiceTier ?? throwUnsupportedServiceTierAction;
 		this.runtime.getSessionName = actions.getSessionName;
 		this.runtime.setSessionName = actions.setSessionName;
+		this.runtime.emitNotification = (channel, message) => this.#dispatchNotification(channel, message);
 		this.runtime.registerProvider = (name, config, sourceId) => {
 			this.modelRegistry.registerProvider(name, config, sourceId);
 		};
@@ -826,6 +838,12 @@ export class ExtensionRunner {
 				});
 			}
 		});
+
+		// Extension services declared via `registerService` enter the running
+		// state as soon as the session's runtime/UI context is wired, and theme
+		// tokens contributed via `registerThemeToken` merge into the active theme.
+		this.startServices();
+		this.applyThemeTokens();
 	}
 
 	/**
@@ -1037,6 +1055,9 @@ export class ExtensionRunner {
 		}
 		this.extensions[index] = replacement;
 		this.#recordExtensionEntryMtime(replacement.resolvedPath);
+		this.#stopServicesForExtension(oldExt);
+		this.startServices();
+		this.applyThemeTokens();
 		logger.info("Extension hot-reloaded", { extensionPath: oldExt.path, removedTools: removedTools.length });
 		return { removedTools, errors: loadResult.errors.map(e => e.error) };
 	}
@@ -1151,6 +1172,8 @@ export class ExtensionRunner {
 		}
 		this.extensions.push(extension);
 		this.#recordExtensionEntryMtime(extension.resolvedPath);
+		this.startServices();
+		this.applyThemeTokens();
 		const addedTools = [...extension.tools.keys()];
 		for (const name of addedTools) {
 			for (const wrapped of extension.toolRegistrationListeners ?? []) wrapped(name);
@@ -1416,6 +1439,101 @@ export class ExtensionRunner {
 	 */
 	disposeFileFallbacks(): void {
 		for (const dispose of this.#fileFallbackDisposers.splice(0)) dispose();
+	}
+
+	/**
+	 * Subscribe to extension notification-channel pushes. The daemon host wires
+	 * this to the GUI plus the built-in notify pipeline; the returned function
+	 * unsubscribes. A subscriber throw is isolated and never breaks the runner.
+	 */
+	onNotification(callback: (channel: string, message: ExtensionNotificationMessage) => void): () => void {
+		this.#notificationSubscribers.add(callback);
+		return () => this.#notificationSubscribers.delete(callback);
+	}
+
+	/** Notification channels contributed by all loaded extensions, in
+	 *  registration order. */
+	getNotificationChannels(): ExtensionNotificationChannel[] {
+		return this.extensions.flatMap(ext => ext.notificationChannels);
+	}
+
+	/** Start every extension service whose `start` is not yet running. Each
+	 *  `start` is isolated: a throw/rejection is routed to onError and the
+	 *  remaining services still start. */
+	startServices(): void {
+		for (const ext of this.extensions) {
+			for (const service of ext.services) {
+				if (typeof service.start !== "function") continue;
+				if (this.#startedServices.has(service)) continue;
+				this.#startedServices.add(service);
+				this.#invokeServiceLifecycle("service_start", ext.path, service.start);
+			}
+		}
+	}
+
+	stopServices(): void {
+		for (const ext of this.extensions) {
+			this.#stopServicesForExtension(ext);
+		}
+		this.#startedServices.clear();
+	}
+
+	#stopServicesForExtension(ext: Extension): void {
+		for (const service of ext.services) {
+			if (typeof service.stop !== "function") continue;
+			this.#invokeServiceLifecycle("service_stop", ext.path, service.stop);
+			this.#startedServices.delete(service);
+		}
+	}
+
+	#dispatchNotification(channel: string, message: ExtensionNotificationMessage): void {
+		for (const subscriber of [...this.#notificationSubscribers]) {
+			try {
+				subscriber(channel, message);
+			} catch (error) {
+				logger.warn("Extension notification subscriber threw", {
+					channel,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+	}
+
+	#invokeServiceLifecycle(event: "service_start" | "service_stop", extensionPath: string, fn: () => void | Promise<void>): void {
+		try {
+			const result = fn();
+			if (result instanceof Promise) {
+				result.catch(error => this.emitError({
+					extensionPath,
+					event,
+					error: error instanceof Error ? error.message : String(error),
+				}));
+			}
+		} catch (error) {
+			this.emitError({
+				extensionPath,
+				event,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	/** Theme tokens aggregated across all loaded extensions (last-wins on a
+	 *  duplicate key). The theme subsystem merges only *new* keys. */
+	getThemeTokens(): Record<string, string> {
+		const tokens: Record<string, string> = {};
+		for (const ext of this.extensions) {
+			for (const token of ext.themeTokens) {
+				tokens[token.key] = token.value;
+			}
+		}
+		return tokens;
+	}
+
+	/** Apply the current aggregate theme tokens to the theme subsystem, so the
+	 *  active theme re-renders with (or without) extension tokens. */
+	applyThemeTokens(): void {
+		setExtensionThemeTokens(this.getThemeTokens());
 	}
 
 	createCommandContext(): ExtensionCommandContext {

@@ -45,10 +45,14 @@ import type {
 	ExtensionContext,
 	ExtensionFactory,
 	ExtensionModeDefinition,
+	ExtensionNotificationChannel,
+	ExtensionNotificationMessage,
 	ExtensionPromptSection,
 	ExtensionRpcHandler,
+	ExtensionService,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
+	ExtensionThemeToken,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
@@ -148,6 +152,10 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	}
 
 	setSessionName(): Promise<void> {
+		throw new ExtensionRuntimeNotInitializedError();
+	}
+
+	emitNotification(): void {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
 }
@@ -307,6 +315,45 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		}
 		this.extension.composerShapes.set(id, definition);
 	}
+	registerNotificationChannel(
+		channel: string,
+		options?: { label?: string },
+	): (message: ExtensionNotificationMessage) => void {
+		if (typeof channel !== "string" || channel.length === 0) {
+			throw new TypeError("registerNotificationChannel: channel must be a non-empty string");
+		}
+		const send = (message: ExtensionNotificationMessage) => {
+			this.runtime.emitNotification?.(channel, message);
+		};
+		this.extension.notificationChannels.push({
+			channel,
+			...(options?.label ? { label: options.label } : {}),
+			send,
+		});
+		return send;
+	}
+
+	registerService(name: string, service: ExtensionService): void {
+		if (typeof name !== "string" || name.length === 0) {
+			throw new TypeError("registerService: name must be a non-empty string");
+		}
+		if (typeof service !== "object" || service === null) {
+			throw new TypeError(`registerService: service for "${name}" must be an object`);
+		}
+		const start = typeof service.start === "function" ? service.start : undefined;
+		const stop = typeof service.stop === "function" ? service.stop : undefined;
+		this.extension.services.push({ name, ...(start ? { start } : {}), ...(stop ? { stop } : {}) });
+	}
+
+	registerThemeToken(key: string, value: string): void {
+		if (typeof key !== "string" || key.length === 0) {
+			throw new TypeError("registerThemeToken: key must be a non-empty string");
+		}
+		if (typeof value !== "string") {
+			throw new TypeError(`registerThemeToken: value for "${key}" must be a string`);
+		}
+		this.extension.themeTokens.push({ key, value });
+	}
 
 	getFlag(name: string): boolean | string | undefined {
 		if (!this.extension.flags.has(name)) return undefined;
@@ -416,6 +463,9 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		rpcs: new Map(),
 		skills: [],
 		toolViews: [],
+		notificationChannels: [],
+		services: [],
+		themeTokens: [],
 	};
 }
 

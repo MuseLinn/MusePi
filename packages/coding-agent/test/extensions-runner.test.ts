@@ -3842,6 +3842,9 @@ describe("ExtensionRunner", () => {
 				rpcs: new Map(),
 				skills: [],
 				toolViews: [],
+				notificationChannels: [],
+				services: [],
+				themeTokens: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);
 		};
@@ -4034,6 +4037,145 @@ describe("ExtensionRunner", () => {
 			expect(loaded.addedTools).toEqual([]);
 			expect(runner.isExtensionLoaded(extPath)).toBe(false);
 			expect(runner.getAllRegisteredTools().map(t => t.definition.name)).not.toContain("runtime_tool");
+		});
+	});
+
+	describe("plugin seams (P3/P4): notification channel / service domain / theme token", () => {
+		it("registerNotificationChannel routes via onNotification and drops on unload", async () => {
+			const extPath = path.join(extensionsDir, "notification-channel.ts");
+			fs.writeFileSync(
+				extPath,
+				`
+					export default function (pi: any) {
+						const send = pi.registerNotificationChannel("ext.chan", { label: "Ext Channel" });
+						(globalThis as any).__notificationSend = send;
+					}
+				`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			expect(runner.getNotificationChannels().map(c => c.channel)).toEqual(["ext.chan"]);
+
+			const received: Array<{ channel: string; message: unknown }> = [];
+			const unsubscribe = runner.onNotification((channel, message) => received.push({ channel, message }));
+
+			// Wire the runtime action so a channel send() routes to the sink. The test
+			// does not exercise the session's real actions, so minimal stubs suffice.
+			runner.initialize(
+				{
+					sendMessage: () => {},
+					sendUserMessage: () => {},
+					appendEntry: () => {},
+					setLabel: () => {},
+					getActiveTools: () => [],
+					getAllTools: () => [],
+					setActiveTools: async () => {},
+					getCommands: () => [],
+					setModel: async () => true,
+					getThinkingLevel: () => undefined,
+					setThinkingLevel: () => {},
+					getSessionName: () => undefined,
+					setSessionName: async () => {},
+				} as never,
+				{
+					getModel: () => undefined,
+					isIdle: () => true,
+					abort: () => {},
+					hasPendingMessages: () => false,
+					shutdown: () => {},
+					getSystemPrompt: () => [],
+				} as never,
+			);
+
+			const send = (globalThis as typeof globalThis & { __notificationSend?: (m: unknown) => void }).__notificationSend;
+			expect(send).toBeDefined();
+			send!({ text: "hello", title: "T", kind: "info" });
+			expect(received).toEqual([{ channel: "ext.chan", message: { text: "hello", title: "T", kind: "info" } }]);
+
+			unsubscribe();
+			// Reload dropping the channel: the contributed channel is gone.
+			fs.writeFileSync(extPath, `export default function (pi: any) {}
+`);
+			const { errors } = await runner.reloadExtension(extPath);
+			expect(errors).toEqual([]);
+			expect(runner.getNotificationChannels()).toEqual([]);
+		});
+
+		it("registerService starts on load and stops on teardown, isolating a throwing start", async () => {
+			const extPath = path.join(extensionsDir, "service.ts");
+			const g = globalThis as typeof globalThis & {
+				__svcStarted?: boolean;
+				__svcStopped?: boolean;
+				__svcBoomyStopped?: boolean;
+			};
+			delete g.__svcStarted;
+			delete g.__svcStopped;
+			delete g.__svcBoomyStopped;
+			fs.writeFileSync(
+				extPath,
+				`
+					export default function (pi: any) {
+						pi.registerService("svc.alpha", {
+							start: () => { (globalThis as any).__svcStarted = true; },
+							stop: () => { (globalThis as any).__svcStopped = true; },
+						});
+						pi.registerService("svc.boomy", {
+							start: () => { throw new Error("boom"); },
+							stop: () => { (globalThis as any).__svcBoomyStopped = true; },
+						});
+					}
+				`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			// start() runs on load; a throwing start is isolated and does not abort the rest.
+			runner.startServices();
+			expect(Boolean(g.__svcStarted)).toBe(true);
+			// stop is always called for both services (including the one whose start threw).
+			runner.stopServices();
+			expect(Boolean(g.__svcStopped)).toBe(true);
+			expect(Boolean(g.__svcBoomyStopped)).toBe(true);
+		});
+
+				it("registerThemeToken aggregates tokens and removes them on reload", async () => {
+			const extPath = path.join(extensionsDir, "theme-token.ts");
+			fs.writeFileSync(
+				extPath,
+				`
+					export default function (pi: any) {
+						pi.registerThemeToken("ext.accent", "#ff0000");
+						pi.registerThemeToken("ext.border", "#00ff00");
+					}
+				`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			expect(runner.getThemeTokens()).toEqual({ "ext.accent": "#ff0000", "ext.border": "#00ff00" });
+			// Reload dropping the tokens: the theme token set is restored (no residue).
+			fs.writeFileSync(extPath, `export default function (pi: any) {}
+`);
+			const { errors } = await runner.reloadExtension(extPath);
+			expect(errors).toEqual([]);
+			expect(runner.getThemeTokens()).toEqual({});
 		});
 	});
 });

@@ -515,6 +515,9 @@ describe("createAgentSession credential_disabled subscription", () => {
 				rpcs: new Map(),
 				skills: [],
 				toolViews: [],
+				notificationChannels: [],
+				services: [],
+				themeTokens: [],
 			};
 			const runtime = new ExtensionRuntime();
 			const sessionManager = SessionManager.inMemory();

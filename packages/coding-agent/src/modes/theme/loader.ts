@@ -139,6 +139,9 @@ export interface CreateThemeOptions {
 	mode?: ColorMode;
 	symbolPresetOverride?: SymbolPreset;
 	colorBlindMode?: boolean;
+	/** Theme tokens contributed by extensions (registerThemeToken): merged as
+	 *  *new* keys only, never overriding a built-in color/background/symbol. */
+	extensionTokens?: Record<string, string>;
 }
 
 /** HSV adjustment to shift green toward blue for colorblind mode (red-green colorblindness) */
@@ -178,7 +181,7 @@ export function createTheme(themeJson: ThemeJson, options: CreateThemeOptions = 
 	const symbolPreset: SymbolPreset = symbolPresetOverride ?? themeJson.symbols?.preset ?? "unicode";
 	const symbolOverrides = themeJson.symbols?.overrides ?? {};
 	const spinnerFramesOverrides = normalizeSpinnerFramesOverride(themeJson.symbols?.spinnerFrames);
-	return new Theme(fgColors, bgColors, colorMode, symbolPreset, symbolOverrides, spinnerFramesOverrides);
+	return new Theme(fgColors, bgColors, colorMode, symbolPreset, symbolOverrides, spinnerFramesOverrides, options.extensionTokens);
 }
 
 export async function loadTheme(name: string, options: CreateThemeOptions = {}): Promise<Theme> {
