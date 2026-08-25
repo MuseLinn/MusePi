@@ -274,7 +274,9 @@
  * through the translucent scrim; macOS keeps the page blur because the
  * vibrancy window's page blur layers over the system material. */
 [data-platform="win32"] .gui-main,
-[data-platform="linux"] .gui-main {
+[data-platform="linux"] .gui-main,
+[data-platform="win32"] .gui-pane-side,
+[data-platform="linux"] .gui-pane-side {
 	backdrop-filter: none;
 	-webkit-backdrop-filter: none;
 }
