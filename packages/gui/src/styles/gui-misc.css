@@ -457,6 +457,23 @@
 	color: var(--color-danger);
 }
 
+/* Ask card float layer: the card is ABSOLUTE-anchored to its in-flow
+ * anchor at the bottom of the transcript area, so asking a question NEVER
+ * resizes the transcript/composer (the old in-flex render pushed the
+ * message list up). The card overlays the transcript's bottom edge,
+ * sharing the composer column's width. */
+.gui-ask-float {
+	position: absolute;
+	bottom: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	z-index: 40;
+	pointer-events: none;
+}
+.gui-ask-float > .gui-ask-card {
+	pointer-events: auto;
+}
+
 /* Ask card (TUI ask parity): question + option rows or free-text input.
  * Floating card ABOVE the composer (openchamber QuestionCard / proma
  * AskUserBanner parity) — full composer width so long titles wrap instead
@@ -476,13 +493,10 @@
 	align-self: flex-start;
 	margin-left: 16px;
 	padding: 10px;
-	margin-bottom: 8px;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
-	box-shadow:
-		0 10px 32px rgba(0, 0, 0, 0.22),
-		0 0 0 1px rgba(0, 0, 0, 0.04);
+	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	opacity: 0;
 }

@@ -2080,25 +2080,25 @@
 	gap: 6px;
 	padding: 0 8px;
 	border: 1px solid var(--border);
-	border-radius: 9px;
-	background: var(--color-surface-raised, var(--color-bg));
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
-	font-size: 11px;
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-sunken, var(--color-surface));
+	font-size: 11.5px;
 	color: var(--color-text);
 	cursor: pointer;
-	transition: border-color 120ms ease;
+	transition: border-color 120ms ease, background 120ms ease;
 }
 .stc-node:hover {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	background: var(--color-surface-raised, var(--color-bg));
 }
 .stc-node--user {
-	border-left: 3px solid color-mix(in oklab, var(--color-info, #6aa1ff) 70%, transparent);
+	border-left: 2px solid color-mix(in oklab, var(--color-info, #6aa1ff) 55%, transparent);
 }
 .stc-node--assistant {
-	border-left: 3px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
+	border-left: 2px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
 }
 .stc-node--toolResult {
-	border-left: 3px solid color-mix(in oklab, var(--color-text-faint) 60%, transparent);
+	border-left: 2px solid color-mix(in oklab, var(--color-text-faint) 50%, transparent);
 }
 .stc-node-text {
 	min-width: 0;
@@ -2141,7 +2141,7 @@
 }
 .stc-node--active {
 	border-color: color-mix(in oklab, var(--color-accent) 58%, var(--border));
-	background: color-mix(in oklab, var(--color-accent) 7%, var(--color-surface-raised, var(--color-bg)));
+	background: var(--color-surface-raised, var(--color-bg));
 }
 .stc-node--active.stc-node--leaf {
 	border-color: var(--color-accent);
@@ -2204,6 +2204,8 @@
 	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
 }
 /* Canvas detail card (focus view) */
+/* Canvas focus card: design-language floating card (border + raised +
+ * token radius + tiered shadow + glass), NOT an AI-style rounded modal. */
 .stc-focus-overlay {
 	position: absolute;
 	inset: 0;
@@ -2211,36 +2213,33 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: color-mix(in oklab, var(--color-bg) 60%, transparent);
-	backdrop-filter: blur(2px);
-	animation: stc-fade-in 160ms ease;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(3px);
+	animation: gui-menu-in 140ms var(--gui-ease-out);
 }
 .stc-focus-card {
-	width: 90%;
-	max-width: 520px;
-	max-height: 70%;
+	width: min(520px, calc(100% - 48px));
+	max-height: 66%;
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised, var(--color-bg));
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
 	overflow: hidden;
-	animation: stc-scale-in 200ms ease;
 }
 .stc-focus-head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 10px 12px;
+	padding: 9px 12px;
 	border-bottom: 1px solid var(--border);
 	flex-shrink: 0;
 }
 .stc-focus-label {
-	font-size: 10.5px;
+	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.02em;
 	color: var(--color-text-muted);
 }
 .stc-focus-close {
@@ -2250,23 +2249,25 @@
 	width: 22px;
 	height: 22px;
 	margin-left: auto;
-	border-radius: 5px;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
 	color: var(--color-text-muted);
 }
 .stc-focus-close:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
 	color: var(--color-text);
 }
 .stc-focus-body {
 	padding: 12px;
 	overflow-y: auto;
-	font-size: 12.5px;
-	line-height: 1.55;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.6;
 	color: var(--color-text);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
-/* Canvas search bar */
+
 .stc-search {
 	position: absolute;
 	top: 8px;
@@ -2416,10 +2417,31 @@
 	animation: gui-flash-highlight 1.2s ease-out;
 }
 
+/* Trajectory inspector = floating overlay anchored to the panel's bottom
+ * edge (absolute, never resizes the event list). Design-language card. */
+.traj-inspector-overlay {
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: 8px;
+	z-index: 30;
+	max-height: 58%;
+	display: flex;
+	flex-direction: column;
+	animation: gui-menu-in 140ms var(--gui-ease-out);
+}
+.traj-inspector-overlay .traj-inspector {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: 100%;
+	overflow: hidden;
+}
 .traj-inspector {
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised, var(--color-bg));
+	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
 	padding: 8px 9px;
 }
 .traj-inspector-head {
@@ -2458,6 +2480,11 @@
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 6px;
 	margin-top: 8px;
+}
+/* Floating card interior scrolls when the payload exceeds the 58% cap. */
+.traj-inspector-overlay .traj-inspector-body {
+	overflow-y: auto;
+	min-height: 0;
 }
 .traj-inspector-value {
 	font-size: 11px;

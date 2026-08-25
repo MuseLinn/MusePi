@@ -1602,7 +1602,11 @@ export function ChatView({
 												onDecide={onDecideApproval}
 											/>
 										))}
-										{ask && onAskAnswer && <AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />}
+										{ask && onAskAnswer && (
+								<div className="gui-ask-float">
+									<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
+								</div>
+							)}
 										{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
 										 * above the composer (root > … > leaf, click any segment to jump). */}
 										{currentLeafKey !== null && (

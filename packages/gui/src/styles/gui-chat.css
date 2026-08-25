@@ -298,6 +298,9 @@
  * the current height, then transitions to the target; flex:1 would snap). */
 .gui-composer-wrap {
 	transition: height 280ms var(--spring);
+	/* Anchor for the absolutely-positioned AskCard float layer (the ask card
+	 * must float over the transcript's bottom edge, never resize it). */
+	position: relative;
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
@@ -3077,11 +3080,11 @@ body.gui-resizing .gui-pane-right {
 	align-items: flex-start;
 	gap: 8px;
 	margin: 0 14px 6px;
-	padding: 6px 10px;
-	border-radius: 10px;
-	border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
-	border-left: 3px solid var(--color-accent);
-	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	padding: 7px 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
 	max-height: 96px;
 	overflow: hidden;
 }
@@ -3089,9 +3092,9 @@ body.gui-resizing .gui-pane-right {
 .gui-quote-text {
 	flex: 1;
 	min-width: 0;
-	font-size: 12.5px;
-	line-height: 1.5;
-	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--color-text);
 	white-space: pre-wrap;
 	word-break: break-word;
 	display: -webkit-box;

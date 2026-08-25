@@ -144,6 +144,7 @@ function InspectorCard({
 					<Icon name="close" className="h-3 w-3" />
 				</button>
 			</div>
+			<div className="traj-inspector-body">
 			<div className="traj-inspector-grid">
 				<div className="gui-ctx-stat">
 					<div className="gui-ctx-stat-v text-[11px]">{t("trajectory time")}</div>
@@ -208,6 +209,7 @@ function InspectorCard({
 					<pre className="traj-inspector-pre">{output}</pre>
 				</div>
 			)}
+			</div>
 		</div>
 	);
 }
@@ -440,7 +442,7 @@ export function TrajectoryView({
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div className="relative flex h-full min-h-0 flex-col">
 			{/* Timeline | Tree 切换(第二层):同一棵 entry 树的两个投影轴。 */}
 			<div className="traj-mode-row">
 				<div className="traj-mode-toggle" role="tablist">
@@ -515,9 +517,10 @@ export function TrajectoryView({
 					</div>
 				</div>
 			)}
-			{/* 检视面板:选中记录的时刻/回合用时/Input/Output。 */}
+			{/* 检视面板 = 悬浮浮层(绝对定位覆盖,不挤占事件列表):
+			 * 选中即浮在列表上方(底右锚),130ms 进出,滚动独立。 */}
 			{selected && (
-				<div className="px-2.5 pb-1.5">
+				<div className="traj-inspector-overlay">
 					<InspectorCard
 						ev={selected}
 						roundDurationMs={turnDurationOf(selected.turn)}
