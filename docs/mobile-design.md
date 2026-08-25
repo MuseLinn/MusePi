@@ -526,3 +526,24 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
 - `scripts/copy-web-assets.js`：desktop-web dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
 - 构建路径：desktop-web build → copy-web-assets → DevEco Studio 打开签名运行（本机无 DevEco，ArkTS 未编译验证）
+
+### 11.10 旋转/断点过渡动效（2026-08-25，模拟器双向实测）
+
+横竖屏切换跨越宽度断点（768/640/520）时布局原为硬切。新增**断点几何过渡**：
+
+- **机制**：纯 CSS `transition`（320ms `cubic-bezier(0.22,1,0.36,1)` 项目 spring 曲线）作用于
+  `padding / gap / max-width / min-width / min-height / font-size`，注册在基础规则上，
+  断点跨越时属性变化自动平滑过渡——**零 JS**（旋转 → 媒体查询重评估 → 属性变化 → 过渡）。
+  覆盖：`.sh-header(-left/-right)`、`.sh-composer(-inner/-input)`、`.sh-btn(-icon)`、
+  `.sh-connect-card/method/submit`、`.sh-workspace`、`.sh-ws-sidebar/card`、`.sh-transcript/content`。
+- **保留特例**：`.sh-composer` 的键盘 inset 走原 220ms spring（padding-bottom 不被通用曲线覆盖）；
+  `.sh-ws-card` 合并 hover 交互过渡（border-color/transform/box-shadow 120ms + 几何 320ms）。
+- **不可过渡、保持硬切**：`flex-direction`（workspace 侧栏 column↔row）、`display:none`
+  （chips/avatars/gauge 等隐藏控件）——布局正确性优先，硬切表现为即时重排而非闪烁。
+- **prefers-reduced-motion**：两个 reduced-motion 块之一清零全部旋转过渡（transition: none）。
+- **实测证据**（模拟器 CDP，connect 卡 max-width）：
+  - 竖→横：`100% → calc(0.0246882% + 479.882px)`（106ms 中间态）→ 480px 封顶 ✅
+  - 横→竖：`calc(0% + 480px)`（76ms 中间态）→ `100%` ✅
+  - 双向平滑 morph，非硬切；transitionProperty 含 padding/gap/max-width/min-width/min-height/font-size ✅
+- **鸿蒙侧**：ArkWeb 同 Chromium 内核共享同一套 CSS——壳无需额外代码；ArkUI 窗口旋转动画为系统级，
+  Web 内容过渡由 CSS 承担（双层动效，无冲突）。

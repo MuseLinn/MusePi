@@ -28,6 +28,12 @@ cd ../harmony && node scripts/copy-web-assets.js
 深链：`musepi://connect?link=<collab link>`，EntryAbility onCreate（冷启动存
 AppStorage）/ onNewWant（暖启动直推）。
 
+## 旋转动效
+
+ArkWeb 与 Android WebView 同为 Chromium 内核，共享 desktop-web 的断点几何过渡
+（shell.css breakpoint/rotation transitions：320ms spring，双向 morph）。
+ArkUI 窗口旋转动画为系统级，Web 内容过渡由 CSS 承担——双层动效无冲突，壳无需额外代码。
+
 ## 取舍（P3）
 
 - 凭证回退 localStorage（未接 `@ohos.security.asset`）

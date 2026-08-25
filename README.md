@@ -89,6 +89,12 @@ Setting-gated, off by default: `github`, `security_scan`, `generate_image`, `tts
 Three standalone lowercase words opt a turn into specialized behavior: **`ultrathink`** (careful multi-step reasoning), **`orchestrate`** (parallel subagents, verified phases), **`workflowz`** (deterministic multi-subagent workflow). See [Magic keywords](docs/magic-keywords.md).
 
 Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
+### Mobile shells
+
+- **Capacitor Android app** (`packages/mobile` + `desktop-web` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions.
+- **HarmonyOS WebView shell** (`packages/harmony`): ArkTS `Web` component loading the same bundle from rawfile — native insets (`getWindowAvoidArea`), badge, `musepi://` deep links, keyboard insets. No compat layer: immersion/camera/permissions are native.
+- **Pairing surface**: host shares via `/collab` (TUI slash: view / workspace / lan / tunnel / status / stop) or `collab.start` RPC; guests join with the collab link in any browser, the Android app, or `musepi join "<link>"` from the CLI. E2E-encrypted; workspace mode shares the whole session directory.
+- Design spec: [`mobile-design.md`](docs/mobile-design.md).
 
 ## Providers
 
@@ -114,7 +120,9 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 | Package | Role |
 |---|---|
 | `gui` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
-| `desktop-web` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI |
+| `desktop-web` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI (desktop + mobile entry) |
+| `mobile` | Capacitor Android shell: InsetsPlugin (edge-to-edge), native chrome wiring, APK build |
+| `harmony` | HarmonyOS NEXT WebView shell: ArkTS Web + `harmonyNative` bridge, deep links, DevEco project |
 | `coding-agent` | CLI entry (`musepi`), daemon server, slash/bash commands, tool implementations |
 | `collab-proto` | GUI ↔ daemon transport (WS frames, crypto, links) |
 | `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | Agent engine / provider registry / TUI / model catalog / wire types / utils |
@@ -122,7 +130,7 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 | `natives` | Rust N-API bindings (Bazel/cargo builds, macOS LINKEDIT alignment post-processing) |
 | `swarm-core` / `swarm-extension` / `tool-select` / `browser-relay` / `metaharness` | Subagent orchestration / tool selection / browser relay / harness tooling |
 
-Key contract docs: [`gui-design.md`](docs/gui-design.md) · [`gui-implementation.md`](docs/gui-implementation.md) · [`widget-design-system.md`](docs/widget-design-system.md) · [`collab.md`](docs/collab.md) · [`UPSTREAM.md`](UPSTREAM.md).
+Key contract docs: [`gui-design.md`](docs/gui-design.md) · [`gui-implementation.md`](docs/gui-implementation.md) · [`widget-design-system.md`](docs/widget-design-system.md) · [`mobile-design.md`](docs/mobile-design.md) · [`collab.md`](docs/collab.md) · [`UPSTREAM.md`](UPSTREAM.md).
 
 ## Entry points
 

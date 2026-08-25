@@ -1281,10 +1281,60 @@
 		inset 0 1px 0 color-mix(in oklab, #fff 18%, transparent);
 }
 
-.sh-connect-submit:active:not(:disabled) {
-	transform: scale(0.98);
-	filter: brightness(0.96);
+/* ---- breakpoint / rotation transitions ---- *
+* Screen rotation crosses the width breakpoints (768/640/520) and snaps the
+* layout; these transitions morph the size-bearing properties instead of
+* hard-cutting. `flex-direction` / `display` switches (workspace sidebar
+* column↔row, hidden header controls) are not transitionable — they keep the
+* hard switch, which reads as an instant re-flow, not a glitch.
+* The reduced-motion block at the bottom of this file clears all of them. */
+.sh-header,
+.sh-header-left,
+.sh-header-right,
+.sh-composer,
+.sh-composer-inner,
+.sh-composer-input,
+.sh-btn-icon,
+.sh-btn,
+.sh-connect-card,
+.sh-connect-method,
+.sh-connect-submit,
+.sh-workspace,
+.sh-ws-sidebar,
+.sh-ws-card,
+.sh-transcript,
+.sh-content {
+	transition:
+		padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		gap 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		min-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		min-height 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		font-size 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Composer keeps its keyboard-inset spring; the block above must not
+* override it with the generic curve. */
+.sh-composer {
+	transition:
+		padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		padding-bottom 220ms var(--spring);
+}
+
+/* Workspace cards: merge the generic geometry curve with their existing
+* hover/interaction transitions (declared here so the block above does not
+* clobber them). */
+.sh-ws-card {
+	transition:
+		border-color 120ms ease,
+		transform 120ms ease,
+		box-shadow 120ms ease,
+		padding 320ms cubic-bezier(0.22, 1, 0.36, 1),
+		gap 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+ 
+ 
+ /* ---- responsive mobile styles ---- */
 
 
 /* ---- responsive mobile styles ---- */
@@ -2394,9 +2444,25 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.ss-backdrop,
-	.ss-card {
-		animation: none;
+	/* Rotation/breakpoint geometry transitions: hard switch under reduced
+	 * motion (the block near the responsive styles sets them). */
+	.sh-header,
+	.sh-header-left,
+	.sh-header-right,
+	.sh-composer,
+	.sh-composer-inner,
+	.sh-composer-input,
+	.sh-btn-icon,
+	.sh-btn,
+	.sh-connect-card,
+	.sh-connect-method,
+	.sh-connect-submit,
+	.sh-workspace,
+	.sh-ws-sidebar,
+	.sh-ws-card,
+	.sh-transcript,
+	.sh-content {
+		transition: none;
 	}
 }
 
