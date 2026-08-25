@@ -2924,3 +2924,44 @@ a.tr-tool-search-title:hover {
 	font-size: 11px;
 	color: var(--fg-faint);
 }
+
+/* Mobile welcome hint (greeting + rotating tip) — replaces .tr-empty on the
+ * mobile shell; desktop keeps the bare line. */
+.sh-welcome-hint {
+	padding: 64px 24px 24px;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.sh-welcome-greeting {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 600;
+	color: var(--fg);
+	letter-spacing: 0.01em;
+}
+
+.sh-welcome-tip {
+	margin: 0;
+	max-width: 320px;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--fg-faint);
+	animation: sh-welcome-tip-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sh-welcome-tip-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+		filter: blur(3px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+		filter: blur(0);
+	}
+}

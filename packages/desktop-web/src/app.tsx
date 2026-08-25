@@ -10,6 +10,7 @@ import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
+import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { Toasts } from "./components/shell/Toasts";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
@@ -295,6 +296,9 @@ function TranscriptPane({ client, host }: { client: GuestClient; host: ToolRende
 	const activeTools = useGuestSelector(client, s => s.activeTools);
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
+	// Mobile empty state gets the time-aware greeting + rotating tip in place
+	// of the bare "no activity yet" line (gui WelcomeComposer parity).
+	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
 	return (
 		<Transcript
 			entries={entries}
@@ -304,6 +308,7 @@ function TranscriptPane({ client, host }: { client: GuestClient; host: ToolRende
 			working={working}
 			roundDurations={roundDurations}
 			host={host}
+			emptySlot={emptySlot}
 		/>
 	);
 }

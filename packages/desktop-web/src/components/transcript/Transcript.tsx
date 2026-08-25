@@ -90,6 +90,9 @@ export interface TranscriptProps {
 	/** User messages render as plain text instead of markdown
 	 *  (openchamber userMessageRendering parity). */
 	userPlain?: boolean;
+	/** Empty-state replacement (mobile welcome hint): rendered in place of
+	 *  the bare "no activity yet" line when the transcript has nothing. */
+	emptySlot?: ReactNode;
 	/** Long user messages clamp to two lines with an expand toggle
 	 *  (openchamber collapsibleUserMessages parity). */
 	collapseLongUserMessages?: boolean;
@@ -1380,6 +1383,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		host,
 		userGutter,
 		agentGutter,
+		emptySlot,
 		userPlain = false,
 		collapseLongUserMessages = false,
 		smoothStreaming = true,
@@ -1686,7 +1690,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
-			{entries.length === 0 && stream === null && !working && <div className="tr-empty">{t("no activity yet")}</div>}
+			{entries.length === 0 && stream === null && !working && (
+				emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>
+			)}
 			{hidden > 0 && (
 				<div ref={sentinelRef} className="tr-window-more" style={{ height: Math.round(hidden * avgRowH) }}>
 					<button
