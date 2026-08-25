@@ -93,6 +93,7 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 
 - **Capacitor Android app** (`packages/mobile` + `desktop-web` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions.
 - **HarmonyOS WebView shell** (`packages/harmony`): ArkTS `Web` component loading the same bundle from rawfile — native insets (`getWindowAvoidArea`), badge, `musepi://` deep links, keyboard insets. No compat layer: immersion/camera/permissions are native.
+- **PWA**: offline connect shell via service worker (`packages/desktop-web/public/sw.js`) — cached shell opens without a network; static assets cache-first.
 - **Pairing surface**: host shares via `/collab` (TUI slash: view / workspace / lan / tunnel / status / stop) or `collab.start` RPC; guests join with the collab link in any browser, the Android app, or `musepi join "<link>"` from the CLI. E2E-encrypted; workspace mode shares the whole session directory.
 - Design spec: [`mobile-design.md`](docs/mobile-design.md).
 

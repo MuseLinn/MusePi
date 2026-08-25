@@ -547,3 +547,24 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
   - 双向平滑 morph，非硬切；transitionProperty 含 padding/gap/max-width/min-width/min-height/font-size ✅
 - **鸿蒙侧**：ArkWeb 同 Chromium 内核共享同一套 CSS——壳无需额外代码；ArkUI 窗口旋转动画为系统级，
   Web 内容过渡由 CSS 承担（双层动效，无冲突）。
+
+### 11.11 PWA 离线壳 + 连接文案人性化（2026-08-25，Electron 验证）
+
+**PWA service worker（§10 P3 项完成）**：
+- `public/sw.js`：静态资源 cache-first（hash 文件名不可变）、HTML 壳 network-first + 离线回退缓存；
+  预缓存 index/mobile.html、双 manifest、favicons；版本化缓存键 `musepi-collab-v1`、
+  skipWaiting + clients.claim、activate 清理旧缓存
+- index.html + mobile.html 内联注册（bun 构建保留内联脚本）；build 脚本显式
+  `cp public/sw.js dist/sw.js`（bun build 把 public/ 复制成子目录而非根级——坑）
+- **Electron 验证**：缓存 `musepi-collab-v1` 创建 ✓；同一进程内杀服务器后 reload
+  从缓存加载 shell + React 完整渲染（connect 卡）✓；跨进程持久化在 Electron 默认
+  session 不生效（其 session 行为，真实浏览器/WebView 正常持久化）
+- 离线提示条 `.sh-connect-offline`（navigator.onLine + online/offline 事件），
+  明确"已显示缓存内容，连接需要网络"
+
+**连接文案人性化（回答"二维码能不能直接扫码用"式困惑）**：
+- 扫码磁贴："扫桌面分享面板的二维码 — 本 App 或任意手机浏览器都能用"
+  （原"用相机扫描桌面分享的二维码"未说明浏览器也可用）
+- 配对码磁贴："6 位配对码 + 电脑地址 — 都在桌面分享面板上"（原未说明地址来源）
+- 配对表单底部 hint："看不到电脑地址？改用公网隧道分享，直接扫码链接"
+  （隧道模式免地址——等价于"只输授权码"的体验）
