@@ -209,6 +209,11 @@ export const commands: CommandEntry[] = [
 		aliases: ["q"],
 		help: commandHelp.searchHelp,
 	},
+	{
+		name: "assembly",
+		load: () => import("./commands/assembly").then(m => m.default),
+		help: { description: "Inspect the musepi assembly manifest and surface configuration", hidden: false, flags: {}, args: {} },
+	},
 ];
 
 // Documented-looking plugin/marketplace verbs that are NOT registered top-level
