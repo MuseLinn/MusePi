@@ -1,4 +1,5 @@
 # Environment Variables (Current Runtime Reference)
+English | [中文](environment-variables.zh-CN.md)
 
 This reference is derived from current code paths in:
 

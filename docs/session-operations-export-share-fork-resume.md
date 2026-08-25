@@ -1,4 +1,5 @@
 # Session Operations: export, dump, share, fresh, fork, resume/continue
+English | [中文](session-operations-export-share-fork-resume.zh-CN.md)
 
 This document describes operator-visible behavior for session export/share/fork/resume operations as currently implemented.
 

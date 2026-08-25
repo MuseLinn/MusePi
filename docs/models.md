@@ -1,4 +1,5 @@
 # Model and Provider Configuration (`models.yml` / `models.yaml`)
+English | [中文](models.zh-CN.md)
 
 This document describes how the coding-agent currently loads models, applies overrides, resolves credentials, and chooses models at runtime.
 

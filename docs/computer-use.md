@@ -1,4 +1,5 @@
 # Native computer use
+English | [中文](computer-use.zh-CN.md)
 
 `computer` captures and controls the desktop that is running `musepi`. It uses native screen-capture and input APIs; it does not launch Chromium, use Puppeteer, or expose a DOM.
 

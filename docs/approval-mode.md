@@ -1,4 +1,5 @@
 # Tool approval mode
+English | [中文](approval-mode.zh-CN.md)
 
 Tool approval has two independent inputs:
 

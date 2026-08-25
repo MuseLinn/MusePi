@@ -1,4 +1,6 @@
 # Marketplace plugin system
+English | [中文](marketplace.zh-CN.md)
+
 
 The marketplace system lets you discover, install, and manage plugins from Git, local, or direct-catalog sources. It is compatible with the Claude Code plugin registry format.
 

@@ -1,5 +1,7 @@
 # MCP configuration in OMP
 
+English | [中文](mcp-config.zh-CN.md)
+
 This guide explains how to add, edit, and validate MCP servers for the OMP coding agent.
 
 Source of truth in code:

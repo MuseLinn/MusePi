@@ -1,0 +1,5 @@
+# Consistency record for session-operations-export-share-fork-resume.md / session-operations-export-share-fork-resume.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/session-operations-export-share-fork-resume
+session-operations-export-share-fork-resume.md: 1b25a97762d37647d971bfa461f838df8ac5420a
+session-operations-export-share-fork-resume.zh-CN.md: 09d400128bfba271ae60325548399e2f48549559

@@ -1,0 +1,5 @@
+# Consistency record for computer-use.md / computer-use.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/computer-use
+computer-use.md: 06fbca26dfbfaeafa2729ca11fbd7f3c968702be
+computer-use.zh-CN.md: 2482d7d2ccd38fe4af42a3b93cbd97c743131abd
