@@ -71,9 +71,11 @@ export function useFloatingMenu(
 
 	// Viewport padding so a clamped menu never touches the window edge.
 	const MENU_EDGE_PAD = 8;
-	// Width assumed on the very first open (menu not mounted yet); snapped to
-	// the real offsetWidth on the next frame (see re-measure effect below).
+	// Width/height assumed on the very first open (menu not mounted yet);
+	// snapped to the real offsetWidth/offsetHeight on the next frame (see
+	// re-measure effect below).
 	const MENU_ESTIMATED_W = 260;
+	const MENU_ESTIMATED_H = 300;
 	const positionMenu = (): void => {
 		const anchor = anchorOption ?? anchorRef.current;
 		if (!anchor) return;
@@ -83,10 +85,16 @@ export function useFloatingMenu(
 			anchor instanceof HTMLElement
 				? anchor.getBoundingClientRect()
 				: { left: anchor.x, top: anchor.y, right: anchor.x, bottom: anchor.y, width: 0, height: 0 };
+		const menuW = menuRef.current?.offsetWidth ?? MENU_ESTIMATED_W;
+		const menuH = menuRef.current?.offsetHeight ?? MENU_ESTIMATED_H;
+		// Flip up when the menu would overflow the viewport bottom (top +
+		// height > innerHeight) as well as when there is simply more room
+		// above — a tall menu near the bottom edge must not clip (Base-UI
+		// flip parity for the vertical axis).
+		const flipUpForBottomOverflow = r.bottom + 6 + menuH > window.innerHeight - MENU_EDGE_PAD;
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
-		const up = roomAbove > roomBelow;
-		const menuW = menuRef.current?.offsetWidth ?? MENU_ESTIMATED_W;
+		const up = flipUpForBottomOverflow || (roomAbove > roomBelow);
 		// Align: right -> menu's right edge on anchor's right edge; left ->
 		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
 		// the viewport — the previous anchor-only clamp (right: innerWidth -

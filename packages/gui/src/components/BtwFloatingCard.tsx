@@ -96,6 +96,9 @@ export function BtwFloatingCard({
 			className="gui-btw-card"
 			role="dialog"
 			aria-label={t("side question")}
+			onKeyDown={e => {
+				if (e.key === "Escape") onClose();
+			}}
 			style={{ position: "fixed", bottom: 96, right: 24, zIndex: 2900, width: 380, maxWidth: "calc(100vw - 48px)" }}
 		>
 			<div className="gui-btw-head">

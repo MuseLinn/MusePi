@@ -188,6 +188,15 @@
 - **紧凑弹窗**:小内容确认框用 `gui-dialog--confirm`(auto 尺寸 + max-width 380 + 22×24 padding)——基类 `.gui-dialog` 是 600×420 设置框,desc+两按钮装在里面读起来是坏的(看板删除/新建项目/定时删除均踩过)。
 - **hooks 铁律**:所有 hook 声明必须在**任何早退 return 之前**(`if (!open) return null` 之后的 hook 会在 open 切换时崩 "Rendered more hooks than during the previous render"——AnnouncementOverlay 回归实测)。
 
+### 浮窗定位规范(2026-08-25 定稿,openchamber v1.20.0 对照)
+
+**单一入口铁律**:所有弹出浮层(菜单/dropdown/上下文菜单/颜色选择器/附件菜单)必须经 `components/Pop.tsx` → `lib/use-floating-menu.tsx`(唯一实现:portal 到 React root + 全局互斥 + `gui-menu-in/out` 动画)。**禁止手写 `position: fixed/absolute` 的弹出浮层**——openchamber 用 @base-ui/react(floating-ui popper 内部引擎),我们手写同语义、不相依:
+- **碰撞语义(flip + shift)**:垂直方向 = 锚点下方放不下(或上方空间更多)时向上翻转(flip);水平方向 = 左/右溢出时整体移入视口(clamp 到 `[8, innerWidth − menuW − 8]`,shift 不翻转)——右对齐菜单右缘钉锚点右缘,空间不足时右移保命,不被窗口边缘截断。
+- **两阶段测量**:首次 open 时菜单未挂载 → 260×300 估算定位 → 挂载帧一次性重测 `offsetWidth/Height` 精确重定位(`measuredRef` 防循环);右对齐菜单右缘因此仍精确落在锚点上。
+- **上下翻转含高度**:`flipUpForBottomOverflow = r.bottom + 6 + menuH > innerHeight − 8` —— 高菜单挂在低锚点下也向上翻,不许底部溢出。
+- **常驻浮卡(非弹出)**:btw 侧问卡/角标卡等 fixed 角卡必须自带视口 clamp(`maxWidth: calc(100vw − 48px)` + `max-height: min(60vh,520px)` + body 滚动),禁止裸 fixed 无边界。
+- **键盘**:浮卡/浮菜单的 Esc 承诺必须接线(如 btw 卡 hint「Esc closes」↔ onKeyDown Escape),不许提示与行为脱节。
+
 ### 模型选择器(provider 复合键)
 
 - **模型身份 = `provider/id`**,绝不是裸 id——两个供应商可提供同裸 id(opencode-go / opencode-zen 都出 `deepseek-v4-flash`):收藏(`musepi-gui-fav-models`)、DEFAULT 图钉(`modelRoles.default`)、选中态、角色行赋值全部按 `provider/id` 键控(旧裸 id 条目兼容匹配、toggle 时清理);`session.setModel` 携带 `provider` 让 daemon 精确解析(daemon 侧 provider 限定查找已加)。
