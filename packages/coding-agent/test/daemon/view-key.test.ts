@@ -118,6 +118,10 @@ describe("daemon snapshot id space (messageKey)", () => {
 			cleanup.push(async () => {
 				ws.close();
 				await fs.promises.rm(parentFile, { force: true });
+				// The mangled session dir lives under ~/.musepi/agent/sessions
+				// (NOT under tmp) — remove it too or the SDK scan keeps listing
+				// the test session in the real daemon's tree.
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
 				await fs.promises.rm(tmp, { recursive: true, force: true });
 			});
 
@@ -212,6 +216,10 @@ ${lines.join("\n")}
 			cleanup.push(async () => {
 				ws.close();
 				await fs.promises.rm(parentFile, { force: true });
+				// The mangled session dir lives under ~/.musepi/agent/sessions
+				// (NOT under tmp) — remove it too or the SDK scan keeps listing
+				// the test session in the real daemon's tree.
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
 				await fs.promises.rm(tmp, { recursive: true, force: true });
 			});
 

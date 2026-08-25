@@ -128,7 +128,7 @@ describe("daemon session.branchAt", () => {
 			const sessionId = crypto.randomUUID();
 			const tA = Date.now() - 2000;
 			const tA2 = Date.now() - 1000;
-			const { parentFile } = await seedSession(tmp, sessionId, [
+			const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
 				{ role: "user", timestamp: tA, content: [{ type: "text", text: "第一轮 A" }] },
 				{ role: "assistant", timestamp: tA2, content: [{ type: "text", text: "助手回复 A" }] },
 			]);
@@ -137,6 +137,10 @@ describe("daemon session.branchAt", () => {
 				await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
 				new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
 				await fs.promises.rm(parentFile, { force: true });
+				// The mangled session dir lives under ~/.musepi/agent/sessions
+				// (NOT under tmp) — remove it too or the SDK scan keeps listing
+				// the test session in the real daemon's tree.
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
 				await fs.promises.rm(tmp, { recursive: true, force: true });
 			});
 
@@ -173,7 +177,7 @@ describe("daemon session.branchAt", () => {
 			const ws = await openWs(daemon.wsPort!);
 			const call = makeRpc(ws);
 			const sessionId = crypto.randomUUID();
-			const { parentFile } = await seedSession(tmp, sessionId, [
+			const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
 				{ role: "user", timestamp: Date.now() - 1000, content: [{ type: "text", text: "只有一条" }] },
 			]);
 			cleanup.push(async () => {
@@ -181,6 +185,10 @@ describe("daemon session.branchAt", () => {
 				await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
 				new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
 				await fs.promises.rm(parentFile, { force: true });
+				// The mangled session dir lives under ~/.musepi/agent/sessions
+				// (NOT under tmp) — remove it too or the SDK scan keeps listing
+				// the test session in the real daemon's tree.
+				await fs.promises.rm(sessionDir, { recursive: true, force: true });
 				await fs.promises.rm(tmp, { recursive: true, force: true });
 			});
 
