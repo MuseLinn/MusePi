@@ -1,0 +1,5 @@
+# Consistency record for i18n.md / i18n.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/i18n
+i18n.md: 3fdb65ce7ac5ed29413460b6c412cb4e0a3642ea
+i18n.zh-CN.md: 9941ef4a1775d8d0dc42f5018facc4dea58595e9

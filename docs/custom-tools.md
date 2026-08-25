@@ -1,4 +1,5 @@
 # Custom Tools
+English | [中文](custom-tools.zh-CN.md)
 
 Custom tools are model-callable functions that plug into the same tool execution pipeline as built-in tools.
 

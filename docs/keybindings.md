@@ -1,4 +1,5 @@
 # Keybindings
+English | [中文](keybindings.zh-CN.md)
 
 Run `/hotkeys` inside a `musepi` session to see the active chords for your current build. The list reflects any remaps loaded from disk and any bindings added by extensions.
 

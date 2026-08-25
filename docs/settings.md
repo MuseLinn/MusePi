@@ -1,5 +1,7 @@
 # Settings
 
+English | [中文](settings.zh-CN.md)
+
 `musepi` resolves settings from built-in defaults, a persistent global config file, optional project-local config, one-shot CLI overlays, and in-memory runtime overrides. Reach for project settings when one repository needs a different provider set, model role, tool policy, memory backend, or UI behavior than your global defaults — without touching your machine-wide configuration.
 
 Settings are stored as plain YAML mappings. Every key, its type, default, and enum values come from the settings schema, and you can inspect or change any of them with `musepi config` or the interactive `/settings` panel.

@@ -1,4 +1,5 @@
 # Session Storage and Entry Model
+English | [中文](session.zh-CN.md)
 
 This document is the source of truth for how coding-agent sessions are represented, persisted, migrated, and reconstructed at runtime.
 

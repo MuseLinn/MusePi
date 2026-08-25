@@ -1,0 +1,5 @@
+# Consistency record for custom-tools.md / custom-tools.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/custom-tools
+custom-tools.md: f605d9784b421bd7000e7e6afc6db67413bf4c71
+custom-tools.zh-CN.md: 8329a7a894a2f4164eb4ea7f12c1e1a1536fbe32

@@ -1,0 +1,5 @@
+# Consistency record for keybindings.md / keybindings.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/keybindings
+keybindings.md: 313c4e4ee1f54c466b1e5440fde6bd5c2a863e04
+keybindings.zh-CN.md: 5f1fb97fc2b00c36544f42376fbdbcdc638dee61

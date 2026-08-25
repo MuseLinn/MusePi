@@ -1,4 +1,5 @@
 # Skills
+English | [中文](skills.zh-CN.md)
 
 Skills are file-backed capability packs discovered at startup and exposed to the model as:
 

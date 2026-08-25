@@ -1,0 +1,5 @@
+# Consistency record for mobile-design.md / mobile-design.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/mobile-design
+mobile-design.md: 0096c859089a8cd84c4ad95f2062cd601a9a4f76
+mobile-design.zh-CN.md: 0096c859089a8cd84c4ad95f2062cd601a9a4f76
