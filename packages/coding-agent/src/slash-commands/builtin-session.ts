@@ -524,6 +524,18 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		},
 	},
 	{
+		name: "import-session",
+		icon: "inbox",
+		description: "Import a session from another coding-agent (run `musepi import --list` to see sources)",
+		inlineHint: "[--list | <source> --sessions | <source> <id>]",
+		handleTui: (_command, runtime) => {
+			// The full 3-step flow (sources → sessions → import) lives in
+			// `musepi import`. TUI surfaces the entry point; shell (`!`/`!!`)
+			// or the CLI runs it. Kept lightweight — no selector UI duplication.
+			runtime.ctx.editor.setText("musepi import ");
+		},
+	},
+	{
 		name: "login",
 		icon: "signIn",
 		description: "Login with OAuth provider",
