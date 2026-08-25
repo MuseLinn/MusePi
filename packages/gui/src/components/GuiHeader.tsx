@@ -12,6 +12,7 @@ import {
 	shellPlatform,
 } from "../lib/electron";
 import { usePrompt } from "../lib/prompt-dialog";
+import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
@@ -101,6 +102,10 @@ export function GuiHeader({
 	onReconnect,
 	onOpenCollab,
 	onDeleteSession,
+	hosts,
+	onSwitchHost,
+	onAddHost,
+	onRemoveHost,
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
@@ -151,6 +156,15 @@ export function GuiHeader({
 	/** Permanently delete a session (journal + index); the caller also
 	 *  resets the UI when it was the active session. Returns success. */
 	onDeleteSession(sessionId: string): Promise<boolean>;
+	/** Saved remote daemon hosts for the instance switcher (openchamber
+	 *  DesktopHostSwitcher host list parity). */
+	hosts: RemoteHost[];
+	/** Switch the GUI to a host (remote or the implicit local daemon). */
+	onSwitchHost(host: RemoteHost | null): void;
+	/** Persist a new host entry from the add form. */
+	onAddHost(host: { label: string; url: string; token?: string }): void;
+	/** Remove a saved host by id. */
+	onRemoveHost(id: string): void;
 }): ReactNode {
 	const noopSubscribe = (): (() => void) => () => {};
 	const snap = useStore(
@@ -181,6 +195,9 @@ export function GuiHeader({
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [titleMenuOpen, setTitleMenuOpen] = useState(false);
 	const [instanceOpen, setInstanceOpen] = useState(false);
+	// Instance switcher add form (openchamber "Add instance" parity).
+	const [addHostOpen, setAddHostOpen] = useState(false);
+	const [hostDraft, setHostDraft] = useState({ label: "", url: "", token: "" });
 	const openInDir = store?.cwd ?? project ?? "";
 	const [devRunning, setDevRunning] = useState(false);
 	const [devStopping, setDevStopping] = useState(false);
@@ -1101,6 +1118,124 @@ export function GuiHeader({
 						</div>
 						<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
 					</div>
+					{hosts.length > 0 && (
+						<>
+							<div className="my-1 border-t border-[var(--border)]" />
+							<div className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)]">
+								{t("instances")}
+							</div>
+							{hosts.map(h => {
+								const active = buildWsUrl(h) === daemonUrl;
+								return (
+									<div
+										key={h.id}
+										className="group mx-2 mb-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--color-surface-sunken)]"
+										role="button"
+										tabIndex={0}
+										onClick={() => {
+											if (!active) {
+												setInstanceOpen(false);
+												onSwitchHost(h);
+											}
+										}}
+										onKeyDown={e => {
+											if (e.key === "Enter" && !active) {
+												setInstanceOpen(false);
+												onSwitchHost(h);
+											}
+										}}
+									>
+										<span
+											className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-[var(--color-success)]" : "bg-[var(--color-text-faint)]"}`}
+										/>
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-1.5">
+												<span className="truncate text-[12.5px]">{h.label}</span>
+												{active && (
+													<span className="rounded-full bg-[var(--color-success)]/15 px-1.5 text-[10px] font-semibold text-[var(--color-success)]">
+														current
+													</span>
+												)}
+											</div>
+											<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">
+												{h.url}
+											</div>
+										</div>
+										<button
+											type="button"
+											className="gui-view-opt !w-auto px-1.5 opacity-0 group-hover:opacity-100"
+											aria-label={t("remove")}
+											title={t("remove")}
+											onClick={e => {
+												e.stopPropagation();
+												onRemoveHost(h.id);
+											}}
+										>
+											<Icon name="close" className="h-3 w-3" />
+										</button>
+									</div>
+								);
+							})}
+						</>
+					)}
+					<div className="my-1 border-t border-[var(--border)]" />
+					{addHostOpen ? (
+						<div className="mx-2 mb-1 flex flex-col gap-1.5 rounded-lg bg-[var(--color-surface-sunken)] p-2">
+							<input
+								className="gui-input w-full"
+								placeholder={t("instance label")}
+								value={hostDraft.label}
+								onChange={e => setHostDraft(d => ({ ...d, label: e.target.value }))}
+							/>
+							<input
+								className="gui-input w-full font-mono"
+								placeholder="ws://host:8300"
+								value={hostDraft.url}
+								onChange={e => setHostDraft(d => ({ ...d, url: e.target.value }))}
+							/>
+							<input
+								className="gui-input w-full font-mono"
+								placeholder={t("remote token (optional)")}
+								type="password"
+								value={hostDraft.token}
+								onChange={e => setHostDraft(d => ({ ...d, token: e.target.value }))}
+							/>
+							<div className="flex gap-1.5">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary gui-btn-sm flex-1"
+									disabled={!hostDraft.label.trim() || !hostDraft.url.trim()}
+									onClick={() => {
+										onAddHost({
+											label: hostDraft.label.trim(),
+											url: hostDraft.url.trim(),
+											token: hostDraft.token.trim() || undefined,
+										});
+										setHostDraft({ label: "", url: "", token: "" });
+										setAddHostOpen(false);
+									}}
+								>
+									{t("add")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn gui-btn-sm"
+									onClick={() => setAddHostOpen(false)}
+								>
+									{t("cancel")}
+								</button>
+							</div>
+						</div>
+					) : (
+						<button
+							type="button"
+							className="gui-view-opt"
+							onClick={() => setAddHostOpen(true)}
+						>
+							<Icon name="add-circle" className="h-3.5 w-3.5" />
+							<span>{t("add instance")}</span>
+						</button>
+					)}
 					<div className="my-1 border-t border-[var(--border)]" />
 					<button
 						type="button"

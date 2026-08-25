@@ -13,6 +13,10 @@ export default class Serve extends Command {
 	static description = "Start the MusePi daemon (unix socket JSON-RPC)";
 	static flags = {
 		port: Flags.integer({ description: "WebSocket port for browser GUI connections" }),
+		"remote-token": Flags.string({
+			description:
+				"Enable remote connections: bind the WS to all interfaces and require this bearer token (Authorization: Bearer, or ?token= for browsers). NEVER share this token.",
+		}),
 	};
 
 	async run(): Promise<void> {
@@ -21,9 +25,19 @@ export default class Serve extends Command {
 		if (wsPort !== undefined && (wsPort < 1 || wsPort > 65535)) {
 			throw new Error(`Invalid --port: ${wsPort}`);
 		}
-		const { socketPath, wsPort: boundWsPort, close } = await startDaemon({ wsPort });
+		const remoteToken = flags["remote-token"];
+		if (remoteToken !== undefined && remoteToken.length < 16) {
+			throw new Error("--remote-token must be at least 16 characters");
+		}
+		const { socketPath, wsPort: boundWsPort, close } = await startDaemon({ wsPort, remoteToken });
 		process.stdout.write(`musepi daemon listening on ${socketPath}\n`);
-		if (boundWsPort) process.stdout.write(`browser GUI: ws://127.0.0.1:${boundWsPort}\n`);
+		if (boundWsPort) {
+			process.stdout.write(
+				remoteToken
+					? `browser GUI: ws://0.0.0.0:${boundWsPort} (remote, token required)\n`
+					: `browser GUI: ws://127.0.0.1:${boundWsPort}\n`,
+			);
+		}
 		process.stdout.write("press Ctrl+C to stop\n");
 
 		const shutdown = async (signal: string): Promise<void> => {

@@ -39,6 +39,7 @@ import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runClean
 import { clearRoundDurations, dispatchPetActivity, GuiSessionStore, type PetBubbleKind } from "./lib/session-store";
 import { sfxFor } from "./lib/sfx";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
+import { buildWsUrl, loadHosts, saveHosts, newHostId, type RemoteHost } from "./lib/remote-hosts";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
@@ -262,6 +263,7 @@ function AppInner(): ReactNode {
 		}
 	});
 	const [rpc, setRpc] = useState<RpcClient | null>(null);
+	const [hosts, setHosts] = useState<RemoteHost[]>(() => loadHosts());
 	const [status, setStatus] = useState<"idle" | "connecting" | "open" | "closed">("idle");
 	const [error, setError] = useState<string | null>(null);
 	// GUI motion packs (extension center → injected <style>): declared
@@ -1105,6 +1107,13 @@ function AppInner(): ReactNode {
 				await new Promise(resolve => setTimeout(resolve, 300));
 			}
 		};
+		// Remote hosts (instance switcher) skip the Electron version gate and
+		// the local probe/spawn fallback — those only make sense for the
+		// machine's own daemon.
+		const isLocalUrl = (u: string): boolean => {
+			const h = new URL(u).hostname;
+			return h === "127.0.0.1" || h === "localhost" || h === "::1";
+		};
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
 				await connect(u);
@@ -1115,7 +1124,9 @@ function AppInner(): ReactNode {
 				// spawn 时注入 MUSEPI_VERSION=GUI 版本,这里与当前 GUI
 				// 版本比对:不一致 → daemon-restart(kill+spawn 新代码)
 				// 后重连。dev 迭代(版本号不变)不触发,发布/OTA 必触发。
-				if (isElectron()) {
+				// Token-bearing URLs are user-configured remote instances (the
+			// instance switcher): the version gate must NOT restart them.
+			if (isElectron() && isLocalUrl(u) && !new URL(u).searchParams.has("token")) {
 					const rpc = rpcRef.current;
 					const api = (
 						window as unknown as {
@@ -1141,7 +1152,7 @@ function AppInner(): ReactNode {
 		try {
 			if ((await tryUrl(url)) === true) return;
 			// Electron shell: discover a running daemon, else spawn one.
-			if (isElectron()) {
+			if (isElectron() && isLocalUrl(url)) {
 				const port = await probeDaemonPort();
 				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
 				try {
@@ -1761,6 +1772,22 @@ function AppInner(): ReactNode {
 	const activeAsk =
 		pendingAsk && (pendingAsk.sessionId === undefined || pendingAsk.sessionId === selectedId) ? pendingAsk : null;
 
+	const switchHost = useCallback((host: RemoteHost | null): void => {
+		const targetUrl = host ? buildWsUrl(host) : "ws://127.0.0.1:8300";
+		setUrl(targetUrl);
+		localStorage.setItem("musepi-gui-url", targetUrl);
+	}, []);
+	const addHost = useCallback((input: { label: string; url: string; token?: string }): void => {
+		const h: RemoteHost = { id: newHostId(), label: input.label, url: input.url, token: input.token || undefined };
+		const next = [...hosts, h];
+		setHosts(next);
+		saveHosts(next);
+	}, [hosts]);
+	const removeHost = useCallback((id: string): void => {
+		const next = hosts.filter(h => h.id !== id);
+		setHosts(next);
+		saveHosts(next);
+	}, [hosts]);
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
 	 *  confirm dialog honors the settings toggle (musepi-gui-confirm-delete). */
@@ -2628,6 +2655,10 @@ function AppInner(): ReactNode {
 							onReconnect={() => void boot()}
 							onOpenCollab={() => setCollabOpen(true)}
 							onDeleteSession={deleteSession}
+							hosts={hosts}
+							onSwitchHost={switchHost}
+							onAddHost={addHost}
+							onRemoveHost={removeHost}
 						/>
 						{(() => {
 							const chatSurface = (

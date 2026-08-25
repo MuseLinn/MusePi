@@ -28,6 +28,8 @@ export const settings = {
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
 	"Mnemopi Scoping": "Mnemopi Scoping",
+	"add": "add",
+	"add instance": "Add instance",
 	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
 		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
 	Global: "Global",
@@ -43,6 +45,8 @@ export const settings = {
 	"English (bge-base-en-v1.5)": "English (bge-base-en-v1.5)",
 	"BAAI/bge-base-en-v1.5 (768d), English-only": "BAAI/bge-base-en-v1.5 (768d), English-only",
 	"Multilingual (multilingual-e5-large)": "Multilingual (multilingual-e5-large)",
+	"instance label": "Instance label",
+	"instances": "Instances",
 	"intfloat/multilingual-e5-large (1024d), cross-language recall":
 		"intfloat/multilingual-e5-large (1024d), cross-language recall",
 	"Mnemopi Auto Recall": "Mnemopi Auto Recall",
@@ -218,6 +222,7 @@ export const settings = {
 	"comma separated values": "Comma separated values",
 	"invalid json": "Invalid JSON",
 	"options come from the TUI runtime": "Options come from the TUI runtime",
+	"remote token (optional)": "Remote token (optional)",
 	"terminal only settings": "Terminal (TUI) display options",
 	"terminal only settings note":
 		"These options only affect the terminal interface (TUI): theme, status line, terminal escape sequences, etc. They have no effect in the desktop interface, but changes will apply the next time you use the TUI.",
@@ -450,6 +455,9 @@ export const settings = {
 	'share session "{title}" live on the local network':
 		"Share the current session “{title}” live on the local network; scan with your phone to join.",
 	"open or create a session first to share it": "Open or create a session first, then start sharing.",
+	"public tunnel": "Public tunnel",
+	"public tunnel — anyone with the link can join; stop sharing to close it":
+		"Public tunnel — anyone with the link can join; stop sharing to close it.",
 	"use bot channel": "Use Bot Channel",
 	"connect a chat bot for longer mobile access": "Connect a chat bot for longer mobile access.",
 	"open this workspace from {name}": "Open this workspace from {name}.",

@@ -39,6 +39,14 @@ export interface DaemonWsOptions {
 	port: number;
 	/** Bind host. Defaults to loopback; the mobile pair endpoint passes "0.0.0.0". */
 	host?: string;
+	/**
+	 * Required bearer token. Every connection must present it via the
+	 * `Authorization: Bearer <token>` header (Node/Electron clients) or the
+	 * `?token=<token>` query param on the WebSocket URL (browsers cannot set
+	 * headers). Verified with a constant-time compare; rejected with 401.
+	 * Absent => no auth (loopback-only transports stay compatible).
+	 */
+	authToken?: string;
 	/** One complete text message from a client (a JSON-RPC request line). */
 	onMessage(conn: DaemonConnection, text: string): void;
 	/** Connection closed — drop subscriptions held by this client. */
@@ -59,6 +67,36 @@ function acceptKey(key: string): string {
 
 function rejectHttp(socket: net.Socket, status: number, message: string): void {
 	socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
+}
+
+/** Constant-time string compare (timing-safe token check). */
+function timingSafeEqualStr(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	const bufA = Buffer.from(a);
+	const bufB = Buffer.from(b);
+	return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Resolve the bearer token from a request: Authorization header first, then
+ * the `token` query param (browser WebSocket cannot set headers). Returns
+ * null when absent.
+ */
+function requestToken(requestLine: string, headers: Map<string, string>): string | null {
+	const auth = headers.get("authorization");
+	if (auth) {
+		const m = /^Bearer\s+(.+)$/i.exec(auth);
+		if (m) return m[1]!.trim();
+	}
+	const qIdx = requestLine.indexOf("?");
+	if (qIdx !== -1) {
+		const query = requestLine.slice(qIdx + 1).split(" ")[0] ?? "";
+		for (const pair of query.split("&")) {
+			const [k, v] = pair.split("=");
+			if (k === "token" && v) return decodeURIComponent(v);
+		}
+	}
+	return null;
 }
 
 function closeWithCode(socket: net.Socket, code: number, reason: string): void {
@@ -110,6 +148,13 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 		if (upgrade?.toLowerCase() !== "websocket") return rejectHttp(socket, 426, "websocket upgrade required");
 		const key = headers.get("sec-websocket-key");
 		if (!key) return rejectHttp(socket, 400, "missing sec-websocket-key");
+		if (options.authToken) {
+			const presented = requestToken(requestLine, headers);
+			if (!presented || !timingSafeEqualStr(presented, options.authToken)) {
+				logger.warn("ws auth rejected", { remote: socket.remoteAddress ?? null });
+				return rejectHttp(socket, 401, "unauthorized");
+			}
+		}
 
 		const accept = acceptKey(key);
 		// The Date header is required by RFC 7231 for HTTP/1.1 responses.

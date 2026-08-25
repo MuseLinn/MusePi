@@ -23,6 +23,8 @@ export const settings = {
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"可选共享库基础名，按项目模式据此派生项目本地库",
 	"Mnemopi Scoping": "Mnemopi 作用域",
+	"add": "添加",
+	"add instance": "添加实例",
 	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
 		"global=单一共享库；per-project=每个 cwd 独立库；per-project-tagged=项目本地写入+全局回忆可见",
 	Global: "全局",
@@ -38,6 +40,8 @@ export const settings = {
 	"English (bge-base-en-v1.5)": "英文（bge-base-en-v1.5）",
 	"BAAI/bge-base-en-v1.5 (768d), English-only": "BAAI/bge-base-en-v1.5（768 维），仅英文",
 	"Multilingual (multilingual-e5-large)": "多语言（multilingual-e5-large）",
+	"instance label": "实例名称",
+	"instances": "实例",
 	"intfloat/multilingual-e5-large (1024d), cross-language recall":
 		"intfloat/multilingual-e5-large（1024 维），跨语言回忆",
 	"Mnemopi Auto Recall": "Mnemopi 自动回忆",
@@ -199,6 +203,7 @@ export const settings = {
 	"comma separated values": "逗号分隔的值",
 	"invalid json": "JSON 格式无效",
 	"options come from the TUI runtime": "选项由 TUI 运行时提供",
+	"remote token (optional)": "远程令牌（可选）",
 	"terminal only settings": "终端（TUI）显示选项",
 	"terminal only settings note":
 		"以下选项仅作用于终端界面（TUI）：主题、状态栏、终端转义序列等。在桌面界面中不生效，但修改后会在下次使用 TUI 时应用。",
@@ -414,6 +419,8 @@ export const settings = {
 	"share this session live on the local network": "在局域网内实时共享当前会话，手机扫码即可加入。",
 	'share session "{title}" live on the local network': "在局域网内实时共享当前会话「{title}」，手机扫码即可加入。",
 	"open or create a session first to share it": "请先打开或新建一个会话，再开始共享。",
+	"public tunnel": "公网隧道",
+	"public tunnel — anyone with the link can join; stop sharing to close it": "公网隧道 — 任何人拿到链接都能加入；停止共享即关闭。",
 	"use bot channel": "使用 Bot Channel",
 	"connect a chat bot for longer mobile access": "连接聊天 Bot，适合更长时间的移动端访问。",
 	"open this workspace from {name}": "从 {name} 打开这个工作区。",
