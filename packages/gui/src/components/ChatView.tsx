@@ -652,6 +652,20 @@ export function ChatView({
 			})
 			.catch(() => {});
 	};
+	// Tree-path transcript pulse (TUI parity): branchAt / revertTo /
+	// forkAt / btwBranch all mutate the CURRENT session's message flow
+	// without a sessionId change, so the session-switch effect below (keyed
+	// on store?.sessionId) never fires — the transcript would hard-cut.
+	// This helper replays the same staggered reveal + tail-jump on demand.
+	const pulseSwitch = useCallback((): void => {
+		const el = transcriptRef.current;
+		if (!el) return;
+		el.dataset.switched = "1";
+		el.scrollTop = el.scrollHeight;
+		window.setTimeout(() => {
+			delete el.dataset.switched;
+		}, 700);
+	}, []);
 	// Revert history (openchamber RevertedMessageDock parity): the daemon
 	// is the single source of truth — session.revertList returns the
 	// backed-up reverts (one entry per session.revertTo), so the dock can
@@ -691,10 +705,11 @@ export function ChatView({
 		if (!store) return;
 		try {
 			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
-			// The truncation moved the tail — leave branch navigation so the
-			// session tree / breadcrumb follow the NEW leaf instead of the
-			// reverted branch point.
-			setCurrentLeafKey(null);
+			// The truncation moved the tail — leave branch navigation so the
+			// session tree / breadcrumb follow the NEW leaf instead of the
+			// reverted branch point.
+			setCurrentLeafKey(null);
+			pulseSwitch();
 			await onReloadSession?.();
 			await refreshReverts();
 		} catch {
@@ -718,6 +733,7 @@ export function ChatView({
 				}>("session.branchAt", { sessionId: store.sessionId, messageId });
 				if (res?.ok !== true) return null;
 				if (res.leafId) setCurrentLeafKey(res.leafId);
+				pulseSwitch();
 				return { leafId: res.leafId ?? null, editorText: res.editorText ?? null };
 			} catch {
 				return null;

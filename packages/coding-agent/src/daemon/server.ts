@@ -56,6 +56,7 @@ import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
+import type { CollabToolHandle } from "../tools/collab";
 import { isWireAgentEvent, toWireAgentEvent } from "../collab/wire-guard";
 import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
@@ -458,6 +459,13 @@ export interface DaemonOptions {
 	/** Optional WebSocket port (browser-reachable JSON-RPC transport). */
 	wsPort?: number;
 	cwd?: string;
+	/**
+	 * Remote-access token. When set, the WS transport binds all interfaces
+	 * and REQUIRES this token on every connection (Authorization: Bearer
+	 * header, or `?token=` on the WebSocket URL for browsers that cannot
+	 * set headers). Absent => loopback-only, no auth (current behavior).
+	 */
+	remoteToken?: string;
 }
 
 /**
@@ -949,6 +957,13 @@ export class DaemonSessionHost {
 	readonly #extensionSettings = new Map<string, { setting: ExtensionSetting; extensionPath: string }>();
 	readonly #options: DaemonOptions;
 	readonly #store: ViewStore;
+	/** Daemon collab share provider (set by DaemonServer on construction) —
+	 *  lets session.create/activate inject the `collab` tool handle into
+	 *  agent sessions. Absent in host-only tests. */
+	#collabToolProvider: (() => CollabToolHandle) | null = null;
+	setCollabToolProvider(provider: () => CollabToolHandle): void {
+		this.#collabToolProvider = provider;
+	}
 	/** Workspace file-content index (settings → 索引库 → 代码库); lazily
 	 *  created on first index.* RPC so a daemon that never opens the tab
 	 *  pays nothing. */
@@ -1301,6 +1316,7 @@ export class DaemonSessionHost {
 			mcpManager,
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+			collabTool: this.#collabToolProvider?.(),
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
@@ -1379,6 +1395,7 @@ export class DaemonSessionHost {
 			mcpManager,
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+			collabTool: this.#collabToolProvider?.(),
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -1884,6 +1901,17 @@ export class DaemonSessionHost {
 
 	get(sessionId: string): LiveSession | undefined {
 		return this.#sessions.get(sessionId);
+	}
+
+	/** Re-key a live host entry after an in-place session identity change
+	 *  (btwBranch's createBranchedSession swaps the session id) so RPCs
+	 *  under the NEW id resolve to the same live session. */
+	rekeySession(oldId: string, newId: string): void {
+		if (oldId === newId || !this.#sessions.has(oldId)) return;
+		const live = this.#sessions.get(oldId);
+		if (!live) return;
+		this.#sessions.delete(oldId);
+		this.#sessions.set(newId, live);
 	}
 
 	/** True when the daemon journal holds this session (journal-only or live). */
@@ -2777,6 +2805,7 @@ export class DaemonServer {
 	}
 
 	constructor(host: DaemonSessionHost) {
+		host.setCollabToolProvider(() => this.#collabToolHandle());
 		this.#host = host;
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
@@ -2924,6 +2953,41 @@ export class DaemonServer {
 		for (const [code, entry] of this.#pairCodes) {
 			if (entry.expiresAt < now) this.#pairCodes.delete(code);
 		}
+	}
+	/**
+	 * Agent `collab` tool handle: a thin shell over the daemon RPC surface.
+	 * The collab.* RPC cases never write to the connection, so a dummy conn
+	 * is safe — this keeps the tool and the GUI share panel on the exact
+	 * same code path.
+	 */
+	#collabToolHandle(): CollabToolHandle {
+		const dummyConn: DaemonConnection = { id: "collab-tool", send: () => {} };
+		return {
+			start: async opts => {
+				const mode =
+					opts.mode === "tunnel" ? "tunnel" : opts.mode === "workspace" ? "workspace" : "session";
+				const result = await this.handle(
+					"collab.start",
+					{ mode, ...(opts.sessionId ? { sessionId: opts.sessionId } : {}) },
+					dummyConn,
+				);
+				return result as { link?: string; webLink?: string; viewLink?: string };
+			},
+			stop: async () => (await this.handle("collab.stop", {}, dummyConn)) as { ok: boolean },
+			status: async () =>
+				(await this.handle("collab.status", {}, dummyConn)) as {
+					hosting: boolean;
+					link?: string;
+					webLink?: string;
+					viewLink?: string;
+				},
+			generatePair: async () =>
+				(await this.handle("collab.pair.generate", {}, dummyConn)) as {
+					code: string;
+					expiresInSeconds: number;
+					lanPort: number;
+				},
+		};
 	}
 
 	/** Send a user message to a session (reactivating history sessions),
@@ -5958,7 +6022,17 @@ export class DaemonServer {
 					}
 				).branchFromBtw(bp.question, assistantMessage, leafId, bp.sessionId);
 				if (bresult.cancelled) return { ok: false };
-				return { ok: true, sessionFile: bresult.sessionFile ?? null };
+				// createBranchedSession REPLACES the live session's id (new
+				// sessionFile + new id — TUI parity: the current view IS the new
+				// session). Rekey the host entry so later RPCs under the new id
+				// resolve; the GUI navigates to it (same as forkAt).
+				const bnewId = (blive.agentSession as unknown as {
+					sessionManager: { getSessionId(): string };
+				}).sessionManager.getSessionId();
+				if (bnewId && bnewId !== bp.sessionId) {
+					this.#host.rekeySession(bp.sessionId, bnewId);
+				}
+				return { ok: true, sessionId: bnewId ?? null, sessionFile: bresult.sessionFile ?? null };
 			}
 			case "session.forkAt": {
 				// Non-destructive fork (GUI 分叉): copy the parent session's
@@ -9236,9 +9310,16 @@ export async function startDaemon(
 	// GUI connects here; the unix socket stays the local CLI path.
 	let wsHandle: DaemonWsHandle | null = null;
 	if (options.wsPort !== undefined) {
+		// A remote token opts the daemon into listening on all interfaces
+		// with mandatory bearer auth — the remote-instance switcher's
+		// security gate. Without it the WS stays loopback-only (local GUI).
+		const remote = options.remoteToken
+			? { host: "0.0.0.0" as const, authToken: options.remoteToken }
+			: undefined;
 		try {
 			wsHandle = await startDaemonWs({
 				port: options.wsPort,
+				...(remote ?? {}),
 				onMessage: (conn, text) => void handleRpcLine(server, text, conn),
 				onClose: connId => {
 					host.disconnect(connId);
