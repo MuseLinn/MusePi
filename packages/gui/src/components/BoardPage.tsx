@@ -3,6 +3,7 @@ import { WidgetErrorBoundary } from "@musepi/desktop-web/src/widgets/error-bound
 import { WidgetFit } from "@musepi/desktop-web/src/widgets/fit";
 import { type BoardWidget, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
+import { executeWidgetTask, isTaskDue, runTimeString, type TaskRunResult } from "@musepi/desktop-web/src/widgets/task-run";
 import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
@@ -898,26 +899,91 @@ export function BoardPage({
 		}, "board");
 	};
 
-	// Widget task run: running spinner → success run recorded.
+	// Widget task run: real execution → run recorded (docs board-dashboard §4
+	// 调度执行引擎). A run refreshes the card's data via the executor then
+	// records the outcome; auto + manual share one deduped path.
 	const [runningId, setRunningId] = useState<string | null>(null);
 	const [taskModalId, setTaskModalId] = useState<string | null>(null);
-	const runTask = (w: BoardWidget): void => {
-		if (!hasTask(w.data) || runningId) return;
+	const taskRunningRef = useRef<Set<string>>(new Set());
+	/** Merge a data patch into a widget on the CURRENT active board. */
+	const persistWidgetData = (widgetId: string, dataPatch: Record<string, unknown>): void => {
+		const board = activeRef.current;
+		if (!board) return;
+		const nextBoards = boardsRef.current.map(b =>
+			b.id === board.id
+				? { ...b, widgets: b.widgets.map(x => (x.id === widgetId ? { ...x, data: { ...x.data, ...dataPatch } } : x)) }
+				: b,
+		);
+		persist(nextBoards);
+	};
+	/** Record a run outcome + merge the executor's refreshed data. */
+	const recordTaskRun = (widgetId: string, result: TaskRunResult): void => {
+		const w = activeRef.current?.widgets.find(x => x.id === widgetId);
+		if (!w || !hasTask(w.data)) return;
+		const t = w.data.task as WidgetTask;
+		const next: WidgetTask = { ...t, lastRunAt: Date.now(), runs: [{ time: runTimeString(new Date()), success: result.success }, ...t.runs].slice(0, 12) };
+		persistWidgetData(widgetId, { ...result.data, task: next });
+	};
+	/** First-sight baseline for a scheduled task (no run recorded) — sets the
+	 *  clock so the task doesn't fire the instant the board opens. */
+	const baselineTask = (widgetId: string, at: number): void => {
+		const w = activeRef.current?.widgets.find(x => x.id === widgetId);
+		if (!w || !hasTask(w.data)) return;
+		const t = w.data.task as WidgetTask;
+		persistWidgetData(widgetId, { task: { ...t, lastRunAt: at } });
+	};
+	/** Execute a task (deduped per widget), record the result. */
+	const executeAndRecord = async (widgetId: string, showSpinner: boolean): Promise<void> => {
+		if (taskRunningRef.current.has(widgetId)) return;
+		const w = activeRef.current?.widgets.find(x => x.id === widgetId);
+		if (!w || !hasTask(w.data)) return;
 		const t = w.data.task as WidgetTask;
 		if (!t.enabled) return;
-		setRunningId(w.id);
-		setTimeout(() => {
-			const now = new Date();
-			const time = `${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-			const next: WidgetTask = { ...t, runs: [{ time, success: true }, ...t.runs].slice(0, 12) };
-			updateWidgetData(w.id, { task: next });
-			setRunningId(null);
-		}, 1400);
+		if (showSpinner) setRunningId(widgetId);
+		taskRunningRef.current.add(widgetId);
+		try {
+			recordTaskRun(widgetId, await executeWidgetTask(w.type, w.data));
+		} catch (e) {
+			recordTaskRun(widgetId, { data: {}, success: false, error: e instanceof Error ? e.message : String(e) });
+		} finally {
+			taskRunningRef.current.delete(widgetId);
+			if (showSpinner) setRunningId(null);
+		}
+	};
+	const runTask = (w: BoardWidget): void => {
+		void executeAndRecord(w.id, true);
 	};
 	const openTaskModal = (w: BoardWidget): void => {
 		if (hasTask(w.data)) setTaskModalId(w.id);
 	};
 	const taskModalWidget = taskModalId ? (active?.widgets.find(w => w.id === taskModalId) ?? null) : null;
+	// Auto-execute due hourly/daily tasks — the real schedule consumer
+	// (docs/board-dashboard.md §4 调度执行引擎). Polls the active board,
+	// baselines first-sight tasks, and fires each due task through the same
+	// executor as a manual run. A 30s poll keeps hourly/daily cadence
+	// accurate without burning a 1s timer.
+	useEffect(() => {
+		if (!activeId || !boardsReady) return;
+		const tick = (): void => {
+			const board = activeRef.current;
+			if (!board) return;
+			const now = Date.now();
+			for (const w of board.widgets) {
+				if (!hasTask(w.data) || taskRunningRef.current.has(w.id)) continue;
+				const task = w.data.task as WidgetTask;
+				if (!task.enabled) continue;
+				if (task.schedule && task.schedule !== "manual" && task.lastRunAt == null) {
+					baselineTask(w.id, now);
+					continue;
+				}
+				if (!isTaskDue(task, now)) continue;
+				void executeAndRecord(w.id, false);
+			}
+		};
+		tick();
+		const timer = window.setInterval(tick, 30_000);
+		return () => window.clearInterval(timer);
+	}, [activeId, boardsReady]);
 
 	// Maximized-card close: brief blur-out before unmounting.
 	const [focusClosing, setFocusClosing] = useState(false);
