@@ -1,7 +1,7 @@
 import type { SessionManager } from "./session-manager";
 
 /** External coding-agent session source supported by OMP imports. */
-export type ForeignSessionSource = "claude" | "codex" | "grok" | "pi" | "kimicode" | "omp" | "opencode";
+export type ForeignSessionSource = "claude" | "codex" | "grok" | "musepi" | "pi" | "kimicode" | "omp" | "opencode";
 
 /** Lightweight source metadata used to choose a foreign session before loading its transcript. */
 export interface ForeignSessionInfo {

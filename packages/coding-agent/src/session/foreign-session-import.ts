@@ -15,6 +15,8 @@ export function createForeignSessionStore(source: ForeignSessionSource): Foreign
 			return new ClaudeSessionStore();
 		case "codex":
 			return new CodexSessionStore();
+		case "musepi":
+			return new SdkCompatSessionStore("musepi");
 		case "omp":
 			return new SdkCompatSessionStore("omp");
 		case "pi":
@@ -35,8 +37,10 @@ export function foreignSessionSourceName(source: ForeignSessionSource): string {
 			return "Claude";
 		case "codex":
 			return "Codex";
+		case "musepi":
+			return "MusePi";
 		case "omp":
-			return "Oh My Pi";
+			return "OMP";
 		case "pi":
 			return "Pi";
 		case "opencode":
@@ -50,7 +54,7 @@ export function foreignSessionSourceName(source: ForeignSessionSource): string {
 
 /** All importable sources, in display order. */
 export function foreignSessionSources(): ForeignSessionSource[] {
-	return ["omp", "pi", "opencode", "grok", "kimicode", "claude", "codex"];
+	return ["musepi", "omp", "pi", "opencode", "grok", "kimicode", "claude", "codex"];
 }
 
 /** Convert lightweight foreign metadata for the existing session picker. */

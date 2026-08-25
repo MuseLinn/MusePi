@@ -24,7 +24,8 @@ import { SessionManager } from "./session-manager";
  * records with `type:"message"` + `message.role` blocks). Reading a sibling
  * install is a format-compatible conversion, not a translation.
  */
-const SDK_SESSION_ROOTS: Record<"omp" | "pi", string[]> = {
+const SDK_SESSION_ROOTS: Record<"musepi" | "omp" | "pi", string[]> = {
+	musepi: ["~/.musepi/agent/sessions", "~/.musepi/sessions", "~/.musepi/agent/data/sessions"],
 	omp: ["~/.omp/agent/sessions", "~/.omp/sessions", "~/.omp/agent/data/sessions"],
 	pi: ["~/.pi/agent/sessions", "~/.pi/sessions", "~/.pi/agent/data/sessions"],
 };
@@ -214,10 +215,10 @@ async function collectRecords(file: string): Promise<{ value: Record<string, unk
 
 /** OMP-SDK-compatible session store (omp / pi). */
 export class SdkCompatSessionStore implements ForeignSessionStore {
-	readonly source: "omp" | "pi";
+	readonly source: "musepi" | "omp" | "pi";
 	readonly #roots: string[];
 
-	constructor(source: "omp" | "pi", roots?: string[]) {
+	constructor(source: "musepi" | "omp" | "pi", roots?: string[]) {
 		this.source = source;
 		this.#roots = roots ?? SDK_SESSION_ROOTS[source].map(expandHome);
 	}
