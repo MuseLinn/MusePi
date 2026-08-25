@@ -406,8 +406,9 @@ export interface InteractiveModeContext {
 	showPluginSelector(mode?: "install" | "uninstall"): void;
 	showUserMessageSelector(): void;
 	showCopySelector(): void;
-	showTreeSelector(): void;
-	showSessionSelector(source?: ForeignSessionSource): void;
+showTreeSelector(): void;
+showTraceSelector(): void;
+showSessionSelector(source?: ForeignSessionSource): void;
 	handleResumeSession(sessionPath: string): Promise<void>;
 	handleSessionDeleteCommand(): Promise<void>;
 	showOAuthSelector(mode: "login" | "logout", providerId?: string): Promise<void>;

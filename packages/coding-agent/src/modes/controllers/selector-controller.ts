@@ -1222,7 +1222,7 @@ export class SelectorController {
 		this.ctx.ui.requestRender();
 	}
 
-	showTreeSelector(): void {
+	showTreeSelector(projection: "tree" | "trace" = "tree"): void {
 		const tree = this.ctx.sessionManager.getTree();
 		const realLeafId = this.ctx.sessionManager.getLeafId();
 
@@ -1274,7 +1274,7 @@ export class SelectorController {
 
 						if (summaryChoice === undefined) {
 							// User pressed escape - re-show tree selector
-							this.showTreeSelector();
+							this.showTreeSelector(projection);
 							return;
 						}
 
@@ -1339,7 +1339,7 @@ export class SelectorController {
 						if (result.aborted) {
 							// Summarization aborted - re-show tree selector
 							this.ctx.showStatus("Branch summarization cancelled");
-							this.showTreeSelector();
+							this.showTreeSelector(projection);
 							return;
 						}
 						if (result.cancelled) {
@@ -1383,9 +1383,16 @@ export class SelectorController {
 					this.ctx.ui.requestRender();
 				},
 				settings.get("treeFilterMode"),
+				projection,
 			);
 			return { component: selector, focus: selector };
 		});
+	}
+
+	/** Open the trajectory projection of the session tree (`/trace`): the same
+	 *  entry tree with time/cost columns overlaid (`docs/tui-trace-plan.md`). */
+	showTraceSelector(): void {
+		this.showTreeSelector("trace");
 	}
 
 	/**

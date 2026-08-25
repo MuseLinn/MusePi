@@ -515,6 +515,15 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		},
 	},
 	{
+		name: "trace",
+		icon: "gauge",
+		description: "Session trajectory view (time & token projection of the message tree)",
+		handleTui: (_command, runtime) => {
+			runtime.ctx.showTraceSelector();
+			runtime.ctx.editor.setText("");
+		},
+	},
+	{
 		name: "login",
 		icon: "signIn",
 		description: "Login with OAuth provider",

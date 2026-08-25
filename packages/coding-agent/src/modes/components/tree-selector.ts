@@ -10,10 +10,11 @@ import {
 	Text,
 	TruncatedText,
 	truncateToWidth,
+	visibleWidth,
 } from "@musepi/pi-tui";
 import type { TreeFilterMode } from "../../config/settings-schema";
 import { t } from "../../i18n/index.js";
-import { theme } from "../../modes/theme/theme";
+import { theme, type ThemeColor } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
 	matchesSelectDown,
@@ -21,7 +22,7 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
-import type { SessionTreeNode } from "../../session/session-entries";
+import type { SessionEntry, SessionTreeNode } from "../../session/session-entries";
 import { toPathList } from "../../tools/path-utils";
 import { shortenPath } from "../../tools/render-utils";
 import { canonicalizeMessage } from "../../utils/thinking-display";
@@ -53,6 +54,46 @@ interface FlatNode {
 /** Filter mode for tree display */
 type FilterMode = TreeFilterMode;
 
+/** Rendering projection of the shared entry tree: structural (/tree) or trajectory (/trace). */
+export type TreeProjection = "tree" | "trace";
+
+/** Absolute-scale cost bar glyphs (8 levels, docs/tui-trace-plan.md §2). */
+const TRACE_BAR_CHARS = "▁▂▃▄▅▆▇█";
+
+/** Message fields the trace columns read off a persisted session message. */
+interface TraceMessageInfo {
+	role?: string;
+	timestamp?: number;
+	usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+	duration?: number;
+	stopReason?: string;
+}
+
+function asTraceMessage(entry: SessionEntry): TraceMessageInfo | undefined {
+	return entry.type === "message" ? (entry.message as TraceMessageInfo) : undefined;
+}
+
+/** Numeric wall-clock time for an entry: the message's ms stamp first, else the ISO entry stamp. */
+function traceEntryTimeMs(entry: SessionEntry): number | undefined {
+	const msg = asTraceMessage(entry);
+	if (msg?.timestamp !== undefined && Number.isFinite(msg.timestamp)) return msg.timestamp;
+	const parsed = Date.parse(entry.timestamp);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Local `HH:mm:ss` stamp — the trace column's compact time (same session, so date is implicit). */
+function traceClock(ms: number): string {
+	const d = new Date(ms);
+	const pad = (v: number): string => String(v).padStart(2, "0");
+	return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Compact token count (1.2k / 45.6k / 1.8M) — matches the transcript usage-row language. */
+function traceTokens(n: number): string {
+	if (!Number.isFinite(n) || n <= 0) return "0";
+	return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
+}
+
 /**
  * Tree list component with selection and ASCII art visualization
  */
@@ -72,6 +113,8 @@ class TreeList implements Component {
 	#multipleRoots = false;
 	#activePathIds: Set<string> = new Set();
 	#lastSelectedId: string | null = null;
+	#projection: TreeProjection;
+	#maxTraceTokens = 0;
 
 	onSelect?: (entryId: string, options: { summarize: boolean }) => void;
 	onCancel?: () => void;
@@ -83,10 +126,15 @@ class TreeList implements Component {
 		private readonly maxVisibleLines: number,
 		initialFilterMode: FilterMode = "default",
 		initialSelectedId?: string,
+		projection: TreeProjection = "tree",
 	) {
 		this.#filterMode = initialFilterMode;
+		this.#projection = projection;
 		this.#multipleRoots = tree.length > 1;
 		this.#flatNodes = this.#flattenTree(tree);
+		if (projection === "trace") {
+			this.#maxTraceTokens = this.#computeTraceMax();
+		}
 		this.#buildActivePath();
 		this.#applyFilter();
 
@@ -590,6 +638,13 @@ class TreeList implements Component {
 			const content = this.#getEntryDisplayText(flatNode.node, isSelected);
 
 			let line = cursor + theme.fg("dim", prefix) + pathMarker + label + content;
+			// `/trace` overlays the trajectory columns on the same row; reserve their
+			// width so truncation eats the content, never the metrics.
+			if (this.#projection === "trace") {
+				const tracePart = this.#renderTraceColumns(flatNode);
+				const budget = Math.max(0, rowWidth - visibleWidth(tracePart));
+				line = truncateToWidth(line, budget) + tracePart;
+			}
 			if (isSelected) {
 				line = theme.bg("selectedBg", line);
 			}
@@ -754,7 +809,6 @@ class TreeList implements Component {
 		}
 		return false;
 	}
-
 	#formatToolCall(name: string, args: Record<string, unknown>): string {
 		switch (name) {
 			case "read": {
@@ -813,11 +867,101 @@ class TreeList implements Component {
 				return `[ls: ${path}]`;
 			}
 			default: {
-				// Custom tool - show name and truncated JSON args
 				const argsStr = JSON.stringify(args).slice(0, 40);
 				return `[${name}: ${argsStr}${JSON.stringify(args).length > 40 ? "..." : ""}]`;
 			}
 		}
+	}
+
+	/** Total token magnitude for a node — the trace bar's absolute scale (input + cache + output). */
+	#traceTotalTokens(entry: SessionEntry): number {
+		const usage = asTraceMessage(entry)?.usage;
+		if (usage) {
+			return (usage.input ?? 0) + (usage.cacheWrite ?? 0) + (usage.output ?? 0);
+		}
+		if (entry.type === "compaction") return entry.tokensBefore ?? 0;
+		return 0;
+	}
+
+	/** Session-wide max token magnitude — all nodes share one absolute scale (docs/tui-trace-plan.md §2). */
+	#computeTraceMax(): number {
+		let max = 0;
+		for (const flat of this.#flatNodes) {
+			const total = this.#traceTotalTokens(flat.node.entry);
+			if (total > max) max = total;
+		}
+		return max;
+	}
+
+	/** Work-kind tint for the cost bar: user(input) / tool / model / bookkeeping. */
+	#traceKindColor(entry: SessionEntry): ThemeColor {
+		if (entry.type !== "message") return "muted";
+		const role = asTraceMessage(entry)?.role;
+		if (role === "user") return "accent";
+		if (role === "toolResult") return "warning";
+		if (role === "assistant") return "success";
+		return "muted";
+	}
+
+	/** Failure/abort marker for the status column; empty when the turn settled cleanly. */
+	#traceStatus(entry: SessionEntry): string {
+		const msg = entry.type === "message" ? asTraceMessage(entry) : undefined;
+		if (!msg || msg.role !== "assistant") return "";
+		switch (msg.stopReason) {
+			case "error":
+				return theme.fg("error", ` ${theme.status.error}`);
+			case "aborted":
+				return theme.fg("warning", ` ${theme.status.aborted}`);
+			case "length":
+				return theme.fg("warning", ` ${theme.status.warning}`);
+			default:
+				return "";
+		}
+	}
+
+	/**
+	 * Trajectory projection columns: cost bar (absolute scale) + clock + token
+	 * in/out + duration + status. Rendered only in `/trace` mode; the live
+	 * message data lives on the persisted assistant message (wire parity).
+	 */
+	#renderTraceColumns(flatNode: FlatNode): string {
+		const entry = flatNode.node.entry;
+		const total = this.#traceTotalTokens(entry);
+		const ratio = total > 0 && this.#maxTraceTokens > 0 ? Math.min(1, total / this.#maxTraceTokens) : 0;
+		const barChar = TRACE_BAR_CHARS[Math.round(ratio * (TRACE_BAR_CHARS.length - 1))] ?? TRACE_BAR_CHARS[0]!;
+
+		const parts: string[] = [theme.fg(this.#traceKindColor(entry), barChar)];
+
+		const tsMs = traceEntryTimeMs(entry);
+		if (tsMs !== undefined) {
+			parts.push(theme.fg("muted", ` ${traceClock(tsMs)}`));
+		}
+
+		const usage = asTraceMessage(entry)?.usage;
+		if (usage) {
+			const inputTotal = (usage.input ?? 0) + (usage.cacheWrite ?? 0);
+			if (inputTotal > 0 || (usage.output ?? 0) > 0) {
+				parts.push(theme.fg("accent", ` ${traceTokens(inputTotal)}↑`));
+				parts.push(theme.fg("success", ` ${traceTokens(usage.output ?? 0)}↓`));
+			}
+		} else {
+			const compact = this.#traceTotalTokens(entry);
+			if (compact > 0) {
+				parts.push(theme.fg("accent", ` ${traceTokens(compact)}↑`));
+			}
+		}
+
+		const duration = asTraceMessage(entry)?.duration;
+		if (duration !== undefined && duration > 0) {
+			parts.push(theme.fg("dim", ` ${(duration / 1000).toFixed(1)}s`));
+		}
+
+		const status = this.#traceStatus(entry);
+		if (status) {
+			parts.push(status);
+		}
+
+		return ` ${parts.join("")}`;
 	}
 
 	#moveToAdjacentTurn(direction: -1 | 1): void {
@@ -983,7 +1127,6 @@ export class TreeSelectorComponent extends Container {
 	#labelInput: LabelInput | null = null;
 	#labelInputContainer: Container;
 	#treeContainer: Container;
-
 	constructor(
 		tree: SessionTreeNode[],
 		currentLeafId: string | null,
@@ -992,11 +1135,12 @@ export class TreeSelectorComponent extends Container {
 		onCancel: () => void,
 		private readonly onLabelChangeCallback?: (entryId: string, label: string | undefined) => void,
 		initialFilterMode: FilterMode = "default",
+		projection: TreeProjection = "tree",
 	) {
 		super();
 		const maxVisibleLines = Math.max(5, Math.floor(terminalHeight / 2));
 
-		this.#treeList = new TreeList(tree, currentLeafId, maxVisibleLines, initialFilterMode);
+		this.#treeList = new TreeList(tree, currentLeafId, maxVisibleLines, initialFilterMode, undefined, projection);
 		this.#treeList.onSelect = onSelect;
 		this.#treeList.onCancel = onCancel;
 		this.#treeList.onLabelEdit = (entryId, currentLabel) => this.#showLabelInput(entryId, currentLabel);
@@ -1008,13 +1152,18 @@ export class TreeSelectorComponent extends Container {
 
 		this.addChild(new Spacer(1));
 		this.addChild(new DynamicBorder());
-		this.addChild(new Text(theme.bold("  Session Tree"), 1, 0));
+		this.addChild(new Text(theme.bold(projection === "trace" ? "  Session Trace" : "  Session Tree"), 1, 0));
 		this.addChild(
 			new TruncatedText(
-				theme.fg(
-					"muted",
-					"Enter: switch. Alt+↑/↓: previous/next turn. PgUp/PgDn (←/→): page. Home/End: first/last item. Shift+Enter: summarize & switch. Shift+L: label. Ctrl+O: filter. Alt+D/T/U/L/A: filter. Type to search",
-				),
+				projection === "trace"
+					? theme.fg(
+							"muted",
+							"Trajectory view: bar = token cost (session-absolute scale), HH:mm:ss, input↑/output↓ tokens, request time, ⚠/✘ on failure. Enter: switch. Alt+↑/↓: next/prev turn. Ctrl+O: filter. Type to search",
+						)
+					: theme.fg(
+							"muted",
+							"Enter: switch. Alt+↑/↓: previous/next turn. PgUp/PgDn (←/→): page. Home/End: first/last item. Shift+Enter: summarize & switch. Shift+L: label. Ctrl+O: filter. Alt+D/T/U/L/A: filter. Type to search",
+						),
 				0,
 				0,
 			),
@@ -1031,6 +1180,7 @@ export class TreeSelectorComponent extends Container {
 			setTimeout(() => onCancel(), 100);
 		}
 	}
+
 
 	#showLabelInput(entryId: string, currentLabel: string | undefined): void {
 		this.#labelInput = new LabelInput(entryId, currentLabel);
