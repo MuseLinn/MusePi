@@ -1,5 +1,9 @@
 # Widget 设计系统（看板组件 + 消息内联 widget）
 
+> **状态（2026-08-25 核对）**：registry 组件层已实现（18 种 widget，parity 测试 `desktop-web/test/widget-parity.test.ts`）；
+> iframe 沙箱层部分（html widget opaque-origin sandbox + postMessage bridge 存在，缺 token CSS 预加载与沙箱 sendPrompt）；
+> 完整核对见 `docs/board-dashboard.md` 状态行与 `docs/audit-widget-board.md`。
+>
 > 2026-08-07 建立。来源：kimi 官方 widget 设计系统（`~/Downloads/kimi-widget-skill/`，
 > 用户从 kimi 对话中取得）提炼 + 映射到 MusePi GUI token。适用范围：**白名单 registry 组件**
 > （看板卡 + transcript 内联卡）与 **iframe 沙箱组件**（M4 备选升级）共用——设计系统是

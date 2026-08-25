@@ -1,6 +1,7 @@
 # 会话树节点控制与显示：调研分析与重构计划 v2
 
 ## 更新日志
+- 2026-08-25 状态：**已实现**（Phase 0–4 全部完成，Phase 5 默认折叠已实现，indexeddb 缓存跳过——`session.tree` RPC 是会话列表树非会话内拓扑，会话内拓扑已在 `snap.entries` 内存 + daemon journal，GUI 再缓存无收益）。Phase 6 E2E 视觉冒烟已在 headless Chrome 组件级完成；完整 GUI 隔离链路待后续。
 - 2026-08-25 v3.1: **id 空间统一修复**（`268c9ea4f7`）——真实数据桥接发现 resume 路径把 SDK hex 树 id 原样塞进 MaterializedView，与 live wire seam 的 messageKey（"role:timestamp"）混成两种 id 空间，branchChildren/面包屑/leafPath 全按 messageKey 匹配失败，三层树 UI 在**所有历史会话**上渲染为空。修复：resume 路径 sdkEntries rekey（id→messageKey，parentId→父条目 messageKey）。`test/daemon/view-key.test.ts` 固化数据契约（17 断言）：所有 id/parentId 均为 messageKey 形状，分支点恰好 2 子节点。
 - 2026-08-25 v3: 三层 UI 全部实现并推送（`b6d31253a1`/`6a2a8a69ab`/`825b4ab8a0`）。Phase 0–4 完成。Phase 5 性能项中的默认折叠已实现；indexeddb 缓存跳过（`session.tree` RPC 返回的是**会话列表树**，不是会话内消息拓扑；会话内拓扑已在 `snap.entries` 内存中，daemon journal 已持久化，GUI 再缓存是重复持久化无用户收益）。Phase 6 验证的 E2E 视觉冒烟已在 headless Chrome 组件级完成（分层布局/折叠/缩放/节点动作/跳转 transcript 全链路通过），完整 GUI 隔离链路待后续。
 - 2026-08-24 v2：纳入 OMP TUI 分支语义调研 + 三层 Canvas 设计 + 文件操作分析

@@ -3,8 +3,19 @@
 > 对比分析 openchamber / proma / bitfun / opencode 后，对 MusePi 右侧面板的重新设计。
 
 - **日期**: 2026-08-24
-- **状态**: 草案
+- **状态**: 草案（部分已落地，2026-08-25 核对）
 - **参考**: `gui-design.md`（既有布局规范）、`gui-implementation.md`（实现笔记）
+
+---
+
+## 0. 实现状态（2026-08-25 核对）
+
+> 核对方法：`docs/audit-right-panel.md`（逐项 vs `packages/gui/src/`）。
+
+- **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ❌。
+- **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ❌、上下文 gating ❌、Mod+1..9 ❌、pop-out ❌。
+- **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌）；Git/Diff/PR 仍 3 独立 surface ❌；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。
+- **结论**：核心改造主体已落地（分组/宽度/折叠），TabBar 与多实例为架构否决项，剩余为 Phase 3 面板级细化。实施下一批时更新本表。
 
 ---
 

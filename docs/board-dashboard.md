@@ -3,9 +3,12 @@
 > 2026-08-07 立项。目标：kimi work 式可交互、可编辑、可常驻桌面的组件看板；
 > 参考 kimi work（产品形态）+ bitfun Agentic Mini Apps / BitFun Canvas（技术范式）。
 >
-> **状态（2026-08-25 核对）**：M1–M3 已落地（BoardPage + WidgetRegistry + 17 种 widget +
-> `board.*`/`widget` RPC + boards.json 持久化）；M4/M5 部分落地；iframe 沙箱按 §7 决策排除；
-> **调度执行引擎未实现（无排期）**——详见 §4 里程碑标注。
+> **状态（2026-08-25 核对）**：M1–M3 已落地（BoardPage + WidgetRegistry + **18 种 widget** +
+> `board.*`/`widget` RPC + boards.json 持久化）；M4 部分落地（后台会话 AI 生成入口已存在，
+> 缺 `widget.generate` RPC 与模板市场）；M5 已落地（pin.html + pinned-widgets.json 重启恢复 +
+> alwaysOnTop 切换，文档旧标"未验证"过时）；iframe 沙箱层按 §7 决策仅用于 html widget
+> （opaque-origin，缺 token CSS 预加载与沙箱 sendPrompt）；**调度执行引擎未实现（无排期）**、
+> **`widget.data` 数据源代理 RPC 未实现**（行情卡为静态默认值）——详见 §4 里程碑标注。
 
 ## 1. 动机与参考
 
