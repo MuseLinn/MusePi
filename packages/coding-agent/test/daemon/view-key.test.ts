@@ -144,4 +144,96 @@ describe("daemon snapshot id space (messageKey)", () => {
 		},
 		20_000,
 	);
+
+	test(
+		"message parentId walks up non-message leaves (model_change) to nearest message ancestor",
+		async () => {
+			// The SDK leaf at append time may be a non-message entry; the
+			// rekey must link the next message to the nearest MESSAGE
+			// ancestor, not null it out (scattered single-node trees).
+			const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-viewkey-"));
+			const journalDir = path.join(tmp, "journal");
+			const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
+			cleanup.push(async () => {
+				await daemon.close();
+			});
+			const ws = await openWs(daemon.wsPort!);
+			const call = makeRpc(ws);
+			const sessionId = crypto.randomUUID();
+			const t = Date.now();
+			const msgs: WireMessage[] = [
+				{ role: "user", timestamp: t, content: [{ type: "text", text: "A" }] },
+				{ role: "assistant", timestamp: t + 1, content: [{ type: "text", text: "B" }] },
+				{ role: "user", timestamp: t + 2, content: [{ type: "text", text: "C" }] },
+				{ role: "assistant", timestamp: t + 3, content: [{ type: "text", text: "D" }] },
+			];
+			const sessionDir = computeDefaultSessionDir(tmp, new FileSessionStorage());
+			const iso = new Date().toISOString().replace(/[:.]/g, "-");
+			const parentFile = path.join(sessionDir, `${iso}_${sessionId}.jsonl`);
+			const header = { type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: tmp };
+			const ids = msgs.map(() => crypto.randomBytes(4).toString("hex"));
+			// A model_change sits BETWEEN assistant B and user C — its id is
+			// the leaf when C is appended, so C's hex parentId points at it.
+			const modelChangeId = crypto.randomBytes(4).toString("hex");
+			const lines: string[] = [];
+			for (let i = 0; i < msgs.length; i++) {
+				const parentIdx = i - 1;
+				const parentId =
+					i === 2
+						? modelChangeId // C's parent is the model_change entry
+						: parentIdx >= 0
+							? ids[parentIdx]
+							: null;
+				lines.push(
+					JSON.stringify({
+						type: "message",
+						id: ids[i],
+						parentId,
+						timestamp: new Date(msgs[i].timestamp).toISOString(),
+						message: msgs[i],
+					}),
+				);
+				if (i === 1) {
+					lines.push(
+						JSON.stringify({
+							type: "model_change",
+							id: modelChangeId,
+							parentId: ids[1], // leaf = assistant B when it appended
+							timestamp: new Date(msgs[i].timestamp + 0.5).toISOString(),
+							model: "test/model",
+							resolvedModelIsFallback: false,
+						}),
+					);
+				}
+			}
+			await fs.promises.writeFile(parentFile, `${JSON.stringify(header)}
+${lines.join("\n")}
+`);
+			cleanup.push(async () => {
+				ws.close();
+				await fs.promises.rm(parentFile, { force: true });
+				await fs.promises.rm(tmp, { recursive: true, force: true });
+			});
+
+			await call("session.subscribe", { sessionId });
+			const snap = (await call("session.snapshot", { sessionId })) as {
+				entries: { id: string; parentId: string | null; message: { role: string } }[];
+			};
+			const entries = snap.entries ?? [];
+			// The non-message entry (model_change) stays in the view (the
+			// timeline shows it); only the tree projection filters it out.
+			expect(entries.length).toBe(5);
+			// C (user at t+2) must hang under B (assistant at t+1) — the walk
+			// skips the model_change entry — not under a null/hex parent.
+			const c = entries.find(e => e.id === `user:${t + 2}`);
+			expect(c).toBeDefined();
+			expect(c!.parentId).toBe(`assistant:${t + 1}`);
+			// D hangs under C; the chain is fully connected (one root).
+			const d = entries.find(e => e.id === `assistant:${t + 3}`);
+			expect(d!.parentId).toBe(`user:${t + 2}`);
+			const roots = entries.filter(e => e.parentId === null);
+			expect(roots.length).toBe(1);
+		},
+		20_000,
+	);
 });

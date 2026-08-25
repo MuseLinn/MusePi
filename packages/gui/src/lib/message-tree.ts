@@ -24,14 +24,21 @@ export interface FlatMessageTreeRow {
 	isLast: boolean;
 }
 
-/** 从 entries 构建消息树:孤儿(无父/父缺失/自环)作为根,兄弟保持条目顺序。 */
+/**
+ * 从 entries 构建消息树:孤儿(无父/父缺失/自环)作为根,兄弟保持条目顺序。
+ * 只收 message 条目(画布/分支树的节点 = 消息摘要,边 = parent-child 消息
+ * 流;model_change/custom/thinking_level_change 等非消息条目不进树——
+ * 它们是轨迹时间线的事件,不是消息流节点。daemon 侧已把消息的 parentId
+ * 归一为「最近消息祖先」的 view key,这里无需再走链)。
+ */
 export function buildMessageTree(entries: readonly unknown[]): MessageTreeNode[] {
 	const nodes = new Map<string, MessageTreeNode>();
 	const roots: MessageTreeNode[] = [];
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
-		const entry = raw as { id?: unknown; parentId?: unknown; timestamp?: unknown };
+		const entry = raw as { id?: unknown; parentId?: unknown; timestamp?: unknown; type?: unknown };
 		if (typeof entry.id !== "string") continue;
+		if (entry.type !== "message") continue;
 		const node: MessageTreeNode = {
 			id: entry.id,
 			parentId: entry.parentId === null || typeof entry.parentId !== "string" ? null : entry.parentId,

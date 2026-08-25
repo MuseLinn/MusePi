@@ -1463,16 +1463,32 @@ export class DaemonSessionHost {
 			// messageKey,三层树 UI 在历史会话上全部失效。这里统一 rekey
 			// (id → messageKey,parentId → 父条目的 messageKey)。
 			const byHex = new Map(sdkEntries.map(e => [e.id, e]));
+			// Messages link to their nearest MESSAGE ancestor: the SDK leaf at
+			// append time may be a non-message entry (model_change / custom /
+			// thinking_level_change), so a message's hex parentId can point at
+			// one — walking up keeps the /tree projection connected (scattered
+			// single-node trees otherwise) in both the canvas and the
+			// trajectory tree.
+			const nearestMessageOf = (startId: string | null | undefined): WireMessage | null => {
+				let cur = startId ? byHex.get(startId) : null;
+				const seen = new Set<string>();
+				while (cur && !seen.has(cur.id)) {
+					seen.add(cur.id);
+					const m = (cur as { message?: WireMessage }).message;
+					if (cur.type === "message" && m) return m;
+					cur = cur.parentId ? byHex.get(cur.parentId) : null;
+				}
+				return null;
+			};
 			const viewEntries = sdkEntries.map(e => {
 				const msg = (e as { message?: WireMessage }).message;
 				if (e.type !== "message" || !msg) return e;
 				const key = messageKey(msg);
-				const parent = e.parentId ? byHex.get(e.parentId) : null;
-				const parentMsg = parent ? (parent as { message?: WireMessage }).message : null;
+				const parentMsg = nearestMessageOf(e.parentId);
 				return {
 					...e,
 					id: key,
-					parentId: parent && parent.type === "message" && parentMsg ? messageKey(parentMsg) : null,
+					parentId: parentMsg ? messageKey(parentMsg) : null,
 				};
 			});
 			view =
@@ -1753,12 +1769,42 @@ export class DaemonSessionHost {
 					// materialized view keys its entries by messageKey
 					// ("role:timestamp") — convert so the GUI tree can actually
 					// link parent ↔ child across the two id spaces.
-					const parentEntry = (
-						agentSession.sessionManager as unknown as {
-							getLeafEntry(): { message: WireMessage } | undefined;
+					const mgr = agentSession.sessionManager as unknown as {
+						getLeafEntry(): { type?: string; message?: WireMessage; parentId?: string | null } | undefined;
+						getEntries?(): Array<{
+							id: string;
+							type?: string;
+							message?: WireMessage;
+							parentId?: string | null;
+						}>;
+					} | null;
+					const parentEntry = mgr?.getLeafEntry();
+					let parentMsg: WireMessage | null = null;
+					if (parentEntry) {
+						if (parentEntry.type === "message" && parentEntry.message) {
+							parentMsg = parentEntry.message;
+						} else {
+							// The leaf is a non-message entry (model_change /
+							// custom / thinking_level_change): the new message's
+							// parentId must point at the nearest MESSAGE ancestor
+							// so the /tree projection stays connected (scattered
+							// single-node trees otherwise). Rare path — build the
+							// hex map only here.
+							const entries = mgr?.getEntries?.() ?? [];
+							const byHex = new Map(entries.map(e => [e.id, e]));
+							let cur = parentEntry.parentId ? byHex.get(parentEntry.parentId) : undefined;
+							const seen = new Set<string>();
+							while (cur && !seen.has(cur.id)) {
+								seen.add(cur.id);
+								if (cur.type === "message" && cur.message) {
+									parentMsg = cur.message;
+									break;
+								}
+								cur = cur.parentId ? byHex.get(cur.parentId) : undefined;
+							}
 						}
-					).getLeafEntry();
-					m.parentId = parentEntry ? messageKey(parentEntry.message as WireMessage) : null;
+					}
+					m.parentId = parentMsg ? messageKey(parentMsg) : null;
 				}
 			}
 			const seq = ++live.seq;
@@ -5906,15 +5952,37 @@ export class DaemonServer {
 				if (!match) throw new Error(`Unknown session: ${p.sessionId}`);
 				const file = match.session.path;
 				const lines = (await fs.promises.readFile(file, "utf8")).split("\n");
+				// The SDK file is `[title slot]` + `[session header]` + entries.
+				// The title slot (type "title") holds the display title; it is
+				// NOT the session header. DO NOT assume lines[0] is the header —
+				// a stale parse produced forks whose header was type "title" and
+				// whose body still contained the parent's header, so
+				// loadSessionFile picked the parent's id and activation threw
+				// `Unknown session` (fork send was unusable). Scan for the
+				// actual session record (type "session", string id).
+				let headerIdx = -1;
 				let header: Record<string, unknown> = {};
-				try {
-					header = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
-				} catch {
-					// missing/partial header — tolerate, keep going
+				for (let i = 0; i < Math.min(lines.length, 8); i++) {
+					const line = lines[i];
+					if (!line?.trim()) continue;
+					try {
+						const rec = JSON.parse(line) as { type?: unknown; id?: unknown };
+						if (rec.type === "session" && typeof rec.id === "string") {
+							headerIdx = i;
+							header = rec as Record<string, unknown>;
+							break;
+						}
+					} catch {
+						// malformed early line — skip
+					}
 				}
+				if (headerIdx < 0) throw new Error(`Unreadable session file: ${file}`);
+				// Title slot lines (before the header) are preserved so the
+				// fork keeps the parent's display title in the session list.
+				const titleSlot = lines.slice(0, headerIdx).join("\n");
 				let keep = 0;
 				let found = false;
-				for (let i = 1; i < lines.length; i++) {
+				for (let i = headerIdx + 1; i < lines.length; i++) {
 					const line = lines[i];
 					if (!line?.trim()) continue;
 					try {
@@ -5954,11 +6022,17 @@ export class DaemonServer {
 				};
 				const dir = path.dirname(file);
 				const newFile = path.join(dir, `${timestamp.replace(/[:.]/g, "-")}_${newId}.jsonl`);
+				// Body = entries after the header, up to and including the
+				// target message (or before it, per includeTarget).
+				// Exclude the header line itself — it was already copied into
+				// the new file's header, and including it would make
+				// loadSessionFile find the parent's id as the fork's header.
 				const body = lines
-					.slice(1, keep + 1)
+					.slice(headerIdx + 1, keep + 1)
 					.filter(l => l?.trim())
 					.join("\n");
-				await fs.promises.writeFile(newFile, `${JSON.stringify(newHeader)}\n${body}${body ? "\n" : ""}`);
+				const head = titleSlot ? titleSlot + "\n" : "";
+				await fs.promises.writeFile(newFile, `${head}${JSON.stringify(newHeader)}\n${body}${body ? "\n" : ""}`);
 				// Bust the SDK-session scan cache so the tree lists the fork
 				// on the next refresh (listAllSessions is TTL-cached).
 				this.#host.invalidateHistoryCache();
