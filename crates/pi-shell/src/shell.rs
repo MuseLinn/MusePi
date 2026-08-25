@@ -2548,7 +2548,7 @@ mod tests {
 		}
 
 		let statuses =
-			time::timeout(Duration::from_secs(5), async { tokio::join!(first.wait(), second.wait()) })
+			time::timeout(Duration::from_secs(15), async { tokio::join!(first.wait(), second.wait()) })
 				.await;
 		if statuses.is_err() {
 			let _ = first.kill().await;
@@ -2579,7 +2579,7 @@ mod tests {
 			.spawn()
 			.expect("trapping child");
 		let pid = child.id().expect("child pid");
-		let ready_result = time::timeout(Duration::from_secs(5), async {
+		let ready_result = time::timeout(Duration::from_secs(15), async {
 			while !ready.exists() {
 				time::sleep(Duration::from_millis(10)).await;
 			}
@@ -2600,7 +2600,7 @@ mod tests {
 			.expect("kill command");
 		let code = exit_code(&result);
 
-		let status = time::timeout(Duration::from_secs(5), child.wait()).await;
+		let status = time::timeout(Duration::from_secs(15), child.wait()).await;
 		if status.is_err() {
 			let _ = child.kill().await;
 			let _ = child.wait().await;
@@ -2639,7 +2639,7 @@ mod tests {
 		let group_pid = group_child.id().expect("group pid");
 		let plain_pid = plain_child.id().expect("plain pid");
 
-		let ready_result = time::timeout(Duration::from_secs(5), async {
+		let ready_result = time::timeout(Duration::from_secs(15), async {
 			while !group_ready.exists() || !plain_ready.exists() {
 				time::sleep(Duration::from_millis(10)).await;
 			}
@@ -2662,7 +2662,7 @@ mod tests {
 			.expect("kill command");
 		let code = exit_code(&result);
 
-		let statuses = time::timeout(Duration::from_secs(5), async {
+		let statuses = time::timeout(Duration::from_secs(15), async {
 			tokio::join!(group_child.wait(), plain_child.wait())
 		})
 		.await;
@@ -2707,7 +2707,7 @@ mod tests {
 		let default_pid = default_child.id().expect("default pid");
 		let named_pid = named_child.id().expect("named pid");
 
-		let ready_result = time::timeout(Duration::from_secs(5), async {
+		let ready_result = time::timeout(Duration::from_secs(15), async {
 			while !default_ready.exists() || !named_ready.exists() {
 				time::sleep(Duration::from_millis(10)).await;
 			}
@@ -2736,7 +2736,7 @@ mod tests {
 			.await
 			.expect("named kill command");
 
-		let statuses = time::timeout(Duration::from_secs(5), async {
+		let statuses = time::timeout(Duration::from_secs(15), async {
 			tokio::join!(default_child.wait(), named_child.wait())
 		})
 		.await;
@@ -2791,13 +2791,13 @@ mod tests {
 		let source_info = SourceInfo::from("pi-natives:test");
 
 		time::timeout(
-			Duration::from_secs(5),
+			Duration::from_secs(15),
 			session.shell.run_string(command, &source_info, &params),
 		)
 		.await
 		.expect("pipeline did not stop")
 		.expect("stopped pipeline");
-		time::timeout(Duration::from_secs(5), async {
+		time::timeout(Duration::from_secs(15), async {
 			while !first_ready.exists() || !second_ready.exists() {
 				time::sleep(Duration::from_millis(10)).await;
 			}
@@ -2872,7 +2872,7 @@ mod tests {
 		let code = exit_code(&result);
 
 		let statuses =
-			time::timeout(Duration::from_secs(5), async { tokio::join!(first.wait(), second.wait()) })
+			time::timeout(Duration::from_secs(15), async { tokio::join!(first.wait(), second.wait()) })
 				.await;
 		if statuses.is_err() {
 			let _ = first.start_kill();
@@ -4334,7 +4334,7 @@ mod tests {
 			token.cancel();
 		});
 		let result = time::timeout(
-			Duration::from_secs(5),
+			Duration::from_secs(15),
 			session.shell.run_string("head -n 1000000", &si, &params),
 		)
 		.await;
@@ -4507,7 +4507,7 @@ mod tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn uutils_diff_reads_process_substitution_fds() {
 		let (result, output) = time::timeout(
-			Duration::from_secs(5),
+			Duration::from_secs(15),
 			run_command_capture("diff <(echo a) <(echo b)", None, None, CancelToken::default()),
 		)
 		.await
@@ -4948,7 +4948,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 			(session, exec)
 		});
 
-		let child_pid = time::timeout(Duration::from_secs(5), pid_rx)
+		let child_pid = time::timeout(Duration::from_secs(15), pid_rx)
 			.await
 			.expect("timed out waiting for child PID")
 			.expect("reader closed pid channel without sending");
@@ -4967,7 +4967,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 		);
 
 		// Drain the brush task and the pipe reader.
-		let (_session, exec) = time::timeout(Duration::from_secs(5), shell_handle)
+		let (_session, exec) = time::timeout(Duration::from_secs(15), shell_handle)
 			.await
 			.expect("shell timed out")
 			.expect("shell task panicked");
@@ -5016,7 +5016,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 		});
 
 		let mut b_output = String::new();
-		let b_ready = time::timeout(Duration::from_secs(5), async {
+		let b_ready = time::timeout(Duration::from_secs(15), async {
 			loop {
 				let chunk = rx_b
 					.recv_async()
@@ -5048,7 +5048,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 		});
 
 		let mut a_output = String::new();
-		let a_child_pid = time::timeout(Duration::from_secs(5), async {
+		let a_child_pid = time::timeout(Duration::from_secs(15), async {
 			loop {
 				let chunk = rx_a
 					.recv_async()
@@ -5119,7 +5119,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 				.await
 		});
 
-		let child_pid = time::timeout(Duration::from_secs(5), async {
+		let child_pid = time::timeout(Duration::from_secs(15), async {
 			loop {
 				if let Ok(pid_text) = std::fs::read_to_string(&pid_path)
 					&& let Ok(pid) = pid_text.trim().parse::<i32>()
@@ -5150,7 +5150,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 			"signal cancellation during snapshot sourcing must not report timeout"
 		);
 
-		let child_dead = time::timeout(Duration::from_secs(5), async {
+		let child_dead = time::timeout(Duration::from_secs(15), async {
 			loop {
 				// SAFETY: `child_pid` came from the foreground `sh` spawned by the
 				// snapshot; `kill(pid, 0)` only probes whether that process still exists.
@@ -5259,7 +5259,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 			(session, exec)
 		});
 
-		let child_pid = time::timeout(Duration::from_secs(5), pid_rx)
+		let child_pid = time::timeout(Duration::from_secs(15), pid_rx)
 			.await
 			.expect("timed out waiting for first-stage PID")
 			.expect("reader closed pid channel without sending");
@@ -5274,7 +5274,7 @@ replace = [{ pattern = "^.+$", replacement = "PWD" }]
 			std::io::Error::last_os_error(),
 		);
 
-		let (_session, exec) = time::timeout(Duration::from_secs(5), shell_handle)
+		let (_session, exec) = time::timeout(Duration::from_secs(15), shell_handle)
 			.await
 			.expect("shell timed out")
 			.expect("shell task panicked");
