@@ -57,7 +57,7 @@ export function CollabDialog({
 	const [copied, setCopied] = useState(false);
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
-	const [mode, setMode] = useState<"session" | "workspace">("session");
+	const [mode, setMode] = useState<"session" | "workspace" | "tunnel">("session");
 	const [pairCode, setPairCode] = useState<string | null>(null);
 	const [channels, setChannels] = useState<
 		{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[] | null
@@ -195,7 +195,9 @@ export function CollabDialog({
 	};
 
 	const hosting = info?.hosting ?? false;
-	const canShare = !busy && rpc !== null && (mode === "workspace" || sessionId !== null);
+	// Tunnel mode needs no session: it shares the workspace when no session
+	// is open (daemon treats tunnel-without-sessionId as workspace mode).
+	const canShare = !busy && rpc !== null && (mode === "workspace" || mode === "tunnel" || sessionId !== null);
 	const sessionHint =
 		sessionId !== null && sessionTitle
 			? t(`share session "{title}" live on the local network`, { title: sessionTitle })
@@ -279,6 +281,13 @@ export function CollabDialog({
 								>
 									{t("workspace")}
 								</button>
+								<button
+									type="button"
+									className={`gui-seg-btn${mode === "tunnel" ? " gui-seg-btn--active" : ""}`}
+									onClick={() => setMode("tunnel")}
+								>
+									{t("public tunnel")}
+								</button>
 							</div>
 							<button
 								type="button"
@@ -294,7 +303,9 @@ export function CollabDialog({
 									? t("open or create a session first to share it")
 									: mode === "workspace"
 										? t("share the whole workspace — guests see every session")
-										: sessionHint}
+										: mode === "tunnel"
+											? t("public tunnel — anyone with the link can join; stop sharing to close it")
+											: sessionHint}
 							</p>
 						</div>
 					)}

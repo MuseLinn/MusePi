@@ -45,6 +45,7 @@ import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
 import bundledBoardDesignSkill from "./bundled-skills/board-design/SKILL.md" with { type: "text" };
+import { collabTool, type CollabToolHandle } from "./tools/collab";
 import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
 import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
 import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
@@ -464,6 +465,12 @@ export interface CreateAgentSessionOptions {
 
 	/** Custom tools to register (in addition to built-in tools). Accepts both CustomTool and ToolDefinition. */
 	customTools?: (CustomTool | ToolDefinition)[];
+	/**
+	 * Daemon-injected collab share handle for the `collab` tool. Passed by
+	 * daemon hosts so an agent session can start/stop remote sharing of its
+	 * own session; absent in standalone TUI/CLI sessions.
+	 */
+	collabTool?: CollabToolHandle;
 	/** Inline extensions (merged with discovery). */
 	extensions?: ExtensionFactory[];
 	/** Additional extension paths to load (merged with discovery). */
@@ -2220,6 +2227,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			if (settings.get("agnes_video_gen.enabled")) {
 				customTools.push(agnesVideoGenTool as unknown as CustomTool);
 			}
+			// Collab share tool (default enabled): lets the agent start/stop
+			// remote sharing of the current session. Absent when no daemon
+			// injects a collab handle — the tool reports "unavailable" at use.
+			customTools.push(collabTool as unknown as CustomTool);
 
 			// Add web search tools
 			if (options.toolNames?.includes("web_search")) {
@@ -2928,6 +2939,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			settings,
 			localProtocolOptions,
 			autoApprove: options.autoApprove ?? false,
+			...(options.collabTool ? { collab: options.collabTool } : {}),
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
 		const setSessionActiveToolNames = (names: Iterable<string>): void => {

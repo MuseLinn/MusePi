@@ -1,3 +1,4 @@
+import type { CollabToolHandle } from "./collab";
 import type { AgentToolContext, ToolCallContext } from "@musepi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
@@ -18,6 +19,9 @@ declare module "@musepi/pi-agent-core" {
 		xdevTierResolved?(tier: "read" | "write" | "exec"): void;
 		/** Set only after an interactive prompt approves provider computer safety checks. */
 		providerSafetyApproved?: boolean;
+		/** Daemon-injected collab share handle for the `collab` tool. Absent in
+		 *  standalone TUI/CLI sessions (no daemon to share through). */
+		collab?: CollabToolHandle;
 	}
 }
 
