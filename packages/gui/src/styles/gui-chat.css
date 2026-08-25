@@ -3332,6 +3332,13 @@ body.gui-resizing .gui-pane-right {
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
 }
+.gui-revert-hint {
+	margin: 0;
+	padding: 2px 6px 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-faint);
+}
 
 /* ── Message-tree navigation (TUI tree-selector parity) ───────────────────
  * Floating button at the transcript's top-right opens a searchable turn

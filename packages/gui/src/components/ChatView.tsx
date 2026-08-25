@@ -1,4 +1,5 @@
 import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t } from "@musepi/desktop-web";
+import { Reveal } from "./Reveal";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -666,54 +667,64 @@ export function ChatView({
 			delete el.dataset.switched;
 		}, 700);
 	}, []);
-	// Revert history (openchamber RevertedMessageDock parity): the daemon
-	// is the single source of truth — session.revertList returns the
-	// backed-up reverts (one entry per session.revertTo), so the dock can
-	// never drift from what session.restoreRevert can actually restore.
-	// The list renders as a collapsed dock card above the composer — NOT
-	// inline in the transcript, so it never scrolls away with the messages.
-	const [revertItems, setRevertItems] = useState<{ index: number; text: string; messageId: string }[]>([]);
-	const [revertDockOpen, setRevertDockOpen] = useState(false);
-	const prevRevertLen = useRef(revertItems.length);
-	useEffect(() => {
-		if (revertItems.length > prevRevertLen.current) setRevertDockOpen(false);
-		prevRevertLen.current = revertItems.length;
-	}, [revertItems.length]);
-	const refreshReverts = useCallback(async (): Promise<void> => {
-		if (!store) return;
-		try {
-			const res = await rpc.request<{ items: { index: number; text: string; messageId: string }[] }>(
-				"session.revertList",
-				{ sessionId: store.sessionId },
-			);
-			setRevertItems(res?.items ?? []);
-		} catch {
-			// old daemon without the RPC — keep the current list
-		}
-	}, [rpc, store]);
-	useEffect(() => {
-		void refreshReverts();
-	}, [refreshReverts, store?.sessionId]);
-	// Revert / edit-and-reconverse: truncate the session to before the user
-	// message, reload the snapshot — the daemon records the backup, the
-	// dock re-fetches it from session.revertList.
+	// Jump-back (TUI navigateTree parity, 2026-08-25): 撤回 means branchAt,
+	// NOT a truncation — the session leaf moves IN PLACE to the target
+	// message, the old reply + tail stay reachable as a sibling branch on
+	// the tree (natural undo, no daemon backup state; the tree is the
+	// single source of truth). The composer gets the message text back for
+	// editing, and the dock card above the composer shows the jump target
+	// with an explicit undo (jump back to the leaf we came from).
+	const [jumpBack, setJumpBack] = useState<{ fromLeafKey: string; text: string } | null>(null);
+	const [jumpDockOpen, setJumpDockOpen] = useState(false);
+	// Any new prompt after a jump-back commits the new branch — the undo
+	// window closes (both branches stay on the tree).
+	const sendAndCloseJump = useCallback(
+		(
+			text: string,
+			images?: { type: "image"; data: string; mimeType: string }[],
+			deliverAs?: "prompt" | "steer" | "followUp",
+		): void => {
+			setJumpBack(null);
+			onSend(text, images, deliverAs);
+		},
+		[onSend],
+	);
 	// 保存为图片 → the export dialog (options + live preview) owns the
 	// rasterization; the transcript row's save button just opens it.
 	const [saveImageText, setSaveImageText] = useState<string | null>(null);
 
-	const revertToMessage = async (messageId: string, _text: string, _edit: boolean): Promise<void> => {
+	const jumpBackToMessage = async (messageId: string, text: string): Promise<void> => {
 		if (!store) return;
+		const fromLeafKey = effectiveLeaf;
 		try {
-			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
-			// The truncation moved the tail — leave branch navigation so the
-			// session tree / breadcrumb follow the NEW leaf instead of the
-			// reverted branch point.
-			setCurrentLeafKey(null);
+			const res = await rpc.request<{ ok: boolean; leafId: string | null }>("session.branchAt", {
+				sessionId: store.sessionId,
+				messageId,
+			});
+			if (res?.ok !== true) return;
+			if (res.leafId) setCurrentLeafKey(res.leafId);
+			if (text) setPendingEdit(text);
+			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
 			pulseSwitch();
-			await onReloadSession?.();
-			await refreshReverts();
 		} catch {
 			// daemon rejected — keep the transcript as-is
+		}
+	};
+	// Undo the jump-back: branchAt back to the leaf we came from (the
+	// sibling branch — nothing was ever truncated).
+	const undoJumpBack = async (): Promise<void> => {
+		if (!store || !jumpBack) return;
+		try {
+			const res = await rpc.request<{ ok: boolean; leafId: string | null }>("session.branchAt", {
+				sessionId: store.sessionId,
+				messageId: jumpBack.fromLeafKey,
+			});
+			if (res?.ok !== true) return;
+			if (res.leafId) setCurrentLeafKey(res.leafId);
+			setJumpBack(null);
+			pulseSwitch();
+		} catch {
+			// daemon rejected — keep as-is
 		}
 	};
 	// Retry (重新生成该回复): branch to the user message that produced
@@ -747,67 +758,8 @@ export function ChatView({
 		else if (res) onSend(text);
 	};
 	// Pending composer prefill: message text sent back for re-editing
-	// (revert-dock 回填 + transcript inline edit). null = no pending edit.
+	// (jump-back 回填 + transcript inline edit). null = no pending edit.
 	const [pendingEdit, setPendingEdit] = useState<string | null>(null);
-	// 回填: put the reverted text into the composer for re-editing.
-	const restoreReverted = (text: string): void => {
-		setPendingEdit(text);
-	};
-	// Undo ONE revert (还原单轮): the daemon re-inserts that backed-up
-	// tail (agent context + journal + view), then we re-fetch the list and
-	// reload the snapshot.
-	const restoreItem = async (index: number): Promise<void> => {
-		if (!store) return;
-		try {
-			const res = await rpc.request<{ ok: boolean }>("session.restoreRevert", {
-				sessionId: store.sessionId,
-				index,
-			});
-			if (res?.ok === true) {
-				await refreshReverts();
-				await onReloadSession?.();
-			}
-		} catch {
-			// daemon rejected — keep the list as-is
-		}
-	};
-	// Undo EVERY revert (还原全部): the daemon re-inserts every backed-up
-	// tail (deduped), then we re-fetch the list and reload.
-	const restoreAllReverts = async (): Promise<void> => {
-		if (!store) return;
-		try {
-			const res = await rpc.request<{ ok: boolean }>("session.restoreRevert", {
-				sessionId: store.sessionId,
-				all: true,
-			});
-			if (res?.ok === true) {
-				await refreshReverts();
-				setCurrentLeafKey(null);
-				pulseSwitch();
-				await onReloadSession?.();
-			}
-		} catch {
-			// daemon rejected — keep the list as-is
-		}
-	};
-	// 撤回 dock 的「重新发送」: re-send the reverted text as a NEW user
-	// prompt. deliverAs is OMITTED on purpose — an explicit "followUp" only
-	// queues the message without starting a turn when idle, so the button
-	// would look dead. Omitting it starts a turn when idle (steers while
-	// streaming), which is the actual "resend" semantic.
-	const resendReverted = (text: string): void => {
-		onSend(text);
-	};
-	const discardReverted = async (index: number): Promise<void> => {
-		if (!store) return;
-		try {
-			await rpc.request("session.discardRevert", { sessionId: store.sessionId, index });
-			await refreshReverts();
-		} catch {
-			// old daemon without the RPC — drop locally so the dock clears
-			setRevertItems(prev => prev.filter(r => r.index !== index));
-		}
-	};
 	// Fork (分叉 / TUI /branch parity): non-destructive — copy the session
 	// truncated at this message into a NEW session, open it, and backfill
 	// the composer with the message text (the TUI /branch loads the
@@ -1043,7 +995,7 @@ export function ChatView({
 		},
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
-		sendPrompt: (text: string) => onSend(text),
+		sendPrompt: (text: string) => sendAndCloseJump(text),
 	};
 	const fetchThinkingInfo = useCallback((): void => {
 		if (!rpc || !store) return;
@@ -1363,7 +1315,7 @@ export function ChatView({
 														}
 														colorBlind={displaySettings.colorBlindMode === true}
 														onQuote={text => appendQuote(text)}
-														onRevert={(id, text) => void revertToMessage(id, text, false)}
+														onRevert={(id, text) => void jumpBackToMessage(id, text)}
 														/* 编辑并重发 (Transcript onEdit, previously unwired):
 														 * backfill the composer with the message text for
 														 * re-editing — same pendingEdit path as the revert
@@ -1446,7 +1398,7 @@ export function ChatView({
 												onFork={(entry, text, includeTarget) =>
 													void forkFromMessage(entry.id, text, includeTarget)
 												}
-												onRevertTo={entry => void revertToMessage(entry.id, "", false)}
+												onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
 											/>
 											{/* In-message text selection actions (openchamber parity):
 											 * quote a snippet (not the whole message), copy, start a
@@ -1517,104 +1469,69 @@ export function ChatView({
 												: "gui-composer-wrap flex flex-shrink-0 flex-col px-5 pb-3"
 										}
 									>
-										{/* Reverted-messages dock (openchamber RevertedMessageDock
-										 * parity): a floating card above the input — collapsed
-										 * to a header row by default, expand for 恢复/重发/分叉/丢弃.
-										 * Lives OUTSIDE the transcript so it never scrolls away. */}
-										{revertItems.length > 0 && (
-											<div className="gui-revert-dock" role="region" aria-label={t("reverted messages")}>
+										{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
+										 * a floating card above the input — shows the target of the
+										 * last 撤回 (non-destructive branchAt leaf move) with an
+										 * explicit undo (jump back to the leaf we came from; the
+										 * old tail stays on the tree as a sibling branch either
+										 * way). Lives OUTSIDE the transcript so it never scrolls
+										 * away; appears/disappears and expands with the shared
+										 * Reveal motion (fade + collapse). */}
+										<Reveal open={jumpBack !== null}>
+											<div className="gui-revert-dock" role="region" aria-label={t("jumped back")}>
 												<div
 													role="button"
 													tabIndex={0}
 													className="gui-revert-dock-head"
-													onClick={() => setRevertDockOpen(v => !v)}
+													onClick={() => setJumpDockOpen(v => !v)}
 													onKeyDown={e => {
 														if (e.key === "Enter" || e.key === " ") {
 															e.preventDefault();
-															setRevertDockOpen(v => !v);
+															setJumpDockOpen(v => !v);
 														}
 													}}
-													aria-expanded={revertDockOpen}
+													aria-expanded={jumpDockOpen}
 												>
 													<Icon
 														name="arrow-go-back"
 														className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
 													/>
-													<span className="gui-revert-dock-title">
-														{t("reverted messages ({count})", { count: String(revertItems.length) })}
+													<span className="gui-revert-dock-title" title={jumpBack?.text}>
+														{jumpBack
+															? t("jumped back to") + (jumpBack.text ? `: ${jumpBack.text}` : "")
+															: t("jumped back")}
 													</span>
 													<button
 														type="button"
 														className="gui-pane-action !w-auto px-1.5"
-														title={t("restore all reverts")}
+														title={t("undo jump")}
 														onClick={e => {
 															// The head is a click target for collapse/expand —
-															// don't toggle it when the restore-all button fires.
+															// don't toggle it when the undo button fires.
 															e.stopPropagation();
-															void restoreAllReverts();
+															void undoJumpBack();
 														}}
 													>
 														<Icon name="arrow-go-forward" className="h-3 w-3" />
 													</button>
 													<Icon
 														name="arrow-down-s"
-														className={`gui-revert-dock-chevron${revertDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
+														className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
 														aria-hidden="true"
 													/>
 												</div>
-												{revertDockOpen && (
+												<Reveal open={jumpDockOpen}>
 													<div className="gui-revert-dock-body">
-														{revertItems.map(r => (
-															<div key={r.index} className="gui-revert-item">
-																<span className="gui-revert-item-text" title={r.text}>
-																	{r.text}
-																</span>
-																<button
-																	type="button"
-																	className="gui-pane-action !w-auto px-1.5"
-																	title={t("restore this revert")}
-																	onClick={() => void restoreItem(r.index)}
-																>
-																	<Icon name="arrow-go-forward" className="h-3 w-3" />
-																</button>
-																<button
-																	type="button"
-																	className="gui-pane-action !w-auto px-1.5"
-																	title={t("restore into the input")}
-																	onClick={() => restoreReverted(r.text)}
-																>
-																	<Icon name="arrow-go-back" className="h-3 w-3" />
-																</button>
-																<button
-																	type="button"
-																	className="gui-pane-action !w-auto px-1.5"
-																	title={t("resend")}
-																	onClick={() => resendReverted(r.text)}
-																>
-																	<Icon name="send-plane" className="h-3 w-3" />
-																</button>
-																<button
-																	type="button"
-																	className="gui-pane-action !w-auto px-1.5"
-																	title={t("continue from this point in a new session")}
-																	onClick={() => void forkFromMessage(r.messageId, r.text)}
-																>
-																	<Icon name="git-fork" className="h-3 w-3" />
-																</button>
-																<button
-																	type="button"
-																	className="gui-pane-action !w-auto px-1.5"
-																	title={t("discard")}
-																	onClick={() => void discardReverted(r.index)}
-																>
-																	<Icon name="close" className="h-3 w-3" />
-																</button>
-															</div>
-														))}
+														<div className="gui-revert-item">
+															<span className="gui-revert-item-text" title={jumpBack?.text}>
+																{jumpBack?.text ?? ""}
+															</span>
+														</div>
+														<p className="gui-revert-hint">{t("jump back hint")}</p>
 													</div>
-												)}
+												</Reveal>
 											</div>
-										)}
+										</Reveal>
 										{snap?.approvals.map(a => (
 											<ApprovalCard
 												key={a.requestId}
@@ -1655,7 +1572,7 @@ export function ChatView({
 												streaming: snap?.streaming ?? false,
 												hasApprovals: (snap?.approvals.length ?? 0) > 0,
 											})}
-											onSend={onSend}
+											onSend={sendAndCloseJump}
 											onStop={() => void handleStop()}
 											rpc={rpc}
 											sessionId={store.sessionId}
