@@ -490,3 +490,20 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 **构建**：desktop-web `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 packages/harmony 运行。rawfile gitignored。
 
 **取舍**：凭证回退 localStorage（未接 `@ohos.security.asset`，P3）；通知/语音/原生图标均为 P3。若用户要真原生体验，connect+会话列表 ArkTS 重写是后续独立工程。
+
+### 11.8 GUI 视觉吸收（2026-08-25，持续）
+
+按"协议兼容 + 零依赖"原则把 gui 客户端组件吸收进移动壳（desktop-web 的 shell 组件），每批模拟器 CDP 实测。
+
+**批 1（716b5bf3e4）— 品牌动效**：
+- DotMatrixMark（canvas 点阵品牌底纹）作为 connect 卡背景（masked 渐隐）；注意 canvas 必须 CSS 容器约束，否则 ResizeObserver↔bitmap attribute 反馈环撑爆像素
+- ShinyText 副标题扫光、BlurText 品牌逐字入场、SpotlightCard 聚光卡（触控适配 pointer 事件）
+- collab-host-stub 补 workspace-select 分支 + sessionId 字段名，支撑全链路 E2E 验证
+
+**批 2（e5f71bbb60）— 空态推荐 chips**：
+- SuggestionChips（openchamber DraftPresetChips parity）：8 默认 + 7 展开，i18n keyed（chip */suggest * 双语言已存在）
+- 集成点 = Composer 空态（live && !readOnly && entries==0）：点击填入草稿 + 聚焦（gui parity，用户改后发送），+ 展开 staggered blur-in / 收起 fade-out
+- 协议零改动——chips 只是 draft 填充，发送仍走 prompt 帧
+- 协议约束检查：guest 无 set-model/附件帧 → AttachMenu / ThinkingSelector / SlashRow(daemon commands.list) 不吸收，避免半成品
+
+**E2E 验证**：连接 → 选空会话（Board cleanup）→ 9 chips（8+more）→ 点击 "探索代码库" 填入 "带我了解这个代码库的结构和关键模块" + 聚焦 + 发送可用 → 展开 16 chips 全部渲染。
