@@ -10,7 +10,7 @@
  *
  * Also covers the id-spaces regression: the GUI sends view keys
  * ("role:timestamp") that never equal SDK/jsonl ids — forkAt must resolve
- * by message identity like revertTo does.
+ * by message identity (same as branchAt).
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";

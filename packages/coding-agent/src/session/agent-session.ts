@@ -396,24 +396,9 @@ const noOpUIContext: ExtensionUIContext = {
  * Resolve a transcript index for a message identified by either id space:
  * the SDK entry id (generateId hex) or the view's messageKey
  * ("role:timestamp" / "toolResult:toolCallId"). The two diverge because the
- * SDK re-ids entries on append (restoreRevert) while the view keeps the
  * wire message's own identity — so the id lookup falls back to matching the
  * message's role+timestamp/toolCallId.
  */
-function sdkMessageIndex(entries: SessionEntry[], messageId: string): number {
-	const idHit = entries.findIndex(e => e.id === messageId);
-	if (idHit >= 0) return idHit;
-	const sep = messageId.indexOf(":");
-	if (sep < 0) return -1;
-	const role = messageId.slice(0, sep);
-	const key = messageId.slice(sep + 1);
-	return entries.findIndex(e => {
-		if (e.type !== "message") return false;
-		const m = e.message as { role?: string; timestamp?: number | string; toolCallId?: string };
-		if (m.role !== role) return false;
-		return role === "toolResult" ? m.toolCallId === key : String(m.timestamp) === key;
-	});
-}
 
 type MessageEndPersistenceSlot = {
 	readonly promise: Promise<void>;
@@ -6545,75 +6530,6 @@ export class AgentSession {
 	 * Omitted `deliverAs` starts a turn when idle and queues as a steer while streaming.
 	 * Explicit `deliverAs` queues without starting a turn in either state.
 	 */
-	/**
-	 * Undo / edit-and-reconverse: physically truncate the session to just
-	 * before a user message (openchamber revert parity). The session file
-	 * loses the abandoned tail (sessionManager.truncateToIndex), the
-	 * agent's live context is replayed from the surviving entries, and the
-	 * caller (daemon session.revertTo) truncates the journal + view and
-	 * notifies subscribers. Returns the user message text for the client
-	 * to restore into the composer, or null when the message is unknown.
-	 */
-	async revertTo(messageId: string): Promise<string | null> {
-		const entries = this.sessionManager.getEntries();
-		// The caller (daemon) passes the view's messageKey ("role:timestamp")
-		// which the SDK entry id (generateId hex) never matches — resolve by
-		// message identity instead (see sdkMessageIndex).
-		const index = sdkMessageIndex(entries, messageId);
-		if (index < 0) return null;
-		const entry = entries[index];
-		const msg = (entry as { message?: unknown }).message;
-		const content =
-			msg && typeof msg === "object" && "content" in msg ? (msg as { content: unknown }).content : undefined;
-		const text =
-			typeof content === "string"
-				? content
-				: Array.isArray(content)
-					? content
-							.map(block =>
-								block && typeof block === "object" && "text" in block
-									? String((block as { text: string }).text)
-									: "",
-							)
-							.filter(Boolean)
-							.join("\n")
-					: "";
-		await this.sessionManager.truncateToIndex(index);
-		// Replay the surviving entries into the live agent context (same
-		// path the branch flow uses) so the next turn starts from the
-		// truncated transcript.
-		const sessionContext = this.buildDisplaySessionContext();
-		this.agent.replaceMessages(sessionContext.messages);
-		this.#advisors.resetSessionState();
-		return text;
-	}
-
-	/**
-	 * Undo a revert (openchamber RevertedMessageDock Restore parity):
-	 * re-append the abandoned tail — the daemon passes the wire entries it
-	 * backed up at revert time (the agent's own tail capture was never
-	 * reliable: the view id space differs from the SDK's) — then replay the
-	 * full context. Returns whether anything was appended.
-	 */
-	async restoreRevert(tail: SessionEntry[]): Promise<boolean> {
-		if (tail.length === 0) return false;
-		let appended = 0;
-		for (const entry of tail) {
-			if (entry.type !== "message") continue;
-			// appendMessage accepts the transcript roles (not the
-			// branch-summary marker etc.) — skip anything else.
-			const role = entry.message.role;
-			if (role !== "user" && role !== "assistant" && role !== "toolResult" && role !== "developer") continue;
-			this.sessionManager.appendMessage(entry.message);
-			appended++;
-		}
-		if (appended === 0) return false;
-		const sessionContext = this.buildDisplaySessionContext();
-		this.agent.replaceMessages(sessionContext.messages);
-		this.#advisors.resetSessionState();
-		return true;
-	}
-
 	async sendUserMessage(
 		content: string | (TextContent | ImageContent)[],
 		options?: { deliverAs?: "steer" | "followUp" },

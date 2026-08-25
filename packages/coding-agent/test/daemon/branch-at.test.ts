@@ -1,11 +1,11 @@
 /**
  * session.branchAt (TUI navigateTree parity, layer-1 session-tree nav):
- * move the session leaf IN PLACE — non-destructive, unlike revertTo
+ * move the session leaf IN PLACE — non-destructive (never truncates)
  * (no truncation) and unlike forkAt (no new session file). The old leaf
  * and its subtree stay reachable as a sibling branch.
  *
  *   - resolves the GUI's view key ("role:timestamp") to the SDK entry id
- *     (id-space parity — same matching as revertTo/sdkMessageIndex);
+ *     (id-space parity — same message-key matching as forkAt);
  *   - user messages re-answer: leaf = parent, editorText backfilled;
  *   - assistant messages: leaf lands ON the node (continue from there);
  *   - returns the new leaf as a messageKey so the GUI tree can link it.

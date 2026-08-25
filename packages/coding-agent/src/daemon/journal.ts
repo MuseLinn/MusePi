@@ -38,12 +38,11 @@ export const COMPACT_EVENT_THRESHOLD = 2000;
 export const COMPACT_BYTE_THRESHOLD = 4 * 1024 * 1024;
 
 /**
- * Per-file exclusive queue for the rewrite operations (compact /
- * replaceCheckpoint / truncate). Each writes a fixed `<file>.tmp` then
- * renames it — two rewrites of the same journal racing (e.g. a turn-end
- * compaction overlapping a revert truncation) delete each other's .tmp
- * and the loser crashes with ENOENT. Appends are chained per instance
- * already; rewrites go through this module-level queue so different
+ * Per-file exclusive queue for the rewrite operations (compact). Each
+ * writes a fixed `<file>.tmp` then renames it — two rewrites of the same
+ * journal racing delete each other's .tmp and the loser crashes with
+ * ENOENT. Appends are chained per instance already; rewrites go through
+ * this module-level queue so different
  * AppendJournal instances for the same session serialize too.
  */
 const rewriteLocks = new Map<string, Promise<void>>();
@@ -72,7 +71,7 @@ const RETRYABLE_RENAME_CODES = new Set(
 /**
  * Per-file live fd registry. Several AppendJournal instances can hold the
  * same journal file open (the live session's journal + a transient
- * truncateSession instance). A rewrite must close EVERY instance's fd
+ * A rewrite must close EVERY instance's fd
  * before renaming over the file — Windows rejects the rename while ANY
  * handle holds the target — then let each instance reopen its own.
  */
@@ -218,63 +217,6 @@ export class AppendJournal {
 		return false;
 	}
 
-	/**
-	 * Rewrite the checkpoint with a replacement snapshot (compact-mode
-	 * revert: the truncated snapshot is folded back into the checkpoint and
-	 * the journal is emptied — every surviving record is <= the checkpoint
-	 * seq, so replay is checkpoint-only).
-	 */
-	async replaceCheckpoint(snapshot: unknown, seq: number): Promise<void> {
-		await this.flush();
-		await withRewriteLock(this.filePath, async () => {
-			const ckpt: JournalCheckpoint = { seq, ts: new Date().toISOString(), snapshot };
-			const tmpCkpt = `${this.checkpointPath()}.tmp`;
-			await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");
-			await fs.promises.rename(tmpCkpt, this.checkpointPath());
-			const tmpJournal = `${this.filePath}.tmp`;
-			await fs.promises.writeFile(tmpJournal, "", "utf8");
-			await this.#replaceFile(tmpJournal);
-			this.#writtenBytes = 0;
-		});
-	}
-
-	/**
-	 * Truncate: rewrite the journal keeping only records with seq <=
-	 * targetSeq and DROP the checkpoint (its folded snapshot may contain
-	 * truncated events — a stale checkpoint would resurrect them). Used by
-	 * session.revertTo (message undo / edit-and-reconverse).
-	 */
-	async truncate(targetSeq: number): Promise<void> {
-		await this.flush();
-		await withRewriteLock(this.filePath, async () => {
-			const keep: JournalRecord[] = [];
-			for (const record of await this.readAll()) {
-				if (record.seq <= targetSeq) keep.push(record);
-			}
-			const tmpJournal = `${this.filePath}.tmp`;
-			await fs.promises.writeFile(
-				tmpJournal,
-				keep.map(r => JSON.stringify(r)).join("\n") + (keep.length ? "\n" : ""),
-				"utf8",
-			);
-			await this.#replaceFile(tmpJournal);
-			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
-			try {
-				await fs.promises.unlink(this.checkpointPath());
-			} catch {
-				// no checkpoint — nothing to drop
-			}
-		});
-	}
-
-	/**
-	 * Windows-safe atomic journal replacement. POSIX allows rename-over-open
-	 * but leaves a stale fd pointing at the unlinked inode — later appends
-	 * would silently vanish; Windows rejects the rename with EPERM while ANY
-	 * handle (including another AppendJournal instance's) holds the target.
-	 * Both platforms need the same sequence: close every fd on the file,
-	 * rename (bounded retry for transient locks), reopen each fd.
-	 */
 	/** Release this instance's append fd (rewrite coordination). */
 	async #releaseFd(): Promise<void> {
 		if (this.#fd !== null) {
