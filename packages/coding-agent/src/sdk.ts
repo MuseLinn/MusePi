@@ -262,7 +262,7 @@ type LateDiagnosticsDetails = {
  *  与 discovery/helpers getExtensionNameFromPath 同规则 —— mode 白名单、
  *  composer source(ext:<id>)、热切 entryPath 查找必须一致,否则白名单
  *  永不匹配(<dir>/index.ts 的 basename 是 index.ts 而非目录名)。 */
-function extensionIdOf(extensionPath: string): string {
+export function extensionIdOf(extensionPath: string): string {
 	const base = extensionPath.replace(/\\/g, "/").split("/").pop() ?? extensionPath;
 	if (base === "index.ts" || base === "index.js") {
 		const parts = extensionPath.replace(/\\/g, "/").split("/");

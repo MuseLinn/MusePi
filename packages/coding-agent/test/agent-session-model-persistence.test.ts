@@ -479,7 +479,7 @@ describe("AgentSession model persistence", () => {
 		// `errorMessage` only exists on assistant messages — the union
 		// (which includes BashExecutionMessage) needs a narrowing cast.
 		expect((interrupted as { errorMessage?: string } | undefined)?.errorMessage).toBe(
-			"Previous OMP process exited before completing the turn (process_exit). The turn was interrupted and will not continue automatically; send a new message to continue.",
+			"Previous MusePi process exited before completing the turn (process_exit). The turn was interrupted and will not continue automatically; send a new message to continue.",
 		);
 		expect(
 			messages.some(

@@ -1663,6 +1663,17 @@ export async function runRootCommand(
 				process.stderr.write(`${chalk.yellow(`${message}\n`)}`);
 			}
 		}
+		// Assembly verification pass: managed extension errors become session-fatal
+		// unless degraded_ok is set in the active assembly.toml. Unmanaged errors
+		// remain soft (warn) but are surfaced via /assembly — no silent degradation.
+		try {
+			const { bootVerifyExtensions } = await import("./assembly/index.ts");
+			const surface = isInteractive ? "tui" : mode === "rpc-ui" ? "daemon" : "headless";
+			bootVerifyExtensions(cwd, home, surface, extensionsResult);
+		} catch {
+			// Boot-time verify throws only on managed errors with degraded_ok=false;
+			// let it propagate as a clean startup failure (user sees the stderr output).
+		}
 		// Fail fast on stale/typo flags (e.g. `musepi --list-models`) now that we
 		// know the real extension flag set. Without this check the unrecognized
 		// token gets silently consumed and any following positional leaks as the

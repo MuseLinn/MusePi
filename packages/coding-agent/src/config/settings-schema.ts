@@ -986,6 +986,23 @@ export const SETTINGS_SCHEMA = {
 			condition: "hasImageProtocol",
 		},
 	},
+	// Terminal backend seam: explicit provider overrides the default auto-fallback.
+	"terminal.provider": {
+		type: "enum",
+		default: "auto",
+		options: [
+			{ value: "auto", label: "Auto (bun-pty → node-pty fallback)" },
+			{ value: "bun-pty", label: "Bun pty (native, lowest latency)" },
+			{ value: "node-pty", label: "Node pty (bridge process, more portable)" },
+		],
+		ui: {
+			tab: "appearance",
+			tuiOnly: true,
+			group: "Terminal",
+			label: "Terminal Provider",
+			description: "Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
+		},
+	},
 
 	"images.autoResize": {
 		type: "boolean",

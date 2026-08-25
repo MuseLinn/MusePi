@@ -600,7 +600,19 @@
 			"types": "./src/web/search/providers/*.ts",
 			"import": "./src/web/search/providers/*.ts"
 		},
-		"./*.js": "./src/*.ts"
+		"./*.js": "./src/*.ts",
+		"./assembly": {
+			"types": "./src/assembly/index.ts",
+			"import": "./src/assembly/index.ts"
+		},
+		"./assembly/*": {
+			"types": "./src/assembly/*.ts",
+			"import": "./src/assembly/*.ts"
+		},
+		"./daemon/terminal-provider": {
+			"types": "./src/daemon/terminal-provider.ts",
+			"import": "./src/daemon/terminal-provider.ts"
+		}
 	},
 	"piConfig": {
 		"name": "musepi",
