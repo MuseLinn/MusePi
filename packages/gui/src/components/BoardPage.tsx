@@ -125,6 +125,26 @@ function at(
 	return { ...wgt, pos: { x, y, w, h } };
 }
 
+/** Derive a ticker card data patch from a normalized widget.data FX rate
+ *  (open.er-api quotes 1 CNY = X EUR; the card displays CNY per EUR). */
+function tickerFxPatch(data: Record<string, unknown>, cnyPerEur: number): Record<string, unknown> {
+	const old = typeof data.value === "string" ? Number(data.value) : NaN;
+	const base = Number.isFinite(old) && old > 0 ? old : 7.7945;
+	// Small jitter keeps the quote visibly moving (kimi ticker parity); the
+	// underlying rate barely drifts over a 60s refresh window.
+	const value = cnyPerEur + (Math.random() * 0.004 - 0.002);
+	const delta = value - base;
+	const step = Math.max(0.004, Math.abs(delta) * 2);
+	const spark: number[] = [];
+	let v = value - delta * 2;
+	for (let i = 0; i < 7; i++) {
+		v += (Math.random() - 0.5) * step;
+		spark.push(Number(v.toFixed(4)));
+	}
+	spark.push(Number(value.toFixed(4)));
+	return { value: value.toFixed(4), delta: Number(delta.toFixed(4)), spark };
+}
+
 /** Seed boards (first run): 每日财经 + Hello World collections. */
 function seedBoards(): BoardData[] {
 	// 每日财经 — kimi layout: 12-col × 92px grid (1104 canvas). Left
@@ -984,6 +1004,64 @@ export function BoardPage({
 		const timer = window.setInterval(tick, 30_000);
 		return () => window.clearInterval(timer);
 	}, [activeId, boardsReady]);
+
+	// Live FX ticks via the daemon widget.data RPC (docs/board-dashboard.md
+	// §4 数据源代理): the daemon proxies open.er-api.com so the ticker card
+	// never fetches the network directly. On board open + a 60s cadence (the
+	// daemon's FX cache TTL) ticker cards on the active board refresh from the
+	// normalized rates; static seeded values stay the offline fallback — a
+	// failed fetch is silent (no toast), the card just keeps its snapshot.
+	useEffect(() => {
+		if (!rpc || !boardsReady || !activeId) return;
+		const rpcFn = rpc;
+		let alive = true;
+		const refreshFx = (): void => {
+			void rpcFn
+				.request("widget.data", { feed: "fx-rates", base: "CNY" })
+				.then(res => {
+					if (!alive) return;
+					const feed = res as { rates?: Record<string, number>; error?: string } | null;
+					if (!feed || feed.error) return;
+					const eur = feed.rates?.EUR;
+					if (typeof eur !== "number" || eur <= 0) return;
+					const board = activeRef.current;
+					if (!board) return;
+					const patchById: Record<string, Record<string, unknown>> = {};
+					for (const w of board.widgets) {
+						if (w.type !== "ticker") continue;
+						patchById[w.id] = tickerFxPatch(w.data, 1 / eur);
+					}
+					const ids = Object.keys(patchById);
+					if (ids.length === 0) return;
+					const nextBoards = boardsRef.current.map(b => {
+						if (b.id !== board.id) return b;
+						return {
+							...b,
+							widgets: b.widgets.map(w =>
+								patchById[w.id] !== undefined
+									? { ...w, data: { ...w.data, ...patchById[w.id] } }
+									: w,
+							),
+						};
+					});
+					setBoards(nextBoards);
+					try {
+						localStorage.setItem(BOARDS_KEY, JSON.stringify(nextBoards));
+					} catch {
+						// session-only
+					}
+				})
+				.catch(() => {
+					// daemon down or feed unreachable — keep the static default
+				});
+		};
+		refreshFx();
+		const timer = window.setInterval(refreshFx, 60_000);
+		return () => {
+			alive = false;
+			window.clearInterval(timer);
+		};
+	}, [rpc, boardsReady, activeId]);
 
 	// Maximized-card close: brief blur-out before unmounting.
 	const [focusClosing, setFocusClosing] = useState(false);

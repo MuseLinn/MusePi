@@ -453,6 +453,7 @@ import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal } from "./journal";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
+import { getFxRates } from "./fx-rates";
 
 export interface DaemonOptions {
 	socketPath?: string;
@@ -3341,138 +3342,41 @@ export class DaemonServer {
 			env.LANG = "C.UTF-8";
 		}
 
-		// Primary: bun-pty inside this process.
-		try {
-			const { spawn: bunSpawn } = (await import("bun-pty")) as {
-				spawn(
-					cmd: string,
-					args: string[],
-					opts: { cols: number; rows: number; cwd: string; env: Record<string, string> },
-				): {
-					pid: number;
-					write(d: string): void;
-					resize(c: number, r: number): void;
-					kill(): void;
-					onData(cb: (d: string) => void): void;
-					onExit(cb: (e: { exitCode: number }) => void): void;
-				};
-			};
-			const proc = bunSpawn(shell, args, { cols, rows, cwd: realCwd, env });
-			proc.onData(d =>
-				this.#host.emitEvent(conn, { kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }),
-			);
-			proc.onExit(({ exitCode }) => {
-				this.#terminals.delete(id);
-				this.#host.emitEvent(conn, {
-					kind: "terminal-exit",
-					seq: ++this.#eventSeq,
-					payload: { id, code: exitCode },
-				});
-			});
-			this.#terminals.set(id, {
-				async write(msg: { method: string; params?: Record<string, unknown> }): Promise<void> {
-					if (msg.method === "input") proc.write(String(msg.params?.data ?? ""));
-					else if (msg.method === "resize")
-						proc.resize?.(Number(msg.params?.cols) || cols, Number(msg.params?.rows) || rows);
-					else if (msg.method === "close") proc.kill();
-				},
-				dispose(): void {
-					proc.kill();
-				},
-			});
-			return id;
-		} catch {
-			// Fall through to the node bridge.
-		}
-
-		const { spawn } = await import("node:child_process");
-		const { createInterface } = await import("node:readline");
-		const bridgePath = path.join(import.meta.dir, "pty-bridge.cjs");
-		// node-pty needs a REAL node host — Bun's runtime doesn't drive the
-		// native read loop, so pty output never arrives. Probe common node
-		// binaries (Electron-spawned daemons have a stripped PATH).
-		const nodeBin = await this.#resolveNodeBinary();
-		const child = spawn(nodeBin, [bridgePath], {
-			stdio: ["pipe", "pipe", "inherit"],
-			env: { ...process.env, COLUMNS: String(cols), LINES: String(rows) },
-		}) as unknown as {
-			stdin: NodeJS.WritableStream;
-			stdout: NodeJS.ReadableStream;
-			kill(): void;
-			on(event: "exit", cb: (code: number | null) => void): void;
-			once(event: "error", cb: (err: Error) => void): void;
-		};
-		const lines = createInterface({ input: child.stdout, crlfDelay: Infinity }) as unknown as {
-			on(event: "line", cb: (line: string) => void): void;
-			once(event: "line", cb: (line: string) => void): void;
-			close(): void;
-		};
-		let open = false;
-		let exitSent = false;
-		lines.on("line", line => {
-			let msg: { kind?: string; id?: string; data?: string; code?: number; message?: string };
+		// Resolve provider from manifest seam > settings.raw > default "auto".
+		const { getTerminalProvider, resolveTerminalProvider } = await import("./terminal-provider.ts");
+		const settings = await this.#settingsForRpc().catch(() => null);
+		const manifestProvider = await (async () => {
 			try {
-				msg = JSON.parse(line) as typeof msg;
+				const { getSessionState } = await import("../assembly/index.ts");
+				return getSessionState().manifest?.seams.terminal?.provider ?? null;
 			} catch {
-				return;
+				return null;
 			}
-			if (msg.kind === "data" && open) {
-				this.#host.emitEvent(conn, {
-					kind: "terminal-output",
-					seq: ++this.#eventSeq,
-					payload: { id, data: msg.data ?? "" },
-				});
-			} else if (msg.kind === "open") {
-				open = true;
-			} else if (msg.kind === "exit" && !exitSent) {
-				exitSent = true;
-				this.#host.emitEvent(conn, {
-					kind: "terminal-exit",
-					seq: ++this.#eventSeq,
-					payload: { id, code: msg.code ?? 0 },
-				});
-			} else if (msg.kind === "error") {
-				this.#host.emitEvent(conn, {
-					kind: "terminal-error",
-					seq: ++this.#eventSeq,
-					payload: { id, message: msg.message ?? "" },
-				});
-			}
-		});
-		child.on("exit", () => {
-			if (!exitSent) {
-				exitSent = true;
-				this.#host.emitEvent(conn, { kind: "terminal-exit", seq: ++this.#eventSeq, payload: { id, code: -1 } });
-			}
-			this.#terminals.delete(id);
-		});
+		})();
+		const provider = getTerminalProvider(resolveTerminalProvider(settings ?? { getRaw: () => undefined } as never, manifestProvider));
+
+		// Wrap the provider handle to emit daemon events.
+		const handle = await provider.open(realCwd, cols, rows, shell, args, env);
 		const entry = {
 			async write(msg: unknown): Promise<void> {
-				if (child.stdin.writable) child.stdin.write(`${JSON.stringify(msg)}\n`);
+				const m = msg as { method?: string; params?: Record<string, unknown> };
+				if (m.method === "input") handle.write(String(m.params?.data ?? ""));
+				else if (m.method === "resize") handle.resize(Number(m.params?.cols) || cols, Number(m.params?.rows) || rows);
+				else if (m.method === "close") handle.dispose();
 			},
-			dispose(): void {
-				lines.close();
-				child.kill();
-			},
+			dispose(): void { handle.dispose(); },
 		};
+		handle.onData(d =>
+			this.#host.emitEvent(conn, { kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }),
+		);
+		handle.onExit((code) => {
+			this.#host.emitEvent(conn, {
+				kind: "terminal-exit",
+				seq: ++this.#eventSeq,
+				payload: { id, code: code ?? 0 },
+			});
+		});
 		this.#terminals.set(id, entry);
-		await new Promise<void>((resolve, reject) => {
-			const t = setTimeout(() => reject(new Error("terminal bridge spawn timeout")), 8000);
-			lines.once("line", () => {
-				clearTimeout(t);
-				resolve();
-			});
-			child.once("error", err => {
-				clearTimeout(t);
-				reject(err);
-			});
-		});
-		// Send the open request now that the bridge is alive.
-		await entry.write({
-			method: "open",
-			id,
-			params: { cwd, cols, rows, shell: process.env.SHELL },
-		});
 		return id;
 	}
 
@@ -4240,7 +4144,7 @@ export class DaemonServer {
 				// Renderer-side slot components (ui-slots analogue): compiled
 				// from active extension-module entries, cached 10s with the
 				// extension scan. The GUI mounts them by slot id.
-				const { collectSlotComponents, collectToolViews } = await import("./extension-artifact-compiler");
+				const { collectSlotComponents, collectToolViews, collectStatusBarSegments } = await import("./extension-artifact-compiler");
 				const components = await collectSlotComponents(
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
@@ -4251,12 +4155,19 @@ export class DaemonServer {
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
 				);
+				// Status-bar segments (registerStatusBarSegment): the GUI status bar
+				// merges these after its built-ins, ordered by `order`.
+				const statusBarSegments = await collectStatusBarSegments(
+					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+					this.#host.cwd(),
+				);
 				return {
 					extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
 					tabs,
 					providers,
 					components,
 					toolViews,
+					statusBarSegments,
 					// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 					slots: {
 						exact: [...EXTENSION_SLOT_DECLARATION.exact],
@@ -4673,6 +4584,23 @@ export class DaemonServer {
 				const { WIDGET_TYPES } = await import("../tools/widget");
 				const { WIDGET_TONES } = await import("../tools/widget");
 				return { types: WIDGET_TYPES, tones: WIDGET_TONES };
+			}
+			case "widget.data": {
+				// Daemon-side data-source proxy (docs/board-dashboard.md §4
+				// 数据源代理): widgets never fetch the network directly — the
+				// daemon fetches each feed once per TTL and caches it
+				// in-process. First feed: FX rates (open.er-api.com, base CNY).
+				// Returns normalized { rates, base, updatedAt } or a typed
+				// { error } (soft error — mirrors the git.*/notes.* result
+				// error convention rather than throwing into JSON-RPC).
+				const p = (params ?? {}) as { feed?: unknown; base?: unknown };
+				const feed = typeof p.feed === "string" ? p.feed : "";
+				if (feed !== "fx-rates") return { error: `widget.data: unknown feed "${feed}"` };
+				const base =
+					typeof p.base === "string" && /^[A-Za-z]{3}$/.test(p.base) ? p.base.toUpperCase() : "CNY";
+				const rates = await getFxRates(base);
+				if (rates === null) return { error: "widget.data: FX feed unavailable" };
+				return { rates, base, updatedAt: Date.now() };
 			}
 			case "git.log": {
 				// Recent commit history for the right-pane git view.
