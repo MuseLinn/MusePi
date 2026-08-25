@@ -1,9 +1,9 @@
 {
-  "name": "entry",
-  "version": "1.0.0",
-  "description": "MusePi HarmonyOS shell",
-  "main": "",
-  "author": "MusePi",
-  "license": "Apache-2.0",
-  "dependencies": {}
+	"name": "entry",
+	"version": "1.0.0",
+	"description": "MusePi WebView shell entry module",
+	"main": "",
+	"author": "musepi",
+	"license": "MIT",
+	"dependencies": {}
 }

@@ -1,53 +1,37 @@
+#!/usr/bin/env node
 /**
- * Copies the built desktop-web dist into the HarmonyOS rawfile directory so
- * the ArkTS WebView can load it via $rawfile('index.html').
+ * Copy the desktop-web mobile bundle into the HarmonyOS rawfile directory.
  *
- * The shell loads the *mobile* entry (src/mobile.tsx — the Capacitor-shell
- * bundle with native chrome), which the desktop-web build emits as
- * `mobile.html`. It is renamed to `index.html` in rawfile so Index.ets can
- * reference a stable $rawfile('index.html') regardless of shell.
- *
- * Usage:
- *   bun run build                       # in packages/desktop-web → dist/
- *   node scripts/copy-web-assets.js     # in packages/harmony
+ * Usage: node scripts/copy-web-assets.js
+ * Run after `bun run build` in packages/desktop-web. mobile.html becomes
+ * rawfile/index.html (the shell loads $rawfile('index.html')); the hashed
+ * asset files sit next to it so relative references resolve.
  */
-import { cpSync, existsSync, mkdirSync, renameSync, rmSync, readdirSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const harmony = path.resolve(here, "..");
-const webDist = path.resolve(harmony, "../desktop-web/dist");
-const rawfile = path.join(harmony, "entry/src/main/resources/rawfile");
+const here = dirname(fileURLToPath(import.meta.url));
+const harmonyRoot = join(here, "..");
+const dist = join(harmonyRoot, "..", "desktop-web", "dist");
+const rawfile = join(harmonyRoot, "entry", "src", "main", "resources", "rawfile");
 
-if (!existsSync(path.join(webDist, "mobile.html"))) {
-	console.error(
-		`[harmony] ${path.join(webDist, "mobile.html")} not found — run "bun run build" in packages/desktop-web first.`,
-	);
+if (!existsSync(join(dist, "mobile.html"))) {
+	console.error("[copy-web-assets] desktop-web dist not found — run `bun run build` in packages/desktop-web first");
 	process.exit(1);
 }
 
 rmSync(rawfile, { recursive: true, force: true });
 mkdirSync(rawfile, { recursive: true });
-cpSync(webDist, rawfile, { recursive: true });
 
-// (This overwrites the desktop-web entry's index.html, which is unused.)
-renameSync(path.join(rawfile, "mobile.html"), path.join(rawfile, "index.html"));
+// Copy everything, then promote mobile.html to index.html (the desktop
+// index.html is not used by the shell).
+cpSync(dist, rawfile, { recursive: true });
 
-// Strip the PWA manifest / favicon — the native shell supplies its own icon.
-for (const name of ["mobile.webmanifest", "favicon.ico"]) {
-	const p = path.join(rawfile, name);
-	if (existsSync(p)) rmSync(p, { force: true });
-}
+const mobile = readFileSync(join(rawfile, "mobile.html"), "utf8");
+writeFileSync(join(rawfile, "index.html"), mobile);
+rmSync(join(rawfile, "mobile.html"));
+// The desktop entry would dead-end in the shell — drop it.
+rmSync(join(rawfile, "index-*.html"), { force: true });
 
-// Report the copied size.
-let bytes = 0;
-const walk = (dir) => {
-	for (const entry of readdirSync(dir, { withFileTypes: true })) {
-		const p = path.join(dir, entry.name);
-		if (entry.isDirectory()) walk(p);
-		else bytes += statSync(p).size;
-	}
-};
-walk(rawfile);
-console.log(`[harmony] copied ${webDist} → ${rawfile} (${(bytes / 1024 / 1024).toFixed(1)} MiB)`);
+console.log(`[copy-web-assets] rawfile ready (${rawfile})`);

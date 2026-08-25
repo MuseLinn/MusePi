@@ -1,0 +1,12 @@
+{
+	"name": "musepi-harmony",
+	"version": "1.0.0",
+	"description": "MusePi HarmonyOS WebView shell",
+	"main": "",
+	"author": "musepi",
+	"license": "MIT",
+	"dependencies": {},
+	"devDependencies": {
+		"@ohos/hypium": "1.0.19"
+	}
+}

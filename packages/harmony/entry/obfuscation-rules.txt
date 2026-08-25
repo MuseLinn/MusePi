@@ -1,0 +1,9 @@
+# Obfuscation rules (release). Keep the JS bridge object names — the WebView
+# page calls them by string name.
+-keep-property-name
+harmonyNative
+getSystemBars
+getBadge
+setBadgeCount
+clearBadge
+consumeDeepLink

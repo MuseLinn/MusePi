@@ -1,24 +1,8 @@
 {
-  "string": [
-    {
-      "name": "app_name",
-      "value": "MusePi"
-    },
-    {
-      "name": "app_name_desc",
-      "value": "MusePi mobile client"
-    },
-    {
-      "name": "perm_internet_reason",
-      "value": "Connect to the MusePi agent daemon"
-    },
-    {
-      "name": "perm_camera_reason",
-      "value": "Scan QR codes to connect"
-    },
-    {
-      "name": "perm_mic_reason",
-      "value": "Voice input in agent chat"
-    }
-  ]
+	"string": [
+		{ "name": "module_desc", "value": "MusePi WebView shell" },
+		{ "name": "ability_desc", "value": "MusePi collaborator client" },
+		{ "name": "perm_internet_reason", "value": "连接同一网络下电脑上的 MusePi 会话" },
+		{ "name": "perm_camera_reason", "value": "扫描桌面端分享的连接二维码" }
+	]
 }

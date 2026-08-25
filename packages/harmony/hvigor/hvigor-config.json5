@@ -1,14 +1,8 @@
 {
-  "modelVersion": "5.0.0",
-  "dependencies": {},
-  "execution": {
-    "analyze": "normal",
-    "daemon": true
-  },
-  "logging": {
-    "level": "info"
-  },
-  "debugging": {
-    "hsp": true
-  }
+	"modelVersion": "5.0.0",
+	"dependencies": {},
+	"execution": {},
+	"logging": {},
+	"debugging": {},
+	"nodeOptions": {}
 }

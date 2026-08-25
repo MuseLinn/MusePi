@@ -1,29 +1,25 @@
 {
-  "apiType": "stageMode",
-  "buildOption": {
-    "arkOptions": {
-      "apPath": "./modules.ap"
-    }
-  },
-  "buildOptionSet": [
-    {
-      "name": "release",
-      "arkOptions": {
-        "obfuscation": {
-          "ruleOptions": {
-            "enable": false,
-            "files": [
-              "./obfuscation-rules.txt"
-            ]
-          }
-        }
-      }
-    }
-  ],
-  "targets": [
-    {
-      "name": "default",
-      "runtimeOS": "HarmonyOS"
-    }
-  ]
+	"apiType": "stageMode",
+	"buildOption": {},
+	"buildOptionSet": [
+		{
+			"name": "release",
+			"arkOptions": {
+				"obfuscation": {
+					"ruleOptions": {
+						"enable": false,
+						"files": ["./obfuscation-rules.txt"]
+					}
+				}
+			}
+		}
+	],
+	"targets": [
+		{
+			"name": "default"
+		},
+		{
+			"name": "ohosTest"
+		}
+	]
 }
