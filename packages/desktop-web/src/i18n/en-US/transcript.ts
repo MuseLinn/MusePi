@@ -90,6 +90,7 @@ export const transcript = {
 	"show pre-compaction history": "Show pre-compaction history",
 	"show pre-compaction history ({count})": "Show pre-compaction history ({count})",
 	"side question": "Side question",
+	"branch this answer": "Branch this answer",
 	"btw unavailable — no active session": "No active session for /btw",
 	"btw failed — check the daemon connection": "Btw failed — check the daemon connection",
 	"follow up…": "Follow up…",

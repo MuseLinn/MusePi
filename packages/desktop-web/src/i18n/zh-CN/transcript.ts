@@ -87,6 +87,7 @@ export const transcript = {
 	"show pre-compaction history": "显示压缩前历史",
 	"show pre-compaction history ({count})": "显示压缩前历史（{count} 条）",
 	"side question": "旁路问题",
+	"branch this answer": "将此答案分支为会话",
 	"btw unavailable — no active session": "无活跃会话，/btw 不可用",
 	"btw failed — check the daemon connection": "/btw 失败，请检查 daemon 连接",
 	"follow up…": "追问…",

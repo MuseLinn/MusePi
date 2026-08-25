@@ -5922,6 +5922,44 @@ export class DaemonServer {
 					editorImages: bresult.editorImages ?? [],
 				};
 			}
+			case "session.btwBranch": {
+				// GUI /btw promote (TUI branchFromBtw parity — openchamber
+				// BtwPanel promote parity): an ephemeral side-question answer
+				// becomes its own BRANCHED session. The daemon mirrors the
+				// current live session into a new session file and appends the
+				// question + answer as its first user/assistant pair; the
+				// original session is untouched. Session maintenance guards
+				// (streaming/bash/compact) live inside branchFromBtw.
+				const bp = (params ?? {}) as { sessionId: string; question: string; replyText: string };
+				if (!bp.question) throw new Error("question required");
+				const blive = this.#host.get(bp.sessionId);
+				if (!blive) throw new Error("btwBranch requires a live session");
+				const bsm = (blive.agentSession as unknown as {
+					sessionManager: { getLeafId(): string | null };
+				}).sessionManager;
+				const leafId = bsm.getLeafId();
+				if (!leafId) throw new Error("btwBranch requires a branchable leaf");
+				// Reconstruct the minimum AssistantMessage the boundary op
+				// re-parents into the new session (same shape the TUI passes:
+				// a text-only assistant reply).
+				const assistantMessage = {
+					id: `btw-${Date.now()}`,
+					role: "assistant",
+					content: [{ type: "text", text: bp.replyText }],
+				} as unknown as import("@musepi/pi-ai").AssistantMessage;
+				const bresult = await (
+					blive.agentSession as unknown as {
+						branchFromBtw(
+							question: string,
+							assistantMessage: import("@musepi/pi-ai").AssistantMessage,
+							leafId: string,
+							sessionId: string,
+						): Promise<{ cancelled: boolean; sessionFile: string | undefined }>;
+					}
+				).branchFromBtw(bp.question, assistantMessage, leafId, bp.sessionId);
+				if (bresult.cancelled) return { ok: false };
+				return { ok: true, sessionFile: bresult.sessionFile ?? null };
+			}
 			case "session.forkAt": {
 				// Non-destructive fork (GUI 分叉): copy the parent session's
 				// transcript truncated at the target message into a new
@@ -6044,8 +6082,8 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "collab.start": {
-				const p = (params ?? {}) as { sessionId?: string; mode?: "session" | "workspace" };
-				const mode = p.mode === "workspace" ? "workspace" : "session";
+				const p = (params ?? {}) as { sessionId?: string; mode?: "session" | "workspace" | "tunnel" };
+				const mode = p.mode === "workspace" ? "workspace" : p.mode === "tunnel" ? "tunnel" : "session";
 				if (mode === "session" && !p.sessionId) {
 					throw new Error("open or create a session first to share it");
 				}
@@ -6165,9 +6203,16 @@ export class DaemonServer {
 					},
 				};
 				const transport = new LocalShareManager({ port: undefined, onStatus: () => {} });
-				const collabHost = new CollabHost(stubCtx as never, mode);
-				const urls = await transport.startLan();
-				await collabHost.start(urls.joinUrl, urls.webUrl, urls.webJoinUrl);
+				// Tunnel mode with no sessionId shares the workspace (like
+				// workspace mode); with a sessionId it shares that session.
+				const collabMode: "session" | "workspace" =
+					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
+				const collabHost = new CollabHost(stubCtx as never, collabMode);
+				// Tunnel shares the same loopback relay as the desktop-web dist;
+				// the public URL is https/wss-same-origin, so webUrl for the
+				// browser deep link is the tunnel URL itself.
+				const urls = mode === "tunnel" ? await transport.startTunnel() : await transport.startLan();
+				await collabHost.start(urls.joinUrl, mode === "tunnel" ? urls.joinUrl : urls.webUrl, urls.webJoinUrl);
 				this.#collab = { host: collabHost, transport };
 				return {
 					link: collabHost.link,

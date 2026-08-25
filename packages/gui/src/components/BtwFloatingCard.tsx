@@ -15,7 +15,7 @@
  * its result is discarded — runEphemeralTurn has no cross-request cancel).
  */
 import { type TranslationKey, t } from "@musepi/desktop-web";
-import { Sparkles, StopCircle, X } from "lucide-react";
+import { GitBranch, Sparkles, StopCircle, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Markdown } from "@musepi/desktop-web";
@@ -39,10 +39,14 @@ interface BtwTurn {
 export function BtwFloatingCard({
 	initialQuestion,
 	onAsk,
+	onBranch,
 	onClose,
 }: {
 	initialQuestion: string;
 	onAsk(question: string, history: BtwTurn[]): Promise<{ replyText: string } | null>;
+	/** Promote (TUI `b` key / openchamber promote parity): turn the last
+	 *  answered question into its own branched session. */
+	onBranch?: (question: string, replyText: string) => Promise<boolean>;
 	onClose(): void;
 }): React.ReactNode {
 	const [turns, setTurns] = useState<BtwTurn[]>([]);
@@ -128,6 +132,17 @@ export function BtwFloatingCard({
 							<div className="gui-btw-a">
 								<Markdown text={turn.answer || "…"} />
 							</div>
+						)}
+						{!turn.error && turn.answer && !asking && i === turns.length - 1 && onBranch && (
+							<button
+								type="button"
+								className="gui-btw-branch"
+								title={t("branch this answer")}
+								onClick={() => void onBranch(turn.question, turn.answer)}
+							>
+								<GitBranch size={12} />
+								<span>{t("branch")}</span>
+							</button>
 						)}
 					</div>
 				))}

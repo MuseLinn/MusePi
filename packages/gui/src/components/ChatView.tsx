@@ -691,6 +691,10 @@ export function ChatView({
 		if (!store) return;
 		try {
 			await rpc.request("session.revertTo", { sessionId: store.sessionId, messageId });
+			// The truncation moved the tail — leave branch navigation so the
+			// session tree / breadcrumb follow the NEW leaf instead of the
+			// reverted branch point.
+			setCurrentLeafKey(null);
 			await onReloadSession?.();
 			await refreshReverts();
 		} catch {
@@ -1754,6 +1758,23 @@ export function ChatView({
 								})
 								.then(res => (res?.replyText ? { replyText: res.replyText } : null));
 						}}
+							onBranch={async (question: string, replyText: string): Promise<boolean> => {
+								const sessionId = store?.sessionId;
+								if (!rpc || !sessionId) return true;
+								try {
+									const res = await rpc.request<{ ok?: boolean } | null>("session.btwBranch", {
+										sessionId,
+										question,
+										replyText,
+									});
+									// Promote = close the card; the new session appears
+									// in the sidebar (session list refreshes via tree).
+									if (res?.ok === true) setBtwQuestion(null);
+								} catch {
+									// daemon rejected (busy/guard) — keep the card open
+								}
+								return true;
+							}}
 						onClose={() => setBtwQuestion(null)}
 					/>
 				)}
