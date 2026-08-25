@@ -7,7 +7,7 @@
 > `board.*`/`widget` RPC + boards.json 持久化）；M4 部分落地（后台会话 AI 生成入口已存在，
 > 缺 `widget.generate` RPC 与模板市场）；M5 已落地（pin.html + pinned-widgets.json 重启恢复 +
 > alwaysOnTop 切换，文档旧标"未验证"过时）；iframe 沙箱层按 §7 决策仅用于 html widget
-> （opaque-origin，缺 token CSS 预加载与沙箱 sendPrompt）；**调度执行引擎未实现（无排期）**、
+> （opaque-origin，缺 token CSS 预加载与沙箱 sendPrompt）；**调度执行引擎已实现（GUI 侧）**、
 > **`widget.data` 数据源代理 RPC 未实现**（行情卡为静态默认值）——详见 §4 里程碑标注。
 
 ## 1. 动机与参考
@@ -154,7 +154,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 - **M3 编辑与持久化**：拖放/缩放、编辑模式、daemon board.* RPC + 落盘（`~/.musepi/boards/boards.json`）。~1 周 — **✅ 已落地**
 - **M4 AI 生成**：widget 工具已落地（agent 经 schema 选类型填数据渲染）；**AI 生成会话（widget.generate）+ 模板市场未做（无排期）**。~1 周 — **◐ 部分**
 - **M5 桌面常驻**：alwaysOnTop 小窗先例存在（main.cjs mini-window 族）；**看板专用小窗（board-card.html）未验证**。~0.5 周 — **◐ 部分**
-- **调度执行引擎**（§7 widget `data.task.schedule` 每小时/每天定时执行）：**未实现，列为后续里程碑，无排期** — **❌ 未做**
+- **调度执行引擎**（§7 widget `data.task.schedule` 每小时/每天定时执行）：**GUI 侧已实现**（`desktop-web` task-run 执行引擎 + BoardPage 30s poll 定时消费 schedule；手动 run 走同一执行器刷新卡片数据而非 setTimeout 模拟）— **✅ 已落地（当前看板作用域）**
 
 ## 5. 风险与决策待定
 

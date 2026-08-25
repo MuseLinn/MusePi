@@ -12,6 +12,10 @@ export interface WidgetTask {
 	runs: { time: string; success: boolean }[];
 	/** Schedule: manual (run button only), hourly, daily. */
 	schedule?: "manual" | "hourly" | "daily";
+	/** Last auto/manual run (epoch ms) — the scheduler's clock for hourly /
+	 *  daily due-ness. Set on first sight for scheduled tasks so a board
+	 *  doesn't fire the instant it opens. */
+	lastRunAt?: number;
 }
 
 export function hasTask(data: Record<string, unknown>): data is Record<string, unknown> & { task: WidgetTask } {
