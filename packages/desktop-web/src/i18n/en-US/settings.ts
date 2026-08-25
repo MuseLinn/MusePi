@@ -28,8 +28,10 @@ export const settings = {
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
 	"Mnemopi Scoping": "Mnemopi Scoping",
+	"active": "Active",
 	"add": "add",
 	"add instance": "Add instance",
+	"archived": "Archived",
 	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
 		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
 	Global: "Global",
@@ -223,6 +225,8 @@ export const settings = {
 	"invalid json": "Invalid JSON",
 	"options come from the TUI runtime": "Options come from the TUI runtime",
 	"remote token (optional)": "Remote token (optional)",
+	"show active sessions": "Show active sessions",
+	"show archived": "Show archived",
 	"terminal only settings": "Terminal (TUI) display options",
 	"terminal only settings note":
 		"These options only affect the terminal interface (TUI): theme, status line, terminal escape sequences, etc. They have no effect in the desktop interface, but changes will apply the next time you use the TUI.",

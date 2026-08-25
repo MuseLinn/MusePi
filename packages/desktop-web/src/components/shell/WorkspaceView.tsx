@@ -1,4 +1,4 @@
-import { ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -34,7 +34,23 @@ export function WorkspaceView({
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// Collapsed project groups (keyed by cwd; "" = no folder).
 	const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
-	const groups = useMemo(() => groupByProject(sessions), [sessions]);
+	// Archive (localStorage, same concept as the desktop GUI SessionSidebar).
+	const ARCHIVE_KEY = "musepi-collab-archived";
+	const [archived, setArchived] = useState<Set<string>>(() => {
+		try { return new Set(JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]")); } catch { return new Set(); }
+	});
+	const [archivedView, setArchivedView] = useState(false);
+	const toggleArchive = (id: string): void => {
+		const next = new Set(archived);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		setArchived(next);
+		localStorage.setItem(ARCHIVE_KEY, JSON.stringify([...next]));
+	};
+	const visibleSessions = useMemo(
+		() => (archivedView ? sessions : sessions.filter(s => !archived.has(s.id))),
+		[sessions, archived, archivedView],
+	);
+	const groups = useMemo(() => groupByProject(visibleSessions), [visibleSessions]);
 	return (
 		<div className="sh-workspace">
 			<aside className={`sh-ws-sidebar${sidebarOpen ? "" : " sh-ws-sidebar--closed"}`}>
@@ -91,6 +107,18 @@ export function WorkspaceView({
 				<div className="sh-workspace-head">
 					<h1 className="sh-workspace-title">{t("workspace")}</h1>
 					<p className="sh-workspace-desc">{t("sessions on this machine — tap one to watch it live")}</p>
+					<div className="sh-workspace-actions">
+					{archived.size > 0 && (
+						<button
+							type="button"
+							className="sh-ws-create"
+							onClick={() => setArchivedView(v => !v)}
+							title={archivedView ? t("show active sessions") : t("show archived")}
+						>
+							<Archive size={14} />
+							<span>{archivedView ? t("active") : t("archived")} ({archived.size})</span>
+						</button>
+					)}
 					{onCreateSession && (
 						<button
 							type="button"
@@ -103,9 +131,10 @@ export function WorkspaceView({
 						</button>
 					)}
 				</div>
+				</div>
 				<div className="sh-workspace-grid">
-					{sessions.map(session => (
-						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} />
+					{visibleSessions.map(session => (
+						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} onArchive={toggleArchive} />
 					))}
 				</div>
 				{sessions.length === 0 && <p className="sh-workspace-empty">{t("no sessions yet")}</p>}
@@ -151,11 +180,14 @@ function WorkspaceCard({
 	onSelect,
 	onDeleteSession,
 	onRenameSession,
+	onArchive,
 }: {
 	session: WorkspaceSessionInfo;
 	onSelect(sessionId: string): void;
 	onDeleteSession?(sessionId: string): Promise<unknown>;
 	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
+	/** Toggle archived (localStorage, desktop-GUI parity). */
+	onArchive?(sessionId: string): void;
 }): ReactNode {
 	const [renaming, setRenaming] = useState(false);
 	const [draft, setDraft] = useState(session.title ?? "");
@@ -217,9 +249,19 @@ function WorkspaceCard({
 					{!session.live && <span className="sh-chip">{t("history")}</span>}
 				</div>
 			</button>
-			{(onDeleteSession || onRenameSession) && (
-				<div className="sh-ws-card-actions">
-					{onRenameSession && (
+			<div className="sh-ws-card-actions">
+				<button
+					type="button"
+					className="sh-ws-action-btn"
+					title={t("archive")}
+					onClick={e => {
+						e.stopPropagation();
+						onArchive?.(session.id);
+					}}
+				>
+					<Archive size={12} />
+				</button>
+				{onRenameSession && (
 						<button
 							type="button"
 							className="sh-ws-action-btn"
@@ -247,7 +289,6 @@ function WorkspaceCard({
 						</button>
 					)}
 				</div>
-			)}
 		</div>
 	);
 }

@@ -1838,6 +1838,13 @@
 	transform: translateY(-1px);
 }
 
+.sh-workspace-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+}
+
 .sh-ws-title {
 	font-size: 13.5px;
 	font-weight: 600;

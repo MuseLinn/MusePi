@@ -23,8 +23,10 @@ export const settings = {
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"可选共享库基础名，按项目模式据此派生项目本地库",
 	"Mnemopi Scoping": "Mnemopi 作用域",
+	"active": "活跃",
 	"add": "添加",
 	"add instance": "添加实例",
+	"archived": "已归档",
 	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
 		"global=单一共享库；per-project=每个 cwd 独立库；per-project-tagged=项目本地写入+全局回忆可见",
 	Global: "全局",
@@ -204,6 +206,8 @@ export const settings = {
 	"invalid json": "JSON 格式无效",
 	"options come from the TUI runtime": "选项由 TUI 运行时提供",
 	"remote token (optional)": "远程令牌（可选）",
+	"show active sessions": "显示活跃会话",
+	"show archived": "显示归档",
 	"terminal only settings": "终端（TUI）显示选项",
 	"terminal only settings note":
 		"以下选项仅作用于终端界面（TUI）：主题、状态栏、终端转义序列等。在桌面界面中不生效，但修改后会在下次使用 TUI 时应用。",
