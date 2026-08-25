@@ -507,3 +507,22 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 协议约束检查：guest 无 set-model/附件帧 → AttachMenu / ThinkingSelector / SlashRow(daemon commands.list) 不吸收，避免半成品
 
 **E2E 验证**：连接 → 选空会话（Board cleanup）→ 9 chips（8+more）→ 点击 "探索代码库" 填入 "带我了解这个代码库的结构和关键模块" + 聚焦 + 发送可用 → 展开 16 chips 全部渲染。
+
+### 11.9 空态问候 + 真实 daemon 验证 + Harmony 壳落地（2026-08-25）
+
+**批 3（a160d75025）— 空态问候层**：
+- WelcomeHint（gui WelcomeComposer 吸收）：七时段问候（凌晨/清晨/早上/中午/下午/晚上/深夜）+ 旋转 tips（6s 轮换、blur-in 刷新）；桌面专属 tip（{mod}N）从移动列表剔除
+- Transcript 新增可选 `emptySlot` prop 替代裸 "no activity yet"；TranscriptPane 仅在 `isMobileShell()` 时注入（桌面 collab web 不受影响）
+- 实测：空会话显示 "夜深了，注意休息"（03:xx 时段正确）+ tip + 9 chips 共存；8s 推送到达后空态正确让位于消息
+
+**真实 daemon E2E（协议桩之上的最终验证）**：
+- 隔离 daemon（MUSEPI_DAEMON_DIR + PI_CONFIG_DIR 独立目录，`musepi serve --port 8310`）→ RPC `session.create` + `collab.start`（workspace 模式）→ LAN relay 7654
+- 模拟器粘贴真实链接 → workspace 目录（真实 journal：项目分组/cwd/会话数）→ 会话卡 → composer live → 真实 prompt → **真实 LLM 回复**（deepseek 思考块+回答）全链路 ✅
+- 协议栈端到端（E2E 加密、workspace-select、快照水合、prompt/steer、entry 推送）在真实 host 语义下确认
+
+**HarmonyOS 壳（2352d2ea0c）**：
+- `packages/harmony/` DevEco 工程（API 12 / 5.0.0）：EntryAbility（musepi:// 深链冷/暖启动）+ Index.ets（Web 组件 + `harmonyNative` javaScriptProxy）
+- 桥面与 JS 侧 capacitor.ts 的类型/路由完全对齐（getSystemBars via getWindowAvoidArea px→vp、badge、consumeDeepLink、__harmonyKeyboard/__harmonyDeepLink 推送）
+- `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
+- `scripts/copy-web-assets.js`：desktop-web dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
+- 构建路径：desktop-web build → copy-web-assets → DevEco Studio 打开签名运行（本机无 DevEco，ArkTS 未编译验证）
