@@ -7771,6 +7771,9 @@ export class DaemonServer {
 					op: "show" | "approve" | "refine" | "save";
 					feedback?: string | null;
 					content?: string | null;
+					/** TUI "Approve and compact context" parity: distill the
+					 *  planning transcript before the approved-prompt dispatch. */
+					compact?: boolean;
 				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -7807,6 +7810,12 @@ export class DaemonServer {
 						g.setPlanProposalHandler(null);
 						g.setPlanModeState?.(undefined);
 						g.markPlanReferenceSent();
+						if (p.compact === true) {
+							// Distill the planning conversation first (TUI
+							// compactBeforeExecute parity): the approved prompt then
+							// lands as a fresh cache anchor on the compacted context.
+							await g.compact(undefined, {});
+						}
 						// Context preserved (the TUI's default is a fresh session;
 						// the daemon keeps the planning conversation so the agent
 						// still sees its own discussion — the approved prompt

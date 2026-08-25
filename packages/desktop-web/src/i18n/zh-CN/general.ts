@@ -138,6 +138,8 @@ export const general = {
 	"plan refine": "完善",
 	"plan approve execute": "批准并执行",
 	"plan exit": "退出计划模式",
+	"plan approve compact": "批准并压缩上下文",
+	"plan approve compact hint": "压缩规划上下文后执行计划",
 	"plan not written yet": "尚未写计划 — 让智能体先写一份",
 	"plan mode off": "计划模式已关闭",
 	"guided goal mode": "引导式目标",

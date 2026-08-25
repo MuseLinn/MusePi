@@ -119,6 +119,16 @@ export function PlanPanel({
 							<Icon name="check" className="h-3.5 w-3.5" />
 							{t("plan approve execute")}
 						</button>
+						<button
+							type="button"
+							className="gui-goal-btn"
+							disabled={busy !== null}
+							title={t("plan approve compact hint")}
+							onClick={() => run("approve", { compact: true })}
+						>
+							<Icon name="stack" className="h-3.5 w-3.5" />
+							{t("plan approve compact")}
+						</button>
 						<button type="button" className="gui-goal-btn" disabled={busy !== null} onClick={() => run("exit")}>
 							<Icon name="close" className="h-3.5 w-3.5" />
 							{t("plan exit")}

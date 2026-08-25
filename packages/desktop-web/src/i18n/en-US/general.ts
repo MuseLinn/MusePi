@@ -140,6 +140,8 @@ export const general = {
 	"plan refine": "Refine",
 	"plan approve execute": "Approve and execute",
 	"plan exit": "Exit plan mode",
+	"plan approve compact": "Approve and compact context",
+	"plan approve compact hint": "Distill the planning context, then execute the plan",
 	"plan not written yet": "No plan written yet — ask the agent to write one",
 	"plan mode off": "Plan mode is off",
 	"guided goal mode": "Guided goal",
