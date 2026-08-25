@@ -1873,7 +1873,6 @@
     url = "https://registry.npmjs.org/roarr/-/roarr-2.15.4.tgz";
     hash = "sha512-CHhPh+UNHD2GTXNYhPWLnU8ONHdI+5DI+4EYIAOaiD63rHeYlZvyh8P+in5999TTSFgUYuKUAjzRI4mdh/p+2A==";
   };
-  "robomp-web" = copyPathToStore ../python/robomp/web;
   "rolldown@1.2.3" = fetchurl {
     url = "https://registry.npmjs.org/rolldown/-/rolldown-1.2.3.tgz";
     hash = "sha512-rn9wpmxplLf7NLNyCk9FyWh3FM43DbY8jOzCdEPzH7uflhTftRbCEpqi6Ly2osgoU8OwObtmavMbWLaWy4LX7A==";
