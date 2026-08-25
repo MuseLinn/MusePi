@@ -5,6 +5,7 @@ import { t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import { useGuestSelector } from "../../lib/use-guest";
+import { SuggestionChips } from "./SuggestionChips";
 
 export interface ComposerProps {
 	client: GuestClient;
@@ -122,6 +123,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const uiRequest = useGuestSelector(client, s => s.uiRequest);
 	const busy = useGuestSelector(client, s => s.working);
 	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
+	// Empty-state draft suggestions (openchamber parity): show only while the
+	// session is live, editable and has nothing to show yet.
+	const empty = useGuestSelector(client, s => s.entries.length === 0 && s.stream === null && !s.working);
 	const canPrompt = live && !readOnly;
 	// editor-draft mode keeps submit enabled even for whitespace-only prefill
 	const canSend = canPrompt && (text.trim().length > 0 || uiRequest?.kind === "editor");
@@ -206,6 +210,17 @@ export function Composer({ client }: ComposerProps): ReactNode {
 
 	return (
 		<div className="sh-composer">
+			{canPrompt && empty && (
+				<div className="sh-composer-suggest">
+					<SuggestionChips
+						onPick={prompt => {
+							setText(prompt);
+							taRef.current?.focus();
+							haptic(8);
+						}}
+					/>
+				</div>
+			)}
 			<div className="sh-composer-inner">
 				<textarea
 					ref={taRef}
