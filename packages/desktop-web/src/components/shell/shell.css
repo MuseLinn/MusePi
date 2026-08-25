@@ -1737,9 +1737,22 @@
 	border: 1px solid var(--border, oklch(1 0 0 / 9%));
 	background: var(--bg-raised, oklch(1 0 0 / 4%));
 	box-shadow: 0 1px 2px color-mix(in oklab, var(--fg, oklch(0.4 0 0)) 4%, transparent);
+	transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.sh-ws-card-main {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	color: inherit;
 	text-align: left;
 	cursor: pointer;
-	transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
 
 .sh-ws-card:hover:not(:disabled) {
@@ -1762,6 +1775,67 @@
 	justify-content: space-between;
 	gap: 10px;
 	min-width: 0;
+}
+
+.sh-ws-card-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	border-top: 1px solid var(--border, oklch(1 0 0 / 8%));
+	padding-top: 8px;
+	margin-top: 2px;
+}
+
+.sh-ws-action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	border: 1px solid var(--border, oklch(1 0 0 / 9%));
+	background: var(--bg-raised, oklch(1 0 0 / 3%));
+	color: var(--fg-muted, var(--muted));
+	cursor: pointer;
+	transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.sh-ws-action-btn:hover {
+	border-color: var(--accent, oklch(0.674 0.23 341));
+	color: var(--accent, oklch(0.674 0.23 341));
+}
+
+.sh-ws-rename-input {
+	width: 100%;
+	min-width: 0;
+	padding: 2px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--accent, oklch(0.674 0.23 341));
+	background: var(--bg, oklch(1 0 0 / 6%));
+	color: inherit;
+	font: inherit;
+	font-size: 13.5px;
+	font-weight: 600;
+}
+
+.sh-ws-create {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border-radius: 9px;
+	border: 1px solid var(--accent, oklch(0.674 0.23 341));
+	background: color-mix(in oklab, var(--accent, oklch(0.674 0.23 341)) 12%, transparent);
+	color: var(--accent, oklch(0.674 0.23 341));
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 120ms ease, transform 120ms ease;
+}
+
+.sh-ws-create:hover {
+	background: color-mix(in oklab, var(--accent, oklch(0.674 0.23 341)) 20%, transparent);
+	transform: translateY(-1px);
 }
 
 .sh-ws-title {

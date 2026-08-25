@@ -433,7 +433,14 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">
 				{inWorkspace && workspace !== null ? (
-					<WorkspaceView client={client} sessions={workspace} onSelect={id => client.selectWorkspaceSession(id)} />
+					<WorkspaceView
+						client={client}
+						sessions={workspace}
+						onSelect={id => client.selectWorkspaceSession(id)}
+						onCreateSession={() => client.rpc("session.create", {})}
+						onDeleteSession={id => client.rpc("session.delete", { sessionId: id })}
+						onRenameSession={(id, title) => client.rpc("session.rename", { sessionId: id, title })}
+					/>
 				) : activePanel !== null ? (
 					<section className="sh-content" data-rail="false">
 						<div className="sh-panel">

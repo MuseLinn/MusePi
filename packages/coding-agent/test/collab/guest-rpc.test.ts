@@ -150,6 +150,63 @@ describe("collab guest rpc", () => {
 		expect(Array.isArray(data.entries)).toBe(true);
 	});
 
+	it("session.create/delete/rename are rejected without a workspace provider", async () => {
+		// Host built with makeHostContext() has no workspace provider — the
+		// guest RPC must fail cleanly rather than crash the host.
+		const guest = await joinAsGuest(host.link, "rpc-test");
+		guestCleanups.push(() => guest.close());
+		const create = await guest.rpc("session.create");
+		expect(create.ok).toBe(false);
+		expect(String(create.error)).toMatch(/workspace mode required/i);
+		const del = await guest.rpc("session.delete", { sessionId: "x" });
+		expect(del.ok).toBe(false);
+	});
+
+	it("session.create/delete/rename route through the workspace provider", async () => {
+		// Host with a workspace provider: create/delete/rename must reach the
+		// provider with the right args, and read-only links must reject them.
+		const calls: string[] = [];
+		const wsCtx = {
+			...makeHostContext(),
+			workspace: {
+				listWorkspaceSessions: async () => [],
+				subscribeWorkspace: () => () => {},
+				switchWorkspaceSession: async () => true,
+				createWorkspaceSession: async () => {
+					calls.push("create");
+					return "sess-new";
+				},
+				deleteWorkspaceSession: async (id: string) => {
+					calls.push(`delete:${id}`);
+				},
+				renameWorkspaceSession: async (id: string, title: string) => {
+					calls.push(`rename:${id}:${title}`);
+				},
+			},
+		};
+		const wsHost = new CollabHost(wsCtx as unknown as InteractiveModeContext, "workspace");
+		await wsHost.start("ws://localhost:8787");
+		try {
+			const guest = await joinAsGuest(wsHost.link, "rpc-test");
+			const create = await guest.rpc("session.create");
+			expect(create.ok).toBe(true);
+			expect((create.data as { sessionId?: unknown }).sessionId).toBe("sess-new");
+			const rename = await guest.rpc("session.rename", { sessionId: "sess-1", title: "Renamed" });
+			expect(rename.ok).toBe(true);
+			const del = await guest.rpc("session.delete", { sessionId: "sess-1" });
+			expect(del.ok).toBe(true);
+			expect(calls).toEqual(["create", "rename:sess-1:Renamed", "delete:sess-1"]);
+			// Read-only link (no write token) rejects mutating methods.
+			const viewGuest = await joinAsGuest(wsHost.viewLink, "view-test");
+			const readOnlyDel = await viewGuest.rpc("session.delete", { sessionId: "sess-1" });
+			expect(readOnlyDel.ok).toBe(false);
+			expect(String(readOnlyDel.error)).toMatch(/read-only/i);
+			viewGuest.close();
+		} finally {
+			await wsHost.stop("test done");
+		}
+	});
+
 	it("fs.read rejects paths escaping the workspace", async () => {
 		const guest = await joinAsGuest(host.link, "rpc-test");
 		guestCleanups.push(() => guest.close());

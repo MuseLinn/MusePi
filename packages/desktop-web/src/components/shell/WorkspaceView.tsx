@@ -1,4 +1,4 @@
-import { ChevronRight, Loader2, PanelLeft, PanelLeftClose } from "lucide-react";
+import { ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -17,10 +17,19 @@ export function WorkspaceView({
 	client,
 	sessions,
 	onSelect,
+	onCreateSession,
+	onDeleteSession,
+	onRenameSession,
 }: {
 	client: GuestClient;
 	sessions: readonly WorkspaceSessionInfo[];
 	onSelect(sessionId: string): void;
+	/** Create a fresh session (guest session.create RPC, write token gated). */
+	onCreateSession?(): Promise<unknown>;
+	/** Delete a session by id (guest session.delete RPC). */
+	onDeleteSession?(sessionId: string): Promise<unknown>;
+	/** Rename a session (guest session.rename RPC). */
+	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
 }): ReactNode {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// Collapsed project groups (keyed by cwd; "" = no folder).
@@ -82,10 +91,21 @@ export function WorkspaceView({
 				<div className="sh-workspace-head">
 					<h1 className="sh-workspace-title">{t("workspace")}</h1>
 					<p className="sh-workspace-desc">{t("sessions on this machine — tap one to watch it live")}</p>
+					{onCreateSession && (
+						<button
+							type="button"
+							className="sh-ws-create"
+							onClick={() => void onCreateSession()}
+							title={t("new session")}
+						>
+							<Plus size={14} />
+							<span>{t("new session")}</span>
+						</button>
+					)}
 				</div>
 				<div className="sh-workspace-grid">
 					{sessions.map(session => (
-						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} />
+						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} />
 					))}
 				</div>
 				{sessions.length === 0 && <p className="sh-workspace-empty">{t("no sessions yet")}</p>}
@@ -129,47 +149,106 @@ function WorkspaceSideItem({
 function WorkspaceCard({
 	session,
 	onSelect,
+	onDeleteSession,
+	onRenameSession,
 }: {
 	session: WorkspaceSessionInfo;
 	onSelect(sessionId: string): void;
+	onDeleteSession?(sessionId: string): Promise<unknown>;
+	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
 }): ReactNode {
+	const [renaming, setRenaming] = useState(false);
+	const [draft, setDraft] = useState(session.title ?? "");
 	const title = session.title ?? t("untitled session");
 	const when = formatWhen(session.updatedAt);
+	const commitRename = (): void => {
+		if (!renaming) return;
+		setRenaming(false);
+		const next = draft.trim();
+		if (next && next !== title && onRenameSession) void onRenameSession(session.id, next);
+	};
 	return (
-		<button
-			type="button"
-			className={`sh-ws-card${session.working ? " sh-ws-card--working" : ""}`}
-			onClick={() => onSelect(session.id)}
-			title={t("open session")}
-		>
-			<div className="sh-ws-card-top">
-				<span className="sh-ws-title" title={title}>
-					{title}
-				</span>
-				{session.working ? (
-					<span className="sh-ws-status sh-ws-status--working">
-						<Loader2 size={11} className="sh-ws-spin" />
-						{t("working")}
+		<div className={`sh-ws-card${session.working ? " sh-ws-card--working" : ""}`}>
+			<button
+				type="button"
+				className="sh-ws-card-main"
+				onClick={() => onSelect(session.id)}
+				title={t("open session")}
+			>
+				<div className="sh-ws-card-top">
+					{renaming ? (
+						<input
+							className="sh-ws-rename-input"
+							value={draft}
+							onChange={e => setDraft(e.target.value)}
+							onBlur={commitRename}
+							onKeyDown={e => {
+								if (e.key === "Enter") commitRename();
+								if (e.key === "Escape") setRenaming(false);
+							}}
+							autoFocus
+						/>
+					) : (
+						<span className="sh-ws-title" title={title}>
+							{title}
+						</span>
+					)}
+					{session.working ? (
+						<span className="sh-ws-status sh-ws-status--working">
+							<Loader2 size={11} className="sh-ws-spin" />
+							{t("working")}
+						</span>
+					) : session.paused ? (
+						<span className="sh-ws-status sh-ws-status--paused">{t("paused")}</span>
+					) : (
+						<span className="sh-ws-status">{t("idle")}</span>
+					)}
+				</div>
+				<div className="sh-ws-card-meta">
+					<span className="sh-ws-meta">{when}</span>
+					<span className="sh-ws-meta">
+						{t("{count} messages", { count: String(session.messageCount) })}
 					</span>
-				) : session.paused ? (
-					<span className="sh-ws-status sh-ws-status--paused">{t("paused")}</span>
-				) : (
-					<span className="sh-ws-status">{t("idle")}</span>
-				)}
-			</div>
-			<div className="sh-ws-card-meta">
-				<span className="sh-ws-meta">{when}</span>
-				<span className="sh-ws-meta">
-					{t("{count} messages", { count: String(session.messageCount) })}
-				</span>
-				{session.cwd && (
-					<span className="sh-ws-meta sh-ws-meta-cwd" title={session.cwd}>
-						{shortenPath(session.cwd)}
-					</span>
-				)}
-				{!session.live && <span className="sh-chip">{t("history")}</span>}
-			</div>
-		</button>
+					{session.cwd && (
+						<span className="sh-ws-meta sh-ws-meta-cwd" title={session.cwd}>
+							{shortenPath(session.cwd)}
+						</span>
+					)}
+					{!session.live && <span className="sh-chip">{t("history")}</span>}
+				</div>
+			</button>
+			{(onDeleteSession || onRenameSession) && (
+				<div className="sh-ws-card-actions">
+					{onRenameSession && (
+						<button
+							type="button"
+							className="sh-ws-action-btn"
+							title={t("rename")}
+							onClick={e => {
+								e.stopPropagation();
+								setDraft(title);
+								setRenaming(v => !v);
+							}}
+						>
+							<Pencil size={12} />
+						</button>
+					)}
+					{onDeleteSession && (
+						<button
+							type="button"
+							className="sh-ws-action-btn"
+							title={t("delete")}
+							onClick={e => {
+								e.stopPropagation();
+								if (window.confirm(t("confirm delete session"))) void onDeleteSession(session.id);
+							}}
+						>
+							<Trash2 size={12} />
+						</button>
+					)}
+				</div>
+			)}
+		</div>
 	);
 }
 

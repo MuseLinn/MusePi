@@ -6274,6 +6274,30 @@ export class DaemonServer {
 							focus = next;
 							return true;
 						},
+						// dsh-mobile-remote parity: remote guests manage the
+						// workspace (new/delete/rename sessions) over the
+						// collab RPC — write-token gated in the host.
+						createWorkspaceSession: async () => {
+							// New sessions land in the focused session's cwd,
+							// else the first workspace session's, else the
+							// daemon's own default.
+							const cwd =
+								focus?.agentSession?.sessionManager?.getCwd() ??
+								(await this.#host.listWorkspaceSessions()).find(s => s.cwd)?.cwd ??
+								undefined;
+							const created = await this.#host.createSession({ cwd });
+							return created.sessionId;
+						},
+						deleteWorkspaceSession: async (sessionId: string) => {
+							await this.#host.deleteSession(sessionId);
+						},
+						renameWorkspaceSession: async (sessionId: string, title: string) => {
+							const live = this.#host.get(sessionId) ?? (await this.#host.activate(sessionId).catch(() => null));
+							if (!live) {
+								throw new Error(`Cannot rename session ${sessionId} (not resumable)`);
+							}
+							await live.agentSession.sessionManager.setSessionName(title, "user");
+						},
 					},
 				};
 				const transport = new LocalShareManager({ port: undefined, onStatus: () => {} });

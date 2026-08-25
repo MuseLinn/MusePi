@@ -145,6 +145,12 @@ export interface CollabWorkspaceContext {
 	 * when the session can't go live (no transcript, unsupported host).
 	 */
 	switchWorkspaceSession(sessionId: string): Promise<boolean>;
+	/** Create a fresh session in the workspace. Resolves the new session id. */
+	createWorkspaceSession?(): Promise<string>;
+	/** Delete a session by id (journal + index). */
+	deleteWorkspaceSession?(sessionId: string): Promise<void>;
+	/** Rename a session (journal label, user-set). */
+	renameWorkspaceSession?(sessionId: string, title: string): Promise<void>;
 }
 
 export type CollabHostMode = "session" | "workspace";
@@ -841,6 +847,9 @@ export class CollabHost {
 		"fs.mkdir": true,
 		"fs.rename": true,
 		"fs.delete": true,
+		"session.create": true,
+		"session.delete": true,
+		"session.rename": true,
 	};
 
 	/**
@@ -976,6 +985,32 @@ export class CollabHost {
 				if (typeof rel !== "string") throw new Error("fs.delete: path required");
 				const res = deleteWorkspaceEntry(this.#ctx.sessionManager.getCwd(), rel);
 				if (!res.ok) throw new Error(res.error);
+				return { ok: true };
+			}
+			case "session.create": {
+				if (!this.#ctx.workspace?.createWorkspaceSession) {
+					throw new Error("session.create: workspace mode required");
+				}
+				const sessionId = await this.#ctx.workspace.createWorkspaceSession();
+				return { sessionId };
+			}
+			case "session.delete": {
+				if (!this.#ctx.workspace?.deleteWorkspaceSession) {
+					throw new Error("session.delete: workspace mode required");
+				}
+				const { sessionId } = p as { sessionId?: string };
+				if (!sessionId) throw new Error("session.delete: sessionId required");
+				await this.#ctx.workspace.deleteWorkspaceSession(sessionId);
+				return { ok: true };
+			}
+			case "session.rename": {
+				if (!this.#ctx.workspace?.renameWorkspaceSession) {
+					throw new Error("session.rename: workspace mode required");
+				}
+				const { sessionId, title } = p as { sessionId?: string; title?: string };
+				if (!sessionId) throw new Error("session.rename: sessionId required");
+				if (!title?.trim()) throw new Error("session.rename: title required");
+				await this.#ctx.workspace.renameWorkspaceSession(sessionId, title.trim());
 				return { ok: true };
 			}
 			default:
