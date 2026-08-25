@@ -107,7 +107,42 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   (`findFile(files, "zip", ["pkg","dmg"])`,无 zip 抛
   `ERR_UPDATER_ZIP_FILE_NOT_FOUND`)——mac target 补 `zip`,CI 上传/发布清单
   同步收录 `*.zip`。
-- **CHANGELOG 段落顺序归一**(oldest-first):CI release-notes 生成器取文件末段,
-  此前 0.4.4 排在 0.4.3 前导致下个 tag 的发布说明会取错段落;daemon 解析按版本号
-  语义比较,不受顺序影响。
+### Added (0.4.4 追加,2026-08-25)
+
+- **移动端 MusePi(mobile)**:Capacitor Android 壳(compileSdk 36 / minSdk 24),
+  连接局域网 daemon 的远程会话伴侣——三合一发送控件(点阵 bloom 反馈)、盲文
+  点阵工作指示器、会话归档(localStorage,桌面 GUI parity)、PWA 离线壳 +
+  连接码复制优化、旋转/断点几何过渡、时间感知问候与轮换提示、空态建议 chips、
+  jsQR 扫码加入、沉浸式 edge-to-edge 布局。
+- **collab 远程会话管理**(dsh-mobile-remote parity):guest 可创建/删除/重命名
+  会话;agent 主动分享(collab tool,分级审批);`session.abort` 允许 guest
+  停止远端正在运行的 turn。
+- **GUI /btw 分支提升**(TUI b-branch + openchamber promote parity):/btw 提问
+  后「分支」按钮把当前会话切到新会话,问答可见,侧栏出现新分支会话 + 树路径
+  transcript 脉冲。
+- **撤回语义重构**(TUI navigateTree parity):撤回改为 branchAt 树跳转——
+  旧回复保留为 sibling 分支、树上随时跳回;撤回悬浮卡片带 Reveal 折叠/展开
+  动画;daemon 侧 revert RPC 全套移除(-1176 行)。
+- **plan 批准并压缩上下文**:GUI plan 面板第二 primary 按钮,approve 后自动
+  compact(TUI "Approve and compact context" parity)。
+- **浮层定位规范**:全翻转+位移、btw Esc 关闭、菜单 clamp 进视口(不截断);
+  AskCard 选择取消按钮、设计语言卡片(floating ask/inspector)。
+- **实例切换器**:连接远程 daemon(openchamber DesktopHostSwitcher parity)。
+- **HarmonyOS NEXT WebView 壳**(ArkTS Web + harmonyNative bridge)脚手架。
+- **Nix 发布修复**:恢复 rust-toolchain.toml、清理 collab-web/robomp-web 死
+  路径映射——OMP Nix flake 评估恢复通过。
+
+### Changed (0.4.4 追加)
+
+- 会话列表按最后活动日期分组(不再按创建时间);agent-activity 行转瞬态
+  (agent 完成即清);breadcrumb 仅分支导航时显示。
+- SessionTreeCanvas 可读总览 + 正确有向流;canvas 聚焦/跳转/搜索交互 +
+  轨迹分支车道。
+- rail 溢出菜单弹出动画(浏览器菜单 parity)。
+
+### Fixed (0.4.4 追加)
+
+- 会话列表日期分组与 canvas 地图语义修正;daemon fork 激活(title-slot 头)+
+  message-tree 父级 walk-up;view-key/branch-at 测试清理损坏会话目录。
+- i18n general/settings 域 `active` key 冲突(去重)。
 

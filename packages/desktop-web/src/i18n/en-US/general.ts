@@ -153,7 +153,7 @@ export const general = {
 	"no goal": "No goal",
 	goal: "Goal",
 	"next message becomes the goal objective": "The next message becomes the goal objective",
-	active: "Active",
+	"active label": "Active",
 	advisor: "Advisor",
 	"advisory blocker": "Blocker",
 	"advisory concern": "Concern",

@@ -24,7 +24,7 @@
 
 MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
 
-应用版本 `0.4.3`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
+应用版本 `0.4.4`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
 
 ## ✨ 特性
 
@@ -138,6 +138,13 @@ bun run lint / fmt       # biome + rustfmt
 
 提交习惯：`git commit --no-verify`（husky/biome 基线问题）；natives 变更后需重建（`bun run build:native`，macOS LINKEDIT 对齐自动）。
 
+## 📱 移动端壳
+
+- **Capacitor Android 应用**（`packages/mobile` + `desktop-web` 移动入口）：沉浸式 edge-to-edge（自定义 InsetsPlugin）、QR 扫码配对（jsQR，无 GMS 依赖）、时间感知问候 + 轮换提示、建议 chips、44px 触控目标、Android 返回键逐层展开、旋转过渡、三合一发送控件（点阵 bloom 反馈）、盲文点阵工作指示器、会话归档（localStorage 桌面 GUI parity）。
+- **HarmonyOS WebView 壳**（`packages/harmony`）：ArkTS `Web` 组件加载同一 bundle（native insets、badge、`musepi://` 深链、键盘 inset）。
+- **PWA**：service worker 离线连接壳。
+- **远程会话管理**（dsh-mobile-remote parity）：guest 可创建/删除/重命名会话、停止远端正在运行的 turn（`session.abort`）；agent 可主动发起分享（collab tool，分级审批）。
+
 ## 📦 打包与发布
 
 ### 桌面应用（macOS）
@@ -148,6 +155,14 @@ bun --cwd=packages/gui run pack:dir      # electron-builder dir 构建 + 签名�
 ```
 
 产物：`release/mac-arm64/MusePi.app`。`pack` 脚本做 **ad-hoc 签名**（本机可运行）。**正式分发**需要 Developer ID Application 证书 + Apple 公证——macOS 26 对未签名/未公证应用的多项能力（通知等）直接拒绝。CLI 二进制的签名/公证流程见 `docs/macos-signing-notarization.md`（hardened runtime + `notarytool`）；与裸 Mach-O 不同，`.app` bundle 还可以 **staple**（公证票据内嵌，离线也能通过 Gatekeeper 校验）。
+
+### 桌面应用（Windows / Linux）
+
+`gui-release.yml` 在 tag 推送时按平台构建 Electron 应用：macOS arm64（`dmg` + `zip`）、Windows x64（NSIS 安装器，逐用户免管理员默认路径）、Linux x64/arm64（`AppImage` + `deb`）。发布 `v*` tag 自动上传所有平台工件 + OTA 清单（`latest*.yml`，tag 含 `-beta` 时走 beta 通道）+ `update-manifest.json`（应用内更新检查）。
+
+### 移动端（Android）
+
+同一 workflow 的 `package_mobile` job 构建 Capacitor 应用：desktop-web 编译 → `cap sync` → Gradle `assembleDebug`。Debug APK 附在 Release 页；`adb install -r app-debug.apk` 安装。HarmonyOS 壳（`packages/harmony`）在 DevEco Studio 中构建。
 
 ### CLI
 
@@ -161,4 +176,4 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.3）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.4）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。

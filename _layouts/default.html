@@ -35,5 +35,25 @@
       <span>MusePi — desktop-first AI coding agent · fork of <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
     </footer>
   </div>
+  <script>
+    // Scroll-reveal (GUI Reveal parity: 240ms ease + 160ms fade, opacity-only —
+    // no transform keyframes so static transforms survive). Elements opt in via
+    // class="mp-reveal"; reduced-motion users see everything immediately.
+    (function () {
+      document.body.classList.add("mp-js");
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var els = document.querySelectorAll(".mp-reveal");
+      if (!els.length || !("IntersectionObserver" in window)) return;
+      var io = new IntersectionObserver(function (entries) {
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].isIntersecting) {
+            entries[i].target.classList.add("mp-reveal-in");
+            io.unobserve(entries[i].target);
+          }
+        }
+      }, { threshold: 0.12 });
+      for (var j = 0; j < els.length; j++) io.observe(els[j]);
+    })();
+  </script>
 </body>
 </html>

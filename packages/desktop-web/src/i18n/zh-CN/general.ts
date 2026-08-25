@@ -151,7 +151,7 @@ export const general = {
 	"no goal": "无目标",
 	goal: "目标",
 	"next message becomes the goal objective": "下一条消息的内容将成为目标",
-	active: "活跃",
+	"active label": "活跃",
 	advisor: "顾问",
 	"advisory blocker": "阻塞",
 	"advisory concern": "关注",

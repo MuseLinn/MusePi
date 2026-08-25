@@ -29,7 +29,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Dot-matrix backdrop (DotMatrixMark language, coarser). */
+/* Dot-matrix backdrop (DotMatrixMark language, coarser). The field drifts
+ * one full grid step per cycle (48s) and the mask breathes — the GUI's
+ * dot-matrix brand backdrop, animated. */
 .mp-bg {
   position: fixed;
   inset: 0;
@@ -38,6 +40,17 @@ body {
   background-size: 24px 24px;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
+  animation: mp-dots-drift 48s linear infinite, mp-mask-breathe 14s ease-in-out infinite;
+}
+
+@keyframes mp-dots-drift {
+  from { background-position: 0 0; }
+  to { background-position: 24px 24px; }
+}
+
+@keyframes mp-mask-breathe {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
 }
 
 .mp-wrap {
@@ -121,6 +134,59 @@ body {
 .mp-cta:hover {
   background: color-mix(in oklab, var(--accent) 24%, transparent);
   transform: translateY(-1px);
+  box-shadow: 0 0 24px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+.mp-cta-row {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.mp-cta-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.mp-cta-ghost:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.mp-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.24);
+  font-size: 13px;
+}
+
+.mp-version-tag {
+  color: var(--accent);
+  font-weight: 650;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.mp-version-meta { color: var(--text-faint); }
+
+.mp-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: mp-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes mp-pulse {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 60%, transparent); }
+  50% { box-shadow: 0 0 16px var(--accent); }
 }
 
 .mp-hero-code {
@@ -140,6 +206,24 @@ body {
 }
 
 .mp-hero-code .mp-cmd { color: var(--accent); }
+
+/* Terminal caret on the last command line (GUI terminal aesthetic). */
+.mp-hero-code .mp-cmd:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 6px;
+  vertical-align: -2px;
+  background: var(--accent);
+  animation: mp-caret 1.1s steps(2, jump-none) infinite;
+}
+
+@keyframes mp-caret {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
 
 /* ── Sections ─────────────────────────────────────────────── */
 .mp-section { padding: 48px 0 8px; }
@@ -165,12 +249,13 @@ body {
   backdrop-filter: blur(20px) saturate(170%);
   -webkit-backdrop-filter: blur(20px) saturate(170%);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-  transition: border-color 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mp-card:hover {
   border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
   transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.36), 0 0 0 1px color-mix(in oklab, var(--accent) 14%, transparent);
 }
 
 .mp-card h3 {
@@ -193,6 +278,12 @@ body {
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 70%, transparent);
+  animation: mp-dot-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes mp-dot-pulse {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 50%, transparent); }
+  50% { box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 90%, transparent); }
 }
 
 /* Screenshots */
@@ -273,6 +364,32 @@ body {
   color: var(--accent);
 }
 
+/* ── Motion (GUI parity: opacity-first, cubic-bezier(0.22,1,0.36,1)) ──
+ * JS-gated: elements only hide once body.mp-js is present (reveal script
+ * sets it), so a no-JS environment never loses content. */
+body.mp-js .mp-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1), transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.mp-js .mp-reveal-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-bg, .mp-card .mp-dot, .mp-hero-code .mp-cmd:last-child::after {
+    animation: none;
+  }
+  body.mp-js .mp-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  html { scroll-behavior: auto; }
+}
+
 /* ── Footer ───────────────────────────────────────────────── */
 .mp-footer {
   margin-top: 72px;
@@ -304,4 +421,6 @@ body {
   .mp-hero h1 { font-size: 34px; }
   .mp-nav { gap: 14px; }
   .mp-nav a:nth-child(2), .mp-nav a:nth-child(3) { display: none; }
+  .mp-cta-row { flex-direction: column; }
+  .mp-version { flex-wrap: wrap; justify-content: center; }
 }

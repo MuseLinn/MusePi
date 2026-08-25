@@ -28,7 +28,7 @@
 
 MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-Current app version **`0.4.3`** (independent of upstream versioning).
+Current app version **`0.4.4`** (independent of upstream versioning).
 
 ## Screenshots
 
@@ -49,6 +49,8 @@ Current app version **`0.4.3`** (independent of upstream versioning).
 - **Context management**: context donut (`session.contextUsage`), `/compact`-parity manual compaction, snapcompact savings estimate.
 - **Settings panel**: all 336 TUI settings merged into the desktop settings (schema-driven via `settings.schema`), 10+ tabs; sidebar search matches actual setting rows.
 - **Rich interactions**: image attachments & lightbox, voice input (dictation / read-aloud / `tts.autoRead`), per-session draft persistence, idle recap, reminders panel, ⌘K command palette, Board kanban (auto-scaling canvas, ChromaGrid-style group glow), widget system (custom HTML widgets with theme hot-swap).
+- **Branching (TUI parity)**: 撤回 (jump back) = `branchAt` tree navigation — old replies stay reachable as sibling branches with an animated undo dock; `/btw` questions can be promoted into a new branched session; plan approval offers an "approve and compact context" path.
+- **Instance switcher**: connect remote daemons from the top bar (bearer-token gated, openchamber parity).
 - **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`); managed in Settings → 智能体 → 预设.
 - **Session lifecycle status**: sidebar rows carry colored status squares (complete / interrupted / aborted / error / pending) with manual tag overrides.
 - **Swarm task visualizer**: frosted member chip above the composer while a `task` tool runs — floating avatar/progress grid with agent trajectory drill-down.
@@ -91,9 +93,10 @@ Three standalone lowercase words opt a turn into specialized behavior: **`ultrat
 Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
 ### Mobile shells
 
-- **Capacitor Android app** (`packages/mobile` + `desktop-web` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions.
+- **Capacitor Android app** (`packages/mobile` + `desktop-web` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.
 - **HarmonyOS WebView shell** (`packages/harmony`): ArkTS `Web` component loading the same bundle from rawfile — native insets (`getWindowAvoidArea`), badge, `musepi://` deep links, keyboard insets. No compat layer: immersion/camera/permissions are native.
 - **PWA**: offline connect shell via service worker (`packages/desktop-web/public/sw.js`) — cached shell opens without a network; static assets cache-first.
+- **Remote session management**: guests can create / delete / rename sessions and stop a running turn (`session.abort`) — dsh-mobile-remote parity.
 - **Instance switcher**: top-bar menu connects to remote daemons (`serve --remote-token <token>` gates with bearer auth; hosts persist in localStorage).
 - **Agent-initiated sharing**: the `collab` tool starts LAN/tunnel shares (tunnel requires explicit approval).
 - **Pairing surface**: host shares via `/collab` (TUI slash: view / workspace / lan / tunnel / status / stop) or `collab.start` RPC; guests join with the collab link in any browser, the Android app, or `musepi join "<link>"` from the CLI. E2E-encrypted; workspace mode shares the whole session directory.
@@ -162,6 +165,14 @@ bun --cwd=packages/gui run pack          # build + electron-builder + codesign
 ```
 
 Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bundle so it runs locally. **Distribution builds** need a Developer ID Application certificate + notarization — macOS 26 refuses unsigned/non-notarized apps for several entitlements. See [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
+
+### Desktop app (Windows / Linux)
+
+`gui-release.yml` builds the Electron app per platform on tag pushes: macOS arm64 (`dmg` + `zip`), Windows x64 (NSIS assisted installer, per-user no-admin default), Linux x64/arm64 (`AppImage` + `deb`). Releasing a `v*` tag publishes all platform artifacts plus OTA manifests (`latest*.yml`, beta channel when the tag contains `-beta`) and an `update-manifest.json` for the in-app update check.
+
+### Mobile (Android)
+
+`package_mobile` in the same workflow builds the Capacitor app: desktop-web bundle → `cap sync` → Gradle `assembleDebug`. The debug APK lands on the release page; install with `adb install -r app-debug.apk`. HarmonyOS shell (`packages/harmony`) builds in DevEco Studio.
 
 ### CLI
 

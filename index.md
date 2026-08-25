@@ -6,11 +6,25 @@ title: MusePi
 <section class="mp-hero">
   <h1>MusePi</h1>
   <p class="mp-tagline">
-    A desktop-first AI coding agent — an Electron GUI, an always-on desktop pet and a
-    daemon service on top of the oh-my-pi agent engine. Chinese-first, frosted-glass,
-    keyboard-driven.
+    A desktop-first AI coding agent — an Electron GUI, an always-on desktop pet, a
+    mobile companion and a daemon service on top of the oh-my-pi agent engine.
+    Chinese-first, frosted-glass, keyboard-driven.
   </p>
-  <a class="mp-cta" href="{{ '/docs/' | relative_url }}">Read the docs →</a>
+  <div class="mp-cta-row">
+    <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases">Download v0.4.4 →</a>
+    <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
+  </div>
+  <div class="mp-version">
+    <span class="mp-pulse" aria-hidden="true"></span>
+    <span class="mp-version-tag">v0.4.4</span>
+    <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
+  </div>
+  <div class="mp-hero-code">
+    <span class="mp-cmd">bun run setup</span><br>
+    <span class="mp-cmd">bun run musepi</span>                <span style="opacity:.5"># terminal TUI</span><br>
+    <span class="mp-cmd">bun --cwd=packages/gui run desktop</span>  <span style="opacity:.5"># desktop GUI</span>
+  </div>
+</section>
   <div class="mp-hero-code">
     <span class="mp-cmd">bun run setup</span><br>
     <span class="mp-cmd">bun run musepi</span>                <span style="opacity:.5"># terminal TUI</span><br>
@@ -18,7 +32,7 @@ title: MusePi
   </div>
 </section>
 
-<section class="mp-section" id="features">
+<section class="mp-section mp-reveal" id="features">
   <h2>What makes MusePi different</h2>
   <div class="mp-grid">
     <div class="mp-card">
@@ -51,10 +65,22 @@ title: MusePi
       <p>Live kanban with window-adaptive canvas and a ChromaGrid-style group glow;
          custom HTML widgets with theme hot-swap.</p>
     </div>
+    <div class="mp-card">
+      <h3><span class="mp-dot"></span>Mobile companion</h3>
+      <p>Capacitor Android app pairing with your desktop daemon over LAN — QR join,
+         session archiving, three-in-one send with dot-matrix bloom, braille working
+         indicator. PWA offline shell + HarmonyOS WebView shell.</p>
+    </div>
+    <div class="mp-card">
+      <h3><span class="mp-dot"></span>Remote &amp; branching</h3>
+      <p>Guests manage sessions and stop running turns remotely (E2E-encrypted collab).
+         撤回 = branchAt tree jumps with an animated undo dock; /btw promotes into a
+         branched session; plan approve-and-compact keeps context lean.</p>
+    </div>
   </div>
 </section>
 
-<section class="mp-section" id="screens">
+<section class="mp-section mp-reveal" id="screens">
   <h2>Screens</h2>
   <div class="mp-shots">
     <figure class="mp-shot">
@@ -72,7 +98,7 @@ title: MusePi
   </div>
 </section>
 
-<section class="mp-section" id="quick-start">
+<section class="mp-section mp-reveal" id="quick-start">
   <h2>Quick start</h2>
   <div class="mp-quick">
 <pre><span class="mp-cmd">bun run setup</span>                  # install + natives + link
@@ -83,10 +109,11 @@ title: MusePi
   <p style="color:var(--text-muted);font-size:14px">The full guide lives in <a href="{{ 'README.md' | relative_url }}">README.md</a>.</p>
 </section>
 
-<section class="mp-section">
+<section class="mp-section mp-reveal">
   <h2>Documentation</h2>
   <ul class="mp-docs">
     <li><a href="{{ 'docs/gui-design.md' | relative_url }}">GUI design spec — layout / tokens / motion / components</a></li>
+    <li><a href="{{ 'docs/mobile-design.md' | relative_url }}">Mobile design spec — screens / motion / native chrome</a></li>
     <li><a href="{{ 'docs/gui-implementation.md' | relative_url }}">GUI implementation — daemon RPC shapes, pitfalls, verification</a></li>
     <li><a href="{{ 'docs/widget-design-system.md' | relative_url }}">Widget design system</a></li>
     <li><a href="{{ 'docs/board-dashboard.md' | relative_url }}">Board dashboard</a></li>
