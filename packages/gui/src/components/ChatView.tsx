@@ -782,6 +782,8 @@ export function ChatView({
 			});
 			if (res?.ok === true) {
 				await refreshReverts();
+				setCurrentLeafKey(null);
+				pulseSwitch();
 				await onReloadSession?.();
 			}
 		} catch {
