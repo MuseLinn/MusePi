@@ -422,6 +422,32 @@
 	outline: none;
 }
 
+/* ── Composer braille status line (desktop GUI parity) ── */
+.sh-composer-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 0 4px;
+	font-size: 11px;
+	line-height: 1;
+	color: var(--accent, oklch(0.674 0.23 341));
+}
+.sh-braille {
+	font-size: 14px;
+	line-height: 1;
+	width: 1em;
+	height: 1em;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(135deg, var(--accent, oklch(0.674 0.23 341)), oklch(0.7 0.18 301));
+	background-clip: text;
+	-webkit-background-clip: text;
+	color: transparent;
+}
+.sh-composer-status-text {
+	opacity: 0.7;
+}
 .sh-composer-actions {
 	display: flex;
 	align-items: center;

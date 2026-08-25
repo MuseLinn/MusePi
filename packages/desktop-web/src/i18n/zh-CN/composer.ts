@@ -1,5 +1,6 @@
 export const composer = {
 	// ── Composer ──────────────────────────────────────────────────────────────
+	"Working…": "工作中…",
 	"type your response…": "输入您的回复…",
 	"read-only session — watching only": "只读会话 — 仅观看",
 	"prompt the host agent…": "向宿主代理发送提示…",

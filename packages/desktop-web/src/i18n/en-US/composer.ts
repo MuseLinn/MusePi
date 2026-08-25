@@ -2,6 +2,7 @@ import type { ComposerKey } from "../zh-CN/composer.js";
 
 export const composer = {
 	// ── Composer ──────────────────────────────────────────────────────────────
+	"Working…": "Working…",
 	"type your response…": "Type your response…",
 	"read-only session — watching only": "Read-only session — watching only",
 	"prompt the host agent…": "Prompt the host agent…",
