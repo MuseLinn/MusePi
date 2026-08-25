@@ -422,31 +422,37 @@
 	outline: none;
 }
 
-/* ── Composer braille status line (desktop GUI parity) ── */
-.sh-composer-status {
-	display: flex;
-	align-items: center;
+/* ── 三合一 send control (desktop GUI parity) ── */
+.sh-btn-send-work {
+	/* accent pill — same tokens as sh-btn-primary, capsule shape like
+	 * gui-composer-send--working; the dot-matrix bloom reads in
+	 * --accent-fg on the accent fill. */
+	color: var(--accent-fg);
+	background: var(--accent);
+	border-color: var(--accent);
+	border-radius: 999px;
+	min-width: 72px;
+	padding: 4px 12px;
 	gap: 6px;
-	padding: 2px 0 4px;
-	font-size: 11px;
-	line-height: 1;
-	color: var(--accent, oklch(0.674 0.23 341));
 }
-.sh-braille {
-	font-size: 14px;
-	line-height: 1;
-	width: 1em;
-	height: 1em;
+.sh-btn-send-work:active:not(:disabled) {
+	filter: brightness(1.04);
+}
+.sh-send-work {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	background: linear-gradient(135deg, var(--accent, oklch(0.674 0.23 341)), oklch(0.7 0.18 301));
-	background-clip: text;
-	-webkit-background-clip: text;
-	color: transparent;
+	gap: 6px;
 }
-.sh-composer-status-text {
-	opacity: 0.7;
+.sh-send-matrix {
+	color: currentColor;
+	flex: none;
+}
+.sh-send-label {
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1;
+	white-space: nowrap;
 }
 .sh-composer-actions {
 	display: flex;

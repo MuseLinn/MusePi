@@ -1,10 +1,11 @@
 import { SendHorizontal, Square } from "lucide-react";
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { GuestClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import { useGuestSelector } from "../../lib/use-guest";
+import { MatrixLoader } from "./matrix-loader";
 import { SuggestionChips } from "./SuggestionChips";
 
 export interface ComposerProps {
@@ -122,17 +123,6 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const uiRequest = useGuestSelector(client, s => s.uiRequest);
 	const busy = useGuestSelector(client, s => s.working);
-	// Braille dot-matrix spinner (desktop GUI parity: cli-spinners "dots").
-	const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-	const [braille, setBraille] = useState(0);
-	useEffect(() => {
-		if (!busy) {
-			setBraille(0);
-			return;
-		}
-		const id = window.setInterval(() => setBraille(i => (i + 1) % BRAILLE_FRAMES.length), 80);
-		return () => clearInterval(id);
-	}, [busy]);
 	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
 	// Empty-state draft suggestions (openchamber parity): show only while the
 	// session is live, editable and has nothing to show yet.
@@ -252,43 +242,43 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					rows={1}
 					spellCheck={false}
 				/>
-				{busy && !readOnly && (
-					<div className="sh-composer-status" role="status" aria-live="polite">
-						<span className="sh-braille" aria-hidden>
-							{BRAILLE_FRAMES[braille]}
-						</span>
-						<span className="sh-composer-status-text">{t("Working…")}</span>
-					</div>
-				)}
 				<div className="sh-composer-actions">
 					{busy && queued > 0 && (
 						<span className="sh-queued">
 							<span className="sh-queued-label">{t("queued")} </span>×{queued}
 						</span>
 					)}
-					{busy && !readOnly && (
+					{busy && !readOnly ? (
+						/* 三合一 send control (desktop GUI parity): the same button
+						 * that sends becomes the live working display — accent pill
+						 * with the dot-matrix bloom; tap aborts the turn. */
 						<button
 							type="button"
-							className="sh-btn sh-btn-stop"
+							className="sh-btn sh-btn-send-work"
 							onClick={() => {
 								client.sendAbort();
 								haptic(15);
 							}}
 							disabled={!live}
 							title={t("stop the current turn")}
+							aria-label={t("stop the current turn")}
 						>
-							<Square size={11} /> <span className="sh-btn-label">{t("Stop")}</span>
+							<span className="sh-send-work">
+								<MatrixLoader className="sh-send-matrix" />
+								<span className="sh-send-label">{t("working active")}</span>
+							</span>
+						</button>
+					) : (
+						<button
+							type="button"
+							className="sh-btn sh-btn-primary"
+							onClick={send}
+							disabled={!canSend}
+							title={t("send (Enter)")}
+						>
+							<SendHorizontal size={12} /> <span className="sh-btn-label">{t("Send")}</span>
 						</button>
 					)}
-					<button
-						type="button"
-						className="sh-btn sh-btn-primary"
-						onClick={send}
-						disabled={!canSend}
-						title={t("send (Enter)")}
-					>
-						<SendHorizontal size={12} /> <span className="sh-btn-label">{t("Send")}</span>
-					</button>
 				</div>
 			</div>
 		</div>
