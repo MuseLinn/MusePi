@@ -52,6 +52,11 @@ export function useFloatingMenu(
 	const setAnchor = (el: HTMLElement | null): void => {
 		anchorRef.current = el;
 	};
+	// Portal container element — measured after first mount so horizontal
+	// clamping uses the REAL menu width instead of the estimate below
+	// (Base-UI/floating-ui flip+shift parity, hand-rolled).
+	const menuRef = useRef<HTMLDivElement | null>(null);
+	const measuredRef = useRef(false);
 	// Declarative anchor (Pop parity): an element passed straight in beats
 	// the imperative callback ref — read at positioning time so the layout
 	// effect below sees it on the SAME commit the menu opens. A point
@@ -64,8 +69,12 @@ export function useFloatingMenu(
 	const closeRef = useRef<() => void>(() => {});
 	closeRef.current = () => onOpenChange?.(false);
 
-	useLayoutEffect(() => {
-		if (!open) return;
+	// Viewport padding so a clamped menu never touches the window edge.
+	const MENU_EDGE_PAD = 8;
+	// Width assumed on the very first open (menu not mounted yet); snapped to
+	// the real offsetWidth on the next frame (see re-measure effect below).
+	const MENU_ESTIMATED_W = 260;
+	const positionMenu = (): void => {
 		const anchor = anchorOption ?? anchorRef.current;
 		if (!anchor) return;
 		// Point anchors (right-click menus) are a zero-size rect at (x,y);
@@ -77,16 +86,38 @@ export function useFloatingMenu(
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
 		const up = roomAbove > roomBelow;
+		const menuW = menuRef.current?.offsetWidth ?? MENU_ESTIMATED_W;
+		// Align: right -> menu's right edge on anchor's right edge; left ->
+		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
+		// the viewport — the previous anchor-only clamp (right: innerWidth -
+		// r.right) pushed menus past the LESS-visible edge: an overlay opened
+		// on the far-left header got clipped by the window edge.
+		const rawLeft = align === "right" ? r.right - menuW : r.left;
+		const left = Math.min(
+			Math.max(rawLeft, MENU_EDGE_PAD),
+			Math.max(MENU_EDGE_PAD, window.innerWidth - menuW - MENU_EDGE_PAD),
+		);
 		setClosing(false);
 		setEntered(false);
-		setPos({
-			...(align === "right"
-				? { right: Math.max(4, window.innerWidth - r.right) }
-				: { left: Math.min(r.left, window.innerWidth - 260) }),
-			...(!up ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }),
-			up,
-		});
+		setPos({ left, ...(!up ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }), up });
+	};
+	useLayoutEffect(() => {
+		if (!open) {
+			measuredRef.current = false;
+			return;
+		}
+		positionMenu();
 	}, [open, align]);
+
+	// One-shot re-measure: first positioning ran before the portal existed
+	// (estimated width) — after mount, snap left/right to the real menu
+	// width so right-aligned menus keep their right edge ON the anchor.
+	useLayoutEffect(() => {
+		if (!open || !pos || measuredRef.current) return;
+		if (!menuRef.current) return;
+		measuredRef.current = true;
+		positionMenu();
+	}, [open, pos]);
 
 	// Two-phase enter: paint at opacity 0, then start the fade next frame so
 	// the frosted backdrop is ready before it becomes visible.
@@ -166,6 +197,7 @@ export function useFloatingMenu(
 		if (!pos) return null;
 		return createPortal(
 			<div
+				ref={menuRef}
 				data-header-menu=""
 				className={`gui-menu-popup ${className}${closing ? " gui-menu-popup--closing" : ""}${!closing && entered ? " gui-menu-popup--entered" : ""}`}
 				style={{
