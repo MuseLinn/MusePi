@@ -36,7 +36,7 @@
 
 - **progress-guard 29/29 全过**(2026-08-26 实测) — 两个回归测试已修复
 - **session.prompt 17.4.0 重构已实现**(`src/session/agent-session.ts` #promptWithMessage/dispatched)
-- **`/cleanse` 17.4.0 增强** — 待比对上游(非必修;若上游增量无实质改进,跳过)
+- **`/cleanse` 17.4.0 增强** — 2026-08-26 评估:上游新增 cleanse/board.ts(CleanseStatusBoard 状态板)与 checker 事件类型;musepi 独立上游,既有 TUI 进度报告足够,不移植(非必修)
 - **issue-887 catalog 测试** — 该测试已不存在(非移植问题)
 - **codex 并行 flake** — 负载性,单跑全过,非回归
 - 候选未做(2026-08-26 核正) — **全部已实现**:registerFileWriteFallback/DeleteFallback、`musepi ps`、statusLine.contextLine、composer.shape、Anthropic retryTransientCompletion
