@@ -87,6 +87,7 @@ import { AssistantMessageComponent } from "../components/assistant-message";
 import { CopySelectorComponent } from "../components/copy-selector";
 import { ExtensionDashboard } from "../../extensibility/extensions-center";
 import { HistorySearchComponent } from "../components/history-search";
+import { ImportSessionSelector } from "../components/import-session-selector";
 import { LoginDialogComponent } from "../components/login-dialog";
 import { LogoutAccountSelectorComponent } from "../components/logout-account-selector";
 import { ModelHubComponent, type ModelRoleSelectionScope } from "../components/model-hub";
@@ -358,6 +359,19 @@ export class SelectorController {
 					this.ctx.editor.setText(prompt);
 					this.ctx.ui.requestRender();
 				},
+				() => {
+					done();
+					this.ctx.ui.requestRender();
+				},
+			);
+			return { component, focus: component };
+		});
+	}
+
+	showImportSelector(): void {
+		this.showSelector(done => {
+			const component = new ImportSessionSelector(
+				done,
 				() => {
 					done();
 					this.ctx.ui.requestRender();
