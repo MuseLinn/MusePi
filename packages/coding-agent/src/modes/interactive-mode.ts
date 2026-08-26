@@ -857,6 +857,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// spraying events no longer runs `getTopBorder` synchronously in the
 		// hot path where the render never gets to paint the result.
 		this.editor.setTopBorderProvider(availableWidth => this.statusLine.getTopBorder(availableWidth));
+		this.#focusController = new SessionFocusController(this);
 		this.syncComposerShape();
 
 		this.hideToolActivity = settings.get("display.hideToolActivity");
@@ -899,7 +900,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#todoCommandController = new TodoCommandController(this);
 		this.#liveCommandController = new LiveCommandController(this);
 		this.#selectorController = new SelectorController(this);
-		this.#focusController = new SessionFocusController(this);
 		this.#inputController = new InputController(this);
 		this.#observerRegistry = new SessionObserverRegistry();
 	}
