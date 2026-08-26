@@ -1,7 +1,7 @@
 # MusePi 插件化设计（介于 pi 与 dsh 之间）
 
 > 状态：**方向已定稿，P0/P1 已实现**。2026-08-20 调研 dsh-TUI(Cordis 插件生态)后立项;
-> 2026-08-25 核对：P0（8/8）与 P1（veto/observe）已落地并超前于本文件;P2 ◐（命令/快捷键 ✅、状态行 ❌）;P3 ◐（主题 token ✅、通知通道 ✅）;P4 ◐（定时器 ✅、服务域 ❌）。
+> 2026-08-25 核对：P0（8/8）与 P1（veto/observe）已落地并超前于本文件;P2 ◐（命令/快捷键 ✅、状态行 ❌）;P3 ✅（主题 token + 通知通道,2026-08-26）;P4 ✅（定时器 + 服务域,2026-08-26 核正——服务 stop 在 reload/shutdown 全链路已接线）。
 > 本文件定义核心边界、接缝清单、可逆卸载契约与阶段路线,供后续实现对齐。
 
 ## 0. 定位：介于 pi 与 dsh 之间
@@ -126,7 +126,7 @@ DSH 的 13 类接缝映射到 MusePi 目标接缝(新增标 ★,核心观察类�
 | P1 | 决策 veto/observe 接缝(approval 扩展化 + agent 事件只读订阅) | 插件可 veto 工具执行;卸载后核心行为逐位不变 | ✅ 达成(wrapper tool_call block/input + ExtensionEvent 37 事件 × on();待补:同点多扩展 veto 仲裁) |
 | P2 | TUI 接缝:状态行/快捷键/命令追加 | TUI 与 GUI 同源扩展装载 | ◐ 2/3(命令/快捷键 ✅;TUI 状态行段 ❌ SEGMENTS 静态) |
 | P3 | 主题 token 追加 + 通知通道 | 主题贡献删除即还原 | ❌ 仅 themePaths 文件贡献间接形态 |
-| P4 | 服务/定时器隔离域 | 卸载即停,无残留进程 | ◐ 定时器域 ✅(ManagedTimers);服务域 ❌ |
+| P4 | 服务/定时器隔离域 | 卸载即停,无残留进程 | ✅ 定时器域 ✅(ManagedTimers);服务域 ✅(reload #stopServicesForExtension + shutdown stopServices,2026-08-26 核正) |
 
 每阶段验收必须含:**回滚/卸载后核心行为快照对比**(会话创建、暂停、
 权限链判定、压缩触发各跑一次对照)。

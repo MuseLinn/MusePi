@@ -26,7 +26,7 @@ The desktop GUI follows its own living spec — **`docs/gui-design.md`** (design
 |---|---|---|
 | `docs/modes-plan.md` | ✅ v1+v2 已实现（2026-08-21 `7bff540c13`/`457039db31`） | `coding-agent/src/presets/resolve.ts`、`prompts/composer.ts`、`--preset` CLI、GUI 欢迎页 mode chip |
 | `docs/tui-trace-plan.md` | ✅ 已实现（2026-08-26） | `/trace` 叠加在 `/tree` 上；`modes/components/tree-selector.ts` 投影参数、`test/modes/components/trace-selector.test.ts` |
-| `docs/plugin-design.md` | ✅ P0/P1 已实现；P2 ✅ 状态行段（2026-08-26）；P3 ◐ 主题 token ✅ 通知通道 ✅（2026-08-26）；P4 ◐ 定时器 ✅ 服务域 ❌ | 方向定稿（pi 组件完备 + dsh 扩展生态折中）；**不引入 cordis.patch.yml / 改写型决策事件 / 卸载不可逆** |
+| `docs/plugin-design.md` | ✅ P0–P4 全部实现（P2 状态行段 2026-08-26；P3 通知通道 2026-08-26；P4 服务域 2026-08-26 核正） | 方向定稿（pi 组件完备 + dsh 扩展生态折中）；**不引入 cordis.patch.yml / 改写型决策事件 / 卸载不可逆** |
 | `docs/session-tree-redesign.md` | ✅ Phase 0–5 已实现（indexeddb 缓存跳过） | `session.tree` RPC 是会话列表树；会话内拓扑在 `snap.entries` 内存 + daemon journal |
 | `docs/widget-design-system.md` | ✅ registry 层已实现（18 种 widget）；iframe 沙箱层部分 | `desktop-web/test/widget-parity.test.ts` |
 | `docs/gui-right-panel-redesign.md` | ◐ Phase 1 核心大部分落地；TabBar/多实例为架构否决 | `surfaces/registry.ts`、`RightRail.tsx`、`ContextPanel.tsx` |
