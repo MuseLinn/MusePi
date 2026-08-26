@@ -36,7 +36,7 @@
 
 ### 3.2 中期（中风险）
 - **单一 runner**：把 hooks/runner.ts 合并进 extensions/runner.ts，hooks 注册为 extension 的 event handlers（DSH：hooks-claude-code / hooks-codex 作为 cordis 插件）
-- **capability seam 文档**：`docs/extensibility-seams.md` 列出 service 声明/实现/消费者（对齐 DSH docs/capability-seams.md）
+- **capability seam 文档（规划中，文档未建成）**：`docs/extensibility-seams.md`（列出 service 声明/实现/消费者，对齐 DSH docs/capability-seams.md）
 
 ### 3.3 长期（高风险，需评估）
 - **Cordis 引入**：vendored cordis 替换自研 EventBus——获得 DI/typed events/waterfall dispatch/plugin 生命周期

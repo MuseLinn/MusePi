@@ -2,7 +2,7 @@
 
 > 状态:**已实现（v1+v2，2026-08-21 提交 7bff540c13 / 457039db31）**。目标:命名预设 = { 扩展工具集 + 系统提示词 + settings 覆盖 } 的聚合与切换,支撑 Work / Design 等角色模式。
 > 2026-08-25 核对:`presets/resolve.ts`（createModeResolver/resolve）、`prompts/composer.ts`（PromptComposer）、sdk.ts modeId 全链路、server.ts modes.list/get RPC + modes.changed 广播均已在。
-> 关联:扩展 HMR v2 契约(`docs/extension-hmr-v2-plan.md`)、ModelSelector 三态语义(已修)。
+> 关联:扩展 HMR v2 契约(`docs/extensions-dev.md` §6 热插拔)、ModelSelector 三态语义(已修)。
 
 ## 1. 背景与目标
 

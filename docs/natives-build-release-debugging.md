@@ -239,7 +239,7 @@ bazelisk build --nobuild //:natives-win32-x64-baseline
 - **omp-kata:** read-write gRPC to the in-cluster bazel-remote (`grpcs://bazel-remote.bazel-cache.svc.cluster.local:9092`, TLS via the committed `infra/bazel-remote/ca.crt`, htpasswd user `ci`). `--remote_local_fallback` plus retries make an outage degrade to local execution rather than fail the build.
 - **GitHub-hosted:** no cluster access; only the darwin release/warm jobs build with bazel here. The v3 `actions/cache` disk key separates config and source generations with prefix + bare fallbacks (see the `bazel-cache` action section above); `.github/workflows/bazel-cache-warm.yml` publishes the `release-darwin-*` archives from the same macOS images as the release consumers.
 - **msvc repos:** the ~2 GiB LLVM download is sha256-pinned and repository-cache backed; the ~1 GiB xwin CRT/SDK splat is fetched from the Microsoft CDN inside the repo rule and is **not** repo-cache backed — a cold output base re-downloads it. Microsoft advances the VS channel payload over time, so remote-cache hit rates for win32 actions degrade gracefully after an MS bump (same property the previous cross toolchain had). Win32 link actions also don't share cache entries across host OSes (linux vs mac clang binaries).
-- Server-side operations (deploy, TLS/auth, egress, poisoning boundary): `infra/docs/04-arc-and-caching.md` §5.
+- Server-side operations (deploy, TLS/auth, egress, poisoning boundary): `../oh-my-pi/infra/docs/04-arc-and-caching.md` §5.
 
 ## Target/variant model and naming conventions
 

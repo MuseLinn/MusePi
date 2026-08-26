@@ -1,7 +1,6 @@
 # MusePi 移动端设计规范（Mobile Companion）
 
-> **状态（2026-08-25 核对）**：壳已构建（`packages/mobile` Capacitor Android + desktop-web 移动入口，CI mobile job 活跃；
-> 完整度核对见 `docs/audit-upstream-gaps.md` §9 —— 托盘/会话导入/usage/win32 玻璃均已在，移动端实现细节待专项核对）。
+> **状态（2026-08-25 核对）**：壳已构建（`packages/mobile` Capacitor Android + desktop-web 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在，移动端实现细节待专项核对）。
 >
 > 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/desktop-web` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。

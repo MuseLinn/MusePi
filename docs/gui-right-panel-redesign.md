@@ -10,7 +10,7 @@
 
 ## 0. 实现状态（2026-08-25 核对）
 
-> 核对方法：`docs/audit-right-panel.md`（逐项 vs `packages/gui/src/`）。
+> 核对方法：逐项 vs `packages/gui/src/`。
 
 - **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ❌。
 - **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ❌、上下文 gating ❌、Mod+1..9 ❌、pop-out ❌。

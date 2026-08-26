@@ -14,7 +14,31 @@ The desktop GUI follows its own living spec — **`docs/gui-design.md`** (design
 - **CSS-only interactions stay CSS-only** (chroma group glow via CSS vars + hover; recap slide via sibling selectors) — no React state for pointer tracks.
 - **i18n 词表按域拆分**（`desktop-web/src/i18n/{zh-CN,en-US}/<domain>.ts`，TUI 在 `coding-agent/src/i18n/zh-CN/`）：改文案找对应域文件，禁止塞回单文件；en 域文件必须 `as const satisfies Record<ZhKey, string>`（缺/多 key 即编译错误，加 zh key 必须同步 en）；域间 key 重复 → barrel 模块加载抛错。插件/扩展文案走 `registerTranslations`（GUI 另有 `tLoose`），不直接改词表。架构见 `docs/i18n.md`。
 - **Extension HMR / `registerComponent`**（P4 v1 + P5 v2，契约见 `docs/extensions-dev.md §6`）：扩展入口文件变更 → daemon watcher 500ms 内广播 `extensions.changed`（GUI `useSlotComponents`/`ExtensionsCenter`/`PluginsSection` 监听即刷，替代纯轮询）+ 对每个活跃会话按入口 mtime 对比执行 `reloadExtension`（忙会话挂起、`agent_end` 补做），完成发会话内事件 `extensions.reloaded`。GUI 组件渲染 = 文件变更后 ~1s；会话内工具 = 下次调用生效（旧名若未被新模块重注册则从注册表删除）。**子模块改动不热生效**（Bun 模块缓存只重键入口 specifier）——多文件扩展改子模块需 touch 入口。扩展内存态不迁移、在途副作用不回收、handler 重载存在 ~ms 双跑窗口（旧 handler 先清后推新）。新增扩展 API 必须同步更新 `docs/extensions-dev.md`。
-- **Modes（预设）与扩展中心分类**（`docs/modes-plan.md`）：预设 = 扩展白名单 + 提示词区块 + settings 覆盖，文件在 `~/.musepi/modes/<id>.json`（`modes/resolve.ts` 继承展开/校验、`prompts/composer.ts` 注入；入口 `--preset` CLI / GUI 欢迎页项目行 chip / 设置→智能体→预设）。**扩展中心 provider 并存**：`omp-plugins` = "OMP Extension Packages"（上游生态，勿改品牌名）、`musepi-extensions` = "MusePi Extensions"（自有扩展系统，`discovery/builtin.ts` 的 ExtensionModule/Extension 源标记）——新增自有扩展能力沿用 `musepi-extensions` provider，勿并入 native。
+- **Modes（预设）与扩展中心分类**（`docs/modes-plan.md`）：预设 = 扩展白名单 + 提示词区块 + settings 覆盖，文件在 `~/.musepi/modes/<id>.json`（`presets/resolve.ts` 继承展开/校验、`prompts/composer.ts` 注入；入口 `--preset` CLI / GUI 欢迎页项目行 chip / 设置→智能体→预设）。**扩展中心 provider 并存**：`omp-plugins` = "OMP Extension Packages"（上游生态，勿改品牌名）、`musepi-extensions` = "MusePi Extensions"（自有扩展系统，`discovery/builtin.ts` 的 ExtensionModule/Extension 源标记）——新增自有扩展能力沿用 `musepi-extensions` provider，勿并入 native。
+
+## Docs: 计划文档实现状态速查
+
+> **权威状态在 `docs/` 各文档头部状态行**。本轮（2026-08-26）逐项核验后固化如下；改动功能时先更新对应计划文档状态行，再参考本文避免重复核验。
+
+各计划文档实现状态（2026-08-26 核对）：
+
+| 文档 | 状态 | 关键实现位置 |
+|---|---|---|
+| `docs/modes-plan.md` | ✅ v1+v2 已实现（2026-08-21 `7bff540c13`/`457039db31`） | `coding-agent/src/presets/resolve.ts`、`prompts/composer.ts`、`--preset` CLI、GUI 欢迎页 mode chip |
+| `docs/tui-trace-plan.md` | ✅ 已实现（2026-08-26） | `/trace` 叠加在 `/tree` 上；`modes/components/tree-selector.ts` 投影参数、`test/modes/components/trace-selector.test.ts` |
+| `docs/plugin-design.md` | ✅ P0/P1 已实现；P2 ◐（状态行 ❌）；P3 ❌；P4 ◐ | 方向定稿（pi 组件完备 + dsh 扩展生态折中）；**不引入 cordis.patch.yml / 改写型决策事件 / 卸载不可逆** |
+| `docs/session-tree-redesign.md` | ✅ Phase 0–5 已实现（indexeddb 缓存跳过） | `session.tree` RPC 是会话列表树；会话内拓扑在 `snap.entries` 内存 + daemon journal |
+| `docs/widget-design-system.md` | ✅ registry 层已实现（18 种 widget）；iframe 沙箱层部分 | `desktop-web/test/widget-parity.test.ts` |
+| `docs/gui-right-panel-redesign.md` | ◐ Phase 1 核心大部分落地；TabBar/多实例为架构否决 | `surfaces/registry.ts`、`RightRail.tsx`、`ContextPanel.tsx` |
+| `docs/mobile-design.md` | ◐ 壳已构建（Capacitor Android + desktop-web 移动入口）；移动端细节待专项核对 | `packages/mobile`、`desktop-web/mobile.*` |
+
+**文档双语约定**（参照 dsh 配对，仓库既有后缀是 `.zh-CN.md` 非 `.zh.md`）：
+
+- 配对 = 三个同级文件：`X.md` + `X.zh-CN.md` + `X.i18n.yaml`（blob-hash 记录配对）。
+- 门控脚本：`bun run verify-translation-pairing`（全量报告 exit 0，列出 missing-pair；命名配对严格 exit 1——渐进落地不阻塞 CI）。
+- 配对契约：`docs/i18n/README.md`；语言切换器、结构调整勾选后 `--write` 记录 hash。
+- 修改 `docs/*.md` 时若终态仍有对应 `.zh-CN.md`，必须同步更新双语（除非是临时/已闭合文档——应删除而非翻译）。
+- 排除配对：`docs/AGENTS.md`、`docs/CLAUDE.md`、`docs/skills/examples/**/README.md`。
 
 ## Default Context
 
