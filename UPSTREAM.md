@@ -37,7 +37,7 @@
 1. **2 个 progress-guard 回归测试**(agent-session-auto-compaction-progress-guard 27/29):代码链(agent.continue/scheduleAgentContinue/scheduleCompactionContinuation/isTerminalTextAssistantAnswer/findLastAssistantMessage/emitExternalEvent)与上游字节一致,仅 fork 的 session.prompt 为 17.3.4 版(上游 17.4.0 重构为 #promptWithMessage + dispatched 流程)导致续跑触发路径差异;session.prompt 重构是 daemon 耦合大改动,留作单独任务
 2. **issue-887 catalog 测试失败**:上游 17.4.0 本身同样失败,非移植问题
 3. **codex 流式 2 测试并行 flake**:5s 超时,单跑全过,非回归
-4. 候选未做:registerFileWriteFallback/DeleteFallback(17.3.6)、/cleanse 17.4.0 增强、`omp ps`、statusLine.contextLine、composer.shape、Anthropic map-reduce withRetry→retryTransientCompletion(2 文件小改)
+4. 候选未做(2026-08-26 核正:大部分已陆续实现)——已实现:registerFileWriteFallback/DeleteFallback(loader.ts:204 + patch.ts hasFileWriteFallback)、`musepi ps`(cli-commands.ts)、statusLine.contextLine(settings-schema)、composer.shape(types.ts registerComposerShape)、Anthropic retryTransientCompletion(ai/oneshot-retry.ts:143);**仍缺**:session.prompt 17.4.0 重构(=缺口 1)、/cleanse 17.4.0 增强(待比对上游)
 
 ## 同步状态（历史记录，截至归档）
 
