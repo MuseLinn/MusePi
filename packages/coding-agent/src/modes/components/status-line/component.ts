@@ -1648,6 +1648,7 @@ export class StatusLineComponent implements Component {
 		const gitPr = includePr ? this.#lookupPr(activeRepoCache.effectiveGitCwd) : null;
 		return {
 			session: this.session,
+			modeId: this.session.sessionManager?.getHeader?.()?.modeId,
 			focusedAgentId: this.#focusedAgentId,
 			sessionAccent: this.#resolveSettings().sessionAccent !== false,
 			previewTitle,

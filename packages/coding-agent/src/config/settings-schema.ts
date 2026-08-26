@@ -237,6 +237,7 @@ export const TAB_GROUPS: Record<SettingTab, readonly string[]> = {
 
 /** Status line segment identifiers */
 export type StatusLineSegmentId =
+	| "preset"
 	| "pi"
 	| "model"
 	| "mode"

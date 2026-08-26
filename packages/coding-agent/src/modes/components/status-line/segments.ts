@@ -82,6 +82,23 @@ function classifyProjectDir(pwd: string): { scratch: boolean; relative: string |
 // Segment Implementations
 // ═══════════════════════════════════════════════════════════════════════════
 
+const MODE_LABELS: Record<string, string> = {
+	work: "Work",
+	chat: "Chat",
+	design: "Design",
+	creator: "Creator",
+};
+
+const presetSegment: StatusLineSegment = {
+	id: "preset",
+	render(ctx) {
+		if (!ctx.modeId) return { content: "", visible: false };
+		const label = MODE_LABELS[ctx.modeId] ?? ctx.modeId;
+		const content = withIcon(theme.icon.prewalk, label);
+		return { content: theme.fg("accent", content), visible: true };
+	},
+};
+
 const piSegment: StatusLineSegment = {
 	id: "pi",
 	render(ctx) {
@@ -697,6 +714,7 @@ const usageSegment: StatusLineSegment = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const SEGMENTS: Record<StatusLineSegmentId, StatusLineSegment> = {
+	preset: presetSegment,
 	pi: piSegment,
 	model: modelSegment,
 	mode: modeSegment,
