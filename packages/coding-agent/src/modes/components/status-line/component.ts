@@ -12,6 +12,7 @@ import {
 import { adjustHsv, formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../../config/settings";
 import type { AgentSession } from "../../../session/agent-session";
+import type { ExtensionStatusBarSegment } from "../../../extensibility/extensions/types";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
 import { limitMatchesActiveAccount } from "../../../slash-commands/helpers/active-oauth-account";
 import { type ActiveRepoContext, resolveActiveRepoContextSync } from "../../../utils/active-repo-context";
