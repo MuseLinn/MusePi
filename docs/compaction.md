@@ -1,5 +1,7 @@
 # Compaction and Branch Summaries
 
+
+[English](compaction.md) | [中文](compaction.zh-CN.md)
 Compaction and branch summaries are the two mechanisms that keep long sessions usable without losing prior work context.
 
 - **Compaction** rewrites old history into a summary on the current branch.

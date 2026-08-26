@@ -1,0 +1,5 @@
+# Consistency record for tree.md / tree.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/tree
+tree.md: 600c49cfcfefde0cfc8e9270ada64257bc7da15a
+tree.zh-CN.md: 01ddf14565e9fb54905be70cfff980674e5c516a

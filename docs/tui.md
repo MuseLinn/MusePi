@@ -1,5 +1,7 @@
 # TUI integration for extensions and custom tools
 
+
+[English](tui.md) | [中文](tui.zh-CN.md)
 This document covers the **current** TUI contract used by `packages/coding-agent` and `packages/tui` for extension UI, custom tool UI, and custom renderers.
 
 ## What this subsystem is

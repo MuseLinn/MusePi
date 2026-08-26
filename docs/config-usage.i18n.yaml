@@ -1,0 +1,5 @@
+# Consistency record for config-usage.md / config-usage.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/config-usage
+config-usage.md: b73a7bd1dd2f2ea0ed575befb5e62674a83868cb
+config-usage.zh-CN.md: 2ab8867ee5ebe6d2229f140d7e3769c24ff9a836

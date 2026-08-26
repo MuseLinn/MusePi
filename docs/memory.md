@@ -1,5 +1,7 @@
 # Autonomous Memory
 
+
+[English](memory.md) | [中文](memory.zh-CN.md)
 When the local memory backend is enabled, the agent automatically extracts durable knowledge from past sessions and injects a compact summary into future sessions for the same project. Over time it builds a project-scoped memory store — technical decisions, recurring workflows, pitfalls — that carries forward without manual effort.
 
 Disabled by default. Enable the local summary pipeline via `/settings` or `config.yml`:

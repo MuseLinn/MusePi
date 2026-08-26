@@ -1,0 +1,5 @@
+# Consistency record for tui.md / tui.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/tui
+tui.md: 68bfb1fd8b4bf2fb0d179caf68ae382d6e244e8a
+tui.zh-CN.md: 5a81bcfed4af3ea486efced3afa12ee41d9b5bdb

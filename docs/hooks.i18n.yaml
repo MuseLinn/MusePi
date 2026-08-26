@@ -1,0 +1,5 @@
+# Consistency record for hooks.md / hooks.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/hooks
+hooks.md: 7948d5fbb753e022841704ac97676f9a17c62ab4
+hooks.zh-CN.md: 96de838b47bd8245ae66c23696aa340ae2cd158b

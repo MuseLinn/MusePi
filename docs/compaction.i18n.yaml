@@ -1,0 +1,5 @@
+# Consistency record for compaction.md / compaction.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/compaction
+compaction.md: df7ec352b6983f4ff03e9f2983bc090e68159b48
+compaction.zh-CN.md: a0e467bddf180cdf6bc01bda74ea615f871e1f62

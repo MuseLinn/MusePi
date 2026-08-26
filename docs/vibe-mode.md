@@ -1,5 +1,7 @@
 # Vibe mode
 
+
+[English](vibe-mode.md) | [中文](vibe-mode.zh-CN.md)
 Vibe mode turns the session into a **director** that drives persistent background
 worker sessions instead of editing code itself. In vibe mode your own toolset is
 stripped down to `read`, optional parent-owned `todo`, plus five worker-control

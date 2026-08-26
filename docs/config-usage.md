@@ -1,5 +1,7 @@
 # Configuration Discovery and Resolution
 
+
+[English](config-usage.md) | [中文](config-usage.zh-CN.md)
 This document describes how the coding-agent resolves configuration today: which roots are scanned, how precedence works, and how resolved config is consumed by settings, skills, hooks, tools, and extensions.
 
 ## Scope

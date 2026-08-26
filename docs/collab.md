@@ -1,5 +1,7 @@
 # Collab: Live Session Sharing
 
+
+[English](collab.md) | [中文](collab.zh-CN.md)
 `/collab` shares your running session with other musepi instances in real time. Guests render the **same session natively in their own TUI** — streaming assistant text, tool-call cards, footer state (cwd, model, context %, cost), ctrl+o expansion, `/dump` — no terminal mirroring. Guests can prompt and interrupt the agent; the host machine runs the agent and all tools.
 
 ## Quick start

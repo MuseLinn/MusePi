@@ -1,5 +1,7 @@
 # Hooks
 
+
+[English](hooks.md) | [中文](hooks.zh-CN.md)
 This document describes the **current hook subsystem code** in `src/extensibility/hooks/*`.
 
 ## Current status in runtime

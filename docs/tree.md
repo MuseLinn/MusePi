@@ -1,5 +1,7 @@
 # `/tree` Command Reference
 
+
+[English](tree.md) | [中文](tree.zh-CN.md)
 `/tree` opens the interactive **Session Tree** navigator. It lets you jump to any entry in the current session file and continue from that point.
 
 This is an in-file leaf move, not a new session export.

@@ -1,0 +1,5 @@
+# Consistency record for vibe-mode.md / vibe-mode.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/vibe-mode
+vibe-mode.md: a77e94291e764c7a45bebdcb8fbb312f2cac7c95
+vibe-mode.zh-CN.md: 822cb3908b81a5bbc6c9d50d1ec5427d531560cb
