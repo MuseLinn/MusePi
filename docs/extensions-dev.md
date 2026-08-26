@@ -1,5 +1,7 @@
 # MusePi 扩展开发规范(Agent 版)
 
+[English](extensions-dev.md) | [中文](extensions-dev.zh-CN.md)
+
 > 给 LLM agent(以及人类开发者)的 musepi-omp 扩展开发指南。本文件回答三个问题:
 > 1. OMP Plugin 与 MusePi Plugin 的划分与兼容边界;
 > 2. 一个扩展从零到落地要走哪些步骤、遵循什么结构;

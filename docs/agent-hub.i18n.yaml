@@ -1,0 +1,5 @@
+# Consistency record for agent-hub.md / agent-hub.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/agent-hub
+agent-hub.md: 44cc46f09f36685f110d1194103f07df43f7d13c
+agent-hub.zh-CN.md: 408055edd94f3b9207e42a38d6fca1eead42fe85

@@ -1,0 +1,5 @@
+# Consistency record for lsp-config.md / lsp-config.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/lsp-config
+lsp-config.md: 0e948efe017fd7cf09c900de93d857a63cb02a71
+lsp-config.zh-CN.md: cabae6567a71d176329ca9a4ecb057cb72edf0bc

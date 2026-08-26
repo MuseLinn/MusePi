@@ -1,0 +1,5 @@
+# Consistency record for local-models.md / local-models.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/local-models
+local-models.md: 2fb8c23fe84281d0b165129e93b4accd046cf54f
+local-models.zh-CN.md: 982e90cb42e090051e6e537c2a7f81fb36bbcc7d

@@ -1,5 +1,7 @@
 # Embedded Local Tiny-Model Experiments
 
+English | [中文](local-models.zh-CN.md)
+
 This document summarizes the experiments behind the optional **local** tiny-model paths for
 session-title generation (`providers.tinyModel`), Mnemopi memory extraction/consolidation
 (`providers.memoryModel`), and the `auto` thinking-level difficulty classifier

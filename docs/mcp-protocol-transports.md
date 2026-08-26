@@ -1,5 +1,7 @@
 # MCP Protocol and Transport Internals
 
+[English](mcp-protocol-transports.md) | [中文](mcp-protocol-transports.zh-CN.md)
+
 This document describes how coding-agent implements MCP JSON-RPC messaging and how protocol concerns are split from transport concerns.
 
 ## Scope

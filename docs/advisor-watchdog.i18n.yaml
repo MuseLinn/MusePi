@@ -1,0 +1,5 @@
+# Consistency record for advisor-watchdog.md / advisor-watchdog.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/advisor-watchdog
+advisor-watchdog.md: 9edb0c40ff35b78b72ef3d75e3a4f933ef38eb2d
+advisor-watchdog.zh-CN.md: ccceead1137afd58d3521aa648ff04aa1d0a3400

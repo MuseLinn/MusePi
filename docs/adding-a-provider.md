@@ -1,5 +1,7 @@
 # Adding a provider
 
+[English](adding-a-provider.md) | [中文](adding-a-provider.zh-CN.md)
+
 A provider is described in two halves:
 
 - **Catalog half** (`packages/catalog`): one entry in the `CATALOG_PROVIDERS`

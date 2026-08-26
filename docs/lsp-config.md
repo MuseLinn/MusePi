@@ -1,5 +1,7 @@
 # LSP configuration in OMP
 
+[English](lsp-config.md) | [中文](lsp-config.zh-CN.md)
+
 This guide explains how to configure language servers for the OMP coding agent.
 
 Source of truth in code:

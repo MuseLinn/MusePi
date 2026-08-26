@@ -1,0 +1,5 @@
+# Consistency record for mcp-protocol-transports.md / mcp-protocol-transports.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/mcp-protocol-transports
+mcp-protocol-transports.md: b93057b70f9066524f486fffe61b48dcd7fe137c
+mcp-protocol-transports.zh-CN.md: 5ffb1b44ceb4a55da5880e0e597a53d019cf6957

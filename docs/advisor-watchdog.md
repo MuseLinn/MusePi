@@ -1,5 +1,7 @@
 # Advisor, WATCHDOG.md, and WATCHDOG.yml
 
+English | [中文](advisor-watchdog.zh-CN.md)
+
 The advisor is an optional second model attached to a session. It reviews the primary agent's transcript after each turn, inspects the workspace with its own tools, and injects concise advice back into the primary session.
 
 The advisor is not a second executor: it cannot approve actions or change primary session state directly. Its default toolset is read-only (`read`, `grep`, `glob`) plus `advise`, but a `WATCHDOG.yml` roster entry may broaden `tools:` to any built-in — including mutating tools such as `edit`, `write`, `bash`, `eval`, and `browser` — so grant those tools only when the advisor model and workspace are trusted (see [Tools and isolation](#tools-and-isolation)).

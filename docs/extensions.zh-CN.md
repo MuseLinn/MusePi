@@ -1,10 +1,10 @@
-# Extensions
+# 扩展
 
-[English](extensions.md) | [中文](extensions.zh-CN.md)
+[English](extensions.md) | 中文
 
-Primary guide for authoring runtime extensions in `packages/coding-agent`.
+本文件是 `packages/coding-agent` 中运行时扩展的主要编写指南。
 
-This document covers the current extension runtime in:
+本文覆盖当前扩展运行时涉及的实现位置：
 
 - `src/extensibility/extensions/types.ts`
 - `src/extensibility/extensions/runner.ts`
@@ -12,38 +12,38 @@ This document covers the current extension runtime in:
 - `src/extensibility/extensions/index.ts`
 - `src/modes/controllers/extension-ui-controller.ts`
 
-For discovery paths and filesystem loading rules, see [`extension-loading.md`](./extension-loading.html).
+关于发现路径与文件系统加载规则，见 [`extension-loading.md`](./extension-loading.html)。
 
-For packaged user-facing extension CLIs/features, see [`user-facing-packages.md`](./user-facing-packages.html).
+关于面向用户的扩展 CLI/特性封装，见 [`user-facing-packages.md`](./user-facing-packages.html)。
 
-## What an extension is
+## 什么是扩展
 
-An extension is a TS/JS module exporting a default factory:
+扩展是一个 TS/JS 模块，默认导出 factory：
 
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
 export default function myExtension(pi: ExtensionAPI) {
-  // register handlers/tools/commands/renderers
+  // 注册 handlers/tools/commands/renderers
 }
 ```
 
-Extensions can combine all of the following in one module:
+一个扩展模块可以组合以下能力：
 
-- event handlers (`pi.on(...)`)
-- LLM-callable tools (`pi.registerTool(...)`)
-- slash commands (`pi.registerCommand(...)`)
-- keyboard shortcuts and flags
-- custom message rendering
-- session/message injection APIs (`sendMessage`, `sendUserMessage`, `appendEntry`)
+- 事件处理：`pi.on(...)`
+- LLM 可调用工具：`pi.registerTool(...)`
+- 斜杠命令：`pi.registerCommand(...)`
+- 快捷键与 flags
+- 自定义消息渲染
+- 会话/消息注入 API：`sendMessage`、`sendUserMessage`、`appendEntry`
 
-## Runtime model
+## 运行时模型
 
-1. Extensions are imported and their factory functions run.
-2. During that load phase, registration methods are valid; runtime action methods are not yet initialized.
-3. `ExtensionRunner.initialize(...)` wires live actions/contexts for the active mode.
-4. Session/agent/tool lifecycle events are emitted to handlers.
-5. Every tool execution is wrapped with extension interception (`tool_call` / `tool_result`).
+1. 扩展被导入，其 factory 执行。
+2. 在加载阶段，注册方法是可用的；运行时动作方法尚未初始化。
+3. `ExtensionRunner.initialize(...)` 为当前 mode/session/tool registry 接通实时动作与上下文。
+4. 会话/agent/tool 生命周期事件被分发给 handlers。
+5. 每次工具执行都会被扩展拦截层包裹：`tool_call` / `tool_result`。
 
 ```text
 Extension lifecycle (simplified)
@@ -61,28 +61,28 @@ ExtensionRunner.initialize(mode/session/tool registry)
    └─ expose runtime actions (sendMessage, setActiveTools, ...)
 ```
 
-Important constraint from `loader.ts`:
+`loader.ts` 的重要约束：
 
-- calling action methods like `pi.sendMessage()` during extension load throws `ExtensionRuntimeNotInitializedError`
-- register first; perform runtime behavior from events/commands/tools
+- 在扩展加载期间调用 `pi.sendMessage()` 这类动作方法会抛出 `ExtensionRuntimeNotInitializedError`
+- 先注册；运行时行为从事件/命令/工具中触发
 
 ## Runtime self-bootstrapping (daemon 会话工具,2026-08-20)
 
-GUI daemon 的每个会话额外注入 5 个**会话级 CustomTool**(`extension-lifecycle-tools.ts`,经 `#extensionManagerTools` 注入 `createSession`/`activate` 的 `customTools`):
+GUI daemon 的每个会话额外注入 5 个**会话级 CustomTool**（`extension-lifecycle-tools.ts`，经 `#extensionManagerTools` 注入 `createSession`/`activate` 的 `customTools`）：
 
-- `extension_load <name|path>` — 装载扩展(编译 + 注册 + fail-loud 错误展示)
+- `extension_load <name|path>` — 装载扩展（编译 + 注册 + fail-loud 错误展示）
 - `extension_reload <name>` — 热重载
 - `extension_status <name>` — 状态查询
-- `extension_validate <name>` — 校验(不装载)
+- `extension_validate <name>` — 校验（不装载）
 - `extension_rollback <name>` — 恢复最近一次 load/reload 成功的快照并重载会话
 
-语义要点:
+语义要点：
 
-- **deferred busy-gate**:会话 streaming 期间调用 load/reload 返回 `{ deferred: true }`,实际在 turn 结束的空闲边界执行——E2E 断言必须两轮(轮 1 接受,轮 2 验证已注册)。
-- **快照回滚**:每次 load/reload 成功即快照到 `~/.musepi/extension-backups/<sha1(入口)12>/<ts>/`,保留最近 5 份;rollback 用最新快照覆盖扩展产物 + 重载会话,是损坏新版本的修复路径。
-- **沙箱**:扩展宿主半体跑在 `node:vm` 受限 realm(`extension-sandbox.ts`;process/require/globalThis 天然缺席,async 悬挂由宿主 `Promise.race` 竞速超时)——行为约束,非安全边界。
-- **注**:这些是 agent 会话工具(由模型调用),**不是** daemon WS RPC。WS 面的扩展管理 RPC 只有 `extensions.list/raw/setEnabled/setForceEnabled/setProviderEnabled` 与 `ext.call`(设置「扩展」tab 用)。
-- 方向文档:核心边界与接缝清单见 `docs/plugin-design.md`。
+- **deferred busy-gate**：会话 streaming 期间调用 load/reload 返回 `{ deferred: true }`，实际在 turn 结束的空闲边界执行——E2E 断言必须两轮（轮 1 接受，轮 2 验证已注册）。
+- **快照回滚**：每次 load/reload 成功即快照到 `~/.musepi/extension-backups/<sha1(入口)12>/<ts>/`，保留最近 5 份；rollback 用最新快照覆盖扩展产物 + 重载会话，是损坏新版本的修复路径。
+- **沙箱**：扩展宿主半体跑在 `node:vm` 受限 realm（`extension-sandbox.ts`；process/require/globalThis 天然缺席，async 悬挂由宿主 `Promise.race` 竞速超时）——行为约束，非安全边界。
+- **注**：这些是 agent 会话工具（由模型调用），**不是** daemon WS RPC。WS 面的扩展管理 RPC 只有 `extensions.list/raw/setEnabled/setForceEnabled/setProviderEnabled` 与 `ext.call`（设置「扩展」tab 用）。
+- 方向文档：核心边界与接缝清单见 `docs/plugin-design.md`。
 
 ## Quick start
 
@@ -336,9 +336,7 @@ execute(
 
 ### Delegating to a native built-in (`ctx.invokeTool`)
 
-A tool that re-registers a built-in name (e.g. wrapping `write` to add logging or a policy check) can
-run the original instead of reimplementing it. When your registered tool shadows a built-in, the `ctx`
-passed to `execute` carries:
+A tool that re-registers a built-in name (e.g. wrapping `write` to add logging or a policy check) can run the original instead of reimplementing it. When your registered tool shadows a built-in, the `ctx` passed to `execute` carries:
 
 ```ts
 ctx.invokeTool?<TDetails>(
@@ -347,12 +345,7 @@ ctx.invokeTool?<TDetails>(
 ): Promise<AgentToolResult<TDetails>>
 ```
 
-It runs the **native** built-in of the same name as your tool (delegation is same-tool only, so it
-cannot reach an arbitrary target or escalate past the approval already granted for this call) and
-returns its result, including the native tool's own side effects and internal bookkeeping. It is
-present only when a native built-in of that name exists — `ctx.invokeTool` is `undefined` for a
-net-new tool that shadows no built-in. The native call is not re-gated, since it is the same tool you
-are already approved as, and delegation depth is guarded against accidental self-recursion.
+It runs the **native** built-in of the same name as your tool (delegation is same-tool only, so it cannot reach an arbitrary target or escalate past the approval already granted for this call) and returns its result, including the native tool's own side effects and internal bookkeeping. It is present only when a native built-in of that name exists — `ctx.invokeTool` is `undefined` for a net-new tool that shadows no built-in. The native call is not re-gated, since it is the same tool you are already approved as, and delegation depth is guarded against accidental self-recursion.
 
 Template:
 
