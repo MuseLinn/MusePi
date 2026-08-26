@@ -50,6 +50,8 @@ import { bottomBorder, divider, row, topBorder } from "./overlay-box";
 import { handleInputOrEscape, PluginSettingsComponent } from "./plugin-settings";
 import { getSettingDef, getSettingsForTab, type SettingDef } from "./settings-defs";
 import { SnapcompactShapePreview } from "./snapcompact-shape-preview";
+import { type ComposerPreviewStatusSource, ComposerShapePreview } from "./composer-shape-preview";
+import { getComposerShapeOptions } from "./composer-shape-registry";
 import { getPreset } from "./status-line/presets";
 
 /**
@@ -513,6 +515,8 @@ export interface SettingsRuntimeContext {
 	imageBudget?: ImageBudget;
 	/** Schedules a re-render after async preview work completes. */
 	requestRender?: () => void;
+	/** Live status renderer for composer-shape previews (the session's status line). */
+	composerPreviewStatus?: ComposerPreviewStatusSource;
 }
 
 /** Status line settings subset for preview */
@@ -1062,6 +1066,8 @@ export class SettingsSelectorComponent implements Component {
 			});
 		} else if (def.path === "theme.dark" || def.path === "theme.light") {
 			options = this.context.availableThemes.map(t => ({ value: t, label: t }));
+		} else if (def.path === "composer.shape") {
+			options = getComposerShapeOptions();
 		}
 
 		// Preview handlers
@@ -1119,6 +1125,13 @@ export class SettingsSelectorComponent implements Component {
 				model: this.context.model,
 				imageBudget: this.context.imageBudget,
 				requestRender: this.context.requestRender,
+			});
+			onPreview = value => shapePreview.setValue(value);
+			footer = shapePreview;
+		} else if (def.path === "composer.shape") {
+			const shapePreview = new ComposerShapePreview(String(currentValue ?? "box"), {
+				requestRender: this.context.requestRender,
+				status: this.context.composerPreviewStatus,
 			});
 			onPreview = value => shapePreview.setValue(value);
 			footer = shapePreview;

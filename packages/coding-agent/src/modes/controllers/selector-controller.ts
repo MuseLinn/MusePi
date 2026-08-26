@@ -206,6 +206,7 @@ export class SelectorController {
 					model: this.ctx.session.model,
 					imageBudget: this.ctx.ui.imageBudget,
 					requestRender: () => this.ctx.ui.requestRender(),
+					composerPreviewStatus: this.ctx.statusLine,
 				},
 				{
 					onChange: (id, value) => this.handleSettingChange(id, value),
