@@ -1,64 +1,64 @@
-# MusePi Assembly — 声明式装配与启动验证
+# MusePi Assembly — Declarative Assembly and Boot Verification
 
-## 概览
+[English](assembly.md) | [中文](assembly.zh-CN.md)
 
-`musepi.assembly.toml` 是 musepi 的产品装配清单，声明：
-- **面**（TUI / daemon / headless）——控制扩展加载的范围
-- **managed 扩展**——声明后的扩展加载失败会 **fail-loud**（默认），避免静默回退
-- **seams**——可显式选择的可换核心实现（terminal provider、compaction 方法）
+`musepi.assembly.toml` is the musepi product assembly manifest. It declares:
+- **surface** (TUI / daemon / headless) — controls which extensions are loaded
+- **managed extensions** — declared extensions fail **fail-loud** by default, avoiding silent fallback
+- **seams** — explicitly selectable swappable core implementations (terminal provider, compaction method)
 
-## 文件位置与发现顺序
+## File location and discovery order
 
-项目级 > 全局级（前者 per-key 胜出）：
+Project-level > Global-level (project wins per key):
 
-1. `<cwd>/.musepi/assembly.toml`（从 cwd 向上查找）
-2. `$MUSEPI_AGENT_DIR/assembly.toml`（当前 profile 的 agent 目录）
-3. `~/.musepi/assembly.toml`（用户全局）
+1. `<cwd>/.musepi/assembly.toml` (discovered from cwd upward)
+2. `$MUSEPI_AGENT_DIR/assembly.toml` (agent directory of the current profile)
+3. `~/.musepi/assembly.toml` (user global)
 
-## 格式
+## Format
 
 ```toml
 [assembly]
-# surface = "tui" | "daemon" | "headless" | "acp"   # 缺省 auto（按 mode）
-degraded_ok = false                                  # 扩展加载失败语义
+# surface = "tui" | "daemon" | "headless" | "acp"   # default auto (by mode)
+degraded_ok = false                                  # extension load failure semantics
 
 [extensions]
-# include = ["my-extension", "another-ext"]          # 白名单
-# exclude = ["*debug*", "*legacy*"]                  # 排除 glob
-# patterns = ["**/tools/**", "extensions/skills"]    # 路径过滤
+# include = ["my-extension", "another-ext"]          # whitelist
+# exclude = ["*debug*", "*legacy*"]                  # exclusion glob
+# patterns = ["**/tools/**", "extensions/skills"]    # path filtering
 
 [seams.terminal]
 provider = "auto"        # "auto" | "bun-pty" | "node-pty"
 
 [seams.compaction]
-method = "snapcompact"   # 首选 compaction 方法
+method = "snapcompact"   # preferred compaction method
 ```
 
-## 行为
+## Behavior
 
-### 启动验证
-- **无 manifest** → 保持现有行为（所有错误 warn，session 继续）
-- **有 manifest** → managed 扩展的加载错误 **throw**（除非 `degraded_ok = true`）
-- unmanaged 扩展错误仍 warn，通过 `musepi assembly status` 可见
+### Boot verification
+- **No manifest** → preserve existing behavior (all errors warn, session continues)
+- **Manifest present** → managed extension load errors **throw** (unless `degraded_ok = true`)
+- unmanaged extension errors still warn, visible via `musepi assembly status`
 
-### 面裁剪
-- `musepi assembly verify` 会读取当前 cwd 的 manifest 并打印过滤后扩展数
-- manifest 中 `extensions.patterns` 控制扩展加载 glob
+### Surface filtering
+- `musepi assembly verify` reads the current cwd manifest and prints the filtered extension count
+- `extensions.patterns` in the manifest controls the extension load glob
 
-### Seam 选择
-- `terminal.provider` 控制 daemon terminal 后端：`auto`（默认）= bun-pty 失败时回退 node-pty；显式值 = 失败时报错
-- `compaction.method` 仅为 manifest 侧的校验——实际 compaction 由 `settings.compaction.methodOrder` 控制
+### Seam selection
+- `terminal.provider` controls the daemon terminal backend: `auto` (default) = fall back to node-pty when bun-pty fails; explicit value = error on failure
+- `compaction.method` is only manifest-side validation — actual compaction is controlled by `settings.compaction.methodOrder`
 
-## CLI 命令
+## CLI commands
 
 ```bash
-musepi assembly status      # 显示当前 manifest、surface、boot 状态
-musepi assembly verify      # 静态验证 manifest + 扩展路径过滤结果
+musepi assembly status      # show current manifest, surface, and boot status
+musepi assembly verify      # statically verify manifest + extension path filtering results
 ```
 
-## 设计原则
+## Design principles
 
-1. **渐进启用**：无 manifest 时老行为不变，老用户升级无感
-2. **fail-loud on declared**：声明过托管的扩展失败就报错，未声明的继续 soft-fail
-3. **可见性**：所有失败通过 `musepi assembly status` 可见，不静默
-4. **配置驱动**：manifest 是唯一配置源，settings 只读不写（terminal.provider 可通过 settings 显式覆盖）
+1. **Progressive enablement**: without manifest, legacy behavior stays the same; upgrades are seamless for existing users
+2. **fail-loud on declared**: declared managed extensions fail loudly; undeclared ones continue soft-fail
+3. **Visibility**: all failures are visible through `musepi assembly status`, never silent
+4. **Config-driven**: the manifest is the single source of configuration, settings are read-only (`terminal.provider` can still be explicitly overridden via settings)

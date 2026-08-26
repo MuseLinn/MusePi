@@ -1,0 +1,5 @@
+# Consistency record for blob-artifact-architecture.md / blob-artifact-architecture.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/blob-artifact-architecture
+blob-artifact-architecture.md: 6026d47fe0057af97de7225f2d9c63c2da109d3d
+blob-artifact-architecture.zh-CN.md: dc4d9928457022e2c5e8e3bc61faacd33f5d4963

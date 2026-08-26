@@ -1,0 +1,5 @@
+# Consistency record for session-tree-plan.md / session-tree-plan.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/session-tree-plan
+session-tree-plan.md: ff8f69b756bcb2b538e2cffd0a28b3dd4f92f1f5
+session-tree-plan.zh-CN.md: 6a95135f59b4028f188513b34bf8c0c9e860480e

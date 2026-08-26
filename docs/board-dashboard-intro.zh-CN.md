@@ -1,7 +1,6 @@
-# MusePi 看板：让 AI 亲手设计你的桌面组件墙
-English | [中文](board-dashboard-intro.zh-CN.md)
+# MusePi 看板介绍：让 AI 亲手设计你的桌面组件墙
 
-English | [中文](board-dashboard-intro.zh-CN.md)
+[English](board-dashboard-intro.md) | 中文
 
 > 本文是看板（Board/Dashboard）组件平台的通俗介绍文档，面向使用与理解系统的人。
 > 架构立项见 `docs/board-dashboard.md`，组件渲染规范见 `docs/widget-design-system.md`。

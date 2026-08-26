@@ -1,0 +1,5 @@
+# Consistency record for arktype-guide.md / arktype-guide.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/arktype-guide
+arktype-guide.md: 47887f2cdee8af902fc2564a0491b41ef7c164ec
+arktype-guide.zh-CN.md: cdc7d6ac0333e4cafaf9c1fb32f12762617d1b7b

@@ -1,0 +1,5 @@
+# Consistency record for fs-scan-cache-architecture.md / fs-scan-cache-architecture.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/fs-scan-cache-architecture
+fs-scan-cache-architecture.md: eaa0fc1f7e3ed4efdd56ab3812f52c4bb9e06a7e
+fs-scan-cache-architecture.zh-CN.md: 9294c66acf46d939bbbecc53f66fd706d7ecbc77

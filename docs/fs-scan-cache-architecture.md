@@ -1,5 +1,7 @@
 # Filesystem Scan Cache Architecture Contract
 
+English | [中文](fs-scan-cache-architecture.zh-CN.md)
+
 This document defines the current contract for the shared filesystem scan cache implemented in Rust (`crates/pi-natives/src/fs_cache.rs`) and consumed by native discovery/search APIs exposed to `packages/coding-agent`.
 
 ## What this cache is

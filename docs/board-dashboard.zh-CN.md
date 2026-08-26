@@ -1,11 +1,11 @@
-# 看板（Board/Dashboard）组件平台 — 立项
+# 看板仪表盘组件平台 — 立项
 
-English | [中文](board-dashboard.zh-CN.md)
+[English](board-dashboard.md) | 中文
 
 > 2026-08-07 立项。目标：kimi work 式可交互、可编辑、可常驻桌面的组件看板；
 > 参考 kimi work（产品形态）+ bitfun Agentic Mini Apps / BitFun Canvas（技术范式）。
 >
-> **状态（2026-08-25 核对）**：M1–M3 已落地（BoardPage + WidgetRegistry + **18 种 widget** +
+> **状态（2026-08-25 核对）**：M1–M3 已落地（BoardPage + WidgetRegistry + **18 种组件** +
 > `board.*`/`widget` RPC + boards.json 持久化）；M4 部分落地（后台会话 AI 生成入口已存在，
 > 缺 `widget.generate` RPC 与模板市场）；M5 已落地（pin.html + pinned-widgets.json 重启恢复 +
 > alwaysOnTop 切换，文档旧标"未验证"过时）；iframe 沙箱层按 §7 决策仅用于 html widget
@@ -68,17 +68,17 @@ English | [中文](board-dashboard.zh-CN.md)
 
 | 决策点 | 选择 | 理由 |
 |---|---|---|
-| 组件运行环境 | **白名单组件注册表（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 desktop-web tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联 widget** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
-| 组件格式 | **registry 条目**：`{ type, schema, component }`——组件是 TSX（reactbits 源码式），agent 交互的是 **widget schema**（type + data 字段） | 比单 HTML 文件更易维护；reactbits 组件零改动直接入 registry；`widget.render` 工具按 schema 校验 |
+| 组件运行环境 | **白名单组件注册表（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 desktop-web tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联组件** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
+| 组件格式 | **registry 条目**：`{ type, schema, component }`——组件是 TSX（reactbits 源码式），agent 交互的是 **组件 schema**（type + data 字段） | 比单 HTML 文件更易维护；reactbits 组件零改动直接入 registry；`widget.render` 工具按 schema 校验 |
 | 组件 SDK | `widget.render { type, data }` 工具 + daemon `widget.schema` RPC（暴露可用类型/字段给 agent） | agent 通过 schema 发现能力，**自动补全组件参数**——"封装好搭好底座暴露给 agent"正是此意 |
 | 持久化 | daemon `board.*` RPC → 会话目录 JSON（`~/.musepi/boards/`） | 跨重启、可备份；与 notes/plans 同级 |
 | 数据源 | daemon widget.data 代理（首期：行情静态/轮询接口） | 组件不直连外网，数据策略可审计 |
-| 消息内联 widget | **同一 registry** 渲染在 transcript（kimi 式）：工具结果 → widget 卡；复用已有 tool-render 管线（30+ 工具渲染器） | 看板组件与内联 widget 共用底座，一份组件两处用 |
+| 消息内联组件 | **同一 registry** 渲染在 transcript（kimi 式）：工具结果 → 组件卡；复用已有 tool-render 管线（30+ 工具渲染器） | 看板组件与内联组件共用底座，一份组件两处用 |
 | 桌面常驻 | Electron 小窗 + `alwaysOnTop` 可切换 | pet 窗口先例（main.cjs miniWindow） |
 
 ### kimi 参考形态（2026-08-07 六张截图提炼）
 
-**会话内联 widget 的组件模式**（kimi 网页端聊天内联，均可交互）：
+**会话内联组件的组件模式**（kimi 网页端聊天内联，均可交互）：
 
 | 模式 | 参考 | registry 通用组件 |
 |---|---|---|

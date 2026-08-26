@@ -1,5 +1,7 @@
 # Mnemopi memory backend
 
+
+English | [中文](mnemosyne-memory-backend.zh-CN.md)
 Oh My Pi can use `@musepi/pi-mnemopi` as a local long-term memory backend.
 
 Set:
