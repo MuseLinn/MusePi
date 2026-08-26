@@ -435,7 +435,7 @@ async function snapshotFromJsonl(file: string, sessionId: string): Promise<Stati
 }
 
 import { ModelsConfigFile } from "../config/models-config";
-import type { ExtensionSetting, ExtensionUIContext } from "../extensibility/extensions/types";
+import type { ExtensionNotificationMessage, ExtensionSetting, ExtensionUIContext } from "../extensibility/extensions/types";
 import type { AgentSession } from "../session/agent-session";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
@@ -910,6 +910,9 @@ function discoverySettingsFingerprint(settings: Settings): string {
  */
 export class DaemonSessionHost {
 	readonly #sessions = new Map<string, LiveSession>();
+	/** Callback invoked when an extension pushes a notification channel message.
+	 *  Wired by DaemonServer constructor to broadcast to GUI clients. */
+	#onExtensionNotification: ((channel: string, message: ExtensionNotificationMessage) => void) | undefined;
 	/** In-flight history-session reactivations (dedupe concurrent subscribe/send). */
 	readonly #activating = new Map<string, Promise<LiveSession>>();
 	/** First live session's model registry — shared for provider/model RPCs
@@ -951,6 +954,11 @@ export class DaemonSessionHost {
 	#collabToolProvider: (() => CollabToolHandle) | null = null;
 	setCollabToolProvider(provider: () => CollabToolHandle): void {
 		this.#collabToolProvider = provider;
+	}
+	setOnExtensionNotification(
+		handler: (channel: string, message: ExtensionNotificationMessage) => void,
+	): void {
+		this.#onExtensionNotification = handler;
 	}
 	/** Workspace file-content index (settings → 索引库 → 代码库); lazily
 	 *  created on first index.* RPC so a daemon that never opens the tab
@@ -1845,6 +1853,13 @@ export class DaemonSessionHost {
 		// session existed (or while discovery was in flight) must land on it
 		// now — the tools-changed callback only fires on FUTURE changes.
 		this.#pushMcpToolsToSession(live);
+		// Extension notification channels (P3): forward pushed messages to
+		// the daemon server's broadcast. The subscriber is dropped when the
+		// session closes (live is GC'd with the set); reload detaches the
+		// channel atomically on the extension side.
+		agentSession.extensionRunner?.onNotification((channel, message) => {
+			this.#onExtensionNotification?.(channel, message);
+		});
 		return live;
 	}
 
@@ -2669,6 +2684,9 @@ export class DaemonServer {
 
 	constructor(host: DaemonSessionHost) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
+		host.setOnExtensionNotification((channel, message) => {
+			this.#broadcastExtensionNotification(channel, message);
+		});
 		this.#host = host;
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
@@ -3064,6 +3082,24 @@ export class DaemonServer {
 				seq,
 				payload: { type: "extensions.changed", at: Date.now() },
 			});
+		}
+	}
+
+	/** 广播 extensions.notification(扩展 registerNotificationChannel 推送):
+	 *  转发到 events.subscribe 的 GUI 客户端。频道消息带 channel + 完整
+	 *  message(text/title/kind),GUI 渲染为通知。 */
+	#broadcastExtensionNotification(
+		channel: string,
+		message: ExtensionNotificationMessage,
+	): void {
+		const seq = ++this.#globalEventSeq;
+		const payload = { type: "extensions.notification" as const, channel, message, at: Date.now() };
+		for (const conn of this.#globalEventTargets) {
+			try {
+				this.#host.emitEvent(conn, { kind: "event", seq, payload });
+			} catch {
+				this.#globalEventTargets.delete(conn);
+			}
 		}
 	}
 
