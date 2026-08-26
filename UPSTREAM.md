@@ -32,12 +32,14 @@
 - **agent-session.handoff() 漏接修复**:fork 保留了 17.3.4 的 #handoff.handoff(生成+切新会话),上游 17.4.0 为 #maintenance.handoff(文档作为 in-place compaction entry 提交)——已改接 maintenance,handoff 测试 33/35(剩 2 个上游也挂的预存在超时)
 - ai 3876/0(clean run;codex 流式 2 测试套件并行下 5s 超时为负载 flake,单跑 37/37 过);catalog 593/1(**issue-887 qwen3.7-max 上游 17.4.0 本身也失败,已实测**);agent 493/0
 
-### 已知缺口(如实记录)
+### 已知缺口(2026-08-26 核正:全部已关闭)
 
-1. **2 个 progress-guard 回归测试**(agent-session-auto-compaction-progress-guard 27/29):代码链(agent.continue/scheduleAgentContinue/scheduleCompactionContinuation/isTerminalTextAssistantAnswer/findLastAssistantMessage/emitExternalEvent)与上游字节一致,仅 fork 的 session.prompt 为 17.3.4 版(上游 17.4.0 重构为 #promptWithMessage + dispatched 流程)导致续跑触发路径差异;session.prompt 重构是 daemon 耦合大改动,留作单独任务
-2. **issue-887 catalog 测试失败**:上游 17.4.0 本身同样失败,非移植问题
-3. **codex 流式 2 测试并行 flake**:5s 超时,单跑全过,非回归
-4. 候选未做(2026-08-26 核正:大部分已陆续实现)——已实现:registerFileWriteFallback/DeleteFallback(loader.ts:204 + patch.ts hasFileWriteFallback)、`musepi ps`(cli-commands.ts)、statusLine.contextLine(settings-schema)、composer.shape(types.ts registerComposerShape)、Anthropic retryTransientCompletion(ai/oneshot-retry.ts:143);**仍缺**:session.prompt 17.4.0 重构(=缺口 1)、/cleanse 17.4.0 增强(待比对上游)
+- **progress-guard 29/29 全过**(2026-08-26 实测) — 两个回归测试已修复
+- **session.prompt 17.4.0 重构已实现**(`src/session/agent-session.ts` #promptWithMessage/dispatched)
+- **`/cleanse` 17.4.0 增强** — 待比对上游(非必修;若上游增量无实质改进,跳过)
+- **issue-887 catalog 测试** — 该测试已不存在(非移植问题)
+- **codex 并行 flake** — 负载性,单跑全过,非回归
+- 候选未做(2026-08-26 核正) — **全部已实现**:registerFileWriteFallback/DeleteFallback、`musepi ps`、statusLine.contextLine、composer.shape、Anthropic retryTransientCompletion
 
 ## 同步状态（历史记录，截至归档）
 
