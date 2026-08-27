@@ -4187,9 +4187,27 @@ export class DaemonServer {
 				const extensions = await this.#getExtensions();
 				// Builtin style extension state mirrors display.taskCardStyle
 				// (the setting is the source of truth; setEnabled writes it).
-				const s = this.#host.settings();
+				let s = this.#host.settings();
+				if (!s) {
+					// Shell mode/enabled live in settings; bootstrap the shared
+					// instance so the desktop-shell entry reports them even
+					// before any session exists (fresh daemon + compat page).
+					await this.#host.ensureRegistry();
+					s = this.#host.settings();
+				}
 				const rawStyle = s?.getRaw("display.taskCardStyle");
 				const styleSetting: "swarm" | "classic" = rawStyle === "classic" ? "classic" : "swarm";
+				// Desktop-shell config (dsh-desktop parity): the compat page /
+				// GUI shell read enabled + mode + served origin from the
+				// registry response (raw is stripped by the response mapping).
+				const shellEnabled = s?.getRaw("shell.enabled");
+				const shellMode = s?.getRaw("shell.mode");
+				const shellCfg = {
+					enabled: shellEnabled !== false,
+					mode:
+						shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
+					webUrl: this.#webUrl,
+				};
 				for (const ext of extensions) {
 					if (ext.id === "style:task-card-swarm") {
 						ext.state = styleSetting === "classic" ? "disabled" : "active";
@@ -4199,13 +4217,8 @@ export class DaemonServer {
 					// disabled -> the GUI loads its local bundle instead of the
 					// runtime-served renderer.
 					if (ext.id === "desktop-shell:shell") {
-						const shellEnabled = s?.getRaw("shell.enabled");
-						ext.state = shellEnabled === false ? "disabled" : "active";
-						ext.disabledReason = shellEnabled === false ? "item-disabled" : undefined;
-						// The served origin + the effective shell mode ride on
-						// the entry's raw so the GUI shell (and extension
-						// center) reads them from the registry, not env.
-						(ext.raw as Record<string, unknown>).webUrl = this.#webUrl;
+						ext.state = shellCfg.enabled ? "active" : "disabled";
+						ext.disabledReason = shellCfg.enabled ? undefined : "item-disabled";
 					}
 				}
 				const { buildProviderTabs } = await import("../extensibility/extensions-center/state-manager");
@@ -4243,6 +4256,9 @@ export class DaemonServer {
 					components,
 					toolViews,
 					statusBarSegments,
+					// Desktop-shell config (dsh-desktop parity): enabled/mode/
+					// webUrl read by the compat page + GUI shell.
+					shell: shellCfg,
 					// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 					slots: {
 						exact: [...EXTENSION_SLOT_DECLARATION.exact],
@@ -4267,7 +4283,7 @@ export class DaemonServer {
 				// center agree (issue #3827). The builtin style extension
 				// (task-card-swarm) maps to display.taskCardStyle instead —
 				// the setting IS the source of truth for render style.
-				const p = (params ?? {}) as { id: string; enabled: boolean };
+				const p = (params ?? {}) as { id: string; enabled: boolean; mode?: string };
 				let settings = this.#host.settings();
 				if (!settings) {
 					await this.#host.ensureRegistry();
@@ -4291,7 +4307,16 @@ export class DaemonServer {
 					// runtime-served renderer; disabled -> local bundle. The
 					// setting drives the extension's mirrored state, and the
 					// web.port discovery file is written/deleted so the shell
-					// sees the change without an RPC round-trip.
+					// sees the change without an RPC round-trip. An optional
+					// `mode` param (compatibility/extended/enhanced) switches
+					// the shell mode atomically.
+					if (typeof p.mode === "string") {
+						const mode: string = p.mode;
+						if (mode !== "compatibility" && mode !== "extended" && mode !== "enhanced") {
+							throw new Error(`invalid shell mode: ${mode}`);
+						}
+						settings.set("shell.mode" as Parameters<Settings["set"]>[0], mode as never);
+					}
 					settings.set("shell.enabled" as Parameters<Settings["set"]>[0], p.enabled as never);
 					await settings.flush();
 					const webPortFile = path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port");

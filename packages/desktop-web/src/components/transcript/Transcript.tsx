@@ -623,14 +623,22 @@ export interface MusePiCompatHost {
 		Component: ComponentType<Record<string, unknown>>,
 		extensionId: string,
 	): void;
-	get(kind: string): { Component: ComponentType<Record<string, unknown>>; extensionId: string } | undefined;
+	/** Components registered for a slot (all kinds). */
+	getForSlot(slot: string): Array<{
+		Component: ComponentType<Record<string, unknown>>;
+		extensionId: string;
+		entryKinds: string[];
+	}>;
+	/** Components registered for a slot that own the given kind (transcript
+	 *  node dispatch). */
+	get(slot: string, kind: string): { Component: ComponentType<Record<string, unknown>>; extensionId: string } | undefined;
 }
 
 function compatHostRenderer(
 	kind: string,
 ): ((node: TranscriptNodeInjection) => ReactNode) | undefined {
 	const host = (globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost;
-	const entry = host?.get(kind);
+	const entry = host?.get("transcript.node", kind);
 	if (!entry) return undefined;
 	const { Component, extensionId } = entry;
 	return (node: TranscriptNodeInjection) =>

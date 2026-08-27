@@ -9,6 +9,7 @@ import { ScheduledPanel } from "./components/panels/ScheduledPanel";
 import { Banners } from "./components/shell/Banners";
 import { ApprovalCard } from "./components/shell/ApprovalCard";
 import { Composer } from "./components/shell/Composer";
+import { CompatSlotHost } from "./lib/compat-slot-host";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { WelcomeHint } from "./components/shell/WelcomeHint";
@@ -515,8 +516,14 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 					</>
 				)}
 			</main>
-			{!inWorkspace && activePanel === null && <Composer client={client} />}
+			{!inWorkspace && activePanel === null && (
+				<>
+					<CompatSlotHost slot="composer.dock" className="sh-compat-dock" />
+					<Composer client={client} />
+				</>
+			)}
 			{!inWorkspace && activePanel === null && <ApprovalCard client={client} />}
+			{!inWorkspace && activePanel === null && <CompatSlotHost slot="statusbar" className="sh-compat-statusbar" />}
 			{drawerAgent && (
 				<>
 					<div className="ag-drawer-backdrop" onClick={() => setSelectedId(null)} />

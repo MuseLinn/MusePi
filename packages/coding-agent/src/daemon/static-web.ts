@@ -99,8 +99,21 @@ export function compatSlotHostScript(): string {
 		} catch {
 			return; // daemon unreachable — no extensions to host
 		}
+		// DSH shell modes: compatibility = transcript.node only; extended adds
+		// the composer/panel/statusbar slots; enhanced keeps those plus native
+		// shell UI (Electron side). The injected host registers components for
+		// the slots the current mode consumes.
+		const mode = registry && registry.shell && typeof registry.shell.mode === "string"
+			? registry.shell.mode
+			: "compatibility";
+		const slots = new Set(["transcript.node"]);
+		if (mode === "extended" || mode === "enhanced") {
+			slots.add("composer.dock");
+			slots.add("panel.tab.workbench");
+			slots.add("statusbar");
+		}
 		const items = registry && Array.isArray(registry.components)
-			? registry.components.filter(c => c && c.slot === "transcript.node" && c.code)
+			? registry.components.filter(c => c && slots.has(c.slot) && c.code)
 			: [];
 		if (items.length === 0) return;
 		const host = window.MusePiCompatHost;
