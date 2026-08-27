@@ -3,7 +3,7 @@
 import * as path from "node:path";
 import { $, Glob } from "bun";
 
-const CHANGELOG_GLOB = "packages/coding-agent/CHANGELOG.md";
+const CHANGELOG_GLOB = "packages/{coding-agent,desktop-web}/CHANGELOG.md";
 const ORDERED_SECTION_TITLES = ["Breaking Changes", "Added", "Changed", "Fixed", "Removed"] as const;
 const CHANGELOG_BASELINE_REF = "refs/clog";
 const CHANGELOG_BASELINE_NAME = "clog";

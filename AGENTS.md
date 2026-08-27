@@ -321,7 +321,7 @@ Test the contract the system exposes — not the easiest internal detail to asse
 
 ## Changelog
 
-Location: single file — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's own release notes, read by the GUI "what's-new" panel and `/changelog`). `packages/coding-agent/CHANGELOG.md` remains only as a compiled-in upstream fallback (imported by `src/utils/changelog.ts`); do not add per-package `packages/*/CHANGELOG.md` files — that upstream convention was removed.
+Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's release notes, read by the GUI "what's-new" panel and `/changelog`). `packages/coding-agent/CHANGELOG.md` remains as a compiled-in upstream fallback (imported by `src/utils/changelog.ts`). `packages/desktop-web/CHANGELOG.md` is also release-managed (0.4.x line). Do not add per-package `packages/*/CHANGELOG.md` files — that upstream convention was removed.
 
 **Format** — sections under `## [Unreleased]`:
 
