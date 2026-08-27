@@ -143,8 +143,8 @@ import {
 	type ResolvedMode,
 } from "./presets/resolve";
 import { PromptComposer } from "./prompts/composer";
-import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import extensionsInventoryTemplate from "./prompts/system/extensions-inventory.md" with { type: "text" };
+import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
@@ -2391,7 +2391,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				.filter(e => e.label.length > 0);
 			modeRuntime.composer.removeBySource("ext:inventory");
 			modeRuntime.composer.add(
-				{ name: "extensions-inventory", order: 25, text: prompt.render(extensionsInventoryTemplate, { extensions: named }) },
+				{
+					name: "extensions-inventory",
+					order: 25,
+					text: prompt.render(extensionsInventoryTemplate, { extensions: named }),
+				},
 				"ext:inventory",
 			);
 		};
