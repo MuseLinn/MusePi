@@ -1,4 +1,4 @@
-import { createElement, type ComponentType, type ReactNode } from "react";
+import { createElement, memo, type ComponentType, type ReactNode } from "react";
 import type { MusePiCompatHost } from "../components/transcript/Transcript";
 
 /**
@@ -16,8 +16,10 @@ function compatHost(): MusePiCompatHost | null {
 	return (globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost ?? null;
 }
 
-/** Render all extension components registered for a slot (extended mode). */
-export function CompatSlotHost({
+/** Render all extension components registered for a slot (extended mode).
+ *  Memoized: the registry lookup allocates a fresh array per call — a
+ *  re-render every snapshot frame would defeat the slot host. */
+export const CompatSlotHost = memo(function CompatSlotHost({
 	slot,
 	className,
 }: {
@@ -39,4 +41,4 @@ export function CompatSlotHost({
 			))}
 		</div>
 	);
-}
+});
